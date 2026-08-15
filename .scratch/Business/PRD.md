@@ -1,6 +1,12 @@
 # KitCollective – Nordisk platform for fodboldtrøjesamlere
 
-**Version 2.0** · August 2026 · Erstatter `temp-PRD.md`
+**Version 2.1** · 14. august 2026 · Erstatter 2.0
+
+Research der underbygger 2.1: `.scratch/Research/jersey-registration-speed.md`,
+`catalog-seed-sources.md`, `jersey-vision-providers.md`.
+
+Stak og spec-regler: `.scratch/Architecture/tech-stack.md`.
+Datamodel (stamdata-trøje vs bruger-trøje): `.scratch/Architecture/data-model.md`.
 
 ---
 
@@ -21,15 +27,26 @@ Det afgørende designprincip er, at de tre lag er det samme produkt. Ønskeliste
 er i fase 1 en premium-funktion og i fase 2 et match mellem en navngiven køber
 og en butiks lager. Der skal ikke bygges to produkter.
 
-KitCollective bygges som en **mobilapp til iOS og Android**. Registrering sker
-med trøjen i hånden, og kameraet er derfor ikke en detalje, men selve
-indtastningsmetoden. Push-notifikationer er samtidig den eneste kanal, der gør
-ønskelisten til en grund til at vende tilbage — en e-mail om en trøjematch
-bliver læst en gang om ugen, en push bliver læst med det samme. Appen
-suppleres af et **offentligt weblag uden login**, hvor samlinger og
-katalogsider kan ses og deles. Uden det mister vi både organisk søgning og
-muligheden for at dele en samling i en Facebook-gruppe, hvilket er den eneste
-gratis distributionskanal, vi har.
+KitCollective bygges som en **Expo-app til iOS og Android** (samme kode også
+som nedgraderet web-app). De første brugere har typisk billederne i rullen —
+galleri er first-class ved onboarding. Kameraet er first-class, når samleren
+står med næste trøje i hånden. Vision (Gemini) foreslår klub/sæson/type fra
+foto; Save venter aldrig på modellen. Push er den kanal, der gør ønskelisten
+til en grund til at vende tilbage. Appen suppleres af et **offentligt Astro-
+weblag uden login**, hvor samlinger og katalogsider kan ses og deles. Uden det
+mister vi organisk søgning og muligheden for at dele i en Facebook-gruppe.
+
+### Væsentligste ændringer fra version 2.0
+
+| Område | Version 2.0 | Version 2.1 | Begrundelse |
+| --- | --- | --- | --- |
+| Stak | Uspecificeret native + “weblag” | Expo + NestJS + Astro + Vite-admin, ét git-repo | Agent-workflow og isolation uden polyrepo |
+| Offentlig web | “Ikke en web-app” | Astro = læs/SEO/OG. Expo Web = app-følelse | To jobs, to flader |
+| Upload | Kamera først, galleri som undtagelse | Galleri først ved onboarding; kamera ved gentagelse | Beta har fotos i rullen, ikke trøjen i hånden |
+| Prefill | Sidste land/liga/klub altid | Kun via “Samme klub”. “Ny trøje” starter tom | Inter 23/24 → Barça 25/26 må ikke arve forkert klub |
+| Vision | Ikke i MVP | Gemini Flash-Lite, asynkront forslag, katalog-ID | Eneste genvej når klubben skifter; Huddle-erfaring |
+| Save | Underforstået komplet katalog | Blokerer aldrig på kit, manufacturer eller pad | 45 s dør på klub/sæson-miss, ikke på tyndt kit-lag |
+| Database | Ikke låst | Egen Postgres. Ingen pgvector i MVP | Vision logges som JSON/telemetry, ikke vektor |
 
 ### Væsentligste ændringer fra version 1
 
@@ -143,12 +160,15 @@ første i MVP og bruger den tredje som distribution.
 - Vi bygger ikke en fuld markedsplads. Kontakt mellem samlere er organisk,
   platformen er ikke part i handlen.
 - Vi lancerer ikke på engelsk eller uden for Norden i version 1.
-- Vi bygger ikke automatisk billedgenkendelse i MVP, men kamera-flowet og
-  datamodellen skal kunne bære det senere. Genkendelse af mærke- og
-  størrelseslabel er den mest oplagte version 2-funktion, fordi den angriber
-  kategoriens hovedproblem direkte.
-- Vi bygger ikke en web-app til registrering og redigering. Weblaget er
-  læseadgang og deling, intet andet.
+- Vi lader ikke Vision **være sandhed** eller blokere Save. Modellen må kun
+  foreslå katalog-ID’er. On-device OCR af mærke/størrelse er v2, ikke MVP.
+- Vi bygger ikke Next.js. Offentligt weblag er Astro (læs, SEO, OG).
+  Registrering og redigering sker i Expo (iOS/Android; web-target er
+  nedgraderet). Admin er en separat Vite-app.
+- Vi kører ikke Nest-microservices i MVP. API’et er én modulær monolit.
+- Vi viser ikke tredjeparts kit-renders (FKApi/arkiv) i Expo, Astro eller
+  Open Graph, før rettigheder er afklaret. Brugerens eget foto er
+  produktbilledet.
 
 ---
 
@@ -258,9 +278,10 @@ vokser.
 
 ### Konto og progressiv tillid — Must have
 
-- Kontooprettelse med e-mail og adgangskode. Google-login som sekundær mulighed.
-  **Sign in with Apple er obligatorisk**, hvis vi tilbyder tredjepartslogin —
-  Apple afviser ellers appen.
+- Kontooprettelse med **e-mail og adgangskode er altid tilgængelig** (mandatory
+  sti). Social login: Apple og Google i MVP; Facebook kan tilføjes senere på
+  samme konto. **Sign in with Apple er obligatorisk**, fordi vi tilbyder
+  tredjepartslogin — Apple afviser ellers appen.
 - E-mailverifikation er eneste krav for at bruge gratis-laget.
 - Valgfrit profilfoto og profiltekst.
 - Rapportering og blokering af brugere fra dag ét.
@@ -281,13 +302,21 @@ vokser.
 - Ingen obligatorisk pris. Købspris er valgfri og altid privat.
 - Status pr. trøje: ikke tilgængelig (default), åben for bytte, åben for
   henvendelser.
-- Billeder tages med kameraet direkte i flowet, med anbefaling om front, ryg og
-  mærke. Valg fra galleriet er muligt, men er ikke standardvejen.
+- Billeder: anbefal front, ryg og mærke. Mindst ét foto for at gemme.
+  **Onboarding / første session: galleri (multi-select) er primær.** Kamera er
+  primær ved gentagelse i samme session. Expo Web er galleri-først.
+- Hvert foto har `role` (`front` / `back` / `label` / `other`) fra start, så
+  senere OCR kan sættes på uden migration.
 - Filtrering, sortering og eksport af egen samling.
-- **Krav til registreringshastighed:** trøje nummer to skal kunne oprettes på
-  under 45 sekunder. Genbrug af sidste valgte land, liga og klub som
-  forudfyldte værdier, og mulighed for at fortsætte direkte til næste trøje uden
-  at gå tilbage til oversigten.
+- **Krav til registreringshastighed:** trøje nummer to under 45 sekunder.
+  Median tid fra trøje 1 til 2 under 5 minutter. Efter Save: **Ny trøje**
+  (tom identitet) eller **Samme klub** (prefill). Aldrig stille arv af klub
+  fra forrige trøje. Ikke tilbage til oversigten før brugeren vælger det.
+- **Vision i MVP:** asynkront forslag (klub, sæson, type; spiller i “flere
+  detaljer”) mappet til kanoniske katalog-ID’er. Default tændt. Save venter
+  ikke. Timeout/offline/lav confidence → manuel søgning.
+- **Save blokerer ikke** på manglende kit-række, manufacturer eller pad.
+  Påkrævet katalog-hit er klub + klub-scopet sæson. Resten er enrichment.
 
 ### Discovery og community — Must have
 
@@ -314,7 +343,8 @@ vores eneste vej til organisk søgning.
   Facebook-gruppe ser ud som en samling og ikke som en URL.
 - Deep linking: et delt link åbner appen, hvis den er installeret, og ellers
   websiden med en installationsopfordring.
-- Ingen redigering på web. Alt, der skaber eller ændrer data, sker i appen.
+- Ingen redigering på det **offentlige** weblag (Astro). Mutationer sker i
+  Expo. Admin-mutationer sker i Vite-admin mod samme Nest-API.
 - Respekterer brugerens synlighedsindstillinger fuldt ud. Privat betyder ikke
   indekseret.
 
@@ -395,10 +425,11 @@ offentlig webside — som regel en anden samlers samling — hvor værdien er sy
 før noget skal installeres. Derfra fører en tydelig opfordring til App Store
 eller Google Play.
 
-I appen oprettes konto med e-mail eller Apple-/Google-login, e-mailen bekræftes,
-og brugeren føres direkte til at oprette sin første trøje med kameraet. Der er
-ingen KYC-trin og ingen profilopsætning før første trøje — profil og billede kan
-udfyldes senere.
+I appen oprettes konto med e-mail og adgangskode (altid) eller Apple-/Google-login, e-mailen bekræftes,
+og brugeren føres direkte til at oprette sin første trøje. **Første gang er
+upload fra galleri den primære knap** (kamera som anden). Der er ingen KYC-trin
+og ingen profilopsætning før første trøje — profil og billede kan udfyldes
+senere.
 
 Push-tilladelse spørges der **ikke** om ved opstart. Den spørges der om i det
 øjeblik, brugeren opretter sin første ønskelistepost, hvor formålet er konkret:
@@ -411,18 +442,20 @@ forsøger noget, der kræver netværket. Det er der, værdien er konkret.
 
 ### Kerneflow
 
-**Trin 1 — Opret trøje, kameraet først.** Flowet starter med at fotografere
-trøjen, ikke med en formular. Brugeren står typisk med trøjen i hånden, og
-billedet er det, der gør oprettelsen konkret. Derefter vælges land, liga og klub
-via søgning eller navigerbare lister, og sæson, type, størrelse og stand
-udfyldes. Felterne valideres, og manglende katalogdata udløser en
-opgraderings-CTA frem for en blindgyde.
+**Trin 1 — Fotos, derefter ét bekræft-skærm.** Ikke et detalje-wizard. Onboarding:
+vælg 1–3 billeder fra galleri (front/ryg/mærke). Gentagelse med trøjen i hånden:
+ét `CameraView`, tre slots. Vision kører i baggrunden fra første foto. Bekræft:
+klub (søg, ikke land→liga→klub-hierarki), sæson scoped til klubben, chips for
+type/størrelse/stand. Vision-forslag vises når de er klar; Save venter ikke.
+Katalog-miss på klub/sæson → upgrade-CTA, draft beholdes. Aldrig fritekst-klub.
+Nameset, pad, køb, ægthed ligger under “Flere detaljer”.
 
 **Trin 2 — Se samlingen.** Trøjen vises som et visuelt kort. Samlingen kan
 filtreres og sorteres. Ingen prisangivelse er påkrævet.
 
-**Trin 3 — Gentag hurtigt.** Land, liga og klub er forudfyldt fra sidste
-registrering. Målet er, at trøje nummer to og tre oprettes i samme session.
+**Trin 3 — Gentag.** To handlinger: **Ny trøje** (tom identitet — Inter må ikke
+blive til Barça) eller **Samme klub** (prefill). Add another åbner foto-flow
+igen, ikke oversigten.
 
 **Trin 4 — Definér drømmetrøjen.** Brugeren opretter en ønskelistepost med
 præcise kriterier og får forklaret, at der kommer besked ved match. Dette er
@@ -450,7 +483,8 @@ konto. Det er sådan, nye brugere kommer ind.
 
 - Appen skal føles som en app, ikke som en indpakket hjemmeside. Native
   navigation, native tastatur og gestures.
-- Kameraet er en førsteklasses indtastningsmetode, ikke et vedhæftningsfelt.
+- Kamera **og** galleri er førsteklasses indtastning. Kamera er ikke et
+  vedhæftningsfelt; galleri er ikke en undskyldning.
 - Strukturerede, søgbare felter frem for tunge fritekstformularer. Alt, der kan
   vælges, skal kunne vælges med tommelfingeren.
 - Visuelt fokus på trøjebilleder med tydelige metadata.
@@ -554,9 +588,14 @@ eneste indtægt.
 - Push sendt, leveret og åbnet, opdelt pr. notifikationstype.
 - Samling eller enkelt trøje delt, med kanal.
 - Trøje oprettet, redigeret, arkiveret. **Tidsstempel på hver oprettelse.**
-- Billede taget med kamera kontra valgt fra galleri.
-- Registreringsformular påbegyndt og afbrudt, med felt for afbrydelsespunkt.
+- Billede taget med kamera kontra valgt fra galleri, med `role`.
+- Vision: kald startet/lykkedes/timeout, model, latency, foreslåede ID’er,
+  confidence, om brugeren bekræftede, rettede eller ignorerede.
+- `jersey_saved.elapsedMs` for jerseyIndex ≥ 2 (gate: median < 45 s).
+- `time_to_second_jersey` (gate: median < 5 min).
+- Registrering afbrudt, med sidste state/felt.
 - Katalogmangel mødt, opgraderings-CTA vist og klikket.
+- Prefill: `samme_klub` vs `ny_troje` vs vision-forslag.
 - Katalogforslag indsendt, godkendt eller afvist, med svartid.
 - Søgning udført og filtre anvendt.
 - Ønskelistepost oprettet, match udløst, notifikation åbnet, henvendelse sendt.
@@ -572,15 +611,24 @@ eneste indtægt.
 
 ### Platform
 
-- **Mobilapp til iOS og Android** som det primære produkt. Ét delt kodegrundlag
-  frem for to native apps; teamet er to til tre personer, og to kodebaser er
-  ikke realistisk.
-- **Offentligt weblag uden login** til visning af samlerprofiler, enkelte trøjer
-  og katalogsider. Læseadgang, ingen redigering. Dette er ikke en "web-app", men
-  en delings- og indekseringsflade.
-- **Administrationsflade på web** til katalogforslag, moderering og partnerdata.
-- Deep links skal virke begge veje: et delt link åbner appen, hvis den er
-  installeret, og ellers websiden med en installationsopfordring.
+Låst stak. Ét git-repo (`apps/*` + `packages/api-contract`).
+
+| Flade | Valg |
+| --- | --- |
+| Mobil + app-på-web | Expo (iOS/Android; web-target nedgraderet) |
+| Offentligt site | Astro — læs, SEO, Open Graph, deep link |
+| Admin | Vite + React |
+| API | NestJS, modulær monolit, Fastify, `/v1` |
+| Kontrakt | Zod i `packages/api-contract` — Expo/Astro/admin typechecker herimod |
+| Database | Egen Postgres. Ingen pgvector i MVP |
+| Monorepo | pnpm + Turborepo |
+
+- **Expo** er det primære produkt. Ét kodegrundlag, ikke to native apps.
+- **Astro** er distribution og indeksering, ikke en web-app til mutationer.
+- **Expo Web** er app-følelsen i browseren (svagere kamera/push; IAP i butikkerne).
+- **Admin** er intern, aldrig indekseret (`admin.`-host).
+- Deep links: delt link åbner Expo hvis installeret, ellers Astro med
+  installationsopfordring.
 
 ### Behov
 
@@ -589,8 +637,11 @@ eneste indtægt.
 - Push-notifikationer med granulær styring pr. type: ønskeliste-match, fulgt
   samler, henvendelse, systembesked. En bruger, der slår alt fra, skal kunne slå
   ønskeliste-match til igen alene.
-- Kameraintegration til trøjebilleder direkte i registreringsflowet, med
-  beskæring og komprimering på enheden.
+- Kameraintegration (`CameraView`, multi-shot) og system-galleri
+  (multi-select, ingen bred medie-permission), med beskæring og komprimering
+  på enheden.
+- Vision-worker i Nest: Gemini 2.5 Flash-Lite, OpenAI `gpt-4.1-nano` som
+  fallback. 8–12 s timeout, fail open. Log rå JSON + telemetry. Ingen embeddings.
 - Offline-tolerance: en påbegyndt registrering må ikke gå tabt ved dårlig
   forbindelse. Kladder gemmes lokalt og synkroniseres.
 - Datamodel for trøjer, klubber, ligaer, lande, sæsoner, spillere, profiler,
@@ -605,12 +656,24 @@ eneste indtægt.
 - **Katalogdata og brugerdata adskilles strengt.** En trøje i en samling peger
   på kanoniske katalogposter, den kopierer dem ikke. Det gør det muligt at
   rette en klubs navn ét sted.
+- **Katalognavne er lokaliserede labels, ikke én engelsk streng.** Samme klub
+  er `F.C. København` på dansk og `FC Copenhagen` på engelsk. Seed må ankomme
+  på engelsk; dansk display kan mangle. Oversættelses-pipeline er ikke i MVP.
 - **Katalogposter har gyldighedsperiode**, så omdøbte klubber og nedlagte ligaer
   kan repræsenteres historisk korrekt.
 - **Ønskelisteposter gemmes som strukturerede kriterier**, ikke som fritekst, og
   med felter der kan matches mod en ekstern varekilde.
 - **Ægthed er et felt på trøjen**, ikke en egenskab ved brugeren, så
   verifikationsniveauer kan indføres senere uden migrering.
+- **Foto har `role`.** Label gemmes i højere opløsning end front/ryg.
+- **Kit er valgfri katalogrække** `(clubId, seasonId, type, manufacturerId?)`.
+  Brugertrøjen peger altid på klub + sæson; `catalogKitId` kan være tom.
+- **Pad er egen katalog-entitet.** Sæson × turnering giver kandidater, ikke
+  auto-attach. Bruger eller admin bekræfter.
+- **ExternalId** mapper vores rækker til kilder (Wikidata, seed-import). Vores
+  UUID er PK. Seed er offline Fase 0 — ikke et runtime-kald til scrapers.
+- Kit-referencebilleder fra arkiv/FKApi gemmes i eget objektlager med
+  `rights: unresolved` og `visibility: admin_only`, indtil visning er afklaret.
 
 ### Integrationer
 
@@ -622,6 +685,7 @@ eneste indtægt.
 - Partnerfeeds eller deeplinks, når aftaler indgås (fase 2).
 - Identitetsleverandør med nordisk dækning — først relevant i fase 3.
 - Crash- og fejlrapportering fra begge platforme.
+- Vision-udbyder (Gemini paid API; OpenAI som fallback). Nøgler kun på Nest.
 
 ### Data og privatliv
 
@@ -688,7 +752,11 @@ koster en uge hver, når man møder dem første gang.
 
 ### Fase 0 — Seed og partnerdialog (parallelt med udvikling)
 
-- Opbyg katalog: nordiske ligaer, landshold, de største europæiske klubber.
+- Opbyg katalog **tykt på klub + klub-scopet sæson** (det sprænger 45 s).
+  Kit-rækker og pads må være tyndere. Historisk stamdata (klub, sæson, trup,
+  nummer) seedes offline ind i eget katalog. Kit-identitet curates + beta-
+  propose. Pads bagud via sæson × turnering som kandidater. Sportmonks/andre
+  licenserede feeds kan komme senere til det levende lag.
 - Rekruttér 50–100 engagerede danske samlere fra de eksisterende
   Facebook-grupper til lukket beta.
 - Indled dialog med butikspartnere. Målet er tre underskrevne aftaler inden
@@ -696,15 +764,15 @@ koster en uge hver, når man møder dem første gang.
 
 ### Fase 1 — MVP (uge 1–12)
 
-App til iOS og Android med konto og e-mailverifikation, seedet katalog,
-kamera-først registrering, samlingsstyring, søgning, ønskeliste med match og
-push-notifikation, custom data-flow med administratorkø, abonnement via in-app
-purchase med prøveperiode, samt rapportering og blokering.
+Expo-app (iOS/Android) med konto og e-mailverifikation, seedet katalog,
+galleri-først onboarding + kamera ved gentagelse, asynkron Vision-prefill,
+samlingsstyring, søgning, ønskeliste med match og push, custom data-kø,
+abonnement via in-app purchase med prøveperiode, rapportering og blokering.
 
-Weblag med offentlige samlingssider, trøjesider og katalogsider, delelige links
-med Open Graph-data, og deep linking til appen.
+Astro-weblag med offentlige samlingssider, trøjesider og katalogsider, OG og
+deep link.
 
-Administrationsflade til katalogkøen.
+Vite-admin til katalogkøen.
 
 Afhængigheder: udviklerkonti hos Apple og Google oprettet i uge ét, godkendelse
 til Small Business Program, og et brugbart udgangspunkt for klub- og ligadata.

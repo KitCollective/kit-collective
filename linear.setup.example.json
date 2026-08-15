@@ -1,0 +1,33 @@
+{
+  "workspaceName": "Kit Collective",
+  "team": {
+    "key": "KIT",
+    "name": "Kit Collective",
+    "id": "<set by bootstrap>"
+  },
+  "states": {
+    "Backlog": { "id": "<set by bootstrap>", "type": "backlog" },
+    "Parked": { "id": "<set by bootstrap>", "type": "unstarted" },
+    "Implementing": { "id": "<set by bootstrap>", "type": "started" },
+    "In Review": { "id": "<set by bootstrap>", "type": "started" },
+    "Ready for merge": { "id": "<set by bootstrap>", "type": "started" },
+    "Rework": { "id": "<set by bootstrap>", "type": "started" },
+    "Done": { "id": "<set by bootstrap>", "type": "completed" },
+    "Canceled": { "id": "<set by bootstrap>", "type": "canceled" }
+  },
+  "labels": {
+    "signal-up": "<set by bootstrap>",
+    "needs-triage": "<set by bootstrap>",
+    "ready-for-agent": "<set by bootstrap>",
+    "ready-for-human": "<set by bootstrap>",
+    "wontfix": "<set by bootstrap>",
+    "kickoff": "<set by bootstrap>",
+    "feature": "<set by bootstrap>",
+    "surface:mobile": "<set by bootstrap>",
+    "surface:web": "<set by bootstrap>",
+    "surface:admin": "<set by bootstrap>",
+    "surface:api": "<set by bootstrap>",
+    "seed": "<set by bootstrap>"
+  },
+  "delegateAgentName": "Cursor"
+}

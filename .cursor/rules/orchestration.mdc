@@ -1,0 +1,16 @@
+---
+description: Linear orchestration contract — dispatch, states, lanes
+alwaysApply: true
+---
+
+# Orchestration
+
+`WORKFLOW.md` is the control-plane contract. Do not invent Linear statuses.
+
+- Dispatch only when status is `Backlog`, the issue is delegated to Cursor, and it has no `blockedBy`.
+- Claim by moving to `Implementing` before code changes.
+- One issue → one branch from `development` → one PR into `development`.
+- Nick moving the issue to `Done` is merge approval. Then `/land`.
+- Never push to `staging` or `production` from an issue land run.
+- Runtime agents use Linear MCP. They must not create teams or workflow states.
+- Domain sub-agents are helpers inside `/implement`. They do not get their own Linear issues.
