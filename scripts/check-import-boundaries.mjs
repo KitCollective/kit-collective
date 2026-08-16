@@ -57,7 +57,15 @@ const clientViolations = findViolations(clientFiles, [
 const apiFiles = collectSourceFiles(path.join(ROOT, "apps/api"));
 const apiViolations = findViolations(apiFiles, [/from ['"]seed\//, /import ['"]seed\//]);
 
-const all = [...clientViolations, ...apiViolations];
+const seedFiles = collectSourceFiles(path.join(ROOT, "seed/fkapi"));
+const seedViolations = findViolations(seedFiles, [
+  /from ['"]@kit\/db/,
+  /import ['"]@kit\/db/,
+  /from ['"]packages\/db/,
+  /import ['"]packages\/db/,
+]);
+
+const all = [...clientViolations, ...apiViolations, ...seedViolations];
 if (all.length > 0) {
   console.error("Import boundary violations:");
   for (const v of all) console.error(v);

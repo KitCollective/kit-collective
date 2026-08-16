@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
-import { resetDatabase } from "@kit/db";
+import { resetTestDatabase } from "./test-db.js";
 import { parseCliArgs } from "../src/cli-args.js";
 import { createFixtureFetchAdapter } from "../src/fetch.js";
 import { normalizeRawKit } from "../src/normalize.js";
@@ -62,7 +62,7 @@ function createMemoryObjectStore(): ObjectStoreAdapter & { objects: Map<string, 
 }
 
 describe("FK seed CLI args", () => {
-  it("matches Apify seed shape: competition, from, to, lane", () => {
+  it("matches shared seed CLI contract: competition, from, to, lane", () => {
     const parsed = parseCliArgs(["superliga", "0001", "2025/26", "development"]);
     expect(parsed.ok).toBe(true);
     if (parsed.ok) {
@@ -102,7 +102,7 @@ describe("FK seed mapper", () => {
   let pool: Pool;
 
   beforeAll(async () => {
-    await resetDatabase(DATABASE_URL, migrationsFolder);
+    await resetTestDatabase(DATABASE_URL, migrationsFolder);
     pool = new Pool({ connectionString: DATABASE_URL });
   });
 
@@ -256,8 +256,23 @@ describe("FK seed mapper", () => {
 });
 
 describe("runCli", () => {
+  it("requires FKAPI_BASE_URL when no fetch adapter is injected", async () => {
+    const previous = process.env.FKAPI_BASE_URL;
+    delete process.env.FKAPI_BASE_URL;
+    await expect(
+      runCli({
+        argv: ["superliga", "1998/99", "1998/99", "development"],
+        databaseUrl: DATABASE_URL,
+        objectStore: createMemoryObjectStore(),
+      }),
+    ).rejects.toThrow(/FKAPI_BASE_URL/);
+    if (previous) {
+      process.env.FKAPI_BASE_URL = previous;
+    }
+  });
+
   it("runs end-to-end with fake adapters", async () => {
-    await resetDatabase(DATABASE_URL, migrationsFolder);
+    await resetTestDatabase(DATABASE_URL, migrationsFolder);
     const pool = new Pool({ connectionString: DATABASE_URL });
     await seedApifyPrerequisites(pool);
     await pool.end();

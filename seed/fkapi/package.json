@@ -13,13 +13,13 @@
     "seed": "node dist/cli.js"
   },
   "dependencies": {
-    "@kit/db": "workspace:*",
-    "@kit/domain": "workspace:*",
-    "drizzle-orm": "^0.39.1"
+    "@aws-sdk/client-s3": "^3.758.0",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "pg": "^8.13.1",
+    "@types/pg": "^8.11.10",
+    "drizzle-orm": "^0.39.1",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
   }

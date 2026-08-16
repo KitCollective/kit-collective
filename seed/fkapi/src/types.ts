@@ -1,5 +1,3 @@
-import type { KitType } from "@kit/domain";
-
 /** Raw kit payload from the Football Kit Archive fetch adapter. */
 export type FkRawKit = {
   id: string;
@@ -11,6 +9,8 @@ export type FkRawKit = {
   labelEn?: string;
   imageBytes?: Uint8Array;
 };
+
+export type KitType = "home" | "away" | "third" | "gk" | "special";
 
 export type FkFetchScope = {
   competition: string;
