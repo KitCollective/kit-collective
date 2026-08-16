@@ -1,0 +1,23 @@
+{
+  "kits": [
+    {
+      "id": "fk-1001",
+      "clubTransfermarktId": "190",
+      "seasonTransfermarktId": "DK1-1998",
+      "seasonLabel": "1998/99",
+      "type": "home",
+      "manufacturerName": "Hummel",
+      "labelEn": "Brøndby IF home 1998/99",
+      "imageBytes": [255, 216, 255, 219]
+    },
+    {
+      "id": "fk-1002",
+      "clubTransfermarktId": "190",
+      "seasonTransfermarktId": "DK1-1998",
+      "seasonLabel": "1998/99",
+      "type": "away",
+      "manufacturerName": "Hummel",
+      "imageBytes": [255, 216, 255, 220]
+    }
+  ]
+}
