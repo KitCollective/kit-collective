@@ -25,7 +25,7 @@ Use this file when writing specs (`to-spec`). If a spec fights a lock below, cha
 | Database | Self-hosted Postgres | — | No Neon. No pgvector in MVP. |
 | ORM | Drizzle | `packages/db` | Schema lives here. **Only `apps/api` imports it.** |
 | Monorepo | pnpm workspaces + Turborepo | repo root | One git repo. |
-| Compute | Hetzner **CX33** (4 vCPU / 8 GB / 80 GB), **Nürnberg** | — | Coolify + Nest + Postgres + Redis. See [server-stack](./server-stack.md). |
+| Compute | Hetzner **CX33** (4 vCPU / 8 GB / 80 GB), **Helsinki** | — | Coolify + Nest + Postgres + Redis. See [server-stack](./server-stack.md). |
 | Object storage | **Cloudflare R2** (S3 API) | — | User photos + admin-only kit archive bytes. **Not** on the CX33 disk. |
 | Jobs | **BullMQ** via `@nestjs/bullmq`, worker in the same Nest process | `apps/api` | Wishlist, push, Vision, seed. Redis beside Nest per lane. See §9. |
 
@@ -227,12 +227,12 @@ Compute and object storage: [server-stack](./server-stack.md). Inventory: [ops-e
 
 | App | Runtime |
 | --- | --- |
-| `apps/api` | Long-running Node on **Hetzner CX33 Nürnberg**, Coolify + Docker. Own Postgres + Redis beside it. **`api.kitcollective.app`** |
+| `apps/api` | Long-running Node on **Hetzner CX33 Helsinki**, Coolify + Docker. Own Postgres + Redis beside it. **`api.kitcollective.app`** |
 | `apps/web` | Astro on Pages / Workers. **`kitcollective.app`** (www → apex). Read Nest. |
 | `apps/admin` | Static SPA behind auth. **`admin.kitcollective.app`**. Never indexed. |
 | `apps/mobile` | EAS Build / Submit. Channels: `development` / `staging` / `production`. |
 | Files | **Cloudflare R2.** Nest is the only writer/reader of secrets. |
-| Email | **AWS SES** from Nest, **EU region** (pick at provision — Frankfurt `eu-central-1` is the usual pair with Nürnberg). Verify-email first; match mail later. How templates/from-address work is Notify-spec, not a lock now. |
+| Email | **AWS SES** from Nest, **EU region** (pick at provision — Frankfurt `eu-central-1` is the usual pair with Helsinki). Verify-email first; match mail later. How templates/from-address work is Notify-spec, not a lock now. |
 
 Three deploy loops, one repo. Path-filtered CI.
 
