@@ -66,9 +66,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: verify-image
     environment: ${{ github.ref_name }}
-    if: vars.COOLIFY_DEPLOY_WEBHOOK_URL != ''
+    if: secrets.COOLIFY_DEPLOY_WEBHOOK_URL != ''
     steps:
       - name: Trigger Coolify webhook
         env:
-          COOLIFY_DEPLOY_WEBHOOK_URL: ${{ vars.COOLIFY_DEPLOY_WEBHOOK_URL }}
+          COOLIFY_DEPLOY_WEBHOOK_URL: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK_URL }}
         run: curl -fsS -X POST "${COOLIFY_DEPLOY_WEBHOOK_URL}"

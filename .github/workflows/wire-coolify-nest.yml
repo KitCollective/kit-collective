@@ -1,0 +1,165 @@
+name: Wire Coolify Nest API
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: Git / Coolify lane
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  wire:
+    name: Wire Nest (${{ inputs.lane }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.lane }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require Coolify credentials
+        env:
+          COOLIFY_API_URL: ${{ secrets.COOLIFY_API_URL }}
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          for name in COOLIFY_API_URL COOLIFY_API_TOKEN DATABASE_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing GitHub Environment secret ${name} on ${{ inputs.lane }}"
+              exit 1
+            fi
+          done
+
+      - name: Ensure Nest application exists and is configured
+        id: coolify
+        env:
+          LANE: ${{ inputs.lane }}
+          COOLIFY_API_URL: ${{ secrets.COOLIFY_API_URL }}
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GIT_REPOSITORY: KitCollective/kit-collective
+        run: |
+          set -euo pipefail
+          API="${COOLIFY_API_URL%/}/api/v1"
+          AUTH="Authorization: Bearer ${COOLIFY_API_TOKEN}"
+
+          request() {
+            local method="$1"
+            local path="$2"
+            local body="${3:-}"
+            if [ -n "$body" ]; then
+              curl -fsS -X "$method" "${API}${path}" \
+                -H "$AUTH" -H "Content-Type: application/json" \
+                -d "$body"
+            else
+              curl -fsS -X "$method" "${API}${path}" -H "$AUTH"
+            fi
+          }
+
+          PROJECT_UUID="$(request GET /projects | jq -r '.[] | select(.name=="KitCollective") | .uuid' | head -1)"
+          if [ -z "$PROJECT_UUID" ] || [ "$PROJECT_UUID" = "null" ]; then
+            echo "::error::Coolify project KitCollective not found"
+            exit 1
+          fi
+
+          ENV_JSON="$(request GET "/projects/${PROJECT_UUID}/environments" | jq -c --arg lane "$LANE" '.[] | select(.name==$lane)')"
+          ENV_UUID="$(echo "$ENV_JSON" | jq -r '.uuid')"
+          if [ -z "$ENV_UUID" ] || [ "$ENV_UUID" = "null" ]; then
+            echo "::error::Coolify environment ${LANE} not found"
+            exit 1
+          fi
+
+          SERVER_UUID="$(request GET /servers | jq -r '.[0].uuid')"
+          if [ -z "$SERVER_UUID" ] || [ "$SERVER_UUID" = "null" ]; then
+            echo "::error::No Coolify server registered"
+            exit 1
+          fi
+
+          APP_UUID="$(request GET /applications | jq -r --arg repo "$GIT_REPOSITORY" --arg lane "$LANE" '
+            .[] | select(.git_repository==$repo and .git_branch==$lane) | .uuid' | head -1)"
+
+          if [ -z "$APP_UUID" ] || [ "$APP_UUID" = "null" ]; then
+            GH_APP_UUID="$(request GET /github/apps | jq -r '.[0].uuid')"
+            if [ -z "$GH_APP_UUID" ] || [ "$GH_APP_UUID" = "null" ]; then
+              echo "::error::No kit-api app and no GitHub App in Coolify — create the Nest app in the panel first"
+              exit 1
+            fi
+
+            CREATE_BODY="$(jq -n \
+              --arg project_uuid "$PROJECT_UUID" \
+              --arg server_uuid "$SERVER_UUID" \
+              --arg environment_name "$LANE" \
+              --arg environment_uuid "$ENV_UUID" \
+              --arg github_app_uuid "$GH_APP_UUID" \
+              --arg git_repository "$GIT_REPOSITORY" \
+              --arg git_branch "$LANE" \
+              '{
+                project_uuid: $project_uuid,
+                server_uuid: $server_uuid,
+                environment_name: $environment_name,
+                environment_uuid: $environment_uuid,
+                github_app_uuid: $github_app_uuid,
+                git_repository: $git_repository,
+                git_branch: $git_branch,
+                build_pack: "dockerfile",
+                ports_exposes: "3000",
+                name: "kit-api",
+                health_check_enabled: true,
+                health_check_path: "/v1/health",
+                health_check_port: "3000",
+                health_check_method: "GET",
+                health_check_return_code: 200
+              }')"
+
+            APP_JSON="$(request POST /applications/private-github-app "$CREATE_BODY")"
+            APP_UUID="$(echo "$APP_JSON" | jq -r '.uuid')"
+            echo "Created Coolify application ${APP_UUID}"
+          else
+            echo "Found existing Coolify application ${APP_UUID}"
+          fi
+
+          request POST "/applications/${APP_UUID}/envs" "$(jq -n \
+            --arg key "DATABASE_URL" \
+            --arg value "$DATABASE_URL" \
+            '{key: $key, value: $value, is_preview: false, is_literal: true}')" >/dev/null || true
+
+          request POST "/applications/${APP_UUID}/envs" "$(jq -n \
+            --arg key "PORT" \
+            --arg value "3000" \
+            '{key: $key, value: $value, is_preview: false, is_literal: true}')" >/dev/null || true
+
+          request GET "/applications/${APP_UUID}/start" >/dev/null
+
+          APP_DETAILS="$(request GET "/applications/${APP_UUID}")"
+          FQDN="$(echo "$APP_DETAILS" | jq -r '.fqdn // empty' | cut -d',' -f1)"
+          WEBHOOK="$(echo "$APP_DETAILS" | jq -r '.manual_webhook_secret_github // .manual_webhook_secret // empty')"
+
+          if [ -z "$WEBHOOK" ] || [ "$WEBHOOK" = "null" ]; then
+            WEBHOOK="${COOLIFY_API_URL%/}/api/v1/deploy?uuid=${APP_UUID}&force=false"
+          fi
+
+          echo "app_uuid=${APP_UUID}" >> "$GITHUB_OUTPUT"
+          echo "fqdn=${FQDN}" >> "$GITHUB_OUTPUT"
+          echo "webhook_url=${WEBHOOK}" >> "$GITHUB_OUTPUT"
+          echo "Coolify app ${APP_UUID} on ${LANE}; fqdn=${FQDN:-pending}"
+          echo "Set GitHub Environment secret COOLIFY_DEPLOY_WEBHOOK_URL=${WEBHOOK}"
+
+      - name: Smoke live health + catalog stats
+        if: steps.coolify.outputs.fqdn != ''
+        env:
+          FQDN: ${{ steps.coolify.outputs.fqdn }}
+        run: |
+          set -euo pipefail
+          BASE="https://${FQDN}"
+          for i in $(seq 1 30); do
+            if curl -fsS "${BASE}/v1/health" | grep -q '"database":"ok"'; then
+              break
+            fi
+            sleep 10
+          done
+          curl -fsS "${BASE}/v1/health" | grep -q '"database":"ok"'
+          curl -fsS "${BASE}/v1/catalog/stats" | grep -q '"countries":'
+          echo "Live smoke passed: ${BASE}/v1/health and /v1/catalog/stats"
