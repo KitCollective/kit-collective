@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Static import boundary check for CI.
- * - Client apps must not import @kit/db or packages/db
+ * - Client apps must not import @kit/db, packages/db, or apps/api
  * - apps/api must not import seed/
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -46,7 +46,13 @@ function findViolations(files, patterns) {
 
 const clientApps = ["apps/mobile", "apps/web", "apps/admin"].map((p) => path.join(ROOT, p));
 const clientFiles = clientApps.flatMap((dir) => collectSourceFiles(dir));
-const clientViolations = findViolations(clientFiles, [/@kit\/db/, /packages\/db/]);
+const clientViolations = findViolations(clientFiles, [
+  /@kit\/db/,
+  /packages\/db/,
+  /from ['"]@kit\/api/,
+  /from ['"]apps\/api/,
+  /from ['"]\.\.\/\.\.\/api/,
+]);
 
 const apiFiles = collectSourceFiles(path.join(ROOT, "apps/api"));
 const apiViolations = findViolations(apiFiles, [/from ['"]seed\//, /import ['"]seed\//]);

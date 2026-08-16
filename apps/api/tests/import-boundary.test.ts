@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const CLIENT_FORBIDDEN_PATTERNS = [
+  /@kit\/db/,
+  /packages\/db/,
+  /from ['"]@kit\/api/,
+  /from ['"]apps\/api/,
+  /from ['"]\.\.\/\.\.\/api/,
+];
 
 function collectSourceFiles(dir: string): string[] {
   try {
@@ -40,17 +49,23 @@ function findForbiddenImports(files: string[], patterns: RegExp[]): string[] {
 }
 
 describe("import boundaries", () => {
-  it("client apps do not import @kit/db", () => {
+  it("client apps do not import @kit/db or apps/api", () => {
     const clientApps = ["apps/mobile", "apps/web", "apps/admin"].map((p) =>
       path.join(ROOT, p),
     );
     const files = clientApps.flatMap((dir) => collectSourceFiles(dir));
-    const violations = findForbiddenImports(files, [
-      /@kit\/db/,
-      /packages\/db/,
-      /from ['"]@kit\/db/,
-    ]);
+    const violations = findForbiddenImports(files, CLIENT_FORBIDDEN_PATTERNS);
     expect(violations).toEqual([]);
+  });
+
+  it("detects forbidden client imports from apps/api (fixture)", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "kit-boundary-"));
+    const badFile = path.join(dir, "bad.ts");
+    writeFileSync(badFile, `import { x } from 'apps/api/foo';\n`);
+
+    const violations = findForbiddenImports([badFile], CLIENT_FORBIDDEN_PATTERNS);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain("bad.ts");
   });
 
   it("Nest API does not import seed/", () => {
