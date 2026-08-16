@@ -5,6 +5,7 @@
 .cursor/mcp.json
 node_modules/
 dist/
+.turbo/
 .idea/
 .vscode/
 *.log
