@@ -26,23 +26,45 @@ Choose a **mode**. Ask if unclear.
 
 ### Kickoff
 
-No Linear project exists for this effort (new product, or unscaffolded repo). The spec must organize the **whole picture**, not one flat feature:
+No Linear project exists for this effort (new product, or unscaffolded repo). The spec must organize the **whole picture**, not one flat feature.
 
-- One Linear **project** (`save_project` on `linear.teamKey`, status `planned`)
-- Several **milestones** — each is a shippable increment, a **handful of vertical slices**, and the unit that later promotes `lanes.integration` → `lanes.staging`. Not tasks. Not “phase 1 / phase 2” as wishful labels; each milestone has a demoable “complete”.
-- `save_document` on that project with the spec body
-- Label `kickoff`
+Create **one** Linear project that looks like a project, not an empty shell. `save_project` on `linear.teamKey` with every field below. Then milestones, then the document. No issues.
 
-Add `## Linear` (project name, each milestone, what complete means). Keep the other headings.
+**Project (`save_project`)**
+
+| Field | Value |
+| --- | --- |
+| `name` | From the spec title / product effort |
+| `setTeams` | `[linear.teamKey]` |
+| `state` | `planned` |
+| `summary` | One sentence from Problem Statement (≤255 chars) |
+| `description` | Markdown: problem, solution, milestone list with what “complete” means. Not the full spec — that is the document |
+| `lead` | `approver` from factory config |
+| `labels` | `craft:*` from `labels.projects.items` that this effort actually touches. Whole-product kickoff typically all three. Names, not IDs. This **replaces** the label set — pass the full list |
+| `priority` | Only if the conversation named it (`1` Urgent … `4` Low). Otherwise omit (Linear `None`) |
+| `startDate` / `targetDate` | Only if the conversation named dates |
+| `icon` / `color` | Omit unless the conversation named them |
+
+`craft:design` = UI, layout, copy, a11y. `craft:frontend` = client surfaces. `craft:backend` = API / schema. PM filter only — never split a vertical slice by craft.
+
+**Milestones** — each is a shippable increment, a **handful of vertical slices**, and the unit that later promotes `lanes.integration` → `lanes.staging`. Not tasks. Not “phase 1 / phase 2” as wishful labels. `save_milestone` with `name` **and** `description` (what “complete” means — demoable; ready to promote). `targetDate` only if named.
+
+**Document** — `save_document` on that project with the spec body. Title = spec name.
+
+Record spec type `kickoff` in `## Linear`. That label lives on issues `/to-tickets` may spawn later; do not create a dummy issue to hang it.
+
+**Done when:** the Linear project has name, team, summary, description, lead, at least one `craft:*` label, and every milestone has a description. Opening it in Linear does not look blank.
+
+Add `## Linear` (project name, craft labels, lead, priority if set, each milestone, what complete means). Keep the other headings.
 
 ### Feature
 
 A Linear project already exists. This is a new slice on a specified product.
 
-- `save_document` on that project only
-- Label `feature` (Linear Type **Feature**)
-- Do **not** create a second project
-- If this feature is its own staging increment, `save_milestone` on the existing project. If it belongs in an open milestone, attach there.
+- `save_document` on that project only. Title = spec name. Body = spec.
+- Record spec type `feature` (Linear Type **Feature** on issues `/to-tickets` will create). Do not create a dummy issue.
+- Do **not** create a second project. Do **not** call `save_project` with `labels` — that replaces the whole set.
+- If this feature is its own staging increment, `save_milestone` on the existing project with `name` and `description` (what “complete” means). If it belongs in an open milestone, attach there.
 
 If unclear, ask which Linear project (and milestone) this belongs to.
 
@@ -101,6 +123,9 @@ A description of the things that are out of scope for this spec.
 
 - **Project:** name
 - **Mode:** kickoff | feature
+- **Craft labels:** `craft:…` (kickoff only)
+- **Lead:** approver
+- **Priority:** value, or None (not named)
 - **Milestones** (each is one staging increment — a handful of issues, not the whole product):
   1. Milestone name — what “complete” means (demoable; ready to promote integration → staging)
 

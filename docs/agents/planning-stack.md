@@ -31,7 +31,7 @@ Keep `/to-tickets` (Matt’s name). It slices vertical issues onto a **milestone
 | --- | --- |
 | `/grill-with-docs` | Shared understanding. Terms in `CONTEXT.md` Language. Sparse ADRs. |
 | `/to-design` | AI-ready visual lock in `docs/design-system.md`. HITL. Skip when the work is not visual. |
-| `/to-spec` | Spec file + Linear project/milestones (kickoff) or document ± milestone (feature). Seams confirmed. |
+| `/to-spec` | Spec file + Linear project/milestones (kickoff: summary, description, lead, `craft:*`) or document ± milestone (feature). Seams confirmed. |
 | `/to-tickets` | Vertical Linear issues on **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not delegated.** |
 | Delegate | Human. Agent field = `linear.delegateAgentName`. |
 | Planner | Cron. Claims `dispatch.state` → `Implementing` under `agent.maxConcurrent`, in Linear priority order. No code. |

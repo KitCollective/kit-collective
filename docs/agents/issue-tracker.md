@@ -14,8 +14,8 @@ If the setup file is missing, run `/bootstrap-linear`. Do not guess IDs.
 
 | Skill | What to create |
 | --- | --- |
-| `/to-spec` kickoff | Linear **project** (`planned`) + **milestones** + a Linear document with the spec body. Issue label `kickoff`. Project labels `craft:*` as a PM filter. No issues. |
-| `/to-spec` feature | Linear **document** on the existing project. Label `feature`. |
+| `/to-spec` kickoff | Linear **project** (`planned`) filled in: summary, description, lead (`approver`), `craft:*` project labels (PM filter). **Milestones** with descriptions. Linear **document** with the spec body. Priority and dates only if the conversation named them. No issues. |
+| `/to-spec` feature | Linear **document** on the existing project. New **milestone** (with description) only if this feature is its own staging increment. Do not replace project labels. |
 | `/to-tickets` | One Linear **issue** per vertical slice. Status = `dispatch.state`. Parent project + milestone. Native `blockedBy`. Label `ready-for-agent`. Optional `write-scope:`. **Do not delegate.** |
 | `/signal-up` | New issue in the dispatch state with `signal-up` + `needs-triage`. Related to the origin. Never `Implementing`. |
 
@@ -27,7 +27,7 @@ Use Linear MCP `get_issue` with `<teamKey>-n` or UUID **and** `list_comments` on
 
 Moving an issue to the dispatch state is **not** enough. A human must **delegate** it to `linear.delegateAgentName`. The human stays the assignee. Automations no-op when `blockedBy` is unresolved.
 
-**Priority** is Linear’s native field (`0` None, `1` Urgent, `2` High, `3` Medium, `4` Low). The human sets it. Planner uses `dispatch.priorityOrder` only to pick **which eligible issue to claim next**. It does not replace delegate, blockers, or `signal-up`. `/to-tickets` does not invent a priority. Same rank: oldest first. Do not preempt `Implementing`.
+**Priority** is Linear’s native field (`0` None, `1` Urgent, `2` High, `3` Medium, `4` Low). The human sets it. `/to-spec` and `/to-tickets` copy it only when the conversation named it; they do not invent High to fill the UI. Planner uses `dispatch.priorityOrder` only to pick **which eligible issue to claim next**. It does not replace delegate, blockers, or `signal-up`. Same rank: oldest first. Do not preempt `Implementing`.
 
 ## Intake (Linear Triage and Duplicate)
 
