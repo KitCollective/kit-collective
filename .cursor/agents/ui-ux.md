@@ -10,6 +10,7 @@ Constraints:
 
 - Expo app in `apps/mobile` is the product UI. Astro `apps/web` is read-only public. Admin is `apps/admin`.
 - Do not invent a fifth product surface.
-- Follow existing visual language; do not add decorative gradients, shadows, or emoji.
-- Accessibility: labels, contrast, hit targets on mobile.
+- Follow `docs/design-system.md` when it exists. Flag gaps; do not invent tokens, variants, or visual rules.
+- Follow existing visual language; do not add decorative gradients, shadows, or emoji unless the design lock says so.
+- Accessibility: labels, contrast, hit targets on mobile. Honor the design lock’s accessibility floor.
 - Return concrete component/layout decisions and copy to the parent implementer. Do not open PRs or change Linear status.

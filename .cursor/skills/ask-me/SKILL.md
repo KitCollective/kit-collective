@@ -26,19 +26,20 @@ A **flow** is a path through the skills. Most paths run along one **main flow**,
 
 The route most work travels. You have an idea and want it built.
 
-1. **`/grill-with-docs`** — sharpen the idea by interview. Kickoff (whole product) or feature (existing Linear project). Writes `CONTEXT.md` terms and ADRs. Next step is `/to-spec` in the **same** conversation.
+1. **`/grill-with-docs`** — sharpen the idea by interview. Kickoff (whole product) or feature (existing Linear project). Writes `CONTEXT.md` terms and ADRs. Next step is `/to-spec` in the **same** conversation — or `/to-design` first when surfaces need a shared visual lock.
 2. **Branch — can you settle every question in conversation?** If a question needs a runnable answer (state, business logic, a UI you have to see), detour through **`/prototype`**. Same repo → invoke it here. New session or directory → **`/handoff`** out and back. The prototype answers the question; it does not implement the issue.
-3. **`/to-spec`** — kickoff = one Linear project + milestones (no issues). Feature = document on the existing project; new milestone only if this feature is its own staging increment.
-4. **`/to-tickets`** — vertical slices onto **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not delegated.**
-5. **Human** delegates to `linear.delegateAgentName` (human stays assignee).
-6. **`/implement`** — one issue, one branch from `lanes.integration`, one PR into that lane. Drives **`/tdd`** at spec seams (`/codebase-design` vocabulary). Hard repro with no loop yet → **`/diagnosing-bugs`** first. Out of scope → **`/signal-up`** (cap applies). Closes with **`/code-review`** before `In Review`.
-7. **Checker** — `/code-review` again (judge only). Pass → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`.
-8. **Approver** reads the GitHub PR, moves Linear to `Done`. That **is** merge approval.
-9. **`/land`** into `lanes.integration`. A complete **milestone** then staging / production (not this skill).
+3. **`/to-design`** — when implementing agents will build UI and taste is still implicit. HITL. Writes `docs/design-system.md`. A look you must see is still `/prototype`, then back. Skip this step when the work is not visual.
+4. **`/to-spec`** — kickoff = one Linear project + milestones (no issues). Feature = document on the existing project; new milestone only if this feature is its own staging increment.
+5. **`/to-tickets`** — vertical slices onto **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not delegated.**
+6. **Human** delegates to `linear.delegateAgentName` (human stays assignee).
+7. **`/implement`** — one issue, one branch from `lanes.integration`, one PR into that lane. Drives **`/tdd`** at spec seams (`/codebase-design` vocabulary). Hard repro with no loop yet → **`/diagnosing-bugs`** first. Out of scope → **`/signal-up`** (cap applies). Closes with **`/code-review`** before `In Review`. UI slices follow `docs/design-system.md` when it exists.
+8. **Checker** — `/code-review` again (judge only). Pass → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`.
+9. **Approver** reads the GitHub PR, moves Linear to `Done`. That **is** merge approval.
+10. **`/land`** into `lanes.integration`. A complete **milestone** then staging / production (not this skill).
 
 ### Context hygiene
 
-Keep grilling → spec → tickets in **one unbroken context window**. Each `/implement` starts fresh from the Linear issue.
+Keep grilling → spec → tickets in **one unbroken context window**. Each `/implement` starts fresh from the Linear issue. `/to-design` may share that window or be its own sitting — `docs/design-system.md` is the handoff.
 
 The limit is the **[smart zone](https://www.aihero.dev/ai-coding-dictionary/smart-zone)** (~150k tokens). If a session approaches it before `/to-tickets`, compact at the nearest phase boundary — see [PHASE-BOUNDARIES.md](PHASE-BOUNDARIES.md).
 
@@ -47,6 +48,7 @@ The limit is the **[smart zone](https://www.aihero.dev/ai-coding-dictionary/smar
 - **Something's broken** → **`/diagnosing-bugs`**. Tight red-capable loop before a fix. Then `/tdd` at the seam on a bug issue, or `/signal-up` if found mid-implement.
 - **Bugs and requests piling up** → human triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`). This factory has not copied Matt’s `/triage` skill. Tickets from `/to-tickets` are already agent-ready — **don't re-triage them**.
 - **A huge, foggy effort** → `/grill-with-docs` **kickoff** in rounds, then `/to-spec` (project + milestones). Not wayfinder.
+- **Agents guess layout, tokens, or components** → **`/to-design`**. HITL. Writes `docs/design-system.md`.
 
 ## Codebase health
 
@@ -58,6 +60,7 @@ Not feature work — upkeep.
 ## Vocabulary underneath
 
 - **`/grill-with-docs`** already drives domain language into `CONTEXT.md` / ADRs (Matt’s `/domain-modeling` is inlined there).
+- **`/to-design`** — visual and interaction language into `docs/design-system.md`. Taste, foundations, tokens, components. Agents flag gaps; they do not invent rules.
 - **`/codebase-design`** — module, interface, depth, seam, adapter, leverage, locality.
 
 ## Factory-only
@@ -66,6 +69,7 @@ Not feature work — upkeep.
 - **`/land`** — merge the GitHub PR after `Done`. Integration lane only.
 - **`/bootstrap-linear`** — board missing or unshaped (`linear.setup.json` absent).
 - **`/create-new-skill`** — author a factory skill under `.cursor/skills/`.
+- **`/to-design`** — HITL visual lock into `docs/design-system.md`. Factory-original.
 - **`/ask-me`** — this router.
 
 ## Phase boundaries
@@ -80,7 +84,7 @@ Off the main flow. Skills marked *not copied* are Matt’s — do not invent a l
 - **`/tdd`** — red-green-refactor at a seam, without a full spec.
 - **`/create-new-skill`** — new or edited factory skill.
 - **`/wait-what`** — the last message did not land. Re-pitch in `CONTEXT.md` language. Works mid-conversation, inside any skill.
-- **`/prototype`** — throwaway code that answers one design question (logic HTML or UI variants). Then back to grill / `/to-spec`.
+- **`/prototype`** — throwaway code that answers one design question (logic HTML or UI variants). Then back to grill / `/to-design` / `/to-spec`.
 - **`/research`** — background agent, cited primary sources, Markdown under `{paths.specs}`. Feeds grilling; does not replace it.
 - **`/handoff`** — portable session file. Default OS temp; `{paths.specs}/<effort>/handoff.md` when the next agent is on this repo.
 - **`/wizard`** — interactive bash for steps only a human can take (secrets, dashboards, cutover). Not for steps the agent can do.

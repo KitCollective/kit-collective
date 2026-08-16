@@ -5,7 +5,7 @@ Operator path from idea to landed work. Matt’s engineering loop, Linear as the
 ## Path
 
 ```text
-/grill-with-docs → /to-spec → /to-tickets
+/grill-with-docs → /to-design (when UI needs shared rules) → /to-spec → /to-tickets
   → human delegates to linear.delegateAgentName
   → planner claims (Backlog → Implementing)
   → /implement (/tdd + domain helpers) → PR + Linear evidence → In Review
@@ -30,6 +30,7 @@ Keep `/to-tickets` (Matt’s name). It slices vertical issues onto a **milestone
 | Step | Output |
 | --- | --- |
 | `/grill-with-docs` | Shared understanding. Terms in `CONTEXT.md` Language. Sparse ADRs. |
+| `/to-design` | AI-ready visual lock in `docs/design-system.md`. HITL. Skip when the work is not visual. |
 | `/to-spec` | Spec file + Linear project/milestones (kickoff) or document ± milestone (feature). Seams confirmed. |
 | `/to-tickets` | Vertical Linear issues on **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not delegated.** |
 | Delegate | Human. Agent field = `linear.delegateAgentName`. |
@@ -48,7 +49,7 @@ Message didn’t land? `/wait-what`.
 
 Architecture upkeep? `/improve-codebase-architecture` (survey → grill → `/to-spec`, no implement).
 
-Design question you can’t settle on paper? `/prototype`. Reading legwork? `/research`. Session must travel? `/handoff`. Human-only setup? `/wizard`.
+Design question you can’t settle on paper? `/prototype`. Visual system still implicit? `/to-design`. Reading legwork? `/research`. Session must travel? `/handoff`. Human-only setup? `/wizard`.
 
 New factory skill? `/create-new-skill` (Matt’s `writing-for-agents` + the old `write-a-skill` process).
 

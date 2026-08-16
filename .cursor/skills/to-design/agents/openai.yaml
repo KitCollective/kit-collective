@@ -1,0 +1,5 @@
+interface:
+  display_name: "To Design"
+  short_description: "Interview; write an AI-ready design-system MD"
+policy:
+  allow_implicit_invocation: false

@@ -19,6 +19,7 @@ If `CONTEXT.md` or `docs/adr/` is thin, proceed. `/grill-with-docs` creates term
 | `WORKFLOW.md` | Generic control-plane prompt. |
 | `AGENTS.md` | Generated harness entrypoint. Do not edit by hand. |
 | `docs/adr/` | Architecture Decision Records from `/grill-with-docs`. |
+| `docs/design-system.md` | Visual and interaction lock from `/to-design`. Agents flag gaps; they do not invent taste. |
 | `{paths.specs}/` | Product specs, PRD, architecture lock. |
 
 When `/grill-with-docs` coins a term, add it to `CONTEXT.md` **Language** (never the generated Orchestration block). When it locks a decision, write an ADR under `docs/adr/`.

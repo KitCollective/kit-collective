@@ -58,11 +58,12 @@ Read \`factory.config.json\` then \`WORKFLOW.md\` before writing code or touchin
 When two docs disagree, resolve in this order rather than following whichever you read first:
 
 1. **\`CONTEXT.md\`** — the domain vocabulary. Highest authority on what a thing *is*.
-2. **\`docs/adr/\`** — accepted decisions, on why things are the way they are. An ADR marked superseded loses to the one that superseded it. Correct with a supersession note, never by rewriting.
-3. **\`${specs}/<effort>/spec.md\`** — what one effort set out to build, frozen at write time. Specs go stale; treat them as intent, not as truth.
-4. **The Linear issue** — tickets are subordinate to their spec.
+2. **\`docs/design-system.md\`** — visual and interaction rules for in-scope surfaces (when the file exists). Agents flag gaps; they do not invent taste.
+3. **\`docs/adr/\`** — accepted decisions, on why things are the way they are. An ADR marked superseded loses to the one that superseded it. Correct with a supersession note, never by rewriting.
+4. **\`${specs}/<effort>/spec.md\`** — what one effort set out to build, frozen at write time. Specs go stale; treat them as intent, not as truth.
+5. **The Linear issue** — tickets are subordinate to their spec.
 
-**Code is evidence, not authority** — if the code contradicts \`CONTEXT.md\`, one of them is a bug; say which rather than silently following the code.
+**Code is evidence, not authority** — if the code contradicts \`CONTEXT.md\` or \`docs/design-system.md\`, one of them is a bug; say which rather than silently following the code.
 
 If you find a genuine contradiction, surface it instead of picking a side quietly.
 
@@ -106,6 +107,10 @@ Declare path globs on implementation issues (\`write-scope:\`) so parallel runs 
 
 Single-context layout: root \`CONTEXT.md\` + \`docs/adr/\`. See \`docs/agents/domain.md\`.
 
+### Design system
+
+Human \`/to-design\` writes \`docs/design-system.md\`. Implementing agents and the UI helper follow it and flag gaps instead of inventing taste. See \`.cursor/skills/to-design/SKILL.md\`.
+
 ### Codebase design
 
 Deep-module vocabulary (module, interface, seam, adapter). \`/tdd\` and \`/to-spec\` consult it. Survey deepenings with \`/improve-codebase-architecture\`. See \`.cursor/skills/codebase-design/SKILL.md\`.
@@ -128,21 +133,22 @@ New or edited factory skill under \`.cursor/skills/\`. Not a domain helper. See 
 
 ### Prototype, research, handoff, wizard
 
-Throwaway design question: \`/prototype\`. Cited primary sources: \`/research\`. Session must travel: \`/handoff\`. Human-only setup: \`/wizard\`.
+Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited primary sources: \`/research\`. Session must travel: \`/handoff\`. Human-only setup: \`/wizard\`.
 
 ### Planning stack
 
-\`/grill-with-docs\` → \`/to-spec\` → \`/to-tickets\` → delegate to **${delegate}** → planner claims → \`/implement\` (\`/tdd\`) → checker → ${approver} to Done → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
+\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → delegate to **${delegate}** → planner claims → \`/implement\` (\`/tdd\`) → checker → ${approver} to Done → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
 
 ## How work enters the factory
 
 1. \`/grill-with-docs\`
-2. \`/to-spec\` — kickoff = Linear project + milestones; feature = document on an existing project
-3. \`/to-tickets\` — vertical slices in \`${dispatch}\`
-4. Human delegates to \`${delegate}\` (human stays assignee)
-5. planner claims → implement → PR + Linear evidence → checker → \`Ready for merge\`
-6. \`${approver}\` reads the GitHub PR, moves Linear to \`Done\`
-7. \`/land\` into \`${integration}\`. A complete **milestone** then \`${staging}\` / \`${production}\` promotions
+2. \`/to-design\` — HITL visual lock into \`docs/design-system.md\` when agents will implement UI
+3. \`/to-spec\` — kickoff = Linear project + milestones; feature = document on an existing project
+4. \`/to-tickets\` — vertical slices in \`${dispatch}\`
+5. Human delegates to \`${delegate}\` (human stays assignee)
+6. planner claims → implement → PR + Linear evidence → checker → \`Ready for merge\`
+7. \`${approver}\` reads the GitHub PR, moves Linear to \`Done\`
+8. \`/land\` into \`${integration}\`. A complete **milestone** then \`${staging}\` / \`${production}\` promotions
 
 Product truth lives under \`${specs}\`. If a spec fights a stack lock, change the lock first.
 `;

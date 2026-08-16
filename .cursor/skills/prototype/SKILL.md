@@ -11,7 +11,7 @@ A prototype is **throwaway code that answers a question**. The question decides 
 
 ## Factory twist
 
-- This skill **answers one design question**. It does not implement the Linear issue, open a product PR, or `/land`. Fold the verdict back into `/grill-with-docs` or `/to-spec`.
+- This skill **answers one design question**. It does not implement the Linear issue, open a product PR, or `/land`. Fold the verdict back into `/grill-with-docs`, `/to-design`, or `/to-spec`.
 - Capture the prototype on a throwaway branch **out of** `lanes.integration`. Never merge it via `/land`. The integration lane keeps only the validated decision.
 - Clients (`apps/mobile`, `apps/web`, `apps/admin`) must not import `apps/api` or `packages/db`. A UI prototype that would require that is the wrong seam — use a fixture or the public contract.
 - Redact secrets. `LINEAR_API_KEY` never appears in a prototype, log, or HTML file.

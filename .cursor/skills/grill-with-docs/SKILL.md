@@ -10,7 +10,7 @@ Load `factory.config.json` then `WORKFLOW.md`. Read `CONTEXT.md` first.
 
 This is Matt’s `/grill-with-docs`, not `/grill-me`. `/grill-me` is stateless (no repo, no files, not necessarily code). We always have a repo, so we grill **and** write the glossary.
 
-Do not invent Linear statuses. Do not publish tickets. Next step is `/to-spec` in the **same** conversation.
+Do not invent Linear statuses. Do not publish tickets. Next step is `/to-spec` in the **same** conversation. If surfaces need a shared visual lock first, `/to-design` then `/to-spec`.
 
 ## Which tree you are grilling
 

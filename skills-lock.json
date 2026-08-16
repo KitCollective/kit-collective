@@ -82,6 +82,11 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/wizard/SKILL.md"
+    },
+    "to-design": {
+      "source": "factory",
+      "sourceType": "factory",
+      "skillPath": "factory"
     }
   },
   "harnessTwists": {
