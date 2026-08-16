@@ -1,0 +1,39 @@
+# Coolify Docker Compose job — Apify / Transfermarkt seed CLI.
+# Resource-limited one-shot. Not a 24/7 service. Do not add ports or
+# restart: unless-stopped. Attach to Coolify environment `development`,
+# or `staging` only when that lane is named. Never the production environment.
+#
+# Required env: DATABASE_URL, SEED_COMPETITION, SEED_FROM_SEASON, SEED_TO_SEASON
+# Optional: SEED_LANE (defaults to development). Production is rejected.
+
+services:
+  seed-apify:
+    build:
+      context: ../..
+      dockerfile: seed/jobs/Dockerfile
+    restart: "no"
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: "1.0"
+    pids_limit: 256
+    environment:
+      SEED_CLI: apify
+      DATABASE_URL: ${DATABASE_URL}
+      SEED_COMPETITION: ${SEED_COMPETITION}
+      SEED_FROM_SEASON: ${SEED_FROM_SEASON}
+      SEED_TO_SEASON: ${SEED_TO_SEASON}
+      SEED_LANE: ${SEED_LANE:-development}
+      SEED_APIFY_BIN: ${SEED_APIFY_BIN:-}
+    command:
+      - node
+      - --experimental-strip-types
+      - seed/jobs/run.ts
+      - --
+      - --competition
+      - ${SEED_COMPETITION}
+      - --from-season
+      - ${SEED_FROM_SEASON}
+      - --to-season
+      - ${SEED_TO_SEASON}
+      - --lane
+      - ${SEED_LANE:-development}

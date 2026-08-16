@@ -1,0 +1,49 @@
+# Coolify Docker Compose job — Football Kit Archive seed CLI.
+# Resource-limited one-shot. Not a 24/7 service. Do not add ports or
+# restart: unless-stopped. Attach to Coolify environment `development`,
+# or `staging` only when that lane is named. Never the production environment.
+#
+# Run Apify for the same competition + season range first. FK refuses a
+# scope whose Club/Season rows are missing.
+#
+# Required env: DATABASE_URL, SEED_COMPETITION, SEED_FROM_SEASON, SEED_TO_SEASON
+# Optional: SEED_LANE (defaults to development). Production is rejected.
+# R2 names (values from the matching GitHub Environment only):
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_ENDPOINT
+
+services:
+  seed-fk:
+    build:
+      context: ../..
+      dockerfile: seed/jobs/Dockerfile
+    restart: "no"
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: "1.0"
+    pids_limit: 256
+    environment:
+      SEED_CLI: fk
+      DATABASE_URL: ${DATABASE_URL}
+      SEED_COMPETITION: ${SEED_COMPETITION}
+      SEED_FROM_SEASON: ${SEED_FROM_SEASON}
+      SEED_TO_SEASON: ${SEED_TO_SEASON}
+      SEED_LANE: ${SEED_LANE:-development}
+      SEED_FK_BIN: ${SEED_FK_BIN:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+    command:
+      - node
+      - --experimental-strip-types
+      - seed/jobs/run.ts
+      - --
+      - --competition
+      - ${SEED_COMPETITION}
+      - --from-season
+      - ${SEED_FROM_SEASON}
+      - --to-season
+      - ${SEED_TO_SEASON}
+      - --lane
+      - ${SEED_LANE:-development}
