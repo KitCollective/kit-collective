@@ -138,6 +138,8 @@ Port from Huddle: prompt shape, ID match, confidence gates. Do **not** port the 
 
 The product monorepo (`kit-collective`) does **not** scrape and does **not** contain Apify/FKApi fetch code. Stamdata is two **separate GitHub repos**. Create them when we leave restructuring — not inside this monorepo.
 
+> **Interim exception (ADR 0001):** until `kit-collective-seed-fkapi` exists on GitHub, FK seed CLI lives at `seed/fkapi/` in this monorepo. It uses `DATABASE_URL` only (no `@kit/db`). Move out and delete the folder when the standalone repo is created. Apify seed is **not** interim — still a separate future repo.
+
 | Repo | Learns | Writes into KitCollective |
 | --- | --- | --- |
 | `kit-collective-seed-apify` | Clubs, seasons, team-seasons, players, squad numbers (facts only) via Apify | `Club`, `Season`, `TeamSeason`, `Player`, `PlayerClubSeason`, `CatalogLabel`, `ExternalId` |
