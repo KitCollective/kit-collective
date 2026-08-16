@@ -1,4 +1,3 @@
-import type { LabelLocale } from "@kit/domain";
 import type {
   NormalizedClub,
   NormalizedFacts,
@@ -8,6 +7,7 @@ import type {
   TransfermarktRawPayload,
   TransfermarktRawPlayer,
 } from "../types.js";
+import { seedLabelLocale } from "./seed-label-locale.js";
 
 const FORBIDDEN_CLUB_KEYS = new Set([
   "marketValue",
@@ -26,19 +26,12 @@ function assertNoForbiddenKeys(value: Record<string, unknown>, forbidden: Set<st
   }
 }
 
-function labelLocaleForEntity(entity: "club" | "player", name: string): LabelLocale {
-  if (entity === "player") {
-    return "mul";
-  }
-  return "en";
-}
-
 function normalizePlayer(raw: TransfermarktRawPlayer): NormalizedPlayer {
   assertNoForbiddenKeys(raw as unknown as Record<string, unknown>, FORBIDDEN_PLAYER_KEYS, "player");
   return {
     externalId: raw.id,
     name: raw.name,
-    nameLocale: labelLocaleForEntity("player", raw.name),
+    nameLocale: seedLabelLocale(raw.name),
     squadNumber: raw.jerseyNumber,
   };
 }
@@ -48,7 +41,7 @@ function normalizeClub(raw: TransfermarktRawClub): NormalizedClub {
   return {
     externalId: raw.id,
     name: raw.name,
-    nameLocale: labelLocaleForEntity("club", raw.name),
+    nameLocale: seedLabelLocale(raw.name),
     countryIso: raw.country?.iso3166 ?? "XX",
     kind: raw.kind ?? "club",
     players: raw.players.map(normalizePlayer),

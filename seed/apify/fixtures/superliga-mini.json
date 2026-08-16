@@ -51,6 +51,11 @@
               "id": "player-67890",
               "name": "Kevin Jakobsen",
               "jerseyNumber": 9
+            },
+            {
+              "id": "player-99999",
+              "name": "Rasmus Hojlund",
+              "jerseyNumber": 11
             }
           ]
         }

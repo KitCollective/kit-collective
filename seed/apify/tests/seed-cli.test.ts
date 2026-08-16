@@ -58,7 +58,7 @@ describe("normalize", () => {
     expect(facts.seasons[1]?.clubs[0]?.players[0]?.squadNumber).toBe(23);
   });
 
-  it("assigns en labels for clubs and mul for players", async () => {
+  it("assigns en for clubs and mul only for locale-invariant player names", async () => {
     const adapter = createFixtureFetchAdapter(fixturePath);
     const raw = await adapter.fetch({
       competition: "dk1",
@@ -69,6 +69,7 @@ describe("normalize", () => {
     const season = facts.seasons.find((s) => s.label === "23/24");
     expect(season?.clubs[0]?.nameLocale).toBe("en");
     expect(season?.clubs[0]?.players[0]?.nameLocale).toBe("mul");
+    expect(season?.clubs[1]?.players[1]?.nameLocale).toBe("en");
   });
 });
 
@@ -219,6 +220,20 @@ describe("mapper idempotency", () => {
         );
 
       expect(playerLabel.some((row) => row.text === "Jonas Wind")).toBe(true);
+
+      const transliteratedPlayer = await db
+        .select({ text: catalogLabel.text, locale: catalogLabel.locale })
+        .from(catalogLabel)
+        .where(
+          and(
+            eq(catalogLabel.entityType, "player"),
+            eq(catalogLabel.text, "Rasmus Hojlund"),
+            eq(catalogLabel.kind, "label"),
+          ),
+        );
+
+      expect(transliteratedPlayer).toHaveLength(1);
+      expect(transliteratedPlayer[0]?.locale).toBe("en");
     } finally {
       await dbPool.end();
     }
