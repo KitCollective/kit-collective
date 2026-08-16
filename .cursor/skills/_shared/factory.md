@@ -7,7 +7,7 @@ Every harness skill starts here.
 3. If `linear.setup.json` is missing, stop and run `/bootstrap-linear`.
 4. Domain helpers live in `paths.helpers` (default `.cursor/agents/`). Spawn by matching the slice to each helper’s YAML `description`. They never own Linear issues. Skip `planner`, `checker`, and `release` during `/tdd`.
 
-Working skills are `.cursor/skills/` — self-contained (Matt’s loop plus this factory). Do not open `.agents/skills/` at runtime.
+Working skills are `.cursor/skills/` — self-contained (Matt’s loop plus this factory). Do not recreate `.agents/`.
 
 Resolve names from config, not from memory:
 

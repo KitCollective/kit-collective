@@ -85,6 +85,6 @@
     }
   },
   "harnessTwists": {
-    "note": "Working copy is .cursor/skills/ (Matt’s loop inlined, then factory twist). .agents/skills/ is an optional upstream snapshot, not loaded at runtime. Domain helpers stay in .cursor/agents/ per product."
+    "note": "Working copy is .cursor/skills/ (Matt’s loop inlined, then factory twist). Domain helpers stay in .cursor/agents/ per product. Do not recreate .agents/."
   }
 }

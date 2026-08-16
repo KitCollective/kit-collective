@@ -73,7 +73,6 @@ If you find a genuine contradiction, surface it instead of picking a side quietl
 | \`factory.config.json\` | This product’s names, team key, lanes, labels. Copy from \`factory.config.example.json\` on a new repo. | Yes — per project. |
 | \`.cursor/skills/\` | Working skills. Matt’s loop copied in, then this factory’s twist. YAML in \`agents/\`. | Yes — keep generic. |
 | \`${helpers}/\` | Domain helpers spawned from \`/implement\` / \`/tdd\`. Product specialization. | Yes — per project. |
-| \`.agents/skills/\` | Optional upstream snapshot. Not loaded at runtime. | No. |
 
 Factory slash commands are the **Cursor** skills.
 
