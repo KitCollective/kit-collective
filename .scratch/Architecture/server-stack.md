@@ -133,6 +133,17 @@ CX33                          R2 (per lane)
 
 ---
 
+## Cursor MCP (Coolify)
+
+Nicklas operates the CX33 from Cursor via Coolify’s built-in MCP server ([Coolify MCP docs](https://coolify.io/docs/integrations/mcp)):
+
+1. Enable MCP in Coolify **Settings → Advanced** (root API token).
+2. Endpoint: `{panel_url}/mcp` with `Authorization: Bearer <token>`.
+3. **Cloud Agents:** commit `.cursor/mcp.json.example` + `scripts/setup-coolify-mcp.sh`; `.cursor/environment.json` `install` generates `.cursor/mcp.json` when the Cloud Agent environment has `COOLIFY_API_URL`, `COOLIFY_API_TOKEN`, and optionally `COOLIFY_MCP_URL`. Secret names are in `.env.example`; values never in git.
+4. **Evidence:** an implement or checker run must see a `coolify` server in `GetMcpTools` in that same session — not prose from a prior VM.
+
+---
+
 ## Alternatives considered
 
 | Option | Verdict | Why |
