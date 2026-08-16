@@ -1,31 +1,91 @@
-# Kit Collective — domain language
+# KitCollective
 
-Use these terms in specs, tickets, commits, and Linear titles. Prefer one word over a paragraph.
+Nordic football-shirt collector product. Use these terms in specs, tickets, commits, and Linear titles.
 
-## Product
-
-| Term | Meaning |
-| --- | --- |
-| Kit | Catalog truth for a shirt design (club / season / type). Not a user’s copy. |
-| UserJersey | A collector’s owned instance of a Kit, with photos and personal fields. |
-| CatalogLabel | Locale + kind name for stamdata. English seed string is not the Danish UI name. |
-| Vision suggestion | Gemini output. Persist catalog UUIDs after confirm — never raw model names as FK. |
-| Save | Must not wait on Vision, kit completeness, or manufacturer. |
-| Lane | One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects. |
-
-Full product glossary grows via `/grill-with-docs` into this file and `docs/adr/`.
-
+<!-- factory:generated-start -->
 ## Orchestration
 
-| Term | Meaning |
-| --- | --- |
-| Control plane | Linear. Status + delegate + blockers decide what runs. |
-| Runtime | Cursor Automations + Cloud Agents reading this repo’s harness. |
-| Kickoff | `/to-spec` for a new Linear project + milestones. No issues yet. |
-| Feature spec | `/to-spec` against an existing project. |
-| Vertical slice | One issue that cuts schema → API → UI → tests and is demoable alone. |
-| Delegate | Linear agent field. Human remains assignee. Dispatch key with `Backlog` + unblocked. |
-| Workpad | The single `## Agent Workpad` comment on an issue. |
-| Signal-up | Out-of-scope finding filed as a new `Backlog` issue. Never coded in the current PR. |
-| Land | Merge to `development` after Nick moves the issue to `Done`. |
-| Promotion | Project-complete → staging; release agent → production. Separate from land. |
+Generated from `factory.config.json`. Do not put product nouns here.
+
+**Control plane**:
+Linear. Status + delegate + blockers decide what runs.
+_Avoid_: GitHub Issues as source of truth, treating labels as dispatch
+
+**Runtime**:
+Cursor Automations + Cloud Agents reading this repo’s harness.
+_Avoid_: Conductor board, local-only agents as the factory
+
+**Kickoff**:
+`/to-spec` for a new Linear project + milestones. No issues yet.
+_Avoid_: creating tickets during spec
+
+**Feature spec**:
+`/to-spec` against an existing project.
+_Avoid_: a second Linear project for the same effort
+
+**Vertical slice**:
+One issue that cuts schema → API → UI → tests and is demoable alone.
+_Avoid_: horizontal tickets (schema-only, API-only)
+
+**Delegate**:
+Linear agent field. Human remains assignee. Dispatch = `Backlog` + delegated to Cursor + unblocked. Planner claim order = Linear priority (`dispatch.priorityOrder`).
+_Avoid_: assigning the agent as the human owner, treating priority as eligibility
+
+**Workpad**:
+The single workpad comment on an issue. `### Review feedback` is why a pass was sent back.
+_Avoid_: a new comment thread per agent turn
+
+**Signal-up**:
+Out-of-scope bug or debt, filed as a new `Backlog` issue. Never coded in the current PR.
+_Avoid_: expanding the PR, auto-delegating the finding
+
+**Proposal**:
+Out-of-scope feature or optimisation. Same ingress as signal-up, different label.
+_Avoid_: mixing with `signal-up` on the same issue
+
+**Land**:
+Merge to `development` after Nicklas moves the issue to Done.
+_Avoid_: landing to staging or production from an issue run
+
+**Promotion**:
+A Linear **milestone** complete → `staging`; release helper → `production`. Separate from land. Not the whole project at once.
+_Avoid_: deploy, release PR as a synonym for land, treating the Linear project as one staging dump
+
+**Triage** *(Linear state)*:
+Inbox for Sentry and other intake. Human accepts onto the board. Never auto-dispatch.
+_Avoid_: the Triage *label group*, `needs-triage`
+
+**Duplicate** *(Linear state)*:
+This work already exists on another issue. No agent action.
+_Avoid_: deleting the issue instead of marking duplicate
+
+**Write scope**:
+Path globs on an implementation issue the implementer may change.
+_Avoid_: treating surface labels as write scope
+<!-- factory:generated-end -->
+
+## Language
+
+**Kit**:
+Catalog truth for a shirt design (club / season / type). Not a user’s copy.
+_Avoid_: shirt as catalog, jersey for the catalog row
+
+**UserJersey**:
+A collector’s owned instance of a Kit, with photos and personal fields.
+_Avoid_: Kit (for a copy), collection item
+
+**CatalogLabel**:
+Locale + kind name for stamdata. The English seed string is not the Danish UI name.
+_Avoid_: hardcoding English as the UI label
+
+**Vision suggestion**:
+Gemini output. Persist catalog UUIDs after confirm.
+_Avoid_: raw model names as foreign keys
+
+**Save**:
+Must not wait on Vision, kit completeness, or manufacturer.
+_Avoid_: blocking save on inference
+
+**Lane**:
+One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects.
+_Avoid_: environment as a synonym without saying which object

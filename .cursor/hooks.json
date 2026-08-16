@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "bash .cursor/hooks/block-dangerous-git.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-reward-hacks.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/protect-ratchet.sh",
+        "failClosed": true
+      }
+    ]
+  }
+}

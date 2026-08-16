@@ -4,14 +4,14 @@ Nordic football-shirt collector product, plus the agent factory that builds it.
 
 Product truth: `.scratch/Business/PRD.md`  
 Stack lock: `.scratch/Architecture/tech-stack.md`  
-Control plane: [`WORKFLOW.md`](./WORKFLOW.md)
+Control plane: [`WORKFLOW.md`](./WORKFLOW.md) + [`factory.config.json`](./factory.config.json)
 
 ## Factory (Linear + Cursor)
 
-Linear is the board. Cursor Cloud Agents execute. You stay in the helicopter.
+Linear is the board. Cursor Cloud Agents execute. Config is `factory.config.json` (copy `factory.config.example.json` on a new repo). See `docs/agents/template.md`.
 
-1. Create a Linear workspace named **Kit Collective** (API cannot do this).
-2. Connect Cursor’s Linear integration to that workspace (not Mercflow).
+1. Create a Linear workspace named in `product.name` (API cannot do this).
+2. Connect Cursor’s Linear integration to that workspace.
 3. Enable the Cursor agent so issues can be **delegated**.
 4. Put an admin Linear API key in `.env` as `LINEAR_API_KEY` (see `.env.example`).
 5. Run bootstrap:
@@ -20,18 +20,19 @@ Linear is the board. Cursor Cloud Agents execute. You stay in the helicopter.
 set -a && source .env && set +a
 node scripts/bootstrap-linear.mjs --dry-run
 node scripts/bootstrap-linear.mjs
+node scripts/generate-harness-docs.mjs
 ```
 
 6. Wire Cursor Automations from `docs/agents/automations.md`.
 
-Then: `/grill-with-docs` → `/to-spec` (project + milestones) → `/to-tickets` (Backlog issues) → delegate to Cursor.
+Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → delegate to Cursor.
 
-Matt Pocock originals live in `.agents/skills/` (do not edit). Harness twists live in `.cursor/skills/`.
+Working skills: `.cursor/skills/`. Domain helpers: `.cursor/agents/`.
 
-## Dispatch rule
+## Dispatch
 
-An issue runs only when it is `Backlog`, **delegated** to Cursor, and not blocked. Labels like `ready-for-agent` mean the ticket is well-written — they do not start a run.
+An issue runs only when it is in `dispatch.state`, **delegated** to `linear.delegateAgentName`, and not blocked. Among those, planner claims in Linear priority order (`dispatch.priorityOrder`).
 
 ## Lanes
 
-`development` → `staging` → `production`. Issue land merges to `development` only, after you move the issue to `Done`.
+`lanes.integration` → `lanes.staging` → `lanes.production`. Issue land merges to the integration lane only, after the approver moves the issue to `Done`.

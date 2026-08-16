@@ -1,0 +1,69 @@
+{
+  "product": "KitCollective",
+  "team": {
+    "key": "KIT",
+    "name": "Engineering",
+    "id": "ca3382dd-f185-46a1-bd4f-c452f1dad635"
+  },
+  "states": {
+    "Backlog": {
+      "id": "d6926e65-ad02-4cd2-bb57-52fecc9419ac",
+      "type": "backlog"
+    },
+    "Parked": {
+      "id": "f8b769b2-57b0-4f22-8b89-69aca27d6aec",
+      "type": "unstarted"
+    },
+    "Implementing": {
+      "id": "a2f8faa8-21eb-42fa-b82b-336b537ec771",
+      "type": "started"
+    },
+    "In Review": {
+      "id": "7c2a44fa-66d2-41f0-a8c0-5ca88cc8d75e",
+      "type": "started"
+    },
+    "Ready for merge": {
+      "id": "c38c7c78-68e6-4acc-9916-c89ad7ea77d4",
+      "type": "started"
+    },
+    "Done": {
+      "id": "b68eb2c6-f230-4bab-ae07-465c44fdc980",
+      "type": "completed"
+    },
+    "Canceled": {
+      "id": "4e6cf5b6-7203-4d65-b3b6-8b13c88fa0bd",
+      "type": "canceled"
+    }
+  },
+  "labels": {
+    "signal-up": "53fef5e7-cdd1-4f01-9380-9b040ad202a1",
+    "needs-triage": "ddf9d4b1-3048-4ec7-a85e-2370b8f9ec1c",
+    "ready-for-agent": "036c9036-ca3d-49fa-aab6-afe404c0d6e1",
+    "ready-for-human": "be6ffd6f-23b9-4a72-9799-687a0ea76574",
+    "wontfix": "dc2e48a0-7675-496f-994f-37e244d4ca46",
+    "kickoff": "95a81622-07fc-407f-8853-e6205392d2ef",
+    "feature": "6963c611-7ae3-456f-bfc0-751a624570a3",
+    "surface:mobile": "55e62ea9-ce12-47fb-a3bc-dda751f3e184",
+    "surface:web": "523cc6b6-b06f-4e01-9904-4ed64d5a1ade",
+    "surface:admin": "45fb61ca-38ec-49fb-9b3a-20f258777f21",
+    "surface:api": "766b68ae-1c2a-46da-8888-e9b605437cad",
+    "seed": "4d185adc-e313-4261-a4a4-dd81082e266e"
+  },
+  "labelGroups": {
+    "Triage": "ac3efb6a-1de2-4cc7-85ef-e19777e908d7",
+    "Spec": "a113c610-efbd-420e-ad25-38b96a0910b3",
+    "Surface": "6ed38ecc-e60b-4f70-b6d2-c147e0bc0d36",
+    "Work": "19069dca-12a9-4555-ba35-a0ddf6c4d0de",
+    "Type": "e9a8e516-9347-4750-8e46-d4d086b68e08"
+  },
+  "projectLabels": {
+    "craft:design": "88a954b7-23e5-4079-beb0-73138adbd48b",
+    "craft:frontend": "b5007573-de82-4f94-877a-4a5735cf04d9",
+    "craft:backend": "1a666708-0960-46a8-ada5-fbdde3dbf6e4"
+  },
+  "projectLabelGroups": {
+    "Craft": "de5cfd77-3efc-4d98-9533-15a7813f7cfd"
+  },
+  "delegateAgentName": "Cursor",
+  "bootstrappedAt": "2026-08-15T14:29:20.217Z"
+}

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Create new skill"
+  short_description: "Author a factory skill the Matt way"

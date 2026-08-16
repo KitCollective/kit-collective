@@ -1,0 +1,5 @@
+interface:
+  display_name: "To Tickets"
+  short_description: "Vertical slices onto one staging milestone"
+policy:
+  allow_implicit_invocation: false

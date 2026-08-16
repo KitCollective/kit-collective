@@ -1,125 +1,100 @@
 ---
-tracker:
-  kind: linear
-  team_key: KIT
-  setup_file: linear.setup.json
-  default_branch: development
-  promotion_branches:
-    - development
-    - staging
-    - production
-  dispatch:
-    state: Backlog
-    require_delegate: true
-    require_unblocked: true
-  active_states:
-    - Implementing
-    - In Review
-    - Ready for merge
-    - Rework
-  handoff_states:
-    - Ready for merge
-  land_state: Done
-  terminal_states:
-    - Done
-    - Canceled
-  parked_state: Parked
-  project_statuses:
-    specced: planned
-    building: started
-    staging: completed
-agent:
-  max_concurrent: 3
-  signal_up_cap_per_run: 3
-  workpad_heading: "## Agent Workpad"
+# Names, keys, and lanes live in factory.config.json — read that first.
+# This file is the generic control-plane prompt. Do not hardcode a product here.
 ---
 
-# Kit Collective agent workflow
+# Agent workflow
 
 Linear is the control plane. Cursor Automations + Cloud Agents are the runtime.
 This file is the contract. Automations must follow it, not a one-off prompt.
 
-Skills: Matt Pocock originals in `.agents/skills/` (do not edit). Harness twists in `.cursor/skills/` wrap those originals, then apply this file. Factory runs use the Cursor skills.
+Load `factory.config.json` (product, team, states, lanes, approver, helper dir).
+Working skills are `.cursor/skills/` (self-contained). Follow this file for status, land, and comments.
 
 You are working on Linear issue `{{ issue.identifier }}`.
 
 ## Eligibility (dispatch)
 
-An issue may start an implement run **only** when all of these are true:
+The **planner** claims. Implement never claims from `dispatch.state`.
 
-1. Status is `Backlog`
-2. It is **delegated** to the Cursor agent (Linear agent field — the human stays assignee)
+Planner may move an issue to `Implementing` **only** when all of these are true:
+
+1. Status equals `dispatch.state` in factory config (default `Backlog`)
+2. It is **delegated** to `linear.delegateAgentName` (human stays assignee)
 3. It has **no** unresolved `blockedBy` relations
-4. No other agent run is already claimed on it (status is still `Backlog`)
+4. It is not labelled `signal-up`
+5. Count of issues already `Implementing` is below `agent.maxConcurrent`
 
-If any check fails: **do not modify the issue**. Stop.
+Among issues that pass, claim in `dispatch.priorityOrder` (default Linear: Urgent `1`, High `2`, Medium `3`, Low `4`, None `0`). Same rank: oldest first. Do not preempt `Implementing`. Priority is **claim order**, not eligibility — an Urgent issue that is not delegated still does not run.
 
-On claim: move to `Implementing` **before** any code change.
+If any eligibility check fails: **do not modify the issue**. Stop.
+
+Never claim from Linear **Triage** (Sentry/intake) or **Duplicate**. Those are Linear-owned. A human accepts onto `Backlog`/`Parked` first.
+
+An issue may **start** implement when status is `Implementing` and it has no branch/PR yet.
+
+An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). Same issue, same branch, same PR. A new Cloud Agent VM — there is no resume of the previous session.
 
 ## Status map
 
+Use the `states` array in factory config. Do not invent extra issue statuses.
+
+Typical contract:
+
 | State | Linear type | Who moves here | Meaning |
 | --- | --- | --- | --- |
-| Backlog | backlog | humans, `/to-tickets`, signal-up | Queued. Dispatch-eligible when delegated + unblocked |
+| Backlog | backlog | humans, `/to-tickets`, signal-up | Dispatch-eligible when delegated + unblocked |
 | Parked | unstarted | humans only | Visible, never auto-dispatched |
-| Implementing | started | implement automation on claim | Coding in progress |
-| In Review | started | implementer when PR + proof exist | Autonomous checker owns the next step |
-| Ready for merge | started | checker on pass | Waiting for Nick to read the GitHub PR |
-| Rework | started | checker or Nick | Changes requested; implementer resumes |
-| Done | completed | **Nick only** after reading the PR | Human approval. Land automation merges to `development` |
+| Triage | triage | Sentry and other intake | Inbox. Human accepts. Never auto-dispatch |
+| Duplicate | duplicate | humans | Duplicate of another issue. Never auto-dispatch |
+| Implementing | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |
+| In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |
+| Ready for merge | started | checker on pass | Waiting for the approver to read the GitHub PR |
+| Done | completed | **approver only** after reading the PR | Human approval. Land merges to the integration lane |
 | Canceled | canceled | humans | Dead. No agent action |
-
-Do not invent extra issue statuses.
 
 ## Project + environment promotion
 
-Issues belong to a Linear **project**. Milestones group shippable increments inside that project.
+Issues belong to a Linear **project**. A **milestone** is a handful of vertical slices and the unit that promotes to staging.
 
 | When | What happens |
 | --- | --- |
-| `/to-spec` kickoff | Create Linear project (`planned`) + milestones. No issues yet |
-| `/to-tickets` | Vertical-slice issues under those milestones, status `Backlog`, **not** delegated |
-| All project issues `Done` or `Canceled` | Staging automation opens/updates the `development` → `staging` promotion PR and runs staging CI |
-| Staging green + Nick asks for prod | Release agent diffs `staging` vs `production`, writes Linear release notes + changelog, opens `staging` → `production` PR. Nick approves. Agent does not push production without that approval |
+| `/to-spec` kickoff | Create Linear project (`planned`) + milestones (each = one staging increment). No issues yet |
+| `/to-spec` feature | Document on the existing project; new milestone only if this feature is its own staging increment |
+| `/to-tickets` | Vertical-slice issues under **one** milestone each, dispatch state, **not** delegated |
+| All issues on a **milestone** Done or Canceled | Staging automation opens/updates integration → staging PR for that increment |
+| Staging green + approver asks for prod | Release helper diffs staging vs production, drafts release notes, opens staging → production PR. Approver merges production. |
 
-Git lanes are `development` / `staging` / `production` (see `.scratch/Architecture/tech-stack.md` §10).
+Lanes come from `lanes` in factory config.
 
 ## Issue run (implement)
 
-1. Re-check eligibility. Claim → `Implementing`.
-2. Open or reuse the single workpad comment whose heading is `## Agent Workpad`.
-3. Branch from latest `origin/development`. One issue, one branch, one PR.
-4. Follow `/implement`: `/tdd` at the spec’s seams; spawn **domain helper sub-agents** (never their own Linear issues).
-5. Out of scope → `/signal-up`. Cap 3. Never expand the PR.
-6. Open a PR **into `development`**. Link the Linear issue. Attach the PR URL on the issue.
-7. Only then move to `In Review`.
+1. Status must already be `Implementing`. If it is `dispatch.state`, stop — planner has not claimed.
+2. Fetch context: Linear `get_issue` **and** `list_comments`. `get_issue` does not include comments. The workpad is one comment (`agent.workpadHeading`). If a PR is linked, also read GitHub PR review comments.
+3. On resume, the latest `### Review feedback` plus other issue/PR comments **are** the change request. Fix those before anything else. Same branch/PR.
+4. Open or reuse the single workpad comment.
+5. Start: branch from latest `origin/<lanes.integration>`. One issue, one branch, one PR. Resume: do not new-branch.
+6. Follow `/implement`: `/tdd` at the spec’s seams; spawn **every matching helper** in `paths.helpers` (never their own Linear issues).
+7. Out of scope → `/signal-up`. Cap `agent.signalUpCapPerRun`. Never expand the PR.
+8. Open or update a PR **into the integration lane**. Attach the PR URL on the issue.
+9. Upload screenshots/recordings from the VM to the Linear issue. Comment. Link under workpad `### Evidence`.
+10. Clear addressed `### Review feedback`. Move to `In Review`. Do not merge. Do not move to `Done`.
 
-## Checker run (PR opened or `In Review`)
+## Checker run
 
-Judge only. No feature coding.
-
-1. Resolve the Linear issue from the PR.
-2. Run `/code-review` (Standards + Spec) as parallel sub-agents.
-3. Pass + CI green → `Ready for merge`.
-4. Fail → `Rework` with findings in the workpad. Do not merge.
+Wakes when status becomes `In Review`. Judge only. No feature coding. `/code-review` (Standards + Spec). Pass + CI green → `Ready for merge`. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` + Linear comment + attachments. That status change wakes implement. Do not start implement yourself.
 
 ## Land run (status became `Done`)
 
-Nick moving the issue to `Done` **is** the merge approval.
-
-1. Confirm the linked PR targets `development`, checker passed, CI green.
-2. Merge the PR (`gh pr merge`, squash or merge per repo default).
-3. If merge fails: move to `Rework`, explain in the workpad. Never force-push `development`.
+The approver moving the issue to `Done` **is** the merge approval. Merge into the integration lane only. Merge fail → `Implementing` and write the merge error under `### Review feedback`. Never force-push. Never land into staging or production from this run.
 
 ## Guardrails
 
-- Never push directly to `staging` or `production`.
-- Never merge to `production` from an issue land run.
-- Never create Linear teams or workflow states at runtime (bootstrap script only).
+- Never push directly to staging or production lanes.
+- Never create Linear teams or workflow states at runtime (bootstrap skill only).
 - Never delegate or self-apply dispatch on `signal-up` issues.
-- Never validate your own code in the same context window — checker is a separate run.
-- Secrets stay in env / GitHub Environments. Never log them.
-- Product clients must not import `apps/api` or `packages/db`.
+- Never validate your own code in the same context window.
+- Secrets stay in env / GitHub Environments.
 
 ## Workpad template
 
@@ -145,13 +120,21 @@ Nick moving the issue to `Done` **is** the merge approval.
 
 ### Domain helpers used
 
-- (none | ui-ux / react-expo / backend-nest / db-drizzle / devops)
+- (none | names of files spawned from paths.helpers)
 
 ### Notes
 
 - timestamped progress
 
+### Review feedback
+
+- (none | why the last pass was not enough — checker, land, or approver)
+
+### Evidence
+
+- (none | Linear attachment titles / comment links for screenshots and recordings)
+
 ### Signal-up
 
-- (none | KIT-xx …)
+- (none | <teamKey>-n …)
 ````

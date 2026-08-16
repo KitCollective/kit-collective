@@ -1,6 +1,6 @@
 ---
 name: db-drizzle
-description: Use as a helper from /implement when the slice needs Drizzle schema, migrations, or CatalogLabel/stamdata. Never owns a Linear issue.
+description: Use as a helper from /tdd during /implement when the slice needs Drizzle schema, migrations, or CatalogLabel/stamdata. Never owns a Linear issue.
 model: inherit
 ---
 

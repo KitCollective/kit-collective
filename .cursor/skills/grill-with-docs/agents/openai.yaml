@@ -1,0 +1,5 @@
+interface:
+  display_name: "Grill with docs"
+  short_description: "Interview in-repo; write glossary and ADRs"
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,89 @@
+{
+  "product": {
+    "name": "KitCollective",
+    "workspaceMatch": "kitcollective"
+  },
+  "approver": "Nicklas",
+  "github": {
+    "ownerRepo": "KitCollective/kit-collective"
+  },
+  "linear": {
+    "teamKey": "KIT",
+    "teamName": "Engineering",
+    "delegateAgentName": "Cursor"
+  },
+  "lanes": {
+    "integration": "development",
+    "staging": "staging",
+    "production": "production"
+  },
+  "dispatch": {
+    "state": "Backlog",
+    "requireDelegate": true,
+    "requireUnblocked": true,
+    "priorityOrder": [1, 2, 3, 4, 0]
+  },
+  "states": [
+    { "name": "Backlog", "type": "backlog", "color": "#bec2c8" },
+    { "name": "Parked", "type": "unstarted", "color": "#95a2b3" },
+    { "name": "Implementing", "type": "started", "color": "#f2c94c" },
+    { "name": "In Review", "type": "started", "color": "#5e6ad2" },
+    { "name": "Ready for merge", "type": "started", "color": "#26b5ce" },
+    { "name": "Done", "type": "completed", "color": "#4cb782" },
+    { "name": "Canceled", "type": "canceled", "color": "#95a2b3" }
+  ],
+  "stateAliases": {
+    "Todo": "Parked",
+    "In Progress": "Implementing",
+    "Cancelled": "Canceled"
+  },
+  "labels": {
+    "groups": [
+      { "name": "Triage", "color": "#eb5757", "description": "Who acts. Not dispatch." },
+      { "name": "Spec", "color": "#9b51e0", "description": "Kickoff vs an existing project." },
+      { "name": "Surface", "color": "#2f80ed", "description": "Which app surface a vertical slice touches. Not a horizontal split." },
+      { "name": "Work", "color": "#56ccf2", "description": "Kind of work that is not a surface." },
+      { "name": "Type", "color": "#bb87fc", "description": "Linear issue type. Do not invent extras." }
+    ],
+    "factory": [
+      { "name": "signal-up", "group": "Triage", "color": "#f2994a", "description": "Out-of-scope finding. Human triage only." },
+      { "name": "needs-triage", "group": "Triage", "color": "#eb5757", "description": "Waiting for a human before dispatch." },
+      { "name": "needs-info", "group": "Triage", "color": "#f2c94c", "description": "Waiting on a human for missing information." },
+      { "name": "proposal", "group": "Triage", "color": "#e99695", "description": "Out-of-scope feature or optimisation. Human triage only." },
+      { "name": "ready-for-agent", "group": "Triage", "color": "#5e6ad2", "description": "Ticket is well-formed. Dispatch still requires delegate." },
+      { "name": "ready-for-human", "group": "Triage", "color": "#26b5ce", "description": "Blocked on a human decision." },
+      { "name": "wontfix", "group": "Triage", "color": "#95a2b3", "description": "Will not be done." },
+      { "name": "kickoff", "group": "Spec", "color": "#9b51e0", "description": "New Linear project from /to-spec kickoff." },
+      { "name": "feature", "group": "Type", "color": "#27ae60", "description": "Feature spec against an existing project. Reuses Linear Feature." }
+    ],
+    "surfaces": ["mobile", "web", "admin", "api"],
+    "extra": [
+      { "name": "seed", "group": "Work", "color": "#56ccf2", "description": "Seed / stamdata work." }
+    ],
+    "adopt": [
+      { "name": "Bug", "group": "Type" },
+      { "name": "Feature", "group": "Type" },
+      { "name": "Improvement", "group": "Type" }
+    ],
+    "projects": {
+      "groups": [
+        { "name": "Craft", "color": "#f2c94c", "description": "PM filter on Linear projects. Not an issue split." }
+      ],
+      "items": [
+        { "name": "craft:design", "group": "Craft", "color": "#e056a0", "description": "UI, layout, copy, a11y. Project filter only." },
+        { "name": "craft:frontend", "group": "Craft", "color": "#2f80ed", "description": "Expo, Astro, admin. Project filter only." },
+        { "name": "craft:backend", "group": "Craft", "color": "#27ae60", "description": "Nest, Drizzle, /v1. Project filter only." }
+      ]
+    }
+  },
+  "paths": {
+    "helpers": ".cursor/agents",
+    "setupFile": "linear.setup.json",
+    "specs": ".scratch"
+  },
+  "agent": {
+    "maxConcurrent": 3,
+    "signalUpCapPerRun": 3,
+    "workpadHeading": "## Agent Workpad"
+  }
+}

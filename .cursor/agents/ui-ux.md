@@ -1,6 +1,6 @@
 ---
 name: ui-ux
-description: Use as a helper from /implement when the vertical slice includes layout, visual hierarchy, accessibility, or Expo/Astro UI copy. Never owns a Linear issue.
+description: Use as a helper from /tdd during /implement when the vertical slice includes layout, visual hierarchy, accessibility, or Expo/Astro UI copy. Never owns a Linear issue.
 model: inherit
 ---
 

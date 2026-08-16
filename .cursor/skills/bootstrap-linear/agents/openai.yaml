@@ -1,0 +1,5 @@
+interface:
+  display_name: "Bootstrap Linear"
+  short_description: "Create team, states, and labels from factory config"
+policy:
+  allow_implicit_invocation: false

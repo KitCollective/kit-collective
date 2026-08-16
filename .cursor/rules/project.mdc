@@ -1,0 +1,13 @@
+---
+description: Project agent defaults
+alwaysApply: true
+---
+
+Follow `CONTEXT.md` and `AGENTS.md`. Prefer small, reviewable changes.
+
+## Error ratcheting
+
+Constraints in `.cursor/hooks.json`, `.cursor/hooks/`, and `.cursor/rules/` may only be
+tightened. Never delete, empty, or weaken an existing ratchet. If a hook blocks
+legitimate work, open a `signal-up` Linear issue instead (see `docs/agents/signal-up.md`
+and `docs/agents/error-ratcheting.md`).

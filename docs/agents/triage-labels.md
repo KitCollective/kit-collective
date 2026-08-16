@@ -1,19 +1,27 @@
 # Triage labels
 
-Canonical Matt Pocock roles, plus Kit Collective extras. Names must match `linear.setup.json`.
+Canonical Matt Pocock roles, plus factory extras. Names must match `factory.config.json` / `linear.setup.json`. Linear **label groups** are layout only — agents still match the leaf name.
 
-| Role | Label | Who applies it |
+Dispatch is **not** a label. Dispatch = `dispatch.state` + delegated to `linear.delegateAgentName` + unblocked. Linear priority is claim order among eligible issues, not eligibility.
+
+Linear **Triage** (Sentry inbox) and **Duplicate** are Linear product states. They are not this label group and not factory dispatch statuses. See `docs/agents/issue-tracker.md`.
+
+## Issue groups
+
+| Group | Labels | Who applies them |
 | --- | --- | --- |
-| Needs triage | `needs-triage` | signal-up; humans clearing inbox |
-| Needs info | `ready-for-human` | agent when a human decision is required |
-| Ready for agent | `ready-for-agent` | `/to-spec`, `/to-tickets` — quality of the ticket, **not** dispatch |
-| Won't fix | `wontfix` | humans |
+| Triage | `needs-triage`, `needs-info`, `ready-for-human`, `ready-for-agent`, `wontfix`, `signal-up`, `proposal` | signal-up / proposals; `/to-spec` / `/to-tickets`; humans |
+| Spec | `kickoff` | `/to-spec` kickoff |
+| Type | `Bug`, `Feature`, `Improvement` | humans; `/to-spec` feature reuses `Feature` |
+| Surface | `surface:<name>` from `labels.surfaces` | `/to-tickets` — helper hint, **not** a horizontal split |
+| Work | `seed` and other `labels.extra` | humans / specs |
 
-Dispatch is **not** a label. Dispatch = `Backlog` + delegated to Cursor + unblocked.
+`ready-for-agent` is ticket quality, **not** dispatch. `signal-up` and `proposal` must also have `needs-triage`. Never put both `signal-up` and `proposal` on the same issue.
 
-| Extra | Meaning |
+## Project groups (EP filter)
+
+Linear **projects** (kickoff), not issues. Never split a vertical slice by these.
+
+| Group | Labels |
 | --- | --- |
-| `signal-up` | Out of scope for the current issue. Must also have `needs-triage`. |
-| `kickoff` | Spec created a new Linear project. |
-| `feature` | Spec against an existing project. |
-| `surface:mobile` / `surface:web` / `surface:admin` / `surface:api` / `seed` | Hint for `/implement` which helper sub-agents to spawn. Still one vertical issue. |
+| Craft | `craft:design`, `craft:frontend`, `craft:backend` |

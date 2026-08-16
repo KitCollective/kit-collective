@@ -1,6 +1,6 @@
 ---
 name: react-expo
-description: Use as a helper from /implement when the slice touches React Native, Expo Router, gallery/camera, or Expo Web. Never owns a Linear issue.
+description: Use as a helper from /tdd during /implement when the slice touches React Native, Expo Router, gallery/camera, or Expo Web. Never owns a Linear issue.
 model: inherit
 ---
 
