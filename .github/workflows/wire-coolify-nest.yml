@@ -106,6 +106,7 @@ jobs:
                 health_check_port: "3000",
                 health_check_method: "GET",
                 health_check_return_code: 200,
+                health_check_start_period: 45,
                 is_force_https_enabled: false,
                 instant_deploy: true
               }')"
@@ -123,6 +124,10 @@ jobs:
           else
             echo "Found existing Coolify application ${APP_UUID}"
           fi
+
+          request PATCH "/applications/${APP_UUID}" "$(jq -n \
+            --arg health_check_start_period "45" \
+            '{health_check_start_period: $health_check_start_period, health_check_enabled: true}')" >/dev/null
 
           request POST "/applications/${APP_UUID}/envs" "$(jq -n \
             --arg key "DATABASE_URL" \
@@ -146,9 +151,12 @@ jobs:
 
           echo "app_uuid=${APP_UUID}" >> "$GITHUB_OUTPUT"
           echo "fqdn=${FQDN}" >> "$GITHUB_OUTPUT"
-          echo "webhook_url=${WEBHOOK}" >> "$GITHUB_OUTPUT"
+          echo "webhook_configured=$([ -n "$WEBHOOK" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "Coolify app ${APP_UUID} on ${LANE}; fqdn=${FQDN:-pending}"
-          echo "Set GitHub Environment secret COOLIFY_DEPLOY_WEBHOOK_URL=${WEBHOOK}"
+          if [ -n "$WEBHOOK" ]; then
+            echo "::add-mask::${WEBHOOK}"
+          fi
+          echo "Deploy webhook is configured. Set GitHub Environment secret COOLIFY_DEPLOY_WEBHOOK_URL from the Coolify app deploy webhook (not logged)."
 
       - name: Smoke live health + catalog stats
         if: steps.coolify.outputs.fqdn != ''

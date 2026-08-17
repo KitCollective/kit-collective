@@ -51,6 +51,9 @@ jobs:
       - name: Check import boundaries
         run: pnpm check:imports
 
+      - name: Check workflow secret logging
+        run: node scripts/check-workflow-secrets.mjs
+
       - name: Test
         run: pnpm test
         env:
