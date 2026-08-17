@@ -7,7 +7,8 @@
     "test": "turbo run test --concurrency=1",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "check:imports": "node scripts/check-import-boundaries.mjs"
+    "check:imports": "node scripts/check-import-boundaries.mjs",
+    "check:workflows": "bash scripts/lint-workflows.sh"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

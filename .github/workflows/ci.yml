@@ -54,6 +54,9 @@ jobs:
       - name: Check workflow secret logging
         run: node scripts/check-workflow-secrets.mjs
 
+      - name: Lint GitHub Actions workflows
+        run: bash scripts/lint-workflows.sh
+
       - name: Test
         run: pnpm test
         env:
