@@ -5,6 +5,13 @@
       "headers": {
         "Authorization": "Bearer ${env:COOLIFY_API_TOKEN}"
       }
+    },
+    "seed": {
+      "command": "node",
+      "args": ["seed/mcp/dist/index.js"],
+      "env": {
+        "SEED_REPO_ROOT": "${workspaceFolder}"
+      }
     }
   }
 }

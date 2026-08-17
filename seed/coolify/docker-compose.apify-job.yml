@@ -1,0 +1,42 @@
+# Apify / Transfermarkt seed job (one-shot)
+#
+# Coolify: create a Docker Compose resource from this file. Set restart to "no" or use
+# Coolify's job/cron trigger. Pass competition + season range via environment variables
+# or override `command` at run time.
+#
+# Required secrets (development lane example):
+#   DATABASE_URL — Postgres for the lane
+#   APIFY_TOKEN — Apify actor token (when KIT-8 fetch adapter is wired)
+#
+# Resource limits keep seed imports from starving Nest on the CX33.
+
+services:
+  seed-apify-job:
+    build:
+      context: ../..
+      dockerfile: seed/coolify/Dockerfile
+    image: kit-collective-seed:latest
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    environment:
+      SEED_LANE: ${SEED_LANE:-development}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      APIFY_TOKEN: ${APIFY_TOKEN:-}
+    command:
+      - pnpm
+      - --filter
+      - "@kit-collective/seed-apify"
+      - run
+      - seed
+      - --
+      - ${SEED_COMPETITION:?SEED_COMPETITION is required}
+      - ${SEED_FROM_SEASON:?SEED_FROM_SEASON is required}
+      - ${SEED_TO_SEASON:?SEED_TO_SEASON is required}
+      - ${SEED_LANE:-development}

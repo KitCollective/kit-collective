@@ -1,0 +1,45 @@
+# FK / Football Kit Archive seed job (one-shot)
+#
+# Run only after Apify seed for the same competition + season range has populated
+# Club and Season rows.
+#
+# Required secrets (development lane example):
+#   DATABASE_URL — Postgres for the lane
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_ENDPOINT
+#
+# KitPhoto bytes are admin_only with rights unresolved — never public CDN / OG.
+
+services:
+  seed-fkapi-job:
+    build:
+      context: ../..
+      dockerfile: seed/coolify/Dockerfile
+    image: kit-collective-seed:latest
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    environment:
+      SEED_LANE: ${SEED_LANE:-development}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+    command:
+      - pnpm
+      - --filter
+      - "@kit-collective/seed-fkapi"
+      - run
+      - seed
+      - --
+      - ${SEED_COMPETITION:?SEED_COMPETITION is required}
+      - ${SEED_FROM_SEASON:?SEED_FROM_SEASON is required}
+      - ${SEED_TO_SEASON:?SEED_TO_SEASON is required}
+      - ${SEED_LANE:-development}
