@@ -1,0 +1,15 @@
+# Keep API images free of seed data and dev-only trees.
+seed/
+.scratch/
+.cursor/
+.git/
+.github/
+node_modules/
+**/node_modules/
+**/dist/
+**/*.test.ts
+**/tests/
+**/*.md
+.env
+.env.*
+!.env.example
