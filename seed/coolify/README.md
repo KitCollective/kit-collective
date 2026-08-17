@@ -6,8 +6,8 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 
 | File | CLI | When to run |
 | --- | --- | --- |
-| `docker-compose.apify-job.yml` | `@kit-collective/seed-apify` | Transfermarkt facts for a competition + season range |
-| `docker-compose.fkapi-job.yml` | `@kit-collective/seed-fkapi` | FK kit identity + archive bytes **after** Apify for the same scope |
+| `docker-compose.apify-job.yml` | `@kit/seed-apify` | Transfermarkt facts for a competition + season range |
+| `docker-compose.fkapi-job.yml` | `@kit/seed-fkapi` | FK kit identity + archive bytes **after** Apify for the same scope |
 
 ## Lane rules
 

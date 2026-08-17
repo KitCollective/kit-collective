@@ -15,7 +15,7 @@ describe("buildSeedCliInvocation", () => {
       command: "pnpm",
       argv: [
         "--filter",
-        "@kit-collective/seed-apify",
+        "@kit/seed-apify",
         "run",
         "seed",
         "--",
@@ -34,7 +34,7 @@ describe("buildSeedCliInvocation", () => {
       toSeason: "today",
       lane: "staging",
     });
-    expect(argv).toContain("@kit-collective/seed-fkapi");
+    expect(argv).toContain("@kit/seed-fkapi");
     expect(argv.at(-1)).toBe("staging");
   });
 });

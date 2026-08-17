@@ -32,7 +32,7 @@ services:
     command:
       - pnpm
       - --filter
-      - "@kit-collective/seed-apify"
+      - "@kit/seed-apify"
       - run
       - seed
       - --
