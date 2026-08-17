@@ -46,7 +46,7 @@ jobs:
 
       - name: Assert seed/ is not in the image
         run: |
-          if docker run --rm kit-api:${{ github.sha }} sh -c "test ! -e /app/seed && test ! -e /seed"; then
+          if docker run --rm --entrypoint sh kit-api:${{ github.sha }} -c "test ! -e /app/seed && test ! -e /seed"; then
             echo "seed/ absent from image"
           else
             echo "seed/ must not be present in the API image" >&2
