@@ -79,42 +79,45 @@ jobs:
           fi
 
           APP_UUID="$(request GET /applications | jq -r --arg repo "$GIT_REPOSITORY" --arg lane "$LANE" '
-            .[] | select(.git_repository==$repo and .git_branch==$lane) | .uuid' | head -1)"
+            .[] | select((.git_repository==$repo or .git_repository==("https://github.com/" + $repo)) and .git_branch==$lane) | .uuid' | head -1)"
 
           if [ -z "$APP_UUID" ] || [ "$APP_UUID" = "null" ]; then
-            GH_APP_UUID="$(request GET /github/apps | jq -r '.[0].uuid')"
-            if [ -z "$GH_APP_UUID" ] || [ "$GH_APP_UUID" = "null" ]; then
-              echo "::error::No kit-api app and no GitHub App in Coolify — create the Nest app in the panel first"
-              exit 1
-            fi
-
-            CREATE_BODY="$(jq -n \
+            CREATE_BASE="$(jq -n \
               --arg project_uuid "$PROJECT_UUID" \
               --arg server_uuid "$SERVER_UUID" \
               --arg environment_name "$LANE" \
               --arg environment_uuid "$ENV_UUID" \
-              --arg github_app_uuid "$GH_APP_UUID" \
-              --arg git_repository "$GIT_REPOSITORY" \
+              --arg git_repository "https://github.com/${GIT_REPOSITORY}" \
               --arg git_branch "$LANE" \
               '{
                 project_uuid: $project_uuid,
                 server_uuid: $server_uuid,
                 environment_name: $environment_name,
                 environment_uuid: $environment_uuid,
-                github_app_uuid: $github_app_uuid,
                 git_repository: $git_repository,
                 git_branch: $git_branch,
                 build_pack: "dockerfile",
+                dockerfile_location: "/Dockerfile",
                 ports_exposes: "3000",
                 name: "kit-api",
+                description: ("Nest API (" + $environment_name + ")"),
                 health_check_enabled: true,
                 health_check_path: "/v1/health",
                 health_check_port: "3000",
                 health_check_method: "GET",
-                health_check_return_code: 200
+                health_check_return_code: 200,
+                is_force_https_enabled: false,
+                instant_deploy: true
               }')"
 
-            APP_JSON="$(request POST /applications/private-github-app "$CREATE_BODY")"
+            GH_APP_UUID="$(request GET /github-apps | jq -r '.[] | select(.installation_id != null) | .uuid' | head -1)"
+            if [ -n "$GH_APP_UUID" ] && [ "$GH_APP_UUID" != "null" ]; then
+              CREATE_BODY="$(echo "$CREATE_BASE" | jq --arg github_app_uuid "$GH_APP_UUID" '. + {github_app_uuid: $github_app_uuid}')"
+              APP_JSON="$(request POST /applications/private-github-app "$CREATE_BODY")"
+            else
+              APP_JSON="$(request POST /applications/public "$CREATE_BASE")"
+            fi
+
             APP_UUID="$(echo "$APP_JSON" | jq -r '.uuid')"
             echo "Created Coolify application ${APP_UUID}"
           else
@@ -131,10 +134,10 @@ jobs:
             --arg value "3000" \
             '{key: $key, value: $value, is_preview: false, is_literal: true}')" >/dev/null || true
 
-          request GET "/applications/${APP_UUID}/start" >/dev/null
+          request POST "/applications/${APP_UUID}/start" >/dev/null
 
           APP_DETAILS="$(request GET "/applications/${APP_UUID}")"
-          FQDN="$(echo "$APP_DETAILS" | jq -r '.fqdn // empty' | cut -d',' -f1)"
+          FQDN="$(echo "$APP_DETAILS" | jq -r '.fqdn // empty' | sed -E 's#^https?://##' | cut -d',' -f1)"
           WEBHOOK="$(echo "$APP_DETAILS" | jq -r '.manual_webhook_secret_github // .manual_webhook_secret // empty')"
 
           if [ -z "$WEBHOOK" ] || [ "$WEBHOOK" = "null" ]; then
@@ -153,7 +156,7 @@ jobs:
           FQDN: ${{ steps.coolify.outputs.fqdn }}
         run: |
           set -euo pipefail
-          BASE="https://${FQDN}"
+          BASE="http://${FQDN}"
           for i in $(seq 1 30); do
             if curl -fsS "${BASE}/v1/health" | grep -q '"database":"ok"'; then
               break
