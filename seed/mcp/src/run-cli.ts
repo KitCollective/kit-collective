@@ -15,8 +15,8 @@ export type CliRunner = (
 export type SeedCliTarget = "apify" | "fkapi";
 
 const CLI_PACKAGES: Record<SeedCliTarget, string> = {
-  apify: "@kit-collective/seed-apify",
-  fkapi: "@kit-collective/seed-fkapi",
+  apify: "@kit/seed-apify",
+  fkapi: "@kit/seed-fkapi",
 };
 
 export function buildSeedCliInvocation(

@@ -15,6 +15,8 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 RUN pnpm --filter @kit/seed-shared build \
+  && pnpm --filter @kit/seed-apify build \
+  && pnpm --filter @kit/seed-fkapi build \
   && pnpm --filter @kit/seed-mcp build
 
 FROM base AS runner
