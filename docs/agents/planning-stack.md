@@ -6,8 +6,7 @@ Operator path from idea to landed work. Matt’s engineering loop, Linear as the
 
 ```text
 /grill-with-docs → /to-design (when UI needs shared rules) → /to-spec → /to-tickets
-  → human delegates to linear.delegateAgentName
-  → planner claims (Backlog → Implementing)
+  → planner claims (Backlog + ready-for-agent + unblocked → Implementing)
   → /implement (/tdd + domain helpers) → PR + Linear evidence → In Review
   → checker (/code-review)
   → approver reads the PR, Linear → Done
@@ -32,11 +31,10 @@ Keep `/to-tickets` (Matt’s name). It slices vertical issues onto a **milestone
 | `/grill-with-docs` | Shared understanding. Terms in `CONTEXT.md` Language. Sparse ADRs. |
 | `/to-design` | AI-ready visual lock in `docs/design-system.md`. HITL. Skip when the work is not visual. |
 | `/to-spec` | Spec file + Linear project/milestones (kickoff: summary, description, lead, `craft:*`) or document ± milestone (feature). Seams confirmed. |
-| `/to-tickets` | Vertical Linear issues on **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not delegated.** |
-| Delegate | Human. Agent field = `linear.delegateAgentName`. |
-| Planner | Cron. Claims `dispatch.state` → `Implementing` under `agent.maxConcurrent`, in Linear priority order. No code. |
+| `/to-tickets` | Vertical Linear issues on **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not** Linear Agent = Cursor. |
+| Planner | Cron. Claims every eligible `dispatch.state` issue → `Implementing` by `ready-for-agent` + `blockedBy` + Linear priority. No concurrency cap. No code. |
 | `/implement` | Wakes on `Implementing`. Branch + PR + Linear evidence → `In Review`. |
-| Checker | Wakes on `In Review`. Judge-only. Pass → `Ready for merge`. Fail → `Implementing` + `### Review feedback` (same branch). |
+| Checker | Wakes on `In Review`. Judge-only `/code-review` + GitHub CI/CD. Pass + checks green → `Ready for merge`. Fail → `Implementing` + `### Review feedback` (same branch). |
 | Approver | Reads the GitHub PR. Linear `Done` **is** merge approval. |
 | `/land` | Merge to integration only. |
 | Staging | When **that milestone’s** issues are all Done or Canceled. |

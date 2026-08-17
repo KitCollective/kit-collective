@@ -14,7 +14,7 @@ Resolve names from config, not from memory:
 | Need | Config path |
 | --- | --- |
 | Team key | `linear.teamKey` |
-| Delegate agent | `linear.delegateAgentName` |
+| Dispatch label | `ready-for-agent` |
 | Approver | `approver` |
 | Integration branch | `lanes.integration` |
 | Dispatch state | `dispatch.state` |

@@ -19,7 +19,8 @@
   },
   "dispatch": {
     "state": "Backlog",
-    "requireDelegate": true,
+    "requireDelegate": false,
+    "requireReadyForAgent": true,
     "requireUnblocked": true,
     "priorityOrder": [1, 2, 3, 4, 0]
   },
@@ -50,7 +51,7 @@
       { "name": "needs-triage", "group": "Triage", "color": "#eb5757", "description": "Waiting for a human before dispatch." },
       { "name": "needs-info", "group": "Triage", "color": "#f2c94c", "description": "Waiting on a human for missing information." },
       { "name": "proposal", "group": "Triage", "color": "#e99695", "description": "Out-of-scope feature or optimisation. Human triage only." },
-      { "name": "ready-for-agent", "group": "Triage", "color": "#5e6ad2", "description": "Ticket is well-formed. Dispatch still requires delegate." },
+      { "name": "ready-for-agent", "group": "Triage", "color": "#5e6ad2", "description": "Ticket is well-formed. Planner claims when status is dispatch.state, this label is present, and blockedBy is resolved." },
       { "name": "ready-for-human", "group": "Triage", "color": "#26b5ce", "description": "Blocked on a human decision." },
       { "name": "wontfix", "group": "Triage", "color": "#95a2b3", "description": "Will not be done." },
       { "name": "kickoff", "group": "Spec", "color": "#9b51e0", "description": "New Linear project from /to-spec kickoff." },
@@ -82,7 +83,6 @@
     "specs": ".scratch"
   },
   "agent": {
-    "maxConcurrent": 3,
     "signalUpCapPerRun": 3,
     "workpadHeading": "## Agent Workpad"
   }

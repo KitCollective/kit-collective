@@ -36,7 +36,7 @@ Work lives in Linear workspace **KitCollective**, team **Engineering** (`KIT`). 
 
 ### Triage labels
 
-Who-acts labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `signal-up`, `proposal`. See `docs/agents/triage-labels.md`. Dispatch is not a label.
+Who-acts labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `signal-up`, `proposal`. See `docs/agents/triage-labels.md`. Dispatch = `Backlog` + `ready-for-agent` + unblocked.
 
 ### Signal-up
 
@@ -88,17 +88,16 @@ Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primar
 
 ### Planning stack
 
-`/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → delegate to **Cursor** → planner claims → `/implement` (`/tdd`) → checker → Nicklas to Done → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
+`/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → Nicklas to Done → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
 
 ## How work enters the factory
 
 1. `/grill-with-docs`
 2. `/to-design` — HITL visual lock into `docs/design-system.md` when agents will implement UI
 3. `/to-spec` — kickoff = Linear project + milestones; feature = document on an existing project
-4. `/to-tickets` — vertical slices in `Backlog`
-5. Human delegates to `Cursor` (human stays assignee)
-6. planner claims → implement → PR + Linear evidence → checker → `Ready for merge`
-7. `Nicklas` reads the GitHub PR, moves Linear to `Done`
-8. `/land` into `development`. A complete **milestone** then `staging` / `production` promotions
+4. `/to-tickets` — vertical slices in `Backlog` with `ready-for-agent`
+5. planner claims (unblocked) → implement → PR + Linear evidence → checker → `Ready for merge`
+6. `Nicklas` reads the GitHub PR, moves Linear to `Done`
+7. `/land` into `development`. A complete **milestone** then `staging` / `production` promotions
 
 Product truth lives under `.scratch`. If a spec fights a stack lock, change the lock first.

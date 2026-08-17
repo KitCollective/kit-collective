@@ -68,10 +68,10 @@ Every issue:
 - Label `ready-for-agent`
 - Optional `write-scope: path/globs` in the body when the slice is obviously bounded
 - Surface labels from `labels.surfaces` (`surface:<name>`) are hints for `/implement` helpers — **not** a reason to split horizontally
-- **Do not delegate. Do not assign the delegate agent.**
-- **Do not set Linear priority** unless the user named it. Default is None (`0`). The human sets Urgent/High/Medium/Low before or when they delegate. Planner uses that as claim order.
+- **Do not delegate. Do not set Linear Agent to Cursor.**
+- **Do not set Linear priority** unless the user named it. Default is None (`0`). The human sets Urgent/High/Medium/Low. Planner uses that as claim order.
 
-After publish: an unblocked dispatch-state issue runs when a human delegates it to `linear.delegateAgentName`.
+After publish: an unblocked `dispatch.state` issue with `ready-for-agent` is claimed by the planner cron. No Assignee → Agents click.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 

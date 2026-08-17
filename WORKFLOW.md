@@ -20,12 +20,12 @@ The **planner** claims. Implement never claims from `dispatch.state`.
 Planner may move an issue to `Implementing` **only** when all of these are true:
 
 1. Status equals `dispatch.state` in factory config (default `Backlog`)
-2. It is **delegated** to `linear.delegateAgentName` (human stays assignee)
+2. It is labelled `ready-for-agent` (when `dispatch.requireReadyForAgent` is true)
 3. It has **no** unresolved `blockedBy` relations
 4. It is not labelled `signal-up`
-5. Count of issues already `Implementing` is below `agent.maxConcurrent`
+5. Linear **Agent** is empty (Assignee stays the human). If Agent is Cursor, skip and comment — that path starts a Cloud Agent and is not factory dispatch.
 
-Among issues that pass, claim in `dispatch.priorityOrder` (default Linear: Urgent `1`, High `2`, Medium `3`, Low `4`, None `0`). Same rank: oldest first. Do not preempt `Implementing`. Priority is **claim order**, not eligibility — an Urgent issue that is not delegated still does not run.
+There is **no** concurrency cap. Unresolved `blockedBy` is what keeps a later slice out of `Implementing`. Among issues that pass, claim **all** currently eligible issues in `dispatch.priorityOrder` (default Linear: Urgent `1`, High `2`, Medium `3`, Low `4`, None `0`). Same rank: oldest first. Unset / None is last. Do not preempt `Implementing`. Priority is **claim order**, not eligibility — an Urgent issue without `ready-for-agent` still does not run.
 
 If any eligibility check fails: **do not modify the issue**. Stop.
 
@@ -43,7 +43,7 @@ Typical contract:
 
 | State | Linear type | Who moves here | Meaning |
 | --- | --- | --- | --- |
-| Backlog | backlog | humans, `/to-tickets`, signal-up | Dispatch-eligible when delegated + unblocked |
+| Backlog | backlog | humans, `/to-tickets`, signal-up | Dispatch-eligible when `ready-for-agent` + unblocked |
 | Parked | unstarted | humans only | Visible, never auto-dispatched |
 | Triage | triage | Sentry and other intake | Inbox. Human accepts. Never auto-dispatch |
 | Duplicate | duplicate | humans | Duplicate of another issue. Never auto-dispatch |
@@ -82,7 +82,12 @@ Lanes come from `lanes` in factory config.
 
 ## Checker run
 
-Wakes when status becomes `In Review`. Judge only. No feature coding. `/code-review` (Standards + Spec). Pass + CI green → `Ready for merge`. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` + Linear comment + attachments. That status change wakes implement. Do not start implement yourself.
+Wakes when status becomes `In Review`. Judge only. No feature coding.
+
+1. `/code-review` (Standards + Spec) against the attached PR.
+2. GitHub CI/CD on that PR: read check runs / status checks. Pending → wait until they complete. Do not move status while checks are pending. Red or failed required checks → fail.
+3. Pass only when both axes are clean **and** required GitHub checks are green → `Ready for merge`.
+4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` + Linear comment + attachments. That status change wakes implement. Do not start implement yourself.
 
 ## Land run (status became `Done`)
 

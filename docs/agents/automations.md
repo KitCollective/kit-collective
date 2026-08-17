@@ -4,7 +4,7 @@ Wire **planner + implement + checker + land** first. Staging/production later.
 
 Linear MCP must point at the workspace in `factory.config.json`. `linear.setup.json` must exist.
 
-Cursor’s Linear trigger fires on issue created / status changed / end of cycle — **not** on delegate. Planner therefore uses a short cron. Implement and checker wake on **status**, so they talk through Linear, not through a shared Cloud Agent session.
+Cursor’s Linear trigger fires on issue created / status changed / end of cycle — **not** on delegate. Planner therefore uses a short cron. **Do not** use Linear Assignee → Agents → Cursor as dispatch: that starts a Cloud Agent immediately. Assignee stays the human; Agent stays **No agent**. Planner claims on `ready-for-agent`. Implement and checker wake on **status**.
 
 Each automation must read `factory.config.json` and `WORKFLOW.md` from the checkout. Do not paste a second copy of policy into the prompt. The **Instruction** field is what you paste into Cursor Automations.
 
@@ -17,7 +17,7 @@ Linear `get_issue` does **not** return comments. Every runtime that acts on an i
 There is no “same Cloud Agent”. Each run is a new VM. **Same work** means: same Linear issue, same git branch, same PR, same workpad.
 
 ```text
-planner:    Backlog + delegated + unblocked → Implementing (priority order)
+planner:    Backlog + ready-for-agent + unblocked → Implementing (priority order)
 implement:  Implementing (no PR) → branch + code + PR on Linear → In Review
 checker:    In Review → Ready for merge
             or Implementing + ### Review feedback (+ attachments)
@@ -59,8 +59,8 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | --- | --- |
 | Trigger | Every 5 minutes (`*/5 * * * *`) |
 | Tools | **Linear MCP only** |
-| Eligibility | `dispatch.state` + delegated to `linear.delegateAgentName` + no `blockedBy` + not `signal-up` |
-| Action | Cap `agent.maxConcurrent`. Claim the next eligible issue in `dispatch.priorityOrder`. No code. |
+| Eligibility | `dispatch.state` + `ready-for-agent` + no unresolved `blockedBy` + not `signal-up` + Agent field empty |
+| Action | No concurrency cap. Claim **all** currently eligible issues in `dispatch.priorityOrder`. Blocking is the limiter. No code. |
 | Instruction | See prompt below. |
 
 ### Cursor UI checklist
@@ -82,9 +82,9 @@ You are the planner. Read factory.config.json then WORKFLOW.md. Follow .cursor/a
 Linear only. No product code. No PRs. No .cursor/hooks or .cursor/rules edits.
 
 Every run:
-1. List KIT issues in dispatch.state that are delegated to linear.delegateAgentName, unblocked, not signal-up.
-2. Count issues already in Implementing. Do not exceed agent.maxConcurrent.
-3. Among remaining eligible issues, claim in dispatch.priorityOrder (Urgent 1, High 2, Medium 3, Low 4, None 0). Same rank: oldest first. Skip write-scope overlap with an Implementing issue. Do not preempt Implementing. That is the only status move you make.
+1. List KIT issues in dispatch.state with label ready-for-agent, unblocked, not signal-up. Unresolved blockedBy = blocker is not Done or Canceled. Skip any issue whose Linear Agent field is set (native Cursor execute); comment and leave it.
+2. There is no concurrency cap. Blocking is the limiter.
+3. Claim all currently eligible issues in dispatch.priorityOrder (Urgent 1, High 2, Medium 3, Low 4, None 0). Same rank: oldest first. Unset/None is last. Skip write-scope overlap with an Implementing issue (leave it in dispatch.state with ready-for-agent, comment why). Do not preempt Implementing. That is the only status move you make.
 4. If the same ### Review feedback class has failed twice on an Implementing issue, comment that the next implement pass must land a ratchet (docs/agents/error-ratcheting.md). Do not write the ratchet.
 
 Never claim Triage or Duplicate. Never move to In Review, Ready for merge, Done, Parked, or Canceled.
@@ -150,7 +150,7 @@ Out of scope → /signal-up (cap applies).
 | --- | --- |
 | Trigger | Linear status changed **to** `In Review` |
 | Tools | GitHub, Linear MCP |
-| Action | Judge-only `/code-review`. Pass + CI green → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`. Do not start implement. |
+| Action | Judge-only `/code-review` **and** GitHub CI/CD checks on the attached PR. Pending checks → wait. Pass + required checks green → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`. Do not start implement. |
 | Instruction | See prompt below. |
 
 ### Cursor UI checklist
@@ -176,7 +176,9 @@ No feature coding. Do not start /implement. Do not merge.
 
 Fetch Linear get_issue and list_comments. Update the existing workpad. Attach the PR if it is missing on the issue.
 
-Pass + CI green → Ready for merge. Comment on Linear that the issue is waiting for the approver.
+Read GitHub check runs on the attached PR. Pending required checks → wait; do not move status. Failed required checks → fail. Local tests are not a substitute.
+
+Pass (Standards + Spec clean, required GitHub CI/CD green) → Ready for merge. Comment on Linear that the issue is waiting for the approver.
 
 Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with what failed, file/criterion, and what done looks like. save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no way to resume the previous Cloud Agent VM.
 

@@ -36,7 +36,6 @@ const config = JSON.parse(readFileSync(join(ROOT, "factory.config.json"), "utf8"
 const product = config.product?.name ?? "Product";
 const teamKey = config.linear?.teamKey ?? "TEAM";
 const teamName = config.linear?.teamName ?? "Engineering";
-const delegate = config.linear?.delegateAgentName ?? "Cursor";
 const approver = config.approver ?? "the approver";
 const dispatch = config.dispatch?.state ?? "Backlog";
 const integration = config.lanes?.integration ?? "development";
@@ -85,7 +84,7 @@ Work lives in Linear workspace **${product}**, team **${teamName}** (\`${teamKey
 
 ### Triage labels
 
-Who-acts labels: \`needs-triage\`, \`needs-info\`, \`ready-for-agent\`, \`ready-for-human\`, \`wontfix\`, \`signal-up\`, \`proposal\`. See \`docs/agents/triage-labels.md\`. Dispatch is not a label.
+Who-acts labels: \`needs-triage\`, \`needs-info\`, \`ready-for-agent\`, \`ready-for-human\`, \`wontfix\`, \`signal-up\`, \`proposal\`. See \`docs/agents/triage-labels.md\`. Dispatch = \`${dispatch}\` + \`ready-for-agent\` + unblocked.
 
 ### Signal-up
 
@@ -137,18 +136,17 @@ Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited pr
 
 ### Planning stack
 
-\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → delegate to **${delegate}** → planner claims → \`/implement\` (\`/tdd\`) → checker → ${approver} to Done → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
+\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → ${approver} to Done → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
 
 ## How work enters the factory
 
 1. \`/grill-with-docs\`
 2. \`/to-design\` — HITL visual lock into \`docs/design-system.md\` when agents will implement UI
 3. \`/to-spec\` — kickoff = Linear project + milestones; feature = document on an existing project
-4. \`/to-tickets\` — vertical slices in \`${dispatch}\`
-5. Human delegates to \`${delegate}\` (human stays assignee)
-6. planner claims → implement → PR + Linear evidence → checker → \`Ready for merge\`
-7. \`${approver}\` reads the GitHub PR, moves Linear to \`Done\`
-8. \`/land\` into \`${integration}\`. A complete **milestone** then \`${staging}\` / \`${production}\` promotions
+4. \`/to-tickets\` — vertical slices in \`${dispatch}\` with \`ready-for-agent\`
+5. planner claims (unblocked) → implement → PR + Linear evidence → checker → \`Ready for merge\`
+6. \`${approver}\` reads the GitHub PR, moves Linear to \`Done\`
+7. \`/land\` into \`${integration}\`. A complete **milestone** then \`${staging}\` / \`${production}\` promotions
 
 Product truth lives under \`${specs}\`. If a spec fights a stack lock, change the lock first.
 `;
@@ -161,8 +159,8 @@ function orchestrationContext() {
 Generated from \`factory.config.json\`. Do not put product nouns here.
 
 **Control plane**:
-Linear. Status + delegate + blockers decide what runs.
-_Avoid_: GitHub Issues as source of truth, treating labels as dispatch
+Linear. Status + \`ready-for-agent\` + blockers decide what runs.
+_Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
 Cursor Automations + Cloud Agents reading this repo’s harness.
@@ -180,9 +178,9 @@ _Avoid_: a second Linear project for the same effort
 One issue that cuts schema → API → UI → tests and is demoable alone.
 _Avoid_: horizontal tickets (schema-only, API-only)
 
-**Delegate**:
-Linear agent field. Human remains assignee. Dispatch = \`${dispatch}\` + delegated to ${delegate} + unblocked. Planner claim order = Linear priority (\`dispatch.priorityOrder\`).
-_Avoid_: assigning the agent as the human owner, treating priority as eligibility
+**Dispatch**:
+\`${dispatch}\` + label \`ready-for-agent\` + unblocked. Human remains assignee. Linear Agent stays empty (Cursor in that menu starts a Cloud Agent). Planner claim order = Linear priority (\`dispatch.priorityOrder\`).
+_Avoid_: assigning Cursor as Agent or Assignee, treating priority as eligibility
 
 **Workpad**:
 The single workpad comment on an issue. \`### Review feedback\` is why a pass was sent back.
@@ -190,7 +188,7 @@ _Avoid_: a new comment thread per agent turn
 
 **Signal-up**:
 Out-of-scope bug or debt, filed as a new \`${dispatch}\` issue. Never coded in the current PR.
-_Avoid_: expanding the PR, auto-delegating the finding
+_Avoid_: expanding the PR, applying \`ready-for-agent\` to the finding
 
 **Proposal**:
 Out-of-scope feature or optimisation. Same ingress as signal-up, different label.

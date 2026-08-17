@@ -25,9 +25,9 @@ Use Linear MCP `get_issue` with `<teamKey>-n` or UUID **and** `list_comments` on
 
 ## Dispatch
 
-Moving an issue to the dispatch state is **not** enough. A human must **delegate** it to `linear.delegateAgentName`. The human stays the assignee. Automations no-op when `blockedBy` is unresolved.
+Moving an issue to the dispatch state is **not** enough. It needs label `ready-for-agent` (`dispatch.requireReadyForAgent`). The human stays the **assignee**. Never set Linear **Agent** to Cursor — that starts a Cloud Agent. Automations no-op when `blockedBy` is unresolved.
 
-**Priority** is Linear’s native field (`0` None, `1` Urgent, `2` High, `3` Medium, `4` Low). The human sets it. `/to-spec` and `/to-tickets` copy it only when the conversation named it; they do not invent High to fill the UI. Planner uses `dispatch.priorityOrder` only to pick **which eligible issue to claim next**. It does not replace delegate, blockers, or `signal-up`. Same rank: oldest first. Do not preempt `Implementing`.
+**Priority** is Linear’s native field (`0` None, `1` Urgent, `2` High, `3` Medium, `4` Low). The human sets it. `/to-spec` and `/to-tickets` copy it only when the conversation named it; they do not invent High to fill the UI. Planner claims **every** currently eligible issue in `dispatch.priorityOrder`. There is no concurrency cap — unresolved `blockedBy` is the limiter. Unset / None is last. Same rank: oldest first. Do not preempt `Implementing`.
 
 ## Intake (Linear Triage and Duplicate)
 
@@ -35,8 +35,8 @@ Team `linear.teamKey` keeps Linear’s **Triage** and **Duplicate** states. They
 
 - **Triage** — inbox for Sentry bugs and other integrations. Automations must not claim, label-as-ready, or delegate them.
 - **Duplicate** — mark that the work already exists on another issue. No agent action.
-- A human **Accepts** from Triage into `Parked` or `Backlog` (without delegate), or marks duplicate / declines / snoozes.
-- After accept: add `needs-triage` until a human has shaped the ticket. Dispatch still requires `dispatch.state` + delegate + unblocked.
+- A human **Accepts** from Triage into `Parked` or `Backlog` (without `ready-for-agent`), or marks duplicate / declines / snoozes.
+- After accept: add `needs-triage` until a human has shaped the ticket. Then `ready-for-agent`. Dispatch requires `dispatch.state` + `ready-for-agent` + unblocked. Never set Linear Agent to Cursor.
 
 ## PRs
 

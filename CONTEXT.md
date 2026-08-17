@@ -8,8 +8,8 @@ Nordic football-shirt collector product. Use these terms in specs, tickets, comm
 Generated from `factory.config.json`. Do not put product nouns here.
 
 **Control plane**:
-Linear. Status + delegate + blockers decide what runs.
-_Avoid_: GitHub Issues as source of truth, treating labels as dispatch
+Linear. Status + `ready-for-agent` + blockers decide what runs.
+_Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
 Cursor Automations + Cloud Agents reading this repo’s harness.
@@ -27,9 +27,9 @@ _Avoid_: a second Linear project for the same effort
 One issue that cuts schema → API → UI → tests and is demoable alone.
 _Avoid_: horizontal tickets (schema-only, API-only)
 
-**Delegate**:
-Linear agent field. Human remains assignee. Dispatch = `Backlog` + delegated to Cursor + unblocked. Planner claim order = Linear priority (`dispatch.priorityOrder`).
-_Avoid_: assigning the agent as the human owner, treating priority as eligibility
+**Dispatch**:
+`Backlog` + label `ready-for-agent` + unblocked. Human remains assignee. Linear Agent stays empty (Cursor in that menu starts a Cloud Agent). Planner claim order = Linear priority (`dispatch.priorityOrder`).
+_Avoid_: assigning Cursor as Agent or Assignee, treating priority as eligibility
 
 **Workpad**:
 The single workpad comment on an issue. `### Review feedback` is why a pass was sent back.
@@ -37,7 +37,7 @@ _Avoid_: a new comment thread per agent turn
 
 **Signal-up**:
 Out-of-scope bug or debt, filed as a new `Backlog` issue. Never coded in the current PR.
-_Avoid_: expanding the PR, auto-delegating the finding
+_Avoid_: expanding the PR, applying `ready-for-agent` to the finding
 
 **Proposal**:
 Out-of-scope feature or optimisation. Same ingress as signal-up, different label.
