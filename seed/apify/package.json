@@ -1,0 +1,32 @@
+{
+  "name": "@kit/seed-apify",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "seed-apify": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@kit/db": "workspace:*",
+    "@kit/domain": "workspace:*",
+    "drizzle-orm": "^0.39.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
