@@ -13,4 +13,4 @@ if ! command -v actionlint >/dev/null 2>&1; then
   actionlint_bin="$root/actionlint"
 fi
 
-"$actionlint_bin" -color
+"$actionlint_bin" -color -shellcheck=
