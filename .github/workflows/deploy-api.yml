@@ -58,18 +58,18 @@ jobs:
           DATABASE_URL: postgresql://kit:kit@postgres:5432/kit_deploy_test
         run: |
           docker network create kit-deploy-test
-          docker run -d --name kit-deploy-postgres --network kit-deploy-test \
+          docker run -d --name postgres --network kit-deploy-test \
             -e POSTGRES_USER=kit -e POSTGRES_PASSWORD=kit -e POSTGRES_DB=kit_deploy_test \
             postgres:16
           for i in $(seq 1 30); do
-            if docker exec kit-deploy-postgres pg_isready -U kit -d kit_deploy_test; then
+            if docker exec postgres pg_isready -U kit -d kit_deploy_test; then
               break
             fi
             sleep 1
           done
           docker run -d --name kit-deploy-api --network kit-deploy-test \
             -e DATABASE_URL="${DATABASE_URL}" -p 13000:3000 kit-api:${{ github.sha }}
-          for i in $(seq 1 30); do
+          for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:13000/v1/health; then
               break
             fi
@@ -77,8 +77,8 @@ jobs:
           done
           curl -fsS http://127.0.0.1:13000/v1/health | grep -q '"database":"ok"'
           curl -fsS http://127.0.0.1:13000/v1/catalog/stats | grep -q '"countries":0'
-          docker stop kit-deploy-postgres
-          docker rm kit-deploy-postgres kit-deploy-api
+          docker stop postgres kit-deploy-api
+          docker rm postgres kit-deploy-api
           docker network rm kit-deploy-test
 
   coolify-deploy:
