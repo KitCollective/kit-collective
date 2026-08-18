@@ -14,6 +14,14 @@ const CLIENT_FORBIDDEN_PATTERNS = [
   /from ['"]\.\.\/\.\.\/api/,
 ];
 
+const API_FORBIDDEN_PATTERNS = [
+  /from ['"]seed\//,
+  /from ['"]\.\.\/\.\.\/seed\//,
+  /import ['"]seed\//,
+  /from ['"]@kit\/seed-/,
+  /import ['"]@kit\/seed-/,
+];
+
 function collectSourceFiles(dir: string): string[] {
   try {
     statSync(dir);
@@ -68,14 +76,21 @@ describe("import boundaries", () => {
     expect(violations[0]).toContain("bad.ts");
   });
 
-  it("Nest API does not import seed/", () => {
+  it("Nest API does not import seed/ or @kit/seed-*", () => {
     const apiDir = path.join(ROOT, "apps/api");
     const files = collectSourceFiles(apiDir);
-    const violations = findForbiddenImports(files, [
-      /from ['"]seed\//,
-      /from ['"]\.\.\/\.\.\/seed\//,
-      /import ['"]seed\//,
-    ]);
+    const violations = findForbiddenImports(files, API_FORBIDDEN_PATTERNS);
     expect(violations).toEqual([]);
+  });
+
+  it("detects forbidden @kit/seed-* imports from apps/api (fixture)", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "kit-boundary-"));
+    const badFile = path.join(dir, "bad.ts");
+    const seedPkg = "@kit/seed-" + "mcp";
+    writeFileSync(badFile, `import { x } from '${seedPkg}';\n`);
+
+    const violations = findForbiddenImports([badFile], API_FORBIDDEN_PATTERNS);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain("bad.ts");
   });
 });
