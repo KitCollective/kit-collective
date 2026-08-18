@@ -51,6 +51,9 @@ jobs:
       - name: Check import boundaries
         run: pnpm check:imports
 
+      - name: Check seed workspace and Coolify job wiring
+        run: pnpm check:seed
+
       - name: Check workflow secret logging
         run: node scripts/check-workflow-secrets.mjs
 

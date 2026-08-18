@@ -51,3 +51,7 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 ### GitHub Actions workflow lint ratchet (KIT-7)
 
 `scripts/lint-workflows.sh` (actionlint) runs in CI on every PR. Fails when a workflow file has invalid YAML, schema, or expression syntax (e.g. `secrets` in a job-level `if:`). Prevents shipping a push-triggered deploy workflow that silently never runs. Tighten only.
+
+### Seed workspace and CI ratchet (KIT-12)
+
+`scripts/check-seed-workspace.mjs` fails CI when a `seed/*/package.json` package falls out of `pnpm-workspace.yaml`, drops its `scripts.test`, or when root `pnpm test` / `.github/workflows/ci.yml` no longer runs turbo tests for seed packages. Also asserts Coolify job compose files and `seed/coolify/Dockerfile` still build and invoke the same `@kit/seed-*` CLIs as Seed MCP, and that `check-import-boundaries` keeps `apps/api` from importing `seed/`. Tighten only.

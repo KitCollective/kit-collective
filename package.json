@@ -8,6 +8,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "check:imports": "node scripts/check-import-boundaries.mjs",
+    "check:seed": "node scripts/check-seed-workspace.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"
   },
   "devDependencies": {
