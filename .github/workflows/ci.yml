@@ -51,6 +51,56 @@ jobs:
       - name: Check import boundaries
         run: pnpm check:imports
 
+      - name: Assert seed packages are in workspace and turbo test graph
+        run: |
+          node -e '
+          const { execFileSync } = require("node:child_process");
+          const required = [
+            "@kit/seed-mcp",
+            "@kit/seed-apify",
+            "@kit/seed-fkapi",
+            "@kit/seed-shared",
+          ];
+          const names = new Set(
+            JSON.parse(
+              execFileSync("pnpm", ["list", "-r", "--depth", "-1", "--json"], {
+                encoding: "utf8",
+              }),
+            ).map((pkg) => pkg.name),
+          );
+          const dry = JSON.parse(
+            execFileSync(
+              "pnpm",
+              ["exec", "turbo", "run", "test", "--dry-run=json"],
+              { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+            ),
+          );
+          const taskIds = new Set(dry.tasks.map((task) => task.taskId));
+          const missing = required.filter((name) => !names.has(name));
+          const untested = required.filter(
+            (name) => !taskIds.has(name + "#test"),
+          );
+          if (missing.length > 0 || untested.length > 0) {
+            if (missing.length > 0) {
+              console.error(
+                "Workspace missing seed packages:",
+                missing.join(", "),
+              );
+            }
+            if (untested.length > 0) {
+              console.error(
+                "turbo test graph missing:",
+                untested.map((name) => name + "#test").join(", "),
+              );
+            }
+            process.exit(1);
+          }
+          console.log(
+            "Seed workspace + turbo test graph OK:",
+            required.join(", "),
+          );
+          '
+
       - name: Check workflow secret logging
         run: node scripts/check-workflow-secrets.mjs
 
