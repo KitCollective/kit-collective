@@ -44,6 +44,10 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 
 `scripts/check-import-boundaries.mjs` denies `@kit/db` and `packages/db` imports inside `seed/fkapi/`. Seed mappers talk to Postgres via `DATABASE_URL` only (ADR 0001). Tighten only — do not remove this check without superseding ADR 0001.
 
+### Nest seed import ratchet (KIT-13)
+
+`scripts/check-import-boundaries.mjs` denies `seed/` path imports and `@kit/seed-*` package imports inside `apps/api`. Nest must not depend on seed mappers or MCP packages — seed work stays out of the API boundary. Tighten only.
+
 ### Workflow secret-logging ratchet (KIT-7)
 
 `scripts/check-workflow-secrets.mjs` fails CI when a `.github/workflows` `run:` step echoes or writes to `$GITHUB_OUTPUT` a Coolify deploy webhook / bearer-shaped value without `::add-mask::` in the same step. Prevents repeating the KIT-7 checker fail (unmasked `COOLIFY_DEPLOY_WEBHOOK_URL` in job logs). Tighten only.

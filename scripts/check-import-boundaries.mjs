@@ -2,7 +2,7 @@
 /**
  * Static import boundary check for CI.
  * - Client apps must not import @kit/db, packages/db, or apps/api
- * - apps/api must not import seed/
+ * - apps/api must not import seed/ or @kit/seed-*
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -55,7 +55,12 @@ const clientViolations = findViolations(clientFiles, [
 ]);
 
 const apiFiles = collectSourceFiles(path.join(ROOT, "apps/api"));
-const apiViolations = findViolations(apiFiles, [/from ['"]seed\//, /import ['"]seed\//]);
+const apiViolations = findViolations(apiFiles, [
+  /from ['"]seed\//,
+  /import ['"]seed\//,
+  /from ['"]@kit\/seed-/,
+  /import ['"]@kit\/seed-/,
+]);
 
 const seedFiles = collectSourceFiles(path.join(ROOT, "seed/fkapi"));
 const seedViolations = findViolations(seedFiles, [
