@@ -116,6 +116,9 @@ importers:
       '@kit/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@kit/seed-shared':
+        specifier: workspace:*
+        version: link:../shared
       drizzle-orm:
         specifier: ^0.39.1
         version: 0.39.3(@types/pg@8.21.0)(pg@8.23.0)

@@ -1,14 +1,14 @@
 import type { CalendarKind, ClubKind, LabelLocale } from "@kit/domain";
+import type { ResolvedSeedLane } from "@kit/seed-shared";
+import type { SeedScope } from "@kit/seed-shared";
 
 export const TM_SYSTEM = "transfermarkt";
 
 export type Lane = "development" | "staging";
 
-export interface SeedCliArgs {
-  competition: string;
-  fromSeason: string;
-  toSeason: string;
-  lane: Lane;
+export interface RunSeedCliInput {
+  scope: SeedScope;
+  lane: ResolvedSeedLane;
 }
 
 /** Raw Transfermarkt-shaped payload from fetch adapter (may include forbidden fields). */

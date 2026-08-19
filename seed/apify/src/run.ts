@@ -1,66 +1,155 @@
 import { createDb } from "@kit/db";
+import { parseSeedScopeArgv, type ParsedSeedScope, type SeedScope } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { normalize } from "./normalize/index.js";
 import { mapFacts } from "./map/index.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
-import { filterSeasons } from "./season-range.js";
-import type { MapResult, SeedCliArgs } from "./types.js";
+import { isClubSeasonAlreadySeeded } from "./seeded.js";
+import type { Lane, MapResult } from "./types.js";
 
-export interface RunSeedOptions extends SeedCliArgs {
+export interface RunSeedOptions {
+  scope: SeedScope;
+  lane: Lane;
   fetchAdapter: FetchAdapter;
   databaseUrl?: string;
   migrationsFolder?: string;
 }
 
+export interface ClubSeasonFailure {
+  clubExternalId: string;
+  season: string;
+  error: string;
+}
+
+export interface RunSeedSummary {
+  fetched: number;
+  skipped: number;
+  mapped: number;
+  failures: ClubSeasonFailure[];
+}
+
 export interface RunSeedResult {
-  mapResult: MapResult;
+  summary: RunSeedSummary;
+}
+
+function emptyMapResult(): MapResult {
+  return {
+    countries: 0,
+    leagues: 0,
+    seasons: 0,
+    clubs: 0,
+    teamSeasons: 0,
+    players: 0,
+    playerClubSeasons: 0,
+    catalogLabels: 0,
+    externalIds: 0,
+  };
+}
+
+function addMapResults(target: MapResult, source: MapResult): void {
+  target.countries += source.countries;
+  target.leagues += source.leagues;
+  target.seasons += source.seasons;
+  target.clubs += source.clubs;
+  target.teamSeasons += source.teamSeasons;
+  target.players += source.players;
+  target.playerClubSeasons += source.playerClubSeasons;
+  target.catalogLabels += source.catalogLabels;
+  target.externalIds += source.externalIds;
+}
+
+function mapTotal(mapResult: MapResult): number {
+  return (
+    mapResult.countries +
+    mapResult.leagues +
+    mapResult.seasons +
+    mapResult.clubs +
+    mapResult.teamSeasons +
+    mapResult.players +
+    mapResult.playerClubSeasons +
+    mapResult.catalogLabels +
+    mapResult.externalIds
+  );
+}
+
+async function expandScope(
+  scope: SeedScope,
+  fetchAdapter: FetchAdapter,
+): Promise<Array<{ clubExternalId: string; seasonLabel: string }>> {
+  if (scope.kind === "club") {
+    return [{ clubExternalId: scope.clubExternalId, seasonLabel: scope.season }];
+  }
+
+  return fetchAdapter.listClubSeasonPairs({
+    competition: scope.competition,
+    fromSeason: scope.fromSeason,
+    toSeason: scope.toSeason,
+  });
 }
 
 export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
   const lane = parseLane(options.lane);
   const databaseUrl = options.databaseUrl ?? resolveDatabaseUrl(lane);
+  const competition =
+    options.scope.kind === "club" ? options.scope.competition : options.scope.competition;
 
-  const raw = await options.fetchAdapter.fetch({
-    competition: options.competition,
-    fromSeason: options.fromSeason,
-    toSeason: options.toSeason,
-  });
-
-  const normalized = normalize(raw);
-  const seasons = filterSeasons(normalized.seasons, options.fromSeason, options.toSeason);
-  const scopedFacts = { ...normalized, seasons };
+  const pairs = await expandScope(options.scope, options.fetchAdapter);
+  const summary: RunSeedSummary = {
+    fetched: 0,
+    skipped: 0,
+    mapped: 0,
+    failures: [],
+  };
 
   const { db, pool } = createDb(databaseUrl);
   try {
-    const mapResult = await mapFacts(db, scopedFacts);
-    return { mapResult };
+    const aggregateMap = emptyMapResult();
+
+    for (const pair of pairs) {
+      const alreadySeeded = await isClubSeasonAlreadySeeded(
+        db,
+        competition,
+        pair.clubExternalId,
+        pair.seasonLabel,
+      );
+
+      if (alreadySeeded) {
+        summary.skipped += 1;
+        continue;
+      }
+
+      try {
+        const raw = await options.fetchAdapter.fetchClubSeason({
+          competition,
+          clubExternalId: pair.clubExternalId,
+          season: pair.seasonLabel,
+        });
+        summary.fetched += 1;
+
+        const normalized = normalize(raw);
+        const mapResult = await mapFacts(db, normalized);
+        addMapResults(aggregateMap, mapResult);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        summary.failures.push({
+          clubExternalId: pair.clubExternalId,
+          season: pair.seasonLabel,
+          error: message,
+        });
+      }
+    }
+
+    summary.mapped = mapTotal(aggregateMap);
+    return { summary };
   } finally {
     await pool.end();
   }
 }
 
-export function parseCliArgs(argv: string[]): SeedCliArgs {
-  const args = argv.slice(2);
-  if (args.length !== 4) {
-    throw new Error(
-      "Usage: seed-apify <competition> <from-season> <to-season> <lane>\n" +
-        "  from-season: 0001 = first season of competition, or season label/id\n" +
-        "  to-season: season label/id or today\n" +
-        "  lane: development | staging (production is rejected)",
-    );
+export function parseCliArgs(argv: string[]): ParsedSeedScope {
+  const result = parseSeedScopeArgv(argv.slice(2));
+  if (!result.ok) {
+    throw new Error(result.error);
   }
-
-  const [competition, fromSeason, toSeason, laneRaw] = args as [
-    string,
-    string,
-    string,
-    string,
-  ];
-
-  return {
-    competition,
-    fromSeason,
-    toSeason,
-    lane: parseLane(laneRaw),
-  };
+  return result.parsed;
 }

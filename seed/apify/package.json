@@ -23,6 +23,7 @@
   "dependencies": {
     "@kit/db": "workspace:*",
     "@kit/domain": "workspace:*",
+    "@kit/seed-shared": "workspace:*",
     "drizzle-orm": "^0.39.1"
   },
   "devDependencies": {

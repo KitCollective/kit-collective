@@ -13,13 +13,27 @@ const seedInputSchema = {
   fromSeason: z
     .string()
     .min(1)
+    .optional()
     .describe(
-      "Start season label, or 0001 for that competition's first season in Transfermarkt/FK ordering.",
+      "Start season label for competition scope, or 0001 for that competition's first Transfermarkt season.",
     ),
   toSeason: z
     .string()
     .min(1)
-    .describe("End season label (e.g. 2025/26) or today for the current season."),
+    .optional()
+    .describe("End season label for competition scope (e.g. 2025/26) or today."),
+  club: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Transfermarkt club external id for club scope (e.g. club-190). When set, season is required and from/to are ignored.",
+    ),
+  season: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Season label for club scope (e.g. 23/24). Required when club is set."),
   lane: z
     .string()
     .optional()
@@ -29,11 +43,15 @@ const seedInputSchema = {
 };
 
 const APIFY_DESCRIPTION = [
-  "Run the Apify/Transfermarkt seed CLI for a competition and season range.",
+  "Run the Apify/Transfermarkt seed CLI for a Seed scope.",
   "",
-  "Pipeline: fetch → normalize (facts only, no market value/agent PII/TM branding) → map into Postgres.",
+  "Scopes:",
+  "- Competition + season range: competition, fromSeason, toSeason",
+  "- Club + one season: competition, club, season",
   "",
-  "Season shorthand: 0001 = that competition's first season.",
+  "Pipeline: fetch → normalize (facts only) → map into Postgres. Already seeded club-seasons skip fetch.",
+  "",
+  "Season shorthand: 0001 = that competition's first Transfermarkt season (Superliga 1991/92).",
   "",
   "Lane rules: default development when lane is omitted; staging only when explicitly named; production is impossible.",
   "",
@@ -90,7 +108,18 @@ export function createSeedMcpServer(runner: CliRunner): McpServer {
   server.tool(
     "seed_fk",
     FK_DESCRIPTION,
-    seedInputSchema,
+    {
+      competition: seedInputSchema.competition,
+      fromSeason: z
+        .string()
+        .min(1)
+        .describe("Start season label, or 0001 for that competition's first season."),
+      toSeason: z
+        .string()
+        .min(1)
+        .describe("End season label (e.g. 2025/26) or today for the current season."),
+      lane: seedInputSchema.lane,
+    },
     async (input) => {
       const result = await runSeedCli("fkapi", input, runner);
       if (!result.ok) {
