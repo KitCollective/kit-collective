@@ -1,0 +1,16 @@
+{
+  "competitionCode": "DK1",
+  "season": 2015,
+  "clubs": [
+    {
+      "clubId": "190",
+      "clubName": "FC Copenhagen",
+      "clubUrl": "https://www.transfermarkt.com/fc-copenhagen/startseite/verein/190"
+    },
+    {
+      "clubId": "191",
+      "clubName": "Brondby IF",
+      "clubUrl": "https://www.transfermarkt.com/brondby-if/startseite/verein/191"
+    }
+  ]
+}
