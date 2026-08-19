@@ -41,12 +41,19 @@ export interface ApifyFetchAdapterOptions {
   onProfileFetch?: (playerId: string) => void;
 }
 
+interface ApifyActorRun {
+  defaultDatasetId: string;
+  storageIds?: {
+    datasets?: Record<string, string>;
+  };
+}
+
 interface ApifyClientLike {
   actor(actorId: string): {
     call(
       input: Record<string, unknown>,
       options?: { waitSecs?: number },
-    ): Promise<{ defaultDatasetId: string }>;
+    ): Promise<ApifyActorRun>;
   };
   dataset(datasetId: string): {
     listItems(options?: { clean?: boolean; limit?: number }): Promise<{ items: unknown[] }>;
@@ -86,12 +93,27 @@ function toPlayerProfile(recording: ActorProfileRecording): ActorPlayerProfile {
   };
 }
 
+function resolveNamedDatasetId(run: ApifyActorRun, datasetName: string): string {
+  const datasets = run.storageIds?.datasets ?? {};
+  const namedId = datasets[datasetName];
+  if (namedId) {
+    return namedId;
+  }
+  // Players mode stores profile rows on the default dataset, not a "players" named store.
+  if (datasetName === PLAYERS_DATASET && datasets.default) {
+    return datasets.default;
+  }
+  throw new Error(
+    `Named dataset "${datasetName}" not found on actor run (available: ${Object.keys(datasets).join(", ") || "none"})`,
+  );
+}
+
 async function fetchDatasetItems(
   client: ApifyClientLike,
-  run: { defaultDatasetId: string },
+  run: ApifyActorRun,
   datasetName: string,
 ): Promise<unknown[]> {
-  const datasetId = `${run.defaultDatasetId}/${datasetName}`;
+  const datasetId = resolveNamedDatasetId(run, datasetName);
   const { items } = await client.dataset(datasetId).listItems({ clean: true });
   return items;
 }
@@ -132,10 +154,10 @@ async function runClubSquad(
 
   const items = await fetchDatasetItems(client, run, SQUADS_DATASET);
   return items.map((item) => {
-    const row = item as ActorSquadRow;
+    const row = item as ActorSquadRow & { name?: string };
     return {
       playerId: row.playerId,
-      playerName: row.playerName,
+      playerName: row.playerName ?? row.name ?? "",
       shirtNumber: row.shirtNumber,
       clubId: row.clubId ?? clubId,
       clubName: row.clubName,
@@ -155,13 +177,19 @@ async function runPlayerProfile(
   });
 
   const items = await fetchDatasetItems(client, run, PLAYERS_DATASET);
-  const first = items[0] as { playerId?: string; playerName?: string; shirtNumber?: number | null };
-  if (!first?.playerId || !first.playerName) {
+  const first = items[0] as {
+    playerId?: string;
+    playerName?: string;
+    name?: string;
+    shirtNumber?: number | null;
+  };
+  const playerName = first?.playerName ?? first?.name;
+  if (!first?.playerId || !playerName) {
     throw new Error(`Invalid player profile for ${playerId}`);
   }
   return {
     playerId: first.playerId,
-    playerName: first.playerName,
+    playerName,
     shirtNumber: first.shirtNumber,
   };
 }
