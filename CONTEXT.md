@@ -89,3 +89,39 @@ _Avoid_: blocking save on inference
 **Lane**:
 One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects.
 _Avoid_: environment as a synonym without saying which object
+
+**Seed run**:
+One chat sentence that starts the full ingest for a Seed scope into a lane’s Postgres. The operator does not chain hops. Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
+_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad
+
+**Seed scope**:
+What one Seed sentence covers: a club + one season (squad and numbers), or a named competition + Season range (every club that season, squads and numbers). Superliga is the Proof run; Bundesliga and others are the same loop.
+_Avoid_: Superliga-only as the product ceiling; treating a club-season ask as a different product
+
+**Fetch step**:
+Internal unit the job uses: resolve club, resolve season, fetch that club-season’s squad, or (only if needed) fetch a player profile. Not what the operator types. Not one nested dump of a club plus the whole roster in a product API.
+_Avoid_: exposing Fetch steps as the human chat protocol; product `/v1` seed endpoints
+
+**Player profile fetch**:
+An extra Transfermarkt hop for one player. Used only when the squad list row is missing identity or jersey number.
+_Avoid_: a profile call for every player when the squad list already has id, name, and number
+
+**Proof run**:
+The first live accept: one Superliga season, every club that season, squad and jersey numbers, into the development lane. Same loop as a full Season range — smaller scope so MCP and Postgres are proven before a multi-hour job.
+_Avoid_: treating the proof as the product ceiling; requiring the full 1995/96–2025/26 range before any row is accepted
+
+**Already seeded**:
+A club + season is already seeded when that pair has a squad with jersey numbers in our Postgres. The next Seed run skips fetching that pair from Transfermarkt.
+_Avoid_: skipping every later season because the club exists; still paying Apify and only skipping the database insert
+
+**Competition season page**:
+The Transfermarkt page for that league season. The club list for a Seed run comes from there, so promotion and relegation are included.
+_Avoid_: a hardcoded Superliga club roster
+
+**ExternalId**:
+The vendor’s stable id (Transfermarkt, Football Kit Archive) on our row. Our UUID is the primary key. Same vendor id on a later run finds the same club/player/kit instead of inserting a duplicate.
+_Avoid_: using Transfermarkt’s integer as our primary key
+
+**Season range**:
+Inclusive seasons of the named competition from a start label to an end label (e.g. Superliga 1995/96–2025/26, Bundesliga 05/06–19/20). The job expands that to every season of that competition in between.
+_Avoid_: treating a range as a single season; treating `0001` as calendar year 1991 without saying so; assuming every range is Superliga

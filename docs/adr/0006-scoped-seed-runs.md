@@ -4,4 +4,4 @@ Stamdata ingest is on-demand. An operator or agent names a competition and a sea
 
 There is no baked-in “Denmark first” dump in M1. Football Kit Archive mapping for a scope runs after Apify/Transfermarkt facts for that same scope exist, so `Kit` can point at our club and season UUIDs.
 
-Status: accepted
+Status: accepted. Club + one season as a Seed scope is added by ADR-0014; competition + range stays valid.
