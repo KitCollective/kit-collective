@@ -1,4 +1,10 @@
 export { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
+export {
+  createApifyFetchAdapter,
+  createLiveApifyFetchAdapter,
+  PINNED_ACTOR_ID,
+  SQUADS_DATASET,
+} from "./fetch/apify-adapter.js";
 export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
 export type {
   ClubSeasonPair,
