@@ -229,8 +229,8 @@ describe("runSeed scope walk", () => {
       scope: {
         kind: "club",
         competition: "dk1",
-        clubExternalId: "club-191",
-        season: "23/24",
+        clubExternalId: "club-190",
+        season: "22/23",
       },
       lane: "development",
       fetchAdapter: recording.adapter,
@@ -238,7 +238,32 @@ describe("runSeed scope walk", () => {
     });
 
     expect(recording.getFetchCalls()).toHaveLength(2);
+    expect(recording.getFetchCalls()[1]?.season).toBe("22/23");
     expect(result.summary.fetched).toBe(1);
+    expect(result.summary.skipped).toBe(0);
+  });
+
+  it("resolves 0001 to the first season on club scope", async () => {
+    await prepareDatabase();
+    const inner = createFixtureFetchAdapter(fixturePath);
+    const recording = createRecordingFetchAdapter(inner);
+
+    const result = await runSeed({
+      scope: {
+        kind: "club",
+        competition: "dk1",
+        clubExternalId: "club-190",
+        season: "0001",
+      },
+      lane: "development",
+      fetchAdapter: recording.adapter,
+      databaseUrl: DATABASE_URL,
+    });
+
+    expect(recording.getFetchCalls()).toHaveLength(1);
+    expect(recording.getFetchCalls()[0]?.season).toBe("1991/92");
+    expect(result.summary.fetched).toBe(1);
+    expect(result.summary.mapped).toBeGreaterThan(0);
   });
 
   it("reports a failed club-season and continues the walk", async () => {

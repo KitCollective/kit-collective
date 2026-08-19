@@ -1,5 +1,10 @@
 import { createDb } from "@kit/db";
-import { parseSeedScopeArgv, type ParsedSeedScope, type SeedScope } from "@kit/seed-shared";
+import {
+  parseSeedScopeArgv,
+  resolveSeasonRef,
+  type ParsedSeedScope,
+  type SeedScope,
+} from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { normalize } from "./normalize/index.js";
 import { mapFacts } from "./map/index.js";
@@ -77,7 +82,8 @@ async function expandScope(
   fetchAdapter: FetchAdapter,
 ): Promise<Array<{ clubExternalId: string; seasonLabel: string }>> {
   if (scope.kind === "club") {
-    return [{ clubExternalId: scope.clubExternalId, seasonLabel: scope.season }];
+    const seasonLabel = resolveSeasonRef(scope.competition, scope.season);
+    return [{ clubExternalId: scope.clubExternalId, seasonLabel }];
   }
 
   return fetchAdapter.listClubSeasonPairs({
@@ -90,8 +96,7 @@ async function expandScope(
 export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
   const lane = parseLane(options.lane);
   const databaseUrl = options.databaseUrl ?? resolveDatabaseUrl(lane);
-  const competition =
-    options.scope.kind === "club" ? options.scope.competition : options.scope.competition;
+  const competition = options.scope.competition;
 
   const pairs = await expandScope(options.scope, options.fetchAdapter);
   const summary: RunSeedSummary = {
