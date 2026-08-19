@@ -3,7 +3,7 @@ import { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
 import { parseCliArgs, runSeed } from "./run.js";
 
 async function main() {
-  const args = parseCliArgs(process.argv);
+  const parsed = parseCliArgs(process.argv);
   const fixturePath = process.env.SEED_APIFY_FIXTURE;
 
   if (!fixturePath) {
@@ -14,8 +14,13 @@ async function main() {
   }
 
   const fetchAdapter = createFixtureFetchAdapter(fixturePath);
-  const { mapResult } = await runSeed({ ...args, fetchAdapter });
-  console.log(JSON.stringify({ ok: true, lane: args.lane, mapResult }, null, 2));
+  const { summary } = await runSeed({
+    scope: parsed.scope,
+    lane: parsed.lane,
+    fetchAdapter,
+  });
+
+  console.log(JSON.stringify({ ok: true, lane: parsed.lane, summary }, null, 2));
 }
 
 main().catch((error: unknown) => {

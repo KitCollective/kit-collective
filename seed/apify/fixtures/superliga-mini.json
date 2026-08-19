@@ -15,7 +15,41 @@
       "startDate": "2022-07-01",
       "endDate": "2023-06-30",
       "calendarKind": "split_year",
-      "clubs": []
+      "clubs": [
+        {
+          "id": "club-190",
+          "name": "FC Copenhagen",
+          "country": { "iso3166": "DK" },
+          "players": [
+            {
+              "id": "player-11111",
+              "name": "Victor Nelsson",
+              "jerseyNumber": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "1991",
+      "label": "1991/92",
+      "startDate": "1991-07-01",
+      "endDate": "1992-06-30",
+      "calendarKind": "split_year",
+      "clubs": [
+        {
+          "id": "club-190",
+          "name": "FC Copenhagen",
+          "country": { "iso3166": "DK" },
+          "players": [
+            {
+              "id": "player-00001",
+              "name": "Peter Schmeichel",
+              "jerseyNumber": 1
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "2023",

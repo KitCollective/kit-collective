@@ -1,14 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildSeedCliInvocation, laneEnvForCli, runSeedCli } from "../src/run-cli.js";
+import {
+  buildSeedCliInvocation,
+  laneEnvForCli,
+  parseSeedMcpInput,
+  runSeedCli,
+} from "../src/run-cli.js";
 import type { CliRunner } from "../src/run-cli.js";
 
 describe("buildSeedCliInvocation", () => {
   it("wraps the apify CLI with competition, season range, and lane", () => {
     expect(
       buildSeedCliInvocation("apify", {
-        competition: "superligaen",
-        fromSeason: "0001",
-        toSeason: "2025/26",
+        scope: {
+          kind: "competition",
+          competition: "superligaen",
+          fromSeason: "0001",
+          toSeason: "2025/26",
+        },
         lane: "development",
       }),
     ).toEqual({
@@ -27,15 +35,60 @@ describe("buildSeedCliInvocation", () => {
     });
   });
 
+  it("wraps club + season scope for apify", () => {
+    expect(
+      buildSeedCliInvocation("apify", {
+        scope: {
+          kind: "club",
+          competition: "dk1",
+          clubExternalId: "club-190",
+          season: "23/24",
+        },
+        lane: "development",
+      }),
+    ).toEqual({
+      command: "pnpm",
+      argv: [
+        "--filter",
+        "@kit/seed-apify",
+        "run",
+        "seed",
+        "--",
+        "club",
+        "dk1",
+        "club-190",
+        "23/24",
+        "development",
+      ],
+    });
+  });
+
   it("wraps the fkapi CLI", () => {
     const { argv } = buildSeedCliInvocation("fkapi", {
-      competition: "championship",
-      fromSeason: "2018/19",
-      toSeason: "today",
+      scope: {
+        kind: "competition",
+        competition: "championship",
+        fromSeason: "2018/19",
+        toSeason: "today",
+      },
       lane: "staging",
     });
     expect(argv).toContain("@kit/seed-fkapi");
     expect(argv.at(-1)).toBe("staging");
+  });
+});
+
+describe("parseSeedMcpInput", () => {
+  it("parses club scope when club and season are provided", () => {
+    const result = parseSeedMcpInput({
+      competition: "dk1",
+      club: "club-190",
+      season: "23/24",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.parsed.scope.kind).toBe("club");
+    }
   });
 });
 
