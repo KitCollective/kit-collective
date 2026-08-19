@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { resolveCompetition } from "@kit/seed-shared";
 import type {
@@ -35,7 +35,6 @@ export function createActorRecordingsStore(recordingsDir: string): ActorRecordin
   return {
     async listAvailableSeasons(competition: string): Promise<number[]> {
       const code = competitionCode(competition);
-      const { readdir } = await import("node:fs/promises");
       const files = await readdir(competitionsDir);
       const prefix = `${code}-`;
       return files

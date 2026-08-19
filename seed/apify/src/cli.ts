@@ -10,17 +10,18 @@ async function resolveFetchAdapter() {
   const fixturePath = process.env.SEED_APIFY_FIXTURE;
   const recordingsDir = process.env.SEED_APIFY_RECORDINGS;
   const apifyToken = process.env.APIFY_TOKEN;
+  const actorId = process.env.SEED_APIFY_ACTOR_ID;
 
   if (fixturePath) {
     return createFixtureFetchAdapter(fixturePath);
   }
 
   if (recordingsDir) {
-    return createApifyFetchAdapter({ recordingsDir });
+    return createApifyFetchAdapter({ recordingsDir, actorId });
   }
 
   if (apifyToken) {
-    return createLiveApifyFetchAdapter({ token: apifyToken });
+    return createLiveApifyFetchAdapter({ token: apifyToken, actorId });
   }
 
   console.error(

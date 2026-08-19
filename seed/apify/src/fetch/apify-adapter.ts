@@ -1,3 +1,4 @@
+import { ApifyClient } from "apify-client";
 import { resolveCompetition } from "@kit/seed-shared";
 import {
   CLUBS_DATASET,
@@ -312,27 +313,22 @@ function createLiveAdapter(
 }
 
 export function createApifyFetchAdapter(options: ApifyFetchAdapterOptions): FetchAdapter {
-  const actorId = options.actorId ?? PINNED_ACTOR_ID;
-
   if (options.recordingsDir) {
     const store = createActorRecordingsStore(options.recordingsDir);
     return createRecordingsAdapter(store, options.onProfileFetch);
   }
 
-  if (!options.token) {
-    throw new Error("Apify fetch adapter requires recordingsDir or token");
+  if (options.token) {
+    return createLiveApifyFetchAdapter({ ...options, token: options.token });
   }
 
-  throw new Error(
-    "Live Apify client is not initialized in this build. Pass recordingsDir for hermetic mode.",
-  );
+  throw new Error("Apify fetch adapter requires recordingsDir or token");
 }
 
-export async function createLiveApifyFetchAdapter(
+export function createLiveApifyFetchAdapter(
   options: ApifyFetchAdapterOptions & { token: string },
-): Promise<FetchAdapter> {
+): FetchAdapter {
   const actorId = options.actorId ?? PINNED_ACTOR_ID;
-  const { ApifyClient } = await import("apify-client");
   const client = new ApifyClient({ token: options.token }) as unknown as ApifyClientLike;
   return createLiveAdapter(client, actorId, options.onProfileFetch);
 }
