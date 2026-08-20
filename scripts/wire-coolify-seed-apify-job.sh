@@ -136,7 +136,7 @@ BULK_ENVS="$(jq -n \
 
 request PATCH "/services/${SERVICE_UUID}/envs/bulk" "$BULK_ENVS" >/dev/null
 
-request POST "/services/${SERVICE_UUID}/start" >/dev/null
-
 echo "service_uuid=${SERVICE_UUID}"
 echo "wire-coolify-seed-apify-job: service ${SERVICE_UUID} on ${LANE} (one-shot, resource-limited)"
+echo "wire-coolify-seed-apify-job: start the run via Coolify MCP control (not REST start):"
+echo "  bash seed/coolify/start-apify-job.sh ${SERVICE_UUID} start"

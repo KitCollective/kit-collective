@@ -35,4 +35,6 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 4. Apply CPU/memory limits from the compose `deploy.resources` block.
 5. Store secrets in the matching Coolify environment (`development` or `staging`).
 
-Agents can trigger deploy/start via Coolify MCP once the resource exists (`deploy` + `control` on the service UUID).
+Agents can trigger deploy/start via Coolify MCP once the resource exists (`control` on the service UUID).
+
+**Cloud Agents:** `scripts/setup-coolify-mcp.sh` writes `.cursor/mcp.json` for the IDE. Agents also need the same HTTP server registered under **Cursor Dashboard → Integrations & MCP** so `GetMcpTools` lists `coolify` in-session. Starting a run from chat uses the Coolify MCP `control` tool — see `seed/coolify/start-apify-job.sh` (not the Coolify REST `/start` endpoint).
