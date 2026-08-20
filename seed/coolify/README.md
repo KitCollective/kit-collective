@@ -29,10 +29,10 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 
 ## Coolify setup
 
-1. Build from repo root using `seed/coolify/Dockerfile`.
-2. Import the compose file as a **Docker Compose** resource.
+1. Build from repo root using `seed/coolify/Dockerfile` (local) or `seed/coolify/Dockerfile.remote` (Coolify API — clones public git at build time).
+2. Import the compose file as a **Docker Compose** resource, **or** run `scripts/wire-coolify-seed-apify-job.sh` to create/update the development job via Coolify API.
 3. Set restart policy to **never** / run as a one-shot job or cron.
 4. Apply CPU/memory limits from the compose `deploy.resources` block.
 5. Store secrets in the matching Coolify environment (`development` or `staging`).
 
-Agents can also trigger the same command via Coolify MCP once the resource exists.
+Agents can trigger deploy/start via Coolify MCP once the resource exists (`deploy` + `control` on the service UUID).
