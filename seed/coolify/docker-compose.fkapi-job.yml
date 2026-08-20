@@ -36,9 +36,9 @@ services:
       - pnpm
       - --filter
       - "@kit/seed-fkapi"
-      - run
-      - seed
-      - --
+      - exec
+      - node
+      - dist/cli.js
       - ${SEED_COMPETITION:?SEED_COMPETITION is required}
       - ${SEED_FROM_SEASON:?SEED_FROM_SEASON is required}
       - ${SEED_TO_SEASON:?SEED_TO_SEASON is required}

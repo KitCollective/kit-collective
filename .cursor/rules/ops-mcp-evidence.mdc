@@ -7,7 +7,8 @@ alwaysApply: true
 
 When an issue acceptance criterion requires an MCP server (for example Coolify MCP on KIT-6):
 
-1. Before marking the criterion complete or moving to **In Review**, run `GetMcpTools` in **this** session and confirm the named server appears in the catalog.
-2. Session-local MCP state from a prior agent run is not evidence. Workpad prose such as "MCP connected" without a catalog query in the same session is not evidence.
-3. Durable wiring for Cloud Agents: `.cursor/mcp.json.example`, `scripts/setup-coolify-mcp.sh`, and `.cursor/environment.json` `install`. Secrets are `COOLIFY_API_URL`, `COOLIFY_MCP_URL` (optional; defaults to `{COOLIFY_API_URL}/mcp`), and `COOLIFY_API_TOKEN` in the Cursor Cloud Agent environment — names only in `.env.example`.
-4. If a criterion is intentionally human-only (Nicklas Desktop), say so explicitly in the workpad and attach a screenshot from that surface under `### Evidence`. Do not claim agent-verifiable MCP without a catalog query.
+1. Before marking the criterion complete or moving to **In Review**, run `GetMcpTools` in **this** session and confirm the named server appears in the catalog. Pipe the JSON to `scripts/record-getmcptools-evidence.sh <server>`; only mark the AC when that script exits 0.
+2. Session-local MCP state from a prior agent run is not evidence. Workpad prose such as "MCP connected" without a catalog query in the same session is not evidence. Manual files under `.cursor/getmcptools-evidence/` are blocked by hook — use the record script only.
+3. If catalog registration is human-only (e.g. Dashboard Integrations & MCP — see `KIT-18`), relate the issue `blockedBy` that ticket and do **not** move to **In Review** until `GetMcpTools` lists the server or the blocker is resolved.
+4. Durable wiring for Cloud Agents: `.cursor/mcp.json.example`, `scripts/setup-coolify-mcp.sh`, and `.cursor/environment.json` `install`. Secrets are `COOLIFY_API_URL`, `COOLIFY_MCP_URL` (optional; defaults to `{COOLIFY_API_URL}/mcp`), and `COOLIFY_API_TOKEN` in the Cursor Cloud Agent environment — names only in `.env.example`.
+5. If a criterion is intentionally human-only (Nicklas Desktop), say so explicitly in the workpad and attach a screenshot from that surface under `### Evidence`. Do not claim agent-verifiable MCP without a catalog query.

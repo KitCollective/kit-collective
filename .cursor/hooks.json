@@ -17,6 +17,14 @@
       {
         "command": "bash .cursor/hooks/block-seed-substitute-db.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-coolify-rest-service-control.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-manual-getmcptools-evidence.sh",
+        "failClosed": true
       }
     ]
   }
