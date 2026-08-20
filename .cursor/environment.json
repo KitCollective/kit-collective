@@ -1,4 +1,5 @@
 {
   "name": "KitCollective",
-  "install": "bash scripts/setup-coolify-mcp.sh"
+  "install": "bash scripts/setup-coolify-mcp.sh",
+  "start": "bash scripts/setup-coolify-mcp.sh"
 }
