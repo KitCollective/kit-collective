@@ -51,3 +51,7 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 ### GitHub Actions workflow lint ratchet (KIT-7)
 
 `scripts/lint-workflows.sh` (actionlint) runs in CI on every PR. Fails when a workflow file has invalid YAML, schema, or expression syntax (e.g. `secrets` in a job-level `if:`). Prevents shipping a push-triggered deploy workflow that silently never runs. Tighten only.
+
+### Seed development proof DB ratchet (KIT-16)
+
+`.cursor/hooks/block-seed-substitute-db.sh` denies shell seed CLI / MCP invocations for the development lane when `DATABASE_URL` points at localhost, `127.0.0.1`, or a `*test*` database name, or when the command inline-overrides `DATABASE_URL` to those hosts or pairs `docker run … postgres` with a seed CLI. Prevents repeating the KIT-16 checker fail (proof rows on a substitute Postgres instead of real development). Fixture/recording modes (`SEED_APIFY_FIXTURE`, `SEED_APIFY_RECORDINGS`) and explicit `staging` lane are exempt. Tighten only.

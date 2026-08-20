@@ -10,7 +10,9 @@
       "command": "node",
       "args": ["seed/mcp/dist/index.js"],
       "env": {
-        "SEED_REPO_ROOT": "${workspaceFolder}"
+        "SEED_REPO_ROOT": "${workspaceFolder}",
+        "APIFY_TOKEN": "${env:APIFY_TOKEN}",
+        "DATABASE_URL": "${env:DATABASE_URL}"
       }
     }
   }

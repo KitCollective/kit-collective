@@ -13,6 +13,10 @@
       {
         "command": "bash .cursor/hooks/protect-ratchet.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-seed-substitute-db.sh",
+        "failClosed": true
       }
     ]
   }
