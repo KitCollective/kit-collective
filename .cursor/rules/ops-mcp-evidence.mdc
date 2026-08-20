@@ -9,5 +9,8 @@ When an issue acceptance criterion requires an MCP server (for example Coolify M
 
 1. Before marking the criterion complete or moving to **In Review**, run `GetMcpTools` in **this** session and confirm the named server appears in the catalog.
 2. Session-local MCP state from a prior agent run is not evidence. Workpad prose such as "MCP connected" without a catalog query in the same session is not evidence.
-3. Durable wiring for Cloud Agents: `.cursor/mcp.json.example`, `scripts/setup-coolify-mcp.sh`, and `.cursor/environment.json` `install`. Secrets are `COOLIFY_API_URL`, `COOLIFY_MCP_URL` (optional; defaults to `{COOLIFY_API_URL}/mcp`), and `COOLIFY_API_TOKEN` in the Cursor Cloud Agent environment — names only in `.env.example`.
+3. Durable wiring for Cloud Agents has two layers. `GetMcpTools` in a Cloud Agent VM sees Dashboard HTTP MCP, not repo `.cursor/mcp.json` alone:
+   - Cursor Dashboard → Integrations & MCP, and the Cloud Agent environment’s Integrations & MCP: HTTP server named exactly `coolify`, URL `{COOLIFY_API_URL}/mcp`, header `Authorization: Bearer <COOLIFY_API_TOKEN>`. Add to Team Marketplace so Linear automation VMs inherit it.
+   - `.cursor/mcp.json.example`, `scripts/setup-coolify-mcp.sh`, and `.cursor/environment.json` `install` + `start` generate gitignored `.cursor/mcp.json` from Cloud Agent secrets for Desktop and local tools. `start` is required because environment builds do not re-run `install` on each pod.
+   Secrets are `COOLIFY_API_URL`, `COOLIFY_MCP_URL` (optional; defaults to `{COOLIFY_API_URL}/mcp`), and `COOLIFY_API_TOKEN` in the Cursor Cloud Agent environment — names only in `.env.example`.
 4. If a criterion is intentionally human-only (Nicklas Desktop), say so explicitly in the workpad and attach a screenshot from that surface under `### Evidence`. Do not claim agent-verifiable MCP without a catalog query.

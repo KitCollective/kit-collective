@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Generate .cursor/mcp.json from the committed example when Cloud Agent secrets exist.
-# Idempotent — safe to run on every environment install.
+# Idempotent — safe on every environment install and every pod start.
+# Cloud Agent GetMcpTools still needs Dashboard HTTP MCP named coolify; this file
+# is for Desktop and local tools. Environment builds skip install on later boots,
+# so start must run this too.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
