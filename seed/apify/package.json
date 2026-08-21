@@ -25,6 +25,7 @@
     "@kit/domain": "workspace:*",
     "@kit/seed-shared": "workspace:*",
     "apify-client": "^2.12.0",
+    "cheerio": "^1.0.0",
     "drizzle-orm": "^0.39.1"
   },
   "devDependencies": {
