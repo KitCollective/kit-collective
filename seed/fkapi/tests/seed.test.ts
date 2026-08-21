@@ -180,8 +180,6 @@ describe("FK seed mapper", () => {
   });
 
   it("refuses accept when object store reports missing bytes after putObject", async () => {
-    await seedApifyPrerequisites(pool);
-
     const brokenStore: ObjectStoreAdapter = {
       async putObject() {},
       async objectExists() {
