@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Header } from "@nestjs/common";
 import { CatalogService } from "./catalog.service.js";
 
 @Controller("catalog")
@@ -8,5 +8,11 @@ export class CatalogController {
   @Get("stats")
   getStats() {
     return this.catalogService.getStats();
+  }
+
+  @Get("peek")
+  @Header("Content-Type", "text/html; charset=utf-8")
+  getPeek() {
+    return this.catalogService.getPeekHtml();
   }
 }

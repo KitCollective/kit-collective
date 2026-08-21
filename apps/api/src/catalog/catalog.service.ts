@@ -16,9 +16,10 @@ import {
   teamSeason,
   user,
 } from "@kit/db";
-import { count } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import type { Db } from "@kit/db";
+import { buildPeekHtml, type PeekClubRow, type PeekKitRow } from "./catalog-peek.js";
 
 @Injectable()
 export class CatalogService {
@@ -75,5 +76,81 @@ export class CatalogService {
     };
 
     return catalogStatsSchema.parse(stats);
+  }
+
+  async getPeekHtml(): Promise<string> {
+    const seasons = await this.db
+      .select({ id: season.id, label: season.label })
+      .from(season)
+      .orderBy(asc(season.startsOn));
+
+    if (seasons.length === 0) {
+      return buildPeekHtml([], []);
+    }
+
+    const clubLabel = sql<string>`coalesce(
+      max(case when ${catalogLabel.locale} = 'da' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+      max(case when ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+      ${club.id}::text
+    )`;
+
+    const clubRows = await this.db
+      .select({
+        seasonId: season.id,
+        seasonLabel: season.label,
+        clubId: club.id,
+        clubName: clubLabel,
+        squadCount: sql<number>`count(distinct ${playerClubSeason.id})::int`,
+      })
+      .from(teamSeason)
+      .innerJoin(season, eq(teamSeason.seasonId, season.id))
+      .innerJoin(club, eq(teamSeason.clubId, club.id))
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+      )
+      .leftJoin(
+        playerClubSeason,
+        and(
+          eq(playerClubSeason.clubId, club.id),
+          eq(playerClubSeason.seasonId, season.id),
+        ),
+      )
+      .groupBy(season.id, season.label, club.id)
+      .orderBy(asc(season.startsOn), asc(club.id));
+
+    const kitRows = await this.db
+      .select({
+        clubId: kit.clubId,
+        seasonId: kit.seasonId,
+        kitType: kit.type,
+        photoCount: sql<number>`count(${kitPhoto.id})::int`,
+      })
+      .from(kit)
+      .leftJoin(kitPhoto, eq(kitPhoto.kitId, kit.id))
+      .where(sql`${kit.clubId} is not null`)
+      .groupBy(kit.clubId, kit.seasonId, kit.type)
+      .orderBy(asc(kit.seasonId), asc(kit.clubId), asc(kit.type));
+
+    const clubs: PeekClubRow[] = clubRows
+      .filter((row) => row.clubId !== null)
+      .map((row) => ({
+        seasonId: row.seasonId,
+        seasonLabel: row.seasonLabel,
+        clubId: row.clubId,
+        clubName: row.clubName,
+        squadCount: row.squadCount,
+      }));
+
+    const kits: PeekKitRow[] = kitRows
+      .filter((row) => row.clubId !== null)
+      .map((row) => ({
+        clubId: row.clubId!,
+        seasonId: row.seasonId,
+        kitType: row.kitType,
+        photoCount: row.photoCount,
+      }));
+
+    return buildPeekHtml(clubs, kits);
   }
 }
