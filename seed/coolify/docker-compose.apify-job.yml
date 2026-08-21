@@ -6,7 +6,9 @@
 #
 # Required secrets (development lane example):
 #   DATABASE_URL — Postgres for the lane
-#   APIFY_TOKEN — Apify actor token (when KIT-8 fetch adapter is wired)
+#   SEED_PROXY_URL — residential HTTP(S) proxy for live Kader fetch (Coolify / Hetzner IP)
+#   SEED_REQUIRE_PROXY — set to true on Coolify so missing proxy fails closed
+#   APIFY_TOKEN — Apify actor token (only when SEED_FETCH=apify)
 #
 # Resource limits keep seed imports from starving Nest on the CX33.
 
@@ -28,6 +30,8 @@ services:
     environment:
       SEED_LANE: ${SEED_LANE:-development}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      SEED_PROXY_URL: ${SEED_PROXY_URL:?SEED_PROXY_URL is required}
+      SEED_REQUIRE_PROXY: ${SEED_REQUIRE_PROXY:-true}
       APIFY_TOKEN: ${APIFY_TOKEN:-}
     command:
       - pnpm

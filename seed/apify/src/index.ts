@@ -10,6 +10,12 @@ export {
   TransfermarktHttpError,
 } from "./fetch/kader-fetch-adapter.js";
 export { resolveFetchAdapter } from "./resolve-fetch-adapter.js";
+export {
+  assertSeedProxyAvailable,
+  createProxyFetchHtml,
+  resolveSeedProxyConfig,
+  type SeedProxyConfig,
+} from "./proxy-config.js";
 export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
 export type {
   ClubSeasonPair,

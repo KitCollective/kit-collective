@@ -5,6 +5,11 @@ import {
 } from "./fetch/apify-adapter.js";
 import { createKaderFetchAdapter } from "./fetch/kader-fetch-adapter.js";
 import type { FetchAdapter } from "./fetch/adapter.js";
+import {
+  assertSeedProxyAvailable,
+  createProxyFetchHtml,
+  resolveSeedProxyConfig,
+} from "./proxy-config.js";
 
 export type SeedFetchMode = "kader" | "apify";
 
@@ -44,5 +49,12 @@ export async function resolveFetchAdapter(): Promise<FetchAdapter> {
     );
   }
 
-  return createKaderFetchAdapter();
+  const proxyConfig = resolveSeedProxyConfig();
+  assertSeedProxyAvailable(proxyConfig);
+
+  const fetchHtml = proxyConfig.proxyUrl
+    ? createProxyFetchHtml(proxyConfig.proxyUrl)
+    : undefined;
+
+  return createKaderFetchAdapter({ fetchHtml });
 }
