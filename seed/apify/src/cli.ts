@@ -4,21 +4,26 @@ import { resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 
 async function main() {
   const parsed = parseCliArgs(process.argv);
-  let fetchAdapter;
+  let resolved;
   try {
-    fetchAdapter = await resolveFetchAdapter();
+    resolved = await resolveFetchAdapter();
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
     process.exit(1);
   }
-  const { summary } = await runSeed({
-    scope: parsed.scope,
-    lane: parsed.lane,
-    fetchAdapter,
-  });
 
-  console.log(JSON.stringify({ ok: true, lane: parsed.lane, summary }, null, 2));
+  try {
+    const { summary } = await runSeed({
+      scope: parsed.scope,
+      lane: parsed.lane,
+      fetchAdapter: resolved.adapter,
+    });
+
+    console.log(JSON.stringify({ ok: true, lane: parsed.lane, summary }, null, 2));
+  } finally {
+    await resolved.close?.();
+  }
 }
 
 main().catch((error: unknown) => {

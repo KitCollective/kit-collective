@@ -13,6 +13,11 @@ import {
 
 export type SeedFetchMode = "kader" | "apify";
 
+export interface ResolvedFetchAdapter {
+  adapter: FetchAdapter;
+  close?: () => Promise<void>;
+}
+
 function resolveFetchMode(): SeedFetchMode {
   const mode = process.env.SEED_FETCH?.trim().toLowerCase();
   if (mode === "apify") {
@@ -21,7 +26,7 @@ function resolveFetchMode(): SeedFetchMode {
   return "kader";
 }
 
-export async function resolveFetchAdapter(): Promise<FetchAdapter> {
+export async function resolveFetchAdapter(): Promise<ResolvedFetchAdapter> {
   const fixturePath = process.env.SEED_APIFY_FIXTURE;
   const kaderHtmlDir = process.env.SEED_KADER_HTML;
   const recordingsDir = process.env.SEED_APIFY_RECORDINGS;
@@ -30,19 +35,19 @@ export async function resolveFetchAdapter(): Promise<FetchAdapter> {
   const fetchMode = resolveFetchMode();
 
   if (fixturePath) {
-    return createFixtureFetchAdapter(fixturePath);
+    return { adapter: createFixtureFetchAdapter(fixturePath) };
   }
 
   if (kaderHtmlDir) {
-    return createKaderFetchAdapter({ fixturesDir: kaderHtmlDir });
+    return { adapter: createKaderFetchAdapter({ fixturesDir: kaderHtmlDir }) };
   }
 
   if (fetchMode === "apify") {
     if (recordingsDir) {
-      return createApifyFetchAdapter({ recordingsDir, actorId });
+      return { adapter: createApifyFetchAdapter({ recordingsDir, actorId }) };
     }
     if (apifyToken) {
-      return createLiveApifyFetchAdapter({ token: apifyToken, actorId });
+      return { adapter: createLiveApifyFetchAdapter({ token: apifyToken, actorId }) };
     }
     throw new Error(
       "SEED_FETCH=apify requires SEED_APIFY_RECORDINGS (recorded actor datasets) or APIFY_TOKEN (live Apify fetch).",
@@ -52,9 +57,13 @@ export async function resolveFetchAdapter(): Promise<FetchAdapter> {
   const proxyConfig = resolveSeedProxyConfig();
   assertSeedProxyAvailable(proxyConfig);
 
-  const fetchHtml = proxyConfig.proxyUrl
-    ? createProxyFetchHtml(proxyConfig.proxyUrl)
-    : undefined;
+  if (proxyConfig.proxyUrl) {
+    const { fetchHtml, close } = createProxyFetchHtml(proxyConfig.proxyUrl);
+    return {
+      adapter: createKaderFetchAdapter({ fetchHtml }),
+      close,
+    };
+  }
 
-  return createKaderFetchAdapter({ fetchHtml });
+  return { adapter: createKaderFetchAdapter() };
 }

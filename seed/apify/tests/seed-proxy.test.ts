@@ -80,7 +80,7 @@ describe("createProxyFetchHtml", () => {
       text: async () => "<html>ok</html>",
     });
 
-    const fetchHtml = createProxyFetchHtml("http://proxy.example:8080");
+    const { fetchHtml } = createProxyFetchHtml("http://proxy.example:8080");
     const html = await fetchHtml("https://www.transfermarkt.com/test");
 
     expect(html).toBe("<html>ok</html>");
@@ -88,12 +88,39 @@ describe("createProxyFetchHtml", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://www.transfermarkt.com/test",
       expect.objectContaining({
-        dispatcher: { kind: "proxy-agent" },
+        dispatcher: expect.objectContaining({ kind: "proxy-agent" }),
         headers: expect.objectContaining({
           "User-Agent": expect.stringContaining("KitCollective-Seed"),
         }),
       }),
     );
+  });
+
+  it("drains the response body before throwing on non-OK", async () => {
+    const textMock = vi.fn().mockResolvedValue("");
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 202,
+      text: textMock,
+    });
+
+    const { fetchHtml } = createProxyFetchHtml("http://proxy.example:8080");
+    await expect(fetchHtml("https://www.transfermarkt.com/test")).rejects.toThrow(
+      /Transfermarkt HTTP 202/,
+    );
+    expect(textMock).toHaveBeenCalled();
+  });
+
+  it("closes the proxy agent when close is called", async () => {
+    const closeMock = vi.fn().mockResolvedValue(undefined);
+    ProxyAgentMock.mockImplementation(() => ({
+      kind: "proxy-agent",
+      close: closeMock,
+    }));
+
+    const { close } = createProxyFetchHtml("http://proxy.example:8080");
+    await close();
+    expect(closeMock).toHaveBeenCalled();
   });
 });
 
@@ -116,7 +143,7 @@ describe("resolveFetchAdapter proxy behaviour", () => {
     process.env.SEED_KADER_HTML = "/tmp/kader-html";
 
     const adapter = await resolveFetchAdapter();
-    expect(adapter.fetchClubSeason).toBeTypeOf("function");
+    expect(adapter.adapter.fetchClubSeason).toBeTypeOf("function");
   });
 
   it("accepts live kader when SEED_PROXY_URL is set", async () => {
@@ -126,7 +153,16 @@ describe("resolveFetchAdapter proxy behaviour", () => {
     delete process.env.SEED_REQUIRE_PROXY;
     process.env.SEED_PROXY_URL = "http://proxy.example:8080";
 
-    const adapter = await resolveFetchAdapter();
-    expect(adapter.fetchClubSeason).toBeTypeOf("function");
+    const closeMock = vi.fn().mockResolvedValue(undefined);
+    ProxyAgentMock.mockImplementation(() => ({
+      kind: "proxy-agent",
+      close: closeMock,
+    }));
+
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
+    expect(resolved.close).toBeTypeOf("function");
+    await resolved.close?.();
+    expect(closeMock).toHaveBeenCalled();
   });
 });

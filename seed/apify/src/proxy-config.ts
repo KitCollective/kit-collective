@@ -34,10 +34,15 @@ export function assertSeedProxyAvailable(config: SeedProxyConfig): void {
   }
 }
 
-export function createProxyFetchHtml(proxyUrl: string): (url: string) => Promise<string> {
+export interface ProxyFetchHtml {
+  fetchHtml: (url: string) => Promise<string>;
+  close: () => Promise<void>;
+}
+
+export function createProxyFetchHtml(proxyUrl: string): ProxyFetchHtml {
   const agent = new ProxyAgent(proxyUrl);
 
-  return async (url: string) => {
+  const fetchHtml = async (url: string) => {
     const response = await undiciFetch(url, {
       dispatcher: agent,
       headers: {
@@ -47,10 +52,16 @@ export function createProxyFetchHtml(proxyUrl: string): (url: string) => Promise
       },
     });
 
+    const text = await response.text();
     if (!response.ok) {
       throw new TransfermarktHttpError(response.status, url);
     }
 
-    return response.text();
+    return text;
+  };
+
+  return {
+    fetchHtml,
+    close: () => agent.close(),
   };
 }
