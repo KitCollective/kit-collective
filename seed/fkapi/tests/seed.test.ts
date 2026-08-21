@@ -58,6 +58,9 @@ function createMemoryObjectStore(): ObjectStoreAdapter & { objects: Map<string, 
     async putObject(key: string, bytes: Uint8Array): Promise<void> {
       objects.set(key, bytes);
     },
+    async objectExists(key: string): Promise<boolean> {
+      return objects.has(key);
+    },
   };
 }
 
@@ -174,6 +177,30 @@ describe("FK seed mapper", () => {
     }
 
     expect(objectStore.objects.size).toBe(2);
+  });
+
+  it("refuses accept when object store reports missing bytes after putObject", async () => {
+    await seedApifyPrerequisites(pool);
+
+    const brokenStore: ObjectStoreAdapter = {
+      async putObject() {},
+      async objectExists() {
+        return false;
+      },
+    };
+
+    await expect(
+      runFkSeed({
+        databaseUrl: DATABASE_URL,
+        fetchAdapter: createFixtureFetchAdapter(),
+        objectStore: brokenStore,
+        scope: {
+          competition: "superliga",
+          fromSeason: "1998/99",
+          toSeason: "1998/99",
+        },
+      }),
+    ).rejects.toThrow(/Lane R2 object missing after putObject/);
   });
 
   it("is idempotent on second run", async () => {

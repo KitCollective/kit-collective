@@ -52,6 +52,12 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
       if (rawKit.imageBytes && rawKit.imageBytes.length > 0) {
         const objectKey = `kit/${kitId}/archive.jpg`;
         await options.objectStore.putObject(objectKey, rawKit.imageBytes);
+        const exists = await options.objectStore.objectExists(objectKey);
+        if (!exists) {
+          throw new Error(
+            `Lane R2 object missing after putObject: ${objectKey}. Refusing accept without archive bytes in object store.`,
+          );
+        }
         const wrote = await upsertKitPhoto(pool, kitId, objectKey);
         if (wrote) {
           photosWritten += 1;

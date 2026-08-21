@@ -24,6 +24,7 @@ export type FkFetchAdapter = {
 
 export type ObjectStoreAdapter = {
   putObject(key: string, bytes: Uint8Array): Promise<void>;
+  objectExists(key: string): Promise<boolean>;
 };
 
 export const EXTERNAL_SYSTEM_FKAPI = "fkapi";
