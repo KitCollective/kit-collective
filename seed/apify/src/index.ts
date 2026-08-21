@@ -5,6 +5,11 @@ export {
   PINNED_ACTOR_ID,
   SQUADS_DATASET,
 } from "./fetch/apify-adapter.js";
+export {
+  createKaderFetchAdapter,
+  TransfermarktHttpError,
+} from "./fetch/kader-fetch-adapter.js";
+export { resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
 export type {
   ClubSeasonPair,

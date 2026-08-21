@@ -33,7 +33,7 @@ if ! printf '%s' "$COMMAND" | grep -qE 'seed/apify/dist/cli\.js|seed/fkapi/dist/
 fi
 
 # Fixture / recording modes are hermetic by design — not development proof runs.
-if printf '%s' "$COMMAND" | grep -qE 'SEED_APIFY_FIXTURE=|SEED_APIFY_RECORDINGS='; then
+if printf '%s' "$COMMAND" | grep -qE 'SEED_APIFY_FIXTURE=|SEED_APIFY_RECORDINGS=|SEED_KADER_HTML='; then
   allow
 fi
 

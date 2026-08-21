@@ -23,6 +23,7 @@ import type {
   ActorSquadRow,
 } from "./actor-types.js";
 import { labelToStartYear } from "./season-label.js";
+import { resolveProfiles } from "./squad-profile-hop.js";
 import type {
   ClubSeasonPair,
   FetchAdapter,
@@ -79,10 +80,6 @@ function clubStartUrl(clubId: string): string {
 
 function playerProfileUrl(playerId: string): string {
   return `https://www.transfermarkt.com/player/profil/spieler/${playerId}`;
-}
-
-function squadRowNeedsProfile(row: ActorSquadRow): boolean {
-  return !row.playerId || row.shirtNumber === undefined || row.shirtNumber === null;
 }
 
 function toPlayerProfile(recording: ActorProfileRecording): ActorPlayerProfile {
@@ -192,27 +189,6 @@ async function runPlayerProfile(
     playerName,
     shirtNumber: first.shirtNumber,
   };
-}
-
-async function resolveProfiles(
-  squadRows: ActorSquadRow[],
-  fetchProfile: (playerId: string) => Promise<ActorPlayerProfile>,
-  onProfileFetch?: (playerId: string) => void,
-): Promise<Map<string, ActorPlayerProfile>> {
-  const profiles = new Map<string, ActorPlayerProfile>();
-
-  for (const row of squadRows) {
-    if (!squadRowNeedsProfile(row) || !row.playerId) {
-      continue;
-    }
-    if (profiles.has(row.playerId)) {
-      continue;
-    }
-    onProfileFetch?.(row.playerId);
-    profiles.set(row.playerId, await fetchProfile(row.playerId));
-  }
-
-  return profiles;
 }
 
 function createRecordingsAdapter(

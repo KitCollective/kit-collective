@@ -6,3 +6,7 @@ export {
   PINNED_ACTOR_ID,
   SQUADS_DATASET,
 } from "./apify-adapter.js";
+export {
+  createKaderFetchAdapter,
+  TransfermarktHttpError,
+} from "./kader-fetch-adapter.js";
