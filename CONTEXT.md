@@ -90,10 +90,6 @@ _Avoid_: blocking save on inference
 One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects.
 _Avoid_: environment as a synonym without saying which object
 
-**kc_seed_mcp**:
-The Cursor Seed MCP server id. Stdio process exposing `seed_apify` then `seed_fk`. Seed-only env (lane database, Seed proxy, FK origin, lane R2). Not Coolify MCP.
-_Avoid_: naming it `seed`; putting Coolify tokens on this server; using Coolify `control` as the Seed scope interface
-
 **Seed run**:
 One chat sentence that starts the full ingest for a Seed scope into a lane’s Postgres. The operator does not chain hops. Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
 _Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad
