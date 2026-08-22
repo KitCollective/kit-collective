@@ -90,6 +90,10 @@ _Avoid_: blocking save on inference
 One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects.
 _Avoid_: environment as a synonym without saying which object
 
+**kc_seed_mcp**:
+The Cursor Seed MCP server id. Stdio process exposing `seed_apify` then `seed_fk`. Seed-only env (lane database, Seed proxy, FK origin, lane R2). Not Coolify MCP.
+_Avoid_: naming it `seed`; putting Coolify tokens on this server; using Coolify `control` as the Seed scope interface
+
 **Seed run**:
 One chat sentence that starts the full ingest for a Seed scope into a lane’s Postgres. The operator does not chain hops. Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
 _Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad
@@ -131,7 +135,7 @@ The live Transfermarkt path: HTTP GET of the Competition season page and each cl
 _Avoid_: calling this a Nest scraper; treating Cheerio as anti-bot; fetching a player profile page when the kader row already has id and number
 
 **Seed proxy**:
-Outbound HTTP(S) proxy used only for Transfermarkt (and Football Kit Archive when that fetch is live) from Coolify. Vendors: Decodo residential (per GB) or Decodo Site Unblocker (`unblock.decodo.com` as HTTP proxy). Coolify stores the secret and injects it into the job. Kader fetch on Coolify does not run until that secret is present (fail closed).
+Outbound HTTP(S) proxy used only for Transfermarkt (and Football Kit Archive when that fetch is live) from Coolify jobs and from `kc_seed_mcp`. Vendors: Decodo residential (per GB) or Decodo Site Unblocker (`unblock.decodo.com` as HTTP proxy). Coolify stores the secret and injects it into the job; `kc_seed_mcp` reads the same **names** from its own env. Kader fetch on Coolify does not run until that secret is present (fail closed).
 _Avoid_: Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
 
 **Opt-in Apify**:

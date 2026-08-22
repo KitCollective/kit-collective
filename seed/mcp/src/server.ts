@@ -40,7 +40,10 @@ const seedInputSchema = {
     ),
 };
 
-const APIFY_DESCRIPTION = [
+const COOLIFY_NOT_SEED_SCOPE =
+  "Coolify MCP is host-only (servers, databases, long one-shot jobs). Do not use Coolify control/deploy for Seed scope args (fromSeason, toSeason, club + season). Call this Seed MCP tool instead.";
+
+export const APIFY_DESCRIPTION = [
   "Run the Apify/Transfermarkt seed CLI for a Seed scope.",
   "",
   "Scopes:",
@@ -54,9 +57,11 @@ const APIFY_DESCRIPTION = [
   "Lane rules: default development when lane is omitted; staging only when explicitly named; production is impossible.",
   "",
   "Run Apify seed for a scope before FK seed for the same scope so Kit rows can join on ExternalId.",
+  "",
+  COOLIFY_NOT_SEED_SCOPE,
 ].join("\n");
 
-const FK_DESCRIPTION = [
+export const FK_DESCRIPTION = [
   "Run the Football Kit Archive (FKApi) seed CLI for a competition and season range.",
   "",
   "Writes Kit identity and admin_only KitPhoto bytes (rights: unresolved) to the lane's R2 bucket.",
@@ -66,11 +71,13 @@ const FK_DESCRIPTION = [
   "Requires Club and Season rows for the scope — run seed_apify first for the same competition/range.",
   "",
   "Lane rules: default development when lane is omitted; staging only when explicitly named; production is impossible.",
+  "",
+  COOLIFY_NOT_SEED_SCOPE,
 ].join("\n");
 
 export function createSeedMcpServer(runner: CliRunner): McpServer {
   const server = new McpServer({
-    name: "kit-collective-seed",
+    name: "kc_seed_mcp",
     version: "0.1.0",
   });
 
