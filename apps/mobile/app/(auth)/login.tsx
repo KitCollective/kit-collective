@@ -10,7 +10,7 @@ import {
 import { Link } from "expo-router";
 import { ErrorText, FieldLabel, PrimaryButton, Screen } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { color, radius, space, type } from "@/theme/tokens";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -51,7 +51,7 @@ export default function LoginScreen() {
             onChangeText={setEmail}
             style={styles.input}
             placeholder="dig@eksempel.dk"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={color.contentMuted}
           />
         </View>
 
@@ -64,7 +64,7 @@ export default function LoginScreen() {
             onChangeText={setPassword}
             style={styles.input}
             placeholder="Mindst 8 tegn"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={color.contentMuted}
           />
         </View>
 
@@ -84,39 +84,41 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   form: {
     flex: 1,
-    gap: spacing.md,
+    gap: space.gapMd,
   },
   title: {
-    fontSize: typography.title,
-    fontWeight: "700",
-    color: colors.text,
+    fontSize: type.title.fontSize,
+    lineHeight: type.title.lineHeight,
+    fontWeight: type.title.fontWeight,
+    color: color.contentPrimary,
   },
   subtitle: {
-    fontSize: typography.body,
-    color: colors.textMuted,
-    marginBottom: spacing.md,
+    fontSize: type.body.fontSize,
+    lineHeight: type.body.lineHeight,
+    color: color.contentMuted,
+    marginBottom: space.insetMd,
   },
   field: {
-    gap: spacing.xs,
+    gap: space.xs,
   },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: spacing.md,
-    fontSize: typography.body,
-    color: colors.text,
-    backgroundColor: colors.surface,
+    borderColor: color.borderSubtle,
+    borderRadius: radius.md,
+    paddingHorizontal: space.insetMd,
+    fontSize: type.body.fontSize,
+    color: color.contentPrimary,
+    backgroundColor: color.surface,
   },
   actions: {
-    marginTop: spacing.lg,
-    gap: spacing.md,
+    marginTop: space.insetLg,
+    gap: space.gapMd,
     alignItems: "center",
   },
   link: {
-    color: colors.text,
-    fontSize: typography.body,
+    color: color.contentPrimary,
+    fontSize: type.body.fontSize,
     textDecorationLine: "underline",
   },
 });

@@ -1,7 +1,7 @@
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
 import { AuthProvider } from "@/auth/AuthProvider";
-import { colors } from "@/theme/tokens";
+import { color } from "@/theme/tokens";
 
 export default function RootLayout() {
   return (
@@ -18,7 +18,7 @@ export default function RootLayout() {
 export function LoadingScreen() {
   return (
     <View style={styles.loading}>
-      <ActivityIndicator color={colors.primary} />
+      <ActivityIndicator color={color.fillPrimary} />
     </View>
   );
 }
@@ -28,6 +28,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
+    backgroundColor: color.canvas,
   },
 });

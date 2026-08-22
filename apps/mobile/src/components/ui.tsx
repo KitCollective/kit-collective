@@ -7,7 +7,7 @@ import {
   View,
   type PressableProps,
 } from "react-native";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { color, radius, space, type } from "@/theme/tokens";
 
 type ButtonProps = PressableProps & {
   label: string;
@@ -29,7 +29,7 @@ export function PrimaryButton({ label, loading = false, disabled, ...props }: Bu
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={colors.primaryText} />
+        <ActivityIndicator color={color.contentInverse} />
       ) : (
         <Text style={styles.buttonLabel}>{label}</Text>
       )}
@@ -52,17 +52,17 @@ export function ErrorText({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    backgroundColor: color.canvas,
+    paddingHorizontal: space.insetLg,
+    paddingTop: space.xl,
   },
   button: {
-    minHeight: 48,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
+    minHeight: 44,
+    borderRadius: radius.pill,
+    backgroundColor: color.fillPrimary,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: space.insetMd,
   },
   buttonPressed: {
     opacity: 0.9,
@@ -71,19 +71,22 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   buttonLabel: {
-    color: colors.primaryText,
-    fontSize: typography.body,
-    fontWeight: "600",
+    color: color.contentInverse,
+    fontSize: type.label.fontSize,
+    fontWeight: type.label.fontWeight,
+    lineHeight: type.label.lineHeight,
   },
   label: {
-    color: colors.text,
-    fontSize: typography.caption,
-    marginBottom: spacing.xs,
-    fontWeight: "500",
+    color: color.contentPrimary,
+    fontSize: type.caption.fontSize,
+    lineHeight: type.caption.lineHeight,
+    marginBottom: space.xs,
+    fontWeight: type.label.fontWeight,
   },
   error: {
-    color: colors.danger,
-    fontSize: typography.caption,
-    marginTop: spacing.sm,
+    color: color.danger,
+    fontSize: type.caption.fontSize,
+    lineHeight: type.caption.lineHeight,
+    marginTop: space.gapSm,
   },
 });

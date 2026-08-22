@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { color, space, type } from "@/theme/tokens";
 
 export default function AddScreen() {
   return (
@@ -16,18 +16,19 @@ export default function AddScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-    padding: spacing.lg,
-    gap: spacing.md,
+    backgroundColor: color.canvas,
+    padding: space.insetLg,
+    gap: space.gapMd,
   },
   title: {
-    fontSize: typography.title,
-    fontWeight: "700",
-    color: colors.text,
+    fontSize: type.title.fontSize,
+    lineHeight: type.title.lineHeight,
+    fontWeight: type.title.fontWeight,
+    color: color.contentPrimary,
   },
   body: {
-    fontSize: typography.body,
-    color: colors.textMuted,
-    lineHeight: 24,
+    fontSize: type.body.fontSize,
+    lineHeight: type.body.lineHeight,
+    color: color.contentMuted,
   },
 });

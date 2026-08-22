@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import { AppModule } from "./app.module.js";
+import { isCorsOriginAllowed } from "./config/cors-origins.js";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -9,7 +10,9 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      callback(null, isCorsOriginAllowed(origin));
+    },
     credentials: true,
   });
 

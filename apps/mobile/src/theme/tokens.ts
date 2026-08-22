@@ -1,24 +1,54 @@
-export const colors = {
-  background: "#ffffff",
-  surface: "#f5f5f5",
-  text: "#111111",
-  textMuted: "#666666",
-  border: "#e0e0e0",
-  primary: "#1a1a1a",
-  primaryText: "#ffffff",
-  danger: "#b00020",
+// Primitives — only referenced inside this token file (docs/design-system.md).
+const primitive = {
+  gray0: "#FFFFFF",
+  gray50: "#F4F4F4",
+  gray100: "#E8E8E8",
+  gray400: "#6B6B6B",
+  gray600: "#5E5E5E",
+  gray900: "#000000",
+  danger500: "#B42318",
+  identityWashStart: "#00D4F5",
+  identityWashEnd: "#6B2FFF",
 } as const;
 
-export const spacing = {
+/** Semantic color tokens (light mode). */
+export const color = {
+  canvas: primitive.gray0,
+  surface: primitive.gray0,
+  contentPrimary: primitive.gray900,
+  contentSecondary: primitive.gray600,
+  contentMuted: primitive.gray400,
+  contentInverse: primitive.gray0,
+  borderSubtle: primitive.gray100,
+  fillPrimary: primitive.gray900,
+  fillSecondary: primitive.gray50,
+  danger: primitive.danger500,
+  identityWashStart: primitive.identityWashStart,
+  identityWashEnd: primitive.identityWashEnd,
+} as const;
+
+export const radius = {
   xs: 4,
   sm: 8,
-  md: 16,
-  lg: 24,
+  md: 12,
+  lg: 16,
+  pill: 999,
+} as const;
+
+export const space = {
+  xs: 4,
+  insetSm: 8,
+  insetMd: 16,
+  insetLg: 24,
+  gapSm: 8,
+  gapMd: 12,
+  gapLg: 16,
   xl: 32,
 } as const;
 
-export const typography = {
-  title: 24,
-  body: 16,
-  caption: 14,
+export const type = {
+  title: { fontSize: 22, lineHeight: 28, fontWeight: "600" as const },
+  body: { fontSize: 16, lineHeight: 24, fontWeight: "400" as const },
+  label: { fontSize: 16, lineHeight: 20, fontWeight: "500" as const },
+  caption: { fontSize: 13, lineHeight: 18, fontWeight: "400" as const },
 } as const;
