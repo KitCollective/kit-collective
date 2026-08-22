@@ -22,6 +22,15 @@ import {
 import { createKaderHtmlStore, type KaderHtmlStore } from "./kader-html-store.js";
 import { labelToStartYear } from "./season-label.js";
 import { resolveProfiles } from "./squad-profile-hop.js";
+import {
+  createTransfermarktRequestDelay,
+  createTransfermarktRetryFetch,
+  DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS,
+  DEFAULT_TRANSFERMARKT_RETRY_BASE_DELAY_MS,
+  DEFAULT_TRANSFERMARKT_RETRY_MAX_ATTEMPTS,
+  type TransfermarktClock,
+  type TransfermarktSleep,
+} from "./transfermarkt-fetch-policy.js";
 import { createTransfermarktRateLimitGuard } from "./transfermarkt-rate-limit.js";
 
 export interface KaderFetchAdapterOptions {
@@ -31,6 +40,16 @@ export interface KaderFetchAdapterOptions {
   cacheDir?: string;
   /** Optional HTTP client for live fetch. Defaults to global fetch. */
   fetchHtml?: (url: string) => Promise<string>;
+  /** Milliseconds to wait between live Transfermarkt GETs. Set 0 to disable. */
+  requestDelayMs?: number;
+  /** Retry attempts per URL for HTTP 403/429 before counting a circuit failure. */
+  retryMaxAttempts?: number;
+  /** Base delay in ms for exponential backoff between 403/429 retries. */
+  retryBaseDelayMs?: number;
+  /** Injectable sleep for tests (delay + retry backoff). */
+  sleep?: TransfermarktSleep;
+  /** Injectable clock for tests (request delay). */
+  clock?: TransfermarktClock;
   /** Stop live Transfermarkt GETs after this many consecutive HTTP 403/429 responses. */
   rateLimitStopAfter?: number;
   /** Test hook: called when a player profile fetch is triggered. */
@@ -308,7 +327,19 @@ function buildLiveFetchHtml(options: KaderFetchAdapterOptions): (url: string) =>
     ? wrapFetchHtmlWithKaderCache(baseFetch, createKaderHtmlLiveCache(options.cacheDir))
     : baseFetch;
 
-  return createTransfermarktRateLimitGuard(cachedFetch, {
+  const retriedFetch = createTransfermarktRetryFetch(cachedFetch, {
+    maxAttempts: options.retryMaxAttempts ?? DEFAULT_TRANSFERMARKT_RETRY_MAX_ATTEMPTS,
+    baseDelayMs: options.retryBaseDelayMs ?? DEFAULT_TRANSFERMARKT_RETRY_BASE_DELAY_MS,
+    sleep: options.sleep,
+  });
+
+  const delayedFetch = createTransfermarktRequestDelay(retriedFetch, {
+    delayMs: options.requestDelayMs ?? DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS,
+    sleep: options.sleep,
+    clock: options.clock,
+  });
+
+  return createTransfermarktRateLimitGuard(delayedFetch, {
     stopAfter: options.rateLimitStopAfter,
   }).fetchHtml;
 }

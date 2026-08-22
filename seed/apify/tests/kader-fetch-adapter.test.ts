@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { catalogLabel, createDb, externalId, playerClubSeason, resetDatabase } from "@kit/db";
 import { and, eq } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   createKaderFetchAdapter,
   TransfermarktHttpError,
@@ -27,6 +27,12 @@ const fixturesDir = path.join(
 );
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+
+/** Hermetic live-fetch tests: no real delay/backoff sleeps. */
+const FAST_LIVE_FETCH = {
+  requestDelayMs: 0,
+  retryBaseDelayMs: 0,
+} as const;
 
 async function prepareDatabase() {
   await resetDatabase(DATABASE_URL, migrationsFolder);
@@ -144,6 +150,7 @@ describe("kader fetch adapter from recorded HTML", () => {
 
     let competitionFetches = 0;
     const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
       fetchHtml: async (url) => {
         if (url.includes("/wettbewerb/")) {
           competitionFetches += 1;
@@ -186,6 +193,7 @@ describe("kader fetch adapter from recorded HTML", () => {
     let networkCalls = 0;
 
     const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
       cacheDir,
       fetchHtml: async (url) => {
         networkCalls += 1;
@@ -222,6 +230,7 @@ describe("kader fetch adapter from recorded HTML", () => {
     const profileHoles: string[] = [];
 
     const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
       fetchHtml: async (url) => {
         if (url.includes("/wettbewerb/")) {
           return competitionHtml;
@@ -259,6 +268,7 @@ describe("kader fetch adapter from recorded HTML", () => {
     const profileFetches: string[] = [];
 
     const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
       fetchHtml: async (url) => {
         if (url.includes("/wettbewerb/")) {
           return competitionHtml;
@@ -286,10 +296,131 @@ describe("kader fetch adapter from recorded HTML", () => {
   });
 });
 
+describe("kader fetch adapter polite fetch policy", () => {
+  it("invokes configured delay between live Transfermarkt GETs", async () => {
+    const competitionHtml = readFileSync(
+      path.join(fixturesDir, "competitions/DK1-2015.html"),
+      "utf8",
+    );
+    const kader190 = readFileSync(path.join(fixturesDir, "kader/190-2015.html"), "utf8");
+    const kader191 = readFileSync(path.join(fixturesDir, "kader/191-2015.html"), "utf8");
+    const sleptMs: number[] = [];
+    const sleep = vi.fn(async (ms: number) => {
+      sleptMs.push(ms);
+    });
+    let now = 0;
+    const clock = { now: () => now };
+
+    const adapter = createKaderFetchAdapter({
+      requestDelayMs: 100,
+      retryBaseDelayMs: 0,
+      sleep,
+      clock,
+      fetchHtml: async (url) => {
+        now += 10;
+        if (url.includes("/wettbewerb/")) {
+          return competitionHtml;
+        }
+        if (url.includes("/verein/190/")) {
+          return kader190;
+        }
+        if (url.includes("/verein/191/")) {
+          return kader191;
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    await adapter.fetchClubSeason({
+      competition: "superligaen",
+      clubExternalId: "190",
+      season: "2015/16",
+    });
+    now += 20;
+    await adapter.fetchClubSeason({
+      competition: "superligaen",
+      clubExternalId: "191",
+      season: "2015/16",
+    });
+
+    expect(sleptMs.some((ms) => ms >= 80)).toBe(true);
+  });
+
+  it("maps a club after HTTP 403 then 200 on retry for the same URL", async () => {
+    const competitionHtml = readFileSync(
+      path.join(fixturesDir, "competitions/DK1-2015.html"),
+      "utf8",
+    );
+    const kader190 = readFileSync(path.join(fixturesDir, "kader/190-2015.html"), "utf8");
+    let competitionAttempts = 0;
+
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      retryMaxAttempts: 3,
+      fetchHtml: async (url) => {
+        if (url.includes("/wettbewerb/")) {
+          competitionAttempts += 1;
+          if (competitionAttempts === 1) {
+            throw new TransfermarktHttpError(403, url);
+          }
+          return competitionHtml;
+        }
+        if (url.includes("/verein/190/")) {
+          return kader190;
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    const raw = await adapter.fetchClubSeason({
+      competition: "superligaen",
+      clubExternalId: "190",
+      season: "2015/16",
+    });
+
+    expect(competitionAttempts).toBe(2);
+    const facts = normalize(raw);
+    expect(facts.seasons[0]?.clubs[0]?.players.length).toBeGreaterThan(0);
+  });
+
+  it("opens the circuit only after retry budget is exhausted and stops further GETs", async () => {
+    let networkCalls = 0;
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      retryMaxAttempts: 3,
+      rateLimitStopAfter: 1,
+      fetchHtml: async (url) => {
+        networkCalls += 1;
+        throw new TransfermarktHttpError(403, url);
+      },
+    });
+
+    await expect(
+      adapter.fetchClubSeason({
+        competition: "superligaen",
+        clubExternalId: "190",
+        season: "2015/16",
+      }),
+    ).rejects.toBeInstanceOf(TransfermarktHttpError);
+
+    await expect(
+      adapter.fetchClubSeason({
+        competition: "superligaen",
+        clubExternalId: "191",
+        season: "2015/16",
+      }),
+    ).rejects.toBeInstanceOf(TransfermarktCircuitOpenError);
+
+    expect(networkCalls).toBe(3);
+  });
+});
+
 describe("kader fetch adapter rate limiting", () => {
   it("stops further Transfermarkt GETs after consecutive HTTP 403 responses", async () => {
     let networkCalls = 0;
     const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      retryMaxAttempts: 1,
       rateLimitStopAfter: 1,
       fetchHtml: async (url) => {
         networkCalls += 1;
@@ -320,6 +451,8 @@ describe("kader fetch adapter rate limiting", () => {
     let networkCalls = 0;
     const fixturesAdapter = createKaderFetchAdapter({ fixturesDir });
     const rateLimited = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      retryMaxAttempts: 1,
       rateLimitStopAfter: 1,
       fetchHtml: async (url) => {
         networkCalls += 1;
@@ -362,6 +495,7 @@ describe("kader fetch adapter rate limiting", () => {
 describe("kader fetch adapter live HTTP errors", () => {
   it("throws on HTTP 202 without falling back to Apify", async () => {
     const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
       fetchHtml: async () => {
         throw new TransfermarktHttpError(202, "https://www.transfermarkt.com/example");
       },
@@ -472,6 +606,8 @@ describe("runSeed with kader HTML adapter", () => {
     let networkCalls = 0;
     const fixturesAdapter = createKaderFetchAdapter({ fixturesDir });
     const rateLimited = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      retryMaxAttempts: 1,
       rateLimitStopAfter: 1,
       fetchHtml: async (url) => {
         networkCalls += 1;
