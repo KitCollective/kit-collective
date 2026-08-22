@@ -1,4 +1,11 @@
-import { Controller, Get, Header } from "@nestjs/common";
+import {
+  catalogClubSearchResponseSchema,
+  catalogClubSeasonsQuerySchema,
+  catalogClubSeasonsResponseSchema,
+  catalogPickerSearchQuerySchema,
+} from "@kit/api-contract";
+import { Controller, Get, Header, Param, Query, UseGuards } from "@nestjs/common";
+import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
 import { CatalogService } from "./catalog.service.js";
 
 @Controller("catalog")
@@ -14,5 +21,29 @@ export class CatalogController {
   @Header("Content-Type", "text/html; charset=utf-8")
   getPeek() {
     return this.catalogService.getPeekHtml();
+  }
+
+  @Get("clubs/search")
+  @UseGuards(JwtAuthGuard)
+  async searchClubs(@Query() query: Record<string, string | string[] | undefined>) {
+    const parsed = catalogPickerSearchQuerySchema.parse({
+      q: typeof query.q === "string" ? query.q : undefined,
+      locale: typeof query.locale === "string" ? query.locale : undefined,
+    });
+    const body = await this.catalogService.searchClubs(parsed.q, parsed.locale);
+    return catalogClubSearchResponseSchema.parse(body);
+  }
+
+  @Get("clubs/:clubId/seasons")
+  @UseGuards(JwtAuthGuard)
+  async getClubSeasons(
+    @Param("clubId") clubId: string,
+    @Query() query: Record<string, string | string[] | undefined>,
+  ) {
+    const parsed = catalogClubSeasonsQuerySchema.parse({
+      locale: typeof query.locale === "string" ? query.locale : undefined,
+    });
+    const body = await this.catalogService.getClubSeasons(clubId, parsed.locale);
+    return catalogClubSeasonsResponseSchema.parse(body);
   }
 }
