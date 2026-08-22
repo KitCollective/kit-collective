@@ -1,4 +1,11 @@
-import { type CatalogStats, catalogStatsSchema } from "@kit/api-contract";
+import {
+  type CatalogClubSearchResponse,
+  type CatalogClubSeasonsResponse,
+  type CatalogStats,
+  catalogClubSearchResponseSchema,
+  catalogClubSeasonsResponseSchema,
+  catalogStatsSchema,
+} from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
   catalogLabel,
@@ -16,8 +23,9 @@ import {
   teamSeason,
   user,
 } from "@kit/db";
+import type { LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import { buildPeekHtml, type PeekClubRow, type PeekKitRow } from "./catalog-peek.js";
 
@@ -140,14 +148,138 @@ export class CatalogService {
       }));
 
     const kits: PeekKitRow[] = kitRows
-      .filter((row) => row.clubId !== null)
+      .filter((row): row is typeof row & { clubId: string } => row.clubId !== null)
       .map((row) => ({
-        clubId: row.clubId!,
+        clubId: row.clubId,
         seasonId: row.seasonId,
         kitType: row.kitType,
         photoCount: row.photoCount,
       }));
 
     return buildPeekHtml(clubs, kits);
+  }
+
+  async searchClubs(query: string, locale: LabelLocale): Promise<CatalogClubSearchResponse> {
+    const pattern = `%${query}%`;
+
+    const matches = await this.db
+      .selectDistinct({
+        entityType: catalogLabel.entityType,
+        entityId: catalogLabel.entityId,
+      })
+      .from(catalogLabel)
+      .where(
+        and(
+          inArray(catalogLabel.entityType, ["club", "national_team"]),
+          sql`${catalogLabel.text} ilike ${pattern}`,
+        ),
+      );
+
+    if (matches.length === 0) {
+      return catalogClubSearchResponseSchema.parse({ clubs: [] });
+    }
+
+    const clubIds = matches.filter((row) => row.entityType === "club").map((row) => row.entityId);
+    const nationalTeamIds = matches
+      .filter((row) => row.entityType === "national_team")
+      .map((row) => row.entityId);
+
+    const resolvedLabel = () =>
+      sql<string | null>`coalesce(
+        max(case when ${catalogLabel.locale} = ${locale} and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+        max(case when ${catalogLabel.locale} = 'mul' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+        max(case when ${catalogLabel.locale} = 'en' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end)
+      )`;
+
+    const clubRows =
+      clubIds.length === 0
+        ? []
+        : await this.db
+            .select({
+              id: club.id,
+              label: resolvedLabel(),
+            })
+            .from(club)
+            .leftJoin(
+              catalogLabel,
+              and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+            )
+            .where(inArray(club.id, clubIds))
+            .groupBy(club.id);
+
+    const nationalTeamRows =
+      nationalTeamIds.length === 0
+        ? []
+        : await this.db
+            .select({
+              id: nationalTeam.id,
+              label: resolvedLabel(),
+            })
+            .from(nationalTeam)
+            .leftJoin(
+              catalogLabel,
+              and(
+                eq(catalogLabel.entityType, "national_team"),
+                eq(catalogLabel.entityId, nationalTeam.id),
+              ),
+            )
+            .where(inArray(nationalTeam.id, nationalTeamIds))
+            .groupBy(nationalTeam.id);
+
+    const clubs = [...clubRows, ...nationalTeamRows]
+      .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+      .map((row) => ({ id: row.id, label: row.label }))
+      .sort((a, b) => a.label.localeCompare(b.label, locale));
+
+    return catalogClubSearchResponseSchema.parse({ clubs });
+  }
+
+  async getClubSeasons(clubId: string): Promise<CatalogClubSeasonsResponse> {
+    const [clubRow] = await this.db
+      .select({ id: club.id })
+      .from(club)
+      .where(eq(club.id, clubId))
+      .limit(1);
+
+    if (clubRow) {
+      const rows = await this.db
+        .select({
+          id: season.id,
+          label: season.label,
+        })
+        .from(teamSeason)
+        .innerJoin(season, eq(teamSeason.seasonId, season.id))
+        .where(eq(teamSeason.clubId, clubId))
+        .orderBy(desc(season.startsOn));
+
+      return catalogClubSeasonsResponseSchema.parse({
+        seasons: rows.map((row) => ({ id: row.id, label: row.label })),
+      });
+    }
+
+    const [nationalTeamRow] = await this.db
+      .select({ id: nationalTeam.id })
+      .from(nationalTeam)
+      .where(eq(nationalTeam.id, clubId))
+      .limit(1);
+
+    if (nationalTeamRow) {
+      const rows = await this.db
+        .selectDistinct({
+          id: season.id,
+          label: season.label,
+          startsOn: season.startsOn,
+        })
+        .from(kit)
+        .innerJoin(season, eq(kit.seasonId, season.id))
+        .where(eq(kit.nationalTeamId, clubId))
+        .orderBy(desc(season.startsOn));
+
+      return catalogClubSeasonsResponseSchema.parse({
+        seasons: rows.map((row) => ({ id: row.id, label: row.label })),
+      });
+    }
+
+    return catalogClubSeasonsResponseSchema.parse({ seasons: [] });
   }
 }

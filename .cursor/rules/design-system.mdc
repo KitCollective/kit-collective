@@ -24,6 +24,9 @@ Apply the lock; do not invent taste:
 - Type size comes from locked `type.*` roles. A raw `fontSize` in px (e.g. `fontSize: 10`)
   is an invented value — use the role or flag the gap. Same for color: no raw hex/rgba
   outside `theme/tokens.ts`.
+- Mobile components must not use raw hex or `rgb`/`rgba` literals outside
+  `apps/mobile/src/theme/tokens.ts`. Import semantic roles from `theme/tokens.ts` instead.
+  CI enforces this via `pnpm check:mobile-design-tokens`.
 - Grayscale carries hierarchy. The identity wash is garnish, never a primary CTA, chrome,
   or a status encoding.
 - Marks come from data — a licensed mark or a `CatalogLabel` monogram. Never emoji, never

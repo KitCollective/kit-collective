@@ -6,7 +6,11 @@ const primitive = {
   gray400: "#6B6B6B",
   gray600: "#5E5E5E",
   gray900: "#000000",
+  gray900Alpha40: "rgba(0,0,0,0.4)",
   danger500: "#B42318",
+  warning500: "#F5A623",
+  success500: "#0E8345",
+  info500: "#276EF1",
   identityWashStart: "#00D4F5",
   identityWashEnd: "#6B2FFF",
 } as const;
@@ -15,6 +19,8 @@ const primitive = {
 export const color = {
   canvas: primitive.gray0,
   surface: primitive.gray0,
+  surfaceRaised: primitive.gray0,
+  scrim: primitive.gray900Alpha40,
   contentPrimary: primitive.gray900,
   contentSecondary: primitive.gray600,
   contentMuted: primitive.gray400,
@@ -23,6 +29,9 @@ export const color = {
   fillPrimary: primitive.gray900,
   fillSecondary: primitive.gray50,
   danger: primitive.danger500,
+  warning: primitive.warning500,
+  success: primitive.success500,
+  info: primitive.info500,
   identityWashStart: primitive.identityWashStart,
   identityWashEnd: primitive.identityWashEnd,
 } as const;
