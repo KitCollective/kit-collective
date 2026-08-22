@@ -107,9 +107,14 @@ function scopeToCliArgs(scope: SeedScope): string[] {
 }
 
 export function omitCoolifyHostEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(
-    Object.entries(env).filter(([key]) => !key.startsWith("COOLIFY_")),
-  ) as NodeJS.ProcessEnv;
+  const next: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (key.startsWith("COOLIFY_") || value === undefined) {
+      continue;
+    }
+    next[key] = value;
+  }
+  return next;
 }
 
 export function laneEnvForCli(lane: ResolvedSeedLane): NodeJS.ProcessEnv {
