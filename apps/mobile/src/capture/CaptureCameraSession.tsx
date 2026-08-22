@@ -30,10 +30,11 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
   });
   const [photos, setPhotos] = useState(() => loadDraft(draftId).photos);
 
-  const photoMap = Object.fromEntries(photos.map((photo) => [photo.role, photo.uri])) as Record<
-    PhotoRole,
-    string | undefined
-  >;
+  const photoMap: Record<PhotoRole, string | undefined> = {
+    front: photos.find((photo) => photo.role === "front")?.uri,
+    back: photos.find((photo) => photo.role === "back")?.uri,
+    label: photos.find((photo) => photo.role === "label")?.uri,
+  };
 
   const refreshPhotos = useCallback(() => {
     const draft = loadDraft(draftId);

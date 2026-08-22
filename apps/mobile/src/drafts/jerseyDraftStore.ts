@@ -22,15 +22,21 @@ function mapRow(
   },
   photos: DraftPhoto[],
 ): JerseyDraftRow {
+  // SAFETY: jersey_draft columns are written only from domain enums in this module.
+  const kitType = row.kit_type as KitType;
+  const size = row.size as JerseySize;
+  const condition = row.condition as JerseyCondition;
+  const activeRole = (row.active_role as PhotoRole | null) ?? PHOTO_ROLES[0];
+
   return {
     id: row.id,
     clubId: row.club_id,
     clubLabel: row.club_label,
     seasonId: row.season_id,
-    kitType: row.kit_type as KitType,
-    size: row.size as JerseySize,
-    condition: row.condition as JerseyCondition,
-    activeRole: (row.active_role as PhotoRole | null) ?? PHOTO_ROLES[0],
+    kitType,
+    size,
+    condition,
+    activeRole,
     photos,
   };
 }
@@ -120,11 +126,14 @@ export function loadDraft(id: string): JerseyDraftRow {
 
   return mapRow(
     row,
-    photos.map((photo) => ({
-      role: photo.role as PhotoRole,
-      uri: photo.uri,
-      source: photo.source as PhotoSource,
-    })),
+    photos.map((photo) => {
+      // SAFETY: jersey_draft_photo rows are written only via upsertDraftPhoto with domain enums.
+      return {
+        role: photo.role as PhotoRole,
+        uri: photo.uri,
+        source: photo.source as PhotoSource,
+      };
+    }),
   );
 }
 
