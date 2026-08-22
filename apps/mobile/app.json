@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "KitCollective",
+    "slug": "kit-collective",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "kitcollective",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.kitcollective.mobile"
+    },
+    "android": {
+      "package": "app.kitcollective.mobile"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ddddf92b-e7cd-4ec5-b07c-643106041550"
+      }
+    },
+    "owner": "kitcollective"
+  }
+}

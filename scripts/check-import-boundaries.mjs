@@ -49,7 +49,7 @@ const clientFiles = clientApps.flatMap((dir) => collectSourceFiles(dir));
 const clientViolations = findViolations(clientFiles, [
   /@kit\/db/,
   /packages\/db/,
-  /from ['"]@kit\/api/,
+  /from ['"]@kit\/api(?!-contract)/,
   /from ['"]apps\/api/,
   /from ['"]\.\.\/\.\.\/api/,
 ]);
