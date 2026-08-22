@@ -268,7 +268,7 @@ describe("Catalog picker /v1", () => {
         label: "2022",
         startsOn: "2022-01-01",
         endsOn: "2022-12-31",
-        calendarKind: "calendar_year",
+        calendarKind: "calendar",
       })
       .returning({ id: season.id });
 
@@ -279,7 +279,7 @@ describe("Catalog picker /v1", () => {
         label: "2024",
         startsOn: "2024-01-01",
         endsOn: "2024-12-31",
-        calendarKind: "calendar_year",
+        calendarKind: "calendar",
       })
       .returning({ id: season.id });
 
