@@ -39,19 +39,11 @@ export function PhotoSlot({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        isEmpty
-          ? `${roleLabel}, tom`
-          : selected
-            ? `${roleLabel}, valgt`
-            : roleLabel
+        isEmpty ? `${roleLabel}, tom` : selected ? `${roleLabel}, valgt` : roleLabel
       }
       accessibilityHint={isEmpty ? "Tilføj foto" : "Erstat foto"}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.slot,
-        { width: slotWidth },
-        pressed && styles.slotPressed,
-      ]}
+      style={({ pressed }) => [styles.slot, { width: slotWidth }, pressed && styles.slotPressed]}
     >
       {isEmpty ? (
         <View

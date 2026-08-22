@@ -16,10 +16,10 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
+import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
@@ -294,9 +294,7 @@ export default function ConfirmScreen() {
           {photoList.length === 0 ? (
             <Text style={styles.helper}>Mindst ét foto er påkrævet.</Text>
           ) : photoList.length < PHOTO_ROLES.length ? (
-            <Text style={styles.helper}>
-              3 fotos anbefales — mærkefoto gør det lettere senere.
-            </Text>
+            <Text style={styles.helper}>3 fotos anbefales — mærkefoto gør det lettere senere.</Text>
           ) : null}
           <Button
             label="Tilføj fra galleri"

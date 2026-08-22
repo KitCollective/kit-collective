@@ -1,9 +1,9 @@
 import type { CatalogPickerItem } from "@kit/api-contract";
 import { useRouter } from "expo-router";
+import { StyleSheet, Text, View } from "react-native";
 import { Sheet } from "@/components/catalog-ui";
 import { Button } from "@/components/ui";
 import { createDraft, createDraftId } from "@/drafts/jerseyDraftStore";
-import { StyleSheet, Text, View } from "react-native";
 import { color, space, type } from "@/theme/tokens";
 
 type PostSaveSheetProps = {

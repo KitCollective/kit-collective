@@ -109,9 +109,7 @@ export default function CaptureScreen() {
           : "Vælg fotos fra galleriet for din første trøje i denne session."}
       </Text>
       <Button label="Vælg fra galleri" onPress={() => void openGalleryMulti()} />
-      {photoCount > 0 ? (
-        <Button label="Fortsæt" variant="secondary" onPress={goToConfirm} />
-      ) : null}
+      {photoCount > 0 ? <Button label="Fortsæt" variant="secondary" onPress={goToConfirm} /> : null}
     </View>
   );
 }

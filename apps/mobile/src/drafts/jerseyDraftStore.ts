@@ -1,8 +1,8 @@
 import {
-  PHOTO_ROLES,
   type JerseyCondition,
   type JerseySize,
   type KitType,
+  PHOTO_ROLES,
   type PhotoRole,
   type PhotoSource,
 } from "@kit/domain";
@@ -139,9 +139,8 @@ export function nextEmptyRole(photos: DraftPhoto[]): PhotoRole | null {
 }
 
 export function draftExists(id: string): boolean {
-  const row = draftDb.getFirstSync<{ id: string }>(
-    `SELECT id FROM jersey_draft WHERE id = ?`,
-    [id],
-  );
+  const row = draftDb.getFirstSync<{ id: string }>(`SELECT id FROM jersey_draft WHERE id = ?`, [
+    id,
+  ]);
   return row !== null;
 }

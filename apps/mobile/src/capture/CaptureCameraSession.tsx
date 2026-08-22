@@ -1,7 +1,7 @@
 import { PHOTO_ROLES, type PhotoRole } from "@kit/domain";
+import { useIsFocused } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import { useIsFocused } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
@@ -10,11 +10,7 @@ import { captureQualityForRole } from "@/capture/photoBytes";
 import { Banner } from "@/components/catalog-ui";
 import { PhotoSlot } from "@/components/photo-slot";
 import { Button } from "@/components/ui";
-import {
-  loadDraft,
-  nextEmptyRole,
-  upsertDraftPhoto,
-} from "@/drafts/jerseyDraftStore";
+import { loadDraft, nextEmptyRole, upsertDraftPhoto } from "@/drafts/jerseyDraftStore";
 import { color, space, type } from "@/theme/tokens";
 
 type CaptureCameraSessionProps = {
