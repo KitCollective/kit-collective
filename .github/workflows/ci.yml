@@ -124,6 +124,9 @@ jobs:
       - name: Check mobile tab bar anatomy
         run: pnpm check:mobile-tab-bar
 
+      - name: Check mobile design tokens
+        run: pnpm check:mobile-design-tokens
+
       - name: Lint GitHub Actions workflows
         run: bash scripts/lint-workflows.sh
 

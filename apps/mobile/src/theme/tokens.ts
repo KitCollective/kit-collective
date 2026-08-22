@@ -6,6 +6,7 @@ const primitive = {
   gray400: "#6B6B6B",
   gray600: "#5E5E5E",
   gray900: "#000000",
+  gray900Alpha40: "rgba(0,0,0,0.4)",
   danger500: "#B42318",
   identityWashStart: "#00D4F5",
   identityWashEnd: "#6B2FFF",
@@ -15,6 +16,8 @@ const primitive = {
 export const color = {
   canvas: primitive.gray0,
   surface: primitive.gray0,
+  surfaceRaised: primitive.gray0,
+  scrim: primitive.gray900Alpha40,
   contentPrimary: primitive.gray900,
   contentSecondary: primitive.gray600,
   contentMuted: primitive.gray400,

@@ -21,6 +21,9 @@ Apply the lock; do not invent taste:
 - Tab bar screens (`apps/mobile/app/(tabs)/`) must set `tabBarIcon` plus Danish
   `tabBarLabel` on every tab — icon + label anatomy from `docs/design-system.md` Tab bar.
   CI enforces this via `pnpm check:mobile-tab-bar`.
+- Mobile components must not use raw hex or `rgb`/`rgba` literals outside
+  `apps/mobile/src/theme/tokens.ts`. Import semantic roles from `theme/tokens.ts` instead.
+  CI enforces this via `pnpm check:mobile-design-tokens`.
 - Grayscale carries hierarchy. The identity wash is garnish, never a primary CTA, chrome,
   or a status encoding.
 - Marks come from data — a licensed mark or a `CatalogLabel` monogram. Never emoji, never

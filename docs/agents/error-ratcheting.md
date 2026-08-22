@@ -111,3 +111,7 @@ catches it in the API tests and the container smoke test.
 ### Mobile tab bar anatomy ratchet (KIT-23)
 
 `scripts/check-mobile-tab-bar.mjs` (CI via `pnpm check:mobile-tab-bar`) fails when `apps/mobile/app/(tabs)/_layout.tsx` omits `tabBarIcon` on Collection/Add tabs. Prevents repeating the KIT-23 checker fail #4 (text-only tabs against the locked icon+label Tab bar anatomy). Tighten only.
+
+### Mobile design-token ratchet (KIT-24)
+
+`scripts/check-mobile-design-tokens.mjs` (CI via `pnpm check:mobile-design-tokens`) fails when any `apps/mobile` `.ts`/`.tsx` file outside `src/theme/tokens.ts` contains a raw hex or `rgb`/`rgba` color literal. Prevents repeating the KIT-24 checker fails (invented Banner hex colors in round 3; unflagged Sheet scrim `rgba` and `surface.raised` gap in round 4). Tighten only.
