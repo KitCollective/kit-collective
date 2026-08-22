@@ -1,13 +1,37 @@
 import {
+  JERSEY_CONDITIONS,
+  JERSEY_SIZES,
   type JerseyCondition,
   type JerseySize,
+  KIT_TYPES,
   type KitType,
   PHOTO_ROLES,
+  PHOTO_SOURCES,
   type PhotoRole,
   type PhotoSource,
 } from "@kit/domain";
 import { draftDb } from "./db";
 import type { DraftPhoto, JerseyDraftRow } from "./types";
+
+function readKitType(value: string): KitType {
+  return KIT_TYPES.find((kitType) => kitType === value) ?? "home";
+}
+
+function readJerseySize(value: string): JerseySize {
+  return JERSEY_SIZES.find((jerseySize) => jerseySize === value) ?? "m";
+}
+
+function readJerseyCondition(value: string): JerseyCondition {
+  return JERSEY_CONDITIONS.find((jerseyCondition) => jerseyCondition === value) ?? "used";
+}
+
+function readPhotoRole(value: string): PhotoRole | null {
+  return PHOTO_ROLES.find((photoRole) => photoRole === value) ?? null;
+}
+
+function readPhotoSource(value: string): PhotoSource {
+  return PHOTO_SOURCES.find((photoSource) => photoSource === value) ?? "gallery";
+}
 
 function mapRow(
   row: {
@@ -22,21 +46,15 @@ function mapRow(
   },
   photos: DraftPhoto[],
 ): JerseyDraftRow {
-  // SAFETY: jersey_draft columns are written only from domain enums in this module.
-  const kitType = row.kit_type as KitType;
-  const size = row.size as JerseySize;
-  const condition = row.condition as JerseyCondition;
-  const activeRole = (row.active_role as PhotoRole | null) ?? PHOTO_ROLES[0];
-
   return {
     id: row.id,
     clubId: row.club_id,
     clubLabel: row.club_label,
     seasonId: row.season_id,
-    kitType,
-    size,
-    condition,
-    activeRole,
+    kitType: readKitType(row.kit_type),
+    size: readJerseySize(row.size),
+    condition: readJerseyCondition(row.condition),
+    activeRole: readPhotoRole(row.active_role ?? "") ?? PHOTO_ROLES[0],
     photos,
   };
 }
@@ -126,14 +144,11 @@ export function loadDraft(id: string): JerseyDraftRow {
 
   return mapRow(
     row,
-    photos.map((photo) => {
-      // SAFETY: jersey_draft_photo rows are written only via upsertDraftPhoto with domain enums.
-      return {
-        role: photo.role as PhotoRole,
-        uri: photo.uri,
-        source: photo.source as PhotoSource,
-      };
-    }),
+    photos.map((photo) => ({
+      role: readPhotoRole(photo.role) ?? PHOTO_ROLES[0],
+      uri: photo.uri,
+      source: readPhotoSource(photo.source),
+    })),
   );
 }
 
