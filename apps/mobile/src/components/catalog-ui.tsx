@@ -35,7 +35,7 @@ export function Mark({ label, size = "md" }: MarkProps) {
       importantForAccessibility="no-hide-descendants"
       style={[styles.mark, { width: dimension, height: dimension, borderRadius: radius.sm }]}
     >
-      <Text style={[styles.markText, size === "sm" && styles.markTextSm]}>{letters}</Text>
+      <Text style={styles.markText}>{letters}</Text>
     </View>
   );
 }
@@ -139,13 +139,11 @@ type BannerProps = {
   action?: ReactNode;
 };
 
-// warning/success surface tokens are unmapped in docs/design-system.md — use neutral
-// surfaces until semantic aliases exist (see KIT-24 Linear comment).
 const bannerToneStyles: Record<BannerTone, { background: string; border: string }> = {
   danger: { background: color.fillSecondary, border: color.danger },
-  warning: { background: color.fillSecondary, border: color.borderSubtle },
-  info: { background: color.fillSecondary, border: color.borderSubtle },
-  success: { background: color.fillSecondary, border: color.borderSubtle },
+  warning: { background: color.fillSecondary, border: color.warning },
+  info: { background: color.fillSecondary, border: color.info },
+  success: { background: color.fillSecondary, border: color.success },
 };
 
 export function Banner({ tone, message, action }: BannerProps) {
@@ -173,11 +171,9 @@ const styles = StyleSheet.create({
   },
   markText: {
     fontSize: type.caption.fontSize,
+    lineHeight: type.caption.lineHeight,
     fontWeight: type.label.fontWeight,
     color: color.contentPrimary,
-  },
-  markTextSm: {
-    fontSize: 10,
   },
   searchField: {
     flexDirection: "row",

@@ -11,6 +11,7 @@ import {
   club,
   country,
   createDb,
+  kit,
   league,
   nationalTeam,
   resetDatabase,
@@ -239,6 +240,71 @@ describe("Catalog picker /v1", () => {
         id: insertedNationalTeam!.id,
         label: "Danmark",
       },
+    ]);
+  });
+
+  it("lists seasons for a national team from Kit rows", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "DK" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedNationalTeam] = await db
+      .insert(nationalTeam)
+      .values({ countryId: insertedCountry!.id, gender: "men" })
+      .returning({ id: nationalTeam.id });
+
+    const [olderSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2022",
+        startsOn: "2022-01-01",
+        endsOn: "2022-12-31",
+        calendarKind: "calendar_year",
+      })
+      .returning({ id: season.id });
+
+    const [newerSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2024",
+        startsOn: "2024-01-01",
+        endsOn: "2024-12-31",
+        calendarKind: "calendar_year",
+      })
+      .returning({ id: season.id });
+
+    await db.insert(kit).values([
+      { nationalTeamId: insertedNationalTeam!.id, seasonId: olderSeason!.id, type: "home" },
+      { nationalTeamId: insertedNationalTeam!.id, seasonId: newerSeason!.id, type: "home" },
+    ]);
+
+    await pool.end();
+
+    const session = await registerCollector(app, "nt-seasons@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/catalog/clubs/${insertedNationalTeam!.id}/seasons`,
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = catalogClubSeasonsResponseSchema.parse(JSON.parse(response.body));
+    expect(body.seasons).toEqual([
+      { id: newerSeason!.id, label: "2024" },
+      { id: olderSeason!.id, label: "2022" },
     ]);
   });
 

@@ -235,18 +235,50 @@ export class CatalogService {
   }
 
   async getClubSeasons(clubId: string): Promise<CatalogClubSeasonsResponse> {
-    const rows = await this.db
-      .select({
-        id: season.id,
-        label: season.label,
-      })
-      .from(teamSeason)
-      .innerJoin(season, eq(teamSeason.seasonId, season.id))
-      .where(eq(teamSeason.clubId, clubId))
-      .orderBy(desc(season.startsOn));
+    const [clubRow] = await this.db
+      .select({ id: club.id })
+      .from(club)
+      .where(eq(club.id, clubId))
+      .limit(1);
 
-    return catalogClubSeasonsResponseSchema.parse({
-      seasons: rows.map((row) => ({ id: row.id, label: row.label })),
-    });
+    if (clubRow) {
+      const rows = await this.db
+        .select({
+          id: season.id,
+          label: season.label,
+        })
+        .from(teamSeason)
+        .innerJoin(season, eq(teamSeason.seasonId, season.id))
+        .where(eq(teamSeason.clubId, clubId))
+        .orderBy(desc(season.startsOn));
+
+      return catalogClubSeasonsResponseSchema.parse({
+        seasons: rows.map((row) => ({ id: row.id, label: row.label })),
+      });
+    }
+
+    const [nationalTeamRow] = await this.db
+      .select({ id: nationalTeam.id })
+      .from(nationalTeam)
+      .where(eq(nationalTeam.id, clubId))
+      .limit(1);
+
+    if (nationalTeamRow) {
+      const rows = await this.db
+        .selectDistinct({
+          id: season.id,
+          label: season.label,
+        })
+        .from(kit)
+        .innerJoin(season, eq(kit.seasonId, season.id))
+        .where(eq(kit.nationalTeamId, clubId))
+        .orderBy(desc(season.startsOn));
+
+      return catalogClubSeasonsResponseSchema.parse({
+        seasons: rows.map((row) => ({ id: row.id, label: row.label })),
+      });
+    }
+
+    return catalogClubSeasonsResponseSchema.parse({ seasons: [] });
   }
 }
