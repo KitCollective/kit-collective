@@ -21,6 +21,14 @@ export const catalogPickerSearchQuerySchema = z
 
 export type CatalogPickerSearchQuery = z.infer<typeof catalogPickerSearchQuerySchema>;
 
+export const catalogPickerClubIdParamSchema = z
+  .object({
+    clubId: z.string().uuid(),
+  })
+  .strict();
+
+export type CatalogPickerClubIdParam = z.infer<typeof catalogPickerClubIdParamSchema>;
+
 export const catalogClubSearchResponseSchema = z
   .object({
     clubs: z.array(catalogPickerItemSchema),

@@ -184,12 +184,11 @@ export class CatalogService {
       .filter((row) => row.entityType === "national_team")
       .map((row) => row.entityId);
 
-    const resolvedLabel = (entityIdColumn: typeof club.id | typeof nationalTeam.id) =>
-      sql<string>`coalesce(
+    const resolvedLabel = () =>
+      sql<string | null>`coalesce(
         max(case when ${catalogLabel.locale} = ${locale} and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
         max(case when ${catalogLabel.locale} = 'mul' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
-        max(case when ${catalogLabel.locale} = 'en' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
-        ${entityIdColumn}::text
+        max(case when ${catalogLabel.locale} = 'en' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end)
       )`;
 
     const clubRows =
@@ -198,7 +197,7 @@ export class CatalogService {
         : await this.db
             .select({
               id: club.id,
-              label: resolvedLabel(club.id),
+              label: resolvedLabel(),
             })
             .from(club)
             .leftJoin(
@@ -214,7 +213,7 @@ export class CatalogService {
         : await this.db
             .select({
               id: nationalTeam.id,
-              label: resolvedLabel(nationalTeam.id),
+              label: resolvedLabel(),
             })
             .from(nationalTeam)
             .leftJoin(
@@ -228,6 +227,7 @@ export class CatalogService {
             .groupBy(nationalTeam.id);
 
     const clubs = [...clubRows, ...nationalTeamRows]
+      .filter((row): row is typeof row & { label: string } => Boolean(row.label))
       .map((row) => ({ id: row.id, label: row.label }))
       .sort((a, b) => a.label.localeCompare(b.label, locale));
 
