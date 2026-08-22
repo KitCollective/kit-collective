@@ -8,6 +8,7 @@ export async function resolveProfiles(
   squadRows: ActorSquadRow[],
   fetchProfile: (playerId: string) => Promise<ActorPlayerProfile>,
   onProfileFetch?: (playerId: string) => void,
+  onProfileHole?: (playerId: string, error: unknown) => void,
 ): Promise<Map<string, ActorPlayerProfile>> {
   const profiles = new Map<string, ActorPlayerProfile>();
 
@@ -19,7 +20,11 @@ export async function resolveProfiles(
       continue;
     }
     onProfileFetch?.(row.playerId);
-    profiles.set(row.playerId, await fetchProfile(row.playerId));
+    try {
+      profiles.set(row.playerId, await fetchProfile(row.playerId));
+    } catch (error: unknown) {
+      onProfileHole?.(row.playerId, error);
+    }
   }
 
   return profiles;

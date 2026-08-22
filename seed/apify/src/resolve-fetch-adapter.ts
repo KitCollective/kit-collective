@@ -54,13 +54,15 @@ export async function resolveFetchAdapter(): Promise<ResolvedFetchAdapter> {
   const proxyConfig = resolveSeedProxyConfig();
   assertSeedProxyAvailable(proxyConfig);
 
+  const kaderCacheDir = process.env.SEED_KADER_CACHE?.trim() || undefined;
+
   if (proxyConfig.proxyUrl) {
     const { fetchHtml, close } = createProxyFetchHtml(proxyConfig.proxyUrl);
     return {
-      adapter: createKaderFetchAdapter({ fetchHtml }),
+      adapter: createKaderFetchAdapter({ fetchHtml, cacheDir: kaderCacheDir }),
       close,
     };
   }
 
-  return { adapter: createKaderFetchAdapter() };
+  return { adapter: createKaderFetchAdapter({ cacheDir: kaderCacheDir }) };
 }

@@ -52,7 +52,11 @@ function resolvePlayer(
 
   const profile = profileByPlayerId.get(row.playerId);
   if (!profile) {
-    throw new Error(`Missing player profile for ${row.playerId} (${row.playerName})`);
+    return {
+      id: row.playerId,
+      name: row.playerName,
+      jerseyNumber: undefined,
+    };
   }
 
   return {
