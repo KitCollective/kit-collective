@@ -108,8 +108,7 @@ export function parseKaderHtml(
 export function parsePlayerProfileHtml(html: string, playerId: string): ActorPlayerProfile {
   const $ = cheerio.load(html);
   const playerName =
-    $("h1.data-header__headline-wrapper").text().trim() ||
-    $("h1").first().text().trim();
+    $("h1.data-header__headline-wrapper").text().trim() || $("h1").first().text().trim();
 
   if (!playerName) {
     throw new Error(`Invalid player profile for ${playerId}`);

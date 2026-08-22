@@ -25,6 +25,10 @@
       {
         "command": "bash .cursor/hooks/block-manual-getmcptools-evidence.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-push-behind-development.sh",
+        "failClosed": true
       }
     ]
   }

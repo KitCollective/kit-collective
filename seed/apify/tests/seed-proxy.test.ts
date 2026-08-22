@@ -67,9 +67,9 @@ describe("assertSeedProxyAvailable", () => {
   });
 
   it("fails closed when proxy is required but missing", () => {
-    expect(() =>
-      assertSeedProxyAvailable({ requireProxy: true, proxyUrl: undefined }),
-    ).toThrow(/SEED_REQUIRE_PROXY is set but SEED_PROXY_URL is missing/);
+    expect(() => assertSeedProxyAvailable({ requireProxy: true, proxyUrl: undefined })).toThrow(
+      /SEED_REQUIRE_PROXY is set but SEED_PROXY_URL is missing/,
+    );
   });
 });
 

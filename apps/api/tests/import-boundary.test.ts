@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -58,9 +58,7 @@ function findForbiddenImports(files: string[], patterns: RegExp[]): string[] {
 
 describe("import boundaries", () => {
   it("client apps do not import @kit/db or apps/api", () => {
-    const clientApps = ["apps/mobile", "apps/web", "apps/admin"].map((p) =>
-      path.join(ROOT, p),
-    );
+    const clientApps = ["apps/mobile", "apps/web", "apps/admin"].map((p) => path.join(ROOT, p));
     const files = clientApps.flatMap((dir) => collectSourceFiles(dir));
     const violations = findForbiddenImports(files, CLIENT_FORBIDDEN_PATTERNS);
     expect(violations).toEqual([]);

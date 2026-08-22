@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveCompetition } from "@kit/seed-shared";
 import type {
@@ -29,6 +29,8 @@ export function createActorRecordingsStore(recordingsDir: string): ActorRecordin
 
   async function readJson<T>(filePath: string): Promise<T> {
     const raw = await readFile(filePath, "utf8");
+    // SAFETY: recordings are captured from live actor runs and committed under
+    // fixtures/actor-recordings, so their shape is fixed at review time.
     return JSON.parse(raw) as T;
   }
 
@@ -43,7 +45,10 @@ export function createActorRecordingsStore(recordingsDir: string): ActorRecordin
         .filter((year) => !Number.isNaN(year));
     },
 
-    async loadCompetitionSeason(competition: string, season: number): Promise<ActorCompetitionRecording> {
+    async loadCompetitionSeason(
+      competition: string,
+      season: number,
+    ): Promise<ActorCompetitionRecording> {
       const code = competitionCode(competition);
       const filePath = path.join(competitionsDir, `${code}-${season}.json`);
       return readJson<ActorCompetitionRecording>(filePath);

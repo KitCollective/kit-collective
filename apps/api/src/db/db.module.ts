@@ -1,5 +1,5 @@
-import { Global, Module } from "@nestjs/common";
 import { createDb, type Db } from "@kit/db";
+import { Global, Module } from "@nestjs/common";
 
 export const DB = Symbol("DB");
 export type DbToken = Db;

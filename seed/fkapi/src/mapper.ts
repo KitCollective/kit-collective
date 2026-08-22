@@ -1,9 +1,12 @@
 import { Pool } from "pg";
-import type { FkFetchAdapter, FkFetchScope, FkRawKit, ObjectStoreAdapter, SeedRunResult } from "./types.js";
-import {
-  EXTERNAL_SYSTEM_FKAPI,
-  EXTERNAL_SYSTEM_TRANSFERMARKT,
+import type {
+  FkFetchAdapter,
+  FkFetchScope,
+  FkRawKit,
+  ObjectStoreAdapter,
+  SeedRunResult,
 } from "./types.js";
+import { EXTERNAL_SYSTEM_FKAPI, EXTERNAL_SYSTEM_TRANSFERMARKT } from "./types.js";
 
 export type MapperOptions = {
   databaseUrl: string;
@@ -27,6 +30,8 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
     let photosWritten = 0;
 
     for (const rawKit of rawKits) {
+      assertKitHasArchiveBytes(rawKit);
+
       const clubRow = await findClubByTransfermarktId(pool, rawKit.clubTransfermarktId);
       const seasonRow = await findSeasonForClub(pool, clubRow!.entityId, rawKit.seasonLabel);
 
@@ -52,6 +57,12 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
       if (rawKit.imageBytes && rawKit.imageBytes.length > 0) {
         const objectKey = `kit/${kitId}/archive.jpg`;
         await options.objectStore.putObject(objectKey, rawKit.imageBytes);
+        const exists = await options.objectStore.objectExists(objectKey);
+        if (!exists) {
+          throw new Error(
+            `Lane R2 object missing after putObject: ${objectKey}. Refusing accept without archive bytes in object store.`,
+          );
+        }
         const wrote = await upsertKitPhoto(pool, kitId, objectKey);
         if (wrote) {
           photosWritten += 1;
@@ -62,6 +73,14 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
     return { kitsUpserted, photosWritten };
   } finally {
     await pool.end();
+  }
+}
+
+function assertKitHasArchiveBytes(rawKit: FkRawKit): void {
+  if (!rawKit.imageBytes || rawKit.imageBytes.length === 0) {
+    throw new Error(
+      `Kit ${rawKit.id} has no archive image bytes. Refusing accept without lane R2 object for this kit.`,
+    );
   }
 }
 

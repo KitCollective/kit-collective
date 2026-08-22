@@ -1,7 +1,7 @@
 export {
-  catalogStatsSchema,
-  catalogStatsKeys,
   type CatalogStats,
+  catalogStatsKeys,
+  catalogStatsSchema,
 } from "./catalog/stats.js";
 
 export {

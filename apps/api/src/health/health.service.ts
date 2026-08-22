@@ -1,6 +1,6 @@
+import type { Db } from "@kit/db";
 import { Inject, Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { sql } from "drizzle-orm";
-import type { Db } from "@kit/db";
 import { DB } from "../db/db.module.js";
 
 @Injectable()

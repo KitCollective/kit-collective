@@ -1,10 +1,10 @@
 import "reflect-metadata";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { NestFastifyApplication, FastifyAdapter } from "@nestjs/platform-fastify";
-import { Test } from "@nestjs/testing";
+import { fileURLToPath } from "node:url";
 import { resetDatabase } from "@kit/db";
+import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
+import { Test } from "@nestjs/testing";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 
 const migrationsFolder = path.join(
@@ -13,8 +13,7 @@ const migrationsFolder = path.join(
 );
 
 const DATABASE_URL =
-  process.env.API_TEST_DATABASE_URL ??
-  "postgresql://kit:kit@localhost:5432/kit_api_test";
+  process.env.API_TEST_DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_api_test";
 
 describe("GET /v1/health", () => {
   let app: NestFastifyApplication;
@@ -27,9 +26,7 @@ describe("GET /v1/health", () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleRef.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter(),
-    );
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("v1");
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
@@ -47,8 +44,7 @@ describe("GET /v1/health", () => {
 
   it("returns 503 when Postgres is down", async () => {
     const originalUrl = process.env.DATABASE_URL;
-    process.env.DATABASE_URL =
-      "postgresql://kit:kit@127.0.0.1:1/unreachable";
+    process.env.DATABASE_URL = "postgresql://kit:kit@127.0.0.1:1/unreachable";
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],

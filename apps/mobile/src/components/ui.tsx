@@ -9,84 +9,137 @@ import {
 } from "react-native";
 import { color, radius, space, type } from "@/theme/tokens";
 
+type ButtonVariant = "primary" | "secondary" | "tertiary" | "destructive";
+
 type ButtonProps = PressableProps & {
   label: string;
+  variant?: ButtonVariant;
   loading?: boolean;
 };
 
-export function PrimaryButton({ label, loading = false, disabled, ...props }: ButtonProps) {
+export function Button({
+  label,
+  variant = "primary",
+  loading = false,
+  disabled,
+  ...props
+}: ButtonProps) {
   const isDisabled = disabled || loading;
 
   return (
     <Pressable
       accessibilityRole="button"
       style={({ pressed }) => [
-        styles.button,
-        isDisabled && styles.buttonDisabled,
-        pressed && !isDisabled && styles.buttonPressed,
+        styles.base,
+        variantStyles[variant],
+        isDisabled && styles.disabled,
+        pressed && !isDisabled && styles.pressed,
       ]}
       disabled={isDisabled}
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={color.contentInverse} />
+        <ActivityIndicator color={loadingColor[variant]} />
       ) : (
-        <Text style={styles.buttonLabel}>{label}</Text>
+        <Text style={[styles.label, labelStyles[variant]]}>{label}</Text>
       )}
     </Pressable>
   );
 }
 
-export function Screen({ children }: { children: ReactNode }) {
-  return <View style={styles.screen}>{children}</View>;
-}
+type EmptyStateProps = {
+  title: string;
+  body: string;
+  action?: ReactNode;
+};
 
-export function FieldLabel({ children }: { children: ReactNode }) {
-  return <Text style={styles.label}>{children}</Text>;
-}
-
-export function ErrorText({ children }: { children: ReactNode }) {
-  return <Text style={styles.error}>{children}</Text>;
+export function EmptyState({ title, body, action }: EmptyStateProps) {
+  return (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyBody}>{body}</Text>
+      {action}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: color.canvas,
-    paddingHorizontal: space.insetLg,
-    paddingTop: space.xl,
-  },
-  button: {
+  base: {
     minHeight: 44,
     borderRadius: radius.pill,
-    backgroundColor: color.fillPrimary,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: space.insetMd,
   },
-  buttonPressed: {
-    opacity: 0.9,
-  },
-  buttonDisabled: {
+  disabled: {
     opacity: 0.5,
   },
-  buttonLabel: {
-    color: color.contentInverse,
+  pressed: {
+    opacity: 0.9,
+  },
+  label: {
     fontSize: type.label.fontSize,
     fontWeight: type.label.fontWeight,
     lineHeight: type.label.lineHeight,
   },
-  label: {
-    color: color.contentPrimary,
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    marginBottom: space.xs,
-    fontWeight: type.label.fontWeight,
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.gapMd,
+    paddingHorizontal: space.insetLg,
   },
-  error: {
-    color: color.danger,
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    marginTop: space.gapSm,
+  emptyTitle: {
+    fontSize: type.title.fontSize,
+    lineHeight: type.title.lineHeight,
+    fontWeight: type.title.fontWeight,
+    color: color.contentPrimary,
+    textAlign: "center",
+  },
+  emptyBody: {
+    fontSize: type.body.fontSize,
+    lineHeight: type.body.lineHeight,
+    color: color.contentMuted,
+    textAlign: "center",
+    marginBottom: space.insetMd,
   },
 });
+
+const variantStyles = StyleSheet.create({
+  primary: {
+    backgroundColor: color.fillPrimary,
+  },
+  secondary: {
+    backgroundColor: color.fillSecondary,
+    borderWidth: 1,
+    borderColor: color.borderSubtle,
+  },
+  tertiary: {
+    backgroundColor: "transparent",
+  },
+  destructive: {
+    backgroundColor: color.danger,
+  },
+});
+
+const labelStyles = StyleSheet.create({
+  primary: {
+    color: color.contentInverse,
+  },
+  secondary: {
+    color: color.contentPrimary,
+  },
+  tertiary: {
+    color: color.contentPrimary,
+  },
+  destructive: {
+    color: color.contentInverse,
+  },
+});
+
+const loadingColor: Record<ButtonVariant, string> = {
+  primary: color.contentInverse,
+  secondary: color.contentPrimary,
+  tertiary: color.contentPrimary,
+  destructive: color.contentInverse,
+};

@@ -4,9 +4,7 @@ export type SeedLane = (typeof SEED_LANES)[number];
 
 export type ResolvedSeedLane = Exclude<SeedLane, "production">;
 
-export type ResolveLaneResult =
-  | { ok: true; lane: ResolvedSeedLane }
-  | { ok: false; error: string };
+export type ResolveLaneResult = { ok: true; lane: ResolvedSeedLane } | { ok: false; error: string };
 
 /**
  * Default lane is development. Staging only when explicitly named.

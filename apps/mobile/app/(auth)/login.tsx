@@ -8,9 +8,12 @@ import {
   View,
 } from "react-native";
 import { Link } from "expo-router";
-import { ErrorText, FieldLabel, PrimaryButton, Screen } from "@/components/ui";
+import { Button } from "@/components/ui";
 import { useAuth } from "@/auth/AuthProvider";
 import { color, radius, space, type } from "@/theme/tokens";
+
+// Design-system gap (KIT-23): login/register screens are not in docs/design-system.md
+// Scope §Included or §Deferred. Layout uses locked tokens only; no new primitives.
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -33,7 +36,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <Screen>
+    <View style={styles.screen}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.form}
@@ -42,7 +45,7 @@ export default function LoginScreen() {
         <Text style={styles.subtitle}>Din fodboldtrøjesamling starter her.</Text>
 
         <View style={styles.field}>
-          <FieldLabel>E-mail</FieldLabel>
+          <Text style={styles.fieldLabel}>E-mail</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="email"
@@ -56,7 +59,7 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.field}>
-          <FieldLabel>Adgangskode</FieldLabel>
+          <Text style={styles.fieldLabel}>Adgangskode</Text>
           <TextInput
             secureTextEntry
             autoCapitalize="none"
@@ -68,20 +71,26 @@ export default function LoginScreen() {
           />
         </View>
 
-        {error ? <ErrorText>{error}</ErrorText> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <View style={styles.actions}>
-          <PrimaryButton label="Log ind" onPress={() => void handleSubmit()} loading={loading} />
+          <Button label="Log ind" variant="primary" onPress={() => void handleSubmit()} loading={loading} />
           <Link href="/register" style={styles.link}>
             Opret konto
           </Link>
         </View>
       </KeyboardAvoidingView>
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: color.canvas,
+    paddingHorizontal: space.insetLg,
+    paddingTop: space.xl,
+  },
   form: {
     flex: 1,
     gap: space.gapMd,
@@ -101,6 +110,12 @@ const styles = StyleSheet.create({
   field: {
     gap: space.xs,
   },
+  fieldLabel: {
+    color: color.contentPrimary,
+    fontSize: type.caption.fontSize,
+    lineHeight: type.caption.lineHeight,
+    fontWeight: type.label.fontWeight,
+  },
   input: {
     minHeight: 48,
     borderWidth: 1,
@@ -110,6 +125,12 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     color: color.contentPrimary,
     backgroundColor: color.surface,
+  },
+  error: {
+    color: color.danger,
+    fontSize: type.caption.fontSize,
+    lineHeight: type.caption.lineHeight,
+    marginTop: space.gapSm,
   },
   actions: {
     marginTop: space.insetLg,

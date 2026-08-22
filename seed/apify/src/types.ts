@@ -1,6 +1,5 @@
 import type { CalendarKind, ClubKind, LabelLocale } from "@kit/domain";
-import type { ResolvedSeedLane } from "@kit/seed-shared";
-import type { SeedScope } from "@kit/seed-shared";
+import type { ResolvedSeedLane, SeedScope } from "@kit/seed-shared";
 
 export const TM_SYSTEM = "transfermarkt";
 

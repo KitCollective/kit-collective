@@ -1,11 +1,7 @@
 import { resolveSeasonRef } from "@kit/seed-shared";
 import type { NormalizedSeason } from "./types.js";
 
-function seasonIndex(
-  seasons: NormalizedSeason[],
-  competition: string,
-  ref: string,
-): number {
+function seasonIndex(seasons: NormalizedSeason[], competition: string, ref: string): number {
   const resolved = resolveSeasonRef(competition, ref);
   if (resolved === "today") {
     return seasons.length - 1;

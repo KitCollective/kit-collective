@@ -2,6 +2,7 @@ import { parseCliArgs } from "./cli-args.js";
 import { createFkApiFetchAdapter } from "./fetch.js";
 import { runFkSeed } from "./mapper.js";
 import { createR2ObjectStore } from "./object-store.js";
+import { assertSeedProxyAvailable, resolveSeedProxyConfig } from "./proxy-config.js";
 import type { FkFetchAdapter, ObjectStoreAdapter } from "./types.js";
 
 export type RunCliOptions = {
@@ -49,5 +50,9 @@ function resolveDefaultFetchAdapter(): FkFetchAdapter {
       "FKApi fetch requires FKAPI_BASE_URL. Tests inject a fetch adapter; CLI runs must set FKAPI_BASE_URL explicitly.",
     );
   }
-  return createFkApiFetchAdapter();
+
+  const proxyConfig = resolveSeedProxyConfig();
+  assertSeedProxyAvailable(proxyConfig);
+
+  return createFkApiFetchAdapter({ proxyConfig });
 }

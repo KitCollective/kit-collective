@@ -17,9 +17,7 @@ function isTruthy(value: string | undefined): boolean {
   return TRUTHY.has(value.trim().toLowerCase());
 }
 
-export function resolveSeedProxyConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): SeedProxyConfig {
+export function resolveSeedProxyConfig(env: NodeJS.ProcessEnv = process.env): SeedProxyConfig {
   const proxyUrl = env.SEED_PROXY_URL?.trim() || undefined;
   const requireProxy = isTruthy(env.SEED_REQUIRE_PROXY);
 
@@ -46,8 +44,7 @@ export function createProxyFetchHtml(proxyUrl: string): ProxyFetchHtml {
     const response = await undiciFetch(url, {
       dispatcher: agent,
       headers: {
-        "User-Agent":
-          "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
+        "User-Agent": "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
         "Accept-Language": "en-US,en;q=0.9",
       },
     });

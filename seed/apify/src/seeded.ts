@@ -1,12 +1,6 @@
-import {
-  catalogLabel,
-  externalId,
-  playerClubSeason,
-  season,
-  type Db,
-} from "@kit/db";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { catalogLabel, type Db, externalId, playerClubSeason, season } from "@kit/db";
 import { resolveCompetition } from "@kit/seed-shared";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { TM_SYSTEM } from "./types.js";
 
 async function findEntityId(db: Db, value: string): Promise<string | undefined> {
@@ -84,10 +78,7 @@ export async function isClubSeasonAlreadySeeded(
   return numberedSquad.length > 0;
 }
 
-export async function findClubLabel(
-  db: Db,
-  clubExternalId: string,
-): Promise<string | undefined> {
+export async function findClubLabel(db: Db, clubExternalId: string): Promise<string | undefined> {
   const clubEntityId = await findEntityId(db, clubExternalId);
   if (!clubEntityId) {
     return undefined;

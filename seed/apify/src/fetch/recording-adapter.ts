@@ -1,5 +1,4 @@
 import type { FetchAdapter, FetchClubSeasonParams, ListClubSeasonPairsParams } from "./adapter.js";
-import type { TransfermarktRawPayload } from "../types.js";
 
 export function createRecordingFetchAdapter(inner: FetchAdapter): {
   adapter: FetchAdapter;

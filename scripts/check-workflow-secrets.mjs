@@ -3,7 +3,7 @@
  * Ratchet (KIT-7): fail CI if a workflow step logs deploy webhook / bearer URLs
  * without GitHub Actions masking.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const workflowDir = ".github/workflows";

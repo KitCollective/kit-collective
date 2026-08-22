@@ -1,10 +1,10 @@
 #!/usr/bin/env node
+import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 import { parseCliArgs, runSeed } from "./run.js";
-import { resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 
 async function main() {
   const parsed = parseCliArgs(process.argv);
-  let resolved;
+  let resolved: ResolvedFetchAdapter;
   try {
     resolved = await resolveFetchAdapter();
   } catch (error: unknown) {

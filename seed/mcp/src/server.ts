@@ -7,9 +7,7 @@ const seedInputSchema = {
   competition: z
     .string()
     .min(1)
-    .describe(
-      "Competition slug or id (e.g. superligaen, championship). Not limited to Denmark.",
-    ),
+    .describe("Competition slug or id (e.g. superligaen, championship). Not limited to Denmark."),
   fromSeason: z
     .string()
     .min(1)
@@ -76,34 +74,29 @@ export function createSeedMcpServer(runner: CliRunner): McpServer {
     version: "0.1.0",
   });
 
-  server.tool(
-    "seed_apify",
-    APIFY_DESCRIPTION,
-    seedInputSchema,
-    async (input) => {
-      const result = await runSeedCli("apify", input, runner);
-      if (!result.ok) {
-        return {
-          content: [{ type: "text", text: result.error }],
-          isError: true,
-        };
-      }
-
-      const summary = [
-        `seed_apify exited with code ${result.exitCode}`,
-        `lane: ${input.lane?.trim().toLowerCase() || "development"}`,
-        result.stdout.trim() ? `\nstdout:\n${result.stdout.trim()}` : "",
-        result.stderr.trim() ? `\nstderr:\n${result.stderr.trim()}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
+  server.tool("seed_apify", APIFY_DESCRIPTION, seedInputSchema, async (input) => {
+    const result = await runSeedCli("apify", input, runner);
+    if (!result.ok) {
       return {
-        content: [{ type: "text", text: summary }],
-        isError: result.exitCode !== 0,
+        content: [{ type: "text", text: result.error }],
+        isError: true,
       };
-    },
-  );
+    }
+
+    const summary = [
+      `seed_apify exited with code ${result.exitCode}`,
+      `lane: ${input.lane?.trim().toLowerCase() || "development"}`,
+      result.stdout.trim() ? `\nstdout:\n${result.stdout.trim()}` : "",
+      result.stderr.trim() ? `\nstderr:\n${result.stderr.trim()}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    return {
+      content: [{ type: "text", text: summary }],
+      isError: result.exitCode !== 0,
+    };
+  });
 
   server.tool(
     "seed_fk",

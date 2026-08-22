@@ -1,16 +1,10 @@
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
+import { catalogLabel, createDb, externalId, playerClubSeason, resetDatabase } from "@kit/db";
 import { and, eq } from "drizzle-orm";
-import {
-  catalogLabel,
-  createDb,
-  externalId,
-  playerClubSeason,
-  resetDatabase,
-} from "@kit/db";
-import { createApifyFetchAdapter } from "../src/fetch/apify-adapter.js";
+import { beforeAll, describe, expect, it } from "vitest";
 import { PINNED_ACTOR_ID, SQUADS_DATASET } from "../src/fetch/actor-constants.js";
+import { createApifyFetchAdapter } from "../src/fetch/apify-adapter.js";
 import { createRecordingFetchAdapter } from "../src/fetch/recording-adapter.js";
 import { normalize } from "../src/normalize/index.js";
 import { runSeed } from "../src/run.js";
@@ -26,8 +20,7 @@ const recordingsDir = path.join(
   "../fixtures/actor-recordings",
 );
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
 
 async function prepareDatabase() {
   await resetDatabase(DATABASE_URL, migrationsFolder);

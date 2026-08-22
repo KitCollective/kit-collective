@@ -17,6 +17,7 @@ This is not a memory store. Wrong lessons are reverted with git.
 | `.cursor/hooks.json` | Which events run which scripts |
 | `.cursor/hooks/*.sh` | Command hooks (deny/allow) |
 | `.cursor/rules/*.mdc` | Always-applied agent rules |
+| `biome.json` / `oxlint.config.ts` | Format, lint, and anti-slop gates run in CI |
 | `docs/agents/error-ratcheting.md` | This contract |
 
 ## Default factory ratchet
@@ -60,6 +61,45 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 
 `.cursor/hooks/block-coolify-rest-service-control.sh` denies shell commands that call Coolify REST `/api/v1/services/{uuid}/start|stop|restart` (including bare `curl` to those paths). Season-range runs must use the Coolify MCP `control` tool via `seed/coolify/mcp-call.sh` / `start-apify-job.sh`. Prevents repeating the first KIT-17 checker fail (REST start instead of MCP). Tighten only.
 
+### Code quality ratchet
+
+`biome.json` (format + lint), `oxlint.config.ts` with the vendored plugin under
+`tools/oxlint/anti-slop/`, and the CI steps `pnpm typecheck`, `pnpm format:check`,
+`pnpm lint:anti-slop`. `typecheck` runs each package's `tsconfig.test.json`, so test
+files are typechecked too. Tighten only.
+
+Three rules are deliberately at warn, not error, and are the ratchet targets:
+
+- `lint/style/noNonNullAssertion` (Biome) — the existing `!` sites are mostly
+  `const [row] = await …returning()`. Ratchet to error once those reads carry a guard.
+- `anti-slop/no-unsafe-dictionary-type` — the remaining sites are the raw Transfermarkt
+  and Football Kit Archive payloads that `normalize()` and `normalizeRawKit` exist to
+  parse. Ratchet to error once those adapters parse through a schema.
+- `anti-slop/no-module-mocking` — `seed/apify/tests/seed-proxy.test.ts` mocks `undici`
+  because `seed/apify/src/proxy-config.ts` imports `fetch` and `ProxyAgent` at module
+  scope, leaving the test no seam to inject. Ratchet to error once `proxy-config` takes
+  those as an injected dependency.
+
+`tools/oxlint/anti-slop/README.md` records which upstream rules we left out and why.
+
+`lint/style/useImportType` is off for `apps/api/src/**`. This is not a ratchet target — do
+not turn it on. Nest resolves constructor injection from `emitDecoratorMetadata`, and an
+`import type` is erased at compile time, so the emitted `design:paramtypes` degrades to
+`Function` and the module fails to build at runtime. Typecheck stays green, so CI only
+catches it in the API tests and the container smoke test.
+
 ### Ops MCP catalog evidence ratchet (KIT-17)
 
 `.cursor/hooks/block-manual-getmcptools-evidence.sh` denies manual writes under `.cursor/getmcptools-evidence/`. Agents record in-session catalog proof only via `scripts/record-getmcptools-evidence.sh <server>` fed with **this session's** `GetMcpTools` JSON. Prevents repeating the second KIT-17 checker fail (marking MCP-catalog AC complete without catalog evidence). Dashboard registration for Cloud Agents remains human-only (`KIT-18`). Tighten only.
+
+### FK seed test isolation ratchet (KIT-22)
+
+`scripts/check-seed-fkapi-test-isolation.mjs` (CI via `pnpm check:seed-fkapi-tests`) fails when `seed/fkapi/tests/**` hardcodes Transfermarkt `external_id` values in prerequisite INSERTs, defines a local `seedApifyPrerequisites`, or calls `seedApifyPrerequisites` without an allocated `TestFixtureScope` from `seed/fkapi/tests/fixture-scope.ts`. Prevents repeating the KIT-22 checker fail (order-dependent unique-constraint collisions when tests share one DB pool). Tighten only.
+
+### Push behind development ratchet (KIT-23)
+
+`.cursor/hooks/block-push-behind-development.sh` denies `git push` when the current branch is behind `origin/development`. Prevents repeating the KIT-23 checker fail (unmergeable PR because the feature branch was never rebased after `development` moved). Pushes to `development`, `staging`, and `production` are exempt. Tighten only.
+
+### Mobile design-system inventory ratchet (KIT-23)
+
+`.cursor/rules/design-system.mdc` requires flagging (not inventing) any `apps/mobile` screen or component not named in `docs/design-system.md` Scope §Included or Components inventory before writing it. Prevents repeating the KIT-23 checker fail (invented primitives like `Screen`/`FieldLabel` and unflagged auth-screen gaps). Tighten only.

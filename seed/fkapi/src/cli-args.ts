@@ -34,23 +34,24 @@ export function parseLane(lane: string): SeedLane | "production" | undefined {
   return undefined;
 }
 
-export function parseCliArgs(argv: string[]): {
-  ok: true;
-  args: {
-    competition: string;
-    fromSeason: string;
-    toSeason: string;
-    lane: SeedLane;
-  };
-} | {
-  ok: false;
-  error: string;
-} {
+export function parseCliArgs(argv: string[]):
+  | {
+      ok: true;
+      args: {
+        competition: string;
+        fromSeason: string;
+        toSeason: string;
+        lane: SeedLane;
+      };
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
   if (argv.length !== 4) {
     return {
       ok: false,
-      error:
-        "Usage: kit-seed-fkapi <competition> <from-season> <to-season> <lane>",
+      error: "Usage: kit-seed-fkapi <competition> <from-season> <to-season> <lane>",
     };
   }
 
@@ -62,8 +63,7 @@ export function parseCliArgs(argv: string[]): {
   if (!competition || !fromSeason || !toSeason || !laneRaw) {
     return {
       ok: false,
-      error:
-        "Usage: kit-seed-fkapi <competition> <from-season> <to-season> <lane>",
+      error: "Usage: kit-seed-fkapi <competition> <from-season> <to-season> <lane>",
     };
   }
 
@@ -83,8 +83,7 @@ export function parseCliArgs(argv: string[]): {
     return { ok: false, error: "Lane production is rejected for FK seed." };
   }
 
-  const resolvedFrom =
-    fromSeason === "0001" ? competitionDef.firstSeasonLabel : fromSeason;
+  const resolvedFrom = fromSeason === "0001" ? competitionDef.firstSeasonLabel : fromSeason;
   const resolvedTo = toSeason === "today" ? "today" : toSeason;
 
   return {

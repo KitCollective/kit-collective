@@ -1,5 +1,5 @@
-import { ApifyClient } from "apify-client";
 import { resolveCompetition } from "@kit/seed-shared";
+import { ApifyClient } from "apify-client";
 import {
   CLUBS_DATASET,
   PINNED_ACTOR_ID,
@@ -13,23 +13,16 @@ import {
   seasonClubRowsToPairs,
   startYearToLabel,
 } from "./actor-mapper.js";
-import {
-  createActorRecordingsStore,
-  type ActorRecordingsStore,
-} from "./actor-recordings.js";
-import type {
-  ActorPlayerProfile,
-  ActorProfileRecording,
-  ActorSquadRow,
-} from "./actor-types.js";
-import { labelToStartYear } from "./season-label.js";
-import { resolveProfiles } from "./squad-profile-hop.js";
+import { type ActorRecordingsStore, createActorRecordingsStore } from "./actor-recordings.js";
+import type { ActorPlayerProfile, ActorProfileRecording, ActorSquadRow } from "./actor-types.js";
 import type {
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
+import { labelToStartYear } from "./season-label.js";
+import { resolveProfiles } from "./squad-profile-hop.js";
 
 export interface ApifyFetchAdapterOptions {
   /** Directory of recorded actor JSON fixtures (hermetic / CI mode). */
@@ -51,10 +44,7 @@ interface ApifyActorRun {
 
 interface ApifyClientLike {
   actor(actorId: string): {
-    call(
-      input: Record<string, unknown>,
-      options?: { waitSecs?: number },
-    ): Promise<ApifyActorRun>;
+    call(input: Record<string, unknown>, options?: { waitSecs?: number }): Promise<ApifyActorRun>;
   };
   dataset(datasetId: string): {
     listItems(options?: { clean?: boolean; limit?: number }): Promise<{ items: unknown[] }>;
@@ -129,6 +119,8 @@ async function runCompetitionSeason(
 
   const items = await fetchDatasetItems(client, run, SEASON_STATISTICS_DATASET);
   return items.map((item) => {
+    // SAFETY: every field is optional here, and the guard below rejects the row
+    // before any caller sees it.
     const row = item as { clubId?: string; clubName?: string };
     if (!row.clubId || !row.clubName) {
       throw new Error(`Invalid season_statistics row: ${JSON.stringify(item)}`);
@@ -151,6 +143,8 @@ async function runClubSquad(
 
   const items = await fetchDatasetItems(client, run, SQUADS_DATASET);
   return items.map((item) => {
+    // SAFETY: every field read below is either optional or defaulted, so a missing
+    // one yields an empty name or the requested club/season rather than undefined.
     const row = item as ActorSquadRow & { name?: string };
     return {
       playerId: row.playerId,
@@ -174,6 +168,8 @@ async function runPlayerProfile(
   });
 
   const items = await fetchDatasetItems(client, run, PLAYERS_DATASET);
+  // SAFETY: every field is optional here, and the guard below rejects the profile
+  // before any caller sees it.
   const first = items[0] as {
     playerId?: string;
     playerName?: string;
@@ -250,10 +246,7 @@ function createLiveAdapter(
   return {
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
       const tmCode = competitionCode(params.competition);
-      const fromLabel =
-        params.fromSeason === "today"
-          ? "today"
-          : params.fromSeason;
+      const fromLabel = params.fromSeason === "today" ? "today" : params.fromSeason;
       const toLabel = params.toSeason;
 
       const fromYear =
@@ -333,7 +326,9 @@ export function createLiveApifyFetchAdapter(
   options: ApifyFetchAdapterOptions & { token: string },
 ): FetchAdapter {
   const actorId = options.actorId ?? PINNED_ACTOR_ID;
-  const client = new ApifyClient({ token: options.token }) as unknown as ApifyClientLike;
+  // SAFETY: ApifyClientLike names the two SDK methods this adapter calls; the SDK's own
+  // types are wider, so the narrowing is checked by the calls in createLiveAdapter.
+  const client: ApifyClientLike = new ApifyClient({ token: options.token });
   return createLiveAdapter(client, actorId, options.onProfileFetch);
 }
 
