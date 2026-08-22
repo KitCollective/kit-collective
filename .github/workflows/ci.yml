@@ -60,6 +60,9 @@ jobs:
       - name: Check import boundaries
         run: pnpm check:imports
 
+      - name: Check FK seed test isolation
+        run: pnpm check:seed-fkapi-tests
+
       - name: Assert seed packages are in workspace and turbo test graph
         run: |
           node -e '

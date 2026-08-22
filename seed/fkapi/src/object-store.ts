@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { ObjectStoreAdapter } from "./types.js";
 
 /** R2 / S3-compatible object store using AWS SigV4 (not HTTP Basic). */
@@ -34,6 +34,19 @@ export function createR2ObjectStore(): ObjectStoreAdapter {
           ContentType: "image/jpeg",
         }),
       );
+    },
+    async objectExists(key: string): Promise<boolean> {
+      try {
+        await client.send(
+          new HeadObjectCommand({
+            Bucket: bucket,
+            Key: key,
+          }),
+        );
+        return true;
+      } catch {
+        return false;
+      }
     },
   };
 }

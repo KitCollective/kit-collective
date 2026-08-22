@@ -91,3 +91,7 @@ catches it in the API tests and the container smoke test.
 ### Ops MCP catalog evidence ratchet (KIT-17)
 
 `.cursor/hooks/block-manual-getmcptools-evidence.sh` denies manual writes under `.cursor/getmcptools-evidence/`. Agents record in-session catalog proof only via `scripts/record-getmcptools-evidence.sh <server>` fed with **this session's** `GetMcpTools` JSON. Prevents repeating the second KIT-17 checker fail (marking MCP-catalog AC complete without catalog evidence). Dashboard registration for Cloud Agents remains human-only (`KIT-18`). Tighten only.
+
+### FK seed test isolation ratchet (KIT-22)
+
+`scripts/check-seed-fkapi-test-isolation.mjs` (CI via `pnpm check:seed-fkapi-tests`) fails when `seed/fkapi/tests/**` hardcodes Transfermarkt `external_id` values in prerequisite INSERTs, defines a local `seedApifyPrerequisites`, or calls `seedApifyPrerequisites` without an allocated `TestFixtureScope` from `seed/fkapi/tests/fixture-scope.ts`. Prevents repeating the KIT-22 checker fail (order-dependent unique-constraint collisions when tests share one DB pool). Tighten only.
