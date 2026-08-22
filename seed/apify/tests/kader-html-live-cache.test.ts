@@ -49,8 +49,7 @@ describe("wrapFetchHtmlWithKaderCache", () => {
   it("writes HTML to disk and avoids a second network fetch in the same process", async () => {
     const cacheDir = await mkdtemp(path.join(tmpdir(), "kader-cache-"));
     const cache = createKaderHtmlLiveCache(cacheDir);
-    const url =
-      "https://www.transfermarkt.com/-/kader/verein/190/saison_id/2015/plus/1";
+    const url = "https://www.transfermarkt.com/-/kader/verein/190/saison_id/2015/plus/1";
     let networkCalls = 0;
 
     const fetchHtml = wrapFetchHtmlWithKaderCache(async () => {

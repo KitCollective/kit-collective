@@ -12,6 +12,7 @@ import type {
   FetchClubSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
+import { createKaderHtmlLiveCache, wrapFetchHtmlWithKaderCache } from "./kader-html-live-cache.js";
 import {
   type KaderParseWarning,
   parseCompetitionSeasonHtml,
@@ -19,10 +20,6 @@ import {
   parsePlayerProfileHtml,
 } from "./kader-html-parser.js";
 import { createKaderHtmlStore, type KaderHtmlStore } from "./kader-html-store.js";
-import {
-  createKaderHtmlLiveCache,
-  wrapFetchHtmlWithKaderCache,
-} from "./kader-html-live-cache.js";
 import { labelToStartYear } from "./season-label.js";
 import { resolveProfiles } from "./squad-profile-hop.js";
 import { createTransfermarktRateLimitGuard } from "./transfermarkt-rate-limit.js";

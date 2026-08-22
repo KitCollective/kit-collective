@@ -15,12 +15,12 @@ export {
   createKaderFetchAdapter,
   TransfermarktHttpError,
 } from "./fetch/kader-fetch-adapter.js";
+export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
 export {
   createTransfermarktRateLimitGuard,
   DEFAULT_TRANSFERMARKT_RATE_LIMIT_STOP_AFTER,
   TransfermarktCircuitOpenError,
 } from "./fetch/transfermarkt-rate-limit.js";
-export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
 export { parseLane, resolveDatabaseUrl } from "./lane.js";
 export { mapFacts } from "./map/index.js";
 export { normalize, stripForbiddenFields } from "./normalize/index.js";
