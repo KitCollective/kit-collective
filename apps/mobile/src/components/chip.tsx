@@ -5,12 +5,19 @@ type ChipProps = {
   label: string;
   selected?: boolean;
   onPress: () => void;
+  /** Single-select groups use radio; multi-select uses button (design-system Chip). */
+  accessibilityRole?: "button" | "radio";
 };
 
-export function Chip({ label, selected = false, onPress }: ChipProps) {
+export function Chip({
+  label,
+  selected = false,
+  onPress,
+  accessibilityRole = "button",
+}: ChipProps) {
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={accessibilityRole}
       accessibilityState={{ selected }}
       onPress={onPress}
       style={({ pressed }) => [

@@ -64,6 +64,13 @@ export type JerseyCondition = (typeof JERSEY_CONDITIONS)[number];
 export const PHOTO_ROLES = ["front", "back", "label"] as const;
 export type PhotoRole = (typeof PHOTO_ROLES)[number];
 
+/** Danish labels for photo role slots (UI only). */
+export const PHOTO_ROLE_LABELS_DA: Record<PhotoRole, string> = {
+  front: "Forside",
+  back: "Bagside",
+  label: "Mærke",
+};
+
 export const PHOTO_SOURCES = ["gallery", "camera"] as const;
 export type PhotoSource = (typeof PHOTO_SOURCES)[number];
 

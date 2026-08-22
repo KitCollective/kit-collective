@@ -9,26 +9,43 @@ import {
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
   type KitType,
+  PHOTO_ROLES,
+  type PhotoRole,
 } from "@kit/domain";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
+import { PhotoSlot } from "@/components/photo-slot";
 import { Button } from "@/components/ui";
-import { color, radius, space, type } from "@/theme/tokens";
+import { color, space, type } from "@/theme/tokens";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 
 type LocalPhoto = {
   uri: string;
   base64: string;
-  role: "front" | "back" | "label";
+  role: PhotoRole;
 };
+
+type PhotoSlots = Record<PhotoRole, LocalPhoto | null>;
+
+const EMPTY_PHOTO_SLOTS: PhotoSlots = {
+  front: null,
+  back: null,
+  label: null,
+};
+
+function filledPhotos(slots: PhotoSlots): LocalPhoto[] {
+  return PHOTO_ROLES.map((role) => slots[role]).filter(
+    (photo): photo is LocalPhoto => photo !== null,
+  );
+}
 
 export default function AddScreen() {
   const router = useRouter();
@@ -40,7 +57,7 @@ export default function AddScreen() {
   const [seasonResults, setSeasonResults] = useState<CatalogPickerItem[]>([]);
   const [selectedClub, setSelectedClub] = useState<CatalogPickerItem | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<CatalogPickerItem | null>(null);
-  const [photos, setPhotos] = useState<LocalPhoto[]>([]);
+  const [photos, setPhotos] = useState<PhotoSlots>(EMPTY_PHOTO_SLOTS);
   const [kitType, setKitType] = useState<KitType>("home");
   const [size, setSize] = useState<JerseySize>("m");
   const [condition, setCondition] = useState<JerseyCondition>("used");
@@ -92,6 +109,35 @@ export default function AddScreen() {
     return () => clearTimeout(handle);
   }, [clubQuery, clubSheetOpen, runClubSearch]);
 
+  const pickPhotoForRole = async (role: PhotoRole) => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: false,
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (result.canceled || !result.assets[0]?.base64) {
+      return;
+    }
+
+    const asset = result.assets[0];
+
+    setPhotos((current) => ({
+      ...current,
+      [role]: {
+        uri: asset.uri,
+        base64: asset.base64,
+        role,
+      },
+    }));
+  };
+
   const pickGalleryPhotos = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -109,23 +155,25 @@ export default function AddScreen() {
       return;
     }
 
-    const roles: LocalPhoto["role"][] = ["front", "back", "label"];
-    const nextPhotos: LocalPhoto[] = [];
+    const nextSlots = { ...photos };
+    let roleIndex = 0;
 
-    for (const [index, asset] of result.assets.entries()) {
-      if (!asset.base64) {
+    for (const asset of result.assets) {
+      if (!asset.base64 || roleIndex >= PHOTO_ROLES.length) {
         continue;
       }
 
-      nextPhotos.push({
+      const role = PHOTO_ROLES[roleIndex];
+      nextSlots[role] = {
         uri: asset.uri,
         base64: asset.base64,
-        role: roles[index] ?? "front",
-      });
+        role,
+      };
+      roleIndex += 1;
     }
 
-    if (nextPhotos.length > 0) {
-      setPhotos(nextPhotos);
+    if (roleIndex > 0) {
+      setPhotos(nextSlots);
     }
   };
 
@@ -158,10 +206,11 @@ export default function AddScreen() {
     }
   };
 
-  const canSave = accessToken && selectedClub && selectedSeason && photos.length > 0 && !saving;
+  const photoList = filledPhotos(photos);
+  const canSave = accessToken && selectedClub && selectedSeason && photoList.length > 0 && !saving;
 
   const handleSave = async () => {
-    if (!accessToken || !selectedClub || !selectedSeason || photos.length === 0) {
+    if (!accessToken || !selectedClub || !selectedSeason || photoList.length === 0) {
       return;
     }
 
@@ -176,7 +225,7 @@ export default function AddScreen() {
         type: kitType,
         size,
         condition,
-        photos: photos.map((photo) => ({
+        photos: photoList.map((photo) => ({
           role: photo.role,
           source: "gallery",
           contentBase64: photo.base64,
@@ -206,15 +255,19 @@ export default function AddScreen() {
             variant="secondary"
             onPress={() => void pickGalleryPhotos()}
           />
-          {photos.length > 0 ? (
-            <View style={styles.photoRow}>
-              {photos.map((photo) => (
-                <Image key={photo.uri} source={{ uri: photo.uri }} style={styles.photoThumb} />
-              ))}
-            </View>
-          ) : (
+          <View style={styles.photoRow}>
+            {PHOTO_ROLES.map((role) => (
+              <PhotoSlot
+                key={role}
+                role={role}
+                uri={photos[role]?.uri}
+                onPress={() => void pickPhotoForRole(role)}
+              />
+            ))}
+          </View>
+          {photoList.length === 0 ? (
             <Text style={styles.helper}>Mindst ét foto er påkrævet.</Text>
-          )}
+          ) : null}
         </View>
 
         {catalogMiss && !clubSheetOpen ? (
@@ -253,6 +306,7 @@ export default function AddScreen() {
                 key={value}
                 label={KIT_TYPE_LABELS_DA[value]}
                 selected={kitType === value}
+                accessibilityRole="radio"
                 onPress={() => setKitType(value)}
               />
             ))}
@@ -267,6 +321,7 @@ export default function AddScreen() {
                 key={value}
                 label={JERSEY_SIZE_LABELS_DA[value]}
                 selected={size === value}
+                accessibilityRole="radio"
                 onPress={() => setSize(value)}
               />
             ))}
@@ -281,6 +336,7 @@ export default function AddScreen() {
                 key={value}
                 label={JERSEY_CONDITION_LABELS_DA[value]}
                 selected={condition === value}
+                accessibilityRole="radio"
                 onPress={() => setCondition(value)}
               />
             ))}
@@ -420,12 +476,6 @@ const styles = StyleSheet.create({
   photoRow: {
     flexDirection: "row",
     gap: space.gapSm,
-  },
-  photoThumb: {
-    width: 72,
-    height: 90,
-    borderRadius: radius.md,
-    backgroundColor: color.fillSecondary,
   },
   chipRow: {
     flexDirection: "row",

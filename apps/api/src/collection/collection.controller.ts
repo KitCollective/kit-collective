@@ -1,16 +1,16 @@
 import type { LabelLocale } from "@kit/domain";
 import {
+  Body,
   Controller,
   Get,
   Headers,
   HttpCode,
   Param,
   Post,
-  Req,
   Res,
   UseGuards,
 } from "@nestjs/common";
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyReply } from "fastify";
 import { CurrentUser } from "../identity/current-user.decorator.js";
 import type { JwtPayload } from "../identity/identity.service.js";
 import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
@@ -46,10 +46,10 @@ export class CollectionController {
   @UseGuards(JwtAuthGuard)
   saveJersey(
     @CurrentUser() user: JwtPayload,
-    @Req() request: FastifyRequest,
+    @Body() body: unknown,
     @Headers("accept-language") acceptLanguage?: string,
   ) {
-    return this.collectionService.saveJersey(user.sub, request.body, resolveLocale(acceptLanguage));
+    return this.collectionService.saveJersey(user.sub, body, resolveLocale(acceptLanguage));
   }
 
   @Get("collection/photos/:photoId")
