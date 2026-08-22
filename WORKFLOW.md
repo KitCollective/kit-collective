@@ -78,17 +78,17 @@ Lanes come from `lanes` in factory config.
 7. Out of scope → `/signal-up`. Cap `agent.signalUpCapPerRun`. Never expand the PR except ratchet paths required by `### Review feedback` (`docs/agents/write-scope.md`).
 8. Open or update a PR **into the integration lane**. Attach the PR URL on the issue.
 9. Upload screenshots/recordings from the VM to the Linear issue. Comment. Link under workpad `### Evidence`.
-10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph; wait for **all** required GitHub checks (including image/deploy smokes); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff. On resume, fix the **class**, not only the cited file.
+10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph plus typecheck of packages whose src or tests you edited; wait for **all** required GitHub checks (pending or red → do not flip, including image/deploy smokes); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff; spawn the UI/layout helper when the issue cites the design lock; every What to build clause has Validation or Evidence. On resume, fix the **class**, not only the cited file.
 11. Clear addressed `### Review feedback`. Move to `In Review` only after the gate. Do not merge. Do not move to `Done`.
 
 ## Checker run
 
 Wakes when status becomes `In Review`. Judge only. No feature coding.
 
-Every pass is a **complete** review of the current diff, not a delta against last `### Review feedback`. Findings that existed in the first PR and are only reported on fail #3+ are a checker miss — dump the whole lock set in fail #1.
+Every pass is a **complete** review of the current diff, not a delta against last `### Review feedback`. Findings that existed in the first PR and are only reported on fail #3+ are a checker miss — dump the whole lock set in fail #1. Spec source is the whole issue body (What to build + AC). A red CI job is not a Spec-clean license.
 
 1. `/code-review` (Standards + Spec) against the attached PR. Sub-agents list **every** hard finding; do not stop at the first three. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis.
-2. GitHub CI/CD on that PR: read **all** required check runs (not only `test` — image/deploy smokes count). `gh pr view --json mergeable` must be `MERGEABLE`. Pending required checks → wait; stay in `In Review`. Red or failed required checks, or `CONFLICTING` → fail.
+2. GitHub CI/CD on that PR: read **all** required check runs (not only `test` — image/deploy smokes count). `gh pr view --json mergeable` must be `MERGEABLE`. Pending required checks → wait; stay in `In Review`. Do **not** fail early on Standards while checks are still running. Red or failed required checks, or `CONFLICTING` → fail, and still include every Spec/Standards hard miss in the same feedback.
 3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Ready for merge`.
 4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). If the miss is a new required env, “done” includes every workflow that boots that process. Linear comment + attachments. That status change wakes implement. Do not start implement yourself.
 

@@ -26,9 +26,17 @@ Before the verdict, walk this lock set (skip a row only when the slice cannot to
 5. Mergeability — `gh pr view --json mergeable` is `MERGEABLE` (not `CONFLICTING`)
 6. **All** required GitHub checks, including image/deploy smokes — not only the job named `test`
 
+Spec source is the **whole issue body** (What to build + acceptance criteria + workpad), not the AC checkboxes alone. A clause in What to build that has no AC line is still in scope.
+
 If you require a new process env, “what done looks like” includes every workflow that boots that process, not only the file that failed this run.
 
 Ratchet paths required on a second fail of the same class are **not** a write-scope miss (`docs/agents/write-scope.md`).
+
+## CI-red is not Spec-clean
+
+Walk the **full** lock set even when required checks are red. A lint/typecheck fail does not license “Spec axis is clean”. Never write that sentence unless the lock walk finished with zero hard Spec misses.
+
+Do not move status, and do not start the fail write-up, while any required check is **pending** — including when you already see a Standards miss. Wait until checks finish, then dump CI + Spec + Standards in **one** `### Review feedback`.
 
 ## GitHub CI/CD
 

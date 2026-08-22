@@ -34,11 +34,12 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 Do not move to `In Review` until all of these are true. Record the commands under workpad `### Validation`.
 
 1. **Locks** — if the slice has UI, read `docs/design-system.md` (tokens, type roles, tab-bar anatomy, component inventory). If it has Nest `/v1` or auth, read `{paths.specs}/Architecture/tech-stack.md` (module boundaries + auth). Flag gaps; do not invent.
-2. **Helpers** — spawn every matching helper (`/tdd`). A slice that touches Nest HTTP and Expo screens whose workpad says `(none)` is a process miss — matching helpers must run before the PR.
+2. **Helpers** — spawn every matching helper (`/tdd`). A slice that touches Nest HTTP and Expo screens whose workpad says `(none)` is a process miss. If the issue cites `docs/design-system.md` or named lock components (Search, Sheet, Mark, Banner, Tab bar, Empty state), the helper whose description matches layout / visual hierarchy / UI copy must run — nest+expo alone is not enough.
 3. **Lane** — `git fetch origin <lanes.integration>` and rebase or merge so `gh pr view --json mergeable` is `MERGEABLE`. Behind the lane is not shippable.
-4. **Tests** — full graph, not only the files you touched.
-5. **CI** — wait until **every** required GitHub check is green or skipped-by-design. Image/deploy smokes count. Pending → stay on the branch; do not flip status.
+4. **Tests** — full graph, not only the files you touched. Typecheck every package whose src **or tests** you edited (`pnpm --filter <pkg> typecheck`), not only the client.
+5. **CI** — wait until **every** required GitHub check is green or skipped-by-design. Image/deploy smokes count. Pending **or red** → stay on the branch; do not flip status.
 6. **Env class** — if you added a required process env (fail-fast at boot), grep `.github/workflows/**` for every job that `docker run`s or otherwise boots that process, and set the var there too.
+7. **AC evidence** — every acceptance criterion (and every What to build clause) has a Validation command or Evidence screenshot. Ticking the workpad box is not evidence. Spec source is the whole issue body, not AC alone.
 
 ## Domain helpers
 
