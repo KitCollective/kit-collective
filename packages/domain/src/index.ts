@@ -105,4 +105,3 @@ export const JERSEY_CONDITION_LABELS_DA: Record<JerseyCondition, string> = {
   used: "Brugt",
   worn: "Slidt",
 };
-
