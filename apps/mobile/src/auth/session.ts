@@ -1,4 +1,4 @@
-import { identitySessionSchema, type IdentitySession } from "@kit/api-contract";
+import { type IdentitySession, identitySessionSchema } from "@kit/api-contract";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
