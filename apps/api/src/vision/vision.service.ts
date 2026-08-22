@@ -69,21 +69,25 @@ export class VisionService {
       status = "failed";
     }
 
-    await this.db
-      .update(visionLog)
-      .set({
-        status,
-        suggestedClubId: result?.clubId ?? null,
-        suggestedSeasonId: result?.seasonId ?? null,
-        suggestedCatalogKitId: result?.catalogKitId ?? null,
-        suggestedType: result?.type ?? null,
-        visionRaw: result?.visionRaw ?? null,
-        confidences: result?.confidences ? serializeConfidences(result.confidences) : null,
-        latencyMs: result?.latencyMs ?? null,
-        model: result?.model ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(visionLog.id, payload.jobId));
+    try {
+      await this.db
+        .update(visionLog)
+        .set({
+          status,
+          suggestedClubId: result?.clubId ?? null,
+          suggestedSeasonId: result?.seasonId ?? null,
+          suggestedCatalogKitId: result?.catalogKitId ?? null,
+          suggestedType: result?.type ?? null,
+          visionRaw: result?.visionRaw ?? null,
+          confidences: result?.confidences ? serializeConfidences(result.confidences) : null,
+          latencyMs: result?.latencyMs ?? null,
+          model: result?.model ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(visionLog.id, payload.jobId));
+    } catch {
+      // Fail open — a late or orphaned worker must not reject the Save path.
+    }
   }
 
   async findActiveJobForDraft(userId: string, draftId: string): Promise<string | null> {

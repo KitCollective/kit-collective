@@ -20,7 +20,9 @@ export class VisionQueueService {
     }
 
     setImmediate(() => {
-      void this.visionService.processJob(payload);
+      void this.visionService.processJob(payload).catch(() => {
+        // Vision is fail-open — background inference must not crash the process.
+      });
     });
   }
 
