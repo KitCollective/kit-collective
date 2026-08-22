@@ -69,12 +69,12 @@ export default function CollectionScreen() {
         <Text style={styles.title}>Samling</Text>
         <EmptyState
           title="Ingen trøjer endnu"
-          body="Tilføj din første trøje for at starte samlingen."
+          body="Tilføj den første fra galleriet."
           action={
             <Button
               label="Tilføj trøje"
               variant="primary"
-              onPress={() => router.push("/(tabs)/add")}
+              onPress={() => router.push("/(tabs)/add/capture")}
             />
           }
         />

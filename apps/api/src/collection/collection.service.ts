@@ -302,7 +302,9 @@ export class CollectionService {
     }
 
     const jerseys = await this.listJerseys(userId);
-    return jerseys.jerseys.find((jersey) => jersey.id === draft.userJerseyId) ?? null;
+    return (
+      jerseys.jerseys.find((jersey: CollectionJersey) => jersey.id === draft.userJerseyId) ?? null
+    );
   }
 
   private async resolveClubLabels(

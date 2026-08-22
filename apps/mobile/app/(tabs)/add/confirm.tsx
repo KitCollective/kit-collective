@@ -13,45 +13,36 @@ import {
   PHOTO_ROLES,
   type PhotoRole,
 } from "@kit/domain";
-import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/vision";
 import { useAuth } from "@/auth/AuthProvider";
+import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
+import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
+import { PostSaveSheet } from "@/components/post-save-sheet";
 import { Button } from "@/components/ui";
+import {
+  deleteDraft,
+  loadDraft,
+  updateDraftFields,
+  upsertDraftPhoto,
+} from "@/drafts/jerseyDraftStore";
+import { markJerseySaved } from "@/session/addSession";
 import { color, motion, space, type } from "@/theme/tokens";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 
-type LocalPhoto = {
-  uri: string;
-  base64: string;
-  role: PhotoRole;
-};
-
-type PhotoSlots = Record<PhotoRole, LocalPhoto | null>;
-
-const EMPTY_PHOTO_SLOTS: PhotoSlots = {
-  front: null,
-  back: null,
-  label: null,
-};
-
-function filledPhotos(slots: PhotoSlots): LocalPhoto[] {
-  return PHOTO_ROLES.map((role) => slots[role]).filter(
-    (photo): photo is LocalPhoto => photo !== null,
-  );
-}
-
-export default function AddScreen() {
+export default function ConfirmScreen() {
   const router = useRouter();
+  const { draftId } = useLocalSearchParams<{ draftId: string }>();
   const { accessToken } = useAuth();
+
   const [clubSheetOpen, setClubSheetOpen] = useState(false);
   const [seasonSheetOpen, setSeasonSheetOpen] = useState(false);
   const [clubQuery, setClubQuery] = useState("");
@@ -59,16 +50,23 @@ export default function AddScreen() {
   const [seasonResults, setSeasonResults] = useState<CatalogPickerItem[]>([]);
   const [selectedClub, setSelectedClub] = useState<CatalogPickerItem | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<CatalogPickerItem | null>(null);
-  const [photos, setPhotos] = useState<PhotoSlots>(EMPTY_PHOTO_SLOTS);
   const [kitType, setKitType] = useState<KitType>("home");
   const [size, setSize] = useState<JerseySize>("m");
   const [condition, setCondition] = useState<JerseyCondition>("used");
+  const [photoUris, setPhotoUris] = useState<Record<PhotoRole, string | undefined>>({
+    front: undefined,
+    back: undefined,
+    label: undefined,
+  });
   const [searching, setSearching] = useState(false);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
   const [saving, setSaving] = useState(false);
   const [catalogMiss, setCatalogMiss] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [postSaveOpen, setPostSaveOpen] = useState(false);
+  const [savedClub, setSavedClub] = useState<CatalogPickerItem | null>(null);
+  const [savedSeasonLabel, setSavedSeasonLabel] = useState<string | null>(null);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const [visionPolling, setVisionPolling] = useState(false);
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
@@ -77,6 +75,37 @@ export default function AddScreen() {
   const seasonManuallySet = useRef(false);
   const kitTypeManuallySet = useRef(false);
   const appliedVisionJobId = useRef<string | null>(null);
+  const visionStartAttempted = useRef(false);
+
+  useEffect(() => {
+    if (!draftId) {
+      router.replace("/(tabs)/add/capture");
+      return;
+    }
+
+    try {
+      const draft = loadDraft(draftId);
+      setKitType(draft.kitType);
+      setSize(draft.size);
+      setCondition(draft.condition);
+
+      const uris: Record<PhotoRole, string | undefined> = {
+        front: undefined,
+        back: undefined,
+        label: undefined,
+      };
+      for (const photo of draft.photos) {
+        uris[photo.role] = photo.uri;
+      }
+      setPhotoUris(uris);
+
+      if (draft.clubId && draft.clubLabel) {
+        setSelectedClub({ id: draft.clubId, label: draft.clubLabel });
+      }
+    } catch {
+      router.replace("/(tabs)/add/capture");
+    }
+  }, [draftId, router]);
 
   const runClubSearch = useCallback(
     async (query: string) => {
@@ -119,122 +148,21 @@ export default function AddScreen() {
     return () => clearTimeout(handle);
   }, [clubQuery, clubSheetOpen, runClubSearch]);
 
-  const pickPhotoForRole = async (role: PhotoRole) => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
+  const refreshPhotosFromDraft = useCallback(() => {
+    if (!draftId) {
       return;
     }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: false,
-      quality: 0.8,
-      base64: true,
-    });
-
-    if (result.canceled || !result.assets[0]?.base64) {
-      return;
+    const draft = loadDraft(draftId);
+    const uris: Record<PhotoRole, string | undefined> = {
+      front: undefined,
+      back: undefined,
+      label: undefined,
+    };
+    for (const photo of draft.photos) {
+      uris[photo.role] = photo.uri;
     }
-
-    const asset = result.assets[0];
-
-    setPhotos((current) => ({
-      ...current,
-      [role]: {
-        uri: asset.uri,
-        base64: asset.base64,
-        role,
-      },
-    }));
-
-    const hadPhotos = filledPhotos(photos).length > 0;
-    if (!hadPhotos && asset.base64) {
-      void maybeStartVision({
-        uri: asset.uri,
-        base64: asset.base64,
-        role,
-      });
-    }
-  };
-
-  const pickGalleryPhotos = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: true,
-      quality: 0.8,
-      base64: true,
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    const nextSlots = { ...photos };
-    let roleIndex = 0;
-
-    for (const asset of result.assets) {
-      if (!asset.base64 || roleIndex >= PHOTO_ROLES.length) {
-        continue;
-      }
-
-      const role = PHOTO_ROLES[roleIndex];
-      if (!role) {
-        continue;
-      }
-
-      nextSlots[role] = {
-        uri: asset.uri,
-        base64: asset.base64,
-        role,
-      };
-      roleIndex += 1;
-    }
-
-    if (roleIndex > 0) {
-      setPhotos(nextSlots);
-      if (filledPhotos(photos).length === 0 && nextSlots[PHOTO_ROLES[0]]) {
-        const first = nextSlots[PHOTO_ROLES[0]];
-        if (first) {
-          void maybeStartVision(first);
-        }
-      }
-    }
-  };
-
-  const openClubSheet = () => {
-    setClubQuery("");
-    setClubResults([]);
-    setCatalogMiss(false);
-    setSearchError(false);
-    setClubSheetOpen(true);
-  };
-
-  const selectClub = async (club: CatalogPickerItem) => {
-    clubManuallySet.current = true;
-    setSelectedClub(club);
-    setSelectedSeason(null);
-    setClubSheetOpen(false);
-    setSeasonSheetOpen(true);
-
-    if (!accessToken) {
-      return;
-    }
-
-    setLoadingSeasons(true);
-    try {
-      const response = await fetchClubSeasons(accessToken, club.id);
-      setSeasonResults(response.seasons);
-    } catch {
-      setSeasonResults([]);
-    } finally {
-      setLoadingSeasons(false);
-    }
-  };
+    setPhotoUris(uris);
+  }, [draftId]);
 
   const fadeInSuggestion = useCallback(() => {
     suggestionOpacity.setValue(0);
@@ -280,46 +208,18 @@ export default function AddScreen() {
     [accessToken, fadeInSuggestion],
   );
 
-  const photoList = filledPhotos(photos);
-
-  const applySuggestionBanner = async () => {
-    if (!visionSuggestion?.suggestions || !accessToken) {
-      return;
-    }
-
-    const suggestions = visionSuggestion.suggestions;
-    if (suggestions.clubId && suggestions.clubLabel) {
-      clubManuallySet.current = true;
-      setSelectedClub({ id: suggestions.clubId, label: suggestions.clubLabel });
-      setSelectedSeason(null);
-      const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
-      setSeasonResults(seasons.seasons);
-    }
-
-    if (suggestions.seasonId && suggestions.seasonLabel) {
-      seasonManuallySet.current = true;
-      setSelectedSeason({ id: suggestions.seasonId, label: suggestions.seasonLabel });
-    }
-
-    if (suggestions.type) {
-      kitTypeManuallySet.current = true;
-      setKitType(suggestions.type);
-    }
-
-    setVisionSuggestion(null);
-  };
-
-  const canSave = accessToken && selectedClub && selectedSeason && photoList.length > 0 && !saving;
-
   const maybeStartVision = useCallback(
-    async (photo: LocalPhoto) => {
-      if (!accessToken || visionJobId) {
+    async (role: PhotoRole, uri: string) => {
+      if (!accessToken || visionJobId || visionStartAttempted.current) {
         return;
       }
 
+      visionStartAttempted.current = true;
+
       try {
+        const contentBase64 = await readPhotoBase64(uri);
         const jobId = await startVisionSuggest(accessToken, {
-          photo: { role: photo.role, contentBase64: photo.base64 },
+          photo: { role, contentBase64 },
         });
         setVisionJobId(jobId);
         setVisionPolling(true);
@@ -329,6 +229,20 @@ export default function AddScreen() {
     },
     [accessToken, visionJobId],
   );
+
+  useEffect(() => {
+    if (!accessToken || !draftId || visionJobId || visionStartAttempted.current) {
+      return;
+    }
+
+    const draft = loadDraft(draftId);
+    const firstPhoto = draft.photos[0];
+    if (!firstPhoto) {
+      return;
+    }
+
+    void maybeStartVision(firstPhoto.role, firstPhoto.uri);
+  }, [accessToken, draftId, visionJobId, maybeStartVision]);
 
   useEffect(() => {
     if (!accessToken || !visionJobId || !visionPolling) {
@@ -371,8 +285,92 @@ export default function AddScreen() {
     };
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
+  const pickPhotoForRole = async (role: PhotoRole) => {
+    const hadPhotos = PHOTO_ROLES.some((photoRole) => photoUris[photoRole]);
+
+    const uris = await pickGalleryPhotos({
+      quality: captureQualityForRole(role),
+    });
+
+    if (!uris?.[0] || !draftId) {
+      return;
+    }
+
+    upsertDraftPhoto(draftId, role, uris[0], "gallery");
+    refreshPhotosFromDraft();
+
+    if (!hadPhotos) {
+      void maybeStartVision(role, uris[0]);
+    }
+  };
+
+  const openClubSheet = () => {
+    setClubQuery("");
+    setClubResults([]);
+    setCatalogMiss(false);
+    setSearchError(false);
+    setClubSheetOpen(true);
+  };
+
+  const selectClub = async (club: CatalogPickerItem) => {
+    clubManuallySet.current = true;
+    setSelectedClub(club);
+    setSelectedSeason(null);
+    setClubSheetOpen(false);
+    setSeasonSheetOpen(true);
+
+    if (draftId) {
+      updateDraftFields(draftId, { clubId: club.id, clubLabel: club.label, seasonId: null });
+    }
+
+    if (!accessToken) {
+      return;
+    }
+
+    setLoadingSeasons(true);
+    try {
+      const response = await fetchClubSeasons(accessToken, club.id);
+      setSeasonResults(response.seasons);
+    } catch {
+      setSeasonResults([]);
+    } finally {
+      setLoadingSeasons(false);
+    }
+  };
+
+  const photoList = PHOTO_ROLES.filter((role) => photoUris[role]);
+  const canSave =
+    accessToken && selectedClub && selectedSeason && photoList.length > 0 && !saving && draftId;
+
+  const applySuggestionBanner = async () => {
+    if (!visionSuggestion?.suggestions || !accessToken) {
+      return;
+    }
+
+    const suggestions = visionSuggestion.suggestions;
+    if (suggestions.clubId && suggestions.clubLabel) {
+      clubManuallySet.current = true;
+      setSelectedClub({ id: suggestions.clubId, label: suggestions.clubLabel });
+      setSelectedSeason(null);
+      const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
+      setSeasonResults(seasons.seasons);
+    }
+
+    if (suggestions.seasonId && suggestions.seasonLabel) {
+      seasonManuallySet.current = true;
+      setSelectedSeason({ id: suggestions.seasonId, label: suggestions.seasonLabel });
+    }
+
+    if (suggestions.type) {
+      kitTypeManuallySet.current = true;
+      setKitType(suggestions.type);
+    }
+
+    setVisionSuggestion(null);
+  };
+
   const handleSave = async () => {
-    if (!accessToken || !selectedClub || !selectedSeason || photoList.length === 0) {
+    if (!accessToken || !selectedClub || !selectedSeason || photoList.length === 0 || !draftId) {
       return;
     }
 
@@ -380,7 +378,26 @@ export default function AddScreen() {
     setSaveError(false);
 
     try {
+      const draft = loadDraft(draftId);
+      const photoPayload = await Promise.all(
+        draft.photos.map(async (photo) => ({
+          role: photo.role,
+          source: photo.source,
+          contentBase64: await readPhotoBase64(photo.uri),
+        })),
+      );
+
+      updateDraftFields(draftId, {
+        kitType,
+        size,
+        condition,
+        clubId: selectedClub.id,
+        clubLabel: selectedClub.label,
+        seasonId: selectedSeason.id,
+      });
+
       const response = await saveUserJersey(accessToken, {
+        draftId,
         clubId: selectedClub.id,
         seasonId: selectedSeason.id,
         catalogKitId: null,
@@ -388,15 +405,11 @@ export default function AddScreen() {
         size,
         condition,
         visionJobId: visionJobId ?? undefined,
-        photos: photoList.map((photo) => ({
-          role: photo.role,
-          source: "gallery",
-          contentBase64: photo.base64,
-        })),
+        photos: photoPayload,
       });
 
       const jobIdForLog = response.visionJobId ?? visionJobId;
-      if (jobIdForLog && accessToken) {
+      if (jobIdForLog) {
         try {
           const job = await fetchVisionJob(accessToken, jobIdForLog);
           const resolved = resolveVisionSaveAction({
@@ -420,7 +433,11 @@ export default function AddScreen() {
         }
       }
 
-      router.replace("/(tabs)/collection");
+      markJerseySaved();
+      deleteDraft(draftId);
+      setSavedClub(selectedClub);
+      setSavedSeasonLabel(selectedSeason.label);
+      setPostSaveOpen(true);
     } catch {
       setSaveError(true);
     } finally {
@@ -428,13 +445,20 @@ export default function AddScreen() {
     }
   };
 
+  const handlePostSaveDismiss = () => {
+    setPostSaveOpen(false);
+    router.replace("/(tabs)/collection");
+  };
+
+  if (!draftId) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Bekræft og gem</Text>
-        <Text style={styles.body}>
-          Vælg foto, klub, sæson og detaljer. Gem kræver mindst ét foto.
-        </Text>
+        <Text style={styles.body}>Vælg klub, sæson og detaljer.</Text>
 
         {visionPolling ? <Text style={styles.helper}>Analyserer foto…</Text> : null}
 
@@ -461,24 +485,31 @@ export default function AddScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Fotos</Text>
-          <Button
-            label="Vælg fra galleri"
-            variant="secondary"
-            onPress={() => void pickGalleryPhotos()}
-          />
           <View style={styles.photoRow}>
             {PHOTO_ROLES.map((role) => (
               <PhotoSlot
                 key={role}
                 role={role}
-                uri={photos[role]?.uri}
+                uri={photoUris[role]}
                 onPress={() => void pickPhotoForRole(role)}
               />
             ))}
           </View>
           {photoList.length === 0 ? (
             <Text style={styles.helper}>Mindst ét foto er påkrævet.</Text>
+          ) : photoList.length < PHOTO_ROLES.length ? (
+            <Text style={styles.helper}>3 fotos anbefales — mærkefoto gør det lettere senere.</Text>
           ) : null}
+          <Button
+            label="Tilføj fra galleri"
+            variant="tertiary"
+            onPress={() => {
+              const emptyRole = PHOTO_ROLES.find((role) => !photoUris[role]);
+              if (emptyRole) {
+                void pickPhotoForRole(emptyRole);
+              }
+            }}
+          />
         </View>
 
         {catalogMiss && !clubSheetOpen ? (
@@ -643,12 +674,22 @@ export default function AddScreen() {
                   seasonManuallySet.current = true;
                   setSelectedSeason(season);
                   setSeasonSheetOpen(false);
+                  if (draftId) {
+                    updateDraftFields(draftId, { seasonId: season.id });
+                  }
                 }}
               />
             ))}
           </ScrollView>
         )}
       </Sheet>
+
+      <PostSaveSheet
+        visible={postSaveOpen}
+        savedClub={savedClub}
+        savedSeasonLabel={savedSeasonLabel}
+        onDismiss={handlePostSaveDismiss}
+      />
     </View>
   );
 }
