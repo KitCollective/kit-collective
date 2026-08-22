@@ -164,6 +164,10 @@ export default function AddScreen() {
       }
 
       const role = PHOTO_ROLES[roleIndex];
+      if (!role) {
+        continue;
+      }
+
       nextSlots[role] = {
         uri: asset.uri,
         base64: asset.base64,
