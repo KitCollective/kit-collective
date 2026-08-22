@@ -29,6 +29,7 @@
     "react-native-web": "~0.19.13"
   },
   "devDependencies": {
+    "@types/node": "^22.10.5",
     "@types/react": "~18.3.12",
     "babel-plugin-module-resolver": "^5.0.2",
     "typescript": "^5.7.3"
