@@ -35,6 +35,7 @@ export { normalize, stripForbiddenFields } from "./normalize/index.js";
 export {
   assertSeedProxyAvailable,
   createProxyFetchHtml,
+  isDecodoSiteUnblockerProxy,
   type ProxyFetchHtml,
   resolveSeedProxyConfig,
   type SeedProxyConfig,
