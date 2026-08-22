@@ -1,14 +1,15 @@
-import { Link } from "expo-router";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/auth/AuthProvider";
-import { Button } from "@/components/ui";
+import { Button, ButtonDock } from "@/components/ui";
 import { color, radius, space, type } from "@/theme/tokens";
 
 // Design-system gap (KIT-23): login/register screens are not in docs/design-system.md
 // Scope §Included or §Deferred. Layout uses locked tokens only; no new primitives.
 
 export default function RegisterScreen() {
+  const router = useRouter();
   const { signUp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +33,7 @@ export default function RegisterScreen() {
     <View style={styles.screen}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.form}
+        style={styles.body}
       >
         <Text style={styles.title}>Opret konto</Text>
         <Text style={styles.subtitle}>Gem dine trøjer ét sted.</Text>
@@ -65,19 +66,22 @@ export default function RegisterScreen() {
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <View style={styles.actions}>
-          <Button
-            label="Opret konto"
-            variant="primary"
-            onPress={() => void handleSubmit()}
-            loading={loading}
-          />
-          <Link href="/login" style={styles.link}>
-            Har du allerede en konto?
-          </Link>
-        </View>
       </KeyboardAvoidingView>
+
+      <ButtonDock>
+        <Button
+          label="Opret konto"
+          variant="primary"
+          width="fill"
+          onPress={() => void handleSubmit()}
+          loading={loading}
+        />
+        <Button
+          label="Har du allerede en konto?"
+          variant="tertiary"
+          onPress={() => router.push("/login")}
+        />
+      </ButtonDock>
     </View>
   );
 }
@@ -86,12 +90,12 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: color.canvas,
-    paddingHorizontal: space.insetLg,
-    paddingTop: space.insetLg,
   },
-  form: {
+  body: {
     flex: 1,
     gap: space.gapMd,
+    paddingHorizontal: space.insetLg,
+    paddingTop: space.insetLg,
   },
   title: {
     fontSize: type.title.fontSize,
@@ -129,15 +133,5 @@ const styles = StyleSheet.create({
     fontSize: type.caption.fontSize,
     lineHeight: type.caption.lineHeight,
     marginTop: space.gapSm,
-  },
-  actions: {
-    marginTop: space.insetLg,
-    gap: space.gapMd,
-    alignItems: "center",
-  },
-  link: {
-    color: color.contentPrimary,
-    fontSize: type.body.fontSize,
-    textDecorationLine: "underline",
   },
 });

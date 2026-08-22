@@ -156,6 +156,7 @@ Status: `locked`
 **Primitive values** (light):
 | Primitive | Value |
 | --- | --- |
+| `black` | `#000000` |
 | `gray.0` | `#FFFFFF` |
 | `gray.50` | `#F4F4F4` |
 | `gray.100` | `#E8E8E8` |
@@ -169,7 +170,7 @@ Status: `locked`
 | `identity.wash.start` | `#00D4F5` |
 | `identity.wash.end` | `#6B2FFF` |
 
-**Semantic aliases (light)**: `canvas` → `gray.0`; `surface` → `gray.0`; `surface.raised` → `gray.0`; `content.primary` → `gray.900`; `content.secondary` → `gray.600`; `content.muted` → `gray.400`; `content.inverse` → `gray.0`; `border.subtle` → `gray.100`; `border.strong` → `gray.900`; `fill.primary` → `gray.900`; `fill.secondary` → `gray.50`; `scrim` → `gray.900` at 40% opacity.
+**Semantic aliases (light)**: `canvas` → `gray.0`; `surface` → `gray.0`; `surface.raised` → `gray.0`; `content.primary` → `black`; `content.secondary` → `gray.600`; `content.muted` → `gray.400`; `content.inverse` → `gray.0`; `border.subtle` → `gray.100`; `border.strong` → `gray.900`; `fill.primary` → `black`; `fill.secondary` → `gray.50`; `scrim` → `black` at 40% opacity.
 
 **Semantic aliases (dark)**: `canvas` → `gray.900`; `surface` → `#1A1A1A`; `surface.raised` → `#2A2A2A`; `content.primary` → `gray.0`; `content.secondary` → `#C2C2C2`; `content.muted` → `#8A8A8A`; `content.inverse` → `gray.900`; `border.subtle` → `#333333`; `border.strong` → `gray.0`; `fill.primary` → `gray.0`; `fill.secondary` → `#2A2A2A`; `scrim` → `gray.900` at 60% opacity. Status primitives stay the same hues; check AA on the dark surface and flag if a control fails.
 
@@ -187,18 +188,18 @@ Status: `locked`
 | Token | Value | Use |
 | --- | --- | --- |
 | `radius.xs` | 4px | Tiny nested tags only |
-| `radius.sm` | 8px | Nested surfaces inside a card; compact controls that are not pills |
+| `radius.sm` | 8px | Buttons; nested surfaces inside a card |
 | `radius.md` | 12px | Default cards, photo tiles, banners |
 | `radius.lg` | 16px | Sheets, dialogs, large containers |
-| `radius.pill` | 999px | Buttons, chips, search field |
+| `radius.pill` | 999px | Chips, search field |
 
-**Usage**: Photo tiles and collection cards use `radius.md`, not pill. Interactive elements that are not a card use `radius.pill`. Nested child radius shrinks one step (card `md` → nested `sm`).
+**Usage**: Photo tiles and collection cards use `radius.md`, not pill. Buttons use `radius.sm` (rectangular 8px), not pill. Chips and search use `radius.pill`. Nested child radius shrinks one step (card `md` → nested `sm`).
 
 **Relationships**: Layout clips the photo to the tile radius. Border follows the same radius.
 
 **Constraints**: Do not use 0px on interactive elements. Do not put `radius.pill` on a jersey photo tile.
 
-**Example** *(not a rule)*: A collection tile at `radius.md` containing a full-bleed photo; a **Save** button at `radius.pill`.
+**Example** *(not a rule)*: A collection tile at `radius.md` containing a full-bleed photo; a dock **Save** button at `radius.sm`.
 
 **Exceptions**: System sheets may use the platform’s own top-corner radius. Match `radius.lg` when we draw the sheet ourselves.
 
@@ -242,7 +243,7 @@ Status: `locked`
 | Screen | Full viewport plus safe-area insets |
 | Header | Title and search; not a marketing hero |
 | Body | Collection grid or confirm form |
-| Footer actions | Primary/secondary buttons for the current task |
+| Footer actions | Primary/secondary buttons for the current task; pinned **Button dock** at the bottom on login, register, confirm, and empty collection |
 | Tab bar | Collection / Add / (later) Wishlist |
 
 **Usage (mobile)**: Collection body is a **two-column** photo grid on phone. Jersey photos on tiles are cropped **4:5**. Caption under the photo: club + season (and type if needed). Search in the header. Filters are chips, not a sidebar. **Add** opens the photo flow (gallery-first on first session, camera-first on repeat), not the overview and not a marketplace compose screen. “Same club” vs “New jersey” is a choice after Save, not inherited identity on **New**.
@@ -395,12 +396,13 @@ Status: `locked` for foundations in this file. Component tokens are not used.
 | --- | --- | --- | --- |
 | `color.canvas` | Page background | gray.0 / gray.900 | mobile, web |
 | `color.surface` | Card / field | see Color | mobile, web |
-| `color.fill.primary` | Primary button | gray.900 / gray.0 | mobile, web |
+| `color.fill.primary` | Primary button | black / gray.0 | mobile, web |
 | `color.identity.wash` | Garnish gradient | start → end | mobile, web (empty, share header, thin rule, OG strip) |
 | `type.title` / `type.body` / `type.label` / `type.caption` | Type roles | system UI; see Typography | mobile, web |
 | `space.inset.md` / `space.gap.md` | Default padding / grid gap | 16px / 12px | mobile, web |
 | `radius.md` | Cards / photo tiles | 12px | mobile, web |
-| `radius.pill` | Buttons / chips / search | 999px | mobile, web |
+| `radius.sm` | Buttons | 8px | mobile, web |
+| `radius.pill` | Chips / search | 999px | mobile, web |
 | `elevation.card` | Flat tile | border only | mobile, web |
 | `elevation.overlay` | Sheet | scrim + raised surface | mobile |
 | `border.focus` | Focus ring | 2px fill.primary, 2px offset | mobile, web |
@@ -412,7 +414,7 @@ Flag missing context; do not invent tokens or values.
 
 Status: `locked` for the inventory below. A primitive not listed: **flag**. Do not invent components or variants.
 
-**Inventory (v1)**: Button, Icon button, Search field, Text field, Chip, Jersey tile, Mark, List row, Photo slot, Empty state, Sheet, Tab bar, Banner.
+**Inventory (v1)**: Button, Button dock, Icon button, Search field, Text field, Chip, Jersey tile, Mark, List row, Photo slot, Empty state, Sheet, Tab bar, Banner.
 
 **Deferred primitives**: Switch, checkbox, user avatar, paywall card, wishlist row, admin tables.
 
@@ -422,23 +424,45 @@ Status: `locked` for the inventory below. A primitive not listed: **flag**. Do n
 
 **Anatomy**: Label (required). Leading icon (optional). No subtitle inside the button.
 
-**Properties**: `variant`: `primary` | `secondary` | `tertiary` | `destructive`. `size`: `md` (default) | `sm`. `disabled`, `loading`.
+**Properties**: `variant`: `primary` | `secondary` | `tertiary` | `destructive`. `width`: `hug` (default) | `fill`. `size`: `md` (default) | `sm`. `disabled`, `loading`.
 
-**Variants**: `primary` = the one action that moves the task forward (`fill.primary`, `content.inverse`, `radius.pill`). `secondary` = alternative on the same surface (`fill.secondary` or outline `border.subtle` on `surface`). `tertiary` = low-emphasis, often inline (no fill). `destructive` = data-loss (`danger` fill, `content.inverse`). One `primary` per visible region.
+**Variants**: `primary` = the one action that moves the task forward (`fill.primary`, `content.inverse`, `radius.sm`). `secondary` = alternative on the same surface (`fill.secondary` or outline `border.subtle` on `surface`). `tertiary` = low-emphasis, often inline (no fill). `destructive` = data-loss (`danger` fill, `content.inverse`). One `primary` per visible region. Dock primaries use `width.fill` with min hit target ≥ 48×48 on `mobile`. Inline and banner actions stay `width.hug`.
 
 **States**: Rest, pressed, focus, disabled, loading (label stays; ignore a second submit).
 
 **Accessibility**: Visible label. Focus = `border.focus`. Disabled is not the only explanation — pair with helper text when Save is blocked. Hit target ≥ 44×44 on `mobile`. Contrast AA.
 
-**Composition**: Footer actions, empty-state action, inline in confirm. Destructive confirms in a Sheet when the cost is high.
+**Composition**: Footer actions (via **Button dock**), empty-state action, inline in confirm. Destructive confirms in a Sheet when the cost is high. Camera chrome and banner inline actions stay `width.hug` — not docked, not side-by-side primaries on phone.
 
 **Unsupported**: Two primaries in one region. Primary + destructive as equal side-by-side choices. `identity.wash` as button fill. Teal or cyan CTA.
 
-**Example** *(not a rule)*: Confirm footer: `primary` “Gem”, `tertiary` “Annuller”.
+**Example** *(not a rule)*: Confirm footer dock: `primary` “Gem” (`width.fill`), `tertiary` “Annuller” stacked below when present.
 
-**Code**: Unmapped until `apps/mobile` / `apps/web` exist. Flag; do not invent a host API.
+**Code**: `apps/mobile` — `Button`, `ButtonDock` in `src/components/ui.tsx`.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Button dock
+
+**Purpose**: Pin footer actions to the bottom of the screen with safe-area padding.
+
+**Anatomy**: Top border (`border.subtle`). Vertical stack (`space.gap.md`). One `primary` `width.fill` at top of stack. Tertiary paths below. Optional helper text above the primary when Save is blocked.
+
+**Properties**: None beyond children.
+
+**Variants**: None.
+
+**States**: None.
+
+**Accessibility**: Safe-area insets on `mobile`. Helper text explains blocks — disabled primary is not the only signal.
+
+**Composition**: Login, register, confirm, empty collection. Not camera chrome or inline banner actions.
+
+**Unsupported**: Side-by-side primaries on phone. Hugging centered pill as the only primary on these screens.
+
+**Example** *(not a rule)*: Login dock: fill “Log ind” + tertiary “Opret konto” below.
+
+**Code**: `apps/mobile` — `ButtonDock` in `src/components/ui.tsx`.
 
 ### Icon button
 
