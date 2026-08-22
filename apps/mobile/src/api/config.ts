@@ -8,10 +8,15 @@ export function getApiBaseUrl(): string {
     return fromEnv.replace(/\/$/, "");
   }
 
-  const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
+  const extra = Constants.expoConfig?.extra;
+  // SAFETY: app.json extra is a plain object at build time; only optional apiUrl is read.
+  const apiUrl =
+    extra && typeof extra === "object" && "apiUrl" in extra && typeof extra.apiUrl === "string"
+      ? extra.apiUrl
+      : undefined;
 
-  if (extra?.apiUrl) {
-    return extra.apiUrl.replace(/\/$/, "");
+  if (apiUrl) {
+    return apiUrl.replace(/\/$/, "");
   }
 
   return fallbackApiUrl;

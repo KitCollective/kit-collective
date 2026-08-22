@@ -1,4 +1,4 @@
-import type { IdentitySession } from "@kit/api-contract";
+import { identitySessionSchema, type IdentitySession } from "@kit/api-contract";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
@@ -43,7 +43,7 @@ export async function loadSession(): Promise<StoredSession | null> {
   }
 
   try {
-    return JSON.parse(raw) as StoredSession;
+    return identitySessionSchema.parse(JSON.parse(raw));
   } catch {
     await deleteItem(SESSION_KEY);
     return null;
