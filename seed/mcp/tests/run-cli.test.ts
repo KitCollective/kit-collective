@@ -174,29 +174,45 @@ describe("runSeedCli", () => {
     );
   });
 
-  it("spawns seed_fk as a separate CLI from seed_apify", async () => {
+  it("keeps seed_apify and seed_fk as separate CLI invocations", async () => {
     const runner = vi.fn<CliRunner>().mockResolvedValue({
       exitCode: 0,
       stdout: "ok",
       stderr: "",
     });
 
-    await runSeedCli(
+    const scope = {
+      competition: "superligaen",
+      fromSeason: "2017/18",
+      toSeason: "2017/18",
+    };
+
+    await runSeedCli("apify", scope, runner);
+    await runSeedCli("fkapi", scope, runner);
+
+    expect(runner).toHaveBeenCalledTimes(2);
+    const apifyArgv = runner.mock.calls[0]?.[1] ?? [];
+    const fkArgv = runner.mock.calls[1]?.[1] ?? [];
+    expect(apifyArgv).toContain("@kit/seed-apify");
+    expect(fkArgv).toContain("@kit/seed-fkapi");
+    expect(apifyArgv).not.toContain("@kit/seed-fkapi");
+    expect(fkArgv).not.toContain("@kit/seed-apify");
+  });
+
+  it("rejects production for seed_fk before spawning", async () => {
+    const runner = vi.fn<CliRunner>();
+    const result = await runSeedCli(
       "fkapi",
       {
         competition: "superligaen",
         fromSeason: "2017/18",
         toSeason: "2017/18",
+        lane: "production",
       },
       runner,
     );
-
-    expect(runner).toHaveBeenCalledWith(
-      "pnpm",
-      expect.arrayContaining(["@kit/seed-fkapi"]),
-      expect.any(Object),
-    );
-    expect(runner.mock.calls[0]?.[1]).not.toContain("@kit/seed-apify");
+    expect(result.ok).toBe(false);
+    expect(runner).not.toHaveBeenCalled();
   });
 });
 

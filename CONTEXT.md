@@ -146,6 +146,10 @@ _Avoid_: retrying HTML 202s on Apify by default; treating Apify as the primary C
 Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club and Season rows from Transfermarkt. Writes Kit identity and admin_only KitPhoto bytes onto those seasons (ExternalId join). Not before Kader fetch is green for that path. The operator still runs two Seed MCP tools (`seed_apify` then `seed_fk`) for that scope — not one fused tool.
 _Avoid_: scraping FK with no TM clubs; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool in this slice
 
+**kc_seed_mcp**:
+The Cursor Seed MCP server id. Standalone stdio process — not Coolify MCP. Exposes `seed_apify` (Kader fetch / Transfermarkt facts) and `seed_fk` (Football Kit Archive kits + admin_only archive bytes) only. Gets Seed env (lane database, Seed proxy, FK origin, lane R2) — never Coolify API tokens. Coolify MCP stays the host catalog for long one-shot jobs; Seed scope args (`fromSeason` / `toSeason` / `club` + `season`) go through `kc_seed_mcp`, not Coolify `control`.
+_Avoid_: naming the server `seed` in Cursor config; mixing Coolify tokens into the Seed MCP process; using Coolify `control` for ingest scope; fusing `seed_apify` and `seed_fk` into one tool
+
 **Catalog peek**:
 An unstyled HTML page on Nest (`GET /v1/catalog/peek`) so Nicklas can open a URL and see Seed run results: season, club names, squad counts, kit identity and photo counts. Not `apps/admin`, not the design system, not archive JPEGs on a public URL.
 _Avoid_: building the product admin; `/to-design`; treating `GET /v1/catalog/stats` JSON as the peek; hot-linking KitPhoto bytes
