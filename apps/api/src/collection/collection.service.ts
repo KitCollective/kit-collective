@@ -21,6 +21,7 @@ import type { LabelLocale } from "@kit/domain";
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
+import { VisionQueueService } from "../vision/vision-queue.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 
@@ -50,6 +51,7 @@ export class CollectionService {
   constructor(
     @Inject(DB) private readonly db: Db,
     @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
+    private readonly visionQueueService: VisionQueueService,
   ) {}
 
   static objectStoreFactory(): ObjectStoreAdapter {
@@ -190,6 +192,11 @@ export class CollectionService {
     }
 
     const photos = await this.persistPhotos(userId, insertedJersey.id, body.photos);
+
+    if (body.photos.length > 0) {
+      const firstPhotoBytes = decodeBase64Photo(body.photos[0].contentBase64);
+      this.visionQueueService.enqueueFromSave(userId, firstPhotoBytes, body.draftId);
+    }
 
     if (body.draftId) {
       await this.db

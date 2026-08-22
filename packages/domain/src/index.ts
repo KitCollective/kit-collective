@@ -105,3 +105,11 @@ export const JERSEY_CONDITION_LABELS_DA: Record<JerseyCondition, string> = {
   used: "Brugt",
   worn: "Slidt",
 };
+
+/** Vision job lifecycle on VisionLog.status. */
+export const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
+export type VisionJobStatus = (typeof VISION_JOB_STATUSES)[number];
+
+/** Collector action on a Vision suggestion (VisionLog.userAction). */
+export const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
+export type VisionUserAction = (typeof VISION_USER_ACTIONS)[number];

@@ -32,6 +32,20 @@ export {
   collectionSaveResponseSchema,
 } from "./collection/save.js";
 export {
+  type VisionJobResponse,
+  type VisionLogRequest,
+  type VisionLogResponse,
+  type VisionSuggestions,
+  type VisionSuggestRequest,
+  type VisionSuggestResponse,
+  visionJobResponseSchema,
+  visionLogRequestSchema,
+  visionLogResponseSchema,
+  visionSuggestionsSchema,
+  visionSuggestRequestSchema,
+  visionSuggestResponseSchema,
+} from "./collection/vision.js";
+export {
   type IdentityCredentials,
   type IdentityMe,
   type IdentityRole,

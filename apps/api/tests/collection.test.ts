@@ -19,6 +19,8 @@ import {
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
+import { FailingVisionAdapter, SlowVisionAdapter } from "../dist/vision/test-vision.adapters.js";
 import { AppModule } from "../dist/app.module.js";
 
 const migrationsFolder = path.join(
@@ -252,5 +254,79 @@ describe("Collection /v1", () => {
     const firstBody = collectionSaveResponseSchema.parse(JSON.parse(first.body));
     const secondBody = collectionSaveResponseSchema.parse(JSON.parse(second.body));
     expect(secondBody.jersey.id).toBe(firstBody.jersey.id);
+  });
+
+  it("returns 2xx Save while Vision adapter is slow", async () => {
+    const slowAdapter = new SlowVisionAdapter(3000);
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(VISION_ADAPTER)
+      .useValue(slowAdapter)
+      .compile();
+
+    const slowApp = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    slowApp.setGlobalPrefix("v1");
+    await slowApp.init();
+    await slowApp.getHttpAdapter().getInstance().ready();
+
+    const session = await registerSession(slowApp, "slow-vision@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const response = await slowApp.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    await slowApp.close();
+  });
+
+  it("returns 2xx Save when Vision adapter fails", async () => {
+    const failingAdapter = new FailingVisionAdapter();
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(VISION_ADAPTER)
+      .useValue(failingAdapter)
+      .compile();
+
+    const failApp = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    failApp.setGlobalPrefix("v1");
+    await failApp.init();
+    await failApp.getHttpAdapter().getInstance().ready();
+
+    const session = await registerSession(failApp, "fail-vision@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const response = await failApp.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "away",
+        size: "l",
+        condition: "new",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    await failApp.close();
   });
 });
