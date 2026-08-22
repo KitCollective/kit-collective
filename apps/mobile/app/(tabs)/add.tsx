@@ -78,7 +78,7 @@ export default function AddScreen() {
 
     setLoadingSeasons(true);
     try {
-      const response = await fetchClubSeasons(accessToken, club.id, "da");
+      const response = await fetchClubSeasons(accessToken, club.id);
       setSeasonResults(response.seasons);
     } catch {
       setSeasonResults([]);

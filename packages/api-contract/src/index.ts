@@ -1,11 +1,9 @@
 export {
   type CatalogClubSearchResponse,
-  type CatalogClubSeasonsQuery,
   type CatalogClubSeasonsResponse,
   type CatalogPickerItem,
   type CatalogPickerSearchQuery,
   catalogClubSearchResponseSchema,
-  catalogClubSeasonsQuerySchema,
   catalogClubSeasonsResponseSchema,
   catalogPickerItemSchema,
   catalogPickerSearchQuerySchema,
