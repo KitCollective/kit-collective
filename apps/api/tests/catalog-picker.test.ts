@@ -145,6 +145,59 @@ describe("Catalog picker /v1", () => {
     expect(JSON.stringify(body)).not.toMatch(/kit_photo|object_key|http/i);
   });
 
+  it("omits clubs that match only via alias without a resolvable label row", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "DK" })
+      .returning({ id: country.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "da",
+      kind: "alias",
+      text: "AliasOnly",
+      source: "seed",
+    });
+
+    await pool.end();
+
+    const session = await registerCollector(app, "alias-only@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/catalog/clubs/search?q=aliasonly&locale=da",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = catalogClubSearchResponseSchema.parse(JSON.parse(response.body));
+    expect(body.clubs).toEqual([]);
+  });
+
+  it("rejects malformed club id on seasons with 400", async () => {
+    const session = await registerCollector(app, "bad-id@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/catalog/clubs/not-a-uuid/seasons",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it("includes national teams in club search results", async () => {
     const { db, pool } = createDb(DATABASE_URL);
 

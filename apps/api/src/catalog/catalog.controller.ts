@@ -1,9 +1,18 @@
 import {
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
+  catalogPickerClubIdParamSchema,
   catalogPickerSearchQuerySchema,
 } from "@kit/api-contract";
-import { Controller, Get, Header, Param, Query, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
 import { CatalogService } from "./catalog.service.js";
 
@@ -36,7 +45,11 @@ export class CatalogController {
   @Get("clubs/:clubId/seasons")
   @UseGuards(JwtAuthGuard)
   async getClubSeasons(@Param("clubId") clubId: string) {
-    const body = await this.catalogService.getClubSeasons(clubId);
+    const parsed = catalogPickerClubIdParamSchema.safeParse({ clubId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid club id");
+    }
+    const body = await this.catalogService.getClubSeasons(parsed.data.clubId);
     return catalogClubSeasonsResponseSchema.parse(body);
   }
 }

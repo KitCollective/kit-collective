@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
+  catalogPickerClubIdParamSchema,
   catalogPickerItemSchema,
   catalogPickerSearchQuerySchema,
 } from "../src/catalog/picker.js";
@@ -51,6 +52,17 @@ describe("catalogClubSeasonsResponseSchema", () => {
       ],
     };
     expect(catalogClubSeasonsResponseSchema.parse(payload)).toEqual(payload);
+  });
+});
+
+describe("catalogPickerClubIdParamSchema", () => {
+  it("accepts a UUID club id", () => {
+    const payload = { clubId: "550e8400-e29b-41d4-a716-446655440000" };
+    expect(catalogPickerClubIdParamSchema.parse(payload)).toEqual(payload);
+  });
+
+  it("rejects a malformed club id", () => {
+    expect(() => catalogPickerClubIdParamSchema.parse({ clubId: "not-a-uuid" })).toThrow();
   });
 });
 

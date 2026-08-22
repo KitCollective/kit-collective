@@ -1,10 +1,12 @@
 export {
   type CatalogClubSearchResponse,
   type CatalogClubSeasonsResponse,
+  type CatalogPickerClubIdParam,
   type CatalogPickerItem,
   type CatalogPickerSearchQuery,
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
+  catalogPickerClubIdParamSchema,
   catalogPickerItemSchema,
   catalogPickerSearchQuerySchema,
 } from "./catalog/picker.js";
