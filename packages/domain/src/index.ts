@@ -52,3 +52,49 @@ export type KitPhotoVisibility = (typeof KIT_PHOTO_VISIBILITY)[number];
 
 export const USER_ROLES = ["user", "admin"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
+
+/** Closed set for UserJersey.size — stored value, not free text. */
+export const JERSEY_SIZES = ["xs", "s", "m", "l", "xl", "xxl"] as const;
+export type JerseySize = (typeof JERSEY_SIZES)[number];
+
+/** Closed set for UserJersey.condition — stored value, not free text. */
+export const JERSEY_CONDITIONS = ["new", "used", "worn"] as const;
+export type JerseyCondition = (typeof JERSEY_CONDITIONS)[number];
+
+export const PHOTO_ROLES = ["front", "back", "label"] as const;
+export type PhotoRole = (typeof PHOTO_ROLES)[number];
+
+export const PHOTO_SOURCES = ["gallery", "camera"] as const;
+export type PhotoSource = (typeof PHOTO_SOURCES)[number];
+
+export const OCR_STATUSES = ["none"] as const;
+export type OcrStatus = (typeof OCR_STATUSES)[number];
+
+export const AUTHENTICITY_VALUES = ["unknown", "genuine", "replica"] as const;
+export type Authenticity = (typeof AUTHENTICITY_VALUES)[number];
+
+/** Danish chip labels for kit type (UI only — stored values are KIT_TYPES). */
+export const KIT_TYPE_LABELS_DA: Record<KitType, string> = {
+  home: "Hjemme",
+  away: "Ude",
+  third: "Tredje",
+  gk: "Keeper",
+  special: "Special",
+};
+
+/** Danish chip labels for jersey size (UI only). */
+export const JERSEY_SIZE_LABELS_DA: Record<JerseySize, string> = {
+  xs: "XS",
+  s: "S",
+  m: "M",
+  l: "L",
+  xl: "XL",
+  xxl: "XXL",
+};
+
+/** Danish chip labels for jersey condition (UI only). */
+export const JERSEY_CONDITION_LABELS_DA: Record<JerseyCondition, string> = {
+  new: "Ny",
+  used: "Brugt",
+  worn: "Slidt",
+};
