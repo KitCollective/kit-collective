@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
+import { galleryMultiSelectQuality } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { resolveCaptureMode } from "@/capture/sessionMode";
 import { Button } from "@/components/ui";
@@ -42,7 +43,7 @@ export default function CaptureScreen() {
     const uris = await pickGalleryPhotos({
       allowsMultipleSelection: true,
       selectionLimit: PHOTO_ROLES.length,
-      quality: 0.8,
+      quality: galleryMultiSelectQuality(),
     });
 
     if (!uris) {
