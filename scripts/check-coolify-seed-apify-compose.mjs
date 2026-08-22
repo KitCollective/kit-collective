@@ -44,7 +44,10 @@ if (!wireComposeSection.includes("mem_limit")) {
 if (!wireComposeSection.includes("seed/apify/dist/cli.js")) {
   violations.push(`${wirePath}: command must run prebuilt seed/apify/dist/cli.js`);
 }
-if (!wireComposeSection.includes("seed/coolify/Dockerfile.remote") && !wireComposeSection.includes("dockerfile_inline")) {
+if (
+  !wireComposeSection.includes("seed/coolify/Dockerfile.remote") &&
+  !wireComposeSection.includes("dockerfile_inline")
+) {
   violations.push(
     `${wirePath}: must build from seed/coolify/Dockerfile.remote (dockerfile_inline) at deploy time`,
   );
