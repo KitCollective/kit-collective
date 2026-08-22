@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -7,7 +8,6 @@ import {
   Text,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { color, radius, space, type } from "@/theme/tokens";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];

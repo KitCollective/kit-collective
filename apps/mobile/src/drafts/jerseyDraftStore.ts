@@ -1,4 +1,3 @@
-import * as Crypto from "expo-crypto";
 import {
   JERSEY_CONDITIONS,
   JERSEY_SIZES,
@@ -11,6 +10,7 @@ import {
   type PhotoRole,
   type PhotoSource,
 } from "@kit/domain";
+import * as Crypto from "expo-crypto";
 import { draftDb } from "./db";
 import type { DraftPhoto, JerseyDraftRow } from "./types";
 
