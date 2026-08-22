@@ -11,13 +11,18 @@ When you are the **implement** runtime about to move a Linear issue to `In Revie
    `MERGEABLE`.
 2. Run the full test graph. A targeted filter is not a substitute.
 3. Wait for **all** required GitHub checks, including image/deploy smokes — not only
-   `test`. Pending → do not flip status.
+   `test`. Pending or red → do not flip status.
 4. If you added a required boot env, grep every workflow that starts that process.
 5. Spawn matching domain helpers. Read `docs/design-system.md` before UI and the
-   architecture lock before Nest/auth.
-6. On resume, fix the **class**, not only the cited file.
+   architecture lock before Nest/auth. A design-lock AC without the UI/layout helper
+   is a miss.
+6. Typecheck every package whose src or tests you edited. Ticking AC without a
+   Validation command or Evidence screenshot is not done.
+7. On resume, fix the **class**, not only the cited file.
 
 Do not call `/code-review` as the pass verdict — checker owns that in a fresh VM.
 
 When you are the **checker**: every pass is a complete review of the current diff.
-Dump every hard finding in this fail. Do not drip-feed.
+Dump every hard finding in this fail. Do not drip-feed. A red CI job is not a
+Spec-clean license. Pending required checks → do not fail, do not pass. Spec
+source is What to build + AC, not AC alone.

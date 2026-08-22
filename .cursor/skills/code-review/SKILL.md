@@ -84,7 +84,7 @@ Present the two reports under `## Standards` and `## Spec` headings, verbatim or
 
 End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
 
-When the caller is the checker agent: write **every** hard finding into `### Review feedback` in one fail — do not drip-feed. Hard Spec miss, hard Standards violation, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `Implementing`. Pending required checks → wait; stay in `In Review`. Otherwise → `Ready for merge` only when required GitHub checks are green **and** the PR is mergeable.
+When the caller is the checker agent: write **every** hard finding into `### Review feedback` in one fail — do not drip-feed. Spec source is the whole Linear issue body (What to build + AC), not AC alone. A red required check is not a Spec-clean license — finish both axes before the verdict. Hard Spec miss, hard Standards violation, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `Implementing`. Pending required checks → wait; stay in `In Review` (do not fail early on Standards while checks are still running). Otherwise → `Ready for merge` only when required GitHub checks are green **and** the PR is mergeable.
 
 ## Why two axes
 

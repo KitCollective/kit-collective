@@ -114,7 +114,7 @@ Never claim Triage or Duplicate. Never move to In Review, Ready for merge, Done,
 | Do not add | Memories. Slack/Teams. Request Reviewers (approver reads the PR; that is not a GitHub review request). |
 | Memories | Off. Empty. Same reason as planner. |
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}` — Linear-triggeren fylder den. |
-| Status | Inactive until planner + checker exist, and `development` has `/implement` + `WORKFLOW.md`. If the Instruction was pasted before the KIT-23 pre-review gate, **re-paste** the implement block below. |
+| Status | Inactive until planner + checker exist, and `development` has `/implement` + `WORKFLOW.md`. If the Instruction was pasted before the KIT-23/KIT-24 pre-review gate, **re-paste** the implement block below. |
 
 The Linear trigger is what makes checker-fail → `Implementing` wake **this** automation on the **same issue**. A new VM each time; same branch/PR because the workpad and the attached PR say so.
 
@@ -138,7 +138,7 @@ Spawn every matching domain helper. Read docs/design-system.md before UI and the
 
 Screenshots or recordings from this VM: upload to this Linear issue (prepare_attachment_upload → PUT → create_attachment_from_upload), then save_comment and link under workpad ### Evidence.
 
-Pre-review gate before In Review (do not skip): rebase until gh pr view --json mergeable is MERGEABLE; full test graph (not a targeted filter); wait for ALL required GitHub checks including image/deploy smokes; if you added a required boot env, grep every workflow that boots that process. Then clear addressed ### Review feedback and move to In Review. Do not merge. Do not move to Done.
+Pre-review gate before In Review (do not skip): rebase until gh pr view --json mergeable is MERGEABLE; full test graph plus typecheck of every package whose src or tests you edited; wait for ALL required GitHub checks (pending or red → do not flip) including image/deploy smokes; if you added a required boot env, grep every workflow that boots that process; every What to build clause and AC has Validation or Evidence. If the issue cites docs/design-system.md or lock components, spawn the UI/layout helper — nest+expo alone is not enough. Then clear addressed ### Review feedback and move to In Review. Do not merge. Do not move to Done.
 If ### Review feedback asked for a ratchet, land it in this PR (docs/agents/error-ratcheting.md). Tighten only. Ratchet paths are in-scope (docs/agents/write-scope.md).
 
 Out of scope → /signal-up (cap applies).
@@ -167,7 +167,7 @@ Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview 
 | Do not add | **Open Pull Request**. Memories. Slack. Anything that can merge. |
 | Memories | Off. Empty. |
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}`. |
-| Status | Inactive until implement is wired — otherwise nothing ever reaches `In Review`. If the Instruction was pasted before the KIT-23 complete-review contract, **re-paste** the checker block below. |
+| Status | Inactive until implement is wired — otherwise nothing ever reaches `In Review`. If the Instruction was pasted before the KIT-23/KIT-24 complete-review contract, **re-paste** the checker block below. |
 
 Checker is **judge-only**. Fail → `Implementing` wakes implement on the same issue. Pass → `Ready for merge` and stop. Nicklas (approver) moves to `Done`; that is not this agent.
 
@@ -180,9 +180,9 @@ No feature coding. Do not start /implement. Do not merge.
 
 Fetch Linear get_issue and list_comments. Update the existing workpad. Attach the PR if it is missing on the issue.
 
-Complete review every pass — not a delta on last ### Review feedback. Dump every hard finding in this fail (architecture lock, design-system if UI, secrets/boot env, mergeability, spec AC). Do not drip-feed.
+Complete review every pass — not a delta on last ### Review feedback. Dump every hard finding in this fail (architecture lock, design-system if UI, secrets/boot env, mergeability, What to build + spec AC). Do not drip-feed. A red CI job is not a Spec-clean license.
 
-Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status. Failed required checks or CONFLICTING → fail. Local tests are not a substitute.
+Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status; do not fail early on Standards. Failed required checks or CONFLICTING → fail, and still include every Spec/Standards hard miss in the same ### Review feedback. Local tests are not a substitute.
 
 Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Comment on Linear that the issue is waiting for the approver.
 

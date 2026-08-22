@@ -67,6 +67,7 @@ Every issue:
 - Native `blockedBy`
 - Label `ready-for-agent`
 - Optional `write-scope: path/globs` in the body when the slice is obviously bounded. If the slice adds a required process env, include `.github/workflows/**`. If it has UI, point the body at `docs/design-system.md`. If it has Nest/auth, point at the relevant `{paths.specs}/Architecture/tech-stack.md` section.
+- **What to build ↔ AC:** every clause in What to build must have a matching acceptance-criterion checkbox. Implement and checker treat the **whole issue body** as spec — an orphan What to build sentence (e.g. national teams in the picker) is still in scope even if AC forgot it. Prefer making it an AC line at publish time.
 - Surface labels from `labels.surfaces` (`surface:<name>`) are hints for `/implement` helpers — **not** a reason to split horizontally
 - **Do not delegate. Do not set Linear Agent to Cursor.**
 - **Do not set Linear priority** unless the user named it. Default is None (`0`). The human sets Urgent/High/Medium/Low. Planner uses that as claim order.
@@ -85,11 +86,11 @@ A reference to the parent spec / Linear project (if the source was an existing i
 
 ## What to build
 
-The end-to-end behaviour this ticket makes work, from the user's perspective — not layer-by-layer implementation.
+The end-to-end behaviour this ticket makes work, from the user's perspective — not layer-by-layer implementation. Every sentence here must appear as an AC checkbox below.
 
 ## Acceptance criteria
 
-- [ ] Criterion 1
+- [ ] Criterion 1 (covers a What to build clause)
 - [ ] Criterion 2
 
 ## Seams
