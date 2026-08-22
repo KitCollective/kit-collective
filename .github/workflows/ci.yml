@@ -27,6 +27,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
       API_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_api_test
+      # CI-only test value — not a product default; Nest Identity requires JWT_SECRET at boot.
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
 
     steps:
       - uses: actions/checkout@v4
