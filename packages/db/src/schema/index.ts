@@ -1,8 +1,11 @@
 import {
+  AUTHENTICITY_VALUES,
   CALENDAR_KINDS,
   CATALOG_ENTITY_TYPES,
   CLUB_KINDS,
   EXTERNAL_ID_ENTITY_TYPES,
+  JERSEY_CONDITIONS,
+  JERSEY_SIZES,
   KIT_PHOTO_RIGHTS,
   KIT_PHOTO_VISIBILITY,
   KIT_TYPES,
@@ -10,6 +13,9 @@ import {
   LABEL_LOCALES,
   LABEL_SOURCES,
   NATIONAL_TEAM_GENDERS,
+  OCR_STATUSES,
+  PHOTO_ROLES,
+  PHOTO_SOURCES,
   USER_ROLES,
 } from "@kit/domain";
 import { relations, sql } from "drizzle-orm";
@@ -37,6 +43,12 @@ export const nationalTeamGenderEnum = pgEnum("national_team_gender", NATIONAL_TE
 export const kitPhotoRightsEnum = pgEnum("kit_photo_rights", KIT_PHOTO_RIGHTS);
 export const kitPhotoVisibilityEnum = pgEnum("kit_photo_visibility", KIT_PHOTO_VISIBILITY);
 export const userRoleEnum = pgEnum("user_role", USER_ROLES);
+export const jerseySizeEnum = pgEnum("jersey_size", JERSEY_SIZES);
+export const jerseyConditionEnum = pgEnum("jersey_condition", JERSEY_CONDITIONS);
+export const photoRoleEnum = pgEnum("photo_role", PHOTO_ROLES);
+export const photoSourceEnum = pgEnum("photo_source", PHOTO_SOURCES);
+export const ocrStatusEnum = pgEnum("ocr_status", OCR_STATUSES);
+export const authenticityEnum = pgEnum("authenticity", AUTHENTICITY_VALUES);
 
 export const country = pgTable("country", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -208,6 +220,54 @@ export const user = pgTable(
   (table) => [uniqueIndex("user_email_unique").on(table.email)],
 );
 
+export const userJersey = pgTable("user_jersey", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => user.id),
+  clubId: uuid("club_id")
+    .notNull()
+    .references(() => club.id),
+  seasonId: uuid("season_id")
+    .notNull()
+    .references(() => season.id),
+  catalogKitId: uuid("catalog_kit_id").references(() => kit.id),
+  type: kitTypeEnum("type").notNull(),
+  size: jerseySizeEnum("size").notNull(),
+  condition: jerseyConditionEnum("condition").notNull(),
+  authenticity: authenticityEnum("authenticity").notNull().default("unknown"),
+  notes: text("notes"),
+  draftId: uuid("draft_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const userJerseyPhoto = pgTable("user_jersey_photo", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userJerseyId: uuid("user_jersey_id")
+    .notNull()
+    .references(() => userJersey.id),
+  objectKey: text("object_key").notNull(),
+  role: photoRoleEnum("role").notNull(),
+  source: photoSourceEnum("source").notNull(),
+  ocrStatus: ocrStatusEnum("ocr_status").notNull().default("none"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const jerseyDraft = pgTable(
+  "jersey_draft",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    userJerseyId: uuid("user_jersey_id").references(() => userJersey.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("jersey_draft_user_id_unique").on(table.userId, table.id)],
+);
+
 export const countryRelations = relations(country, ({ many }) => ({
   leagues: many(league),
   clubs: many(club),
@@ -248,4 +308,27 @@ export const kitRelations = relations(kit, ({ one, many }) => ({
     references: [manufacturer.id],
   }),
   photos: many(kitPhoto),
+}));
+
+export const userJerseyRelations = relations(userJersey, ({ one, many }) => ({
+  user: one(user, { fields: [userJersey.userId], references: [user.id] }),
+  club: one(club, { fields: [userJersey.clubId], references: [club.id] }),
+  season: one(season, { fields: [userJersey.seasonId], references: [season.id] }),
+  catalogKit: one(kit, { fields: [userJersey.catalogKitId], references: [kit.id] }),
+  photos: many(userJerseyPhoto),
+}));
+
+export const userJerseyPhotoRelations = relations(userJerseyPhoto, ({ one }) => ({
+  userJersey: one(userJersey, {
+    fields: [userJerseyPhoto.userJerseyId],
+    references: [userJersey.id],
+  }),
+}));
+
+export const jerseyDraftRelations = relations(jerseyDraft, ({ one }) => ({
+  user: one(user, { fields: [jerseyDraft.userId], references: [user.id] }),
+  userJersey: one(userJersey, {
+    fields: [jerseyDraft.userJerseyId],
+    references: [userJersey.id],
+  }),
 }));

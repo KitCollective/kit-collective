@@ -16,9 +16,21 @@ export {
   catalogStatsSchema,
 } from "./catalog/stats.js";
 export {
+  type CollectionJersey,
+  type CollectionJerseyPhoto,
   type CollectionJerseys,
+  collectionJerseyPhotoSchema,
+  collectionJerseySchema,
   collectionJerseysSchema,
 } from "./collection/jerseys.js";
+export {
+  type CollectionSavePhoto,
+  type CollectionSaveRequest,
+  type CollectionSaveResponse,
+  collectionSavePhotoSchema,
+  collectionSaveRequestSchema,
+  collectionSaveResponseSchema,
+} from "./collection/save.js";
 export {
   type IdentityCredentials,
   type IdentityMe,

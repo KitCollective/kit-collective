@@ -1,9 +1,17 @@
 import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity/identity.module.js";
 import { CollectionController } from "./collection.controller.js";
+import { CollectionService, OBJECT_STORE } from "./collection.service.js";
 
 @Module({
   imports: [IdentityModule],
   controllers: [CollectionController],
+  providers: [
+    CollectionService,
+    {
+      provide: OBJECT_STORE,
+      useFactory: () => CollectionService.objectStoreFactory(),
+    },
+  ],
 })
 export class CollectionModule {}
