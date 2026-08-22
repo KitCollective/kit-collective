@@ -1,0 +1,59 @@
+import type { CatalogPickerItem } from "@kit/api-contract";
+import { useRouter } from "expo-router";
+import { StyleSheet, Text, View } from "react-native";
+import { Sheet } from "@/components/catalog-ui";
+import { Button } from "@/components/ui";
+import { createDraft, createDraftId } from "@/drafts/jerseyDraftStore";
+import { color, space, type } from "@/theme/tokens";
+
+type PostSaveSheetProps = {
+  visible: boolean;
+  savedClub: CatalogPickerItem | null;
+  savedSeasonLabel: string | null;
+  onDismiss: () => void;
+};
+
+export function PostSaveSheet({
+  visible,
+  savedClub,
+  savedSeasonLabel,
+  onDismiss,
+}: PostSaveSheetProps) {
+  const router = useRouter();
+
+  const startCapture = (club?: CatalogPickerItem | null) => {
+    const draftId = createDraftId();
+    createDraft(draftId, club ? { id: club.id, label: club.label } : null);
+    router.replace({
+      pathname: "/(tabs)/add/capture",
+      params: { draftId },
+    });
+  };
+
+  const body =
+    savedClub && savedSeasonLabel
+      ? `${savedClub.label} · ${savedSeasonLabel}`
+      : "Din trøje er i samlingen.";
+
+  return (
+    <Sheet visible={visible} title="Trøjen er gemt" onDismiss={onDismiss}>
+      <View style={styles.content}>
+        <Text style={styles.body}>{body}</Text>
+        <Button label="Samme klub" onPress={() => startCapture(savedClub)} disabled={!savedClub} />
+        <Button label="Ny trøje" variant="secondary" onPress={() => startCapture()} />
+      </View>
+    </Sheet>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: {
+    gap: space.gapSm,
+  },
+  body: {
+    fontSize: type.body.fontSize,
+    lineHeight: type.body.lineHeight,
+    color: color.contentSecondary,
+    marginBottom: space.gapSm,
+  },
+});
