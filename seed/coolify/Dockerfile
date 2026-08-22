@@ -14,7 +14,9 @@ COPY seed ./seed
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
-RUN pnpm --filter @kit/seed-shared build \
+RUN pnpm --filter @kit/domain build \
+  && pnpm --filter @kit/db build \
+  && pnpm --filter @kit/seed-shared build \
   && pnpm --filter @kit/seed-apify build \
   && pnpm --filter @kit/seed-fkapi build \
   && pnpm --filter @kit/seed-mcp build
@@ -27,8 +29,9 @@ COPY --from=deps /app/package.json ./package.json
 COPY --from=deps /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=deps /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=build /app/seed ./seed
-COPY --from=deps /app/packages ./packages
+COPY --from=build /app/packages ./packages
 COPY --from=deps /app/apps/api/package.json ./apps/api/package.json
 
-# Builds shared + MCP layers. Apify/FK CLI packages (KIT-8 / KIT-9) must exist in seed/
-# before the job command can succeed at runtime.
+# Builds @kit/domain + @kit/db (seed-apify imports them at module scope) plus shared + MCP
+# layers. Apify/FK CLI packages (KIT-8 / KIT-9) must exist in seed/ before the job command
+# can succeed at runtime.

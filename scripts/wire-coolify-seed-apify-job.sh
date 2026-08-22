@@ -45,37 +45,45 @@ fi
 SERVER_UUID="$(request GET /servers | jq -r '.[0].uuid')"
 DEST_UUID="$(request GET /destinations | jq -r '.[0].uuid')"
 
-# Runtime clone avoids compose build/dockerfile_inline on the CX33 host.
-COMPOSE_BODY="$(jq -n '{
+# Image is built from seed/coolify/Dockerfile.remote at deploy time (inline compose build);
+# the running container only executes the prebuilt Kader CLI (no pnpm install or tsc).
+DOCKERFILE_INLINE="$(<"$ROOT/seed/coolify/Dockerfile.remote")"
+COMPOSE_BODY="$(jq -n \
+  --arg seed_lane "$LANE" \
+  --arg git_repository "$GIT_REPOSITORY" \
+  --arg git_ref "$GIT_REF" \
+  --arg dockerfile_inline "$DOCKERFILE_INLINE" \
+  '{
   services: {
     "seed-apify-job": {
-      image: "node:22-bookworm-slim",
-      restart: "no",
-      mem_limit: "2g",
-      memswap_limit: "2g",
-      cpus: "1.0",
-      deploy: {
-        resources: {
-          limits: { cpus: "1.0", memory: "2G" },
-          reservations: { cpus: "0.25", memory: "512M" }
+      build: {
+        context: ".",
+        dockerfile_inline: $dockerfile_inline,
+        args: {
+          GIT_REPOSITORY: $git_repository,
+          GIT_REF: $git_ref
         }
       },
+      image: "kit-collective-seed:latest",
+      restart: "no",
+      mem_limit: "512m",
       environment: {
-        SEED_LANE: "${SEED_LANE}",
+        SEED_LANE: $seed_lane,
         DATABASE_URL: "${DATABASE_URL}",
         SEED_PROXY_URL: "${SEED_PROXY_URL}",
         SEED_REQUIRE_PROXY: "true",
         APIFY_TOKEN: "${APIFY_TOKEN:-}",
         SEED_COMPETITION: "${SEED_COMPETITION}",
         SEED_FROM_SEASON: "${SEED_FROM_SEASON}",
-        SEED_TO_SEASON: "${SEED_TO_SEASON}",
-        GIT_REPOSITORY: "${GIT_REPOSITORY}",
-        GIT_REF: "${GIT_REF}"
+        SEED_TO_SEASON: "${SEED_TO_SEASON}"
       },
       command: [
-        "bash",
-        "-lc",
-        "set -euo pipefail; apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*; corepack enable; rm -rf /tmp/seed-src; git clone --depth 1 --branch \"${GIT_REF}\" \"${GIT_REPOSITORY}\" /tmp/seed-src; cd /tmp/seed-src; pnpm install --frozen-lockfile; pnpm --filter @kit/domain build; pnpm --filter @kit/db build; pnpm --filter @kit/seed-shared build; pnpm --filter @kit/seed-apify build; cd seed/apify; node dist/cli.js \"${SEED_COMPETITION}\" \"${SEED_FROM_SEASON}\" \"${SEED_TO_SEASON}\" \"${SEED_LANE}\""
+        "node",
+        "seed/apify/dist/cli.js",
+        "${SEED_COMPETITION}",
+        "${SEED_FROM_SEASON}",
+        "${SEED_TO_SEASON}",
+        $seed_lane
       ]
     }
   }
@@ -122,8 +130,7 @@ BULK_ENVS="$(jq -n \
   --arg database_url "$DATABASE_URL" \
   --arg proxy_url "$SEED_PROXY_URL" \
   --arg apify_token "${APIFY_TOKEN:-}" \
-  --arg git_repository "$GIT_REPOSITORY" \
-  --arg git_ref "$GIT_REF" \
+  --arg seed_lane "$LANE" \
   --arg competition "${SEED_COMPETITION:-superligaen}" \
   --arg from_season "${SEED_FROM_SEASON:-2014/15}" \
   --arg to_season "${SEED_TO_SEASON:-2015/16}" \
@@ -133,12 +140,10 @@ BULK_ENVS="$(jq -n \
       {key: "SEED_PROXY_URL", value: $proxy_url, is_literal: true, is_preview: false},
       {key: "SEED_REQUIRE_PROXY", value: "true", is_literal: true, is_preview: false},
       {key: "APIFY_TOKEN", value: $apify_token, is_literal: true, is_preview: false},
-      {key: "SEED_LANE", value: "development", is_literal: true, is_preview: false},
+      {key: "SEED_LANE", value: $seed_lane, is_literal: true, is_preview: false},
       {key: "SEED_COMPETITION", value: $competition, is_literal: true, is_preview: false},
       {key: "SEED_FROM_SEASON", value: $from_season, is_literal: true, is_preview: false},
-      {key: "SEED_TO_SEASON", value: $to_season, is_literal: true, is_preview: false},
-      {key: "GIT_REPOSITORY", value: $git_repository, is_literal: true, is_preview: false},
-      {key: "GIT_REF", value: $git_ref, is_literal: true, is_preview: false}
+      {key: "SEED_TO_SEASON", value: $to_season, is_literal: true, is_preview: false}
     ]
   }')"
 
