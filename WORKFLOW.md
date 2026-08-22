@@ -74,7 +74,7 @@ Lanes come from `lanes` in factory config.
 3. On resume, the latest `### Review feedback` plus other issue/PR comments **are** the change request. Fix those before anything else. Same branch/PR.
 4. Open or reuse the single workpad comment.
 5. Start: branch from latest `origin/<lanes.integration>`. One issue, one branch, one PR. Resume: do not new-branch.
-6. Follow `/implement`: `/tdd` at the spec’s seams; spawn **every matching helper** in `paths.helpers` (never their own Linear issues).
+6. Follow `/implement`: `/tdd` at the spec’s seams; spawn **every matching helper** in `paths.helpers` (never their own Linear issues). Mobile/EAS slices also load `.cursor/skills/expo/` (`expo-overview` first, then the matching leaf).
 7. Out of scope → `/signal-up`. Cap `agent.signalUpCapPerRun`. Never expand the PR.
 8. Open or update a PR **into the integration lane**. Attach the PR URL on the issue.
 9. Upload screenshots/recordings from the VM to the Linear issue. Comment. Link under workpad `### Evidence`.
@@ -84,7 +84,7 @@ Lanes come from `lanes` in factory config.
 
 Wakes when status becomes `In Review`. Judge only. No feature coding.
 
-1. `/code-review` (Standards + Spec) against the attached PR.
+1. `/code-review` (Standards + Spec) against the attached PR. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis.
 2. GitHub CI/CD on that PR: read check runs / status checks. Pending → wait until they complete. Do not move status while checks are pending. Red or failed required checks → fail.
 3. Pass only when both axes are clean **and** required GitHub checks are green → `Ready for merge`.
 4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` + Linear comment + attachments. That status change wakes implement. Do not start implement yourself.

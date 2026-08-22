@@ -42,6 +42,8 @@ For the current seam / slice, spawn **every** helper whose `description` matches
 
 Write the chosen helper names in the workpad under `### Domain helpers used`.
 
+When `react-expo` is among them, or the seam is EAS, that helper reads `.cursor/skills/expo/expo-overview/SKILL.md` first, then the matching leaf skill, before the first red test. Product docs win on conflict with vendor Expo defaults.
+
 The helper:
 
 1. Writes the **failing** test at that seam (red)

@@ -69,6 +69,7 @@ Not feature work — upkeep.
 - **`/land`** — merge the GitHub PR after `Done`. Integration lane only.
 - **`/bootstrap-linear`** — board missing or unshaped (`linear.setup.json` absent).
 - **`/create-new-skill`** — author a factory skill under `.cursor/skills/`.
+- **Vendor Expo skills** — `.cursor/skills/expo/`. Not slash commands. `/implement`, `/tdd`, and checker load them on mobile and EAS work. Product docs win on conflict.
 - **`/to-design`** — HITL visual lock into `docs/design-system.md`. Factory-original.
 - **`/ask-me`** — this router.
 
