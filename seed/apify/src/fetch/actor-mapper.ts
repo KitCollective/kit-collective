@@ -32,10 +32,12 @@ function resolveCompetitionOrThrow(slug: string): {
   };
 }
 
+type ResolvedPlayer = { id: string; name: string; jerseyNumber?: number };
+
 function resolvePlayer(
   row: ActorSquadRow,
   profileByPlayerId: Map<string, ActorPlayerProfile>,
-): { id: string; name: string; jerseyNumber?: number } {
+): ResolvedPlayer | null {
   const needsProfile = !row.playerId || row.shirtNumber === undefined || row.shirtNumber === null;
 
   if (!needsProfile) {
@@ -47,7 +49,7 @@ function resolvePlayer(
   }
 
   if (!row.playerId) {
-    throw new Error(`Squad row for ${row.playerName} lacks player id and cannot profile-hop`);
+    return null;
   }
 
   const profile = profileByPlayerId.get(row.playerId);
@@ -74,7 +76,9 @@ export function mapClubSeasonToPayload(params: MapClubSeasonParams): Transfermar
   const startYear = labelToStartYear(params.seasonLabel);
   const { startDate, endDate } = seasonCalendarBounds(startYear);
 
-  const players = params.squadRows.map((row) => resolvePlayer(row, params.profileByPlayerId));
+  const players = params.squadRows
+    .map((row) => resolvePlayer(row, params.profileByPlayerId))
+    .filter((player): player is ResolvedPlayer => player !== null);
 
   return {
     competition: {

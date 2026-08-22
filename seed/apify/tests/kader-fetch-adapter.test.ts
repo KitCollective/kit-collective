@@ -249,6 +249,41 @@ describe("kader fetch adapter from recorded HTML", () => {
     expect(players.find((p) => p.externalId === "22221")?.squadNumber).toBe(7);
     expect(players.find((p) => p.externalId === "99999")?.squadNumber).toBeUndefined();
   });
+
+  it("treats a squad row without player id as a hole and still maps the rest of the club", async () => {
+    const competitionHtml = readFileSync(
+      path.join(fixturesDir, "competitions/DK1-2015.html"),
+      "utf8",
+    );
+    const kader193 = readFileSync(path.join(fixturesDir, "kader/193-2015.html"), "utf8");
+    const profileFetches: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      fetchHtml: async (url) => {
+        if (url.includes("/wettbewerb/")) {
+          return competitionHtml;
+        }
+        if (url.includes("/verein/193/")) {
+          return kader193;
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+      onProfileFetch: (playerId) => profileFetches.push(playerId),
+    });
+
+    const raw = await adapter.fetchClubSeason({
+      competition: "superligaen",
+      clubExternalId: "193",
+      season: "2015/16",
+    });
+
+    expect(profileFetches).toEqual([]);
+    const facts = normalize(raw);
+    const players = facts.seasons[0]?.clubs[0]?.players ?? [];
+    expect(players).toHaveLength(1);
+    expect(players[0]?.externalId).toBe("44444");
+    expect(players[0]?.squadNumber).toBe(1);
+  });
 });
 
 describe("kader fetch adapter rate limiting", () => {
@@ -430,5 +465,41 @@ describe("runSeed with kader HTML adapter", () => {
     } finally {
       await pool.end();
     }
+  });
+
+  it("stops Transfermarkt GETs after consecutive 403/429 and still returns runSeed summary", async () => {
+    await prepareDatabase();
+    let networkCalls = 0;
+    const fixturesAdapter = createKaderFetchAdapter({ fixturesDir });
+    const rateLimited = createKaderFetchAdapter({
+      rateLimitStopAfter: 1,
+      fetchHtml: async (url) => {
+        networkCalls += 1;
+        throw new TransfermarktHttpError(403, url);
+      },
+    });
+    const adapter = {
+      listClubSeasonPairs: fixturesAdapter.listClubSeasonPairs.bind(fixturesAdapter),
+      fetchClubSeason: rateLimited.fetchClubSeason.bind(rateLimited),
+    };
+
+    const result = await runSeed({
+      scope: {
+        kind: "competition",
+        competition: "superligaen",
+        fromSeason: "2015",
+        toSeason: "2015",
+      },
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: DATABASE_URL,
+    });
+
+    expect(networkCalls).toBe(1);
+    expect(result.summary.fetched).toBe(0);
+    expect(result.summary.failures).toHaveLength(2);
+    expect(result.summary.failures[0]?.error).toMatch(/403/);
+    expect(result.summary.failures[1]?.error).toMatch(/consecutive HTTP 403\/429/);
+    expect(result.summary.mapped).toBe(0);
   });
 });
