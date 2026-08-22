@@ -131,8 +131,8 @@ The live Transfermarkt path: HTTP GET of the Competition season page and each cl
 _Avoid_: calling this a Nest scraper; treating Cheerio as anti-bot; fetching a player profile page when the kader row already has id and number
 
 **Seed proxy**:
-Outbound residential HTTP(S) proxy used only for Transfermarkt (and Football Kit Archive when that fetch is live) from Coolify. First vendor is Decodo residential, billed per GB. Coolify stores the secret and injects it into the job. Kader fetch on Coolify does not run until that secret is present (fail closed).
-_Avoid_: Coolify Traefik as the TM unblock; Decodo’s Transfermarkt Scraping API (browser/JS); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
+Outbound HTTP(S) proxy used only for Transfermarkt (and Football Kit Archive when that fetch is live) from Coolify. Vendors: Decodo residential (per GB) or Decodo Site Unblocker (`unblock.decodo.com` as HTTP proxy). Coolify stores the secret and injects it into the job. Kader fetch on Coolify does not run until that secret is present (fail closed).
+_Avoid_: Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
 
 **Opt-in Apify**:
 The existing Store-actor FetchAdapter. The operator must explicitly choose it. It is not an automatic fallback when Kader fetch fails or is slow. Quota is spent only when Nicklas opts in.

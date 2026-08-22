@@ -37,16 +37,50 @@ export interface ProxyFetchHtml {
   close: () => Promise<void>;
 }
 
+const DECODO_SITE_UNBLOCKER_HOST = "unblock.decodo.com";
+
+export function isDecodoSiteUnblockerProxy(proxyUrl: string): boolean {
+  try {
+    return new URL(proxyUrl).hostname.toLowerCase() === DECODO_SITE_UNBLOCKER_HOST;
+  } catch {
+    return false;
+  }
+}
+
+function createSeedProxyAgent(proxyUrl: string): ProxyAgent {
+  if (!isDecodoSiteUnblockerProxy(proxyUrl)) {
+    return new ProxyAgent(proxyUrl);
+  }
+
+  // Site Unblocker MITMs TLS; Decodo's client examples use verify=False / curl -k.
+  return new ProxyAgent({
+    uri: proxyUrl,
+    requestTls: { rejectUnauthorized: false },
+    proxyTls: { rejectUnauthorized: false },
+  });
+}
+
+function seedProxyRequestHeaders(proxyUrl: string): Record<string, string> {
+  if (isDecodoSiteUnblockerProxy(proxyUrl)) {
+    return {
+      "X-SU-Geo": "Germany",
+      "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+    };
+  }
+
+  return {
+    "User-Agent": "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
+    "Accept-Language": "en-US,en;q=0.9",
+  };
+}
+
 export function createProxyFetchHtml(proxyUrl: string): ProxyFetchHtml {
-  const agent = new ProxyAgent(proxyUrl);
+  const agent = createSeedProxyAgent(proxyUrl);
 
   const fetchHtml = async (url: string) => {
     const response = await undiciFetch(url, {
       dispatcher: agent,
-      headers: {
-        "User-Agent": "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
+      headers: seedProxyRequestHeaders(proxyUrl),
     });
 
     const text = await response.text();
