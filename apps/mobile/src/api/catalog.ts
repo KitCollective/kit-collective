@@ -1,6 +1,4 @@
 import {
-  type CatalogClubSearchResponse,
-  type CatalogClubSeasonsResponse,
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
 } from "@kit/api-contract";
@@ -22,18 +20,15 @@ export async function searchCatalogClubs(accessToken: string, query: string, loc
     throw new Error("Kunne ikke søge i kataloget");
   }
 
-  return catalogClubSearchResponseSchema.parse(await response.json()) as CatalogClubSearchResponse;
+  return catalogClubSearchResponseSchema.parse(await response.json());
 }
 
-export async function fetchClubSeasons(accessToken: string, clubId: string, locale = "da") {
-  const params = new URLSearchParams({ locale });
-  const response = await authGet(`/v1/catalog/clubs/${clubId}/seasons?${params}`, accessToken);
+export async function fetchClubSeasons(accessToken: string, clubId: string) {
+  const response = await authGet(`/v1/catalog/clubs/${clubId}/seasons`, accessToken);
 
   if (!response.ok) {
     throw new Error("Kunne ikke hente sæsoner");
   }
 
-  return catalogClubSeasonsResponseSchema.parse(
-    await response.json(),
-  ) as CatalogClubSeasonsResponse;
+  return catalogClubSeasonsResponseSchema.parse(await response.json());
 }

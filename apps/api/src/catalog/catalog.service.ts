@@ -206,8 +206,7 @@ export class CatalogService {
               and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
             )
             .where(inArray(club.id, clubIds))
-            .groupBy(club.id)
-            .orderBy(asc(resolvedLabel(club.id)));
+            .groupBy(club.id);
 
     const nationalTeamRows =
       nationalTeamIds.length === 0
@@ -226,19 +225,16 @@ export class CatalogService {
               ),
             )
             .where(inArray(nationalTeam.id, nationalTeamIds))
-            .groupBy(nationalTeam.id)
-            .orderBy(asc(resolvedLabel(nationalTeam.id)));
+            .groupBy(nationalTeam.id);
 
     const clubs = [...clubRows, ...nationalTeamRows]
       .map((row) => ({ id: row.id, label: row.label }))
-      .sort((a, b) => a.label.localeCompare(b.label, "da"));
+      .sort((a, b) => a.label.localeCompare(b.label, locale));
 
     return catalogClubSearchResponseSchema.parse({ clubs });
   }
 
-  async getClubSeasons(clubId: string, locale: LabelLocale): Promise<CatalogClubSeasonsResponse> {
-    void locale;
-
+  async getClubSeasons(clubId: string): Promise<CatalogClubSeasonsResponse> {
     const rows = await this.db
       .select({
         id: season.id,

@@ -29,14 +29,6 @@ export const catalogClubSearchResponseSchema = z
 
 export type CatalogClubSearchResponse = z.infer<typeof catalogClubSearchResponseSchema>;
 
-export const catalogClubSeasonsQuerySchema = z
-  .object({
-    locale: z.enum(PICKER_LABEL_LOCALES).default("da"),
-  })
-  .strict();
-
-export type CatalogClubSeasonsQuery = z.infer<typeof catalogClubSeasonsQuerySchema>;
-
 export const catalogClubSeasonsResponseSchema = z
   .object({
     seasons: z.array(catalogPickerItemSchema),

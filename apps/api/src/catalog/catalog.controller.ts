@@ -1,6 +1,5 @@
 import {
   catalogClubSearchResponseSchema,
-  catalogClubSeasonsQuerySchema,
   catalogClubSeasonsResponseSchema,
   catalogPickerSearchQuerySchema,
 } from "@kit/api-contract";
@@ -36,14 +35,8 @@ export class CatalogController {
 
   @Get("clubs/:clubId/seasons")
   @UseGuards(JwtAuthGuard)
-  async getClubSeasons(
-    @Param("clubId") clubId: string,
-    @Query() query: Record<string, string | string[] | undefined>,
-  ) {
-    const parsed = catalogClubSeasonsQuerySchema.parse({
-      locale: typeof query.locale === "string" ? query.locale : undefined,
-    });
-    const body = await this.catalogService.getClubSeasons(clubId, parsed.locale);
+  async getClubSeasons(@Param("clubId") clubId: string) {
+    const body = await this.catalogService.getClubSeasons(clubId);
     return catalogClubSeasonsResponseSchema.parse(body);
   }
 }

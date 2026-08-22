@@ -240,7 +240,7 @@ describe("Catalog picker /v1", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: `/v1/catalog/clubs/${insertedClub!.id}/seasons?locale=da`,
+      url: `/v1/catalog/clubs/${insertedClub!.id}/seasons`,
       headers: {
         authorization: `Bearer ${session.accessToken}`,
       },
