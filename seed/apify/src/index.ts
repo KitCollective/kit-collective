@@ -17,6 +17,14 @@ export {
 } from "./fetch/kader-fetch-adapter.js";
 export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
 export {
+  createTransfermarktRequestDelay,
+  createTransfermarktRetryFetch,
+  DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS,
+  DEFAULT_TRANSFERMARKT_RETRY_BASE_DELAY_MS,
+  DEFAULT_TRANSFERMARKT_RETRY_MAX_ATTEMPTS,
+  parsePositiveIntEnv,
+} from "./fetch/transfermarkt-fetch-policy.js";
+export {
   createTransfermarktRateLimitGuard,
   DEFAULT_TRANSFERMARKT_RATE_LIMIT_STOP_AFTER,
   TransfermarktCircuitOpenError,

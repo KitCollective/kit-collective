@@ -26,6 +26,10 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 | `DATABASE_URL` | yes | yes |
 | `SEED_PROXY_URL` | yes (live Kader on Coolify) | when FK origin 202s from CX33 |
 | `SEED_REQUIRE_PROXY` | recommended `true` on Coolify | recommended `true` on Coolify |
+| `SEED_TRANSFERMARKT_REQUEST_DELAY_MS` | optional (default `1500`) | — |
+| `SEED_TRANSFERMARKT_RETRY_MAX_ATTEMPTS` | optional (default `3`) | — |
+| `SEED_TRANSFERMARKT_RETRY_BASE_DELAY_MS` | optional (default `1000`) | — |
+| `SEED_TRANSFERMARKT_RATE_LIMIT_STOP_AFTER` | optional (default `3`) | — |
 | `APIFY_TOKEN` | only when `SEED_FETCH=apify` | — |
 | `FKAPI_BASE_URL` | — | yes (live listings; not fixture JSON) |
 | `FKAPI_TOKEN` | — | when FK origin requires auth |
@@ -38,6 +42,8 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 3. Set restart policy to **never** / run as a one-shot job or cron.
 4. Set the cgroup memory cap with compose **`mem_limit`** (e.g. `512m` on the Apify job). Coolify on this host does **not** enforce Swarm-only `deploy.resources.limits.memory`; use `mem_limit` so the one-shot job is capped for Node CLI RAM, not a full monorepo install + `tsc`.
 5. Store secrets in the matching Coolify environment (`development` or `staging`).
+
+For Decodo residential proxies, `SEED_PROXY_URL` may include optional sticky-session username parameters `session` and `sessionduration` (document names only in git; set values in Coolify). Omit `session` for rotating IPs.
 
 Agents can trigger deploy/start via Coolify MCP once the resource exists (`control` on the service UUID).
 
