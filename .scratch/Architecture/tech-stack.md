@@ -232,7 +232,7 @@ Compute and object storage: [server-stack](./server-stack.md). Inventory: [ops-e
 | `apps/api` | Long-running Node on **Hetzner CX33 Helsinki**, Coolify + Docker. Own Postgres + Redis beside it. **`api.kitcollective.app`** |
 | `apps/web` | Astro on Pages / Workers. **`kitcollective.app`** (www → apex). Read Nest. |
 | `apps/admin` | Static SPA behind auth. **`admin.kitcollective.app`**. Never indexed. |
-| `apps/mobile` | EAS Build / Submit. Channels: `development` / `staging` / `production`. |
+| `apps/mobile` | EAS Build / Submit. **Project id `ddddf92b-e7cd-4ec5-b07c-643106041550`.** Channels: `development` / `staging` / `production`. One Expo project; do not `eas init` a second id. |
 | Files | **Cloudflare R2.** Nest is the only writer/reader of secrets. |
 | Email | **AWS SES** from Nest, **EU region** (pick at provision — Frankfurt `eu-central-1` is the usual pair with Helsinki). Verify-email first; match mail later. How templates/from-address work is Notify-spec, not a lock now. |
 

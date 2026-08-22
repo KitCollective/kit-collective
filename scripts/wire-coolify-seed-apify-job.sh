@@ -9,7 +9,7 @@ LANE="${SEED_LANE:-development}"
 GIT_REPOSITORY="${GIT_REPOSITORY:-https://github.com/KitCollective/kit-collective.git}"
 GIT_REF="${GIT_REF:-development}"
 
-for name in COOLIFY_API_URL COOLIFY_API_TOKEN DATABASE_URL APIFY_TOKEN; do
+for name in COOLIFY_API_URL COOLIFY_API_TOKEN DATABASE_URL SEED_PROXY_URL; do
   if [[ -z "${!name:-}" ]]; then
     echo "wire-coolify-seed-apify-job: missing required env ${name}" >&2
     exit 1
@@ -60,7 +60,9 @@ COMPOSE_BODY="$(jq -n '{
       environment: {
         SEED_LANE: "${SEED_LANE}",
         DATABASE_URL: "${DATABASE_URL}",
-        APIFY_TOKEN: "${APIFY_TOKEN}",
+        SEED_PROXY_URL: "${SEED_PROXY_URL}",
+        SEED_REQUIRE_PROXY: "true",
+        APIFY_TOKEN: "${APIFY_TOKEN:-}",
         SEED_COMPETITION: "${SEED_COMPETITION}",
         SEED_FROM_SEASON: "${SEED_FROM_SEASON}",
         SEED_TO_SEASON: "${SEED_TO_SEASON}",
@@ -115,7 +117,8 @@ fi
 
 BULK_ENVS="$(jq -n \
   --arg database_url "$DATABASE_URL" \
-  --arg apify_token "$APIFY_TOKEN" \
+  --arg proxy_url "$SEED_PROXY_URL" \
+  --arg apify_token "${APIFY_TOKEN:-}" \
   --arg git_repository "$GIT_REPOSITORY" \
   --arg git_ref "$GIT_REF" \
   --arg competition "${SEED_COMPETITION:-superligaen}" \
@@ -124,6 +127,8 @@ BULK_ENVS="$(jq -n \
   '{
     data: [
       {key: "DATABASE_URL", value: $database_url, is_literal: true, is_preview: false},
+      {key: "SEED_PROXY_URL", value: $proxy_url, is_literal: true, is_preview: false},
+      {key: "SEED_REQUIRE_PROXY", value: "true", is_literal: true, is_preview: false},
       {key: "APIFY_TOKEN", value: $apify_token, is_literal: true, is_preview: false},
       {key: "SEED_LANE", value: "development", is_literal: true, is_preview: false},
       {key: "SEED_COMPETITION", value: $competition, is_literal: true, is_preview: false},

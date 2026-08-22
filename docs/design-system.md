@@ -1,0 +1,806 @@
+# Design system
+
+AI-ready visual and interaction lock for in-scope surfaces.
+Agents apply this file. Flag missing context; do not invent values, tokens, variants, or rules.
+
+**Surfaces in scope**: `mobile` (deep), `web` (thin, share/OG). `admin` and `api` are out of this lock.
+**Modes**: Lock 2026-08-22. Light is the default canvas. Dark is a full token mode that follows the system appearance.
+**Owner**: Nicklas
+
+**Taste (locked)**: Vinted for layout and scanability (grid, short captions, search, chips, tab bar) — not for marketplace mechanics. Uber Base for grayscale structure, components, and quiet motion — not for copying UberMove or importing Base Web. One cyan→violet identity wash as garnish, Premier League Fantasy–adjacent, never as chrome that competes with a jersey photo.
+
+**Anti-references**: Shirt Squad field wizards; Vinted buy/sell/price/boost/teal CTA; newbie primary/secondary palettes; emoji as icons; archive `KitPhoto` JPEGs as club marks; Fantasy-style gradient fills behind product photos.
+
+## Goals
+
+Status: `locked`
+
+**Problem**: Collectors have no serious place to register and scan a football-shirt collection. Implementing agents have no visual lock, so they invent taste. Both fail the same way: slow capture and noisy chrome.
+
+**Audience**: Nordic collectors (Denmark first, then Sweden and Norway). Implementing agents composing Expo and Astro screens.
+
+**Outcomes**: Jersey #2 in under 45 seconds. The collection scans as a photo grid, not a spreadsheet. A public Astro link looks like the same product when pasted into a Facebook group. Missing decisions are flagged, not filled with taste.
+
+**Evidence**: Product PRD (`.scratch/Business/PRD.md`) UX principles; registration-speed research (`.scratch/Research/jersey-registration-speed.md`); this lock interview (Vinted IA + Base grayscale + one wash).
+
+**Priorities**: Owned photo and capture speed over catalog completeness. Grayscale chrome over a mascot brand hue. Data marks over decoration.
+
+**Constraints**: No archive kit renders in Expo, Astro, or OG until rights are resolved. No emoji as illustration. Clients do not import `apps/api` or `packages/db`. UI copy is Danish-first; labels come from `CatalogLabel`, never the English seed string as the Danish name. Hit targets ≥ 44×44 on `mobile`. WCAG AA for text and essential controls. `prefers-reduced-motion` has a still equivalent.
+
+**Non-goals**: A component library for its own sake. Cloning Uber or Vinted branding. Price, buy/sell, or marketplace listing UI. Serving `KitPhoto` to users. Inventing a logo in this lock.
+
+Flag missing context; do not invent priorities.
+
+## Principles
+
+Status: `locked`
+
+**Jersey first**: The collector’s photo is the interface; chrome is grayscale scaffolding.
+- **When it collides**: Identity wash, badges, and metadata yield to the photo.
+- **Follow**: A collection card where the jersey fills the tile and club + season sit as a caption under it.
+- **Violate**: A Fantasy-style gradient fill behind the jersey photo.
+- **Goal it serves**: Scanable collection; photo as product image.
+
+**Fast capture**: One confirm screen beats a complete wizard.
+- **When it collides**: Extra fields yield to time-to-Save.
+- **Follow**: Club search, club-scoped season, chips for type / size / condition; nameset and purchase behind “More details”. Save does not wait on Vision.
+- **Violate**: A Shirt Squad–style twelve-step form before the row exists.
+- **Goal it serves**: Jersey #2 in under 45 seconds.
+
+**Structure without a mascot color**: Black, white, and gray carry hierarchy. One identity wash is garnish only.
+- **When it collides**: “Make it more branded” yields to grayscale UI. Gradients never encode status or fill a primary CTA.
+- **Follow**: Primary **Save** is black on light / white on dark.
+- **Violate**: A cyan primary button, or three washes used as success / warning / info.
+- **Goal it serves**: Quiet, Base-like structure; identity without a newbie palette.
+
+**Marks from data**: Country / league / club / player use a licensed mark when one exists; otherwise a monogram. Never emoji.
+- **When it collides**: An empty slot stays a monogram. Agents flag missing assets; they do not invent crests.
+- **Follow**: A club row with a crest or the letters from `CatalogLabel` on a gray tile.
+- **Violate**: ⚽, a made-up shield, or an archive kit JPEG used as a club logo.
+- **Goal it serves**: Catalog truth in the UI; no decoration pretending to be stamdata.
+
+Flag missing context; do not invent new rules.
+
+## Scope
+
+Status: `locked`
+
+**Included** (surface → depth):
+- `mobile` (Expo, iOS/Android): collection grid, empty state, add / confirm / Save, gallery-first onboarding and camera-on-repeat, search, chip filters, bottom navigation (Collection / Add / later Wishlist).
+- `web` (Astro): public collection page, single UserJersey page, Open Graph image and title — same tokens so a shared link is recognisably KitCollective. Thin: no login mutations, no capture UI.
+
+**Excluded** (with reason):
+- `api` and catalog peek (`GET /v1/catalog/peek`): unstyled Nest HTML, not product UI (ADR-0016).
+- Marketplace listing chrome (price, buy, boost, ratings on cards): product is a catalog, not Vinted-the-marketplace.
+- Archive `KitPhoto` bytes on Expo, Astro, or OG: `admin_only` until rights are resolved.
+- Emoji as icons or category marks.
+
+**Deferred** (with reason):
+- `admin`: no designed catalog browser in this lock; peek stays Nest HTML.
+- Wishlist chrome, IAP paywall, Expo Web as a first-class surface.
+- Logo / wordmark.
+- Identity wash variants 2 and 3: no named job yet.
+- Player portraits, league badges, and club crests as shipped artwork: UI slot is locked; assets are not.
+
+Flag missing context; do not expand scope.
+
+## Architecture
+
+Status: `locked`
+
+**Layers**: foundations → tokens → components → patterns.
+
+**Naming**: Purpose-encoded. Semantic tokens in UI (`color.content.primary`, `space.inset.md`). Primitives (`gray.0`, `gray.100`) only inside token files. Do not name tokens after hex or after Uber/Vinted.
+
+**Source of truth** per decision type:
+- What a thing *is* (Kit, UserJersey, CatalogLabel, Save): `CONTEXT.md`.
+- Visual and interaction rules: this file.
+- Machine-readable tokens for agents that look for Google Labs `DESIGN.md`: repo-root `DESIGN.md` (YAML front matter). Same values as this file; **this file wins** on conflict.
+- Why a hard-to-reverse product trade-off exists: `docs/adr/`.
+- Uber Base and Vinted: references for taste, not dependencies and not copy-paste APIs.
+
+**Placement rule**: A new visual decision lands in the lowest layer that can express it. A one-off screen color is a missing token — flag it. A new button look is a missing component variant — flag it. Do not add a layer.
+
+Flag missing context; do not invent layers.
+
+## Ownership
+
+Status: `locked`
+
+**Visual direction**: Nicklas.
+**Tokens / foundations**: Nicklas.
+**Components**: Nicklas (new primitives and variants).
+**Review / escalation**: Agents apply this file and flag gaps. Unresolved visual disagreement goes to Nicklas, not a new principle in a PR.
+
+Route requests. Do not assign authority.
+
+## Foundations
+
+### Color
+
+Status: `locked`
+
+**Purpose**: Grayscale structure so jersey photos dominate. Status color is functional. Identity wash is garnish, not a brand primary.
+
+**Roles**:
+| Role | Meaning |
+| --- | --- |
+| `canvas` | App/page background |
+| `surface` | Cards, fields, sheets |
+| `surface.raised` | Overlay sheet sitting on a scrim |
+| `content.primary` | Titles, primary labels, primary icon |
+| `content.secondary` | Captions, helper text |
+| `content.muted` | Placeholder, de-emphasized meta |
+| `content.inverse` | Text on primary fill or on dark photo scrims |
+| `border.subtle` | Card edge, input outline |
+| `border.strong` | High-emphasis hairline (selected card, if a line is used) |
+| `fill.primary` | Primary button fill (black on light, white on dark) |
+| `fill.secondary` | Secondary / quiet fill |
+| `danger` | Destructive or invalid. Never the only error signal |
+| `warning` | Caution that is not data-loss |
+| `success` | Completed, saved, matched |
+| `info` | Neutral system notice (not the identity wash) |
+| `identity.wash` | Single cyan→violet gradient garnish |
+| `scrim` | Dim behind sheets |
+
+**Usage**: Select semantic roles in UI. Primary actions use `fill.primary`, never `identity.wash`. Selected chips use `fill.primary` / inverse content or a strong border — not a wash. Vision suggestions use existing surface + content roles; do not invent a “AI purple”.
+
+**Relationships**: Elevation uses `surface` / `surface.raised` plus scrim, not a random lighter hex. Focus uses the border/focus foundation, not the wash.
+
+**Constraints**: Text and essential controls meet WCAG AA against their surface. Color is never the only error or selected signal. `identity.wash` is forbidden: behind a jersey photo, on body text, on a primary CTA, as success/warning/danger/info. Wash variants 2 and 3 are deferred.
+
+**Example** *(not a rule)*: Collection screen `canvas`; jersey tile `surface` with photo full-bleed inside the radius; caption `content.secondary`; **Save** `fill.primary`.
+
+**Exceptions**: Photo pixels are not tokens. A user JPEG may be any color; chrome around it stays grayscale.
+
+**Primitive values** (light):
+| Primitive | Value |
+| --- | --- |
+| `gray.0` | `#FFFFFF` |
+| `gray.50` | `#F4F4F4` |
+| `gray.100` | `#E8E8E8` |
+| `gray.400` | `#6B6B6B` |
+| `gray.600` | `#5E5E5E` |
+| `gray.900` | `#000000` |
+| `danger.500` | `#B42318` |
+| `warning.500` | `#F5A623` |
+| `success.500` | `#0E8345` |
+| `info.500` | `#276EF1` |
+| `identity.wash.start` | `#00D4F5` |
+| `identity.wash.end` | `#6B2FFF` |
+
+**Semantic aliases (light)**: `canvas` → `gray.0`; `surface` → `gray.0`; `surface.raised` → `gray.0`; `content.primary` → `gray.900`; `content.secondary` → `gray.600`; `content.muted` → `gray.400`; `content.inverse` → `gray.0`; `border.subtle` → `gray.100`; `border.strong` → `gray.900`; `fill.primary` → `gray.900`; `fill.secondary` → `gray.50`; `scrim` → `gray.900` at 40% opacity.
+
+**Semantic aliases (dark)**: `canvas` → `gray.900`; `surface` → `#1A1A1A`; `surface.raised` → `#2A2A2A`; `content.primary` → `gray.0`; `content.secondary` → `#C2C2C2`; `content.muted` → `#8A8A8A`; `content.inverse` → `gray.900`; `border.subtle` → `#333333`; `border.strong` → `gray.0`; `fill.primary` → `gray.0`; `fill.secondary` → `#2A2A2A`; `scrim` → `gray.900` at 60% opacity. Status primitives stay the same hues; check AA on the dark surface and flag if a control fails.
+
+`identity.wash`: linear gradient `start` → `end`, used at low opacity (about 12–24% fill) or as a thin (2px) rule / header strip. Never opaque full-bleed on a content card that holds a jersey photo.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Radius
+
+Status: `locked`
+
+**Purpose**: Two families so surfaces feel like Base cards and actions feel tappable, without rounding the jersey into a pill.
+
+**Scale**:
+| Token | Value | Use |
+| --- | --- | --- |
+| `radius.xs` | 4px | Tiny nested tags only |
+| `radius.sm` | 8px | Nested surfaces inside a card; compact controls that are not pills |
+| `radius.md` | 12px | Default cards, photo tiles, banners |
+| `radius.lg` | 16px | Sheets, dialogs, large containers |
+| `radius.pill` | 999px | Buttons, chips, search field |
+
+**Usage**: Photo tiles and collection cards use `radius.md`, not pill. Interactive elements that are not a card use `radius.pill`. Nested child radius shrinks one step (card `md` → nested `sm`).
+
+**Relationships**: Layout clips the photo to the tile radius. Border follows the same radius.
+
+**Constraints**: Do not use 0px on interactive elements. Do not put `radius.pill` on a jersey photo tile.
+
+**Example** *(not a rule)*: A collection tile at `radius.md` containing a full-bleed photo; a **Save** button at `radius.pill`.
+
+**Exceptions**: System sheets may use the platform’s own top-corner radius. Match `radius.lg` when we draw the sheet ourselves.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Motion
+
+Status: `locked`
+
+**Purpose**: Quiet confirmation that something happened. Never celebration, never decoration.
+
+**Scale** (Base-adjacent):
+| Token | Duration | Use |
+| --- | --- | --- |
+| `motion.fast` | 200ms | Pressed/hover color, chip select |
+| `motion.base` | 300ms | Sheet present, tab content fade |
+| `motion.slow` | 400ms | Rare: large contextual reveal (empty → first tile) |
+| Easing | `cubic-bezier(0.4, 0, 0.2, 1)` | Default in/out |
+
+**Usage**: Animate opacity and transform only. Moments that earn motion: shutter feedback, sheet present/dismiss, Vision suggestion fade-in, tab change. No bounce, no confetti, no auto-playing loops on load except a loading indicator.
+
+**Relationships**: Reduced-motion still states use the same layouts at rest.
+
+**Constraints**: `prefers-reduced-motion: reduce` → durations ~0 / no transform travel. Shutter may keep a one-frame highlight. Loading indicators may remain if they are the only progress signal.
+
+**Example** *(not a rule)*: Confirm sheet slides up in `motion.base`; Vision chips fade in with `motion.fast` when the suggestion arrives.
+
+**Exceptions**: Platform keyboard and system share sheets use OS motion.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Layout
+
+Status: `locked`
+
+**Purpose**: A Vinted-like scan of owned jerseys. Add is capture, not a listing. Public web is the same product at read-only depth.
+
+**Regions (mobile)**:
+| Region | Meaning |
+| --- | --- |
+| Screen | Full viewport plus safe-area insets |
+| Header | Title and search; not a marketing hero |
+| Body | Collection grid or confirm form |
+| Footer actions | Primary/secondary buttons for the current task |
+| Tab bar | Collection / Add / (later) Wishlist |
+
+**Usage (mobile)**: Collection body is a **two-column** photo grid on phone. Jersey photos on tiles are cropped **4:5**. Caption under the photo: club + season (and type if needed). Search in the header. Filters are chips, not a sidebar. **Add** opens the photo flow (gallery-first on first session, camera-first on repeat), not the overview and not a marketplace compose screen. “Same club” vs “New jersey” is a choice after Save, not inherited identity on **New**.
+
+**Usage (web)**:
+| Surface | Rule |
+| --- | --- |
+| Single UserJersey | Centered column, max-width **640px** |
+| Collection | Centered column, max-width **960px** |
+| Collection columns | 2 below 768px; 3 from 768px; 4 from 1024px; never more than 4 |
+| Open Graph | Canvas **1200×630**. User photo dominates. Club + season as text. `identity.wash` only as a thin top strip, never behind the jersey |
+
+**Relationships**: Grid gap is `space.gap.md`. Page inset is `space.inset.md`. Cards use `radius.md` and `surface`. Type roles from Typography.
+
+**Constraints**: No price, buy, boost, or ratings on a collection card. No teal (or wash) primary in the tab bar. Tab bar Add is capture. Safe-area insets are required on `mobile`. Content must reflow; do not hard-code a pixel width for the **mobile** grid (columns are 2, tiles flex). Do not invent a fifth desktop column.
+
+**Example** *(not a rule)*: Two tiles per row on iPhone; caption two lines max, ellipsis. Astro collection at 800px viewport shows two columns inside 960px.
+
+**Exceptions**: Confirm/Save is a single column. Camera session is full-bleed preview with three slots overlaid, not a grid. Capture does not crop while shooting. OG letterboxes a 4:5 photo on 1200×630 — do not crop the jersey to 16:9.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Typography
+
+Status: `locked`
+
+**Purpose**: Native, readable type so metadata stays secondary to the photo. No proprietary UberMove. No webfont until a logo pass.
+
+**Family**: Platform system UI — San Francisco on iOS, Roboto on Android, `system-ui` (with `-apple-system`, `Segoe UI`, `Roboto`, `sans-serif` fallbacks) on Astro.
+
+**Roles**:
+| Role | Size | Weight | Line-height | Use |
+| --- | --- | --- | --- | --- |
+| `title` | 22px | 600 | 28px | Screen titles |
+| `body` | 16px | 400 | 24px | Paragraphs, confirm helper text |
+| `label` | 16px | 500 | 20px | Buttons, chips, field labels |
+| `caption` | 13px | 400 | 18px | Club + season under a photo; meta |
+
+There is no `display` role in this lock.
+
+**Usage**: One role per line of UI text. Caption truncates at **two lines** with ellipsis. Do not use caption as a button label. Do not use title inside a collection tile.
+
+**Relationships**: Title + caption stacks use `space.gap.sm` between lines. Label sits in buttons/chips with `space.inset` from Spacing.
+
+**Constraints**: Body is at least 16px on `mobile`. Body and label follow Dynamic Type / font scaling; title and caption may scale but must not blow the tab bar or two-column grid. Text is never the only state signal. WCAG AA against the surface.
+
+**Example** *(not a rule)*: Collection header uses `title` “Samling”; each tile caption uses `caption` “F.C. København · 2023/24”.
+
+**Exceptions**: Legal / App Store fine print may use caption. System share sheets use OS type.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Spacing
+
+Status: `locked`
+
+**Purpose**: One rhythm for padding, gaps, and insets so screens do not invent local spacing.
+
+**Scale**: `4 / 8 / 12 / 16 / 24 / 32 / 48`.
+
+**Roles** (prefer these in UI; primitives only in token files):
+| Token | Value | Use |
+| --- | --- | --- |
+| `space.inset.sm` | 8px | Compact padding (chips, caption inset) |
+| `space.inset.md` | 16px | Default screen and card padding |
+| `space.inset.lg` | 24px | Generous padding (empty state, confirm sections) |
+| `space.gap.sm` | 8px | Tight stacks (title + caption) |
+| `space.gap.md` | 12px | Collection grid gap; form groups |
+| `space.gap.lg` | 16px | Between sections |
+
+**Usage**: Padding and gap come from the scale. Do not mix ad-hoc pixels with tokens on the same screen. One density: confirm uses the small end of the same scale, not a second compact token set.
+
+**Relationships**: Layout gutters use `space.inset.md` and `space.gap.md`. Typography line-boxes sit inside spacing, not the other way around.
+
+**Constraints**: Primary hit targets ≥ 44×44 on `mobile`. Compact density is not one-off tighter padding.
+
+**Example** *(not a rule)*: Collection grid uses `space.inset.md` page padding and `space.gap.md` between tiles.
+
+**Exceptions**: Platform sheets may use safe-area insets outside the scale.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Elevation
+
+Status: `locked`
+
+**Purpose**: Depth means “this is an overlay task”, not decoration. Cards stay flat so photos read as the surface.
+
+**Levels**:
+| Level | Token | Treatment |
+| --- | --- | --- |
+| Canvas | `elevation.canvas` | No shadow |
+| Card | `elevation.card` | No shadow. Edge is `border.subtle` |
+| Overlay | `elevation.overlay` | `scrim` + `surface.raised` sheet. Optional whisper shadow `0 4px 16px` at 12% black |
+
+**Usage**: Collection tiles stay at card (flat). Confirm, club search, and permission pre-prompts use overlay. Do not raise a tile on press with a drop shadow.
+
+**Relationships**: Overlay uses `color.scrim` and `color.surface.raised`. Motion `motion.base` for present/dismiss.
+
+**Constraints**: Overlay must dim the canvas and trap focus until dismissed. Elevation is not a brand flourish.
+
+**Example** *(not a rule)*: Club search is a sheet over the confirm screen; the grid behind is dimmed and inert.
+
+**Exceptions**: Camera preview is full-screen, not an elevated card.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Border
+
+Status: `locked`
+
+**Purpose**: Hairlines separate flat surfaces. Focus is a ring, not a wash. Error is a line **and** text.
+
+**Roles**:
+| Token | Treatment | Use |
+| --- | --- | --- |
+| `border.subtle` | 1px `color.border.subtle` | Cards, text fields, photo tiles |
+| `border.strong` | 1px `color.border.strong` | Selected card or selected chip when fill is not used |
+| `border.focus` | 2px `color.fill.primary`, 2px offset | Keyboard / accessibility focus |
+| `border.danger` | 1px `color.danger` | Invalid field; must pair with helper text |
+| Divider | 1px `border.subtle` | Two list groups with no heading between them |
+
+**Usage**: Prefer space over dividers inside a single form group. Do not use `identity.wash` as a focus or selected ring. `border.strong` aliases `gray.900` on light and `gray.0` on dark unless a dedicated primitive is added later — do not invent a new hex.
+
+**Relationships**: Radius follows the control. Focus ring is drawn outside the pill/card radius.
+
+**Constraints**: Focus is always visible for keyboard and accessibility focus. Color is never the only error signal. Dividers do not replace headings.
+
+**Example** *(not a rule)*: Search field: `border.subtle` at rest, `border.focus` on focus, `border.danger` plus “Klub er påkrævet” when Save is blocked on club.
+
+**Exceptions**: Hairline may be omitted on a photo tile if the photo’s edge reads against `canvas`; if contrast fails, keep `border.subtle`. Flag rather than inventing a thicker stroke.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+## Tokens
+
+Status: `locked` for foundations in this file. Component tokens are not used.
+
+**Layers**: primitive → semantic. No component-token layer.
+
+**Naming**: `color.{role}`, `type.{role}`, `space.inset|gap.{sm|md|lg}`, `radius.{step}`, `motion.{step}`, `elevation.{level}`. Purpose-encoded. Do not name after hex, Uber, or Vinted.
+
+**Modes**: `light` (default), `dark` (system).
+
+**References**: Semantic color aliases primitives. `identity.wash` references `identity.wash.start` and `identity.wash.end`. Type roles do not alias a custom family — they alias system UI. UI must not reference primitives.
+
+**Usage**: Select semantic tokens in UI; primitives only inside token files.
+
+| Token | Role | References | Surfaces |
+| --- | --- | --- | --- |
+| `color.canvas` | Page background | gray.0 / gray.900 | mobile, web |
+| `color.surface` | Card / field | see Color | mobile, web |
+| `color.fill.primary` | Primary button | gray.900 / gray.0 | mobile, web |
+| `color.identity.wash` | Garnish gradient | start → end | mobile, web (empty, share header, thin rule, OG strip) |
+| `type.title` / `type.body` / `type.label` / `type.caption` | Type roles | system UI; see Typography | mobile, web |
+| `space.inset.md` / `space.gap.md` | Default padding / grid gap | 16px / 12px | mobile, web |
+| `radius.md` | Cards / photo tiles | 12px | mobile, web |
+| `radius.pill` | Buttons / chips / search | 999px | mobile, web |
+| `elevation.card` | Flat tile | border only | mobile, web |
+| `elevation.overlay` | Sheet | scrim + raised surface | mobile |
+| `border.focus` | Focus ring | 2px fill.primary, 2px offset | mobile, web |
+| `motion.fast` / `motion.base` | Quiet UI | 200ms / 300ms | mobile, web |
+
+Flag missing context; do not invent tokens or values.
+
+## Components
+
+Status: `locked` for the inventory below. A primitive not listed: **flag**. Do not invent components or variants.
+
+**Inventory (v1)**: Button, Icon button, Search field, Text field, Chip, Jersey tile, Mark, List row, Photo slot, Empty state, Sheet, Tab bar, Banner.
+
+**Deferred primitives**: Switch, checkbox, user avatar, paywall card, wishlist row, admin tables.
+
+### Button
+
+**Purpose**: Commit an action the user asked for.
+
+**Anatomy**: Label (required). Leading icon (optional). No subtitle inside the button.
+
+**Properties**: `variant`: `primary` | `secondary` | `tertiary` | `destructive`. `size`: `md` (default) | `sm`. `disabled`, `loading`.
+
+**Variants**: `primary` = the one action that moves the task forward (`fill.primary`, `content.inverse`, `radius.pill`). `secondary` = alternative on the same surface (`fill.secondary` or outline `border.subtle` on `surface`). `tertiary` = low-emphasis, often inline (no fill). `destructive` = data-loss (`danger` fill, `content.inverse`). One `primary` per visible region.
+
+**States**: Rest, pressed, focus, disabled, loading (label stays; ignore a second submit).
+
+**Accessibility**: Visible label. Focus = `border.focus`. Disabled is not the only explanation — pair with helper text when Save is blocked. Hit target ≥ 44×44 on `mobile`. Contrast AA.
+
+**Composition**: Footer actions, empty-state action, inline in confirm. Destructive confirms in a Sheet when the cost is high.
+
+**Unsupported**: Two primaries in one region. Primary + destructive as equal side-by-side choices. `identity.wash` as button fill. Teal or cyan CTA.
+
+**Example** *(not a rule)*: Confirm footer: `primary` “Gem”, `tertiary` “Annuller”.
+
+**Code**: Unmapped until `apps/mobile` / `apps/web` exist. Flag; do not invent a host API.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Icon button
+
+**Purpose**: Compact action when a visible text label would not fit.
+
+**Anatomy**: Single icon. No caption inside the control.
+
+**Properties**: `name` (accessible string, required). `icon`. `disabled`.
+
+**Variants**: None. Emphasis comes from context, not a color variant. Do not add `primary` Icon button.
+
+**States**: Rest, pressed, focus, disabled.
+
+**Accessibility**: Accessible name required (e.g. “Luk”, “Kamera”). Hit target ≥ 44×44. Icon is not the only meaning — name is.
+
+**Composition**: Header trailing actions, camera shutter chrome. Not a substitute for Tab bar Add.
+
+**Unsupported**: Icon-only control without a name. Emoji as the icon.
+
+**Example** *(not a rule)*: Capture header “Luk” to abandon a draft (confirm in Sheet if photos exist).
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Search field
+
+**Purpose**: Filter the collection or find a catalog club by typed query.
+
+**Anatomy**: Leading search icon (decorative). Field. Optional clear control (Icon button). Visible label or `accessibilityLabel` (required).
+
+**Properties**: `value`, `placeholder` (not a label substitute), `onSubmit` / live filter. Collection search may filter as you type. Club search queries catalog IDs, never free-text club as truth.
+
+**Variants**: `collection` (header). `catalog` (club pick on confirm). Same chrome; different data.
+
+**States**: Rest, focus, disabled, empty. Error is rare; if the query cannot run, use Banner, not a red search field.
+
+**Accessibility**: Label associated. Hit target ≥ 44 tall. Keyboard: search / default.
+
+**Composition**: Collection header, or inside a Sheet for club pick. Uses `radius.pill`, `border.subtle`, `type.body`.
+
+**Unsupported**: Land → league → club hierarchy instead of search. Free-text club saved as catalog truth. Wash fill inside the field.
+
+**Example** *(not a rule)*: Confirm Sheet labelled “Klub”, placeholder “Søg klub”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Text field
+
+**Purpose**: Collect a short string we actually store (notes and similar under “Flere detaljer”). Not for club, season, type, size, or condition.
+
+**Anatomy**: Visible label (required). Field. Hint (optional). Error (optional; replaces hint when invalid).
+
+**Properties**: `value`, `placeholder` (not a label substitute), `optional`, `error`, `disabled`, platform keyboard hint.
+
+**Variants**: Single-line default. Multiline only for notes.
+
+**States**: Rest, focus, disabled, error. Empty is a value, not a special chrome.
+
+**Accessibility**: Label associated. Error = `border.danger` **plus** text, announced when it appears.
+
+**Composition**: Stacks in the Sheet “Flere detaljer” with `space.gap.md`. Does not sit inside a Button.
+
+**Unsupported**: Placeholder-only labels. Using Text field for catalog identity (club/season). Validating empty fields on every keystroke before blur/Save.
+
+**Example** *(not a rule)*: Label “Noter”, optional, body keyboard.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Chip
+
+**Purpose**: Pick one value from a small closed set (type, size, condition) or toggle a collection filter.
+
+**Anatomy**: Label (`type.label`). Optional leading Mark (not emoji). No photo inside a chip.
+
+**Properties**: `label` (required). `selected`. `disabled`. `onPress`.
+
+**Variants**: `single-select` (type / size / condition groups). `filter` (collection filters; more than one may be on).
+
+**States**: Rest, pressed, selected, disabled, focus. Selected = `fill.primary` + `content.inverse`. Not the wash.
+
+**Accessibility**: Role button or radio/checkbox according to variant. Name = label. Hit target ≥ 44 tall (pill may grow horizontally).
+
+**Composition**: Horizontal wrap with `space.gap.sm`. Lives on confirm or under collection search.
+
+**Unsupported**: Chip as a primary CTA. Encoding type with wash variant 2/3. Emoji in the chip.
+
+**Example** *(not a rule)*: Condition chips “Ny” / “Brugt” / “Slidt”; one selected.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Jersey tile
+
+**Purpose**: Show one UserJersey in a collection as a photo-first card.
+
+**Anatomy**: Photo (required to *display*; placeholder Mark/monogram only if the row has no photo yet — Save still requires at least one photo). Caption: club + season (`type.caption`, max two lines). Optional type on line two. No price. No buy. No ratings.
+
+**Properties**: `photo` (user JPEG). `clubLabel`, `seasonLabel` from resolved `CatalogLabel`. `onPress` opens detail. Crop **4:5**.
+
+**Variants**: `mobile-grid` and `web-grid` share anatomy; column count comes from Layout.
+
+**States**: Rest, pressed, focus. No hover-elevation. Loading photo: flat `fill.secondary` placeholder, not a skeleton wash.
+
+**Accessibility**: Name = club + season (and type if shown). Photo is informative; do not hide caption. Hit target = whole tile.
+
+**Composition**: Collection grid and Astro collection. Not used as the capture preview.
+
+**Unsupported**: Price, boost, marketplace footer. `identity.wash` behind the photo. Archive `KitPhoto`. Crop to 1:1 or 16:9 on the tile.
+
+**Example** *(not a rule)*: 4:5 FCK 2023/24 home photo; caption “F.C. København · 2023/24”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Mark
+
+**Purpose**: Identify a stamdata entity beside its label without using emoji or invented artwork.
+
+**Anatomy**: Square or circular image slot. If no licensed asset: gray `fill.secondary` tile + one or two letters from `CatalogLabel` (`type.label` or `type.caption`).
+
+**Properties**: `kind`: `country` | `league` | `club` | `player`. `asset` optional. `label` required for fallback letters and accessible name.
+
+**Variants**: None beyond `kind` (slot meaning). Sizes: `sm` 24px (chip), `md` 32px (list row). Do not invent more sizes.
+
+**States**: Rest only. Missing asset is fallback, not an error state.
+
+**Accessibility**: Name = entity label. Fallback letters are visible text or a labelled graphic. Decorative only when the adjacent text already names the entity — then hide the mark from the accessibility tree and keep the name on the row.
+
+**Composition**: Leading slot on List row; optional on Chip. Not a replacement for Jersey tile photo.
+
+**Unsupported**: Emoji. Made-up crests. Archive kit JPEG as club logo. Player portrait when no approved asset.
+
+**Example** *(not a rule)*: Club row with crest if licensed; otherwise “FC” on gray.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### List row
+
+**Purpose**: Show one catalog or settings item and let the user select or navigate.
+
+**Anatomy**: Leading Mark (optional). Title (`type.body` or `type.label`). Meta one line (`type.caption`). Trailing chevron or selected check — not both competing actions.
+
+**Properties**: `title`, `meta`, `onPress` or `selected`.
+
+**Variants**: `select` (club search). `navigate` (settings later — if used before settings ship, flag).
+
+**States**: Rest, pressed, selected, disabled, focus. List loading is list-level, not a row variant.
+
+**Accessibility**: Name = title + essential meta. Chevron decorative when the row is the control. Height ≥ 44 on `mobile`.
+
+**Composition**: Lives in a list inside a Sheet or screen. Empty list uses Empty state.
+
+**Unsupported**: Multiple primary actions in one row. Row as a form. Price as meta.
+
+**Example** *(not a rule)*: Club search result: Mark + “F.C. København” + meta “Superliga”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Photo slot
+
+**Purpose**: Capture or assign one UserJersey photo with a role.
+
+**Anatomy**: Preview (camera or thumbnail). Role label (`front` | `back` | `label`). Optional empty dashed `border.subtle` when vacant.
+
+**Properties**: `role`: `front` | `back` | `label`. `uri` optional. `onPress` capture or replace.
+
+**Variants**: `camera-overlay` (full-bleed preview, three slots). `confirm-strip` (thumbnails on confirm).
+
+**States**: Empty, filled, selected (which slot is next), focus. At least one filled photo required to Save; all three recommended, not required.
+
+**Accessibility**: Name includes role in Danish UI (“Forside”, “Bagside”, “Mærke”). Empty slot says it is empty. Hit target ≥ 44.
+
+**Composition**: Camera session pattern; confirm strip. Gallery-first onboarding fills slots from the picker.
+
+**Unsupported**: Emoji placeholders. Using ImagePicker camera as the primary repeat path (in-app `CameraView` is the repeat path). Blocking Save on all three slots.
+
+**Example** *(not a rule)*: Three overlay slots; Forside filled, Bagside and Mærke empty.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Empty state
+
+**Purpose**: Explain an empty collection and the next useful action.
+
+**Anatomy**: Title (`type.title`). One-sentence body (`type.body`). Optional thin `identity.wash` rule above the title (garnish). One Button (`primary`).
+
+**Properties**: `title`, `body`, `action`.
+
+**Variants**: `collection` only in this lock.
+
+**States**: Rest. Do not animate emptiness.
+
+**Accessibility**: Text is meaning; wash is decorative. Action uses Button.
+
+**Composition**: Replaces the grid, not a tile inside it. Action starts add/capture (gallery-first on first session).
+
+**Unsupported**: Sarcasm. Three actions. Empty state used for Save errors (that is Banner). Full-bleed wash background. Illustration libraries or emoji.
+
+**Example** *(not a rule)*: “Ingen trøjer endnu” + “Tilføj den første fra galleriet.” + `primary` “Tilføj trøje”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Sheet
+
+**Purpose**: Focused overlay task over the current screen (club search, more details, destructive confirm).
+
+**Anatomy**: Scrim. Raised surface (`radius.lg` on the sheet). Grab/handle optional. Title. Body. Optional footer Buttons.
+
+**Properties**: `title`, `children`, `onDismiss`.
+
+**Variants**: `form` (club search / more details). `confirm` (destructive).
+
+**States**: Presenting, rest, dismissed. Focus trapped while open.
+
+**Accessibility**: Title is the accessible name. Scrim dim + focus trap. Escape / swipe-down dismisses when the task is cancellable. `motion.base`; reduced-motion = instant present, no travel.
+
+**Composition**: `elevation.overlay`. Contains Search field, List row, Text field, or Chip groups. Does not contain Tab bar.
+
+**Unsupported**: Full-screen sheet for the collection itself. Nested sheets more than one deep — flag. Wash as scrim.
+
+**Example** *(not a rule)*: “Vælg klub” with Search field + List rows.
+
+**Code**: Unmapped. Flag. Platform sheet OK if tokens (radius, colors) still apply.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Tab bar
+
+**Purpose**: Switch the app’s primary places. Add is capture, not a listing compose.
+
+**Anatomy**: Collection and Add as equal items. Wishlist is a third equal item **only when that milestone ships**; until then do not add a FAB or a sell bubble to fill the gap. Icon + `type.caption` or `type.label` text. Safe-area inset below.
+
+**Properties**: `active`: `collection` | `add` (add `wishlist` only when that tab ships).
+
+**Variants**: None. Equal width. Selected = `content.primary`. Unselected = `content.muted`. No fill. No wash. No raised center “sell” bubble. Add = plus + label, same size as the others.
+
+**States**: Active, inactive, focus. Do not invent a disabled-premium tab style.
+
+**Accessibility**: Role tab/tablist. Name in Danish (“Samling”, “Tilføj”; “Ønske” when that tab ships). Hit target ≥ 44 tall plus inset.
+
+**Composition**: Screen footer region. Selecting Add starts Photo slot capture flow, does not stay on an empty Add screen.
+
+**Unsupported**: FAB. Four tabs. Badge counts unless a later lock. Marketplace sell icon.
+
+**Example** *(not a rule)*: Samling active in black; Tilføj muted gray. Do not draw Ønske until that milestone.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Banner
+
+**Purpose**: Persistent or until-dismissed system feedback for a task failure or blocker (Save failed, catalog miss).
+
+**Anatomy**: Body text (`type.body`). Optional title. Optional tertiary action. Not a stack of toasts.
+
+**Properties**: `tone`: `danger` | `warning` | `info` | `success`. `message` (required). `action` optional.
+
+**Variants**: Tone only. Never use `identity.wash` as tone.
+
+**States**: Visible, dismissed. Do not auto-hide a Save error before the user can read it.
+
+**Accessibility**: Announced when it appears. Tone is not the only signal (text + optional icon that is not emoji). Contrast AA.
+
+**Composition**: Top of the current screen or confirm, below the header. One banner at a time.
+
+**Unsupported**: Toast rain on every chip tap. Vision “still loading” as danger. Blocking Save with a banner instead of keeping the draft.
+
+**Example** *(not a rule)*: `warning` “Klubben findes ikke i kataloget endnu” + draft kept; upgrade CTA is a Button, not a chip wash.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+## Patterns
+
+Status: `locked` for the three compositions below. Other compositions: flag.
+
+### Collection grid
+
+**Purpose**: Scan owned jerseys.
+
+**Composition**: Header (title + Search field + optional Chip filters) + two-column Jersey tiles (`space.gap.md`, `space.inset.md`) + Tab bar. Empty collection uses Empty state instead of the grid.
+
+**Unsupported**: Marketplace card extras. One-column gallery of uncropped 16:9 photos. Wash behind tiles.
+
+Flag missing context; do not invent patterns.
+
+### Confirm and Save
+
+**Purpose**: Attach photos to catalog identity and save without a wizard.
+
+**Composition**: Photo slot strip (at least one filled) + club Search (Sheet + List row + Mark) + club-scoped season + Chip groups (type, size, condition) + optional “Flere detaljer” Sheet (Text field, extra chips) + footer one `primary` Save. Vision suggestions appear as pre-selected chips or list selection when ready; Save does not wait.
+
+**Unsupported**: Multi-step stepper. Prefilling club on “Ny trøje”. Free-text club. Blocking on manufacturer or kit completeness.
+
+Flag missing context; do not invent patterns.
+
+### Capture session
+
+**Purpose**: Fill Photo slots.
+
+**Composition**: First session: system gallery / picker, multi-select into roles. Repeat: one `CameraView`, three Photo slots overlaid, gallery as text/tertiary escape. Persist draft locally after each shot. Then Confirm and Save.
+
+**Unsupported**: System camera one-shot as the repeat primary path. Asking camera + photos + push on first launch.
+
+Flag missing context; do not invent patterns.
+
+## Design–code alignment
+
+Status: `thin` — host apps are not scaffolded. Mapping is “flag until named”, not a license to invent APIs.
+
+| Decision | Surface | Code name | Notes / exceptions |
+| --- | --- | --- | --- |
+| Color / type / space tokens | mobile | *unmapped* | Expo theme or NativeWind — flag until named |
+| Color / type / space tokens | web | *unmapped* | CSS variables on Astro — flag until named |
+| Button … Banner | mobile | *unmapped* | One component per inventory name |
+| Jersey tile | web | *unmapped* | Same 4:5 crop and caption rules |
+| Identity wash | mobile, web | *unmapped* | Gradient; never on `KitPhoto` or jersey photo |
+| Tab bar | mobile | *unmapped* | Equal tabs; Add → capture |
+| Catalog peek | api | `GET /v1/catalog/peek` | Not in this system |
+| OG canvas | web | *unmapped* | 1200×630; letterbox 4:5; wash top strip only |
+
+**Behavior parity**: Save, gallery-first vs camera-repeat, and “no archive renders” are product rules (`CONTEXT.md` + this file), not platform exceptions.
+
+**Supported exceptions**: System photo picker, system share sheet, OS keyboard, OS font (SF / Roboto / `system-ui`). Native sheet chrome if colors and radius still match.
+
+Flag missing context; do not invent APIs or behavior.
+
+## Using this file
+
+1. Read Goals, Principles, and Scope before any screen.
+2. Choose existing tokens and components. Compose patterns only as documented.
+3. If the screen needs a decision this file does not contain: **flag it**. Do not fill the gap with taste.
+4. Platform exceptions live in Design–code alignment, not as one-off values in a component.
+5. Root `DESIGN.md` is the token snapshot (Google Labs format). Do not treat it as a second set of product rules.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+## Deferred
+
+| Area | Why now | Revisit when |
+| --- | --- | --- |
+| Design–code host names | `apps/mobile` and `apps/web` are not scaffolded | First Expo/Astro slice maps tokens here |
+| Admin UI | Peek is enough to verify seed | Admin is in scope as a product surface |
+| Logo | Not designed | Brand pass |
+| Wash variants 2–3 | No named job | A taxonomy (e.g. kit type) needs distinction |
+| Crest / badge / portrait files | Rights and assets missing | Stamdata has approved marks |
+| Adopt / Evolve roadmap areas | First lock | A later Gap pass |
+| Expo Web as first-class | Degraded by stack lock | If Expo Web ships as a real surface |
