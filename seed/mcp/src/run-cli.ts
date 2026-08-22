@@ -106,13 +106,24 @@ function scopeToCliArgs(scope: SeedScope): string[] {
   return [scope.competition, scope.fromSeason, scope.toSeason];
 }
 
+export function omitCoolifyHostEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const next: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (key.startsWith("COOLIFY_") || value === undefined) {
+      continue;
+    }
+    next[key] = value;
+  }
+  return next;
+}
+
 export function laneEnvForCli(lane: ResolvedSeedLane): NodeJS.ProcessEnv {
   const databaseVar = laneDatabaseEnvVar(lane);
   const databaseUrl =
     lane === "staging" ? process.env.SEED_STAGING_DATABASE_URL : process.env.DATABASE_URL;
 
   return {
-    ...process.env,
+    ...omitCoolifyHostEnv(process.env),
     SEED_LANE: lane,
     ...(databaseUrl ? { [databaseVar]: databaseUrl, DATABASE_URL: databaseUrl } : {}),
   };
