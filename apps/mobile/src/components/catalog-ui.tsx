@@ -139,11 +139,13 @@ type BannerProps = {
   action?: ReactNode;
 };
 
+// warning/success surface tokens are unmapped in docs/design-system.md — use neutral
+// surfaces until semantic aliases exist (see KIT-24 Linear comment).
 const bannerToneStyles: Record<BannerTone, { background: string; border: string }> = {
-  danger: { background: "#FEF3F2", border: color.danger },
-  warning: { background: "#FFFAEB", border: "#F79009" },
+  danger: { background: color.fillSecondary, border: color.danger },
+  warning: { background: color.fillSecondary, border: color.borderSubtle },
   info: { background: color.fillSecondary, border: color.borderSubtle },
-  success: { background: "#ECFDF3", border: "#12B76A" },
+  success: { background: color.fillSecondary, border: color.borderSubtle },
 };
 
 export function Banner({ tone, message, action }: BannerProps) {
