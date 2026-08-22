@@ -52,7 +52,7 @@ export function PhotoSlot({
             {
               width: slotWidth,
               height: slotHeight,
-              backgroundColor: isOverlay ? color.surface : color.surface,
+              backgroundColor: color.surface,
               opacity: isOverlay ? 0.75 : 1,
             },
             selected && isOverlay && styles.overlaySelected,

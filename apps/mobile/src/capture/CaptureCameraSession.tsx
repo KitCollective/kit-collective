@@ -1,11 +1,11 @@
 import { PHOTO_ROLES, type PhotoRole } from "@kit/domain";
 import { useIsFocused } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { captureQualityForRole } from "@/capture/photoBytes";
 import { Banner } from "@/components/catalog-ui";
 import { PhotoSlot } from "@/components/photo-slot";
@@ -18,12 +18,20 @@ type CaptureCameraSessionProps = {
   onContinue: () => void;
 };
 
+/**
+ * Repeat-capture session with in-app CameraView.
+ *
+ * Camera permission is deferred until shutter intent: CameraView is not mounted
+ * until the user has granted permission via the shutter button (see Expo camera
+ * docs — mounting CameraView before grant triggers the OS prompt on mount).
+ */
 export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessionProps) {
   const router = useRouter();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [pendingShot, setPendingShot] = useState(false);
   const [activeRole, setActiveRole] = useState<PhotoRole>(() => {
     const draft = loadDraft(draftId);
     return nextEmptyRole(draft.photos) ?? PHOTO_ROLES[0];
@@ -45,14 +53,7 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
     }
   }, [draftId]);
 
-  const takeShot = useCallback(async () => {
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        return;
-      }
-    }
-
+  const captureFromCamera = useCallback(async () => {
     if (!cameraRef.current) {
       return;
     }
@@ -68,33 +69,70 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
 
     upsertDraftPhoto(draftId, activeRole, shot.uri, "camera");
     refreshPhotos();
-  }, [activeRole, draftId, permission?.granted, refreshPhotos, requestPermission]);
+  }, [activeRole, draftId, refreshPhotos]);
 
-  const pickFromGallery = async () => {
-    const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!libraryPermission.granted) {
+  const takeShot = useCallback(async () => {
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        return;
+      }
+      setPendingShot(true);
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: false,
+    await captureFromCamera();
+  }, [captureFromCamera, permission?.granted, requestPermission]);
+
+  useEffect(() => {
+    if (!permission?.granted || !pendingShot || !isFocused) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const runPendingShot = async () => {
+      // CameraView mounts only after grant; wait one frame for the ref to attach.
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
+      if (cancelled || !cameraRef.current) {
+        return;
+      }
+
+      await captureFromCamera();
+      if (!cancelled) {
+        setPendingShot(false);
+      }
+    };
+
+    void runPendingShot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [captureFromCamera, isFocused, pendingShot, permission?.granted]);
+
+  const pickFromGallery = async () => {
+    const uris = await pickGalleryPhotos({
       quality: captureQualityForRole(activeRole),
     });
 
-    if (result.canceled || !result.assets[0]?.uri) {
+    if (!uris?.[0]) {
       return;
     }
 
-    upsertDraftPhoto(draftId, activeRole, result.assets[0].uri, "gallery");
+    upsertDraftPhoto(draftId, activeRole, uris[0], "gallery");
     refreshPhotos();
   };
 
   const cameraDenied = permission?.status === "denied";
+  const showCamera = isFocused && permission?.granted;
 
   return (
     <View style={styles.root}>
-      {isFocused && !cameraDenied ? (
+      {showCamera ? (
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.cameraFallback]} />

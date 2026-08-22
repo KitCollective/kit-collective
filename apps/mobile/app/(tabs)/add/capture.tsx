@@ -1,9 +1,9 @@
 import { PHOTO_ROLES } from "@kit/domain";
-import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
+import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { resolveCaptureMode } from "@/capture/sessionMode";
 import { Button } from "@/components/ui";
 import {
@@ -39,25 +39,19 @@ export default function CaptureScreen() {
   }, [draftId, router]);
 
   const openGalleryMulti = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+    const uris = await pickGalleryPhotos({
       allowsMultipleSelection: true,
       selectionLimit: PHOTO_ROLES.length,
       quality: 0.8,
     });
 
-    if (result.canceled) {
+    if (!uris) {
       return;
     }
 
     let roleIndex = 0;
-    for (const asset of result.assets) {
-      if (!asset.uri || roleIndex >= PHOTO_ROLES.length) {
+    for (const uri of uris) {
+      if (roleIndex >= PHOTO_ROLES.length) {
         continue;
       }
 
@@ -66,7 +60,7 @@ export default function CaptureScreen() {
         continue;
       }
 
-      upsertDraftPhoto(draftId, role, asset.uri, "gallery");
+      upsertDraftPhoto(draftId, role, uri, "gallery");
       roleIndex += 1;
     }
 

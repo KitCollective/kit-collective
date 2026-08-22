@@ -12,13 +12,13 @@ import {
   PHOTO_ROLES,
   type PhotoRole,
 } from "@kit/domain";
-import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
+import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
@@ -154,26 +154,15 @@ export default function ConfirmScreen() {
   }, [draftId]);
 
   const pickPhotoForRole = async (role: PhotoRole) => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: false,
+    const uris = await pickGalleryPhotos({
       quality: captureQualityForRole(role),
     });
 
-    if (result.canceled || !result.assets[0]?.uri) {
+    if (!uris?.[0] || !draftId) {
       return;
     }
 
-    if (!draftId) {
-      return;
-    }
-
-    upsertDraftPhoto(draftId, role, result.assets[0].uri, "gallery");
+    upsertDraftPhoto(draftId, role, uris[0], "gallery");
     refreshPhotosFromDraft();
   };
 
