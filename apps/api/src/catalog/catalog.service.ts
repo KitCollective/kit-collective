@@ -268,6 +268,7 @@ export class CatalogService {
         .selectDistinct({
           id: season.id,
           label: season.label,
+          startsOn: season.startsOn,
         })
         .from(kit)
         .innerJoin(season, eq(kit.seasonId, season.id))
