@@ -1,5 +1,4 @@
 import {
-  collectionJerseysSchema,
   type IdentityCredentials,
   type IdentityMe,
   type IdentitySession,
@@ -63,18 +62,4 @@ export async function fetchCurrentUser(accessToken: string): Promise<IdentityMe>
   }
 
   return identityMeSchema.parse(await response.json());
-}
-
-export async function fetchCollectionJerseys(accessToken: string) {
-  const response = await requestJson("/v1/collection/jerseys", {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error("Kunne ikke hente samling");
-  }
-
-  return collectionJerseysSchema.parse(await response.json());
 }

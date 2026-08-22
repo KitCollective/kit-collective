@@ -1,10 +1,18 @@
 import { z } from "zod";
+import { collectionJerseySchema } from "./save.js";
 
-/** Empty collection list for the signed-in collector shell. */
+/** Collection list for the signed-in collector. */
 export const collectionJerseysSchema = z
   .object({
-    jerseys: z.array(z.never()),
+    jerseys: z.array(collectionJerseySchema),
   })
   .strict();
 
 export type CollectionJerseys = z.infer<typeof collectionJerseysSchema>;
+
+export {
+  type CollectionJersey,
+  type CollectionJerseyPhoto,
+  collectionJerseyPhotoSchema,
+  collectionJerseySchema,
+} from "./save.js";

@@ -11,6 +11,7 @@
     "dev": "node --watch dist/main.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
     "@fastify/cors": "^11.3.0",
     "@kit/api-contract": "workspace:*",
     "@kit/db": "workspace:*",

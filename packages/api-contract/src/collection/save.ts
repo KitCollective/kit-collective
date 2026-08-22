@@ -1,0 +1,67 @@
+import {
+  JERSEY_CONDITIONS,
+  JERSEY_SIZES,
+  KIT_TYPES,
+  PHOTO_ROLES,
+  PHOTO_SOURCES,
+} from "@kit/domain";
+import { z } from "zod";
+
+export const collectionSavePhotoSchema = z
+  .object({
+    role: z.enum(PHOTO_ROLES),
+    source: z.enum(PHOTO_SOURCES),
+    contentBase64: z.string().min(1),
+  })
+  .strict();
+
+export const collectionSaveRequestSchema = z
+  .object({
+    draftId: z.string().uuid().optional(),
+    clubId: z.string().uuid(),
+    seasonId: z.string().uuid(),
+    catalogKitId: z.string().uuid().nullable().optional(),
+    type: z.enum(KIT_TYPES),
+    size: z.enum(JERSEY_SIZES),
+    condition: z.enum(JERSEY_CONDITIONS),
+    photos: z.array(collectionSavePhotoSchema).min(1),
+  })
+  .strict();
+
+export const collectionJerseyPhotoSchema = z
+  .object({
+    id: z.string().uuid(),
+    role: z.enum(PHOTO_ROLES),
+    source: z.enum(PHOTO_SOURCES),
+    objectKey: z.string().min(1),
+    photoUrl: z.string().min(1),
+    ocrStatus: z.literal("none"),
+  })
+  .strict();
+
+export const collectionJerseySchema = z
+  .object({
+    id: z.string().uuid(),
+    clubId: z.string().uuid(),
+    seasonId: z.string().uuid(),
+    catalogKitId: z.string().uuid().nullable(),
+    type: z.enum(KIT_TYPES),
+    size: z.enum(JERSEY_SIZES),
+    condition: z.enum(JERSEY_CONDITIONS),
+    clubLabel: z.string().min(1),
+    seasonLabel: z.string().min(1),
+    photos: z.array(collectionJerseyPhotoSchema).min(1),
+  })
+  .strict();
+
+export const collectionSaveResponseSchema = z
+  .object({
+    jersey: collectionJerseySchema,
+  })
+  .strict();
+
+export type CollectionSavePhoto = z.infer<typeof collectionSavePhotoSchema>;
+export type CollectionSaveRequest = z.infer<typeof collectionSaveRequestSchema>;
+export type CollectionJerseyPhoto = z.infer<typeof collectionJerseyPhotoSchema>;
+export type CollectionJersey = z.infer<typeof collectionJerseySchema>;
+export type CollectionSaveResponse = z.infer<typeof collectionSaveResponseSchema>;
