@@ -118,6 +118,12 @@ jobs:
       - name: Check workflow secret logging
         run: node scripts/check-workflow-secrets.mjs
 
+      - name: Check workflow API boot env
+        run: pnpm check:workflow-api-boot-env
+
+      - name: Check mobile tab bar anatomy
+        run: pnpm check:mobile-tab-bar
+
       - name: Lint GitHub Actions workflows
         run: bash scripts/lint-workflows.sh
 

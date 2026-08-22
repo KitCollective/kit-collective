@@ -1,4 +1,3 @@
-import { collectionJerseysSchema } from "@kit/api-contract";
 import { Body, Controller, Get, HttpCode, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "./current-user.decorator.js";
 import { IdentityService, type JwtPayload } from "./identity.service.js";
@@ -23,11 +22,5 @@ export class IdentityController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: JwtPayload) {
     return this.identityService.getMe(user.sub);
-  }
-
-  @Get("collection/jerseys")
-  @UseGuards(JwtAuthGuard)
-  listJerseys() {
-    return collectionJerseysSchema.parse({ jerseys: [] });
   }
 }

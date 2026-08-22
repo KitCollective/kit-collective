@@ -18,6 +18,9 @@ Apply the lock; do not invent taste:
   or Components inventory, flag the gap on the Linear issue. Do not invent layout, tokens,
   or new primitive names (e.g. `Screen`, `FieldLabel`) — use locked tokens inline or wait
   for sign-off.
+- Tab bar screens (`apps/mobile/app/(tabs)/`) must set `tabBarIcon` plus Danish
+  `tabBarLabel` on every tab — icon + label anatomy from `docs/design-system.md` Tab bar.
+  CI enforces this via `pnpm check:mobile-tab-bar`.
 - Grayscale carries hierarchy. The identity wash is garnish, never a primary CTA, chrome,
   or a status encoding.
 - Marks come from data — a licensed mark or a `CatalogLabel` monogram. Never emoji, never

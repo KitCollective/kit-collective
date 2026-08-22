@@ -1,5 +1,6 @@
 import {
   type IdentityMe,
+  type IdentityRole,
   type IdentitySession,
   identityCredentialsSchema,
   identityMeSchema,
@@ -17,7 +18,7 @@ const { hash, compare } = bcrypt;
 export type JwtPayload = {
   sub: string;
   email: string;
-  role: "user" | "admin";
+  role: IdentityRole;
 };
 
 @Injectable()
@@ -109,11 +110,7 @@ export class IdentityService {
     return identityMeSchema.parse(found);
   }
 
-  private buildSession(row: {
-    id: string;
-    email: string;
-    role: "user" | "admin";
-  }): IdentitySession {
+  private buildSession(row: { id: string; email: string; role: IdentityRole }): IdentitySession {
     const payload: JwtPayload = {
       sub: row.id,
       email: row.email,

@@ -56,6 +56,8 @@ jobs:
       - name: Smoke health + catalog stats in container
         env:
           DATABASE_URL: postgresql://kit:kit@postgres:5432/kit_deploy_test
+          # CI-only — Nest Identity requires JWT_SECRET at boot; not a product default.
+          JWT_SECRET: ci-test-jwt-secret-not-for-production
         run: |
           docker network create kit-deploy-test
           docker run -d --name postgres --network kit-deploy-test \
@@ -68,7 +70,9 @@ jobs:
             sleep 1
           done
           docker run -d --name kit-deploy-api --network kit-deploy-test \
-            -e DATABASE_URL="${DATABASE_URL}" -p 13000:3000 kit-api:${{ github.sha }}
+            -e DATABASE_URL="${DATABASE_URL}" \
+            -e JWT_SECRET="${JWT_SECRET}" \
+            -p 13000:3000 kit-api:${{ github.sha }}
           for i in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:13000/v1/health; then
               break

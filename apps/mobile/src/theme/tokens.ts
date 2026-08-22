@@ -36,14 +36,12 @@ export const radius = {
 } as const;
 
 export const space = {
-  xs: 4,
   insetSm: 8,
   insetMd: 16,
   insetLg: 24,
   gapSm: 8,
   gapMd: 12,
   gapLg: 16,
-  xl: 32,
 } as const;
 
 export const type = {

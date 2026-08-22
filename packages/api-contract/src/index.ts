@@ -6,14 +6,16 @@ export {
 export {
   type CollectionJerseys,
   collectionJerseysSchema,
-} from "./identity/collection.js";
+} from "./collection/jerseys.js";
 export {
   type IdentityCredentials,
   type IdentityMe,
+  type IdentityRole,
   type IdentitySession,
   type IdentityUser,
   identityCredentialsSchema,
   identityMeSchema,
+  identityRoleSchema,
   identitySessionSchema,
   identityUserSchema,
 } from "./identity/session.js";

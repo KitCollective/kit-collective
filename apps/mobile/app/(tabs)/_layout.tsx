@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Pressable, Text } from "react-native";
 import { useAuth } from "@/auth/AuthProvider";
@@ -39,6 +40,9 @@ export default function TabsLayout() {
         options={{
           title: "Samling",
           tabBarLabel: "Samling",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid-outline" size={size} color={color} accessibilityElementsHidden />
+          ),
         }}
       />
       <Tabs.Screen
@@ -46,6 +50,9 @@ export default function TabsLayout() {
         options={{
           title: "Tilføj",
           tabBarLabel: "Tilføj",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="add-outline" size={size} color={color} accessibilityElementsHidden />
+          ),
         }}
       />
     </Tabs>

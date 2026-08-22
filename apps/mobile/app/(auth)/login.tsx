@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: color.canvas,
     paddingHorizontal: space.insetLg,
-    paddingTop: space.xl,
+    paddingTop: space.insetLg,
   },
   form: {
     flex: 1,
@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     marginBottom: space.insetMd,
   },
   field: {
-    gap: space.xs,
+    gap: space.gapSm,
   },
   fieldLabel: {
     color: color.contentPrimary,

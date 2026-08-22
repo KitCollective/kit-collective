@@ -1,10 +1,14 @@
 import { z } from "zod";
 
+export const identityRoleSchema = z.enum(["user", "admin"]);
+
+export type IdentityRole = z.infer<typeof identityRoleSchema>;
+
 export const identityUserSchema = z
   .object({
     id: z.string().uuid(),
     email: z.string().email(),
-    role: z.enum(["user", "admin"]),
+    role: identityRoleSchema,
   })
   .strict();
 
