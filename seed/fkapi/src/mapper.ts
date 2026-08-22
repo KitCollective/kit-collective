@@ -27,6 +27,8 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
     let photosWritten = 0;
 
     for (const rawKit of rawKits) {
+      assertKitHasArchiveBytes(rawKit);
+
       const clubRow = await findClubByTransfermarktId(pool, rawKit.clubTransfermarktId);
       const seasonRow = await findSeasonForClub(pool, clubRow!.entityId, rawKit.seasonLabel);
 
@@ -68,6 +70,14 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
     return { kitsUpserted, photosWritten };
   } finally {
     await pool.end();
+  }
+}
+
+function assertKitHasArchiveBytes(rawKit: FkRawKit): void {
+  if (!rawKit.imageBytes || rawKit.imageBytes.length === 0) {
+    throw new Error(
+      `Kit ${rawKit.id} has no archive image bytes. Refusing accept without lane R2 object for this kit.`,
+    );
   }
 }
 
