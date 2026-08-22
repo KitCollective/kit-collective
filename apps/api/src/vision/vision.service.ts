@@ -1,7 +1,12 @@
-import type { VisionJobStatus, VisionSuggestions, VisionUserAction } from "@kit/api-contract";
+import {
+  resolveVisionSaveAction,
+  type VisionJobStatus,
+  type VisionSuggestions,
+  type VisionUserAction,
+} from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, season, visionLog } from "@kit/db";
-import type { LabelLocale } from "@kit/domain";
+import type { KitType, LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
@@ -217,23 +222,31 @@ export class VisionService {
     return true;
   }
 
-  /** Fire-and-forget enqueue from Collection Save after first photo is persisted. */
-  enqueueFromSave(
+  /**
+   * Records the terminal userAction on a VisionLog row at Save time.
+   * Server-side guarantee — does not rely on client follow-up logging.
+   */
+  async reconcileUserActionAtSave(
     userId: string,
-    photoBytes: Uint8Array,
-    enqueue: (payload: VisionJobPayload) => void,
-    draftId?: string,
-  ): void {
-    void this.createJob(userId, photoBytes, draftId).then((jobId) => {
-      this.enqueueJob(
-        {
-          jobId,
-          userId,
-          draftId,
-          photoBytes,
-        },
-        enqueue,
-      );
+    jobId: string,
+    userJerseyId: string,
+    selectedClubId: string,
+    selectedSeasonId: string,
+    selectedKitType: KitType,
+  ): Promise<void> {
+    const job = await this.getJob(userId, jobId);
+    if (!job) {
+      return;
+    }
+
+    const resolved = resolveVisionSaveAction({
+      status: job.status,
+      suggestions: job.suggestions,
+      selectedClubId,
+      selectedSeasonId,
+      selectedKitType: selectedKitType,
     });
+
+    await this.logUserAction(userId, jobId, resolved.action, userJerseyId);
   }
 }

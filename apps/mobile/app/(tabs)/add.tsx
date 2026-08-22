@@ -395,9 +395,10 @@ export default function AddScreen() {
         })),
       });
 
-      if (visionJobId && accessToken) {
+      const jobIdForLog = response.visionJobId ?? visionJobId;
+      if (jobIdForLog && accessToken) {
         try {
-          const job = await fetchVisionJob(accessToken, visionJobId);
+          const job = await fetchVisionJob(accessToken, jobIdForLog);
           const resolved = resolveVisionSaveAction({
             status: job.status,
             suggestions: job.suggestions,
@@ -407,7 +408,7 @@ export default function AddScreen() {
           });
 
           await logVisionAction(accessToken, {
-            jobId: visionJobId,
+            jobId: jobIdForLog,
             action: resolved.action,
             userJerseyId: response.jersey.id,
             clubId: resolved.clubId,
@@ -415,7 +416,7 @@ export default function AddScreen() {
             type: resolved.type,
           });
         } catch {
-          // Logging must not block navigation after Save.
+          // Logging must not block navigation after Save — server already reconciled.
         }
       }
 

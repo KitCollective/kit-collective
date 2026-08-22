@@ -2,10 +2,15 @@
 /**
  * Ratchet (KIT-27): fail CI when the mobile Save screen does not use the shared
  * resolveVisionSaveAction helper — every VisionJobStatus must log a userAction.
+ *
+ * Integration coverage: apps/api/tests/collection.test.ts case
+ * "sets VisionLog userAction when Save enqueues vision without client visionJobId"
+ * guards the server-side fallback enqueue path (lost/never-sent visionJobId).
  */
 import { readFileSync } from "node:fs";
 
 const addScreenPath = "apps/mobile/app/(tabs)/add.tsx";
+const collectionTestPath = "apps/api/tests/collection.test.ts";
 const violations = [];
 
 const source = readFileSync(addScreenPath, "utf8");
@@ -16,6 +21,12 @@ if (!source.includes("resolveVisionSaveAction")) {
   );
 }
 
+if (!source.includes("response.visionJobId")) {
+  violations.push(
+    `${addScreenPath}: must reconcile using response.visionJobId from Save when the client never learned the job id`,
+  );
+}
+
 const forbiddenPatterns = ["fullyMatches", "matchesClub && matchesSeason"];
 for (const pattern of forbiddenPatterns) {
   if (source.includes(pattern)) {
@@ -23,6 +34,17 @@ for (const pattern of forbiddenPatterns) {
       `${addScreenPath}: inline vision save-action branching (${pattern}) is forbidden — use resolveVisionSaveAction`,
     );
   }
+}
+
+const collectionTest = readFileSync(collectionTestPath, "utf8");
+if (
+  !collectionTest.includes(
+    "sets VisionLog userAction when Save enqueues vision without client visionJobId",
+  )
+) {
+  violations.push(
+    `${collectionTestPath}: must include the integration test that asserts vision_log.user_action is set when Save enqueues without client visionJobId`,
+  );
 }
 
 if (violations.length > 0) {

@@ -59,6 +59,8 @@ export const collectionJerseySchema = z
 export const collectionSaveResponseSchema = z
   .object({
     jersey: collectionJerseySchema,
+    /** Vision job id when Save started or reused one — client can reconcile userAction. */
+    visionJobId: z.string().uuid().optional(),
   })
   .strict();
 

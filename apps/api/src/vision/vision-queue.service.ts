@@ -24,12 +24,18 @@ export class VisionQueueService {
     });
   }
 
-  enqueueFromSave(userId: string, photoBytes: Uint8Array, draftId?: string): void {
-    this.visionService.enqueueFromSave(
-      userId,
-      photoBytes,
+  /** Creates the VisionLog row synchronously; inference runs async. Returns job id for Save reconciliation. */
+  async enqueueFromSave(userId: string, photoBytes: Uint8Array, draftId?: string): Promise<string> {
+    const jobId = await this.visionService.createJob(userId, photoBytes, draftId);
+    this.visionService.enqueueJob(
+      {
+        jobId,
+        userId,
+        draftId,
+        photoBytes,
+      },
       (payload) => this.enqueue(payload),
-      draftId,
     );
+    return jobId;
   }
 }

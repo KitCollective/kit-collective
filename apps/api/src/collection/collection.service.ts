@@ -196,14 +196,30 @@ export class CollectionService {
     const photos = await this.persistPhotos(userId, insertedJersey.id, body.photos);
 
     const firstPhoto = body.photos[0];
+    let effectiveVisionJobId = body.visionJobId ?? null;
     const shouldEnqueueVision =
       firstPhoto &&
-      !body.visionJobId &&
+      !effectiveVisionJobId &&
       !(body.draftId && (await this.visionService.findActiveJobForDraft(userId, body.draftId)));
 
     if (shouldEnqueueVision) {
       const firstPhotoBytes = decodeBase64Photo(firstPhoto.contentBase64);
-      this.visionQueueService.enqueueFromSave(userId, firstPhotoBytes, body.draftId);
+      effectiveVisionJobId = await this.visionQueueService.enqueueFromSave(
+        userId,
+        firstPhotoBytes,
+        body.draftId,
+      );
+    }
+
+    if (effectiveVisionJobId) {
+      await this.visionService.reconcileUserActionAtSave(
+        userId,
+        effectiveVisionJobId,
+        insertedJersey.id,
+        body.clubId,
+        body.seasonId,
+        body.type,
+      );
     }
 
     if (body.draftId) {
@@ -236,7 +252,10 @@ export class CollectionService {
       photos,
     };
 
-    return collectionSaveResponseSchema.parse({ jersey });
+    return collectionSaveResponseSchema.parse({
+      jersey,
+      visionJobId: effectiveVisionJobId ?? undefined,
+    });
   }
 
   async getPhotoBytes(userId: string, photoId: string): Promise<Uint8Array> {

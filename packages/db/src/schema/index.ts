@@ -18,10 +18,6 @@ import {
   PHOTO_SOURCES,
   USER_ROLES,
 } from "@kit/domain";
-
-const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
-const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
-
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -34,6 +30,9 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
+const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
 
 export const catalogEntityTypeEnum = pgEnum("catalog_entity_type", CATALOG_ENTITY_TYPES);
 export const externalIdEntityTypeEnum = pgEnum("external_id_entity_type", EXTERNAL_ID_ENTITY_TYPES);
