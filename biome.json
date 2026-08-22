@@ -65,6 +65,16 @@
   },
   "overrides": [
     {
+      "includes": ["apps/api/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useImportType": "off"
+          }
+        }
+      }
+    },
+    {
       "includes": [
         "factory.config.json",
         "factory.config.example.json",

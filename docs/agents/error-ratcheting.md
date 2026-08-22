@@ -82,6 +82,12 @@ Three rules are deliberately at warn, not error, and are the ratchet targets:
 
 `tools/oxlint/anti-slop/README.md` records which upstream rules we left out and why.
 
+`lint/style/useImportType` is off for `apps/api/src/**`. This is not a ratchet target — do
+not turn it on. Nest resolves constructor injection from `emitDecoratorMetadata`, and an
+`import type` is erased at compile time, so the emitted `design:paramtypes` degrades to
+`Function` and the module fails to build at runtime. Typecheck stays green, so CI only
+catches it in the API tests and the container smoke test.
+
 ### Ops MCP catalog evidence ratchet (KIT-17)
 
 `.cursor/hooks/block-manual-getmcptools-evidence.sh` denies manual writes under `.cursor/getmcptools-evidence/`. Agents record in-session catalog proof only via `scripts/record-getmcptools-evidence.sh <server>` fed with **this session's** `GetMcpTools` JSON. Prevents repeating the second KIT-17 checker fail (marking MCP-catalog AC complete without catalog evidence). Dashboard registration for Cloud Agents remains human-only (`KIT-18`). Tighten only.

@@ -1,5 +1,5 @@
 import { Controller, Get, Header } from "@nestjs/common";
-import type { CatalogService } from "./catalog.service.js";
+import { CatalogService } from "./catalog.service.js";
 
 @Controller("catalog")
 export class CatalogController {
