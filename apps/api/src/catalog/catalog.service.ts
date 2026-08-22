@@ -150,7 +150,7 @@ export class CatalogService {
     const kits: PeekKitRow[] = kitRows
       .filter((row) => row.clubId !== null)
       .map((row) => ({
-        clubId: row.clubId!,
+        clubId: row.clubId,
         seasonId: row.seasonId,
         kitType: row.kitType,
         photoCount: row.photoCount,

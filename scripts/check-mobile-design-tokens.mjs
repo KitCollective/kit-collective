@@ -28,11 +28,15 @@ function walk(dir) {
     const rel = relative(process.cwd(), fullPath);
 
     for (const match of source.matchAll(hexPattern)) {
-      violations.push(`${rel}: raw hex color "${match[0]}" — use semantic tokens from theme/tokens.ts`);
+      violations.push(
+        `${rel}: raw hex color "${match[0]}" — use semantic tokens from theme/tokens.ts`,
+      );
     }
 
     for (const match of source.matchAll(rgbPattern)) {
-      violations.push(`${rel}: raw rgb/rgba color "${match[0]}" — use semantic tokens from theme/tokens.ts`);
+      violations.push(
+        `${rel}: raw rgb/rgba color "${match[0]}" — use semantic tokens from theme/tokens.ts`,
+      );
     }
   }
 }
