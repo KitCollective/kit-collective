@@ -15,37 +15,37 @@ describe("resolveFetchAdapter", () => {
     delete process.env.APIFY_TOKEN;
     delete process.env.SEED_FETCH;
 
-    const adapter = await resolveFetchAdapter();
-    expect(adapter).toBeDefined();
-    expect(adapter.fetchClubSeason).toBeTypeOf("function");
+    const resolved = await resolveFetchAdapter();
+    expect(resolved).toBeDefined();
+    expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
   });
 
   it("uses nested fixture adapter when SEED_APIFY_FIXTURE is set", async () => {
     process.env.SEED_APIFY_FIXTURE = "/tmp/superliga-mini.json";
-    const adapter = await resolveFetchAdapter();
-    expect(adapter.fetchClubSeason).toBeTypeOf("function");
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
   });
 
   it("uses kader HTML fixtures when SEED_KADER_HTML is set", async () => {
     process.env.SEED_KADER_HTML = "/tmp/kader-html";
-    const adapter = await resolveFetchAdapter();
-    expect(adapter.fetchClubSeason).toBeTypeOf("function");
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
   });
 
   it("uses kader fetch by default even when SEED_APIFY_RECORDINGS is set", async () => {
     process.env.SEED_APIFY_RECORDINGS = "/tmp/actor-recordings";
     delete process.env.SEED_FETCH;
 
-    const adapter = await resolveFetchAdapter();
-    expect(adapter.fetchClubSeason).toBeTypeOf("function");
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
   });
 
   it("uses Apify recordings only when SEED_FETCH=apify", async () => {
     process.env.SEED_FETCH = "apify";
     process.env.SEED_APIFY_RECORDINGS = "/tmp/actor-recordings";
 
-    const adapter = await resolveFetchAdapter();
-    expect(adapter.fetchClubSeason).toBeTypeOf("function");
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
   });
 
   it("throws when SEED_FETCH=apify without recordings or token", async () => {
@@ -60,7 +60,7 @@ describe("resolveFetchAdapter", () => {
     process.env.APIFY_TOKEN = "test-token";
     delete process.env.SEED_FETCH;
 
-    const adapter = await resolveFetchAdapter();
-    expect(adapter.fetchClubSeason).toBeTypeOf("function");
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
   });
 });

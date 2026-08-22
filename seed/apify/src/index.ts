@@ -19,7 +19,14 @@ export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
 export { parseLane, resolveDatabaseUrl } from "./lane.js";
 export { mapFacts } from "./map/index.js";
 export { normalize, stripForbiddenFields } from "./normalize/index.js";
-export { resolveFetchAdapter } from "./resolve-fetch-adapter.js";
+export {
+  assertSeedProxyAvailable,
+  createProxyFetchHtml,
+  type ProxyFetchHtml,
+  resolveSeedProxyConfig,
+  type SeedProxyConfig,
+} from "./proxy-config.js";
+export { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 export {
   type ClubSeasonFailure,
   parseCliArgs,

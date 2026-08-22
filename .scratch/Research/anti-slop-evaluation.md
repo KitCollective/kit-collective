@@ -46,8 +46,11 @@ repository-specific rule set:
 3. Reject `object` parameters and unsafe dictionary contracts.
 4. Keep `unknown` allowed at named adapter/parser boundaries, but disallow
    masking it behind aliases or returning it from public contracts.
-5. Reject new module mocks from the start; current tests have no module mocks,
-   and the rule reinforces the existing preference for real dependency seams.
+5. Surface module mocks. This was scoped as an error because the tests had no
+   module mocks when the evaluation was written; KIT-21 has since landed
+   `seed-proxy.test.ts`, which mocks `undici` because `proxy-config.ts` offers
+   no injectable seam. The rule ships at warn with that single site as its
+   ratchet target.
 
 Before enforcing any new rule, add a CI job that runs both `pnpm typecheck` and
 the selected lint command. A one-week warning-only baseline, followed by
