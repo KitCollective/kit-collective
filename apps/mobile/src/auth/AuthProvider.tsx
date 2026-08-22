@@ -10,6 +10,7 @@ import {
 } from "react";
 import { fetchCurrentUser, loginCollector, registerCollector } from "@/api/identity";
 import { clearSession, loadSession, saveSession } from "@/auth/session";
+import { resetAddSession } from "@/session/addSession";
 
 type AuthContextValue = {
   user: IdentityUser | null;
@@ -85,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await clearSession();
+    resetAddSession();
     setSession(null);
   }, []);
 

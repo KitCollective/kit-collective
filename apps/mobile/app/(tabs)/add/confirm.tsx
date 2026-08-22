@@ -13,43 +13,34 @@ import {
   type PhotoRole,
 } from "@kit/domain";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
+import { PostSaveSheet } from "@/components/post-save-sheet";
 import { Button } from "@/components/ui";
+import {
+  deleteDraft,
+  loadDraft,
+  updateDraftFields,
+  upsertDraftPhoto,
+} from "@/drafts/jerseyDraftStore";
+import { markJerseySaved } from "@/session/addSession";
 import { color, space, type } from "@/theme/tokens";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 
-type LocalPhoto = {
-  uri: string;
-  base64: string;
-  role: PhotoRole;
-};
-
-type PhotoSlots = Record<PhotoRole, LocalPhoto | null>;
-
-const EMPTY_PHOTO_SLOTS: PhotoSlots = {
-  front: null,
-  back: null,
-  label: null,
-};
-
-function filledPhotos(slots: PhotoSlots): LocalPhoto[] {
-  return PHOTO_ROLES.map((role) => slots[role]).filter(
-    (photo): photo is LocalPhoto => photo !== null,
-  );
-}
-
-export default function AddScreen() {
+export default function ConfirmScreen() {
   const router = useRouter();
+  const { draftId } = useLocalSearchParams<{ draftId: string }>();
   const { accessToken } = useAuth();
+
   const [clubSheetOpen, setClubSheetOpen] = useState(false);
   const [seasonSheetOpen, setSeasonSheetOpen] = useState(false);
   const [clubQuery, setClubQuery] = useState("");
@@ -57,16 +48,53 @@ export default function AddScreen() {
   const [seasonResults, setSeasonResults] = useState<CatalogPickerItem[]>([]);
   const [selectedClub, setSelectedClub] = useState<CatalogPickerItem | null>(null);
   const [selectedSeason, setSelectedSeason] = useState<CatalogPickerItem | null>(null);
-  const [photos, setPhotos] = useState<PhotoSlots>(EMPTY_PHOTO_SLOTS);
   const [kitType, setKitType] = useState<KitType>("home");
   const [size, setSize] = useState<JerseySize>("m");
   const [condition, setCondition] = useState<JerseyCondition>("used");
+  const [photoUris, setPhotoUris] = useState<Record<PhotoRole, string | undefined>>({
+    front: undefined,
+    back: undefined,
+    label: undefined,
+  });
   const [searching, setSearching] = useState(false);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
   const [saving, setSaving] = useState(false);
   const [catalogMiss, setCatalogMiss] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [saveError, setSaveError] = useState(false);
+  const [postSaveOpen, setPostSaveOpen] = useState(false);
+  const [savedClub, setSavedClub] = useState<CatalogPickerItem | null>(null);
+  const [savedSeasonLabel, setSavedSeasonLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!draftId) {
+      router.replace("/(tabs)/add/capture");
+      return;
+    }
+
+    try {
+      const draft = loadDraft(draftId);
+      setKitType(draft.kitType);
+      setSize(draft.size);
+      setCondition(draft.condition);
+
+      const uris: Record<PhotoRole, string | undefined> = {
+        front: undefined,
+        back: undefined,
+        label: undefined,
+      };
+      for (const photo of draft.photos) {
+        uris[photo.role] = photo.uri;
+      }
+      setPhotoUris(uris);
+
+      if (draft.clubId && draft.clubLabel) {
+        setSelectedClub({ id: draft.clubId, label: draft.clubLabel });
+      }
+    } catch {
+      router.replace("/(tabs)/add/capture");
+    }
+  }, [draftId, router]);
 
   const runClubSearch = useCallback(
     async (query: string) => {
@@ -109,6 +137,22 @@ export default function AddScreen() {
     return () => clearTimeout(handle);
   }, [clubQuery, clubSheetOpen, runClubSearch]);
 
+  const refreshPhotosFromDraft = useCallback(() => {
+    if (!draftId) {
+      return;
+    }
+    const draft = loadDraft(draftId);
+    const uris: Record<PhotoRole, string | undefined> = {
+      front: undefined,
+      back: undefined,
+      label: undefined,
+    };
+    for (const photo of draft.photos) {
+      uris[photo.role] = photo.uri;
+    }
+    setPhotoUris(uris);
+  }, [draftId]);
+
   const pickPhotoForRole = async (role: PhotoRole) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -118,67 +162,19 @@ export default function AddScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: false,
-      quality: 0.8,
-      base64: true,
+      quality: captureQualityForRole(role),
     });
 
-    if (result.canceled || !result.assets[0]?.base64) {
+    if (result.canceled || !result.assets[0]?.uri) {
       return;
     }
 
-    const asset = result.assets[0];
-
-    setPhotos((current) => ({
-      ...current,
-      [role]: {
-        uri: asset.uri,
-        base64: asset.base64,
-        role,
-      },
-    }));
-  };
-
-  const pickGalleryPhotos = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
+    if (!draftId) {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: true,
-      quality: 0.8,
-      base64: true,
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    const nextSlots = { ...photos };
-    let roleIndex = 0;
-
-    for (const asset of result.assets) {
-      if (!asset.base64 || roleIndex >= PHOTO_ROLES.length) {
-        continue;
-      }
-
-      const role = PHOTO_ROLES[roleIndex];
-      if (!role) {
-        continue;
-      }
-
-      nextSlots[role] = {
-        uri: asset.uri,
-        base64: asset.base64,
-        role,
-      };
-      roleIndex += 1;
-    }
-
-    if (roleIndex > 0) {
-      setPhotos(nextSlots);
-    }
+    upsertDraftPhoto(draftId, role, result.assets[0].uri, "gallery");
+    refreshPhotosFromDraft();
   };
 
   const openClubSheet = () => {
@@ -195,6 +191,10 @@ export default function AddScreen() {
     setClubSheetOpen(false);
     setSeasonSheetOpen(true);
 
+    if (draftId) {
+      updateDraftFields(draftId, { clubId: club.id, clubLabel: club.label, seasonId: null });
+    }
+
     if (!accessToken) {
       return;
     }
@@ -210,11 +210,12 @@ export default function AddScreen() {
     }
   };
 
-  const photoList = filledPhotos(photos);
-  const canSave = accessToken && selectedClub && selectedSeason && photoList.length > 0 && !saving;
+  const photoList = PHOTO_ROLES.filter((role) => photoUris[role]);
+  const canSave =
+    accessToken && selectedClub && selectedSeason && photoList.length > 0 && !saving && draftId;
 
   const handleSave = async () => {
-    if (!accessToken || !selectedClub || !selectedSeason || photoList.length === 0) {
+    if (!accessToken || !selectedClub || !selectedSeason || photoList.length === 0 || !draftId) {
       return;
     }
 
@@ -222,21 +223,40 @@ export default function AddScreen() {
     setSaveError(false);
 
     try {
+      const draft = loadDraft(draftId);
+      const photoPayload = await Promise.all(
+        draft.photos.map(async (photo) => ({
+          role: photo.role,
+          source: photo.source,
+          contentBase64: await readPhotoBase64(photo.uri),
+        })),
+      );
+
+      updateDraftFields(draftId, {
+        kitType,
+        size,
+        condition,
+        clubId: selectedClub.id,
+        clubLabel: selectedClub.label,
+        seasonId: selectedSeason.id,
+      });
+
       await saveUserJersey(accessToken, {
+        draftId,
         clubId: selectedClub.id,
         seasonId: selectedSeason.id,
         catalogKitId: null,
         type: kitType,
         size,
         condition,
-        photos: photoList.map((photo) => ({
-          role: photo.role,
-          source: "gallery",
-          contentBase64: photo.base64,
-        })),
+        photos: photoPayload,
       });
 
-      router.replace("/(tabs)/collection");
+      markJerseySaved();
+      deleteDraft(draftId);
+      setSavedClub(selectedClub);
+      setSavedSeasonLabel(selectedSeason.label);
+      setPostSaveOpen(true);
     } catch {
       setSaveError(true);
     } finally {
@@ -244,34 +264,50 @@ export default function AddScreen() {
     }
   };
 
+  const handlePostSaveDismiss = () => {
+    setPostSaveOpen(false);
+    router.replace("/(tabs)/collection");
+  };
+
+  if (!draftId) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Bekræft og gem</Text>
-        <Text style={styles.body}>
-          Vælg foto, klub, sæson og detaljer. Gem kræver mindst ét foto.
-        </Text>
+        <Text style={styles.body}>Vælg klub, sæson og detaljer.</Text>
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Fotos</Text>
-          <Button
-            label="Vælg fra galleri"
-            variant="secondary"
-            onPress={() => void pickGalleryPhotos()}
-          />
           <View style={styles.photoRow}>
             {PHOTO_ROLES.map((role) => (
               <PhotoSlot
                 key={role}
                 role={role}
-                uri={photos[role]?.uri}
+                uri={photoUris[role]}
                 onPress={() => void pickPhotoForRole(role)}
               />
             ))}
           </View>
           {photoList.length === 0 ? (
             <Text style={styles.helper}>Mindst ét foto er påkrævet.</Text>
+          ) : photoList.length < PHOTO_ROLES.length ? (
+            <Text style={styles.helper}>
+              3 fotos anbefales — mærkefoto gør det lettere senere.
+            </Text>
           ) : null}
+          <Button
+            label="Tilføj fra galleri"
+            variant="tertiary"
+            onPress={() => {
+              const emptyRole = PHOTO_ROLES.find((role) => !photoUris[role]);
+              if (emptyRole) {
+                void pickPhotoForRole(emptyRole);
+              }
+            }}
+          />
         </View>
 
         {catalogMiss && !clubSheetOpen ? (
@@ -432,12 +468,22 @@ export default function AddScreen() {
                 onPress={() => {
                   setSelectedSeason(season);
                   setSeasonSheetOpen(false);
+                  if (draftId) {
+                    updateDraftFields(draftId, { seasonId: season.id });
+                  }
                 }}
               />
             ))}
           </ScrollView>
         )}
       </Sheet>
+
+      <PostSaveSheet
+        visible={postSaveOpen}
+        savedClub={savedClub}
+        savedSeasonLabel={savedSeasonLabel}
+        onDismiss={handlePostSaveDismiss}
+      />
     </View>
   );
 }
