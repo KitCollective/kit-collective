@@ -1,26 +1,19 @@
 import type { CatalogPickerItem } from "@kit/api-contract";
 import {
-  JERSEY_CONDITIONS,
   JERSEY_CONDITION_LABELS_DA,
+  JERSEY_CONDITIONS,
   JERSEY_SIZE_LABELS_DA,
   JERSEY_SIZES,
-  KIT_TYPE_LABELS_DA,
-  KIT_TYPES,
   type JerseyCondition,
   type JerseySize,
+  KIT_TYPE_LABELS_DA,
+  KIT_TYPES,
   type KitType,
 } from "@kit/domain";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
@@ -165,12 +158,7 @@ export default function AddScreen() {
     }
   };
 
-  const canSave =
-    accessToken &&
-    selectedClub &&
-    selectedSeason &&
-    photos.length > 0 &&
-    !saving;
+  const canSave = accessToken && selectedClub && selectedSeason && photos.length > 0 && !saving;
 
   const handleSave = async () => {
     if (!accessToken || !selectedClub || !selectedSeason || photos.length === 0) {
@@ -213,7 +201,11 @@ export default function AddScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Fotos</Text>
-          <Button label="Vælg fra galleri" variant="secondary" onPress={() => void pickGalleryPhotos()} />
+          <Button
+            label="Vælg fra galleri"
+            variant="secondary"
+            onPress={() => void pickGalleryPhotos()}
+          />
           {photos.length > 0 ? (
             <View style={styles.photoRow}>
               {photos.map((photo) => (
@@ -299,7 +291,9 @@ export default function AddScreen() {
           <Banner
             tone="danger"
             message="Kunne ikke gemme trøjen. Prøv igen."
-            action={<Button label="Prøv igen" variant="tertiary" onPress={() => void handleSave()} />}
+            action={
+              <Button label="Prøv igen" variant="tertiary" onPress={() => void handleSave()} />
+            }
           />
         ) : null}
       </ScrollView>
