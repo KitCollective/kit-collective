@@ -4,17 +4,13 @@ export const DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS = 1_500;
 export const DEFAULT_TRANSFERMARKT_RETRY_MAX_ATTEMPTS = 3;
 export const DEFAULT_TRANSFERMARKT_RETRY_BASE_DELAY_MS = 1_000;
 
-export interface TransfermarktSleep {
-  (ms: number): Promise<void>;
-}
+export type TransfermarktSleep = (ms: number) => Promise<void>;
 
 export interface TransfermarktClock {
   now(): number;
 }
 
-export interface TransfermarktRandom {
-  (): number;
-}
+export type TransfermarktRandom = () => number;
 
 export const defaultSleep: TransfermarktSleep = (ms) =>
   new Promise((resolve) => {
@@ -107,10 +103,7 @@ export function createTransfermarktRetryFetch(
   };
 }
 
-export function parsePositiveIntEnv(
-  value: string | undefined,
-  fallback: number,
-): number {
+export function parsePositiveIntEnv(value: string | undefined, fallback: number): number {
   if (!value?.trim()) {
     return fallback;
   }
