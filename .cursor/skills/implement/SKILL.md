@@ -33,4 +33,6 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 
 `/tdd` lists `paths.helpers` and spawns matches from each file’s YAML `description`. Do not hardcode helper names here.
 
+When the slice is labelled `mobile` or touches `apps/mobile`, Expo Router, React Native, or EAS, the matching helper (`react-expo`, and `devops` for EAS) must load vendor Expo skills under `.cursor/skills/expo/`: `expo-overview` first, then the matching leaf. Record those skill names in the workpad under `### Domain helpers used`. Product docs win if they conflict with a vendor Expo default.
+
 This implementer still owns the workpad, the branch, `/signal-up`, the PR, and the move to `In Review`. Planner owns claim. Helpers must not do those.

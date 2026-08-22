@@ -140,6 +140,7 @@ When the PR is up and proof is on Linear: clear addressed ### Review feedback, m
 If ### Review feedback asked for a ratchet, land it in this PR (docs/agents/error-ratcheting.md). Tighten only.
 
 Out of scope → /signal-up (cap applies).
+Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview then the matching leaf. Product docs win on conflict.
 ```
 
 ---
@@ -171,6 +172,7 @@ Checker is **judge-only**. Fail → `Implementing` wakes implement on the same i
 ```text
 You are the checker for Linear issue {{ issue.identifier }}.
 Read factory.config.json then WORKFLOW.md. Follow /code-review (Standards + Spec). Follow .cursor/agents/checker.md.
+Mobile/EAS diffs: Standards includes .cursor/skills/expo/ (expo-overview then matching leaf). Product docs win on conflict.
 
 No feature coding. Do not start /implement. Do not merge.
 
