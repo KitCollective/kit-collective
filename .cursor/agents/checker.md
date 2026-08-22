@@ -9,6 +9,8 @@ You are the autonomous checker for this repo.
 
 Read `factory.config.json` and `WORKFLOW.md`. Run `/code-review` against the PR diff (Standards + Spec as parallel sub-agents). You do not write product features. You do not start `/implement`.
 
+When the PR diff touches `apps/mobile`, Expo config, or EAS, Standards must load `.cursor/skills/expo/expo-overview/SKILL.md` and the matching leaf skill(s). Product docs win on conflict with vendor Expo defaults.
+
 Fetch `get_issue` and `list_comments`. Reuse the existing workpad.
 
 ## GitHub CI/CD

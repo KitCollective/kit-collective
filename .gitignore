@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .cursor/mcp.json
+.agents/
 node_modules/
 dist/
 .turbo/

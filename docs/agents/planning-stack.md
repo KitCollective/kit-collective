@@ -33,8 +33,8 @@ Keep `/to-tickets` (Matt’s name). It slices vertical issues onto a **milestone
 | `/to-spec` | Spec file + Linear project/milestones (kickoff: summary, description, lead, `craft:*`) or document ± milestone (feature). Seams confirmed. |
 | `/to-tickets` | Vertical Linear issues on **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not** Linear Agent = Cursor. |
 | Planner | Cron. Claims every eligible `dispatch.state` issue → `Implementing` by `ready-for-agent` + `blockedBy` + Linear priority. No concurrency cap. No code. |
-| `/implement` | Wakes on `Implementing`. Branch + PR + Linear evidence → `In Review`. |
-| Checker | Wakes on `In Review`. Judge-only `/code-review` + GitHub CI/CD. Pass + checks green → `Ready for merge`. Fail → `Implementing` + `### Review feedback` (same branch). |
+| `/implement` | Wakes on `Implementing`. Branch + PR + Linear evidence → `In Review`. Mobile/EAS slices load `.cursor/skills/expo/`. |
+| Checker | Wakes on `In Review`. Judge-only `/code-review` + GitHub CI/CD. Mobile/EAS diffs include Expo vendor skills on Standards. Pass + checks green → `Ready for merge`. Fail → `Implementing` + `### Review feedback` (same branch). |
 | Approver | Reads the GitHub PR. Linear `Done` **is** merge approval. |
 | `/land` | Merge to integration only. |
 | Staging | When **that milestone’s** issues are all Done or Canceled. |

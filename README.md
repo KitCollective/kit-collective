@@ -27,7 +27,7 @@ node scripts/generate-harness-docs.mjs
 
 Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → planner claims (`ready-for-agent` + unblocked).
 
-Working skills: `.cursor/skills/`. Domain helpers: `.cursor/agents/`.
+Working skills: `.cursor/skills/` (Expo/EAS vendor pack: `.cursor/skills/expo/`). Domain helpers: `.cursor/agents/`.
 
 ## Dispatch
 

@@ -14,6 +14,7 @@ Writing discipline: [WRITING.md](WRITING.md). Frontmatter and invocation: [SKILL
 ## Factory twist
 
 - Working skills live in **`.cursor/skills/<name>/`**. Never `~/.cursor/skills-cursor/`. Never recreate `.agents/`.
+- Vendored third-party packs (Expo) stay namespaced at **`.cursor/skills/expo/<skill>/`**. Do not flatten them into factory skills. Do not add factory `agents/openai.yaml` on top.
 - **Domain helpers** (Nest, Drizzle, Expo, …) live in `paths.helpers` (default `.cursor/agents/`). They are not skills and they never own Linear issues. If the user wants product specialization, write a helper, not a skill.
 - Skills stay **generic**. Product names, team keys, and lanes come from `factory.config.json`.
 - Every skill gets `agents/openai.yaml` (`display_name`, `short_description`). User-invoked skills also set `policy.allow_implicit_invocation: false` and `disable-model-invocation: true`.
