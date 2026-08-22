@@ -15,7 +15,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
@@ -23,7 +23,7 @@ import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { Button } from "@/components/ui";
-import { color, radius, space, type } from "@/theme/tokens";
+import { color, space, type } from "@/theme/tokens";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 
