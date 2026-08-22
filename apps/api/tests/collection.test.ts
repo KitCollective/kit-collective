@@ -19,9 +19,9 @@ import {
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
-import { FailingVisionAdapter, SlowVisionAdapter } from "../dist/vision/test-vision.adapters.js";
 import { AppModule } from "../dist/app.module.js";
+import { FailingVisionAdapter, SlowVisionAdapter } from "../dist/vision/test-vision.adapters.js";
+import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

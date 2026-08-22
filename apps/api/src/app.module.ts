@@ -7,13 +7,6 @@ import { IdentityModule } from "./identity/identity.module.js";
 import { VisionModule } from "./vision/vision.module.js";
 
 @Module({
-  imports: [
-    DbModule,
-    CatalogModule,
-    HealthModule,
-    IdentityModule,
-    VisionModule,
-    CollectionModule,
-  ],
+  imports: [DbModule, CatalogModule, HealthModule, IdentityModule, VisionModule, CollectionModule],
 })
 export class AppModule {}
