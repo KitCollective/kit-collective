@@ -1,26 +1,26 @@
 import { resolveCompetition } from "@kit/seed-shared";
-import type { ActorPlayerProfile, ActorSeasonClubRow } from "./actor-types.js";
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
   seasonClubRowsToPairs,
   startYearToLabel,
 } from "./actor-mapper.js";
-import {
-  parseCompetitionSeasonHtml,
-  parseKaderHtml,
-  parsePlayerProfileHtml,
-  type KaderParseWarning,
-} from "./kader-html-parser.js";
-import { createKaderHtmlStore, type KaderHtmlStore } from "./kader-html-store.js";
-import { labelToStartYear } from "./season-label.js";
-import { resolveProfiles } from "./squad-profile-hop.js";
+import type { ActorPlayerProfile, ActorSeasonClubRow } from "./actor-types.js";
 import type {
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
+import {
+  type KaderParseWarning,
+  parseCompetitionSeasonHtml,
+  parseKaderHtml,
+  parsePlayerProfileHtml,
+} from "./kader-html-parser.js";
+import { createKaderHtmlStore, type KaderHtmlStore } from "./kader-html-store.js";
+import { labelToStartYear } from "./season-label.js";
+import { resolveProfiles } from "./squad-profile-hop.js";
 
 export interface KaderFetchAdapterOptions {
   /** Directory of recorded Transfermarkt HTML fixtures (hermetic / CI mode). */
@@ -67,8 +67,7 @@ export class TransfermarktHttpError extends Error {
 async function defaultFetchHtml(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
-      "User-Agent":
-        "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
+      "User-Agent": "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
       "Accept-Language": "en-US,en;q=0.9",
     },
   });
@@ -86,7 +85,10 @@ interface KaderHtmlClient {
     clubId: string,
     season: number,
     clubName?: string,
-  ): Promise<{ squadRows: ReturnType<typeof parseKaderHtml>["squadRows"]; warnings: KaderParseWarning[] }>;
+  ): Promise<{
+    squadRows: ReturnType<typeof parseKaderHtml>["squadRows"];
+    warnings: KaderParseWarning[];
+  }>;
   fetchPlayerProfile(playerId: string): Promise<ActorPlayerProfile>;
 }
 
@@ -168,19 +170,12 @@ async function fetchClubSeasonWithClient(
   const startYear = labelToStartYear(params.season);
   const clubs = await client.fetchCompetitionSeason(params.competition, startYear);
   const clubName =
-    clubs.find((club) => club.clubId === params.clubExternalId)?.clubName ??
-    params.clubExternalId;
+    clubs.find((club) => club.clubId === params.clubExternalId)?.clubName ?? params.clubExternalId;
 
-  const { squadRows } = await client.fetchKader(
-    params.clubExternalId,
-    startYear,
-    clubName,
-  );
+  const { squadRows } = await client.fetchKader(params.clubExternalId, startYear, clubName);
 
   if (squadRows.length === 0) {
-    throw new Error(
-      `Missing kader for club ${params.clubExternalId} season ${params.season}`,
-    );
+    throw new Error(`Missing kader for club ${params.clubExternalId} season ${params.season}`);
   }
 
   const profileByPlayerId = await resolveProfiles(
@@ -267,7 +262,10 @@ function createLiveAdapter(
   return {
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
       const { fromYear, toYear } = resolveSeasonYearRange(params.fromSeason, params.toSeason);
-      const available = Array.from({ length: toYear - fromYear + 1 }, (_, index) => fromYear + index);
+      const available = Array.from(
+        { length: toYear - fromYear + 1 },
+        (_, index) => fromYear + index,
+      );
       const seasons = expandSeasonStartYears(
         params.competition,
         params.fromSeason,

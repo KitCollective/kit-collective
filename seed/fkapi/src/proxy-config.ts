@@ -16,9 +16,7 @@ function isTruthy(value: string | undefined): boolean {
   return TRUTHY.has(value.trim().toLowerCase());
 }
 
-export function resolveSeedProxyConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): SeedProxyConfig {
+export function resolveSeedProxyConfig(env: NodeJS.ProcessEnv = process.env): SeedProxyConfig {
   const proxyUrl = env.SEED_PROXY_URL?.trim() || undefined;
   const requireProxy = isTruthy(env.SEED_REQUIRE_PROXY);
 

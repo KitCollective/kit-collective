@@ -4,7 +4,7 @@
  * Prevents hardcoded Transfermarkt external_id values in seed/fkapi/tests that
  * collide on external_id_system_value_unique when tests share one DB pool.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -62,7 +62,9 @@ try {
     violations.push(`${FIXTURE_SCOPE_FILE}: must export seedApifyPrerequisites`);
   }
 } catch {
-  violations.push(`seed/fkapi/tests/${FIXTURE_SCOPE_FILE}: required fixture-scope module is missing`);
+  violations.push(
+    `seed/fkapi/tests/${FIXTURE_SCOPE_FILE}: required fixture-scope module is missing`,
+  );
 }
 
 if (violations.length > 0) {

@@ -1,14 +1,11 @@
 import "reflect-metadata";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { NestFastifyApplication, FastifyAdapter } from "@nestjs/platform-fastify";
-import { Test } from "@nestjs/testing";
+import { fileURLToPath } from "node:url";
 import {
-  createDb,
-  country,
-  club,
   catalogLabel,
+  club,
+  country,
+  createDb,
   kit,
   kitPhoto,
   league,
@@ -18,6 +15,9 @@ import {
   season,
   teamSeason,
 } from "@kit/db";
+import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
+import { Test } from "@nestjs/testing";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 
 const migrationsFolder = path.join(
@@ -26,8 +26,7 @@ const migrationsFolder = path.join(
 );
 
 const DATABASE_URL =
-  process.env.API_TEST_DATABASE_URL ??
-  "postgresql://kit:kit@localhost:5432/kit_api_test";
+  process.env.API_TEST_DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_api_test";
 
 async function prepareDatabase() {
   await resetDatabase(DATABASE_URL, migrationsFolder);
@@ -44,9 +43,7 @@ describe("GET /v1/catalog/peek", () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleRef.createNestApplication<NestFastifyApplication>(
-      new FastifyAdapter(),
-    );
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix("v1");
     await app.init();
     await app.getHttpAdapter().getInstance().ready();

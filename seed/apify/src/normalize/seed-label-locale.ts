@@ -26,6 +26,7 @@ function isLocaleInvariantSeedString(name: string): boolean {
     return false;
   }
 
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the ASCII range bound is the test itself.
   if (/[^\u0000-\u007F]/.test(trimmed)) {
     return /^[\p{L}\p{M}\s\-'.]+$/u.test(trimmed);
   }

@@ -1,5 +1,5 @@
-import { Inject, Injectable } from "@nestjs/common";
-import { catalogStatsSchema, type CatalogStats } from "@kit/api-contract";
+import { type CatalogStats, catalogStatsSchema } from "@kit/api-contract";
+import type { Db } from "@kit/db";
 import {
   catalogLabel,
   club,
@@ -16,9 +16,9 @@ import {
   teamSeason,
   user,
 } from "@kit/db";
+import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, count, eq, sql } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
-import type { Db } from "@kit/db";
 import { buildPeekHtml, type PeekClubRow, type PeekKitRow } from "./catalog-peek.js";
 
 @Injectable()
@@ -111,10 +111,7 @@ export class CatalogService {
       )
       .leftJoin(
         playerClubSeason,
-        and(
-          eq(playerClubSeason.clubId, club.id),
-          eq(playerClubSeason.seasonId, season.id),
-        ),
+        and(eq(playerClubSeason.clubId, club.id), eq(playerClubSeason.seasonId, season.id)),
       )
       .groupBy(season.id, season.label, club.id)
       .orderBy(asc(season.startsOn), asc(club.id));

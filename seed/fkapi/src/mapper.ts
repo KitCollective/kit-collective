@@ -1,9 +1,12 @@
 import { Pool } from "pg";
-import type { FkFetchAdapter, FkFetchScope, FkRawKit, ObjectStoreAdapter, SeedRunResult } from "./types.js";
-import {
-  EXTERNAL_SYSTEM_FKAPI,
-  EXTERNAL_SYSTEM_TRANSFERMARKT,
+import type {
+  FkFetchAdapter,
+  FkFetchScope,
+  FkRawKit,
+  ObjectStoreAdapter,
+  SeedRunResult,
 } from "./types.js";
+import { EXTERNAL_SYSTEM_FKAPI, EXTERNAL_SYSTEM_TRANSFERMARKT } from "./types.js";
 
 export type MapperOptions = {
   databaseUrl: string;

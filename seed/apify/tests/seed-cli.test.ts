@@ -1,22 +1,17 @@
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
-import {
-  catalogLabel,
-  createDb,
-  externalId,
-  resetDatabase,
-} from "@kit/db";
+import { fileURLToPath } from "node:url";
+import { catalogLabel, createDb, externalId, resetDatabase } from "@kit/db";
 import { resolveSeasonRef } from "@kit/seed-shared";
+import { and, eq } from "drizzle-orm";
+import { beforeAll, describe, expect, it } from "vitest";
+import type { FetchAdapter } from "../src/fetch/adapter.js";
 import { createFixtureFetchAdapter } from "../src/fetch/fixture-adapter.js";
 import { createRecordingFetchAdapter } from "../src/fetch/recording-adapter.js";
-import type { FetchAdapter } from "../src/fetch/adapter.js";
-import { normalize, stripForbiddenFields } from "../src/normalize/index.js";
-import { mapFacts } from "../src/map/index.js";
 import { parseLane } from "../src/lane.js";
-import { filterSeasons } from "../src/season-range.js";
+import { mapFacts } from "../src/map/index.js";
+import { normalize, stripForbiddenFields } from "../src/normalize/index.js";
 import { parseCliArgs, runSeed } from "../src/run.js";
+import { filterSeasons } from "../src/season-range.js";
 import { TM_SYSTEM } from "../src/types.js";
 
 const migrationsFolder = path.join(
@@ -29,8 +24,7 @@ const fixturePath = path.join(
   "../fixtures/superliga-mini.json",
 );
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
 
 async function prepareDatabase() {
   await resetDatabase(DATABASE_URL, migrationsFolder);
@@ -129,14 +123,7 @@ describe("CLI args", () => {
   });
 
   it("parses club + season scope", () => {
-    const parsed = parseCliArgs([
-      "node",
-      "seed-apify",
-      "club",
-      "dk1",
-      "club-190",
-      "23/24",
-    ]);
+    const parsed = parseCliArgs(["node", "seed-apify", "club", "dk1", "club-190", "23/24"]);
     expect(parsed.scope).toEqual({
       kind: "club",
       competition: "dk1",
@@ -372,22 +359,26 @@ describe("mapper idempotency", () => {
     const { db, pool: dbPool } = createDb(DATABASE_URL);
     try {
       await runSeed({
-      scope: {
-        kind: "club",
-        competition: "dk1",
-        clubExternalId: "club-191",
-        season: "23/24",
-      },
-      lane: "development",
-      fetchAdapter: createFixtureFetchAdapter(fixturePath),
-      databaseUrl: DATABASE_URL,
-    });
+        scope: {
+          kind: "club",
+          competition: "dk1",
+          clubExternalId: "club-191",
+          season: "23/24",
+        },
+        lane: "development",
+        fetchAdapter: createFixtureFetchAdapter(fixturePath),
+        databaseUrl: DATABASE_URL,
+      });
 
       const clubLabel = await db
         .select({ text: catalogLabel.text, locale: catalogLabel.locale })
         .from(catalogLabel)
         .where(
-          and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.locale, "en"), eq(catalogLabel.kind, "label")),
+          and(
+            eq(catalogLabel.entityType, "club"),
+            eq(catalogLabel.locale, "en"),
+            eq(catalogLabel.kind, "label"),
+          ),
         );
 
       expect(clubLabel.some((row) => row.text === "Brondby IF")).toBe(true);

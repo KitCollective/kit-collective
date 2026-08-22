@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { FkFetchAdapter, FkFetchScope, FkRawKit } from "./types.js";
 import { normalizeRawKit } from "./normalize.js";
 import {
   createSeedHttpFetch,
@@ -9,6 +8,7 @@ import {
   type SeedHttpFetch,
   type SeedProxyConfig,
 } from "./proxy-config.js";
+import type { FkFetchAdapter, FkFetchScope, FkRawKit } from "./types.js";
 
 const FIXTURE_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -23,6 +23,8 @@ export function createFixtureFetchAdapter(): FkFetchAdapter {
   return {
     async fetchKits(_scope: FkFetchScope): Promise<FkRawKit[]> {
       const raw = await readFile(FIXTURE_PATH, "utf8");
+      // SAFETY: the fixture is committed in this repository and normalizeRawKit rejects
+      // any record that does not parse into an FkRawKit.
       const parsed = JSON.parse(raw) as FixtureFile;
       const kits: FkRawKit[] = [];
       for (const item of parsed.kits) {
@@ -63,6 +65,8 @@ export function createFkApiFetchAdapter(options: FkApiFetchAdapterOptions = {}):
       }
 
       const response = await httpFetch(url.toString(), { headers });
+      // SAFETY: every record is parsed by normalizeRawKit, which drops anything that is
+      // not an FkRawKit, so a wrong shape here yields no kits rather than bad data.
       const body = (await response.json()) as { kits?: Record<string, unknown>[] };
       const kits: FkRawKit[] = [];
 

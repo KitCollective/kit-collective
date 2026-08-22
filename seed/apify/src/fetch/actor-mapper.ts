@@ -1,10 +1,6 @@
 import { resolveCompetition, resolveSeasonRef } from "@kit/seed-shared";
 import type { TransfermarktRawPayload } from "../types.js";
-import type {
-  ActorPlayerProfile,
-  ActorSeasonClubRow,
-  ActorSquadRow,
-} from "./actor-types.js";
+import type { ActorPlayerProfile, ActorSeasonClubRow, ActorSquadRow } from "./actor-types.js";
 import { labelToStartYear, seasonCalendarBounds, startYearToLabel } from "./season-label.js";
 
 export interface MapClubSeasonParams {
@@ -40,8 +36,7 @@ function resolvePlayer(
   row: ActorSquadRow,
   profileByPlayerId: Map<string, ActorPlayerProfile>,
 ): { id: string; name: string; jerseyNumber?: number } {
-  const needsProfile =
-    !row.playerId || row.shirtNumber === undefined || row.shirtNumber === null;
+  const needsProfile = !row.playerId || row.shirtNumber === undefined || row.shirtNumber === null;
 
   if (!needsProfile) {
     return {
@@ -131,12 +126,8 @@ export function expandSeasonStartYears(
     return [];
   }
 
-  const fromYear =
-    fromLabel === "today"
-      ? sorted[sorted.length - 1]!
-      : labelToStartYear(fromLabel);
-  const toYear =
-    toLabel === "today" ? sorted[sorted.length - 1]! : labelToStartYear(toLabel);
+  const fromYear = fromLabel === "today" ? sorted[sorted.length - 1]! : labelToStartYear(fromLabel);
+  const toYear = toLabel === "today" ? sorted[sorted.length - 1]! : labelToStartYear(toLabel);
 
   if (fromYear > toYear) {
     throw new Error(`from-season ${fromSeason} is after to-season ${toSeason}`);

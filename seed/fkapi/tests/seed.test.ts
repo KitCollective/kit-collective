@@ -1,12 +1,11 @@
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { resetTestDatabase } from "./test-db.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseCliArgs } from "../src/cli-args.js";
 import { createFixtureFetchAdapter } from "../src/fetch.js";
-import { normalizeRawKit } from "../src/normalize.js";
 import { runFkSeed } from "../src/mapper.js";
+import { normalizeRawKit } from "../src/normalize.js";
 import { runCli } from "../src/run.js";
 import type { FkFetchAdapter, ObjectStoreAdapter } from "../src/types.js";
 import { EXTERNAL_SYSTEM_FKAPI } from "../src/types.js";
@@ -15,14 +14,14 @@ import {
   createScopedFixtureFetchAdapter,
   seedApifyPrerequisites,
 } from "./fixture-scope.js";
+import { resetTestDatabase } from "./test-db.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../../packages/db/migrations",
 );
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
 
 function createMemoryObjectStore(): ObjectStoreAdapter & { objects: Map<string, Uint8Array> } {
   const objects = new Map<string, Uint8Array>();

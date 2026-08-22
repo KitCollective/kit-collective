@@ -1,10 +1,7 @@
-import { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
-import {
-  createApifyFetchAdapter,
-  createLiveApifyFetchAdapter,
-} from "./fetch/apify-adapter.js";
-import { createKaderFetchAdapter } from "./fetch/kader-fetch-adapter.js";
 import type { FetchAdapter } from "./fetch/adapter.js";
+import { createApifyFetchAdapter, createLiveApifyFetchAdapter } from "./fetch/apify-adapter.js";
+import { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
+import { createKaderFetchAdapter } from "./fetch/kader-fetch-adapter.js";
 import {
   assertSeedProxyAvailable,
   createProxyFetchHtml,

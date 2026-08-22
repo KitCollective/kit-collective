@@ -48,6 +48,15 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Format and lint
+        run: pnpm format:check
+
+      - name: Lint anti-slop patterns
+        run: pnpm lint:anti-slop
+
       - name: Check import boundaries
         run: pnpm check:imports
 

@@ -1,7 +1,7 @@
 import {
   CALENDAR_KINDS,
-  CLUB_KINDS,
   CATALOG_ENTITY_TYPES,
+  CLUB_KINDS,
   EXTERNAL_ID_ENTITY_TYPES,
   KIT_PHOTO_RIGHTS,
   KIT_PHOTO_VISIBILITY,
@@ -14,9 +14,9 @@ import {
 } from "@kit/domain";
 import { relations, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   date,
   integer,
-  type AnyPgColumn,
   pgEnum,
   pgTable,
   text,
@@ -26,10 +26,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const catalogEntityTypeEnum = pgEnum("catalog_entity_type", CATALOG_ENTITY_TYPES);
-export const externalIdEntityTypeEnum = pgEnum(
-  "external_id_entity_type",
-  EXTERNAL_ID_ENTITY_TYPES,
-);
+export const externalIdEntityTypeEnum = pgEnum("external_id_entity_type", EXTERNAL_ID_ENTITY_TYPES);
 export const labelLocaleEnum = pgEnum("label_locale", LABEL_LOCALES);
 export const labelKindEnum = pgEnum("label_kind", LABEL_KINDS);
 export const labelSourceEnum = pgEnum("label_source", LABEL_SOURCES);
@@ -104,9 +101,7 @@ export const teamSeason = pgTable(
       .references(() => season.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    uniqueIndex("team_season_club_season_unique").on(table.clubId, table.seasonId),
-  ],
+  (table) => [uniqueIndex("team_season_club_season_unique").on(table.clubId, table.seasonId)],
 );
 
 export const player = pgTable("player", {
@@ -131,11 +126,7 @@ export const playerClubSeason = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("player_club_season_unique").on(
-      table.playerId,
-      table.clubId,
-      table.seasonId,
-    ),
+    uniqueIndex("player_club_season_unique").on(table.playerId, table.clubId, table.seasonId),
   ],
 );
 

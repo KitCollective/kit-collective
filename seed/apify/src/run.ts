@@ -1,14 +1,14 @@
 import { createDb } from "@kit/db";
 import {
+  type ParsedSeedScope,
   parseSeedScopeArgv,
   resolveSeasonRef,
-  type ParsedSeedScope,
   type SeedScope,
 } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
-import { normalize } from "./normalize/index.js";
-import { mapFacts } from "./map/index.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
+import { mapFacts } from "./map/index.js";
+import { normalize } from "./normalize/index.js";
 import { isClubSeasonAlreadySeeded } from "./seeded.js";
 import type { Lane, MapResult } from "./types.js";
 

@@ -17,6 +17,7 @@ This is not a memory store. Wrong lessons are reverted with git.
 | `.cursor/hooks.json` | Which events run which scripts |
 | `.cursor/hooks/*.sh` | Command hooks (deny/allow) |
 | `.cursor/rules/*.mdc` | Always-applied agent rules |
+| `biome.json` / `oxlint.config.ts` | Format, lint, and anti-slop gates run in CI |
 | `docs/agents/error-ratcheting.md` | This contract |
 
 ## Default factory ratchet
@@ -59,6 +60,33 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 ### Coolify MCP control ratchet (KIT-17)
 
 `.cursor/hooks/block-coolify-rest-service-control.sh` denies shell commands that call Coolify REST `/api/v1/services/{uuid}/start|stop|restart` (including bare `curl` to those paths). Season-range runs must use the Coolify MCP `control` tool via `seed/coolify/mcp-call.sh` / `start-apify-job.sh`. Prevents repeating the first KIT-17 checker fail (REST start instead of MCP). Tighten only.
+
+### Code quality ratchet
+
+`biome.json` (format + lint), `oxlint.config.ts` with the vendored plugin under
+`tools/oxlint/anti-slop/`, and the CI steps `pnpm typecheck`, `pnpm format:check`,
+`pnpm lint:anti-slop`. `typecheck` runs each package's `tsconfig.test.json`, so test
+files are typechecked too. Tighten only.
+
+Three rules are deliberately at warn, not error, and are the ratchet targets:
+
+- `lint/style/noNonNullAssertion` (Biome) — the existing `!` sites are mostly
+  `const [row] = await …returning()`. Ratchet to error once those reads carry a guard.
+- `anti-slop/no-unsafe-dictionary-type` — the remaining sites are the raw Transfermarkt
+  and Football Kit Archive payloads that `normalize()` and `normalizeRawKit` exist to
+  parse. Ratchet to error once those adapters parse through a schema.
+- `anti-slop/no-module-mocking` — `seed/apify/tests/seed-proxy.test.ts` mocks `undici`
+  because `seed/apify/src/proxy-config.ts` imports `fetch` and `ProxyAgent` at module
+  scope, leaving the test no seam to inject. Ratchet to error once `proxy-config` takes
+  those as an injected dependency.
+
+`tools/oxlint/anti-slop/README.md` records which upstream rules we left out and why.
+
+`lint/style/useImportType` is off for `apps/api/src/**`. This is not a ratchet target — do
+not turn it on. Nest resolves constructor injection from `emitDecoratorMetadata`, and an
+`import type` is erased at compile time, so the emitted `design:paramtypes` degrades to
+`Function` and the module fails to build at runtime. Typecheck stays green, so CI only
+catches it in the API tests and the container smoke test.
 
 ### Ops MCP catalog evidence ratchet (KIT-17)
 

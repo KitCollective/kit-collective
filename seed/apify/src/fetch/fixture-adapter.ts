@@ -34,6 +34,8 @@ export function createFixtureFetchAdapter(fixturePath: string): FetchAdapter {
   async function loadFixture(): Promise<TransfermarktRawPayload> {
     if (!cached) {
       const raw = await readFile(fixturePath, "utf8");
+      // SAFETY: fixtures are committed in this repository, so their shape is fixed at
+      // review time rather than supplied by Transfermarkt at runtime.
       cached = JSON.parse(raw) as TransfermarktRawPayload;
     }
     return cached;
@@ -63,9 +65,7 @@ export function createFixtureFetchAdapter(fixturePath: string): FetchAdapter {
       const payload = await loadFixture();
       const scoped = scopeClubSeason(payload, params.clubExternalId, params.season);
       if (scoped.seasons.length === 0) {
-        throw new Error(
-          `Missing kader for club ${params.clubExternalId} season ${params.season}`,
-        );
+        throw new Error(`Missing kader for club ${params.clubExternalId} season ${params.season}`);
       }
       return scoped;
     },

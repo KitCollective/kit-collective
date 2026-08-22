@@ -1,16 +1,12 @@
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resetDatabase } from "../src/migrate.js";
 
-const migrationsFolder = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../migrations",
-);
+const migrationsFolder = path.join(path.dirname(fileURLToPath(import.meta.url)), "../migrations");
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
 
 const IDENTITY_TABLES = [
   "country",
@@ -116,14 +112,10 @@ describe("stamdata schema", () => {
   });
 
   it("enforces User email unique", async () => {
-    await pool.query(
-      `INSERT INTO "user" (email, password_hash) VALUES ('a@example.com', 'hash')`,
-    );
+    await pool.query(`INSERT INTO "user" (email, password_hash) VALUES ('a@example.com', 'hash')`);
 
     await expect(
-      pool.query(
-        `INSERT INTO "user" (email, password_hash) VALUES ('a@example.com', 'hash2')`,
-      ),
+      pool.query(`INSERT INTO "user" (email, password_hash) VALUES ('a@example.com', 'hash2')`),
     ).rejects.toThrow();
   });
 });
