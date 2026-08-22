@@ -9,16 +9,15 @@ import type {
 } from "../types.js";
 import { seedLabelLocale } from "./seed-label-locale.js";
 
-const FORBIDDEN_CLUB_KEYS = new Set([
-  "marketValue",
-  "agent",
-  "tmLogoUrl",
-  "transfermarktUrl",
-]);
+const FORBIDDEN_CLUB_KEYS = new Set(["marketValue", "agent", "tmLogoUrl", "transfermarktUrl"]);
 
 const FORBIDDEN_PLAYER_KEYS = new Set(["marketValue", "agent"]);
 
-function assertNoForbiddenKeys(value: Record<string, unknown>, forbidden: Set<string>, path: string) {
+function assertNoForbiddenKeys(
+  value: TransfermarktRawClub | TransfermarktRawPlayer,
+  forbidden: Set<string>,
+  path: string,
+) {
   for (const key of Object.keys(value)) {
     if (forbidden.has(key)) {
       throw new Error(`Forbidden field ${path}.${key} must be dropped before mapping`);
@@ -27,7 +26,7 @@ function assertNoForbiddenKeys(value: Record<string, unknown>, forbidden: Set<st
 }
 
 function normalizePlayer(raw: TransfermarktRawPlayer): NormalizedPlayer {
-  assertNoForbiddenKeys(raw as unknown as Record<string, unknown>, FORBIDDEN_PLAYER_KEYS, "player");
+  assertNoForbiddenKeys(raw, FORBIDDEN_PLAYER_KEYS, "player");
   return {
     externalId: raw.id,
     name: raw.name,
@@ -37,7 +36,7 @@ function normalizePlayer(raw: TransfermarktRawPlayer): NormalizedPlayer {
 }
 
 function normalizeClub(raw: TransfermarktRawClub): NormalizedClub {
-  assertNoForbiddenKeys(raw as unknown as Record<string, unknown>, FORBIDDEN_CLUB_KEYS, "club");
+  assertNoForbiddenKeys(raw, FORBIDDEN_CLUB_KEYS, "club");
   return {
     externalId: raw.id,
     name: raw.name,

@@ -1,4 +1,4 @@
-import { resolveSeedLane, type ResolvedSeedLane } from "./lane.js";
+import { type ResolvedSeedLane, resolveSeedLane } from "./lane.js";
 
 export type SeedCliArgs = {
   competition: string;
@@ -7,9 +7,7 @@ export type SeedCliArgs = {
   lane: ResolvedSeedLane;
 };
 
-export type ParseCliArgsResult =
-  | { ok: true; args: SeedCliArgs }
-  | { ok: false; error: string };
+export type ParseCliArgsResult = { ok: true; args: SeedCliArgs } | { ok: false; error: string };
 
 /**
  * Positional CLI contract shared by seed/apify and seed/fkapi:

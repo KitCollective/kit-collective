@@ -2,13 +2,13 @@ import {
   catalogLabel,
   club,
   country,
+  type Db,
   externalId,
   league,
   player,
   playerClubSeason,
   season,
   teamSeason,
-  type Db,
 } from "@kit/db";
 import type { CatalogEntityType, LabelLocale } from "@kit/domain";
 import { and, eq } from "drizzle-orm";
@@ -167,10 +167,7 @@ async function upsertClubRow(
     return { id: byExternal, created: false, labels: labelChanged ? 1 : 0, externalIds: 0 };
   }
 
-  const [row] = await db
-    .insert(club)
-    .values({ countryId, kind })
-    .returning({ id: club.id });
+  const [row] = await db.insert(club).values({ countryId, kind }).returning({ id: club.id });
   const id = row!.id;
   await linkExternalId(db, "club", id, externalValue);
   await upsertCatalogLabel(db, "club", id, nameLocale, name);

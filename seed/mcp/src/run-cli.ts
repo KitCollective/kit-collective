@@ -1,11 +1,11 @@
+import type { SpawnOptions } from "node:child_process";
 import {
   laneDatabaseEnvVar,
-  resolveSeedLane,
   type ParsedSeedScope,
   type ResolvedSeedLane,
+  resolveSeedLane,
   type SeedScope,
 } from "@kit/seed-shared";
-import type { SpawnOptions } from "node:child_process";
 
 export type CliRunner = (
   command: string,
@@ -29,7 +29,9 @@ export type SeedMcpInput = {
   lane?: string | null;
 };
 
-export function parseSeedMcpInput(input: SeedMcpInput): { ok: true; parsed: ParsedSeedScope } | { ok: false; error: string } {
+export function parseSeedMcpInput(
+  input: SeedMcpInput,
+): { ok: true; parsed: ParsedSeedScope } | { ok: false; error: string } {
   const laneResult = resolveSeedLane(input.lane);
   if (!laneResult.ok) {
     return { ok: false, error: laneResult.error };
@@ -66,7 +68,8 @@ export function parseSeedMcpInput(input: SeedMcpInput): { ok: true; parsed: Pars
   if (!fromSeason || !toSeason) {
     return {
       ok: false,
-      error: "fromSeason and toSeason are required for competition scope (or provide club + season)",
+      error:
+        "fromSeason and toSeason are required for competition scope (or provide club + season)",
     };
   }
 
@@ -106,9 +109,7 @@ function scopeToCliArgs(scope: SeedScope): string[] {
 export function laneEnvForCli(lane: ResolvedSeedLane): NodeJS.ProcessEnv {
   const databaseVar = laneDatabaseEnvVar(lane);
   const databaseUrl =
-    lane === "staging"
-      ? process.env.SEED_STAGING_DATABASE_URL
-      : process.env.DATABASE_URL;
+    lane === "staging" ? process.env.SEED_STAGING_DATABASE_URL : process.env.DATABASE_URL;
 
   return {
     ...process.env,

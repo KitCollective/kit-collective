@@ -1,15 +1,9 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { fileURLToPath } from "node:url";
+import { catalogLabel, createDb, externalId, playerClubSeason, resetDatabase } from "@kit/db";
 import { and, eq } from "drizzle-orm";
-import {
-  catalogLabel,
-  createDb,
-  externalId,
-  playerClubSeason,
-  resetDatabase,
-} from "@kit/db";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   createKaderFetchAdapter,
   TransfermarktHttpError,
@@ -29,8 +23,7 @@ const fixturesDir = path.join(
   "../fixtures/kader-html",
 );
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
 
 async function prepareDatabase() {
   await resetDatabase(DATABASE_URL, migrationsFolder);
@@ -144,10 +137,7 @@ describe("kader fetch adapter from recorded HTML", () => {
     );
     const kader190 = readFileSync(path.join(fixturesDir, "kader/190-2015.html"), "utf8");
     const kader191 = readFileSync(path.join(fixturesDir, "kader/191-2015.html"), "utf8");
-    const profile99999 = readFileSync(
-      path.join(fixturesDir, "profiles/player-99999.html"),
-      "utf8",
-    );
+    const profile99999 = readFileSync(path.join(fixturesDir, "profiles/player-99999.html"), "utf8");
 
     let competitionFetches = 0;
     const adapter = createKaderFetchAdapter({

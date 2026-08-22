@@ -1,4 +1,4 @@
-import { resolveSeedLane, type ResolvedSeedLane } from "./lane.js";
+import { type ResolvedSeedLane, resolveSeedLane } from "./lane.js";
 
 export type ClubSeedScope = {
   kind: "club";
@@ -25,7 +25,9 @@ export type ParseSeedScopeResult =
   | { ok: true; parsed: ParsedSeedScope }
   | { ok: false; error: string };
 
-function parseLaneArg(laneInput: string | undefined): ParseSeedScopeResult | { lane: ResolvedSeedLane } {
+function parseLaneArg(
+  laneInput: string | undefined,
+): ParseSeedScopeResult | { lane: ResolvedSeedLane } {
   const laneResult = resolveSeedLane(laneInput);
   if (!laneResult.ok) {
     return { ok: false, error: laneResult.error };
@@ -46,8 +48,7 @@ export function parseSeedScopeArgv(argv: string[]): ParseSeedScopeResult {
     if (argv.length < 4 || argv.length > 5) {
       return {
         ok: false,
-        error:
-          "Expected: club <competition> <club-external-id> <season> [lane]",
+        error: "Expected: club <competition> <club-external-id> <season> [lane]",
       };
     }
 

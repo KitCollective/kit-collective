@@ -21,10 +21,7 @@ export type PeekKitRow = {
   photoCount: number;
 };
 
-export function buildPeekHtml(
-  clubs: PeekClubRow[],
-  kits: PeekKitRow[],
-): string {
+export function buildPeekHtml(clubs: PeekClubRow[], kits: PeekKitRow[]): string {
   const kitsByClubSeason = new Map<string, PeekKitRow[]>();
   for (const kit of kits) {
     const key = `${kit.clubId}:${kit.seasonId}`;
@@ -55,8 +52,7 @@ export function buildPeekHtml(
                 `<li>${escapeHtml(kit.kitType)} — ${kit.photoCount} photo${kit.photoCount === 1 ? "" : "s"}</li>`,
             )
             .join("");
-          const kitsList =
-            kitItems.length > 0 ? `<ul>${kitItems}</ul>` : "<p>no kits</p>";
+          const kitsList = kitItems.length > 0 ? `<ul>${kitItems}</ul>` : "<p>no kits</p>";
 
           return `<li>${escapeHtml(club.clubName)} — squad: ${club.squadCount}${kitsList}</li>`;
         })

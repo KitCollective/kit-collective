@@ -1,0 +1,26 @@
+---
+description: Follow the locked design system on mobile and web surfaces
+globs: apps/mobile/**,apps/web/**
+alwaysApply: false
+---
+
+# Design system
+
+`docs/design-system.md` is the visual and interaction lock for the `mobile` and `web`
+surfaces. Read it before composing or changing any screen, component, or UI copy there.
+`admin` and `api` are outside the lock.
+
+Apply the lock; do not invent taste:
+
+- Take tokens, spacing, type, motion, and component variants from the lock. If a value
+  you need is missing, flag the gap on the issue instead of inventing one.
+- Grayscale carries hierarchy. The identity wash is garnish, never a primary CTA, chrome,
+  or a status encoding.
+- Marks come from data — a licensed mark or a `CatalogLabel` monogram. Never emoji, never
+  an invented crest, never `KitPhoto` bytes as a club mark.
+- Danish-first copy, with labels from `CatalogLabel` rather than the English seed string.
+- Hit targets at least 44x44 on mobile, WCAG AA for text and essential controls, and a
+  still equivalent under `prefers-reduced-motion`.
+
+The lock outranks the code: if an existing screen contradicts `docs/design-system.md`, say
+which one is the bug rather than copying the screen.

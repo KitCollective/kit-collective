@@ -1,15 +1,16 @@
 import type { Lane } from "./types.js";
 
-const ALLOWED_LANES = new Set<Lane>(["development", "staging"]);
+const ALLOWED_LANES: readonly Lane[] = ["development", "staging"];
 
 export function parseLane(lane: string): Lane {
   if (lane === "production") {
     throw new Error("Lane production is rejected for seed runs");
   }
-  if (!ALLOWED_LANES.has(lane as Lane)) {
+  const allowed = ALLOWED_LANES.find((candidate) => candidate === lane);
+  if (!allowed) {
     throw new Error(`Unknown lane: ${lane}. Expected development or staging`);
   }
-  return lane as Lane;
+  return allowed;
 }
 
 export function resolveDatabaseUrl(lane: Lane): string {

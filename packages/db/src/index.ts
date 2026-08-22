@@ -1,2 +1,2 @@
+export { createDb, type Db, migrate, resetDatabase } from "./migrate.js";
 export * from "./schema/index.js";
-export { createDb, migrate, resetDatabase, type Db } from "./migrate.js";

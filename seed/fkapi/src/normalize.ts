@@ -34,6 +34,8 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
   if (raw.imageBytes instanceof Uint8Array) {
     imageBytes = raw.imageBytes;
   } else if (Array.isArray(raw.imageBytes)) {
+    // SAFETY: Uint8Array.from coerces each element, so a non-numeric entry becomes NaN
+    // rather than corrupting the byte contract.
     imageBytes = Uint8Array.from(raw.imageBytes as number[]);
   }
 

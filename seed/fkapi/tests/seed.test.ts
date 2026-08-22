@@ -1,23 +1,22 @@
-import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { resetTestDatabase } from "./test-db.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseCliArgs } from "../src/cli-args.js";
 import { createFixtureFetchAdapter } from "../src/fetch.js";
-import { normalizeRawKit } from "../src/normalize.js";
 import { runFkSeed } from "../src/mapper.js";
+import { normalizeRawKit } from "../src/normalize.js";
 import { runCli } from "../src/run.js";
 import type { FkFetchAdapter, ObjectStoreAdapter } from "../src/types.js";
 import { EXTERNAL_SYSTEM_FKAPI, EXTERNAL_SYSTEM_TRANSFERMARKT } from "../src/types.js";
+import { resetTestDatabase } from "./test-db.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../../packages/db/migrations",
 );
 
-const DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
 
 async function seedApifyPrerequisites(pool: Pool) {
   const countryRow = await pool.query<{ id: string }>(
@@ -43,10 +42,10 @@ async function seedApifyPrerequisites(pool: Pool) {
   );
   const seasonId = seasonRow.rows[0]!.id;
 
-  await pool.query(
-    `INSERT INTO team_season (club_id, season_id) VALUES ($1, $2)`,
-    [clubId, seasonId],
-  );
+  await pool.query(`INSERT INTO team_season (club_id, season_id) VALUES ($1, $2)`, [
+    clubId,
+    seasonId,
+  ]);
 
   return { clubId, seasonId };
 }

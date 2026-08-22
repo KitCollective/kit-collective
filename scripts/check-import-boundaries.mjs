@@ -4,7 +4,7 @@
  * - Client apps must not import @kit/db, packages/db, or apps/api
  * - apps/api must not import seed/ or @kit/seed-*
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 

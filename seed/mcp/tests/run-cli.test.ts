@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import type { CliRunner } from "../src/run-cli.js";
 import {
   buildSeedCliInvocation,
   laneEnvForCli,
   parseSeedMcpInput,
   runSeedCli,
 } from "../src/run-cli.js";
-import type { CliRunner } from "../src/run-cli.js";
 
 describe("buildSeedCliInvocation", () => {
   it("wraps the apify CLI with competition, season range, and lane", () => {
