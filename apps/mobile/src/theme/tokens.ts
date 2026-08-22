@@ -59,3 +59,10 @@ export const type = {
   label: { fontSize: 16, lineHeight: 20, fontWeight: "500" as const },
   caption: { fontSize: 13, lineHeight: 18, fontWeight: "400" as const },
 } as const;
+
+/** docs/design-system.md Motion */
+export const motion = {
+  fast: 200,
+  base: 300,
+  slow: 400,
+} as const;

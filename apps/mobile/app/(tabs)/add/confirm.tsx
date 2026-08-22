@@ -1,4 +1,5 @@
-import type { CatalogPickerItem } from "@kit/api-contract";
+import type { CatalogPickerItem, VisionJobResponse } from "@kit/api-contract";
+import { resolveVisionSaveAction } from "@kit/api-contract";
 import {
   JERSEY_CONDITION_LABELS_DA,
   JERSEY_CONDITIONS,
@@ -13,10 +14,11 @@ import {
   type PhotoRole,
 } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
+import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/vision";
 import { useAuth } from "@/auth/AuthProvider";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -32,7 +34,7 @@ import {
   upsertDraftPhoto,
 } from "@/drafts/jerseyDraftStore";
 import { markJerseySaved } from "@/session/addSession";
-import { color, space, type } from "@/theme/tokens";
+import { color, motion, space, type } from "@/theme/tokens";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 
@@ -65,6 +67,15 @@ export default function ConfirmScreen() {
   const [postSaveOpen, setPostSaveOpen] = useState(false);
   const [savedClub, setSavedClub] = useState<CatalogPickerItem | null>(null);
   const [savedSeasonLabel, setSavedSeasonLabel] = useState<string | null>(null);
+  const [visionJobId, setVisionJobId] = useState<string | null>(null);
+  const [visionPolling, setVisionPolling] = useState(false);
+  const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
+  const suggestionOpacity = useRef(new Animated.Value(0)).current;
+  const clubManuallySet = useRef(false);
+  const seasonManuallySet = useRef(false);
+  const kitTypeManuallySet = useRef(false);
+  const appliedVisionJobId = useRef<string | null>(null);
+  const visionStartAttempted = useRef(false);
 
   useEffect(() => {
     if (!draftId) {
@@ -153,7 +164,130 @@ export default function ConfirmScreen() {
     setPhotoUris(uris);
   }, [draftId]);
 
+  const fadeInSuggestion = useCallback(() => {
+    suggestionOpacity.setValue(0);
+    Animated.timing(suggestionOpacity, {
+      toValue: 1,
+      duration: motion.fast,
+      useNativeDriver: true,
+    }).start();
+  }, [suggestionOpacity]);
+
+  const applyVisionSuggestions = useCallback(
+    async (job: VisionJobResponse, preselect: boolean) => {
+      if (job.status !== "ready" || !job.suggestions) {
+        return;
+      }
+
+      const suggestions = job.suggestions;
+
+      if (preselect) {
+        if (!clubManuallySet.current && suggestions.clubId && suggestions.clubLabel) {
+          setSelectedClub({ id: suggestions.clubId, label: suggestions.clubLabel });
+          setSelectedSeason(null);
+          if (accessToken) {
+            const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
+            setSeasonResults(seasons.seasons);
+          }
+        }
+
+        if (!seasonManuallySet.current && suggestions.seasonId && suggestions.seasonLabel) {
+          setSelectedSeason({ id: suggestions.seasonId, label: suggestions.seasonLabel });
+        }
+
+        if (!kitTypeManuallySet.current && suggestions.type) {
+          setKitType(suggestions.type);
+        }
+
+        fadeInSuggestion();
+      } else {
+        setVisionSuggestion(job);
+        fadeInSuggestion();
+      }
+    },
+    [accessToken, fadeInSuggestion],
+  );
+
+  const maybeStartVision = useCallback(
+    async (role: PhotoRole, uri: string) => {
+      if (!accessToken || visionJobId || visionStartAttempted.current) {
+        return;
+      }
+
+      visionStartAttempted.current = true;
+
+      try {
+        const contentBase64 = await readPhotoBase64(uri);
+        const jobId = await startVisionSuggest(accessToken, {
+          photo: { role, contentBase64 },
+        });
+        setVisionJobId(jobId);
+        setVisionPolling(true);
+      } catch {
+        // Vision is optional — confirm screen must not block.
+      }
+    },
+    [accessToken, visionJobId],
+  );
+
+  useEffect(() => {
+    if (!accessToken || !draftId || visionJobId || visionStartAttempted.current) {
+      return;
+    }
+
+    const draft = loadDraft(draftId);
+    const firstPhoto = draft.photos[0];
+    if (!firstPhoto) {
+      return;
+    }
+
+    void maybeStartVision(firstPhoto.role, firstPhoto.uri);
+  }, [accessToken, draftId, visionJobId, maybeStartVision]);
+
+  useEffect(() => {
+    if (!accessToken || !visionJobId || !visionPolling) {
+      return;
+    }
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const job = await fetchVisionJob(accessToken, visionJobId);
+        if (cancelled) {
+          return;
+        }
+
+        if (job.status === "pending") {
+          return;
+        }
+
+        setVisionPolling(false);
+
+        if (job.status === "ready" && job.suggestions && appliedVisionJobId.current !== job.jobId) {
+          appliedVisionJobId.current = job.jobId;
+          await applyVisionSuggestions(job, job.preselect === true);
+        }
+      } catch {
+        if (!cancelled) {
+          setVisionPolling(false);
+        }
+      }
+    };
+
+    const interval = setInterval(() => {
+      void poll();
+    }, 2000);
+    void poll();
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
+
   const pickPhotoForRole = async (role: PhotoRole) => {
+    const hadPhotos = PHOTO_ROLES.some((photoRole) => photoUris[photoRole]);
+
     const uris = await pickGalleryPhotos({
       quality: captureQualityForRole(role),
     });
@@ -164,6 +298,10 @@ export default function ConfirmScreen() {
 
     upsertDraftPhoto(draftId, role, uris[0], "gallery");
     refreshPhotosFromDraft();
+
+    if (!hadPhotos) {
+      void maybeStartVision(role, uris[0]);
+    }
   };
 
   const openClubSheet = () => {
@@ -175,6 +313,7 @@ export default function ConfirmScreen() {
   };
 
   const selectClub = async (club: CatalogPickerItem) => {
+    clubManuallySet.current = true;
     setSelectedClub(club);
     setSelectedSeason(null);
     setClubSheetOpen(false);
@@ -203,6 +342,33 @@ export default function ConfirmScreen() {
   const canSave =
     accessToken && selectedClub && selectedSeason && photoList.length > 0 && !saving && draftId;
 
+  const applySuggestionBanner = async () => {
+    if (!visionSuggestion?.suggestions || !accessToken) {
+      return;
+    }
+
+    const suggestions = visionSuggestion.suggestions;
+    if (suggestions.clubId && suggestions.clubLabel) {
+      clubManuallySet.current = true;
+      setSelectedClub({ id: suggestions.clubId, label: suggestions.clubLabel });
+      setSelectedSeason(null);
+      const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
+      setSeasonResults(seasons.seasons);
+    }
+
+    if (suggestions.seasonId && suggestions.seasonLabel) {
+      seasonManuallySet.current = true;
+      setSelectedSeason({ id: suggestions.seasonId, label: suggestions.seasonLabel });
+    }
+
+    if (suggestions.type) {
+      kitTypeManuallySet.current = true;
+      setKitType(suggestions.type);
+    }
+
+    setVisionSuggestion(null);
+  };
+
   const handleSave = async () => {
     if (!accessToken || !selectedClub || !selectedSeason || photoList.length === 0 || !draftId) {
       return;
@@ -230,7 +396,7 @@ export default function ConfirmScreen() {
         seasonId: selectedSeason.id,
       });
 
-      await saveUserJersey(accessToken, {
+      const response = await saveUserJersey(accessToken, {
         draftId,
         clubId: selectedClub.id,
         seasonId: selectedSeason.id,
@@ -238,8 +404,34 @@ export default function ConfirmScreen() {
         type: kitType,
         size,
         condition,
+        visionJobId: visionJobId ?? undefined,
         photos: photoPayload,
       });
+
+      const jobIdForLog = response.visionJobId ?? visionJobId;
+      if (jobIdForLog) {
+        try {
+          const job = await fetchVisionJob(accessToken, jobIdForLog);
+          const resolved = resolveVisionSaveAction({
+            status: job.status,
+            suggestions: job.suggestions,
+            selectedClubId: selectedClub.id,
+            selectedSeasonId: selectedSeason.id,
+            selectedKitType: kitType,
+          });
+
+          await logVisionAction(accessToken, {
+            jobId: jobIdForLog,
+            action: resolved.action,
+            userJerseyId: response.jersey.id,
+            clubId: resolved.clubId,
+            seasonId: resolved.seasonId,
+            type: resolved.type,
+          });
+        } catch {
+          // Logging must not block navigation after Save — server already reconciled.
+        }
+      }
 
       markJerseySaved();
       deleteDraft(draftId);
@@ -267,6 +459,29 @@ export default function ConfirmScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Bekræft og gem</Text>
         <Text style={styles.body}>Vælg klub, sæson og detaljer.</Text>
+
+        {visionPolling ? <Text style={styles.helper}>Analyserer foto…</Text> : null}
+
+        {visionSuggestion?.suggestions ? (
+          <Animated.View style={{ opacity: suggestionOpacity }}>
+            <Banner
+              tone="info"
+              message={`Forslag: ${[
+                visionSuggestion.suggestions.clubLabel,
+                visionSuggestion.suggestions.seasonLabel,
+              ]
+                .filter(Boolean)
+                .join(" · ")}`}
+              action={
+                <Button
+                  label="Brug forslag"
+                  variant="tertiary"
+                  onPress={() => void applySuggestionBanner()}
+                />
+              }
+            />
+          </Animated.View>
+        ) : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Fotos</Text>
@@ -334,7 +549,10 @@ export default function ConfirmScreen() {
                 label={KIT_TYPE_LABELS_DA[value]}
                 selected={kitType === value}
                 accessibilityRole="radio"
-                onPress={() => setKitType(value)}
+                onPress={() => {
+                  kitTypeManuallySet.current = true;
+                  setKitType(value);
+                }}
               />
             ))}
           </View>
@@ -453,6 +671,7 @@ export default function ConfirmScreen() {
                 title={season.label}
                 selected={selectedSeason?.id === season.id}
                 onPress={() => {
+                  seasonManuallySet.current = true;
                   setSelectedSeason(season);
                   setSeasonSheetOpen(false);
                   if (draftId) {

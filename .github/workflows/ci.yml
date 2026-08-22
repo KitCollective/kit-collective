@@ -127,6 +127,9 @@ jobs:
       - name: Check mobile design tokens
         run: pnpm check:mobile-design-tokens
 
+      - name: Check vision log save-action
+        run: pnpm check:vision-log-save-action
+
       - name: Lint GitHub Actions workflows
         run: bash scripts/lint-workflows.sh
 

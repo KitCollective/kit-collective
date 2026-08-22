@@ -31,6 +31,9 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
+const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
+
 export const catalogEntityTypeEnum = pgEnum("catalog_entity_type", CATALOG_ENTITY_TYPES);
 export const externalIdEntityTypeEnum = pgEnum("external_id_entity_type", EXTERNAL_ID_ENTITY_TYPES);
 export const labelLocaleEnum = pgEnum("label_locale", LABEL_LOCALES);
@@ -49,6 +52,8 @@ export const photoRoleEnum = pgEnum("photo_role", PHOTO_ROLES);
 export const photoSourceEnum = pgEnum("photo_source", PHOTO_SOURCES);
 export const ocrStatusEnum = pgEnum("ocr_status", OCR_STATUSES);
 export const authenticityEnum = pgEnum("authenticity", AUTHENTICITY_VALUES);
+export const visionJobStatusEnum = pgEnum("vision_job_status", VISION_JOB_STATUSES);
+export const visionUserActionEnum = pgEnum("vision_user_action", VISION_USER_ACTIONS);
 
 export const country = pgTable("country", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -254,6 +259,27 @@ export const userJerseyPhoto = pgTable("user_jersey_photo", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const visionLog = pgTable("vision_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => user.id),
+  draftId: uuid("draft_id"),
+  userJerseyId: uuid("user_jersey_id").references(() => userJersey.id),
+  status: visionJobStatusEnum("status").notNull().default("pending"),
+  suggestedClubId: uuid("suggested_club_id").references(() => club.id),
+  suggestedSeasonId: uuid("suggested_season_id").references(() => season.id),
+  suggestedCatalogKitId: uuid("suggested_catalog_kit_id").references(() => kit.id),
+  suggestedType: kitTypeEnum("suggested_type"),
+  visionRaw: text("vision_raw"),
+  confidences: text("confidences"),
+  latencyMs: integer("latency_ms"),
+  model: text("model"),
+  userAction: visionUserActionEnum("user_action"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const jerseyDraft = pgTable(
   "jersey_draft",
   {
@@ -322,6 +348,23 @@ export const userJerseyPhotoRelations = relations(userJerseyPhoto, ({ one }) => 
   userJersey: one(userJersey, {
     fields: [userJerseyPhoto.userJerseyId],
     references: [userJersey.id],
+  }),
+}));
+
+export const visionLogRelations = relations(visionLog, ({ one }) => ({
+  user: one(user, { fields: [visionLog.userId], references: [user.id] }),
+  userJersey: one(userJersey, {
+    fields: [visionLog.userJerseyId],
+    references: [userJersey.id],
+  }),
+  suggestedClub: one(club, { fields: [visionLog.suggestedClubId], references: [club.id] }),
+  suggestedSeason: one(season, {
+    fields: [visionLog.suggestedSeasonId],
+    references: [season.id],
+  }),
+  suggestedCatalogKit: one(kit, {
+    fields: [visionLog.suggestedCatalogKitId],
+    references: [kit.id],
   }),
 }));
 

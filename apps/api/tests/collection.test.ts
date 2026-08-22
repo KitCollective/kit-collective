@@ -15,11 +15,15 @@ import {
   resetDatabase,
   season,
   teamSeason,
+  visionLog,
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
+import { FailingVisionAdapter, SlowVisionAdapter } from "../dist/vision/test-vision.adapters.js";
+import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -252,5 +256,118 @@ describe("Collection /v1", () => {
     const firstBody = collectionSaveResponseSchema.parse(JSON.parse(first.body));
     const secondBody = collectionSaveResponseSchema.parse(JSON.parse(second.body));
     expect(secondBody.jersey.id).toBe(firstBody.jersey.id);
+  });
+
+  it("returns 2xx Save while Vision adapter is slow", async () => {
+    const slowAdapter = new SlowVisionAdapter(3000);
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(VISION_ADAPTER)
+      .useValue(slowAdapter)
+      .compile();
+
+    const slowApp = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    slowApp.setGlobalPrefix("v1");
+    await slowApp.init();
+    await slowApp.getHttpAdapter().getInstance().ready();
+
+    const session = await registerSession(slowApp, "slow-vision@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const response = await slowApp.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    await slowApp.close();
+  });
+
+  it("returns 2xx Save when Vision adapter fails", async () => {
+    const failingAdapter = new FailingVisionAdapter();
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(VISION_ADAPTER)
+      .useValue(failingAdapter)
+      .compile();
+
+    const failApp = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    failApp.setGlobalPrefix("v1");
+    await failApp.init();
+    await failApp.getHttpAdapter().getInstance().ready();
+
+    const session = await registerSession(failApp, "fail-vision@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const response = await failApp.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "away",
+        size: "l",
+        condition: "new",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    await failApp.close();
+  });
+
+  it("sets VisionLog userAction when Save enqueues vision without client visionJobId (ratchet KIT-27)", async () => {
+    const session = await registerSession(app, "vision-reconcile@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = collectionSaveResponseSchema.parse(JSON.parse(response.body));
+    expect(body.visionJobId).toBeDefined();
+    const visionJobId = body.visionJobId;
+    if (!visionJobId) {
+      throw new Error("expected visionJobId in Save response");
+    }
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const [row] = await db
+      .select({ userAction: visionLog.userAction })
+      .from(visionLog)
+      .where(eq(visionLog.id, visionJobId))
+      .limit(1);
+    await pool.end();
+
+    expect(row?.userAction).toBe("ignored");
   });
 });
