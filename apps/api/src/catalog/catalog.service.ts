@@ -148,7 +148,7 @@ export class CatalogService {
       }));
 
     const kits: PeekKitRow[] = kitRows
-      .filter((row) => row.clubId !== null)
+      .filter((row): row is typeof row & { clubId: string } => row.clubId !== null)
       .map((row) => ({
         clubId: row.clubId,
         seasonId: row.seasonId,
