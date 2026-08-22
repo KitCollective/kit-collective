@@ -1,4 +1,4 @@
-import type { CatalogPickerItem } from "@kit/api-contract";
+import type { CatalogPickerItem, VisionJobResponse } from "@kit/api-contract";
 import {
   JERSEY_CONDITION_LABELS_DA,
   JERSEY_CONDITIONS,
@@ -15,7 +15,14 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Animated,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/vision";
@@ -24,7 +31,7 @@ import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { Button } from "@/components/ui";
-import { color, space, type } from "@/theme/tokens";
+import { color, motion, space, type } from "@/theme/tokens";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 
@@ -70,6 +77,8 @@ export default function AddScreen() {
   const [saveError, setSaveError] = useState(false);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const [visionPolling, setVisionPolling] = useState(false);
+  const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
+  const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const clubManuallySet = useRef(false);
   const seasonManuallySet = useRef(false);
   const kitTypeManuallySet = useRef(false);
@@ -233,7 +242,79 @@ export default function AddScreen() {
     }
   };
 
+  const fadeInSuggestion = useCallback(() => {
+    suggestionOpacity.setValue(0);
+    Animated.timing(suggestionOpacity, {
+      toValue: 1,
+      duration: motion.fast,
+      useNativeDriver: true,
+    }).start();
+  }, [suggestionOpacity]);
+
+  const applyVisionSuggestions = useCallback(
+    async (job: VisionJobResponse, preselect: boolean) => {
+      if (job.status !== "ready" || !job.suggestions) {
+        return;
+      }
+
+      const suggestions = job.suggestions;
+
+      if (preselect) {
+        if (!clubManuallySet.current && suggestions.clubId && suggestions.clubLabel) {
+          setSelectedClub({ id: suggestions.clubId, label: suggestions.clubLabel });
+          setSelectedSeason(null);
+          if (accessToken) {
+            const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
+            setSeasonResults(seasons.seasons);
+          }
+        }
+
+        if (!seasonManuallySet.current && suggestions.seasonId && suggestions.seasonLabel) {
+          setSelectedSeason({ id: suggestions.seasonId, label: suggestions.seasonLabel });
+        }
+
+        if (!kitTypeManuallySet.current && suggestions.type) {
+          setKitType(suggestions.type);
+        }
+
+        fadeInSuggestion();
+      } else {
+        setVisionSuggestion(job);
+        fadeInSuggestion();
+      }
+    },
+    [accessToken, fadeInSuggestion],
+  );
+
   const photoList = filledPhotos(photos);
+
+  const applySuggestionBanner = async () => {
+    if (!visionSuggestion?.suggestions || !accessToken) {
+      return;
+    }
+
+    const suggestions = visionSuggestion.suggestions;
+    if (suggestions.clubId && suggestions.clubLabel) {
+      clubManuallySet.current = true;
+      setSelectedClub({ id: suggestions.clubId, label: suggestions.clubLabel });
+      setSelectedSeason(null);
+      const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
+      setSeasonResults(seasons.seasons);
+    }
+
+    if (suggestions.seasonId && suggestions.seasonLabel) {
+      seasonManuallySet.current = true;
+      setSelectedSeason({ id: suggestions.seasonId, label: suggestions.seasonLabel });
+    }
+
+    if (suggestions.type) {
+      kitTypeManuallySet.current = true;
+      setKitType(suggestions.type);
+    }
+
+    setVisionSuggestion(null);
+  };
+
   const canSave = accessToken && selectedClub && selectedSeason && photoList.length > 0 && !saving;
 
   const maybeStartVision = useCallback(
@@ -276,24 +357,7 @@ export default function AddScreen() {
 
         if (job.status === "ready" && job.suggestions && appliedVisionJobId.current !== job.jobId) {
           appliedVisionJobId.current = job.jobId;
-          const suggestions = job.suggestions;
-
-          if (!clubManuallySet.current && suggestions.clubId && suggestions.clubLabel) {
-            setSelectedClub({ id: suggestions.clubId, label: suggestions.clubLabel });
-            setSelectedSeason(null);
-            const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
-            if (!cancelled) {
-              setSeasonResults(seasons.seasons);
-            }
-          }
-
-          if (!seasonManuallySet.current && suggestions.seasonId && suggestions.seasonLabel) {
-            setSelectedSeason({ id: suggestions.seasonId, label: suggestions.seasonLabel });
-          }
-
-          if (!kitTypeManuallySet.current && suggestions.type) {
-            setKitType(suggestions.type);
-          }
+          await applyVisionSuggestions(job, job.preselect === true);
         }
       } catch {
         if (!cancelled) {
@@ -311,7 +375,7 @@ export default function AddScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [accessToken, visionJobId, visionPolling]);
+  }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
   const handleSave = async () => {
     if (!accessToken || !selectedClub || !selectedSeason || photoList.length === 0) {
@@ -329,6 +393,7 @@ export default function AddScreen() {
         type: kitType,
         size,
         condition,
+        visionJobId: visionJobId ?? undefined,
         photos: photoList.map((photo) => ({
           role: photo.role,
           source: "gallery",
@@ -343,21 +408,37 @@ export default function AddScreen() {
             const matchesClub = job.suggestions.clubId === selectedClub.id;
             const matchesSeason = job.suggestions.seasonId === selectedSeason.id;
             const matchesType = !job.suggestions.type || job.suggestions.type === kitType;
-            const action = matchesClub && matchesSeason && matchesType ? "accepted" : "edited";
-            await logVisionAction(accessToken, {
-              jobId: visionJobId,
-              action,
-              userJerseyId: response.jersey.id,
-              clubId: selectedClub.id,
-              seasonId: selectedSeason.id,
-              type: kitType,
-            });
-          } else if (job.status === "ready" || job.status === "pending") {
-            await logVisionAction(accessToken, {
-              jobId: visionJobId,
-              action: "ignored",
-              userJerseyId: response.jersey.id,
-            });
+            const fullyMatches = matchesClub && matchesSeason && matchesType;
+
+            if (fullyMatches) {
+              await logVisionAction(accessToken, {
+                jobId: visionJobId,
+                action: "accepted",
+                userJerseyId: response.jersey.id,
+                clubId: selectedClub.id,
+                seasonId: selectedSeason.id,
+                type: kitType,
+              });
+            } else if (
+              matchesClub ||
+              matchesSeason ||
+              (job.suggestions.type && job.suggestions.type === kitType)
+            ) {
+              await logVisionAction(accessToken, {
+                jobId: visionJobId,
+                action: "edited",
+                userJerseyId: response.jersey.id,
+                clubId: selectedClub.id,
+                seasonId: selectedSeason.id,
+                type: kitType,
+              });
+            } else {
+              await logVisionAction(accessToken, {
+                jobId: visionJobId,
+                action: "ignored",
+                userJerseyId: response.jersey.id,
+              });
+            }
           }
         } catch {
           // Logging must not block navigation after Save.
@@ -381,6 +462,27 @@ export default function AddScreen() {
         </Text>
 
         {visionPolling ? <Text style={styles.helper}>Analyserer foto…</Text> : null}
+
+        {visionSuggestion?.suggestions ? (
+          <Animated.View style={{ opacity: suggestionOpacity }}>
+            <Banner
+              tone="info"
+              message={`Forslag: ${[
+                visionSuggestion.suggestions.clubLabel,
+                visionSuggestion.suggestions.seasonLabel,
+              ]
+                .filter(Boolean)
+                .join(" · ")}`}
+              action={
+                <Button
+                  label="Brug forslag"
+                  variant="tertiary"
+                  onPress={() => void applySuggestionBanner()}
+                />
+              }
+            />
+          </Animated.View>
+        ) : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Fotos</Text>

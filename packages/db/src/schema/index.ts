@@ -17,9 +17,10 @@ import {
   PHOTO_ROLES,
   PHOTO_SOURCES,
   USER_ROLES,
-  VISION_JOB_STATUSES,
-  VISION_USER_ACTIONS,
 } from "@kit/domain";
+
+const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
+const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,

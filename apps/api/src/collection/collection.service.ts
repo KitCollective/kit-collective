@@ -22,6 +22,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from "@nes
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
+import { VisionService } from "../vision/vision.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 
@@ -52,6 +53,7 @@ export class CollectionService {
     @Inject(DB) private readonly db: Db,
     @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
     private readonly visionQueueService: VisionQueueService,
+    private readonly visionService: VisionService,
   ) {}
 
   static objectStoreFactory(): ObjectStoreAdapter {
@@ -194,7 +196,12 @@ export class CollectionService {
     const photos = await this.persistPhotos(userId, insertedJersey.id, body.photos);
 
     const firstPhoto = body.photos[0];
-    if (firstPhoto) {
+    const shouldEnqueueVision =
+      firstPhoto &&
+      !body.visionJobId &&
+      !(body.draftId && (await this.visionService.findActiveJobForDraft(userId, body.draftId)));
+
+    if (shouldEnqueueVision) {
       const firstPhotoBytes = decodeBase64Photo(firstPhoto.contentBase64);
       this.visionQueueService.enqueueFromSave(userId, firstPhotoBytes, body.draftId);
     }

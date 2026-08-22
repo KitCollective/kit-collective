@@ -18,6 +18,8 @@ export const collectionSavePhotoSchema = z
 export const collectionSaveRequestSchema = z
   .object({
     draftId: z.string().uuid().optional(),
+    /** Client-started Vision job — Save must not enqueue a duplicate. */
+    visionJobId: z.string().uuid().optional(),
     clubId: z.string().uuid(),
     seasonId: z.string().uuid(),
     catalogKitId: z.string().uuid().nullable().optional(),

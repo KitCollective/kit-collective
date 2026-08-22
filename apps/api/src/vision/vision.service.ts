@@ -1,12 +1,22 @@
-import type { VisionSuggestions } from "@kit/api-contract";
+import type {
+  VisionJobStatus,
+  VisionSuggestions,
+  VisionUserAction,
+} from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, season, visionLog } from "@kit/db";
-import type { LabelLocale, VisionJobStatus, VisionUserAction } from "@kit/domain";
+import type { LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import type { VisionAdapter, VisionInferenceResult } from "./vision.adapter.js";
 import { VISION_ADAPTER } from "./vision.adapter.js";
+import {
+  parseConfidences,
+  resolveVisionStatus,
+  serializeConfidences,
+  shouldPreselect,
+} from "./vision-confidence.js";
 
 export const VISION_QUEUE_NAME = "vision";
 
@@ -51,13 +61,9 @@ export class VisionService {
 
     try {
       result = await this.adapter.infer(payload.photoBytes);
-      if (result?.clubId || result?.seasonId || result?.catalogKitId || result?.type) {
-        status = "ready";
-      } else if (result) {
-        status = "noop";
-      } else {
-        status = "noop";
-      }
+      const resolved = resolveVisionStatus(result);
+      status = resolved.status;
+      result = resolved.result;
     } catch {
       status = "failed";
     }
@@ -71,12 +77,29 @@ export class VisionService {
         suggestedCatalogKitId: result?.catalogKitId ?? null,
         suggestedType: result?.type ?? null,
         visionRaw: result?.visionRaw ?? null,
-        confidences: result?.confidences ?? null,
+        confidences: result?.confidences ? serializeConfidences(result.confidences) : null,
         latencyMs: result?.latencyMs ?? null,
         model: result?.model ?? null,
         updatedAt: new Date(),
       })
       .where(eq(visionLog.id, payload.jobId));
+  }
+
+  async findActiveJobForDraft(userId: string, draftId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ id: visionLog.id })
+      .from(visionLog)
+      .where(
+        and(
+          eq(visionLog.userId, userId),
+          eq(visionLog.draftId, draftId),
+          inArray(visionLog.status, ["pending", "ready"]),
+        ),
+      )
+      .orderBy(desc(visionLog.createdAt))
+      .limit(1);
+
+    return row?.id ?? null;
   }
 
   async getJob(
@@ -86,6 +109,7 @@ export class VisionService {
   ): Promise<{
     jobId: string;
     status: VisionJobStatus;
+    preselect?: boolean;
     suggestions?: VisionSuggestions;
   } | null> {
     const [row] = await this.db
@@ -97,6 +121,7 @@ export class VisionService {
         suggestedSeasonId: visionLog.suggestedSeasonId,
         suggestedCatalogKitId: visionLog.suggestedCatalogKitId,
         suggestedType: visionLog.suggestedType,
+        confidences: visionLog.confidences,
       })
       .from(visionLog)
       .where(eq(visionLog.id, jobId))
@@ -112,6 +137,9 @@ export class VisionService {
         status: row.status,
       };
     }
+
+    const confidences = parseConfidences(row.confidences);
+    const preselect = shouldPreselect(confidences);
 
     const clubLabel = row.suggestedClubId
       ? await this.resolveClubLabel(row.suggestedClubId, locale)
@@ -132,6 +160,7 @@ export class VisionService {
     return {
       jobId: row.id,
       status: row.status,
+      preselect,
       suggestions,
     };
   }

@@ -40,6 +40,19 @@ describe("vision contract", () => {
     expect(parsed.suggestions?.clubLabel).toBe("F.C. København");
   });
 
+  it("parses job response with preselect flag", () => {
+    const job: VisionJobResponse = {
+      jobId: "22222222-2222-2222-2222-222222222222",
+      status: "ready",
+      preselect: false,
+      suggestions: {
+        clubId: "33333333-3333-3333-3333-333333333333",
+        clubLabel: "F.C. København",
+      },
+    };
+    expect(visionJobResponseSchema.parse(job).preselect).toBe(false);
+  });
+
   it("parses vision log request", () => {
     const body: VisionLogRequest = {
       jobId: "22222222-2222-2222-2222-222222222222",

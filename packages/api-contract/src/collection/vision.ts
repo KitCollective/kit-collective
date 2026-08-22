@@ -1,5 +1,17 @@
-import { KIT_TYPES, PHOTO_ROLES, VISION_JOB_STATUSES, VISION_USER_ACTIONS } from "@kit/domain";
+import { KIT_TYPES, PHOTO_ROLES } from "@kit/domain";
 import { z } from "zod";
+
+/** Vision job lifecycle on VisionLog.status. */
+export const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
+export type VisionJobStatus = (typeof VISION_JOB_STATUSES)[number];
+
+/** Collector action on a Vision suggestion (VisionLog.userAction). */
+export const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
+export type VisionUserAction = (typeof VISION_USER_ACTIONS)[number];
+
+/** tech-stack.md §6: ≥70% preselect, 50–69% suggest-only, else ignore. */
+export const VISION_CONFIDENCE_PRESELECT = 70;
+export const VISION_CONFIDENCE_SUGGEST = 50;
 
 export const visionSuggestPhotoSchema = z
   .object({
@@ -36,6 +48,8 @@ export const visionJobResponseSchema = z
   .object({
     jobId: z.string().uuid(),
     status: z.enum(VISION_JOB_STATUSES),
+    /** When true (≥70% confidence), confirm may pre-select fields. When false (50–69%), show only. */
+    preselect: z.boolean().optional(),
     suggestions: visionSuggestionsSchema.optional(),
   })
   .strict();

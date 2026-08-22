@@ -13,6 +13,7 @@ type GeminiStructured = {
   clubHint?: string;
   seasonHint?: string;
   kitType?: KitType;
+  confidence?: number;
 };
 
 function hasGeminiConfig(): boolean {
@@ -71,6 +72,7 @@ function decodeGeminiResponse(body: unknown): GeminiStructured | null {
       clubHint: typeof parsed.clubHint === "string" ? parsed.clubHint : undefined,
       seasonHint: typeof parsed.seasonHint === "string" ? parsed.seasonHint : undefined,
       kitType: isKitType(parsed.kitType) ? parsed.kitType : undefined,
+      confidence: typeof parsed.confidence === "number" ? parsed.confidence : undefined,
     };
   } catch {
     return null;
@@ -103,7 +105,7 @@ export class GeminiVisionAdapter implements VisionAdapter {
               {
                 parts: [
                   {
-                    text: 'Identify the football club, season, and kit type (home|away|third|gk|special) from this jersey photo. Reply JSON only: {"clubHint":"...","seasonHint":"...","kitType":"home"}. Use English club names. Omit fields you cannot infer.',
+                    text: 'Identify the football club, season, and kit type (home|away|third|gk|special) from this jersey photo. Reply JSON only: {"clubHint":"...","seasonHint":"...","kitType":"home","confidence":0.85}. confidence is 0-1 for how sure you are overall. Use English club names. Omit fields you cannot infer.',
                   },
                   {
                     inline_data: {
@@ -136,6 +138,7 @@ export class GeminiVisionAdapter implements VisionAdapter {
       if (!mapped) {
         return {
           visionRaw: JSON.stringify(structured),
+          confidences: this.buildConfidences(structured.confidence, {}),
           latencyMs: Date.now() - started,
           model: GEMINI_MODEL,
         };
@@ -154,10 +157,34 @@ export class GeminiVisionAdapter implements VisionAdapter {
     }
   }
 
+  private buildConfidences(
+    modelConfidence: number | undefined,
+    fields: { club?: number; season?: number; kitType?: number },
+  ): VisionInferenceResult["confidences"] {
+    const fieldValues = [fields.club, fields.season, fields.kitType].filter(
+      (value): value is number => value !== undefined,
+    );
+    const matchAverage =
+      fieldValues.length > 0
+        ? fieldValues.reduce((sum, value) => sum + value, 0) / fieldValues.length
+        : 0;
+    const modelScore = modelConfidence !== undefined ? modelConfidence * 100 : matchAverage;
+    const overall = Math.round(Math.max(modelScore, matchAverage));
+
+    return {
+      overall,
+      club: fields.club,
+      season: fields.season,
+      kitType: fields.kitType,
+    };
+  }
+
   private async mapToCatalog(structured: GeminiStructured): Promise<VisionInferenceResult | null> {
     let clubId: string | undefined;
     let seasonId: string | undefined;
     let catalogKitId: string | undefined;
+    let clubMatchScore: number | undefined;
+    let seasonMatchScore: number | undefined;
 
     if (structured.clubHint?.trim()) {
       const hint = structured.clubHint.trim();
@@ -173,13 +200,15 @@ export class GeminiVisionAdapter implements VisionAdapter {
 
       if (rows.length > 0 && rows[0]?.clubId) {
         clubId = rows[0].clubId;
+        const label = rows[0].label?.toLowerCase() ?? "";
+        clubMatchScore = label === hint.toLowerCase() ? 90 : 65;
       }
     }
 
     if (clubId && structured.seasonHint?.trim()) {
       const hint = structured.seasonHint.trim();
       const seasonRows = await this.db
-        .select({ seasonId: season.id })
+        .select({ seasonId: season.id, label: season.label })
         .from(teamSeason)
         .innerJoin(season, eq(teamSeason.seasonId, season.id))
         .where(and(eq(teamSeason.clubId, clubId), ilike(season.label, `%${hint}%`)))
@@ -187,6 +216,8 @@ export class GeminiVisionAdapter implements VisionAdapter {
 
       if (seasonRows.length > 0 && seasonRows[0]?.seasonId) {
         seasonId = seasonRows[0].seasonId;
+        const label = seasonRows[0].label?.toLowerCase() ?? "";
+        seasonMatchScore = label.includes(hint.toLowerCase()) ? 85 : 60;
       }
     }
 
@@ -208,11 +239,18 @@ export class GeminiVisionAdapter implements VisionAdapter {
       return null;
     }
 
+    const kitTypeScore = structured.kitType ? 70 : undefined;
+
     return {
       clubId,
       seasonId,
       catalogKitId,
       type: structured.kitType,
+      confidences: this.buildConfidences(structured.confidence, {
+        club: clubMatchScore,
+        season: seasonMatchScore,
+        kitType: kitTypeScore,
+      }),
     };
   }
 }

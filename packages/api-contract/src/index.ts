@@ -33,11 +33,17 @@ export {
 } from "./collection/save.js";
 export {
   type VisionJobResponse,
+  type VisionJobStatus,
   type VisionLogRequest,
   type VisionLogResponse,
   type VisionSuggestions,
   type VisionSuggestRequest,
   type VisionSuggestResponse,
+  type VisionUserAction,
+  VISION_CONFIDENCE_PRESELECT,
+  VISION_CONFIDENCE_SUGGEST,
+  VISION_JOB_STATUSES,
+  VISION_USER_ACTIONS,
   visionJobResponseSchema,
   visionLogRequestSchema,
   visionLogResponseSchema,

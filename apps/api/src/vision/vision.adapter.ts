@@ -1,12 +1,19 @@
 import type { KitType } from "@kit/domain";
 
+export type VisionFieldConfidences = {
+  overall: number;
+  club?: number;
+  season?: number;
+  kitType?: number;
+};
+
 export type VisionInferenceResult = {
   clubId?: string;
   seasonId?: string;
   catalogKitId?: string;
   type?: KitType;
   visionRaw?: string;
-  confidences?: string;
+  confidences?: VisionFieldConfidences;
   latencyMs?: number;
   model?: string;
 };
