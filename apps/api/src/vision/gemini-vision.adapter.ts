@@ -24,7 +24,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isKitType(value: unknown): value is KitType {
-  return typeof value === "string" && (KIT_TYPES as readonly string[]).includes(value);
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  return KIT_TYPES.some((kitType) => kitType === value);
 }
 
 function decodeGeminiResponse(body: unknown): GeminiStructured | null {
