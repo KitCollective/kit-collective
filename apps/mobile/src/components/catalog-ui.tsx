@@ -228,10 +228,10 @@ const styles = StyleSheet.create({
   },
   sheetScrim: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: color.scrim,
   },
   sheet: {
-    backgroundColor: color.surface,
+    backgroundColor: color.surfaceRaised,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingBottom: space.insetLg,
