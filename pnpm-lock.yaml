@@ -150,6 +150,9 @@ importers:
       pg:
         specifier: ^8.13.1
         version: 8.23.0
+      undici:
+        specifier: ^7.29.0
+        version: 7.29.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.5

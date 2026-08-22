@@ -9,7 +9,12 @@ import { normalizeRawKit } from "../src/normalize.js";
 import { runFkSeed } from "../src/mapper.js";
 import { runCli } from "../src/run.js";
 import type { FkFetchAdapter, ObjectStoreAdapter } from "../src/types.js";
-import { EXTERNAL_SYSTEM_FKAPI, EXTERNAL_SYSTEM_TRANSFERMARKT } from "../src/types.js";
+import { EXTERNAL_SYSTEM_FKAPI } from "../src/types.js";
+import {
+  allocateTestFixtureScope,
+  createScopedFixtureFetchAdapter,
+  seedApifyPrerequisites,
+} from "./fixture-scope.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -19,44 +24,15 @@ const migrationsFolder = path.join(
 const DATABASE_URL =
   process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
 
-async function seedApifyPrerequisites(pool: Pool) {
-  const countryRow = await pool.query<{ id: string }>(
-    `INSERT INTO country (iso3166) VALUES ('DK') RETURNING id`,
-  );
-  const countryId = countryRow.rows[0]!.id;
-
-  const clubRow = await pool.query<{ id: string }>(
-    `INSERT INTO club (country_id, kind) VALUES ($1, 'club') RETURNING id`,
-    [countryId],
-  );
-  const clubId = clubRow.rows[0]!.id;
-
-  await pool.query(
-    `INSERT INTO external_id (entity_type, entity_id, system, value)
-     VALUES ('club', $1, $2, '190')`,
-    [clubId, EXTERNAL_SYSTEM_TRANSFERMARKT],
-  );
-
-  const seasonRow = await pool.query<{ id: string }>(
-    `INSERT INTO season (label, starts_on, ends_on, calendar_kind)
-     VALUES ('1998/99', '1998-07-01', '1999-06-30', 'split_year') RETURNING id`,
-  );
-  const seasonId = seasonRow.rows[0]!.id;
-
-  await pool.query(
-    `INSERT INTO team_season (club_id, season_id) VALUES ($1, $2)`,
-    [clubId, seasonId],
-  );
-
-  return { clubId, seasonId };
-}
-
 function createMemoryObjectStore(): ObjectStoreAdapter & { objects: Map<string, Uint8Array> } {
   const objects = new Map<string, Uint8Array>();
   return {
     objects,
     async putObject(key: string, bytes: Uint8Array): Promise<void> {
       objects.set(key, bytes);
+    },
+    async objectExists(key: string): Promise<boolean> {
+      return objects.has(key);
     },
   };
 }
@@ -127,17 +103,18 @@ describe("FK seed mapper", () => {
   });
 
   it("writes Kit + KitPhoto with admin_only and unresolved rights", async () => {
-    const { clubId, seasonId } = await seedApifyPrerequisites(pool);
+    const scope = allocateTestFixtureScope();
+    const { clubId, seasonId } = await seedApifyPrerequisites(pool, scope);
     const objectStore = createMemoryObjectStore();
 
     const result = await runFkSeed({
       databaseUrl: DATABASE_URL,
-      fetchAdapter: createFixtureFetchAdapter(),
+      fetchAdapter: createScopedFixtureFetchAdapter(scope),
       objectStore,
       scope: {
         competition: "superliga",
-        fromSeason: "1998/99",
-        toSeason: "1998/99",
+        fromSeason: scope.seasonLabel,
+        toSeason: scope.seasonLabel,
       },
     });
 
@@ -176,19 +153,85 @@ describe("FK seed mapper", () => {
     expect(objectStore.objects.size).toBe(2);
   });
 
+  it("refuses accept when object store reports missing bytes after putObject", async () => {
+    const scope = allocateTestFixtureScope();
+    await seedApifyPrerequisites(pool, scope);
+
+    const brokenStore: ObjectStoreAdapter = {
+      async putObject() {},
+      async objectExists() {
+        return false;
+      },
+    };
+
+    await expect(
+      runFkSeed({
+        databaseUrl: DATABASE_URL,
+        fetchAdapter: createScopedFixtureFetchAdapter(scope),
+        objectStore: brokenStore,
+        scope: {
+          competition: "superliga",
+          fromSeason: scope.seasonLabel,
+          toSeason: scope.seasonLabel,
+        },
+      }),
+    ).rejects.toThrow(/Lane R2 object missing after putObject/);
+  });
+
+  it("refuses accept when a kit has no archive image bytes", async () => {
+    const scope = allocateTestFixtureScope();
+    await seedApifyPrerequisites(pool, scope);
+
+    const imagelessAdapter: FkFetchAdapter = {
+      async fetchKits() {
+        return [
+          {
+            id: "fk-no-image",
+            clubTransfermarktId: scope.clubTransfermarktId,
+            seasonTransfermarktId: "DK1-1998",
+            seasonLabel: scope.seasonLabel,
+            type: "home",
+          },
+        ];
+      },
+    };
+
+    await expect(
+      runFkSeed({
+        databaseUrl: DATABASE_URL,
+        fetchAdapter: imagelessAdapter,
+        objectStore: createMemoryObjectStore(),
+        scope: {
+          competition: "superliga",
+          fromSeason: scope.seasonLabel,
+          toSeason: scope.seasonLabel,
+        },
+      }),
+    ).rejects.toThrow(/no archive image bytes/);
+
+    const kitRow = await pool.query<{ value: string }>(
+      `SELECT value FROM external_id WHERE system = $1 AND value = 'fk-no-image'`,
+      [EXTERNAL_SYSTEM_FKAPI],
+    );
+    expect(kitRow.rows).toHaveLength(0);
+  });
+
   it("is idempotent on second run", async () => {
+    const scope = allocateTestFixtureScope();
+    await seedApifyPrerequisites(pool, scope);
     const objectStore = createMemoryObjectStore();
-    const fetchAdapter = createFixtureFetchAdapter();
+    const fetchAdapter = createScopedFixtureFetchAdapter(scope);
+    const runScope = {
+      competition: "superliga",
+      fromSeason: scope.seasonLabel,
+      toSeason: scope.seasonLabel,
+    };
 
     await runFkSeed({
       databaseUrl: DATABASE_URL,
       fetchAdapter,
       objectStore,
-      scope: {
-        competition: "superliga",
-        fromSeason: "1998/99",
-        toSeason: "1998/99",
-      },
+      scope: runScope,
     });
 
     const firstKitIds = await pool.query<{ id: string }>(`SELECT id FROM kit ORDER BY id`);
@@ -200,11 +243,7 @@ describe("FK seed mapper", () => {
       databaseUrl: DATABASE_URL,
       fetchAdapter,
       objectStore,
-      scope: {
-        competition: "superliga",
-        fromSeason: "1998/99",
-        toSeason: "1998/99",
-      },
+      scope: runScope,
     });
 
     expect(second.kitsUpserted).toBe(2);
@@ -220,14 +259,17 @@ describe("FK seed mapper", () => {
   });
 
   it("does not call Football Kit Archive when using injected fetch adapter", async () => {
+    const scope = allocateTestFixtureScope();
+    await seedApifyPrerequisites(pool, scope);
+
     const fakeAdapter: FkFetchAdapter = {
       async fetchKits() {
         return [
           {
             id: "fk-injected",
-            clubTransfermarktId: "190",
+            clubTransfermarktId: scope.clubTransfermarktId,
             seasonTransfermarktId: "DK1-1998",
-            seasonLabel: "1998/99",
+            seasonLabel: scope.seasonLabel,
             type: "home",
             imageBytes: Uint8Array.from([1, 2, 3]),
           },
@@ -242,8 +284,8 @@ describe("FK seed mapper", () => {
       objectStore,
       scope: {
         competition: "superliga",
-        fromSeason: "1998/99",
-        toSeason: "1998/99",
+        fromSeason: scope.seasonLabel,
+        toSeason: scope.seasonLabel,
       },
     });
 
@@ -272,16 +314,17 @@ describe("runCli", () => {
   });
 
   it("runs end-to-end with fake adapters", async () => {
+    const scope = allocateTestFixtureScope();
     await resetTestDatabase(DATABASE_URL, migrationsFolder);
-    const pool = new Pool({ connectionString: DATABASE_URL });
-    await seedApifyPrerequisites(pool);
-    await pool.end();
+    const setupPool = new Pool({ connectionString: DATABASE_URL });
+    await seedApifyPrerequisites(setupPool, scope);
+    await setupPool.end();
 
     const objectStore = createMemoryObjectStore();
     await runCli({
-      argv: ["superliga", "1998/99", "1998/99", "development"],
+      argv: ["superliga", scope.seasonLabel, scope.seasonLabel, "development"],
       databaseUrl: DATABASE_URL,
-      fetchAdapter: createFixtureFetchAdapter(),
+      fetchAdapter: createScopedFixtureFetchAdapter(scope),
       objectStore,
     });
 

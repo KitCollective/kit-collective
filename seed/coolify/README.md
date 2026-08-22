@@ -24,9 +24,11 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 | `SEED_TO_SEASON` | yes (`today` allowed) | yes |
 | `SEED_LANE` | optional (default development) | optional |
 | `DATABASE_URL` | yes | yes |
-| `SEED_PROXY_URL` | yes (live Kader on Coolify) | — |
-| `SEED_REQUIRE_PROXY` | recommended `true` on Coolify | — |
+| `SEED_PROXY_URL` | yes (live Kader on Coolify) | when FK origin 202s from CX33 |
+| `SEED_REQUIRE_PROXY` | recommended `true` on Coolify | recommended `true` on Coolify |
 | `APIFY_TOKEN` | only when `SEED_FETCH=apify` | — |
+| `FKAPI_BASE_URL` | — | yes (live listings; not fixture JSON) |
+| `FKAPI_TOKEN` | — | when FK origin requires auth |
 | `R2_*` | — | yes (lane bucket only) |
 
 ## Coolify setup
