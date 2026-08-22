@@ -8,6 +8,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "check:imports": "node scripts/check-import-boundaries.mjs",
+    "check:seed-fkapi-tests": "node scripts/check-seed-fkapi-test-isolation.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"
   },
   "devDependencies": {
