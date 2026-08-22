@@ -17,15 +17,10 @@ import {
   userJerseyPhoto,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
-import {
-  BadRequestException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
-import { type ObjectStoreAdapter, createMemoryObjectStore } from "./object-store.js";
+import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
@@ -40,9 +35,8 @@ function hasR2Config(): boolean {
 }
 
 function decodeBase64Photo(contentBase64: string): Uint8Array {
-  const normalized = contentBase64.includes(",")
-    ? contentBase64.split(",").pop()!
-    : contentBase64;
+  const commaIndex = contentBase64.indexOf(",");
+  const normalized = commaIndex >= 0 ? contentBase64.slice(commaIndex + 1) : contentBase64;
   const bytes = Buffer.from(normalized, "base64");
   if (bytes.length === 0) {
     throw new BadRequestException("Photo bytes are empty");
@@ -256,7 +250,10 @@ export class CollectionService {
     return bytes;
   }
 
-  private async findJerseyByDraft(userId: string, draftId: string): Promise<CollectionJersey | null> {
+  private async findJerseyByDraft(
+    userId: string,
+    draftId: string,
+  ): Promise<CollectionJersey | null> {
     const [draft] = await this.db
       .select({
         userJerseyId: jerseyDraft.userJerseyId,
@@ -273,7 +270,10 @@ export class CollectionService {
     return jerseys.jerseys.find((jersey) => jersey.id === draft.userJerseyId) ?? null;
   }
 
-  private async resolveClubLabels(clubIds: string[], locale: LabelLocale): Promise<Map<string, string>> {
+  private async resolveClubLabels(
+    clubIds: string[],
+    locale: LabelLocale,
+  ): Promise<Map<string, string>> {
     if (clubIds.length === 0) {
       return new Map();
     }

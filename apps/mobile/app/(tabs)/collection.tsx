@@ -1,3 +1,4 @@
+import type { CollectionJersey } from "@kit/api-contract";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -5,15 +6,14 @@ import {
   FlatList,
   StyleSheet,
   Text,
-  View,
   useWindowDimensions,
+  View,
 } from "react-native";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { JerseyTile } from "@/components/jersey-tile";
 import { Button, EmptyState } from "@/components/ui";
 import { color, space, type } from "@/theme/tokens";
-import type { CollectionJersey } from "@kit/api-contract";
 
 export default function CollectionScreen() {
   const router = useRouter();
@@ -100,9 +100,7 @@ export default function CollectionScreen() {
           const photoSource = primaryPhoto
             ? {
                 uri: resolvePhotoUrl(primaryPhoto.photoUrl),
-                headers: accessToken
-                  ? { Authorization: `Bearer ${accessToken}` }
-                  : undefined,
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
               }
             : undefined;
 

@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from "react-native";
+import { Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
 import { color, radius, space, type } from "@/theme/tokens";
 
 type JerseyTileProps = {
@@ -25,7 +25,9 @@ export function JerseyTile({ photoSource, clubLabel, seasonLabel, onPress }: Jer
           <View style={styles.photoPlaceholder} />
         )}
       </View>
-      <Text style={styles.caption} numberOfLines={2}>{caption}</Text>
+      <Text style={styles.caption} numberOfLines={2}>
+        {caption}
+      </Text>
     </Pressable>
   );
 }

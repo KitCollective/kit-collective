@@ -1,3 +1,4 @@
+import type { LabelLocale } from "@kit/domain";
 import {
   Controller,
   Get,
@@ -9,7 +10,6 @@ import {
   Res,
   UseGuards,
 } from "@nestjs/common";
-import type { LabelLocale } from "@kit/domain";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { CurrentUser } from "../identity/current-user.decorator.js";
 import type { JwtPayload } from "../identity/identity.service.js";
@@ -17,7 +17,12 @@ import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
 import { CollectionService } from "./collection.service.js";
 
 function resolveLocale(headerValue: string | undefined): LabelLocale {
-  if (headerValue === "da" || headerValue === "en" || headerValue === "sv" || headerValue === "no") {
+  if (
+    headerValue === "da" ||
+    headerValue === "en" ||
+    headerValue === "sv" ||
+    headerValue === "no"
+  ) {
     return headerValue;
   }
   return "da";

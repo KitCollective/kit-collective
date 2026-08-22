@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   JERSEY_CONDITIONS,
   JERSEY_SIZES,
@@ -6,6 +5,7 @@ import {
   PHOTO_ROLES,
   PHOTO_SOURCES,
 } from "@kit/domain";
+import { z } from "zod";
 
 export const collectionSavePhotoSchema = z
   .object({
