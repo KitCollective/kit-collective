@@ -21,7 +21,9 @@ FROM source AS deps
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
-RUN pnpm --filter @kit/seed-shared build \
+RUN pnpm --filter @kit/domain build \
+  && pnpm --filter @kit/db build \
+  && pnpm --filter @kit/seed-shared build \
   && pnpm --filter @kit/seed-apify build \
   && pnpm --filter @kit/seed-fkapi build \
   && pnpm --filter @kit/seed-mcp build
@@ -34,5 +36,5 @@ COPY --from=deps /app/package.json ./package.json
 COPY --from=deps /app/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=deps /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=build /app/seed ./seed
-COPY --from=deps /app/packages ./packages
+COPY --from=build /app/packages ./packages
 COPY --from=deps /app/apps/api/package.json ./apps/api/package.json
