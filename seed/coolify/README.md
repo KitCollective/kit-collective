@@ -33,10 +33,10 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 
 ## Coolify setup
 
-1. Build from repo root using `seed/coolify/Dockerfile` (local) or `seed/coolify/Dockerfile.remote` (Coolify API — clones public git at build time).
-2. Import the compose file as a **Docker Compose** resource, **or** run `scripts/wire-coolify-seed-apify-job.sh` to create/update the development job via Coolify API.
+1. Build from repo root using `seed/coolify/Dockerfile` (local) or `seed/coolify/Dockerfile.remote` (Coolify API — clones public git at build time). The job container runs the **prebuilt** CLI from `seed/apify/dist/cli.js`; it does not `pnpm install` or compile TypeScript at start.
+2. Import the compose file as a **Docker Compose** resource, **or** run `scripts/wire-coolify-seed-apify-job.sh` to create/update the development job via Coolify API (embeds `Dockerfile.remote` as `dockerfile_inline` so the CX33 host does not need a git checkout for build context).
 3. Set restart policy to **never** / run as a one-shot job or cron.
-4. Apply CPU/memory limits from the compose `deploy.resources` block.
+4. Set the cgroup memory cap with compose **`mem_limit`** (e.g. `512m` on the Apify job). Coolify on this host does **not** enforce Swarm-only `deploy.resources.limits.memory`; use `mem_limit` so the one-shot job is capped for Node CLI RAM, not a full monorepo install + `tsc`.
 5. Store secrets in the matching Coolify environment (`development` or `staging`).
 
 Agents can trigger deploy/start via Coolify MCP once the resource exists (`control` on the service UUID).

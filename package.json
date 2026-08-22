@@ -15,6 +15,7 @@
     "check:seed-fkapi-tests": "node scripts/check-seed-fkapi-test-isolation.mjs",
     "check:mobile-tab-bar": "node scripts/check-mobile-tab-bar.mjs",
     "check:workflow-api-boot-env": "node scripts/check-workflow-api-boot-env.mjs",
+    "check:coolify-seed-apify-compose": "node scripts/check-coolify-seed-apify-compose.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"
   },
   "devDependencies": {

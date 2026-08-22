@@ -10,7 +10,7 @@
 #   SEED_REQUIRE_PROXY — set to true on Coolify so missing proxy fails closed
 #   APIFY_TOKEN — Apify actor token (only when SEED_FETCH=apify)
 #
-# Resource limits keep seed imports from starving Nest on the CX33.
+# mem_limit is the cgroup cap Coolify applies on this compose parser (not Swarm deploy.resources).
 
 services:
   seed-apify-job:
@@ -19,14 +19,7 @@ services:
       dockerfile: seed/coolify/Dockerfile
     image: kit-collective-seed:latest
     restart: "no"
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-        reservations:
-          cpus: "0.25"
-          memory: 256M
+    mem_limit: 512m
     environment:
       SEED_LANE: ${SEED_LANE:-development}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
@@ -34,12 +27,8 @@ services:
       SEED_REQUIRE_PROXY: ${SEED_REQUIRE_PROXY:-true}
       APIFY_TOKEN: ${APIFY_TOKEN:-}
     command:
-      - pnpm
-      - --filter
-      - "@kit/seed-apify"
-      - exec
       - node
-      - dist/cli.js
+      - seed/apify/dist/cli.js
       - ${SEED_COMPETITION:?SEED_COMPETITION is required}
       - ${SEED_FROM_SEASON:?SEED_FROM_SEASON is required}
       - ${SEED_TO_SEASON:?SEED_TO_SEASON is required}
