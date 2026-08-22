@@ -32,6 +32,8 @@ describe("kc_seed_mcp catalog", () => {
 
 describe("mcp.json.example", () => {
   it("registers kc_seed_mcp stdio with Seed env names and no Coolify tokens", () => {
+    // SAFETY: mcp.json.example is committed JSON; the checks below reject a missing
+    // kc_seed_mcp entry and only read env key names, never secret values.
     const example = JSON.parse(
       readFileSync(join(repoRoot, ".cursor/mcp.json.example"), "utf8"),
     ) as {
