@@ -6,8 +6,8 @@ export default function AddScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Tilføj</Text>
       <Text style={styles.body}>
-        Her kommer tilføjelsesflowet i næste skive. Ingen kamera eller fototilladelser
-        på første opstart.
+        Her kommer tilføjelsesflowet i næste skive. Ingen kamera eller fototilladelser på første
+        opstart.
       </Text>
     </View>
   );

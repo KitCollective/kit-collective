@@ -3,19 +3,17 @@ export {
   catalogStatsKeys,
   catalogStatsSchema,
 } from "./catalog/stats.js";
-
 export {
-  identityCredentialsSchema,
-  identityMeSchema,
-  identitySessionSchema,
-  identityUserSchema,
+  type CollectionJerseys,
+  collectionJerseysSchema,
+} from "./identity/collection.js";
+export {
   type IdentityCredentials,
   type IdentityMe,
   type IdentitySession,
   type IdentityUser,
+  identityCredentialsSchema,
+  identityMeSchema,
+  identitySessionSchema,
+  identityUserSchema,
 } from "./identity/session.js";
-
-export {
-  collectionJerseysSchema,
-  type CollectionJerseys,
-} from "./identity/collection.js";

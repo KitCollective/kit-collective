@@ -1,18 +1,14 @@
+import type { IdentitySession, IdentityUser } from "@kit/api-contract";
 import {
   createContext,
+  type ReactNode,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
-import type { IdentitySession, IdentityUser } from "@kit/api-contract";
-import {
-  fetchCurrentUser,
-  loginCollector,
-  registerCollector,
-} from "@/api/identity";
+import { fetchCurrentUser, loginCollector, registerCollector } from "@/api/identity";
 import { clearSession, loadSession, saveSession } from "@/auth/session";
 
 type AuthContextValue = {

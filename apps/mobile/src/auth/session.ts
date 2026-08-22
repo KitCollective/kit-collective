@@ -1,6 +1,6 @@
+import type { IdentitySession } from "@kit/api-contract";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import type { IdentitySession } from "@kit/api-contract";
 
 const SESSION_KEY = "kit.session";
 

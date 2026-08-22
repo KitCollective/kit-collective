@@ -1,20 +1,15 @@
 import {
-  ConflictException,
-  Inject,
-  Injectable,
-  UnauthorizedException,
-} from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
-import {
+  type IdentityMe,
+  type IdentitySession,
   identityCredentialsSchema,
   identityMeSchema,
   identitySessionSchema,
-  type IdentityMe,
-  type IdentitySession,
 } from "@kit/api-contract";
 import { user } from "@kit/db";
-import { eq } from "drizzle-orm";
+import { ConflictException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 import { DB, type DbToken } from "../db/db.module.js";
 
 const { hash, compare } = bcrypt;

@@ -12,10 +12,7 @@ describe("corsAllowedOrigins", () => {
     process.env.CORS_ALLOWED_ORIGINS = "https://app.example.com, https://web.example.com";
     delete process.env.NODE_ENV;
 
-    expect(corsAllowedOrigins()).toEqual([
-      "https://app.example.com",
-      "https://web.example.com",
-    ]);
+    expect(corsAllowedOrigins()).toEqual(["https://app.example.com", "https://web.example.com"]);
   });
 
   it("denies all origins in production when unset", () => {

@@ -1,11 +1,11 @@
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  type PressableProps,
   StyleSheet,
   Text,
   View,
-  type PressableProps,
 } from "react-native";
 import { color, radius, space, type } from "@/theme/tokens";
 

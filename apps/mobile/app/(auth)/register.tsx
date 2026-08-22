@@ -1,15 +1,8 @@
-import { useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
 import { Link } from "expo-router";
-import { Button } from "@/components/ui";
+import { useState } from "react";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/auth/AuthProvider";
+import { Button } from "@/components/ui";
 import { color, radius, space, type } from "@/theme/tokens";
 
 // Design-system gap (KIT-23): login/register screens are not in docs/design-system.md
@@ -74,7 +67,12 @@ export default function RegisterScreen() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <View style={styles.actions}>
-          <Button label="Opret konto" variant="primary" onPress={() => void handleSubmit()} loading={loading} />
+          <Button
+            label="Opret konto"
+            variant="primary"
+            onPress={() => void handleSubmit()}
+            loading={loading}
+          />
           <Link href="/login" style={styles.link}>
             Har du allerede en konto?
           </Link>

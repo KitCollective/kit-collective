@@ -1,5 +1,5 @@
-import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Stack } from "expo-router";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { color } from "@/theme/tokens";
 

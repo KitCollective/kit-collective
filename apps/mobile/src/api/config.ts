@@ -8,9 +8,7 @@ export function getApiBaseUrl(): string {
     return fromEnv.replace(/\/$/, "");
   }
 
-  const extra = Constants.expoConfig?.extra as
-    | { apiUrl?: string }
-    | undefined;
+  const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
 
   if (extra?.apiUrl) {
     return extra.apiUrl.replace(/\/$/, "");

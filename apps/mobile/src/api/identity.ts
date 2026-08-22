@@ -1,18 +1,15 @@
 import {
   collectionJerseysSchema,
-  identityCredentialsSchema,
-  identityMeSchema,
-  identitySessionSchema,
   type IdentityCredentials,
   type IdentityMe,
   type IdentitySession,
+  identityCredentialsSchema,
+  identityMeSchema,
+  identitySessionSchema,
 } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
 
-async function requestJson(
-  path: string,
-  init: RequestInit = {},
-): Promise<Response> {
+async function requestJson(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type") && init.body) {
     headers.set("Content-Type", "application/json");
@@ -40,9 +37,7 @@ export async function registerCollector(
   return identitySessionSchema.parse(await response.json());
 }
 
-export async function loginCollector(
-  credentials: IdentityCredentials,
-): Promise<IdentitySession> {
+export async function loginCollector(credentials: IdentityCredentials): Promise<IdentitySession> {
   const payload = identityCredentialsSchema.parse(credentials);
   const response = await requestJson("/v1/identity/login", {
     method: "POST",

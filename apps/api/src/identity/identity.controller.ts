@@ -1,12 +1,5 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Post,
-  UseGuards,
-} from "@nestjs/common";
 import { collectionJerseysSchema } from "@kit/api-contract";
+import { Body, Controller, Get, HttpCode, Post, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "./current-user.decorator.js";
 import { IdentityService, type JwtPayload } from "./identity.service.js";
 import { JwtAuthGuard } from "./jwt-auth.guard.js";

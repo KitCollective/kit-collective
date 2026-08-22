@@ -1,6 +1,6 @@
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
 import { fetchCollectionJerseys } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button, EmptyState } from "@/components/ui";
