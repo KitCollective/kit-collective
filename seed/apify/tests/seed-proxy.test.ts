@@ -96,6 +96,32 @@ describe("createProxyFetchHtml", () => {
     );
   });
 
+  it("uses Site Unblocker TLS skip and geo header without a custom User-Agent", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      text: async () => "<html>ok</html>",
+    });
+
+    const unblockerUrl = "http://user:pass@unblock.decodo.com:60000";
+    const { fetchHtml } = createProxyFetchHtml(unblockerUrl);
+    await fetchHtml("https://www.transfermarkt.com/test");
+
+    expect(ProxyAgentMock).toHaveBeenCalledWith({
+      uri: unblockerUrl,
+      requestTls: { rejectUnauthorized: false },
+      proxyTls: { rejectUnauthorized: false },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://www.transfermarkt.com/test",
+      expect.objectContaining({
+        headers: {
+          "X-SU-Geo": "Germany",
+          "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+        },
+      }),
+    );
+  });
+
   it("drains the response body before throwing on non-OK", async () => {
     const textMock = vi.fn().mockResolvedValue("");
     fetchMock.mockResolvedValue({

@@ -4,4 +4,4 @@ Coolify’s Hetzner IP gets HTTP 202 and an empty body from Transfermarkt. Apify
 
 Felipeall is not a dependency. Decodo’s browser Scraping API is not the fetch. Nest still never hits Transfermarkt.
 
-Status: accepted.
+Status: accepted. Partially superseded by ADR-0017: Coolify may use Decodo **Site Unblocker** as `SEED_PROXY_URL` (HTTP proxy). `POST /v2/scrape` remains out.

@@ -45,6 +45,8 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 
 For Decodo residential proxies, `SEED_PROXY_URL` may include optional sticky-session username parameters `session` and `sessionduration` (document names only in git; set values in Coolify). Omit `session` for rotating IPs.
 
+Decodo **Site Unblocker** uses host `unblock.decodo.com` port `60000` (HTTP proxy, not `POST /v2/scrape`). The seed CLI detects that host, disables TLS verification on the proxy dispatcher only, and sends `X-SU-Geo: Germany`. Do not enable Unblocker JS rendering for kader HTML.
+
 Agents can trigger deploy/start via Coolify MCP once the resource exists (`control` on the service UUID).
 
 **Cloud Agents:** `scripts/setup-coolify-mcp.sh` writes `.cursor/mcp.json` for the IDE. Agents also need the same HTTP server registered under **Cursor Dashboard → Integrations & MCP** so `GetMcpTools` lists `coolify` in-session. Starting a run from chat uses the Coolify MCP `control` tool — see `seed/coolify/start-apify-job.sh` (not the Coolify REST `/start` endpoint).
