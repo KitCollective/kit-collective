@@ -18,8 +18,8 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-nat
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
-import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
+import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
