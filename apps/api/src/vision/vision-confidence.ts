@@ -39,6 +39,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+/** Model self-reported confidence (0–1) scaled to 0–100 for gate decisions. */
+export function computeOverallConfidence(modelConfidence: number | undefined): number {
+  if (modelConfidence === undefined) {
+    return 0;
+  }
+
+  return Math.round(modelConfidence * 100);
+}
+
 export function shouldPreselect(confidences: VisionFieldConfidences | null): boolean {
   if (!confidences) {
     return false;

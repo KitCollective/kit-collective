@@ -52,6 +52,11 @@ export {
   visionSuggestResponseSchema,
 } from "./collection/vision.js";
 export {
+  resolveVisionSaveAction,
+  type VisionSaveActionInput,
+  type VisionSaveActionResult,
+} from "./collection/vision-save-action.js";
+export {
   type IdentityCredentials,
   type IdentityMe,
   type IdentityRole,

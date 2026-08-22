@@ -1,4 +1,5 @@
 import type { CatalogPickerItem, VisionJobResponse } from "@kit/api-contract";
+import { resolveVisionSaveAction } from "@kit/api-contract";
 import {
   JERSEY_CONDITION_LABELS_DA,
   JERSEY_CONDITIONS,
@@ -397,42 +398,22 @@ export default function AddScreen() {
       if (visionJobId && accessToken) {
         try {
           const job = await fetchVisionJob(accessToken, visionJobId);
-          if (job.status === "ready" && job.suggestions) {
-            const matchesClub = job.suggestions.clubId === selectedClub.id;
-            const matchesSeason = job.suggestions.seasonId === selectedSeason.id;
-            const matchesType = !job.suggestions.type || job.suggestions.type === kitType;
-            const fullyMatches = matchesClub && matchesSeason && matchesType;
+          const resolved = resolveVisionSaveAction({
+            status: job.status,
+            suggestions: job.suggestions,
+            selectedClubId: selectedClub.id,
+            selectedSeasonId: selectedSeason.id,
+            selectedKitType: kitType,
+          });
 
-            if (fullyMatches) {
-              await logVisionAction(accessToken, {
-                jobId: visionJobId,
-                action: "accepted",
-                userJerseyId: response.jersey.id,
-                clubId: selectedClub.id,
-                seasonId: selectedSeason.id,
-                type: kitType,
-              });
-            } else if (
-              matchesClub ||
-              matchesSeason ||
-              (job.suggestions.type && job.suggestions.type === kitType)
-            ) {
-              await logVisionAction(accessToken, {
-                jobId: visionJobId,
-                action: "edited",
-                userJerseyId: response.jersey.id,
-                clubId: selectedClub.id,
-                seasonId: selectedSeason.id,
-                type: kitType,
-              });
-            } else {
-              await logVisionAction(accessToken, {
-                jobId: visionJobId,
-                action: "ignored",
-                userJerseyId: response.jersey.id,
-              });
-            }
-          }
+          await logVisionAction(accessToken, {
+            jobId: visionJobId,
+            action: resolved.action,
+            userJerseyId: response.jersey.id,
+            clubId: resolved.clubId,
+            seasonId: resolved.seasonId,
+            type: resolved.type,
+          });
         } catch {
           // Logging must not block navigation after Save.
         }

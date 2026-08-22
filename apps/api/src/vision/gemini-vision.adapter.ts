@@ -5,6 +5,7 @@ import { KIT_TYPES } from "@kit/domain";
 import { and, eq, ilike, or } from "drizzle-orm";
 import { NoopVisionAdapter } from "./noop-vision.adapter.js";
 import type { VisionAdapter, VisionInferenceResult } from "./vision.adapter.js";
+import { computeOverallConfidence } from "./vision-confidence.js";
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
 const GEMINI_TIMEOUT_MS = 10_000;
@@ -161,18 +162,8 @@ export class GeminiVisionAdapter implements VisionAdapter {
     modelConfidence: number | undefined,
     fields: { club?: number; season?: number; kitType?: number },
   ): VisionInferenceResult["confidences"] {
-    const fieldValues = [fields.club, fields.season, fields.kitType].filter(
-      (value): value is number => value !== undefined,
-    );
-    const matchAverage =
-      fieldValues.length > 0
-        ? fieldValues.reduce((sum, value) => sum + value, 0) / fieldValues.length
-        : 0;
-    const modelScore = modelConfidence !== undefined ? modelConfidence * 100 : matchAverage;
-    const overall = Math.round(Math.max(modelScore, matchAverage));
-
     return {
-      overall,
+      overall: computeOverallConfidence(modelConfidence),
       club: fields.club,
       season: fields.season,
       kitType: fields.kitType,
