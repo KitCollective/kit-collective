@@ -1,3 +1,4 @@
+import type { CatalogPickerItem } from "@kit/api-contract";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
@@ -6,20 +7,15 @@ import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Button } from "@/components/ui";
 import { color, space, type } from "@/theme/tokens";
 
-type PickerItem = {
-  id: string;
-  label: string;
-};
-
 export default function AddScreen() {
   const { accessToken } = useAuth();
   const [clubSheetOpen, setClubSheetOpen] = useState(false);
   const [seasonSheetOpen, setSeasonSheetOpen] = useState(false);
   const [clubQuery, setClubQuery] = useState("");
-  const [clubResults, setClubResults] = useState<PickerItem[]>([]);
-  const [seasonResults, setSeasonResults] = useState<PickerItem[]>([]);
-  const [selectedClub, setSelectedClub] = useState<PickerItem | null>(null);
-  const [selectedSeason, setSelectedSeason] = useState<PickerItem | null>(null);
+  const [clubResults, setClubResults] = useState<CatalogPickerItem[]>([]);
+  const [seasonResults, setSeasonResults] = useState<CatalogPickerItem[]>([]);
+  const [selectedClub, setSelectedClub] = useState<CatalogPickerItem | null>(null);
+  const [selectedSeason, setSelectedSeason] = useState<CatalogPickerItem | null>(null);
   const [searching, setSearching] = useState(false);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
   const [catalogMiss, setCatalogMiss] = useState(false);
@@ -66,7 +62,7 @@ export default function AddScreen() {
     setClubSheetOpen(true);
   };
 
-  const selectClub = async (club: PickerItem) => {
+  const selectClub = async (club: CatalogPickerItem) => {
     setSelectedClub(club);
     setSelectedSeason(null);
     setClubSheetOpen(false);
@@ -94,7 +90,7 @@ export default function AddScreen() {
 
       {catalogMiss && !clubSheetOpen ? (
         <Banner
-          tone="warning"
+          tone="info"
           message="Klubben findes ikke i kataloget endnu. Dit draft bliver gemt."
           action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
         />
@@ -131,7 +127,7 @@ export default function AddScreen() {
 
         {catalogMiss ? (
           <Banner
-            tone="warning"
+            tone="info"
             message="Klubben findes ikke i kataloget endnu."
             action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
           />

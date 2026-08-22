@@ -34,11 +34,14 @@ export class CatalogController {
   @Get("clubs/search")
   @UseGuards(JwtAuthGuard)
   async searchClubs(@Query() query: Record<string, string | string[] | undefined>) {
-    const parsed = catalogPickerSearchQuerySchema.parse({
+    const parsed = catalogPickerSearchQuerySchema.safeParse({
       q: typeof query.q === "string" ? query.q : undefined,
       locale: typeof query.locale === "string" ? query.locale : undefined,
     });
-    const body = await this.catalogService.searchClubs(parsed.q, parsed.locale);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid search query");
+    }
+    const body = await this.catalogService.searchClubs(parsed.data.q, parsed.data.locale);
     return catalogClubSearchResponseSchema.parse(body);
   }
 
