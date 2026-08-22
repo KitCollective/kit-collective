@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -7,7 +7,46 @@ import {
   Text,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { color, radius, space, type } from "@/theme/tokens";
+
+type IoniconName = ComponentProps<typeof Ionicons>["name"];
+
+type IconButtonProps = Omit<PressableProps, "children"> & {
+  name: string;
+  icon: IoniconName;
+  iconColor?: string;
+  iconSize?: number;
+};
+
+/**
+ * Icon button primitive (docs/design-system.md → Components → Icon button).
+ * Single icon, no caption inside the control; accessible name via `name`.
+ */
+export function IconButton({
+  name,
+  icon,
+  iconColor = color.contentPrimary,
+  iconSize = 24,
+  disabled,
+  ...props
+}: IconButtonProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={name}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.iconButton,
+        disabled && styles.disabled,
+        pressed && !disabled && styles.pressed,
+      ]}
+      {...props}
+    >
+      <Ionicons name={icon} size={iconSize} color={iconColor} accessibilityElementsHidden />
+    </Pressable>
+  );
+}
 
 type ButtonVariant = "primary" | "secondary" | "tertiary" | "destructive";
 
@@ -64,6 +103,12 @@ export function EmptyState({ title, body, action }: EmptyStateProps) {
 }
 
 const styles = StyleSheet.create({
+  iconButton: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   base: {
     minHeight: 44,
     borderRadius: radius.pill,

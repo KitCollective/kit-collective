@@ -13,10 +13,15 @@ type PhotoSlotProps = {
   onPress: () => void;
 };
 
-const CONFIRM_WIDTH = 72;
-const CONFIRM_HEIGHT = 90;
-const OVERLAY_WIDTH = 56;
-const OVERLAY_HEIGHT = 70;
+/** 4:5 jersey photo tile — design-system Layout (photo dominates, tile clips to radius). */
+function photoSlotHeight(width: number): number {
+  return (width * 5) / 4;
+}
+
+const CONFIRM_WIDTH = space.insetLg * 3;
+const CONFIRM_HEIGHT = photoSlotHeight(CONFIRM_WIDTH);
+const OVERLAY_WIDTH = space.insetMd * 3 + space.gapSm;
+const OVERLAY_HEIGHT = photoSlotHeight(OVERLAY_WIDTH);
 
 /**
  * Photo slot primitive (docs/design-system.md → Components → Photo slot).

@@ -1,3 +1,4 @@
+import * as Crypto from "expo-crypto";
 import {
   JERSEY_CONDITIONS,
   JERSEY_SIZES,
@@ -60,7 +61,7 @@ function mapRow(
 }
 
 export function createDraftId(): string {
-  return globalThis.crypto.randomUUID();
+  return Crypto.randomUUID();
 }
 
 export function createDraft(

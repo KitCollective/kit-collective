@@ -1,7 +1,6 @@
 import { PHOTO_ROLES, type PhotoRole } from "@kit/domain";
-import { useIsFocused } from "@react-navigation/native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,9 +8,9 @@ import { captureQualityForRole } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { Banner } from "@/components/catalog-ui";
 import { PhotoSlot } from "@/components/photo-slot";
-import { Button } from "@/components/ui";
+import { Button, IconButton } from "@/components/ui";
 import { loadDraft, nextEmptyRole, upsertDraftPhoto } from "@/drafts/jerseyDraftStore";
-import { color, space, type } from "@/theme/tokens";
+import { color, radius, space, type } from "@/theme/tokens";
 
 type CaptureCameraSessionProps = {
   draftId: string;
@@ -27,16 +26,23 @@ type CaptureCameraSessionProps = {
  */
 export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessionProps) {
   const router = useRouter();
-  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const [isFocused, setIsFocused] = useState(true);
   const [pendingShot, setPendingShot] = useState(false);
   const [activeRole, setActiveRole] = useState<PhotoRole>(() => {
     const draft = loadDraft(draftId);
     return nextEmptyRole(draft.photos) ?? PHOTO_ROLES[0];
   });
   const [photos, setPhotos] = useState(() => loadDraft(draftId).photos);
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true);
+      return () => setIsFocused(false);
+    }, []),
+  );
 
   const photoMap: Record<PhotoRole, string | undefined> = {
     front: photos.find((photo) => photo.role === "front")?.uri,
@@ -138,72 +144,83 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
         <View style={[StyleSheet.absoluteFill, styles.cameraFallback]} />
       )}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Luk"
-        style={[styles.close, { top: insets.top + space.insetSm }]}
-        onPress={() => router.back()}
+      <View
+        style={[
+          styles.overlay,
+          {
+            paddingTop: insets.top + space.insetSm,
+            paddingBottom: insets.bottom + space.insetMd,
+          },
+        ]}
+        pointerEvents="box-none"
       >
-        <Text style={styles.closeLabel}>Luk</Text>
-      </Pressable>
+        <View style={styles.header} pointerEvents="box-none">
+          <IconButton
+            name="Luk"
+            icon="close"
+            iconColor={color.contentInverse}
+            onPress={() => router.back()}
+          />
+          <Text style={styles.hint}>Tag forside, bagside og mærke</Text>
+          <View style={styles.headerSpacer} />
+        </View>
 
-      <Text style={[styles.hint, { top: insets.top + space.insetSm + 36 }]}>
-        Tag forside, bagside og mærke
-      </Text>
+        {cameraDenied ? (
+          <View style={styles.deniedBanner}>
+            <Banner
+              tone="warning"
+              message="Kameraadgang er slået fra. Vælg fotos fra galleriet, eller slå kamera til i Indstillinger."
+              action={
+                <Button
+                  label="Åbn indstillinger"
+                  variant="tertiary"
+                  onPress={() => void Linking.openSettings()}
+                />
+              }
+            />
+          </View>
+        ) : null}
 
-      {cameraDenied ? (
-        <View style={[styles.deniedBanner, { top: insets.top + 72 }]}>
-          <Banner
-            tone="warning"
-            message="Kameraadgang er slået fra. Vælg fotos fra galleriet, eller slå kamera til i Indstillinger."
-            action={
-              <Button
-                label="Åbn indstillinger"
-                variant="tertiary"
-                onPress={() => void Linking.openSettings()}
-              />
-            }
+        <View style={styles.spacer} />
+
+        <View style={styles.slotRow}>
+          {PHOTO_ROLES.map((role) => (
+            <PhotoSlot
+              key={role}
+              variant="camera-overlay"
+              role={role}
+              uri={photoMap[role]}
+              selected={activeRole === role}
+              onPress={() => setActiveRole(role)}
+            />
+          ))}
+        </View>
+
+        <View style={styles.controls}>
+          <Button
+            label="Vælg fra galleri"
+            variant="tertiary"
+            onPress={() => void pickFromGallery()}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tag billede"
+            accessibilityHint="Tager et foto til den valgte slot"
+            disabled={cameraDenied}
+            onPress={() => void takeShot()}
+            style={({ pressed }) => [
+              styles.shutter,
+              cameraDenied && styles.shutterDisabled,
+              pressed && !cameraDenied && styles.shutterPressed,
+            ]}
+          />
+          <Button
+            label="Fortsæt"
+            variant="secondary"
+            disabled={photos.length === 0}
+            onPress={onContinue}
           />
         </View>
-      ) : null}
-
-      <View style={[styles.slotRow, { bottom: insets.bottom + 132 }]}>
-        {PHOTO_ROLES.map((role) => (
-          <PhotoSlot
-            key={role}
-            variant="camera-overlay"
-            role={role}
-            uri={photoMap[role]}
-            selected={activeRole === role}
-            onPress={() => setActiveRole(role)}
-          />
-        ))}
-      </View>
-
-      <View style={[styles.controls, { paddingBottom: insets.bottom + space.insetMd }]}>
-        <Button
-          label="Vælg fra galleri"
-          variant="tertiary"
-          onPress={() => void pickFromGallery()}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Tag billede"
-          accessibilityHint="Tager et foto til den valgte slot"
-          disabled={cameraDenied}
-          onPress={() => void takeShot()}
-          style={({ pressed }) => [
-            styles.shutter,
-            cameraDenied && styles.shutterDisabled,
-            pressed && !cameraDenied && styles.shutterPressed,
-          ]}
-        />
-        <Button
-          label="Fortsæt"
-          variant="secondary"
-          disabled={photos.length === 0}
-          onPress={onContinue}
-        />
       </View>
     </View>
   );
@@ -217,61 +234,50 @@ const styles = StyleSheet.create({
   cameraFallback: {
     backgroundColor: color.fillSecondary,
   },
-  close: {
-    position: "absolute",
-    left: space.insetMd,
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "space-between",
+    paddingHorizontal: space.insetMd,
     zIndex: 2,
-    minHeight: 44,
-    minWidth: 44,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  closeLabel: {
-    fontSize: type.label.fontSize,
-    lineHeight: type.label.lineHeight,
-    fontWeight: type.label.fontWeight,
-    color: color.contentInverse,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.gapSm,
+  },
+  headerSpacer: {
+    width: 44,
   },
   hint: {
-    position: "absolute",
-    alignSelf: "center",
-    zIndex: 2,
+    flex: 1,
+    textAlign: "center",
     fontSize: type.caption.fontSize,
     lineHeight: type.caption.lineHeight,
     color: color.contentInverse,
     opacity: 0.9,
   },
   deniedBanner: {
-    position: "absolute",
-    left: space.insetMd,
-    right: space.insetMd,
-    zIndex: 2,
+    marginTop: space.gapSm,
+  },
+  spacer: {
+    flex: 1,
   },
   slotRow: {
-    position: "absolute",
-    left: space.insetMd,
-    right: space.insetMd,
     flexDirection: "row",
     justifyContent: "space-between",
     gap: space.gapSm,
-    zIndex: 2,
+    marginBottom: space.insetLg,
   },
   controls: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: space.insetMd,
     gap: space.gapSm,
-    zIndex: 2,
   },
   shutter: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: space.insetLg + space.insetMd + space.insetLg,
+    height: space.insetLg + space.insetMd + space.insetLg,
+    borderRadius: radius.pill,
     backgroundColor: color.fillPrimary,
     borderWidth: 4,
     borderColor: color.contentInverse,
