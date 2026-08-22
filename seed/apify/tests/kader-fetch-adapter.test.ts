@@ -1,4 +1,6 @@
 import { readFileSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { catalogLabel, createDb, externalId, playerClubSeason, resetDatabase } from "@kit/db";
@@ -9,6 +11,7 @@ import {
   TransfermarktHttpError,
 } from "../src/fetch/kader-fetch-adapter.js";
 import { createRecordingFetchAdapter } from "../src/fetch/recording-adapter.js";
+import { TransfermarktCircuitOpenError } from "../src/fetch/transfermarkt-rate-limit.js";
 import { normalize } from "../src/normalize/index.js";
 import { runSeed } from "../src/run.js";
 import { TM_SYSTEM } from "../src/types.js";
@@ -172,6 +175,188 @@ describe("kader fetch adapter from recorded HTML", () => {
 
     expect(competitionFetches).toBe(1);
   });
+
+  it("writes live HTML to cacheDir and avoids a second network fetch for the same URL", async () => {
+    const cacheDir = await mkdtemp(path.join(tmpdir(), "kader-live-cache-"));
+    const competitionHtml = readFileSync(
+      path.join(fixturesDir, "competitions/DK1-2015.html"),
+      "utf8",
+    );
+    const kader190 = readFileSync(path.join(fixturesDir, "kader/190-2015.html"), "utf8");
+    let networkCalls = 0;
+
+    const adapter = createKaderFetchAdapter({
+      cacheDir,
+      fetchHtml: async (url) => {
+        networkCalls += 1;
+        if (url.includes("/wettbewerb/")) {
+          return competitionHtml;
+        }
+        if (url.includes("/verein/190/")) {
+          return kader190;
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    await adapter.fetchClubSeason({
+      competition: "superligaen",
+      clubExternalId: "190",
+      season: "2015/16",
+    });
+    await adapter.fetchClubSeason({
+      competition: "superligaen",
+      clubExternalId: "190",
+      season: "2015/16",
+    });
+
+    expect(networkCalls).toBe(2);
+  });
+
+  it("treats a profile HTTP 403 as a hole and still maps the rest of the club", async () => {
+    const competitionHtml = readFileSync(
+      path.join(fixturesDir, "competitions/DK1-2015.html"),
+      "utf8",
+    );
+    const kader191 = readFileSync(path.join(fixturesDir, "kader/191-2015.html"), "utf8");
+    const profileHoles: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      fetchHtml: async (url) => {
+        if (url.includes("/wettbewerb/")) {
+          return competitionHtml;
+        }
+        if (url.includes("/verein/191/")) {
+          return kader191;
+        }
+        if (url.includes("/spieler/99999")) {
+          throw new TransfermarktHttpError(403, url);
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+      onProfileHole: (playerId) => profileHoles.push(playerId),
+    });
+
+    const raw = await adapter.fetchClubSeason({
+      competition: "superligaen",
+      clubExternalId: "191",
+      season: "2015/16",
+    });
+
+    expect(profileHoles).toEqual(["99999"]);
+    const facts = normalize(raw);
+    const players = facts.seasons[0]?.clubs[0]?.players ?? [];
+    expect(players.find((p) => p.externalId === "22221")?.squadNumber).toBe(7);
+    expect(players.find((p) => p.externalId === "99999")?.squadNumber).toBeUndefined();
+  });
+
+  it("treats a squad row without player id as a hole and still maps the rest of the club", async () => {
+    const competitionHtml = readFileSync(
+      path.join(fixturesDir, "competitions/DK1-2015.html"),
+      "utf8",
+    );
+    const kader193 = readFileSync(path.join(fixturesDir, "kader/193-2015.html"), "utf8");
+    const profileFetches: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      fetchHtml: async (url) => {
+        if (url.includes("/wettbewerb/")) {
+          return competitionHtml;
+        }
+        if (url.includes("/verein/193/")) {
+          return kader193;
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+      onProfileFetch: (playerId) => profileFetches.push(playerId),
+    });
+
+    const raw = await adapter.fetchClubSeason({
+      competition: "superligaen",
+      clubExternalId: "193",
+      season: "2015/16",
+    });
+
+    expect(profileFetches).toEqual([]);
+    const facts = normalize(raw);
+    const players = facts.seasons[0]?.clubs[0]?.players ?? [];
+    expect(players).toHaveLength(1);
+    expect(players[0]?.externalId).toBe("44444");
+    expect(players[0]?.squadNumber).toBe(1);
+  });
+});
+
+describe("kader fetch adapter rate limiting", () => {
+  it("stops further Transfermarkt GETs after consecutive HTTP 403 responses", async () => {
+    let networkCalls = 0;
+    const adapter = createKaderFetchAdapter({
+      rateLimitStopAfter: 1,
+      fetchHtml: async (url) => {
+        networkCalls += 1;
+        throw new TransfermarktHttpError(403, url);
+      },
+    });
+
+    await expect(
+      adapter.fetchClubSeason({
+        competition: "superligaen",
+        clubExternalId: "190",
+        season: "2015/16",
+      }),
+    ).rejects.toBeInstanceOf(TransfermarktHttpError);
+
+    await expect(
+      adapter.fetchClubSeason({
+        competition: "superligaen",
+        clubExternalId: "191",
+        season: "2015/16",
+      }),
+    ).rejects.toBeInstanceOf(TransfermarktCircuitOpenError);
+
+    expect(networkCalls).toBe(1);
+  });
+
+  it("continues the club walk without further network calls once the circuit is open", async () => {
+    let networkCalls = 0;
+    const fixturesAdapter = createKaderFetchAdapter({ fixturesDir });
+    const rateLimited = createKaderFetchAdapter({
+      rateLimitStopAfter: 1,
+      fetchHtml: async (url) => {
+        networkCalls += 1;
+        throw new TransfermarktHttpError(403, url);
+      },
+    });
+    const adapter = {
+      listClubSeasonPairs: (params: Parameters<typeof fixturesAdapter.listClubSeasonPairs>[0]) =>
+        fixturesAdapter.listClubSeasonPairs(params),
+      fetchClubSeason: (params: Parameters<typeof rateLimited.fetchClubSeason>[0]) =>
+        rateLimited.fetchClubSeason(params),
+    };
+
+    const pairs = await adapter.listClubSeasonPairs({
+      competition: "superligaen",
+      fromSeason: "2015",
+      toSeason: "2015",
+    });
+    const failures: unknown[] = [];
+
+    for (const pair of pairs) {
+      try {
+        await adapter.fetchClubSeason({
+          competition: "superligaen",
+          clubExternalId: pair.clubExternalId,
+          season: pair.seasonLabel,
+        });
+      } catch (error: unknown) {
+        failures.push(error);
+      }
+    }
+
+    expect(failures).toHaveLength(2);
+    expect(failures[0]).toBeInstanceOf(TransfermarktHttpError);
+    expect(failures[1]).toBeInstanceOf(TransfermarktCircuitOpenError);
+    expect(networkCalls).toBe(1);
+  });
 });
 
 describe("kader fetch adapter live HTTP errors", () => {
@@ -280,5 +465,41 @@ describe("runSeed with kader HTML adapter", () => {
     } finally {
       await pool.end();
     }
+  });
+
+  it("stops Transfermarkt GETs after consecutive 403/429 and still returns runSeed summary", async () => {
+    await prepareDatabase();
+    let networkCalls = 0;
+    const fixturesAdapter = createKaderFetchAdapter({ fixturesDir });
+    const rateLimited = createKaderFetchAdapter({
+      rateLimitStopAfter: 1,
+      fetchHtml: async (url) => {
+        networkCalls += 1;
+        throw new TransfermarktHttpError(403, url);
+      },
+    });
+    const adapter = {
+      listClubSeasonPairs: fixturesAdapter.listClubSeasonPairs.bind(fixturesAdapter),
+      fetchClubSeason: rateLimited.fetchClubSeason.bind(rateLimited),
+    };
+
+    const result = await runSeed({
+      scope: {
+        kind: "competition",
+        competition: "superligaen",
+        fromSeason: "2015",
+        toSeason: "2015",
+      },
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: DATABASE_URL,
+    });
+
+    expect(networkCalls).toBe(1);
+    expect(result.summary.fetched).toBe(0);
+    expect(result.summary.failures).toHaveLength(2);
+    expect(result.summary.failures[0]?.error).toMatch(/403/);
+    expect(result.summary.failures[1]?.error).toMatch(/consecutive HTTP 403\/429/);
+    expect(result.summary.mapped).toBe(0);
   });
 });

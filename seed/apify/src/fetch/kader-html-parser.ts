@@ -52,7 +52,12 @@ function parseJerseyNumber(raw: string | undefined): number | null | undefined {
     return null;
   }
 
-  const parsed = Number.parseInt(trimmed, 10);
+  const withoutHash = trimmed.startsWith("#") ? trimmed.slice(1).trim() : trimmed;
+  if (!withoutHash) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(withoutHash, 10);
   return Number.isNaN(parsed) ? null : parsed;
 }
 

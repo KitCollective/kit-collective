@@ -83,4 +83,16 @@ describe("kader HTML parser", () => {
       shirtNumber: 9,
     });
   });
+
+  it("parses jersey numbers with a leading hash from plus/1 HTML", () => {
+    const { squadRows, warnings } = parseKaderHtml(
+      readFixture("kader/192-2015.html"),
+      "192",
+      "Hash Club",
+      2015,
+    );
+
+    expect(warnings).toHaveLength(0);
+    expect(squadRows[0]?.shirtNumber).toBe(10);
+  });
 });

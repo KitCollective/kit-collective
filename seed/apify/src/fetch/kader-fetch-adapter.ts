@@ -12,6 +12,7 @@ import type {
   FetchClubSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
+import { createKaderHtmlLiveCache, wrapFetchHtmlWithKaderCache } from "./kader-html-live-cache.js";
 import {
   type KaderParseWarning,
   parseCompetitionSeasonHtml,
@@ -21,14 +22,21 @@ import {
 import { createKaderHtmlStore, type KaderHtmlStore } from "./kader-html-store.js";
 import { labelToStartYear } from "./season-label.js";
 import { resolveProfiles } from "./squad-profile-hop.js";
+import { createTransfermarktRateLimitGuard } from "./transfermarkt-rate-limit.js";
 
 export interface KaderFetchAdapterOptions {
   /** Directory of recorded Transfermarkt HTML fixtures (hermetic / CI mode). */
   fixturesDir?: string;
+  /** Directory for caching live Transfermarkt HTML between retries. */
+  cacheDir?: string;
   /** Optional HTTP client for live fetch. Defaults to global fetch. */
   fetchHtml?: (url: string) => Promise<string>;
+  /** Stop live Transfermarkt GETs after this many consecutive HTTP 403/429 responses. */
+  rateLimitStopAfter?: number;
   /** Test hook: called when a player profile fetch is triggered. */
   onProfileFetch?: (playerId: string) => void;
+  /** Test hook: called when a player profile fetch fails (hole on that player). */
+  onProfileHole?: (playerId: string, error: unknown) => void;
   /** Test hook: called when a squad row lacks a jersey number after parsing. */
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void;
 }
@@ -166,6 +174,7 @@ async function fetchClubSeasonWithClient(
   client: KaderHtmlClient,
   params: FetchClubSeasonParams,
   onProfileFetch?: (playerId: string) => void,
+  onProfileHole?: (playerId: string, error: unknown) => void,
 ) {
   const startYear = labelToStartYear(params.season);
   const clubs = await client.fetchCompetitionSeason(params.competition, startYear);
@@ -182,6 +191,7 @@ async function fetchClubSeasonWithClient(
     squadRows,
     (playerId) => client.fetchPlayerProfile(playerId),
     onProfileFetch,
+    onProfileHole,
   );
 
   return mapClubSeasonToPayload({
@@ -198,6 +208,7 @@ function createAdapterFromClient(
   client: KaderHtmlClient,
   listSeasons: (competition: string) => Promise<number[]>,
   onProfileFetch?: (playerId: string) => void,
+  onProfileHole?: (playerId: string, error: unknown) => void,
 ): FetchAdapter {
   return {
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
@@ -219,7 +230,7 @@ function createAdapterFromClient(
     },
 
     async fetchClubSeason(params) {
-      return fetchClubSeasonWithClient(client, params, onProfileFetch);
+      return fetchClubSeasonWithClient(client, params, onProfileFetch, onProfileHole);
     },
   };
 }
@@ -227,6 +238,7 @@ function createAdapterFromClient(
 function createFixturesAdapter(
   store: KaderHtmlStore,
   onProfileFetch?: (playerId: string) => void,
+  onProfileHole?: (playerId: string, error: unknown) => void,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
 ): FetchAdapter {
   const client = createKaderHtmlClient(
@@ -240,12 +252,14 @@ function createFixturesAdapter(
     client,
     (competition) => store.listAvailableSeasons(competition),
     onProfileFetch,
+    onProfileHole,
   );
 }
 
 function createLiveAdapter(
   fetchHtml: (url: string) => Promise<string>,
   onProfileFetch?: (playerId: string) => void,
+  onProfileHole?: (playerId: string, error: unknown) => void,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
 ): FetchAdapter {
   const client = createKaderHtmlClient(
@@ -283,17 +297,38 @@ function createLiveAdapter(
     },
 
     async fetchClubSeason(params) {
-      return fetchClubSeasonWithClient(client, params, onProfileFetch);
+      return fetchClubSeasonWithClient(client, params, onProfileFetch, onProfileHole);
     },
   };
+}
+
+function buildLiveFetchHtml(options: KaderFetchAdapterOptions): (url: string) => Promise<string> {
+  const baseFetch = options.fetchHtml ?? defaultFetchHtml;
+  const cachedFetch = options.cacheDir
+    ? wrapFetchHtmlWithKaderCache(baseFetch, createKaderHtmlLiveCache(options.cacheDir))
+    : baseFetch;
+
+  return createTransfermarktRateLimitGuard(cachedFetch, {
+    stopAfter: options.rateLimitStopAfter,
+  }).fetchHtml;
 }
 
 export function createKaderFetchAdapter(options: KaderFetchAdapterOptions = {}): FetchAdapter {
   if (options.fixturesDir) {
     const store = createKaderHtmlStore(options.fixturesDir);
-    return createFixturesAdapter(store, options.onProfileFetch, options.onMissingJerseyNumber);
+    return createFixturesAdapter(
+      store,
+      options.onProfileFetch,
+      options.onProfileHole,
+      options.onMissingJerseyNumber,
+    );
   }
 
-  const fetchHtml = options.fetchHtml ?? defaultFetchHtml;
-  return createLiveAdapter(fetchHtml, options.onProfileFetch, options.onMissingJerseyNumber);
+  const fetchHtml = buildLiveFetchHtml(options);
+  return createLiveAdapter(
+    fetchHtml,
+    options.onProfileFetch,
+    options.onProfileHole,
+    options.onMissingJerseyNumber,
+  );
 }
