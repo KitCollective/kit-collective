@@ -32,6 +32,10 @@ export {
   collectionSaveResponseSchema,
 } from "./collection/save.js";
 export {
+  VISION_CONFIDENCE_PRESELECT,
+  VISION_CONFIDENCE_SUGGEST,
+  VISION_JOB_STATUSES,
+  VISION_USER_ACTIONS,
   type VisionJobResponse,
   type VisionJobStatus,
   type VisionLogRequest,
@@ -40,10 +44,6 @@ export {
   type VisionSuggestRequest,
   type VisionSuggestResponse,
   type VisionUserAction,
-  VISION_CONFIDENCE_PRESELECT,
-  VISION_CONFIDENCE_SUGGEST,
-  VISION_JOB_STATUSES,
-  VISION_USER_ACTIONS,
   visionJobResponseSchema,
   visionLogRequestSchema,
   visionLogResponseSchema,

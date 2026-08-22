@@ -21,6 +21,7 @@ import {
 
 const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
 const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
+
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,

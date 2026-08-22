@@ -1,8 +1,4 @@
-import type {
-  VisionJobStatus,
-  VisionSuggestions,
-  VisionUserAction,
-} from "@kit/api-contract";
+import type { VisionJobStatus, VisionSuggestions, VisionUserAction } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, season, visionLog } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";

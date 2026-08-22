@@ -44,9 +44,10 @@ export function shouldPreselect(confidences: VisionFieldConfidences | null): boo
   return confidences.overall >= VISION_CONFIDENCE_PRESELECT;
 }
 
-export function resolveVisionStatus(
-  result: VisionInferenceResult | null,
-): { status: VisionJobStatus; result: VisionInferenceResult | null } {
+export function resolveVisionStatus(result: VisionInferenceResult | null): {
+  status: VisionJobStatus;
+  result: VisionInferenceResult | null;
+} {
   if (!result) {
     return { status: "noop", result: null };
   }

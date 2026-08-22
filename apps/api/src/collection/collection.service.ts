@@ -21,8 +21,8 @@ import type { LabelLocale } from "@kit/domain";
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
-import { VisionQueueService } from "../vision/vision-queue.service.js";
 import { VisionService } from "../vision/vision.service.js";
+import { VisionQueueService } from "../vision/vision-queue.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 

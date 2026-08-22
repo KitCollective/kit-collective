@@ -1,6 +1,6 @@
+import type { Db } from "@kit/db";
 import { BullModule } from "@nestjs/bullmq";
 import { Module } from "@nestjs/common";
-import type { Db } from "@kit/db";
 import { DB } from "../db/db.module.js";
 import { IdentityModule } from "../identity/identity.module.js";
 import { createGeminiVisionAdapter } from "./gemini-vision.adapter.js";
