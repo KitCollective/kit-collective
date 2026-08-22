@@ -40,6 +40,8 @@ Look for the originating spec, in this order:
 
 Anything in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`. Always include `WORKFLOW.md`, `.cursor/rules/`, and any architecture lock under `{paths.specs}/Architecture/` if it exists.
 
+If the diff touches `apps/mobile`, Expo config (`app.json` / `app.config.*`), or EAS (`eas.json`, EAS workflow YAML), also include `.cursor/skills/expo/expo-overview/SKILL.md` and the matching leaf skill(s) under `.cursor/skills/expo/`. Product docs (`CONTEXT.md`, ADRs, `docs/design-system.md`) override vendor Expo defaults on conflict.
+
 On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below — a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
 
 - **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.

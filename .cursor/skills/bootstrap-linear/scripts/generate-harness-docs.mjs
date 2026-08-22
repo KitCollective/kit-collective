@@ -130,6 +130,10 @@ Lost? \`/ask-me\` maps the situation to a factory skill. It hints; it does not f
 
 New or edited factory skill under \`.cursor/skills/\`. Not a domain helper. See \`.cursor/skills/create-new-skill/SKILL.md\`.
 
+### Vendor Expo skills
+
+Official Expo/EAS skills live under \`.cursor/skills/expo/\` (not factory skills). \`/implement\` and the \`react-expo\` helper load \`expo-overview\` first, then the matching leaf. Checker \`/code-review\` Standards includes them when the diff touches \`apps/mobile\` or EAS. Product docs win on conflict. Do not recreate \`.agents/\`.
+
 ### Prototype, research, handoff, wizard
 
 Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited primary sources: \`/research\`. Session must travel: \`/handoff\`. Human-only setup: \`/wizard\`.
