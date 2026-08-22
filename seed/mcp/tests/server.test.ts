@@ -5,10 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { CliRunner } from "../src/run-cli.js";
 import {
   APIFY_DESCRIPTION,
+  createSeedMcpServer,
   FK_DESCRIPTION,
   SEED_MCP_SERVER_NAME,
   SEED_MCP_TOOL_NAMES,
-  createSeedMcpServer,
 } from "../src/server.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -35,7 +35,10 @@ describe("mcp.json.example", () => {
     const example = JSON.parse(
       readFileSync(join(repoRoot, ".cursor/mcp.json.example"), "utf8"),
     ) as {
-      mcpServers: Record<string, { command?: string; args?: string[]; env?: Record<string, string> }>;
+      mcpServers: Record<
+        string,
+        { command?: string; args?: string[]; env?: Record<string, string> }
+      >;
     };
 
     const seedServer = example.mcpServers.kc_seed_mcp;
