@@ -1,6 +1,7 @@
 import {
   type CollectionJersey,
   type CollectionJerseys,
+  type CollectionSavePhoto,
   type CollectionSaveResponse,
   collectionJerseysSchema,
   collectionSaveRequestSchema,
@@ -354,7 +355,7 @@ export class CollectionService {
   private async persistPhotos(
     userId: string,
     jerseyId: string,
-    photos: { role: string; source: string; contentBase64: string }[],
+    photos: CollectionSavePhoto[],
   ): Promise<CollectionJersey["photos"]> {
     const saved: CollectionJersey["photos"] = [];
 
@@ -376,8 +377,8 @@ export class CollectionService {
           id: photoId,
           userJerseyId: jerseyId,
           objectKey,
-          role: photo.role as "front" | "back" | "label",
-          source: photo.source as "gallery" | "camera",
+          role: photo.role,
+          source: photo.source,
           ocrStatus: "none",
         })
         .returning({
