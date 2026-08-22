@@ -7,6 +7,8 @@ import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Button } from "@/components/ui";
 import { color, space, type } from "@/theme/tokens";
 
+const MIN_CLUB_SEARCH_LENGTH = 2;
+
 export default function AddScreen() {
   const { accessToken } = useAuth();
   const [clubSheetOpen, setClubSheetOpen] = useState(false);
@@ -19,23 +21,30 @@ export default function AddScreen() {
   const [searching, setSearching] = useState(false);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
   const [catalogMiss, setCatalogMiss] = useState(false);
+  const [searchError, setSearchError] = useState(false);
 
   const runClubSearch = useCallback(
     async (query: string) => {
-      if (!accessToken || query.trim().length === 0) {
+      const trimmed = query.trim();
+
+      if (!accessToken || trimmed.length === 0) {
         setClubResults([]);
         setCatalogMiss(false);
+        setSearchError(false);
         return;
       }
 
       setSearching(true);
+      setSearchError(false);
+
       try {
-        const response = await searchCatalogClubs(accessToken, query.trim(), "da");
+        const response = await searchCatalogClubs(accessToken, trimmed, "da");
         setClubResults(response.clubs);
-        setCatalogMiss(response.clubs.length === 0);
+        setCatalogMiss(trimmed.length >= MIN_CLUB_SEARCH_LENGTH && response.clubs.length === 0);
       } catch {
         setClubResults([]);
-        setCatalogMiss(true);
+        setCatalogMiss(false);
+        setSearchError(true);
       } finally {
         setSearching(false);
       }
@@ -59,6 +68,7 @@ export default function AddScreen() {
     setClubQuery("");
     setClubResults([]);
     setCatalogMiss(false);
+    setSearchError(false);
     setClubSheetOpen(true);
   };
 
@@ -130,6 +140,20 @@ export default function AddScreen() {
             tone="info"
             message="Klubben findes ikke i kataloget endnu."
             action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
+          />
+        ) : null}
+
+        {searchError ? (
+          <Banner
+            tone="warning"
+            message="Kunne ikke søge i kataloget. Prøv igen."
+            action={
+              <Button
+                label="Prøv igen"
+                variant="tertiary"
+                onPress={() => void runClubSearch(clubQuery)}
+              />
+            }
           />
         ) : null}
 
