@@ -20,7 +20,7 @@ Apply the lock; do not invent taste:
   for sign-off.
 - Tab bar screens (`apps/mobile/app/(tabs)/`) must set `tabBarIcon` plus Danish
   `tabBarLabel` on every tab — icon + label anatomy from `docs/design-system.md` Tab bar.
-  CI enforces this via `pnpm check:mobile-tab-bar`.
+  CI enforces this via `pnpm check:mobile-tab-bar`. A `tabBarLabel`-only bar is a miss.
 - Grayscale carries hierarchy. The identity wash is garnish, never a primary CTA, chrome,
   or a status encoding.
 - Marks come from data — a licensed mark or a `CatalogLabel` monogram. Never emoji, never

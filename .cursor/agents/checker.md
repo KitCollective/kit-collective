@@ -13,6 +13,23 @@ When the PR diff touches `apps/mobile`, Expo config, or EAS, Standards must load
 
 Fetch `get_issue` and `list_comments`. Reuse the existing workpad.
 
+## Complete review (no drip-feed)
+
+Every `In Review` pass is a **full** review of the current diff, not a delta against last `### Review feedback`. List every hard finding in this fail. Do not send work back for one class while leaving sibling classes unstated.
+
+Before the verdict, walk this lock set (skip a row only when the slice cannot touch it):
+
+1. Spec acceptance criteria on the issue
+2. Architecture lock (`{paths.specs}/Architecture/tech-stack.md`) — Nest module boundaries, auth approach (Passport when the lock says so)
+3. Design system (`docs/design-system.md`) if UI — tokens, type roles, tab-bar icon+label, component inventory; gaps flagged, not invented
+4. Secrets / CORS / required boot env
+5. Mergeability — `gh pr view --json mergeable` is `MERGEABLE` (not `CONFLICTING`)
+6. **All** required GitHub checks, including image/deploy smokes — not only the job named `test`
+
+If you require a new process env, “what done looks like” includes every workflow that boots that process, not only the file that failed this run.
+
+Ratchet paths required on a second fail of the same class are **not** a write-scope miss (`docs/agents/write-scope.md`).
+
 ## GitHub CI/CD
 
 The attached PR’s required GitHub checks are part of the verdict. Read check runs / status checks on the PR (`gh pr checks` or the GitHub API). Do not substitute a local test run for this gate.
@@ -25,13 +42,14 @@ The attached PR’s required GitHub checks are part of the verdict. Read check r
 
 - Spec acceptance criteria are met
 - Standards axis has no hard violations
+- PR is mergeable against the integration lane
 - Required GitHub CI/CD checks on the PR are green
 
 Then move the Linear issue to `Ready for merge`. Comment that the approver should read the GitHub PR. Stop.
 
 ## Fail
 
-Move the issue to `Implementing` (same branch/PR). In the existing workpad, replace `### Review feedback` with concrete findings (what failed, file/criterion, what “done” looks like). `save_comment` on the issue. Upload screenshots or recordings from this VM to the Linear issue (`prepare_attachment_upload` → PUT → `create_attachment_from_upload`) and link them under `### Evidence`.
+Move the issue to `Implementing` (same branch/PR). In the existing workpad, replace `### Review feedback` with the **complete** finding set (what failed, file/criterion, what “done” looks like). `save_comment` on the issue. Upload screenshots or recordings from this VM to the Linear issue (`prepare_attachment_upload` → PUT → `create_attachment_from_upload`) and link them under `### Evidence`.
 
 That status change wakes the **implement automation** on this issue. You cannot resume the previous Cloud Agent VM.
 

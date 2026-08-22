@@ -18,10 +18,10 @@ There is no “same Cloud Agent”. Each run is a new VM. **Same work** means: s
 
 ```text
 planner:    Backlog + ready-for-agent + unblocked → Implementing (priority order)
-implement:  Implementing (no PR) → branch + code + PR on Linear → In Review
-checker:    In Review → Ready for merge
-            or Implementing + ### Review feedback (+ attachments)
-implement:  Implementing (PR exists) → same branch, fix feedback → In Review
+implement:  Implementing (no PR) → branch + code + PR + pre-review gate → In Review
+checker:    In Review → complete review → Ready for merge
+            or Implementing + full ### Review feedback (no drip-feed)
+implement:  Implementing (PR exists) → same branch, fix the class → In Review
 approver:   Done
 land:       merge to lanes.integration
 ```
@@ -72,7 +72,7 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | Model | A cheap/fast model is fine (dispatcher, not coder) |
 | Tools | **Linear** connected to workspace KitCollective. Remove **Open Pull Request**. Remove **Memories**. Do not add Slack/Teams. |
 | Memories | Leave empty. Do not use. Factory truth is git + Linear, not a private `MEMORIES.md`. |
-| Status | Keep Inactive until `development` has `planner.md` and you have implement + checker ready to wake. If the Instruction was pasted before this priority change, **re-paste** the block below. |
+| Status | Keep Inactive until `development` has `planner.md` and you have implement + checker ready to wake. If the Instruction was pasted before the priority-order contract, **re-paste** the planner block below. |
 
 `MEMORIES.md` is a second source of truth the planner would write outside review. Recurring mistakes go on the Linear issue (comment) and into a ratchet in the **implement PR**. Wrong lessons are reverted with git.
 
@@ -114,7 +114,7 @@ Never claim Triage or Duplicate. Never move to In Review, Ready for merge, Done,
 | Do not add | Memories. Slack/Teams. Request Reviewers (approver reads the PR; that is not a GitHub review request). |
 | Memories | Off. Empty. Same reason as planner. |
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}` — Linear-triggeren fylder den. |
-| Status | Inactive until planner + checker exist, and `development` has `/implement` + `WORKFLOW.md`. |
+| Status | Inactive until planner + checker exist, and `development` has `/implement` + `WORKFLOW.md`. If the Instruction was pasted before the KIT-23 pre-review gate, **re-paste** the implement block below. |
 
 The Linear trigger is what makes checker-fail → `Implementing` wake **this** automation on the **same issue**. A new VM each time; same branch/PR because the workpad and the attached PR say so.
 
@@ -132,12 +132,14 @@ Required context fetch every run:
 4. If a GitHub PR is attached, read PR review comments and check runs.
 
 Start: Implementing, no branch/PR → branch from origin/<lanes.integration>, implement, open PR into that lane, attach the PR URL on the Linear issue.
-Resume: Implementing, branch/PR exists → same branch. Fix ### Review feedback first. Do not open a second PR.
+Resume: Implementing, branch/PR exists → same branch. Fix ### Review feedback first — the class, not only the cited file. Do not open a second PR.
+
+Spawn every matching domain helper. Read docs/design-system.md before UI and the architecture lock before Nest/auth. Do not call /code-review as the pass verdict.
 
 Screenshots or recordings from this VM: upload to this Linear issue (prepare_attachment_upload → PUT → create_attachment_from_upload), then save_comment and link under workpad ### Evidence.
 
-When the PR is up and proof is on Linear: clear addressed ### Review feedback, move to In Review. Do not merge. Do not move to Done.
-If ### Review feedback asked for a ratchet, land it in this PR (docs/agents/error-ratcheting.md). Tighten only.
+Pre-review gate before In Review (do not skip): rebase until gh pr view --json mergeable is MERGEABLE; full test graph (not a targeted filter); wait for ALL required GitHub checks including image/deploy smokes; if you added a required boot env, grep every workflow that boots that process. Then clear addressed ### Review feedback and move to In Review. Do not merge. Do not move to Done.
+If ### Review feedback asked for a ratchet, land it in this PR (docs/agents/error-ratcheting.md). Tighten only. Ratchet paths are in-scope (docs/agents/write-scope.md).
 
 Out of scope → /signal-up (cap applies).
 Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview then the matching leaf. Product docs win on conflict.
@@ -151,7 +153,7 @@ Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview 
 | --- | --- |
 | Trigger | Linear status changed **to** `In Review` |
 | Tools | GitHub, Linear MCP |
-| Action | Judge-only `/code-review` **and** GitHub CI/CD checks on the attached PR. Pending checks → wait. Pass + required checks green → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`. Do not start implement. |
+| Action | Judge-only `/code-review` **and** GitHub CI/CD checks on the attached PR. Complete review each pass (no drip-feed). Pending checks → wait. Pass + required checks green + mergeable → `Ready for merge`. Fail → `Implementing` + full `### Review feedback`. Do not start implement. |
 | Instruction | See prompt below. |
 
 ### Cursor UI checklist
@@ -165,7 +167,7 @@ Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview 
 | Do not add | **Open Pull Request**. Memories. Slack. Anything that can merge. |
 | Memories | Off. Empty. |
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}`. |
-| Status | Inactive until implement is wired — otherwise nothing ever reaches `In Review`. |
+| Status | Inactive until implement is wired — otherwise nothing ever reaches `In Review`. If the Instruction was pasted before the KIT-23 complete-review contract, **re-paste** the checker block below. |
 
 Checker is **judge-only**. Fail → `Implementing` wakes implement on the same issue. Pass → `Ready for merge` and stop. Nicklas (approver) moves to `Done`; that is not this agent.
 
@@ -178,13 +180,15 @@ No feature coding. Do not start /implement. Do not merge.
 
 Fetch Linear get_issue and list_comments. Update the existing workpad. Attach the PR if it is missing on the issue.
 
-Read GitHub check runs on the attached PR. Pending required checks → wait; do not move status. Failed required checks → fail. Local tests are not a substitute.
+Complete review every pass — not a delta on last ### Review feedback. Dump every hard finding in this fail (architecture lock, design-system if UI, secrets/boot env, mergeability, spec AC). Do not drip-feed.
 
-Pass (Standards + Spec clean, required GitHub CI/CD green) → Ready for merge. Comment on Linear that the issue is waiting for the approver.
+Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status. Failed required checks or CONFLICTING → fail. Local tests are not a substitute.
 
-Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with what failed, file/criterion, and what done looks like. save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no way to resume the previous Cloud Agent VM.
+Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Comment on Linear that the issue is waiting for the approver.
 
-If this is the second fail of the same class on this issue, say so in ### Review feedback and require a ratchet in the next implement PR (docs/agents/error-ratcheting.md). Do not write the ratchet yourself.
+Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no way to resume the previous Cloud Agent VM.
+
+If this is the second fail of the same class on this issue, say so in ### Review feedback and require a ratchet in the next implement PR (docs/agents/error-ratcheting.md). Do not write the ratchet yourself. Ratchet paths are not a write-scope miss.
 ```
 
 ---

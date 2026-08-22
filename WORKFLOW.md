@@ -71,23 +71,26 @@ Lanes come from `lanes` in factory config.
 
 1. Status must already be `Implementing`. If it is `dispatch.state`, stop — planner has not claimed.
 2. Fetch context: Linear `get_issue` **and** `list_comments`. `get_issue` does not include comments. The workpad is one comment (`agent.workpadHeading`). If a PR is linked, also read GitHub PR review comments.
-3. On resume, the latest `### Review feedback` plus other issue/PR comments **are** the change request. Fix those before anything else. Same branch/PR.
+3. On resume, the latest `### Review feedback` plus other issue/PR comments **are** the change request. Fix the **class**, not only the cited file. Same branch/PR.
 4. Open or reuse the single workpad comment.
 5. Start: branch from latest `origin/<lanes.integration>`. One issue, one branch, one PR. Resume: do not new-branch.
-6. Follow `/implement`: `/tdd` at the spec’s seams; spawn **every matching helper** in `paths.helpers` (never their own Linear issues). Mobile/EAS slices also load `.cursor/skills/expo/` (`expo-overview` first, then the matching leaf).
-7. Out of scope → `/signal-up`. Cap `agent.signalUpCapPerRun`. Never expand the PR.
+6. Follow `/implement`: `/tdd` at the spec’s seams; spawn **every matching helper** in `paths.helpers` (never their own Linear issues). Workpad `### Domain helpers used` must list them — `(none)` on a slice that matches helper descriptions is a miss. Mobile/EAS slices also load `.cursor/skills/expo/` (`expo-overview` first, then the matching leaf).
+7. Out of scope → `/signal-up`. Cap `agent.signalUpCapPerRun`. Never expand the PR except ratchet paths required by `### Review feedback` (`docs/agents/write-scope.md`).
 8. Open or update a PR **into the integration lane**. Attach the PR URL on the issue.
 9. Upload screenshots/recordings from the VM to the Linear issue. Comment. Link under workpad `### Evidence`.
-10. Clear addressed `### Review feedback`. Move to `In Review`. Do not merge. Do not move to `Done`.
+10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph; wait for **all** required GitHub checks (including image/deploy smokes); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff. On resume, fix the **class**, not only the cited file.
+11. Clear addressed `### Review feedback`. Move to `In Review` only after the gate. Do not merge. Do not move to `Done`.
 
 ## Checker run
 
 Wakes when status becomes `In Review`. Judge only. No feature coding.
 
-1. `/code-review` (Standards + Spec) against the attached PR. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis.
-2. GitHub CI/CD on that PR: read check runs / status checks. Pending → wait until they complete. Do not move status while checks are pending. Red or failed required checks → fail.
-3. Pass only when both axes are clean **and** required GitHub checks are green → `Ready for merge`.
-4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` + Linear comment + attachments. That status change wakes implement. Do not start implement yourself.
+Every pass is a **complete** review of the current diff, not a delta against last `### Review feedback`. Findings that existed in the first PR and are only reported on fail #3+ are a checker miss — dump the whole lock set in fail #1.
+
+1. `/code-review` (Standards + Spec) against the attached PR. Sub-agents list **every** hard finding; do not stop at the first three. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis.
+2. GitHub CI/CD on that PR: read **all** required check runs (not only `test` — image/deploy smokes count). `gh pr view --json mergeable` must be `MERGEABLE`. Pending required checks → wait; stay in `In Review`. Red or failed required checks, or `CONFLICTING` → fail.
+3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Ready for merge`.
+4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). If the miss is a new required env, “done” includes every workflow that boots that process. Linear comment + attachments. That status change wakes implement. Do not start implement yourself.
 
 ## Land run (status became `Done`)
 
@@ -98,7 +101,7 @@ The approver moving the issue to `Done` **is** the merge approval. Merge into th
 - Never push directly to staging or production lanes.
 - Never create Linear teams or workflow states at runtime (bootstrap skill only).
 - Never delegate or self-apply dispatch on `signal-up` issues.
-- Never validate your own code in the same context window.
+- Checker never validates in the same VM that wrote the code. Implement may run the mechanical pre-review gate (rebase, full tests, wait for required CI, lock checklist) in its own run; it must not call `/code-review` as the pass verdict.
 - Secrets stay in env / GitHub Environments.
 
 ## Workpad template

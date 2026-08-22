@@ -66,7 +66,7 @@ Every issue:
 - Parent **project + milestone** from the spec. Every issue belongs to exactly one milestone. A milestone is a handful of slices that promote to staging **together**. Do not dump the whole product into one milestone.
 - Native `blockedBy`
 - Label `ready-for-agent`
-- Optional `write-scope: path/globs` in the body when the slice is obviously bounded
+- Optional `write-scope: path/globs` in the body when the slice is obviously bounded. If the slice adds a required process env, include `.github/workflows/**`. If it has UI, point the body at `docs/design-system.md`. If it has Nest/auth, point at the relevant `{paths.specs}/Architecture/tech-stack.md` section.
 - Surface labels from `labels.surfaces` (`surface:<name>`) are hints for `/implement` helpers — **not** a reason to split horizontally
 - **Do not delegate. Do not set Linear Agent to Cursor.**
 - **Do not set Linear priority** unless the user named it. Default is None (`0`). The human sets Urgent/High/Medium/Low. Planner uses that as claim order.

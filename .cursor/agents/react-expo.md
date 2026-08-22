@@ -12,6 +12,7 @@ Constraints from `.scratch/Architecture/tech-stack.md` and product docs win over
 
 - `apps/mobile` only. No Next.js. Expo Web is the in-app degraded web, not the public site.
 - Must not import `apps/api` or `packages/db`. Use `packages/api-contract` and `packages/domain`.
+- Read `docs/design-system.md` before composing screens. Tab bar is icon + label (not text-only). Empty-state type roles and Button variants come from the lock. Flag gaps; do not invent primitives.
 - Gallery is first-class at onboarding; camera is first-class for repeat add.
 - Save must not wait on Vision.
 - Do not restructure `apps/mobile` to match `expo-project-structure`.

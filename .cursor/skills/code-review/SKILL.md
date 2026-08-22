@@ -38,7 +38,7 @@ Look for the originating spec, in this order:
 
 ### 3. Identify the standards sources
 
-Anything in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`. Always include `WORKFLOW.md`, `.cursor/rules/`, and any architecture lock under `{paths.specs}/Architecture/` if it exists.
+Anything in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`. Always include `WORKFLOW.md`, `.cursor/rules/`, and any architecture lock under `{paths.specs}/Architecture/` if it exists. If the diff touches `apps/mobile` or `apps/web`, also include `docs/design-system.md`.
 
 If the diff touches `apps/mobile`, Expo config (`app.json` / `app.config.*`), or EAS (`eas.json`, EAS workflow YAML), also include `.cursor/skills/expo/expo-overview/SKILL.md` and the matching leaf skill(s) under `.cursor/skills/expo/`. Product docs (`CONTEXT.md`, ADRs, `docs/design-system.md`) override vendor Expo defaults on conflict.
 
@@ -68,13 +68,13 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 
 - The full diff command and commit list.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
-- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
+- The brief: "Report — per file/hunk where relevant — (a) **every** place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. List every hard finding; do not stop at the first three. A 400-word cap must not hide a hard miss — use a compact bullet list. Hard findings first, judgement calls after."
 
 **Spec sub-agent prompt** — include:
 
 - The diff command and commit list.
 - The path or fetched contents of the spec (issue + comments + spec document).
-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
+- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. List every hard miss; do not stop at the first three. Compact bullets. No word cap that would hide a hard miss."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report.
 
@@ -84,7 +84,7 @@ Present the two reports under `## Standards` and `## Spec` headings, verbatim or
 
 End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
 
-When the caller is the checker agent: hard Spec miss, hard Standards violation, or failed required GitHub CI/CD checks → Linear `Implementing` and write `### Review feedback`. Pending required checks → wait; stay in `In Review`. Otherwise → `Ready for merge` only when required GitHub checks are green.
+When the caller is the checker agent: write **every** hard finding into `### Review feedback` in one fail — do not drip-feed. Hard Spec miss, hard Standards violation, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `Implementing`. Pending required checks → wait; stay in `In Review`. Otherwise → `Ready for merge` only when required GitHub checks are green **and** the PR is mergeable.
 
 ## Why two axes
 

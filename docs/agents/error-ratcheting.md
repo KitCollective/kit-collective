@@ -39,7 +39,7 @@ After checker fail or approver reject, if the mistake is a **recurring class** (
 3. Keep the PR focused; explain the ratchet in the PR description.
 4. Never weaken existing entries to make the PR green.
 
-The **checker** may require this in `### Review feedback` on the second fail of the same class. The **planner** may comment the same requirement. Neither writes the hook or rule. The **implement** PR lands it. Prefer a hook over a new always-applied rule when a deny/allow gate would have caught it — do not grow `.cursor/rules/` for one-off mistakes.
+The **checker** may require this in `### Review feedback` on the second fail of the same class. The **planner** may comment the same requirement. Neither writes the hook or rule. The **implement** PR lands it. Ratchet files use the write-scope exception in `docs/agents/write-scope.md` — they are not a write-scope miss on that issue. Prefer a hook over a new always-applied rule when a deny/allow gate would have caught it — do not grow `.cursor/rules/` for one-off mistakes.
 
 ### Seed package import ratchet (KIT-9)
 
@@ -91,6 +91,10 @@ catches it in the API tests and the container smoke test.
 ### Ops MCP catalog evidence ratchet (KIT-17)
 
 `.cursor/hooks/block-manual-getmcptools-evidence.sh` denies manual writes under `.cursor/getmcptools-evidence/`. Agents record in-session catalog proof only via `scripts/record-getmcptools-evidence.sh <server>` fed with **this session's** `GetMcpTools` JSON. Prevents repeating the second KIT-17 checker fail (marking MCP-catalog AC complete without catalog evidence). Dashboard registration for Cloud Agents remains human-only (`KIT-18`). Tighten only.
+
+### Implement/checker loop ratchet (KIT-23)
+
+`.cursor/rules/pre-review-gate.mdc` — implement must pass the mechanical gate (mergeable against the integration lane, full test graph, all required GitHub checks including image/deploy smokes, boot-env class, matching helpers, lock reads) before `In Review`. Checker must dump every hard finding in one fail (no drip-feed). Prevents repeating the KIT-23 five-round loop on PR #22. Tighten only.
 
 ### FK seed test isolation ratchet (KIT-22)
 

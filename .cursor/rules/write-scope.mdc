@@ -15,7 +15,11 @@ write-scope: apps/api/**, packages/db/**
 
 - Do not create, edit, move, or delete files outside the declared globs.
 - A fix you need outside the globs is a `/signal-up` issue, never a wider PR.
-- Files outside the globs are a checker finding, so do not "just also" touch them.
+- **Exception:** when `### Review feedback` or a planner comment on this issue
+  requires a ratchet (`docs/agents/error-ratcheting.md`), the ratchet paths in
+  `docs/agents/write-scope.md` are in-scope for that PR. Product features are not.
+- Files outside the globs are a checker finding, so do not "just also" touch them
+  (ratchet exception above is the only carve-out).
 - No `write-scope:` line means the boundary is unset — normal scope rules still apply
   (`.cursor/rules/scope-signal-up.mdc`).
 

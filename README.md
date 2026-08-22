@@ -23,7 +23,7 @@ node scripts/bootstrap-linear.mjs
 node scripts/generate-harness-docs.mjs
 ```
 
-6. Wire Cursor Automations from `docs/agents/automations.md`. Re-paste planner Instruction after contract changes.
+6. Wire Cursor Automations from `docs/agents/automations.md`. Re-paste planner, implement, and checker Instruction after contract changes.
 
 Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → planner claims (`ready-for-agent` + unblocked).
 
