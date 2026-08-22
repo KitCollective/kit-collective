@@ -95,3 +95,19 @@ catches it in the API tests and the container smoke test.
 ### FK seed test isolation ratchet (KIT-22)
 
 `scripts/check-seed-fkapi-test-isolation.mjs` (CI via `pnpm check:seed-fkapi-tests`) fails when `seed/fkapi/tests/**` hardcodes Transfermarkt `external_id` values in prerequisite INSERTs, defines a local `seedApifyPrerequisites`, or calls `seedApifyPrerequisites` without an allocated `TestFixtureScope` from `seed/fkapi/tests/fixture-scope.ts`. Prevents repeating the KIT-22 checker fail (order-dependent unique-constraint collisions when tests share one DB pool). Tighten only.
+
+### Push behind development ratchet (KIT-23)
+
+`.cursor/hooks/block-push-behind-development.sh` denies `git push` when the current branch is behind `origin/development`. Prevents repeating the KIT-23 checker fail (unmergeable PR because the feature branch was never rebased after `development` moved). Pushes to `development`, `staging`, and `production` are exempt. Tighten only.
+
+### Mobile design-system inventory ratchet (KIT-23)
+
+`.cursor/rules/design-system.mdc` requires flagging (not inventing) any `apps/mobile` screen or component not named in `docs/design-system.md` Scope §Included or Components inventory before writing it. Prevents repeating the KIT-23 checker fail (invented primitives like `Screen`/`FieldLabel` and unflagged auth-screen gaps). Tighten only.
+
+### Workflow API boot env ratchet (KIT-23)
+
+`scripts/check-workflow-api-boot-env.mjs` (CI via `pnpm check:workflow-api-boot-env`) fails when a `.github/workflows` `run:` step `docker run`s the API image (`kit-api` / `kit-deploy-api`) without `JWT_SECRET`. Prevents repeating the KIT-23 checker fail #4 (deployable image cannot boot because `IdentityModule` requires `JWT_SECRET` at Nest bootstrap). Tighten only — extend `REQUIRED_DOCKER_ENV` when new vars become mandatory at boot.
+
+### Mobile tab bar anatomy ratchet (KIT-23)
+
+`scripts/check-mobile-tab-bar.mjs` (CI via `pnpm check:mobile-tab-bar`) fails when `apps/mobile/app/(tabs)/_layout.tsx` omits `tabBarIcon` on Collection/Add tabs. Prevents repeating the KIT-23 checker fail #4 (text-only tabs against the locked icon+label Tab bar anatomy). Tighten only.

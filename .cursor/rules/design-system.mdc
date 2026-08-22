@@ -14,6 +14,13 @@ Apply the lock; do not invent taste:
 
 - Take tokens, spacing, type, motion, and component variants from the lock. If a value
   you need is missing, flag the gap on the issue instead of inventing one.
+- Before adding a screen or component not named in `docs/design-system.md` Scope §Included
+  or Components inventory, flag the gap on the Linear issue. Do not invent layout, tokens,
+  or new primitive names (e.g. `Screen`, `FieldLabel`) — use locked tokens inline or wait
+  for sign-off.
+- Tab bar screens (`apps/mobile/app/(tabs)/`) must set `tabBarIcon` plus Danish
+  `tabBarLabel` on every tab — icon + label anatomy from `docs/design-system.md` Tab bar.
+  CI enforces this via `pnpm check:mobile-tab-bar`.
 - Grayscale carries hierarchy. The identity wash is garnish, never a primary CTA, chrome,
   or a status encoding.
 - Marks come from data — a licensed mark or a `CatalogLabel` monogram. Never emoji, never

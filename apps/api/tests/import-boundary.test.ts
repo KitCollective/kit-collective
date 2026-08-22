@@ -9,7 +9,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLIENT_FORBIDDEN_PATTERNS = [
   /@kit\/db/,
   /packages\/db/,
-  /from ['"]@kit\/api/,
+  /from ['"]@kit\/api(?!-contract)/,
   /from ['"]apps\/api/,
   /from ['"]\.\.\/\.\.\/api/,
 ];
@@ -61,6 +61,15 @@ describe("import boundaries", () => {
     const clientApps = ["apps/mobile", "apps/web", "apps/admin"].map((p) => path.join(ROOT, p));
     const files = clientApps.flatMap((dir) => collectSourceFiles(dir));
     const violations = findForbiddenImports(files, CLIENT_FORBIDDEN_PATTERNS);
+    expect(violations).toEqual([]);
+  });
+
+  it("allows @kit/api-contract in client apps (fixture)", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "kit-boundary-"));
+    const okFile = path.join(dir, "ok.ts");
+    writeFileSync(okFile, `import { x } from '@kit/api-contract';\n`);
+
+    const violations = findForbiddenImports([okFile], CLIENT_FORBIDDEN_PATTERNS);
     expect(violations).toEqual([]);
   });
 
