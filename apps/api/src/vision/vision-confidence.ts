@@ -16,24 +16,27 @@ export function parseConfidences(raw: string | null | undefined): VisionFieldCon
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) {
+    if (!isRecord(parsed)) {
       return null;
     }
 
-    const record = parsed as Record<string, unknown>;
-    if (typeof record.overall !== "number") {
+    if (typeof parsed.overall !== "number") {
       return null;
     }
 
     return {
-      overall: record.overall,
-      club: typeof record.club === "number" ? record.club : undefined,
-      season: typeof record.season === "number" ? record.season : undefined,
-      kitType: typeof record.kitType === "number" ? record.kitType : undefined,
+      overall: parsed.overall,
+      club: typeof parsed.club === "number" ? parsed.club : undefined,
+      season: typeof parsed.season === "number" ? parsed.season : undefined,
+      kitType: typeof parsed.kitType === "number" ? parsed.kitType : undefined,
     };
   } catch {
     return null;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 export function shouldPreselect(confidences: VisionFieldConfidences | null): boolean {
