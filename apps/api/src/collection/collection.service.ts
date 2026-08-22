@@ -193,8 +193,9 @@ export class CollectionService {
 
     const photos = await this.persistPhotos(userId, insertedJersey.id, body.photos);
 
-    if (body.photos.length > 0) {
-      const firstPhotoBytes = decodeBase64Photo(body.photos[0].contentBase64);
+    const firstPhoto = body.photos[0];
+    if (firstPhoto) {
+      const firstPhotoBytes = decodeBase64Photo(firstPhoto.contentBase64);
       this.visionQueueService.enqueueFromSave(userId, firstPhotoBytes, body.draftId);
     }
 
