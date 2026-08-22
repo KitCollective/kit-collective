@@ -107,8 +107,8 @@ An extra Transfermarkt hop for one player. Used only when the squad list row is 
 _Avoid_: a profile call for every player when the squad list already has id, name, and number
 
 **Proof run**:
-The first live accept: one Superliga season, every club that season, squad and jersey numbers, into the development lane. Same loop as a full Season range — smaller scope so MCP and Postgres are proven before a multi-hour job.
-_Avoid_: treating the proof as the product ceiling; requiring the full 1995/96–2025/26 range before any row is accepted
+The first live accept of a Transfermarkt path: one Superliga season, every club that season, squad and jersey numbers, into the development lane. Same loop as a full Season range — smaller scope so MCP and Postgres are proven before a multi-hour job. Kader fetch’s first live accept is the same grain, through the Seed proxy on Coolify — not Opt-in Apify.
+_Avoid_: treating the proof as the product ceiling; requiring the full 1995/96–2025/26 range before any row is accepted; treating an Apify proof as proof that CX33 can GET Transfermarkt without a proxy
 
 **Already seeded**:
 A club + season is already seeded when that pair has a squad with jersey numbers in our Postgres. The next Seed run skips fetching that pair from Transfermarkt.
@@ -125,3 +125,23 @@ _Avoid_: using Transfermarkt’s integer as our primary key
 **Season range**:
 Inclusive seasons of the named competition from a start label to an end label (e.g. Superliga 1995/96–2025/26, Bundesliga 05/06–19/20). The job expands that to every season of that competition in between.
 _Avoid_: treating a range as a single season; treating `0001` as calendar year 1991 without saying so; assuming every range is Superliga
+
+**Kader fetch**:
+The live Transfermarkt path: HTTP GET of the Competition season page and each club’s kader HTML (`plus/1`), then Cheerio parse of squad and jersey numbers into the existing mapper. Same Seed run / Seed scope as before. Not an Apify Actor run. Not felipeall as a hosted API.
+_Avoid_: calling this a Nest scraper; treating Cheerio as anti-bot; fetching a player profile page when the kader row already has id and number
+
+**Seed proxy**:
+Outbound residential HTTP(S) proxy used only for Transfermarkt (and Football Kit Archive when that fetch is live) from Coolify. First vendor is Decodo residential, billed per GB. Coolify stores the secret and injects it into the job. Kader fetch on Coolify does not run until that secret is present (fail closed).
+_Avoid_: Coolify Traefik as the TM unblock; Decodo’s Transfermarkt Scraping API (browser/JS); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
+
+**Opt-in Apify**:
+The existing Store-actor FetchAdapter. The operator must explicitly choose it. It is not an automatic fallback when Kader fetch fails or is slow. Quota is spent only when Nicklas opts in.
+_Avoid_: retrying HTML 202s on Apify by default; treating Apify as the primary Coolify path
+
+**FK after facts**:
+Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club and Season rows from Transfermarkt. Writes Kit identity and admin_only KitPhoto bytes onto those seasons (ExternalId join). Not before Kader fetch is green for that path. The operator still runs two Seed MCP tools (`seed_apify` then `seed_fk`) for that scope — not one fused tool.
+_Avoid_: scraping FK with no TM clubs; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool in this slice
+
+**Catalog peek**:
+An unstyled HTML page on Nest (`GET /v1/catalog/peek`) so Nicklas can open a URL and see Seed run results: season, club names, squad counts, kit identity and photo counts. Not `apps/admin`, not the design system, not archive JPEGs on a public URL.
+_Avoid_: building the product admin; `/to-design`; treating `GET /v1/catalog/stats` JSON as the peek; hot-linking KitPhoto bytes

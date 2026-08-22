@@ -19,14 +19,17 @@ services:
       dockerfile: seed/coolify/Dockerfile
     image: kit-collective-seed:latest
     restart: "no"
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: "1.0"
     deploy:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 2G
         reservations:
           cpus: "0.25"
-          memory: 256M
+          memory: 512M
     environment:
       SEED_LANE: ${SEED_LANE:-development}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}

@@ -250,3 +250,24 @@ Apify remains the **named** hosted fetch in ADR-0002; live path is **unwired** (
 7. **Python 3.9 FastAPI app**, not Nest, not a contract we control.
 
 This note feeds `/grill-with-docs`. It does not change ADR-0002, open Linear issues, or open a PR.
+
+---
+
+## Workarounds from GitHub issues (re-read 2026-08-20)
+
+`main` still ends at `bee4c496` (2025-04-13). 19 open issues. No maintainer code for the 503/403/202 class.
+
+| Source | What people actually did |
+| --- | --- |
+| [#121](https://github.com/felipeall/transfermarkt-api/issues/121) (2026-07, open) | All GET → 500. `self.page` is `None` (`xpath` on empty HTML). Third-party image `khalilosx/transfermarkt-api` same crash. Comment: TM block, not caller bug. **Workaround: different IP / change VPN location.** |
+| [#117](https://github.com/felipeall/transfermarkt-api/issues/117) (2025-12, open) | HTTP **202** from TM → empty body → 500. No comments, no fix. |
+| [#110](https://github.com/felipeall/transfermarkt-api/issues/110) (2025-07, open) | 503 on `/clubs/{id}/players` (kader). Local sometimes OK; Fly dies. **Workaround: wait 2 minutes then retry** (author of comment: painfully slow). Maintainer ([felipeall](https://github.com/felipeall/transfermarkt-api/issues/110#issuecomment)): TM is *intentional* anti-scrape, points at [dcaribou/transfermarkt-datasets#327](https://github.com/dcaribou/transfermarkt-datasets/issues/327); “not sure there’s much we can do.” Another comment: after N requests TM 503s for a while. Suggestion to maintainer: **scrape platform / web proxy + cache** (ScrapingBot free tier named) — i.e. pay for IPs, which is Apify’s job. |
+| [#109](https://github.com/felipeall/transfermarkt-api/issues/109) (2025-06, open) | Search 403. **Workaround: self-host on a residential/home server IP** (“mounted the service on my server and it's ok”). Same thread: 503 after volume. **Workaround: reverse-engineered TM mobile/`ceapi`-class HTTP** — [tommhe14/transfermarkt-wrapper](https://github.com/tommhe14/transfermarkt-wrapper). Not a grant; still unofficial. Later comment: 403 for days (“is that it?”). |
+| [#93](https://github.com/felipeall/transfermarkt-api/issues/93) (closed 2025-02) | HTML drift (missing DOB, club name). Maintainer made fields Optional. Pattern: **patch XPath when TM changes HTML**, not anti-bot. |
+| [#79](https://github.com/felipeall/transfermarkt-api/issues/79) (open 2024-11) | Kader truncated; no jersey on `/players`. Unfixed. |
+
+**Read-through:** nobody in the tracker “solved Transfermarkt.” They **moved the IP** (VPN, home server), **slowed down** (2 min backoff), **paid a scrape proxy**, or **left HTML for an unofficial app API**. The demo Fly.io IP is treated as burned. That is why felipeall was a poor *product* fetch (we become the blocked bot on CX33) even though the FastAPI shape (competition clubs + kader + `jersey_numbers`) is closer to our entities than Apify’s nested dump.
+
+Apify PPE (~$700–1.400 for the 1990–2027 grid) is the priced version of the #110 suggestion. Self-host + residential proxy / Unblocker can be cheaper *or* worse depending on GB and block rate; it is not free. dcaribou dump still has no 1990s Superliga and no season-registered squad `#`.
+
+Sources: GitHub issue threads listed above, fetched 2026-08-20 via `gh issue view`.

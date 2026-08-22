@@ -51,10 +51,13 @@ COMPOSE_BODY="$(jq -n '{
     "seed-apify-job": {
       image: "node:22-bookworm-slim",
       restart: "no",
+      mem_limit: "2g",
+      memswap_limit: "2g",
+      cpus: "1.0",
       deploy: {
         resources: {
-          limits: { cpus: "1.0", memory: "512M" },
-          reservations: { cpus: "0.25", memory: "256M" }
+          limits: { cpus: "1.0", memory: "2G" },
+          reservations: { cpus: "0.25", memory: "512M" }
         }
       },
       environment: {
