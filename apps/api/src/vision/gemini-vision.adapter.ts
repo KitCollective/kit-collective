@@ -1,6 +1,7 @@
 import type { Db } from "@kit/db";
 import { catalogLabel, club, kit, season, teamSeason } from "@kit/db";
 import type { KitType } from "@kit/domain";
+import { KIT_TYPES } from "@kit/domain";
 import { and, eq, ilike, or } from "drizzle-orm";
 import { NoopVisionAdapter } from "./noop-vision.adapter.js";
 import type { VisionAdapter, VisionInferenceResult } from "./vision.adapter.js";
@@ -18,28 +19,55 @@ function hasGeminiConfig(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function isKitType(value: unknown): value is KitType {
+  return typeof value === "string" && (KIT_TYPES as readonly string[]).includes(value);
+}
+
 function decodeGeminiResponse(body: unknown): GeminiStructured | null {
-  if (!body || typeof body !== "object") {
+  if (!isRecord(body)) {
     return null;
   }
 
-  const candidates = (body as { candidates?: unknown[] }).candidates;
+  const candidates = body.candidates;
   if (!Array.isArray(candidates) || candidates.length === 0) {
     return null;
   }
 
-  const parts = (candidates[0] as { content?: { parts?: unknown[] } }).content?.parts;
+  const firstCandidate = candidates[0];
+  if (!isRecord(firstCandidate)) {
+    return null;
+  }
+
+  const content = firstCandidate.content;
+  if (!isRecord(content)) {
+    return null;
+  }
+
+  const parts = content.parts;
   if (!Array.isArray(parts) || parts.length === 0) {
     return null;
   }
 
-  const text = (parts[0] as { text?: string }).text;
-  if (!text) {
+  const firstPart = parts[0];
+  if (!isRecord(firstPart) || typeof firstPart.text !== "string") {
     return null;
   }
 
   try {
-    return JSON.parse(text) as GeminiStructured;
+    const parsed: unknown = JSON.parse(firstPart.text);
+    if (!isRecord(parsed)) {
+      return null;
+    }
+
+    return {
+      clubHint: typeof parsed.clubHint === "string" ? parsed.clubHint : undefined,
+      seasonHint: typeof parsed.seasonHint === "string" ? parsed.seasonHint : undefined,
+      kitType: isKitType(parsed.kitType) ? parsed.kitType : undefined,
+    };
   } catch {
     return null;
   }

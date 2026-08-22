@@ -1,8 +1,6 @@
 import {
   type VisionJobResponse,
-  type VisionLogRequest,
   type VisionLogResponse,
-  type VisionSuggestRequest,
   type VisionSuggestResponse,
   visionJobResponseSchema,
   visionLogRequestSchema,
@@ -64,7 +62,7 @@ export class VisionController {
     @CurrentUser() user: JwtPayload,
     @Body() rawBody: unknown,
   ): Promise<VisionSuggestResponse> {
-    const body = visionSuggestRequestSchema.parse(rawBody) as VisionSuggestRequest;
+    const body = visionSuggestRequestSchema.parse(rawBody);
     const photoBytes = decodeBase64Photo(body.photo.contentBase64);
     const jobId = await this.visionService.createJob(user.sub, photoBytes, body.draftId);
 
@@ -100,7 +98,7 @@ export class VisionController {
     @CurrentUser() user: JwtPayload,
     @Body() rawBody: unknown,
   ): Promise<VisionLogResponse> {
-    const body = visionLogRequestSchema.parse(rawBody) as VisionLogRequest;
+    const body = visionLogRequestSchema.parse(rawBody);
     const logged = await this.visionService.logUserAction(
       user.sub,
       body.jobId,
