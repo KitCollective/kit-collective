@@ -19,7 +19,7 @@
   --space-inset-md: 16px;
   --space-inset-lg: 24px;
   --space-gap-sm: 8px;
-  --space-gap-md: 16px;
+  --space-gap-md: 12px;
   --font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -129,6 +129,10 @@ a {
   border-color: var(--fill-primary);
   color: var(--content-inverse);
   width: 100%;
+}
+
+.btn-primary--auto {
+  width: auto;
 }
 
 .btn-tertiary {

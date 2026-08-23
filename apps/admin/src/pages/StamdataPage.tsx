@@ -7,7 +7,7 @@ import {
   adminFilterOptionsSchema,
   adminStamdataListSchema,
 } from "@kit/api-contract";
-import { useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
@@ -88,7 +88,37 @@ export function StamdataPage() {
     }
   }
 
-  // Ratchet: ADMIN_STAMDATA_LIST_ENTITY_TYPES must each have navigation above.
+  function handleRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement>,
+    row: AdminStamdataRow,
+    rowIndex: number,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openRow(row);
+      return;
+    }
+
+    const rowElements = event.currentTarget.parentElement?.children;
+    if (!rowElements) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      const nextRow = rowElements[rowIndex + 1] as HTMLTableRowElement | undefined;
+      nextRow?.focus();
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      const previousRow = rowElements[rowIndex - 1] as HTMLTableRowElement | undefined;
+      previousRow?.focus();
+    }
+  }
+
+  // Ratchet: ADMIN_STAMDATA_LIST_ENTITY_TYPES must each have navigation in openRow above.
   void ADMIN_STAMDATA_LIST_ENTITY_TYPES;
 
   const hasActiveFilters = Boolean(
@@ -146,16 +176,12 @@ export function StamdataPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.rows.map((row) => (
+              {rows.rows.map((row, rowIndex) => (
                 <tr
                   key={`${row.entityType}:${row.id}`}
                   tabIndex={0}
                   onClick={() => openRow(row)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      openRow(row);
-                    }
-                  }}
+                  onKeyDown={(event) => handleRowKeyDown(event, row, rowIndex)}
                 >
                   <td>
                     {row.entityType === "kit" ? (

@@ -1,5 +1,5 @@
 import type { AdminFilterOptions, AdminStamdataQuery } from "@kit/api-contract";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type FiltersSheetProps = {
   open: boolean;
@@ -9,8 +9,13 @@ type FiltersSheetProps = {
   onApply: (next: AdminStamdataQuery) => void;
 };
 
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export function FiltersSheet({ open, options, value, onClose, onApply }: FiltersSheetProps) {
   const [draft, setDraft] = useState(value);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -23,14 +28,59 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
       return;
     }
 
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         onClose();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const panel = panelRef.current;
+      if (!panel) {
+        return;
+      }
+
+      const focusable = [...panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
+        (element) => !element.hasAttribute("disabled"),
+      );
+      if (focusable.length === 0) {
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (!panel.contains(active)) {
+        event.preventDefault();
+        first?.focus();
+        return;
+      }
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first?.focus();
       }
     }
 
+    const panel = panelRef.current;
+    const firstFocusable = panel?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+    firstFocusable?.focus();
+
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocusRef.current?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) {
@@ -52,7 +102,13 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
         aria-label="Close filters"
         onClick={onClose}
       />
-      <div className="sheet-panel" role="dialog" aria-modal="true" aria-label="Filters">
+      <div
+        ref={panelRef}
+        className="sheet-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Filters"
+      >
         <h2>Filters</h2>
 
         <h3>Country</h3>
@@ -161,8 +217,7 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
           </button>
           <button
             type="button"
-            className="btn btn-primary"
-            style={{ width: "auto" }}
+            className="btn btn-primary btn-primary--auto"
             onClick={() => {
               onApply(draft);
               onClose();
