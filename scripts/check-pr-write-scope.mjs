@@ -5,38 +5,27 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-
-const RATCHET_EXCEPTION_PREFIXES = [
-  ".cursor/hooks/",
-  ".cursor/hooks.json",
-  ".cursor/rules/",
-  "docs/agents/error-ratcheting.md",
-  "scripts/check-",
-];
-
-function matchesGlob(filePath, glob) {
-  const regexSource = `^${glob
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*/g, "\0")
-    .replace(/\*/g, "[^/]*")
-    .replace(/\0/g, ".*")}$`;
-  return new RegExp(regexSource).test(filePath);
-}
-
-function isRatchetException(filePath) {
-  return RATCHET_EXCEPTION_PREFIXES.some((prefix) => filePath.startsWith(prefix));
-}
+import {
+  findWriteScopeViolations,
+  parseWriteScopeGlobs,
+} from "./lib/pr-write-scope.mjs";
 
 function getScopeSourceText() {
+  if (process.env.WRITE_SCOPE) {
+    return `write-scope: ${process.env.WRITE_SCOPE}`;
+  }
+
   if (process.env.PR_BODY) {
-    return process.env.PR_BODY;
+    return [process.env.PR_TITLE, process.env.PR_BODY, process.env.PR_HEAD_REF]
+      .filter(Boolean)
+      .join("\n");
   }
 
   const eventPath = process.env.GITHUB_EVENT_PATH;
-  if (eventPath && process.env.GITHUB_EVENT_NAME === "pull_request") {
+  if (eventPath) {
     const event = JSON.parse(readFileSync(eventPath, "utf8"));
-    const pullRequest = event.pull_request;
-    if (pullRequest) {
+    if (event.pull_request) {
+      const pullRequest = event.pull_request;
       return [pullRequest.title, pullRequest.body, pullRequest.head?.ref]
         .filter(Boolean)
         .join("\n");
@@ -44,9 +33,16 @@ function getScopeSourceText() {
   }
 
   try {
-    const json = execFileSync("gh", ["pr", "view", "--json", "title,body,headRefName"], {
+    const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
       encoding: "utf8",
-    });
+    }).trim();
+    const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+    const ghEnv = token ? { ...process.env, GH_TOKEN: token } : process.env;
+    const json = execFileSync(
+      "gh",
+      ["pr", "view", branch, "--json", "title,body,headRefName"],
+      { encoding: "utf8", env: ghEnv },
+    );
     const pullRequest = JSON.parse(json);
     return [pullRequest.title, pullRequest.body, pullRequest.headRefName]
       .filter(Boolean)
@@ -54,17 +50,6 @@ function getScopeSourceText() {
   } catch {
     return "";
   }
-}
-
-function parseWriteScopeGlobs(text) {
-  const match = text.match(/^write-scope:\s*(.+)$/m);
-  if (!match) {
-    return null;
-  }
-  return match[1]
-    .split(",")
-    .map((glob) => glob.trim())
-    .filter(Boolean);
 }
 
 function getChangedFiles(baseRef) {
@@ -85,41 +70,51 @@ function getChangedFiles(baseRef) {
   }
 }
 
-const globs = process.env.WRITE_SCOPE
-  ? process.env.WRITE_SCOPE.split(",")
-      .map((glob) => glob.trim())
-      .filter(Boolean)
-  : parseWriteScopeGlobs(getScopeSourceText());
-
-if (!globs || globs.length === 0) {
-  console.log("PR write-scope check skipped (no write-scope: line on issue/PR).");
-  process.exit(0);
+function isPullRequestEvent() {
+  if (process.env.GITHUB_EVENT_NAME === "pull_request") {
+    return true;
+  }
+  return Boolean(process.env.PR_BODY);
 }
 
-const baseRef = process.env.BASE_REF ?? "origin/development";
-const changedFiles = getChangedFiles(baseRef);
-const violations = [];
+function main() {
+  const scopeText = getScopeSourceText();
+  const globs = parseWriteScopeGlobs(scopeText);
 
-for (const file of changedFiles) {
-  if (isRatchetException(file)) {
-    continue;
+  if (!globs || globs.length === 0) {
+    if (isPullRequestEvent()) {
+      console.error(
+        "PR write-scope ratchet failed — pull request is missing a write-scope: line in its description.",
+      );
+      console.error(
+        "Copy the write-scope: line from the Linear issue body into the PR description.",
+      );
+      process.exit(1);
+    }
+
+    console.log(
+      "PR write-scope check skipped (no write-scope: line and not a pull_request event).",
+    );
+    process.exit(0);
   }
-  const inScope = globs.some((glob) => matchesGlob(file, glob));
-  if (!inScope) {
-    violations.push(file);
+
+  const baseRef = process.env.BASE_REF ?? "origin/development";
+  const changedFiles = getChangedFiles(baseRef);
+  const violations = findWriteScopeViolations(changedFiles, globs);
+
+  if (violations.length > 0) {
+    console.error("PR write-scope ratchet failed — files outside declared write-scope:\n");
+    for (const file of violations) {
+      console.error(`  - ${file}`);
+    }
+    console.error(`\nDeclared write-scope: ${globs.join(", ")}`);
+    console.error(
+      "Ratchet-exception paths: .cursor/hooks/**, .cursor/rules/**, docs/agents/error-ratcheting.md, scripts/check-*",
+    );
+    process.exit(1);
   }
+
+  console.log(`PR write-scope check passed (${changedFiles.length} changed file(s)).`);
 }
 
-if (violations.length > 0) {
-  console.error("PR write-scope ratchet failed — files outside declared write-scope:\n");
-  for (const file of violations) {
-    console.error(`  - ${file}`);
-  }
-  console.error(`\nDeclared write-scope: ${globs.join(", ")}`);
-  console.error(
-    "Ratchet-exception paths: .cursor/hooks/**, .cursor/rules/**, docs/agents/error-ratcheting.md, scripts/check-*",
-  );
-  process.exit(1);
-}
-
-console.log(`PR write-scope check passed (${changedFiles.length} changed file(s)).`);
+main();
