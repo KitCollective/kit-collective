@@ -106,8 +106,7 @@ export function GenvejeSheet({
     onShortcutsChanged();
   };
 
-  const sheetTitle =
-    mode === "list" ? "Genveje" : editingShortcutId ? "Rediger genvej" : "Ny genvej";
+  const sheetTitle = mode === "list" ? "Genveje" : "Ny genvej";
   const canSave = selectedClub !== null && !saving;
 
   return (
@@ -158,10 +157,6 @@ export function GenvejeSheet({
           </View>
         ) : (
           <View style={styles.formBody}>
-            <Text style={[typography.caption, { color: theme.contentSecondary }]}>
-              Facetter kombineres med AND — flere felter gør genvejen snævrere.
-            </Text>
-
             <View style={styles.field}>
               <Text style={[typography.label, { color: theme.contentPrimary }]}>Klub</Text>
               <ListRow

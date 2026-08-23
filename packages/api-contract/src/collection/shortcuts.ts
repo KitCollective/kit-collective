@@ -8,10 +8,7 @@ export const collectionShortcutSchema = z
     id: z.string().uuid(),
     name: z.string().min(1),
     sortOrder: z.number().int(),
-    countryId: z.string().uuid().nullable(),
-    leagueId: z.string().uuid().nullable(),
     clubId: z.string().uuid().nullable(),
-    playerId: z.string().uuid().nullable(),
     matchCount: z.number().int().nonnegative(),
   })
   .strict();
@@ -29,21 +26,10 @@ export type CollectionShortcuts = z.infer<typeof collectionShortcutsSchema>;
 export const collectionShortcutWriteSchema = z
   .object({
     name: z.string().trim().min(1).optional(),
-    countryId: facetUuid.optional(),
-    leagueId: facetUuid.optional(),
-    clubId: facetUuid.optional(),
-    playerId: facetUuid.optional(),
+    clubId: facetUuid,
     sortOrder: z.number().int().optional(),
   })
-  .strict()
-  .superRefine((value, ctx) => {
-    if (!value.countryId && !value.leagueId && !value.clubId && !value.playerId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one facet is required",
-      });
-    }
-  });
+  .strict();
 
 export type CollectionShortcutWrite = z.infer<typeof collectionShortcutWriteSchema>;
 

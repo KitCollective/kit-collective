@@ -1,7 +1,7 @@
 import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -45,6 +45,7 @@ export default function CollectionScreen() {
   const [selectedShortcutId, setSelectedShortcutId] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [genvejeOpen, setGenvejeOpen] = useState(false);
+  const hasInitialLoadRef = useRef(false);
 
   const loadCollection = useCallback(async () => {
     if (!accessToken) {
@@ -91,6 +92,9 @@ export default function CollectionScreen() {
 
       try {
         await refreshAll();
+        if (active) {
+          hasInitialLoadRef.current = true;
+        }
       } finally {
         if (active) {
           setLoading(false);
@@ -106,12 +110,12 @@ export default function CollectionScreen() {
   }, [accessToken, refreshAll]);
 
   useEffect(() => {
-    if (!accessToken || loading) {
+    if (!accessToken || !hasInitialLoadRef.current) {
       return;
     }
 
     void loadCollection();
-  }, [accessToken, loading, loadCollection]);
+  }, [accessToken, selectedShortcutId, loadCollection]);
 
   const openJerseyDetail = (jerseyId: string) => {
     router.push(`/(tabs)/collection/${jerseyId}`);
