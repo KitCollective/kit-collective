@@ -18,11 +18,7 @@ export default function ProfileScreen() {
       <ScreenHeader
         title="Profil"
         trailing={
-          <IconButton
-            name="Log ud"
-            icon="log-out-outline"
-            onPress={() => void signOut()}
-          />
+          <IconButton name="Log ud" icon="log-out-outline" onPress={() => void signOut()} />
         }
       />
       <EmptyState title="Din profil" body="Indstillinger kommer snart." />

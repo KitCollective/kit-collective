@@ -11,9 +11,9 @@ import {
   type TextInputProps,
   View,
 } from "react-native";
+import type { ThemeColors } from "@/theme/tokens";
 import { radius, space, type } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
-import type { ThemeColors } from "@/theme/tokens";
 
 type MarkProps = {
   label: string;
