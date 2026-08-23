@@ -3,12 +3,12 @@ import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { SearchField } from "@/components/catalog-ui";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ScreenHeader } from "@/components/screen-header";
-import { useTabBarContentPadding } from "@/components/shortcut-chip-row";
 import { EmptyState } from "@/components/ui";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -28,7 +28,15 @@ export default function SearchScreen() {
   const { accessToken } = useAuth();
   const { width } = useWindowDimensions();
   const theme = useTheme();
-  const tabBarPadding = useTabBarContentPadding();
+  const insets = useSafeAreaInsets();
+  // Reserve space for floating tab bar — inline per docs/design-system.md Layout constraints.
+  const tabBarPadding =
+    space.insetLg * 2 +
+    space.insetMd +
+    space.insetLg +
+    space.insetSm +
+    insets.bottom +
+    space.insetMd;
   const [loading, setLoading] = useState(true);
   const [jerseys, setJerseys] = useState<CollectionJersey[]>([]);
   const [query, setQuery] = useState("");

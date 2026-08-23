@@ -6,7 +6,6 @@ import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "re
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
-import { useTabBarContentPadding } from "@/components/shortcut-chip-row";
 import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -19,7 +18,14 @@ export default function JerseyDetailScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
-  const tabBarPadding = useTabBarContentPadding();
+  // Reserve space for floating tab bar — inline per docs/design-system.md Layout constraints.
+  const tabBarPadding =
+    space.insetLg * 2 +
+    space.insetMd +
+    space.insetLg +
+    space.insetSm +
+    insets.bottom +
+    space.insetMd;
   const [loading, setLoading] = useState(true);
   const [jersey, setJersey] = useState<CollectionJersey | null>(null);
 

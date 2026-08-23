@@ -148,6 +148,8 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-mobile-design-tokens.mjs` also fails when `apps/mobile/src/theme/tab-bar-layout.ts` exists or when any `apps/mobile/src/theme/**` file (except `tokens.ts`) exports `floatingTabBarLayout` / `tabBarReserve`. Prevents repeating the KIT-42 checker round 7 fail (named pixel-reserve token contradicting `docs/design-system.md` Layout constraints). Tighten only.
 
+`scripts/check-mobile-design-tokens.mjs` also fails when any exported function under `apps/mobile/src/components/**` or `apps/mobile/app/**` composes three or more `space.*` tokens into a returned offset/reserve value **and** is imported by two or more `apps/mobile/app/(tabs)/**` screens — shape-based detection, not a name/path allow-list. `scripts/tests/check-mobile-design-tokens.test.mjs` (CI via `node --test`) imports `findComposedPixelReserveViolations` / `isComposedPixelReserveExport` from the real script and mutation-tests that a relocated `useTabBarContentPadding`-shaped helper reused across tab screens fails. Prevents repeating the KIT-42 checker round 8 fail (pixel-reserve constant evading the round-7 theme-path ratchet by moving to `shortcut-chip-row.tsx`). Tighten only.
+
 ### Mobile icon-button hit-target ratchet (KIT-42)
 
 `scripts/check-mobile-design-tokens.mjs` also fails when an `apps/mobile/src/components/**` file has an icon-only `Pressable` (`accessibilityRole="button"` + `hitSlop={8}` + `<Ionicons`) without an explicit `minWidth`/`minHeight` 44 style — use `IconButton` or inline 44×44. Prevents repeating the KIT-42 checker round 7 fail (`Sheet` close button ~40×40). Tighten only.

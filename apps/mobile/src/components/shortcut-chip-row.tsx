@@ -1,5 +1,4 @@
 import { ScrollView, StyleSheet, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Chip } from "@/components/chip";
 import { space } from "@/theme/tokens";
 
@@ -24,19 +23,6 @@ export function ShortcutChipRow({ selectedShortcutId, onSelectAlle }: ShortcutCh
         />
       </ScrollView>
     </View>
-  );
-}
-
-export function useTabBarContentPadding(): number {
-  const insets = useSafeAreaInsets();
-  // Inline spacing scale (docs/design-system.md Layout — no named pixel-reserve export).
-  return (
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd
   );
 }
 

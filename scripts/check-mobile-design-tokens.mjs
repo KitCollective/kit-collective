@@ -11,6 +11,9 @@
  *
  * Ratchet (KIT-42 round 7): fail on named tab-bar pixel-reserve exports and
  * icon-only Pressable hit targets below 44×44.
+ *
+ * Ratchet (KIT-42 round 8): fail on exported composed pixel-reserve helpers
+ * reused across multiple tab screens (shape-based, not name/path list).
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -65,6 +68,116 @@ function checkTabBarLayoutReserve() {
   }
 
   return localViolations;
+}
+
+/** Extract exported function bodies from components/app sources. */
+export function extractExportedFunctionBodies(source) {
+  const functions = [];
+  const patterns = [
+    /export\s+function\s+(\w+)\s*\([^)]*\)[^{]*\{/g,
+    /export\s+const\s+(\w+)\s*=\s*(?:\([^)]*\)|[^=]+)\s*=>\s*\{/g,
+  ];
+
+  for (const pattern of patterns) {
+    let match = pattern.exec(source);
+    while (match) {
+      const name = match[1];
+      const startIdx = match.index + match[0].length;
+      let depth = 1;
+      let i = startIdx;
+      while (i < source.length && depth > 0) {
+        if (source[i] === "{") depth++;
+        if (source[i] === "}") depth--;
+        i++;
+      }
+      functions.push({ name, body: source.slice(startIdx, i - 1) });
+      match = pattern.exec(source);
+    }
+  }
+
+  return functions;
+}
+
+/** True when a function composes multiple space.* tokens into a returned offset. */
+export function isComposedPixelReserveExport(body) {
+  const spaceRefs = (body.match(/space\.\w+/g) ?? []).length;
+  if (spaceRefs < 3) {
+    return false;
+  }
+  if (!/return\b/.test(body)) {
+    return false;
+  }
+  return /\+/.test(body);
+}
+
+function listSourceFiles(dir, acc = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      listSourceFiles(fullPath, acc);
+      continue;
+    }
+    if (/\.(tsx|ts)$/.test(entry.name)) {
+      acc.push(fullPath);
+    }
+  }
+  return acc;
+}
+
+function countTabScreenImporters(exportName, fromRelPath, fileSources) {
+  const importPattern = new RegExp(
+    `import\\s+\\{[^}]*\\b${exportName}\\b[^}]*\\}\\s+from\\s+["'][^"']+["']`,
+  );
+  const importers = new Set();
+
+  for (const [rel, source] of fileSources) {
+    if (rel === fromRelPath) continue;
+    if (!rel.startsWith("apps/mobile/app/(tabs)/")) continue;
+    if (importPattern.test(source)) {
+      importers.add(rel);
+    }
+  }
+
+  return importers.size;
+}
+
+function loadMobileFileSources(root = mobileRoot) {
+  const fileSources = new Map();
+  for (const fullPath of listSourceFiles(root)) {
+    fileSources.set(relative(process.cwd(), fullPath), readFileSync(fullPath, "utf8"));
+  }
+  return fileSources;
+}
+
+export function findComposedPixelReserveViolations(fileSources) {
+  const localViolations = [];
+  const scanPrefixes = ["apps/mobile/src/components/", "apps/mobile/app/"];
+
+  for (const [rel, source] of fileSources) {
+    if (!scanPrefixes.some((prefix) => rel.startsWith(prefix))) {
+      continue;
+    }
+
+    for (const { name, body } of extractExportedFunctionBodies(source)) {
+      if (!isComposedPixelReserveExport(body)) {
+        continue;
+      }
+
+      const importerCount = countTabScreenImporters(name, rel, fileSources);
+      if (importerCount >= 2) {
+        localViolations.push(
+          `${rel}: exports "${name}" composing ${(body.match(/space\.\w+/g) ?? []).length} space.* tokens into a shared pixel reserve — inline at each tab screen instead`,
+        );
+      }
+    }
+  }
+
+  return localViolations;
+}
+
+export function checkComposedPixelReserveExports(options = {}) {
+  const fileSources = options.fileSources ?? loadMobileFileSources(options.mobileRoot);
+  return findComposedPixelReserveViolations(fileSources);
 }
 
 function checkIconButtonHitTargets(dir) {
@@ -245,6 +358,7 @@ if (
 walk(mobileRoot);
 violations.push(...checkSemanticColorKeys());
 violations.push(...checkTabBarLayoutReserve());
+violations.push(...checkComposedPixelReserveExports());
 violations.push(...checkIconButtonHitTargets(join(mobileRoot, "src/components")));
 
 if (violations.length > 0) {
