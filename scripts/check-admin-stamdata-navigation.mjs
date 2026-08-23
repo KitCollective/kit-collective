@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Ratchet (KIT-39): fail CI when admin stamdata row navigation or drill routes
- * do not cover every entity type the list API can emit.
+ * do not cover every entity type the list API can emit, or when Data table pages
+ * drop the table header on loading/empty instead of replacing only the body.
  */
 import { readFileSync } from "node:fs";
 
@@ -51,6 +52,43 @@ const requiredRoutes = [
 for (const route of requiredRoutes) {
   if (!appSource.includes(route.pattern)) {
     violations.push(`apps/admin/src/App.tsx: missing ${route.label} route (${route.pattern})`);
+  }
+}
+
+const dataTablePages = ["apps/admin/src/pages/StamdataPage.tsx", "apps/admin/src/pages/CollectorsPage.tsx"];
+
+for (const pagePath of dataTablePages) {
+  const pageSource = readFileSync(pagePath, "utf8");
+  if (!pageSource.includes("data-table")) {
+    continue;
+  }
+
+  const dropsHeaderOnLoading = /\{loading\s*\?\s*\(\s*<div className="empty-state"/.test(
+    pageSource,
+  );
+  if (dropsHeaderOnLoading) {
+    violations.push(
+      `${pagePath}: loading state replaces the whole Data table — keep <thead> and replace only <tbody>`,
+    );
+  }
+
+  const dropsHeaderOnEmpty = /\)\s*:\s*!rows\s*\|\|\s*rows\.rows\.length\s*===\s*0\s*\?\s*\(\s*<div className="empty-state"/.test(
+    pageSource,
+  );
+  if (dropsHeaderOnEmpty) {
+    violations.push(
+      `${pagePath}: empty state replaces the whole Data table — keep <thead> and replace only <tbody>`,
+    );
+  }
+
+  if (!pageSource.includes("<thead>")) {
+    violations.push(`${pagePath}: Data table page must render <thead>`);
+  }
+
+  if (pageSource.includes("loading") && !pageSource.includes("data-table-empty")) {
+    violations.push(
+      `${pagePath}: loading/empty states must use data-table-empty inside <tbody>, not a page-level empty-state`,
+    );
   }
 }
 

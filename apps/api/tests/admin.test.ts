@@ -291,7 +291,7 @@ describe("Admin /v1", () => {
     const listBody = adminStamdataListSchema.parse(JSON.parse(listResponse.body));
     const kitRow = listBody.rows.find((row) => row.entityType === "kit");
     expect(kitRow?.label).toContain("FC Copenhagen");
-    expect(kitRow?.photoPath).toBe(`/v1/admin/catalog/kits/${insertedKit!.id}/photo`);
+    expect(kitRow?.photoPath).toBe(`/admin/catalog/kits/${insertedKit!.id}/photo`);
 
     const drillResponse = await app.inject({
       method: "GET",

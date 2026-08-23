@@ -121,9 +121,11 @@ a {
 }
 
 .top-tab[aria-current="page"] {
-  border-bottom-color: var(--content-primary);
+  border-bottom-color: var(--fill-primary);
   color: var(--content-primary);
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
 }
 
 .toolbar {
@@ -281,9 +283,9 @@ a {
   line-height: 20px;
 }
 
-.field input {
+.login-card .field input {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   min-height: 44px;
   padding: 0 var(--space-inset-md);
 }
@@ -327,7 +329,7 @@ a {
 }
 
 .drill-page {
-  max-width: 960px;
+  width: 100%;
 }
 
 .drill-header {
@@ -421,7 +423,7 @@ a {
   font-weight: 500;
   line-height: 20px;
   min-height: 44px;
-  padding: 0 var(--space-inset-md);
+  padding: 0 var(--space-inset-sm);
 }
 
 .data-table-empty {

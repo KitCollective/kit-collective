@@ -4,12 +4,19 @@ export function getApiBase(): string {
   return API_BASE.replace(/\/$/, "");
 }
 
+/** Join API base (…/v1) with a contract path; strips a redundant /v1 prefix from legacy photoPath values. */
+export function joinApiPath(base: string, path: string): string {
+  const normalizedBase = base.replace(/\/$/, "");
+  const normalizedPath = path.startsWith("/v1/") ? path.slice(3) : path;
+  return `${normalizedBase}${normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`}`;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { token?: string } = {},
 ): Promise<T> {
   const { token, headers, ...rest } = options;
-  const response = await fetch(`${getApiBase()}${path}`, {
+  const response = await fetch(joinApiPath(getApiBase(), path), {
     ...rest,
     headers: {
       "content-type": "application/json",

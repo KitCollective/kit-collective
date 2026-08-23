@@ -161,32 +161,40 @@ export function StamdataPage() {
 
       {error ? <div className="banner-error">{error}</div> : null}
 
-      {loading ? (
-        <div className="empty-state">Loading stamdata…</div>
-      ) : !rows || rows.rows.length === 0 ? (
-        <div className="empty-state">
-          <h2>No records match</h2>
-          <p>Try a different search or clear your filters.</p>
-          {hasActiveFilters ? (
-            <button type="button" className="btn btn-tertiary" onClick={clearFilters}>
-              Clear filters
-            </button>
-          ) : null}
-        </div>
-      ) : (
-        <div className="data-table-wrap">
-          <table className="data-table">
-            <thead>
+      <div className="data-table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Mark</th>
+              <th scope="col">Name</th>
+              <th scope="col">Type</th>
+              <th scope="col">Season</th>
+              <th scope="col">Meta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
               <tr>
-                <th scope="col">Mark</th>
-                <th scope="col">Name</th>
-                <th scope="col">Type</th>
-                <th scope="col">Season</th>
-                <th scope="col">Meta</th>
+                <td colSpan={5}>
+                  <div className="empty-state data-table-empty">Loading stamdata…</div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.rows.map((row, rowIndex) => (
+            ) : !rows || rows.rows.length === 0 ? (
+              <tr>
+                <td colSpan={5}>
+                  <div className="empty-state data-table-empty">
+                    <h2>No records match</h2>
+                    <p>Try a different search or clear your filters.</p>
+                    {hasActiveFilters ? (
+                      <button type="button" className="btn btn-tertiary" onClick={clearFilters}>
+                        Clear filters
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              rows.rows.map((row, rowIndex) => (
                 <tr
                   key={`${row.entityType}:${row.id}`}
                   tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
@@ -220,11 +228,11 @@ export function StamdataPage() {
                         : "—"}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {filterOptions ? (
         <FiltersSheet

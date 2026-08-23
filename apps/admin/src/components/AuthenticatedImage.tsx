@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getApiBase } from "../api/client.js";
+import { getApiBase, joinApiPath } from "../api/client.js";
 
 type AuthenticatedImageProps = {
   path: string;
@@ -15,7 +15,7 @@ export function AuthenticatedImage({ path, token, alt = "", className }: Authent
     let objectUrl: string | null = null;
     let cancelled = false;
 
-    fetch(`${getApiBase()}${path}`, {
+    fetch(joinApiPath(getApiBase(), path), {
       headers: {
         authorization: `Bearer ${token}`,
       },
@@ -48,7 +48,7 @@ export function AuthenticatedImage({ path, token, alt = "", className }: Authent
   }, [path, token]);
 
   if (!src) {
-    return <span className="thumb-slot" aria-hidden />;
+    return <span className={className ?? "thumb-slot"} aria-hidden />;
   }
 
   return <img src={src} alt={alt} className={className} />;

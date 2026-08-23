@@ -183,7 +183,7 @@ export class AdminCatalogService {
       clubLabel: row.clubLabel ?? undefined,
       seasonLabel: row.seasonLabel,
       hasPhoto,
-      photoPath: hasPhoto ? `/v1/admin/catalog/kits/${row.id}/photo` : undefined,
+      photoPath: hasPhoto ? `/admin/catalog/kits/${row.id}/photo` : undefined,
     });
   }
 
@@ -702,7 +702,7 @@ export class AdminCatalogService {
           seasonLabel: row.seasonLabel,
           kitType: row.kitType,
           hasPhoto,
-          photoPath: hasPhoto ? `/v1/admin/catalog/kits/${row.id}/photo` : undefined,
+          photoPath: hasPhoto ? `/admin/catalog/kits/${row.id}/photo` : undefined,
         };
       });
   }
