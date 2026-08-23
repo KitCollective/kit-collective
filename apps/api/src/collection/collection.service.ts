@@ -90,7 +90,6 @@ export class CollectionService {
       })
       .from(userJersey)
       .innerJoin(season, eq(userJersey.seasonId, season.id))
-      .innerJoin(club, eq(userJersey.clubId, club.id))
       .where(and(...filterConditions))
       .orderBy(desc(userJersey.createdAt));
 

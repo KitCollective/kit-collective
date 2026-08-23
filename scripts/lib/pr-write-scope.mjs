@@ -17,6 +17,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/check-admin-design-tokens.mjs",
   "scripts/check-admin-stamdata-navigation.mjs",
   "scripts/check-import-boundaries.mjs",
+  "scripts/check-mobile-collection-ui-evidence.mjs",
   "scripts/check-mobile-design-tokens.mjs",
   "scripts/check-mobile-tab-bar.mjs",
   "scripts/check-pr-write-scope.mjs",
@@ -30,6 +31,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/lib/pr-write-scope.mjs",
   "scripts/lint-workflows.sh",
   "scripts/tests/check-mobile-tab-bar.test.mjs",
+  "scripts/tests/check-mobile-collection-ui-evidence.test.mjs",
   "scripts/tests/check-mobile-design-tokens.test.mjs",
   "scripts/tests/check-pr-write-scope.test.mjs",
 ]);

@@ -18,6 +18,7 @@
     "check:seed-apify-test-database-isolation": "node scripts/check-seed-apify-test-database-isolation.mjs",
     "check:mobile-tab-bar": "node scripts/check-mobile-tab-bar.mjs",
     "check:mobile-design-tokens": "node scripts/check-mobile-design-tokens.mjs",
+    "check:mobile-collection-ui-evidence": "node scripts/check-mobile-collection-ui-evidence.mjs",
     "check:workflow-api-boot-env": "node scripts/check-workflow-api-boot-env.mjs",
     "check:vision-log-save-action": "node scripts/check-vision-log-save-action.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"

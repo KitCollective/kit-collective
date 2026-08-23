@@ -28,6 +28,7 @@ describe("collectionShortcutSchema", () => {
       name: "F.C. København",
       sortOrder: 0,
       clubId: UUID,
+      clubLabel: "F.C. København",
       matchCount: 2,
     };
     expect(collectionShortcutSchema.parse(payload)).toEqual(payload);
@@ -43,6 +44,7 @@ describe("collectionShortcutsSchema", () => {
           name: "F.C. København",
           sortOrder: 0,
           clubId: UUID,
+          clubLabel: "F.C. København",
           matchCount: 0,
         },
       ],

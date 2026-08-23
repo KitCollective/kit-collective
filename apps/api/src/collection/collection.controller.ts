@@ -51,8 +51,11 @@ export class CollectionController {
 
   @Get("collection/shortcuts")
   @UseGuards(JwtAuthGuard)
-  listShortcuts(@CurrentUser() user: JwtPayload) {
-    return this.shortcutsService.listShortcuts(user.sub);
+  listShortcuts(
+    @CurrentUser() user: JwtPayload,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.shortcutsService.listShortcuts(user.sub, resolveLocale(acceptLanguage));
   }
 
   @Post("collection/shortcuts")

@@ -9,6 +9,13 @@ import {
 } from "@/api/shortcuts";
 import { ListRow, Sheet } from "@/components/catalog-ui";
 import { ClubPickerOverlay } from "@/components/club-picker-overlay";
+import {
+  canSaveGenvej,
+  type GenvejeSheetMode,
+  manageRowAccessibilityLabel,
+  resolveGenvejeSheetTitle,
+  seedClubForEdit,
+} from "@/components/genveje-sheet-logic";
 import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -17,21 +24,23 @@ import { useTheme } from "@/theme/use-theme";
 type GenvejeSheetProps = {
   visible: boolean;
   accessToken: string;
+  activeShortcutId: string | null;
   onDismiss: () => void;
   onShortcutsChanged: () => void;
+  onShortcutDeleted: (shortcutId: string) => void;
 };
-
-type SheetMode = "list" | "form";
 
 export function GenvejeSheet({
   visible,
   accessToken,
+  activeShortcutId,
   onDismiss,
   onShortcutsChanged,
+  onShortcutDeleted,
 }: GenvejeSheetProps) {
   const theme = useTheme();
   const typography = useTypography();
-  const [mode, setMode] = useState<SheetMode>("list");
+  const [mode, setMode] = useState<GenvejeSheetMode>("list");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
@@ -70,7 +79,7 @@ export function GenvejeSheet({
   const openEditForm = (shortcut: CollectionShortcut) => {
     setEditingShortcutId(shortcut.id);
     setCustomName(shortcut.name);
-    setSelectedClub(shortcut.clubId ? { id: shortcut.clubId, label: "Valgt klub" } : null);
+    setSelectedClub(seedClubForEdit(shortcut));
     setMode("form");
   };
 
@@ -102,12 +111,15 @@ export function GenvejeSheet({
 
   const handleDelete = async (shortcutId: string) => {
     await deleteCollectionShortcut(accessToken, shortcutId);
+    if (shortcutId === activeShortcutId) {
+      onShortcutDeleted(shortcutId);
+    }
     await loadShortcuts();
     onShortcutsChanged();
   };
 
-  const sheetTitle = mode === "list" ? "Genveje" : "Ny genvej";
-  const canSave = selectedClub !== null && !saving;
+  const sheetTitle = resolveGenvejeSheetTitle(mode);
+  const canSave = canSaveGenvej(selectedClub, saving);
 
   return (
     <>
@@ -130,12 +142,25 @@ export function GenvejeSheet({
               <ScrollView>
                 {shortcuts.map((shortcut) => (
                   <View key={shortcut.id} style={styles.manageRow}>
-                    <IoniconsDragHandle color={theme.contentMuted} />
-                    <View style={styles.manageMain}>
-                      <Text style={[typography.body, { color: theme.contentPrimary }]}>
+                    <ShortcutDragHandle color={theme.contentMuted} />
+                    <View
+                      style={styles.manageMain}
+                      accessible
+                      accessibilityLabel={manageRowAccessibilityLabel(
+                        shortcut.name,
+                        shortcut.matchCount,
+                      )}
+                    >
+                      <Text
+                        style={[typography.body, { color: theme.contentPrimary }]}
+                        importantForAccessibility="no-hide-descendants"
+                      >
                         {shortcut.name}
                       </Text>
-                      <Text style={[typography.mono, { color: theme.contentMuted }]}>
+                      <Text
+                        style={[typography.mono, { color: theme.contentMuted }]}
+                        importantForAccessibility="no-hide-descendants"
+                      >
                         {shortcut.matchCount}
                       </Text>
                     </View>
@@ -210,9 +235,9 @@ export function GenvejeSheet({
   );
 }
 
-function IoniconsDragHandle({ color }: { color: string }) {
+function ShortcutDragHandle({ color }: { color: string }) {
   return (
-    <View style={styles.dragHandle} accessibilityElementsHidden>
+    <View style={styles.dragHandle} accessible accessibilityRole="button" accessibilityLabel="Flyt">
       <View style={[styles.dragBar, { backgroundColor: color }]} />
       <View style={[styles.dragBar, { backgroundColor: color }]} />
     </View>

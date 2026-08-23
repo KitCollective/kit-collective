@@ -16,7 +16,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { and, asc, count, eq, type SQL } from "drizzle-orm";
+import { and, asc, count, eq, inArray, type SQL } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 
 type ShortcutFacets = {
@@ -27,7 +27,7 @@ type ShortcutFacets = {
 export class CollectionShortcutsService {
   constructor(@Inject(DB) private readonly db: Db) {}
 
-  async listShortcuts(userId: string): Promise<CollectionShortcuts> {
+  async listShortcuts(userId: string, locale: LabelLocale = "da"): Promise<CollectionShortcuts> {
     const rows = await this.db
       .select({
         id: collectionShortcut.id,
@@ -39,17 +39,27 @@ export class CollectionShortcutsService {
       .where(eq(collectionShortcut.userId, userId))
       .orderBy(asc(collectionShortcut.sortOrder), asc(collectionShortcut.createdAt));
 
+    const clubIds = [
+      ...new Set(
+        rows.map((row) => row.clubId).filter((clubId): clubId is string => clubId !== null),
+      ),
+    ];
+    const clubLabels = await this.resolveClubLabels(clubIds, locale);
+
     const shortcuts: CollectionShortcut[] = await Promise.all(
       rows.map(async (row) => {
         const matchCount = await this.countMatchingJerseys(userId, {
           clubId: row.clubId,
         });
 
+        const clubLabel = row.clubId ? (clubLabels.get(row.clubId) ?? null) : null;
+
         return collectionShortcutSchema.parse({
           id: row.id,
           name: row.name,
           sortOrder: row.sortOrder,
           clubId: row.clubId,
+          clubLabel,
           matchCount,
         });
       }),
@@ -92,8 +102,11 @@ export class CollectionShortcutsService {
       clubId: inserted.clubId,
     });
 
+    const clubLabel = inserted.clubId ? await this.resolveClubLabel(inserted.clubId, locale) : null;
+
     return collectionShortcutSchema.parse({
       ...inserted,
+      clubLabel,
       matchCount,
     });
   }
@@ -135,8 +148,11 @@ export class CollectionShortcutsService {
       clubId: updated.clubId,
     });
 
+    const clubLabel = updated.clubId ? await this.resolveClubLabel(updated.clubId, locale) : null;
+
     return collectionShortcutSchema.parse({
       ...updated,
+      clubLabel,
       matchCount,
     });
   }
@@ -245,6 +261,41 @@ export class CollectionShortcutsService {
       throw new BadRequestException("clubId is not catalog truth");
     }
     return label;
+  }
+
+  private async resolveClubLabels(
+    clubIds: string[],
+    locale: LabelLocale,
+  ): Promise<Map<string, string>> {
+    if (clubIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .select({
+        clubId: catalogLabel.entityId,
+        label: catalogLabel.text,
+        locale: catalogLabel.locale,
+        kind: catalogLabel.kind,
+      })
+      .from(catalogLabel)
+      .where(and(eq(catalogLabel.entityType, "club"), inArray(catalogLabel.entityId, clubIds)));
+
+    const labels = new Map<string, string>();
+
+    for (const clubId of clubIds) {
+      const clubLabels = rows.filter((row) => row.clubId === clubId && row.label);
+      const resolved =
+        clubLabels.find((row) => row.locale === locale && row.kind === "label")?.label ??
+        clubLabels.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
+        clubLabels.find((row) => row.locale === "en" && row.kind === "label")?.label;
+
+      if (resolved) {
+        labels.set(clubId, resolved);
+      }
+    }
+
+    return labels;
   }
 
   private async resolveClubLabel(clubId: string, locale: LabelLocale): Promise<string | null> {

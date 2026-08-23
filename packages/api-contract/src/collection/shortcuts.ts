@@ -9,6 +9,7 @@ export const collectionShortcutSchema = z
     name: z.string().min(1),
     sortOrder: z.number().int(),
     clubId: z.string().uuid().nullable(),
+    clubLabel: z.string().min(1).nullable(),
     matchCount: z.number().int().nonnegative(),
   })
   .strict();

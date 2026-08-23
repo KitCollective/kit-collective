@@ -11,12 +11,13 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
+import { CollectionFetchError, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { fetchCollectionShortcuts } from "@/api/shortcuts";
 import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/catalog-ui";
 import { CollectionHeader } from "@/components/collection-header";
 import { GenvejeSheet } from "@/components/genveje-sheet";
+import { shouldFallbackToAlleOnFetchError } from "@/components/genveje-sheet-logic";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
 import { Button, ButtonDock, EmptyState } from "@/components/ui";
@@ -52,11 +53,23 @@ export default function CollectionScreen() {
       return;
     }
 
-    const response = await fetchCollectionJerseys(accessToken, selectedShortcutId);
-    setJerseys(response.jerseys);
+    try {
+      const response = await fetchCollectionJerseys(accessToken, selectedShortcutId);
+      setJerseys(response.jerseys);
 
-    if (selectedShortcutId === null) {
-      setTotalJerseyCount(response.jerseys.length);
+      if (selectedShortcutId === null) {
+        setTotalJerseyCount(response.jerseys.length);
+      }
+    } catch (error) {
+      if (
+        error instanceof CollectionFetchError &&
+        shouldFallbackToAlleOnFetchError(error.status, selectedShortcutId)
+      ) {
+        setSelectedShortcutId(null);
+        return;
+      }
+
+      throw error;
     }
   }, [accessToken, selectedShortcutId]);
 
@@ -211,7 +224,9 @@ export default function CollectionScreen() {
       <GenvejeSheet
         visible={genvejeOpen}
         accessToken={accessToken ?? ""}
+        activeShortcutId={selectedShortcutId}
         onDismiss={() => setGenvejeOpen(false)}
+        onShortcutDeleted={() => setSelectedShortcutId(null)}
         onShortcutsChanged={() => {
           void refreshAll();
         }}

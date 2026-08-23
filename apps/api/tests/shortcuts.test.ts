@@ -205,6 +205,7 @@ describe("Collection shortcuts /v1", () => {
     const shortcut = collectionShortcutSchema.parse(JSON.parse(createResponse.body));
     expect(shortcut.name).toBe(fixture.clubLabelDa);
     expect(shortcut.clubId).toBe(fixture.clubId);
+    expect(shortcut.clubLabel).toBe(fixture.clubLabelDa);
     expect(shortcut.matchCount).toBe(1);
 
     const alleResponse = await app.inject({
