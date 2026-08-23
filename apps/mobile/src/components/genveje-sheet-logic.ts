@@ -13,11 +13,19 @@ export function canSaveGenvej(selectedClub: CatalogPickerItem | null, saving: bo
 
 /** Seeds the club picker when editing an existing genvej. */
 export function seedClubForEdit(shortcut: CollectionShortcut): CatalogPickerItem | null {
-  if (!shortcut.clubId || !shortcut.clubLabel) {
+  if (!shortcut.clubId) {
     return null;
   }
 
-  return { id: shortcut.clubId, label: shortcut.clubLabel };
+  const label =
+    shortcut.clubLabel ?? `Klub ${shortcut.clubId.slice(0, 8)}`;
+
+  return { id: shortcut.clubId, label };
+}
+
+/** After successful Gem (create or edit), Alle must remain the active chip. */
+export function shouldResetToAlleAfterGem(): boolean {
+  return true;
 }
 
 /** Row manage variant: count is type.mono and included in the accessible name. */

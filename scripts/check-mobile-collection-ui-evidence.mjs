@@ -15,6 +15,7 @@ const REQUIRED_LOGIC_EXPORTS = [
   "seedClubForEdit",
   "manageRowAccessibilityLabel",
   "shouldResetShortcutAfterDelete",
+  "shouldResetToAlleAfterGem",
   "shouldFallbackToAlleOnFetchError",
 ];
 
@@ -24,6 +25,7 @@ const REQUIRED_TEST_MARKERS = [
   "seedClubForEdit",
   "manageRowAccessibilityLabel",
   "shouldResetShortcutAfterDelete",
+  "shouldResetToAlleAfterGem",
   "shouldFallbackToAlleOnFetchError",
   "Genveje",
   "Ny genvej",

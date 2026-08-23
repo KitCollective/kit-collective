@@ -14,12 +14,13 @@ describe("checkMobileCollectionUiEvidence", () => {
       export function seedClubForEdit() {}
       export function manageRowAccessibilityLabel() {}
       export function shouldResetShortcutAfterDelete() {}
+      export function shouldResetToAlleAfterGem() {}
       export function shouldFallbackToAlleOnFetchError() {}
     `;
     const testSource = `
       import { resolveGenvejeSheetTitle, canSaveGenvej, seedClubForEdit,
         manageRowAccessibilityLabel, shouldResetShortcutAfterDelete,
-        shouldFallbackToAlleOnFetchError } from "../src/components/genveje-sheet-logic";
+        shouldResetToAlleAfterGem, shouldFallbackToAlleOnFetchError } from "../src/components/genveje-sheet-logic";
       Genveje Ny genvej Flyt
     `;
 
@@ -41,7 +42,7 @@ describe("checkMobileCollectionUiEvidence", () => {
       testExists: true,
       logicSource: "export function resolveGenvejeSheetTitle() {}",
       testSource:
-        "genveje-sheet-logic Genveje Ny genvej Flyt resolveGenvejeSheetTitle canSaveGenvej seedClubForEdit manageRowAccessibilityLabel shouldResetShortcutAfterDelete shouldFallbackToAlleOnFetchError",
+        "genveje-sheet-logic Genveje Ny genvej Flyt resolveGenvejeSheetTitle canSaveGenvej seedClubForEdit manageRowAccessibilityLabel shouldResetShortcutAfterDelete shouldResetToAlleAfterGem shouldFallbackToAlleOnFetchError",
     });
 
     assert.ok(violations.some((v) => v.includes("Flyt")));

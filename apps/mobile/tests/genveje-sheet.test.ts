@@ -6,6 +6,7 @@ import {
   seedClubForEdit,
   shouldFallbackToAlleOnFetchError,
   shouldResetShortcutAfterDelete,
+  shouldResetToAlleAfterGem,
 } from "../src/components/genveje-sheet-logic";
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
@@ -42,13 +43,26 @@ describe("seedClubForEdit", () => {
     ).toEqual({ id: UUID, label: "F.C. København" });
   });
 
-  it("returns null when club label is missing", () => {
+  it("falls back to an id-derived label when club label is missing", () => {
     expect(
       seedClubForEdit({
         id: UUID,
         name: "FCK",
         sortOrder: 0,
         clubId: UUID,
+        clubLabel: null,
+        matchCount: 0,
+      }),
+    ).toEqual({ id: UUID, label: "Klub 550e8400" });
+  });
+
+  it("returns null when club id is missing", () => {
+    expect(
+      seedClubForEdit({
+        id: UUID,
+        name: "FCK",
+        sortOrder: 0,
+        clubId: null,
         clubLabel: null,
         matchCount: 0,
       }),
@@ -59,6 +73,12 @@ describe("seedClubForEdit", () => {
 describe("manageRowAccessibilityLabel", () => {
   it("includes match count in the row accessible name for Flyt manage rows", () => {
     expect(manageRowAccessibilityLabel("F.C. København", 3)).toBe("F.C. København, 3");
+  });
+});
+
+describe("shouldResetToAlleAfterGem", () => {
+  it("resets to Alle after Gem even when a non-Alle chip was active", () => {
+    expect(shouldResetToAlleAfterGem()).toBe(true);
   });
 });
 

@@ -15,6 +15,8 @@ import {
   manageRowAccessibilityLabel,
   resolveGenvejeSheetTitle,
   seedClubForEdit,
+  shouldResetShortcutAfterDelete,
+  shouldResetToAlleAfterGem,
 } from "@/components/genveje-sheet-logic";
 import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
@@ -27,6 +29,7 @@ type GenvejeSheetProps = {
   activeShortcutId: string | null;
   onDismiss: () => void;
   onShortcutsChanged: () => void;
+  onShortcutSaved: () => void;
   onShortcutDeleted: (shortcutId: string) => void;
 };
 
@@ -36,6 +39,7 @@ export function GenvejeSheet({
   activeShortcutId,
   onDismiss,
   onShortcutsChanged,
+  onShortcutSaved,
   onShortcutDeleted,
 }: GenvejeSheetProps) {
   const theme = useTheme();
@@ -103,6 +107,9 @@ export function GenvejeSheet({
 
       await loadShortcuts();
       onShortcutsChanged();
+      if (shouldResetToAlleAfterGem()) {
+        onShortcutSaved();
+      }
       setMode("list");
     } finally {
       setSaving(false);
@@ -111,7 +118,7 @@ export function GenvejeSheet({
 
   const handleDelete = async (shortcutId: string) => {
     await deleteCollectionShortcut(accessToken, shortcutId);
-    if (shortcutId === activeShortcutId) {
+    if (shouldResetShortcutAfterDelete(shortcutId, activeShortcutId)) {
       onShortcutDeleted(shortcutId);
     }
     await loadShortcuts();
@@ -237,7 +244,7 @@ export function GenvejeSheet({
 
 function ShortcutDragHandle({ color }: { color: string }) {
   return (
-    <View style={styles.dragHandle} accessible accessibilityRole="button" accessibilityLabel="Flyt">
+    <View style={styles.dragHandle} accessible accessibilityLabel="Flyt">
       <View style={[styles.dragBar, { backgroundColor: color }]} />
       <View style={[styles.dragBar, { backgroundColor: color }]} />
     </View>

@@ -227,6 +227,7 @@ export default function CollectionScreen() {
         activeShortcutId={selectedShortcutId}
         onDismiss={() => setGenvejeOpen(false)}
         onShortcutDeleted={() => setSelectedShortcutId(null)}
+        onShortcutSaved={() => setSelectedShortcutId(null)}
         onShortcutsChanged={() => {
           void refreshAll();
         }}
