@@ -57,7 +57,7 @@ describe("findConfirmSaveViolations", () => {
     });
 
     assert.ok(violations.some((line) => line.includes("photo.source")));
-    assert.ok(violations.some((line) => line.includes("defaultPhotoSource")));
+    assert.ok(violations.some((line) => line.includes("route params")));
   });
 });
 
