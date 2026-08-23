@@ -55,7 +55,10 @@ for (const route of requiredRoutes) {
   }
 }
 
-const dataTablePages = ["apps/admin/src/pages/StamdataPage.tsx", "apps/admin/src/pages/CollectorsPage.tsx"];
+const dataTablePages = [
+  "apps/admin/src/pages/StamdataPage.tsx",
+  "apps/admin/src/pages/CollectorsPage.tsx",
+];
 
 for (const pagePath of dataTablePages) {
   const pageSource = readFileSync(pagePath, "utf8");
@@ -72,9 +75,10 @@ for (const pagePath of dataTablePages) {
     );
   }
 
-  const dropsHeaderOnEmpty = /\)\s*:\s*!rows\s*\|\|\s*rows\.rows\.length\s*===\s*0\s*\?\s*\(\s*<div className="empty-state"/.test(
-    pageSource,
-  );
+  const dropsHeaderOnEmpty =
+    /\)\s*:\s*!rows\s*\|\|\s*rows\.rows\.length\s*===\s*0\s*\?\s*\(\s*<div className="empty-state"/.test(
+      pageSource,
+    );
   if (dropsHeaderOnEmpty) {
     violations.push(
       `${pagePath}: empty state replaces the whole Data table — keep <thead> and replace only <tbody>`,
