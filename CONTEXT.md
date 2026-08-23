@@ -153,3 +153,19 @@ _Avoid_: naming the server `seed` in Cursor config; mixing Coolify tokens into t
 **Catalog peek**:
 An unstyled HTML page on Nest (`GET /v1/catalog/peek`) so Nicklas can open a URL and see Seed run results: season, club names, squad counts, kit identity and photo counts. Not `apps/admin`, not the design system, not archive JPEGs on a public URL.
 _Avoid_: building the product admin; `/to-design`; treating `GET /v1/catalog/stats` JSON as the peek; hot-linking KitPhoto bytes
+
+**Admin SPA**:
+The Vite + React operator surface (`apps/admin`). Same Identity as Expo. Chrome in English. CatalogLabel in this surface is requested as `en` (fallback `mul` → `en`). Never indexed. KitPhoto may render here; never on Expo, Astro, or OG.
+_Avoid_: Catalog peek as the product admin; a second login product; Expo as the operator UI; Danish chrome as the admin default
+
+**Collector**:
+A User in Expo. The same row can later hold Staff access. Not a separate account type.
+_Avoid_: a dedicated admin user table; locking `role=admin` out of Expo
+
+**Staff access**:
+Authorization on that same User that opens Admin SPA. Stored as `User.role` `admin`. Not a second login and not a second column. Later scoped staff roles may replace this binary grant. An admin may promote or demote another User; not themselves, and not the last admin.
+_Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authentication; locking admins out of Expo; self-demote; demoting the last admin
+
+**Take-down**:
+Removing one UserJersey and its UserJerseyPhoto bytes. The User remains. Not a Kit delete. Not a hide flag.
+_Avoid_: unpublish; soft-hide without a column; deleting the collector by default
