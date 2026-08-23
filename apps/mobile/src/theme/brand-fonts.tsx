@@ -22,10 +22,12 @@ export function resolveFontFamily(brandFamily: string, brandEnabled: boolean): s
     return brandFamily;
   }
 
-  return Platform.select({
-    web: "system-ui",
-    ios: "System",
-    android: "sans-serif",
-    default: "system-ui",
-  }) as string;
+  return (
+    Platform.select({
+      web: "system-ui",
+      ios: "System",
+      android: "sans-serif",
+      default: "system-ui",
+    }) ?? "system-ui"
+  );
 }
