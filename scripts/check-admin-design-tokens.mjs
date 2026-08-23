@@ -18,8 +18,7 @@ const ALLOWED_TYPOGRAPHY = [
 
 function matchesAllowedTypography(size, weight, lineHeight) {
   return ALLOWED_TYPOGRAPHY.some(
-    (entry) =>
-      entry.size === size && entry.weight === weight && entry.lineHeight === lineHeight,
+    (entry) => entry.size === size && entry.weight === weight && entry.lineHeight === lineHeight,
   );
 }
 
@@ -32,9 +31,7 @@ if (!source.includes("--scrim:")) {
 }
 
 if (!source.includes(":focus-visible") || !source.includes("var(--border-focus)")) {
-  violations.push(
-    `${cssPath}: missing :focus-visible rule referencing var(--border-focus)`,
-  );
+  violations.push(`${cssPath}: missing :focus-visible rule referencing var(--border-focus)`);
 }
 
 const rulePattern = /([^{]+)\{([^}]+)\}/g;
