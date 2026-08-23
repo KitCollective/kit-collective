@@ -52,10 +52,6 @@ const lightColor = {
   info: primitive.info500,
   identityWashStart: primitive.identityWashStart,
   identityWashEnd: primitive.identityWashEnd,
-  tabBarFill: "rgba(255,255,255,0.72)",
-  tabBarBorder: "rgba(0,0,0,0.07)",
-  tabBarBlurOverlay: "rgba(255,255,255,0.5)",
-  tabBarShadow: primitive.black,
 } as const;
 
 const darkColor = {
@@ -76,10 +72,6 @@ const darkColor = {
   info: primitive.info500,
   identityWashStart: primitive.identityWashStart,
   identityWashEnd: primitive.identityWashEnd,
-  tabBarFill: "rgba(26,26,26,0.78)",
-  tabBarBorder: primitive.borderSubtleDark,
-  tabBarBlurOverlay: "rgba(26,26,26,0.5)",
-  tabBarShadow: primitive.black,
 } as const;
 
 export type ThemeColors = {
@@ -100,10 +92,6 @@ export type ThemeColors = {
   info: string;
   identityWashStart: string;
   identityWashEnd: string;
-  tabBarFill: string;
-  tabBarBorder: string;
-  tabBarBlurOverlay: string;
-  tabBarShadow: string;
 };
 
 /** Semantic color tokens (default light). Prefer `getThemeColors` in UI. */
@@ -204,6 +192,20 @@ export const type = {
     letterSpacing: 0,
   },
 } as const;
+
+/** Apply alpha to a #RRGGBB semantic color without inventing new token keys. */
+export function withAlpha(hexColor: string, alpha: number): string {
+  const normalized = hexColor.replace("#", "");
+  if (normalized.length !== 6) {
+    return hexColor;
+  }
+
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+
+  return `rgba(${red},${green},${blue},${alpha})`;
+}
 
 /** docs/design-system.md Motion */
 export const motion = {

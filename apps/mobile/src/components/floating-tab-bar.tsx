@@ -3,9 +3,15 @@ import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { withAlpha } from "@/theme/tokens";
 import { floatingTabBarLayout } from "@/theme/tab-bar-layout";
 import { radius } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
+
+const TAB_BAR_SURFACE_ALPHA = {
+  fill: 0.72,
+  blurOverlay: 0.5,
+} as const;
 
 type TabBarNavigation = {
   navigate: (name: string) => void;
@@ -90,8 +96,13 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
     );
   };
 
+  const pillBorderColor = theme.borderSubtle;
+  const pillShadowColor = theme.contentPrimary;
+  const pillFillColor = withAlpha(theme.surface, TAB_BAR_SURFACE_ALPHA.fill);
+  const pillBlurOverlayColor = withAlpha(theme.surface, TAB_BAR_SURFACE_ALPHA.blurOverlay);
+
   const pillContent = (
-    <View style={[styles.pillInner, { borderColor: theme.tabBarBorder }]}>
+    <View style={[styles.pillInner, { borderColor: pillBorderColor }]}>
       {renderSlot("collection")}
       {renderSlot("search")}
       <Pressable
@@ -124,9 +135,9 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
           style={[
             styles.pill,
             {
-              backgroundColor: theme.tabBarBlurOverlay,
-              borderColor: theme.tabBarBorder,
-              shadowColor: theme.tabBarShadow,
+              backgroundColor: pillBlurOverlayColor,
+              borderColor: pillBorderColor,
+              shadowColor: pillShadowColor,
             },
           ]}
         >
@@ -137,9 +148,9 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
           style={[
             styles.pill,
             {
-              backgroundColor: theme.tabBarFill,
-              borderColor: theme.tabBarBorder,
-              shadowColor: theme.tabBarShadow,
+              backgroundColor: pillFillColor,
+              borderColor: pillBorderColor,
+              shadowColor: pillShadowColor,
             },
           ]}
         >

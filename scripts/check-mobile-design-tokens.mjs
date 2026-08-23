@@ -14,6 +14,61 @@ import { join, relative } from "node:path";
 
 const mobileRoot = "apps/mobile";
 const tokenFile = "apps/mobile/src/theme/tokens.ts";
+
+/** Closed allow-list from docs/design-system.md Tokens table (camelCase ThemeColors keys). */
+const DOCUMENTED_SEMANTIC_COLOR_KEYS = new Set([
+  "canvas",
+  "surface",
+  "surfaceRaised",
+  "scrim",
+  "contentPrimary",
+  "contentSecondary",
+  "contentMuted",
+  "contentInverse",
+  "borderSubtle",
+  "fillPrimary",
+  "fillSecondary",
+  "danger",
+  "warning",
+  "success",
+  "info",
+  "identityWashStart",
+  "identityWashEnd",
+]);
+
+function extractSemanticColorKeys(source, blockName) {
+  const match = source.match(new RegExp(`const ${blockName} = \\{([\\s\\S]*?)\\} as const`, "m"));
+  if (!match) {
+    return [];
+  }
+
+  const keys = [];
+  for (const line of match[1].split("\n")) {
+    const keyMatch = line.match(/^\s+(\w+):/);
+    if (keyMatch) {
+      keys.push(keyMatch[1]);
+    }
+  }
+  return keys;
+}
+
+function checkSemanticColorKeys() {
+  const source = readFileSync(tokenFile, "utf8");
+  const localViolations = [];
+
+  for (const blockName of ["lightColor", "darkColor"]) {
+    for (const key of extractSemanticColorKeys(source, blockName)) {
+      if (!DOCUMENTED_SEMANTIC_COLOR_KEYS.has(key)) {
+        localViolations.push(
+          `${tokenFile}: ${blockName}.${key} is not in the locked Tokens table — do not invent semantic color keys`,
+        );
+      }
+    }
+  }
+
+  return localViolations;
+}
+
 const hexPattern = /#[0-9A-Fa-f]{3,8}\b/g;
 const rgbPattern = /rgba?\([^)]+\)/g;
 const staticColorImportPattern =
@@ -132,6 +187,7 @@ if (
 }
 
 walk(mobileRoot);
+violations.push(...checkSemanticColorKeys());
 
 if (violations.length > 0) {
   console.error("Mobile design-token ratchet failed:\n");

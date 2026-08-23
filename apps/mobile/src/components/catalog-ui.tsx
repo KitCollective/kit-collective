@@ -89,8 +89,8 @@ export function SearchField({ variant, value, onClear, style, ...props }: Search
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Ryd søgning"
-          hitSlop={8}
           onPress={onClear}
+          style={styles.clearButton}
         >
           <Ionicons name="close-circle" size={18} color={theme.contentMuted} />
         </Pressable>
@@ -243,6 +243,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     paddingVertical: space.insetSm,
+  },
+  clearButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   listRow: {
     flexDirection: "row",
