@@ -9,6 +9,7 @@ import {
 } from "@/capture/captureFlow";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
+import { isRepeatCaptureSession } from "@/session/addSession";
 import { useTheme } from "@/theme/use-theme";
 
 function readPrefilledClub(params: {
@@ -69,7 +70,7 @@ export default function CaptureScreen() {
     }
   }, [finishCapture]);
 
-  if (Platform.OS === "web") {
+  if (Platform.OS === "web" || !isRepeatCaptureSession()) {
     void openGalleryEscape();
     return <View style={[styles.fallback, { backgroundColor: theme.canvas }]} />;
   }
