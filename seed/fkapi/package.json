@@ -13,6 +13,7 @@
     "seed": "node dist/cli.js"
   },
   "dependencies": {
+    "@kit/seed-shared": "workspace:*",
     "@aws-sdk/client-s3": "^3.758.0",
     "pg": "^8.13.1",
     "undici": "^7.29.0"

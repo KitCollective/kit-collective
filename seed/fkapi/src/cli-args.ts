@@ -1,26 +1,26 @@
+import {
+  formatSeedCliUsage,
+  parseSeedCliArgs,
+  resolveCompetition as resolveSharedCompetition,
+  resolveSeasonRef,
+  type ResolvedSeedLane,
+} from "@kit/seed-shared";
 import type { SeedLane } from "./types.js";
 
 export type CompetitionDefinition = {
-  /** Transfermarkt league id used for season external ids in Apify seed. */
   leagueTransfermarktId: string;
-  /** Label of the first season ("0001" resolves to this). */
   firstSeasonLabel: string;
 };
 
-const COMPETITIONS: Record<string, CompetitionDefinition> = {
-  superliga: {
-    leagueTransfermarktId: "DK1",
-    firstSeasonLabel: "1991/92",
-  },
-  championship: {
-    leagueTransfermarktId: "GB2",
-    firstSeasonLabel: "2004/05",
-  },
-};
-
 export function resolveCompetition(name: string): CompetitionDefinition | undefined {
-  const key = name.trim().toLowerCase();
-  return COMPETITIONS[key];
+  const def = resolveSharedCompetition(name);
+  if (!def?.firstSeasonLabel) {
+    return undefined;
+  }
+  return {
+    leagueTransfermarktId: def.leagueTransfermarktId,
+    firstSeasonLabel: def.firstSeasonLabel,
+  };
 }
 
 export function parseLane(lane: string): SeedLane | "production" | undefined {
@@ -41,58 +41,44 @@ export function parseCliArgs(argv: string[]):
         competition: string;
         fromSeason: string;
         toSeason: string;
-        lane: SeedLane;
+        lane: ResolvedSeedLane;
       };
     }
   | {
       ok: false;
       error: string;
     } {
-  if (argv.length !== 4) {
-    return {
-      ok: false,
-      error: "Usage: kit-seed-fkapi <competition> <from-season> <to-season> <lane>",
-    };
+  const parsed = parseSeedCliArgs(argv);
+  if (!parsed.ok) {
+    return { ok: false, error: parsed.error };
   }
 
-  const competition = argv[0];
-  const fromSeason = argv[1];
-  const toSeason = argv[2];
-  const laneRaw = argv[3];
-
-  if (!competition || !fromSeason || !toSeason || !laneRaw) {
-    return {
-      ok: false,
-      error: "Usage: kit-seed-fkapi <competition> <from-season> <to-season> <lane>",
-    };
-  }
-
-  const competitionDef = resolveCompetition(competition);
+  const competitionDef = resolveCompetition(parsed.args.competition);
   if (!competitionDef) {
-    return { ok: false, error: `Unknown competition: ${competition}` };
+    return { ok: false, error: `Unknown competition: ${parsed.args.competition}` };
   }
 
-  const lane = parseLane(laneRaw);
-  if (lane === undefined) {
-    return {
-      ok: false,
-      error: `Invalid lane: ${laneRaw}. Use development or staging.`,
-    };
+  let fromSeason: string;
+  let toSeason: string;
+  try {
+    fromSeason = resolveSeasonRef(parsed.args.competition, parsed.args.fromSeason);
+    toSeason = resolveSeasonRef(parsed.args.competition, parsed.args.toSeason);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: message };
   }
-  if (lane === "production") {
-    return { ok: false, error: "Lane production is rejected for FK seed." };
-  }
-
-  const resolvedFrom = fromSeason === "0001" ? competitionDef.firstSeasonLabel : fromSeason;
-  const resolvedTo = toSeason === "today" ? "today" : toSeason;
 
   return {
     ok: true,
     args: {
-      competition: competition.trim().toLowerCase(),
-      fromSeason: resolvedFrom,
-      toSeason: resolvedTo,
-      lane,
+      competition: parsed.args.competition.trim().toLowerCase(),
+      fromSeason,
+      toSeason,
+      lane: parsed.args.lane,
     },
   };
+}
+
+export function formatFkCliUsage(): string {
+  return formatSeedCliUsage("kit-seed-fkapi");
 }

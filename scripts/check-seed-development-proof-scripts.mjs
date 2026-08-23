@@ -1,5 +1,5 @@
 /**
- * CI ratchet (KIT-34): seed development proof scripts must exist when seed/mcp changes.
+ * CI ratchet (KIT-34, KIT-35): seed development proof scripts must exist when seed/mcp changes.
  * Prevents claiming dev-Postgres row counts without committed, reproducible verify tooling.
  */
 import { existsSync } from "node:fs";
@@ -10,7 +10,9 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const required = [
   "seed/mcp/scripts/verify-development-db.mjs",
   "seed/mcp/scripts/run-seed-apify-mcp-path.mjs",
+  "seed/mcp/scripts/run-seed-fk-mcp-path.mjs",
   "scripts/record-seed-development-proof.sh",
+  "scripts/record-seed-fk-development-proof.sh",
 ];
 
 const missing = required.filter((rel) => !existsSync(join(root, rel)));
