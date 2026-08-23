@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Ratchet (KIT-39): fail CI when admin.css invents typography, omits focus/scrim
- * tokens, uses raw color literals outside :root, or misses locked spacing/radius roles.
+ * tokens, uses raw color literals (hex, rgb, rgba) outside :root, or misses locked spacing/radius roles.
  */
 import { readFileSync } from "node:fs";
 
@@ -137,6 +137,12 @@ const rawRgb = [...outsideRoot.matchAll(/rgba?\([^)]+\)/g)];
 for (const match of rawRgb) {
   violations.push(
     `${cssPath}: raw rgb/rgba "${match[0]}" outside :root — use a semantic token such as var(--scrim)`,
+  );
+}
+const rawHex = [...outsideRoot.matchAll(/#[0-9a-fA-F]{3,8}\b/g)];
+for (const match of rawHex) {
+  violations.push(
+    `${cssPath}: raw hex "${match[0]}" outside :root — use a semantic token such as var(--scrim)`,
   );
 }
 

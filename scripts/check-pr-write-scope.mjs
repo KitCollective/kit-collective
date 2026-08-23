@@ -5,7 +5,11 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { findWriteScopeViolations, parseWriteScopeGlobs } from "./lib/pr-write-scope.mjs";
+import {
+  findWriteScopeViolations,
+  parseWriteScopeGlobs,
+  shouldEnforceWriteScope,
+} from "./lib/pr-write-scope.mjs";
 
 function getScopeSourceText() {
   if (process.env.WRITE_SCOPE) {
@@ -66,30 +70,13 @@ function getChangedFiles(baseRef) {
   }
 }
 
-function isPullRequestEvent() {
-  if (process.env.GITHUB_EVENT_NAME === "pull_request") {
-    return true;
-  }
-  return Boolean(process.env.PR_BODY);
-}
-
 function main() {
   const scopeText = getScopeSourceText();
   const globs = parseWriteScopeGlobs(scopeText);
 
-  if (!globs || globs.length === 0) {
-    if (isPullRequestEvent()) {
-      console.error(
-        "PR write-scope ratchet failed — pull request is missing a write-scope: line in its description.",
-      );
-      console.error(
-        "Copy the write-scope: line from the Linear issue body into the PR description.",
-      );
-      process.exit(1);
-    }
-
+  if (!shouldEnforceWriteScope(globs)) {
     console.log(
-      "PR write-scope check skipped (no write-scope: line and not a pull_request event).",
+      "PR write-scope check skipped (no write-scope: declaration — optional per docs/agents/write-scope.md).",
     );
     process.exit(0);
   }
@@ -105,7 +92,7 @@ function main() {
     }
     console.error(`\nDeclared write-scope: ${globs.join(", ")}`);
     console.error(
-      "Ratchet-exception paths: .cursor/hooks/**, .cursor/rules/**, docs/agents/error-ratcheting.md, scripts/check-*, scripts/lib/**, scripts/tests/**",
+      "Ratchet-exception paths: .cursor/hooks/**, .cursor/rules/**, docs/agents/error-ratcheting.md, .github/workflows/** (CI wiring), and named ratchet scripts listed in scripts/lib/pr-write-scope.mjs",
     );
     process.exit(1);
   }
