@@ -5,10 +5,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import {
-  findWriteScopeViolations,
-  parseWriteScopeGlobs,
-} from "./lib/pr-write-scope.mjs";
+import { findWriteScopeViolations, parseWriteScopeGlobs } from "./lib/pr-write-scope.mjs";
 
 function getScopeSourceText() {
   if (process.env.WRITE_SCOPE) {
@@ -38,11 +35,10 @@ function getScopeSourceText() {
     }).trim();
     const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
     const ghEnv = token ? { ...process.env, GH_TOKEN: token } : process.env;
-    const json = execFileSync(
-      "gh",
-      ["pr", "view", branch, "--json", "title,body,headRefName"],
-      { encoding: "utf8", env: ghEnv },
-    );
+    const json = execFileSync("gh", ["pr", "view", branch, "--json", "title,body,headRefName"], {
+      encoding: "utf8",
+      env: ghEnv,
+    });
     const pullRequest = JSON.parse(json);
     return [pullRequest.title, pullRequest.body, pullRequest.headRefName]
       .filter(Boolean)
