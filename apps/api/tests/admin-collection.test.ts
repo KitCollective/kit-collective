@@ -295,8 +295,10 @@ describe("Admin collectors /v1", () => {
       payload: { role: "user" },
     });
     expect(selfDemote.statusCode).toBe(409);
-    const selfDemoteBody = JSON.parse(selfDemote.body) as { message: { code: string } };
-    expect(selfDemoteBody.message.code).toBe("SELF_DEMOTE");
+    const selfDemoteBody: unknown = JSON.parse(selfDemote.body);
+    expect(selfDemoteBody).toMatchObject({
+      message: { code: "SELF_DEMOTE" },
+    });
 
     const promoteCollector = await app.inject({
       method: "PATCH",

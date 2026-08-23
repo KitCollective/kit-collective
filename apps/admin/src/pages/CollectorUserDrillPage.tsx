@@ -12,6 +12,30 @@ import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
 import { BackLink } from "../components/BackLink.js";
 import { ConfirmSheet } from "../components/ConfirmSheet.js";
 
+function parseRoleUpdateError(message: string): string {
+  try {
+    const parsed: unknown = JSON.parse(message);
+    if (typeof parsed !== "object" || parsed === null || !("message" in parsed)) {
+      return message;
+    }
+    const nested = parsed.message;
+    if (typeof nested === "string") {
+      return nested;
+    }
+    if (
+      typeof nested === "object" &&
+      nested !== null &&
+      "message" in nested &&
+      typeof nested.message === "string"
+    ) {
+      return nested.message;
+    }
+  } catch {
+    return message;
+  }
+  return message;
+}
+
 export function CollectorUserDrillPage() {
   const { userId } = useParams();
   const { token, user: currentUser } = useAuth();
@@ -116,18 +140,7 @@ export function CollectorUserDrillPage() {
       setPendingRole(null);
     } catch (updateError) {
       const message = updateError instanceof Error ? updateError.message : "Failed to update role";
-      try {
-        const parsed = JSON.parse(message) as { message?: string | { message?: string } };
-        if (typeof parsed.message === "string") {
-          setRoleError(parsed.message);
-        } else if (parsed.message && typeof parsed.message.message === "string") {
-          setRoleError(parsed.message.message);
-        } else {
-          setRoleError(message);
-        }
-      } catch {
-        setRoleError(message);
-      }
+      setRoleError(parseRoleUpdateError(message));
     } finally {
       setRoleUpdating(false);
     }

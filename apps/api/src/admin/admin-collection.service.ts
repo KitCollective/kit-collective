@@ -9,7 +9,6 @@ import {
   adminCollectorJerseyListSchema,
   adminCollectorListSchema,
   adminCollectorUserSchema,
-  type IdentityRole,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, season, user, userJersey, userJerseyPhoto } from "@kit/db";
@@ -348,7 +347,7 @@ export class AdminCollectionService {
     return adminCollectorUserSchema.parse({
       id: updated.id,
       email: updated.email,
-      role: updated.role as IdentityRole,
+      role: updated.role,
       jerseyCount: Number(jerseyCountRow?.total ?? 0),
       createdAt: updated.createdAt.toISOString(),
       monogram: monogramFromEmail(updated.email),
