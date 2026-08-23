@@ -45,16 +45,14 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
   }
 
   return (
-    <div className="sheet-backdrop" role="presentation" onClick={onClose}>
-      <div
-        className="sheet-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Filters"
-        onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
+    <div className="sheet-layer">
+      <button
+        type="button"
+        className="sheet-backdrop"
+        aria-label="Close filters"
+        onClick={onClose}
+      />
+      <div className="sheet-panel" role="dialog" aria-modal="true" aria-label="Filters">
         <h2>Filters</h2>
 
         <h3>Country</h3>
