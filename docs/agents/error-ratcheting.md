@@ -88,6 +88,14 @@ not turn it on. Nest resolves constructor injection from `emitDecoratorMetadata`
 `Function` and the module fails to build at runtime. Typecheck stays green, so CI only
 catches it in the API tests and the container smoke test.
 
+### Admin stamdata navigation ratchet (KIT-39)
+
+`scripts/check-admin-stamdata-navigation.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`) fails when `apps/admin/src/pages/StamdataPage.tsx` `openRow` does not call `navigate(` for every `ADMIN_STAMDATA_LIST_ENTITY_TYPES` value (scoped to the `openRow` function body, not render-time branches), when `apps/admin/src/App.tsx` omits a drill route for club, season, kit, or club-season rows, or when an admin Data table page (`StamdataPage`, `CollectorsPage`) replaces the whole table (including `<thead>`) on loading/empty instead of only the `<tbody>` body. Prevents repeating the KIT-39 checker fails (plain club/season rows were a silent no-op on click; Stamdata loading/empty dropped the table header). Tighten only.
+
+### Admin design-token ratchet (KIT-39)
+
+`scripts/check-admin-design-tokens.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`) fails when `apps/admin/src/styles/admin.css` omits `--border-focus` or `--scrim` tokens, lacks a `:focus-visible` rule referencing `var(--border-focus)`, sets invented effective `font-size`/`font-weight`/`line-height` triples outside the four locked `type.*` roles (including font-weight-only overrides that inherit body size/line-height), uses the wrong semantic token on the active Top tab underline (`fill.primary`, not `content.primary`), omits nested-radius shrink on `.login-card .field input`, uses non-compact chip inset (`space.inset.sm`), caps `.drill-page` to the Astro 960px column, or uses raw hex/`rgb`/`rgba` literals outside `:root`. Prevents repeating the KIT-39 checker fails on invented admin typography, missing focus rings, untokenized scrim, and wrong spacing/radius roles (passes 1, 3, and 5). Tighten only.
+
 ### Ops MCP catalog evidence ratchet (KIT-17)
 
 `.cursor/hooks/block-manual-getmcptools-evidence.sh` denies manual writes under `.cursor/getmcptools-evidence/`. Agents record in-session catalog proof only via `scripts/record-getmcptools-evidence.sh <server>` fed with **this session's** `GetMcpTools` JSON. Prevents repeating the second KIT-17 checker fail (marking MCP-catalog AC complete without catalog evidence). Dashboard registration for Cloud Agents remains human-only (`KIT-18`). Tighten only.
@@ -123,3 +131,7 @@ catches it in the API tests and the container smoke test.
 ### Vision log save-action ratchet (KIT-27)
 
 `packages/api-contract/tests/vision-save-action.test.ts` (CI via `pnpm test`) fails when `resolveVisionSaveAction` does not return a `userAction` for every `VisionJobStatus`. `scripts/check-vision-log-save-action.mjs` (CI via `pnpm check:vision-log-save-action`) fails when `apps/mobile/app/(tabs)/add.tsx` does not call the shared resolver. `apps/api/tests/collection.test.ts` integration case **"sets VisionLog userAction when Save enqueues vision without client visionJobId"** fails when the server-side fallback enqueue path leaves `vision_log.user_action` null (lost/never-sent `visionJobId`). Prevents repeating the KIT-27 checker fail (VisionLog rows left with `userAction: null` at Save). Tighten only.
+
+### PR write-scope ratchet (KIT-39)
+
+`scripts/check-pr-write-scope.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`; pure logic in `scripts/lib/pr-write-scope.mjs`, covered by `scripts/tests/check-pr-write-scope.test.mjs`) fails when a pull request's changed files (vs `origin/development`) fall outside the `write-scope:` globs declared in the PR body, except ratchet-exception paths (`.cursor/hooks/**`, `.cursor/rules/**`, `docs/agents/error-ratcheting.md`, `.github/workflows/**` for CI wiring, and the named ratchet script paths in `RATCHET_SCRIPT_PATHS`). When no `write-scope:` line is present, the check skips cleanly (exit 0) — write-scope is optional per `docs/agents/write-scope.md`. On `push` to feature branches without PR env vars, resolves scope from the open PR via `gh pr view` with `GITHUB_TOKEN`. Prevents repeating the KIT-39 checker fail (gratuitous edits outside declared issue scope, e.g. `seed/fkapi/tests/seed.test.ts` bundled into an admin slice). Tighten only.

@@ -5,6 +5,8 @@ const LOCAL_EXPO_ORIGINS = [
   "http://127.0.0.1:19006",
 ] as const;
 
+const LOCAL_ADMIN_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"] as const;
+
 /**
  * Allowed browser origins for credentialed CORS.
  * Production/staging must set CORS_ALLOWED_ORIGINS explicitly.
@@ -22,7 +24,7 @@ export function corsAllowedOrigins(): readonly string[] | false {
     return false;
   }
 
-  return LOCAL_EXPO_ORIGINS;
+  return [...LOCAL_EXPO_ORIGINS, ...LOCAL_ADMIN_ORIGINS];
 }
 
 export function isCorsOriginAllowed(origin: string | undefined): boolean {

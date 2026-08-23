@@ -32,6 +32,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -129,6 +131,24 @@ jobs:
 
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
+
+      - name: Check PR write scope
+        run: node scripts/check-pr-write-scope.mjs
+        env:
+          BASE_REF: origin/development
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || '' }}
+          PR_BODY: ${{ github.event_name == 'pull_request' && github.event.pull_request.body || '' }}
+          PR_HEAD_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || '' }}
+
+      - name: Test PR write-scope ratchet logic
+        run: node --test scripts/tests/check-pr-write-scope.test.mjs
+
+      - name: Check admin stamdata navigation
+        run: node scripts/check-admin-stamdata-navigation.mjs
+
+      - name: Check admin design tokens
+        run: node scripts/check-admin-design-tokens.mjs
 
       - name: Lint GitHub Actions workflows
         run: bash scripts/lint-workflows.sh
