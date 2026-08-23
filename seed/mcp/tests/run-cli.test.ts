@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { CliRunner } from "../src/run-cli.js";
 import {
@@ -5,6 +7,7 @@ import {
   laneEnvForCli,
   omitCoolifyHostEnv,
   parseSeedMcpInput,
+  resolveSeedRepoRoot,
   runSeedCli,
 } from "../src/run-cli.js";
 import { APIFY_DESCRIPTION, FK_DESCRIPTION } from "../src/server.js";
@@ -130,6 +133,18 @@ describe("laneEnvForCli", () => {
     const env = laneEnvForCli("staging");
     expect(env.DATABASE_URL).toBe("postgresql://staging/example");
     delete process.env.SEED_STAGING_DATABASE_URL;
+  });
+});
+
+describe("resolveSeedRepoRoot", () => {
+  it("resolves the monorepo root containing pnpm-workspace.yaml", () => {
+    expect(existsSync(join(resolveSeedRepoRoot(), "pnpm-workspace.yaml"))).toBe(true);
+  });
+
+  it("prefers SEED_REPO_ROOT when set", () => {
+    process.env.SEED_REPO_ROOT = "/custom/repo";
+    expect(resolveSeedRepoRoot()).toBe("/custom/repo");
+    delete process.env.SEED_REPO_ROOT;
   });
 });
 
