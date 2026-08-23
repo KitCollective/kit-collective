@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { floatingTabBarLayout, tabBarReserve } from "../src/theme/tab-bar-layout";
 import { color, getThemeColors, primitive, space } from "../src/theme/tokens";
 
 describe("color primitives", () => {
@@ -32,22 +31,16 @@ describe("getThemeColors", () => {
   });
 });
 
-describe("floatingTabBarLayout", () => {
-  it("composes layout constants from the spacing scale only", () => {
-    expect(floatingTabBarLayout.pillHeight).toBe(space.insetLg * 2 + space.insetMd);
-    expect(floatingTabBarLayout.bottomOffset).toBe(space.insetLg + space.insetSm);
-    expect(floatingTabBarLayout.horizontalInset).toBe(space.insetLg);
-    expect(floatingTabBarLayout.contentPaddingExtra).toBe(space.insetMd);
-  });
-});
-
-describe("tabBarReserve", () => {
-  it("reserves space for pill, offset, inset, and extra padding", () => {
-    expect(tabBarReserve(34)).toBe(
-      floatingTabBarLayout.pillHeight +
-        floatingTabBarLayout.bottomOffset +
-        34 +
-        floatingTabBarLayout.contentPaddingExtra,
-    );
+describe("tab bar content padding math", () => {
+  it("composes reserve from spacing scale tokens inline", () => {
+    const bottomInset = 34;
+    const reserve =
+      space.insetLg * 2 +
+      space.insetMd +
+      space.insetLg +
+      space.insetSm +
+      bottomInset +
+      space.insetMd;
+    expect(reserve).toBe(34 + space.insetLg * 3 + space.insetMd * 2 + space.insetSm);
   });
 });

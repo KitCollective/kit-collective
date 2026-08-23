@@ -1,7 +1,6 @@
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Chip } from "@/components/chip";
-import { tabBarReserve } from "@/theme/tab-bar-layout";
 import { space } from "@/theme/tokens";
 
 type ShortcutChipRowProps = {
@@ -30,7 +29,15 @@ export function ShortcutChipRow({ selectedShortcutId, onSelectAlle }: ShortcutCh
 
 export function useTabBarContentPadding(): number {
   const insets = useSafeAreaInsets();
-  return tabBarReserve(insets.bottom);
+  // Inline spacing scale (docs/design-system.md Layout — no named pixel-reserve export).
+  return (
+    space.insetLg * 2 +
+    space.insetMd +
+    space.insetLg +
+    space.insetSm +
+    insets.bottom +
+    space.insetMd
+  );
 }
 
 const styles = StyleSheet.create({

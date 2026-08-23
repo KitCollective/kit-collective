@@ -8,12 +8,20 @@
  *
  * Ratchet (KIT-42 round 5): separate color-migration allowlist from typography
  * checks so a file cannot dodge font-fallback enforcement via the color carve-out.
+ *
+ * Ratchet (KIT-42 round 7): fail on named tab-bar pixel-reserve exports and
+ * icon-only Pressable hit targets below 44×44.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const mobileRoot = "apps/mobile";
 const tokenFile = "apps/mobile/src/theme/tokens.ts";
+const tabBarLayoutFile = "apps/mobile/src/theme/tab-bar-layout.ts";
+
+/** Icon-only button with hitSlop but no min 44×44 target (KIT-42 round 7). */
+const iconButtonHitSlopOnlyPattern =
+  /accessibilityRole="button"[\s\S]{0,400}?hitSlop=\{8\}[\s\S]{0,200}?<Ionicons/;
 
 /** Closed allow-list from docs/design-system.md Tokens table (camelCase ThemeColors keys). */
 const DOCUMENTED_SEMANTIC_COLOR_KEYS = new Set([
@@ -35,6 +43,54 @@ const DOCUMENTED_SEMANTIC_COLOR_KEYS = new Set([
   "identityWashStart",
   "identityWashEnd",
 ]);
+
+function checkTabBarLayoutReserve() {
+  const localViolations = [];
+
+  if (existsSync(tabBarLayoutFile)) {
+    localViolations.push(
+      `${tabBarLayoutFile}: named pixel-reserve module forbidden — inline space.* at call sites per docs/design-system.md Layout constraints`,
+    );
+  }
+
+  for (const entry of readdirSync(join(mobileRoot, "src/theme"), { withFileTypes: true })) {
+    if (!entry.isFile() || entry.name === "tokens.ts") continue;
+    const rel = join("apps/mobile/src/theme", entry.name);
+    const source = readFileSync(rel, "utf8");
+    if (/export\s+(const|function)\s+(floatingTabBarLayout|tabBarReserve)/.test(source)) {
+      localViolations.push(
+        `${rel}: exports named tab-bar pixel-reserve constant — inline space.* tokens instead`,
+      );
+    }
+  }
+
+  return localViolations;
+}
+
+function checkIconButtonHitTargets(dir) {
+  const localViolations = [];
+
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      localViolations.push(...checkIconButtonHitTargets(fullPath));
+      continue;
+    }
+
+    if (!/\.tsx$/.test(entry.name)) continue;
+
+    const source = readFileSync(fullPath, "utf8");
+    const rel = relative(process.cwd(), fullPath);
+
+    if (iconButtonHitSlopOnlyPattern.test(source)) {
+      localViolations.push(
+        `${rel}: icon-only Pressable uses hitSlop without minWidth/minHeight 44 — use IconButton or explicit 44×44 style`,
+      );
+    }
+  }
+
+  return localViolations;
+}
 
 function extractSemanticColorKeys(source, blockName) {
   const match = source.match(new RegExp(`const ${blockName} = \\{([\\s\\S]*?)\\} as const`, "m"));
@@ -188,6 +244,8 @@ if (
 
 walk(mobileRoot);
 violations.push(...checkSemanticColorKeys());
+violations.push(...checkTabBarLayoutReserve());
+violations.push(...checkIconButtonHitTargets(join(mobileRoot, "src/components")));
 
 if (violations.length > 0) {
   console.error("Mobile design-token ratchet failed:\n");

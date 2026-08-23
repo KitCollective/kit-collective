@@ -1,10 +1,8 @@
-import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { describe, expect, it } from "vitest";
+import { jerseyTileMetaLine } from "../src/components/jersey-tile-meta";
 
-describe("jersey tile caption", () => {
+describe("jerseyTileMetaLine", () => {
   it("formats season and kit type with middle dot separator", () => {
-    const seasonLabel = "2023/24";
-    const typeLabel = KIT_TYPE_LABELS_DA.home;
-    expect(`${seasonLabel} · ${typeLabel}`).toBe("2023/24 · Hjemme");
+    expect(jerseyTileMetaLine("2023/24", "Hjemme")).toBe("2023/24 · Hjemme");
   });
 });

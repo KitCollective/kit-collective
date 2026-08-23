@@ -144,6 +144,14 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-mobile-design-tokens.mjs` also fails when `apps/mobile/src/theme/tokens.ts` `lightColor` or `darkColor` defines a semantic color key outside the closed allow-list matching `docs/design-system.md` Tokens (e.g. invented `tabBarFill` / `tabBarBorder` roles). Prevents repeating the KIT-42 checker round 6 fail (undocumented tab-bar color tokens in the semantic layer). Tighten only — extend the allow-list only when `/to-design` amends the locked Tokens table.
 
+### Mobile tab-bar pixel-reserve ratchet (KIT-42)
+
+`scripts/check-mobile-design-tokens.mjs` also fails when `apps/mobile/src/theme/tab-bar-layout.ts` exists or when any `apps/mobile/src/theme/**` file (except `tokens.ts`) exports `floatingTabBarLayout` / `tabBarReserve`. Prevents repeating the KIT-42 checker round 7 fail (named pixel-reserve token contradicting `docs/design-system.md` Layout constraints). Tighten only.
+
+### Mobile icon-button hit-target ratchet (KIT-42)
+
+`scripts/check-mobile-design-tokens.mjs` also fails when an `apps/mobile/src/components/**` file has an icon-only `Pressable` (`accessibilityRole="button"` + `hitSlop={8}` + `<Ionicons`) without an explicit `minWidth`/`minHeight` 44 style — use `IconButton` or inline 44×44. Prevents repeating the KIT-42 checker round 7 fail (`Sheet` close button ~40×40). Tighten only.
+
 ### Vision log save-action ratchet (KIT-27)
 
 `packages/api-contract/tests/vision-save-action.test.ts` (CI via `pnpm test`) fails when `resolveVisionSaveAction` does not return a `userAction` for every `VisionJobStatus`. `scripts/check-vision-log-save-action.mjs` (CI via `pnpm check:vision-log-save-action`) fails when `apps/mobile/app/(tabs)/add.tsx` does not call the shared resolver. `apps/api/tests/collection.test.ts` integration case **"sets VisionLog userAction when Save enqueues vision without client visionJobId"** fails when the server-side fallback enqueue path leaves `vision_log.user_action` null (lost/never-sent `visionJobId`). Prevents repeating the KIT-27 checker fail (VisionLog rows left with `userAction: null` at Save). Tighten only.

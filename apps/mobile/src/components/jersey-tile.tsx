@@ -1,4 +1,5 @@
 import { Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
+import { jerseyTileMetaLine } from "@/components/jersey-tile-meta";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -20,7 +21,7 @@ export function JerseyTile({
 }: JerseyTileProps) {
   const theme = useTheme();
   const typography = useTypography();
-  const metaLine = `${seasonLabel} · ${typeLabel}`;
+  const metaLine = jerseyTileMetaLine(seasonLabel, typeLabel);
   const accessibilityLabel = `${clubLabel}, ${metaLine}`;
 
   return (

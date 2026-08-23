@@ -9,6 +9,7 @@ import {
   type TextInputProps,
   View,
 } from "react-native";
+import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import type { ThemeColors } from "@/theme/tokens";
 import { radius, space } from "@/theme/tokens";
@@ -163,14 +164,7 @@ export function Sheet({ visible, title, onDismiss, children }: SheetProps) {
       <View style={[styles.sheet, { backgroundColor: theme.surfaceRaised }]}>
         <View style={styles.sheetHeader}>
           <Text style={[typography.title, { color: theme.contentPrimary }]}>{title}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Luk"
-            hitSlop={8}
-            onPress={onDismiss}
-          >
-            <Ionicons name="close" size={24} color={theme.contentPrimary} />
-          </Pressable>
+          <IconButton name="Luk" icon="close" onPress={onDismiss} />
         </View>
         <View style={styles.sheetBody}>{children}</View>
       </View>
