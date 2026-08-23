@@ -32,6 +32,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -129,6 +131,11 @@ jobs:
 
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
+
+      - name: Check PR write scope
+        run: node scripts/check-pr-write-scope.mjs
+        env:
+          BASE_REF: origin/development
 
       - name: Check admin stamdata navigation
         run: node scripts/check-admin-stamdata-navigation.mjs

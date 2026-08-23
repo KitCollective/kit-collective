@@ -131,3 +131,7 @@ catches it in the API tests and the container smoke test.
 ### Vision log save-action ratchet (KIT-27)
 
 `packages/api-contract/tests/vision-save-action.test.ts` (CI via `pnpm test`) fails when `resolveVisionSaveAction` does not return a `userAction` for every `VisionJobStatus`. `scripts/check-vision-log-save-action.mjs` (CI via `pnpm check:vision-log-save-action`) fails when `apps/mobile/app/(tabs)/add.tsx` does not call the shared resolver. `apps/api/tests/collection.test.ts` integration case **"sets VisionLog userAction when Save enqueues vision without client visionJobId"** fails when the server-side fallback enqueue path leaves `vision_log.user_action` null (lost/never-sent `visionJobId`). Prevents repeating the KIT-27 checker fail (VisionLog rows left with `userAction: null` at Save). Tighten only.
+
+### PR write-scope ratchet (KIT-39)
+
+`scripts/check-pr-write-scope.mjs` (CI via `pnpm check:pr-write-scope`) fails when a pull request's changed files (vs `origin/development`) fall outside the `write-scope:` globs declared in the PR body, except ratchet-exception paths (`.cursor/hooks/**`, `.cursor/rules/**`, `docs/agents/error-ratcheting.md`, `scripts/check-*`). Skips when no `write-scope:` line is present. Prevents repeating the KIT-39 checker fail (gratuitous edits outside declared issue scope, e.g. `seed/fkapi/tests/seed.test.ts` bundled into an admin slice). Tighten only.

@@ -24,6 +24,7 @@ export function StamdataPage() {
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focusedRowIndex, setFocusedRowIndex] = useState(0);
 
   const query = useMemo(
     () => ({
@@ -56,6 +57,7 @@ export function StamdataPage() {
     apiFetch<AdminStamdataList>(`/admin/catalog/stamdata?${params.toString()}`, { token })
       .then((body) => {
         setRows(adminStamdataListSchema.parse(body));
+        setFocusedRowIndex(0);
         setError(null);
       })
       .catch((fetchError) => {
@@ -106,8 +108,10 @@ export function StamdataPage() {
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const next = rowElements.item(rowIndex + 1);
+      const nextIndex = rowIndex + 1;
+      const next = rowElements.item(nextIndex);
       if (next instanceof HTMLTableRowElement) {
+        setFocusedRowIndex(nextIndex);
         next.focus();
       }
       return;
@@ -115,8 +119,10 @@ export function StamdataPage() {
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      const previous = rowElements.item(rowIndex - 1);
+      const previousIndex = rowIndex - 1;
+      const previous = rowElements.item(previousIndex);
       if (previous instanceof HTMLTableRowElement) {
+        setFocusedRowIndex(previousIndex);
         previous.focus();
       }
     }
@@ -183,8 +189,9 @@ export function StamdataPage() {
               {rows.rows.map((row, rowIndex) => (
                 <tr
                   key={`${row.entityType}:${row.id}`}
-                  tabIndex={0}
+                  tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
                   onClick={() => openRow(row)}
+                  onFocus={() => setFocusedRowIndex(rowIndex)}
                   onKeyDown={(event) => handleRowKeyDown(event, row, rowIndex)}
                 >
                   <td>

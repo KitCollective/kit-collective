@@ -254,7 +254,7 @@ describe("FK seed mapper", () => {
     );
 
     expect(secondKitIds.rows).toEqual(firstKitIds.rows);
-    expect(secondCount.rows[0]?.count).toBe(firstCount.rows[0]?.count);
+    expect(secondCount.rows[0]!.count).toBe(firstCount.rows[0]!.count);
   });
 
   it("does not call Football Kit Archive when using injected fetch adapter", async () => {
@@ -331,7 +331,7 @@ describe("runCli", () => {
     const count = await verifyPool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM kit`,
     );
-    expect(Number(count.rows[0]?.count ?? 0)).toBeGreaterThan(0);
+    expect(Number(count.rows[0]!.count)).toBeGreaterThan(0);
     await verifyPool.end();
   });
 });
