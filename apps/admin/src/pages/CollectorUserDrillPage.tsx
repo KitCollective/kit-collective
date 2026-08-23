@@ -69,6 +69,13 @@ export function CollectorUserDrillPage() {
   }, [token, userId]);
 
   const isSelf = currentUser?.id === userId;
+  const isLastAdmin = collector?.role === "admin" && (collector?.adminCount ?? 0) <= 1;
+  const demoteDisabled = isSelf || isLastAdmin;
+  const demoteHelperText = isSelf
+    ? "You cannot demote your own Staff access."
+    : isLastAdmin
+      ? "At least one Staff access account must remain."
+      : null;
 
   function openJersey(jerseyId: string) {
     navigate(`/collectors/${userId}/jerseys/${jerseyId}`);
@@ -116,6 +123,10 @@ export function CollectorUserDrillPage() {
     setRoleError(null);
     if (isSelf && nextRole === "user") {
       setRoleError("You cannot demote your own Staff access.");
+      return;
+    }
+    if (isLastAdmin && nextRole === "user") {
+      setRoleError("At least one Staff access account must remain.");
       return;
     }
     setPendingRole(nextRole);
@@ -192,15 +203,13 @@ export function CollectorUserDrillPage() {
                 type="button"
                 className="btn btn-secondary btn-primary--auto"
                 onClick={() => requestRoleChange("user")}
-                disabled={isSelf}
-                title={isSelf ? "You cannot demote your own Staff access." : undefined}
+                disabled={demoteDisabled}
+                title={demoteHelperText ?? undefined}
               >
                 Remove Staff access
               </button>
             )}
-            {isSelf && collector.role === "admin" ? (
-              <p className="type-caption">You cannot demote your own Staff access.</p>
-            ) : null}
+            {demoteHelperText ? <p className="type-caption">{demoteHelperText}</p> : null}
           </div>
         </>
       ) : null}

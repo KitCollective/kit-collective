@@ -46,6 +46,7 @@ export const adminCollectorUserSchema = z
     email: z.string().email(),
     role: identityRoleSchema,
     jerseyCount: z.number().int().nonnegative(),
+    adminCount: z.number().int().nonnegative(),
     createdAt: z.string().datetime(),
     monogram: z.string().min(1).max(3),
   })

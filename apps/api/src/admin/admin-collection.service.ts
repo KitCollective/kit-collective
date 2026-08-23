@@ -123,11 +123,14 @@ export class AdminCollectionService {
       throw new NotFoundException("User not found");
     }
 
+    const adminCount = await this.countAdmins();
+
     return adminCollectorUserSchema.parse({
       id: row.id,
       email: row.email,
       role: row.role,
       jerseyCount: Number(row.jerseyCount),
+      adminCount,
       createdAt: row.createdAt.toISOString(),
       monogram: monogramFromEmail(row.email),
     });
@@ -279,21 +282,40 @@ export class AdminCollectionService {
       .from(userJerseyPhoto)
       .where(eq(userJerseyPhoto.userJerseyId, jerseyId));
 
+    const photoBytes = new Map<string, Uint8Array>();
     for (const photo of photoRows) {
       if (!photo.objectKey.startsWith(`user/${userId}/${jerseyId}/`)) {
         throw new InternalServerErrorException("Invalid photo object key");
       }
-      try {
-        await this.objectStore.deleteObject(photo.objectKey);
-      } catch {
-        throw new InternalServerErrorException("Failed to delete photo bytes");
+      const bytes = await this.objectStore.getObject(photo.objectKey);
+      if (!bytes) {
+        throw new InternalServerErrorException("Photo bytes missing");
       }
+      photoBytes.set(photo.objectKey, bytes);
     }
 
-    await this.db.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
-    await this.db
-      .delete(userJersey)
-      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+    const deletedKeys: string[] = [];
+    try {
+      for (const photo of photoRows) {
+        await this.objectStore.deleteObject(photo.objectKey);
+        deletedKeys.push(photo.objectKey);
+      }
+    } catch {
+      for (const key of deletedKeys) {
+        const bytes = photoBytes.get(key);
+        if (bytes) {
+          await this.objectStore.putObject(key, bytes);
+        }
+      }
+      throw new InternalServerErrorException("Failed to delete photo bytes");
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
+      await tx
+        .delete(userJersey)
+        .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+    });
   }
 
   async updateUserRole(
@@ -321,12 +343,8 @@ export class AdminCollectionService {
     }
 
     if (target.role === "admin" && body.role === "user") {
-      const [adminCount] = await this.db
-        .select({ total: count(user.id) })
-        .from(user)
-        .where(eq(user.role, "admin"));
-
-      if (Number(adminCount?.total ?? 0) <= 1) {
+      const adminCount = await this.countAdmins();
+      if (adminCount <= 1) {
         throwRoleGuardError("LAST_ADMIN_DEMOTE", "At least one Staff access account must remain.");
       }
     }
@@ -351,14 +369,25 @@ export class AdminCollectionService {
       .from(userJersey)
       .where(eq(userJersey.userId, targetUserId));
 
+    const adminCount = await this.countAdmins();
+
     return adminCollectorUserSchema.parse({
       id: updated.id,
       email: updated.email,
       role: updated.role,
       jerseyCount: Number(jerseyCountRow?.total ?? 0),
+      adminCount,
       createdAt: updated.createdAt.toISOString(),
       monogram: monogramFromEmail(updated.email),
     });
+  }
+
+  private async countAdmins(): Promise<number> {
+    const [adminCount] = await this.db
+      .select({ total: count(user.id) })
+      .from(user)
+      .where(eq(user.role, "admin"));
+    return Number(adminCount?.total ?? 0);
   }
 
   private async assertUserExists(userId: string): Promise<void> {

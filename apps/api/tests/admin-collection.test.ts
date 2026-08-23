@@ -347,4 +347,152 @@ describe("Admin collectors /v1", () => {
     });
     expect(response.statusCode).toBe(404);
   });
+
+  it("keeps jersey and photo bytes when object-store delete fails mid take-down", async () => {
+    const collector = await registerUser(app, "partial-takedown@example.com");
+    await promoteToAdmin("staff-b@example.com");
+    const adminSession = await loginAdmin(app, "staff-b@example.com");
+
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "NO" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "en",
+      kind: "label",
+      text: "Rosenborg",
+      source: "seed",
+    });
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2023/24",
+        startsOn: "2023-07-01",
+        endsOn: "2024-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    await db.insert(teamSeason).values({
+      clubId: insertedClub!.id,
+      seasonId: insertedSeason!.id,
+    });
+
+    const [insertedJersey] = await db
+      .insert(userJersey)
+      .values({
+        userId: collector.user.id,
+        clubId: insertedClub!.id,
+        seasonId: insertedSeason!.id,
+        type: "away",
+        size: "l",
+        condition: "new",
+      })
+      .returning({ id: userJersey.id });
+
+    const photo1Id = crypto.randomUUID();
+    const photo2Id = crypto.randomUUID();
+    const photo1Key = `user/${collector.user.id}/${insertedJersey!.id}/${photo1Id}.jpg`;
+    const photo2Key = `user/${collector.user.id}/${insertedJersey!.id}/${photo2Id}.jpg`;
+    const photo1Bytes = Uint8Array.from([0x01, 0x02, 0x03]);
+    const photo2Bytes = Uint8Array.from([0x04, 0x05, 0x06]);
+    await objectStore.putObject(photo1Key, photo1Bytes);
+    await objectStore.putObject(photo2Key, photo2Bytes);
+    await db.insert(userJerseyPhoto).values([
+      {
+        id: photo1Id,
+        userJerseyId: insertedJersey!.id,
+        objectKey: photo1Key,
+        role: "front",
+        source: "camera",
+        ocrStatus: "none",
+      },
+      {
+        id: photo2Id,
+        userJerseyId: insertedJersey!.id,
+        objectKey: photo2Key,
+        role: "back",
+        source: "camera",
+        ocrStatus: "none",
+      },
+    ]);
+
+    await pool.end();
+
+    const failingStore = {
+      ...objectStore,
+      deleteObject: async (key: string) => {
+        if (key === photo2Key) {
+          throw new Error("simulated object-store failure");
+        }
+        return objectStore.deleteObject(key);
+      },
+    };
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(ADMIN_OBJECT_STORE)
+      .useValue(failingStore)
+      .overrideProvider(OBJECT_STORE)
+      .useValue(failingStore)
+      .compile();
+
+    const failingApp = moduleRef.createNestApplication<NestFastifyApplication>(
+      new FastifyAdapter(),
+    );
+    failingApp.setGlobalPrefix("v1");
+    await failingApp.init();
+    await failingApp.getHttpAdapter().getInstance().ready();
+
+    try {
+      const takeDownResponse = await failingApp.inject({
+        method: "DELETE",
+        url: `/v1/admin/collectors/${collector.user.id}/jerseys/${insertedJersey!.id}`,
+        headers: {
+          authorization: `Bearer ${adminSession.accessToken}`,
+        },
+      });
+      expect(takeDownResponse.statusCode).toBe(500);
+
+      const { db: verifyDb, pool: verifyPool } = createDb(DATABASE_URL);
+      const remainingJersey = await verifyDb
+        .select({ id: userJersey.id })
+        .from(userJersey)
+        .where(eq(userJersey.id, insertedJersey!.id));
+      expect(remainingJersey).toHaveLength(1);
+
+      const remainingPhotos = await verifyDb
+        .select({ id: userJerseyPhoto.id })
+        .from(userJerseyPhoto)
+        .where(eq(userJerseyPhoto.userJerseyId, insertedJersey!.id));
+      expect(remainingPhotos).toHaveLength(2);
+
+      const firstPhotoStillExists = await objectStore.objectExists(photo1Key);
+      expect(firstPhotoStillExists).toBe(true);
+      const firstPhotoBytes = await objectStore.getObject(photo1Key);
+      expect(firstPhotoBytes).toEqual(photo1Bytes);
+
+      await verifyPool.end();
+    } finally {
+      await failingApp.close();
+    }
+  });
 });

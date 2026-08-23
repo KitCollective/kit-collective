@@ -90,6 +90,7 @@ describe("adminCollectorUserSchema", () => {
       email: "collector@example.com",
       role: "user" as const,
       jerseyCount: 0,
+      adminCount: 1,
       createdAt: "2026-08-23T00:00:00.000Z",
       monogram: "CO",
     };
