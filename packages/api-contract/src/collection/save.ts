@@ -41,17 +41,29 @@ export const collectionJerseyPhotoSchema = z
   })
   .strict();
 
+export const collectionJerseySquadPlayerSchema = z
+  .object({
+    id: z.string().uuid(),
+    label: z.string().min(1),
+  })
+  .strict();
+
 export const collectionJerseySchema = z
   .object({
     id: z.string().uuid(),
     clubId: z.string().uuid(),
     seasonId: z.string().uuid(),
+    countryId: z.string().uuid(),
+    leagueId: z.string().uuid().nullable(),
     catalogKitId: z.string().uuid().nullable(),
     type: z.enum(KIT_TYPES),
     size: z.enum(JERSEY_SIZES),
     condition: z.enum(JERSEY_CONDITIONS),
+    countryLabel: z.string().min(1),
+    leagueLabel: z.string().min(1).nullable(),
     clubLabel: z.string().min(1),
     seasonLabel: z.string().min(1),
+    squadPlayers: z.array(collectionJerseySquadPlayerSchema),
     photos: z.array(collectionJerseyPhotoSchema).min(1),
   })
   .strict();
@@ -67,5 +79,6 @@ export const collectionSaveResponseSchema = z
 export type CollectionSavePhoto = z.infer<typeof collectionSavePhotoSchema>;
 export type CollectionSaveRequest = z.infer<typeof collectionSaveRequestSchema>;
 export type CollectionJerseyPhoto = z.infer<typeof collectionJerseyPhotoSchema>;
+export type CollectionJerseySquadPlayer = z.infer<typeof collectionJerseySquadPlayerSchema>;
 export type CollectionJersey = z.infer<typeof collectionJerseySchema>;
 export type CollectionSaveResponse = z.infer<typeof collectionSaveResponseSchema>;

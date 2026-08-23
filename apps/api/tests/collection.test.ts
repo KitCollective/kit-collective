@@ -87,14 +87,32 @@ async function insertClubSeasonFixture() {
     seasonId: insertedSeason!.id,
   });
 
-  await db.insert(catalogLabel).values({
-    entityType: "club",
-    entityId: insertedClub!.id,
-    locale: "da",
-    kind: "label",
-    text: "F.C. København",
-    source: "seed",
-  });
+  await db.insert(catalogLabel).values([
+    {
+      entityType: "country",
+      entityId: insertedCountry!.id,
+      locale: "da",
+      kind: "label",
+      text: "Danmark",
+      source: "seed",
+    },
+    {
+      entityType: "league",
+      entityId: insertedLeague!.id,
+      locale: "da",
+      kind: "label",
+      text: "Superligaen",
+      source: "seed",
+    },
+    {
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "da",
+      kind: "label",
+      text: "F.C. København",
+      source: "seed",
+    },
+  ]);
 
   await pool.end();
 

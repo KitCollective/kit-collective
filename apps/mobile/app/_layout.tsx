@@ -1,3 +1,4 @@
+import "react-native-gesture-handler";
 import {
   Archivo_400Regular,
   Archivo_600SemiBold,
@@ -10,6 +11,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { BrandFontsProvider } from "@/theme/brand-fonts";
 import { useTheme } from "@/theme/use-theme";
@@ -41,15 +43,17 @@ export default function RootLayout() {
   }
 
   return (
-    <BrandFontsProvider enabled={brandFontsEnabled}>
-      <AuthProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-        </Stack>
-      </AuthProvider>
-    </BrandFontsProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <BrandFontsProvider enabled={brandFontsEnabled}>
+        <AuthProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+        </AuthProvider>
+      </BrandFontsProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -64,6 +68,9 @@ export function LoadingScreen() {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   loading: {
     flex: 1,
     alignItems: "center",

@@ -1,20 +1,45 @@
-import type { CatalogPickerItem, CollectionShortcut } from "@kit/api-contract";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type AccessibilityActionEvent,
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  type SharedValue,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+} from "react-native-reanimated";
 import {
   createCollectionShortcut,
   deleteCollectionShortcut,
   fetchCollectionShortcuts,
+  reorderCollectionShortcuts,
   updateCollectionShortcut,
 } from "@/api/shortcuts";
-import { ListRow, Sheet } from "@/components/catalog-ui";
-import { ClubPickerOverlay } from "@/components/club-picker-overlay";
+import { SelectField, Sheet } from "@/components/catalog-ui";
+import { FacetPickerOverlay } from "@/components/facet-picker-overlay";
 import {
+  buildGenvejeWritePayload,
   canSaveGenvej,
+  deriveMostUsedFacets,
+  emptyGenvejeFacets,
+  GENVEJE_AND_HELPER_COPY,
+  type GenvejeFacetKind,
+  type GenvejeFacets,
   type GenvejeSheetMode,
   manageRowAccessibilityLabel,
+  reorderShortcutIds,
+  resolveFacetFieldLabel,
   resolveGenvejeSheetTitle,
-  seedClubForEdit,
+  seedFacetsForEdit,
   shouldResetShortcutAfterDelete,
   shouldResetToAlleAfterGem,
 } from "@/components/genveje-sheet-logic";
@@ -23,10 +48,14 @@ import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
+const FACET_FIELDS: GenvejeFacetKind[] = ["country", "league", "club", "player"];
+const MANAGE_ROW_HEIGHT = 52;
+
 type GenvejeSheetProps = {
   visible: boolean;
   accessToken: string;
   activeShortcutId: string | null;
+  ownerJerseys: CollectionJersey[];
   onDismiss: () => void;
   onShortcutsChanged: () => void;
   onShortcutSaved: () => void;
@@ -37,6 +66,7 @@ export function GenvejeSheet({
   visible,
   accessToken,
   activeShortcutId,
+  ownerJerseys,
   onDismiss,
   onShortcutsChanged,
   onShortcutSaved,
@@ -47,28 +77,54 @@ export function GenvejeSheet({
   const [mode, setMode] = useState<GenvejeSheetMode>("list");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reordering, setReordering] = useState(false);
   const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
   const [editingShortcutId, setEditingShortcutId] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
-  const [selectedClub, setSelectedClub] = useState<CatalogPickerItem | null>(null);
-  const [clubPickerOpen, setClubPickerOpen] = useState(false);
+  const [facets, setFacets] = useState<GenvejeFacets>(emptyGenvejeFacets());
+  const [openFacetPicker, setOpenFacetPicker] = useState<GenvejeFacetKind | null>(null);
+  const [orderedShortcuts, setOrderedShortcuts] = useState<CollectionShortcut[]>([]);
+  const [draggingShortcutId, setDraggingShortcutId] = useState<string | null>(null);
+  const dragOffsetY = useSharedValue(0);
+  const dragStartIndex = useSharedValue(0);
+  const dragCurrentIndex = useSharedValue(0);
+  const dragActive = useSharedValue(0);
+  const shortcutCount = useSharedValue(0);
+  const dragStartIndexRef = useRef(0);
+  const orderedShortcutsRef = useRef(orderedShortcuts);
+
+  useEffect(() => {
+    orderedShortcutsRef.current = orderedShortcuts;
+  }, [orderedShortcuts]);
+
+  useEffect(() => {
+    shortcutCount.value = orderedShortcuts.length;
+  }, [orderedShortcuts.length, shortcutCount]);
 
   const loadShortcuts = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetchCollectionShortcuts(accessToken);
       setShortcuts(response.shortcuts);
+      setOrderedShortcuts(response.shortcuts);
     } finally {
       setLoading(false);
     }
   }, [accessToken]);
 
   useEffect(() => {
+    if (!draggingShortcutId) {
+      setOrderedShortcuts(shortcuts);
+    }
+  }, [shortcuts, draggingShortcutId]);
+
+  useEffect(() => {
     if (visible) {
       setMode("list");
       setEditingShortcutId(null);
       setCustomName("");
-      setSelectedClub(null);
+      setFacets(emptyGenvejeFacets());
+      setOpenFacetPicker(null);
       void loadShortcuts();
     }
   }, [visible, loadShortcuts]);
@@ -76,28 +132,121 @@ export function GenvejeSheet({
   const openCreateForm = () => {
     setEditingShortcutId(null);
     setCustomName("");
-    setSelectedClub(null);
+    setFacets(emptyGenvejeFacets());
     setMode("form");
   };
 
   const openEditForm = (shortcut: CollectionShortcut) => {
     setEditingShortcutId(shortcut.id);
     setCustomName(shortcut.name);
-    setSelectedClub(seedClubForEdit(shortcut));
+    setFacets(seedFacetsForEdit(shortcut));
     setMode("form");
   };
 
+  const persistReorder = async (orderedIds: string[]) => {
+    setReordering(true);
+    try {
+      const response = await reorderCollectionShortcuts(accessToken, orderedIds);
+      setShortcuts(response.shortcuts);
+      setOrderedShortcuts(response.shortcuts);
+      onShortcutsChanged();
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const applyShortcutMove = (fromIndex: number, toIndex: number) => {
+    const orderedIds = reorderShortcutIds(orderedShortcuts, fromIndex, toIndex);
+    if (orderedIds.join() === orderedShortcuts.map((shortcut) => shortcut.id).join()) {
+      return orderedIds;
+    }
+
+    setOrderedShortcuts(
+      orderedIds
+        .map((id) => orderedShortcuts.find((shortcut) => shortcut.id === id))
+        .filter((shortcut): shortcut is CollectionShortcut => shortcut !== undefined),
+    );
+    return orderedIds;
+  };
+
+  const moveShortcut = (fromIndex: number, direction: -1 | 1) => {
+    const toIndex = fromIndex + direction;
+    const orderedIds = applyShortcutMove(fromIndex, toIndex);
+    if (orderedIds.join() === shortcuts.map((shortcut) => shortcut.id).join()) {
+      return;
+    }
+
+    void persistReorder(orderedIds);
+  };
+
+  const maybeReorderToIndex = (targetIndex: number) => {
+    if (!draggingShortcutId) {
+      return;
+    }
+
+    const currentOrdered = orderedShortcutsRef.current;
+    const currentIndex = currentOrdered.findIndex((shortcut) => shortcut.id === draggingShortcutId);
+    if (currentIndex < 0 || targetIndex === currentIndex) {
+      return;
+    }
+
+    const orderedIds = reorderShortcutIds(currentOrdered, currentIndex, targetIndex);
+    const nextOrdered = orderedIds
+      .map((id) => currentOrdered.find((shortcut) => shortcut.id === id))
+      .filter((shortcut): shortcut is CollectionShortcut => shortcut !== undefined);
+    orderedShortcutsRef.current = nextOrdered;
+    setOrderedShortcuts(nextOrdered);
+  };
+
+  useAnimatedReaction(
+    () => ({
+      offsetY: dragOffsetY.value,
+      startIndex: dragStartIndex.value,
+      currentIndex: dragCurrentIndex.value,
+      active: dragActive.value,
+      count: shortcutCount.value,
+    }),
+    (current) => {
+      if (!current.active || current.count <= 0) {
+        return;
+      }
+
+      const targetIndex = Math.min(
+        current.count - 1,
+        Math.max(
+          0,
+          current.startIndex +
+            Math.floor((current.offsetY + MANAGE_ROW_HEIGHT / 2) / MANAGE_ROW_HEIGHT),
+        ),
+      );
+
+      if (targetIndex !== current.currentIndex) {
+        dragCurrentIndex.value = targetIndex;
+        runOnJS(maybeReorderToIndex)(targetIndex);
+      }
+    },
+  );
+
+  const finishDrag = () => {
+    const orderedIds = orderedShortcutsRef.current.map((shortcut) => shortcut.id);
+    const persistedIds = shortcuts.map((shortcut) => shortcut.id);
+    dragActive.value = 0;
+    setDraggingShortcutId(null);
+    dragOffsetY.value = 0;
+
+    if (orderedIds.join() !== persistedIds.join()) {
+      void persistReorder(orderedIds);
+    }
+  };
+
   const handleSave = async () => {
-    if (!selectedClub) {
+    if (!canSaveGenvej(facets, saving)) {
       return;
     }
 
     setSaving(true);
     try {
-      const payload = {
-        clubId: selectedClub.id,
-        ...(customName.trim() ? { name: customName.trim() } : {}),
-      };
+      const payload = buildGenvejeWritePayload(facets, customName);
 
       if (editingShortcutId) {
         await updateCollectionShortcut(accessToken, editingShortcutId, payload);
@@ -126,7 +275,7 @@ export function GenvejeSheet({
   };
 
   const sheetTitle = resolveGenvejeSheetTitle(mode);
-  const canSave = canSaveGenvej(selectedClub, saving);
+  const canSave = canSaveGenvej(facets, saving);
 
   return (
     <>
@@ -143,60 +292,62 @@ export function GenvejeSheet({
       >
         {mode === "list" ? (
           <View style={styles.listBody}>
-            {loading ? (
+            {loading || reordering ? (
               <ActivityIndicator color={theme.fillPrimary} />
             ) : (
               <ScrollView>
-                {shortcuts.map((shortcut) => (
-                  <View key={shortcut.id} style={styles.manageRow}>
-                    <ShortcutDragHandle color={theme.contentMuted} />
-                    <View
-                      style={styles.manageMain}
-                      accessible
-                      accessibilityLabel={manageRowAccessibilityLabel(
-                        shortcut.name,
-                        shortcut.matchCount,
-                      )}
-                    >
-                      <Text
-                        style={[typography.body, { color: theme.contentPrimary }]}
-                        importantForAccessibility="no-hide-descendants"
-                      >
-                        {shortcut.name}
-                      </Text>
-                      <Text
-                        style={[typography.mono, { color: theme.contentMuted }]}
-                        importantForAccessibility="no-hide-descendants"
-                      >
-                        {shortcut.matchCount}
-                      </Text>
-                    </View>
-                    <IconButton
-                      name="Rediger"
-                      icon="create-outline"
-                      onPress={() => openEditForm(shortcut)}
+                {orderedShortcuts.map((shortcut, index) => {
+                  const isDragging = draggingShortcutId === shortcut.id;
+
+                  return (
+                    <ShortcutManageRow
+                      key={shortcut.id}
+                      shortcut={shortcut}
+                      index={index}
+                      isDragging={isDragging}
+                      dragOffsetY={dragOffsetY}
+                      dragStartIndex={dragStartIndex}
+                      dragCurrentIndex={dragCurrentIndex}
+                      themeContentMuted={theme.contentMuted}
+                      themeContentPrimary={theme.contentPrimary}
+                      typographyBody={typography.body}
+                      typographyMono={typography.mono}
+                      onMove={(direction) => moveShortcut(index, direction)}
+                      dragActive={dragActive}
+                      onDragStart={() => {
+                        dragStartIndexRef.current = index;
+                        dragStartIndex.value = index;
+                        dragCurrentIndex.value = index;
+                        setDraggingShortcutId(shortcut.id);
+                      }}
+                      onDragEnd={() => finishDrag()}
+                      onEdit={() => openEditForm(shortcut)}
+                      onDelete={() => void handleDelete(shortcut.id)}
                     />
-                    <IconButton
-                      name="Slet"
-                      icon="trash-outline"
-                      onPress={() => void handleDelete(shortcut.id)}
-                    />
-                  </View>
-                ))}
+                  );
+                })}
               </ScrollView>
             )}
             <Button label="Tilføj" variant="primary" width="fill" onPress={openCreateForm} />
           </View>
         ) : (
           <View style={styles.formBody}>
-            <View style={styles.field}>
-              <Text style={[typography.label, { color: theme.contentPrimary }]}>Klub</Text>
-              <ListRow
-                title={selectedClub?.label ?? "Vælg klub"}
-                onPress={() => setClubPickerOpen(true)}
-                selected={selectedClub !== null}
-              />
-            </View>
+            <Text style={[typography.body, { color: theme.contentSecondary }]}>
+              {GENVEJE_AND_HELPER_COPY}
+            </Text>
+
+            {FACET_FIELDS.map((facetKind) => (
+              <View key={facetKind} style={styles.field}>
+                <Text style={[typography.label, { color: theme.contentPrimary }]}>
+                  {resolveFacetFieldLabel(facetKind)}
+                </Text>
+                <SelectField
+                  value={facets[facetKind]?.label ?? null}
+                  placeholder={`Vælg ${resolveFacetFieldLabel(facetKind).toLowerCase()}`}
+                  onPress={() => setOpenFacetPicker(facetKind)}
+                />
+              </View>
+            ))}
 
             <View style={styles.field}>
               <Text style={[typography.label, { color: theme.contentPrimary }]}>
@@ -231,23 +382,169 @@ export function GenvejeSheet({
         )}
       </Sheet>
 
-      <ClubPickerOverlay
-        visible={visible && clubPickerOpen}
-        accessToken={accessToken}
-        selectedClubId={selectedClub?.id ?? null}
-        onSelect={(club) => setSelectedClub(club)}
-        onDismiss={() => setClubPickerOpen(false)}
-      />
+      {openFacetPicker ? (
+        <FacetPickerOverlay
+          visible={visible && openFacetPicker !== null}
+          facetKind={openFacetPicker}
+          accessToken={accessToken}
+          selectedId={facets[openFacetPicker]?.id ?? null}
+          mostUsed={deriveMostUsedFacets(openFacetPicker, ownerJerseys, shortcuts)}
+          onSelect={(item) => {
+            setFacets((current) => ({ ...current, [openFacetPicker]: item }));
+          }}
+          onDismiss={() => setOpenFacetPicker(null)}
+        />
+      ) : null}
     </>
   );
 }
 
-function ShortcutDragHandle({ color }: { color: string }) {
+type ShortcutManageRowProps = {
+  shortcut: CollectionShortcut;
+  index: number;
+  isDragging: boolean;
+  dragOffsetY: SharedValue<number>;
+  dragStartIndex: SharedValue<number>;
+  dragCurrentIndex: SharedValue<number>;
+  dragActive: SharedValue<number>;
+  themeContentMuted: string;
+  themeContentPrimary: string;
+  typographyBody: ReturnType<typeof useTypography>["body"];
+  typographyMono: ReturnType<typeof useTypography>["mono"];
+  onMove: (direction: -1 | 1) => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+};
+
+function ShortcutManageRow({
+  shortcut,
+  isDragging,
+  dragOffsetY,
+  dragStartIndex,
+  dragCurrentIndex,
+  themeContentMuted,
+  themeContentPrimary,
+  typographyBody,
+  typographyMono,
+  dragActive,
+  onMove,
+  onDragStart,
+  onDragEnd,
+  onEdit,
+  onDelete,
+}: ShortcutManageRowProps) {
+  const animatedRowStyle = useAnimatedStyle(() => {
+    if (!isDragging) {
+      return {};
+    }
+
+    const indexDelta = dragCurrentIndex.value - dragStartIndex.value;
+    return {
+      transform: [{ translateY: dragOffsetY.value - indexDelta * MANAGE_ROW_HEIGHT }],
+    };
+  }, [isDragging]);
+
   return (
-    <View style={styles.dragHandle} accessible accessibilityLabel="Flyt">
-      <View style={[styles.dragBar, { backgroundColor: color }]} />
-      <View style={[styles.dragBar, { backgroundColor: color }]} />
-    </View>
+    <Animated.View
+      style={[styles.manageRow, isDragging && styles.manageRowDragging, animatedRowStyle]}
+    >
+      <ShortcutDragHandle
+        color={themeContentMuted}
+        dragOffsetY={dragOffsetY}
+        dragActive={dragActive}
+        onMove={onMove}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+      />
+      <View
+        style={styles.manageMain}
+        accessible
+        accessibilityLabel={manageRowAccessibilityLabel(shortcut.name, shortcut.matchCount)}
+      >
+        <Text
+          style={[typographyBody, { color: themeContentPrimary }]}
+          importantForAccessibility="no-hide-descendants"
+        >
+          {shortcut.name}
+        </Text>
+        <Text
+          style={[typographyMono, { color: themeContentMuted }]}
+          importantForAccessibility="no-hide-descendants"
+        >
+          {shortcut.matchCount}
+        </Text>
+      </View>
+      <IconButton name="Rediger" icon="create-outline" onPress={onEdit} />
+      <IconButton name="Slet" icon="trash-outline" onPress={onDelete} />
+    </Animated.View>
+  );
+}
+
+function ShortcutDragHandle({
+  color,
+  dragOffsetY,
+  dragActive,
+  onMove,
+  onDragStart,
+  onDragEnd,
+}: {
+  color: string;
+  dragOffsetY: SharedValue<number>;
+  dragActive: SharedValue<number>;
+  onMove: (direction: -1 | 1) => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
+  const pan = Gesture.Pan()
+    .onBegin(() => {
+      dragOffsetY.value = 0;
+      dragActive.value = 1;
+      runOnJS(onDragStart)();
+    })
+    .onUpdate((event) => {
+      dragOffsetY.value = event.translationY;
+    })
+    .onEnd(() => {
+      dragOffsetY.value = 0;
+      dragActive.value = 0;
+      runOnJS(onDragEnd)();
+    })
+    .onFinalize(() => {
+      dragOffsetY.value = 0;
+      dragActive.value = 0;
+    });
+
+  const handleAccessibilityAction = (event: AccessibilityActionEvent) => {
+    switch (event.nativeEvent.actionName) {
+      case "increment":
+        onMove(1);
+        break;
+      case "decrement":
+        onMove(-1);
+        break;
+      default:
+        break;
+    }
+  };
+
+  return (
+    <GestureDetector gesture={pan}>
+      <View
+        style={styles.dragHandle}
+        accessible
+        accessibilityLabel="Flyt"
+        accessibilityActions={[
+          { name: "increment", label: "Flyt ned" },
+          { name: "decrement", label: "Flyt op" },
+        ]}
+        onAccessibilityAction={handleAccessibilityAction}
+      >
+        <View style={[styles.dragBar, { backgroundColor: color }]} />
+        <View style={[styles.dragBar, { backgroundColor: color }]} />
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -264,6 +561,11 @@ const styles = StyleSheet.create({
     gap: space.gapSm,
     minHeight: 44,
     paddingVertical: space.insetSm,
+  },
+  manageRowDragging: {
+    zIndex: 1,
+    elevation: 2,
+    opacity: 0.92,
   },
   manageMain: {
     flex: 1,
@@ -283,10 +585,11 @@ const styles = StyleSheet.create({
     paddingVertical: space.insetSm,
   },
   dragHandle: {
-    width: 20,
-    gap: 4,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
   },
   dragBar: {
     width: 14,

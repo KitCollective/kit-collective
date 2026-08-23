@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
   UseGuards,
@@ -83,6 +84,12 @@ export class CollectionController {
       body,
       resolveLocale(acceptLanguage),
     );
+  }
+
+  @Put("collection/shortcuts/reorder")
+  @UseGuards(JwtAuthGuard)
+  reorderShortcuts(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.shortcutsService.reorderShortcuts(user.sub, body);
   }
 
   @Delete("collection/shortcuts/:shortcutId")

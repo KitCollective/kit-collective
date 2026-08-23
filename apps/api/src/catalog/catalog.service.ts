@@ -1,9 +1,11 @@
 import {
   type CatalogClubSearchResponse,
   type CatalogClubSeasonsResponse,
+  type CatalogFacetSearchResponse,
   type CatalogStats,
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
+  catalogFacetSearchResponseSchema,
   catalogStatsSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
@@ -232,6 +234,71 @@ export class CatalogService {
       .sort((a, b) => a.label.localeCompare(b.label, locale));
 
     return catalogClubSearchResponseSchema.parse({ clubs });
+  }
+
+  async searchCountries(query: string, locale: LabelLocale): Promise<CatalogFacetSearchResponse> {
+    return this.searchFacetEntities("country", query, locale);
+  }
+
+  async searchLeagues(query: string, locale: LabelLocale): Promise<CatalogFacetSearchResponse> {
+    return this.searchFacetEntities("league", query, locale);
+  }
+
+  async searchPlayers(query: string, locale: LabelLocale): Promise<CatalogFacetSearchResponse> {
+    return this.searchFacetEntities("player", query, locale);
+  }
+
+  private async searchFacetEntities(
+    entityType: "country" | "league" | "player",
+    query: string,
+    locale: LabelLocale,
+  ): Promise<CatalogFacetSearchResponse> {
+    const pattern = `%${query}%`;
+
+    const matches = await this.db
+      .selectDistinct({
+        entityId: catalogLabel.entityId,
+      })
+      .from(catalogLabel)
+      .where(
+        and(eq(catalogLabel.entityType, entityType), sql`${catalogLabel.text} ilike ${pattern}`),
+      );
+
+    if (matches.length === 0) {
+      return catalogFacetSearchResponseSchema.parse({ items: [] });
+    }
+
+    const entityIds = matches.map((row) => row.entityId);
+
+    const resolvedLabel = () =>
+      sql<string | null>`coalesce(
+        max(case when ${catalogLabel.locale} = ${locale} and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+        max(case when ${catalogLabel.locale} = 'mul' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+        max(case when ${catalogLabel.locale} = 'en' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end)
+      )`;
+
+    const baseTable =
+      entityType === "country" ? country : entityType === "league" ? league : player;
+
+    const rows = await this.db
+      .select({
+        id: baseTable.id,
+        label: resolvedLabel(),
+      })
+      .from(baseTable)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, entityType), eq(catalogLabel.entityId, baseTable.id)),
+      )
+      .where(inArray(baseTable.id, entityIds))
+      .groupBy(baseTable.id);
+
+    const items = rows
+      .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+      .map((row) => ({ id: row.id, label: row.label }))
+      .sort((a, b) => a.label.localeCompare(b.label, locale));
+
+    return catalogFacetSearchResponseSchema.parse({ items });
   }
 
   async getClubSeasons(clubId: string): Promise<CatalogClubSeasonsResponse> {

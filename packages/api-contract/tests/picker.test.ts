@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
+  catalogFacetSearchResponseSchema,
   catalogPickerClubIdParamSchema,
   catalogPickerItemSchema,
   catalogPickerSearchQuerySchema,
@@ -52,6 +53,20 @@ describe("catalogClubSeasonsResponseSchema", () => {
       ],
     };
     expect(catalogClubSeasonsResponseSchema.parse(payload)).toEqual(payload);
+  });
+});
+
+describe("catalogFacetSearchResponseSchema", () => {
+  it("accepts facet search items without archive URLs", () => {
+    const payload = {
+      items: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440000",
+          label: "Danmark",
+        },
+      ],
+    };
+    expect(catalogFacetSearchResponseSchema.parse(payload)).toEqual(payload);
   });
 });
 
