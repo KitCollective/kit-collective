@@ -111,6 +111,17 @@ describe("isPairInSeedScope", () => {
     expect(seasonLabelInCompetitionScope(scope, "2016/17")).toBe(false);
     expect(isPairInSeedScope(scope, "2016/17")).toBe(false);
   });
+
+  it("accepts bare-year competition scope against split-year pair labels", () => {
+    const scope = {
+      kind: "competition" as const,
+      competition: "superligaen",
+      fromSeason: "2015",
+      toSeason: "2015",
+    };
+    expect(seasonLabelInCompetitionScope(scope, "2015/16")).toBe(true);
+    expect(seasonLabelInCompetitionScope(scope, "2016/17")).toBe(false);
+  });
 });
 
 describe.sequential("runSeed season-scope isolation", () => {

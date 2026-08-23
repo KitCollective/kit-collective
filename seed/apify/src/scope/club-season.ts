@@ -2,6 +2,18 @@ import { type CompetitionSeedScope, resolveSeasonRef, type SeedScope } from "@ki
 import { labelToStartYear } from "../fetch/season-label.js";
 import type { NormalizedFacts } from "../types.js";
 
+function seasonRefToStartYear(ref: string): number {
+  if (ref === "today") {
+    throw new Error("today is not a comparable season label");
+  }
+
+  if (/^\d{4}$/.test(ref)) {
+    return Number.parseInt(ref, 10);
+  }
+
+  return labelToStartYear(ref);
+}
+
 export type ClubSeasonScope = {
   seasonLabel: string;
   clubExternalId: string;
@@ -38,21 +50,21 @@ export function seasonLabelInCompetitionScope(
     scope.toSeason === "today" ? "today" : resolveSeasonRef(scope.competition, scope.toSeason);
   const resolvedPairLabel = resolveSeasonRef(scope.competition, seasonLabel);
 
-  if (fromLabel === toLabel) {
-    return resolvedPairLabel === fromLabel;
+  if (resolvedPairLabel === fromLabel || resolvedPairLabel === toLabel) {
+    return true;
   }
 
   if (fromLabel === "today" || toLabel === "today") {
-    return resolvedPairLabel === fromLabel || resolvedPairLabel === toLabel;
+    return false;
   }
 
   try {
-    const fromYear = labelToStartYear(fromLabel);
-    const toYear = labelToStartYear(toLabel);
-    const labelYear = labelToStartYear(resolvedPairLabel);
+    const fromYear = seasonRefToStartYear(fromLabel);
+    const toYear = seasonRefToStartYear(toLabel);
+    const labelYear = seasonRefToStartYear(resolvedPairLabel);
     return labelYear >= fromYear && labelYear <= toYear;
   } catch {
-    return resolvedPairLabel === fromLabel || resolvedPairLabel === toLabel;
+    return false;
   }
 }
 
