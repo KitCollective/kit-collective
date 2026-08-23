@@ -184,6 +184,7 @@ export function setDraftClub(
     ...draft,
     clubId,
     clubLabel: clubLabel ?? draft.clubLabel,
+    seasonId: draft.clubId === clubId ? draft.seasonId : null,
   }));
 }
 

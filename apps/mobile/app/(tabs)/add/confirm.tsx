@@ -9,6 +9,7 @@ import {
   KIT_TYPES,
   PHOTO_ROLES,
   type PhotoRole,
+  type PhotoSource,
 } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -49,18 +50,28 @@ import { PostSaveSheet } from "@/components/post-save-sheet";
 import { Button, ButtonDock } from "@/components/ui";
 import { markJerseySaved } from "@/session/addSession";
 import { useTypography } from "@/theme/brand-fonts";
-import { motion, space } from "@/theme/tokens";
+import { motion, radius, space } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
+const VISION_TIMEOUT_MS = 12_000;
+
+function readPhotoSource(value: string | string[] | undefined): PhotoSource {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === "camera" ? "camera" : "gallery";
+}
 
 export default function ConfirmScreen() {
   const router = useRouter();
   const theme = useTheme();
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
-  const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const { sessionId, photoSource: photoSourceParam } = useLocalSearchParams<{
+    sessionId: string;
+    photoSource?: string;
+  }>();
+  const defaultPhotoSource = readPhotoSource(photoSourceParam);
   const { accessToken } = useAuth();
   const { state, mutate } = usePersistedCaptureSession(sessionId);
 
@@ -262,7 +273,15 @@ export default function ConfirmScreen() {
     }
 
     let cancelled = false;
+    const startedAt = Date.now();
     const poll = async () => {
+      if (Date.now() - startedAt >= VISION_TIMEOUT_MS) {
+        if (!cancelled) {
+          setVisionPolling(false);
+        }
+        return;
+      }
+
       try {
         const job = await fetchVisionJob(accessToken, visionJobId);
         if (cancelled) {
@@ -329,6 +348,8 @@ export default function ConfirmScreen() {
 
   const selectClub = async (club: CatalogPickerItem) => {
     clubManuallySet.current = true;
+    seasonManuallySet.current = false;
+    setSelectedSeasonLabel(null);
     mutate((current) => setDraftClub(current, current.activeDraftId, club.id, club.label));
     setClubSheetOpen(false);
     setSeasonSheetOpen(true);
@@ -417,7 +438,7 @@ export default function ConfirmScreen() {
           .filter((photo): photo is typeof photo & { role: PhotoRole } => photo.role !== null)
           .map(async (photo) => ({
             role: photo.role,
-            source: "gallery" as const,
+            source: defaultPhotoSource,
             contentBase64: await readPhotoBase64(photo.uri),
           })),
       );
@@ -503,6 +524,29 @@ export default function ConfirmScreen() {
           Vælg klub, sæson og detaljer.
         </Text>
 
+        <View style={styles.section}>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
+          <View style={styles.photoRow}>
+            {PHOTO_ROLES.map((role) => (
+              <PhotoSlot
+                key={role}
+                role={role}
+                uri={photoUris[role]}
+                onPress={() => void pickPhotoForRole(role)}
+              />
+            ))}
+          </View>
+          {photoList.length === 0 ? (
+            <Text style={[typography.caption, { color: theme.contentMuted }]}>
+              Mindst ét foto er påkrævet.
+            </Text>
+          ) : photoList.length < PHOTO_ROLES.length ? (
+            <Text style={[typography.caption, { color: theme.contentMuted }]}>
+              3 fotos anbefales — mærkefoto gør det lettere senere.
+            </Text>
+          ) : null}
+        </View>
+
         {visionPolling ? (
           <Text style={[typography.caption, { color: theme.contentMuted }]}>Analyserer foto…</Text>
         ) : null}
@@ -533,29 +577,6 @@ export default function ConfirmScreen() {
             />
           </Animated.View>
         ) : null}
-
-        <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
-          <View style={styles.photoRow}>
-            {PHOTO_ROLES.map((role) => (
-              <PhotoSlot
-                key={role}
-                role={role}
-                uri={photoUris[role]}
-                onPress={() => void pickPhotoForRole(role)}
-              />
-            ))}
-          </View>
-          {photoList.length === 0 ? (
-            <Text style={[typography.caption, { color: theme.contentMuted }]}>
-              Mindst ét foto er påkrævet.
-            </Text>
-          ) : photoList.length < PHOTO_ROLES.length ? (
-            <Text style={[typography.caption, { color: theme.contentMuted }]}>
-              3 fotos anbefales — mærkefoto gør det lettere senere.
-            </Text>
-          ) : null}
-        </View>
 
         {catalogMiss && !clubSheetOpen ? (
           <Banner
@@ -749,6 +770,7 @@ export default function ConfirmScreen() {
         title="Flere detaljer"
         onDismiss={() => setDetailsSheetOpen(false)}
       >
+        <Text style={[typography.label, { color: theme.contentPrimary }]}>Noter</Text>
         <TextInput
           accessibilityLabel="Noter"
           multiline
@@ -763,6 +785,7 @@ export default function ConfirmScreen() {
               color: theme.contentPrimary,
               borderColor: theme.borderSubtle,
               backgroundColor: theme.surface,
+              borderRadius: radius.sm,
             },
           ]}
         />
@@ -813,7 +836,6 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 120,
     borderWidth: 1,
-    borderRadius: 8,
     padding: space.insetMd,
     textAlignVertical: "top",
   },

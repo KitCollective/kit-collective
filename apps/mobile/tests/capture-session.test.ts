@@ -151,6 +151,20 @@ describe("bind, unbind, and addJersey", () => {
   });
 });
 
+describe("setDraftClub", () => {
+  it("clears season when the club changes", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    let next = setDraftClub(session, draftId, UUID);
+    next = setDraftSeason(next, draftId, UUID_B);
+    expect(getDraft(next, draftId).seasonId).toBe(UUID_B);
+
+    next = setDraftClub(next, draftId, "660e8400-e29b-41d4-a716-446655440002");
+    expect(getDraft(next, draftId).seasonId).toBeNull();
+  });
+});
+
 describe("canSave", () => {
   it("is false until photo, club, season, kit type, size, and condition are explicitly set", () => {
     const session = createCaptureSession([URI_FRONT]);

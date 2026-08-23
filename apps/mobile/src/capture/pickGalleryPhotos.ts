@@ -1,4 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
+import { Platform } from "react-native";
 
 type PickGalleryPhotosOptions = {
   allowsMultipleSelection?: boolean;
@@ -21,6 +22,7 @@ export async function pickGalleryPhotos(
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
     allowsMultipleSelection: options.allowsMultipleSelection ?? false,
+    orderedSelection: Platform.OS === "ios" && (options.allowsMultipleSelection ?? false),
     selectionLimit: options.selectionLimit,
     quality: options.quality ?? 0.8,
   });

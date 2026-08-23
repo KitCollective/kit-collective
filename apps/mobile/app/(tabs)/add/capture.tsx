@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
@@ -53,7 +53,7 @@ export default function CaptureScreen() {
       const { sessionId } = createPersistedCaptureSession(uris, { prefilledClub });
       router.replace({
         pathname: "/(tabs)/add/confirm",
-        params: { sessionId },
+        params: { sessionId, photoSource: "camera" },
       });
     },
     [prefilledClub, router],
@@ -70,8 +70,19 @@ export default function CaptureScreen() {
     }
   }, [finishCapture]);
 
+  const galleryFirstLaunched = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web" || !isRepeatCaptureSession()) {
+      if (galleryFirstLaunched.current) {
+        return;
+      }
+      galleryFirstLaunched.current = true;
+      void openGalleryEscape();
+    }
+  }, [openGalleryEscape]);
+
   if (Platform.OS === "web" || !isRepeatCaptureSession()) {
-    void openGalleryEscape();
     return <View style={[styles.fallback, { backgroundColor: theme.canvas }]} />;
   }
 
