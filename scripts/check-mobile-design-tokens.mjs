@@ -26,14 +26,10 @@ const staticTypeFontFamilyPattern = /fontFamily:\s*type\.\w+\.fontFamily/;
 const staticTypeFontSizePattern = /fontSize:\s*type\.\w+\.fontSize/;
 
 /** Legacy capture surfaces not yet migrated to useTheme(); tighten only by removing entries. */
-const STATIC_COLOR_IMPORT_ALLOWLIST = new Set([
-  "apps/mobile/src/capture/CaptureCameraSession.tsx",
-]);
+const STATIC_COLOR_IMPORT_ALLOWLIST = new Set(["apps/mobile/src/capture/CaptureCameraSession.tsx"]);
 
 /** Typography checks use a separate allowlist — never reuse the color carve-out. */
-const STATIC_TYPOGRAPHY_ALLOWLIST = new Set([
-  "apps/mobile/src/capture/CaptureCameraSession.tsx",
-]);
+const STATIC_TYPOGRAPHY_ALLOWLIST = new Set(["apps/mobile/src/capture/CaptureCameraSession.tsx"]);
 
 const violations = [];
 

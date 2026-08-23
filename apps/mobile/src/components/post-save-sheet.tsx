@@ -42,7 +42,9 @@ export function PostSaveSheet({
   return (
     <Sheet visible={visible} title="Trøjen er gemt" onDismiss={onDismiss}>
       <View style={styles.content}>
-        <Text style={[typography.body, { color: theme.contentSecondary, marginBottom: space.gapSm }]}>
+        <Text
+          style={[typography.body, { color: theme.contentSecondary, marginBottom: space.gapSm }]}
+        >
           {body}
         </Text>
         <Button label="Samme klub" onPress={() => startCapture(savedClub)} disabled={!savedClub} />
