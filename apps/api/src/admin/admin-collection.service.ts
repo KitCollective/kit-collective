@@ -9,8 +9,8 @@ import {
   adminCollectorJerseyListSchema,
   adminCollectorListSchema,
   adminCollectorUserSchema,
-  identityRoleErrorSchema,
   type IdentityRoleErrorCode,
+  identityRoleErrorSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, season, user, userJersey, userJerseyPhoto } from "@kit/db";
