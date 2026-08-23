@@ -61,6 +61,12 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 
 `.cursor/hooks/block-coolify-rest-service-control.sh` denies shell commands that call Coolify REST `/api/v1/services/{uuid}/start|stop|restart` (including bare `curl` to those paths). Season-range runs must use the Coolify MCP `control` tool via `seed/coolify/mcp-call.sh` / `start-apify-job.sh`. Prevents repeating the first KIT-17 checker fail (REST start instead of MCP). Tighten only.
 
+### Seed development proof DB ratchet (KIT-34)
+
+`.cursor/hooks/block-manual-seed-development-proof.sh` denies manual writes under `seed/mcp/proof-output/`. Agents record development-lane seed proof only via `scripts/record-seed-development-proof.sh`, which runs the committed `seed/mcp/scripts/verify-development-db.mjs` and `run-seed-apify-mcp-path.mjs` against the injected `DATABASE_URL` and writes `latest.txt`. `scripts/check-seed-development-proof-scripts.mjs` (CI via `pnpm check:seed-development-proof-scripts`) fails when those scripts are missing. Prevents repeating the KIT-34 checker fail (hand-typed dev-Postgres row counts in workpad/PR without a committed, executed verify path). Tighten only.
+
+`.cursor/hooks/block-hand-typed-seed-db-counts.sh` denies `git commit` messages on seed-proof branches that hand-type squad/club count patterns without referencing `verify-dev-catalog` or `kit-34-verify-output.json`. Use `seed/mcp/scripts/verify-dev-catalog.mjs` (or the record script above) and paste its JSON output — do not type counts by hand. Tighten only.
+
 ### Code quality ratchet
 
 `biome.json` (format + lint), `oxlint.config.ts` with the vendored plugin under

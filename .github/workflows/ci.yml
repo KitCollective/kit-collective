@@ -67,6 +67,9 @@ jobs:
       - name: Check FK seed test isolation
         run: pnpm check:seed-fkapi-tests
 
+      - name: Check seed development proof scripts
+        run: pnpm check:seed-development-proof-scripts
+
       - name: Assert seed packages are in workspace and turbo test graph
         run: |
           node -e '

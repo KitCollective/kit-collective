@@ -31,6 +31,10 @@
         "failClosed": true
       },
       {
+        "command": "bash .cursor/hooks/block-manual-seed-development-proof.sh",
+        "failClosed": true
+      },
+      {
         "command": "bash .cursor/hooks/block-hand-typed-seed-db-counts.sh",
         "failClosed": true
       }
