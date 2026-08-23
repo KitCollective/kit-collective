@@ -20,8 +20,6 @@ type FloatingTabBarProps = {
 
 type TabPlace = "collection" | "search" | "wishlist" | "profile";
 
-const PLACE_ROUTES: TabPlace[] = ["collection", "search", "wishlist", "profile"];
-
 const PLACE_CONFIG: Record<
   TabPlace,
   {
@@ -37,7 +35,15 @@ const PLACE_CONFIG: Record<
 };
 
 function isTabPlace(name: string): name is TabPlace {
-  return PLACE_ROUTES.includes(name as TabPlace);
+  switch (name) {
+    case "collection":
+    case "search":
+    case "wishlist":
+    case "profile":
+      return true;
+    default:
+      return false;
+  }
 }
 
 export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
