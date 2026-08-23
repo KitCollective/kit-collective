@@ -5,7 +5,17 @@ export {
   type SeedCliArgs,
 } from "./cli-args.js";
 export {
+  type CompetitionHit,
+  type CompetitionIdentity,
+  foldCompetitionText,
+  iso3166ForCountryName,
+  normalizeCompetitionText,
+  pickCompetitionHit,
+  searchQueryForCompetition,
+} from "./competition-query.js";
+export {
   type CompetitionDefinition,
+  catalogCompetitionIdentity,
   resolveCompetition,
 } from "./competitions.js";
 export {

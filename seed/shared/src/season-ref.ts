@@ -12,7 +12,7 @@ export function resolveSeasonRef(competition: string, ref: string): string {
 
   if (/^0001$/.test(ref)) {
     const def = resolveCompetition(competition);
-    if (!def) {
+    if (!def?.firstSeasonLabel) {
       throw new Error(`Unknown competition: ${competition}`);
     }
     return def.firstSeasonLabel;

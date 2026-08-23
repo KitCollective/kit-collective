@@ -13,6 +13,28 @@ describe("resolveSeasonRef", () => {
 });
 
 describe("parseSeedScopeArgv", () => {
+  it("strips a leading -- so pnpm-forwarded MCP argv still parses", () => {
+    const result = parseSeedScopeArgv([
+      "--",
+      "premier-league",
+      "2019/20",
+      "2019/20",
+      "development",
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      parsed: {
+        scope: {
+          kind: "competition",
+          competition: "premier-league",
+          fromSeason: "2019/20",
+          toSeason: "2019/20",
+        },
+        lane: "development",
+      },
+    });
+  });
+
   it("parses competition range with default lane", () => {
     const result = parseSeedScopeArgv(["dk1", "1995/96", "2025/26"]);
     expect(result).toEqual({

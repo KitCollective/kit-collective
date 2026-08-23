@@ -183,6 +183,115 @@ describe("kader fetch adapter from recorded HTML", () => {
     expect(competitionFetches).toBe(1);
   });
 
+  it("searches Transfermarkt for Premier League, then walks clubs on GB1", async () => {
+    const searchHtml = readFileSync(path.join(fixturesDir, "search/competitions.html"), "utf8");
+    const competitionHtml = readFileSync(
+      path.join(fixturesDir, "competitions/DK1-2015.html"),
+      "utf8",
+    );
+    const kader190 = readFileSync(path.join(fixturesDir, "kader/190-2015.html"), "utf8");
+    const fetched: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      fetchHtml: async (url) => {
+        fetched.push(url);
+        if (url.includes("schnellsuche")) {
+          return searchHtml;
+        }
+        if (url.includes("/wettbewerb/GB1/")) {
+          expect(url).toContain("/premier-league/startseite/wettbewerb/GB1");
+          return competitionHtml;
+        }
+        if (url.includes("/verein/190/")) {
+          return kader190;
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    const pairs = await adapter.listClubSeasonPairs({
+      competition: "Premier League",
+      fromSeason: "2019/20",
+      toSeason: "2019/20",
+    });
+    const raw = await adapter.fetchClubSeason({
+      competition: "Premier League",
+      clubExternalId: "190",
+      season: "2019/20",
+    });
+
+    expect(fetched.some((url) => url.includes("schnellsuche"))).toBe(true);
+    expect(pairs).toEqual([
+      { clubExternalId: "190", seasonLabel: "2019/20" },
+      { clubExternalId: "191", seasonLabel: "2019/20" },
+    ]);
+    expect(raw.competition.id).toBe("gb1");
+    expect(raw.competition.name).toBe("Premier League");
+    expect(raw.competition.country.iso3166).toBe("GB");
+    expect(raw.seasons[0]?.clubs[0]?.players[0]?.jerseyNumber).toBe(23);
+  });
+
+  it("searches Transfermarkt for La Liga, not the Danish country phrase", async () => {
+    const searchHtml = readFileSync(path.join(fixturesDir, "search/competitions.html"), "utf8");
+    const fetched: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      fetchHtml: async (url) => {
+        fetched.push(url);
+        if (url.includes("schnellsuche")) {
+          expect(url).toContain("query=La%20Liga");
+          expect(url).not.toContain("Spanien");
+          return searchHtml;
+        }
+        if (url.includes("/wettbewerb/ES1/")) {
+          expect(url).toContain("/laliga/startseite/wettbewerb/ES1");
+          return readFileSync(path.join(fixturesDir, "competitions/DK1-2015.html"), "utf8");
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    const pairs = await adapter.listClubSeasonPairs({
+      competition: "La Liga i Spanien",
+      fromSeason: "2019/20",
+      toSeason: "2019/20",
+    });
+    expect(pairs).toHaveLength(2);
+    expect(fetched.some((url) => url.includes("query=La%20Liga"))).toBe(true);
+  });
+
+  it("searches Super Lig for tyrkiske Superliga, then walks TR1", async () => {
+    const searchHtml = readFileSync(path.join(fixturesDir, "search/competitions.html"), "utf8");
+    const fetched: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      fetchHtml: async (url) => {
+        fetched.push(url);
+        if (url.includes("schnellsuche")) {
+          expect(url).toContain("query=Super%20Lig");
+          expect(url).not.toContain("tyrkiske");
+          return searchHtml;
+        }
+        if (url.includes("/wettbewerb/TR1/")) {
+          expect(url).toContain("/super-lig/startseite/wettbewerb/TR1");
+          return readFileSync(path.join(fixturesDir, "competitions/DK1-2015.html"), "utf8");
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    const pairs = await adapter.listClubSeasonPairs({
+      competition: "tyrkiske Superliga",
+      fromSeason: "2019/20",
+      toSeason: "2019/20",
+    });
+    expect(pairs).toHaveLength(2);
+    expect(fetched.some((url) => url.includes("/super-lig/startseite/wettbewerb/TR1"))).toBe(true);
+  });
+
   it("writes live HTML to cacheDir and avoids a second network fetch for the same URL", async () => {
     const cacheDir = await mkdtemp(path.join(tmpdir(), "kader-live-cache-"));
     const competitionHtml = readFileSync(

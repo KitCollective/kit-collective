@@ -94,6 +94,10 @@ _Avoid_: environment as a synonym without saying which object
 One chat sentence that starts the full ingest for a Seed scope into a lane’s Postgres. The operator does not chain hops. Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
 _Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad
 
+**Competition query**:
+The operator names a league in natural language (`Premier League`, `La Liga i Spanien`, `tyrkiske Superliga`). The Seed job resolves that to a Transfermarkt competition (id + slug + country): catalog alias first, otherwise a Transfermarkt search. Country words disambiguate. Then the existing walk: Competition season page → clubs → kader → numbers.
+_Avoid_: a closed hardcoded world list as the only way to name a league; treating every Superliga as Denmark
+
 **Seed scope**:
 What one Seed sentence covers: a club + one season (squad and numbers), or a named competition + Season range (every club that season, squads and numbers). Superliga is the Proof run; Bundesliga and others are the same loop.
 _Avoid_: Superliga-only as the product ceiling; treating a club-season ask as a different product
