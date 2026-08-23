@@ -5,6 +5,15 @@ export {
   type SeedCliArgs,
 } from "./cli-args.js";
 export {
+  type CompetitionHit,
+  type CompetitionIdentity,
+  foldCompetitionText,
+  iso3166ForCountryName,
+  normalizeCompetitionText,
+  pickCompetitionHit,
+} from "./competition-query.js";
+export {
+  catalogCompetitionIdentity,
   type CompetitionDefinition,
   resolveCompetition,
 } from "./competitions.js";

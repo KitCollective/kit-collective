@@ -1,4 +1,8 @@
-import { resolveCompetition, resolveSeasonRef } from "@kit/seed-shared";
+import {
+  catalogCompetitionIdentity,
+  type CompetitionIdentity,
+  resolveSeasonRef,
+} from "@kit/seed-shared";
 import type { TransfermarktRawPayload } from "../types.js";
 import type { ActorPlayerProfile, ActorSeasonClubRow, ActorSquadRow } from "./actor-types.js";
 import { labelToStartYear, seasonCalendarBounds, startYearToLabel } from "./season-label.js";
@@ -10,26 +14,21 @@ export interface MapClubSeasonParams {
   clubName: string;
   squadRows: ActorSquadRow[];
   profileByPlayerId: Map<string, ActorPlayerProfile>;
+  identity?: CompetitionIdentity;
 }
 
-function resolveCompetitionOrThrow(slug: string): {
-  tmCode: string;
-  name: string;
-} {
-  const def = resolveCompetition(slug);
-  if (!def) {
+function resolveCompetitionOrThrow(
+  slug: string,
+  identity?: CompetitionIdentity,
+): CompetitionIdentity {
+  if (identity) {
+    return identity;
+  }
+  const catalog = catalogCompetitionIdentity(slug);
+  if (!catalog) {
     throw new Error(`Unknown competition: ${slug}`);
   }
-
-  const names: Record<string, string> = {
-    DK1: "Superligaen",
-    GB2: "Championship",
-  };
-
-  return {
-    tmCode: def.leagueTransfermarktId,
-    name: names[def.leagueTransfermarktId] ?? def.leagueTransfermarktId,
-  };
+  return catalog;
 }
 
 type ResolvedPlayer = { id: string; name: string; jerseyNumber?: number };
@@ -72,7 +71,8 @@ function resolvePlayer(
 }
 
 export function mapClubSeasonToPayload(params: MapClubSeasonParams): TransfermarktRawPayload {
-  const { tmCode, name: competitionName } = resolveCompetitionOrThrow(params.competitionSlug);
+  const identity = resolveCompetitionOrThrow(params.competitionSlug, params.identity);
+  const tmCode = identity.leagueTransfermarktId;
   const startYear = labelToStartYear(params.seasonLabel);
   const { startDate, endDate } = seasonCalendarBounds(startYear);
 
@@ -83,11 +83,11 @@ export function mapClubSeasonToPayload(params: MapClubSeasonParams): Transfermar
   return {
     competition: {
       id: tmCode.toLowerCase(),
-      name: competitionName,
+      name: identity.name,
       country: {
-        id: tmCode === "DK1" ? "country-dk" : "country-gb",
-        name: tmCode === "DK1" ? "Denmark" : "England",
-        iso3166: tmCode === "DK1" ? "DK" : "GB",
+        id: `country-${identity.iso3166.toLowerCase()}`,
+        name: identity.countryName,
+        iso3166: identity.iso3166,
       },
     },
     seasons: [
@@ -101,7 +101,7 @@ export function mapClubSeasonToPayload(params: MapClubSeasonParams): Transfermar
           {
             id: params.clubExternalId,
             name: params.clubName,
-            country: { iso3166: tmCode === "DK1" ? "DK" : "GB" },
+            country: { iso3166: identity.iso3166 },
             players,
           },
         ],
