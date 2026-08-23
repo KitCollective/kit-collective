@@ -1,8 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
 import {
-  AccessibilityInfo,
   Modal,
   Pressable,
   StyleSheet,
@@ -13,6 +11,7 @@ import {
 } from "react-native";
 import type { ThemeColors } from "@/theme/tokens";
 import { radius, space, type } from "@/theme/tokens";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
 type MarkProps = {
@@ -142,11 +141,7 @@ type SheetProps = {
 
 export function Sheet({ visible, title, onDismiss, children }: SheetProps) {
   const theme = useTheme();
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   return (
     <Modal
