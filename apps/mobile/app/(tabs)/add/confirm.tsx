@@ -26,7 +26,7 @@ import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
-import { Button } from "@/components/ui";
+import { Button, ButtonDock } from "@/components/ui";
 import {
   deleteDraft,
   loadDraft,
@@ -339,8 +339,29 @@ export default function ConfirmScreen() {
   };
 
   const photoList = PHOTO_ROLES.filter((role) => photoUris[role]);
-  const canSave =
-    accessToken && selectedClub && selectedSeason && photoList.length > 0 && !saving && draftId;
+  const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
+
+  const getSaveBlockMessage = (): string | null => {
+    if (photoList.length === 0) {
+      return "Mindst ét foto er påkrævet.";
+    }
+    if (!selectedClub) {
+      return "Vælg en klub.";
+    }
+    if (!selectedSeason) {
+      return "Vælg en sæson.";
+    }
+    return null;
+  };
+
+  const dockHelper = saveBlockMessage ?? getSaveBlockMessage();
+
+  useEffect(() => {
+    const blocked = photoList.length === 0 || !selectedClub || !selectedSeason;
+    if (!blocked) {
+      setSaveBlockMessage(null);
+    }
+  }, [selectedClub, selectedSeason, photoList.length]);
 
   const applySuggestionBanner = async () => {
     if (!visionSuggestion?.suggestions || !accessToken) {
@@ -370,7 +391,13 @@ export default function ConfirmScreen() {
   };
 
   const handleSave = async () => {
-    if (!accessToken || !selectedClub || !selectedSeason || photoList.length === 0 || !draftId) {
+    const block = getSaveBlockMessage();
+    if (block) {
+      setSaveBlockMessage(block);
+      return;
+    }
+
+    if (!accessToken || !selectedClub || !selectedSeason || !draftId) {
       return;
     }
 
@@ -599,15 +626,16 @@ export default function ConfirmScreen() {
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <ButtonDock>
+        {dockHelper ? <Text style={styles.helper}>{dockHelper}</Text> : null}
         <Button
           label="Gem"
           variant="primary"
+          width="fill"
           loading={saving}
-          disabled={!canSave}
           onPress={() => void handleSave()}
         />
-      </View>
+      </ButtonDock>
 
       <Sheet visible={clubSheetOpen} title="Vælg klub" onDismiss={() => setClubSheetOpen(false)}>
         <SearchField
@@ -737,12 +765,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: space.gapSm,
-  },
-  footer: {
-    padding: space.insetLg,
-    borderTopWidth: 1,
-    borderTopColor: color.borderSubtle,
-    backgroundColor: color.canvas,
   },
   loader: {
     paddingVertical: space.insetLg,

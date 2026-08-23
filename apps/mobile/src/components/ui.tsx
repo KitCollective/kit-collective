@@ -8,7 +8,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { color, radius, space, type } from "@/theme/tokens";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { type ButtonWidth, buttonLayoutStyles } from "@/components/button-layout";
+import { color, space, type } from "@/theme/tokens";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -53,12 +55,14 @@ type ButtonVariant = "primary" | "secondary" | "tertiary" | "destructive";
 type ButtonProps = PressableProps & {
   label: string;
   variant?: ButtonVariant;
+  width?: ButtonWidth;
   loading?: boolean;
 };
 
 export function Button({
   label,
   variant = "primary",
+  width = "hug",
   loading = false,
   disabled,
   ...props
@@ -69,7 +73,7 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       style={({ pressed }) => [
-        styles.base,
+        buttonLayoutStyles(width),
         variantStyles[variant],
         isDisabled && styles.disabled,
         pressed && !isDisabled && styles.pressed,
@@ -83,6 +87,24 @@ export function Button({
         <Text style={[styles.label, labelStyles[variant]]}>{label}</Text>
       )}
     </Pressable>
+  );
+}
+
+type ButtonDockProps = {
+  children: ReactNode;
+};
+
+/**
+ * Bottom-pinned footer actions region (docs/design-system.md → Layout → Footer actions).
+ * Stacks fill primaries and tertiary paths vertically; safe-area aware.
+ */
+export function ButtonDock({ children }: ButtonDockProps) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, space.insetMd) }]}>
+      {children}
+    </View>
   );
 }
 
@@ -109,13 +131,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  base: {
-    minHeight: 44,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: space.insetMd,
-  },
   disabled: {
     opacity: 0.5,
   },
@@ -126,6 +141,14 @@ const styles = StyleSheet.create({
     fontSize: type.label.fontSize,
     fontWeight: type.label.fontWeight,
     lineHeight: type.label.lineHeight,
+  },
+  dock: {
+    paddingHorizontal: space.insetLg,
+    paddingTop: space.insetMd,
+    gap: space.gapMd,
+    borderTopWidth: 1,
+    borderTopColor: color.borderSubtle,
+    backgroundColor: color.canvas,
   },
   emptyState: {
     flex: 1,

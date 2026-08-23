@@ -73,9 +73,9 @@ components:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.on-primary}"
     typography: "{typography.label}"
-    rounded: "{rounded.full}"
+    rounded: "{rounded.sm}"
     padding: 12px
-    height: 44px
+    height: 48px
   button-secondary:
     backgroundColor: "{colors.fill-secondary}"
     textColor: "{colors.primary}"
@@ -157,9 +157,9 @@ components:
     backgroundColor: "{colors.on-primary}"
     textColor: "{colors.on-primary-dark}"
     typography: "{typography.label}"
-    rounded: "{rounded.full}"
+    rounded: "{rounded.sm}"
     padding: 12px
-    height: 44px
+    height: 48px
 ---
 
 ## Overview
@@ -206,13 +206,13 @@ Flat cards: no drop shadow; `border-subtle` if the photo edge needs it. Overlay 
 
 ## Shapes
 
-Two families: cards and photo tiles use 12px (`rounded.md`); sheets 16px (`rounded.lg`); nested children shrink one step. Buttons, chips, and search use pill (`rounded.full`). Do not pill a jersey tile. Do not use 0px on interactive elements.
+Two families: cards and photo tiles use 12px (`rounded.md`); sheets 16px (`rounded.lg`); nested children shrink one step. Buttons use 8px (`rounded.sm`). Chips and search use pill (`rounded.full`). Do not pill a jersey tile. Do not use 0px on interactive elements.
 
 ## Components
 
 Inventory and full contracts: `docs/design-system.md`. Token snapshots below are for agents that only read this file.
 
-- **Button:** One primary per region. Primary = black pill, not wash. Destructive = danger fill. Loading keeps the label.
+- **Button:** One primary per region. Dock primaries = black rectangular (`rounded.sm`), fill width, ≥ 48 tall. Inline/banner stay hug. Destructive = danger fill. Loading keeps the label.
 - **Chip:** Selected = primary fill. Not wash. No emoji.
 - **Jersey tile:** User photo 4:5 + caption. No price, buy, boost, or archive `KitPhoto`.
 - **Search field:** Pill. Club search returns catalog IDs, not free-text club as truth.

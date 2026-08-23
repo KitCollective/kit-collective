@@ -12,7 +12,7 @@ import {
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { JerseyTile } from "@/components/jersey-tile";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, ButtonDock, EmptyState } from "@/components/ui";
 import { color, space, type } from "@/theme/tokens";
 
 export default function CollectionScreen() {
@@ -65,19 +65,17 @@ export default function CollectionScreen() {
 
   if (jerseys.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={styles.emptyContainer}>
         <Text style={styles.title}>Samling</Text>
-        <EmptyState
-          title="Ingen trøjer endnu"
-          body="Tilføj den første fra galleriet."
-          action={
-            <Button
-              label="Tilføj trøje"
-              variant="primary"
-              onPress={() => router.push("/(tabs)/add/capture")}
-            />
-          }
-        />
+        <EmptyState title="Ingen trøjer endnu" body="Tilføj den første fra galleriet." />
+        <ButtonDock>
+          <Button
+            label="Tilføj trøje"
+            variant="primary"
+            width="fill"
+            onPress={() => router.push("/(tabs)/add/capture")}
+          />
+        </ButtonDock>
       </View>
     );
   }
@@ -124,6 +122,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: color.canvas,
     padding: space.insetMd,
+  },
+  emptyContainer: {
+    flex: 1,
+    backgroundColor: color.canvas,
+    paddingTop: space.insetMd,
+    paddingHorizontal: space.insetMd,
   },
   centered: {
     flex: 1,
