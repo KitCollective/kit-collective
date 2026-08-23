@@ -130,6 +130,40 @@ export function createCaptureSession(
   return state;
 }
 
+export function createCaptureSessionFromPhotos(
+  photos: CaptureSessionPhoto[],
+  options?: { store?: CaptureSessionStore; sessionId?: string },
+): CaptureSessionState {
+  const boundPhotos = photos.filter(
+    (photo): photo is CaptureSessionPhoto & { role: PhotoRole } => photo.role !== null,
+  );
+  const orderedUris = boundPhotos.map((photo) => photo.uri);
+  const branch = branchFromPhotoCount(orderedUris.length);
+  const draftId = createId();
+  const sessionId = options?.sessionId ?? createId();
+
+  const draft =
+    branch === "single"
+      ? {
+          ...createEmptyDraft(draftId),
+          photos: boundPhotos,
+        }
+      : createEmptyDraft(draftId);
+
+  const state: CaptureSessionState = {
+    sessionId,
+    branch,
+    orderedUris: [...orderedUris],
+    unboundUris: branch === "bulk" ? [...orderedUris] : [],
+    drafts: [draft],
+    activeDraftId: draftId,
+    store: options?.store,
+  };
+
+  persist(state);
+  return state;
+}
+
 export function bindPhoto(
   state: CaptureSessionState,
   uri: string,

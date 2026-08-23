@@ -1,9 +1,20 @@
 import type { PhotoSource } from "@kit/domain";
 import * as Crypto from "expo-crypto";
 import { Alert } from "react-native";
-import { branchFromPhotoCount, createCaptureSession, setDraftClub } from "./captureSession";
+import {
+  branchFromPhotoCount,
+  createCaptureSession,
+  createCaptureSessionFromPhotos,
+  setDraftClub,
+} from "./captureSession";
 import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
-import type { CaptureBranch, CaptureSessionState } from "./captureSessionTypes";
+import type {
+  CaptureBranch,
+  CaptureSessionPhoto,
+  CaptureSessionState,
+} from "./captureSessionTypes";
+
+export { mergeGalleryEscapePhotos } from "./galleryEscape";
 
 export type PrefilledClub = {
   id: string;
@@ -49,6 +60,32 @@ export function createPersistedCaptureSession(
     store,
     sessionId,
     photoSource: options?.photoSource ?? "gallery",
+  });
+
+  if (options?.prefilledClub) {
+    state = setDraftClub(
+      state,
+      state.activeDraftId,
+      options.prefilledClub.id,
+      options.prefilledClub.label,
+    );
+  }
+
+  return { sessionId, branch: state.branch };
+}
+
+export function createPersistedCaptureSessionFromPhotos(
+  photos: CaptureSessionPhoto[],
+  options?: {
+    prefilledClub?: PrefilledClub | null;
+    sessionId?: string;
+  },
+): { sessionId: string; branch: CaptureBranch } {
+  const sessionId = options?.sessionId ?? Crypto.randomUUID();
+  const store = createSqliteCaptureSessionStore(sessionId);
+  let state = createCaptureSessionFromPhotos(photos, {
+    store,
+    sessionId,
   });
 
   if (options?.prefilledClub) {

@@ -42,7 +42,10 @@ import {
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
-import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession";
+import {
+  shouldConfirmRedirectAway,
+  usePersistedCaptureSession,
+} from "@/capture/usePersistedCaptureSession";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
@@ -66,7 +69,7 @@ export default function ConfirmScreen() {
     sessionId: string;
   }>();
   const { accessToken } = useAuth();
-  const { state, mutate } = usePersistedCaptureSession(sessionId);
+  const { state, isSessionResolved, mutate } = usePersistedCaptureSession(sessionId);
 
   const [clubSheetOpen, setClubSheetOpen] = useState(false);
   const [seasonSheetOpen, setSeasonSheetOpen] = useState(false);
@@ -98,10 +101,10 @@ export default function ConfirmScreen() {
   const draft = state ? getDraft(state, state.activeDraftId) : null;
 
   useEffect(() => {
-    if (!sessionId || !state) {
+    if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
       router.replace("/(tabs)/add");
     }
-  }, [router, sessionId, state]);
+  }, [router, sessionId, state, isSessionResolved]);
 
   useEffect(() => {
     if (!accessToken || !draft?.clubId) {

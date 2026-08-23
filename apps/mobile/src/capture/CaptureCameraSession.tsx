@@ -13,7 +13,7 @@ import { color, radius, space, type } from "@/theme/tokens";
 type CaptureCameraSessionProps = {
   onComplete: (uris: string[]) => void;
   onClose: () => void;
-  onGalleryEscape: () => void;
+  onGalleryEscape: (existingPhotos: CapturedPhoto[]) => void;
 };
 
 type CapturedPhoto = {
@@ -190,7 +190,11 @@ export function CaptureCameraSession({
         </View>
 
         <View style={styles.controls}>
-          <Button label="Vælg fra galleri" variant="tertiary" onPress={onGalleryEscape} />
+          <Button
+            label="Vælg fra galleri"
+            variant="tertiary"
+            onPress={() => onGalleryEscape(photos)}
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tag billede"

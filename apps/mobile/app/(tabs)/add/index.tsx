@@ -7,8 +7,7 @@ import {
   readPrefilledClub,
   showBulkUploadBlockedAlert,
 } from "@/capture/captureFlow";
-import { galleryMultiSelectQuality } from "@/capture/photoBytes";
-import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
+import { pickUploadFiles } from "@/capture/pickUploadFiles";
 import { ScreenHeader } from "@/components/screen-header";
 import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
@@ -30,9 +29,8 @@ export default function AddChooserScreen() {
   }, [router]);
 
   const handleUpload = useCallback(async () => {
-    const uris = await pickGalleryPhotos({
+    const uris = await pickUploadFiles({
       allowsMultipleSelection: true,
-      quality: galleryMultiSelectQuality(),
     });
 
     if (!uris) {

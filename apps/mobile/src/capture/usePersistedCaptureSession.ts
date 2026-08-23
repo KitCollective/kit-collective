@@ -2,23 +2,38 @@ import { useCallback, useEffect, useState } from "react";
 import { loadPersistedCaptureSession, withPersistedCaptureSession } from "./captureFlow";
 import type { CaptureSessionState } from "./captureSessionTypes";
 
+export { shouldConfirmRedirectAway } from "./confirmRedirect";
+
 export function usePersistedCaptureSession(sessionId: string | undefined) {
-  const [state, setState] = useState<CaptureSessionState | null>(null);
+  const [state, setState] = useState<CaptureSessionState | null>(() => {
+    if (!sessionId) {
+      return null;
+    }
+    return loadPersistedCaptureSession(sessionId);
+  });
+  const [isSessionResolved, setIsSessionResolved] = useState(() => sessionId !== undefined);
 
   const refresh = useCallback(() => {
     if (!sessionId) {
       setState(null);
+      setIsSessionResolved(true);
       return null;
     }
 
     const loaded = loadPersistedCaptureSession(sessionId);
     setState(loaded);
+    setIsSessionResolved(true);
     return loaded;
   }, [sessionId]);
 
   useEffect(() => {
+    if (!sessionId) {
+      setState(null);
+      setIsSessionResolved(true);
+      return;
+    }
     refresh();
-  }, [refresh]);
+  }, [refresh, sessionId]);
 
   const mutate = useCallback(
     (updater: (current: CaptureSessionState) => CaptureSessionState) => {
@@ -39,5 +54,5 @@ export function usePersistedCaptureSession(sessionId: string | undefined) {
     [sessionId],
   );
 
-  return { state, refresh, mutate };
+  return { state, isSessionResolved, refresh, mutate };
 }
