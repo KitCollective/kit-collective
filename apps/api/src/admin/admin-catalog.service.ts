@@ -526,7 +526,7 @@ export class AdminCatalogService {
       )
       .leftJoin(kitPhoto, eq(kitPhoto.kitId, kit.id))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .groupBy(kit.id, kit.type, kit.clubId, kit.seasonId, season.label)
+      .groupBy(kit.id, kit.type, kit.clubId, kit.seasonId, season.label, season.startsOn)
       .orderBy(desc(season.startsOn), asc(kit.type));
 
     return rows
