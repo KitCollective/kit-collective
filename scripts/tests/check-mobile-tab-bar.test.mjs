@@ -20,7 +20,5 @@ test("checkMobileTabBar fails when a renderSlot call is removed from the bar sou
   const source = readFileSync(floatingBarPath, "utf8");
   const mutated = source.replace('{renderSlot("profile")}', "");
   const violations = checkMobileTabBar({ barSource: mutated });
-  assert.ok(
-    violations.some((violation) => violation.includes("expected five icon render sites")),
-  );
+  assert.ok(violations.some((violation) => violation.includes("expected five icon render sites")));
 });

@@ -18,8 +18,7 @@ export function countIconRenderSites(source) {
 export function checkMobileTabBar(overrides = {}) {
   const violations = [];
 
-  const layoutSource =
-    overrides.layoutSource ?? readFileSync(tabLayoutPath, "utf8");
+  const layoutSource = overrides.layoutSource ?? readFileSync(tabLayoutPath, "utf8");
   const barSource = overrides.barSource ?? readFileSync(floatingBarPath, "utf8");
 
   if (!layoutSource.includes("FloatingTabBar")) {
@@ -31,7 +30,9 @@ export function checkMobileTabBar(overrides = {}) {
   }
 
   if (/tabBarLabel\s*:/.test(layoutSource)) {
-    violations.push(`${tabLayoutPath}: tab bar must be icon-only (no tabBarLabel in screen options)`);
+    violations.push(
+      `${tabLayoutPath}: tab bar must be icon-only (no tabBarLabel in screen options)`,
+    );
   }
 
   const requiredAccessibleNames = ["Samling", "Søg", "Tilføj trøje", "Ønske", "Profil"];

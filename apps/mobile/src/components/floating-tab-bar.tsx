@@ -3,9 +3,8 @@ import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { withAlpha } from "@/theme/tokens";
 import { floatingTabBarLayout } from "@/theme/tab-bar-layout";
-import { radius } from "@/theme/tokens";
+import { radius, withAlpha } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 const TAB_BAR_SURFACE_ALPHA = {
