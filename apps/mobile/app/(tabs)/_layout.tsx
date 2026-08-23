@@ -1,15 +1,18 @@
 import { Tabs } from "expo-router";
 import { FloatingTabBar } from "@/components/floating-tab-bar";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
 export default function TabsLayout() {
   const theme = useTheme();
+  const reduceMotion = useReduceMotion();
 
   return (
     <Tabs
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
+        animation: reduceMotion ? "none" : "fade",
         tabBarStyle: {
           position: "absolute",
           backgroundColor: "transparent",

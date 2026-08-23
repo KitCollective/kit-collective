@@ -639,6 +639,7 @@ export default function ConfirmScreen() {
 
       <Sheet visible={clubSheetOpen} title="Vælg klub" onDismiss={() => setClubSheetOpen(false)}>
         <SearchField
+          variant="catalog"
           accessibilityLabel="Søg klub"
           placeholder="Søg klub"
           value={clubQuery}

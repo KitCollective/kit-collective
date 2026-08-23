@@ -85,6 +85,7 @@ export default function SearchScreen() {
       <ScreenHeader title="Søg" />
       <View style={styles.searchWrapper}>
         <SearchField
+          variant="collection"
           value={query}
           onChangeText={setQuery}
           placeholder="Søg i din samling"

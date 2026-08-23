@@ -3,7 +3,8 @@ import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { radius, tabBar } from "@/theme/tokens";
+import { radius } from "@/theme/tokens";
+import { floatingTabBarLayout } from "@/theme/tab-bar-layout";
 import { useTheme } from "@/theme/use-theme";
 
 type TabBarNavigation = {
@@ -111,7 +112,10 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.container, { paddingBottom: tabBar.bottomOffset + insets.bottom }]}
+      style={[
+        styles.container,
+        { paddingBottom: floatingTabBarLayout.bottomOffset + insets.bottom },
+      ]}
     >
       {Platform.OS === "ios" ? (
         <BlurView
@@ -149,8 +153,8 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    left: tabBar.horizontalInset,
-    right: tabBar.horizontalInset,
+    left: floatingTabBarLayout.horizontalInset,
+    right: floatingTabBarLayout.horizontalInset,
     bottom: 0,
   },
   pill: {
@@ -166,7 +170,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    height: tabBar.pillHeight,
+    height: floatingTabBarLayout.pillHeight,
     borderWidth: 1,
     borderRadius: radius.pill,
     paddingHorizontal: 4,

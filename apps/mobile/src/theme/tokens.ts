@@ -130,18 +130,6 @@ export const space = {
   gapLg: 16,
 } as const;
 
-/** Reserve space so grid rows clear the floating tab bar (docs/design-system.md Layout). */
-export const tabBar = {
-  pillHeight: 66,
-  bottomOffset: 30,
-  horizontalInset: 22,
-  contentPaddingExtra: 16,
-} as const;
-
-export function tabBarReserve(bottomInset: number): number {
-  return tabBar.pillHeight + tabBar.bottomOffset + bottomInset + tabBar.contentPaddingExtra;
-}
-
 export const type = {
   displayLarge: {
     fontFamily: fontFamily.display,

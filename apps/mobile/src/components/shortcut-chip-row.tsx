@@ -1,7 +1,8 @@
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Chip } from "@/components/chip";
-import { space, tabBarReserve } from "@/theme/tokens";
+import { tabBarReserve } from "@/theme/tab-bar-layout";
+import { space } from "@/theme/tokens";
 
 type ShortcutChipRowProps = {
   selectedShortcutId: string | null;

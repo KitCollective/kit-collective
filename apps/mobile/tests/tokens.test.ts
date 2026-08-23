@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { color, getThemeColors, primitive, tabBar, tabBarReserve } from "../src/theme/tokens";
+import { floatingTabBarLayout, tabBarReserve } from "../src/theme/tab-bar-layout";
+import { color, getThemeColors, primitive, space } from "../src/theme/tokens";
 
 describe("color primitives", () => {
   it("keeps black and gray900 as separate primitives", () => {
@@ -31,10 +32,22 @@ describe("getThemeColors", () => {
   });
 });
 
+describe("floatingTabBarLayout", () => {
+  it("composes layout constants from the spacing scale only", () => {
+    expect(floatingTabBarLayout.pillHeight).toBe(space.insetLg * 2 + space.insetMd);
+    expect(floatingTabBarLayout.bottomOffset).toBe(space.insetLg + space.insetSm);
+    expect(floatingTabBarLayout.horizontalInset).toBe(space.insetLg);
+    expect(floatingTabBarLayout.contentPaddingExtra).toBe(space.insetMd);
+  });
+});
+
 describe("tabBarReserve", () => {
   it("reserves space for pill, offset, inset, and extra padding", () => {
     expect(tabBarReserve(34)).toBe(
-      tabBar.pillHeight + tabBar.bottomOffset + 34 + tabBar.contentPaddingExtra,
+      floatingTabBarLayout.pillHeight +
+        floatingTabBarLayout.bottomOffset +
+        34 +
+        floatingTabBarLayout.contentPaddingExtra,
     );
   });
 });

@@ -18,9 +18,11 @@ Apply the lock; do not invent taste:
   or Components inventory, flag the gap on the Linear issue. Do not invent layout, tokens,
   or new primitive names (e.g. `Screen`, `FieldLabel`) — use locked tokens inline or wait
   for sign-off.
-- Tab bar screens (`apps/mobile/app/(tabs)/`) must set `tabBarIcon` plus Danish
-  `tabBarLabel` on every tab — icon + label anatomy from `docs/design-system.md` Tab bar.
-  CI enforces this via `pnpm check:mobile-tab-bar`. A `tabBarLabel`-only bar is a miss.
+- Tab bar screens (`apps/mobile/app/(tabs)/`) use the locked floating icon-only glass pill
+  (docs/design-system.md Tab bar, Gap 2026-08-23). Five slots: Samling · Søg · Tilføj trøje ·
+  Ønske · Profil — icon-only chrome with Danish accessible names, no visible tab labels.
+  CI enforces anatomy via `pnpm check:mobile-tab-bar`. A labeled dock or `tabBarLabel`-only bar
+  is a miss.
 - Type size comes from locked `type.*` roles. A raw `fontSize` in px (e.g. `fontSize: 10`)
   is an invented value — use the role or flag the gap. Same for color: no raw hex/rgba
   outside `theme/tokens.ts`.
