@@ -17,8 +17,7 @@ export function seedClubForEdit(shortcut: CollectionShortcut): CatalogPickerItem
     return null;
   }
 
-  const label =
-    shortcut.clubLabel ?? `Klub ${shortcut.clubId.slice(0, 8)}`;
+  const label = shortcut.clubLabel ?? `Klub ${shortcut.clubId.slice(0, 8)}`;
 
   return { id: shortcut.clubId, label };
 }
