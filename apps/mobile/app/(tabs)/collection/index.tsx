@@ -41,6 +41,7 @@ export default function CollectionScreen() {
     space.insetMd;
   const [loading, setLoading] = useState(true);
   const [jerseys, setJerseys] = useState<CollectionJersey[]>([]);
+  const [allJerseys, setAllJerseys] = useState<CollectionJersey[]>([]);
   const [totalJerseyCount, setTotalJerseyCount] = useState(0);
   const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
   const [selectedShortcutId, setSelectedShortcutId] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export default function CollectionScreen() {
 
     const response = await fetchCollectionJerseys(accessToken, null);
     setTotalJerseyCount(response.jerseys.length);
+    setAllJerseys(response.jerseys);
   }, [accessToken]);
 
   const loadShortcuts = useCallback(async () => {
@@ -225,6 +227,7 @@ export default function CollectionScreen() {
         visible={genvejeOpen}
         accessToken={accessToken ?? ""}
         activeShortcutId={selectedShortcutId}
+        ownerJerseys={allJerseys}
         onDismiss={() => setGenvejeOpen(false)}
         onShortcutDeleted={() => setSelectedShortcutId(null)}
         onShortcutSaved={() => setSelectedShortcutId(null)}

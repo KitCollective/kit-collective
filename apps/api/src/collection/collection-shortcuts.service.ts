@@ -2,12 +2,23 @@ import {
   type CollectionShortcut,
   type CollectionShortcuts,
   type CollectionShortcutWrite,
+  collectionShortcutReorderSchema,
   collectionShortcutSchema,
   collectionShortcutsSchema,
   collectionShortcutWriteSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { catalogLabel, club, collectionShortcut, userJersey } from "@kit/db";
+import {
+  catalogLabel,
+  club,
+  collectionShortcut,
+  country,
+  league,
+  player,
+  playerClubSeason,
+  season,
+  userJersey,
+} from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
 import {
   BadRequestException,
@@ -16,12 +27,17 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { and, asc, count, eq, inArray, type SQL } from "drizzle-orm";
+import { and, asc, count, eq, exists, inArray, type SQL } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 
 type ShortcutFacets = {
+  countryId: string | null;
+  leagueId: string | null;
   clubId: string | null;
+  playerId: string | null;
 };
+
+type CatalogEntityType = "country" | "league" | "club" | "player";
 
 @Injectable()
 export class CollectionShortcutsService {
@@ -33,33 +49,44 @@ export class CollectionShortcutsService {
         id: collectionShortcut.id,
         name: collectionShortcut.name,
         sortOrder: collectionShortcut.sortOrder,
+        countryId: collectionShortcut.countryId,
+        leagueId: collectionShortcut.leagueId,
         clubId: collectionShortcut.clubId,
+        playerId: collectionShortcut.playerId,
       })
       .from(collectionShortcut)
       .where(eq(collectionShortcut.userId, userId))
       .orderBy(asc(collectionShortcut.sortOrder), asc(collectionShortcut.createdAt));
 
-    const clubIds = [
-      ...new Set(
-        rows.map((row) => row.clubId).filter((clubId): clubId is string => clubId !== null),
-      ),
-    ];
-    const clubLabels = await this.resolveClubLabels(clubIds, locale);
+    const countryIds = this.uniqueIds(rows.map((row) => row.countryId));
+    const leagueIds = this.uniqueIds(rows.map((row) => row.leagueId));
+    const clubIds = this.uniqueIds(rows.map((row) => row.clubId));
+    const playerIds = this.uniqueIds(rows.map((row) => row.playerId));
+
+    const [countryLabels, leagueLabels, clubLabels, playerLabels] = await Promise.all([
+      this.resolveEntityLabels("country", countryIds, locale),
+      this.resolveEntityLabels("league", leagueIds, locale),
+      this.resolveEntityLabels("club", clubIds, locale),
+      this.resolveEntityLabels("player", playerIds, locale),
+    ]);
 
     const shortcuts: CollectionShortcut[] = await Promise.all(
       rows.map(async (row) => {
-        const matchCount = await this.countMatchingJerseys(userId, {
-          clubId: row.clubId,
-        });
-
-        const clubLabel = row.clubId ? (clubLabels.get(row.clubId) ?? null) : null;
+        const facets = this.rowToFacets(row);
+        const matchCount = await this.countMatchingJerseys(userId, facets);
 
         return collectionShortcutSchema.parse({
           id: row.id,
           name: row.name,
           sortOrder: row.sortOrder,
+          countryId: row.countryId,
+          countryLabel: row.countryId ? (countryLabels.get(row.countryId) ?? null) : null,
+          leagueId: row.leagueId,
+          leagueLabel: row.leagueId ? (leagueLabels.get(row.leagueId) ?? null) : null,
           clubId: row.clubId,
-          clubLabel,
+          clubLabel: row.clubId ? (clubLabels.get(row.clubId) ?? null) : null,
+          playerId: row.playerId,
+          playerLabel: row.playerId ? (playerLabels.get(row.playerId) ?? null) : null,
           matchCount,
         });
       }),
@@ -74,9 +101,10 @@ export class CollectionShortcutsService {
     locale: LabelLocale,
   ): Promise<CollectionShortcut> {
     const body = this.parseShortcutWrite(rawBody);
-    await this.validateClubId(body.clubId);
+    await this.validateFacetIds(body);
 
-    const name = body.name ?? (await this.buildAutoName(body.clubId, locale));
+    const facets = this.writeToFacets(body);
+    const name = body.name ?? (await this.buildAutoName(facets, locale));
     const sortOrder = body.sortOrder ?? (await this.nextSortOrder(userId));
 
     const [inserted] = await this.db
@@ -85,30 +113,26 @@ export class CollectionShortcutsService {
         userId,
         name,
         sortOrder,
-        clubId: body.clubId,
+        countryId: facets.countryId,
+        leagueId: facets.leagueId,
+        clubId: facets.clubId,
+        playerId: facets.playerId,
       })
       .returning({
         id: collectionShortcut.id,
         name: collectionShortcut.name,
         sortOrder: collectionShortcut.sortOrder,
+        countryId: collectionShortcut.countryId,
+        leagueId: collectionShortcut.leagueId,
         clubId: collectionShortcut.clubId,
+        playerId: collectionShortcut.playerId,
       });
 
     if (!inserted) {
       throw new BadRequestException("Could not create shortcut");
     }
 
-    const matchCount = await this.countMatchingJerseys(userId, {
-      clubId: inserted.clubId,
-    });
-
-    const clubLabel = inserted.clubId ? await this.resolveClubLabel(inserted.clubId, locale) : null;
-
-    return collectionShortcutSchema.parse({
-      ...inserted,
-      clubLabel,
-      matchCount,
-    });
+    return this.toShortcutResponse(userId, inserted, locale);
   }
 
   async updateShortcut(
@@ -119,9 +143,10 @@ export class CollectionShortcutsService {
   ): Promise<CollectionShortcut> {
     const existing = await this.getOwnedShortcutRow(userId, shortcutId);
     const body = this.parseShortcutWrite(rawBody);
-    await this.validateClubId(body.clubId);
+    await this.validateFacetIds(body);
 
-    const name = body.name ?? (await this.buildAutoName(body.clubId, locale));
+    const facets = this.writeToFacets(body);
+    const name = body.name ?? (await this.buildAutoName(facets, locale));
     const sortOrder = body.sortOrder ?? existing.sortOrder;
 
     const [updated] = await this.db
@@ -129,7 +154,10 @@ export class CollectionShortcutsService {
       .set({
         name,
         sortOrder,
-        clubId: body.clubId,
+        countryId: facets.countryId,
+        leagueId: facets.leagueId,
+        clubId: facets.clubId,
+        playerId: facets.playerId,
         updatedAt: new Date(),
       })
       .where(and(eq(collectionShortcut.id, shortcutId), eq(collectionShortcut.userId, userId)))
@@ -137,24 +165,47 @@ export class CollectionShortcutsService {
         id: collectionShortcut.id,
         name: collectionShortcut.name,
         sortOrder: collectionShortcut.sortOrder,
+        countryId: collectionShortcut.countryId,
+        leagueId: collectionShortcut.leagueId,
         clubId: collectionShortcut.clubId,
+        playerId: collectionShortcut.playerId,
       });
 
     if (!updated) {
       throw new NotFoundException("Shortcut not found");
     }
 
-    const matchCount = await this.countMatchingJerseys(userId, {
-      clubId: updated.clubId,
-    });
+    return this.toShortcutResponse(userId, updated, locale);
+  }
 
-    const clubLabel = updated.clubId ? await this.resolveClubLabel(updated.clubId, locale) : null;
+  async reorderShortcuts(userId: string, rawBody: unknown): Promise<CollectionShortcuts> {
+    const body = collectionShortcutReorderSchema.parse(rawBody);
+    const owned = await this.db
+      .select({ id: collectionShortcut.id })
+      .from(collectionShortcut)
+      .where(eq(collectionShortcut.userId, userId));
 
-    return collectionShortcutSchema.parse({
-      ...updated,
-      clubLabel,
-      matchCount,
-    });
+    const ownedIds = new Set(owned.map((row) => row.id));
+    if (body.orderedIds.length !== ownedIds.size) {
+      throw new BadRequestException("orderedIds must include every owned shortcut exactly once");
+    }
+
+    for (const id of body.orderedIds) {
+      if (!ownedIds.has(id)) {
+        throw new BadRequestException("orderedIds contains a shortcut not owned by the user");
+      }
+    }
+
+    await Promise.all(
+      body.orderedIds.map((id, index) =>
+        this.db
+          .update(collectionShortcut)
+          .set({ sortOrder: index, updatedAt: new Date() })
+          .where(and(eq(collectionShortcut.id, id), eq(collectionShortcut.userId, userId))),
+      ),
+    );
+
+    return this.listShortcuts(userId);
   }
 
   async deleteShortcut(userId: string, shortcutId: string): Promise<void> {
@@ -172,16 +223,53 @@ export class CollectionShortcutsService {
 
   async getShortcutFacetsForFilter(userId: string, shortcutId: string): Promise<ShortcutFacets> {
     const row = await this.getOwnedShortcutRow(userId, shortcutId);
-    return {
-      clubId: row.clubId,
-    };
+    return this.rowToFacets(row);
   }
 
   buildJerseyFilterConditions(userId: string, facets: ShortcutFacets): SQL[] {
     const conditions: SQL[] = [eq(userJersey.userId, userId)];
 
+    if (facets.countryId) {
+      conditions.push(
+        exists(
+          this.db
+            .select({ id: club.id })
+            .from(club)
+            .where(and(eq(club.id, userJersey.clubId), eq(club.countryId, facets.countryId))),
+        ),
+      );
+    }
+
+    if (facets.leagueId) {
+      conditions.push(
+        exists(
+          this.db
+            .select({ id: season.id })
+            .from(season)
+            .where(and(eq(season.id, userJersey.seasonId), eq(season.leagueId, facets.leagueId))),
+        ),
+      );
+    }
+
     if (facets.clubId) {
       conditions.push(eq(userJersey.clubId, facets.clubId));
+    }
+
+    if (facets.playerId) {
+      conditions.push(
+        exists(
+          this.db
+            .select({ id: playerClubSeason.id })
+            .from(playerClubSeason)
+            .where(
+              and(
+                eq(playerClubSeason.playerId, facets.playerId),
+                eq(playerClubSeason.clubId, userJersey.clubId),
+                eq(playerClubSeason.seasonId, userJersey.seasonId),
+              ),
+            ),
+        ),
+      );
     }
 
     return conditions;
@@ -213,7 +301,10 @@ export class CollectionShortcutsService {
         userId: collectionShortcut.userId,
         name: collectionShortcut.name,
         sortOrder: collectionShortcut.sortOrder,
+        countryId: collectionShortcut.countryId,
+        leagueId: collectionShortcut.leagueId,
         clubId: collectionShortcut.clubId,
+        playerId: collectionShortcut.playerId,
       })
       .from(collectionShortcut)
       .where(eq(collectionShortcut.id, shortcutId))
@@ -244,75 +335,202 @@ export class CollectionShortcutsService {
     return maxSort + 1;
   }
 
-  private async validateClubId(clubId: string): Promise<void> {
-    const [row] = await this.db
-      .select({ id: club.id })
-      .from(club)
-      .where(eq(club.id, clubId))
-      .limit(1);
-    if (!row) {
-      throw new BadRequestException("clubId is not catalog truth");
+  private async validateFacetIds(body: CollectionShortcutWrite): Promise<void> {
+    if (body.countryId) {
+      const [row] = await this.db
+        .select({ id: country.id })
+        .from(country)
+        .where(eq(country.id, body.countryId))
+        .limit(1);
+      if (!row) {
+        throw new BadRequestException("countryId is not catalog truth");
+      }
+    }
+
+    if (body.leagueId) {
+      const [row] = await this.db
+        .select({ id: league.id })
+        .from(league)
+        .where(eq(league.id, body.leagueId))
+        .limit(1);
+      if (!row) {
+        throw new BadRequestException("leagueId is not catalog truth");
+      }
+    }
+
+    if (body.clubId) {
+      const [row] = await this.db
+        .select({ id: club.id })
+        .from(club)
+        .where(eq(club.id, body.clubId))
+        .limit(1);
+      if (!row) {
+        throw new BadRequestException("clubId is not catalog truth");
+      }
+    }
+
+    if (body.playerId) {
+      const [row] = await this.db
+        .select({ id: player.id })
+        .from(player)
+        .where(eq(player.id, body.playerId))
+        .limit(1);
+      if (!row) {
+        throw new BadRequestException("playerId is not catalog truth");
+      }
     }
   }
 
-  private async buildAutoName(clubId: string, locale: LabelLocale): Promise<string> {
-    const label = await this.resolveClubLabel(clubId, locale);
-    if (!label) {
-      throw new BadRequestException("clubId is not catalog truth");
+  private async buildAutoName(facets: ShortcutFacets, locale: LabelLocale): Promise<string> {
+    const parts: string[] = [];
+
+    if (facets.countryId) {
+      const label = await this.resolveEntityLabel("country", facets.countryId, locale);
+      if (!label) {
+        throw new BadRequestException("countryId is not catalog truth");
+      }
+      parts.push(label);
     }
-    return label;
+
+    if (facets.leagueId) {
+      const label = await this.resolveEntityLabel("league", facets.leagueId, locale);
+      if (!label) {
+        throw new BadRequestException("leagueId is not catalog truth");
+      }
+      parts.push(label);
+    }
+
+    if (facets.clubId) {
+      const label = await this.resolveEntityLabel("club", facets.clubId, locale);
+      if (!label) {
+        throw new BadRequestException("clubId is not catalog truth");
+      }
+      parts.push(label);
+    }
+
+    if (facets.playerId) {
+      const label = await this.resolveEntityLabel("player", facets.playerId, locale);
+      if (!label) {
+        throw new BadRequestException("playerId is not catalog truth");
+      }
+      parts.push(label);
+    }
+
+    if (parts.length === 0) {
+      throw new BadRequestException("At least one facet is required");
+    }
+
+    return parts.join(" · ");
   }
 
-  private async resolveClubLabels(
-    clubIds: string[],
+  private async toShortcutResponse(
+    userId: string,
+    row: {
+      id: string;
+      name: string;
+      sortOrder: number;
+      countryId: string | null;
+      leagueId: string | null;
+      clubId: string | null;
+      playerId: string | null;
+    },
+    locale: LabelLocale,
+  ): Promise<CollectionShortcut> {
+    const facets = this.rowToFacets(row);
+    const matchCount = await this.countMatchingJerseys(userId, facets);
+
+    const [countryLabel, leagueLabel, clubLabel, playerLabel] = await Promise.all([
+      row.countryId ? this.resolveEntityLabel("country", row.countryId, locale) : Promise.resolve(null),
+      row.leagueId ? this.resolveEntityLabel("league", row.leagueId, locale) : Promise.resolve(null),
+      row.clubId ? this.resolveEntityLabel("club", row.clubId, locale) : Promise.resolve(null),
+      row.playerId ? this.resolveEntityLabel("player", row.playerId, locale) : Promise.resolve(null),
+    ]);
+
+    return collectionShortcutSchema.parse({
+      id: row.id,
+      name: row.name,
+      sortOrder: row.sortOrder,
+      countryId: row.countryId,
+      countryLabel,
+      leagueId: row.leagueId,
+      leagueLabel,
+      clubId: row.clubId,
+      clubLabel,
+      playerId: row.playerId,
+      playerLabel,
+      matchCount,
+    });
+  }
+
+  private rowToFacets(row: {
+    countryId: string | null;
+    leagueId: string | null;
+    clubId: string | null;
+    playerId: string | null;
+  }): ShortcutFacets {
+    return {
+      countryId: row.countryId,
+      leagueId: row.leagueId,
+      clubId: row.clubId,
+      playerId: row.playerId,
+    };
+  }
+
+  private writeToFacets(body: CollectionShortcutWrite): ShortcutFacets {
+    return {
+      countryId: body.countryId ?? null,
+      leagueId: body.leagueId ?? null,
+      clubId: body.clubId ?? null,
+      playerId: body.playerId ?? null,
+    };
+  }
+
+  private uniqueIds(values: Array<string | null>): string[] {
+    return [...new Set(values.filter((value): value is string => value !== null))];
+  }
+
+  private async resolveEntityLabels(
+    entityType: CatalogEntityType,
+    entityIds: string[],
     locale: LabelLocale,
   ): Promise<Map<string, string>> {
-    if (clubIds.length === 0) {
+    if (entityIds.length === 0) {
       return new Map();
     }
 
     const rows = await this.db
       .select({
-        clubId: catalogLabel.entityId,
+        entityId: catalogLabel.entityId,
         label: catalogLabel.text,
         locale: catalogLabel.locale,
         kind: catalogLabel.kind,
       })
       .from(catalogLabel)
-      .where(and(eq(catalogLabel.entityType, "club"), inArray(catalogLabel.entityId, clubIds)));
+      .where(and(eq(catalogLabel.entityType, entityType), inArray(catalogLabel.entityId, entityIds)));
 
     const labels = new Map<string, string>();
 
-    for (const clubId of clubIds) {
-      const clubLabels = rows.filter((row) => row.clubId === clubId && row.label);
+    for (const entityId of entityIds) {
+      const entityLabels = rows.filter((row) => row.entityId === entityId && row.label);
       const resolved =
-        clubLabels.find((row) => row.locale === locale && row.kind === "label")?.label ??
-        clubLabels.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
-        clubLabels.find((row) => row.locale === "en" && row.kind === "label")?.label;
+        entityLabels.find((row) => row.locale === locale && row.kind === "label")?.label ??
+        entityLabels.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
+        entityLabels.find((row) => row.locale === "en" && row.kind === "label")?.label;
 
       if (resolved) {
-        labels.set(clubId, resolved);
+        labels.set(entityId, resolved);
       }
     }
 
     return labels;
   }
 
-  private async resolveClubLabel(clubId: string, locale: LabelLocale): Promise<string | null> {
-    const rows = await this.db
-      .select({
-        label: catalogLabel.text,
-        locale: catalogLabel.locale,
-        kind: catalogLabel.kind,
-      })
-      .from(catalogLabel)
-      .where(and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, clubId)));
-
-    const resolved =
-      rows.find((row) => row.locale === locale && row.kind === "label")?.label ??
-      rows.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
-      rows.find((row) => row.locale === "en" && row.kind === "label")?.label;
-
-    return resolved ?? null;
+  private async resolveEntityLabel(
+    entityType: CatalogEntityType,
+    entityId: string,
+    locale: LabelLocale,
+  ): Promise<string | null> {
+    const labels = await this.resolveEntityLabels(entityType, [entityId], locale);
+    return labels.get(entityId) ?? null;
   }
 }

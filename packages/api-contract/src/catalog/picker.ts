@@ -44,3 +44,11 @@ export const catalogClubSeasonsResponseSchema = z
   .strict();
 
 export type CatalogClubSeasonsResponse = z.infer<typeof catalogClubSeasonsResponseSchema>;
+
+export const catalogFacetSearchResponseSchema = z
+  .object({
+    items: z.array(catalogPickerItemSchema),
+  })
+  .strict();
+
+export type CatalogFacetSearchResponse = z.infer<typeof catalogFacetSearchResponseSchema>;

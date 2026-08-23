@@ -1,20 +1,37 @@
-import type { CatalogPickerItem, CollectionShortcut } from "@kit/api-contract";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  PanResponder,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import {
   createCollectionShortcut,
   deleteCollectionShortcut,
   fetchCollectionShortcuts,
+  reorderCollectionShortcuts,
   updateCollectionShortcut,
 } from "@/api/shortcuts";
 import { ListRow, Sheet } from "@/components/catalog-ui";
-import { ClubPickerOverlay } from "@/components/club-picker-overlay";
+import { FacetPickerOverlay } from "@/components/facet-picker-overlay";
 import {
+  buildGenvejeWritePayload,
   canSaveGenvej,
+  deriveMostUsedFacets,
+  emptyGenvejeFacets,
+  GENVEJE_AND_HELPER_COPY,
+  type GenvejeFacetKind,
+  type GenvejeFacets,
   type GenvejeSheetMode,
   manageRowAccessibilityLabel,
+  reorderShortcutIds,
+  resolveFacetFieldLabel,
   resolveGenvejeSheetTitle,
-  seedClubForEdit,
+  seedFacetsForEdit,
   shouldResetShortcutAfterDelete,
   shouldResetToAlleAfterGem,
 } from "@/components/genveje-sheet-logic";
@@ -23,10 +40,13 @@ import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
+const FACET_FIELDS: GenvejeFacetKind[] = ["country", "league", "club", "player"];
+
 type GenvejeSheetProps = {
   visible: boolean;
   accessToken: string;
   activeShortcutId: string | null;
+  ownerJerseys: CollectionJersey[];
   onDismiss: () => void;
   onShortcutsChanged: () => void;
   onShortcutSaved: () => void;
@@ -37,6 +57,7 @@ export function GenvejeSheet({
   visible,
   accessToken,
   activeShortcutId,
+  ownerJerseys,
   onDismiss,
   onShortcutsChanged,
   onShortcutSaved,
@@ -47,11 +68,12 @@ export function GenvejeSheet({
   const [mode, setMode] = useState<GenvejeSheetMode>("list");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reordering, setReordering] = useState(false);
   const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
   const [editingShortcutId, setEditingShortcutId] = useState<string | null>(null);
   const [customName, setCustomName] = useState("");
-  const [selectedClub, setSelectedClub] = useState<CatalogPickerItem | null>(null);
-  const [clubPickerOpen, setClubPickerOpen] = useState(false);
+  const [facets, setFacets] = useState<GenvejeFacets>(emptyGenvejeFacets());
+  const [openFacetPicker, setOpenFacetPicker] = useState<GenvejeFacetKind | null>(null);
 
   const loadShortcuts = useCallback(async () => {
     setLoading(true);
@@ -68,7 +90,8 @@ export function GenvejeSheet({
       setMode("list");
       setEditingShortcutId(null);
       setCustomName("");
-      setSelectedClub(null);
+      setFacets(emptyGenvejeFacets());
+      setOpenFacetPicker(null);
       void loadShortcuts();
     }
   }, [visible, loadShortcuts]);
@@ -76,28 +99,51 @@ export function GenvejeSheet({
   const openCreateForm = () => {
     setEditingShortcutId(null);
     setCustomName("");
-    setSelectedClub(null);
+    setFacets(emptyGenvejeFacets());
     setMode("form");
   };
 
   const openEditForm = (shortcut: CollectionShortcut) => {
     setEditingShortcutId(shortcut.id);
     setCustomName(shortcut.name);
-    setSelectedClub(seedClubForEdit(shortcut));
+    setFacets(seedFacetsForEdit(shortcut));
     setMode("form");
   };
 
+  const persistReorder = async (orderedIds: string[]) => {
+    setReordering(true);
+    try {
+      const response = await reorderCollectionShortcuts(accessToken, orderedIds);
+      setShortcuts(response.shortcuts);
+      onShortcutsChanged();
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const moveShortcut = (fromIndex: number, direction: -1 | 1) => {
+    const toIndex = fromIndex + direction;
+    const orderedIds = reorderShortcutIds(shortcuts, fromIndex, toIndex);
+    if (orderedIds.join() === shortcuts.map((shortcut) => shortcut.id).join()) {
+      return;
+    }
+
+    setShortcuts(
+      orderedIds
+        .map((id) => shortcuts.find((shortcut) => shortcut.id === id))
+        .filter((shortcut): shortcut is CollectionShortcut => shortcut !== undefined),
+    );
+    void persistReorder(orderedIds);
+  };
+
   const handleSave = async () => {
-    if (!selectedClub) {
+    if (!canSaveGenvej(facets, saving)) {
       return;
     }
 
     setSaving(true);
     try {
-      const payload = {
-        clubId: selectedClub.id,
-        ...(customName.trim() ? { name: customName.trim() } : {}),
-      };
+      const payload = buildGenvejeWritePayload(facets, customName);
 
       if (editingShortcutId) {
         await updateCollectionShortcut(accessToken, editingShortcutId, payload);
@@ -126,7 +172,7 @@ export function GenvejeSheet({
   };
 
   const sheetTitle = resolveGenvejeSheetTitle(mode);
-  const canSave = canSaveGenvej(selectedClub, saving);
+  const canSave = canSaveGenvej(facets, saving);
 
   return (
     <>
@@ -143,13 +189,16 @@ export function GenvejeSheet({
       >
         {mode === "list" ? (
           <View style={styles.listBody}>
-            {loading ? (
+            {loading || reordering ? (
               <ActivityIndicator color={theme.fillPrimary} />
             ) : (
               <ScrollView>
-                {shortcuts.map((shortcut) => (
+                {shortcuts.map((shortcut, index) => (
                   <View key={shortcut.id} style={styles.manageRow}>
-                    <ShortcutDragHandle color={theme.contentMuted} />
+                    <ShortcutDragHandle
+                      color={theme.contentMuted}
+                      onMove={(direction) => moveShortcut(index, direction)}
+                    />
                     <View
                       style={styles.manageMain}
                       accessible
@@ -189,14 +238,22 @@ export function GenvejeSheet({
           </View>
         ) : (
           <View style={styles.formBody}>
-            <View style={styles.field}>
-              <Text style={[typography.label, { color: theme.contentPrimary }]}>Klub</Text>
-              <ListRow
-                title={selectedClub?.label ?? "Vælg klub"}
-                onPress={() => setClubPickerOpen(true)}
-                selected={selectedClub !== null}
-              />
-            </View>
+            <Text style={[typography.body, { color: theme.contentSecondary }]}>
+              {GENVEJE_AND_HELPER_COPY}
+            </Text>
+
+            {FACET_FIELDS.map((facetKind) => (
+              <View key={facetKind} style={styles.field}>
+                <Text style={[typography.label, { color: theme.contentPrimary }]}>
+                  {resolveFacetFieldLabel(facetKind)}
+                </Text>
+                <ListRow
+                  title={facets[facetKind]?.label ?? `Vælg ${resolveFacetFieldLabel(facetKind).toLowerCase()}`}
+                  onPress={() => setOpenFacetPicker(facetKind)}
+                  selected={facets[facetKind] !== null}
+                />
+              </View>
+            ))}
 
             <View style={styles.field}>
               <Text style={[typography.label, { color: theme.contentPrimary }]}>
@@ -231,20 +288,64 @@ export function GenvejeSheet({
         )}
       </Sheet>
 
-      <ClubPickerOverlay
-        visible={visible && clubPickerOpen}
-        accessToken={accessToken}
-        selectedClubId={selectedClub?.id ?? null}
-        onSelect={(club) => setSelectedClub(club)}
-        onDismiss={() => setClubPickerOpen(false)}
-      />
+      {openFacetPicker ? (
+        <FacetPickerOverlay
+          visible={visible && openFacetPicker !== null}
+          facetKind={openFacetPicker}
+          accessToken={accessToken}
+          selectedId={facets[openFacetPicker]?.id ?? null}
+          mostUsed={deriveMostUsedFacets(openFacetPicker, ownerJerseys, shortcuts)}
+          onSelect={(item) => {
+            setFacets((current) => ({ ...current, [openFacetPicker]: item }));
+          }}
+          onDismiss={() => setOpenFacetPicker(null)}
+        />
+      ) : null}
     </>
   );
 }
 
-function ShortcutDragHandle({ color }: { color: string }) {
+function ShortcutDragHandle({
+  color,
+  onMove,
+}: {
+  color: string;
+  onMove: (direction: -1 | 1) => void;
+}) {
+  const movedRef = useRef(false);
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        movedRef.current = false;
+      },
+      onPanResponderMove: (_, gesture) => {
+        if (movedRef.current) {
+          return;
+        }
+
+        if (gesture.dy < -36) {
+          movedRef.current = true;
+          onMove(-1);
+        } else if (gesture.dy > 36) {
+          movedRef.current = true;
+          onMove(1);
+        }
+      },
+      onPanResponderRelease: () => {
+        movedRef.current = false;
+      },
+    }),
+  ).current;
+
   return (
-    <View style={styles.dragHandle} accessible accessibilityLabel="Flyt">
+    <View
+      style={styles.dragHandle}
+      accessible
+      accessibilityLabel="Flyt"
+      {...panResponder.panHandlers}
+    >
       <View style={[styles.dragBar, { backgroundColor: color }]} />
       <View style={[styles.dragBar, { backgroundColor: color }]} />
     </View>

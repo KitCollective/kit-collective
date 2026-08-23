@@ -46,6 +46,8 @@ export const collectionJerseySchema = z
     id: z.string().uuid(),
     clubId: z.string().uuid(),
     seasonId: z.string().uuid(),
+    countryId: z.string().uuid(),
+    leagueId: z.string().uuid(),
     catalogKitId: z.string().uuid().nullable(),
     type: z.enum(KIT_TYPES),
     size: z.enum(JERSEY_SIZES),

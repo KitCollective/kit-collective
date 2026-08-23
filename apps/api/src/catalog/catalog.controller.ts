@@ -1,6 +1,7 @@
 import {
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
+  catalogFacetSearchResponseSchema,
   catalogPickerClubIdParamSchema,
   catalogPickerSearchQuerySchema,
 } from "@kit/api-contract";
@@ -43,6 +44,48 @@ export class CatalogController {
     }
     const body = await this.catalogService.searchClubs(parsed.data.q, parsed.data.locale);
     return catalogClubSearchResponseSchema.parse(body);
+  }
+
+  @Get("countries/search")
+  @UseGuards(JwtAuthGuard)
+  async searchCountries(@Query() query: Record<string, string | string[] | undefined>) {
+    const parsed = catalogPickerSearchQuerySchema.safeParse({
+      q: typeof query.q === "string" ? query.q : undefined,
+      locale: typeof query.locale === "string" ? query.locale : undefined,
+    });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid search query");
+    }
+    const body = await this.catalogService.searchCountries(parsed.data.q, parsed.data.locale);
+    return catalogFacetSearchResponseSchema.parse(body);
+  }
+
+  @Get("leagues/search")
+  @UseGuards(JwtAuthGuard)
+  async searchLeagues(@Query() query: Record<string, string | string[] | undefined>) {
+    const parsed = catalogPickerSearchQuerySchema.safeParse({
+      q: typeof query.q === "string" ? query.q : undefined,
+      locale: typeof query.locale === "string" ? query.locale : undefined,
+    });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid search query");
+    }
+    const body = await this.catalogService.searchLeagues(parsed.data.q, parsed.data.locale);
+    return catalogFacetSearchResponseSchema.parse(body);
+  }
+
+  @Get("players/search")
+  @UseGuards(JwtAuthGuard)
+  async searchPlayers(@Query() query: Record<string, string | string[] | undefined>) {
+    const parsed = catalogPickerSearchQuerySchema.safeParse({
+      q: typeof query.q === "string" ? query.q : undefined,
+      locale: typeof query.locale === "string" ? query.locale : undefined,
+    });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid search query");
+    }
+    const body = await this.catalogService.searchPlayers(parsed.data.q, parsed.data.locale);
+    return catalogFacetSearchResponseSchema.parse(body);
   }
 
   @Get("clubs/:clubId/seasons")

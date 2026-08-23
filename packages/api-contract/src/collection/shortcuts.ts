@@ -8,8 +8,14 @@ export const collectionShortcutSchema = z
     id: z.string().uuid(),
     name: z.string().min(1),
     sortOrder: z.number().int(),
+    countryId: z.string().uuid().nullable(),
+    countryLabel: z.string().min(1).nullable(),
+    leagueId: z.string().uuid().nullable(),
+    leagueLabel: z.string().min(1).nullable(),
     clubId: z.string().uuid().nullable(),
     clubLabel: z.string().min(1).nullable(),
+    playerId: z.string().uuid().nullable(),
+    playerLabel: z.string().min(1).nullable(),
     matchCount: z.number().int().nonnegative(),
   })
   .strict();
@@ -24,15 +30,42 @@ export const collectionShortcutsSchema = z
 
 export type CollectionShortcuts = z.infer<typeof collectionShortcutsSchema>;
 
+const collectionShortcutFacetFields = {
+  name: z.string().trim().min(1).optional(),
+  countryId: facetUuid.optional(),
+  leagueId: facetUuid.optional(),
+  clubId: facetUuid.optional(),
+  playerId: facetUuid.optional(),
+  sortOrder: z.number().int().optional(),
+} as const;
+
 export const collectionShortcutWriteSchema = z
+  .object(collectionShortcutFacetFields)
+  .strict()
+  .superRefine((value, ctx) => {
+    const hasFacet =
+      value.countryId !== undefined ||
+      value.leagueId !== undefined ||
+      value.clubId !== undefined ||
+      value.playerId !== undefined;
+
+    if (!hasFacet) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one facet (countryId, leagueId, clubId, or playerId) is required",
+      });
+    }
+  });
+
+export type CollectionShortcutWrite = z.infer<typeof collectionShortcutWriteSchema>;
+
+export const collectionShortcutReorderSchema = z
   .object({
-    name: z.string().trim().min(1).optional(),
-    clubId: facetUuid,
-    sortOrder: z.number().int().optional(),
+    orderedIds: z.array(z.string().uuid()).min(1),
   })
   .strict();
 
-export type CollectionShortcutWrite = z.infer<typeof collectionShortcutWriteSchema>;
+export type CollectionShortcutReorder = z.infer<typeof collectionShortcutReorderSchema>;
 
 export const collectionShortcutIdParamSchema = z
   .object({

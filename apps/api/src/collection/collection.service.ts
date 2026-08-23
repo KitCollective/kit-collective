@@ -82,6 +82,8 @@ export class CollectionService {
         id: userJersey.id,
         clubId: userJersey.clubId,
         seasonId: userJersey.seasonId,
+        countryId: club.countryId,
+        leagueId: season.leagueId,
         catalogKitId: userJersey.catalogKitId,
         type: userJersey.type,
         size: userJersey.size,
@@ -90,6 +92,7 @@ export class CollectionService {
       })
       .from(userJersey)
       .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(club, eq(userJersey.clubId, club.id))
       .where(and(...filterConditions))
       .orderBy(desc(userJersey.createdAt));
 
@@ -113,10 +116,17 @@ export class CollectionService {
         throw new NotFoundException(`Photos missing for jersey ${row.id}`);
       }
 
+      const leagueId = row.leagueId;
+      if (!leagueId) {
+        throw new NotFoundException(`League missing for jersey ${row.id}`);
+      }
+
       return {
         id: row.id,
         clubId: row.clubId,
         seasonId: row.seasonId,
+        countryId: row.countryId,
+        leagueId,
         catalogKitId: row.catalogKitId,
         type: row.type,
         size: row.size,
@@ -145,7 +155,7 @@ export class CollectionService {
     }
 
     const [clubRow] = await this.db
-      .select({ id: club.id })
+      .select({ id: club.id, countryId: club.countryId })
       .from(club)
       .where(eq(club.id, body.clubId))
       .limit(1);
@@ -155,7 +165,7 @@ export class CollectionService {
     }
 
     const [seasonRow] = await this.db
-      .select({ id: season.id, label: season.label })
+      .select({ id: season.id, label: season.label, leagueId: season.leagueId })
       .from(season)
       .where(eq(season.id, body.seasonId))
       .limit(1);
@@ -252,10 +262,16 @@ export class CollectionService {
         });
     }
 
+    if (!seasonRow.leagueId) {
+      throw new BadRequestException("seasonId has no league");
+    }
+
     const jersey: CollectionJersey = {
       id: insertedJersey.id,
       clubId: insertedJersey.clubId,
       seasonId: insertedJersey.seasonId,
+      countryId: clubRow.countryId,
+      leagueId: seasonRow.leagueId,
       catalogKitId: insertedJersey.catalogKitId,
       type: insertedJersey.type,
       size: insertedJersey.size,

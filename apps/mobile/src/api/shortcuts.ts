@@ -1,5 +1,6 @@
 import {
   type CollectionShortcut,
+  type CollectionShortcutWrite,
   type CollectionShortcuts,
   collectionShortcutSchema,
   collectionShortcutsSchema,
@@ -38,7 +39,7 @@ export async function fetchCollectionShortcuts(accessToken: string): Promise<Col
 
 export async function createCollectionShortcut(
   accessToken: string,
-  payload: { name?: string; clubId: string },
+  payload: CollectionShortcutWrite,
 ): Promise<CollectionShortcut> {
   const response = await requestJson("/v1/collection/shortcuts", accessToken, {
     method: "POST",
@@ -55,7 +56,7 @@ export async function createCollectionShortcut(
 export async function updateCollectionShortcut(
   accessToken: string,
   shortcutId: string,
-  payload: { name?: string; clubId: string },
+  payload: CollectionShortcutWrite,
 ): Promise<CollectionShortcut> {
   const response = await requestJson(`/v1/collection/shortcuts/${shortcutId}`, accessToken, {
     method: "PATCH",
@@ -67,6 +68,22 @@ export async function updateCollectionShortcut(
   }
 
   return collectionShortcutSchema.parse(await response.json());
+}
+
+export async function reorderCollectionShortcuts(
+  accessToken: string,
+  orderedIds: string[],
+): Promise<CollectionShortcuts> {
+  const response = await requestJson("/v1/collection/shortcuts/reorder", accessToken, {
+    method: "PUT",
+    body: JSON.stringify({ orderedIds }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke omarrangere genveje");
+  }
+
+  return collectionShortcutsSchema.parse(await response.json());
 }
 
 export async function deleteCollectionShortcut(

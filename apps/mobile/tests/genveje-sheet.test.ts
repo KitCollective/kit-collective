@@ -1,15 +1,63 @@
+import type { CollectionJersey } from "@kit/api-contract";
 import { describe, expect, it } from "vitest";
 import {
+  buildGenvejeWritePayload,
   canSaveGenvej,
+  deriveMostUsedFacets,
+  emptyGenvejeFacets,
+  GENVEJE_AND_HELPER_COPY,
   manageRowAccessibilityLabel,
+  reorderShortcutIds,
   resolveGenvejeSheetTitle,
   seedClubForEdit,
+  seedFacetsForEdit,
   shouldFallbackToAlleOnFetchError,
   shouldResetShortcutAfterDelete,
   shouldResetToAlleAfterGem,
 } from "../src/components/genveje-sheet-logic";
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
+const UUID_B = "550e8400-e29b-41d4-a716-446655440001";
+const UUID_C = "550e8400-e29b-41d4-a716-446655440002";
+
+const baseShortcut = {
+  id: UUID,
+  name: "FCK",
+  sortOrder: 0,
+  countryId: null,
+  countryLabel: null,
+  leagueId: null,
+  leagueLabel: null,
+  clubId: UUID,
+  clubLabel: "F.C. København",
+  playerId: null,
+  playerLabel: null,
+  matchCount: 2,
+};
+
+const baseJersey = {
+  id: UUID,
+  clubId: UUID,
+  seasonId: UUID_B,
+  countryId: UUID_C,
+  leagueId: UUID_B,
+  catalogKitId: null,
+  type: "home" as const,
+  size: "m" as const,
+  condition: "used" as const,
+  clubLabel: "F.C. København",
+  seasonLabel: "2023/24",
+  photos: [
+    {
+      id: UUID,
+      role: "front" as const,
+      source: "gallery" as const,
+      objectKey: "user/x/front.jpg",
+      photoUrl: "/v1/collection/photos/x",
+      ocrStatus: "none" as const,
+    },
+  ],
+} satisfies CollectionJersey;
 
 describe("resolveGenvejeSheetTitle", () => {
   it("uses locked Genveje title for list mode", () => {
@@ -21,52 +69,94 @@ describe("resolveGenvejeSheetTitle", () => {
   });
 });
 
+describe("GENVEJE_AND_HELPER_COPY", () => {
+  it("states that facets combine with AND", () => {
+    expect(GENVEJE_AND_HELPER_COPY).toMatch(/OG/i);
+  });
+});
+
 describe("canSaveGenvej", () => {
-  it("disables Gem until a club is selected", () => {
-    expect(canSaveGenvej(null, false)).toBe(false);
-    expect(canSaveGenvej({ id: UUID, label: "F.C. København" }, false)).toBe(true);
-    expect(canSaveGenvej({ id: UUID, label: "F.C. København" }, true)).toBe(false);
+  it("disables Gem until at least one facet is set", () => {
+    expect(canSaveGenvej(emptyGenvejeFacets(), false)).toBe(false);
+    expect(
+      canSaveGenvej(
+        {
+          ...emptyGenvejeFacets(),
+          club: { id: UUID, label: "F.C. København" },
+        },
+        false,
+      ),
+    ).toBe(true);
+    expect(
+      canSaveGenvej(
+        {
+          ...emptyGenvejeFacets(),
+          club: { id: UUID, label: "F.C. København" },
+        },
+        true,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("buildGenvejeWritePayload", () => {
+  it("includes only set facets and optional custom name", () => {
+    expect(
+      buildGenvejeWritePayload(
+        {
+          country: { id: UUID_C, label: "Danmark" },
+          league: null,
+          club: { id: UUID, label: "F.C. København" },
+          player: null,
+        },
+        "",
+      ),
+    ).toEqual({ countryId: UUID_C, clubId: UUID });
+  });
+});
+
+describe("seedFacetsForEdit", () => {
+  it("seeds all facet pickers from shortcut labels", () => {
+    expect(
+      seedFacetsForEdit({
+        ...baseShortcut,
+        countryId: UUID_C,
+        countryLabel: "Danmark",
+        playerId: UUID_B,
+        playerLabel: "Jonas Wind",
+      }),
+    ).toEqual({
+      country: { id: UUID_C, label: "Danmark" },
+      league: null,
+      club: { id: UUID, label: "F.C. København" },
+      player: { id: UUID_B, label: "Jonas Wind" },
+    });
   });
 });
 
 describe("seedClubForEdit", () => {
   it("seeds the club picker with the resolved club label", () => {
-    expect(
-      seedClubForEdit({
-        id: UUID,
-        name: "FCK",
-        sortOrder: 0,
-        clubId: UUID,
-        clubLabel: "F.C. København",
-        matchCount: 2,
-      }),
-    ).toEqual({ id: UUID, label: "F.C. København" });
+    expect(seedClubForEdit(baseShortcut)).toEqual({ id: UUID, label: "F.C. København" });
   });
+});
 
-  it("falls back to an id-derived label when club label is missing", () => {
-    expect(
-      seedClubForEdit({
-        id: UUID,
-        name: "FCK",
-        sortOrder: 0,
-        clubId: UUID,
-        clubLabel: null,
-        matchCount: 0,
-      }),
-    ).toEqual({ id: UUID, label: "Klub 550e8400" });
+describe("deriveMostUsedFacets", () => {
+  it("ranks club facets from owner jerseys", () => {
+    expect(deriveMostUsedFacets("club", [baseJersey, baseJersey], [])).toEqual([
+      { id: UUID, label: "F.C. København" },
+    ]);
   });
+});
 
-  it("returns null when club id is missing", () => {
-    expect(
-      seedClubForEdit({
-        id: UUID,
-        name: "FCK",
-        sortOrder: 0,
-        clubId: null,
-        clubLabel: null,
-        matchCount: 0,
-      }),
-    ).toBeNull();
+describe("reorderShortcutIds", () => {
+  it("moves a shortcut within the ordered id list", () => {
+    const shortcuts = [
+      { ...baseShortcut, id: "a" },
+      { ...baseShortcut, id: "b" },
+      { ...baseShortcut, id: "c" },
+    ];
+
+    expect(reorderShortcutIds(shortcuts, 0, 2)).toEqual(["b", "c", "a"]);
   });
 });
 
