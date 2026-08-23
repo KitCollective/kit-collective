@@ -9,7 +9,12 @@ import {
   type TextInputProps,
   View,
 } from "react-native";
-import { color, radius, space, type } from "@/theme/tokens";
+import { IconButton } from "@/components/ui";
+import { useTypography } from "@/theme/brand-fonts";
+import type { ThemeColors } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
+import { useTheme } from "@/theme/use-theme";
 
 type MarkProps = {
   label: string;
@@ -26,6 +31,8 @@ function monogramFromLabel(label: string): string {
 }
 
 export function Mark({ label, size = "md" }: MarkProps) {
+  const theme = useTheme();
+  const typography = useTypography();
   const dimension = size === "sm" ? 24 : 32;
   const letters = monogramFromLabel(label);
 
@@ -33,24 +40,47 @@ export function Mark({ label, size = "md" }: MarkProps) {
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={[styles.mark, { width: dimension, height: dimension, borderRadius: radius.sm }]}
+      style={[
+        styles.mark,
+        {
+          width: dimension,
+          height: dimension,
+          borderRadius: radius.sm,
+          backgroundColor: theme.fillSecondary,
+        },
+      ]}
     >
-      <Text style={styles.markText}>{letters}</Text>
+      <Text style={[typography.caption, { color: theme.contentPrimary }]}>{letters}</Text>
     </View>
   );
 }
 
+type SearchFieldVariant = "collection" | "catalog" | "admin";
+
 type SearchFieldProps = TextInputProps & {
+  variant: SearchFieldVariant;
   onClear?: () => void;
 };
 
-export function SearchField({ value, onClear, style, ...props }: SearchFieldProps) {
+export function SearchField({ variant, value, onClear, style, ...props }: SearchFieldProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
   return (
-    <View style={styles.searchField}>
-      <Ionicons name="search" size={18} color={color.contentMuted} accessibilityElementsHidden />
+    <View
+      testID={`search-field-${variant}`}
+      style={[
+        styles.searchField,
+        {
+          borderColor: theme.borderSubtle,
+          backgroundColor: theme.surface,
+        },
+      ]}
+    >
+      <Ionicons name="search" size={18} color={theme.contentMuted} accessibilityElementsHidden />
       <TextInput
-        style={[styles.searchInput, style]}
-        placeholderTextColor={color.contentMuted}
+        style={[typography.body, styles.searchInput, { color: theme.contentPrimary }, style]}
+        placeholderTextColor={theme.contentMuted}
         autoCorrect={false}
         autoCapitalize="none"
         value={value}
@@ -60,10 +90,10 @@ export function SearchField({ value, onClear, style, ...props }: SearchFieldProp
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Ryd søgning"
-          hitSlop={8}
           onPress={onClear}
+          style={styles.clearButton}
         >
-          <Ionicons name="close-circle" size={18} color={color.contentMuted} />
+          <Ionicons name="close-circle" size={18} color={theme.contentMuted} />
         </Pressable>
       ) : null}
     </View>
@@ -78,25 +108,30 @@ type ListRowProps = {
 };
 
 export function ListRow({ title, meta, selected, onPress }: ListRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.listRow,
-        pressed && styles.listRowPressed,
-        selected && styles.listRowSelected,
+        pressed && { backgroundColor: theme.fillSecondary },
+        selected && { backgroundColor: theme.fillSecondary },
       ]}
     >
       <Mark label={title} />
       <View style={styles.listRowBody}>
-        <Text style={styles.listRowTitle}>{title}</Text>
-        {meta ? <Text style={styles.listRowMeta}>{meta}</Text> : null}
+        <Text style={[typography.body, { color: theme.contentPrimary }]}>{title}</Text>
+        {meta ? (
+          <Text style={[typography.caption, { color: theme.contentMuted }]}>{meta}</Text>
+        ) : null}
       </View>
       {selected ? (
-        <Ionicons name="checkmark" size={20} color={color.contentPrimary} />
+        <Ionicons name="checkmark" size={20} color={theme.contentPrimary} />
       ) : (
-        <Ionicons name="chevron-forward" size={18} color={color.contentMuted} />
+        <Ionicons name="chevron-forward" size={18} color={theme.contentMuted} />
       )}
     </Pressable>
   );
@@ -110,20 +145,26 @@ type SheetProps = {
 };
 
 export function Sheet({ visible, title, onDismiss, children }: SheetProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+  const reduceMotion = useReduceMotion();
+
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onDismiss}>
-      <Pressable style={styles.sheetScrim} onPress={onDismiss} accessibilityLabel="Luk" />
-      <View style={styles.sheet}>
+    <Modal
+      animationType={reduceMotion ? "none" : "slide"}
+      transparent
+      visible={visible}
+      onRequestClose={onDismiss}
+    >
+      <Pressable
+        style={[styles.sheetScrim, { backgroundColor: theme.scrim }]}
+        onPress={onDismiss}
+        accessibilityLabel="Luk"
+      />
+      <View style={[styles.sheet, { backgroundColor: theme.surfaceRaised }]}>
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>{title}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Luk"
-            hitSlop={8}
-            onPress={onDismiss}
-          >
-            <Ionicons name="close" size={24} color={color.contentPrimary} />
-          </Pressable>
+          <Text style={[typography.title, { color: theme.contentPrimary }]}>{title}</Text>
+          <IconButton name="Luk" icon="close" onPress={onDismiss} />
         </View>
         <View style={styles.sheetBody}>{children}</View>
       </View>
@@ -139,15 +180,31 @@ type BannerProps = {
   action?: ReactNode;
 };
 
-const bannerToneStyles: Record<BannerTone, { background: string; border: string }> = {
-  danger: { background: color.fillSecondary, border: color.danger },
-  warning: { background: color.fillSecondary, border: color.warning },
-  info: { background: color.fillSecondary, border: color.info },
-  success: { background: color.fillSecondary, border: color.success },
-};
+function getBannerToneStyles(
+  theme: ThemeColors,
+  tone: BannerTone,
+): { background: string; border: string } {
+  const background = theme.fillSecondary;
+  switch (tone) {
+    case "danger":
+      return { background, border: theme.danger };
+    case "warning":
+      return { background, border: theme.warning };
+    case "info":
+      return { background, border: theme.info };
+    case "success":
+      return { background, border: theme.success };
+    default: {
+      const _exhaustive: never = tone;
+      return _exhaustive;
+    }
+  }
+}
 
 export function Banner({ tone, message, action }: BannerProps) {
-  const toneStyle = bannerToneStyles[tone];
+  const theme = useTheme();
+  const typography = useTypography();
+  const toneStyle = getBannerToneStyles(theme, tone);
 
   return (
     <View
@@ -157,7 +214,7 @@ export function Banner({ tone, message, action }: BannerProps) {
       ]}
       accessibilityRole="alert"
     >
-      <Text style={styles.bannerMessage}>{message}</Text>
+      <Text style={[typography.body, { color: theme.contentPrimary }]}>{message}</Text>
       {action}
     </View>
   );
@@ -165,15 +222,8 @@ export function Banner({ tone, message, action }: BannerProps) {
 
 const styles = StyleSheet.create({
   mark: {
-    backgroundColor: color.fillSecondary,
     alignItems: "center",
     justifyContent: "center",
-  },
-  markText: {
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    fontWeight: type.label.fontWeight,
-    color: color.contentPrimary,
   },
   searchField: {
     flexDirection: "row",
@@ -181,17 +231,18 @@ const styles = StyleSheet.create({
     gap: space.gapSm,
     minHeight: 44,
     borderWidth: 1,
-    borderColor: color.borderSubtle,
     borderRadius: radius.pill,
     paddingHorizontal: space.insetMd,
-    backgroundColor: color.surface,
   },
   searchInput: {
     flex: 1,
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    color: color.contentPrimary,
     paddingVertical: space.insetSm,
+  },
+  clearButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   listRow: {
     flexDirection: "row",
@@ -202,32 +253,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.insetSm,
     borderRadius: radius.md,
   },
-  listRowPressed: {
-    backgroundColor: color.fillSecondary,
-  },
-  listRowSelected: {
-    backgroundColor: color.fillSecondary,
-  },
   listRowBody: {
     flex: 1,
     gap: 2,
   },
-  listRowTitle: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    color: color.contentPrimary,
-  },
-  listRowMeta: {
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    color: color.contentMuted,
-  },
   sheetScrim: {
     flex: 1,
-    backgroundColor: color.scrim,
   },
   sheet: {
-    backgroundColor: color.surfaceRaised,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingBottom: space.insetLg,
@@ -241,12 +274,6 @@ const styles = StyleSheet.create({
     paddingTop: space.insetLg,
     paddingBottom: space.insetMd,
   },
-  sheetTitle: {
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
-    color: color.contentPrimary,
-  },
   sheetBody: {
     paddingHorizontal: space.insetLg,
     gap: space.gapMd,
@@ -256,10 +283,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: space.insetMd,
     gap: space.gapSm,
-  },
-  bannerMessage: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    color: color.contentPrimary,
   },
 });

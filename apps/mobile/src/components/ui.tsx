@@ -10,7 +10,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type ButtonWidth, buttonLayoutStyles } from "@/components/button-layout";
-import { color, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { space } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -28,11 +30,13 @@ type IconButtonProps = Omit<PressableProps, "children"> & {
 export function IconButton({
   name,
   icon,
-  iconColor = color.contentPrimary,
+  iconColor,
   iconSize = 24,
   disabled,
   ...props
 }: IconButtonProps) {
+  const theme = useTheme();
+  const resolvedIconColor = iconColor ?? theme.contentPrimary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -45,7 +49,7 @@ export function IconButton({
       ]}
       {...props}
     >
-      <Ionicons name={icon} size={iconSize} color={iconColor} accessibilityElementsHidden />
+      <Ionicons name={icon} size={iconSize} color={resolvedIconColor} accessibilityElementsHidden />
     </Pressable>
   );
 }
@@ -67,14 +71,18 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
+  const theme = useTheme();
+  const typography = useTypography();
   const isDisabled = disabled || loading;
+  const variantStyle = getVariantStyles(theme)[variant];
+  const labelStyle = getLabelStyles(theme)[variant];
 
   return (
     <Pressable
       accessibilityRole="button"
       style={({ pressed }) => [
         buttonLayoutStyles(width),
-        variantStyles[variant],
+        variantStyle,
         isDisabled && styles.disabled,
         pressed && !isDisabled && styles.pressed,
       ]}
@@ -82,9 +90,9 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={loadingColor[variant]} />
+        <ActivityIndicator color={getLoadingColor(theme, variant)} />
       ) : (
-        <Text style={[styles.label, labelStyles[variant]]}>{label}</Text>
+        <Text style={[typography.label, labelStyle]}>{label}</Text>
       )}
     </Pressable>
   );
@@ -100,9 +108,19 @@ type ButtonDockProps = {
  */
 export function ButtonDock({ children }: ButtonDockProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   return (
-    <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, space.insetMd) }]}>
+    <View
+      style={[
+        styles.dock,
+        {
+          paddingBottom: Math.max(insets.bottom, space.insetMd),
+          borderTopColor: theme.borderSubtle,
+          backgroundColor: theme.canvas,
+        },
+      ]}
+    >
       {children}
     </View>
   );
@@ -115,10 +133,22 @@ type EmptyStateProps = {
 };
 
 export function EmptyState({ title, body, action }: EmptyStateProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
   return (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyBody}>{body}</Text>
+      <Text style={[typography.section, { color: theme.contentPrimary, textAlign: "center" }]}>
+        {title}
+      </Text>
+      <Text
+        style={[
+          typography.body,
+          { color: theme.contentMuted, textAlign: "center", marginBottom: space.insetMd },
+        ]}
+      >
+        {body}
+      </Text>
       {action}
     </View>
   );
@@ -137,18 +167,11 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.9,
   },
-  label: {
-    fontSize: type.label.fontSize,
-    fontWeight: type.label.fontWeight,
-    lineHeight: type.label.lineHeight,
-  },
   dock: {
     paddingHorizontal: space.insetLg,
     paddingTop: space.insetMd,
     gap: space.gapMd,
     borderTopWidth: 1,
-    borderTopColor: color.borderSubtle,
-    backgroundColor: color.canvas,
   },
   emptyState: {
     flex: 1,
@@ -157,57 +180,55 @@ const styles = StyleSheet.create({
     gap: space.gapMd,
     paddingHorizontal: space.insetLg,
   },
-  emptyTitle: {
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
-    color: color.contentPrimary,
-    textAlign: "center",
-  },
-  emptyBody: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    color: color.contentMuted,
-    textAlign: "center",
-    marginBottom: space.insetMd,
-  },
 });
 
-const variantStyles = StyleSheet.create({
-  primary: {
-    backgroundColor: color.fillPrimary,
-  },
-  secondary: {
-    backgroundColor: color.fillSecondary,
-    borderWidth: 1,
-    borderColor: color.borderSubtle,
-  },
-  tertiary: {
-    backgroundColor: "transparent",
-  },
-  destructive: {
-    backgroundColor: color.danger,
-  },
-});
+function getVariantStyles(theme: ReturnType<typeof useTheme>) {
+  return {
+    primary: {
+      backgroundColor: theme.fillPrimary,
+    },
+    secondary: {
+      backgroundColor: theme.fillSecondary,
+      borderWidth: 1,
+      borderColor: theme.borderSubtle,
+    },
+    tertiary: {
+      backgroundColor: "transparent",
+    },
+    destructive: {
+      backgroundColor: theme.danger,
+    },
+  } as const;
+}
 
-const labelStyles = StyleSheet.create({
-  primary: {
-    color: color.contentInverse,
-  },
-  secondary: {
-    color: color.contentPrimary,
-  },
-  tertiary: {
-    color: color.contentPrimary,
-  },
-  destructive: {
-    color: color.contentInverse,
-  },
-});
+function getLabelStyles(theme: ReturnType<typeof useTheme>) {
+  return {
+    primary: {
+      color: theme.contentInverse,
+    },
+    secondary: {
+      color: theme.contentPrimary,
+    },
+    tertiary: {
+      color: theme.contentPrimary,
+    },
+    destructive: {
+      color: theme.contentInverse,
+    },
+  } as const;
+}
 
-const loadingColor: Record<ButtonVariant, string> = {
-  primary: color.contentInverse,
-  secondary: color.contentPrimary,
-  tertiary: color.contentPrimary,
-  destructive: color.contentInverse,
-};
+function getLoadingColor(theme: ReturnType<typeof useTheme>, variant: ButtonVariant): string {
+  switch (variant) {
+    case "primary":
+    case "destructive":
+      return theme.contentInverse;
+    case "secondary":
+    case "tertiary":
+      return theme.contentPrimary;
+    default: {
+      const _exhaustive: never = variant;
+      return _exhaustive;
+    }
+  }
+}

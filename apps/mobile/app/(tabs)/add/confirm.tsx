@@ -34,12 +34,18 @@ import {
   upsertDraftPhoto,
 } from "@/drafts/jerseyDraftStore";
 import { markJerseySaved } from "@/session/addSession";
-import { color, motion, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { motion, space } from "@/theme/tokens";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
+import { useTheme } from "@/theme/use-theme";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 
 export default function ConfirmScreen() {
   const router = useRouter();
+  const theme = useTheme();
+  const typography = useTypography();
+  const reduceMotion = useReduceMotion();
   const { draftId } = useLocalSearchParams<{ draftId: string }>();
   const { accessToken } = useAuth();
 
@@ -165,13 +171,16 @@ export default function ConfirmScreen() {
   }, [draftId]);
 
   const fadeInSuggestion = useCallback(() => {
-    suggestionOpacity.setValue(0);
+    suggestionOpacity.setValue(reduceMotion ? 1 : 0);
+    if (reduceMotion) {
+      return;
+    }
     Animated.timing(suggestionOpacity, {
       toValue: 1,
       duration: motion.fast,
       useNativeDriver: true,
     }).start();
-  }, [suggestionOpacity]);
+  }, [reduceMotion, suggestionOpacity]);
 
   const applyVisionSuggestions = useCallback(
     async (job: VisionJobResponse, preselect: boolean) => {
@@ -482,12 +491,16 @@ export default function ConfirmScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Bekræft og gem</Text>
-        <Text style={styles.body}>Vælg klub, sæson og detaljer.</Text>
+        <Text style={[typography.title, { color: theme.contentPrimary }]}>Bekræft og gem</Text>
+        <Text style={[typography.body, { color: theme.contentMuted }]}>
+          Vælg klub, sæson og detaljer.
+        </Text>
 
-        {visionPolling ? <Text style={styles.helper}>Analyserer foto…</Text> : null}
+        {visionPolling ? (
+          <Text style={[typography.caption, { color: theme.contentMuted }]}>Analyserer foto…</Text>
+        ) : null}
 
         {visionSuggestion?.suggestions ? (
           <Animated.View style={{ opacity: suggestionOpacity }}>
@@ -511,7 +524,7 @@ export default function ConfirmScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Fotos</Text>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
           <View style={styles.photoRow}>
             {PHOTO_ROLES.map((role) => (
               <PhotoSlot
@@ -523,9 +536,13 @@ export default function ConfirmScreen() {
             ))}
           </View>
           {photoList.length === 0 ? (
-            <Text style={styles.helper}>Mindst ét foto er påkrævet.</Text>
+            <Text style={[typography.caption, { color: theme.contentMuted }]}>
+              Mindst ét foto er påkrævet.
+            </Text>
           ) : photoList.length < PHOTO_ROLES.length ? (
-            <Text style={styles.helper}>3 fotos anbefales — mærkefoto gør det lettere senere.</Text>
+            <Text style={[typography.caption, { color: theme.contentMuted }]}>
+              3 fotos anbefales — mærkefoto gør det lettere senere.
+            </Text>
           ) : null}
           <Button
             label="Tilføj fra galleri"
@@ -548,7 +565,7 @@ export default function ConfirmScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Klub</Text>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Klub</Text>
           <ListRow
             title={selectedClub?.label ?? "Vælg klub"}
             onPress={openClubSheet}
@@ -558,7 +575,7 @@ export default function ConfirmScreen() {
 
         {selectedClub ? (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Sæson</Text>
+            <Text style={[typography.label, { color: theme.contentPrimary }]}>Sæson</Text>
             <ListRow
               title={selectedSeason?.label ?? "Vælg sæson"}
               onPress={() => setSeasonSheetOpen(true)}
@@ -568,7 +585,7 @@ export default function ConfirmScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Type</Text>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Type</Text>
           <View style={styles.chipRow}>
             {KIT_TYPES.map((value) => (
               <Chip
@@ -586,7 +603,7 @@ export default function ConfirmScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Størrelse</Text>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Størrelse</Text>
           <View style={styles.chipRow}>
             {JERSEY_SIZES.map((value) => (
               <Chip
@@ -601,7 +618,7 @@ export default function ConfirmScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Stand</Text>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Stand</Text>
           <View style={styles.chipRow}>
             {JERSEY_CONDITIONS.map((value) => (
               <Chip
@@ -627,7 +644,9 @@ export default function ConfirmScreen() {
       </ScrollView>
 
       <ButtonDock>
-        {dockHelper ? <Text style={styles.helper}>{dockHelper}</Text> : null}
+        {dockHelper ? (
+          <Text style={[typography.caption, { color: theme.contentMuted }]}>{dockHelper}</Text>
+        ) : null}
         <Button
           label="Gem"
           variant="primary"
@@ -639,6 +658,7 @@ export default function ConfirmScreen() {
 
       <Sheet visible={clubSheetOpen} title="Vælg klub" onDismiss={() => setClubSheetOpen(false)}>
         <SearchField
+          variant="catalog"
           accessibilityLabel="Søg klub"
           placeholder="Søg klub"
           value={clubQuery}
@@ -669,7 +689,7 @@ export default function ConfirmScreen() {
         ) : null}
 
         {searching ? (
-          <ActivityIndicator color={color.fillPrimary} style={styles.loader} />
+          <ActivityIndicator color={theme.fillPrimary} style={styles.loader} />
         ) : (
           <ScrollView keyboardShouldPersistTaps="handled">
             {clubResults.map((club) => (
@@ -690,7 +710,7 @@ export default function ConfirmScreen() {
         onDismiss={() => setSeasonSheetOpen(false)}
       >
         {loadingSeasons ? (
-          <ActivityIndicator color={color.fillPrimary} style={styles.loader} />
+          <ActivityIndicator color={theme.fillPrimary} style={styles.loader} />
         ) : (
           <ScrollView keyboardShouldPersistTaps="handled">
             {seasonResults.map((season) => (
@@ -725,37 +745,14 @@ export default function ConfirmScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: color.canvas,
   },
   scrollContent: {
     padding: space.insetLg,
     gap: space.gapLg,
     paddingBottom: space.insetLg,
   },
-  title: {
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
-    color: color.contentPrimary,
-  },
-  body: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    color: color.contentMuted,
-  },
   section: {
     gap: space.gapSm,
-  },
-  sectionLabel: {
-    fontSize: type.label.fontSize,
-    lineHeight: type.label.lineHeight,
-    fontWeight: type.label.fontWeight,
-    color: color.contentPrimary,
-  },
-  helper: {
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    color: color.contentMuted,
   },
   photoRow: {
     flexDirection: "row",

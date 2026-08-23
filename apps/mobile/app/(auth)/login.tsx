@@ -3,7 +3,9 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button, ButtonDock } from "@/components/ui";
-import { color, radius, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { radius, space } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 // Design-system gap (KIT-23): login/register screens are not in docs/design-system.md
 // Scope §Included or §Deferred. Layout uses locked tokens only; no new primitives.
@@ -11,6 +13,8 @@ import { color, radius, space, type } from "@/theme/tokens";
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
+  const theme = useTheme();
+  const typography = useTypography();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,42 +34,60 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { backgroundColor: theme.canvas }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.body}
       >
-        <Text style={styles.title}>Log ind</Text>
-        <Text style={styles.subtitle}>Din fodboldtrøjesamling starter her.</Text>
+        <Text style={[typography.title, { color: theme.contentPrimary }]}>Log ind</Text>
+        <Text style={[typography.body, styles.subtitle, { color: theme.contentMuted }]}>
+          Din fodboldtrøjesamling starter her.
+        </Text>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>E-mail</Text>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>E-mail</Text>
           <TextInput
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
             value={email}
             onChangeText={setEmail}
-            style={styles.input}
+            style={[
+              styles.input,
+              typography.body,
+              {
+                borderColor: theme.borderSubtle,
+                color: theme.contentPrimary,
+                backgroundColor: theme.surface,
+              },
+            ]}
             placeholder="dig@eksempel.dk"
-            placeholderTextColor={color.contentMuted}
+            placeholderTextColor={theme.contentMuted}
           />
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Adgangskode</Text>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Adgangskode</Text>
           <TextInput
             secureTextEntry
             autoCapitalize="none"
             value={password}
             onChangeText={setPassword}
-            style={styles.input}
+            style={[
+              styles.input,
+              typography.body,
+              {
+                borderColor: theme.borderSubtle,
+                color: theme.contentPrimary,
+                backgroundColor: theme.surface,
+              },
+            ]}
             placeholder="Mindst 8 tegn"
-            placeholderTextColor={color.contentMuted}
+            placeholderTextColor={theme.contentMuted}
           />
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text> : null}
       </KeyboardAvoidingView>
 
       <ButtonDock>
@@ -85,7 +107,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: color.canvas,
   },
   body: {
     flex: 1,
@@ -93,41 +114,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.insetLg,
     paddingTop: space.insetLg,
   },
-  title: {
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
-    color: color.contentPrimary,
-  },
   subtitle: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    color: color.contentMuted,
     marginBottom: space.insetMd,
   },
   field: {
     gap: space.gapSm,
   },
-  fieldLabel: {
-    color: color.contentPrimary,
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    fontWeight: type.label.fontWeight,
-  },
   input: {
     minHeight: 48,
     borderWidth: 1,
-    borderColor: color.borderSubtle,
     borderRadius: radius.md,
     paddingHorizontal: space.insetMd,
-    fontSize: type.body.fontSize,
-    color: color.contentPrimary,
-    backgroundColor: color.surface,
-  },
-  error: {
-    color: color.danger,
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    marginTop: space.gapSm,
   },
 });

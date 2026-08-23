@@ -146,6 +146,32 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-mobile-design-tokens.mjs` (CI via `pnpm check:mobile-design-tokens`) fails when any `apps/mobile` `.ts`/`.tsx` file outside `src/theme/tokens.ts` contains a raw hex or `rgb`/`rgba` color literal. Prevents repeating the KIT-24 checker fails (invented Banner hex colors in round 3; unflagged Sheet scrim `rgba` and `surface.raised` gap in round 4). Tighten only.
 
+### Mobile static color import ratchet (KIT-42)
+
+`scripts/check-mobile-design-tokens.mjs` also fails when a collection-chrome `apps/mobile/src/components/**` file (except legacy capture allowlist entries), `apps/mobile/app/(auth)/**`, or any `apps/mobile/app/(tabs)/**` screen imports the static light-only `color` export from `@/theme/tokens` instead of `useTheme()` / `getThemeColors()`. Prevents repeating the KIT-42 checker round 2 fail (`Chip` Alle shortcut chip ignored dark mode). Tighten only — remove allowlist entries as capture/auth surfaces migrate.
+
+### Mobile webfont fallback ratchet (KIT-42)
+
+`scripts/check-mobile-design-tokens.mjs` also fails when a theme-aware collection-chrome file uses `fontFamily: type.*.fontFamily` or `fontSize: type.*.fontSize` in a StyleSheet instead of `useTypography()` from `@/theme/brand-fonts`, and when `apps/mobile/src/theme/brand-fonts.tsx` omits `resolveTypeRoles` / `useTypography`. Theme-aware scope includes `apps/mobile/app/(auth)/**` and all `apps/mobile/app/(tabs)/**` screens (no `add/` carve-out). Typography checks use a **separate** allowlist from the static-color import carve-out (`STATIC_TYPOGRAPHY_ALLOWLIST` vs `STATIC_COLOR_IMPORT_ALLOWLIST` in the script) so a file cannot dodge font-fallback enforcement by sitting on the color-migration allowlist. `apps/mobile/tests/brand-fonts.test.ts` asserts `resolveTypeRoles(false)` yields `system-ui` for every role. Prevents repeating the KIT-42 checker round 3 fail (webfont fallback dead code) and round 5 fail (allowlist reuse hid `photo-slot.tsx` regression). Tighten only.
+
+### Mobile tab bar icon ratchet (KIT-42)
+
+`scripts/check-mobile-tab-bar.mjs` also fails when `apps/mobile/src/components/floating-tab-bar.tsx` does not have exactly five icon render sites: four `renderSlot(` calls plus one center-plus `<Ionicons name="add"`. `scripts/tests/check-mobile-tab-bar.test.mjs` (CI via `node --test` in `.github/workflows/ci.yml`) imports `countIconRenderSites` and `checkMobileTabBar` from the real script (mirroring `check-pr-write-scope.test.mjs` → `scripts/lib/pr-write-scope.mjs`) and mutation-tests that removing a `renderSlot` call drops the count below five and fails `checkMobileTabBar({ barSource })`. Prevents repeating the KIT-42 checker round 3 fail (ratchet weakened to accessible-name substring match only) and round 6 fail (hand-duplicated counting logic in the self-test). Tighten only.
+
+### Mobile semantic color key ratchet (KIT-42)
+
+`scripts/check-mobile-design-tokens.mjs` also fails when `apps/mobile/src/theme/tokens.ts` `lightColor` or `darkColor` defines a semantic color key outside the closed allow-list matching `docs/design-system.md` Tokens (e.g. invented `tabBarFill` / `tabBarBorder` roles). Prevents repeating the KIT-42 checker round 6 fail (undocumented tab-bar color tokens in the semantic layer). Tighten only — extend the allow-list only when `/to-design` amends the locked Tokens table.
+
+### Mobile tab-bar pixel-reserve ratchet (KIT-42)
+
+`scripts/check-mobile-design-tokens.mjs` also fails when `apps/mobile/src/theme/tab-bar-layout.ts` exists or when any `apps/mobile/src/theme/**` file (except `tokens.ts`) exports `floatingTabBarLayout` / `tabBarReserve`. Prevents repeating the KIT-42 checker round 7 fail (named pixel-reserve token contradicting `docs/design-system.md` Layout constraints). Tighten only.
+
+`scripts/check-mobile-design-tokens.mjs` also fails when any exported function under `apps/mobile/src/components/**` or `apps/mobile/app/**` composes three or more `space.*` tokens into a returned offset/reserve value **and** is imported by two or more `apps/mobile/app/(tabs)/**` screens — shape-based detection, not a name/path allow-list. `scripts/tests/check-mobile-design-tokens.test.mjs` (CI via `node --test`) imports `findComposedPixelReserveViolations` / `isComposedPixelReserveExport` from the real script and mutation-tests that a relocated `useTabBarContentPadding`-shaped helper reused across tab screens fails. Prevents repeating the KIT-42 checker round 8 fail (pixel-reserve constant evading the round-7 theme-path ratchet by moving to `shortcut-chip-row.tsx`). Tighten only.
+
+### Mobile icon-button hit-target ratchet (KIT-42)
+
+`scripts/check-mobile-design-tokens.mjs` also fails when an `apps/mobile/src/components/**` file has an icon-only `Pressable` (`accessibilityRole="button"` + `hitSlop={8}` + `<Ionicons`) without an explicit `minWidth`/`minHeight` 44 style — use `IconButton` or inline 44×44. Prevents repeating the KIT-42 checker round 7 fail (`Sheet` close button ~40×40). Tighten only.
+
 ### Vision log save-action ratchet (KIT-27)
 
 `packages/api-contract/tests/vision-save-action.test.ts` (CI via `pnpm test`) fails when `resolveVisionSaveAction` does not return a `userAction` for every `VisionJobStatus`. `scripts/check-vision-log-save-action.mjs` (CI via `pnpm check:vision-log-save-action`) fails when `apps/mobile/app/(tabs)/add.tsx` does not call the shared resolver. `apps/api/tests/collection.test.ts` integration case **"sets VisionLog userAction when Save enqueues vision without client visionJobId"** fails when the server-side fallback enqueue path leaves `vision_log.user_action` null (lost/never-sent `visionJobId`). Prevents repeating the KIT-27 checker fail (VisionLog rows left with `userAction: null` at Save). Tighten only.

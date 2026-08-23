@@ -4,7 +4,9 @@ import { StyleSheet, Text, View } from "react-native";
 import { Sheet } from "@/components/catalog-ui";
 import { Button } from "@/components/ui";
 import { createDraft, createDraftId } from "@/drafts/jerseyDraftStore";
-import { color, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { space } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 type PostSaveSheetProps = {
   visible: boolean;
@@ -20,6 +22,8 @@ export function PostSaveSheet({
   onDismiss,
 }: PostSaveSheetProps) {
   const router = useRouter();
+  const theme = useTheme();
+  const typography = useTypography();
 
   const startCapture = (club?: CatalogPickerItem | null) => {
     const draftId = createDraftId();
@@ -38,7 +42,11 @@ export function PostSaveSheet({
   return (
     <Sheet visible={visible} title="Trøjen er gemt" onDismiss={onDismiss}>
       <View style={styles.content}>
-        <Text style={styles.body}>{body}</Text>
+        <Text
+          style={[typography.body, { color: theme.contentSecondary, marginBottom: space.gapSm }]}
+        >
+          {body}
+        </Text>
         <Button label="Samme klub" onPress={() => startCapture(savedClub)} disabled={!savedClub} />
         <Button label="Ny trøje" variant="secondary" onPress={() => startCapture()} />
       </View>
@@ -49,11 +57,5 @@ export function PostSaveSheet({
 const styles = StyleSheet.create({
   content: {
     gap: space.gapSm,
-  },
-  body: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    color: color.contentSecondary,
-    marginBottom: space.gapSm,
   },
 });

@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text } from "react-native";
-import { color, radius, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { radius, space } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 type ChipProps = {
   label: string;
@@ -15,6 +17,9 @@ export function Chip({
   onPress,
   accessibilityRole = "button",
 }: ChipProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
   return (
     <Pressable
       accessibilityRole={accessibilityRole}
@@ -22,11 +27,26 @@ export function Chip({
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,
-        selected && styles.chipSelected,
+        {
+          borderColor: theme.borderSubtle,
+          backgroundColor: theme.surface,
+        },
+        selected && {
+          backgroundColor: theme.fillPrimary,
+          borderColor: theme.fillPrimary,
+        },
         pressed && styles.chipPressed,
       ]}
     >
-      <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
+      <Text
+        style={[
+          typography.labelSm,
+          { color: theme.contentPrimary },
+          selected && { color: theme.contentInverse },
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -36,26 +56,11 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.borderSubtle,
     paddingHorizontal: space.insetMd,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: color.surface,
-  },
-  chipSelected: {
-    backgroundColor: color.fillPrimary,
-    borderColor: color.fillPrimary,
   },
   chipPressed: {
     opacity: 0.9,
-  },
-  label: {
-    fontSize: type.label.fontSize,
-    lineHeight: type.label.lineHeight,
-    fontWeight: type.label.fontWeight,
-    color: color.contentPrimary,
-  },
-  labelSelected: {
-    color: color.contentInverse,
   },
 });
