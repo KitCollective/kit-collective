@@ -7,7 +7,11 @@
     "scheme": "kitcollective",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.kitcollective.mobile",
@@ -33,7 +37,8 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

@@ -119,9 +119,9 @@ const styles = StyleSheet.create({
     color: color.contentInverse,
   },
   roleLabel: {
+    fontFamily: type.label.fontFamily,
     fontSize: type.caption.fontSize,
     lineHeight: type.caption.lineHeight,
-    fontWeight: type.label.fontWeight,
     textAlign: "center",
   },
 });

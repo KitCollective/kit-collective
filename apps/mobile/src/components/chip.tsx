@@ -50,9 +50,9 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   label: {
-    fontSize: type.label.fontSize,
-    lineHeight: type.label.lineHeight,
-    fontWeight: type.label.fontWeight,
+    fontFamily: type.labelSm.fontFamily,
+    fontSize: type.labelSm.fontSize,
+    lineHeight: type.labelSm.lineHeight,
     color: color.contentPrimary,
   },
   labelSelected: {

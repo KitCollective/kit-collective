@@ -98,9 +98,10 @@ const styles = StyleSheet.create({
     paddingTop: space.insetLg,
   },
   title: {
+    fontFamily: type.title.fontFamily,
     fontSize: type.title.fontSize,
     lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
+    letterSpacing: type.title.letterSpacing,
     color: color.contentPrimary,
   },
   subtitle: {
@@ -114,9 +115,9 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: color.contentPrimary,
+    fontFamily: type.label.fontFamily,
     fontSize: type.caption.fontSize,
     lineHeight: type.caption.lineHeight,
-    fontWeight: type.label.fontWeight,
   },
   input: {
     minHeight: 48,

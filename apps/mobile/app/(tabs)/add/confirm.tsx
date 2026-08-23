@@ -733,9 +733,10 @@ const styles = StyleSheet.create({
     paddingBottom: space.insetLg,
   },
   title: {
+    fontFamily: type.title.fontFamily,
     fontSize: type.title.fontSize,
     lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
+    letterSpacing: type.title.letterSpacing,
     color: color.contentPrimary,
   },
   body: {
@@ -747,9 +748,9 @@ const styles = StyleSheet.create({
     gap: space.gapSm,
   },
   sectionLabel: {
+    fontFamily: type.label.fontFamily,
     fontSize: type.label.fontSize,
     lineHeight: type.label.lineHeight,
-    fontWeight: type.label.fontWeight,
     color: color.contentPrimary,
   },
   helper: {

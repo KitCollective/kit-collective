@@ -1,60 +1,31 @@
-import { Ionicons } from "@expo/vector-icons";
+import { FloatingTabBar } from "@/components/floating-tab-bar";
 import { Tabs } from "expo-router";
-import { Pressable, Text } from "react-native";
-import { useAuth } from "@/auth/AuthProvider";
-import { color, space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 export default function TabsLayout() {
-  const { signOut } = useAuth();
+  const theme = useTheme();
 
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        headerStyle: { backgroundColor: color.canvas },
-        headerTintColor: color.contentPrimary,
-        tabBarActiveTintColor: color.contentPrimary,
-        tabBarInactiveTintColor: color.contentMuted,
+        headerShown: false,
         tabBarStyle: {
-          backgroundColor: color.canvas,
-          borderTopColor: color.borderSubtle,
+          position: "absolute",
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          elevation: 0,
         },
-        tabBarLabelStyle: {
-          fontSize: type.caption.fontSize,
-          fontWeight: type.label.fontWeight,
+        sceneStyle: {
+          backgroundColor: theme.canvas,
         },
-        headerRight: () => (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void signOut()}
-            style={{ paddingHorizontal: space.insetMd }}
-          >
-            <Text style={{ color: color.contentMuted, fontSize: type.caption.fontSize }}>
-              Log ud
-            </Text>
-          </Pressable>
-        ),
       }}
     >
-      <Tabs.Screen
-        name="collection"
-        options={{
-          title: "Samling",
-          tabBarLabel: "Samling",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={color} accessibilityElementsHidden />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="add"
-        options={{
-          title: "Tilføj",
-          tabBarLabel: "Tilføj",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="add-outline" size={size} color={color} accessibilityElementsHidden />
-          ),
-        }}
-      />
+      <Tabs.Screen name="collection" options={{ title: "Samling" }} />
+      <Tabs.Screen name="search" options={{ title: "Søg" }} />
+      <Tabs.Screen name="wishlist" options={{ title: "Ønske" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profil" }} />
+      <Tabs.Screen name="add" options={{ href: null }} />
     </Tabs>
   );
 }

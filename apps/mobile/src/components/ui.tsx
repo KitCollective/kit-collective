@@ -10,7 +10,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type ButtonWidth, buttonLayoutStyles } from "@/components/button-layout";
-import { color, space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
+import { radius, space, type } from "@/theme/tokens";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -28,11 +29,13 @@ type IconButtonProps = Omit<PressableProps, "children"> & {
 export function IconButton({
   name,
   icon,
-  iconColor = color.contentPrimary,
+  iconColor,
   iconSize = 24,
   disabled,
   ...props
 }: IconButtonProps) {
+  const theme = useTheme();
+  const resolvedIconColor = iconColor ?? theme.contentPrimary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -45,7 +48,7 @@ export function IconButton({
       ]}
       {...props}
     >
-      <Ionicons name={icon} size={iconSize} color={iconColor} accessibilityElementsHidden />
+      <Ionicons name={icon} size={iconSize} color={resolvedIconColor} accessibilityElementsHidden />
     </Pressable>
   );
 }
@@ -67,14 +70,17 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
+  const theme = useTheme();
   const isDisabled = disabled || loading;
+  const variantStyle = getVariantStyles(theme)[variant];
+  const labelStyle = getLabelStyles(theme)[variant];
 
   return (
     <Pressable
       accessibilityRole="button"
       style={({ pressed }) => [
         buttonLayoutStyles(width),
-        variantStyles[variant],
+        variantStyle,
         isDisabled && styles.disabled,
         pressed && !isDisabled && styles.pressed,
       ]}
@@ -82,9 +88,9 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <ActivityIndicator color={loadingColor[variant]} />
+        <ActivityIndicator color={getLoadingColor(theme, variant)} />
       ) : (
-        <Text style={[styles.label, labelStyles[variant]]}>{label}</Text>
+        <Text style={[styles.label, labelStyle]}>{label}</Text>
       )}
     </Pressable>
   );
@@ -100,9 +106,19 @@ type ButtonDockProps = {
  */
 export function ButtonDock({ children }: ButtonDockProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   return (
-    <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, space.insetMd) }]}>
+    <View
+      style={[
+        styles.dock,
+        {
+          paddingBottom: Math.max(insets.bottom, space.insetMd),
+          borderTopColor: theme.borderSubtle,
+          backgroundColor: theme.canvas,
+        },
+      ]}
+    >
       {children}
     </View>
   );
@@ -115,10 +131,12 @@ type EmptyStateProps = {
 };
 
 export function EmptyState({ title, body, action }: EmptyStateProps) {
+  const theme = useTheme();
+
   return (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.emptyBody}>{body}</Text>
+      <Text style={[styles.emptyTitle, { color: theme.contentPrimary }]}>{title}</Text>
+      <Text style={[styles.emptyBody, { color: theme.contentMuted }]}>{body}</Text>
       {action}
     </View>
   );
@@ -138,8 +156,8 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   label: {
+    fontFamily: type.label.fontFamily,
     fontSize: type.label.fontSize,
-    fontWeight: type.label.fontWeight,
     lineHeight: type.label.lineHeight,
   },
   dock: {
@@ -147,8 +165,6 @@ const styles = StyleSheet.create({
     paddingTop: space.insetMd,
     gap: space.gapMd,
     borderTopWidth: 1,
-    borderTopColor: color.borderSubtle,
-    backgroundColor: color.canvas,
   },
   emptyState: {
     flex: 1,
@@ -158,56 +174,68 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.insetLg,
   },
   emptyTitle: {
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
-    color: color.contentPrimary,
+    fontFamily: type.section.fontFamily,
+    fontSize: type.section.fontSize,
+    lineHeight: type.section.lineHeight,
+    letterSpacing: type.section.letterSpacing,
     textAlign: "center",
   },
   emptyBody: {
+    fontFamily: type.body.fontFamily,
     fontSize: type.body.fontSize,
     lineHeight: type.body.lineHeight,
-    color: color.contentMuted,
     textAlign: "center",
     marginBottom: space.insetMd,
   },
 });
 
-const variantStyles = StyleSheet.create({
-  primary: {
-    backgroundColor: color.fillPrimary,
-  },
-  secondary: {
-    backgroundColor: color.fillSecondary,
-    borderWidth: 1,
-    borderColor: color.borderSubtle,
-  },
-  tertiary: {
-    backgroundColor: "transparent",
-  },
-  destructive: {
-    backgroundColor: color.danger,
-  },
-});
+function getVariantStyles(theme: ReturnType<typeof useTheme>) {
+  return {
+    primary: {
+      backgroundColor: theme.fillPrimary,
+    },
+    secondary: {
+      backgroundColor: theme.fillSecondary,
+      borderWidth: 1,
+      borderColor: theme.borderSubtle,
+    },
+    tertiary: {
+      backgroundColor: "transparent",
+    },
+    destructive: {
+      backgroundColor: theme.danger,
+    },
+  } as const;
+}
 
-const labelStyles = StyleSheet.create({
-  primary: {
-    color: color.contentInverse,
-  },
-  secondary: {
-    color: color.contentPrimary,
-  },
-  tertiary: {
-    color: color.contentPrimary,
-  },
-  destructive: {
-    color: color.contentInverse,
-  },
-});
+function getLabelStyles(theme: ReturnType<typeof useTheme>) {
+  return {
+    primary: {
+      color: theme.contentInverse,
+    },
+    secondary: {
+      color: theme.contentPrimary,
+    },
+    tertiary: {
+      color: theme.contentPrimary,
+    },
+    destructive: {
+      color: theme.contentInverse,
+    },
+  } as const;
+}
 
-const loadingColor: Record<ButtonVariant, string> = {
-  primary: color.contentInverse,
-  secondary: color.contentPrimary,
-  tertiary: color.contentPrimary,
-  destructive: color.contentInverse,
-};
+function getLoadingColor(theme: ReturnType<typeof useTheme>, variant: ButtonVariant): string {
+  switch (variant) {
+    case "primary":
+    case "destructive":
+      return theme.contentInverse;
+    case "secondary":
+    case "tertiary":
+      return theme.contentPrimary;
+    default: {
+      const _exhaustive: never = variant;
+      return _exhaustive;
+    }
+  }
+}

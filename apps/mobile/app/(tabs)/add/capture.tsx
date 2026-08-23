@@ -124,9 +124,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   title: {
+    fontFamily: type.title.fontFamily,
     fontSize: type.title.fontSize,
     lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
+    letterSpacing: type.title.letterSpacing,
     color: color.contentPrimary,
   },
   body: {

@@ -1,33 +1,54 @@
 import { Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
-import { color, radius, space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
+import { radius, space, type } from "@/theme/tokens";
 
 type JerseyTileProps = {
   photoSource?: ImageSourcePropType;
   clubLabel: string;
   seasonLabel: string;
+  typeLabel: string;
   onPress?: () => void;
 };
 
-export function JerseyTile({ photoSource, clubLabel, seasonLabel, onPress }: JerseyTileProps) {
-  const caption = `${clubLabel} · ${seasonLabel}`;
+export function JerseyTile({
+  photoSource,
+  clubLabel,
+  seasonLabel,
+  typeLabel,
+  onPress,
+}: JerseyTileProps) {
+  const theme = useTheme();
+  const metaLine = `${seasonLabel} · ${typeLabel}`;
+  const accessibilityLabel = `${clubLabel}, ${metaLine}`;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={caption}
+      accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
     >
-      <View style={styles.photoFrame}>
+      <View style={[styles.photoFrame, { backgroundColor: theme.fillSecondary, borderColor: theme.borderSubtle }]}>
         {photoSource ? (
           <Image source={photoSource} style={styles.photo} resizeMode="cover" />
         ) : (
-          <View style={styles.photoPlaceholder} />
+          <View style={[styles.photoPlaceholder, { backgroundColor: theme.fillSecondary }]} />
         )}
       </View>
-      <Text style={styles.caption} numberOfLines={2}>
-        {caption}
-      </Text>
+      <View style={styles.captionStack}>
+        <Text
+          style={[styles.club, { color: theme.contentPrimary }]}
+          numberOfLines={1}
+        >
+          {clubLabel}
+        </Text>
+        <Text
+          style={[styles.meta, { color: theme.contentSecondary }]}
+          numberOfLines={1}
+        >
+          {metaLine}
+        </Text>
+      </View>
     </Pressable>
   );
 }
@@ -43,8 +64,8 @@ const styles = StyleSheet.create({
   photoFrame: {
     borderRadius: radius.md,
     overflow: "hidden",
-    backgroundColor: color.fillSecondary,
     aspectRatio: 4 / 5,
+    borderWidth: 1,
   },
   photo: {
     width: "100%",
@@ -52,11 +73,19 @@ const styles = StyleSheet.create({
   },
   photoPlaceholder: {
     flex: 1,
-    backgroundColor: color.fillSecondary,
   },
-  caption: {
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    color: color.contentSecondary,
+  captionStack: {
+    gap: space.gapSm,
+  },
+  club: {
+    fontFamily: type.headingSm.fontFamily,
+    fontSize: type.headingSm.fontSize,
+    lineHeight: type.headingSm.lineHeight,
+    letterSpacing: type.headingSm.letterSpacing,
+  },
+  meta: {
+    fontFamily: type.mono.fontFamily,
+    fontSize: type.mono.fontSize,
+    lineHeight: type.mono.lineHeight,
   },
 });

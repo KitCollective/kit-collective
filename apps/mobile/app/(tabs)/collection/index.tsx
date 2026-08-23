@@ -1,4 +1,5 @@
 import type { CollectionJersey } from "@kit/api-contract";
+import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -11,16 +12,23 @@ import {
 } from "react-native";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
+import { CollectionHeader } from "@/components/collection-header";
 import { JerseyTile } from "@/components/jersey-tile";
+import { Sheet } from "@/components/catalog-ui";
+import { ShortcutChipRow, useTabBarContentPadding } from "@/components/shortcut-chip-row";
 import { Button, ButtonDock, EmptyState } from "@/components/ui";
-import { color, space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
+import { space, type } from "@/theme/tokens";
 
 export default function CollectionScreen() {
   const router = useRouter();
   const { accessToken } = useAuth();
   const { width } = useWindowDimensions();
+  const theme = useTheme();
+  const tabBarPadding = useTabBarContentPadding();
   const [loading, setLoading] = useState(true);
   const [jerseys, setJerseys] = useState<CollectionJersey[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const loadCollection = useCallback(async () => {
     if (!accessToken) {
@@ -55,27 +63,35 @@ export default function CollectionScreen() {
     };
   }, [accessToken, loadCollection]);
 
+  const openJerseyDetail = (jerseyId: string) => {
+    router.push(`/(tabs)/collection/${jerseyId}`);
+  };
+
+  const startCapture = () => {
+    router.push("/(tabs)/add/capture");
+  };
+
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={color.fillPrimary} />
+      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
+        <ActivityIndicator color={theme.fillPrimary} />
       </View>
     );
   }
 
   if (jerseys.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.title}>Samling</Text>
+      <View style={[styles.emptyContainer, { backgroundColor: theme.canvas }]}>
+        <CollectionHeader count={0} onNotificationsPress={() => setNotificationsOpen(true)} />
         <EmptyState title="Ingen trøjer endnu" body="Tilføj den første fra galleriet." />
         <ButtonDock>
-          <Button
-            label="Tilføj trøje"
-            variant="primary"
-            width="fill"
-            onPress={() => router.push("/(tabs)/add/capture")}
-          />
+          <Button label="Tilføj trøje" variant="primary" width="fill" onPress={startCapture} />
         </ButtonDock>
+        <Sheet visible={notificationsOpen} title="Notifikationer" onDismiss={() => setNotificationsOpen(false)}>
+          <Text style={[styles.notificationBody, { color: theme.contentSecondary }]}>
+            Ingen notifikationer
+          </Text>
+        </Sheet>
       </View>
     );
   }
@@ -85,14 +101,18 @@ export default function CollectionScreen() {
   const tileWidth = (width - horizontalPadding - columnGap) / 2;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Samling</Text>
+    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
+      <CollectionHeader
+        count={jerseys.length}
+        onNotificationsPress={() => setNotificationsOpen(true)}
+      />
+      <ShortcutChipRow selectedShortcutId={null} onSelectAlle={() => undefined} />
       <FlatList
         data={jerseys}
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.gridContent}
+        contentContainerStyle={[styles.gridContent, { paddingBottom: tabBarPadding }]}
         renderItem={({ item }) => {
           const primaryPhoto = item.photos[0];
           const photoSource = primaryPhoto
@@ -108,11 +128,18 @@ export default function CollectionScreen() {
                 photoSource={photoSource}
                 clubLabel={item.clubLabel}
                 seasonLabel={item.seasonLabel}
+                typeLabel={KIT_TYPE_LABELS_DA[item.type]}
+                onPress={() => openJerseyDetail(item.id)}
               />
             </View>
           );
         }}
       />
+      <Sheet visible={notificationsOpen} title="Notifikationer" onDismiss={() => setNotificationsOpen(false)}>
+        <Text style={[styles.notificationBody, { color: theme.contentSecondary }]}>
+          Ingen notifikationer
+        </Text>
+      </Sheet>
     </View>
   );
 }
@@ -120,32 +147,25 @@ export default function CollectionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: color.canvas,
-    padding: space.insetMd,
   },
   emptyContainer: {
     flex: 1,
-    backgroundColor: color.canvas,
-    paddingTop: space.insetMd,
-    paddingHorizontal: space.insetMd,
   },
   centered: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: color.canvas,
-  },
-  title: {
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
-    color: color.contentPrimary,
-    marginBottom: space.insetMd,
   },
   gridContent: {
+    paddingHorizontal: space.insetMd,
     gap: space.gapMd,
   },
   row: {
     gap: space.gapMd,
+  },
+  notificationBody: {
+    fontFamily: type.body.fontFamily,
+    fontSize: type.body.fontSize,
+    lineHeight: type.body.lineHeight,
   },
 });

@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
+  AccessibilityInfo,
   Modal,
   Pressable,
   StyleSheet,
@@ -110,8 +112,19 @@ type SheetProps = {
 };
 
 export function Sheet({ visible, title, onDismiss, children }: SheetProps) {
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+  }, []);
+
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onDismiss}>
+    <Modal
+      animationType={reduceMotion ? "none" : "slide"}
+      transparent
+      visible={visible}
+      onRequestClose={onDismiss}
+    >
       <Pressable style={styles.sheetScrim} onPress={onDismiss} accessibilityLabel="Luk" />
       <View style={styles.sheet}>
         <View style={styles.sheetHeader}>
@@ -170,9 +183,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   markText: {
+    fontFamily: type.label.fontFamily,
     fontSize: type.caption.fontSize,
     lineHeight: type.caption.lineHeight,
-    fontWeight: type.label.fontWeight,
     color: color.contentPrimary,
   },
   searchField: {
@@ -242,9 +255,10 @@ const styles = StyleSheet.create({
     paddingBottom: space.insetMd,
   },
   sheetTitle: {
+    fontFamily: type.title.fontFamily,
     fontSize: type.title.fontSize,
     lineHeight: type.title.lineHeight,
-    fontWeight: type.title.fontWeight,
+    letterSpacing: type.title.letterSpacing,
     color: color.contentPrimary,
   },
   sheetBody: {
