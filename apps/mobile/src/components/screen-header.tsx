@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type ScreenHeaderProps = {
@@ -12,10 +13,11 @@ type ScreenHeaderProps = {
 export function ScreenHeader({ title, trailing }: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const typography = useTypography();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + space.insetSm }]}>
-      <Text style={[styles.title, { color: theme.contentPrimary }]}>{title}</Text>
+      <Text style={[typography.title, styles.title, { color: theme.contentPrimary }]}>{title}</Text>
       {trailing}
     </View>
   );
@@ -31,10 +33,6 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   title: {
-    fontFamily: type.title.fontFamily,
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    letterSpacing: type.title.letterSpacing,
     flex: 1,
   },
 });

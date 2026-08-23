@@ -17,7 +17,8 @@ import { CollectionHeader } from "@/components/collection-header";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow, useTabBarContentPadding } from "@/components/shortcut-chip-row";
 import { Button, ButtonDock, EmptyState } from "@/components/ui";
-import { space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 export default function CollectionScreen() {
@@ -25,6 +26,7 @@ export default function CollectionScreen() {
   const { accessToken } = useAuth();
   const { width } = useWindowDimensions();
   const theme = useTheme();
+  const typography = useTypography();
   const tabBarPadding = useTabBarContentPadding();
   const [loading, setLoading] = useState(true);
   const [jerseys, setJerseys] = useState<CollectionJersey[]>([]);
@@ -92,7 +94,7 @@ export default function CollectionScreen() {
           title="Notifikationer"
           onDismiss={() => setNotificationsOpen(false)}
         >
-          <Text style={[styles.notificationBody, { color: theme.contentSecondary }]}>
+          <Text style={[typography.body, { color: theme.contentSecondary }]}>
             Ingen notifikationer
           </Text>
         </Sheet>
@@ -144,7 +146,7 @@ export default function CollectionScreen() {
         title="Notifikationer"
         onDismiss={() => setNotificationsOpen(false)}
       >
-        <Text style={[styles.notificationBody, { color: theme.contentSecondary }]}>
+        <Text style={[typography.body, { color: theme.contentSecondary }]}>
           Ingen notifikationer
         </Text>
       </Sheet>
@@ -170,10 +172,5 @@ const styles = StyleSheet.create({
   },
   row: {
     gap: space.gapMd,
-  },
-  notificationBody: {
-    fontFamily: type.body.fontFamily,
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
   },
 });

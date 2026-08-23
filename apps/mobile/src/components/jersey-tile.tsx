@@ -1,5 +1,6 @@
 import { Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
-import { radius, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type JerseyTileProps = {
@@ -18,6 +19,7 @@ export function JerseyTile({
   onPress,
 }: JerseyTileProps) {
   const theme = useTheme();
+  const typography = useTypography();
   const metaLine = `${seasonLabel} · ${typeLabel}`;
   const accessibilityLabel = `${clubLabel}, ${metaLine}`;
 
@@ -41,10 +43,10 @@ export function JerseyTile({
         )}
       </View>
       <View style={styles.captionStack}>
-        <Text style={[styles.club, { color: theme.contentPrimary }]} numberOfLines={1}>
+        <Text style={[typography.headingSm, { color: theme.contentPrimary }]} numberOfLines={1}>
           {clubLabel}
         </Text>
-        <Text style={[styles.meta, { color: theme.contentSecondary }]} numberOfLines={1}>
+        <Text style={[typography.mono, { color: theme.contentSecondary }]} numberOfLines={1}>
           {metaLine}
         </Text>
       </View>
@@ -75,16 +77,5 @@ const styles = StyleSheet.create({
   },
   captionStack: {
     gap: space.gapSm,
-  },
-  club: {
-    fontFamily: type.headingSm.fontFamily,
-    fontSize: type.headingSm.fontSize,
-    lineHeight: type.headingSm.lineHeight,
-    letterSpacing: type.headingSm.letterSpacing,
-  },
-  meta: {
-    fontFamily: type.mono.fontFamily,
-    fontSize: type.mono.fontSize,
-    lineHeight: type.mono.lineHeight,
   },
 });

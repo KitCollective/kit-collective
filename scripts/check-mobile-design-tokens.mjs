@@ -16,6 +16,9 @@ const rgbPattern = /rgba?\([^)]+\)/g;
 const staticColorImportPattern =
   /import\s+\{[^}]*\bcolor\b[^}]*\}\s+from\s+["']@\/theme\/tokens["']/;
 
+/** Direct brand fontFamily from static type roles bypasses webfont fallback. */
+const staticTypeFontFamilyPattern = /fontFamily:\s*type\.\w+\.fontFamily/;
+
 /** Legacy capture/auth surfaces not yet migrated to useTheme(); tighten only by removing entries. */
 const STATIC_COLOR_IMPORT_ALLOWLIST = new Set([
   "apps/mobile/src/components/photo-slot.tsx",
@@ -72,7 +75,29 @@ function walk(dir) {
         `${rel}: imports static light-only 'color' export from theme/tokens — use useTheme() or getThemeColors()`,
       );
     }
+
+    if (isThemeAwareScope(rel) && staticTypeFontFamilyPattern.test(source)) {
+      violations.push(
+        `${rel}: uses static type.*.fontFamily — use useTypography() from @/theme/brand-fonts for webfont fallback`,
+      );
+    }
   }
+}
+
+const brandFontsPath = "apps/mobile/src/theme/brand-fonts.tsx";
+const brandFontsResolvePath = "apps/mobile/src/theme/brand-fonts-resolve.ts";
+const brandFontsSource = readFileSync(brandFontsPath, "utf8");
+const brandFontsResolveSource = readFileSync(brandFontsResolvePath, "utf8");
+if (!brandFontsSource.includes("useTypography")) {
+  violations.push(`${brandFontsPath}: must export useTypography for webfont fallback`);
+}
+if (
+  !brandFontsResolveSource.includes("resolveTypeRoles") ||
+  !brandFontsResolveSource.includes("resolveFontFamily")
+) {
+  violations.push(
+    `${brandFontsResolvePath}: must export resolveTypeRoles and resolveFontFamily for webfont fallback`,
+  );
 }
 
 walk(mobileRoot);

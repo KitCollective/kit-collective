@@ -35,6 +35,21 @@ if (!barSource.includes('accessibilityRole="button"') || !barSource.includes("Ti
   violations.push(`${floatingBarPath}: center plus must be a button named Tilføj trøje`);
 }
 
+const iconCount = (barSource.match(/<Ionicons/g) ?? []).length;
+const requiredIconNames = [
+  "home-outline",
+  "compass-outline",
+  "add",
+  "heart-outline",
+  "person-outline",
+];
+const missingIconNames = requiredIconNames.filter((name) => !barSource.includes(`"${name}"`));
+if (iconCount < 2 || missingIconNames.length > 0) {
+  violations.push(
+    `${floatingBarPath}: expected Ionicons in all five tab-bar slots (jsx=${iconCount}, missing names: ${missingIconNames.join(", ") || "none"})`,
+  );
+}
+
 if (violations.length > 0) {
   console.error("Mobile tab bar ratchet failed:\n");
   for (const v of violations) console.error(`  - ${v}`);

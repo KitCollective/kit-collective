@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import type { ThemeColors } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
 import { radius, space, type } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
@@ -30,6 +31,7 @@ function monogramFromLabel(label: string): string {
 
 export function Mark({ label, size = "md" }: MarkProps) {
   const theme = useTheme();
+  const typography = useTypography();
   const dimension = size === "sm" ? 24 : 32;
   const letters = monogramFromLabel(label);
 
@@ -47,7 +49,7 @@ export function Mark({ label, size = "md" }: MarkProps) {
         },
       ]}
     >
-      <Text style={[styles.markText, { color: theme.contentPrimary }]}>{letters}</Text>
+      <Text style={[typography.caption, { color: theme.contentPrimary }]}>{letters}</Text>
     </View>
   );
 }
@@ -141,6 +143,7 @@ type SheetProps = {
 
 export function Sheet({ visible, title, onDismiss, children }: SheetProps) {
   const theme = useTheme();
+  const typography = useTypography();
   const reduceMotion = useReduceMotion();
 
   return (
@@ -157,7 +160,7 @@ export function Sheet({ visible, title, onDismiss, children }: SheetProps) {
       />
       <View style={[styles.sheet, { backgroundColor: theme.surfaceRaised }]}>
         <View style={styles.sheetHeader}>
-          <Text style={[styles.sheetTitle, { color: theme.contentPrimary }]}>{title}</Text>
+          <Text style={[typography.title, { color: theme.contentPrimary }]}>{title}</Text>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Luk"
@@ -225,11 +228,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  markText: {
-    fontFamily: type.label.fontFamily,
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-  },
   searchField: {
     flexDirection: "row",
     alignItems: "center",
@@ -282,12 +280,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.insetLg,
     paddingTop: space.insetLg,
     paddingBottom: space.insetMd,
-  },
-  sheetTitle: {
-    fontFamily: type.title.fontFamily,
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    letterSpacing: type.title.letterSpacing,
   },
   sheetBody: {
     paddingHorizontal: space.insetLg,

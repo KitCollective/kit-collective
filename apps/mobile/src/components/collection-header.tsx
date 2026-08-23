@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconButton } from "@/components/ui";
-import { space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type CollectionHeaderProps = {
@@ -12,12 +13,13 @@ type CollectionHeaderProps = {
 export function CollectionHeader({ count, onNotificationsPress }: CollectionHeaderProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const typography = useTypography();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + space.insetSm }]}>
       <View style={styles.titleRow}>
-        <Text style={[styles.title, { color: theme.contentPrimary }]}>Samling</Text>
-        <Text style={[styles.count, { color: theme.contentMuted }]}>{count}</Text>
+        <Text style={[typography.display, { color: theme.contentPrimary }]}>Samling</Text>
+        <Text style={[typography.monoSm, { color: theme.contentMuted }]}>{count}</Text>
       </View>
       <IconButton
         name="Notifikationer"
@@ -42,16 +44,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "baseline",
     gap: space.gapSm,
-  },
-  title: {
-    fontFamily: type.display.fontFamily,
-    fontSize: type.display.fontSize,
-    lineHeight: type.display.lineHeight,
-    letterSpacing: type.display.letterSpacing,
-  },
-  count: {
-    fontFamily: type.monoSm.fontFamily,
-    fontSize: type.monoSm.fontSize,
-    lineHeight: type.monoSm.lineHeight,
   },
 });

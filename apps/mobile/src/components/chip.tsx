@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text } from "react-native";
-import { radius, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type ChipProps = {
@@ -17,6 +18,7 @@ export function Chip({
   accessibilityRole = "button",
 }: ChipProps) {
   const theme = useTheme();
+  const typography = useTypography();
 
   return (
     <Pressable
@@ -38,7 +40,7 @@ export function Chip({
     >
       <Text
         style={[
-          styles.label,
+          typography.labelSm,
           { color: theme.contentPrimary },
           selected && { color: theme.contentInverse },
         ]}
@@ -60,10 +62,5 @@ const styles = StyleSheet.create({
   },
   chipPressed: {
     opacity: 0.9,
-  },
-  label: {
-    fontFamily: type.labelSm.fontFamily,
-    fontSize: type.labelSm.fontSize,
-    lineHeight: type.labelSm.lineHeight,
   },
 });

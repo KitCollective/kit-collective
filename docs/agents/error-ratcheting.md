@@ -132,6 +132,14 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-mobile-design-tokens.mjs` also fails when a collection-chrome `apps/mobile/src/components/**` file (except legacy capture allowlist entries) or `apps/mobile/app/(tabs)/**` screen outside `add/**` imports the static light-only `color` export from `@/theme/tokens` instead of `useTheme()` / `getThemeColors()`. Prevents repeating the KIT-42 checker round 2 fail (`Chip` Alle shortcut chip ignored dark mode). Tighten only — remove allowlist entries as capture/auth surfaces migrate.
 
+### Mobile webfont fallback ratchet (KIT-42)
+
+`scripts/check-mobile-design-tokens.mjs` also fails when a theme-aware collection-chrome file uses `fontFamily: type.*.fontFamily` in a StyleSheet instead of `useTypography()` from `@/theme/brand-fonts`, and when `apps/mobile/src/theme/brand-fonts.tsx` omits `resolveTypeRoles` / `useTypography`. `apps/mobile/tests/brand-fonts.test.ts` asserts `resolveTypeRoles(false)` yields `system-ui` for every role. Prevents repeating the KIT-42 checker round 3 fail (webfont fallback dead code). Tighten only.
+
+### Mobile tab bar icon ratchet (KIT-42)
+
+`scripts/check-mobile-tab-bar.mjs` also fails when `apps/mobile/src/components/floating-tab-bar.tsx` renders fewer than five `<Ionicons` elements (one per tab-bar slot). Prevents repeating the KIT-42 checker round 3 fail (ratchet weakened to accessible-name substring match only). Tighten only.
+
 ### Vision log save-action ratchet (KIT-27)
 
 `packages/api-contract/tests/vision-save-action.test.ts` (CI via `pnpm test`) fails when `resolveVisionSaveAction` does not return a `userAction` for every `VisionJobStatus`. `scripts/check-vision-log-save-action.mjs` (CI via `pnpm check:vision-log-save-action`) fails when `apps/mobile/app/(tabs)/add.tsx` does not call the shared resolver. `apps/api/tests/collection.test.ts` integration case **"sets VisionLog userAction when Save enqueues vision without client visionJobId"** fails when the server-side fallback enqueue path leaves `vision_log.user_action` null (lost/never-sent `visionJobId`). Prevents repeating the KIT-27 checker fail (VisionLog rows left with `userAction: null` at Save). Tighten only.

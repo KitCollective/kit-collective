@@ -10,7 +10,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type ButtonWidth, buttonLayoutStyles } from "@/components/button-layout";
-import { space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
@@ -71,6 +72,7 @@ export function Button({
   ...props
 }: ButtonProps) {
   const theme = useTheme();
+  const typography = useTypography();
   const isDisabled = disabled || loading;
   const variantStyle = getVariantStyles(theme)[variant];
   const labelStyle = getLabelStyles(theme)[variant];
@@ -90,7 +92,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={getLoadingColor(theme, variant)} />
       ) : (
-        <Text style={[styles.label, labelStyle]}>{label}</Text>
+        <Text style={[typography.label, labelStyle]}>{label}</Text>
       )}
     </Pressable>
   );
@@ -132,11 +134,21 @@ type EmptyStateProps = {
 
 export function EmptyState({ title, body, action }: EmptyStateProps) {
   const theme = useTheme();
+  const typography = useTypography();
 
   return (
     <View style={styles.emptyState}>
-      <Text style={[styles.emptyTitle, { color: theme.contentPrimary }]}>{title}</Text>
-      <Text style={[styles.emptyBody, { color: theme.contentMuted }]}>{body}</Text>
+      <Text style={[typography.section, { color: theme.contentPrimary, textAlign: "center" }]}>
+        {title}
+      </Text>
+      <Text
+        style={[
+          typography.body,
+          { color: theme.contentMuted, textAlign: "center", marginBottom: space.insetMd },
+        ]}
+      >
+        {body}
+      </Text>
       {action}
     </View>
   );
@@ -155,11 +167,6 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.9,
   },
-  label: {
-    fontFamily: type.label.fontFamily,
-    fontSize: type.label.fontSize,
-    lineHeight: type.label.lineHeight,
-  },
   dock: {
     paddingHorizontal: space.insetLg,
     paddingTop: space.insetMd,
@@ -172,20 +179,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: space.gapMd,
     paddingHorizontal: space.insetLg,
-  },
-  emptyTitle: {
-    fontFamily: type.section.fontFamily,
-    fontSize: type.section.fontSize,
-    lineHeight: type.section.lineHeight,
-    letterSpacing: type.section.letterSpacing,
-    textAlign: "center",
-  },
-  emptyBody: {
-    fontFamily: type.body.fontFamily,
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    textAlign: "center",
-    marginBottom: space.insetMd,
   },
 });
 

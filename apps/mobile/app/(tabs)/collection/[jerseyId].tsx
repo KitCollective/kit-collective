@@ -8,7 +8,8 @@ import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { useTabBarContentPadding } from "@/components/shortcut-chip-row";
 import { IconButton } from "@/components/ui";
-import { radius, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 export default function JerseyDetailScreen() {
@@ -16,6 +17,7 @@ export default function JerseyDetailScreen() {
   const router = useRouter();
   const { accessToken } = useAuth();
   const theme = useTheme();
+  const typography = useTypography();
   const insets = useSafeAreaInsets();
   const tabBarPadding = useTabBarContentPadding();
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export default function JerseyDetailScreen() {
   if (!jersey) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
-        <Text style={[styles.errorText, { color: theme.contentSecondary }]}>
+        <Text style={[typography.body, { color: theme.contentSecondary }]}>
           Trøjen findes ikke
         </Text>
         <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
@@ -86,8 +88,8 @@ export default function JerseyDetailScreen() {
         <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
       </View>
       <View style={styles.titleBlock}>
-        <Text style={[styles.club, { color: theme.contentPrimary }]}>{jersey.clubLabel}</Text>
-        <Text style={[styles.meta, { color: theme.contentSecondary }]}>{metaLine}</Text>
+        <Text style={[typography.title, { color: theme.contentPrimary }]}>{jersey.clubLabel}</Text>
+        <Text style={[typography.mono, { color: theme.contentSecondary }]}>{metaLine}</Text>
       </View>
       <View style={styles.photoGrid}>
         {jersey.photos.map((photo) => (
@@ -122,17 +124,6 @@ const styles = StyleSheet.create({
   titleBlock: {
     gap: space.gapSm,
   },
-  club: {
-    fontFamily: type.title.fontFamily,
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    letterSpacing: type.title.letterSpacing,
-  },
-  meta: {
-    fontFamily: type.mono.fontFamily,
-    fontSize: type.mono.fontSize,
-    lineHeight: type.mono.lineHeight,
-  },
   photoGrid: {
     gap: space.gapMd,
   },
@@ -144,10 +135,5 @@ const styles = StyleSheet.create({
   photo: {
     width: "100%",
     height: "100%",
-  },
-  errorText: {
-    fontFamily: type.body.fontFamily,
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
   },
 });
