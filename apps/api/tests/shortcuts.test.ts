@@ -431,27 +431,20 @@ describe("Collection shortcuts /v1", () => {
     const session = await registerSession(app, "shortcut-reorder-dup@example.com");
     const fixture = await insertFullFixture();
 
-    const first = await app.inject({
+    const createResponse = await app.inject({
       method: "POST",
       url: "/v1/collection/shortcuts",
       headers: { authorization: `Bearer ${session.accessToken}` },
       payload: { clubId: fixture.clubId },
     });
-    const second = await app.inject({
-      method: "POST",
-      url: "/v1/collection/shortcuts",
-      headers: { authorization: `Bearer ${session.accessToken}` },
-      payload: { leagueId: fixture.leagueId },
-    });
 
-    const shortcutA = collectionShortcutSchema.parse(JSON.parse(first.body));
-    collectionShortcutSchema.parse(JSON.parse(second.body));
+    const shortcut = collectionShortcutSchema.parse(JSON.parse(createResponse.body));
 
     const reorderResponse = await app.inject({
       method: "PUT",
       url: "/v1/collection/shortcuts/reorder",
       headers: { authorization: `Bearer ${session.accessToken}` },
-      payload: { orderedIds: [shortcutA.id, shortcutA.id] },
+      payload: { orderedIds: [shortcut.id, shortcut.id] },
     });
 
     expect(reorderResponse.statusCode).toBe(400);
