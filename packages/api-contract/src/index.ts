@@ -32,6 +32,30 @@ export {
   adminStamdataRowSchema,
 } from "./admin/catalog.js";
 export {
+  type AdminCollectorJerseyDrill,
+  type AdminCollectorJerseyList,
+  type AdminCollectorJerseyParams,
+  type AdminCollectorJerseyPhoto,
+  type AdminCollectorJerseyRow,
+  type AdminCollectorList,
+  type AdminCollectorPhotoParams,
+  type AdminCollectorQuery,
+  type AdminCollectorRow,
+  type AdminCollectorUser,
+  type AdminCollectorUserIdParam,
+  adminCollectorJerseyDrillSchema,
+  adminCollectorJerseyListSchema,
+  adminCollectorJerseyParamsSchema,
+  adminCollectorJerseyPhotoSchema,
+  adminCollectorJerseyRowSchema,
+  adminCollectorListSchema,
+  adminCollectorPhotoParamsSchema,
+  adminCollectorQuerySchema,
+  adminCollectorRowSchema,
+  adminCollectorUserIdParamSchema,
+  adminCollectorUserSchema,
+} from "./admin/collectors.js";
+export {
   type CatalogClubSearchResponse,
   type CatalogClubSeasonsResponse,
   type CatalogPickerClubIdParam,
@@ -89,6 +113,14 @@ export {
   type VisionSaveActionInput,
   type VisionSaveActionResult,
 } from "./collection/vision-save-action.js";
+export {
+  type AdminRoleUpdateRequest,
+  adminRoleUpdateRequestSchema,
+  IDENTITY_ROLE_ERROR_CODES,
+  type IdentityRoleError,
+  type IdentityRoleErrorCode,
+  identityRoleErrorSchema,
+} from "./identity/role.js";
 export {
   type IdentityCredentials,
   type IdentityMe,

@@ -14,5 +14,6 @@ import { CollectionService, OBJECT_STORE } from "./collection.service.js";
       useFactory: () => CollectionService.objectStoreFactory(),
     },
   ],
+  exports: [OBJECT_STORE],
 })
 export class CollectionModule {}
