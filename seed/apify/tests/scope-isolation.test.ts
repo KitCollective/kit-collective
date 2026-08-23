@@ -16,6 +16,7 @@ import {
   SeedScopeIsolationError,
   snapshotSeasonPcsByLabel,
 } from "../src/scope-isolation.js";
+import { resolveSeedApifyTestDatabaseUrl } from "./test-database-url.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -27,13 +28,13 @@ const fixturePath = path.join(
   "../fixtures/superliga-mini.json",
 );
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const TEST_DATABASE_URL = resolveSeedApifyTestDatabaseUrl();
 
 let dbResetChain: Promise<void> = Promise.resolve();
 
 async function prepareDatabase() {
   dbResetChain = dbResetChain.then(async () => {
-    await resetDatabase(DATABASE_URL, migrationsFolder);
+    await resetDatabase(TEST_DATABASE_URL, migrationsFolder);
   });
   await dbResetChain;
 }
@@ -111,10 +112,10 @@ describe("runSeed scope isolation", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
-    const { db, pool } = createDb(DATABASE_URL);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
     const before22 = await countPcsForSeasonLabel(db, "22/23");
 
     const result = await runSeed({
@@ -126,7 +127,7 @@ describe("runSeed scope isolation", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(result.summary.fetched).toBe(2);
@@ -151,10 +152,10 @@ describe("runSeed scope isolation", () => {
       scope,
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
-    const { db: dbBefore, pool: poolBefore } = createDb(DATABASE_URL);
+    const { db: dbBefore, pool: poolBefore } = createDb(TEST_DATABASE_URL);
     const snapshotBefore = await snapshotSeasonPcsByLabel(dbBefore, "dk1");
     await poolBefore.end();
 
@@ -164,14 +165,14 @@ describe("runSeed scope isolation", () => {
       scope,
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(second.summary.fetched).toBe(0);
     expect(second.summary.skipped).toBe(2);
     expect(recording.getFetchCalls()).toHaveLength(fetchCallsAfterFirst);
 
-    const { db: dbAfter, pool: poolAfter } = createDb(DATABASE_URL);
+    const { db: dbAfter, pool: poolAfter } = createDb(TEST_DATABASE_URL);
     const snapshotAfter = await snapshotSeasonPcsByLabel(dbAfter, "dk1");
     await poolAfter.end();
 
@@ -210,7 +211,7 @@ describe("runSeed scope isolation", () => {
         },
         lane: "development",
         fetchAdapter: evilAdapter,
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
       }),
     ).rejects.toThrow(SeedScopeIsolationError);
   }, 60_000);
@@ -225,7 +226,7 @@ describe("runSeed scope isolation", () => {
     });
     const facts = normalize(raw);
 
-    const { db, pool } = createDb(DATABASE_URL);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
     try {
       await expect(
         mapFacts(db, facts, { allowedSeasonLabels: new Set(["22/23"]) }),

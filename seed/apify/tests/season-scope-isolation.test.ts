@@ -13,6 +13,7 @@ import {
   isPairInSeedScope,
   seasonLabelInCompetitionScope,
 } from "../src/scope/club-season.js";
+import { resolveSeedApifyTestDatabaseUrl } from "./test-database-url.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,10 +25,10 @@ const fixturePath = path.join(
   "../fixtures/superliga-mini.json",
 );
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const TEST_DATABASE_URL = resolveSeedApifyTestDatabaseUrl();
 
 async function prepareDatabase() {
-  await resetDatabase(DATABASE_URL, migrationsFolder);
+  await resetDatabase(TEST_DATABASE_URL, migrationsFolder);
 }
 
 async function squadCountsByLabel(db: ReturnType<typeof createDb>["db"]) {
@@ -139,7 +140,7 @@ describe.sequential("runSeed season-scope isolation", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     await runSeed({
@@ -151,10 +152,10 @@ describe.sequential("runSeed season-scope isolation", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
-    const { db, pool } = createDb(DATABASE_URL);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
     try {
       const before = await squadCountsByLabel(db);
 
@@ -167,7 +168,7 @@ describe.sequential("runSeed season-scope isolation", () => {
         },
         lane: "development",
         fetchAdapter: recording.adapter,
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
       });
 
       const after = await squadCountsByLabel(db);
@@ -210,10 +211,10 @@ describe.sequential("runSeed season-scope isolation", () => {
       },
       lane: "development",
       fetchAdapter: mislabeledAdapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
-    const { db, pool } = createDb(DATABASE_URL);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
     try {
       const before = await squadCountsByLabel(db);
 
@@ -226,7 +227,7 @@ describe.sequential("runSeed season-scope isolation", () => {
         },
         lane: "development",
         fetchAdapter: mislabeledAdapter,
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
       });
 
       const after = await squadCountsByLabel(db);

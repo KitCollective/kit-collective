@@ -37,6 +37,10 @@
       {
         "command": "bash .cursor/hooks/block-hand-typed-seed-db-counts.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-seed-apify-test-on-shared-db.sh",
+        "failClosed": true
       }
     ]
   }
