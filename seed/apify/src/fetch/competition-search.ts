@@ -1,7 +1,4 @@
-import {
-  type CompetitionHit,
-  iso3166ForCountryName,
-} from "@kit/seed-shared";
+import { type CompetitionHit, iso3166ForCountryName } from "@kit/seed-shared";
 import * as cheerio from "cheerio";
 
 export function competitionSearchUrl(query: string): string {
@@ -12,17 +9,17 @@ export function competitionSearchUrl(query: string): string {
 function countryFromAnchor(anchor: ReturnType<cheerio.CheerioAPI>): string | undefined {
   const row = anchor.closest("tr");
   const scoped = row.length > 0 ? row : anchor;
-  const imgTitle = scoped.find("img[title]").first().attr("title")?.trim();
-  if (imgTitle) {
-    return imgTitle;
-  }
-  const imgAlt = scoped.find("img[alt]").first().attr("alt")?.trim();
-  if (imgAlt) {
-    return imgAlt;
+  const flag = scoped.find("img.flaggenrahmen").first();
+  const flagTitle = flag.attr("title")?.trim() || flag.attr("alt")?.trim();
+  if (flagTitle) {
+    return flagTitle;
   }
 
   const lastCell = scoped.find("td").last().text().trim();
-  return lastCell || undefined;
+  if (!lastCell || /^\d+$/.test(lastCell)) {
+    return undefined;
+  }
+  return lastCell;
 }
 
 export function parseCompetitionSearchHtml(html: string): CompetitionHit[] {
@@ -30,9 +27,9 @@ export function parseCompetitionSearchHtml(html: string): CompetitionHit[] {
   const hits: CompetitionHit[] = [];
   const seen = new Set<string>();
 
-  $('a[href*="/wettbewerb/"]').each((_, anchor) => {
+  $("table.items a[href*='/wettbewerb/']").each((_, anchor) => {
     const href = $(anchor).attr("href");
-    const name = $(anchor).text().trim() || $(anchor).attr("title")?.trim();
+    const name = $(anchor).attr("title")?.trim() || $(anchor).text().replace(/\s+/g, " ").trim();
     if (!href || !name) {
       return;
     }
@@ -42,9 +39,9 @@ export function parseCompetitionSearchHtml(html: string): CompetitionHit[] {
       return;
     }
 
-    const slug = match[1]!;
-    const tmCode = match[2]!.toUpperCase();
-    if (seen.has(tmCode)) {
+    const slug = match[1];
+    const tmCode = match[2]?.toUpperCase();
+    if (!slug || !tmCode || seen.has(tmCode)) {
       return;
     }
     seen.add(tmCode);

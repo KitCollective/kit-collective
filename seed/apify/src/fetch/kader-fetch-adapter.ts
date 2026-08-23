@@ -1,9 +1,8 @@
 import {
-  catalogCompetitionIdentity,
   type CompetitionIdentity,
+  catalogCompetitionIdentity,
   pickCompetitionHit,
 } from "@kit/seed-shared";
-import { competitionSearchUrl, parseCompetitionSearchHtml } from "./competition-search.js";
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
@@ -17,6 +16,7 @@ import type {
   FetchClubSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
+import { competitionSearchUrl, parseCompetitionSearchHtml } from "./competition-search.js";
 import { createKaderHtmlLiveCache, wrapFetchHtmlWithKaderCache } from "./kader-html-live-cache.js";
 import {
   type KaderParseWarning,

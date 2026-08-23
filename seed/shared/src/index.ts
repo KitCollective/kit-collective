@@ -13,8 +13,8 @@ export {
   pickCompetitionHit,
 } from "./competition-query.js";
 export {
-  catalogCompetitionIdentity,
   type CompetitionDefinition,
+  catalogCompetitionIdentity,
   resolveCompetition,
 } from "./competitions.js";
 export {

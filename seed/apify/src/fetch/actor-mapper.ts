@@ -1,6 +1,6 @@
 import {
-  catalogCompetitionIdentity,
   type CompetitionIdentity,
+  catalogCompetitionIdentity,
   resolveSeasonRef,
 } from "@kit/seed-shared";
 import type { TransfermarktRawPayload } from "../types.js";

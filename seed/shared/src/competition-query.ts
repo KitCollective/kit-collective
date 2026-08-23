@@ -24,9 +24,17 @@ type CountryAlias = {
 const COUNTRIES: CountryAlias[] = [
   { iso3166: "GB", name: "England", tokens: ["england", "english", "britain", "uk"] },
   { iso3166: "ES", name: "Spain", tokens: ["spain", "spanien", "spanish", "espanol"] },
-  { iso3166: "TR", name: "Turkey", tokens: ["turkey", "tyrkiet", "turkish", "tyrkisk", "tyrkiske", "turkiye"] },
+  {
+    iso3166: "TR",
+    name: "Turkey",
+    tokens: ["turkey", "tyrkiet", "turkish", "tyrkisk", "tyrkiske", "turkiye"],
+  },
   { iso3166: "DK", name: "Denmark", tokens: ["denmark", "danmark", "danish", "dansk"] },
-  { iso3166: "DE", name: "Germany", tokens: ["germany", "tyskland", "german", "tysk", "deutschland"] },
+  {
+    iso3166: "DE",
+    name: "Germany",
+    tokens: ["germany", "tyskland", "german", "tysk", "deutschland"],
+  },
   { iso3166: "IT", name: "Italy", tokens: ["italy", "italien", "italian"] },
   { iso3166: "FR", name: "France", tokens: ["france", "frankrig", "french"] },
   { iso3166: "NL", name: "Netherlands", tokens: ["netherlands", "holland", "dutch"] },
@@ -50,16 +58,14 @@ const COUNTRIES: CountryAlias[] = [
   { iso3166: "RO", name: "Romania", tokens: ["romania", "rumanien"] },
   { iso3166: "HU", name: "Hungary", tokens: ["hungary", "ungarn"] },
   { iso3166: "IE", name: "Ireland", tokens: ["ireland", "irland"] },
+  { iso3166: "AM", name: "Armenia", tokens: ["armenia", "armenien"] },
   { iso3166: "SCO", name: "Scotland", tokens: ["scotland", "skotland", "scottish"] },
 ];
 
 const STOP_WORDS = new Set(["i", "in", "the", "den", "det", "en", "a", "and", "og", "for", "de"]);
 
 export function foldCompetitionText(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase();
+  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
 }
 
 export function normalizeCompetitionText(value: string): string {
@@ -110,30 +116,37 @@ function stripCountryAndStops(query: string): string {
   if (hint) {
     hintTokens.add(normalizeCompetitionText(hint.name));
   }
-  return words.filter((word) => !hintTokens.has(word)).join(" ").trim();
+  return words
+    .filter((word) => !hintTokens.has(word))
+    .join(" ")
+    .trim();
 }
 
-function nameScore(query: string, hitName: string): number {
+function nameScore(query: string, hit: CompetitionHit): number {
   const q = stripCountryAndStops(query);
-  const n = normalizeCompetitionText(hitName);
+  const n = normalizeCompetitionText(hit.name);
+  const slug = normalizeCompetitionText(hit.slug.replaceAll("-", " "));
   if (!q || !n) {
     return 0;
   }
+  let score = 0;
   if (n === q) {
-    return 100;
+    score = 100;
+  } else if (n.includes(q) || q.includes(n)) {
+    score = 80;
+  } else {
+    const qTokens = q.split(" ").filter(Boolean);
+    const matched = qTokens.filter((token) => n.includes(token)).length;
+    if (qTokens.length > 0 && matched === qTokens.length) {
+      score = 60;
+    } else if (matched > 0) {
+      score = 30;
+    }
   }
-  if (n.includes(q) || q.includes(n)) {
-    return 80;
+  if (slug === q) {
+    score += 40;
   }
-  const qTokens = q.split(" ").filter(Boolean);
-  const matched = qTokens.filter((token) => n.includes(token)).length;
-  if (qTokens.length > 0 && matched === qTokens.length) {
-    return 60;
-  }
-  if (matched > 0) {
-    return 30;
-  }
-  return 0;
+  return score;
 }
 
 function hitMatchesCountry(hit: CompetitionHit, hint: CountryAlias): boolean {
@@ -178,7 +191,7 @@ export function pickCompetitionHit(query: string, hits: CompetitionHit[]): Compe
   }
 
   const scored = pool
-    .map((hit) => ({ hit, score: nameScore(query, hit.name) }))
+    .map((hit) => ({ hit, score: nameScore(query, hit) }))
     .filter((row) => row.score > 0)
     .sort((a, b) => b.score - a.score);
 
@@ -187,7 +200,10 @@ export function pickCompetitionHit(query: string, hits: CompetitionHit[]): Compe
     throw new Error(`No Transfermarkt competition matched: ${query}. Candidates: ${names}`);
   }
 
-  const best = scored[0]!;
+  const best = scored[0];
+  if (!best) {
+    throw new Error(`No Transfermarkt competition matched: ${query}`);
+  }
   const tied = scored.filter((row) => row.score === best.score);
   if (tied.length > 1) {
     const names = tied.map((row) => `${row.hit.name} (${row.hit.countryName})`).join(", ");

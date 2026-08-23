@@ -1,41 +1,55 @@
 import { describe, expect, it } from "vitest";
-import {
-  pickCompetitionHit,
-  type CompetitionHit,
-} from "../src/competition-query.js";
+import { type CompetitionHit, pickCompetitionHit } from "../src/competition-query.js";
 
-const HITS: CompetitionHit[] = [
-  {
-    name: "Premier League",
-    slug: "premier-league",
-    tmCode: "GB1",
-    countryName: "England",
-    iso3166: "GB",
-  },
-  {
-    name: "LaLiga",
-    slug: "laliga",
-    tmCode: "ES1",
-    countryName: "Spain",
-    iso3166: "ES",
-  },
-  {
-    name: "Süper Lig",
-    slug: "super-lig",
-    tmCode: "TR1",
-    countryName: "Turkey",
-    iso3166: "TR",
-  },
-  {
-    name: "Superligaen",
-    slug: "superligaen",
-    tmCode: "DK1",
-    countryName: "Denmark",
-    iso3166: "DK",
-  },
-];
+const ENGLAND_PREMIER_LEAGUE: CompetitionHit = {
+  name: "Premier League",
+  slug: "premier-league",
+  tmCode: "GB1",
+  countryName: "England",
+  iso3166: "GB",
+};
+
+const LALIGA: CompetitionHit = {
+  name: "LaLiga",
+  slug: "laliga",
+  tmCode: "ES1",
+  countryName: "Spain",
+  iso3166: "ES",
+};
+
+const SUPER_LIG: CompetitionHit = {
+  name: "Süper Lig",
+  slug: "super-lig",
+  tmCode: "TR1",
+  countryName: "Turkey",
+  iso3166: "TR",
+};
+
+const SUPERLIGAEN: CompetitionHit = {
+  name: "Superligaen",
+  slug: "superligaen",
+  tmCode: "DK1",
+  countryName: "Denmark",
+  iso3166: "DK",
+};
+
+const HITS: CompetitionHit[] = [ENGLAND_PREMIER_LEAGUE, LALIGA, SUPER_LIG, SUPERLIGAEN];
 
 describe("pickCompetitionHit", () => {
+  it("prefers the England Premier League slug over Armenia's Premier League", () => {
+    const picked = pickCompetitionHit("Premier League", [
+      ENGLAND_PREMIER_LEAGUE,
+      {
+        name: "Premier League",
+        slug: "bardsragujn-chumb",
+        tmCode: "ARM1",
+        countryName: "Armenia",
+        iso3166: "AM",
+      },
+    ]);
+    expect(picked.leagueTransfermarktId).toBe("GB1");
+  });
+
   it("resolves Premier League to England GB1", () => {
     const picked = pickCompetitionHit("Premier League", HITS);
     expect(picked.leagueTransfermarktId).toBe("GB1");
@@ -61,12 +75,9 @@ describe("pickCompetitionHit", () => {
   });
 
   it("fails with candidate names when two hits score the same", () => {
-    expect(() =>
-      pickCompetitionHit("Superliga", [
-        HITS[2]!,
-        HITS[3]!,
-      ]),
-    ).toThrow(/Ambiguous competition/);
+    expect(() => pickCompetitionHit("Superliga", [SUPER_LIG, SUPERLIGAEN])).toThrow(
+      /Ambiguous competition/,
+    );
   });
 
   it("fails when search returned no competitions", () => {

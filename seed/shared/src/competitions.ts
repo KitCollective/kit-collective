@@ -1,7 +1,4 @@
-import {
-  type CompetitionIdentity,
-  iso3166ForCountryName,
-} from "./competition-query.js";
+import { type CompetitionIdentity, iso3166ForCountryName } from "./competition-query.js";
 
 export type CompetitionDefinition = {
   /** Transfermarkt league id used for season external ids in Apify seed. */

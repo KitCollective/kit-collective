@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { pickCompetitionHit } from "@kit/seed-shared";
 import { describe, expect, it } from "vitest";
 import {
   competitionSearchUrl,
@@ -22,6 +23,20 @@ describe("parseCompetitionSearchHtml", () => {
         name: "Premier League",
         slug: "premier-league",
         tmCode: "GB1",
+        countryName: "England",
+        iso3166: "GB",
+      },
+      {
+        name: "Premier League",
+        slug: "bardsragujn-chumb",
+        tmCode: "ARM1",
+        countryName: "Armenia",
+        iso3166: "AM",
+      },
+      {
+        name: "Premier League 2",
+        slug: "premier-league-2",
+        tmCode: "GB21",
         countryName: "England",
         iso3166: "GB",
       },
@@ -53,6 +68,14 @@ describe("parseCompetitionSearchHtml", () => {
     const codes = parseCompetitionSearchHtml(fixture).map((hit) => hit.tmCode);
     expect(codes).not.toContain("11111");
     expect(codes).not.toContain("190");
+    expect(codes).not.toContain("CL");
+  });
+
+  it("picks England GB1 from a search page that also lists Armenia", () => {
+    const hits = parseCompetitionSearchHtml(fixture);
+    expect(pickCompetitionHit("Premier League", hits).leagueTransfermarktId).toBe("GB1");
+    expect(pickCompetitionHit("La Liga i Spanien", hits).leagueTransfermarktId).toBe("ES1");
+    expect(pickCompetitionHit("tyrkiske Superliga", hits).leagueTransfermarktId).toBe("TR1");
   });
 });
 

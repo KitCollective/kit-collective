@@ -184,10 +184,7 @@ describe("kader fetch adapter from recorded HTML", () => {
   });
 
   it("searches Transfermarkt for Premier League, then walks clubs on GB1", async () => {
-    const searchHtml = readFileSync(
-      path.join(fixturesDir, "search/competitions.html"),
-      "utf8",
-    );
+    const searchHtml = readFileSync(path.join(fixturesDir, "search/competitions.html"), "utf8");
     const competitionHtml = readFileSync(
       path.join(fixturesDir, "competitions/DK1-2015.html"),
       "utf8",
