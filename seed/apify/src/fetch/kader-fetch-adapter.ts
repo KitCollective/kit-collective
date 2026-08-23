@@ -1,4 +1,9 @@
-import { resolveCompetition } from "@kit/seed-shared";
+import {
+  type CompetitionIdentity,
+  catalogCompetitionIdentity,
+  pickCompetitionHit,
+  searchQueryForCompetition,
+} from "@kit/seed-shared";
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
@@ -12,6 +17,7 @@ import type {
   FetchClubSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
+import { competitionSearchUrl, parseCompetitionSearchHtml } from "./competition-search.js";
 import { createKaderHtmlLiveCache, wrapFetchHtmlWithKaderCache } from "./kader-html-live-cache.js";
 import {
   type KaderParseWarning,
@@ -60,17 +66,9 @@ export interface KaderFetchAdapterOptions {
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void;
 }
 
-function competitionCode(slug: string): string {
-  const def = resolveCompetition(slug);
-  if (!def) {
-    throw new Error(`Unknown competition: ${slug}`);
-  }
-  return def.leagueTransfermarktId;
-}
-
-export function competitionSeasonUrl(tmCode: string, season: number): string {
-  const slug = tmCode === "DK1" ? "superligaen" : tmCode.toLowerCase();
-  return `https://www.transfermarkt.com/${slug}/startseite/wettbewerb/${tmCode}/saison_id/${season}`;
+export function competitionSeasonUrl(tmCode: string, season: number, slug?: string): string {
+  const pathSlug = slug ?? (tmCode === "DK1" ? "superligaen" : tmCode.toLowerCase());
+  return `https://www.transfermarkt.com/${pathSlug}/startseite/wettbewerb/${tmCode}/saison_id/${season}`;
 }
 
 export function kaderUrl(clubId: string, season: number): string {
@@ -131,7 +129,7 @@ function createKaderHtmlClient(
     competition: string,
     season: number,
   ): Promise<ActorSeasonClubRow[]> {
-    const cacheKey = `${competitionCode(competition)}:${season}`;
+    const cacheKey = `${competition.trim().toLowerCase()}:${season}`;
     const cached = competitionCache.get(cacheKey);
     if (cached) {
       return cached;
@@ -194,6 +192,7 @@ async function fetchClubSeasonWithClient(
   params: FetchClubSeasonParams,
   onProfileFetch?: (playerId: string) => void,
   onProfileHole?: (playerId: string, error: unknown) => void,
+  identity?: CompetitionIdentity,
 ) {
   const startYear = labelToStartYear(params.season);
   const clubs = await client.fetchCompetitionSeason(params.competition, startYear);
@@ -220,6 +219,7 @@ async function fetchClubSeasonWithClient(
     clubName,
     squadRows,
     profileByPlayerId,
+    identity,
   });
 }
 
@@ -275,16 +275,47 @@ function createFixturesAdapter(
   );
 }
 
+function createIdentityResolver(
+  fetchHtml: (url: string) => Promise<string>,
+): (query: string) => Promise<CompetitionIdentity> {
+  const cache = new Map<string, CompetitionIdentity>();
+
+  function remember(query: string, identity: CompetitionIdentity): CompetitionIdentity {
+    cache.set(query.trim().toLowerCase(), identity);
+    cache.set(identity.leagueTransfermarktId.toLowerCase(), identity);
+    cache.set(identity.slug.toLowerCase(), identity);
+    return identity;
+  }
+
+  return async (query: string) => {
+    const key = query.trim().toLowerCase();
+    const cached = cache.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    const catalog = catalogCompetitionIdentity(query);
+    if (catalog) {
+      return remember(query, catalog);
+    }
+
+    const html = await fetchHtml(competitionSearchUrl(searchQueryForCompetition(query)));
+    const hits = parseCompetitionSearchHtml(html);
+    return remember(query, pickCompetitionHit(query, hits));
+  };
+}
+
 function createLiveAdapter(
   fetchHtml: (url: string) => Promise<string>,
   onProfileFetch?: (playerId: string) => void,
   onProfileHole?: (playerId: string, error: unknown) => void,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
 ): FetchAdapter {
+  const identityFor = createIdentityResolver(fetchHtml);
   const client = createKaderHtmlClient(
     async (competition, season) => {
-      const tmCode = competitionCode(competition);
-      const url = competitionSeasonUrl(tmCode, season);
+      const identity = await identityFor(competition);
+      const url = competitionSeasonUrl(identity.leagueTransfermarktId, season, identity.slug);
       return fetchHtml(url);
     },
     async (clubId, season) => fetchHtml(kaderUrl(clubId, season)),
@@ -294,6 +325,7 @@ function createLiveAdapter(
 
   return {
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
+      await identityFor(params.competition);
       const { fromYear, toYear } = resolveSeasonYearRange(params.fromSeason, params.toSeason);
       const available = Array.from(
         { length: toYear - fromYear + 1 },
@@ -316,7 +348,8 @@ function createLiveAdapter(
     },
 
     async fetchClubSeason(params) {
-      return fetchClubSeasonWithClient(client, params, onProfileFetch, onProfileHole);
+      const identity = await identityFor(params.competition);
+      return fetchClubSeasonWithClient(client, params, onProfileFetch, onProfileHole, identity);
     },
   };
 }

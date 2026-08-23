@@ -7,7 +7,9 @@ const seedInputSchema = {
   competition: z
     .string()
     .min(1)
-    .describe("Competition slug or id (e.g. superligaen, championship). Not limited to Denmark."),
+    .describe(
+      "Competition name, slug, or Transfermarkt id (e.g. Premier League, La Liga i Spanien, tyrkiske Superliga, superligaen, GB1). Unknown names are searched on Transfermarkt; country words disambiguate.",
+    ),
   fromSeason: z
     .string()
     .min(1)
@@ -56,7 +58,9 @@ export const APIFY_DESCRIPTION = [
   "- Competition + season range: competition, fromSeason, toSeason",
   "- Club + one season: competition, club, season",
   "",
-  "Pipeline: fetch → normalize (facts only) → map into Postgres. Already seeded club-seasons skip fetch.",
+  "Competition is a name, not a closed catalog. Catalog aliases (superligaen) resolve first; otherwise Transfermarkt search finds the id. Then the job walks Competition season page → clubs → kader squads and numbers.",
+  "",
+  "Pipeline: resolve competition → fetch → normalize (facts only) → map into Postgres. Already seeded club-seasons skip fetch.",
   "",
   "Season shorthand: 0001 = that competition's first Transfermarkt season (Superliga 1991/92).",
   "",
