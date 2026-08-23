@@ -14,6 +14,7 @@ function emptyDraft(overrides: Partial<CaptureJerseyDraft> = {}): CaptureJerseyD
     kitTypeSelected: false,
     sizeSelected: false,
     conditionSelected: false,
+    notes: "",
     photos: [],
     ...overrides,
   };
@@ -25,14 +26,14 @@ describe("getSaveBlockMessage", () => {
     expect(
       getSaveBlockMessage(
         emptyDraft({
-          photos: [{ uri: "file:///a.jpg", role: "front" }],
+          photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
         }),
       ),
     ).toBe("Vælg en klub.");
     expect(
       getSaveBlockMessage(
         emptyDraft({
-          photos: [{ uri: "file:///a.jpg", role: "front" }],
+          photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
           clubId: "club",
         }),
       ),
@@ -40,7 +41,7 @@ describe("getSaveBlockMessage", () => {
     expect(
       getSaveBlockMessage(
         emptyDraft({
-          photos: [{ uri: "file:///a.jpg", role: "front" }],
+          photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
           clubId: "club",
           seasonId: "season",
         }),
@@ -49,7 +50,7 @@ describe("getSaveBlockMessage", () => {
     expect(
       getSaveBlockMessage(
         emptyDraft({
-          photos: [{ uri: "file:///a.jpg", role: "front" }],
+          photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
           clubId: "club",
           seasonId: "season",
           kitTypeSelected: true,
@@ -60,7 +61,7 @@ describe("getSaveBlockMessage", () => {
     expect(
       getSaveBlockMessage(
         emptyDraft({
-          photos: [{ uri: "file:///a.jpg", role: "front" }],
+          photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
           clubId: "club",
           seasonId: "season",
           kitTypeSelected: true,
@@ -76,7 +77,7 @@ describe("getSaveBlockMessage", () => {
     expect(
       getSaveBlockMessage(
         emptyDraft({
-          photos: [{ uri: "file:///a.jpg", role: "front" }],
+          photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
           clubId: "club",
           seasonId: "season",
           kitTypeSelected: true,

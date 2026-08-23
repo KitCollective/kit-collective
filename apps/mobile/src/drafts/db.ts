@@ -48,6 +48,7 @@ draftDb.execSync(`
     kit_type_selected INTEGER NOT NULL DEFAULT 0,
     size_selected INTEGER NOT NULL DEFAULT 0,
     condition_selected INTEGER NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT '',
     sort_order INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (session_id) REFERENCES capture_session(id) ON DELETE CASCADE
@@ -57,8 +58,19 @@ draftDb.execSync(`
     draft_id TEXT NOT NULL,
     uri TEXT NOT NULL,
     role TEXT,
+    source TEXT NOT NULL DEFAULT 'gallery',
     PRIMARY KEY (draft_id, uri),
     FOREIGN KEY (draft_id) REFERENCES capture_session_draft(id) ON DELETE CASCADE,
     FOREIGN KEY (session_id) REFERENCES capture_session(id) ON DELETE CASCADE
   );
 `);
+
+function ensureColumn(table: string, column: string, definition: string): void {
+  const columns = draftDb.getAllSync<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (!columns.some((entry) => entry.name === column)) {
+    draftDb.execSync(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+ensureColumn("capture_session_draft", "notes", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("capture_session_draft_photo", "source", "TEXT NOT NULL DEFAULT 'gallery'");

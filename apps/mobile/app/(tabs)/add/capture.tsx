@@ -37,10 +37,13 @@ export default function CaptureScreen() {
         return;
       }
 
-      const { sessionId } = createPersistedCaptureSession(uris, { prefilledClub });
+      const { sessionId } = createPersistedCaptureSession(uris, {
+        prefilledClub,
+        photoSource,
+      });
       router.replace({
         pathname: "/(tabs)/add/confirm",
-        params: { sessionId, photoSource },
+        params: { sessionId },
       });
     },
     [prefilledClub, router],

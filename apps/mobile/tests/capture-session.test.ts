@@ -16,8 +16,10 @@ import {
   selectDraftKitType,
   selectDraftSize,
   setDraftClub,
+  setDraftNotes,
   setDraftSeason,
   unbindPhoto,
+  upsertDraftPhoto,
 } from "../src/capture/captureSession";
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
@@ -148,6 +150,16 @@ describe("bind, unbind, and addJersey", () => {
     expect(withSecondJersey.activeDraftId).not.toBe(firstDraftId);
     expect(getDraft(withSecondJersey, withSecondJersey.activeDraftId).photos).toEqual([]);
     expect(withSecondJersey.unboundUris).toEqual(session.unboundUris);
+  });
+});
+
+describe("setDraftNotes", () => {
+  it("persists notes on the active draft", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    const withNotes = setDraftNotes(session, draftId, "Match-worn");
+    expect(getDraft(withNotes, draftId).notes).toBe("Match-worn");
   });
 });
 

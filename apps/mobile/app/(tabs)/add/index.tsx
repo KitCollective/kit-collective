@@ -44,7 +44,10 @@ export default function AddChooserScreen() {
       return;
     }
 
-    const { sessionId } = createPersistedCaptureSession(uris, { prefilledClub });
+    const { sessionId } = createPersistedCaptureSession(uris, {
+      prefilledClub,
+      photoSource: "gallery",
+    });
     router.push({
       pathname: "/(tabs)/add/confirm",
       params: { sessionId },

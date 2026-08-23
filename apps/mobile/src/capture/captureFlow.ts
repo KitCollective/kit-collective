@@ -1,3 +1,4 @@
+import type { PhotoSource } from "@kit/domain";
 import * as Crypto from "expo-crypto";
 import { Alert } from "react-native";
 import { branchFromPhotoCount, createCaptureSession, setDraftClub } from "./captureSession";
@@ -36,11 +37,19 @@ export function showBulkUploadBlockedAlert(): void {
 
 export function createPersistedCaptureSession(
   orderedUris: string[],
-  options?: { prefilledClub?: PrefilledClub | null; sessionId?: string },
+  options?: {
+    prefilledClub?: PrefilledClub | null;
+    sessionId?: string;
+    photoSource?: PhotoSource;
+  },
 ): { sessionId: string; branch: CaptureBranch } {
   const sessionId = options?.sessionId ?? Crypto.randomUUID();
   const store = createSqliteCaptureSessionStore(sessionId);
-  let state = createCaptureSession(orderedUris, { store, sessionId });
+  let state = createCaptureSession(orderedUris, {
+    store,
+    sessionId,
+    photoSource: options?.photoSource ?? "gallery",
+  });
 
   if (options?.prefilledClub) {
     state = setDraftClub(

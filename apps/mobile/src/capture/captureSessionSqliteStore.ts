@@ -7,6 +7,7 @@ import {
   type KitType,
   PHOTO_ROLES,
   type PhotoRole,
+  type PhotoSource,
 } from "@kit/domain";
 import { draftDb } from "@/drafts/db";
 import type {
@@ -29,6 +30,7 @@ type DraftRow = {
   kit_type_selected: number;
   size_selected: number;
   condition_selected: number;
+  notes: string;
   sort_order: number;
 };
 
@@ -36,6 +38,7 @@ type PhotoRow = {
   draft_id: string;
   uri: string;
   role: string | null;
+  source: string;
 };
 
 function readKitType(value: string | null): KitType | null {
@@ -78,6 +81,13 @@ function readOrderedUris(value: string): string[] {
   return parsed;
 }
 
+function readPhotoSource(value: string | null | undefined): PhotoSource {
+  if (value === "camera") {
+    return "camera";
+  }
+  return "gallery";
+}
+
 function readDraft(row: DraftRow, photos: CaptureSessionPhoto[]): CaptureJerseyDraft {
   return {
     id: row.id,
@@ -90,6 +100,7 @@ function readDraft(row: DraftRow, photos: CaptureSessionPhoto[]): CaptureJerseyD
     kitTypeSelected: row.kit_type_selected === 1,
     sizeSelected: row.size_selected === 1,
     conditionSelected: row.condition_selected === 1,
+    notes: row.notes ?? "",
     photos,
   };
 }
@@ -134,8 +145,8 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
                id, session_id, club_id, club_label, season_id,
                kit_type, size, condition,
                kit_type_selected, size_selected, condition_selected,
-               sort_order, updated_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               notes, sort_order, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               draft.id,
               sessionId,
@@ -148,6 +159,7 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
               draft.kitTypeSelected ? 1 : 0,
               draft.sizeSelected ? 1 : 0,
               draft.conditionSelected ? 1 : 0,
+              draft.notes,
               index,
               Date.now(),
             ],
@@ -155,9 +167,9 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
 
           for (const photo of draft.photos) {
             draftDb.runSync(
-              `INSERT INTO capture_session_draft_photo (session_id, draft_id, uri, role)
-               VALUES (?, ?, ?, ?)`,
-              [sessionId, draft.id, photo.uri, photo.role],
+              `INSERT INTO capture_session_draft_photo (session_id, draft_id, uri, role, source)
+               VALUES (?, ?, ?, ?, ?)`,
+              [sessionId, draft.id, photo.uri, photo.role, photo.source],
             );
           }
         }
@@ -194,7 +206,7 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
       );
 
       const photoRows = draftDb.getAllSync<PhotoRow>(
-        `SELECT draft_id, uri, role FROM capture_session_draft_photo WHERE session_id = ?`,
+        `SELECT draft_id, uri, role, source FROM capture_session_draft_photo WHERE session_id = ?`,
         [sessionId],
       );
 
@@ -204,6 +216,7 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
           .map((photo) => ({
             uri: photo.uri,
             role: readPhotoRole(photo.role),
+            source: readPhotoSource(photo.source),
           }));
         return readDraft(row, photos);
       });

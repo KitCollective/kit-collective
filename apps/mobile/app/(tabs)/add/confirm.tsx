@@ -9,7 +9,6 @@ import {
   KIT_TYPES,
   PHOTO_ROLES,
   type PhotoRole,
-  type PhotoSource,
 } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -36,6 +35,7 @@ import {
   selectDraftKitType,
   selectDraftSize,
   setDraftClub,
+  setDraftNotes,
   setDraftSeason,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
@@ -57,21 +57,14 @@ import { useTheme } from "@/theme/use-theme";
 const MIN_CLUB_SEARCH_LENGTH = 2;
 const VISION_TIMEOUT_MS = 12_000;
 
-function readPhotoSource(value: string | string[] | undefined): PhotoSource {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw === "camera" ? "camera" : "gallery";
-}
-
 export default function ConfirmScreen() {
   const router = useRouter();
   const theme = useTheme();
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
-  const { sessionId, photoSource: photoSourceParam } = useLocalSearchParams<{
+  const { sessionId } = useLocalSearchParams<{
     sessionId: string;
-    photoSource?: string;
   }>();
-  const defaultPhotoSource = readPhotoSource(photoSourceParam);
   const { accessToken } = useAuth();
   const { state, mutate } = usePersistedCaptureSession(sessionId);
 
@@ -82,7 +75,6 @@ export default function ConfirmScreen() {
   const [clubResults, setClubResults] = useState<CatalogPickerItem[]>([]);
   const [seasonResults, setSeasonResults] = useState<CatalogPickerItem[]>([]);
   const [selectedSeasonLabel, setSelectedSeasonLabel] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
   const [searching, setSearching] = useState(false);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -331,7 +323,7 @@ export default function ConfirmScreen() {
     }
 
     const uri = uris[0];
-    mutate((current) => upsertDraftPhoto(current, current.activeDraftId, role, uri));
+    mutate((current) => upsertDraftPhoto(current, current.activeDraftId, role, uri, "gallery"));
 
     if (!hadPhotos) {
       void maybeStartVision(role, uri);
@@ -438,7 +430,7 @@ export default function ConfirmScreen() {
           .filter((photo): photo is typeof photo & { role: PhotoRole } => photo.role !== null)
           .map(async (photo) => ({
             role: photo.role,
-            source: defaultPhotoSource,
+            source: photo.source,
             contentBase64: await readPhotoBase64(photo.uri),
           })),
       );
@@ -771,13 +763,18 @@ export default function ConfirmScreen() {
         onDismiss={() => setDetailsSheetOpen(false)}
       >
         <Text style={[typography.label, { color: theme.contentPrimary }]}>Noter</Text>
+        <Text style={[typography.caption, { color: theme.contentMuted }]}>
+          Noter gemmes i denne session. De sendes ikke med ved Gem endnu.
+        </Text>
         <TextInput
           accessibilityLabel="Noter"
           multiline
           placeholder="Noter om trøjen"
           placeholderTextColor={theme.contentMuted}
-          value={notes}
-          onChangeText={setNotes}
+          value={draft.notes}
+          onChangeText={(text) => {
+            mutate((current) => setDraftNotes(current, current.activeDraftId, text));
+          }}
           style={[
             styles.notesInput,
             typography.body,
