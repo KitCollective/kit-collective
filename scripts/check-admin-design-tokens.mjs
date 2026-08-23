@@ -80,8 +80,7 @@ for (const rule of rules) {
   const weightMatch = body.match(/font-weight:\s*([^;]+);/);
   const lineHeightMatch = body.match(/line-height:\s*([^;]+);/);
 
-  const hasTypography =
-    Boolean(sizeMatch) || Boolean(weightMatch) || Boolean(lineHeightMatch);
+  const hasTypography = Boolean(sizeMatch) || Boolean(weightMatch) || Boolean(lineHeightMatch);
 
   if (!hasTypography) {
     continue;
@@ -89,9 +88,7 @@ for (const rule of rules) {
 
   const size = sizeMatch ? sizeMatch[1].trim() : inheritedTypography.size;
   const weight = weightMatch ? weightMatch[1].trim() : inheritedTypography.weight;
-  const lineHeight = lineHeightMatch
-    ? lineHeightMatch[1].trim()
-    : inheritedTypography.lineHeight;
+  const lineHeight = lineHeightMatch ? lineHeightMatch[1].trim() : inheritedTypography.lineHeight;
 
   if (!matchesAllowedTypography(size, weight, lineHeight)) {
     violations.push(
