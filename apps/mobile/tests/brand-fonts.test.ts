@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fontFamily, type } from "../src/theme/tokens";
 import { resolveFontFamily, resolveTypeRoles } from "../src/theme/brand-fonts-resolve";
+import { fontFamily, type } from "../src/theme/tokens";
 
 describe("resolveFontFamily", () => {
   it("returns brand family when brand fonts are enabled", () => {

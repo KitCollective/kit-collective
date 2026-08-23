@@ -9,8 +9,8 @@ import {
   type TextInputProps,
   View,
 } from "react-native";
-import type { ThemeColors } from "@/theme/tokens";
 import { useTypography } from "@/theme/brand-fonts";
+import type { ThemeColors } from "@/theme/tokens";
 import { radius, space, type } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";

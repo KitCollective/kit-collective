@@ -1,6 +1,9 @@
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { Platform } from "react-native";
-import { resolveTypeRoles as resolveTypeRolesBase, type ResolvedTypeRoles } from "@/theme/brand-fonts-resolve";
+import {
+  type ResolvedTypeRoles,
+  resolveTypeRoles as resolveTypeRolesBase,
+} from "@/theme/brand-fonts-resolve";
 
 export {
   resolveFontFamily,

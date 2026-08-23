@@ -64,9 +64,7 @@ export default function JerseyDetailScreen() {
   if (!jersey) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
-        <Text style={[typography.body, { color: theme.contentSecondary }]}>
-          Trøjen findes ikke
-        </Text>
+        <Text style={[typography.body, { color: theme.contentSecondary }]}>Trøjen findes ikke</Text>
         <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
       </View>
     );
