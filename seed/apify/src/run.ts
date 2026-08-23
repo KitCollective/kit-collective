@@ -9,6 +9,13 @@ import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
 import { mapFacts } from "./map/index.js";
 import { normalize } from "./normalize/index.js";
+import {
+  assertOutOfScopeSeasonsUnchanged,
+  assertPairsInScope,
+  resolveScopeSeasonLabels,
+  SeedScopeIsolationError,
+  snapshotSeasonPcsByLabel,
+} from "./scope-isolation.js";
 import { isClubSeasonAlreadySeeded } from "./seeded.js";
 import type { Lane, MapResult } from "./types.js";
 
@@ -99,6 +106,9 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
   const competition = options.scope.competition;
 
   const pairs = await expandScope(options.scope, options.fetchAdapter);
+  const inScopeSeasonLabels = resolveScopeSeasonLabels(options.scope);
+  assertPairsInScope(pairs, inScopeSeasonLabels);
+
   const summary: RunSeedSummary = {
     fetched: 0,
     skipped: 0,
@@ -108,6 +118,7 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
 
   const { db, pool } = createDb(databaseUrl);
   try {
+    const outOfScopeBefore = await snapshotSeasonPcsByLabel(db, competition);
     const aggregateMap = emptyMapResult();
 
     for (const pair of pairs) {
@@ -132,9 +143,14 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
         summary.fetched += 1;
 
         const normalized = normalize(raw);
-        const mapResult = await mapFacts(db, normalized);
+        const mapResult = await mapFacts(db, normalized, {
+          allowedSeasonLabels: new Set([pair.seasonLabel]),
+        });
         addMapResults(aggregateMap, mapResult);
       } catch (error: unknown) {
+        if (error instanceof SeedScopeIsolationError) {
+          throw error;
+        }
         const message = error instanceof Error ? error.message : String(error);
         summary.failures.push({
           clubExternalId: pair.clubExternalId,
@@ -143,6 +159,9 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
         });
       }
     }
+
+    const outOfScopeAfter = await snapshotSeasonPcsByLabel(db, competition);
+    assertOutOfScopeSeasonsUnchanged(outOfScopeBefore, outOfScopeAfter, inScopeSeasonLabels);
 
     summary.mapped = mapTotal(aggregateMap);
     return { summary };

@@ -5,5 +5,6 @@ export default defineConfig({
     fileParallelism: false,
     poolOptions: { threads: { singleThread: true } },
     testTimeout: 30_000,
+    hookTimeout: 60_000,
   },
 });

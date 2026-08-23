@@ -70,6 +70,9 @@ jobs:
       - name: Check seed development proof scripts
         run: pnpm check:seed-development-proof-scripts
 
+      - name: Check seed scope isolation test
+        run: pnpm check:seed-scope-isolation-test
+
       - name: Assert seed packages are in workspace and turbo test graph
         run: |
           node -e '

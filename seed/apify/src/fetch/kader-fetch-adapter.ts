@@ -2,6 +2,7 @@ import {
   type CompetitionIdentity,
   catalogCompetitionIdentity,
   pickCompetitionHit,
+  resolveSeasonRef,
   searchQueryForCompetition,
 } from "@kit/seed-shared";
 import {
@@ -161,11 +162,12 @@ function createKaderHtmlClient(
 }
 
 function resolveSeasonYearRange(
+  competition: string,
   fromSeason: string,
   toSeason: string,
 ): { fromYear: number; toYear: number } {
-  const fromLabel = fromSeason === "today" ? "today" : fromSeason;
-  const toLabel = toSeason === "today" ? "today" : toSeason;
+  const fromLabel = fromSeason === "today" ? "today" : resolveSeasonRef(competition, fromSeason);
+  const toLabel = toSeason === "today" ? "today" : resolveSeasonRef(competition, toSeason);
 
   const fromYear =
     fromLabel === "today"
@@ -326,7 +328,11 @@ function createLiveAdapter(
   return {
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
       await identityFor(params.competition);
-      const { fromYear, toYear } = resolveSeasonYearRange(params.fromSeason, params.toSeason);
+      const { fromYear, toYear } = resolveSeasonYearRange(
+        params.competition,
+        params.fromSeason,
+        params.toSeason,
+      );
       const available = Array.from(
         { length: toYear - fromYear + 1 },
         (_, index) => fromYear + index,

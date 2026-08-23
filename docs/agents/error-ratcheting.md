@@ -67,6 +67,8 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 
 `.cursor/hooks/block-hand-typed-seed-db-counts.sh` denies `git commit` messages on seed-proof branches that hand-type squad/club count patterns without referencing `verify-dev-catalog` or `kit-34-verify-output.json`. Use `seed/mcp/scripts/verify-dev-catalog.mjs` (or the record script above) and paste its JSON output — do not type counts by hand. Tighten only.
 
+`scripts/check-seed-scope-isolation-test.mjs` (CI via `pnpm check:seed-scope-isolation-test`) fails when `seed/apify/tests/scope-isolation.test.ts` drops the cross-season isolation coverage (`runSeed` must not mutate `player_club_season` rows outside the requested scope). Prevents repeating the KIT-34 checker round-4 fail (2017/18 skip run mutating 2016/17). Tighten only.
+
 ### Code quality ratchet
 
 `biome.json` (format + lint), `oxlint.config.ts` with the vendored plugin under
@@ -121,6 +123,8 @@ catches it in the API tests and the container smoke test.
 ### Seed DB proof evidence ratchet (KIT-34)
 
 `.cursor/hooks/block-hand-typed-seed-db-counts.sh` denies `git commit` messages on seed-proof work that hand-type development-lane squad/club row counts (e.g. `476 rows`, `14/14 clubs`, `fetched:0, skipped:14`) without referencing `verify-dev-catalog` or `kit-34-verify-output.json`. Run `seed/mcp/scripts/verify-dev-catalog.mjs` and paste its JSON output as evidence instead. Prevents repeating the KIT-34 checker fail (Linear/PR claims that contradict the live `DATABASE_URL`). Tighten only.
+
+`scripts/check-seed-scope-isolation-test.mjs` (CI via `pnpm check:seed-scope-isolation-test`) fails when `seed/apify/tests/scope-isolation.test.ts` drops the cross-season isolation coverage (`runSeed` must not mutate `player_club_season` rows outside the requested scope). Prevents repeating the KIT-34 checker round-4 fail (2017/18 skip run mutating 2016/17). Tighten only.
 
 ### Mobile design-system inventory ratchet (KIT-23)
 
