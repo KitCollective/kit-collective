@@ -26,8 +26,12 @@ export function mergeGalleryEscapePhotos(
     if (galleryIndex >= galleryUris.length) {
       break;
     }
+    const uri = galleryUris[galleryIndex];
+    if (!uri) {
+      break;
+    }
     merged.push({
-      uri: galleryUris[galleryIndex] as string,
+      uri,
       role,
       source: "gallery",
     });
