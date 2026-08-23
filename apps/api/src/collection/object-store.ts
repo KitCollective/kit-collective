@@ -2,6 +2,7 @@ export type ObjectStoreAdapter = {
   putObject(key: string, bytes: Uint8Array): Promise<void>;
   objectExists(key: string): Promise<boolean>;
   getObject(key: string): Promise<Uint8Array | null>;
+  deleteObject(key: string): Promise<void>;
 };
 
 export function createMemoryObjectStore(): ObjectStoreAdapter {
@@ -16,6 +17,9 @@ export function createMemoryObjectStore(): ObjectStoreAdapter {
     },
     async getObject(key: string): Promise<Uint8Array | null> {
       return objects.get(key) ?? null;
+    },
+    async deleteObject(key: string): Promise<void> {
+      objects.delete(key);
     },
   };
 }

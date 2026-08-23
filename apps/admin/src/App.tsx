@@ -4,7 +4,9 @@ import { RequireAdmin } from "./auth/RequireAdmin.js";
 import { AdminShell } from "./components/AdminShell.js";
 import { ClubDrillPage } from "./pages/ClubDrillPage.js";
 import { ClubSeasonDrillPage } from "./pages/ClubSeasonDrillPage.js";
+import { CollectorJerseyDrillPage } from "./pages/CollectorJerseyDrillPage.js";
 import { CollectorsPage } from "./pages/CollectorsPage.js";
+import { CollectorUserDrillPage } from "./pages/CollectorUserDrillPage.js";
 import { KitDrillPage } from "./pages/KitDrillPage.js";
 import { LoginPage } from "./pages/LoginPage.js";
 import { SeasonDrillPage } from "./pages/SeasonDrillPage.js";
@@ -29,6 +31,11 @@ export function App() {
                 element={<ClubSeasonDrillPage />}
               />
               <Route path="/collectors" element={<CollectorsPage />} />
+              <Route path="/collectors/:userId" element={<CollectorUserDrillPage />} />
+              <Route
+                path="/collectors/:userId/jerseys/:jerseyId"
+                element={<CollectorJerseyDrillPage />}
+              />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/stamdata" replace />} />

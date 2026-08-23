@@ -177,6 +177,12 @@ a {
   color: var(--content-primary);
 }
 
+.btn-destructive {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--content-inverse);
+}
+
 .record-count {
   color: var(--content-secondary);
   font-size: 13px;
@@ -345,6 +351,12 @@ a {
   display: block;
   max-height: 480px;
   max-width: 100%;
+}
+
+.jersey-photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-gap-md);
 }
 
 .meta-grid {

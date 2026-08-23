@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -69,6 +70,14 @@ export function createR2ObjectStore(): ObjectStoreAdapter {
       } catch {
         return null;
       }
+    },
+    async deleteObject(key: string): Promise<void> {
+      await client.send(
+        new DeleteObjectCommand({
+          Bucket: bucket,
+          Key: key,
+        }),
+      );
     },
   };
 }
