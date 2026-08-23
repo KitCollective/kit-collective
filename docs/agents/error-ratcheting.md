@@ -61,6 +61,16 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 
 `.cursor/hooks/block-coolify-rest-service-control.sh` denies shell commands that call Coolify REST `/api/v1/services/{uuid}/start|stop|restart` (including bare `curl` to those paths). Season-range runs must use the Coolify MCP `control` tool via `seed/coolify/mcp-call.sh` / `start-apify-job.sh`. Prevents repeating the first KIT-17 checker fail (REST start instead of MCP). Tighten only.
 
+### Seed development proof DB ratchet (KIT-34)
+
+`.cursor/hooks/block-manual-seed-development-proof.sh` denies manual writes under `seed/mcp/proof-output/`. Agents record development-lane seed proof only via `scripts/record-seed-development-proof.sh`, which runs the committed `seed/mcp/scripts/verify-development-db.mjs` and `run-seed-apify-mcp-path.mjs` against the injected `DATABASE_URL` and writes `latest.txt`. `scripts/check-seed-development-proof-scripts.mjs` (CI via `pnpm check:seed-development-proof-scripts`) fails when those scripts are missing. Prevents repeating the KIT-34 checker fail (hand-typed dev-Postgres row counts in workpad/PR without a committed, executed verify path). Tighten only.
+
+`.cursor/hooks/block-hand-typed-seed-db-counts.sh` denies `git commit` messages on seed-proof branches that hand-type squad/club count patterns without referencing `verify-dev-catalog` or `kit-34-verify-output.json`. Use `seed/mcp/scripts/verify-dev-catalog.mjs` (or the record script above) and paste its JSON output — do not type counts by hand. Tighten only.
+
+`scripts/check-seed-scope-isolation-test.mjs` (CI via `pnpm check:seed-scope-isolation-test`) fails when `seed/apify/tests/scope-isolation.test.ts` drops the cross-season isolation coverage (`runSeed` must not mutate `player_club_season` rows outside the requested scope). Prevents repeating the KIT-34 checker round-4 fail (2017/18 skip run mutating 2016/17). Tighten only.
+
+`.cursor/hooks/block-seed-apify-test-on-shared-db.sh` denies `@kit/seed-apify` vitest/test invocations when `DATABASE_URL` points at the shared development Postgres and `SEED_APIFY_TEST_DATABASE_URL` is not set to a disposable test database. `scripts/check-seed-apify-test-database-isolation.mjs` (CI via `pnpm check:seed-apify-test-database-isolation`) fails when any `seed/apify/tests/**` file that calls `resetDatabase` reads `process.env.DATABASE_URL` for `resetDatabase`/`createDb`. Prevents repeating the KIT-34 checker round-6 fail (shared dev Postgres wiped by `resetDatabase` during local test runs). Tighten only.
+
 ### Code quality ratchet
 
 `biome.json` (format + lint), `oxlint.config.ts` with the vendored plugin under
@@ -111,6 +121,14 @@ catches it in the API tests and the container smoke test.
 ### Push behind development ratchet (KIT-23)
 
 `.cursor/hooks/block-push-behind-development.sh` denies `git push` when the current branch is behind `origin/development`. Prevents repeating the KIT-23 checker fail (unmergeable PR because the feature branch was never rebased after `development` moved). Pushes to `development`, `staging`, and `production` are exempt. Tighten only.
+
+### Seed DB proof evidence ratchet (KIT-34)
+
+`.cursor/hooks/block-hand-typed-seed-db-counts.sh` denies `git commit` messages on seed-proof work that hand-type development-lane squad/club row counts (e.g. `476 rows`, `14/14 clubs`, `fetched:0, skipped:14`) without referencing `verify-dev-catalog` or `kit-34-verify-output.json`. Run `seed/mcp/scripts/verify-dev-catalog.mjs` and paste its JSON output as evidence instead. Prevents repeating the KIT-34 checker fail (Linear/PR claims that contradict the live `DATABASE_URL`). Tighten only.
+
+`scripts/check-seed-scope-isolation-test.mjs` (CI via `pnpm check:seed-scope-isolation-test`) fails when `seed/apify/tests/scope-isolation.test.ts` drops the cross-season isolation coverage (`runSeed` must not mutate `player_club_season` rows outside the requested scope). Prevents repeating the KIT-34 checker round-4 fail (2017/18 skip run mutating 2016/17). Tighten only.
+
+`.cursor/hooks/block-seed-apify-test-on-shared-db.sh` denies `@kit/seed-apify` vitest/test invocations when `DATABASE_URL` points at the shared development Postgres and `SEED_APIFY_TEST_DATABASE_URL` is not set to a disposable test database. `scripts/check-seed-apify-test-database-isolation.mjs` (CI via `pnpm check:seed-apify-test-database-isolation`) fails when any `seed/apify/tests/**` file that calls `resetDatabase` reads `process.env.DATABASE_URL` for `resetDatabase`/`createDb`. Prevents repeating the KIT-34 checker round-6 fail (shared dev Postgres wiped by `resetDatabase` during local test runs). Tighten only.
 
 ### Mobile design-system inventory ratchet (KIT-23)
 

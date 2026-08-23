@@ -1,5 +1,5 @@
 import { catalogLabel, type Db, externalId, playerClubSeason, season } from "@kit/db";
-import { resolveCompetition } from "@kit/seed-shared";
+import { resolveCompetition, resolveSeasonRef } from "@kit/seed-shared";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { TM_SYSTEM } from "./types.js";
 
@@ -43,6 +43,7 @@ export async function isClubSeasonAlreadySeeded(
   clubExternalId: string,
   seasonLabel: string,
 ): Promise<boolean> {
+  const resolvedSeasonLabel = resolveSeasonRef(competition, seasonLabel);
   const clubEntityId = await findEntityId(db, clubExternalId);
   if (!clubEntityId) {
     return false;
@@ -56,7 +57,7 @@ export async function isClubSeasonAlreadySeeded(
   const seasonRow = await db
     .select({ id: season.id })
     .from(season)
-    .where(and(eq(season.leagueId, leagueEntityId), eq(season.label, seasonLabel)))
+    .where(and(eq(season.leagueId, leagueEntityId), eq(season.label, resolvedSeasonLabel)))
     .limit(1);
 
   if (!seasonRow[0]) {

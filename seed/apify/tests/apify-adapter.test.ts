@@ -9,6 +9,7 @@ import { createRecordingFetchAdapter } from "../src/fetch/recording-adapter.js";
 import { normalize } from "../src/normalize/index.js";
 import { runSeed } from "../src/run.js";
 import { TM_SYSTEM } from "../src/types.js";
+import { resolveSeedApifyTestDatabaseUrl } from "./test-database-url.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -20,10 +21,10 @@ const recordingsDir = path.join(
   "../fixtures/actor-recordings",
 );
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const TEST_DATABASE_URL = resolveSeedApifyTestDatabaseUrl();
 
 async function prepareDatabase() {
-  await resetDatabase(DATABASE_URL, migrationsFolder);
+  await resetDatabase(TEST_DATABASE_URL, migrationsFolder);
 }
 
 describe("apify fetch adapter constants", () => {
@@ -136,13 +137,13 @@ describe("runSeed with apify adapter recordings", () => {
       },
       lane: "development",
       fetchAdapter: adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(result.summary.fetched).toBe(1);
     expect(result.summary.mapped).toBeGreaterThan(0);
 
-    const { db, pool } = createDb(DATABASE_URL);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
     try {
       const pcsRows = await db
         .select({ squadNumber: playerClubSeason.squadNumber })
@@ -187,14 +188,14 @@ describe("runSeed with apify adapter recordings", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(recording.getFetchCalls()).toHaveLength(2);
     expect(result.summary.fetched).toBe(2);
     expect(result.summary.failures).toHaveLength(0);
 
-    const { db, pool } = createDb(DATABASE_URL);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
     try {
       const clubLabels = await db
         .select({ text: catalogLabel.text })

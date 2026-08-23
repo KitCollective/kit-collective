@@ -1,4 +1,6 @@
 import type { SpawnOptions } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   laneDatabaseEnvVar,
   type ParsedSeedScope,
@@ -19,6 +21,14 @@ const CLI_PACKAGES: Record<SeedCliTarget, string> = {
   apify: "@kit/seed-apify",
   fkapi: "@kit/seed-fkapi",
 };
+
+/** Monorepo root so pnpm --filter works regardless of MCP server cwd. */
+export function resolveSeedRepoRoot(): string {
+  if (process.env.SEED_REPO_ROOT) {
+    return process.env.SEED_REPO_ROOT;
+  }
+  return join(dirname(fileURLToPath(import.meta.url)), "../../..");
+}
 
 export type SeedMcpInput = {
   competition: string;
@@ -93,9 +103,10 @@ export function buildSeedCliInvocation(
 ): { command: string; argv: string[] } {
   const pkg = CLI_PACKAGES[target];
   const scopeArgs = scopeToCliArgs(parsed.scope);
+  // pnpm --filter … run seed -- passes a literal "--" argv to the script; exec avoids that.
   return {
     command: "pnpm",
-    argv: ["--filter", pkg, "run", "seed", "--", ...scopeArgs, parsed.lane],
+    argv: ["--filter", pkg, "exec", "node", "dist/cli.js", ...scopeArgs, parsed.lane],
   };
 }
 
@@ -146,7 +157,7 @@ export async function runSeedCli(
   const { command, argv } = buildSeedCliInvocation(target, parsedResult.parsed);
   const { exitCode, stdout, stderr } = await runner(command, argv, {
     env: laneEnvForCli(parsedResult.parsed.lane),
-    cwd: process.env.SEED_REPO_ROOT ?? process.cwd(),
+    cwd: resolveSeedRepoRoot(),
   });
 
   return { ok: true, exitCode, stdout, stderr };

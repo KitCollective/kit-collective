@@ -13,6 +13,7 @@ import { normalize, stripForbiddenFields } from "../src/normalize/index.js";
 import { parseCliArgs, runSeed } from "../src/run.js";
 import { filterSeasons } from "../src/season-range.js";
 import { TM_SYSTEM } from "../src/types.js";
+import { resolveSeedApifyTestDatabaseUrl } from "./test-database-url.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -24,10 +25,10 @@ const fixturePath = path.join(
   "../fixtures/superliga-mini.json",
 );
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const TEST_DATABASE_URL = resolveSeedApifyTestDatabaseUrl();
 
 async function prepareDatabase() {
-  await resetDatabase(DATABASE_URL, migrationsFolder);
+  await resetDatabase(TEST_DATABASE_URL, migrationsFolder);
 }
 
 describe("normalize", () => {
@@ -152,7 +153,7 @@ describe("runSeed scope walk", () => {
       },
       lane: "development",
       fetchAdapter: adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(result.summary.fetched).toBe(1);
@@ -178,7 +179,7 @@ describe("runSeed scope walk", () => {
       scope,
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(recording.getFetchCalls()).toHaveLength(1);
@@ -187,7 +188,7 @@ describe("runSeed scope walk", () => {
       scope,
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(recording.getFetchCalls()).toHaveLength(1);
@@ -209,7 +210,7 @@ describe("runSeed scope walk", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     const result = await runSeed({
@@ -221,7 +222,7 @@ describe("runSeed scope walk", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(recording.getFetchCalls()).toHaveLength(2);
@@ -244,7 +245,7 @@ describe("runSeed scope walk", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(recording.getFetchCalls()).toHaveLength(1);
@@ -285,7 +286,7 @@ describe("runSeed scope walk", () => {
         },
         fetchClubSeason: failingAdapter.fetchClubSeason.bind(failingAdapter),
       },
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(result.summary.failures).toHaveLength(1);
@@ -309,7 +310,7 @@ describe("mapper idempotency", () => {
     });
     const facts = normalize(raw);
 
-    const { db, pool: dbPool } = createDb(DATABASE_URL);
+    const { db, pool: dbPool } = createDb(TEST_DATABASE_URL);
     try {
       await mapFacts(db, facts);
       const firstIds = await db
@@ -356,7 +357,7 @@ describe("mapper idempotency", () => {
 
   it("writes English club labels and mul player labels", async () => {
     await prepareDatabase();
-    const { db, pool: dbPool } = createDb(DATABASE_URL);
+    const { db, pool: dbPool } = createDb(TEST_DATABASE_URL);
     try {
       await runSeed({
         scope: {
@@ -367,7 +368,7 @@ describe("mapper idempotency", () => {
         },
         lane: "development",
         fetchAdapter: createFixtureFetchAdapter(fixturePath),
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
       });
 
       const clubLabel = await db

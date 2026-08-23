@@ -331,7 +331,7 @@ describe("runCli", () => {
     const count = await verifyPool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM kit`,
     );
-    expect(Number(count.rows[0]!.count)).toBeGreaterThan(0);
+    expect(Number(count.rows[0]?.count)).toBeGreaterThan(0);
     await verifyPool.end();
   });
 });

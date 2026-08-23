@@ -12,8 +12,13 @@ import {
 } from "@kit/db";
 import type { CatalogEntityType, LabelLocale } from "@kit/domain";
 import { and, eq } from "drizzle-orm";
+import { assertFactsSeasonScope } from "../scope-isolation.js";
 import type { MapResult, NormalizedFacts, NormalizedSeason } from "../types.js";
 import { TM_SYSTEM } from "../types.js";
+
+export interface MapFactsOptions {
+  allowedSeasonLabels?: ReadonlySet<string>;
+}
 
 async function findEntityId(db: Db, value: string): Promise<string | undefined> {
   const row = await db
@@ -258,7 +263,18 @@ async function upsertPlayerClubSeasonRow(
   return { id: row!.id, created: true };
 }
 
-export async function mapFacts(db: Db, facts: NormalizedFacts): Promise<MapResult> {
+export async function mapFacts(
+  db: Db,
+  facts: NormalizedFacts,
+  options?: MapFactsOptions,
+): Promise<MapResult> {
+  if (options?.allowedSeasonLabels) {
+    assertFactsSeasonScope(
+      facts.seasons.map((seasonData) => seasonData.label),
+      options.allowedSeasonLabels,
+    );
+  }
+
   const result: MapResult = {
     countries: 0,
     leagues: 0,

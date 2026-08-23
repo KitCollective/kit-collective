@@ -27,6 +27,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
       API_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_api_test
+      SEED_APIFY_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
       # CI-only test value — not a product default; Nest Identity requires JWT_SECRET at boot.
       JWT_SECRET: ci-test-jwt-secret-not-for-production
 
@@ -66,6 +67,15 @@ jobs:
 
       - name: Check FK seed test isolation
         run: pnpm check:seed-fkapi-tests
+
+      - name: Check seed development proof scripts
+        run: pnpm check:seed-development-proof-scripts
+
+      - name: Check seed scope isolation test
+        run: pnpm check:seed-scope-isolation-test
+
+      - name: Check seed apify test database isolation
+        run: pnpm check:seed-apify-test-database-isolation
 
       - name: Assert seed packages are in workspace and turbo test graph
         run: |
