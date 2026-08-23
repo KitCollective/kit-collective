@@ -49,12 +49,12 @@ export {
   type RunSeedSummary,
   runSeed,
 } from "./run.js";
-export { filterSeasons } from "./season-range.js";
 export {
   filterFactsToClubSeason,
   isPairInSeedScope,
   seasonLabelInCompetitionScope,
 } from "./scope/club-season.js";
+export { filterSeasons } from "./season-range.js";
 export { isClubSeasonAlreadySeeded } from "./seeded.js";
 export type {
   Lane,

@@ -6,13 +6,13 @@ import { describe, expect, it } from "vitest";
 import type { FetchAdapter } from "../src/fetch/adapter.js";
 import { createFixtureFetchAdapter } from "../src/fetch/fixture-adapter.js";
 import { createRecordingFetchAdapter } from "../src/fetch/recording-adapter.js";
+import { normalize } from "../src/normalize/index.js";
+import { runSeed } from "../src/run.js";
 import {
   filterFactsToClubSeason,
   isPairInSeedScope,
   seasonLabelInCompetitionScope,
 } from "../src/scope/club-season.js";
-import { normalize } from "../src/normalize/index.js";
-import { runSeed } from "../src/run.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -42,10 +42,7 @@ async function squadCountsByLabel(db: ReturnType<typeof createDb>["db"]) {
     .groupBy(season.label);
 
   return Object.fromEntries(
-    rows.map((row) => [
-      row.label,
-      { squadRows: row.squadRows, withJersey: row.withJersey },
-    ]),
+    rows.map((row) => [row.label, { squadRows: row.squadRows, withJersey: row.withJersey }]),
   );
 }
 
@@ -225,7 +222,9 @@ describe.sequential("runSeed season-scope isolation", () => {
 
       expect(result.summary.fetched).toBe(1);
       expect(result.summary.failures).toHaveLength(1);
-      expect(result.summary.failures[0]?.error).toMatch(/did not contain club club-191 for season 23\/24/);
+      expect(result.summary.failures[0]?.error).toMatch(
+        /did not contain club club-191 for season 23\/24/,
+      );
       expect(result.summary.mapped).toBe(0);
       expect(after["22/23"]).toEqual(before["22/23"]);
       expect(after["23/24"]).toBeUndefined();

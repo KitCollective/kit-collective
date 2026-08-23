@@ -9,10 +9,7 @@ import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
 import { mapFacts } from "./map/index.js";
 import { normalize } from "./normalize/index.js";
-import {
-  filterFactsToClubSeason,
-  isPairInSeedScope,
-} from "./scope/club-season.js";
+import { filterFactsToClubSeason, isPairInSeedScope } from "./scope/club-season.js";
 import { isClubSeasonAlreadySeeded } from "./seeded.js";
 import type { Lane, MapResult } from "./types.js";
 

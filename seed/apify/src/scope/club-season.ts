@@ -1,8 +1,4 @@
-import {
-  type CompetitionSeedScope,
-  resolveSeasonRef,
-  type SeedScope,
-} from "@kit/seed-shared";
+import { type CompetitionSeedScope, resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import { labelToStartYear } from "../fetch/season-label.js";
 import type { NormalizedFacts } from "../types.js";
 
