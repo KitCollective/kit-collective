@@ -32,9 +32,7 @@ function listTsxFiles(dir) {
 export function findOrphanFormStateViolations({ filePath, source }) {
   const violations = [];
   const useStateVars = new Set(
-    [...source.matchAll(/const\s+\[(\w+)\s*,\s*set\w+\]\s*=\s*useState/g)].map(
-      (match) => match[1],
-    ),
+    [...source.matchAll(/const\s+\[(\w+)\s*,\s*set\w+\]\s*=\s*useState/g)].map((match) => match[1]),
   );
 
   for (const match of source.matchAll(/<TextInput[\s\S]*?value=\{(\w+)\}/g)) {
@@ -73,7 +71,9 @@ export function findConfirmSaveViolations({ confirmSource }) {
   }
 
   if (/\bdefaultPhotoSource\b/.test(confirmSource)) {
-    violations.push(`${CONFIRM_PATH}: must not infer one photoSource for every photo from route params`);
+    violations.push(
+      `${CONFIRM_PATH}: must not infer one photoSource for every photo from route params`,
+    );
   }
 
   if (!confirmSource.includes("setDraftNotes") || !confirmSource.includes("draft.notes")) {
