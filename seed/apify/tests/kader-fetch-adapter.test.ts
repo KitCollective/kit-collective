@@ -232,6 +232,66 @@ describe("kader fetch adapter from recorded HTML", () => {
     expect(raw.seasons[0]?.clubs[0]?.players[0]?.jerseyNumber).toBe(23);
   });
 
+  it("searches Transfermarkt for La Liga, not the Danish country phrase", async () => {
+    const searchHtml = readFileSync(path.join(fixturesDir, "search/competitions.html"), "utf8");
+    const fetched: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      fetchHtml: async (url) => {
+        fetched.push(url);
+        if (url.includes("schnellsuche")) {
+          expect(url).toContain("query=La%20Liga");
+          expect(url).not.toContain("Spanien");
+          return searchHtml;
+        }
+        if (url.includes("/wettbewerb/ES1/")) {
+          expect(url).toContain("/laliga/startseite/wettbewerb/ES1");
+          return readFileSync(path.join(fixturesDir, "competitions/DK1-2015.html"), "utf8");
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    const pairs = await adapter.listClubSeasonPairs({
+      competition: "La Liga i Spanien",
+      fromSeason: "2019/20",
+      toSeason: "2019/20",
+    });
+    expect(pairs).toHaveLength(2);
+    expect(fetched.some((url) => url.includes("query=La%20Liga"))).toBe(true);
+  });
+
+  it("searches Super Lig for tyrkiske Superliga, then walks TR1", async () => {
+    const searchHtml = readFileSync(path.join(fixturesDir, "search/competitions.html"), "utf8");
+    const fetched: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      fetchHtml: async (url) => {
+        fetched.push(url);
+        if (url.includes("schnellsuche")) {
+          expect(url).toContain("query=Super%20Lig");
+          expect(url).not.toContain("tyrkiske");
+          return searchHtml;
+        }
+        if (url.includes("/wettbewerb/TR1/")) {
+          expect(url).toContain("/super-lig/startseite/wettbewerb/TR1");
+          return readFileSync(path.join(fixturesDir, "competitions/DK1-2015.html"), "utf8");
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    const pairs = await adapter.listClubSeasonPairs({
+      competition: "tyrkiske Superliga",
+      fromSeason: "2019/20",
+      toSeason: "2019/20",
+    });
+    expect(pairs).toHaveLength(2);
+    expect(fetched.some((url) => url.includes("/super-lig/startseite/wettbewerb/TR1"))).toBe(true);
+  });
+
   it("writes live HTML to cacheDir and avoids a second network fetch for the same URL", async () => {
     const cacheDir = await mkdtemp(path.join(tmpdir(), "kader-live-cache-"));
     const competitionHtml = readFileSync(

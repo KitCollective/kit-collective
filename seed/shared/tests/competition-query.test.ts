@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { type CompetitionHit, pickCompetitionHit } from "../src/competition-query.js";
+import {
+  type CompetitionHit,
+  pickCompetitionHit,
+  searchQueryForCompetition,
+} from "../src/competition-query.js";
 
 const ENGLAND_PREMIER_LEAGUE: CompetitionHit = {
   name: "Premier League",
@@ -34,6 +38,20 @@ const SUPERLIGAEN: CompetitionHit = {
 };
 
 const HITS: CompetitionHit[] = [ENGLAND_PREMIER_LEAGUE, LALIGA, SUPER_LIG, SUPERLIGAEN];
+
+describe("searchQueryForCompetition", () => {
+  it("strips Spain from La Liga i Spanien so Transfermarkt can search La Liga", () => {
+    expect(searchQueryForCompetition("La Liga i Spanien")).toBe("La Liga");
+  });
+
+  it("maps tyrkiske Superliga to Super Lig for Transfermarkt search", () => {
+    expect(searchQueryForCompetition("tyrkiske Superliga")).toBe("Super Lig");
+  });
+
+  it("keeps Premier League as the search string", () => {
+    expect(searchQueryForCompetition("Premier League")).toBe("Premier League");
+  });
+});
 
 describe("pickCompetitionHit", () => {
   it("prefers the England Premier League slug over Armenia's Premier League", () => {
@@ -70,6 +88,20 @@ describe("pickCompetitionHit", () => {
     expect(picked.iso3166).toBe("TR");
   });
 
+  it("matches Transfermarkt's Türkiye flag title to Turkey", () => {
+    const picked = pickCompetitionHit("tyrkiske Superliga", [
+      {
+        name: "Süper Lig",
+        slug: "super-lig",
+        tmCode: "TR1",
+        countryName: "Türkiye",
+        iso3166: "TR",
+      },
+      SUPERLIGAEN,
+    ]);
+    expect(picked.leagueTransfermarktId).toBe("TR1");
+  });
+
   it("resolves a Transfermarkt code when it is unique in the hits", () => {
     expect(pickCompetitionHit("GB1", HITS).leagueTransfermarktId).toBe("GB1");
   });
@@ -83,6 +115,12 @@ describe("pickCompetitionHit", () => {
   it("fails when search returned no competitions", () => {
     expect(() => pickCompetitionHit("Premier League", [])).toThrow(
       /No Transfermarkt competition matched/,
+    );
+  });
+
+  it("fails when a country word is present but no hit is in that country", () => {
+    expect(() => pickCompetitionHit("tyrkiske Superliga", [SUPERLIGAEN])).toThrow(
+      /tyrkiske Superliga/,
     );
   });
 });

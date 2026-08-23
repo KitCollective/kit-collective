@@ -122,6 +122,32 @@ function stripCountryAndStops(query: string): string {
     .trim();
 }
 
+/** Transfermarkt search string: drop country words, keep league spelling. */
+export function searchQueryForCompetition(query: string): string {
+  const hint = countryHint(query);
+  const hintTokens = new Set(hint?.tokens ?? []);
+  if (hint) {
+    hintTokens.add(normalizeCompetitionText(hint.name));
+  }
+  const kept = query
+    .trim()
+    .split(/\s+/)
+    .filter((word) => {
+      const normalized = normalizeCompetitionText(word);
+      return Boolean(normalized) && !STOP_WORDS.has(normalized) && !hintTokens.has(normalized);
+    });
+  const stripped = kept.join(" ").trim();
+  const normalized = normalizeCompetitionText(stripped);
+
+  if (normalized === "laliga") {
+    return "La Liga";
+  }
+  if (normalized === "superliga") {
+    return hint?.iso3166 === "TR" ? "Super Lig" : stripped || "Superliga";
+  }
+  return stripped || query.trim();
+}
+
 function nameScore(query: string, hit: CompetitionHit): number {
   const q = stripCountryAndStops(query);
   const n = normalizeCompetitionText(hit.name);
@@ -179,9 +205,13 @@ export function pickCompetitionHit(query: string, hits: CompetitionHit[]): Compe
   let pool = hits;
   if (hint) {
     const filtered = hits.filter((hit) => hitMatchesCountry(hit, hint));
-    if (filtered.length > 0) {
-      pool = filtered;
+    if (filtered.length === 0) {
+      const names = hits.map((hit) => `${hit.name} (${hit.countryName})`).join(", ");
+      throw new Error(
+        `No Transfermarkt competition matched "${query}" in ${hint.name}. Candidates: ${names}`,
+      );
     }
+    pool = filtered;
   }
 
   const code = query.trim().toUpperCase();

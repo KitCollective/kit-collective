@@ -2,6 +2,7 @@ import {
   type CompetitionIdentity,
   catalogCompetitionIdentity,
   pickCompetitionHit,
+  searchQueryForCompetition,
 } from "@kit/seed-shared";
 import {
   expandSeasonStartYears,
@@ -298,7 +299,7 @@ function createIdentityResolver(
       return remember(query, catalog);
     }
 
-    const html = await fetchHtml(competitionSearchUrl(query));
+    const html = await fetchHtml(competitionSearchUrl(searchQueryForCompetition(query)));
     const hits = parseCompetitionSearchHtml(html);
     return remember(query, pickCompetitionHit(query, hits));
   };

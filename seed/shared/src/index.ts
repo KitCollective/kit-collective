@@ -11,6 +11,7 @@ export {
   iso3166ForCountryName,
   normalizeCompetitionText,
   pickCompetitionHit,
+  searchQueryForCompetition,
 } from "./competition-query.js";
 export {
   type CompetitionDefinition,
