@@ -9,11 +9,14 @@ import {
   adminCollectorJerseyListSchema,
   adminCollectorListSchema,
   adminCollectorUserSchema,
+  identityRoleErrorSchema,
+  type IdentityRoleErrorCode,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, season, user, userJersey, userJerseyPhoto } from "@kit/db";
 import {
-  ConflictException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -23,6 +26,16 @@ import { and, asc, count, desc, eq, ilike, inArray } from "drizzle-orm";
 import { OBJECT_STORE } from "../collection/collection.service.js";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { DB } from "../db/db.module.js";
+
+function throwRoleGuardError(code: IdentityRoleErrorCode, message: string): never {
+  throw new HttpException(
+    {
+      statusCode: HttpStatus.CONFLICT,
+      ...identityRoleErrorSchema.parse({ code, message }),
+    },
+    HttpStatus.CONFLICT,
+  );
+}
 
 function monogramFromEmail(email: string): string {
   const local = email.split("@")[0] ?? email;
@@ -304,10 +317,7 @@ export class AdminCollectionService {
     }
 
     if (target.id === actorUserId && body.role === "user" && target.role === "admin") {
-      throw new ConflictException({
-        code: "SELF_DEMOTE",
-        message: "You cannot demote your own Staff access.",
-      });
+      throwRoleGuardError("SELF_DEMOTE", "You cannot demote your own Staff access.");
     }
 
     if (target.role === "admin" && body.role === "user") {
@@ -317,10 +327,7 @@ export class AdminCollectionService {
         .where(eq(user.role, "admin"));
 
       if (Number(adminCount?.total ?? 0) <= 1) {
-        throw new ConflictException({
-          code: "LAST_ADMIN_DEMOTE",
-          message: "At least one Staff access account must remain.",
-        });
+        throwRoleGuardError("LAST_ADMIN_DEMOTE", "At least one Staff access account must remain.");
       }
     }
 

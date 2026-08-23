@@ -297,7 +297,8 @@ describe("Admin collectors /v1", () => {
     expect(selfDemote.statusCode).toBe(409);
     const selfDemoteBody: unknown = JSON.parse(selfDemote.body);
     expect(selfDemoteBody).toMatchObject({
-      message: { code: "SELF_DEMOTE" },
+      code: "SELF_DEMOTE",
+      message: "You cannot demote your own Staff access.",
     });
 
     const promoteCollector = await app.inject({

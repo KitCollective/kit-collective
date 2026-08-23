@@ -15,20 +15,19 @@ import { ConfirmSheet } from "../components/ConfirmSheet.js";
 function parseRoleUpdateError(message: string): string {
   try {
     const parsed: unknown = JSON.parse(message);
-    if (typeof parsed !== "object" || parsed === null || !("message" in parsed)) {
+    if (typeof parsed !== "object" || parsed === null) {
       return message;
     }
-    const nested = parsed.message;
-    if (typeof nested === "string") {
-      return nested;
+    if ("message" in parsed && typeof parsed.message === "string") {
+      return parsed.message;
     }
     if (
-      typeof nested === "object" &&
-      nested !== null &&
-      "message" in nested &&
-      typeof nested.message === "string"
+      "code" in parsed &&
+      typeof parsed.code === "string" &&
+      "message" in parsed &&
+      typeof parsed.message === "string"
     ) {
-      return nested.message;
+      return parsed.message;
     }
   } catch {
     return message;
