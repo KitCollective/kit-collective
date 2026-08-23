@@ -1,9 +1,9 @@
 import {
   formatSeedCliUsage,
   parseSeedCliArgs,
-  resolveCompetition as resolveSharedCompetition,
-  resolveSeasonRef,
   type ResolvedSeedLane,
+  resolveSeasonRef,
+  resolveCompetition as resolveSharedCompetition,
 } from "@kit/seed-shared";
 import type { SeedLane } from "./types.js";
 
