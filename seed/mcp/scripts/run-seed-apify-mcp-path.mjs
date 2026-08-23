@@ -3,16 +3,13 @@
  * Usage: node run-seed-apify-mcp-path.mjs <competition> <fromSeason> <toSeason> [lane]
  */
 import { spawn } from "node:child_process";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { runSeedCli } from "../dist/run-cli.js";
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const [competition, fromSeason, toSeason, lane] = process.argv.slice(2);
 
 if (!competition || !fromSeason || !toSeason) {
-  console.error(
-    "Usage: node run-seed-apify-mcp-path.mjs <competition> <fromSeason> <toSeason> [lane]",
+  process.stderr.write(
+    "Usage: node run-seed-apify-mcp-path.mjs <competition> <fromSeason> <toSeason> [lane]\n",
   );
   process.exit(1);
 }
@@ -38,23 +35,19 @@ const runner = (command, args, options) =>
     });
   });
 
-const result = await runSeedCli(
-  "apify",
-  { competition, fromSeason, toSeason, lane },
-  runner,
-);
+const result = await runSeedCli("apify", { competition, fromSeason, toSeason, lane }, runner);
 
 if (!result.ok) {
-  console.error(result.error);
+  process.stderr.write(`${result.error}\n`);
   process.exit(1);
 }
 
-console.log(`seed_apify exited with code ${result.exitCode}`);
+process.stdout.write(`seed_apify exited with code ${result.exitCode}\n`);
 if (result.stdout.trim()) {
-  console.log("stdout:", result.stdout.trim());
+  process.stdout.write(`stdout: ${result.stdout.trim()}\n`);
 }
 if (result.stderr.trim()) {
-  console.log("stderr:", result.stderr.trim());
+  process.stdout.write(`stderr: ${result.stderr.trim()}\n`);
 }
 
 process.exit(result.exitCode);
