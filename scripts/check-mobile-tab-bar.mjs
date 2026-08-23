@@ -1,26 +1,44 @@
 #!/usr/bin/env node
 /**
- * Ratchet (KIT-23): fail CI when the Expo tab bar layout omits tabBarIcon on
- * documented Collection/Add tabs (docs/design-system.md Tab bar anatomy).
+ * Ratchet (KIT-42): fail CI when the Expo tab bar omits the locked five-slot
+ * icon-only glass pill (docs/design-system.md Tab bar, Gap 2026-08-23).
  */
 import { readFileSync } from "node:fs";
 
 const tabLayoutPath = "apps/mobile/app/(tabs)/_layout.tsx";
+const floatingBarPath = "apps/mobile/src/components/floating-tab-bar.tsx";
 const violations = [];
 
-const source = readFileSync(tabLayoutPath, "utf8");
+const layoutSource = readFileSync(tabLayoutPath, "utf8");
+const barSource = readFileSync(floatingBarPath, "utf8");
 
-if (!source.includes("tabBarIcon")) {
-  violations.push(
-    `${tabLayoutPath}: Tab bar must set tabBarIcon (icon + label per design-system.md Tab bar anatomy)`,
-  );
+if (!layoutSource.includes("FloatingTabBar")) {
+  violations.push(`${tabLayoutPath}: must render FloatingTabBar as the custom tab bar`);
 }
 
-const iconCount = (source.match(/tabBarIcon/g) ?? []).length;
-if (iconCount < 2) {
-  violations.push(
-    `${tabLayoutPath}: expected tabBarIcon on at least Collection and Add tabs (found ${iconCount})`,
-  );
+if (!layoutSource.includes("href: null")) {
+  violations.push(`${tabLayoutPath}: add route must be hidden from the tab bar (href: null)`);
+}
+
+if (/tabBarLabel\s*:/.test(layoutSource)) {
+  violations.push(`${tabLayoutPath}: tab bar must be icon-only (no tabBarLabel in screen options)`);
+}
+
+const requiredAccessibleNames = [
+  "Samling",
+  "Søg",
+  "Tilføj trøje",
+  "Ønske",
+  "Profil",
+];
+for (const name of requiredAccessibleNames) {
+  if (!barSource.includes(name)) {
+    violations.push(`${floatingBarPath}: missing Danish accessible name "${name}"`);
+  }
+}
+
+if (!barSource.includes('accessibilityRole="button"') || !barSource.includes("Tilføj trøje")) {
+  violations.push(`${floatingBarPath}: center plus must be a button named Tilføj trøje`);
 }
 
 if (violations.length > 0) {
