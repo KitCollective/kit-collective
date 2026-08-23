@@ -90,7 +90,11 @@ catches it in the API tests and the container smoke test.
 
 ### Admin stamdata navigation ratchet (KIT-39)
 
-`scripts/check-admin-stamdata-navigation.mjs` (CI via `pnpm check:admin-stamdata-navigation`) fails when `apps/admin/src/pages/StamdataPage.tsx` `openRow` does not switch on every `ADMIN_STAMDATA_LIST_ENTITY_TYPES` value, or when `apps/admin/src/App.tsx` omits a drill route for club, season, kit, or club-season rows. Prevents repeating the KIT-39 checker fail (plain club/season rows were a silent no-op on click). Tighten only.
+`scripts/check-admin-stamdata-navigation.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`) fails when `apps/admin/src/pages/StamdataPage.tsx` `openRow` does not call `navigate(` for every `ADMIN_STAMDATA_LIST_ENTITY_TYPES` value (scoped to the `openRow` function body, not render-time branches), or when `apps/admin/src/App.tsx` omits a drill route for club, season, kit, or club-season rows. Prevents repeating the KIT-39 checker fail (plain club/season rows were a silent no-op on click). Tighten only.
+
+### Admin design-token ratchet (KIT-39)
+
+`scripts/check-admin-design-tokens.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`) fails when `apps/admin/src/styles/admin.css` omits `--border-focus` or `--scrim` tokens, lacks a `:focus-visible` rule referencing `var(--border-focus)`, sets invented `font-size`/`font-weight`/`line-height` triples outside the four locked `type.*` roles, or uses raw `rgb`/`rgba` literals outside `:root`. Prevents repeating the KIT-39 checker fails on invented admin typography, missing focus rings, and untokenized scrim (passes 1 and 3). Tighten only.
 
 ### Ops MCP catalog evidence ratchet (KIT-17)
 

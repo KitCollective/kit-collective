@@ -6,10 +6,12 @@
   --content-secondary: #5e5e5e;
   --content-muted: #6b6b6b;
   --border-subtle: #e8e8e8;
+  --border-focus: var(--fill-primary);
   --fill-primary: #000000;
   --fill-secondary: #f4f4f4;
   --content-inverse: #ffffff;
   --danger: #b42318;
+  --scrim: rgb(0 0 0 / 40%);
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -39,7 +41,37 @@ body {
   color: var(--content-primary);
   font-family: var(--font-family);
   font-size: 16px;
+  font-weight: 400;
   line-height: 24px;
+}
+
+.type-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.type-body {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+.type-label {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.type-caption {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 button,
@@ -64,7 +96,7 @@ a {
 }
 
 .app-title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
   line-height: 28px;
   margin: 0;
@@ -114,6 +146,8 @@ a {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  font-weight: 500;
+  line-height: 20px;
   min-height: 44px;
   min-width: 44px;
   padding: 0 var(--space-inset-md);
@@ -144,6 +178,7 @@ a {
 .record-count {
   color: var(--content-secondary);
   font-size: 13px;
+  font-weight: 400;
   line-height: 18px;
 }
 
@@ -170,7 +205,7 @@ a {
 .data-table th {
   color: var(--content-secondary);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 18px;
 }
 
@@ -204,8 +239,9 @@ a {
 
 .monogram-slot {
   color: var(--content-secondary);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
 }
 
 .login-page {
@@ -225,7 +261,8 @@ a {
 }
 
 .login-card h1 {
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 600;
   line-height: 28px;
   margin: 0 0 var(--space-gap-md);
 }
@@ -239,7 +276,9 @@ a {
 
 .field label {
   color: var(--content-secondary);
-  font-size: 13px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
 }
 
 .field input {
@@ -266,7 +305,24 @@ a {
 
 .empty-state h2 {
   color: var(--content-primary);
-  font-size: 20px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
+  margin: 0 0 var(--space-gap-sm);
+}
+
+.drill-header h2,
+.sheet-panel h2 {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
+  margin: 0 0 var(--space-gap-md);
+}
+
+.sheet-panel h3 {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
   margin: 0 0 var(--space-gap-sm);
 }
 
@@ -298,6 +354,8 @@ a {
 .meta-grid dt {
   color: var(--content-secondary);
   font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
 }
 
 .meta-grid dd {
@@ -313,7 +371,7 @@ a {
 }
 
 .sheet-backdrop {
-  background: rgb(0 0 0 / 40%);
+  background: var(--scrim);
   border: none;
   cursor: default;
   grid-area: 1 / 1;
@@ -360,8 +418,15 @@ a {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-pill);
   cursor: pointer;
+  font-weight: 500;
+  line-height: 20px;
   min-height: 44px;
   padding: 0 var(--space-inset-md);
+}
+
+.data-table-empty {
+  padding: var(--space-inset-lg);
+  text-align: center;
 }
 
 .chip[aria-pressed="true"] {

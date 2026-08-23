@@ -131,7 +131,10 @@ jobs:
         run: pnpm check:vision-log-save-action
 
       - name: Check admin stamdata navigation
-        run: pnpm check:admin-stamdata-navigation
+        run: node scripts/check-admin-stamdata-navigation.mjs
+
+      - name: Check admin design tokens
+        run: node scripts/check-admin-design-tokens.mjs
 
       - name: Lint GitHub Actions workflows
         run: bash scripts/lint-workflows.sh

@@ -11,26 +11,32 @@ const catalogSource = readFileSync("packages/api-contract/src/admin/catalog.ts",
 const stamdataSource = readFileSync("apps/admin/src/pages/StamdataPage.tsx", "utf8");
 const appSource = readFileSync("apps/admin/src/App.tsx", "utf8");
 
-const entityTypesMatch = catalogSource.match(
-  /ADMIN_STAMDATA_LIST_ENTITY_TYPES\s*=\s*\[([\s\S]*?)\]\s*as const/,
-);
-if (!entityTypesMatch) {
-  violations.push(
-    "packages/api-contract/src/admin/catalog.ts: ADMIN_STAMDATA_LIST_ENTITY_TYPES not found",
-  );
+const openRowStart = stamdataSource.indexOf("function openRow");
+const openRowEnd = stamdataSource.indexOf("function handleRowKeyDown", openRowStart);
+if (openRowStart === -1 || openRowEnd === -1) {
+  violations.push("apps/admin/src/pages/StamdataPage.tsx: function openRow not found");
 } else {
-  const entityTypes = [...entityTypesMatch[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+  const openRowBody = stamdataSource.slice(openRowStart, openRowEnd);
 
-  for (const entityType of entityTypes) {
-    const navigates =
-      (entityType === "kit" && stamdataSource.includes('entityType === "kit"')) ||
-      (entityType === "club" && stamdataSource.includes('entityType === "club"')) ||
-      (entityType === "season" && stamdataSource.includes('entityType === "season"')) ||
-      (entityType === "club_season" && stamdataSource.includes('entityType === "club_season"'));
-    if (!navigates) {
-      violations.push(
-        `apps/admin/src/pages/StamdataPage.tsx: openRow missing navigation for "${entityType}"`,
-      );
+  const entityTypesMatch = catalogSource.match(
+    /ADMIN_STAMDATA_LIST_ENTITY_TYPES\s*=\s*\[([\s\S]*?)\]\s*as const/,
+  );
+  if (!entityTypesMatch) {
+    violations.push(
+      "packages/api-contract/src/admin/catalog.ts: ADMIN_STAMDATA_LIST_ENTITY_TYPES not found",
+    );
+  } else {
+    const entityTypes = [...entityTypesMatch[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+
+    for (const entityType of entityTypes) {
+      const navigates = new RegExp(
+        `entityType === "${entityType}"[\\s\\S]*?navigate\\(`,
+      ).test(openRowBody);
+      if (!navigates) {
+        violations.push(
+          `apps/admin/src/pages/StamdataPage.tsx: openRow missing navigate() for "${entityType}"`,
+        );
+      }
     }
   }
 }
