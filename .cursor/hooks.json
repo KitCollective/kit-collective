@@ -29,6 +29,10 @@
       {
         "command": "bash .cursor/hooks/block-push-behind-development.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-manual-seed-development-proof.sh",
+        "failClosed": true
       }
     ]
   }
