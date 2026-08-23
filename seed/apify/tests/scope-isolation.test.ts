@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDb, playerClubSeason, resetDatabase, season } from "@kit/db";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import type { FetchAdapter } from "../src/fetch/adapter.js";
 import { createFixtureFetchAdapter } from "../src/fetch/fixture-adapter.js";
@@ -10,10 +10,10 @@ import { mapFacts } from "../src/map/index.js";
 import { normalize } from "../src/normalize/index.js";
 import { runSeed } from "../src/run.js";
 import {
-  SeedScopeIsolationError,
   assertOutOfScopeSeasonsUnchanged,
   assertPairsInScope,
   resolveScopeSeasonLabels,
+  SeedScopeIsolationError,
   snapshotSeasonPcsByLabel,
 } from "../src/scope-isolation.js";
 
@@ -97,9 +97,7 @@ describe("assertPairsInScope", () => {
 });
 
 describe("runSeed scope isolation", () => {
-  it(
-    "does not mutate PlayerClubSeason rows for seasons outside the requested scope",
-    async () => {
+  it("does not mutate PlayerClubSeason rows for seasons outside the requested scope", async () => {
     await prepareDatabase();
     const inner = createFixtureFetchAdapter(fixturePath);
     const recording = createRecordingFetchAdapter(inner);
@@ -137,9 +135,7 @@ describe("runSeed scope isolation", () => {
     await pool.end();
   }, 60_000);
 
-  it(
-    "leaves out-of-scope seasons unchanged on a second all-skipped competition run",
-    async () => {
+  it("leaves out-of-scope seasons unchanged on a second all-skipped competition run", async () => {
     await prepareDatabase();
     const inner = createFixtureFetchAdapter(fixturePath);
     const recording = createRecordingFetchAdapter(inner);
@@ -186,9 +182,7 @@ describe("runSeed scope isolation", () => {
     );
   }, 60_000);
 
-  it(
-    "fails when mapped facts target a season outside the club-season pair",
-    async () => {
+  it("fails when mapped facts target a season outside the club-season pair", async () => {
     await prepareDatabase();
     const inner = createFixtureFetchAdapter(fixturePath);
     const evilAdapter: FetchAdapter = {

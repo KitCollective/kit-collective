@@ -1,8 +1,8 @@
 import { type Db, playerClubSeason, season } from "@kit/db";
 import { resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
-import { and, eq, sql } from "drizzle-orm";
-import { findLeagueEntityId } from "./seeded.js";
+import { eq, sql } from "drizzle-orm";
 import { labelToStartYear, startYearToLabel } from "./fetch/season-label.js";
+import { findLeagueEntityId } from "./seeded.js";
 
 export interface SeasonPcsSnapshot {
   clubs: number;
@@ -20,16 +20,16 @@ export class SeedScopeIsolationError extends Error {
 
 function seasonRefToScopeLabel(ref: string): string {
   const bareYear = /^(\d{4})$/.exec(ref);
-  if (bareYear) {
-    return startYearToLabel(Number.parseInt(bareYear[1]!, 10));
+  if (bareYear?.[1]) {
+    return startYearToLabel(Number.parseInt(bareYear[1], 10));
   }
   return ref;
 }
 
 function seasonRefToStartYear(ref: string): number {
   const bareYear = /^(\d{4})$/.exec(ref);
-  if (bareYear) {
-    return Number.parseInt(bareYear[1]!, 10);
+  if (bareYear?.[1]) {
+    return Number.parseInt(bareYear[1], 10);
   }
   return labelToStartYear(ref);
 }
@@ -112,7 +112,9 @@ export async function snapshotSeasonPcsByLabel(
       clubs: sql<number>`count(distinct ${playerClubSeason.clubId})::int`,
       playerClubSeasons: sql<number>`count(${playerClubSeason.id})::int`,
       jerseyNumbers: sql<number>`count(${playerClubSeason.id}) filter (where ${playerClubSeason.squadNumber} is not null)::int`,
-      fingerprint: sql<string | null>`md5(coalesce(string_agg(${playerClubSeason.id}::text, ',' order by ${playerClubSeason.id}), ''))`,
+      fingerprint: sql<
+        string | null
+      >`md5(coalesce(string_agg(${playerClubSeason.id}::text, ',' order by ${playerClubSeason.id}), ''))`,
     })
     .from(season)
     .leftJoin(playerClubSeason, eq(playerClubSeason.seasonId, season.id))

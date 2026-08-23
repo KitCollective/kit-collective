@@ -54,16 +54,16 @@ export {
   isPairInSeedScope,
   seasonLabelInCompetitionScope,
 } from "./scope/club-season.js";
-export { filterSeasons } from "./season-range.js";
 export {
   assertFactsSeasonScope,
   assertOutOfScopeSeasonsUnchanged,
   assertPairsInScope,
   resolveScopeSeasonLabels,
+  type SeasonPcsSnapshot,
   SeedScopeIsolationError,
   snapshotSeasonPcsByLabel,
-  type SeasonPcsSnapshot,
 } from "./scope-isolation.js";
+export { filterSeasons } from "./season-range.js";
 export { isClubSeasonAlreadySeeded } from "./seeded.js";
 export type {
   Lane,
