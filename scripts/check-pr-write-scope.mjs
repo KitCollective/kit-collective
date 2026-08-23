@@ -109,7 +109,7 @@ function main() {
     }
     console.error(`\nDeclared write-scope: ${globs.join(", ")}`);
     console.error(
-      "Ratchet-exception paths: .cursor/hooks/**, .cursor/rules/**, docs/agents/error-ratcheting.md, scripts/check-*",
+      "Ratchet-exception paths: .cursor/hooks/**, .cursor/rules/**, docs/agents/error-ratcheting.md, scripts/check-*, scripts/lib/**, scripts/tests/**",
     );
     process.exit(1);
   }

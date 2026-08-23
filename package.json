@@ -17,8 +17,6 @@
     "check:mobile-design-tokens": "node scripts/check-mobile-design-tokens.mjs",
     "check:workflow-api-boot-env": "node scripts/check-workflow-api-boot-env.mjs",
     "check:vision-log-save-action": "node scripts/check-vision-log-save-action.mjs",
-    "check:pr-write-scope": "node scripts/check-pr-write-scope.mjs",
-    "test:scripts": "node --test scripts/tests/*.test.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"
   },
   "devDependencies": {

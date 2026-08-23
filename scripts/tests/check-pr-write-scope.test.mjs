@@ -33,6 +33,8 @@ test("matchesGlob supports single-segment and recursive globs", () => {
 
 test("isRatchetException allows ratchet paths outside product globs", () => {
   assert.equal(isRatchetException("scripts/check-pr-write-scope.mjs"), true);
+  assert.equal(isRatchetException("scripts/lib/pr-write-scope.mjs"), true);
+  assert.equal(isRatchetException("scripts/tests/check-pr-write-scope.test.mjs"), true);
   assert.equal(isRatchetException(".cursor/rules/write-scope.mdc"), true);
   assert.equal(isRatchetException("apps/admin/src/App.tsx"), false);
 });

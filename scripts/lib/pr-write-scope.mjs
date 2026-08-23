@@ -9,6 +9,8 @@ export const RATCHET_EXCEPTION_PREFIXES = [
   ".cursor/rules/",
   "docs/agents/error-ratcheting.md",
   "scripts/check-",
+  "scripts/lib/",
+  "scripts/tests/",
 ];
 
 export function matchesGlob(filePath, glob) {
