@@ -356,7 +356,7 @@ a {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-pill);
   cursor: pointer;
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 var(--space-inset-md);
 }
 

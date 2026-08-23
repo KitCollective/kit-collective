@@ -126,3 +126,49 @@ export const adminKitIdParamSchema = z
   .strict();
 
 export type AdminKitIdParam = z.infer<typeof adminKitIdParamSchema>;
+
+export const adminClubDrillSchema = z
+  .object({
+    id: z.string().uuid(),
+    label: z.string().min(1),
+    countryLabel: z.string().optional(),
+    monogram: z.string().min(1).max(3),
+  })
+  .strict();
+
+export type AdminClubDrill = z.infer<typeof adminClubDrillSchema>;
+
+export const adminSeasonDrillSchema = z
+  .object({
+    id: z.string().uuid(),
+    label: z.string().min(1),
+    leagueLabel: z.string().optional(),
+    monogram: z.string().min(1).max(3),
+  })
+  .strict();
+
+export type AdminSeasonDrill = z.infer<typeof adminSeasonDrillSchema>;
+
+export const adminClubIdParamSchema = z
+  .object({
+    clubId: z.string().uuid(),
+  })
+  .strict();
+
+export type AdminClubIdParam = z.infer<typeof adminClubIdParamSchema>;
+
+export const adminSeasonIdParamSchema = z
+  .object({
+    seasonId: z.string().uuid(),
+  })
+  .strict();
+
+export type AdminSeasonIdParam = z.infer<typeof adminSeasonIdParamSchema>;
+
+/** Entity types the admin stamdata list API can emit as clickable rows. */
+export const ADMIN_STAMDATA_LIST_ENTITY_TYPES = [
+  "club",
+  "season",
+  "club_season",
+  "kit",
+] as const satisfies readonly AdminStamdataEntityType[];

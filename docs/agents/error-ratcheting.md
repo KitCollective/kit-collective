@@ -88,6 +88,10 @@ not turn it on. Nest resolves constructor injection from `emitDecoratorMetadata`
 `Function` and the module fails to build at runtime. Typecheck stays green, so CI only
 catches it in the API tests and the container smoke test.
 
+### Admin stamdata navigation ratchet (KIT-39)
+
+`scripts/check-admin-stamdata-navigation.mjs` (CI via `pnpm check:admin-stamdata-navigation`) fails when `apps/admin/src/pages/StamdataPage.tsx` `openRow` does not switch on every `ADMIN_STAMDATA_LIST_ENTITY_TYPES` value, or when `apps/admin/src/App.tsx` omits a drill route for club, season, kit, or club-season rows. Prevents repeating the KIT-39 checker fail (plain club/season rows were a silent no-op on click). Tighten only.
+
 ### Ops MCP catalog evidence ratchet (KIT-17)
 
 `.cursor/hooks/block-manual-getmcptools-evidence.sh` denies manual writes under `.cursor/getmcptools-evidence/`. Agents record in-session catalog proof only via `scripts/record-getmcptools-evidence.sh <server>` fed with **this session's** `GetMcpTools` JSON. Prevents repeating the second KIT-17 checker fail (marking MCP-catalog AC complete without catalog evidence). Dashboard registration for Cloud Agents remains human-only (`KIT-18`). Tighten only.

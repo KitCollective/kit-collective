@@ -1,6 +1,8 @@
 import {
+  adminClubIdParamSchema,
   adminClubSeasonParamsSchema,
   adminKitIdParamSchema,
+  adminSeasonIdParamSchema,
   adminStamdataQuerySchema,
 } from "@kit/api-contract";
 import { BadRequestException, Controller, Get, Param, Query, Res, UseGuards } from "@nestjs/common";
@@ -73,5 +75,23 @@ export class AdminCatalogController {
       parsed.data.seasonId,
       expand,
     );
+  }
+
+  @Get("clubs/:clubId")
+  getClubDrill(@Param() params: Record<string, string>) {
+    const parsed = adminClubIdParamSchema.safeParse({ clubId: params.clubId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid club id");
+    }
+    return this.adminCatalogService.getClubDrill(parsed.data.clubId);
+  }
+
+  @Get("seasons/:seasonId")
+  getSeasonDrill(@Param() params: Record<string, string>) {
+    const parsed = adminSeasonIdParamSchema.safeParse({ seasonId: params.seasonId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid season id");
+    }
+    return this.adminCatalogService.getSeasonDrill(parsed.data.seasonId);
   }
 }

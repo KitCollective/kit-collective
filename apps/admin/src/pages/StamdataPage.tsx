@@ -1,7 +1,9 @@
 import {
+  ADMIN_STAMDATA_LIST_ENTITY_TYPES,
   type AdminFilterOptions,
   type AdminStamdataList,
   type AdminStamdataQuery,
+  type AdminStamdataRow,
   adminFilterOptionsSchema,
   adminStamdataListSchema,
 } from "@kit/api-contract";
@@ -68,15 +70,26 @@ export function StamdataPage() {
     setSearch("");
   }
 
-  function openRow(row: AdminStamdataList["rows"][number]) {
+  function openRow(row: AdminStamdataRow) {
     if (row.entityType === "kit") {
       navigate(`/stamdata/kits/${row.id}`);
+      return;
+    }
+    if (row.entityType === "club") {
+      navigate(`/stamdata/clubs/${row.id}`);
+      return;
+    }
+    if (row.entityType === "season") {
+      navigate(`/stamdata/seasons/${row.id}`);
       return;
     }
     if (row.entityType === "club_season" && row.clubId && row.seasonId) {
       navigate(`/stamdata/club-seasons/${row.clubId}/${row.seasonId}`);
     }
   }
+
+  // Ratchet: ADMIN_STAMDATA_LIST_ENTITY_TYPES must each have navigation above.
+  void ADMIN_STAMDATA_LIST_ENTITY_TYPES;
 
   const hasActiveFilters = Boolean(
     filters.countryId ||

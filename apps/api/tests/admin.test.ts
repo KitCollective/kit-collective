@@ -155,6 +155,22 @@ describe("Admin /v1", () => {
         text: "Denmark",
         source: "seed",
       },
+      {
+        entityType: "country",
+        entityId: insertedCountry!.id,
+        locale: "da",
+        kind: "alias",
+        text: "Danmark",
+        source: "seed",
+      },
+      {
+        entityType: "league",
+        entityId: insertedLeague!.id,
+        locale: "da",
+        kind: "alias",
+        text: "SL",
+        source: "seed",
+      },
     ]);
 
     const [insertedSeason] = await db
@@ -219,6 +235,50 @@ describe("Admin /v1", () => {
     expect(aliasSearch.statusCode).toBe(200);
     const aliasBody = adminStamdataListSchema.parse(JSON.parse(aliasSearch.body));
     expect(aliasBody.rows.some((row) => row.label.includes("FC Copenhagen"))).toBe(true);
+
+    const countryAliasSearch = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?q=Danmark",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(countryAliasSearch.statusCode).toBe(200);
+    const countryAliasBody = adminStamdataListSchema.parse(JSON.parse(countryAliasSearch.body));
+    expect(countryAliasBody.rows.some((row) => row.entityType === "club")).toBe(true);
+
+    const leagueAliasSearch = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?q=SL",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(leagueAliasSearch.statusCode).toBe(200);
+    const leagueAliasBody = adminStamdataListSchema.parse(JSON.parse(leagueAliasSearch.body));
+    expect(
+      leagueAliasBody.rows.some(
+        (row) => row.entityType === "season" || row.entityType === "club_season",
+      ),
+    ).toBe(true);
+
+    const clubDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(clubDrillResponse.statusCode).toBe(200);
+
+    const seasonDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/seasons/${insertedSeason!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(seasonDrillResponse.statusCode).toBe(200);
 
     const listResponse = await app.inject({
       method: "GET",

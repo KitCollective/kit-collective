@@ -130,6 +130,9 @@ jobs:
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
 
+      - name: Check admin stamdata navigation
+        run: pnpm check:admin-stamdata-navigation
+
       - name: Lint GitHub Actions workflows
         run: bash scripts/lint-workflows.sh
 

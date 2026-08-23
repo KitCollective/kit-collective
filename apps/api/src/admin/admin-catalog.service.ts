@@ -1,13 +1,17 @@
 import {
+  type AdminClubDrill,
   type AdminClubSeasonDrill,
   type AdminFilterOptions,
   type AdminKitDrill,
+  type AdminSeasonDrill,
   type AdminStamdataList,
   type AdminStamdataQuery,
   type AdminStamdataRow,
+  adminClubDrillSchema,
   adminClubSeasonDrillSchema,
   adminFilterOptionsSchema,
   adminKitDrillSchema,
+  adminSeasonDrillSchema,
   adminStamdataListSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
@@ -271,19 +275,116 @@ export class AdminCatalogService {
     });
   }
 
-  private async matchingClubIds(pattern: string | null): Promise<Set<string>> {
-    if (!pattern) {
-      return new Set();
+  async getClubDrill(clubId: string): Promise<AdminClubDrill> {
+    const [row] = await this.db
+      .select({
+        id: club.id,
+        countryId: club.countryId,
+        label: resolvedEnLabel,
+      })
+      .from(club)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+      )
+      .where(eq(club.id, clubId))
+      .groupBy(club.id, club.countryId)
+      .limit(1);
+
+    if (!row?.label) {
+      throw new NotFoundException("Club not found");
+    }
+
+    let countryLabel: string | undefined;
+    if (row.countryId) {
+      const [countryRow] = await this.db
+        .select({
+          label: resolvedEnLabel,
+        })
+        .from(country)
+        .leftJoin(
+          catalogLabel,
+          and(eq(catalogLabel.entityType, "country"), eq(catalogLabel.entityId, country.id)),
+        )
+        .where(eq(country.id, row.countryId))
+        .groupBy(country.id)
+        .limit(1);
+      countryLabel = countryRow?.label ?? undefined;
+    }
+
+    return adminClubDrillSchema.parse({
+      id: row.id,
+      label: row.label,
+      countryLabel,
+      monogram: monogramFromLabel(row.label),
+    });
+  }
+
+  async getSeasonDrill(seasonId: string): Promise<AdminSeasonDrill> {
+    const [row] = await this.db
+      .select({
+        id: season.id,
+        label: season.label,
+        leagueLabel: resolvedEnLabel,
+      })
+      .from(season)
+      .leftJoin(league, eq(season.leagueId, league.id))
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "league"), eq(catalogLabel.entityId, league.id)),
+      )
+      .where(eq(season.id, seasonId))
+      .groupBy(season.id, season.label)
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException("Season not found");
+    }
+
+    return adminSeasonDrillSchema.parse({
+      id: row.id,
+      label: row.label,
+      leagueLabel: row.leagueLabel ?? undefined,
+      monogram: monogramFromLabel(row.label),
+    });
+  }
+
+  private async matchingCatalogIds(searchPattern: string | null): Promise<{
+    countries: Set<string>;
+    leagues: Set<string>;
+    clubs: Set<string>;
+  }> {
+    if (!searchPattern) {
+      return { countries: new Set(), leagues: new Set(), clubs: new Set() };
     }
 
     const matches = await this.db
       .select({
+        entityType: catalogLabel.entityType,
         entityId: catalogLabel.entityId,
       })
       .from(catalogLabel)
-      .where(and(eq(catalogLabel.entityType, "club"), sql`${catalogLabel.text} ilike ${pattern}`));
+      .where(
+        and(
+          inArray(catalogLabel.entityType, ["country", "league", "club"]),
+          sql`${catalogLabel.text} ilike ${searchPattern}`,
+        ),
+      );
 
-    return new Set(matches.map((match) => match.entityId));
+    const countries = new Set<string>();
+    const leagues = new Set<string>();
+    const clubs = new Set<string>();
+    for (const match of matches) {
+      if (match.entityType === "country") {
+        countries.add(match.entityId);
+      } else if (match.entityType === "league") {
+        leagues.add(match.entityId);
+      } else if (match.entityType === "club") {
+        clubs.add(match.entityId);
+      }
+    }
+
+    return { countries, leagues, clubs };
   }
 
   private async listClubRows(
@@ -315,12 +416,35 @@ export class AdminCatalogService {
       );
     }
 
-    const clubIds = await this.matchingClubIds(searchPattern);
+    const catalogIds = await this.matchingCatalogIds(searchPattern);
     if (searchPattern) {
-      if (clubIds.size === 0) {
+      const searchClauses: SQL[] = [];
+      if (catalogIds.clubs.size > 0) {
+        searchClauses.push(inArray(club.id, [...catalogIds.clubs]));
+      }
+      if (catalogIds.countries.size > 0) {
+        searchClauses.push(inArray(club.countryId, [...catalogIds.countries]));
+      }
+      if (catalogIds.leagues.size > 0) {
+        searchClauses.push(
+          sql`exists (
+            select 1 from ${teamSeason}
+            inner join ${season} on ${teamSeason.seasonId} = ${season.id}
+            where ${teamSeason.clubId} = ${club.id}
+            and ${season.leagueId} in (${sql.join(
+              [...catalogIds.leagues].map((id) => sql`${id}`),
+              sql`, `,
+            )})
+          )`,
+        );
+      }
+      if (searchClauses.length === 0) {
         return [];
       }
-      conditions.push(inArray(club.id, [...clubIds]));
+      const searchClause = or(...searchClauses);
+      if (searchClause) {
+        conditions.push(searchClause);
+      }
     }
 
     const rows = await this.db
@@ -370,7 +494,27 @@ export class AdminCatalogService {
     }
 
     if (searchPattern) {
-      conditions.push(sql`${season.label} ilike ${searchPattern}`);
+      const catalogIds = await this.matchingCatalogIds(searchPattern);
+      const searchClauses: SQL[] = [sql`${season.label} ilike ${searchPattern}`];
+      if (catalogIds.leagues.size > 0) {
+        searchClauses.push(inArray(season.leagueId, [...catalogIds.leagues]));
+      }
+      if (catalogIds.countries.size > 0) {
+        searchClauses.push(
+          sql`exists (
+            select 1 from ${league}
+            where ${season.leagueId} = ${league.id}
+            and ${league.countryId} in (${sql.join(
+              [...catalogIds.countries].map((id) => sql`${id}`),
+              sql`, `,
+            )})
+          )`,
+        );
+      }
+      const searchClause = or(...searchClauses);
+      if (searchClause) {
+        conditions.push(searchClause);
+      }
     }
 
     const rows = await this.db
@@ -406,24 +550,22 @@ export class AdminCatalogService {
       conditions.push(eq(season.id, query.seasonId));
     }
 
-    const clubIds = await this.matchingClubIds(searchPattern);
     if (searchPattern) {
-      if (clubIds.size > 0) {
-        conditions.push(inArray(club.id, [...clubIds]));
-      } else {
-        const seasonMatch = await this.db
-          .select({ id: season.id })
-          .from(season)
-          .where(sql`${season.label} ilike ${searchPattern}`);
-        if (seasonMatch.length === 0) {
-          return [];
-        }
-        conditions.push(
-          inArray(
-            season.id,
-            seasonMatch.map((row) => row.id),
-          ),
-        );
+      const catalogIds = await this.matchingCatalogIds(searchPattern);
+      const searchClauses: SQL[] = [];
+      if (catalogIds.clubs.size > 0) {
+        searchClauses.push(inArray(club.id, [...catalogIds.clubs]));
+      }
+      if (catalogIds.countries.size > 0) {
+        searchClauses.push(inArray(club.countryId, [...catalogIds.countries]));
+      }
+      if (catalogIds.leagues.size > 0) {
+        searchClauses.push(inArray(season.leagueId, [...catalogIds.leagues]));
+      }
+      searchClauses.push(sql`${season.label} ilike ${searchPattern}`);
+      const searchClause = or(...searchClauses);
+      if (searchClause) {
+        conditions.push(searchClause);
       }
     }
 
@@ -485,11 +627,17 @@ export class AdminCatalogService {
       conditions.push(eq(kit.type, query.kitType));
     }
 
-    const clubIds = await this.matchingClubIds(searchPattern);
     if (searchPattern) {
+      const catalogIds = await this.matchingCatalogIds(searchPattern);
       const searchClauses: SQL[] = [];
-      if (clubIds.size > 0) {
-        searchClauses.push(inArray(kit.clubId, [...clubIds]));
+      if (catalogIds.clubs.size > 0) {
+        searchClauses.push(inArray(kit.clubId, [...catalogIds.clubs]));
+      }
+      if (catalogIds.countries.size > 0) {
+        searchClauses.push(inArray(club.countryId, [...catalogIds.countries]));
+      }
+      if (catalogIds.leagues.size > 0) {
+        searchClauses.push(inArray(season.leagueId, [...catalogIds.leagues]));
       }
       searchClauses.push(
         sql`exists (
