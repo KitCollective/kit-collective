@@ -7,6 +7,55 @@ import { existsSync, readFileSync } from "node:fs";
 
 const genvejeSheetPath = "apps/mobile/src/components/genveje-sheet.tsx";
 
+function extractPanOnUpdateBodies(source) {
+  const bodies = [];
+  const panStart = source.indexOf("Gesture.Pan()");
+  if (panStart === -1) {
+    return bodies;
+  }
+
+  const onUpdateIdx = source.indexOf(".onUpdate(", panStart);
+  if (onUpdateIdx === -1) {
+    return bodies;
+  }
+
+  const arrowIdx = source.indexOf("=>", onUpdateIdx);
+  if (arrowIdx === -1) {
+    return bodies;
+  }
+
+  const braceStart = source.indexOf("{", arrowIdx);
+  if (braceStart === -1) {
+    return bodies;
+  }
+
+  let depth = 0;
+  for (let i = braceStart; i < source.length; i += 1) {
+    const char = source[i];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        bodies.push(source.slice(braceStart + 1, i));
+        break;
+      }
+    }
+  }
+
+  return bodies;
+}
+
+function hasUnconditionalRnBridgeInOnUpdate(source) {
+  for (const body of extractPanOnUpdateBodies(source)) {
+    if (/\brunOnJS\s*\(/.test(body) || /\bscheduleOnRN\s*\(/.test(body)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function checkMobileDragReorder(overrides = {}) {
   const violations = [];
 
@@ -56,6 +105,12 @@ export function checkMobileDragReorder(overrides = {}) {
 
   if (!sheetSource.includes('accessibilityLabel="Flyt"')) {
     violations.push(`${genvejeSheetPath}: manage drag-handle must be named Flyt`);
+  }
+
+  if (hasUnconditionalRnBridgeInOnUpdate(sheetSource)) {
+    violations.push(
+      `${genvejeSheetPath}: Gesture.Pan().onUpdate must not call runOnJS/scheduleOnRN every frame — gate RN-runtime work with useAnimatedReaction or onEnd`,
+    );
   }
 
   return violations;

@@ -13,6 +13,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
   type SharedValue,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
@@ -87,12 +88,18 @@ export function GenvejeSheet({
   const dragOffsetY = useSharedValue(0);
   const dragStartIndex = useSharedValue(0);
   const dragCurrentIndex = useSharedValue(0);
+  const dragActive = useSharedValue(0);
+  const shortcutCount = useSharedValue(0);
   const dragStartIndexRef = useRef(0);
   const orderedShortcutsRef = useRef(orderedShortcuts);
 
   useEffect(() => {
     orderedShortcutsRef.current = orderedShortcuts;
   }, [orderedShortcuts]);
+
+  useEffect(() => {
+    shortcutCount.value = orderedShortcuts.length;
+  }, [orderedShortcuts.length, shortcutCount]);
 
   const loadShortcuts = useCallback(async () => {
     setLoading(true);
@@ -172,42 +179,58 @@ export function GenvejeSheet({
     void persistReorder(orderedIds);
   };
 
-  const computeTargetIndex = (offsetY: number) =>
-    Math.min(
-      orderedShortcuts.length - 1,
-      Math.max(
-        0,
-        dragStartIndexRef.current +
-          Math.floor((offsetY + MANAGE_ROW_HEIGHT / 2) / MANAGE_ROW_HEIGHT),
-      ),
-    );
-
-  const maybeReorderDuringDrag = (offsetY: number) => {
+  const maybeReorderToIndex = (targetIndex: number) => {
     if (!draggingShortcutId) {
       return;
     }
 
     const currentOrdered = orderedShortcutsRef.current;
     const currentIndex = currentOrdered.findIndex((shortcut) => shortcut.id === draggingShortcutId);
-    if (currentIndex < 0) {
+    if (currentIndex < 0 || targetIndex === currentIndex) {
       return;
     }
 
-    const targetIndex = computeTargetIndex(offsetY);
-    if (targetIndex !== currentIndex) {
-      const orderedIds = reorderShortcutIds(currentOrdered, currentIndex, targetIndex);
-      const nextOrdered = orderedIds
-        .map((id) => currentOrdered.find((shortcut) => shortcut.id === id))
-        .filter((shortcut): shortcut is CollectionShortcut => shortcut !== undefined);
-      orderedShortcutsRef.current = nextOrdered;
-      setOrderedShortcuts(nextOrdered);
-      dragCurrentIndex.value = targetIndex;
-    }
+    const orderedIds = reorderShortcutIds(currentOrdered, currentIndex, targetIndex);
+    const nextOrdered = orderedIds
+      .map((id) => currentOrdered.find((shortcut) => shortcut.id === id))
+      .filter((shortcut): shortcut is CollectionShortcut => shortcut !== undefined);
+    orderedShortcutsRef.current = nextOrdered;
+    setOrderedShortcuts(nextOrdered);
   };
+
+  useAnimatedReaction(
+    () => ({
+      offsetY: dragOffsetY.value,
+      startIndex: dragStartIndex.value,
+      currentIndex: dragCurrentIndex.value,
+      active: dragActive.value,
+      count: shortcutCount.value,
+    }),
+    (current) => {
+      if (!current.active || current.count <= 0) {
+        return;
+      }
+
+      const targetIndex = Math.min(
+        current.count - 1,
+        Math.max(
+          0,
+          current.startIndex +
+            Math.floor((current.offsetY + MANAGE_ROW_HEIGHT / 2) / MANAGE_ROW_HEIGHT),
+        ),
+      );
+
+      if (targetIndex !== current.currentIndex) {
+        dragCurrentIndex.value = targetIndex;
+        runOnJS(maybeReorderToIndex)(targetIndex);
+      }
+    },
+  );
 
   const finishDrag = () => {
     const orderedIds = orderedShortcutsRef.current.map((shortcut) => shortcut.id);
     const persistedIds = shortcuts.map((shortcut) => shortcut.id);
+    dragActive.value = 0;
     setDraggingShortcutId(null);
     dragOffsetY.value = 0;
 
@@ -290,13 +313,13 @@ export function GenvejeSheet({
                       typographyBody={typography.body}
                       typographyMono={typography.mono}
                       onMove={(direction) => moveShortcut(index, direction)}
+                      dragActive={dragActive}
                       onDragStart={() => {
                         dragStartIndexRef.current = index;
                         dragStartIndex.value = index;
                         dragCurrentIndex.value = index;
                         setDraggingShortcutId(shortcut.id);
                       }}
-                      onDragMove={(offsetY) => maybeReorderDuringDrag(offsetY)}
                       onDragEnd={() => finishDrag()}
                       onEdit={() => openEditForm(shortcut)}
                       onDelete={() => void handleDelete(shortcut.id)}
@@ -383,13 +406,13 @@ type ShortcutManageRowProps = {
   dragOffsetY: SharedValue<number>;
   dragStartIndex: SharedValue<number>;
   dragCurrentIndex: SharedValue<number>;
+  dragActive: SharedValue<number>;
   themeContentMuted: string;
   themeContentPrimary: string;
   typographyBody: ReturnType<typeof useTypography>["body"];
   typographyMono: ReturnType<typeof useTypography>["mono"];
   onMove: (direction: -1 | 1) => void;
   onDragStart: () => void;
-  onDragMove: (offsetY: number) => void;
   onDragEnd: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -405,9 +428,9 @@ function ShortcutManageRow({
   themeContentPrimary,
   typographyBody,
   typographyMono,
+  dragActive,
   onMove,
   onDragStart,
-  onDragMove,
   onDragEnd,
   onEdit,
   onDelete,
@@ -430,9 +453,9 @@ function ShortcutManageRow({
       <ShortcutDragHandle
         color={themeContentMuted}
         dragOffsetY={dragOffsetY}
+        dragActive={dragActive}
         onMove={onMove}
         onDragStart={onDragStart}
-        onDragMove={onDragMove}
         onDragEnd={onDragEnd}
       />
       <View
@@ -462,33 +485,35 @@ function ShortcutManageRow({
 function ShortcutDragHandle({
   color,
   dragOffsetY,
+  dragActive,
   onMove,
   onDragStart,
-  onDragMove,
   onDragEnd,
 }: {
   color: string;
   dragOffsetY: SharedValue<number>;
+  dragActive: SharedValue<number>;
   onMove: (direction: -1 | 1) => void;
   onDragStart: () => void;
-  onDragMove: (offsetY: number) => void;
   onDragEnd: () => void;
 }) {
   const pan = Gesture.Pan()
     .onBegin(() => {
       dragOffsetY.value = 0;
+      dragActive.value = 1;
       runOnJS(onDragStart)();
     })
     .onUpdate((event) => {
       dragOffsetY.value = event.translationY;
-      runOnJS(onDragMove)(event.translationY);
     })
     .onEnd(() => {
       dragOffsetY.value = 0;
+      dragActive.value = 0;
       runOnJS(onDragEnd)();
     })
     .onFinalize(() => {
       dragOffsetY.value = 0;
+      dragActive.value = 0;
     });
 
   const handleAccessibilityAction = (event: AccessibilityActionEvent) => {

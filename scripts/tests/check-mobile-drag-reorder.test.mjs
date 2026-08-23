@@ -32,4 +32,16 @@ describe("checkMobileDragReorder", () => {
     });
     assert.ok(violations.some((line) => line.includes("44×44")));
   });
+
+  it("fails when onUpdate bridges to RN runtime every frame", () => {
+    const violations = checkMobileDragReorder({
+      sheetSource: `${compliantSource}
+const pan = Gesture.Pan()
+  .onUpdate((event) => {
+    dragOffsetY.value = event.translationY;
+    runOnJS(onDragMove)(event.translationY);
+  });`,
+    });
+    assert.ok(violations.some((line) => line.includes("runOnJS/scheduleOnRN")));
+  });
 });

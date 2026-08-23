@@ -182,7 +182,7 @@ catches it in the API tests and the container smoke test.
 
 ### Mobile custom drag-reorder ratchet (KIT-44)
 
-`scripts/check-mobile-drag-reorder.mjs` (CI via `pnpm check:mobile-drag-reorder`) fails when `apps/mobile/src/components/genveje-sheet.tsx` uses `PanResponder`, omits `react-native-gesture-handler` + `react-native-reanimated` + `useSharedValue` for drag offset, or when `styles.dragHandle` lacks `minWidth`/`minHeight` 44. `scripts/tests/check-mobile-drag-reorder.test.mjs` (CI via `node --test`) mutation-tests the ratchet. Prevents repeating the KIT-44 checker round-2 fail (undersized drag handle + banned `PanResponder`/per-frame `setState` gesture pattern on the same reorder surface). Tighten only.
+`scripts/check-mobile-drag-reorder.mjs` (CI via `pnpm check:mobile-drag-reorder`) fails when `apps/mobile/src/components/genveje-sheet.tsx` uses `PanResponder`, omits `react-native-gesture-handler` + `react-native-reanimated` + `useSharedValue` for drag offset, when `styles.dragHandle` lacks `minWidth`/`minHeight` 44, or when `Gesture.Pan().onUpdate` calls `runOnJS`/`scheduleOnRN` (per-frame RN-runtime bridge). `scripts/tests/check-mobile-drag-reorder.test.mjs` (CI via `node --test`) mutation-tests the ratchet. Prevents repeating the KIT-44 checker round-2/3 fails (undersized drag handle, banned `PanResponder`/per-frame `setState`, and per-frame `runOnJS` in `onUpdate` on the same reorder surface). Tighten only.
 
 ### PR write-scope ratchet (KIT-39)
 
