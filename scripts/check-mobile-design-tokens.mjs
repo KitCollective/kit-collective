@@ -5,6 +5,9 @@
  *
  * Ratchet (KIT-42): fail when collection-chrome components/screens import the
  * static light-only `color` export instead of useTheme()/getThemeColors().
+ *
+ * Ratchet (KIT-42 round 5): separate color-migration allowlist from typography
+ * checks so a file cannot dodge font-fallback enforcement via the color carve-out.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -19,16 +22,42 @@ const staticColorImportPattern =
 /** Direct brand fontFamily from static type roles bypasses webfont fallback. */
 const staticTypeFontFamilyPattern = /fontFamily:\s*type\.\w+\.fontFamily/;
 
-/** Legacy capture/auth surfaces not yet migrated to useTheme(); tighten only by removing entries. */
+/** Static type font metrics in StyleSheet without useTypography() bypass brand fonts. */
+const staticTypeFontSizePattern = /fontSize:\s*type\.\w+\.fontSize/;
+
+/** Legacy capture surfaces not yet migrated to useTheme(); tighten only by removing entries. */
 const STATIC_COLOR_IMPORT_ALLOWLIST = new Set([
-  "apps/mobile/src/components/photo-slot.tsx",
-  "apps/mobile/src/components/post-save-sheet.tsx",
+  "apps/mobile/src/capture/CaptureCameraSession.tsx",
+]);
+
+/** Typography checks use a separate allowlist — never reuse the color carve-out. */
+const STATIC_TYPOGRAPHY_ALLOWLIST = new Set([
   "apps/mobile/src/capture/CaptureCameraSession.tsx",
 ]);
 
 const violations = [];
 
 function isThemeAwareScope(relPath) {
+  if (relPath.startsWith("apps/mobile/src/components/")) {
+    return true;
+  }
+
+  if (relPath.startsWith("apps/mobile/app/(auth)/")) {
+    return true;
+  }
+
+  if (relPath.startsWith("apps/mobile/app/(tabs)/")) {
+    return true;
+  }
+
+  return false;
+}
+
+function isTypographyScope(relPath) {
+  return isThemeAwareScope(relPath) && !STATIC_TYPOGRAPHY_ALLOWLIST.has(relPath);
+}
+
+function isColorScope(relPath) {
   if (relPath.startsWith("apps/mobile/src/components/")) {
     return !STATIC_COLOR_IMPORT_ALLOWLIST.has(relPath);
   }
@@ -70,15 +99,21 @@ function walk(dir) {
       );
     }
 
-    if (isThemeAwareScope(rel) && staticColorImportPattern.test(source)) {
+    if (isColorScope(rel) && staticColorImportPattern.test(source)) {
       violations.push(
         `${rel}: imports static light-only 'color' export from theme/tokens — use useTheme() or getThemeColors()`,
       );
     }
 
-    if (isThemeAwareScope(rel) && staticTypeFontFamilyPattern.test(source)) {
+    if (isTypographyScope(rel) && staticTypeFontFamilyPattern.test(source)) {
       violations.push(
         `${rel}: uses static type.*.fontFamily — use useTypography() from @/theme/brand-fonts for webfont fallback`,
+      );
+    }
+
+    if (isTypographyScope(rel) && staticTypeFontSizePattern.test(source)) {
+      violations.push(
+        `${rel}: uses static type.*.fontSize in StyleSheet — use useTypography() role objects for webfont fallback`,
       );
     }
   }

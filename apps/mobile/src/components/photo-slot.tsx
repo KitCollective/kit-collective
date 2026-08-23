@@ -1,7 +1,9 @@
 import type { PhotoRole } from "@kit/domain";
 import { PHOTO_ROLE_LABELS_DA } from "@kit/domain";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { color, radius, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { radius, space } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 type PhotoSlotVariant = "confirm-strip" | "camera-overlay";
 
@@ -33,12 +35,14 @@ export function PhotoSlot({
   selected = false,
   onPress,
 }: PhotoSlotProps) {
+  const theme = useTheme();
+  const typography = useTypography();
   const roleLabel = PHOTO_ROLE_LABELS_DA[role];
   const isEmpty = !uri;
   const isOverlay = variant === "camera-overlay";
   const slotWidth = isOverlay ? OVERLAY_WIDTH : CONFIRM_WIDTH;
   const slotHeight = isOverlay ? OVERLAY_HEIGHT : CONFIRM_HEIGHT;
-  const labelColor = isOverlay ? color.contentInverse : color.contentPrimary;
+  const labelColor = isOverlay ? theme.contentInverse : theme.contentPrimary;
 
   return (
     <Pressable
@@ -57,13 +61,21 @@ export function PhotoSlot({
             {
               width: slotWidth,
               height: slotHeight,
-              backgroundColor: color.surface,
+              backgroundColor: theme.surface,
               opacity: isOverlay ? 0.75 : 1,
+              borderColor: theme.borderSubtle,
             },
-            selected && isOverlay && styles.overlaySelected,
+            selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
           ]}
         >
-          <Text style={[styles.emptyText, isOverlay && styles.emptyTextInverse]}>Tom</Text>
+          <Text
+            style={[
+              typography.caption,
+              { color: isOverlay ? theme.contentInverse : theme.contentMuted },
+            ]}
+          >
+            Tom
+          </Text>
         </View>
       ) : (
         <Image
@@ -73,13 +85,17 @@ export function PhotoSlot({
             {
               width: slotWidth,
               height: slotHeight,
+              backgroundColor: theme.fillSecondary,
+              borderColor: theme.borderSubtle,
             },
-            selected && isOverlay && styles.overlaySelected,
+            selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
           ]}
           accessibilityIgnoresInvertColors
         />
       )}
-      <Text style={[styles.roleLabel, { color: labelColor }]}>{roleLabel}</Text>
+      <Text style={[typography.labelSm, { color: labelColor, textAlign: "center" }]}>
+        {roleLabel}
+      </Text>
     </Pressable>
   );
 }
@@ -94,34 +110,13 @@ const styles = StyleSheet.create({
   },
   preview: {
     borderRadius: radius.md,
-    backgroundColor: color.fillSecondary,
     borderWidth: 1,
-    borderColor: color.borderSubtle,
   },
   emptyPreview: {
     borderRadius: radius.md,
     borderWidth: 1,
     borderStyle: "dashed",
-    borderColor: color.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
-  },
-  overlaySelected: {
-    borderWidth: 2,
-    borderColor: color.contentInverse,
-  },
-  emptyText: {
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    color: color.contentMuted,
-  },
-  emptyTextInverse: {
-    color: color.contentInverse,
-  },
-  roleLabel: {
-    fontFamily: type.label.fontFamily,
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
-    textAlign: "center",
   },
 });

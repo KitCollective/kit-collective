@@ -36,6 +36,7 @@ import {
 import { markJerseySaved } from "@/session/addSession";
 import { useTypography } from "@/theme/brand-fonts";
 import { motion, space } from "@/theme/tokens";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
@@ -44,6 +45,7 @@ export default function ConfirmScreen() {
   const router = useRouter();
   const theme = useTheme();
   const typography = useTypography();
+  const reduceMotion = useReduceMotion();
   const { draftId } = useLocalSearchParams<{ draftId: string }>();
   const { accessToken } = useAuth();
 
@@ -169,13 +171,16 @@ export default function ConfirmScreen() {
   }, [draftId]);
 
   const fadeInSuggestion = useCallback(() => {
-    suggestionOpacity.setValue(0);
+    suggestionOpacity.setValue(reduceMotion ? 1 : 0);
+    if (reduceMotion) {
+      return;
+    }
     Animated.timing(suggestionOpacity, {
       toValue: 1,
       duration: motion.fast,
       useNativeDriver: true,
     }).start();
-  }, [suggestionOpacity]);
+  }, [reduceMotion, suggestionOpacity]);
 
   const applyVisionSuggestions = useCallback(
     async (job: VisionJobResponse, preselect: boolean) => {

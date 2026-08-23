@@ -1,8 +1,10 @@
 import { Stack } from "expo-router";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
 export default function AddFlowLayout() {
   const theme = useTheme();
+  const reduceMotion = useReduceMotion();
 
   return (
     <Stack
@@ -12,7 +14,10 @@ export default function AddFlowLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="capture" options={{ headerShown: false, animation: "fade" }} />
+      <Stack.Screen
+        name="capture"
+        options={{ headerShown: false, animation: reduceMotion ? "none" : "fade" }}
+      />
       <Stack.Screen name="confirm" options={{ title: "Bekræft og gem" }} />
     </Stack>
   );

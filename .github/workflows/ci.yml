@@ -126,6 +126,9 @@ jobs:
       - name: Check mobile tab bar anatomy
         run: pnpm check:mobile-tab-bar
 
+      - name: Test mobile tab bar icon ratchet logic
+        run: node --test scripts/tests/check-mobile-tab-bar.test.mjs
+
       - name: Check mobile design tokens
         run: pnpm check:mobile-design-tokens
 

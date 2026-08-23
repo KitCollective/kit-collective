@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useTypography } from "@/theme/brand-fonts";
 import type { ThemeColors } from "@/theme/tokens";
-import { radius, space, type } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
@@ -63,6 +63,7 @@ type SearchFieldProps = TextInputProps & {
 
 export function SearchField({ variant, value, onClear, style, ...props }: SearchFieldProps) {
   const theme = useTheme();
+  const typography = useTypography();
 
   return (
     <View
@@ -77,7 +78,7 @@ export function SearchField({ variant, value, onClear, style, ...props }: Search
     >
       <Ionicons name="search" size={18} color={theme.contentMuted} accessibilityElementsHidden />
       <TextInput
-        style={[styles.searchInput, { color: theme.contentPrimary }, style]}
+        style={[typography.body, styles.searchInput, { color: theme.contentPrimary }, style]}
         placeholderTextColor={theme.contentMuted}
         autoCorrect={false}
         autoCapitalize="none"
@@ -107,6 +108,7 @@ type ListRowProps = {
 
 export function ListRow({ title, meta, selected, onPress }: ListRowProps) {
   const theme = useTheme();
+  const typography = useTypography();
 
   return (
     <Pressable
@@ -120,9 +122,9 @@ export function ListRow({ title, meta, selected, onPress }: ListRowProps) {
     >
       <Mark label={title} />
       <View style={styles.listRowBody}>
-        <Text style={[styles.listRowTitle, { color: theme.contentPrimary }]}>{title}</Text>
+        <Text style={[typography.body, { color: theme.contentPrimary }]}>{title}</Text>
         {meta ? (
-          <Text style={[styles.listRowMeta, { color: theme.contentMuted }]}>{meta}</Text>
+          <Text style={[typography.caption, { color: theme.contentMuted }]}>{meta}</Text>
         ) : null}
       </View>
       {selected ? (
@@ -207,6 +209,7 @@ function getBannerToneStyles(
 
 export function Banner({ tone, message, action }: BannerProps) {
   const theme = useTheme();
+  const typography = useTypography();
   const toneStyle = getBannerToneStyles(theme, tone);
 
   return (
@@ -217,7 +220,7 @@ export function Banner({ tone, message, action }: BannerProps) {
       ]}
       accessibilityRole="alert"
     >
-      <Text style={[styles.bannerMessage, { color: theme.contentPrimary }]}>{message}</Text>
+      <Text style={[typography.body, { color: theme.contentPrimary }]}>{message}</Text>
       {action}
     </View>
   );
@@ -239,8 +242,6 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
     paddingVertical: space.insetSm,
   },
   listRow: {
@@ -255,14 +256,6 @@ const styles = StyleSheet.create({
   listRowBody: {
     flex: 1,
     gap: 2,
-  },
-  listRowTitle: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-  },
-  listRowMeta: {
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
   },
   sheetScrim: {
     flex: 1,
@@ -290,9 +283,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: space.insetMd,
     gap: space.gapSm,
-  },
-  bannerMessage: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
   },
 });
