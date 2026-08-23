@@ -171,7 +171,7 @@ describe("Collection shortcuts /v1", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("rejects shortcut write with zero facets", async () => {
+  it("rejects shortcut write without clubId", async () => {
     const session = await registerSession(app, "shortcut-zero@example.com");
 
     const response = await app.inject({

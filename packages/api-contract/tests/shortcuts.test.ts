@@ -15,7 +15,7 @@ describe("collectionShortcutWriteSchema", () => {
     expect(collectionShortcutWriteSchema.parse(payload)).toEqual(payload);
   });
 
-  it("rejects write with zero facets", () => {
+  it("rejects write without clubId", () => {
     expect(() => collectionShortcutWriteSchema.parse({ name: "Test" })).toThrow();
     expect(() => collectionShortcutWriteSchema.parse({})).toThrow();
   });
@@ -27,10 +27,7 @@ describe("collectionShortcutSchema", () => {
       id: UUID,
       name: "F.C. København",
       sortOrder: 0,
-      countryId: null,
-      leagueId: null,
       clubId: UUID,
-      playerId: null,
       matchCount: 2,
     };
     expect(collectionShortcutSchema.parse(payload)).toEqual(payload);
@@ -45,10 +42,7 @@ describe("collectionShortcutsSchema", () => {
           id: UUID,
           name: "F.C. København",
           sortOrder: 0,
-          countryId: null,
-          leagueId: null,
           clubId: UUID,
-          playerId: null,
           matchCount: 0,
         },
       ],
