@@ -93,9 +93,10 @@ export function buildSeedCliInvocation(
 ): { command: string; argv: string[] } {
   const pkg = CLI_PACKAGES[target];
   const scopeArgs = scopeToCliArgs(parsed.scope);
+  // pnpm --filter … run seed -- passes a literal "--" argv to the script; exec avoids that.
   return {
     command: "pnpm",
-    argv: ["--filter", pkg, "run", "seed", "--", ...scopeArgs, parsed.lane],
+    argv: ["--filter", pkg, "exec", "node", "dist/cli.js", ...scopeArgs, parsed.lane],
   };
 }
 
