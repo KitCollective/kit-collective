@@ -115,7 +115,7 @@ export default function CollectionScreen() {
     }
 
     void loadCollection();
-  }, [accessToken, selectedShortcutId, loadCollection]);
+  }, [accessToken, loadCollection]);
 
   const openJerseyDetail = (jerseyId: string) => {
     router.push(`/(tabs)/collection/${jerseyId}`);
