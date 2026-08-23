@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import {
   createPersistedCaptureSession,
   isBulkUpload,
-  type PrefilledClub,
+  readPrefilledClub,
+  showBulkUploadBlockedAlert,
 } from "@/capture/captureFlow";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -13,24 +14,6 @@ import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
-
-function readPrefilledClub(params: {
-  prefilledClubId?: string | string[];
-  prefilledClubLabel?: string | string[];
-}): PrefilledClub | null {
-  const clubId = Array.isArray(params.prefilledClubId)
-    ? params.prefilledClubId[0]
-    : params.prefilledClubId;
-  const clubLabel = Array.isArray(params.prefilledClubLabel)
-    ? params.prefilledClubLabel[0]
-    : params.prefilledClubLabel;
-
-  if (!clubId || !clubLabel) {
-    return null;
-  }
-
-  return { id: clubId, label: clubLabel };
-}
 
 export default function AddChooserScreen() {
   const router = useRouter();
@@ -57,10 +40,7 @@ export default function AddChooserScreen() {
     }
 
     if (isBulkUpload(uris.length)) {
-      Alert.alert(
-        "For mange billeder",
-        "Du har valgt mere end tre billeder. Binding af mange billeder kommer i en senere opdatering — vælg op til tre billeder for én trøje.",
-      );
+      showBulkUploadBlockedAlert();
       return;
     }
 
@@ -92,8 +72,7 @@ export default function AddChooserScreen() {
 
       <View style={styles.body}>
         <Text style={[typography.body, { color: theme.contentMuted }]}>
-          Få billeder bliver én trøje. Mange billeder lander som en uredigeret række, du binder
-          senere.
+          Vælg op til tre billeder — de bliver én trøje med forside, bagside og mærke.
         </Text>
 
         <View style={styles.actions}>

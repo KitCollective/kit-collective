@@ -5,30 +5,13 @@ import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
   createPersistedCaptureSession,
   isBulkUpload,
-  type PrefilledClub,
+  readPrefilledClub,
+  showBulkUploadBlockedAlert,
 } from "@/capture/captureFlow";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { isRepeatCaptureSession } from "@/session/addSession";
 import { useTheme } from "@/theme/use-theme";
-
-function readPrefilledClub(params: {
-  prefilledClubId?: string | string[];
-  prefilledClubLabel?: string | string[];
-}): PrefilledClub | null {
-  const clubId = Array.isArray(params.prefilledClubId)
-    ? params.prefilledClubId[0]
-    : params.prefilledClubId;
-  const clubLabel = Array.isArray(params.prefilledClubLabel)
-    ? params.prefilledClubLabel[0]
-    : params.prefilledClubLabel;
-
-  if (!clubId || !clubLabel) {
-    return null;
-  }
-
-  return { id: clubId, label: clubLabel };
-}
 
 export default function CaptureScreen() {
   const router = useRouter();
@@ -46,7 +29,7 @@ export default function CaptureScreen() {
       }
 
       if (isBulkUpload(uris.length)) {
-        router.replace("/(tabs)/add");
+        showBulkUploadBlockedAlert();
         return;
       }
 

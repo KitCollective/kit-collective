@@ -1,4 +1,5 @@
 import * as Crypto from "expo-crypto";
+import { Alert } from "react-native";
 import { branchFromPhotoCount, createCaptureSession, setDraftClub } from "./captureSession";
 import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
 import type { CaptureBranch, CaptureSessionState } from "./captureSessionTypes";
@@ -7,6 +8,31 @@ export type PrefilledClub = {
   id: string;
   label: string;
 };
+
+export function readPrefilledClub(params: {
+  prefilledClubId?: string | string[];
+  prefilledClubLabel?: string | string[];
+}): PrefilledClub | null {
+  const clubId = Array.isArray(params.prefilledClubId)
+    ? params.prefilledClubId[0]
+    : params.prefilledClubId;
+  const clubLabel = Array.isArray(params.prefilledClubLabel)
+    ? params.prefilledClubLabel[0]
+    : params.prefilledClubLabel;
+
+  if (!clubId || !clubLabel) {
+    return null;
+  }
+
+  return { id: clubId, label: clubLabel };
+}
+
+export function showBulkUploadBlockedAlert(): void {
+  Alert.alert(
+    "For mange billeder",
+    "Du har valgt mere end tre billeder. Vælg op til tre billeder for én trøje.",
+  );
+}
 
 export function createPersistedCaptureSession(
   orderedUris: string[],

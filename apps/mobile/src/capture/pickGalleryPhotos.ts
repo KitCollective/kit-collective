@@ -8,17 +8,12 @@ type PickGalleryPhotosOptions = {
 };
 
 /**
- * Request media-library permission and open the system picker.
- * Returns asset URIs in picker order, or null when denied/cancelled.
+ * Open the system photo picker without requesting broad media-library access.
+ * Returns asset URIs in picker order, or null when cancelled.
  */
 export async function pickGalleryPhotos(
   options: PickGalleryPhotosOptions = {},
 ): Promise<string[] | null> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    return null;
-  }
-
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
     allowsMultipleSelection: options.allowsMultipleSelection ?? false,
