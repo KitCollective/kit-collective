@@ -1,5 +1,6 @@
+import type { PhotoSource } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
@@ -21,9 +22,12 @@ export default function CaptureScreen() {
     prefilledClubLabel?: string;
   }>();
   const prefilledClub = readPrefilledClub(params);
+  const [showCameraAfterGallery, setShowCameraAfterGallery] = useState(
+    () => Platform.OS === "web" || isRepeatCaptureSession(),
+  );
 
   const finishCapture = useCallback(
-    (uris: string[]) => {
+    (uris: string[], photoSource: PhotoSource) => {
       if (uris.length === 0) {
         return;
       }
@@ -36,7 +40,7 @@ export default function CaptureScreen() {
       const { sessionId } = createPersistedCaptureSession(uris, { prefilledClub });
       router.replace({
         pathname: "/(tabs)/add/confirm",
-        params: { sessionId, photoSource: "camera" },
+        params: { sessionId, photoSource },
       });
     },
     [prefilledClub, router],
@@ -48,30 +52,41 @@ export default function CaptureScreen() {
       quality: galleryMultiSelectQuality(),
     });
 
-    if (uris) {
-      finishCapture(uris);
+    if (!uris) {
+      return false;
     }
+
+    if (isBulkUpload(uris.length)) {
+      showBulkUploadBlockedAlert();
+      return false;
+    }
+
+    finishCapture(uris, "gallery");
+    return true;
   }, [finishCapture]);
 
   const galleryFirstLaunched = useRef(false);
 
   useEffect(() => {
-    if (Platform.OS === "web" || !isRepeatCaptureSession()) {
-      if (galleryFirstLaunched.current) {
-        return;
-      }
-      galleryFirstLaunched.current = true;
-      void openGalleryEscape();
+    if (Platform.OS === "web" || isRepeatCaptureSession() || galleryFirstLaunched.current) {
+      return;
     }
+    galleryFirstLaunched.current = true;
+    void (async () => {
+      const completed = await openGalleryEscape();
+      if (!completed) {
+        setShowCameraAfterGallery(true);
+      }
+    })();
   }, [openGalleryEscape]);
 
-  if (Platform.OS === "web" || !isRepeatCaptureSession()) {
+  if (!showCameraAfterGallery) {
     return <View style={[styles.fallback, { backgroundColor: theme.canvas }]} />;
   }
 
   return (
     <CaptureCameraSession
-      onComplete={finishCapture}
+      onComplete={(uris) => finishCapture(uris, "camera")}
       onClose={() => router.back()}
       onGalleryEscape={() => void openGalleryEscape()}
     />
