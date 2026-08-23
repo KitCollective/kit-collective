@@ -49,13 +49,7 @@ describe("parseSeedScopeArgv", () => {
   });
 
   it("strips a leading -- from pnpm-filter argv forwarding", () => {
-    const result = parseSeedScopeArgv([
-      "--",
-      "superligaen",
-      "2017/18",
-      "2017/18",
-      "development",
-    ]);
+    const result = parseSeedScopeArgv(["--", "superligaen", "2017/18", "2017/18", "development"]);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.parsed.scope).toEqual({
