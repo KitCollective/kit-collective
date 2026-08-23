@@ -87,9 +87,7 @@ export default function RegisterScreen() {
           />
         </View>
 
-        {error ? (
-          <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text>
-        ) : null}
+        {error ? <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text> : null}
       </KeyboardAvoidingView>
 
       <ButtonDock>
