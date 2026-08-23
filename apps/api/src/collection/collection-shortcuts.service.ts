@@ -186,8 +186,14 @@ export class CollectionShortcutsService {
       .where(eq(collectionShortcut.userId, userId));
 
     const ownedIds = new Set(owned.map((row) => row.id));
+    const uniqueOrderedIds = new Set(body.orderedIds);
+
     if (body.orderedIds.length !== ownedIds.size) {
       throw new BadRequestException("orderedIds must include every owned shortcut exactly once");
+    }
+
+    if (uniqueOrderedIds.size !== body.orderedIds.length) {
+      throw new BadRequestException("orderedIds must not contain duplicates");
     }
 
     for (const id of body.orderedIds) {

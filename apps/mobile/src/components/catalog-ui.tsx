@@ -107,6 +107,49 @@ type ListRowProps = {
   onPress: () => void;
 };
 
+type SelectFieldProps = {
+  value?: string | null;
+  placeholder: string;
+  onPress: () => void;
+  disabled?: boolean;
+};
+
+export function SelectField({ value, placeholder, onPress, disabled }: SelectFieldProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+  const displayValue = value ?? placeholder;
+  const isEmpty = !value;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={isEmpty ? `${placeholder} ikke valgt` : displayValue}
+      accessibilityState={{ disabled: disabled ?? false }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.selectField,
+        {
+          borderColor: theme.borderSubtle,
+          backgroundColor: theme.surface,
+        },
+        pressed && !disabled && { backgroundColor: theme.fillSecondary },
+        disabled && { opacity: 0.5 },
+      ]}
+    >
+      <Text
+        style={[
+          typography.body,
+          { color: isEmpty ? theme.contentMuted : theme.contentPrimary, flex: 1 },
+        ]}
+      >
+        {displayValue}
+      </Text>
+      <Ionicons name="chevron-forward" size={18} color={theme.contentMuted} />
+    </Pressable>
+  );
+}
+
 export function ListRow({ title, meta, selected, onPress }: ListRowProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -256,6 +299,16 @@ const styles = StyleSheet.create({
   listRowBody: {
     flex: 1,
     gap: 2,
+  },
+  selectField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.gapMd,
+    minHeight: 52,
+    paddingHorizontal: space.insetMd,
+    paddingVertical: space.insetSm,
+    borderWidth: 1,
+    borderRadius: radius.md,
   },
   sheetScrim: {
     flex: 1,

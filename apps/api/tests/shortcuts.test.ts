@@ -268,6 +268,15 @@ describe("Collection shortcuts /v1", () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it("rejects unauthenticated filtered jersey list with 401", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
   it("rejects shortcut write without any facet", async () => {
     const session = await registerSession(app, "shortcut-zero@example.com");
 
@@ -416,6 +425,77 @@ describe("Collection shortcuts /v1", () => {
     expect(listBody.shortcuts.map((row) => row.id)).toEqual([shortcutB.id, shortcutA.id]);
     expect(listBody.shortcuts[0]?.sortOrder).toBe(0);
     expect(listBody.shortcuts[1]?.sortOrder).toBe(1);
+  });
+
+  it("rejects reorder payloads with duplicate orderedIds", async () => {
+    const session = await registerSession(app, "shortcut-reorder-dup@example.com");
+    const fixture = await insertFullFixture();
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/collection/shortcuts",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { clubId: fixture.clubId },
+    });
+    const second = await app.inject({
+      method: "POST",
+      url: "/v1/collection/shortcuts",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { leagueId: fixture.leagueId },
+    });
+
+    const shortcutA = collectionShortcutSchema.parse(JSON.parse(first.body));
+    const shortcutB = collectionShortcutSchema.parse(JSON.parse(second.body));
+
+    const reorderResponse = await app.inject({
+      method: "PUT",
+      url: "/v1/collection/shortcuts/reorder",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { orderedIds: [shortcutA.id, shortcutA.id] },
+    });
+
+    expect(reorderResponse.statusCode).toBe(400);
+  });
+
+  it("lists and saves jerseys when Season.leagueId is null", async () => {
+    const session = await registerSession(app, "shortcut-leagueless@example.com");
+    const fixture = await insertFullFixture();
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [leaguelessSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: null,
+        label: "Friendly 2024",
+        startsOn: "2024-01-01",
+        endsOn: "2024-12-31",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    await db.insert(teamSeason).values({
+      clubId: fixture.clubId,
+      seasonId: leaguelessSeason!.id,
+    });
+
+    await pool.end();
+
+    const saved = await saveJersey(app, session.accessToken, fixture.clubId, leaguelessSeason!.id);
+    expect(saved.jersey.leagueId).toBeNull();
+    expect(saved.jersey.leagueLabel).toBeNull();
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(listResponse.statusCode).toBe(200);
+    const listBody = collectionJerseysSchema.parse(JSON.parse(listResponse.body));
+    expect(listBody.jerseys.some((jersey) => jersey.id === saved.jersey.id)).toBe(true);
+    const leaguelessJersey = listBody.jerseys.find((jersey) => jersey.id === saved.jersey.id);
+    expect(leaguelessJersey?.leagueId).toBeNull();
+    expect(leaguelessJersey?.leagueLabel).toBeNull();
   });
 
   it("isolates shortcuts to owner on edit and delete", async () => {

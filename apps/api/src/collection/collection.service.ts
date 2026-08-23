@@ -144,12 +144,8 @@ export class CollectionService {
       }
 
       const leagueId = row.leagueId;
-      if (!leagueId) {
-        throw new NotFoundException(`League missing for jersey ${row.id}`);
-      }
-
-      const leagueLabel = leagueLabels.get(leagueId);
-      if (!leagueLabel) {
+      const leagueLabel = leagueId ? (leagueLabels.get(leagueId) ?? null) : null;
+      if (leagueId && !leagueLabel) {
         throw new NotFoundException(`League label missing for jersey ${row.id}`);
       }
 
@@ -303,14 +299,13 @@ export class CollectionService {
         });
     }
 
-    if (!seasonRow.leagueId) {
-      throw new BadRequestException("seasonId has no league");
-    }
-
-    const leagueLabels = await this.resolveEntityLabels("league", [seasonRow.leagueId], locale);
-    const leagueLabel = leagueLabels.get(seasonRow.leagueId);
-    if (!leagueLabel) {
-      throw new BadRequestException("seasonId league has no resolved label");
+    let leagueLabel: string | null = null;
+    if (seasonRow.leagueId) {
+      const leagueLabels = await this.resolveEntityLabels("league", [seasonRow.leagueId], locale);
+      leagueLabel = leagueLabels.get(seasonRow.leagueId) ?? null;
+      if (!leagueLabel) {
+        throw new BadRequestException("seasonId league has no resolved label");
+      }
     }
 
     const squadPlayersByScope = await this.loadSquadPlayersForScopes(
