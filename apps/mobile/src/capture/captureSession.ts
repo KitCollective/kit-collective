@@ -34,10 +34,7 @@ export function canSave(draft: CaptureJerseyDraft): boolean {
   return draft.kitType !== null && draft.size !== null && draft.condition !== null;
 }
 
-export function photoUriForRole(
-  draft: CaptureJerseyDraft,
-  role: PhotoRole,
-): string | null {
+export function photoUriForRole(draft: CaptureJerseyDraft, role: PhotoRole): string | null {
   const photo = draft.photos.find((entry) => entry.role === role);
   return photo?.uri ?? null;
 }
@@ -159,8 +156,7 @@ export function unbindPhoto(state: CaptureSessionState, uri: string): CaptureSes
   const nextUnbound = state.unboundUris.includes(uri)
     ? state.unboundUris
     : state.orderedUris.filter(
-        (orderedUri) =>
-          orderedUri === uri || state.unboundUris.includes(orderedUri),
+        (orderedUri) => orderedUri === uri || state.unboundUris.includes(orderedUri),
       );
 
   return updateDraft({ ...state, unboundUris: nextUnbound }, owningDraft.id, (draft) => ({

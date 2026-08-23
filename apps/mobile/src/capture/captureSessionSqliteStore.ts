@@ -1,10 +1,10 @@
+import { draftDb } from "@/drafts/db";
 import type {
   CaptureJerseyDraft,
   CaptureSessionPhoto,
   CaptureSessionState,
   CaptureSessionStore,
 } from "./captureSessionTypes";
-import { draftDb } from "@/drafts/db";
 
 type DraftRow = {
   id: string;
@@ -49,7 +49,9 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
       draftDb.execSync("BEGIN");
       try {
         draftDb.runSync(`DELETE FROM capture_unbound_photo WHERE session_id = ?`, [sessionId]);
-        draftDb.runSync(`DELETE FROM capture_session_draft_photo WHERE session_id = ?`, [sessionId]);
+        draftDb.runSync(`DELETE FROM capture_session_draft_photo WHERE session_id = ?`, [
+          sessionId,
+        ]);
         draftDb.runSync(`DELETE FROM capture_session_draft WHERE session_id = ?`, [sessionId]);
         draftDb.runSync(
           `INSERT INTO capture_session (id, branch, active_draft_id, ordered_uris_json, updated_at)
@@ -121,9 +123,10 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         branch: "single" | "bulk";
         active_draft_id: string;
         ordered_uris_json: string;
-      }>(`SELECT id, branch, active_draft_id, ordered_uris_json FROM capture_session WHERE id = ?`, [
-        sessionId,
-      ]);
+      }>(
+        `SELECT id, branch, active_draft_id, ordered_uris_json FROM capture_session WHERE id = ?`,
+        [sessionId],
+      );
 
       if (!sessionRow) {
         return null;

@@ -100,12 +100,7 @@ describe("single branch role assignment", () => {
 
 describe("bulk branch", () => {
   it("starts with every photo unbound and one empty draft", () => {
-    const session = createCaptureSession([
-      URI_EXTRA_A,
-      URI_EXTRA_B,
-      URI_EXTRA_C,
-      URI_EXTRA_D,
-    ]);
+    const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
 
     expect(session.branch).toBe("bulk");
     expect(session.unboundUris).toEqual([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
@@ -201,7 +196,11 @@ describe("canSave and silent sqlite defaults", () => {
     expect(draft.condition).toBeNull();
     expect(canSave(draft)).toBe(false);
 
-    const withClubAndSeason = setDraftSeason(setDraftClub(session, draft.id, UUID), draft.id, UUID_B);
+    const withClubAndSeason = setDraftSeason(
+      setDraftClub(session, draft.id, UUID),
+      draft.id,
+      UUID_B,
+    );
     const stillBlocked = getDraft(withClubAndSeason, draft.id);
 
     expect(stillBlocked.kitType).toBeNull();
@@ -214,10 +213,9 @@ describe("canSave and silent sqlite defaults", () => {
 describe("persistence", () => {
   it("survives reload after pick, bind, unbind, and field changes", () => {
     const store = createMemoryCaptureSessionStore();
-    let session = createCaptureSession(
-      [URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D],
-      { store },
-    );
+    let session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D], {
+      store,
+    });
     const draftId = getActiveDraft(session).id;
 
     session = bindPhoto(session, URI_EXTRA_A, draftId, "front");
@@ -230,11 +228,14 @@ describe("persistence", () => {
     const reloaded = reloadCaptureSession(store);
 
     expect(reloaded).not.toBeNull();
-    expect(reloaded!.branch).toBe("bulk");
-    expect(reloaded!.unboundUris).toEqual([URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
-    expect(reloaded!.drafts).toHaveLength(2);
-    expect(photoUriForRole(getDraft(reloaded!, draftId), "front")).toBe(URI_EXTRA_A);
-    expect(getDraft(reloaded!, draftId).clubId).toBe(UUID);
-    expect(getDraft(reloaded!, draftId).kitType).toBe("away");
+    if (!reloaded) {
+      throw new Error("expected reloaded session");
+    }
+    expect(reloaded.branch).toBe("bulk");
+    expect(reloaded.unboundUris).toEqual([URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
+    expect(reloaded.drafts).toHaveLength(2);
+    expect(photoUriForRole(getDraft(reloaded, draftId), "front")).toBe(URI_EXTRA_A);
+    expect(getDraft(reloaded, draftId).clubId).toBe(UUID);
+    expect(getDraft(reloaded, draftId).kitType).toBe("away");
   });
 });
