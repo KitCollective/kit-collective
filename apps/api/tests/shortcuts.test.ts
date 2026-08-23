@@ -445,7 +445,7 @@ describe("Collection shortcuts /v1", () => {
     });
 
     const shortcutA = collectionShortcutSchema.parse(JSON.parse(first.body));
-    const shortcutB = collectionShortcutSchema.parse(JSON.parse(second.body));
+    collectionShortcutSchema.parse(JSON.parse(second.body));
 
     const reorderResponse = await app.inject({
       method: "PUT",
