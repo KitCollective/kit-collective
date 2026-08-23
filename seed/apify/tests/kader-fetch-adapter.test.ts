@@ -15,6 +15,7 @@ import { TransfermarktCircuitOpenError } from "../src/fetch/transfermarkt-rate-l
 import { normalize } from "../src/normalize/index.js";
 import { runSeed } from "../src/run.js";
 import { TM_SYSTEM } from "../src/types.js";
+import { resolveSeedApifyTestDatabaseUrl } from "./test-database-url.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -26,7 +27,7 @@ const fixturesDir = path.join(
   "../fixtures/kader-html",
 );
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const TEST_DATABASE_URL = resolveSeedApifyTestDatabaseUrl();
 
 /** Hermetic live-fetch tests: no real delay/backoff sleeps. */
 const FAST_LIVE_FETCH = {
@@ -35,7 +36,7 @@ const FAST_LIVE_FETCH = {
 } as const;
 
 async function prepareDatabase() {
-  await resetDatabase(DATABASE_URL, migrationsFolder);
+  await resetDatabase(TEST_DATABASE_URL, migrationsFolder);
 }
 
 describe("kader fetch adapter from recorded HTML", () => {
@@ -639,13 +640,13 @@ describe("runSeed with kader HTML adapter", () => {
       },
       lane: "development",
       fetchAdapter: adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(result.summary.fetched).toBe(1);
     expect(result.summary.mapped).toBeGreaterThan(0);
 
-    const { db, pool } = createDb(DATABASE_URL);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
     try {
       const pcsRows = await db
         .select({ squadNumber: playerClubSeason.squadNumber })
@@ -690,14 +691,14 @@ describe("runSeed with kader HTML adapter", () => {
       },
       lane: "development",
       fetchAdapter: recording.adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(recording.getFetchCalls()).toHaveLength(2);
     expect(result.summary.fetched).toBe(2);
     expect(result.summary.failures).toHaveLength(0);
 
-    const { db, pool } = createDb(DATABASE_URL);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
     try {
       const clubLabels = await db
         .select({ text: catalogLabel.text })
@@ -737,7 +738,7 @@ describe("runSeed with kader HTML adapter", () => {
       },
       lane: "development",
       fetchAdapter: adapter,
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
     });
 
     expect(networkCalls).toBe(1);

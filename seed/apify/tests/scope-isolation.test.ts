@@ -213,7 +213,18 @@ describe("runSeed scope isolation", () => {
         fetchAdapter: evilAdapter,
         databaseUrl: TEST_DATABASE_URL,
       }),
-    ).rejects.toThrow(SeedScopeIsolationError);
+    ).resolves.toMatchObject({
+      summary: {
+        failures: [
+          {
+            clubExternalId: "club-190",
+            season: "23/24",
+            error: expect.stringMatching(/did not contain club club-190 for season 23\/24/),
+          },
+        ],
+        mapped: 0,
+      },
+    });
   }, 60_000);
 
   it("mapFacts rejects normalized facts outside allowed season labels", async () => {

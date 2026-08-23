@@ -19,7 +19,9 @@ const required = [
 
 const missing = required.filter((needle) => !source.includes(needle));
 if (missing.length > 0) {
-  console.error("check-seed-scope-isolation-test: missing required coverage in scope-isolation.test.ts:");
+  console.error(
+    "check-seed-scope-isolation-test: missing required coverage in scope-isolation.test.ts:",
+  );
   for (const item of missing) {
     console.error(`  - ${item}`);
   }

@@ -9,6 +9,7 @@ import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
 import { mapFacts } from "./map/index.js";
 import { normalize } from "./normalize/index.js";
+import { filterFactsToClubSeason } from "./scope/club-season.js";
 import {
   assertOutOfScopeSeasonsUnchanged,
   assertPairsInScope,
@@ -143,7 +144,20 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
         summary.fetched += 1;
 
         const normalized = normalize(raw);
-        const mapResult = await mapFacts(db, normalized, {
+        const scopedFacts = filterFactsToClubSeason(normalized, {
+          seasonLabel: pair.seasonLabel,
+          clubExternalId: pair.clubExternalId,
+        });
+        if (scopedFacts.seasons.length === 0) {
+          summary.failures.push({
+            clubExternalId: pair.clubExternalId,
+            season: pair.seasonLabel,
+            error: `did not contain club ${pair.clubExternalId} for season ${pair.seasonLabel}`,
+          });
+          continue;
+        }
+
+        const mapResult = await mapFacts(db, scopedFacts, {
           allowedSeasonLabels: new Set([pair.seasonLabel]),
         });
         addMapResults(aggregateMap, mapResult);
