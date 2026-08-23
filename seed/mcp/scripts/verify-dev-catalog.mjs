@@ -13,7 +13,7 @@ const pg = require("pg");
 
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error(JSON.stringify({ ok: false, error: "DATABASE_URL is required" }));
+  process.stderr.write(`${JSON.stringify({ ok: false, error: "DATABASE_URL is required" })}\n`);
   process.exit(1);
 }
 
@@ -64,10 +64,10 @@ try {
     },
   };
 
-  console.log(JSON.stringify(output, null, 2));
+  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(JSON.stringify({ ok: false, error: message }));
+  process.stderr.write(`${JSON.stringify({ ok: false, error: message })}\n`);
   process.exit(1);
 } finally {
   await pool.end();

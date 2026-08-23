@@ -4,12 +4,10 @@
  * stdout: JSON { connection, totals, bySeason }
  */
 import { createDb } from "@kit/db";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
-  console.error("DATABASE_URL is required");
+  process.stderr.write("DATABASE_URL is required\n");
   process.exit(1);
 }
 
@@ -49,4 +47,4 @@ const output = {
   bySeason: bySeason.rows,
 };
 
-console.log(JSON.stringify(output, null, 2));
+process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
