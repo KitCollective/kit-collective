@@ -10,8 +10,11 @@
   --fill-secondary: #f4f4f4;
   --content-inverse: #ffffff;
   --danger: #b42318;
-  --radius-sm: 4px;
-  --radius-md: 8px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
   --space-inset-sm: 8px;
   --space-inset-md: 16px;
   --space-inset-lg: 24px;
@@ -101,7 +104,7 @@ a {
 
 .search-field {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   flex: 1 1 240px;
   min-height: 44px;
   padding: 0 var(--space-inset-md);
@@ -243,9 +246,9 @@ a {
 }
 
 .banner-error {
-  background: #fef3f2;
-  border: 1px solid #fecdca;
-  border-radius: var(--radius-sm);
+  background: var(--fill-secondary);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
   color: var(--danger);
   margin-bottom: var(--space-gap-md);
   padding: var(--space-inset-sm) var(--space-inset-md);
@@ -300,8 +303,6 @@ a {
 .sheet-backdrop {
   align-items: flex-end;
   background: rgb(0 0 0 / 40%);
-  border: none;
-  cursor: default;
   display: flex;
   inset: 0;
   justify-content: center;
@@ -310,9 +311,23 @@ a {
   width: 100%;
 }
 
+.icon-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--content-primary);
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 32px;
+  justify-content: center;
+  text-decoration: none;
+  width: 32px;
+}
+
 .sheet-panel {
   background: var(--surface);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   max-height: 80vh;
   overflow: auto;
   padding: var(--space-inset-lg);
@@ -329,7 +344,7 @@ a {
 .chip {
   background: var(--fill-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   min-height: 32px;
   padding: 0 var(--space-inset-md);

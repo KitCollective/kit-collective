@@ -1,8 +1,9 @@
 import { type AdminClubSeasonDrill, adminClubSeasonDrillSchema } from "@kit/api-contract";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
+import { BackLink } from "../components/BackLink.js";
 
 export function ClubSeasonDrillPage() {
   const { clubId, seasonId } = useParams();
@@ -28,9 +29,7 @@ export function ClubSeasonDrillPage() {
   return (
     <div className="drill-page">
       <div className="drill-header">
-        <Link to="/stamdata" className="btn btn-secondary">
-          Back
-        </Link>
+        <BackLink to="/stamdata" />
         <h2>{drill ? `${drill.clubLabel} · ${drill.seasonLabel}` : "Club season"}</h2>
       </div>
 

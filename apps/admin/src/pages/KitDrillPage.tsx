@@ -1,9 +1,10 @@
 import { type AdminKitDrill, adminKitDrillSchema } from "@kit/api-contract";
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
+import { BackLink } from "../components/BackLink.js";
 
 export function KitDrillPage() {
   const { kitId } = useParams();
@@ -25,9 +26,7 @@ export function KitDrillPage() {
   return (
     <div className="drill-page">
       <div className="drill-header">
-        <Link to="/stamdata" className="btn btn-secondary">
-          Back
-        </Link>
+        <BackLink to="/stamdata" />
         <h2>{kit?.label ?? "Kit"}</h2>
       </div>
 

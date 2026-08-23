@@ -14,7 +14,7 @@ export function AdminShell() {
       </header>
 
       <nav className="top-tabs" aria-label="Admin sections">
-        <NavLink to="/stamdata" className={({ isActive }) => `top-tab${isActive ? "" : ""}`} end>
+        <NavLink to="/stamdata" className="top-tab" end>
           Stamdata
         </NavLink>
         <NavLink to="/collectors" className="top-tab">

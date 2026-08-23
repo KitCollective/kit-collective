@@ -18,6 +18,21 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
     }
   }, [open, value]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   if (!open) {
     return null;
   }
@@ -30,7 +45,7 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
   }
 
   return (
-    <button type="button" className="sheet-backdrop" aria-label="Close filters" onClick={onClose}>
+    <div className="sheet-backdrop" role="presentation" onClick={onClose}>
       <div
         className="sheet-panel"
         role="dialog"
@@ -159,6 +174,6 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
           </button>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
