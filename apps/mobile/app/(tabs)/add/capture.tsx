@@ -14,10 +14,14 @@ import {
   loadDraft,
   upsertDraftPhoto,
 } from "@/drafts/jerseyDraftStore";
-import { color, space, type } from "@/theme/tokens";
+import { useTypography } from "@/theme/brand-fonts";
+import { space } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 export default function CaptureScreen() {
   const router = useRouter();
+  const theme = useTheme();
+  const typography = useTypography();
   const params = useLocalSearchParams<{ draftId?: string }>();
   const mode = resolveCaptureMode();
   const autoGalleryOpened = useRef(false);
@@ -82,8 +86,8 @@ export default function CaptureScreen() {
 
   if (initializing) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={color.fillPrimary} />
+      <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
+        <ActivityIndicator color={theme.fillPrimary} />
       </View>
     );
   }
@@ -96,9 +100,9 @@ export default function CaptureScreen() {
   const photoCount = draft.photos.length;
 
   return (
-    <View style={styles.galleryFallback}>
-      <Text style={styles.title}>Tilføj fotos</Text>
-      <Text style={styles.body}>
+    <View style={[styles.galleryFallback, { backgroundColor: theme.canvas }]}>
+      <Text style={[typography.title, { color: theme.contentPrimary }]}>Tilføj fotos</Text>
+      <Text style={[typography.body, { color: theme.contentMuted }]}>
         {Platform.OS === "web"
           ? "Vælg fotos fra galleriet for at tilføje en trøje."
           : "Vælg fotos fra galleriet for din første trøje i denne session."}
@@ -114,25 +118,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: color.canvas,
   },
   galleryFallback: {
     flex: 1,
-    backgroundColor: color.canvas,
     padding: space.insetLg,
     gap: space.gapMd,
     justifyContent: "center",
-  },
-  title: {
-    fontFamily: type.title.fontFamily,
-    fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
-    letterSpacing: type.title.letterSpacing,
-    color: color.contentPrimary,
-  },
-  body: {
-    fontSize: type.body.fontSize,
-    lineHeight: type.body.lineHeight,
-    color: color.contentMuted,
   },
 });

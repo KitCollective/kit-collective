@@ -1,12 +1,14 @@
 import { Stack } from "expo-router";
-import { color } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 export default function AddFlowLayout() {
+  const theme = useTheme();
+
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: color.canvas },
-        headerTintColor: color.contentPrimary,
+        headerStyle: { backgroundColor: theme.canvas },
+        headerTintColor: theme.contentPrimary,
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />

@@ -130,15 +130,15 @@ catches it in the API tests and the container smoke test.
 
 ### Mobile static color import ratchet (KIT-42)
 
-`scripts/check-mobile-design-tokens.mjs` also fails when a collection-chrome `apps/mobile/src/components/**` file (except legacy capture allowlist entries) or `apps/mobile/app/(tabs)/**` screen outside `add/**` imports the static light-only `color` export from `@/theme/tokens` instead of `useTheme()` / `getThemeColors()`. Prevents repeating the KIT-42 checker round 2 fail (`Chip` Alle shortcut chip ignored dark mode). Tighten only — remove allowlist entries as capture/auth surfaces migrate.
+`scripts/check-mobile-design-tokens.mjs` also fails when a collection-chrome `apps/mobile/src/components/**` file (except legacy capture allowlist entries), `apps/mobile/app/(auth)/**`, or any `apps/mobile/app/(tabs)/**` screen imports the static light-only `color` export from `@/theme/tokens` instead of `useTheme()` / `getThemeColors()`. Prevents repeating the KIT-42 checker round 2 fail (`Chip` Alle shortcut chip ignored dark mode). Tighten only — remove allowlist entries as capture/auth surfaces migrate.
 
 ### Mobile webfont fallback ratchet (KIT-42)
 
-`scripts/check-mobile-design-tokens.mjs` also fails when a theme-aware collection-chrome file uses `fontFamily: type.*.fontFamily` in a StyleSheet instead of `useTypography()` from `@/theme/brand-fonts`, and when `apps/mobile/src/theme/brand-fonts.tsx` omits `resolveTypeRoles` / `useTypography`. `apps/mobile/tests/brand-fonts.test.ts` asserts `resolveTypeRoles(false)` yields `system-ui` for every role. Prevents repeating the KIT-42 checker round 3 fail (webfont fallback dead code). Tighten only.
+`scripts/check-mobile-design-tokens.mjs` also fails when a theme-aware collection-chrome file uses `fontFamily: type.*.fontFamily` in a StyleSheet instead of `useTypography()` from `@/theme/brand-fonts`, and when `apps/mobile/src/theme/brand-fonts.tsx` omits `resolveTypeRoles` / `useTypography`. Theme-aware scope includes `apps/mobile/app/(auth)/**` and all `apps/mobile/app/(tabs)/**` screens (no `add/` carve-out). `apps/mobile/tests/brand-fonts.test.ts` asserts `resolveTypeRoles(false)` yields `system-ui` for every role. Prevents repeating the KIT-42 checker round 3 fail (webfont fallback dead code). Tighten only.
 
 ### Mobile tab bar icon ratchet (KIT-42)
 
-`scripts/check-mobile-tab-bar.mjs` also fails when `apps/mobile/src/components/floating-tab-bar.tsx` renders fewer than five `<Ionicons` elements (one per tab-bar slot). Prevents repeating the KIT-42 checker round 3 fail (ratchet weakened to accessible-name substring match only). Tighten only.
+`scripts/check-mobile-tab-bar.mjs` also fails when `apps/mobile/src/components/floating-tab-bar.tsx` does not have exactly five icon render sites: four `renderSlot(` calls plus one center-plus `<Ionicons name="add"`. `scripts/tests/check-mobile-tab-bar.test.mjs` mutation-tests that removing a `renderSlot` call drops the count below five. Prevents repeating the KIT-42 checker round 3 fail (ratchet weakened to accessible-name substring match only). Tighten only.
 
 ### Vision log save-action ratchet (KIT-27)
 

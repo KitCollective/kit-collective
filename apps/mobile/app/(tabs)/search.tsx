@@ -19,8 +19,7 @@ function matchesQuery(jersey: CollectionJersey, query: string): boolean {
     return true;
   }
 
-  const typeLabel = KIT_TYPE_LABELS_DA[jersey.type].toLowerCase();
-  const haystack = `${jersey.clubLabel} ${jersey.seasonLabel} ${typeLabel}`.toLowerCase();
+  const haystack = `${jersey.clubLabel} ${jersey.seasonLabel}`.toLowerCase();
   return haystack.includes(normalized);
 }
 

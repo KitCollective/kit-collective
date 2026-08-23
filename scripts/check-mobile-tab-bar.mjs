@@ -35,7 +35,10 @@ if (!barSource.includes('accessibilityRole="button"') || !barSource.includes("Ti
   violations.push(`${floatingBarPath}: center plus must be a button named Tilføj trøje`);
 }
 
-const iconCount = (barSource.match(/<Ionicons/g) ?? []).length;
+/** Four corner tabs render via renderSlot(); center plus is a separate Ionicons tag. */
+const renderSlotCount = (barSource.match(/renderSlot\(/g) ?? []).length;
+const plusIconCount = (barSource.match(/<Ionicons[^>]*\bname="add"/g) ?? []).length;
+const iconRenderSites = renderSlotCount + plusIconCount;
 const requiredIconNames = [
   "home-outline",
   "compass-outline",
@@ -44,9 +47,9 @@ const requiredIconNames = [
   "person-outline",
 ];
 const missingIconNames = requiredIconNames.filter((name) => !barSource.includes(`"${name}"`));
-if (iconCount < 2 || missingIconNames.length > 0) {
+if (iconRenderSites !== 5 || missingIconNames.length > 0) {
   violations.push(
-    `${floatingBarPath}: expected Ionicons in all five tab-bar slots (jsx=${iconCount}, missing names: ${missingIconNames.join(", ") || "none"})`,
+    `${floatingBarPath}: expected five icon render sites (renderSlot=${renderSlotCount}, plus=${plusIconCount}, total=${iconRenderSites}; missing names: ${missingIconNames.join(", ") || "none"})`,
   );
 }
 

@@ -33,11 +33,11 @@ function isThemeAwareScope(relPath) {
     return !STATIC_COLOR_IMPORT_ALLOWLIST.has(relPath);
   }
 
+  if (relPath.startsWith("apps/mobile/app/(auth)/")) {
+    return true;
+  }
+
   if (relPath.startsWith("apps/mobile/app/(tabs)/")) {
-    // Collection chrome + tab shells; capture/add flow is legacy allowlist.
-    if (relPath.startsWith("apps/mobile/app/(tabs)/add/")) {
-      return false;
-    }
     return true;
   }
 
