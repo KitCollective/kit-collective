@@ -2,21 +2,14 @@ import type { CollectionJersey } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
-import { IconButton } from "@/components/ui";
 import { useTabBarContentPadding } from "@/components/shortcut-chip-row";
-import { useTheme } from "@/theme/use-theme";
+import { IconButton } from "@/components/ui";
 import { radius, space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 export default function JerseyDetailScreen() {
   const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
@@ -69,7 +62,9 @@ export default function JerseyDetailScreen() {
   if (!jersey) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
-        <Text style={[styles.errorText, { color: theme.contentSecondary }]}>Trøjen findes ikke</Text>
+        <Text style={[styles.errorText, { color: theme.contentSecondary }]}>
+          Trøjen findes ikke
+        </Text>
         <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
       </View>
     );

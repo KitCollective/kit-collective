@@ -1,6 +1,6 @@
 import { Image, type ImageSourcePropType, Pressable, StyleSheet, Text, View } from "react-native";
-import { useTheme } from "@/theme/use-theme";
 import { radius, space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 type JerseyTileProps = {
   photoSource?: ImageSourcePropType;
@@ -28,7 +28,12 @@ export function JerseyTile({
       onPress={onPress}
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
     >
-      <View style={[styles.photoFrame, { backgroundColor: theme.fillSecondary, borderColor: theme.borderSubtle }]}>
+      <View
+        style={[
+          styles.photoFrame,
+          { backgroundColor: theme.fillSecondary, borderColor: theme.borderSubtle },
+        ]}
+      >
         {photoSource ? (
           <Image source={photoSource} style={styles.photo} resizeMode="cover" />
         ) : (
@@ -36,16 +41,10 @@ export function JerseyTile({
         )}
       </View>
       <View style={styles.captionStack}>
-        <Text
-          style={[styles.club, { color: theme.contentPrimary }]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.club, { color: theme.contentPrimary }]} numberOfLines={1}>
           {clubLabel}
         </Text>
-        <Text
-          style={[styles.meta, { color: theme.contentSecondary }]}
-          numberOfLines={1}
-        >
+        <Text style={[styles.meta, { color: theme.contentSecondary }]} numberOfLines={1}>
           {metaLine}
         </Text>
       </View>

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
+import { describe, expect, it } from "vitest";
 
 describe("jersey tile caption", () => {
   it("formats season and kit type with middle dot separator", () => {

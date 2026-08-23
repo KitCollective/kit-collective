@@ -12,13 +12,13 @@ import {
 } from "react-native";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
+import { Sheet } from "@/components/catalog-ui";
 import { CollectionHeader } from "@/components/collection-header";
 import { JerseyTile } from "@/components/jersey-tile";
-import { Sheet } from "@/components/catalog-ui";
 import { ShortcutChipRow, useTabBarContentPadding } from "@/components/shortcut-chip-row";
 import { Button, ButtonDock, EmptyState } from "@/components/ui";
-import { useTheme } from "@/theme/use-theme";
 import { space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 export default function CollectionScreen() {
   const router = useRouter();
@@ -87,7 +87,11 @@ export default function CollectionScreen() {
         <ButtonDock>
           <Button label="Tilføj trøje" variant="primary" width="fill" onPress={startCapture} />
         </ButtonDock>
-        <Sheet visible={notificationsOpen} title="Notifikationer" onDismiss={() => setNotificationsOpen(false)}>
+        <Sheet
+          visible={notificationsOpen}
+          title="Notifikationer"
+          onDismiss={() => setNotificationsOpen(false)}
+        >
           <Text style={[styles.notificationBody, { color: theme.contentSecondary }]}>
             Ingen notifikationer
           </Text>
@@ -135,7 +139,11 @@ export default function CollectionScreen() {
           );
         }}
       />
-      <Sheet visible={notificationsOpen} title="Notifikationer" onDismiss={() => setNotificationsOpen(false)}>
+      <Sheet
+        visible={notificationsOpen}
+        title="Notifikationer"
+        onDismiss={() => setNotificationsOpen(false)}
+      >
         <Text style={[styles.notificationBody, { color: theme.contentSecondary }]}>
           Ingen notifikationer
         </Text>

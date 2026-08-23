@@ -3,8 +3,8 @@ import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@/theme/use-theme";
 import { radius, tabBar } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 type TabBarNavigation = {
   navigate: (name: string) => void;
@@ -24,7 +24,11 @@ const PLACE_ROUTES: TabPlace[] = ["collection", "search", "wishlist", "profile"]
 
 const PLACE_CONFIG: Record<
   TabPlace,
-  { icon: keyof typeof Ionicons.glyphMap; iconActive: keyof typeof Ionicons.glyphMap; label: string }
+  {
+    icon: keyof typeof Ionicons.glyphMap;
+    iconActive: keyof typeof Ionicons.glyphMap;
+    label: string;
+  }
 > = {
   collection: { icon: "home-outline", iconActive: "home", label: "Samling" },
   search: { icon: "compass-outline", iconActive: "compass", label: "Søg" },

@@ -10,8 +10,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type ButtonWidth, buttonLayoutStyles } from "@/components/button-layout";
+import { space, type } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
-import { radius, space, type } from "@/theme/tokens";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 

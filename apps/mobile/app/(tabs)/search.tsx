@@ -2,13 +2,7 @@ import type { CollectionJersey } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, StyleSheet, useWindowDimensions, View } from "react-native";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { SearchField } from "@/components/catalog-ui";
@@ -16,8 +10,8 @@ import { JerseyTile } from "@/components/jersey-tile";
 import { ScreenHeader } from "@/components/screen-header";
 import { useTabBarContentPadding } from "@/components/shortcut-chip-row";
 import { EmptyState } from "@/components/ui";
-import { useTheme } from "@/theme/use-theme";
 import { space } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 function matchesQuery(jersey: CollectionJersey, query: string): boolean {
   const normalized = query.trim().toLowerCase();
@@ -103,10 +97,7 @@ export default function SearchScreen() {
           <ActivityIndicator color={theme.fillPrimary} />
         </View>
       ) : jerseys.length === 0 ? (
-        <EmptyState
-          title="Ingen trøjer at søge i"
-          body="Tilføj trøjer til din samling først."
-        />
+        <EmptyState title="Ingen trøjer at søge i" body="Tilføj trøjer til din samling først." />
       ) : filteredJerseys.length === 0 ? (
         <EmptyState title="Ingen resultater" body="Prøv et andet søgeord." />
       ) : (

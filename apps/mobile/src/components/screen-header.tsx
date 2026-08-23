@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@/theme/use-theme";
 import { space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 type ScreenHeaderProps = {
   title: string;

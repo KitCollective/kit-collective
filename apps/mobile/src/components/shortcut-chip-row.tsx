@@ -9,8 +9,6 @@ type ShortcutChipRowProps = {
 };
 
 export function ShortcutChipRow({ selectedShortcutId, onSelectAlle }: ShortcutChipRowProps) {
-  const insets = useSafeAreaInsets();
-
   return (
     <View style={styles.wrapper}>
       <ScrollView

@@ -1,8 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconButton } from "@/components/ui";
-import { useTheme } from "@/theme/use-theme";
 import { space, type } from "@/theme/tokens";
+import { useTheme } from "@/theme/use-theme";
 
 type CollectionHeaderProps = {
   count: number;
