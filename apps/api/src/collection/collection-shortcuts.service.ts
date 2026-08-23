@@ -440,10 +440,16 @@ export class CollectionShortcutsService {
     const matchCount = await this.countMatchingJerseys(userId, facets);
 
     const [countryLabel, leagueLabel, clubLabel, playerLabel] = await Promise.all([
-      row.countryId ? this.resolveEntityLabel("country", row.countryId, locale) : Promise.resolve(null),
-      row.leagueId ? this.resolveEntityLabel("league", row.leagueId, locale) : Promise.resolve(null),
+      row.countryId
+        ? this.resolveEntityLabel("country", row.countryId, locale)
+        : Promise.resolve(null),
+      row.leagueId
+        ? this.resolveEntityLabel("league", row.leagueId, locale)
+        : Promise.resolve(null),
       row.clubId ? this.resolveEntityLabel("club", row.clubId, locale) : Promise.resolve(null),
-      row.playerId ? this.resolveEntityLabel("player", row.playerId, locale) : Promise.resolve(null),
+      row.playerId
+        ? this.resolveEntityLabel("player", row.playerId, locale)
+        : Promise.resolve(null),
     ]);
 
     return collectionShortcutSchema.parse({
@@ -506,7 +512,9 @@ export class CollectionShortcutsService {
         kind: catalogLabel.kind,
       })
       .from(catalogLabel)
-      .where(and(eq(catalogLabel.entityType, entityType), inArray(catalogLabel.entityId, entityIds)));
+      .where(
+        and(eq(catalogLabel.entityType, entityType), inArray(catalogLabel.entityId, entityIds)),
+      );
 
     const labels = new Map<string, string>();
 

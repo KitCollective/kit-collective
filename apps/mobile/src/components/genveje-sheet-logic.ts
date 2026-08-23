@@ -30,7 +30,12 @@ export function emptyGenvejeFacets(): GenvejeFacets {
 }
 
 export function hasAnyGenvejeFacet(facets: GenvejeFacets): boolean {
-  return facets.country !== null || facets.league !== null || facets.club !== null || facets.player !== null;
+  return (
+    facets.country !== null ||
+    facets.league !== null ||
+    facets.club !== null ||
+    facets.player !== null
+  );
 }
 
 export function canSaveGenvej(facets: GenvejeFacets, saving: boolean): boolean {
@@ -89,13 +94,7 @@ function facetLabel(
   }
 
   const prefix =
-    kind === "country"
-      ? "Land"
-      : kind === "league"
-        ? "Liga"
-        : kind === "club"
-          ? "Klub"
-          : "Spiller";
+    kind === "country" ? "Land" : kind === "league" ? "Liga" : kind === "club" ? "Klub" : "Spiller";
 
   return `${prefix} ${id.slice(0, 8)}`;
 }
@@ -107,14 +106,17 @@ export function seedFacetsForEdit(shortcut: CollectionShortcut): GenvejeFacets {
       shortcut.countryId !== null
         ? {
             id: shortcut.countryId,
-            label: facetLabel(shortcut.countryLabel, "country", shortcut.countryId) ?? shortcut.countryId,
+            label:
+              facetLabel(shortcut.countryLabel, "country", shortcut.countryId) ??
+              shortcut.countryId,
           }
         : null,
     league:
       shortcut.leagueId !== null
         ? {
             id: shortcut.leagueId,
-            label: facetLabel(shortcut.leagueLabel, "league", shortcut.leagueId) ?? shortcut.leagueId,
+            label:
+              facetLabel(shortcut.leagueLabel, "league", shortcut.leagueId) ?? shortcut.leagueId,
           }
         : null,
     club:
@@ -128,7 +130,8 @@ export function seedFacetsForEdit(shortcut: CollectionShortcut): GenvejeFacets {
       shortcut.playerId !== null
         ? {
             id: shortcut.playerId,
-            label: facetLabel(shortcut.playerLabel, "player", shortcut.playerId) ?? shortcut.playerId,
+            label:
+              facetLabel(shortcut.playerLabel, "player", shortcut.playerId) ?? shortcut.playerId,
           }
         : null,
   };

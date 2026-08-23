@@ -1,7 +1,7 @@
 import {
   type CollectionShortcut,
-  type CollectionShortcutWrite,
   type CollectionShortcuts,
+  type CollectionShortcutWrite,
   collectionShortcutSchema,
   collectionShortcutsSchema,
 } from "@kit/api-contract";

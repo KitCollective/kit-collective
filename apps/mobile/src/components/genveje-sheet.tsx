@@ -248,7 +248,10 @@ export function GenvejeSheet({
                   {resolveFacetFieldLabel(facetKind)}
                 </Text>
                 <ListRow
-                  title={facets[facetKind]?.label ?? `Vælg ${resolveFacetFieldLabel(facetKind).toLowerCase()}`}
+                  title={
+                    facets[facetKind]?.label ??
+                    `Vælg ${resolveFacetFieldLabel(facetKind).toLowerCase()}`
+                  }
                   onPress={() => setOpenFacetPicker(facetKind)}
                   selected={facets[facetKind] !== null}
                 />
