@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { IdentityModule } from "../identity/identity.module.js";
 import { VisionModule } from "../vision/vision.module.js";
 import { CollectionController } from "./collection.controller.js";
+import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 import { CollectionService, OBJECT_STORE } from "./collection.service.js";
 
 @Module({
@@ -9,6 +10,7 @@ import { CollectionService, OBJECT_STORE } from "./collection.service.js";
   controllers: [CollectionController],
   providers: [
     CollectionService,
+    CollectionShortcutsService,
     {
       provide: OBJECT_STORE,
       useFactory: () => CollectionService.objectStoreFactory(),

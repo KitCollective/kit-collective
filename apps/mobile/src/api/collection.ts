@@ -20,8 +20,12 @@ async function requestJson(path: string, init: RequestInit = {}): Promise<Respon
   });
 }
 
-export async function fetchCollectionJerseys(accessToken: string): Promise<CollectionJerseys> {
-  const response = await requestJson("/v1/collection/jerseys", {
+export async function fetchCollectionJerseys(
+  accessToken: string,
+  shortcutId?: string | null,
+): Promise<CollectionJerseys> {
+  const query = shortcutId ? `?shortcutId=${encodeURIComponent(shortcutId)}` : "";
+  const response = await requestJson(`/v1/collection/jerseys${query}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Accept-Language": "da",

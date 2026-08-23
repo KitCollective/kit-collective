@@ -23,6 +23,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
+import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 
@@ -54,6 +55,7 @@ export class CollectionService {
     @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
     private readonly visionQueueService: VisionQueueService,
     private readonly visionService: VisionService,
+    private readonly shortcutsService: CollectionShortcutsService,
   ) {}
 
   static objectStoreFactory(): ObjectStoreAdapter {
@@ -63,7 +65,18 @@ export class CollectionService {
     return createMemoryObjectStore();
   }
 
-  async listJerseys(userId: string, locale: LabelLocale = "da"): Promise<CollectionJerseys> {
+  async listJerseys(
+    userId: string,
+    locale: LabelLocale = "da",
+    shortcutId?: string,
+  ): Promise<CollectionJerseys> {
+    let filterConditions = [eq(userJersey.userId, userId)];
+
+    if (shortcutId) {
+      const facets = await this.shortcutsService.getShortcutFacetsForFilter(userId, shortcutId);
+      filterConditions = this.shortcutsService.buildJerseyFilterConditions(userId, facets);
+    }
+
     const rows = await this.db
       .select({
         id: userJersey.id,
@@ -77,7 +90,8 @@ export class CollectionService {
       })
       .from(userJersey)
       .innerJoin(season, eq(userJersey.seasonId, season.id))
-      .where(eq(userJersey.userId, userId))
+      .innerJoin(club, eq(userJersey.clubId, club.id))
+      .where(and(...filterConditions))
       .orderBy(desc(userJersey.createdAt));
 
     if (rows.length === 0) {

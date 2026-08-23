@@ -81,6 +81,18 @@ export {
   collectionJerseysSchema,
 } from "./collection/jerseys.js";
 export {
+  type CollectionJerseysQuery,
+  type CollectionShortcut,
+  type CollectionShortcutIdParam,
+  type CollectionShortcutWrite,
+  type CollectionShortcuts,
+  collectionJerseysQuerySchema,
+  collectionShortcutIdParamSchema,
+  collectionShortcutSchema,
+  collectionShortcutWriteSchema,
+  collectionShortcutsSchema,
+} from "./collection/shortcuts.js";
+export {
   type CollectionSavePhoto,
   type CollectionSaveRequest,
   type CollectionSaveResponse,
