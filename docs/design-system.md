@@ -4,7 +4,7 @@ AI-ready visual and interaction lock for in-scope surfaces.
 Agents apply this file. Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Surfaces in scope**: `mobile` (deep), `web` (thin, share/OG), `admin` (operator dashboard). `api` is out of this lock.
-**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Gap 2026-08-23 (`mobile` collection chrome + brand type). Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
+**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Gap 2026-08-23 (`mobile` collection chrome + brand type). Gap 2026-08-23 (`mobile` Tilføj trøje Confirm — one screen, not Stamdata/Detaljer tabs). Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
 **Owner**: Nicklas
 
 **Taste (locked)**: Vinted for layout and scanability (grid, short captions, search, chips, tab bar) — not for marketplace mechanics. Uber Base for grayscale structure, components, and quiet motion — not for copying UberMove or importing Base Web. One cyan→violet identity wash as garnish, Premier League Fantasy–adjacent, never as chrome that competes with a jersey photo.
@@ -23,7 +23,7 @@ Status: `locked`
 
 **Outcomes**: Jersey #2 in under 45 seconds. The collection scans as a photo grid, not a spreadsheet. A public Astro link looks like the same product when pasted into a Facebook group. On `admin`, an operator can search and filter stamdata, see KitPhoto, and take down one UserJersey without invented chrome. Missing decisions are flagged, not filled with taste.
 
-**Evidence**: Product PRD (`.scratch/Business/PRD.md`) UX principles; registration-speed research (`.scratch/Research/jersey-registration-speed.md`); lock interview (Vinted IA + Base grayscale + one wash); Gap 2026-08-23 (Uber Base dashboard refs + grill: Staff access, Take-down, ADR-0018, ADR-0019); Gap 2026-08-23 brand book v1.0 (`.scratch/collection-main-screen/claude-design/KitCollective-brand-book-v1.html`) for type families and scale; collection 3a artifact for Samling chrome (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`).
+**Evidence**: Product PRD (`.scratch/Business/PRD.md`) UX principles; registration-speed research (`.scratch/Research/jersey-registration-speed.md`); lock interview (Vinted IA + Base grayscale + one wash); Gap 2026-08-23 (Uber Base dashboard refs + grill: Staff access, Take-down, ADR-0018, ADR-0019); Gap 2026-08-23 brand book v1.0 (`.scratch/collection-main-screen/claude-design/KitCollective-brand-book-v1.html`) for type families and scale; collection 3a artifact for Samling chrome (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`); Gap 2026-08-23 Tilføj trøje hi-fi (`.scratch/jersey-upload/claude-design/`) for capture spine only — Confirm body is this file, not the Stamdata/Detaljer tabs in that artifact.
 
 **Priorities**: On `mobile` / `web`: owned photo and capture speed over catalog completeness. On `admin`: scannable rows over photo-as-layout. All surfaces: grayscale chrome over a mascot brand hue. Data marks over decoration.
 
@@ -44,9 +44,9 @@ Status: `locked`
 - **Goal it serves**: Scanable collection; photo as product image.
 
 **Fast capture**: One confirm screen beats a complete wizard.
-- **When it collides**: Extra fields yield to time-to-Save.
-- **Follow**: Club search, club-scoped season, chips for type / size / condition; nameset and purchase behind “More details”. Save does not wait on Vision.
-- **Violate**: A Shirt Squad–style twelve-step form before the row exists.
+- **When it collides**: Extra fields yield to time-to-Save. A cleaner-looking second tab yields if it hides a field Save requires.
+- **Follow**: Club search, club-scoped season, chips for type / size / condition on the same screen as **Gem**; nameset, player, patches, purchase, and authenticity behind “Flere detaljer”. Save does not wait on Vision.
+- **Violate**: Stamdata | Detaljer tabs on Confirm. A Shirt Squad–style twelve-step form before the row exists. Star ratings for condition. A “Brug” tap on every high-confidence Vision hit.
 - **Goal it serves**: Jersey #2 in under 45 seconds.
 
 **Structure without a mascot color**: Black, white, and gray carry hierarchy. One identity wash is garnish only.
@@ -513,7 +513,7 @@ A primitive not listed: **flag**. Do not invent components or variants.
 
 **Unsupported**: Two primaries in one region. Primary + destructive as equal side-by-side choices. `identity.wash` as button fill. Teal or cyan CTA. “+ New” as the admin toolbar primary.
 
-**Example** *(not a rule)*: Confirm footer dock: `primary` “Gem” (`width.fill`), `tertiary` “Annuller” stacked below when present. Admin drill: `destructive` “Take down” opens Sheet `confirm`.
+**Example** *(not a rule)*: Confirm footer dock: `primary` “Gem” (`width.fill`), or “Gem og næste” when more unsaved jerseys remain; `tertiary` “Annuller” stacked below when present. Admin drill: `destructive` “Take down” opens Sheet `confirm`.
 
 **Code**: `apps/mobile` — `Button`, `ButtonDock` in `src/components/ui.tsx`.
 
@@ -658,7 +658,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Composition**: Horizontal row with `space.gap.sm` (collection: scroll horizontally if needed). Confirm Chip groups. Admin Filters Sheet. Collection home: `shortcut` chips **under** the header, then Tilpas. Hide the **entire** chip row (Alle, genveje, Tilpas) when the collection is empty. Owner `mobile` collection only — not public Astro.
 
-**Unsupported**: Chip as a primary CTA. Kit-type chips (Hjemme/Ude/Tredje) on Samling. Encoding type with wash variant 2/3. Emoji. Plus control to add a genvej (plus is capture). Auto-selecting a chip after Gem (Alle stays selected).
+**Unsupported**: Chip as a primary CTA. Kit-type chips (Hjemme/Ude/Tredje) on Samling. Encoding type with wash variant 2/3. Emoji. Plus control to add a genvej (plus is capture). Auto-selecting a chip after Gem (Alle stays selected). Star ratings or a fifth “God” scale for condition — Confirm uses Ny / Brugt / Slidt. A “Mere” chip that dumps leftover kit types onto another tab — Keeper and Special stay in the type group.
 
 **Example** *(not a rule)*: Confirm: “Ny” / “Brugt” / “Slidt”. Samling: “Alle” selected, then “Superliga”, “FCK”; trailing “Tilpas”. Admin Filters: “Has photo” as `filter`.
 
@@ -836,7 +836,7 @@ Visible chrome is **icon-only**. No tab labels under the icons. No logo in the p
 
 **Accessibility**: Role tab/tablist for the four places; plus is a button named “Tilføj trøje”. Names required even though chrome is icon-only. Hit target ≥ 44 per slot plus inset. Color is not the only selected signal (icon weight / fill vs outline — flag the host glyph set; do not invent a new icon family).
 
-**Composition**: Screen footer region on `mobile` collector chrome. Public Astro and `admin` do not use this component. Selecting plus starts the capture flow; it does not open Genveje.
+**Composition**: Screen footer region on `mobile` collector chrome. Public Astro and `admin` do not use this component. Selecting plus starts the capture flow; it does not open Genveje. Hide the Tab bar for the whole capture session (chooser, system picker return, bind, Confirm, post-Save “Ny trøje” / “Samme klub”). It returns when the collector lands on Samling.
 
 **Unsupported**: Visible labels (brand-book in-book tabs). Two-item Samling/Tilføj dock. FAB or plus **outside** the pill. Sixth control. “Discovery” as the product name for slot 2. Plus as “ny genvej”. Marketplace sell icon. Logo. Use on `admin` (Top tabs). Badge counts on tabs unless a later lock.
 
@@ -951,21 +951,40 @@ Flag missing context; do not invent patterns.
 
 ### Confirm and Save
 
-**Purpose**: Attach photos to catalog identity and save without a wizard.
+**Purpose**: Attach photos to catalog identity and save without a wizard. Jersey #2 stays under 45 seconds because every field Save requires is on this screen, and nothing Save does not require sits in front of **Gem**.
 
-**Composition**: Photo slot strip (at least one filled) + club Search (Sheet + List row + Mark) + club-scoped season + Chip groups (type, size, condition) + optional “Flere detaljer” Sheet (Text field, extra chips) + footer one `primary` Save. Vision suggestions appear as pre-selected chips or list selection when ready; Save does not wait.
+**Composition** (one scrolling column, `mobile` only; same body for a single jersey and for each active jersey in bulk):
 
-**Unsupported**: Multi-step stepper. Prefilling club on “Ny trøje”. Free-text club. Blocking on manufacturer or kit completeness.
+1. Photo slot `confirm-strip` (Forside / Bagside / Mærke). At least one filled. Roles stay three; do not add left/right/other slots.
+2. Vision suggestion on this jersey only — club, season, kit type. High confidence **pre-selects** the matching Search/Select/Chip. Low confidence: a quiet strip with **Brug** + dismiss. In-flight: skeleton on existing `surface` / `content` tokens, not a blocking “analysing” screen. Failure: the strip disappears; the collector types. Save never waits. Vision does **not** group photos into UserJerseys and does **not** assign Photo slot roles.
+3. Club Search field → Sheet + List row + Mark. Season is club-scoped (Select). No free-text club.
+4. Chip `single-select` groups, all visible here: kit type (Hjemme / Ude / Tredje / Keeper / Special), size (XS–XXL), condition (Ny / Brugt / Slidt). Thumb-reach; not free text; not stars.
+5. Tertiary text **Flere detaljer** opens Sheet `form` (not a second place, not Top tabs). That Sheet holds nameset / player print, patches, purchase, notes, authenticity. Authenticity stays `unknown` unless they open this and pick. Do not ask authenticity on the 45-second path.
+6. Tertiary text **Flere trøjer i denne upload** escapes to bulk bind without re-picking photos. It does not “split” the current jersey.
+7. Button dock: one `primary` **Gem** (`width.fill`). Disabled until photo + club + season + type + size + condition are set. Helper text explains what is missing — do not leave a black button that 4xxs. When more than one unsaved jersey remains in the session, the label is **Gem og næste**; the enablement rule does not change.
+
+**Bulk chrome** (only when the session has more than three photos — see Capture session): a thin **Uredigerede** row (count, no essay) + jersey tabs (Trøje *n* · count, **+ trøje**) sit **above** this same body. The active tab is the bind target. The unbound row hides when empty. Do not ship a thinner bulk form that drops size or condition.
+
+**Defaults**: “Ny trøje” does not inherit club. “Samme klub” prefills club only — not season, type, or condition. Size is not a sticky default in this gap (measure first; flag if an agent wants last-used size).
+
+**Unsupported**: Stamdata | Detaljer (or any Confirm tabs). Admin Top tabs reused on Confirm. Multi-step stepper. Shirt Squad field completeness before the row exists. Prefilling club on “Ny trøje”. Free-text club. Blocking on manufacturer, `catalogKitId`, or kit completeness. Star ratings for condition. A “Mere” type chip that hides Keeper/Special. Required size or condition only on a second surface. Vision as grouping. An extra **Brug** on every high-confidence hit. Two different Save-enablement rules for single vs bulk. Green success confetti; a toast on top of **Gemt**.
+
+**Example** *(not a rule)*: Three 4:5 thumbs, Vision has already selected F.C. København / 2023/24 / Hjemme, collector taps L and Brugt, **Gem** enables. Player and Superliga patch stay behind Flere detaljer.
 
 Flag missing context; do not invent patterns.
 
 ### Capture session
 
-**Purpose**: Fill Photo slots.
+**Purpose**: Fill Photo slots, then land on Confirm and Save. Plus starts this flow; it is not a tab named Add.
 
-**Composition**: First session: system gallery / picker, multi-select into roles. Repeat: one `CameraView`, three Photo slots overlaid, gallery as text/tertiary escape. Persist draft locally after each shot. Then Confirm and Save.
+**Composition**:
 
-**Unsupported**: System camera one-shot as the repeat primary path. Asking camera + photos + push on first launch.
+1. **Chooser** (after plus): title **Tilføj trøje**. Primary **Upload filer** (system picker: iOS Photos and Files / Android gallery and documents). Secondary **Tag billede** (in-app `CameraView` on repeat; gallery-first remains true for the first session). One short caption: few photos become one jersey; many land as an unbound row the collector binds. Close/X exits. Tab bar is hidden.
+2. **System picker**: the OS screen, not an in-app camera roll. iOS may show numbered ordered selection; Android typically does not — bind and Confirm must not assume the collector saw 1, 2, 3. Confirm the pick with **Brug *n* billeder**.
+3. **Branch**: three photos or fewer → Confirm and Save for one UserJersey (picker order fills roles front, back, label when present). More than three → bulk bind first (Uredigerede + jersey tabs), then the same Confirm body per active jersey. Do not auto-chunk every three photos.
+4. **Repeat camera**: one `CameraView`, three Photo slots overlaid, gallery as text/tertiary escape. Persist the draft locally after each shot or pick.
+
+**Unsupported**: System camera one-shot as the repeat primary path. Asking camera + photos + push on first launch. A custom product photo grid as the picker. Vision grouping photos into jerseys. Groups-of-three as the product. Showing the Tab bar while this session is open.
 
 Flag missing context; do not invent patterns.
 
@@ -1009,7 +1028,7 @@ Status: `thin` — `apps/admin` is not scaffolded; mobile/web mappings may still
 
 **Behavior parity**: Save, gallery-first vs camera-repeat, and “no archive renders” on collector surfaces are product rules (`CONTEXT.md` + this file), not platform exceptions. Admin may render KitPhoto. Staff access, Take-down, and English chrome are product rules, not visual exceptions.
 
-**Collection chrome source**: The 3a artifact (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`) is the visual reference for Samling chrome **except** Genveje is a **Sheet**, not a full-screen place. Brand book v1.0 is type + logo construction only. `apps/mobile/src/prototype/` is throwaway evidence of feel — not a host contract and not copy-paste UI.
+**Collection chrome source**: The 3a artifact (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`) is the visual reference for Samling chrome **except** Genveje is a **Sheet**, not a full-screen place. Brand book v1.0 is type + logo construction only. Tilføj trøje hi-fi (`.scratch/jersey-upload/claude-design/`) is capture-spine evidence (chooser, OS picker, bind, Gemt). **Confirm body is this file** — do not copy Stamdata | Detaljer tabs, star condition, or a “Mere” type chip from that artifact. `apps/mobile/src/prototype/` is throwaway evidence of feel — not a host contract and not copy-paste UI.
 
 **Supported exceptions**: System photo picker, system share sheet, OS keyboard. Fonts: brand webfonts first; system-ui fallback if load fails. Native sheet chrome if colors and radius still match. Admin 32×32 icon actions (named). Admin light-only. Genveje manager uses platform Sheet; facet picker may be a full-screen overlay.
 
@@ -1039,3 +1058,5 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 | Adopt / Evolve roadmap areas | First lock | A later Gap pass |
 | Expo Web as first-class | Degraded by stack lock | If Expo Web ships as a real surface |
 | Ønske place **content** | Tab exists; list/row UI not locked | Wishlist feature slice |
+| Sticky last-used size on Confirm | Wrong-default risk; no telemetry | After cellar sessions show the same collector reuses size |
+| Nameset / patch / player-print controls | Flere detaljer Sheet is locked; field UI is not | Nameset / patch feature slice |
