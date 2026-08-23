@@ -40,19 +40,21 @@ function parseLaneArg(
  * Club + season: `club <competition> <club-external-id> <season> [lane]`
  */
 export function parseSeedScopeArgv(argv: string[]): ParseSeedScopeResult {
-  if (argv.length === 0) {
+  const args = argv[0] === "--" ? argv.slice(1) : argv;
+
+  if (args.length === 0) {
     return { ok: false, error: "Seed scope arguments are required" };
   }
 
-  if (argv[0] === "club") {
-    if (argv.length < 4 || argv.length > 5) {
+  if (args[0] === "club") {
+    if (args.length < 4 || args.length > 5) {
       return {
         ok: false,
         error: "Expected: club <competition> <club-external-id> <season> [lane]",
       };
     }
 
-    const [, competition, clubExternalId, season, laneInput] = argv;
+    const [, competition, clubExternalId, season, laneInput] = args;
     if (!competition?.trim() || !clubExternalId?.trim() || !season?.trim()) {
       return { ok: false, error: "club scope requires competition, club id, and season" };
     }
@@ -76,7 +78,7 @@ export function parseSeedScopeArgv(argv: string[]): ParseSeedScopeResult {
     };
   }
 
-  if (argv.length < 3 || argv.length > 4) {
+  if (args.length < 3 || args.length > 4) {
     return {
       ok: false,
       error:
@@ -84,7 +86,7 @@ export function parseSeedScopeArgv(argv: string[]): ParseSeedScopeResult {
     };
   }
 
-  const [competition, fromSeason, toSeason, laneInput] = argv;
+  const [competition, fromSeason, toSeason, laneInput] = args;
   if (!competition?.trim() || !fromSeason?.trim() || !toSeason?.trim()) {
     return { ok: false, error: "competition and season range must be non-empty" };
   }
