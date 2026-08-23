@@ -23,7 +23,6 @@ import {
   season,
   teamSeason,
 } from "@kit/db";
-import type { KitType } from "@kit/domain";
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
@@ -483,7 +482,7 @@ export class AdminCatalogService {
       conditions.push(eq(kit.seasonId, query.seasonId));
     }
     if (query.kitType) {
-      conditions.push(eq(kit.type, query.kitType as KitType));
+      conditions.push(eq(kit.type, query.kitType));
     }
 
     const clubIds = await this.matchingClubIds(searchPattern);

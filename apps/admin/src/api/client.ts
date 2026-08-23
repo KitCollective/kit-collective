@@ -24,13 +24,11 @@ export async function apiFetch<T>(
   }
 
   if (response.status === 204) {
+    // SAFETY: Admin SPA only calls JSON endpoints that return a body; 204 is treated as void.
     return undefined as T;
   }
 
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    return (await response.blob()) as T;
-  }
-
-  return (await response.json()) as T;
+  const body: unknown = await response.json();
+  // SAFETY: Callers pass the expected response schema type and validate with Zod at the seam.
+  return body as T;
 }

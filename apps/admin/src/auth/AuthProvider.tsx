@@ -22,6 +22,34 @@ type AuthState = {
   user: IdentityMe;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseStoredSession(raw: string): AuthState | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed)) {
+    return null;
+  }
+
+  if (typeof parsed.token !== "string" || parsed.token.length === 0) {
+    return null;
+  }
+
+  const userResult = identityMeSchema.safeParse(parsed.user);
+  if (!userResult.success) {
+    return null;
+  }
+
+  return { token: parsed.token, user: userResult.data };
+}
+
 type AuthContextValue = {
   token: string | null;
   user: IdentityMe | null;
@@ -38,11 +66,7 @@ function readStoredSession(): AuthState | null {
     return null;
   }
   try {
-    const parsed = JSON.parse(raw) as AuthState;
-    if (!parsed.token || !parsed.user) {
-      return null;
-    }
-    return parsed;
+    return parseStoredSession(raw);
   } catch {
     return null;
   }
