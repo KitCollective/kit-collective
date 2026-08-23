@@ -24,13 +24,7 @@ if (/tabBarLabel\s*:/.test(layoutSource)) {
   violations.push(`${tabLayoutPath}: tab bar must be icon-only (no tabBarLabel in screen options)`);
 }
 
-const requiredAccessibleNames = [
-  "Samling",
-  "Søg",
-  "Tilføj trøje",
-  "Ønske",
-  "Profil",
-];
+const requiredAccessibleNames = ["Samling", "Søg", "Tilføj trøje", "Ønske", "Profil"];
 for (const name of requiredAccessibleNames) {
   if (!barSource.includes(name)) {
     violations.push(`${floatingBarPath}: missing Danish accessible name "${name}"`);
