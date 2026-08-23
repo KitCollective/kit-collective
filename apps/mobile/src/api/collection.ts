@@ -20,8 +20,22 @@ async function requestJson(path: string, init: RequestInit = {}): Promise<Respon
   });
 }
 
-export async function fetchCollectionJerseys(accessToken: string): Promise<CollectionJerseys> {
-  const response = await requestJson("/v1/collection/jerseys", {
+export class CollectionFetchError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "CollectionFetchError";
+  }
+}
+
+export async function fetchCollectionJerseys(
+  accessToken: string,
+  shortcutId?: string | null,
+): Promise<CollectionJerseys> {
+  const query = shortcutId ? `?shortcutId=${encodeURIComponent(shortcutId)}` : "";
+  const response = await requestJson(`/v1/collection/jerseys${query}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Accept-Language": "da",
@@ -29,7 +43,7 @@ export async function fetchCollectionJerseys(accessToken: string): Promise<Colle
   });
 
   if (!response.ok) {
-    throw new Error("Kunne ikke hente samling");
+    throw new CollectionFetchError("Kunne ikke hente samling", response.status);
   }
 
   return collectionJerseysSchema.parse(await response.json());

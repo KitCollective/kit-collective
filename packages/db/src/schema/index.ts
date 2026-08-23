@@ -294,6 +294,18 @@ export const jerseyDraft = pgTable(
   (table) => [uniqueIndex("jersey_draft_user_id_unique").on(table.userId, table.id)],
 );
 
+export const collectionShortcut = pgTable("collection_shortcut", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => user.id),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  clubId: uuid("club_id").references(() => club.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const countryRelations = relations(country, ({ many }) => ({
   leagues: many(league),
   clubs: many(club),
@@ -334,6 +346,16 @@ export const kitRelations = relations(kit, ({ one, many }) => ({
     references: [manufacturer.id],
   }),
   photos: many(kitPhoto),
+}));
+
+export const userRelations = relations(user, ({ many }) => ({
+  jerseys: many(userJersey),
+  shortcuts: many(collectionShortcut),
+}));
+
+export const collectionShortcutRelations = relations(collectionShortcut, ({ one }) => ({
+  user: one(user, { fields: [collectionShortcut.userId], references: [user.id] }),
+  club: one(club, { fields: [collectionShortcut.clubId], references: [club.id] }),
 }));
 
 export const userJerseyRelations = relations(userJersey, ({ one, many }) => ({

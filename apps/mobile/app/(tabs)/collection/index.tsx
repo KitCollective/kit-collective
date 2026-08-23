@@ -1,7 +1,7 @@
-import type { CollectionJersey } from "@kit/api-contract";
+import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,10 +11,13 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
+import { CollectionFetchError, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
+import { fetchCollectionShortcuts } from "@/api/shortcuts";
 import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/catalog-ui";
 import { CollectionHeader } from "@/components/collection-header";
+import { GenvejeSheet } from "@/components/genveje-sheet";
+import { shouldFallbackToAlleOnFetchError } from "@/components/genveje-sheet-logic";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
 import { Button, ButtonDock, EmptyState } from "@/components/ui";
@@ -29,7 +32,6 @@ export default function CollectionScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
-  // Reserve space for floating tab bar — inline per docs/design-system.md Layout constraints.
   const tabBarPadding =
     space.insetLg * 2 +
     space.insetMd +
@@ -39,16 +41,59 @@ export default function CollectionScreen() {
     space.insetMd;
   const [loading, setLoading] = useState(true);
   const [jerseys, setJerseys] = useState<CollectionJersey[]>([]);
+  const [totalJerseyCount, setTotalJerseyCount] = useState(0);
+  const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
+  const [selectedShortcutId, setSelectedShortcutId] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [genvejeOpen, setGenvejeOpen] = useState(false);
+  const hasInitialLoadRef = useRef(false);
 
   const loadCollection = useCallback(async () => {
     if (!accessToken) {
       return;
     }
 
-    const response = await fetchCollectionJerseys(accessToken);
-    setJerseys(response.jerseys);
+    try {
+      const response = await fetchCollectionJerseys(accessToken, selectedShortcutId);
+      setJerseys(response.jerseys);
+
+      if (selectedShortcutId === null) {
+        setTotalJerseyCount(response.jerseys.length);
+      }
+    } catch (error) {
+      if (
+        error instanceof CollectionFetchError &&
+        shouldFallbackToAlleOnFetchError(error.status, selectedShortcutId)
+      ) {
+        setSelectedShortcutId(null);
+        return;
+      }
+
+      throw error;
+    }
+  }, [accessToken, selectedShortcutId]);
+
+  const loadTotalCount = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetchCollectionJerseys(accessToken, null);
+    setTotalJerseyCount(response.jerseys.length);
   }, [accessToken]);
+
+  const loadShortcuts = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetchCollectionShortcuts(accessToken);
+    setShortcuts(response.shortcuts);
+  }, [accessToken]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadCollection(), loadShortcuts(), loadTotalCount()]);
+  }, [loadCollection, loadShortcuts, loadTotalCount]);
 
   useEffect(() => {
     let active = true;
@@ -59,7 +104,10 @@ export default function CollectionScreen() {
       }
 
       try {
-        await loadCollection();
+        await refreshAll();
+        if (active) {
+          hasInitialLoadRef.current = true;
+        }
       } finally {
         if (active) {
           setLoading(false);
@@ -72,6 +120,14 @@ export default function CollectionScreen() {
     return () => {
       active = false;
     };
+  }, [accessToken, refreshAll]);
+
+  useEffect(() => {
+    if (!accessToken || !hasInitialLoadRef.current) {
+      return;
+    }
+
+    void loadCollection();
   }, [accessToken, loadCollection]);
 
   const openJerseyDetail = (jerseyId: string) => {
@@ -90,7 +146,7 @@ export default function CollectionScreen() {
     );
   }
 
-  if (jerseys.length === 0) {
+  if (totalJerseyCount === 0) {
     return (
       <View style={[styles.emptyContainer, { backgroundColor: theme.canvas }]}>
         <CollectionHeader count={0} onNotificationsPress={() => setNotificationsOpen(true)} />
@@ -118,10 +174,16 @@ export default function CollectionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <CollectionHeader
-        count={jerseys.length}
+        count={totalJerseyCount}
         onNotificationsPress={() => setNotificationsOpen(true)}
       />
-      <ShortcutChipRow selectedShortcutId={null} onSelectAlle={() => undefined} />
+      <ShortcutChipRow
+        shortcuts={shortcuts}
+        selectedShortcutId={selectedShortcutId}
+        onSelectAlle={() => setSelectedShortcutId(null)}
+        onSelectShortcut={(shortcutId) => setSelectedShortcutId(shortcutId)}
+        onTilpasPress={() => setGenvejeOpen(true)}
+      />
       <FlatList
         data={jerseys}
         keyExtractor={(item) => item.id}
@@ -159,6 +221,17 @@ export default function CollectionScreen() {
           Ingen notifikationer
         </Text>
       </Sheet>
+      <GenvejeSheet
+        visible={genvejeOpen}
+        accessToken={accessToken ?? ""}
+        activeShortcutId={selectedShortcutId}
+        onDismiss={() => setGenvejeOpen(false)}
+        onShortcutDeleted={() => setSelectedShortcutId(null)}
+        onShortcutSaved={() => setSelectedShortcutId(null)}
+        onShortcutsChanged={() => {
+          void refreshAll();
+        }}
+      />
     </View>
   );
 }

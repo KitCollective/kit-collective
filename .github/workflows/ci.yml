@@ -145,6 +145,12 @@ jobs:
       - name: Test mobile design token ratchet logic
         run: node --test scripts/tests/check-mobile-design-tokens.test.mjs
 
+      - name: Check mobile collection UI evidence
+        run: pnpm check:mobile-collection-ui-evidence
+
+      - name: Test mobile collection UI evidence ratchet logic
+        run: node --test scripts/tests/check-mobile-collection-ui-evidence.test.mjs
+
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
 
