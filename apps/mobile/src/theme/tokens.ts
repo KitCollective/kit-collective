@@ -54,6 +54,8 @@ const lightColor = {
   identityWashEnd: primitive.identityWashEnd,
   tabBarFill: "rgba(255,255,255,0.72)",
   tabBarBorder: "rgba(0,0,0,0.07)",
+  tabBarBlurOverlay: "rgba(255,255,255,0.5)",
+  tabBarShadow: primitive.black,
 } as const;
 
 const darkColor = {
@@ -76,6 +78,8 @@ const darkColor = {
   identityWashEnd: primitive.identityWashEnd,
   tabBarFill: "rgba(26,26,26,0.78)",
   tabBarBorder: primitive.borderSubtleDark,
+  tabBarBlurOverlay: "rgba(26,26,26,0.5)",
+  tabBarShadow: primitive.black,
 } as const;
 
 export type ThemeColors = {
@@ -98,6 +102,8 @@ export type ThemeColors = {
   identityWashEnd: string;
   tabBarFill: string;
   tabBarBorder: string;
+  tabBarBlurOverlay: string;
+  tabBarShadow: string;
 };
 
 /** Semantic color tokens (default light). Prefer `getThemeColors` in UI. */

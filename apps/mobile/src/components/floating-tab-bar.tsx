@@ -114,11 +114,33 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
       style={[styles.container, { paddingBottom: tabBar.bottomOffset + insets.bottom }]}
     >
       {Platform.OS === "ios" ? (
-        <BlurView intensity={22} tint="default" style={[styles.pill, styles.pillBlur]}>
+        <BlurView
+          intensity={22}
+          tint="default"
+          style={[
+            styles.pill,
+            {
+              backgroundColor: theme.tabBarBlurOverlay,
+              borderColor: theme.tabBarBorder,
+              shadowColor: theme.tabBarShadow,
+            },
+          ]}
+        >
           {pillContent}
         </BlurView>
       ) : (
-        <View style={[styles.pill, { backgroundColor: theme.tabBarFill }]}>{pillContent}</View>
+        <View
+          style={[
+            styles.pill,
+            {
+              backgroundColor: theme.tabBarFill,
+              borderColor: theme.tabBarBorder,
+              shadowColor: theme.tabBarShadow,
+            },
+          ]}
+        >
+          {pillContent}
+        </View>
       )}
     </View>
   );
@@ -135,14 +157,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     overflow: "hidden",
     borderWidth: 1,
-    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.07,
     shadowRadius: 14,
     elevation: 4,
-  },
-  pillBlur: {
-    backgroundColor: "rgba(255,255,255,0.5)",
   },
   pillInner: {
     flexDirection: "row",
