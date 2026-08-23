@@ -4,7 +4,7 @@ AI-ready visual and interaction lock for in-scope surfaces.
 Agents apply this file. Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Surfaces in scope**: `mobile` (deep), `web` (thin, share/OG), `admin` (operator dashboard). `api` is out of this lock.
-**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
+**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Gap 2026-08-23 (`mobile` collection chrome + brand type). Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
 **Owner**: Nicklas
 
 **Taste (locked)**: Vinted for layout and scanability (grid, short captions, search, chips, tab bar) — not for marketplace mechanics. Uber Base for grayscale structure, components, and quiet motion — not for copying UberMove or importing Base Web. One cyan→violet identity wash as garnish, Premier League Fantasy–adjacent, never as chrome that competes with a jersey photo.
@@ -23,13 +23,13 @@ Status: `locked`
 
 **Outcomes**: Jersey #2 in under 45 seconds. The collection scans as a photo grid, not a spreadsheet. A public Astro link looks like the same product when pasted into a Facebook group. On `admin`, an operator can search and filter stamdata, see KitPhoto, and take down one UserJersey without invented chrome. Missing decisions are flagged, not filled with taste.
 
-**Evidence**: Product PRD (`.scratch/Business/PRD.md`) UX principles; registration-speed research (`.scratch/Research/jersey-registration-speed.md`); lock interview (Vinted IA + Base grayscale + one wash); Gap 2026-08-23 (Uber Base dashboard refs + grill: Staff access, Take-down, ADR-0018, ADR-0019).
+**Evidence**: Product PRD (`.scratch/Business/PRD.md`) UX principles; registration-speed research (`.scratch/Research/jersey-registration-speed.md`); lock interview (Vinted IA + Base grayscale + one wash); Gap 2026-08-23 (Uber Base dashboard refs + grill: Staff access, Take-down, ADR-0018, ADR-0019); Gap 2026-08-23 brand book v1.0 (`.scratch/collection-main-screen/claude-design/KitCollective-brand-book-v1.html`) for type families and scale; collection 3a artifact for Samling chrome (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`).
 
 **Priorities**: On `mobile` / `web`: owned photo and capture speed over catalog completeness. On `admin`: scannable rows over photo-as-layout. All surfaces: grayscale chrome over a mascot brand hue. Data marks over decoration.
 
 **Constraints**: No archive kit renders in Expo, Astro, or OG until rights are resolved. KitPhoto may render on `admin` only. No emoji as illustration. Clients do not import `apps/api` or `packages/db`. `mobile` / `web` copy is Danish-first; `admin` chrome is English; CatalogLabel follows the surface locale (`da` on Expo/Astro, `en` on admin), never the English seed string as the Danish name. Hit targets ≥ 44×44 on `mobile`. On `admin`: table row 48px; icon actions 32×32 with an accessible name; toolbar primary/destructive 44×44. WCAG AA for text and essential controls. `prefers-reduced-motion` has a still equivalent. `admin` is light only.
 
-**Non-goals**: A component library for its own sake. Cloning Uber or Vinted branding. Importing Base Web. Price, buy/sell, or marketplace listing UI. Serving `KitPhoto` to collectors. A “+ New” catalog-create control in this admin increment. Inventing a logo in this lock. Danish chrome as the admin default.
+**Non-goals**: A component library for its own sake. Cloning Uber or Vinted branding. Importing Base Web. Price, buy/sell, or marketplace listing UI. Serving `KitPhoto` to collectors. A “+ New” catalog-create control in this admin increment. Inventing a second mark or a mascot. Danish chrome as the admin default.
 
 Flag missing context; do not invent priorities.
 
@@ -39,7 +39,7 @@ Status: `locked`
 
 **Jersey first**: The collector’s photo is the interface; chrome is grayscale scaffolding.
 - **When it collides**: On `mobile` and `web`, identity wash, badges, and metadata yield to the photo. On `admin`, this principle yields to **Rows first**.
-- **Follow**: A collection card where the jersey fills the tile and club + season sit as a caption under it.
+- **Follow**: A collection card where the jersey fills the tile; club is `heading-sm`, season · type is `mono` under it.
 - **Violate**: A Fantasy-style gradient fill behind the jersey photo.
 - **Goal it serves**: Scanable collection; photo as product image.
 
@@ -74,7 +74,7 @@ Flag missing context; do not invent new rules.
 Status: `locked`
 
 **Included** (surface → depth):
-- `mobile` (Expo, iOS/Android): collection grid, empty state, add / confirm / Save, gallery-first onboarding and camera-on-repeat, search, chip filters, bottom navigation (Collection / Add / later Wishlist).
+- `mobile` (Expo, iOS/Android): collection grid, empty state, add / confirm / Save, gallery-first onboarding and camera-on-repeat, search as its own place (Søg tab, not in the collection header), genveje chips + Tilpas (Sheet manager, not a tab), floating icon-only tab bar (Samling · Søg · Tilføj trøje · Ønske · Profil).
 - `web` (Astro): public collection page, single UserJersey page, Open Graph image and title — same tokens so a shared link is recognisably KitCollective. Thin: no login mutations, no capture UI.
 - `admin` (Vite + React SPA): email/password login (same Identity); underline tabs **Stamdata** | **Collectors**; search + Filters; hairline data table; 32px square thumb on Kit and UserJersey rows; Mark/monogram on club, season, and user identity rows; row drill; Take-down confirm; promote/demote with last-admin and self-demote guards. English chrome. Light only. KitPhoto may render here.
 
@@ -92,8 +92,9 @@ Status: `locked`
 - Scoped staff roles UI (moderator who cannot see everything).
 - Catalog writes (labels, Kit create/edit, `rights: public`).
 - Players as a primary admin table (squad stays count + expand on club–season).
-- Wishlist chrome, IAP paywall, Expo Web as a first-class surface.
-- Logo / wordmark.
+- Ønske **content** (list, filters) and IAP paywall. The Ønske **tab** is locked; do not invent a wishlist row primitive.
+- Expo Web as a first-class surface.
+- KC mark on **Profil** header (not locked; flag, do not invent).
 - Identity wash variants 2 and 3: no named job yet.
 - Player portraits, league badges, and club crests as shipped artwork: UI slot is locked; assets are not.
 
@@ -248,7 +249,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Layout
 
-Status: `locked`
+Status: `locked` (Gap 2026-08-23: collection home regions = 3a). Chip row = genveje (Chip / Collection shortcuts). Brand-book Hjemme/Ude on Samling is **not** layout.
 
 **Purpose**: A Vinted-like scan of owned jerseys on `mobile` / `web`. Add is capture, not a listing. Public web is the same product at read-only depth. `admin` is a Base dashboard: table, search, filters; photos are evidence, not the layout.
 
@@ -256,12 +257,12 @@ Status: `locked`
 | Region | Meaning |
 | --- | --- |
 | Screen | Full viewport plus safe-area insets |
-| Header | Title and search; not a marketing hero |
-| Body | Collection grid or confirm form |
+| Header | Collection home: title **Samling** (`display` 28) + count (`mono`) + notification Icon button. No search, no profile, no wordmark, no KC mark |
+| Body | Collection grid or confirm form. Chip row **under** the header when the collection is not empty (Collection shortcuts). Grid scrolls; last rows must clear the floating tab bar |
 | Footer actions | Primary/secondary buttons for the current task; pinned **Button dock** at the bottom on login, register, confirm, and empty collection |
-| Tab bar | Collection / Add / (later) Wishlist |
+| Tab bar | Floating glass pill **above** the home indicator / safe-area inset. Five icon-only slots (Tab bar). Content may show through behind it. Not a full-width labeled dock |
 
-**Usage (mobile)**: Collection body is a **two-column** photo grid on phone. Jersey photos on tiles are cropped **4:5**. Caption under the photo: club + season (and type if needed). Search in the header. Filters are chips, not a sidebar. **Add** opens the photo flow (gallery-first on first session, camera-first on repeat), not the overview and not a marketplace compose screen. “Same club” vs “New jersey” is a choice after Save, not inherited identity on **New**.
+**Usage (mobile)**: Collection body is a **two-column** photo grid on phone. Jersey photos on tiles are cropped **4:5**. Caption under the photo: club (`heading-sm`) then season · type (`mono`). **Search is not in the collection header** — it is the Søg place (compass slot). Collection chips are **genveje**, not kit type (kit type stays on Confirm). **Tilføj trøje** (raised plus) opens the photo flow (gallery-first on first session, camera-first on repeat), not the overview, not “new shortcut”, and not a marketplace compose screen. “Same club” vs “New jersey” is a choice after Save, not inherited identity on **New**. Other collector screens (Søg, Ønske, Profil) use `title` 24 in the header unless a later lock says otherwise. Genveje manager is a **Sheet**, not a titled full-screen place.
 
 **Usage (web)**:
 | Surface | Rule |
@@ -269,7 +270,7 @@ Status: `locked`
 | Single UserJersey | Centered column, max-width **640px** |
 | Collection | Centered column, max-width **960px** |
 | Collection columns | 2 below 768px; 3 from 768px; 4 from 1024px; never more than 4 |
-| Open Graph | Canvas **1200×630**. User photo dominates. Club + season as text. `identity.wash` only as a thin top strip, never behind the jersey |
+| Open Graph | Canvas **1200×630**. User photo dominates. Club + season as text. Compact wordmark or KC mark allowed with the wash strip (Logo). `identity.wash` only as a thin top strip, never behind the jersey |
 
 **Regions (admin)**:
 | Region | Meaning |
@@ -284,43 +285,83 @@ Status: `locked`
 
 **Usage (admin)**: Desktop-first. Page inset `space.inset.lg` (24px). Content is **full width** of the viewport minus inset — not the Astro 960px column. Table row height **48px**. Hairline row dividers (`border.subtle`). Hover and selected row use `fill.secondary`. Kit and UserJersey rows include a **32×32** square thumb (`radius.sm`); missing photo = empty 32px slot, not a crest invented from `KitPhoto`. Club, season, and user identity rows use Mark/monogram, not a KitPhoto thumb. Click row → full-page drill with back. Take-down and demote confirm in a Sheet (`confirm`) over that page. Below **1024px**: table scrolls horizontally; do not invent a phone admin layout. No split-view detail pane. No zebra. No bulk checkboxes.
 
-**Relationships**: Grid gap is `space.gap.md`. Page inset is `space.inset.md` on `mobile` / `web` and `space.inset.lg` on `admin`. Cards use `radius.md` and `surface`. Type roles from Typography. Admin table cells use `type.body` for the primary label and `type.caption` for column headers and meta.
+**Relationships**: Grid gap is `space.gap.md`. Page inset is `space.inset.md` on `mobile` / `web` and `space.inset.lg` on `admin`. Cards use `radius.md` and `surface`. Type roles from Typography. Logo placement from Logo. Admin table cells use `type.body` for the primary label and `type.caption` for column headers and meta. Floating tab bar is chrome on canvas (Elevation), not `elevation.overlay`.
 
-**Constraints**: No price, buy, boost, or ratings on a collection card. No teal (or wash) primary in the tab bar. Tab bar Add is capture. Safe-area insets are required on `mobile`. Content must reflow; do not hard-code a pixel width for the **mobile** grid (columns are 2, tiles flex). Do not invent a fifth desktop column. Do not invent an admin split-view, zebra, “+ New”, or a 4:5 admin home.
+**Constraints**: No price, buy, boost, or ratings on a collection card. No teal (or wash) primary in the tab bar. Tab bar Add is capture, never “new shortcut”. Safe-area insets are required on `mobile`. Body must reserve space for the pill + inset so tiles are not hidden — do not invent a named pixel token for that reserve; flag if a host needs a named constant. Content must reflow; do not hard-code a pixel width for the **mobile** grid (columns are 2, tiles flex). Do not invent a fifth desktop column. Do not invent an admin split-view, zebra, “+ New”, or a 4:5 admin home. Brand-book mocks with wordmark header or labeled flush tabs are **not** layout.
 
-**Example** *(not a rule)*: Two tiles per row on iPhone; caption two lines max, ellipsis. Astro collection at 800px viewport shows two columns inside 960px. Admin Stamdata at 1280px: full-width table of kits with 32px thumbs, Filters in the toolbar, click a row to a drill page.
+**Example** *(not a rule)*: iPhone Samling: “Samling” + “8” + bell; two 4:5 tiles per row; glass pill overlapping the bottom of the grid. Astro collection at 800px viewport shows two columns inside 960px. Admin Stamdata at 1280px: full-width table of kits with 32px thumbs, Filters in the toolbar, click a row to a drill page.
 
-**Exceptions**: Confirm/Save is a single column. Camera session is full-bleed preview with three slots overlaid, not a grid. Capture does not crop while shooting. OG letterboxes a 4:5 photo on 1200×630 — do not crop the jersey to 16:9. Admin login is a centered 400px card, not full-width.
+**Exceptions**: Confirm/Save is a single column. Camera session is full-bleed preview with three slots overlaid, not a grid. Capture does not crop while shooting. OG letterboxes a 4:5 photo on 1200×630 — do not crop the jersey to 16:9. Admin login is a centered 400px card, not full-width. Public Astro has no floating tab bar.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Typography
 
-Status: `locked`
+Status: `locked` (Gap 2026-08-23: brand families). Do not take chips or labeled tabs from the brand book’s in-book app mocks.
 
-**Purpose**: Native, readable type so metadata stays secondary to the photo. No proprietary UberMove. No webfont until a logo pass.
+**Purpose**: Product type, not system UI. Headings carry the KitCollective voice; body stays readable and secondary to the jersey photo. No UberMove.
 
-**Family**: Platform system UI — San Francisco on iOS, Roboto on Android, `system-ui` (with `-apple-system`, `Segoe UI`, `Roboto`, `sans-serif` fallbacks) on Astro and Admin SPA.
+**Families** (load as webfonts on `mobile`, `web`, and `admin`; system-ui is fallback only):
+| Job | Family | Weights |
+| --- | --- | --- |
+| Headings and logo | **Archivo** | 400 (wordmark “Kit” only), 600 (UI headings), 700 (KC mark) |
+| Body, labels, buttons | **IBM Plex Sans** | 400, 500 |
+| Season, size, IDs, counts | **IBM Plex Mono** | 400, 500 |
+
+Do not mix a heading role onto Plex Sans. Do not set body copy in Archivo. Do not use Mono for paragraphs.
 
 **Roles**:
-| Role | Size | Weight | Line-height | Use |
-| --- | --- | --- | --- | --- |
-| `title` | 22px | 600 | 28px | Screen titles |
-| `body` | 16px | 400 | 24px | Paragraphs, confirm helper text |
-| `label` | 16px | 500 | 20px | Buttons, chips, field labels |
-| `caption` | 13px | 400 | 18px | Club + season under a photo; meta; admin column headers and table meta |
+| Role | Family | Size | Weight | Line-height | Tracking | Use |
+| --- | --- | --- | --- | --- | --- | --- |
+| `display` | Archivo | **32px** (default); **28px** on collection home “Samling” | 600 | 37px (32); 34px (28) | −3% | Rare large heading; collection home title |
+| `title` | Archivo | 24px | 600 | 29px | −2% | Other screen titles (Søg, Ønske, Profil, Genveje, Ny genvej) |
+| `section` | Archivo | 20px | 600 | 25px | −2% | Mid headings (picker title if not using `title`; empty-state title) |
+| `heading-sm` | Archivo | 15px | 600 | 20px | −2% | Club name on a Jersey tile |
+| `body` | IBM Plex Sans | 16px | 400 | 25px | 0 | Paragraphs, empty-state body, helper copy |
+| `label` | IBM Plex Sans | 13px–16px | 500 | 18px (13) / 20px (16) | 0–0.01em | Buttons (16), chips (14), field labels (13) |
+| `caption` | IBM Plex Sans | 12px–13px | 400 | 18px | 0 | Non-data meta; admin column headers |
+| `mono` | IBM Plex Mono | 12px–14px | 400 | 18px (12) / 20px (14) | 0 | Season, kit type, size, collection count, IDs |
 
-There is no `display` role in this lock. Do not invent a 14px admin role.
+There is no extra 14px admin-only family. Admin uses the same roles; chrome in English.
 
-**Usage**: One role per line of UI text. Caption truncates at **two lines** with ellipsis. Do not use caption as a button label. Do not use title inside a collection tile. On `admin`, the row’s primary name is `body`; headers and secondary columns are `caption`.
+**Usage**: One role per line of UI text. Collection tile is **two lines**: `heading-sm` club, then `mono` season · type. Do not join club and season into one `caption` string. Do not use `caption` as a button label. Do not use `display`/`title` inside a tile. On `admin`, the row’s primary name is `body`; headers and secondary columns are `caption` or `mono` when the cell is a season/ID.
 
-**Relationships**: Title + caption stacks use `space.gap.sm` between lines. Label sits in buttons/chips with `space.inset` from Spacing.
+**Relationships**: Title + supporting line stacks use `space.gap.sm`. Count beside “Samling” is `mono` 13px, muted. Label sits in buttons/chips with `space.inset` from Spacing. Wordmark and KC mark construction lives in the brand book; **where they appear** is Foundations → Logo.
 
-**Constraints**: Body is at least 16px on `mobile`. Body and label follow Dynamic Type / font scaling; title and caption may scale but must not blow the tab bar or two-column grid. Text is never the only state signal. WCAG AA against the surface.
+**Constraints**: Body is at least 16px on `mobile` (`body`). Body and label follow Dynamic Type / font scaling; display/title/heading-sm may scale but must not blow the tab bar or two-column grid. Text is never the only state signal. WCAG AA against the surface. Brand book accent `#1F5EFF` is **not** a type color and is **not** this gap’s primary CTA — primary fill stays black.
 
-**Example** *(not a rule)*: Collection header uses `title` “Samling”; each tile caption uses `caption` “F.C. København · 2023/24”.
+**Example** *(not a rule)*: Collection home: Archivo `display` 28 “Samling” + Plex Mono “8”. Tile: Archivo `heading-sm` “F.C. København”; Mono “2023/24 · Hjemme”. Empty state title: `section`. Form helper: `body` or `caption`.
 
-**Exceptions**: Legal / App Store fine print may use caption. System share sheets use OS type.
+**Exceptions**: Legal / App Store fine print may use `caption`. System share sheets use OS type. If a webfont fails to load, fall back to system-ui with the same sizes — do not invent a fourth family.
+
+**Source**: Brand book v1.0 §06. In-book app mocks that still show kit-type chips or a wordmark collection header are **not** type or layout rules.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Logo
+
+Status: `locked` (Gap 2026-08-23: placement). Construction is brand book v1.0 §01–04; do not invent a second mark.
+
+**Purpose**: Recognise KitCollective on entry, share, and system chrome. Collection scanning stays jersey-first — the product name in the Samling header is the screen title, not the brand lockup.
+
+**Roles**:
+| Role | Construction | Use |
+| --- | --- | --- |
+| Wordmark | Archivo “Kit” 400 + “Collective” 600, tracking −4.8% | Login, onboarding, splash when a horizontal lockup fits |
+| Compact wordmark | Same construction, tighter for chrome | Share sheets / OG when a wordmark is needed beside the photo |
+| KC mark | Square Archivo 700 “KC”, tracking −6% | Splash (centered), favicon, App Store / Play icon, OG when a square mark fits |
+
+**Usage**: Allowed on **splash**, **login**, **onboarding**, **share / Open Graph**, **favicon**, and **store icons**. Collection home header is **Samling + count + notification** — no wordmark, no KC mark. Tab bar has no logo. Jersey tiles have no logo. Primary CTA fill stays black, never a logo color. Brand-book in-book mocks with a wordmark collection header are **not** a placement rule.
+
+**Relationships**: Type families from Typography. Identity wash may sit as a thin OG top strip with the mark/wordmark; wash never behind the jersey photo. Catalog **Mark** (crest/monogram) is stamdata, not this logo.
+
+**Constraints**: Contrast AA for wordmark on canvas. Do not recolor the mark to `#1F5EFF` or to wash. Do not place the logo on a jersey photo. Do not invent a mascot. `admin` app header stays product **name** text this gap (English), not a new lockup — flag if operators need the KC mark there.
+
+**Example** *(not a rule)*: Login shows the wordmark above email/password. OG 1200×630: jersey dominates; compact wordmark or KC mark in the wash strip. Collection home: “Samling” `display` 28, no logo.
+
+**Exceptions**: System share chrome uses OS type around our preview. Store icon may be the KC mark alone. Profil header KC mark is **deferred** — flag; do not invent.
+
+**Source**: Brand book v1.0 §01–04. Placement: this gap (A+B). 3a artifact for “no logo on Samling header”.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
@@ -367,7 +408,7 @@ Status: `locked`
 | Card | `elevation.card` | No shadow. Edge is `border.subtle` |
 | Overlay | `elevation.overlay` | `scrim` + `surface.raised` sheet. Optional whisper shadow `0 4px 16px` at 12% black |
 
-**Usage**: Collection tiles stay at card (flat). Confirm, club search, and permission pre-prompts use overlay. Admin Take-down / demote use overlay (dialog) over the drill page. Do not raise a tile or table row on press with a drop shadow.
+**Usage**: Collection tiles stay at card (flat). Confirm, club search, and permission pre-prompts use overlay. Admin Take-down / demote use overlay (dialog) over the drill page. The floating tab bar is **chrome on canvas**, not overlay: no scrim, no focus trap. Backdrop blur on the pill is allowed so photos remain readable; do not invent a fourth elevation level. Do not raise a tile or table row on press with a drop shadow.
 
 **Relationships**: Overlay uses `color.scrim` and `color.surface.raised`. Motion `motion.base` for present/dismiss.
 
@@ -416,7 +457,7 @@ Status: `locked` for foundations in this file. Component tokens are not used.
 
 **Modes**: `light` (default), `dark` (system) on `mobile` and `web`. `admin` is **light only** — do not select dark aliases there.
 
-**References**: Semantic color aliases primitives. `identity.wash` references `identity.wash.start` and `identity.wash.end`. Type roles do not alias a custom family — they alias system UI. UI must not reference primitives.
+**References**: Semantic color aliases primitives. `identity.wash` references `identity.wash.start` and `identity.wash.end`. Type roles alias the brand families in Typography (Archivo / IBM Plex Sans / IBM Plex Mono), not system UI as the primary family. UI must not reference primitives.
 
 **Usage**: Select semantic tokens in UI; primitives only inside token files.
 
@@ -427,7 +468,9 @@ Status: `locked` for foundations in this file. Component tokens are not used.
 | `color.fill.primary` | Primary button | black / gray.0 | mobile, web, admin (light: black) |
 | `color.fill.secondary` | Quiet fill / admin row hover | gray.50 / #2A2A2A | mobile, web, admin |
 | `color.identity.wash` | Garnish gradient | start → end | mobile, web (empty, share header, thin rule, OG strip). Not a table treatment on admin |
-| `type.title` / `type.body` / `type.label` / `type.caption` | Type roles | system UI; see Typography | mobile, web, admin |
+| `type.display` / `type.title` / `type.section` / `type.heading-sm` | Heading roles | Archivo 600; see Typography | mobile, web, admin |
+| `type.body` / `type.label` / `type.caption` | Body / label / meta | IBM Plex Sans; see Typography | mobile, web, admin |
+| `type.mono` | Data (season, count, ID) | IBM Plex Mono; see Typography | mobile, web, admin |
 | `space.inset.md` / `space.gap.md` | Default padding / grid gap | 16px / 12px | mobile, web |
 | `space.inset.lg` / `space.inset.sm` | Admin page inset / table cell inset | 24px / 8px | admin |
 | `radius.md` | Cards / photo tiles | 12px | mobile, web |
@@ -444,7 +487,7 @@ Flag missing context; do not invent tokens or values.
 
 Status: `locked` for the inventory below. A primitive not listed: **flag**. Do not invent components or variants.
 
-**Inventory (v1)**: Button, Button dock, Icon button, Search field, Text field, Chip, Jersey tile, Mark, List row, Photo slot, Empty state, Sheet, Tab bar, Banner.
+**Inventory (v1)**: Button, Button dock, Icon button, Search field, Text field, Select field, Chip, Jersey tile, Mark, List row, Photo slot, Empty state, Sheet, Tab bar, Banner.
 
 **Inventory (admin gap)**: Data table, Top tabs. Plus existing Button, Icon button, Search field, Text field, Chip, Mark, Empty state (`table`), Sheet, Banner.
 
@@ -512,7 +555,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Accessibility**: Accessible name required (e.g. “Luk”, “Kamera”, admin “Back”). Hit target ≥ 44×44 on `mobile`. On `admin`, icon actions may be **32×32** if the accessible name is present (visible tooltip or `aria-label`). Icon is not the only meaning — name is.
 
-**Composition**: Header trailing actions, camera shutter chrome, admin header back. Not a substitute for Tab bar Add. Not a substitute for Top tabs.
+**Composition**: Header trailing actions (collection home: notifications), camera shutter chrome, admin header back. Not a substitute for Tab bar Add. Not a substitute for Top tabs.
 
 **Unsupported**: Icon-only control without a name. Emoji as the icon. 32×32 icon actions on `mobile`.
 
@@ -530,13 +573,13 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Properties**: `value`, `placeholder` (not a label substitute), `onSubmit` / live filter. Collection search may filter as you type. Club search queries catalog IDs, never free-text club as truth. Admin search matches CatalogLabel aliases in every locale; displayed labels stay `en` on this surface.
 
-**Variants**: `collection` (header). `catalog` (club pick on confirm). `admin` (toolbar). Same chrome; different data.
+**Variants**: `collection` (Søg place — filter owned jerseys). `catalog` (club pick on confirm). `admin` (toolbar). Same chrome; different data. Do not add a header-search variant on collection home.
 
 **States**: Rest, focus, disabled, empty. Error is rare; if the query cannot run, use Banner, not a red search field.
 
 **Accessibility**: Label associated. Hit target ≥ 44 tall. Keyboard: search / default.
 
-**Composition**: Collection header, inside a Sheet for club pick, or admin toolbar with Filters. Uses `radius.pill`, `border.subtle`, `type.body`.
+**Composition**: Søg place, inside a Sheet for club pick, or admin toolbar with Filters. **Not** the collection home header. Uses `radius.pill`, `border.subtle`, `type.body`.
 
 **Unsupported**: Land → league → club hierarchy instead of search. Free-text club saved as catalog truth. Wash fill inside the field.
 
@@ -560,7 +603,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Accessibility**: Label associated. Error = `border.danger` **plus** text, announced when it appears. Admin login labels in English.
 
-**Composition**: Stacks in the Sheet “Flere detaljer” with `space.gap.md`. Admin login card: email then password, then `primary` Sign in. Does not sit inside a Button.
+**Composition**: Stacks in the Sheet “Flere detaljer” with `space.gap.md`. Optional custom name on Ny genvej (same Sheet). Admin login card: email then password, then `primary` Sign in. Does not sit inside a Button. Not for catalog identity (club/season) — that is Search field or Select field.
 
 **Unsupported**: Placeholder-only labels. Using Text field for catalog identity (club/season). Validating empty fields on every keystroke before blur/Save.
 
@@ -570,25 +613,54 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
+### Select field
+
+**Purpose**: Show a chosen catalog facet (or “unset”) and open a searchable picker. Not a free-text identity field.
+
+**Anatomy**: Visible label (`type.label` 13). Tappable row, height **52px**. Value or placeholder (`type.body`). Trailing chevron. No inline dropdown menu.
+
+**Properties**: `label` (required). `value` optional (CatalogLabel / id). `placeholder`. `facet`: `country` | `league` | `club` | `player`. `onPress` opens the facet picker. `disabled`.
+
+**Variants**: None. Facet is data, not a visual variant.
+
+**States**: Rest, pressed, focus, disabled, empty (placeholder). Empty is allowed until Gem — Gem stays disabled until at least one facet is set.
+
+**Accessibility**: Label associated. Name = label + current value or “ikke valgt”. Hit target = full 52px row (≥ 44).
+
+**Composition**: Ny genvej body inside the Genveje Sheet. Press → full-screen facet picker (Search field + List row + Mark). Not used for kit type / size / condition (those are Chip `single-select`).
+
+**Unsupported**: Typing a club name as catalog truth. Native `<select>` / spinner as the product picker. Opening Genveje from the tab-bar plus.
+
+**Example** *(not a rule)*: Label “Klub”, value “F.C. København”, chevron.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
 ### Chip
 
-**Purpose**: Pick one value from a small closed set (type, size, condition) or toggle a filter (collection or admin).
+**Purpose**: Pick one value from a small closed set (type, size, condition), toggle an admin filter, or select one collection **genvej**.
 
-**Anatomy**: Label (`type.label`). Optional leading Mark (not emoji). No photo inside a chip.
+**Anatomy**: Label (`type.label`, 14px on collection chips). Optional leading Mark (not emoji). No photo inside a chip.
 
 **Properties**: `label` (required). `selected`. `disabled`. `onPress`.
 
-**Variants**: `single-select` (type / size / condition groups). `filter` (collection or admin filters; more than one may be on).
+**Variants**:
+| Variant | Need |
+| --- | --- |
+| `single-select` | Confirm: type / size / condition. One per group |
+| `filter` | Admin Filters Sheet. More than one may be on |
+| `shortcut` | Collection home genveje. **Exactly one** selected. First chip is **Alle** (locked, not deletable) |
 
 **States**: Rest, pressed, selected, disabled, focus. Selected = `fill.primary` + `content.inverse`. Not the wash.
 
-**Accessibility**: Role button or radio/checkbox according to variant. Name = label. Hit target ≥ 44 tall (pill may grow horizontally). Admin chip labels in English.
+**Accessibility**: Role radio for `single-select` and `shortcut`; checkbox for `filter`. Name = label. Hit target ≥ 44 tall. Admin chip labels in English. **Tilpas** is not a Chip — it is `tertiary` text (“Tilpas”), named “Tilpas genveje”.
 
-**Composition**: Horizontal wrap with `space.gap.sm`. Lives on confirm, under collection search, or in the admin Filters Sheet (`form`). Admin filter facets in this gap: country, league, season, kit type, has photo.
+**Composition**: Horizontal row with `space.gap.sm` (collection: scroll horizontally if needed). Confirm Chip groups. Admin Filters Sheet. Collection home: `shortcut` chips **under** the header, then Tilpas. Hide the **entire** chip row (Alle, genveje, Tilpas) when the collection is empty. Owner `mobile` collection only — not public Astro.
 
-**Unsupported**: Chip as a primary CTA. Encoding type with wash variant 2/3. Emoji in the chip.
+**Unsupported**: Chip as a primary CTA. Kit-type chips (Hjemme/Ude/Tredje) on Samling. Encoding type with wash variant 2/3. Emoji. Plus control to add a genvej (plus is capture). Auto-selecting a chip after Gem (Alle stays selected).
 
-**Example** *(not a rule)*: Condition chips “Ny” / “Brugt” / “Slidt”; one selected. Admin Filters: “Has photo” as `filter`.
+**Example** *(not a rule)*: Confirm: “Ny” / “Brugt” / “Slidt”. Samling: “Alle” selected, then “Superliga”, “FCK”; trailing “Tilpas”. Admin Filters: “Has photo” as `filter`.
 
 **Code**: Unmapped. Flag.
 
@@ -598,7 +670,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Purpose**: Show one UserJersey in a collection as a photo-first card.
 
-**Anatomy**: Photo (required to *display*; placeholder Mark/monogram only if the row has no photo yet — Save still requires at least one photo). Caption: club + season (`type.caption`, max two lines). Optional type on line two. No price. No buy. No ratings.
+**Anatomy**: Photo (required to *display*; placeholder Mark/monogram only if the row has no photo yet — Save still requires at least one photo). Caption stack: club (`type.heading-sm`) then season · type (`type.mono`). No price. No buy. No ratings.
 
 **Properties**: `photo` (user JPEG). `clubLabel`, `seasonLabel` from resolved `CatalogLabel`. `onPress` opens detail. Crop **4:5**.
 
@@ -612,7 +684,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Unsupported**: Price, boost, marketplace footer. `identity.wash` behind the photo. Archive `KitPhoto`. Crop to 1:1 or 16:9 on the tile. Admin home or admin table rows (those use Data table thumbs).
 
-**Example** *(not a rule)*: 4:5 FCK 2023/24 home photo; caption “F.C. København · 2023/24”.
+**Example** *(not a rule)*: 4:5 FCK 2023/24 home photo; club “F.C. København”; mono “2023/24 · Hjemme”.
 
 **Code**: Unmapped. Flag.
 
@@ -646,19 +718,19 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Purpose**: Show one catalog or settings item and let the user select or navigate.
 
-**Anatomy**: Leading Mark (optional). Title (`type.body` or `type.label`). Meta one line (`type.caption`). Trailing chevron or selected check — not both competing actions.
+**Anatomy**: Leading Mark (optional) or drag-handle on `manage`. Title (`type.body` or `type.label`). Meta one line (`type.caption` or `type.mono` count on `manage`). Trailing chevron or selected check on `select` / `navigate`. `manage` trailing = edit + delete Icon buttons.
 
 **Properties**: `title`, `meta`, `onPress` or `selected`.
 
-**Variants**: `select` (club search). `navigate` (settings later — if used before settings ship, flag).
+**Variants**: `select` (club search / facet picker). `navigate` (settings later — if used before settings ship, flag). `manage` (Genveje Sheet list: drag-handle, name, count, edit, delete).
 
 **States**: Rest, pressed, selected, disabled, focus. List loading is list-level, not a row variant.
 
-**Accessibility**: Name = title + essential meta. Chevron decorative when the row is the control. Height ≥ 44 on `mobile`.
+**Accessibility**: Name = title + essential meta. Chevron decorative when the row is the control. Height ≥ 44 on `mobile`. `manage`: drag-handle named “Flyt”; edit and delete are Icon buttons with names; count is `type.mono` and included in the name.
 
-**Composition**: Lives in a list inside a Sheet or screen. Empty list uses Empty state.
+**Composition**: Lives in a list inside a Sheet, a full-screen facet picker, or a screen. Empty list uses Empty state. `manage` only in the Genveje Sheet.
 
-**Unsupported**: Multiple primary actions in one row. Row as a form. Price as meta.
+**Unsupported**: Multiple primary actions in one row **except** `manage` (edit + delete are explicit). Row as a form. Price as meta. Using `manage` on confirm club search.
 
 **Example** *(not a rule)*: Club search result: Mark + “F.C. København” + meta “Superliga”.
 
@@ -704,7 +776,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Accessibility**: Text is meaning; wash is decorative. Action uses Button when present. Admin copy in English.
 
-**Composition**: `collection` replaces the grid. `table` replaces the Data table body when there are zero rows.
+**Composition**: `collection` replaces the grid **and** hides the genveje chip row. `table` replaces the Data table body when there are zero rows.
 
 **Unsupported**: Sarcasm. Three actions. Empty state used for Save errors (that is Banner). Full-bleed wash background. Illustration libraries or emoji. `table` variant with a `primary` “+ New” / Add kit.
 
@@ -716,23 +788,23 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Sheet
 
-**Purpose**: Focused overlay task over the current screen (club search, more details, admin Filters, destructive confirm).
+**Purpose**: Focused overlay task over the current screen (club search, more details, Genveje, admin Filters, destructive confirm).
 
 **Anatomy**: Scrim. Raised surface (`radius.lg` on the sheet). Grab/handle optional (mobile). Title. Body. Optional footer Buttons.
 
 **Properties**: `title`, `children`, `onDismiss`.
 
-**Variants**: `form` (club search / more details / admin Filters). `confirm` (destructive Take-down or demote).
+**Variants**: `form` (club search / more details / admin Filters / **Genveje**). `confirm` (destructive Take-down or demote).
 
 **States**: Presenting, rest, dismissed. Focus trapped while open.
 
 **Accessibility**: Title is the accessible name. Scrim dim + focus trap. Escape dismisses when the task is cancellable. Swipe-down may dismiss on `mobile` only. `motion.base`; reduced-motion = instant present, no travel. Admin titles in English.
 
-**Composition**: `elevation.overlay`. Contains Search field, List row, Text field, or Chip groups. Does not contain Tab bar or Top tabs. Admin Filters: Chip `filter` groups (country, league, season, kit type, has photo). Admin confirm: title, consequence sentence, `destructive` + `tertiary` Cancel.
+**Composition**: `elevation.overlay`. Contains Search field, List row, Text field, Select field, or Chip groups. Does not contain Tab bar or Top tabs. Admin Filters: Chip `filter` groups (country, league, season, kit type, has photo). Admin confirm: title, consequence sentence, `destructive` + `tertiary` Cancel. Genveje: list and Ny genvej **share one Sheet** (body swaps; titles “Genveje” / “Ny genvej”). Facet pick is a **full-screen overlay** on top of that Sheet (Search field + List row), not a second Sheet.
 
-**Unsupported**: Full-screen sheet for the collection itself. Nested sheets more than one deep — flag. Wash as scrim. Using Sheet as the admin drill (drill is a full page).
+**Unsupported**: Full-screen **place** for Genveje (it is a Sheet over Samling, not a sixth tab). Nested **Sheets** more than one deep — flag. Wash as scrim. Using Sheet as the admin drill (drill is a full page). Plus in the tab bar opening this Sheet.
 
-**Example** *(not a rule)*: “Vælg klub” with Search field + List rows. Admin: “Take down this jersey?” with `destructive` “Take down”.
+**Example** *(not a rule)*: “Vælg klub” with Search field + List rows. Genveje Sheet: manage rows + `primary` “Tilføj”. Admin: “Take down this jersey?” with `destructive` “Take down”.
 
 **Code**: Unmapped. Flag. Platform sheet OK if tokens (radius, colors) still apply.
 
@@ -740,25 +812,37 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Tab bar
 
-**Purpose**: Switch the app’s primary places. Add is capture, not a listing compose.
+Status: `locked` (Gap 2026-08-23: 3a five-slot icon-only pill).
 
-**Anatomy**: Collection and Add as equal items. Wishlist is a third equal item **only when that milestone ships**; until then do not add a FAB or a sell bubble to fill the gap. Icon + `type.caption` or `type.label` text. Safe-area inset below.
+**Purpose**: Switch the app’s five primary collector places. Center plus is capture, not a listing compose and not “new shortcut”.
 
-**Properties**: `active`: `collection` | `add` (add `wishlist` only when that tab ships).
+**Anatomy**: Floating glass pill above the safe-area inset (Layout). Five slots, left → right:
 
-**Variants**: None. Equal width. Selected = `content.primary`. Unselected = `content.muted`. No fill. No wash. No raised center “sell” bubble. Add = plus + label, same size as the others.
+| Slot | Icon metaphor | Accessible name (da) | Action |
+| --- | --- | --- | --- |
+| 1 | House | Samling | Own collection (app home after login) |
+| 2 | Compass | Søg | Search place. Compass is the Søg **icon**, not a rename to “Discovery” |
+| 3 | Raised plus (larger than the others, still **inside** the pill) | Tilføj trøje | Starts Photo slot capture. No destination screen named Add |
+| 4 | Heart | Ønske | Wishlist **place**. Content of that place is deferred — empty state is allowed; do not invent a wishlist-row primitive |
+| 5 | Person | Profil | Profile place |
 
-**States**: Active, inactive, focus. Do not invent a disabled-premium tab style.
+Visible chrome is **icon-only**. No tab labels under the icons. No logo in the pill. Notification badge lives on the header bell, not on a tab.
 
-**Accessibility**: Role tab/tablist. Name in Danish (“Samling”, “Tilføj”; “Ønske” when that tab ships). Hit target ≥ 44 tall plus inset.
+**Properties**: `active`: `collection` | `search` | `wishlist` | `profile`. Plus is not an `active` place — pressing it starts capture and does not leave a selected plus state after dismiss. `onSelectPlace`, `onCapture`.
 
-**Composition**: Screen footer region. Selecting Add starts Photo slot capture flow, does not stay on an empty Add screen.
+**Variants**: None. Unselected = `content.muted`. Selected place = `content.primary`. Plus uses primary ink; it is not a wash or sell bubble. No fill behind icons except the glass pill.
 
-**Unsupported**: FAB. Four tabs. Badge counts unless a later lock. Marketplace sell icon. Use on `admin` (that surface uses Top tabs).
+**States**: Active place, inactive, focus, pressed. Capture presenting is not a sixth tab state.
 
-**Example** *(not a rule)*: Samling active in black; Tilføj muted gray. Do not draw Ønske until that milestone.
+**Accessibility**: Role tab/tablist for the four places; plus is a button named “Tilføj trøje”. Names required even though chrome is icon-only. Hit target ≥ 44 per slot plus inset. Color is not the only selected signal (icon weight / fill vs outline — flag the host glyph set; do not invent a new icon family).
 
-**Code**: Unmapped. Flag.
+**Composition**: Screen footer region on `mobile` collector chrome. Public Astro and `admin` do not use this component. Selecting plus starts the capture flow; it does not open Genveje.
+
+**Unsupported**: Visible labels (brand-book in-book tabs). Two-item Samling/Tilføj dock. FAB or plus **outside** the pill. Sixth control. “Discovery” as the product name for slot 2. Plus as “ny genvej”. Marketplace sell icon. Logo. Use on `admin` (Top tabs). Badge counts on tabs unless a later lock.
+
+**Example** *(not a rule)*: On Samling, house is primary ink; compass/heart/person muted; plus raised in the middle; grid photos show through the glass.
+
+**Code**: Unmapped. Flag. Throwaway Expo prototype is not the contract.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
@@ -836,15 +920,32 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ## Patterns
 
-Status: `locked` for the five compositions below. Other compositions: flag.
+Status: `locked` for the compositions below. Other compositions: flag.
 
 ### Collection grid
 
 **Purpose**: Scan owned jerseys.
 
-**Composition**: Header (title + Search field + optional Chip filters) + two-column Jersey tiles (`space.gap.md`, `space.inset.md`) + Tab bar. Empty collection uses Empty state instead of the grid.
+**Composition**: Header (Samling + count + notification; no Search field) + Chip `shortcut` row + Tilpas (hidden when empty) + two-column Jersey tiles (`space.gap.md`, `space.inset.md`) + floating Tab bar. Empty collection uses Empty state `collection` instead of the grid **and** instead of the chip row.
 
-**Unsupported**: Marketplace card extras. One-column gallery of uncropped 16:9 photos. Wash behind tiles.
+**Unsupported**: Marketplace card extras. One-column gallery of uncropped 16:9 photos. Wash behind tiles. Kit-type chips on this screen. Search field in this header.
+
+Flag missing context; do not invent patterns.
+
+### Collection shortcuts (genveje)
+
+**Purpose**: Filter the owner’s collection to a saved AND of catalog facets, without putting kit type on Samling.
+
+**Composition**:
+1. Chip row: **Alle** (default, always first, always remains selected after creating a genvej) + zero or more named shortcuts. Trailing **Tilpas** text, never a plus.
+2. Hide the whole row when the collection has zero jerseys.
+3. Tilpas opens Sheet `form` **Genveje**: List row `manage` (drag-handle, name, count, edit, delete) + footer `primary` **Tilføj**. Reorder affordance is the drag-handle; do not treat the throwaway prototype’s up/down buttons as the lock.
+4. Tilføj / edit swaps the **same** Sheet body to **Ny genvej**: Select fields for country, league, club, player; optional Text field for a custom name; helper that facets combine with **AND** (`type.body` or `caption`). Default name = labels of set facets. `primary` **Gem** disabled until at least one facet is set.
+5. Each Select field opens a **full-screen** searchable picker (back + close): Search field, optional “Mest brugte”, List row `select` + Mark. One overlay on the Sheet — not a nested Sheet.
+6. After Gem: dismiss form (back to list or close); **Alle stays the active chip**. Do not auto-select the new shortcut.
+7. Active shortcut filters the grid: all set facets must match (AND). Alle shows the full collection.
+
+**Unsupported**: Opening this flow from tab-bar plus. Kit type as a Samling chip. Auto-focusing the new chip. Public Astro genveje. A sixth tab named Genveje.
 
 Flag missing context; do not invent patterns.
 
@@ -894,21 +995,23 @@ Status: `thin` — `apps/admin` is not scaffolded; mobile/web mappings may still
 
 | Decision | Surface | Code name | Notes / exceptions |
 | --- | --- | --- | --- |
-| Color / type / space tokens | mobile | *unmapped* | Expo theme or NativeWind — flag until named |
-| Color / type / space tokens | web | *unmapped* | CSS variables on Astro — flag until named |
-| Color / type / space tokens | admin | *unmapped* | Vite + React; light aliases only — flag until named |
+| Color / type / space tokens | mobile | *unmapped* | Expo: load Archivo + IBM Plex Sans + IBM Plex Mono; sizes in Typography. Flag host file until named |
+| Color / type / space tokens | web | *unmapped* | CSS variables on Astro; same families |
+| Color / type / space tokens | admin | *unmapped* | Vite + React; light aliases only; same families — flag until named |
 | Button … Banner | mobile | *unmapped* | One component per inventory name |
 | Data table, Top tabs | admin | *unmapped* | Do not reuse Tab bar or Jersey tile |
 | Jersey tile | web | *unmapped* | Same 4:5 crop and caption rules |
 | Identity wash | mobile, web | *unmapped* | Gradient; never on `KitPhoto` or jersey photo |
-| Tab bar | mobile | *unmapped* | Equal tabs; Add → capture |
+| Tab bar | mobile | *unmapped* | Five icon-only slots in a glass pill; plus → capture |
 | Catalog peek | api | `GET /v1/catalog/peek` | Not in this system |
 | OG canvas | web | *unmapped* | 1200×630; letterbox 4:5; wash top strip only |
 | KitPhoto render | admin | *unmapped* | 32px table thumb + drill; never Expo/Astro/OG |
 
 **Behavior parity**: Save, gallery-first vs camera-repeat, and “no archive renders” on collector surfaces are product rules (`CONTEXT.md` + this file), not platform exceptions. Admin may render KitPhoto. Staff access, Take-down, and English chrome are product rules, not visual exceptions.
 
-**Supported exceptions**: System photo picker, system share sheet, OS keyboard, OS font (SF / Roboto / `system-ui`). Native sheet chrome if colors and radius still match. Admin 32×32 icon actions (named). Admin light-only.
+**Collection chrome source**: The 3a artifact (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`) is the visual reference for Samling chrome **except** Genveje is a **Sheet**, not a full-screen place. Brand book v1.0 is type + logo construction only. `apps/mobile/src/prototype/` is throwaway evidence of feel — not a host contract and not copy-paste UI.
+
+**Supported exceptions**: System photo picker, system share sheet, OS keyboard. Fonts: brand webfonts first; system-ui fallback if load fails. Native sheet chrome if colors and radius still match. Admin 32×32 icon actions (named). Admin light-only. Genveje manager uses platform Sheet; facet picker may be a full-screen overlay.
 
 Flag missing context; do not invent APIs or behavior.
 
@@ -930,8 +1033,9 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 | Admin dark mode | Light-only this gap | A later Gap pass if operators need it |
 | Scoped staff-role chrome | Binary `role=admin` only | When permissions exist |
 | Catalog-create / “+ New” | Seed remains the stamdata writer | A later admin mutation feature |
-| Logo | Not designed | Brand pass |
+| KC mark on Profil header | Not chosen this gap | A later collector-chrome pass |
 | Wash variants 2–3 | No named job | A taxonomy (e.g. kit type) needs distinction |
 | Crest / badge / portrait files | Rights and assets missing | Stamdata has approved marks |
 | Adopt / Evolve roadmap areas | First lock | A later Gap pass |
 | Expo Web as first-class | Degraded by stack lock | If Expo Web ships as a real surface |
+| Ønske place **content** | Tab exists; list/row UI not locked | Wishlist feature slice |

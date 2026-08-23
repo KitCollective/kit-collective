@@ -28,26 +28,46 @@ colors:
   content-muted-dark: "#8A8A8A"
   border-subtle-dark: "#333333"
 typography:
-  title:
-    fontFamily: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
-    fontSize: 22px
+  display:
+    fontFamily: Archivo, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
+    fontSize: 32px
     fontWeight: 600
-    lineHeight: 28px
+    lineHeight: 37px
+  title:
+    fontFamily: Archivo, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
+    fontSize: 24px
+    fontWeight: 600
+    lineHeight: 29px
+  section:
+    fontFamily: Archivo, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
+    fontSize: 20px
+    fontWeight: 600
+    lineHeight: 25px
+  heading-sm:
+    fontFamily: Archivo, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
+    fontSize: 15px
+    fontWeight: 600
+    lineHeight: 20px
   body:
-    fontFamily: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
+    fontFamily: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
     fontSize: 16px
     fontWeight: 400
-    lineHeight: 24px
+    lineHeight: 25px
   label:
-    fontFamily: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
+    fontFamily: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
     fontSize: 16px
     fontWeight: 500
     lineHeight: 20px
   caption:
-    fontFamily: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
-    fontSize: 13px
+    fontFamily: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
+    fontSize: 12px
     fontWeight: 400
     lineHeight: 18px
+  mono:
+    fontFamily: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 20px
 rounded:
   xs: 4px
   sm: 8px
@@ -107,7 +127,7 @@ components:
   jersey-tile:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.content-secondary}"
-    typography: "{typography.caption}"
+    typography: "{typography.heading-sm}"
     rounded: "{rounded.md}"
   sheet:
     backgroundColor: "{colors.surface-raised}"
@@ -185,16 +205,20 @@ Do not use `wash-start` / `wash-end` as `tertiary` interaction color.
 
 ## Typography
 
-Platform system UI only (San Francisco, Roboto, `system-ui`). No UberMove. No webfont until a logo pass. No display role.
+Brand webfonts: **Archivo** (headings, logo), **IBM Plex Sans** (body, labels, buttons), **IBM Plex Mono** (season, counts, IDs). System-ui is fallback only. No UberMove. Collection home “Samling” uses `display` at **28px** (not 32). Full roles, tracking, and constraints: `docs/design-system.md`.
 
-- **Title:** 22px / 600 / 28px — screen titles.
-- **Body:** 16px / 400 / 24px — minimum body size on mobile.
-- **Label:** 16px / 500 / 20px — buttons, chips, field labels.
-- **Caption:** 13px / 400 / 18px — club + season under a photo; max two lines, ellipsis.
+- **Display:** Archivo 32px / 600 / 37px — rare large heading.
+- **Title:** Archivo 24px / 600 / 29px — other screen titles.
+- **Section:** Archivo 20px / 600 / 25px — mid headings.
+- **Heading-sm:** Archivo 15px / 600 / 20px — club name on a jersey tile.
+- **Body:** Plex Sans 16px / 400 / 25px — minimum body size on mobile.
+- **Label:** Plex Sans 16px / 500 / 20px — buttons (chips use 14px of the same role).
+- **Caption:** Plex Sans 12px / 400 / 18px — non-data meta.
+- **Mono:** Plex Mono 14px / 400 / 20px — season · type under a tile; counts.
 
 ## Layout
 
-Mobile collection: two-column photo grid, page inset 16px, grid gap 12px, search in the header, chip filters, equal tab bar (Collection / Add). Add opens capture, not a listing compose. Jersey tiles crop **4:5**. Confirm/Save is a single column.
+Mobile collection home: two-column 4:5 grid, page inset 16px, grid gap 12px. Header is title + count + bell — **no search, no logo**. Search is the Søg tab. Chip row under the header. Tab bar is a **floating glass pill** with five icon-only slots (house · compass · raised plus · heart · person). Plus opens capture, not a listing compose. Confirm/Save is a single column.
 
 Web (Astro): single jersey max 640px; collection max 960px (2 / 3 / 4 columns at 0 / 768 / 1024px; never five). OG 1200×630; letterbox 4:5; wash as a thin top strip only.
 
@@ -213,10 +237,11 @@ Two families: cards and photo tiles use 12px (`rounded.md`); sheets 16px (`round
 Inventory and full contracts: `docs/design-system.md`. Token snapshots below are for agents that only read this file.
 
 - **Button:** One primary per region. Dock primaries = black rectangular (`rounded.sm`), fill width, ≥ 48 tall. Inline/banner stay hug. Destructive = danger fill. Loading keeps the label.
-- **Chip:** Selected = primary fill. Not wash. No emoji.
-- **Jersey tile:** User photo 4:5 + caption. No price, buy, boost, or archive `KitPhoto`.
+- **Chip:** Selected = primary fill. Not wash. No emoji. Samling chips are genveje (`shortcut`) + Alle; kit type stays on Confirm. Tilpas is text, not a plus.
+- **Select field:** 52px row; opens a searchable picker. Not free-text club.
+- **Jersey tile:** User photo 4:5; club `heading-sm`, season · type `mono`. No price, buy, boost, or archive `KitPhoto`.
 - **Search field:** Pill. Club search returns catalog IDs, not free-text club as truth.
-- **Tab bar:** Equal items; selected = primary ink; no FAB, no sell bubble. Wishlist tab ships later.
+- **Tab bar:** Five icon-only slots in a floating glass pill (Samling · Søg · Tilføj trøje · Ønske · Profil). Plus is capture, inside the pill. No FAB, no sell bubble, no visible labels.
 - **Banner:** One at a time for Save failures; keep the draft.
 
 Deferred here (do not invent): switch, checkbox, avatar, paywall, wishlist row, admin tables.
@@ -228,9 +253,11 @@ Deferred here (do not invent): switch, checkbox, avatar, paywall, wishlist row, 
 - Do crop collection photos 4:5; letterbox on OG — do not crop the jersey to 16:9.
 - Do use a monogram when a crest/flag/portrait asset is missing.
 - Do honor `prefers-reduced-motion` (still equivalent; no transform travel).
+- Do put the KC mark / wordmark on splash, login, onboarding, OG, favicon, and store icons only.
 - Don't invent tokens, variants, or components. Flag the gap.
+- Don't put the wordmark or KC mark in the Samling header, tab bar, or on a jersey tile.
 - Don't put identity wash behind a jersey photo or on a CTA.
 - Don't use emoji as icons or category marks.
 - Don't build marketplace chrome (price, buy, boost, ratings).
 - Don't copy UberMove or import Base Web. Base and Vinted are taste references only.
-- Don't treat English seed strings as Danish UI labels (`CatalogLabel` wins).
+- Don't put kit-type chips (Hjemme/Ude) on Samling. Genveje manager is a Sheet, not a tab.
