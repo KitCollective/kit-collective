@@ -29,9 +29,9 @@ if (openRowStart === -1 || openRowEnd === -1) {
     const entityTypes = [...entityTypesMatch[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
 
     for (const entityType of entityTypes) {
-      const navigates = new RegExp(
-        `entityType === "${entityType}"[\\s\\S]*?navigate\\(`,
-      ).test(openRowBody);
+      const navigates = new RegExp(`entityType === "${entityType}"[\\s\\S]*?navigate\\(`).test(
+        openRowBody,
+      );
       if (!navigates) {
         violations.push(
           `apps/admin/src/pages/StamdataPage.tsx: openRow missing navigate() for "${entityType}"`,
