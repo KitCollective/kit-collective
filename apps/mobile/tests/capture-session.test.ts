@@ -1,4 +1,4 @@
-import type { JerseyCondition, JerseySize, KitType, PhotoRole } from "@kit/domain";
+import type { JerseyCondition, JerseySize, KitType } from "@kit/domain";
 import { PHOTO_ROLES } from "@kit/domain";
 import { describe, expect, it } from "vitest";
 import {
@@ -22,8 +22,6 @@ import {
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
 const UUID_B = "550e8400-e29b-41d4-a716-446655440001";
-const UUID_C = "550e8400-e29b-41d4-a716-446655440002";
-
 const URI_FRONT = "file:///photos/front.jpg";
 const URI_BACK = "file:///photos/back.jpg";
 const URI_LABEL = "file:///photos/label.jpg";
