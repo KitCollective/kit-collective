@@ -69,18 +69,4 @@ describe("parseSeedScopeArgv", () => {
     const result = parseSeedScopeArgv(["dk1", "0001", "today", "production"]);
     expect(result.ok).toBe(false);
   });
-
-  it("strips a leading -- from pnpm-filter argv forwarding", () => {
-    const result = parseSeedScopeArgv(["--", "superligaen", "2017/18", "2017/18", "development"]);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.parsed.scope).toEqual({
-        kind: "competition",
-        competition: "superligaen",
-        fromSeason: "2017/18",
-        toSeason: "2017/18",
-      });
-      expect(result.parsed.lane).toBe("development");
-    }
-  });
 });

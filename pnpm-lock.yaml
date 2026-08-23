@@ -302,6 +302,9 @@ importers:
 
   seed/mcp:
     dependencies:
+      '@kit/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@kit/seed-shared':
         specifier: workspace:*
         version: link:../shared
