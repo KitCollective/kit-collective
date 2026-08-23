@@ -6,7 +6,11 @@ import {
 } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
 
-async function requestJson(path: string, accessToken: string, init: RequestInit = {}): Promise<Response> {
+async function requestJson(
+  path: string,
+  accessToken: string,
+  init: RequestInit = {},
+): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${accessToken}`);
   if (!headers.has("Accept-Language")) {

@@ -49,10 +49,7 @@ export function ShortcutChipRow({
           accessibilityRole="button"
           accessibilityLabel="Tilpas genveje"
           onPress={onTilpasPress}
-          style={({ pressed }) => [
-            styles.tilpas,
-            pressed && styles.tilpasPressed,
-          ]}
+          style={({ pressed }) => [styles.tilpas, pressed && styles.tilpasPressed]}
         >
           <Text style={[typography.labelSm, { color: theme.contentPrimary }]}>Tilpas</Text>
         </Pressable>

@@ -1,22 +1,14 @@
-import type { CollectionShortcut, CatalogPickerItem } from "@kit/api-contract";
+import type { CatalogPickerItem, CollectionShortcut } from "@kit/api-contract";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   createCollectionShortcut,
   deleteCollectionShortcut,
   fetchCollectionShortcuts,
   updateCollectionShortcut,
 } from "@/api/shortcuts";
-import { ClubPickerOverlay } from "@/components/club-picker-overlay";
 import { ListRow, Sheet } from "@/components/catalog-ui";
+import { ClubPickerOverlay } from "@/components/club-picker-overlay";
 import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -78,11 +70,7 @@ export function GenvejeSheet({
   const openEditForm = (shortcut: CollectionShortcut) => {
     setEditingShortcutId(shortcut.id);
     setCustomName(shortcut.name);
-    setSelectedClub(
-      shortcut.clubId
-        ? { id: shortcut.clubId, label: "Valgt klub" }
-        : null,
-    );
+    setSelectedClub(shortcut.clubId ? { id: shortcut.clubId, label: "Valgt klub" } : null);
     setMode("form");
   };
 
@@ -118,7 +106,8 @@ export function GenvejeSheet({
     onShortcutsChanged();
   };
 
-  const sheetTitle = mode === "list" ? "Genveje" : editingShortcutId ? "Rediger genvej" : "Ny genvej";
+  const sheetTitle =
+    mode === "list" ? "Genveje" : editingShortcutId ? "Rediger genvej" : "Ny genvej";
   const canSave = selectedClub !== null && !saving;
 
   return (

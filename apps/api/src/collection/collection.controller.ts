@@ -17,8 +17,8 @@ import type { FastifyReply } from "fastify";
 import { CurrentUser } from "../identity/current-user.decorator.js";
 import type { JwtPayload } from "../identity/identity.service.js";
 import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
-import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 import { CollectionService } from "./collection.service.js";
+import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 
 function resolveLocale(headerValue: string | undefined): LabelLocale {
   if (
@@ -46,11 +46,7 @@ export class CollectionController {
     @Query("shortcutId") shortcutId?: string,
     @Headers("accept-language") acceptLanguage?: string,
   ) {
-    return this.collectionService.listJerseys(
-      user.sub,
-      resolveLocale(acceptLanguage),
-      shortcutId,
-    );
+    return this.collectionService.listJerseys(user.sub, resolveLocale(acceptLanguage), shortcutId);
   }
 
   @Get("collection/shortcuts")
@@ -67,11 +63,7 @@ export class CollectionController {
     @Body() body: unknown,
     @Headers("accept-language") acceptLanguage?: string,
   ) {
-    return this.shortcutsService.createShortcut(
-      user.sub,
-      body,
-      resolveLocale(acceptLanguage),
-    );
+    return this.shortcutsService.createShortcut(user.sub, body, resolveLocale(acceptLanguage));
   }
 
   @Patch("collection/shortcuts/:shortcutId")

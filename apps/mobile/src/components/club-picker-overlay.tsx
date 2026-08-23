@@ -1,17 +1,10 @@
 import type { CatalogPickerItem } from "@kit/api-contract";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { searchCatalogClubs } from "@/api/catalog";
 import { ListRow, SearchField } from "@/components/catalog-ui";
-import { Button, IconButton } from "@/components/ui";
+import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";

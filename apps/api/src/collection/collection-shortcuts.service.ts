@@ -3,8 +3,8 @@ import {
   type CollectionShortcuts,
   type CollectionShortcutWrite,
   collectionShortcutSchema,
-  collectionShortcutWriteSchema,
   collectionShortcutsSchema,
+  collectionShortcutWriteSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
@@ -89,7 +89,7 @@ export class CollectionShortcutsService {
     await this.validateFacetIds(body);
 
     const name = body.name ?? (await this.buildAutoName(body, locale));
-    const sortOrder = body.sortOrder ?? await this.nextSortOrder(userId);
+    const sortOrder = body.sortOrder ?? (await this.nextSortOrder(userId));
 
     const [inserted] = await this.db
       .insert(collectionShortcut)
@@ -186,9 +186,7 @@ export class CollectionShortcutsService {
 
     const [deleted] = await this.db
       .delete(collectionShortcut)
-      .where(
-        and(eq(collectionShortcut.id, shortcutId), eq(collectionShortcut.userId, userId)),
-      )
+      .where(and(eq(collectionShortcut.id, shortcutId), eq(collectionShortcut.userId, userId)))
       .returning({ id: collectionShortcut.id });
 
     if (!deleted) {
@@ -222,6 +220,7 @@ export class CollectionShortcutsService {
     }
 
     if (facets.playerId) {
+      const playerId = facets.playerId;
       conditions.push(
         exists(
           this.db
@@ -229,7 +228,7 @@ export class CollectionShortcutsService {
             .from(playerClubSeason)
             .where(
               and(
-                eq(playerClubSeason.playerId, facets.playerId!),
+                eq(playerClubSeason.playerId, playerId),
                 eq(playerClubSeason.clubId, userJersey.clubId),
                 eq(playerClubSeason.seasonId, userJersey.seasonId),
               ),
@@ -399,9 +398,7 @@ export class CollectionShortcutsService {
         kind: catalogLabel.kind,
       })
       .from(catalogLabel)
-      .where(
-        and(eq(catalogLabel.entityType, entityType), eq(catalogLabel.entityId, entityId)),
-      );
+      .where(and(eq(catalogLabel.entityType, entityType), eq(catalogLabel.entityId, entityId)));
 
     const resolved =
       rows.find((row) => row.locale === locale && row.kind === "label")?.label ??
