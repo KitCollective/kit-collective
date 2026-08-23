@@ -3,7 +3,6 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { Sheet } from "@/components/catalog-ui";
 import { Button } from "@/components/ui";
-import { createDraft, createDraftId } from "@/drafts/jerseyDraftStore";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -25,12 +24,15 @@ export function PostSaveSheet({
   const theme = useTheme();
   const typography = useTypography();
 
-  const startCapture = (club?: CatalogPickerItem | null) => {
-    const draftId = createDraftId();
-    createDraft(draftId, club ? { id: club.id, label: club.label } : null);
+  const openChooser = (club?: CatalogPickerItem | null) => {
     router.replace({
-      pathname: "/(tabs)/add/capture",
-      params: { draftId },
+      pathname: "/(tabs)/add",
+      params: club
+        ? {
+            prefilledClubId: club.id,
+            prefilledClubLabel: club.label,
+          }
+        : undefined,
     });
   };
 
@@ -40,15 +42,16 @@ export function PostSaveSheet({
       : "Din trøje er i samlingen.";
 
   return (
-    <Sheet visible={visible} title="Trøjen er gemt" onDismiss={onDismiss}>
+    <Sheet visible={visible} title="Gemt" onDismiss={onDismiss}>
       <View style={styles.content}>
         <Text
           style={[typography.body, { color: theme.contentSecondary, marginBottom: space.gapSm }]}
         >
           {body}
         </Text>
-        <Button label="Samme klub" onPress={() => startCapture(savedClub)} disabled={!savedClub} />
-        <Button label="Ny trøje" variant="secondary" onPress={() => startCapture()} />
+        <Button label="Samme klub" onPress={() => openChooser(savedClub)} disabled={!savedClub} />
+        <Button label="Ny trøje" variant="secondary" onPress={() => openChooser()} />
+        <Button label="Til samling" variant="tertiary" onPress={onDismiss} />
       </View>
     </Sheet>
   );

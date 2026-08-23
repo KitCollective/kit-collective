@@ -18,7 +18,7 @@ export default function AddFlowLayout() {
         name="capture"
         options={{ headerShown: false, animation: reduceMotion ? "none" : "fade" }}
       />
-      <Stack.Screen name="confirm" options={{ title: "Bekræft og gem" }} />
+      <Stack.Screen name="confirm" options={{ headerShown: false }} />
     </Stack>
   );
 }

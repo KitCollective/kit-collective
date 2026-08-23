@@ -234,6 +234,18 @@ export function selectDraftCondition(
   }));
 }
 
+export function upsertDraftPhoto(
+  state: CaptureSessionState,
+  draftId: string,
+  role: PhotoRole,
+  uri: string,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    photos: [...draft.photos.filter((photo) => photo.role !== role), { uri, role }],
+  }));
+}
+
 function serializableState(state: CaptureSessionState): CaptureSessionState {
   const { store: _store, ...rest } = state;
   return rest;
