@@ -22,6 +22,7 @@ import {
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
 const UUID_B = "550e8400-e29b-41d4-a716-446655440001";
+
 const URI_FRONT = "file:///photos/front.jpg";
 const URI_BACK = "file:///photos/back.jpg";
 const URI_LABEL = "file:///photos/label.jpg";
@@ -143,7 +144,7 @@ describe("bind, unbind, and addJersey", () => {
     const withSecondJersey = addJerseyDraft(session);
 
     expect(withSecondJersey.drafts).toHaveLength(2);
-    expect(withSecondJersey.drafts.map((draft) => draft.id)).not.toContainEqual(firstDraftId);
+    expect(withSecondJersey.activeDraftId).not.toBe(firstDraftId);
     expect(getDraft(withSecondJersey, withSecondJersey.activeDraftId).photos).toEqual([]);
     expect(withSecondJersey.unboundUris).toEqual(session.unboundUris);
   });
