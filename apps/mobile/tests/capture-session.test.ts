@@ -37,9 +37,15 @@ function fillDraftForSave(
   {
     clubId = UUID,
     seasonId = UUID_B,
-    kitType = "home" as KitType,
-    size = "m" as JerseySize,
-    condition = "used" as JerseyCondition,
+    kitType = "home",
+    size = "m",
+    condition = "used",
+  }: {
+    clubId?: string;
+    seasonId?: string;
+    kitType?: KitType;
+    size?: JerseySize;
+    condition?: JerseyCondition;
   } = {},
 ) {
   let next = setDraftClub(session, draftId, clubId);

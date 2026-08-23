@@ -1,5 +1,16 @@
+import {
+  JERSEY_CONDITIONS,
+  JERSEY_SIZES,
+  type JerseyCondition,
+  type JerseySize,
+  KIT_TYPES,
+  type KitType,
+  PHOTO_ROLES,
+  type PhotoRole,
+} from "@kit/domain";
 import { draftDb } from "@/drafts/db";
 import type {
+  CaptureBranch,
   CaptureJerseyDraft,
   CaptureSessionPhoto,
   CaptureSessionState,
@@ -27,15 +38,55 @@ type PhotoRow = {
   role: string | null;
 };
 
+function readKitType(value: string | null): KitType | null {
+  if (!value) {
+    return null;
+  }
+  return KIT_TYPES.find((kitType) => kitType === value) ?? null;
+}
+
+function readJerseySize(value: string | null): JerseySize | null {
+  if (!value) {
+    return null;
+  }
+  return JERSEY_SIZES.find((size) => size === value) ?? null;
+}
+
+function readJerseyCondition(value: string | null): JerseyCondition | null {
+  if (!value) {
+    return null;
+  }
+  return JERSEY_CONDITIONS.find((condition) => condition === value) ?? null;
+}
+
+function readPhotoRole(value: string | null): PhotoRole | null {
+  if (!value) {
+    return null;
+  }
+  return PHOTO_ROLES.find((role) => role === value) ?? null;
+}
+
+function readBranch(value: string): CaptureBranch {
+  return value === "bulk" ? "bulk" : "single";
+}
+
+function readOrderedUris(value: string): string[] {
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed) || !parsed.every((entry) => typeof entry === "string")) {
+    throw new Error("Invalid ordered URIs payload");
+  }
+  return parsed;
+}
+
 function readDraft(row: DraftRow, photos: CaptureSessionPhoto[]): CaptureJerseyDraft {
   return {
     id: row.id,
     clubId: row.club_id,
     clubLabel: row.club_label,
     seasonId: row.season_id,
-    kitType: row.kit_type as CaptureJerseyDraft["kitType"],
-    size: row.size as CaptureJerseyDraft["size"],
-    condition: row.condition as CaptureJerseyDraft["condition"],
+    kitType: readKitType(row.kit_type),
+    size: readJerseySize(row.size),
+    condition: readJerseyCondition(row.condition),
     kitTypeSelected: row.kit_type_selected === 1,
     sizeSelected: row.size_selected === 1,
     conditionSelected: row.condition_selected === 1,
@@ -152,15 +203,15 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
           .filter((photo) => photo.draft_id === row.id)
           .map((photo) => ({
             uri: photo.uri,
-            role: photo.role as CaptureSessionPhoto["role"],
+            role: readPhotoRole(photo.role),
           }));
         return readDraft(row, photos);
       });
 
       return {
         sessionId,
-        branch: sessionRow.branch,
-        orderedUris: JSON.parse(sessionRow.ordered_uris_json) as string[],
+        branch: readBranch(sessionRow.branch),
+        orderedUris: readOrderedUris(sessionRow.ordered_uris_json),
         unboundUris: unboundRows.map((row) => row.uri),
         drafts,
         activeDraftId: sessionRow.active_draft_id,
