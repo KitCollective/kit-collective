@@ -157,6 +157,12 @@ jobs:
       - name: Test mobile drag-reorder ratchet logic
         run: node --test scripts/tests/check-mobile-drag-reorder.test.mjs
 
+      - name: Check mobile add form-wiring ratchet
+        run: pnpm check:mobile-add-form-wiring
+
+      - name: Test mobile add form-wiring ratchet logic
+        run: node --test scripts/tests/check-mobile-add-form-wiring.test.mjs
+
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
 

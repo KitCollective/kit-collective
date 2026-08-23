@@ -20,6 +20,7 @@
     "check:mobile-design-tokens": "node scripts/check-mobile-design-tokens.mjs",
     "check:mobile-collection-ui-evidence": "node scripts/check-mobile-collection-ui-evidence.mjs",
     "check:mobile-drag-reorder": "node scripts/check-mobile-drag-reorder.mjs",
+    "check:mobile-add-form-wiring": "node scripts/check-mobile-add-form-wiring.mjs",
     "check:workflow-api-boot-env": "node scripts/check-workflow-api-boot-env.mjs",
     "check:vision-log-save-action": "node scripts/check-vision-log-save-action.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"
