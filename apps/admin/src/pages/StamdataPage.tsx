@@ -106,18 +106,18 @@ export function StamdataPage() {
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const nextRow = rowElements.item(rowIndex + 1);
-      if (nextRow instanceof HTMLTableRowElement) {
-        nextRow.focus();
+      const next = rowElements.item(rowIndex + 1);
+      if (next instanceof HTMLTableRowElement) {
+        next.focus();
       }
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      const previousRow = rowElements.item(rowIndex - 1);
-      if (previousRow instanceof HTMLTableRowElement) {
-        previousRow.focus();
+      const previous = rowElements.item(rowIndex - 1);
+      if (previous instanceof HTMLTableRowElement) {
+        previous.focus();
       }
     }
   }
