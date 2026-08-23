@@ -42,8 +42,13 @@ export function AdminShell() {
       }
 
       const nextTab = tabs[nextIndex];
+      const nextRoute = TABS[nextIndex];
+      if (!nextTab || !nextRoute) {
+        return;
+      }
+
       nextTab.focus();
-      navigate(TABS[nextIndex].to);
+      navigate(nextRoute.to);
     },
     [navigate],
   );
