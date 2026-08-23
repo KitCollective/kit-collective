@@ -35,6 +35,8 @@ const baseShortcut = {
   matchCount: 2,
 };
 
+const UUID_D = "550e8400-e29b-41d4-a716-446655440003";
+
 const baseJersey = {
   id: UUID,
   clubId: UUID,
@@ -45,8 +47,11 @@ const baseJersey = {
   type: "home" as const,
   size: "m" as const,
   condition: "used" as const,
+  countryLabel: "Danmark",
+  leagueLabel: "Superligaen",
   clubLabel: "F.C. København",
   seasonLabel: "2023/24",
+  squadPlayers: [{ id: UUID_D, label: "Jonas Wind" }],
   photos: [
     {
       id: UUID,
@@ -144,6 +149,21 @@ describe("deriveMostUsedFacets", () => {
   it("ranks club facets from owner jerseys", () => {
     expect(deriveMostUsedFacets("club", [baseJersey, baseJersey], [])).toEqual([
       { id: UUID, label: "F.C. København" },
+    ]);
+  });
+
+  it("ranks country and league facets from owner jersey labels", () => {
+    expect(deriveMostUsedFacets("country", [baseJersey], [])).toEqual([
+      { id: UUID_C, label: "Danmark" },
+    ]);
+    expect(deriveMostUsedFacets("league", [baseJersey], [])).toEqual([
+      { id: UUID_B, label: "Superligaen" },
+    ]);
+  });
+
+  it("ranks player facets from owner jersey squad players", () => {
+    expect(deriveMostUsedFacets("player", [baseJersey, baseJersey], [])).toEqual([
+      { id: UUID_D, label: "Jonas Wind" },
     ]);
   });
 });

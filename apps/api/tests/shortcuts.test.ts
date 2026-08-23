@@ -164,6 +164,51 @@ async function insertFullFixture(): Promise<Fixture> {
   };
 }
 
+async function insertSecondClubInSameCountry(
+  countryId: string,
+  leagueId: string,
+  clubLabelDa: string,
+): Promise<{ clubId: string; seasonId: string }> {
+  const { db, pool } = createDb(DATABASE_URL);
+
+  const [insertedClub] = await db
+    .insert(club)
+    .values({ countryId, kind: "club" })
+    .returning({ id: club.id });
+
+  const [insertedSeason] = await db
+    .insert(season)
+    .values({
+      leagueId,
+      label: "2023/24",
+      startsOn: "2023-07-01",
+      endsOn: "2024-06-30",
+      calendarKind: "split_year",
+    })
+    .returning({ id: season.id });
+
+  await db.insert(teamSeason).values({
+    clubId: insertedClub!.id,
+    seasonId: insertedSeason!.id,
+  });
+
+  await db.insert(catalogLabel).values({
+    entityType: "club",
+    entityId: insertedClub!.id,
+    locale: "da",
+    kind: "label",
+    text: clubLabelDa,
+    source: "seed",
+  });
+
+  await pool.end();
+
+  return {
+    clubId: insertedClub!.id,
+    seasonId: insertedSeason!.id,
+  };
+}
+
 async function saveJersey(
   app: NestFastifyApplication,
   accessToken: string,
@@ -241,7 +286,14 @@ describe("Collection shortcuts /v1", () => {
   it("filters jerseys with AND of country and club facets", async () => {
     const session = await registerSession(app, "shortcut-and@example.com");
     const fixture = await insertFullFixture();
+    const secondClub = await insertSecondClubInSameCountry(
+      fixture.countryId,
+      fixture.leagueId,
+      "Brøndby IF",
+    );
+
     await saveJersey(app, session.accessToken, fixture.clubId, fixture.seasonId);
+    await saveJersey(app, session.accessToken, secondClub.clubId, secondClub.seasonId);
 
     const createResponse = await app.inject({
       method: "POST",
@@ -258,6 +310,14 @@ describe("Collection shortcuts /v1", () => {
     expect(shortcut.name).toBe(`${fixture.countryLabelDa} · ${fixture.clubLabelDa}`);
     expect(shortcut.matchCount).toBe(1);
 
+    const alleResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    const alleBody = collectionJerseysSchema.parse(JSON.parse(alleResponse.body));
+    expect(alleBody.jerseys.length).toBe(2);
+
     const filteredResponse = await app.inject({
       method: "GET",
       url: `/v1/collection/jerseys?shortcutId=${shortcut.id}`,
@@ -265,6 +325,8 @@ describe("Collection shortcuts /v1", () => {
     });
     const filteredBody = collectionJerseysSchema.parse(JSON.parse(filteredResponse.body));
     expect(filteredBody.jerseys.length).toBe(1);
+    expect(filteredBody.jerseys[0]?.clubId).toBe(fixture.clubId);
+    expect(filteredBody.jerseys.some((jersey) => jersey.clubId === secondClub.clubId)).toBe(false);
   });
 
   it("filters jerseys by league via Season.leagueId", async () => {

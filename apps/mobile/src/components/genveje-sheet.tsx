@@ -1,6 +1,7 @@
 import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  type AccessibilityActionEvent,
   ActivityIndicator,
   PanResponder,
   ScrollView,
@@ -41,6 +42,7 @@ import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 const FACET_FIELDS: GenvejeFacetKind[] = ["country", "league", "club", "player"];
+const MANAGE_ROW_HEIGHT = 52;
 
 type GenvejeSheetProps = {
   visible: boolean;
@@ -74,16 +76,27 @@ export function GenvejeSheet({
   const [customName, setCustomName] = useState("");
   const [facets, setFacets] = useState<GenvejeFacets>(emptyGenvejeFacets());
   const [openFacetPicker, setOpenFacetPicker] = useState<GenvejeFacetKind | null>(null);
+  const [orderedShortcuts, setOrderedShortcuts] = useState<CollectionShortcut[]>([]);
+  const [draggingShortcutId, setDraggingShortcutId] = useState<string | null>(null);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const dragStartIndexRef = useRef(0);
 
   const loadShortcuts = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetchCollectionShortcuts(accessToken);
       setShortcuts(response.shortcuts);
+      setOrderedShortcuts(response.shortcuts);
     } finally {
       setLoading(false);
     }
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!draggingShortcutId) {
+      setOrderedShortcuts(shortcuts);
+    }
+  }, [shortcuts, draggingShortcutId]);
 
   useEffect(() => {
     if (visible) {
@@ -115,25 +128,68 @@ export function GenvejeSheet({
     try {
       const response = await reorderCollectionShortcuts(accessToken, orderedIds);
       setShortcuts(response.shortcuts);
+      setOrderedShortcuts(response.shortcuts);
       onShortcutsChanged();
     } finally {
       setReordering(false);
     }
   };
 
+  const applyShortcutMove = (fromIndex: number, toIndex: number) => {
+    const orderedIds = reorderShortcutIds(orderedShortcuts, fromIndex, toIndex);
+    if (orderedIds.join() === orderedShortcuts.map((shortcut) => shortcut.id).join()) {
+      return orderedIds;
+    }
+
+    setOrderedShortcuts(
+      orderedIds
+        .map((id) => orderedShortcuts.find((shortcut) => shortcut.id === id))
+        .filter((shortcut): shortcut is CollectionShortcut => shortcut !== undefined),
+    );
+    return orderedIds;
+  };
+
   const moveShortcut = (fromIndex: number, direction: -1 | 1) => {
     const toIndex = fromIndex + direction;
-    const orderedIds = reorderShortcutIds(shortcuts, fromIndex, toIndex);
+    const orderedIds = applyShortcutMove(fromIndex, toIndex);
     if (orderedIds.join() === shortcuts.map((shortcut) => shortcut.id).join()) {
       return;
     }
 
-    setShortcuts(
-      orderedIds
-        .map((id) => shortcuts.find((shortcut) => shortcut.id === id))
-        .filter((shortcut): shortcut is CollectionShortcut => shortcut !== undefined),
-    );
     void persistReorder(orderedIds);
+  };
+
+  const updateDragPosition = (shortcutId: string, offsetY: number) => {
+    const currentIndex = orderedShortcuts.findIndex((shortcut) => shortcut.id === shortcutId);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    setDragOffsetY(offsetY);
+
+    const targetIndex = Math.min(
+      orderedShortcuts.length - 1,
+      Math.max(
+        0,
+        dragStartIndexRef.current +
+          Math.floor((offsetY + MANAGE_ROW_HEIGHT / 2) / MANAGE_ROW_HEIGHT),
+      ),
+    );
+
+    if (targetIndex !== currentIndex) {
+      applyShortcutMove(currentIndex, targetIndex);
+    }
+  };
+
+  const finishDrag = () => {
+    const orderedIds = orderedShortcuts.map((shortcut) => shortcut.id);
+    const persistedIds = shortcuts.map((shortcut) => shortcut.id);
+    setDraggingShortcutId(null);
+    setDragOffsetY(0);
+
+    if (orderedIds.join() !== persistedIds.join()) {
+      void persistReorder(orderedIds);
+    }
   };
 
   const handleSave = async () => {
@@ -193,45 +249,67 @@ export function GenvejeSheet({
               <ActivityIndicator color={theme.fillPrimary} />
             ) : (
               <ScrollView>
-                {shortcuts.map((shortcut, index) => (
-                  <View key={shortcut.id} style={styles.manageRow}>
-                    <ShortcutDragHandle
-                      color={theme.contentMuted}
-                      onMove={(direction) => moveShortcut(index, direction)}
-                    />
+                {orderedShortcuts.map((shortcut, index) => {
+                  const isDragging = draggingShortcutId === shortcut.id;
+                  const currentIndex = orderedShortcuts.findIndex((row) => row.id === shortcut.id);
+                  const dragTranslateY = isDragging
+                    ? dragOffsetY - (currentIndex - dragStartIndexRef.current) * MANAGE_ROW_HEIGHT
+                    : 0;
+
+                  return (
                     <View
-                      style={styles.manageMain}
-                      accessible
-                      accessibilityLabel={manageRowAccessibilityLabel(
-                        shortcut.name,
-                        shortcut.matchCount,
-                      )}
+                      key={shortcut.id}
+                      style={[
+                        styles.manageRow,
+                        isDragging && styles.manageRowDragging,
+                        isDragging ? { transform: [{ translateY: dragTranslateY }] } : null,
+                      ]}
                     >
-                      <Text
-                        style={[typography.body, { color: theme.contentPrimary }]}
-                        importantForAccessibility="no-hide-descendants"
+                      <ShortcutDragHandle
+                        color={theme.contentMuted}
+                        onMove={(direction) => moveShortcut(index, direction)}
+                        onDragStart={() => {
+                          dragStartIndexRef.current = index;
+                          setDraggingShortcutId(shortcut.id);
+                          setDragOffsetY(0);
+                        }}
+                        onDragMove={(offsetY) => updateDragPosition(shortcut.id, offsetY)}
+                        onDragEnd={() => finishDrag()}
+                      />
+                      <View
+                        style={styles.manageMain}
+                        accessible
+                        accessibilityLabel={manageRowAccessibilityLabel(
+                          shortcut.name,
+                          shortcut.matchCount,
+                        )}
                       >
-                        {shortcut.name}
-                      </Text>
-                      <Text
-                        style={[typography.mono, { color: theme.contentMuted }]}
-                        importantForAccessibility="no-hide-descendants"
-                      >
-                        {shortcut.matchCount}
-                      </Text>
+                        <Text
+                          style={[typography.body, { color: theme.contentPrimary }]}
+                          importantForAccessibility="no-hide-descendants"
+                        >
+                          {shortcut.name}
+                        </Text>
+                        <Text
+                          style={[typography.mono, { color: theme.contentMuted }]}
+                          importantForAccessibility="no-hide-descendants"
+                        >
+                          {shortcut.matchCount}
+                        </Text>
+                      </View>
+                      <IconButton
+                        name="Rediger"
+                        icon="create-outline"
+                        onPress={() => openEditForm(shortcut)}
+                      />
+                      <IconButton
+                        name="Slet"
+                        icon="trash-outline"
+                        onPress={() => void handleDelete(shortcut.id)}
+                      />
                     </View>
-                    <IconButton
-                      name="Rediger"
-                      icon="create-outline"
-                      onPress={() => openEditForm(shortcut)}
-                    />
-                    <IconButton
-                      name="Slet"
-                      icon="trash-outline"
-                      onPress={() => void handleDelete(shortcut.id)}
-                    />
-                  </View>
-                ))}
+                  );
+                })}
               </ScrollView>
             )}
             <Button label="Tilføj" variant="primary" width="fill" onPress={openCreateForm} />
@@ -311,42 +389,58 @@ export function GenvejeSheet({
 function ShortcutDragHandle({
   color,
   onMove,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
 }: {
   color: string;
   onMove: (direction: -1 | 1) => void;
+  onDragStart: () => void;
+  onDragMove: (offsetY: number) => void;
+  onDragEnd: () => void;
 }) {
-  const movedRef = useRef(false);
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        movedRef.current = false;
+        onDragStart();
       },
       onPanResponderMove: (_, gesture) => {
-        if (movedRef.current) {
-          return;
-        }
-
-        if (gesture.dy < -36) {
-          movedRef.current = true;
-          onMove(-1);
-        } else if (gesture.dy > 36) {
-          movedRef.current = true;
-          onMove(1);
-        }
+        onDragMove(gesture.dy);
       },
       onPanResponderRelease: () => {
-        movedRef.current = false;
+        onDragEnd();
+      },
+      onPanResponderTerminate: () => {
+        onDragEnd();
       },
     }),
   ).current;
+
+  const handleAccessibilityAction = (event: AccessibilityActionEvent) => {
+    switch (event.nativeEvent.actionName) {
+      case "increment":
+        onMove(1);
+        break;
+      case "decrement":
+        onMove(-1);
+        break;
+      default:
+        break;
+    }
+  };
 
   return (
     <View
       style={styles.dragHandle}
       accessible
       accessibilityLabel="Flyt"
+      accessibilityActions={[
+        { name: "increment", label: "Flyt ned" },
+        { name: "decrement", label: "Flyt op" },
+      ]}
+      onAccessibilityAction={handleAccessibilityAction}
       {...panResponder.panHandlers}
     >
       <View style={[styles.dragBar, { backgroundColor: color }]} />
@@ -368,6 +462,11 @@ const styles = StyleSheet.create({
     gap: space.gapSm,
     minHeight: 44,
     paddingVertical: space.insetSm,
+  },
+  manageRowDragging: {
+    zIndex: 1,
+    elevation: 2,
+    opacity: 0.92,
   },
   manageMain: {
     flex: 1,

@@ -229,11 +229,11 @@ function rankFacetFrequency(rows: FacetFrequency[]): CatalogPickerItem[] {
     .map((row) => ({ id: row.id, label: row.label }));
 }
 
-/** Mest brugte from the owner's jerseys and prior genveje — never a global ranking. */
+/** Mest brugte from the owner's jerseys — never a global ranking. */
 export function deriveMostUsedFacets(
   kind: GenvejeFacetKind,
   ownerJerseys: CollectionJersey[],
-  shortcuts: CollectionShortcut[],
+  _shortcuts: CollectionShortcut[],
 ): CatalogPickerItem[] {
   const counts = new Map<string, FacetFrequency>();
 
@@ -254,26 +254,20 @@ export function deriveMostUsedFacets(
 
   if (kind === "country") {
     for (const jersey of ownerJerseys) {
-      const label =
-        shortcuts.find((shortcut) => shortcut.countryId === jersey.countryId)?.countryLabel ??
-        `Land ${jersey.countryId.slice(0, 8)}`;
-      bump(jersey.countryId, label);
+      bump(jersey.countryId, jersey.countryLabel);
     }
   }
 
   if (kind === "league") {
     for (const jersey of ownerJerseys) {
-      const label =
-        shortcuts.find((shortcut) => shortcut.leagueId === jersey.leagueId)?.leagueLabel ??
-        jersey.seasonLabel;
-      bump(jersey.leagueId, label);
+      bump(jersey.leagueId, jersey.leagueLabel);
     }
   }
 
   if (kind === "player") {
-    for (const shortcut of shortcuts) {
-      if (shortcut.playerId && shortcut.playerLabel) {
-        bump(shortcut.playerId, shortcut.playerLabel);
+    for (const jersey of ownerJerseys) {
+      for (const squadPlayer of jersey.squadPlayers) {
+        bump(squadPlayer.id, squadPlayer.label);
       }
     }
   }
