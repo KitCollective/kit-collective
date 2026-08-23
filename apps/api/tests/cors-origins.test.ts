@@ -29,6 +29,7 @@ describe("corsAllowedOrigins", () => {
     const allowed = corsAllowedOrigins();
     expect(allowed).not.toBe(false);
     expect(allowed).toContain("http://localhost:8081");
+    expect(allowed).toContain("http://localhost:5173");
   });
 });
 
