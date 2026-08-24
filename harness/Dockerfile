@@ -15,7 +15,17 @@ RUN apt-get update \
   && npm install -g @schpet/linear-cli@2.5.0 @earendil-works/pi-coding-agent@0.84.3 \
   && rm -rf /var/lib/apt/lists/*
 
+COPY .pi /workspace/.pi
+ENV PI_WORKSPACE=/workspace
+WORKDIR /workspace
+RUN pi install npm:pi-subagents \
+  && pi install npm:@ghoseb/pi-damage-control \
+  && pi install npm:pi-cursor-sdk \
+  && pi install -l npm:pi-subagents \
+  && pi install -l npm:@ghoseb/pi-damage-control \
+  && pi install -l npm:pi-cursor-sdk
+
 WORKDIR /app
-COPY boot-env.mjs job-queue.mjs server.mjs webhook-router.mjs ./
+COPY harness/boot-env.mjs harness/job-queue.mjs harness/linear-cli.mjs harness/pi-job.mjs harness/server.mjs harness/webhook-router.mjs ./
 EXPOSE 8080
 CMD ["node", "server.mjs"]

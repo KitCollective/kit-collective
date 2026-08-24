@@ -1,0 +1,7 @@
+{
+  "packages": [
+    "npm:pi-subagents",
+    "npm:@ghoseb/pi-damage-control",
+    "npm:pi-cursor-sdk"
+  ]
+}

@@ -1,11 +1,14 @@
 /**
  * Production HTTP adapter for the KIT-52 webhook router (Compose on the PI box).
  * GET /health is for Compose/Hetzner probes. POST goes to HMAC dispatch.
+ * Default Linear + Pi adapters are real CLI processes; tests inject fakes.
  */
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { assertWorkerEnv } from "./boot-env.mjs";
 import { createSerialQueue } from "./job-queue.mjs";
+import { createLinearCliClient } from "./linear-cli.mjs";
+import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
 import { createHttpHandler } from "./webhook-router.mjs";
 
 /**
@@ -25,34 +28,39 @@ export function createWorkerHandler(deps) {
   };
 }
 
-export function startWorkerServer({
+export async function startWorkerServer({
   env = process.env,
   listenPort = Number(env.PORT ?? 8080),
-  linear = {
-    async getIssue() {
-      return null;
-    },
-  },
-  gh = {},
+  listenHost = "0.0.0.0",
+  linear,
+  run,
+  listPackages,
+  runCommand,
+  spawnProcess,
   now = () => Date.now(),
 } = {}) {
   assertWorkerEnv(env);
+  const workspace = resolvePiWorkspace(env);
+  await assertPiPackagesReady({ root: workspace, listPackages });
+  const linearClient = linear ?? createLinearCliClient({ env, runCommand });
+  const runner =
+    typeof run === "function" ? { run } : createPiJobRunner({ env, workspace, spawnProcess });
   const queue = createSerialQueue({
     async run(job) {
-      return job;
+      return runner.run(job);
     },
   });
   const handler = createWorkerHandler({
     secret: env.LINEAR_WEBHOOK_SECRET,
     now,
-    linear,
-    gh,
+    linear: linearClient,
+    gh: { tokenName: "GH_TOKEN" },
     enqueue: queue,
     allowedDelegates: ["Pi"],
   });
   const server = createServer(handler);
   return new Promise((resolve) => {
-    server.listen(listenPort, "0.0.0.0", () => resolve(server));
+    server.listen(listenPort, listenHost, () => resolve(server));
   });
 }
 

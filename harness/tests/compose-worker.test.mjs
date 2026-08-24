@@ -7,7 +7,9 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
 import { createSerialQueue } from "../job-queue.mjs";
-import { createWorkerHandler } from "../server.mjs";
+import { createLinearCliClient } from "../linear-cli.mjs";
+import { assertPiPackagesReady, createPiJobRunner, REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
+import { createWorkerHandler, startWorkerServer } from "../server.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SECRET = "test-linear-webhook-secret";
@@ -16,17 +18,32 @@ const NOW = 1_700_000_000_000;
 function validWorkerEnv() {
   return {
     CURSOR_API_KEY: "cursor_test",
-    LINEAR_API_KEY: "lin_api_test",
+    LINEAR_CLI_API_KEY: "lin_cli_test",
     LINEAR_WEBHOOK_SECRET: SECRET,
     GH_TOKEN: "ghp_test",
     LINEAR_CLI_VERSION: LINEAR_CLI_PIN.version,
+    PI_MODEL: "cursor/composer-2.5",
+    PI_MODEL_FAST: "cursor/grok-4.6",
   };
 }
 
-test("worker env lists Cursor SDK, Linear, webhook HMAC, gh, and the pinned Linear CLI", () => {
+function dispatchableIssue(overrides = {}) {
+  return {
+    id: "issue-1",
+    identifier: "KIT-99",
+    status: "Implementing",
+    labels: ["Feature"],
+    linearType: "Feature",
+    blockedBy: [],
+    delegate: { name: "Pi" },
+    ...overrides,
+  };
+}
+
+test("worker env lists Cursor SDK, Linear CLI key, webhook HMAC, gh, and the pinned Linear CLI", () => {
   assert.deepEqual(WORKER_SECRET_NAMES, [
     "CURSOR_API_KEY",
-    "LINEAR_API_KEY",
+    "LINEAR_CLI_API_KEY",
     "LINEAR_WEBHOOK_SECRET",
     "GH_TOKEN",
   ]);
@@ -166,6 +183,16 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.doesNotMatch(dockerfile, /piagent\/platform/);
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
+  assert.match(dockerfile, /COPY \.pi /);
+  assert.match(dockerfile, /pi install/);
+  assert.match(dockerfile, /PI_WORKSPACE=\/workspace/);
+});
+
+test("compose build context includes the repo so .pi lands in the image", () => {
+  const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
+  assert.match(compose, /context:\s*\.\./);
+  assert.match(compose, /dockerfile:\s*harness\/Dockerfile/);
+  assert.match(compose, /PI_WORKSPACE:\s*"\/workspace"/);
 });
 
 test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control exist", () => {
@@ -185,6 +212,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
     ".pi/mcp.json",
     ".pi/damage-control.yaml",
     ".pi/extensions.json",
+    ".pi/settings.json",
     "harness/host.md",
   ];
   for (const relative of files) {
@@ -196,9 +224,9 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
 
   const extensions = JSON.parse(readFileSync(join(ROOT, ".pi/extensions.json"), "utf8"));
   assert.equal(extensions["piagent-platform-onboard"], false);
-  assert.ok(extensions.packages.includes("pi-subagents"));
-  assert.ok(extensions.packages.includes("@ghoseb/pi-damage-control"));
-  assert.ok(extensions.packages.includes("pi-cursor-sdk"));
+
+  const settings = JSON.parse(readFileSync(join(ROOT, ".pi/settings.json"), "utf8"));
+  assert.deepEqual(settings.packages, [...REQUIRED_PI_PACKAGES]);
 
   const policy = readFileSync(join(ROOT, ".pi/damage-control.yaml"), "utf8");
   assert.match(policy, /\.env/);
@@ -213,9 +241,172 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(envExample, /Do not set DATABASE_URL on the CX33 worker/i);
   assert.match(envExample, /PI_MODEL=cursor\/composer-2\.5/);
   assert.match(envExample, /PI_MODEL_FAST=cursor\/grok-4\.6/);
+  const bootstrapKeyIndex = envExample.indexOf(
+    "# Linear admin key for scripts/bootstrap-linear.mjs only.",
+  );
+  const firstLinearApiKey = envExample.indexOf("LINEAR_API_KEY=");
+  const workerKeyIndex = envExample.indexOf("LINEAR_CLI_API_KEY=");
+  assert.ok(bootstrapKeyIndex >= 0 && firstLinearApiKey > bootstrapKeyIndex);
+  assert.ok(workerKeyIndex > firstLinearApiKey);
 
   const host = readFileSync(join(ROOT, "harness/host.md"), "utf8");
   assert.match(host, /kit-harness/);
   assert.match(host, /416348660/);
   assert.match(host, /62\.238\.125\.114/);
+  assert.match(host, /\/opt\/kit-collective\/harness\/\.env/);
+  assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);
+  assert.doesNotMatch(host, /:8080\/health/);
+
+  const wizard = readFileSync(join(ROOT, "harness/cx33-wizard.sh"), "utf8");
+  assert.match(wizard, /harness\/\.env/);
+  assert.match(wizard, /LINEAR_CLI_API_KEY/);
+  assert.doesNotMatch(wizard, /:8080\/health/);
+  assert.doesNotMatch(wizard, /Copy worker keys into \/opt\/kit-collective\/\.env/);
+});
+
+test("worker env does not accept the bootstrap LINEAR_API_KEY as the CLI secret", () => {
+  const env = validWorkerEnv();
+  delete env.LINEAR_CLI_API_KEY;
+  env.LINEAR_API_KEY = "lin_api_bootstrap";
+  assert.throws(() => assertWorkerEnv(env), /LINEAR_CLI_API_KEY/);
+});
+
+test("Linear CLI getIssue maps GraphQL JSON into the KIT-52 dispatch snapshot", async () => {
+  const calls = [];
+  const linear = createLinearCliClient({
+    env: validWorkerEnv(),
+    async runCommand(command, args, options) {
+      calls.push({ command, args, env: options.env });
+      return JSON.stringify({
+        data: {
+          issue: {
+            id: "issue-1",
+            identifier: "KIT-99",
+            state: { name: "Implementing", type: "started" },
+            labels: { nodes: [{ name: "Feature" }, { name: "ready-for-agent" }] },
+            delegate: { name: "Pi" },
+            inverseRelations: {
+              nodes: [
+                {
+                  type: "blocks",
+                  issue: { identifier: "KIT-1", state: { name: "Done", type: "completed" } },
+                },
+              ],
+            },
+          },
+        },
+      });
+    },
+  });
+
+  const issue = await linear.getIssue("issue-1");
+  assert.deepEqual(issue, {
+    id: "issue-1",
+    identifier: "KIT-99",
+    status: "Implementing",
+    labels: ["Feature", "ready-for-agent"],
+    linearType: "Feature",
+    blockedBy: [{ status: "Done", statusType: "completed" }],
+    delegate: { name: "Pi" },
+  });
+  assert.equal(calls[0].command, "linear");
+  assert.equal(calls[0].args[0], "api");
+  assert.equal(calls[0].env.LINEAR_API_KEY, "lin_cli_test");
+  assert.equal(calls[0].env.LINEAR_CLI_API_KEY, "lin_cli_test");
+});
+
+test("boot fails when required Pi packages are missing from pi list", async () => {
+  await assert.rejects(
+    () =>
+      assertPiPackagesReady({
+        root: ROOT,
+        async listPackages() {
+          return "other-extension";
+        },
+      }),
+    /pi-subagents/,
+  );
+});
+
+test("Pi job runner starts one non-interactive Pi process with the role file", async () => {
+  const spawned = [];
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    spawnProcess(command, args, options) {
+      spawned.push({ command, args, options });
+      return Promise.resolve({ status: 0 });
+    },
+  });
+
+  await runner.run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 1);
+  assert.equal(spawned[0].command, "pi");
+  assert.ok(spawned[0].args.includes("-p"));
+  assert.ok(spawned[0].args.includes("cursor/composer-2.5"));
+  assert.ok(spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/implement.md")));
+  assert.equal(spawned[0].options.env.CURSOR_API_KEY, "cursor_test");
+  assert.equal(spawned[0].options.env.GH_TOKEN, "ghp_test");
+  assert.equal(spawned[0].options.env.LINEAR_API_KEY, "lin_cli_test");
+});
+
+test("production adapter fetches Linear and runs one Pi job on a dispatchable Issue POST", async () => {
+  const ran = [];
+  let finished;
+  const done = new Promise((resolve) => {
+    finished = resolve;
+  });
+  const server = await startWorkerServer({
+    env: validWorkerEnv(),
+    listenHost: "127.0.0.1",
+    listenPort: 0,
+    now: () => NOW,
+    linear: {
+      async getIssue() {
+        return dispatchableIssue();
+      },
+    },
+    run: async (job) => {
+      ran.push(job);
+      finished(job);
+      return job;
+    },
+    async listPackages() {
+      return REQUIRED_PI_PACKAGES.join("\n");
+    },
+  });
+  const { port } = server.address();
+  const rawBody = JSON.stringify({
+    action: "update",
+    type: "Issue",
+    data: { id: "issue-1" },
+    updatedFrom: { stateId: "prev" },
+    webhookTimestamp: NOW,
+  });
+  const signature = createHmac("sha256", SECRET).update(rawBody).digest("hex");
+  try {
+    const ok = await fetch(`http://127.0.0.1:${port}/webhooks/linear`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "linear-signature": signature },
+      body: rawBody,
+    });
+    assert.equal(ok.status, 200);
+    await Promise.race([
+      done,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Pi job was never run")), 1000);
+      }),
+    ]);
+    assert.equal(ran.length, 1);
+    assert.equal(ran[0].role, "implement");
+    assert.equal(ran[0].adwFile, ".pi/adw/feature.yaml");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

@@ -26,7 +26,7 @@ Product Postgres, Redis, and the PaaS panel stay on the other Helsinki CX33. Thi
 - Compose: `docker compose up -d` (webhook behind Caddy)
 - Health: `https://harness.eskobar.dev/health` → `{"ok":true}`
 - TLS: Let’s Encrypt via Caddy
-- Worker `.env` on the box only — never git. Required names: `CURSOR_API_KEY`, `LINEAR_API_KEY`, `LINEAR_WEBHOOK_SECRET`, `GH_TOKEN`. Values live on `kit-harness`, not in git.
+- Worker `.env` on the box only — never git. Path: `/opt/kit-collective/harness/.env` (compose `env_file: .env` next to this compose file). Required names: `CURSOR_API_KEY`, `LINEAR_CLI_API_KEY`, `LINEAR_WEBHOOK_SECRET`, `GH_TOKEN`. Values live on `kit-harness`, not in git. Do not reuse `LINEAR_API_KEY` (bootstrap admin key).
 
 ## Models (not Anthropic)
 
@@ -35,5 +35,5 @@ Cursor does not ship a public OpenAI-compatible URL. The macOS app “API for Cu
 Use a Cursor SDK key + the Pi extension `pi-cursor-sdk`:
 
 1. Mint a **user or service-account** key at [cursor.com/dashboard](https://cursor.com/dashboard) → Integrations / API Keys. Team Admin keys are rejected by the SDK.
-2. Put it in `CURSOR_API_KEY` on this host (wizard or `/opt/kit-collective/.env`).
+2. Put it in `CURSOR_API_KEY` on this host (wizard or `/opt/kit-collective/harness/.env`).
 3. Jobs: `pi --model cursor/composer-2.5` (implement) or `pi --model cursor/grok-4.6` (fast/planner). Defaults: `PI_MODEL` / `PI_MODEL_FAST`.

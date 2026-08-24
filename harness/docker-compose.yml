@@ -5,8 +5,8 @@
 services:
   webhook:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: harness/Dockerfile
     command: ["node", "server.mjs"]
     restart: unless-stopped
     expose:
@@ -16,6 +16,7 @@ services:
         required: true
     environment:
       PORT: "8080"
+      PI_WORKSPACE: "/workspace"
       LINEAR_CLI_VERSION: "2.5.0"
       PI_MODEL: "cursor/composer-2.5"
       PI_MODEL_FAST: "cursor/grok-4.6"

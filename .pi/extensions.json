@@ -1,4 +1,3 @@
 {
-  "piagent-platform-onboard": false,
-  "packages": ["pi-subagents", "@ghoseb/pi-damage-control", "pi-cursor-sdk"]
+  "piagent-platform-onboard": false
 }

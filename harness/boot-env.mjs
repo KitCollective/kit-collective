@@ -1,5 +1,6 @@
 /**
  * Worker boot env (KIT-53). Secret names only — values live on the CX33 box.
+ * LINEAR_CLI_API_KEY is the worker Linear CLI secret. LINEAR_API_KEY stays bootstrap-only.
  * DATABASE_URL is forbidden so this host cannot reach product Postgres.
  */
 
@@ -10,7 +11,7 @@ export const LINEAR_CLI_PIN = {
 
 export const WORKER_SECRET_NAMES = [
   "CURSOR_API_KEY",
-  "LINEAR_API_KEY",
+  "LINEAR_CLI_API_KEY",
   "LINEAR_WEBHOOK_SECRET",
   "GH_TOKEN",
 ];
