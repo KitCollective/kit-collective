@@ -20,7 +20,8 @@ export function checkMobileCaptureDeadExports({ captureFlowSource }) {
     );
   }
 
-  const exportFromMidFile = /export\s+type\s+\{[^}]+\}\s+from\s+["'][^"']+["'];\s*\nexport\s+\{[^}]+\}\s+from/;
+  const exportFromMidFile =
+    /export\s+type\s+\{[^}]+\}\s+from\s+["'][^"']+["'];\s*\nexport\s+\{[^}]+\}\s+from/;
   if (exportFromMidFile.test(captureFlowSource)) {
     violations.push(
       `${CAPTURE_FLOW_PATH}: re-exports must not sit between import blocks — keep imports at top`,

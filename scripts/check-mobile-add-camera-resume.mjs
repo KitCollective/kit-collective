@@ -55,9 +55,7 @@ export function checkMobileAddCameraResume({
   }
 
   if (!pointerSource.includes("getActiveCameraCaptureSessionId")) {
-    violations.push(
-      `${POINTER_PATH}: must persist an active camera session pointer for resume`,
-    );
+    violations.push(`${POINTER_PATH}: must persist an active camera session pointer for resume`);
   }
 
   if (!cameraSessionSource.includes("initialPhotos")) {
