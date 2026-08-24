@@ -91,7 +91,8 @@ export function AdminShell() {
     }
 
     function onPointerDown(event: PointerEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target;
+      if (menuRef.current && target instanceof Node && !menuRef.current.contains(target)) {
         closeMenu();
       }
     }
