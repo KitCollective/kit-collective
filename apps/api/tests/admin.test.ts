@@ -303,11 +303,13 @@ describe("Admin /v1", () => {
       },
     });
     expect(clubSeasonDrillResponse.statusCode).toBe(200);
-    const clubSeasonBody = adminClubSeasonDrillSchema.parse(JSON.parse(clubSeasonDrillResponse.body));
-    expect(clubSeasonBody.squadCount).toBe(1);
-    expect(clubSeasonBody.squad?.some((row) => row.label === "Player One" && row.squadNumber === 10)).toBe(
-      true,
+    const clubSeasonBody = adminClubSeasonDrillSchema.parse(
+      JSON.parse(clubSeasonDrillResponse.body),
     );
+    expect(clubSeasonBody.squadCount).toBe(1);
+    expect(
+      clubSeasonBody.squad?.some((row) => row.label === "Player One" && row.squadNumber === 10),
+    ).toBe(true);
     expect(clubSeasonBody.kits.some((row) => row.kitType === "home" && row.hasPhoto)).toBe(true);
 
     const seasonDrillResponse = await app.inject({
