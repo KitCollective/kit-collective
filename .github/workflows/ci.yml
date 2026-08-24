@@ -163,6 +163,18 @@ jobs:
       - name: Test mobile add form-wiring ratchet logic
         run: node --test scripts/tests/check-mobile-add-form-wiring.test.mjs
 
+      - name: Check mobile add confirm-redirect ratchet
+        run: pnpm check:mobile-add-confirm-redirect
+
+      - name: Test mobile add confirm-redirect ratchet logic
+        run: node --test scripts/tests/check-mobile-add-confirm-redirect.test.mjs
+
+      - name: Check mobile add upload-files ratchet
+        run: pnpm check:mobile-add-upload-files
+
+      - name: Test mobile add upload-files ratchet logic
+        run: node --test scripts/tests/check-mobile-add-upload-files.test.mjs
+
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
 
