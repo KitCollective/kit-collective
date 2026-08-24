@@ -107,6 +107,9 @@ export default function ConfirmScreen() {
 
   const draft = state ? getDraft(state, state.activeDraftId) : null;
   const isBulk = state?.branch === "bulk";
+  const visionDraftId = draft?.id ?? null;
+  const visionFirstPhotoUri = draft?.photos[0]?.uri ?? null;
+  const visionFirstPhotoRole = draft?.photos[0]?.role ?? "front";
 
   useEffect(() => {
     if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
@@ -268,12 +271,7 @@ export default function ConfirmScreen() {
     kitTypeManuallySet.current = false;
     setSelectedSeasonLabel(null);
 
-    if (!accessToken || !draft) {
-      return;
-    }
-
-    const firstPhoto = draft.photos[0];
-    if (!firstPhoto) {
+    if (!accessToken || !visionDraftId || !visionFirstPhotoUri) {
       return;
     }
 
@@ -281,9 +279,9 @@ export default function ConfirmScreen() {
     void (async () => {
       visionStartAttempted.current = true;
       try {
-        const contentBase64 = await readPhotoBase64(firstPhoto.uri);
+        const contentBase64 = await readPhotoBase64(visionFirstPhotoUri);
         const jobId = await startVisionSuggest(accessToken, {
-          photo: { role: firstPhoto.role ?? "front", contentBase64 },
+          photo: { role: visionFirstPhotoRole, contentBase64 },
         });
         if (!cancelled) {
           setVisionJobId(jobId);
@@ -297,7 +295,7 @@ export default function ConfirmScreen() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, draft]);
+  }, [accessToken, visionDraftId, visionFirstPhotoUri, visionFirstPhotoRole]);
 
   useEffect(() => {
     if (!accessToken || !visionJobId || !visionPolling) {
