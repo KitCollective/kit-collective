@@ -1,41 +1,53 @@
 import { PHOTO_ROLES, type PhotoRole } from "@kit/domain";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureQualityForRole } from "@/capture/photoBytes";
-import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { Banner } from "@/components/catalog-ui";
 import { PhotoSlot } from "@/components/photo-slot";
 import { Button, IconButton } from "@/components/ui";
-import { loadDraft, nextEmptyRole, upsertDraftPhoto } from "@/drafts/jerseyDraftStore";
 import { color, radius, space, type } from "@/theme/tokens";
 
 type CaptureCameraSessionProps = {
-  draftId: string;
-  onContinue: () => void;
+  onComplete: (uris: string[]) => void;
+  onClose: () => void;
+  onGalleryEscape: (existingPhotos: CapturedPhoto[]) => void;
 };
+
+type CapturedPhoto = {
+  role: PhotoRole;
+  uri: string;
+};
+
+function nextEmptyRole(photos: CapturedPhoto[]): PhotoRole | null {
+  for (const role of PHOTO_ROLES) {
+    if (!photos.some((photo) => photo.role === role)) {
+      return role;
+    }
+  }
+  return null;
+}
 
 /**
  * Repeat-capture session with in-app CameraView.
  *
  * Camera permission is deferred until shutter intent: CameraView is not mounted
- * until the user has granted permission via the shutter button (see Expo camera
- * docs — mounting CameraView before grant triggers the OS prompt on mount).
+ * until the user has granted permission via the shutter button.
  */
-export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessionProps) {
-  const router = useRouter();
+export function CaptureCameraSession({
+  onComplete,
+  onClose,
+  onGalleryEscape,
+}: CaptureCameraSessionProps) {
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [isFocused, setIsFocused] = useState(true);
   const [pendingShot, setPendingShot] = useState(false);
-  const [activeRole, setActiveRole] = useState<PhotoRole>(() => {
-    const draft = loadDraft(draftId);
-    return nextEmptyRole(draft.photos) ?? PHOTO_ROLES[0];
-  });
-  const [photos, setPhotos] = useState(() => loadDraft(draftId).photos);
+  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [activeRole, setActiveRole] = useState<PhotoRole>(PHOTO_ROLES[0]);
 
   useFocusEffect(
     useCallback(() => {
@@ -44,20 +56,18 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
     }, []),
   );
 
+  useEffect(() => {
+    const next = nextEmptyRole(photos);
+    if (next) {
+      setActiveRole(next);
+    }
+  }, [photos]);
+
   const photoMap: Record<PhotoRole, string | undefined> = {
     front: photos.find((photo) => photo.role === "front")?.uri,
     back: photos.find((photo) => photo.role === "back")?.uri,
     label: photos.find((photo) => photo.role === "label")?.uri,
   };
-
-  const refreshPhotos = useCallback(() => {
-    const draft = loadDraft(draftId);
-    setPhotos(draft.photos);
-    const next = nextEmptyRole(draft.photos);
-    if (next) {
-      setActiveRole(next);
-    }
-  }, [draftId]);
 
   const captureFromCamera = useCallback(async () => {
     if (!cameraRef.current) {
@@ -73,9 +83,11 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
       return;
     }
 
-    upsertDraftPhoto(draftId, activeRole, shot.uri, "camera");
-    refreshPhotos();
-  }, [activeRole, draftId, refreshPhotos]);
+    setPhotos((current) => [
+      ...current.filter((photo) => photo.role !== activeRole),
+      { role: activeRole, uri: shot.uri },
+    ]);
+  }, [activeRole]);
 
   const takeShot = useCallback(async () => {
     if (!permission?.granted) {
@@ -98,7 +110,6 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
     let cancelled = false;
 
     const runPendingShot = async () => {
-      // CameraView mounts only after grant; wait one frame for the ref to attach.
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => resolve());
       });
@@ -119,19 +130,6 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
       cancelled = true;
     };
   }, [captureFromCamera, isFocused, pendingShot, permission?.granted]);
-
-  const pickFromGallery = async () => {
-    const uris = await pickGalleryPhotos({
-      quality: captureQualityForRole(activeRole),
-    });
-
-    if (!uris?.[0]) {
-      return;
-    }
-
-    upsertDraftPhoto(draftId, activeRole, uris[0], "gallery");
-    refreshPhotos();
-  };
 
   const cameraDenied = permission?.status === "denied";
   const showCamera = isFocused && permission?.granted;
@@ -155,12 +153,7 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
         pointerEvents="box-none"
       >
         <View style={styles.header} pointerEvents="box-none">
-          <IconButton
-            name="Luk"
-            icon="close"
-            iconColor={color.contentInverse}
-            onPress={() => router.back()}
-          />
+          <IconButton name="Luk" icon="close" iconColor={color.contentInverse} onPress={onClose} />
           <Text style={styles.hint}>Tag forside, bagside og mærke</Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -200,7 +193,7 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
           <Button
             label="Vælg fra galleri"
             variant="tertiary"
-            onPress={() => void pickFromGallery()}
+            onPress={() => onGalleryEscape(photos)}
           />
           <Pressable
             accessibilityRole="button"
@@ -218,7 +211,12 @@ export function CaptureCameraSession({ draftId, onContinue }: CaptureCameraSessi
             label="Fortsæt"
             variant="secondary"
             disabled={photos.length === 0}
-            onPress={onContinue}
+            onPress={() => {
+              const orderedUris = PHOTO_ROLES.map(
+                (role) => photos.find((photo) => photo.role === role)?.uri,
+              ).filter((uri): uri is string => Boolean(uri));
+              onComplete(orderedUris);
+            }}
           />
         </View>
       </View>

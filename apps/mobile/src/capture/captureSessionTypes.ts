@@ -1,10 +1,11 @@
-import type { JerseyCondition, JerseySize, KitType, PhotoRole } from "@kit/domain";
+import type { JerseyCondition, JerseySize, KitType, PhotoRole, PhotoSource } from "@kit/domain";
 
 export type CaptureBranch = "single" | "bulk";
 
 export type CaptureSessionPhoto = {
   uri: string;
   role: PhotoRole | null;
+  source: PhotoSource;
 };
 
 export type CaptureJerseyDraft = {
@@ -18,6 +19,7 @@ export type CaptureJerseyDraft = {
   kitTypeSelected: boolean;
   sizeSelected: boolean;
   conditionSelected: boolean;
+  notes: string;
   photos: CaptureSessionPhoto[];
 };
 

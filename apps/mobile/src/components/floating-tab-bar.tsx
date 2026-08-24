@@ -69,7 +69,7 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
   };
 
   const startCapture = () => {
-    router.push("/(tabs)/add/capture");
+    router.push("/(tabs)/add");
   };
 
   const renderSlot = (place: TabPlace) => {

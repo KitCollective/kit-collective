@@ -1,4 +1,4 @@
-import type { JerseyCondition, JerseySize, KitType, PhotoRole } from "@kit/domain";
+import type { JerseyCondition, JerseySize, KitType, PhotoRole, PhotoSource } from "@kit/domain";
 import { PHOTO_ROLES } from "@kit/domain";
 import type {
   CaptureBranch,
@@ -63,14 +63,16 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
     kitTypeSelected: false,
     sizeSelected: false,
     conditionSelected: false,
+    notes: "",
     photos: [],
   };
 }
 
-function assignSingleRoles(uris: string[]): CaptureSessionPhoto[] {
+function assignSingleRoles(uris: string[], source: PhotoSource): CaptureSessionPhoto[] {
   return uris.map((uri, index) => ({
     uri,
     role: PHOTO_ROLES[index] ?? null,
+    source,
   }));
 }
 
@@ -97,8 +99,45 @@ function updateDraft(
 
 export function createCaptureSession(
   orderedUris: string[],
+  options?: { store?: CaptureSessionStore; sessionId?: string; photoSource?: PhotoSource },
+): CaptureSessionState {
+  const branch = branchFromPhotoCount(orderedUris.length);
+  const draftId = createId();
+  const sessionId = options?.sessionId ?? createId();
+  const photoSource = options?.photoSource ?? "gallery";
+
+  const draft =
+    branch === "single"
+      ? {
+          ...createEmptyDraft(draftId),
+          photos: assignSingleRoles(orderedUris, photoSource).filter(
+            (photo): photo is CaptureSessionPhoto & { role: PhotoRole } => photo.role !== null,
+          ),
+        }
+      : createEmptyDraft(draftId);
+
+  const state: CaptureSessionState = {
+    sessionId,
+    branch,
+    orderedUris: [...orderedUris],
+    unboundUris: branch === "bulk" ? [...orderedUris] : [],
+    drafts: [draft],
+    activeDraftId: draftId,
+    store: options?.store,
+  };
+
+  persist(state);
+  return state;
+}
+
+export function createCaptureSessionFromPhotos(
+  photos: CaptureSessionPhoto[],
   options?: { store?: CaptureSessionStore; sessionId?: string },
 ): CaptureSessionState {
+  const boundPhotos = photos.filter(
+    (photo): photo is CaptureSessionPhoto & { role: PhotoRole } => photo.role !== null,
+  );
+  const orderedUris = boundPhotos.map((photo) => photo.uri);
   const branch = branchFromPhotoCount(orderedUris.length);
   const draftId = createId();
   const sessionId = options?.sessionId ?? createId();
@@ -107,9 +146,7 @@ export function createCaptureSession(
     branch === "single"
       ? {
           ...createEmptyDraft(draftId),
-          photos: assignSingleRoles(orderedUris).filter(
-            (photo): photo is CaptureSessionPhoto & { role: PhotoRole } => photo.role !== null,
-          ),
+          photos: boundPhotos,
         }
       : createEmptyDraft(draftId);
 
@@ -132,6 +169,7 @@ export function bindPhoto(
   uri: string,
   draftId: string,
   role?: PhotoRole,
+  source: PhotoSource = "gallery",
 ): CaptureSessionState {
   if (!state.unboundUris.includes(uri)) {
     throw new Error("Photo is not unbound");
@@ -141,8 +179,8 @@ export function bindPhoto(
   return updateDraft({ ...state, unboundUris: nextUnbound }, draftId, (draft) => {
     const photos =
       role === undefined
-        ? [...draft.photos, { uri, role: null }]
-        : [...draft.photos.filter((photo) => photo.role !== role), { uri, role }];
+        ? [...draft.photos, { uri, role: null, source }]
+        : [...draft.photos.filter((photo) => photo.role !== role), { uri, role, source }];
     return { ...draft, photos };
   });
 }
@@ -184,6 +222,7 @@ export function setDraftClub(
     ...draft,
     clubId,
     clubLabel: clubLabel ?? draft.clubLabel,
+    seasonId: draft.clubId === clubId ? draft.seasonId : null,
   }));
 }
 
@@ -231,6 +270,30 @@ export function selectDraftCondition(
     ...draft,
     condition,
     conditionSelected: true,
+  }));
+}
+
+export function setDraftNotes(
+  state: CaptureSessionState,
+  draftId: string,
+  notes: string,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    notes,
+  }));
+}
+
+export function upsertDraftPhoto(
+  state: CaptureSessionState,
+  draftId: string,
+  role: PhotoRole,
+  uri: string,
+  source: PhotoSource,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    photos: [...draft.photos.filter((photo) => photo.role !== role), { uri, role, source }],
   }));
 }
 
