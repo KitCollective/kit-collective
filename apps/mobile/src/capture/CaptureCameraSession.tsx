@@ -14,6 +14,7 @@ type CaptureCameraSessionProps = {
   onComplete: (uris: string[]) => void;
   onClose: () => void;
   onGalleryEscape: (existingPhotos: CapturedPhoto[]) => void;
+  onPhotoCaptured?: (photo: CapturedPhoto) => void;
 };
 
 type CapturedPhoto = {
@@ -40,6 +41,7 @@ export function CaptureCameraSession({
   onComplete,
   onClose,
   onGalleryEscape,
+  onPhotoCaptured,
 }: CaptureCameraSessionProps) {
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
@@ -83,11 +85,10 @@ export function CaptureCameraSession({
       return;
     }
 
-    setPhotos((current) => [
-      ...current.filter((photo) => photo.role !== activeRole),
-      { role: activeRole, uri: shot.uri },
-    ]);
-  }, [activeRole]);
+    const captured = { role: activeRole, uri: shot.uri };
+    setPhotos((current) => [...current.filter((photo) => photo.role !== activeRole), captured]);
+    onPhotoCaptured?.(captured);
+  }, [activeRole, onPhotoCaptured]);
 
   const takeShot = useCallback(async () => {
     if (!permission?.granted) {

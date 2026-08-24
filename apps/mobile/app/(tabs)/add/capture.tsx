@@ -5,10 +5,11 @@ import { Platform, StyleSheet, View } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
   createPersistedCaptureSession,
-  createPersistedCaptureSessionFromPhotos,
   isBulkUpload,
   mergeGalleryEscapePhotos,
+  persistCameraShotInSession,
   readPrefilledClub,
+  replacePersistedCapturePhotos,
   showBulkUploadBlockedAlert,
 } from "@/capture/captureFlow";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
@@ -27,6 +28,17 @@ export default function CaptureScreen() {
   const [showCameraAfterGallery, setShowCameraAfterGallery] = useState(
     () => Platform.OS === "web" || isRepeatCaptureSession(),
   );
+  const sessionIdRef = useRef<string | null>(null);
+
+  const navigateToConfirm = useCallback(
+    (sessionId: string) => {
+      router.replace({
+        pathname: "/(tabs)/add/confirm",
+        params: { sessionId },
+      });
+    },
+    [router],
+  );
 
   const finishCaptureFromPhotos = useCallback(
     (photos: ReturnType<typeof mergeGalleryEscapePhotos>) => {
@@ -39,15 +51,13 @@ export default function CaptureScreen() {
         return;
       }
 
-      const { sessionId } = createPersistedCaptureSessionFromPhotos(photos, {
+      const sessionId = replacePersistedCapturePhotos(sessionIdRef.current, photos, {
         prefilledClub,
       });
-      router.replace({
-        pathname: "/(tabs)/add/confirm",
-        params: { sessionId },
-      });
+      sessionIdRef.current = sessionId;
+      navigateToConfirm(sessionId);
     },
-    [prefilledClub, router],
+    [navigateToConfirm, prefilledClub],
   );
 
   const finishCapture = useCallback(
@@ -61,16 +71,29 @@ export default function CaptureScreen() {
         return;
       }
 
+      if (sessionIdRef.current) {
+        navigateToConfirm(sessionIdRef.current);
+        return;
+      }
+
       const { sessionId } = createPersistedCaptureSession(uris, {
         prefilledClub,
         photoSource,
       });
-      router.replace({
-        pathname: "/(tabs)/add/confirm",
-        params: { sessionId },
-      });
+      navigateToConfirm(sessionId);
     },
-    [prefilledClub, router],
+    [navigateToConfirm, prefilledClub],
+  );
+
+  const handlePhotoCaptured = useCallback(
+    (photo: { role: PhotoRole; uri: string }) => {
+      sessionIdRef.current = persistCameraShotInSession(
+        sessionIdRef.current,
+        { ...photo, source: "camera" },
+        { prefilledClub, photoSource: "camera" },
+      );
+    },
+    [prefilledClub],
   );
 
   const openGalleryEscape = useCallback(
@@ -120,6 +143,7 @@ export default function CaptureScreen() {
       onComplete={(uris) => finishCapture(uris, "camera")}
       onClose={() => router.back()}
       onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}
+      onPhotoCaptured={handlePhotoCaptured}
     />
   );
 }

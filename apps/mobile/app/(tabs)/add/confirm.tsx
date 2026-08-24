@@ -39,6 +39,7 @@ import {
   setDraftSeason,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
+import { resolveConfirmBanner } from "@/capture/confirmBanner";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
@@ -402,6 +403,13 @@ export default function ConfirmScreen() {
     setVisionSuggestion(null);
   };
 
+  const activeBanner = resolveConfirmBanner({
+    saveError,
+    visionSuggestionVisible: Boolean(visionSuggestion?.suggestions),
+    catalogMiss,
+    clubSheetOpen,
+  });
+
   const handleSave = async () => {
     if (!draft || !sessionId) {
       return;
@@ -546,7 +554,7 @@ export default function ConfirmScreen() {
           <Text style={[typography.caption, { color: theme.contentMuted }]}>Analyserer foto…</Text>
         ) : null}
 
-        {visionSuggestion?.suggestions ? (
+        {activeBanner === "visionSuggestion" && visionSuggestion?.suggestions ? (
           <Animated.View style={{ opacity: suggestionOpacity }}>
             <Banner
               tone="info"
@@ -573,7 +581,7 @@ export default function ConfirmScreen() {
           </Animated.View>
         ) : null}
 
-        {catalogMiss && !clubSheetOpen ? (
+        {activeBanner === "catalogMiss" ? (
           <Banner
             tone="info"
             message="Klubben findes ikke i kataloget endnu. Dit draft bliver gemt."
@@ -661,7 +669,7 @@ export default function ConfirmScreen() {
           <Text style={[typography.label, { color: theme.contentSecondary }]}>Flere detaljer</Text>
         </Pressable>
 
-        {saveError ? (
+        {activeBanner === "saveError" ? (
           <Banner
             tone="danger"
             message="Kunne ikke gemme trøjen. Prøv igen."

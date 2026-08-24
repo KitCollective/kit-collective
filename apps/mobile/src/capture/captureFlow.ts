@@ -14,12 +14,16 @@ import type {
   CaptureSessionState,
 } from "./captureSessionTypes";
 
-export { mergeGalleryEscapePhotos } from "./galleryEscape";
+export type { PrefilledClub } from "./captureSessionPersistence";
+export {
+  loadPersistedCaptureSession,
+  persistCameraShotInSession,
+  replacePersistedCapturePhotos,
+} from "./captureSessionPersistence";
 
-export type PrefilledClub = {
-  id: string;
-  label: string;
-};
+import type { PrefilledClub } from "./captureSessionPersistence";
+
+export { mergeGalleryEscapePhotos } from "./galleryEscape";
 
 export function readPrefilledClub(params: {
   prefilledClubId?: string | string[];
@@ -98,10 +102,6 @@ export function createPersistedCaptureSessionFromPhotos(
   }
 
   return { sessionId, branch: state.branch };
-}
-
-export function loadPersistedCaptureSession(sessionId: string): CaptureSessionState | null {
-  return createSqliteCaptureSessionStore(sessionId).load();
 }
 
 export function withPersistedCaptureSession(
