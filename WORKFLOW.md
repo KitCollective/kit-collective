@@ -49,8 +49,9 @@ Typical contract:
 | Duplicate | duplicate | humans | Duplicate of another issue. Never auto-dispatch |
 | Implementing | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |
 | In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |
-| Ready for merge | started | checker on pass | Waiting for the approver to read the GitHub PR |
-| Done | completed | **approver only** after reading the PR | Human approval. Land merges to the integration lane |
+| Ready for merge | started | checker on pass | Waiting for the approver to read the GitHub PR. No merge. |
+| Merging | started | **approver only** from `Ready for merge` | Merge permission. Land auto-merges into the integration lane |
+| Done | completed | **land only** after `gh pr merge` succeeds | SHA is on `lanes.integration`. `blockedBy` may resolve |
 | Canceled | canceled | humans | Dead. No agent action |
 
 ## Project + environment promotion
@@ -92,9 +93,9 @@ Every pass is a **complete** review of the current diff, not a delta against las
 3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Ready for merge`.
 4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). If the miss is a new required env, “done” includes every workflow that boots that process. Linear comment + attachments. That status change wakes implement. Do not start implement yourself.
 
-## Land run (status became `Done`)
+## Land run (status became `Merging`)
 
-The approver moving the issue to `Done` **is** the merge approval. Merge into the integration lane only. Merge fail → `Implementing` and write the merge error under `### Review feedback`. Never force-push. Never land into staging or production from this run.
+The approver moving the issue to `Merging` **is** the merge approval. Land merges into the integration lane only, then moves the issue to `Done`. Merge fail → `Implementing` and write the merge error under `### Review feedback`. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded. `Ready for merge` → `Merging` does not resolve `blockedBy`; dependents stay blocked until the blocker is `Done` or `Canceled`.
 
 ## Guardrails
 
