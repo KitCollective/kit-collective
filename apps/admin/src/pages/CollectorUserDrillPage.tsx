@@ -215,7 +215,9 @@ export function CollectorUserDrillPage() {
                 Remove Staff access
               </button>
             )}
-            {demoteHelperText ? <p className="type-caption toolbar-hint">{demoteHelperText}</p> : null}
+            {demoteHelperText ? (
+              <p className="type-caption toolbar-hint">{demoteHelperText}</p>
+            ) : null}
           </div>
         </section>
       ) : null}

@@ -1,4 +1,11 @@
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider.js";
 import { BrandLogo } from "../brand/BrandLogo.js";
@@ -75,7 +82,7 @@ export function AdminShell() {
   }
 
   useEffect(() => {
-    setOpenMenu(null);
+    setOpenMenu((current) => (location.pathname ? null : current));
   }, [location.pathname]);
 
   useEffect(() => {
@@ -151,7 +158,9 @@ export function AdminShell() {
             >
               <PinIcon />
             </HeaderMenuButton>
-            {openMenu === "pin" ? <HeaderEmptyMenu label="Pin" copy={emptyMenuCopy("pin")} /> : null}
+            {openMenu === "pin" ? (
+              <HeaderEmptyMenu label="Pin" copy={emptyMenuCopy("pin")} />
+            ) : null}
           </div>
 
           <div className="header-menu">
@@ -258,12 +267,14 @@ export function AdminShell() {
 
       <main className="app-main">
         <Outlet
-          context={{
-            search,
-            setSearch,
-            searchPlaceholder,
-            setSearchPlaceholder,
-          } satisfies AdminChromeContext}
+          context={
+            {
+              search,
+              setSearch,
+              searchPlaceholder,
+              setSearchPlaceholder,
+            } satisfies AdminChromeContext
+          }
         />
       </main>
     </div>
@@ -307,7 +318,13 @@ function SearchIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
       <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10.5 10.5L14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M10.5 10.5L14 14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
@@ -337,7 +354,13 @@ function BellIcon() {
         strokeWidth="1.5"
         strokeLinejoin="round"
       />
-      <path d="M6.5 13a1.5 1.5 0 0 0 3 0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M6.5 13a1.5 1.5 0 0 0 3 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

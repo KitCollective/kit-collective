@@ -208,7 +208,8 @@ export function StamdataPage() {
   return (
     <div className="list-page">
       <div className="toolbar">
-        <div className="chip-group toolbar-chips" role="group" aria-label="Master Data tables">
+        <fieldset className="chip-group toolbar-chips">
+          <legend className="chip-group-legend">Master Data tables</legend>
           {ADMIN_STAMDATA_LIST_ENTITY_TYPES.map((entityType) => (
             <button
               key={entityType}
@@ -231,7 +232,7 @@ export function StamdataPage() {
           >
             Filters
           </button>
-        </div>
+        </fieldset>
         <span className="record-count">
           {loading ? "Loading…" : `${visibleRows.length} ${tableLabel(table).toLowerCase()}`}
         </span>

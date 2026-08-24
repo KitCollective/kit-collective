@@ -197,7 +197,8 @@ export function CollectorsPage() {
   return (
     <div className="list-page">
       <div className="toolbar">
-        <div className="chip-group toolbar-chips" role="group" aria-label="User Data tables">
+        <fieldset className="chip-group toolbar-chips">
+          <legend className="chip-group-legend">User Data tables</legend>
           {USER_DATA_TABLES.map((entityType) => (
             <button
               key={entityType}
@@ -212,7 +213,7 @@ export function CollectorsPage() {
               {tableLabel(entityType)}
             </button>
           ))}
-        </div>
+        </fieldset>
         <span className="record-count">{recordCount}</span>
       </div>
 
@@ -249,7 +250,9 @@ export function CollectorsPage() {
             {loading ? (
               <tr>
                 <td colSpan={columns}>
-                  <div className="empty-state data-table-empty">Loading {tableLabel(table).toLowerCase()}…</div>
+                  <div className="empty-state data-table-empty">
+                    Loading {tableLabel(table).toLowerCase()}…
+                  </div>
                 </td>
               </tr>
             ) : table === "user" && (!users || users.rows.length === 0) ? (
