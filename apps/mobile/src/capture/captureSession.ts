@@ -212,10 +212,7 @@ export function addJerseyDraft(state: CaptureSessionState): CaptureSessionState 
   });
 }
 
-export function setActiveDraft(
-  state: CaptureSessionState,
-  draftId: string,
-): CaptureSessionState {
+export function setActiveDraft(state: CaptureSessionState, draftId: string): CaptureSessionState {
   if (!state.drafts.some((draft) => draft.id === draftId)) {
     throw new Error("Draft not found");
   }
@@ -226,10 +223,7 @@ export function setActiveDraft(
   });
 }
 
-export function removeDraft(
-  state: CaptureSessionState,
-  draftId: string,
-): CaptureSessionState {
+export function removeDraft(state: CaptureSessionState, draftId: string): CaptureSessionState {
   const remaining = state.drafts.filter((draft) => draft.id !== draftId);
   if (remaining.length === 0) {
     return withState(state, {
@@ -240,7 +234,9 @@ export function removeDraft(
   }
 
   const nextActiveId =
-    state.activeDraftId === draftId ? remaining[0]!.id : state.activeDraftId;
+    state.activeDraftId === draftId
+      ? (remaining[0]?.id ?? state.activeDraftId)
+      : state.activeDraftId;
 
   return withState(state, {
     ...state,

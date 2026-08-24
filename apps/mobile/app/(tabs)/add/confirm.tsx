@@ -52,8 +52,8 @@ import {
   shouldConfirmRedirectAway,
   usePersistedCaptureSession,
 } from "@/capture/usePersistedCaptureSession";
-import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { BulkChrome } from "@/components/bulk/BulkChrome";
+import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
@@ -107,24 +107,6 @@ export default function ConfirmScreen() {
 
   const draft = state ? getDraft(state, state.activeDraftId) : null;
   const isBulk = state?.branch === "bulk";
-
-  const resetVisionForDraft = useCallback(() => {
-    setVisionJobId(null);
-    setVisionPolling(false);
-    setVisionSuggestion(null);
-    visionStartAttempted.current = false;
-    appliedVisionJobId.current = null;
-    clubManuallySet.current = false;
-    seasonManuallySet.current = false;
-    kitTypeManuallySet.current = false;
-    setSelectedSeasonLabel(null);
-  }, []);
-
-  const visionDraftKey = `${state?.activeDraftId ?? ""}:${draft?.photos[0]?.uri ?? ""}`;
-
-  useEffect(() => {
-    resetVisionForDraft();
-  }, [resetVisionForDraft, visionDraftKey]);
 
   useEffect(() => {
     if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
@@ -276,7 +258,17 @@ export default function ConfirmScreen() {
   );
 
   useEffect(() => {
-    if (!accessToken || !draft || visionJobId || visionStartAttempted.current) {
+    setVisionJobId(null);
+    setVisionPolling(false);
+    setVisionSuggestion(null);
+    visionStartAttempted.current = false;
+    appliedVisionJobId.current = null;
+    clubManuallySet.current = false;
+    seasonManuallySet.current = false;
+    kitTypeManuallySet.current = false;
+    setSelectedSeasonLabel(null);
+
+    if (!accessToken || !draft) {
       return;
     }
 
@@ -285,8 +277,27 @@ export default function ConfirmScreen() {
       return;
     }
 
-    void maybeStartVision(firstPhoto.role ?? "front", firstPhoto.uri);
-  }, [accessToken, draft, visionJobId, maybeStartVision]);
+    let cancelled = false;
+    void (async () => {
+      visionStartAttempted.current = true;
+      try {
+        const contentBase64 = await readPhotoBase64(firstPhoto.uri);
+        const jobId = await startVisionSuggest(accessToken, {
+          photo: { role: firstPhoto.role ?? "front", contentBase64 },
+        });
+        if (!cancelled) {
+          setVisionJobId(jobId);
+          setVisionPolling(true);
+        }
+      } catch {
+        // Vision is optional — confirm screen must not block.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, draft]);
 
   useEffect(() => {
     if (!accessToken || !visionJobId || !visionPolling) {
