@@ -8,6 +8,9 @@ import { join } from "node:path";
 
 const ADD_DIR = "apps/mobile/app/(tabs)/add";
 const CONFIRM_PATH = `${ADD_DIR}/confirm.tsx`;
+const INDEX_PATH = `${ADD_DIR}/index.tsx`;
+const CAPTURE_PATH = `${ADD_DIR}/capture.tsx`;
+const PICK_UPLOAD_FILES_PATH = "apps/mobile/src/capture/pickUploadFiles.ts";
 
 function listTsxFiles(dir) {
   const entries = readdirSync(dir);
@@ -85,12 +88,88 @@ export function findConfirmSaveViolations({ confirmSource }) {
   return violations;
 }
 
+/**
+ * @param {{ confirmSource: string }} input
+ * @returns {string[]}
+ */
+export function findConfirmRedirectViolations({ confirmSource }) {
+  const violations = [];
+
+  if (!confirmSource.includes("shouldConfirmRedirectAway")) {
+    violations.push(
+      `${CONFIRM_PATH}: must gate chooser redirect with shouldConfirmRedirectAway so mount does not race session load`,
+    );
+  }
+
+  if (!confirmSource.includes("isSessionResolved")) {
+    violations.push(
+      `${CONFIRM_PATH}: must wait for usePersistedCaptureSession isSessionResolved before redirecting away`,
+    );
+  }
+
+  return violations;
+}
+
+/**
+ * @param {{ indexSource: string, pickUploadSource: string }} input
+ * @returns {string[]}
+ */
+export function findUploadPickerViolations({ indexSource, pickUploadSource }) {
+  const violations = [];
+
+  if (indexSource.includes("pickGalleryPhotos")) {
+    violations.push(
+      `${INDEX_PATH}: Upload filer must use pickUploadFiles (Photos + Files/documents), not pickGalleryPhotos directly`,
+    );
+  }
+
+  if (!indexSource.includes("pickUploadFiles")) {
+    violations.push(`${INDEX_PATH}: Upload filer must call pickUploadFiles`);
+  }
+
+  if (
+    !pickUploadSource.includes("pickDocumentImages") &&
+    !pickUploadSource.includes("expo-document-picker")
+  ) {
+    violations.push(
+      `${PICK_UPLOAD_FILES_PATH}: Upload filer must include a Files/documents picker path`,
+    );
+  }
+
+  return violations;
+}
+
+/**
+ * @param {{ captureSource: string }} input
+ * @returns {string[]}
+ */
+export function findGalleryEscapeViolations({ captureSource }) {
+  const violations = [];
+
+  if (!captureSource.includes("mergeGalleryEscapePhotos")) {
+    violations.push(
+      `${CAPTURE_PATH}: gallery escape must merge into in-progress camera photos via mergeGalleryEscapePhotos`,
+    );
+  }
+
+  if (!captureSource.includes("existingPhotos")) {
+    violations.push(
+      `${CAPTURE_PATH}: gallery escape must receive existing camera photos from CaptureCameraSession`,
+    );
+  }
+
+  return violations;
+}
+
 export function checkMobileAddFormWiring({
   addSources = listTsxFiles(ADD_DIR).map((filePath) => ({
     filePath,
     source: readFileSync(filePath, "utf8"),
   })),
   confirmSource = readFileSync(CONFIRM_PATH, "utf8"),
+  indexSource = readFileSync(INDEX_PATH, "utf8"),
+  captureSource = readFileSync(CAPTURE_PATH, "utf8"),
+  pickUploadSource = readFileSync(PICK_UPLOAD_FILES_PATH, "utf8"),
 } = {}) {
   const violations = [];
 
@@ -99,6 +178,9 @@ export function checkMobileAddFormWiring({
   }
 
   violations.push(...findConfirmSaveViolations({ confirmSource }));
+  violations.push(...findConfirmRedirectViolations({ confirmSource }));
+  violations.push(...findUploadPickerViolations({ indexSource, pickUploadSource }));
+  violations.push(...findGalleryEscapeViolations({ captureSource }));
 
   return violations;
 }

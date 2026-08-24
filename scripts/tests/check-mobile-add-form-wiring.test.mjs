@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   checkMobileAddFormWiring,
+  findConfirmRedirectViolations,
   findConfirmSaveViolations,
+  findGalleryEscapeViolations,
   findOrphanFormStateViolations,
+  findUploadPickerViolations,
 } from "../check-mobile-add-form-wiring.mjs";
 
 const compliantConfirm = `
 const draft = getDraft(state, state.activeDraftId);
+const { state, isSessionResolved } = usePersistedCaptureSession(sessionId);
+shouldConfirmRedirectAway(sessionId, state, isSessionResolved);
 mutate((current) => setDraftNotes(current, current.activeDraftId, text));
 <TextInput value={draft.notes} />
 source: photo.source,
@@ -61,12 +66,58 @@ describe("findConfirmSaveViolations", () => {
   });
 });
 
+describe("findGalleryEscapeViolations", () => {
+  it("requires merge helper and existing camera photos", () => {
+    assert.deepEqual(
+      findGalleryEscapeViolations({
+        captureSource: `
+          mergeGalleryEscapePhotos(existingPhotos, uris);
+          onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}
+        `,
+      }),
+      [],
+    );
+  });
+});
+
+describe("findConfirmRedirectViolations", () => {
+  it("requires resolved-session redirect guard", () => {
+    assert.deepEqual(
+      findConfirmRedirectViolations({
+        confirmSource: `
+          const { state, isSessionResolved } = usePersistedCaptureSession(sessionId);
+          shouldConfirmRedirectAway(sessionId, state, isSessionResolved)
+        `,
+      }),
+      [],
+    );
+  });
+});
+
+describe("findUploadPickerViolations", () => {
+  it("requires Upload filer to route through pickUploadFiles with documents support", () => {
+    assert.deepEqual(
+      findUploadPickerViolations({
+        indexSource: `const uris = await pickUploadFiles();`,
+        pickUploadSource: `import { pickDocumentImages } from "./pickDocumentImages";`,
+      }),
+      [],
+    );
+  });
+});
+
 describe("checkMobileAddFormWiring", () => {
   it("passes compliant confirm screen wiring", () => {
     assert.deepEqual(
       checkMobileAddFormWiring({
         addSources: [],
         confirmSource: compliantConfirm,
+        indexSource: `const uris = await pickUploadFiles();`,
+        captureSource: `
+          mergeGalleryEscapePhotos(existingPhotos, uris);
+          onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}
+        `,
+        pickUploadSource: `import { pickDocumentImages } from "./pickDocumentImages";`,
       }),
       [],
     );
