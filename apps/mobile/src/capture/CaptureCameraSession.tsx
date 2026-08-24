@@ -11,6 +11,7 @@ import { Button, IconButton } from "@/components/ui";
 import { color, radius, space, type } from "@/theme/tokens";
 
 type CaptureCameraSessionProps = {
+  initialPhotos?: CapturedPhoto[];
   onComplete: (uris: string[]) => void;
   onClose: () => void;
   onGalleryEscape: (existingPhotos: CapturedPhoto[]) => void;
@@ -38,6 +39,7 @@ function nextEmptyRole(photos: CapturedPhoto[]): PhotoRole | null {
  * until the user has granted permission via the shutter button.
  */
 export function CaptureCameraSession({
+  initialPhotos = [],
   onComplete,
   onClose,
   onGalleryEscape,
@@ -48,7 +50,7 @@ export function CaptureCameraSession({
   const [permission, requestPermission] = useCameraPermissions();
   const [isFocused, setIsFocused] = useState(true);
   const [pendingShot, setPendingShot] = useState(false);
-  const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [photos, setPhotos] = useState<CapturedPhoto[]>(initialPhotos);
   const [activeRole, setActiveRole] = useState<PhotoRole>(PHOTO_ROLES[0]);
 
   useFocusEffect(

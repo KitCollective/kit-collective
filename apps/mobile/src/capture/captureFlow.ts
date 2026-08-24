@@ -1,29 +1,34 @@
 import type { PhotoSource } from "@kit/domain";
 import * as Crypto from "expo-crypto";
 import { Alert } from "react-native";
+import { branchFromPhotoCount, createCaptureSession, setDraftClub } from "./captureSession";
 import {
-  branchFromPhotoCount,
-  createCaptureSession,
-  createCaptureSessionFromPhotos,
-  setDraftClub,
-} from "./captureSession";
-import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
-import type {
-  CaptureBranch,
-  CaptureSessionPhoto,
-  CaptureSessionState,
-} from "./captureSessionTypes";
-
-export type { PrefilledClub } from "./captureSessionPersistence";
-export {
+  clearActiveCameraCaptureSessionId,
+  clearMemoryActiveCameraCaptureSessionIdForTests,
+  setMemoryActiveCameraCaptureSessionIdForTests,
+} from "./captureSessionActivePointer";
+import type { PrefilledClub } from "./captureSessionPersistence";
+import {
   loadPersistedCaptureSession,
   persistCameraShotInSession,
   replacePersistedCapturePhotos,
+  resolveResumableCameraSession,
 } from "./captureSessionPersistence";
+import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
+import type { CaptureBranch, CaptureSessionState } from "./captureSessionTypes";
+import { mergeGalleryEscapePhotos } from "./galleryEscape";
 
-import type { PrefilledClub } from "./captureSessionPersistence";
-
-export { mergeGalleryEscapePhotos } from "./galleryEscape";
+export type { PrefilledClub };
+export {
+  clearActiveCameraCaptureSessionId,
+  clearMemoryActiveCameraCaptureSessionIdForTests,
+  loadPersistedCaptureSession,
+  mergeGalleryEscapePhotos,
+  persistCameraShotInSession,
+  replacePersistedCapturePhotos,
+  resolveResumableCameraSession,
+  setMemoryActiveCameraCaptureSessionIdForTests,
+};
 
 export function readPrefilledClub(params: {
   prefilledClubId?: string | string[];
@@ -78,32 +83,6 @@ export function createPersistedCaptureSession(
   return { sessionId, branch: state.branch };
 }
 
-export function createPersistedCaptureSessionFromPhotos(
-  photos: CaptureSessionPhoto[],
-  options?: {
-    prefilledClub?: PrefilledClub | null;
-    sessionId?: string;
-  },
-): { sessionId: string; branch: CaptureBranch } {
-  const sessionId = options?.sessionId ?? Crypto.randomUUID();
-  const store = createSqliteCaptureSessionStore(sessionId);
-  let state = createCaptureSessionFromPhotos(photos, {
-    store,
-    sessionId,
-  });
-
-  if (options?.prefilledClub) {
-    state = setDraftClub(
-      state,
-      state.activeDraftId,
-      options.prefilledClub.id,
-      options.prefilledClub.label,
-    );
-  }
-
-  return { sessionId, branch: state.branch };
-}
-
 export function withPersistedCaptureSession(
   sessionId: string,
   state: CaptureSessionState,
@@ -114,6 +93,7 @@ export function withPersistedCaptureSession(
 
 export function clearPersistedCaptureSession(sessionId: string): void {
   createSqliteCaptureSessionStore(sessionId).clear();
+  clearActiveCameraCaptureSessionId();
 }
 
 export function isBulkUpload(photoCount: number): boolean {

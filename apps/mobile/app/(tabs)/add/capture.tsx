@@ -1,15 +1,17 @@
 import type { PhotoRole, PhotoSource } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
+  clearActiveCameraCaptureSessionId,
   createPersistedCaptureSession,
   isBulkUpload,
   mergeGalleryEscapePhotos,
   persistCameraShotInSession,
   readPrefilledClub,
   replacePersistedCapturePhotos,
+  resolveResumableCameraSession,
   showBulkUploadBlockedAlert,
 } from "@/capture/captureFlow";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
@@ -25,13 +27,16 @@ export default function CaptureScreen() {
     prefilledClubLabel?: string;
   }>();
   const prefilledClub = readPrefilledClub(params);
+  const resumedSession = useMemo(() => resolveResumableCameraSession(), []);
   const [showCameraAfterGallery, setShowCameraAfterGallery] = useState(
-    () => Platform.OS === "web" || isRepeatCaptureSession(),
+    () => Platform.OS === "web" || isRepeatCaptureSession() || resumedSession !== null,
   );
-  const sessionIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(resumedSession?.sessionId ?? null);
+  const [initialCameraPhotos] = useState(resumedSession?.photos ?? []);
 
   const navigateToConfirm = useCallback(
     (sessionId: string) => {
+      clearActiveCameraCaptureSessionId();
       router.replace({
         pathname: "/(tabs)/add/confirm",
         params: { sessionId },
@@ -122,7 +127,12 @@ export default function CaptureScreen() {
   const galleryFirstLaunched = useRef(false);
 
   useEffect(() => {
-    if (Platform.OS === "web" || isRepeatCaptureSession() || galleryFirstLaunched.current) {
+    if (
+      resumedSession ||
+      Platform.OS === "web" ||
+      isRepeatCaptureSession() ||
+      galleryFirstLaunched.current
+    ) {
       return;
     }
     galleryFirstLaunched.current = true;
@@ -132,7 +142,7 @@ export default function CaptureScreen() {
         setShowCameraAfterGallery(true);
       }
     })();
-  }, [openGalleryEscape]);
+  }, [openGalleryEscape, resumedSession]);
 
   if (!showCameraAfterGallery) {
     return <View style={[styles.fallback, { backgroundColor: theme.canvas }]} />;
@@ -140,6 +150,7 @@ export default function CaptureScreen() {
 
   return (
     <CaptureCameraSession
+      initialPhotos={initialCameraPhotos}
       onComplete={(uris) => finishCapture(uris, "camera")}
       onClose={() => router.back()}
       onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}

@@ -175,6 +175,12 @@ jobs:
       - name: Test mobile add upload-files ratchet logic
         run: node --test scripts/tests/check-mobile-add-upload-files.test.mjs
 
+      - name: Check mobile add camera-resume ratchet
+        run: pnpm check:mobile-add-camera-resume
+
+      - name: Check mobile capture dead-export ratchet
+        run: pnpm check:mobile-capture-dead-exports
+
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
 
