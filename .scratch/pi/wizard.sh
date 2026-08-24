@@ -192,8 +192,8 @@ cd "$REPO_ROOT"
 ENV_FILE="$REPO_ROOT/.env"
 
 # Documented placeholder until KIT-53 CX23 has a public HTTPS URL.
-PI_AGENT_SESSION_WEBHOOK_PLACEHOLDER="https://example.com/kit-58-pi-agent-session-until-cx23"
-PI_OAUTH_CALLBACK="http://127.0.0.1:8765/linear/oauth/callback"
+PI_AGENT_SESSION_WEBHOOK_PLACEHOLDER="https://harness.eskobar.dev/webhooks/linear/agent-session"
+PI_OAUTH_CALLBACK="https://harness.eskobar.dev/oauth/callback"
 
 # lookup_pi_user_id — optional: use the existing bootstrap LINEAR_API_KEY to
 # find the workspace app user named Pi. Prints the UUID or empty. Never prints the key.
@@ -206,7 +206,7 @@ lookup_pi_user_id() {
     curl -sS "https://api.linear.app/graphql" \
       -H "Content-Type: application/json" \
       -H "Authorization: $key" \
-      --data '{"query":"{ users(filter: { name: { eq: \"Pi\" } }) { nodes { id name displayName } } }"}' \
+      --data '{"query":"{ users(filter: { name: { eq: \"Pi Bot Agent\" } }) { nodes { id name displayName } } }"}' \
       || true
   )"
   # Prefer python3 for JSON; fall back to a conservative sed if needed.
@@ -223,9 +223,9 @@ say "Workspace admin only (Nicklas). Do not set Linear Agent to Cursor on this i
 say "Name must be unique in Assignee → Agents. Cursor and Linear already occupy those slots — use Pi."
 open_url "https://linear.app/settings/api/applications/new"
 step "If you are not on New application: Settings → API → Applications → New application."
-step "Application name: Pi"
+step "Application name: Pi Bot Agent"
 step "Description: KitCollective factory harness (Hetzner Pi). Wake is Issue status; Agent session events are display/ack only."
-step "Callback URL (required by the form; CX23 is not up yet): $PI_OAUTH_CALLBACK"
+step "Callback URL: $PI_OAUTH_CALLBACK"
 step "Icon: any mark that is not Cursor's arrow and not Linear's chevron. Unique in Assignee → Agents."
 pause "Press Enter when the application exists (you can still edit it in the next stages)."
 
@@ -243,7 +243,7 @@ if [[ -n "${LINEAR_PI_CLIENT_SECRET:-}" ]]; then
   write_env LINEAR_PI_CLIENT_SECRET "$LINEAR_PI_CLIENT_SECRET"
 fi
 say "Install as actor=app (admin). Typical authorize URL (replace CLIENT_ID):"
-note "https://linear.app/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=http%3A%2F%2F127.0.0.1%3A8765%2Flinear%2Foauth%2Fcallback&scope=read,write,app:assignable,app:mentionable&actor=app"
+note "https://linear.app/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=https%3A%2F%2Fharness.eskobar.dev%2Foauth%2Fcallback&scope=read,write,app:assignable,app:mentionable&actor=app"
 step "If the application page has Authorize / Install, use that. Confirm actor is app, not user."
 step "Grant team access to KIT if a team picker is shown."
 warn "Do not request the admin OAuth scope. actor=app cannot combine with admin."
@@ -251,8 +251,8 @@ pause "Press Enter when Pi is installed on the KitCollective workspace as actor=
 
 # ── 3. Agent session event webhooks ───────────────────────────────────────
 stage "Agent session event webhooks"
-say "KIT-53 CX23 is not up yet. Use the documented placeholder. KIT-53 replaces it with the public HTTPS URL."
-say "Placeholder: $PI_AGENT_SESSION_WEBHOOK_PLACEHOLDER"
+say "Harness host: harness.eskobar.dev. KIT-53 must serve this path. Linear may retry if the box is not up yet."
+say "Webhook URL: $PI_AGENT_SESSION_WEBHOOK_PLACEHOLDER"
 open_url "https://linear.app/settings/api"
 step "Open the Pi application → Webhooks (or the webhook block on the application form)."
 step "Enable webhooks. At the bottom, select Agent session events (Linear's agent-session category)."
@@ -284,13 +284,13 @@ say "This is the workspace app user's UUID, not an API token. It goes in gitigno
 say ".env.example already lists the name LINEAR_PI_APP_USER_ID= with an empty value."
 FOUND_ID="$(lookup_pi_user_id || true)"
 if [[ -n "${FOUND_ID:-}" ]]; then
-  say "Bootstrap LINEAR_API_KEY found a user named Pi: $FOUND_ID"
+  say "Bootstrap LINEAR_API_KEY found a user named Pi Bot Agent: $FOUND_ID"
   if confirm "Write that id to .env as LINEAR_PI_APP_USER_ID"; then
     LINEAR_PI_APP_USER_ID="$FOUND_ID"
   fi
 fi
 if [[ -z "${LINEAR_PI_APP_USER_ID:-}" ]]; then
-  step "Settings → Members (filter agents) or GraphQL: { users(filter: { name: { eq: \"Pi\" } }) { nodes { id name } } }"
+  step "Settings → Members (filter agents) or GraphQL: { users(filter: { name: { eq: \"Pi Bot Agent\" } }) { nodes { id name } } }"
   step "Or open Pi's profile and copy the user UUID."
   ask LINEAR_PI_APP_USER_ID "Paste the Pi app user UUID:"
 fi
