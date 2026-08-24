@@ -199,9 +199,9 @@ a {
   border-radius: 50%;
   background: var(--fill-secondary);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: 0.02em;
-  line-height: 1;
+  line-height: 18px;
 }
 
 .header-menu-list {
@@ -244,9 +244,9 @@ a {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 500;
-  line-height: 18px;
+  line-height: 20px;
   text-align: center;
 }
 
@@ -289,6 +289,7 @@ a {
   cursor: pointer;
   font: inherit;
   font-weight: 500;
+  line-height: 20px;
   text-align: left;
 }
 
@@ -529,7 +530,7 @@ a {
   border-bottom: 1px solid var(--border-subtle);
   font-size: 16px;
   font-weight: 400;
-  line-height: 25px;
+  line-height: 24px;
 }
 
 .data-table thead th {
@@ -540,6 +541,7 @@ a {
   color: var(--content-primary);
   font-family: var(--font-sans);
   font-weight: 500;
+  line-height: 20px;
 }
 
 .data-table thead th:hover {
@@ -612,7 +614,9 @@ a {
   background: var(--fill-secondary);
   color: var(--content-secondary);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
 }
 
 .thumb-slot img {
@@ -638,10 +642,10 @@ a {
   margin: 0 0 var(--space-gap-sm);
   color: var(--content-primary);
   font-family: var(--font-heading);
-  font-size: 15px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 20px;
+  line-height: 28px;
 }
 
 .section-title {
@@ -741,6 +745,7 @@ a {
 .stats-row dd {
   margin: 0;
   font-weight: 500;
+  line-height: 20px;
   overflow-wrap: anywhere;
 }
 
@@ -774,9 +779,10 @@ a {
 .login-card h1 {
   margin: 0 0 var(--space-gap-md);
   font-family: var(--font-heading);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
+  line-height: 28px;
 }
 
 .field {
@@ -789,7 +795,8 @@ a {
 .field label {
   color: var(--content-secondary);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
+  line-height: 18px;
 }
 
 .login-card .field input {
@@ -817,10 +824,10 @@ a {
 .drill-header h2 {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 29px;
+  line-height: 28px;
   overflow-wrap: anywhere;
 }
 
@@ -887,15 +894,17 @@ a {
 .sheet-panel h2 {
   margin: 0 0 var(--space-gap-md);
   font-family: var(--font-heading);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
+  line-height: 28px;
 }
 
 .sheet-panel h3 {
   margin: 0 0 var(--space-gap-sm);
   color: var(--content-secondary);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
+  line-height: 18px;
 }
 
 .chip-group,
@@ -922,13 +931,15 @@ a {
 }
 
 .chip {
-  min-height: 36px;
-  padding: 0 var(--space-inset-md);
+  min-height: 44px;
+  padding: 0 var(--space-inset-sm);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-pill);
   background: var(--fill-secondary);
   cursor: pointer;
+  font-size: 16px;
   font-weight: 500;
+  line-height: 20px;
 }
 
 .chip[aria-pressed="true"] {
