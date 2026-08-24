@@ -18,12 +18,10 @@ RUN apt-get update \
 COPY .pi /workspace/.pi
 ENV PI_WORKSPACE=/workspace
 WORKDIR /workspace
+# Global install only: `pi install -l` refuses untrusted project trees in Docker.
 RUN pi install npm:pi-subagents \
   && pi install npm:@ghoseb/pi-damage-control \
-  && pi install npm:pi-cursor-sdk \
-  && pi install -l npm:pi-subagents \
-  && pi install -l npm:@ghoseb/pi-damage-control \
-  && pi install -l npm:pi-cursor-sdk
+  && pi install npm:pi-cursor-sdk
 
 WORKDIR /app
 COPY harness/boot-env.mjs harness/job-queue.mjs harness/linear-cli.mjs harness/pi-job.mjs harness/server.mjs harness/webhook-router.mjs ./
