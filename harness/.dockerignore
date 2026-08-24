@@ -1,0 +1,6 @@
+tests
+*.md
+ssh-config.example
+cx33-wizard.sh
+.env
+.env.*

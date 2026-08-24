@@ -1,0 +1,11 @@
+name: feature
+linearType: Feature
+summary: Scout, plan, build, then open a PR and move to In Review.
+steps:
+  - scout
+  - plan
+  - build
+  - code-gates
+  - pr
+never:
+  - merge
