@@ -1,0 +1,11 @@
+name: bug
+linearType: Bug
+summary: Repro, smallest fix, then open a PR and move to In Review.
+steps:
+  - scout
+  - repro
+  - fix
+  - code-gates
+  - pr
+never:
+  - merge
