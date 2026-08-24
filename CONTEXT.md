@@ -44,7 +44,7 @@ Out-of-scope feature or optimisation. Same ingress as signal-up, different label
 _Avoid_: mixing with `signal-up` on the same issue
 
 **Land**:
-Merge to `development` after Nicklas moves the issue to Done.
+Merge to `development` after Nicklas moves the issue to Merging. Land sets Done only after the merge.
 _Avoid_: landing to staging or production from an issue run
 
 **Promotion**:

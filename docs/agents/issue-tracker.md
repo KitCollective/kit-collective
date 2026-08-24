@@ -6,7 +6,7 @@ GitHub Issues are not the source of truth. GitHub holds PRs, CI, and Environment
 
 ## After bootstrap
 
-`scripts/bootstrap-linear.mjs` writes `paths.setupFile` (team / state / label IDs). Skills resolve statuses **by name** from factory config, and use the setup file when they need IDs.
+`scripts/bootstrap-linear.mjs` writes `paths.setupFile` (team / state / label IDs), including the `Merging` state id. Skills resolve statuses **by name** from factory config, and use the setup file when they need IDs.
 
 If the setup file is missing, run `/bootstrap-linear`. Do not guess IDs.
 

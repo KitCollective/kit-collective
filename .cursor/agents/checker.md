@@ -63,4 +63,4 @@ That status change wakes the **implement automation** on this issue. You cannot 
 
 If this is the second fail of the same class on this issue, require a ratchet in the next implement PR (`docs/agents/error-ratcheting.md`). Do not write the hook or rule yourself.
 
-Do not merge. Do not move to `Done`.
+Do not merge. Do not move to `Merging` or `Done`.
