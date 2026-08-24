@@ -29,8 +29,9 @@ function createSessionId(): string {
 }
 
 function sqliteStore(sessionId: string): CaptureSessionStore {
-  const { createSqliteCaptureSessionStore } =
-    require("./captureSessionSqliteStore") as typeof import("./captureSessionSqliteStore");
+  const { createSqliteCaptureSessionStore } = require("./captureSessionSqliteStore") satisfies {
+    createSqliteCaptureSessionStore: (id: string) => CaptureSessionStore;
+  };
   return createSqliteCaptureSessionStore(sessionId);
 }
 

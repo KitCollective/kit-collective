@@ -3,9 +3,14 @@ const POINTER_KEY = "capture_camera_active_session";
 let pointerMode: "sqlite" | "memory" = "sqlite";
 let memoryActiveSessionId: string | null = null;
 
-function sqliteDb() {
-  // Lazy import keeps expo-sqlite off the vitest graph for memory-mode tests.
-  return require("@/drafts/db").draftDb as typeof import("@/drafts/db").draftDb;
+type AppKvDb = {
+  runSync: (sql: string, params?: unknown[]) => void;
+  getFirstSync: <T>(sql: string, params?: unknown[]) => T | null;
+};
+
+function sqliteDb(): AppKvDb {
+  const mod = require("@/drafts/db") satisfies { draftDb: AppKvDb };
+  return mod.draftDb;
 }
 
 export function setMemoryActiveCameraCaptureSessionIdForTests(sessionId: string | null): void {

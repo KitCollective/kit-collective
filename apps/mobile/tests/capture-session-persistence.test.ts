@@ -10,10 +10,10 @@ vi.mock("@/drafts/db", () => {
           rows.set("capture_camera_active_session", String(params[1]));
         }
       },
-      getFirstSync: <T>(_sql: string, params?: unknown[]) => {
+      getFirstSync: (_sql: string, params?: unknown[]) => {
         if (params?.[0] === "capture_camera_active_session") {
           const value = rows.get("capture_camera_active_session");
-          return value ? ({ value } as T) : null;
+          return value ? { value } : null;
         }
         return null;
       },
@@ -37,7 +37,7 @@ import {
   replacePersistedCapturePhotos,
   resolveResumableCameraSession,
 } from "../src/capture/captureSessionPersistence";
-import type { CaptureSessionState, CaptureSessionStore } from "../src/capture/captureSessionTypes";
+import type { CaptureSessionStore } from "../src/capture/captureSessionTypes";
 
 const URI_FRONT = "file:///photos/front.jpg";
 const URI_BACK = "file:///photos/back.jpg";
@@ -76,7 +76,10 @@ describe("captureSessionPersistence", () => {
 
     const sessionState = store.load();
     expect(sessionState).toBeDefined();
-    const draft = getActiveDraft(sessionState as CaptureSessionState);
+    if (!sessionState) {
+      throw new Error("expected session");
+    }
+    const draft = getActiveDraft(sessionState);
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
     expect(getActiveCameraCaptureSessionId()).toBe(sessionId);
@@ -114,7 +117,10 @@ describe("captureSessionPersistence", () => {
 
     const sessionState = store.load();
     expect(sessionState).toBeDefined();
-    const draft = getActiveDraft(sessionState as CaptureSessionState);
+    if (!sessionState) {
+      throw new Error("expected session");
+    }
+    const draft = getActiveDraft(sessionState);
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
     expect(photoUriForRole(draft, "label")).toBe(URI_LABEL);
