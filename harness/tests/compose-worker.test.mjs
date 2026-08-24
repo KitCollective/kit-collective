@@ -333,6 +333,11 @@ test("Pi job runner starts one non-interactive Pi process with the role file", a
   const runner = createPiJobRunner({
     env: validWorkerEnv(),
     workspace: ROOT,
+    worktree: {
+      async checkout() {
+        return { path: "/var/lib/kit-pi/worktrees/KIT-99", branch: "kit-99", lane: "development" };
+      },
+    },
     spawnProcess(command, args, options) {
       spawned.push({ command, args, options });
       return Promise.resolve({ status: 0 });

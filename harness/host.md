@@ -27,6 +27,7 @@ Product Postgres, Redis, and the PaaS panel stay on the other Helsinki CX33. Thi
 - Health: `https://harness.eskobar.dev/health` → `{"ok":true}`
 - TLS: Let’s Encrypt via Caddy
 - Worker `.env` on the box only — never git. Path: `/opt/kit-collective/harness/.env` (compose `env_file: .env` next to this compose file). Required names: `CURSOR_API_KEY`, `LINEAR_CLI_API_KEY`, `LINEAR_WEBHOOK_SECRET`, `GH_TOKEN`. Values live on `kit-harness`, not in git. Do not reuse `LINEAR_API_KEY` (bootstrap admin key).
+- Implement worktrees: bare mirror `/var/lib/kit-pi/mirror.git`, issue trees `/var/lib/kit-pi/worktrees/KIT-n` from `origin/development`. One issue, one branch, one PR. Compose volume `kit_pi`.
 
 ## Models (not Anthropic)
 

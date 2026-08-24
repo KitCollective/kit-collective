@@ -1,11 +1,20 @@
 name: improvement
 linearType: Improvement
-summary: Tight change against existing behavior, then open a PR and move to In Review.
+summary: Tight change against existing behavior, then open a PR and move to In Review, with evidence on the workpad.
 steps:
   - scout
   - plan
   - build
   - code-gates
   - pr
+  - in-review
+codeGates:
+  rebase: true
+  typecheckTouchedPackages: true
+  waitRequiredGithubChecks: true
+  fullPnpmTest: github-actions
+workpad:
+  updateExisting: true
 never:
   - merge
+  - factory-checker-subagent
