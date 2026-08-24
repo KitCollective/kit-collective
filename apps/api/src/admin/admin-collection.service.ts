@@ -24,7 +24,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from "@nestjs/common";
-import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, ilike, inArray, or } from "drizzle-orm";
 import { OBJECT_STORE } from "../collection/collection.service.js";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { DB } from "../db/db.module.js";
@@ -198,7 +198,22 @@ export class AdminCollectionService {
       .innerJoin(season, eq(userJersey.seasonId, season.id))
       .where(
         searchPattern
-          ? or(ilike(user.email, searchPattern), ilike(season.label, searchPattern))
+          ? or(
+              ilike(user.email, searchPattern),
+              ilike(season.label, searchPattern),
+              exists(
+                this.db
+                  .select({ id: catalogLabel.id })
+                  .from(catalogLabel)
+                  .where(
+                    and(
+                      eq(catalogLabel.entityType, "club"),
+                      eq(catalogLabel.entityId, userJersey.clubId),
+                      ilike(catalogLabel.text, searchPattern),
+                    ),
+                  ),
+              ),
+            )
           : undefined,
       )
       .orderBy(desc(userJersey.createdAt));

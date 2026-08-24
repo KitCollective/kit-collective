@@ -348,6 +348,98 @@ describe("Admin collectors /v1", () => {
     expect(jerseys).toEqual({ jerseys: [] });
   });
 
+  it("filters jersey index by club CatalogLabel", async () => {
+    const collector = await registerUser(app, "club-search-collector@example.com");
+    await registerUser(app, "club-search-admin@example.com");
+    await promoteToAdmin("club-search-admin@example.com");
+    const adminSession = await loginAdmin(app, "club-search-admin@example.com");
+
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "SE" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    await db.insert(catalogLabel).values([
+      {
+        entityType: "club",
+        entityId: insertedClub!.id,
+        locale: "en",
+        kind: "label",
+        text: "Malmo FF",
+        source: "seed",
+      },
+      {
+        entityType: "club",
+        entityId: insertedClub!.id,
+        locale: "da",
+        kind: "label",
+        text: "Malmø FF",
+        source: "seed",
+      },
+    ]);
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2022/23",
+        startsOn: "2022-07-01",
+        endsOn: "2023-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    const [insertedJersey] = await db
+      .insert(userJersey)
+      .values({
+        userId: collector.user.id,
+        clubId: insertedClub!.id,
+        seasonId: insertedSeason!.id,
+        type: "home",
+        size: "m",
+        condition: "used",
+      })
+      .returning({ id: userJersey.id });
+
+    await pool.end();
+
+    const clubSearchResponse = await app.inject({
+      method: "GET",
+      url: "/v1/admin/collectors/jerseys?q=Malmo",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(clubSearchResponse.statusCode).toBe(200);
+    const clubSearch = adminCollectorJerseyIndexSchema.parse(JSON.parse(clubSearchResponse.body));
+    const matched = clubSearch.rows.find((row) => row.id === insertedJersey!.id);
+    expect(matched?.clubLabel).toBe("Malmo FF");
+    expect(matched?.userEmail).toBe("club-search-collector@example.com");
+
+    const missResponse = await app.inject({
+      method: "GET",
+      url: "/v1/admin/collectors/jerseys?q=NoSuchClub",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(missResponse.statusCode).toBe(200);
+    const missBody = adminCollectorJerseyIndexSchema.parse(JSON.parse(missResponse.body));
+    expect(missBody.rows).toHaveLength(0);
+  });
+
   it("returns 404 for missing jersey take-down", async () => {
     await promoteToAdmin("staff-b@example.com");
     const adminSession = await loginAdmin(app, "staff-b@example.com");
