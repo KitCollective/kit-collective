@@ -50,9 +50,7 @@ export function checkMobileAddConfirmRedirect({
   }
 
   if (!hookSource.includes("loadPersistedCaptureSession")) {
-    violations.push(
-      `${HOOK_PATH}: must load the persisted session synchronously on first render`,
-    );
+    violations.push(`${HOOK_PATH}: must load the persisted session synchronously on first render`);
   }
 
   if (!redirectHelperSource.includes("isSessionResolved")) {

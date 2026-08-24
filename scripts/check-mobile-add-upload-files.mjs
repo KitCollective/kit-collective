@@ -55,9 +55,7 @@ export function checkMobileAddUploadFiles({
   }
 
   if (!uploadTestSource.includes("routes Filer to the document picker")) {
-    violations.push(
-      `${UPLOAD_TEST_PATH}: must regression-test the Files/documents upload branch`,
-    );
+    violations.push(`${UPLOAD_TEST_PATH}: must regression-test the Files/documents upload branch`);
   }
 
   return violations;
