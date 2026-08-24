@@ -1,10 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import {
-  createPersistedCaptureSession,
-  readPrefilledClub,
-} from "@/capture/captureFlow";
+import { createPersistedCaptureSession, readPrefilledClub } from "@/capture/captureFlow";
 import { pickUploadFiles } from "@/capture/pickUploadFiles";
 import { ScreenHeader } from "@/components/screen-header";
 import { Button, IconButton } from "@/components/ui";
