@@ -77,6 +77,7 @@ export function CollectorsPage() {
     if (!token) {
       return;
     }
+    let cancelled = false;
     setLoading(true);
     const params = new URLSearchParams();
     if (query.q) {
@@ -89,25 +90,44 @@ export function CollectorsPage() {
     const request =
       table === "user"
         ? apiFetch<AdminCollectorList>(path, { token }).then((body) => {
+            if (cancelled) {
+              return;
+            }
             setUsers(adminCollectorListSchema.parse(body));
             setJerseys(null);
           })
         : apiFetch<AdminCollectorJerseyIndex>(path, { token }).then((body) => {
+            if (cancelled) {
+              return;
+            }
             setJerseys(adminCollectorJerseyIndexSchema.parse(body));
             setUsers(null);
           });
 
     request
       .then(() => {
+        if (cancelled) {
+          return;
+        }
         setFocusedRowIndex(0);
         setError(null);
       })
       .catch((fetchError) => {
+        if (cancelled) {
+          return;
+        }
         setUsers(null);
         setJerseys(null);
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load user data");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token, query, table]);
 
   function openUser(row: AdminCollectorRow) {

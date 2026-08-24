@@ -10,6 +10,11 @@ import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
 import { BackLink } from "../components/BackLink.js";
+import {
+  isClubSeasonExpandPending,
+  isClubSeasonReadyToExpand,
+  resolveSeasonIdForClub,
+} from "./club-season-expand.js";
 
 type ClubTab = "players" | "jerseys";
 
@@ -48,53 +53,76 @@ export function ClubDrillPage() {
     if (!token || !clubId) {
       return;
     }
+    let cancelled = false;
     apiFetch<AdminClubDrill>(`/admin/catalog/clubs/${clubId}`, { token })
       .then((body) => {
+        if (cancelled) {
+          return;
+        }
         const parsed = adminClubDrillSchema.parse(body);
         setClub(parsed);
-        setSeasonId((current) => {
-          if (current && parsed.seasons.some((season) => season.id === current)) {
-            return current;
-          }
-          return parsed.seasons[0]?.id ?? "";
-        });
+        setSeasonId((current) => resolveSeasonIdForClub(current, parsed.seasons));
         setError(null);
       })
       .catch((fetchError) => {
+        if (cancelled) {
+          return;
+        }
         setClub(null);
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load club");
       });
+    return () => {
+      cancelled = true;
+    };
   }, [token, clubId]);
 
   useEffect(() => {
-    if (!token || !clubId || !seasonId) {
+    if (!token || !clubId) {
       setSeasonDrill(null);
       setSeasonLoading(false);
       return;
     }
+    if (!isClubSeasonReadyToExpand(club, clubId, seasonId)) {
+      setSeasonDrill(null);
+      setSeasonLoading(isClubSeasonExpandPending(club, clubId, seasonId));
+      return;
+    }
+    let cancelled = false;
     setSeasonLoading(true);
     apiFetch<AdminClubSeasonDrill>(
       `/admin/catalog/club-seasons/${clubId}/${seasonId}?expand=true`,
       { token },
     )
       .then((body) => {
+        if (cancelled) {
+          return;
+        }
         setSeasonDrill(adminClubSeasonDrillSchema.parse(body));
         setFocusedRowIndex(0);
         setError(null);
       })
       .catch((fetchError) => {
+        if (cancelled) {
+          return;
+        }
         setSeasonDrill(null);
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load season");
       })
       .finally(() => {
-        setSeasonLoading(false);
+        if (!cancelled) {
+          setSeasonLoading(false);
+        }
       });
-  }, [token, clubId, seasonId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [token, clubId, seasonId, club]);
 
   const players = seasonDrill?.squad ?? [];
   const jerseys = seasonDrill?.kits ?? [];
   const rows = tab === "players" ? players : jerseys;
   const columnCount = tab === "players" ? 2 : 4;
+  const routedClub = club && clubId && club.id === clubId ? club : null;
 
   function openJersey(kitId: string) {
     navigate(`/stamdata/kits/${kitId}`);
@@ -150,39 +178,39 @@ export function ClubDrillPage() {
     <div className="drill-page">
       <div className="drill-header">
         <BackLink to="/stamdata" />
-        <h2>{club?.label ?? "Club"}</h2>
+        <h2>{routedClub?.label ?? "Club"}</h2>
       </div>
 
       {error ? <div className="banner-error">{error}</div> : null}
 
-      {club ? (
+      {routedClub ? (
         <section className="summary-panel identity-strip">
           <dl className="stats-row">
             <div>
               <dt>Country</dt>
-              <dd>{club.countryLabel ?? "—"}</dd>
+              <dd>{routedClub.countryLabel ?? "—"}</dd>
             </div>
             <div>
               <dt>Kind</dt>
-              <dd>{clubKindLabel(club.kind)}</dd>
+              <dd>{clubKindLabel(routedClub.kind)}</dd>
             </div>
             <div>
               <dt>Valid from</dt>
-              <dd className="type-mono">{formatDate(club.validFrom)}</dd>
+              <dd className="type-mono">{formatDate(routedClub.validFrom)}</dd>
             </div>
             <div>
               <dt>Valid to</dt>
-              <dd className="type-mono">{formatDate(club.validTo)}</dd>
+              <dd className="type-mono">{formatDate(routedClub.validTo)}</dd>
             </div>
-            {club.successorLabel ? (
+            {routedClub.successorLabel ? (
               <div>
                 <dt>Successor</dt>
-                <dd>{club.successorLabel}</dd>
+                <dd>{routedClub.successorLabel}</dd>
               </div>
             ) : null}
           </dl>
           <span className="monogram-slot identity-mark" aria-hidden="true">
-            {club.monogram}
+            {routedClub.monogram}
           </span>
         </section>
       ) : null}
@@ -229,12 +257,12 @@ export function ClubDrillPage() {
           <label htmlFor="club-season">Season</label>
           <select
             id="club-season"
-            value={seasonId}
-            disabled={!club || club.seasons.length === 0}
+            value={routedClub ? seasonId : ""}
+            disabled={!routedClub || routedClub.seasons.length === 0}
             onChange={(event) => setSeasonId(event.target.value)}
           >
-            {club && club.seasons.length > 0 ? (
-              club.seasons.map((season) => (
+            {routedClub && routedClub.seasons.length > 0 ? (
+              routedClub.seasons.map((season) => (
                 <option key={season.id} value={season.id}>
                   {season.label}
                 </option>
@@ -268,7 +296,7 @@ export function ClubDrillPage() {
             )}
           </thead>
           <tbody>
-            {seasonLoading || (!club && !error) ? (
+            {seasonLoading || (!routedClub && !error) ? (
               <tr>
                 <td colSpan={columnCount}>
                   <div className="empty-state data-table-empty">Loading…</div>
