@@ -28,7 +28,11 @@ export function createWorkerHandler(deps) {
 export function startWorkerServer({
   env = process.env,
   listenPort = Number(env.PORT ?? 8080),
-  linear = { async getIssue() { return null; } },
+  linear = {
+    async getIssue() {
+      return null;
+    },
+  },
   gh = {},
   now = () => Date.now(),
 } = {}) {
@@ -52,8 +56,7 @@ export function startWorkerServer({
   });
 }
 
-const isMain =
-  Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
   startWorkerServer().catch((error) => {
     console.error(error instanceof Error ? error.message : error);

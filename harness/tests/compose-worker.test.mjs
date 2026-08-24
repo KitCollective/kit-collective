@@ -61,10 +61,7 @@ test("serial queue runs only one Pi job at a time", async () => {
     },
   });
 
-  const [a, b] = await Promise.all([
-    queue.enqueue({ id: "a" }),
-    queue.enqueue({ id: "b" }),
-  ]);
+  const [a, b] = await Promise.all([queue.enqueue({ id: "a" }), queue.enqueue({ id: "b" })]);
 
   assert.equal(a, "a");
   assert.equal(b, "b");
@@ -72,11 +69,20 @@ test("serial queue runs only one Pi job at a time", async () => {
 });
 
 test("Compose HTTP adapter serves /health without enqueueing a Pi job", async () => {
-  const enqueue = { jobs: [], enqueue(job) { this.jobs.push(job); } };
+  const enqueue = {
+    jobs: [],
+    enqueue(job) {
+      this.jobs.push(job);
+    },
+  };
   const handler = createWorkerHandler({
     secret: SECRET,
     now: () => NOW,
-    linear: { async getIssue() { return null; } },
+    linear: {
+      async getIssue() {
+        return null;
+      },
+    },
     gh: {},
     enqueue,
     allowedDelegates: ["Pi"],
@@ -96,11 +102,20 @@ test("Compose HTTP adapter serves /health without enqueueing a Pi job", async ()
 });
 
 test("Compose HTTP adapter still verifies Linear HMAC on POST /webhooks/linear", async () => {
-  const enqueue = { jobs: [], enqueue(job) { this.jobs.push(job); } };
+  const enqueue = {
+    jobs: [],
+    enqueue(job) {
+      this.jobs.push(job);
+    },
+  };
   const handler = createWorkerHandler({
     secret: SECRET,
     now: () => NOW,
-    linear: { async getIssue() { return null; } },
+    linear: {
+      async getIssue() {
+        return null;
+      },
+    },
     gh: {},
     enqueue,
     allowedDelegates: ["Pi"],
