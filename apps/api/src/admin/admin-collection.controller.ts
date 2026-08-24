@@ -40,6 +40,17 @@ export class AdminCollectionController {
     return this.adminCollectionService.listCollectors(parsed.data);
   }
 
+  @Get("jerseys")
+  listAllJerseys(@Query() query: Record<string, string | string[] | undefined>) {
+    const parsed = adminCollectorQuerySchema.safeParse({
+      q: typeof query.q === "string" ? query.q : undefined,
+    });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid collectors query");
+    }
+    return this.adminCollectionService.listAllJerseys(parsed.data);
+  }
+
   @Get(":userId")
   getCollector(@Param() params: Record<string, string>) {
     const parsed = adminCollectorUserIdParamSchema.safeParse({ userId: params.userId });

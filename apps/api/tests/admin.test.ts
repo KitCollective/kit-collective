@@ -2,6 +2,8 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  adminClubDrillSchema,
+  adminClubSeasonDrillSchema,
   adminKitDrillSchema,
   adminStamdataListSchema,
   collectionJerseysSchema,
@@ -15,6 +17,8 @@ import {
   kit,
   kitPhoto,
   league,
+  player,
+  playerClubSeason,
   resetDatabase,
   season,
   teamSeason,
@@ -209,6 +213,22 @@ describe("Admin /v1", () => {
       visibility: "admin_only",
     });
 
+    const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    await db.insert(catalogLabel).values({
+      entityType: "player",
+      entityId: insertedPlayer!.id,
+      locale: "en",
+      kind: "label",
+      text: "Player One",
+      source: "seed",
+    });
+    await db.insert(playerClubSeason).values({
+      playerId: insertedPlayer!.id,
+      clubId: insertedClub!.id,
+      seasonId: insertedSeason!.id,
+      squadNumber: 10,
+    });
+
     await pool.end();
 
     await registerUser(app, "staff@example.com");
@@ -270,6 +290,25 @@ describe("Admin /v1", () => {
       },
     });
     expect(clubDrillResponse.statusCode).toBe(200);
+    const clubDrillBody = adminClubDrillSchema.parse(JSON.parse(clubDrillResponse.body));
+    expect(clubDrillBody.label).toBe("FC Copenhagen");
+    expect(clubDrillBody.kind).toBe("club");
+    expect(clubDrillBody.seasons.some((season) => season.label === "2024/25")).toBe(true);
+
+    const clubSeasonDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/club-seasons/${insertedClub!.id}/${insertedSeason!.id}?expand=true`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(clubSeasonDrillResponse.statusCode).toBe(200);
+    const clubSeasonBody = adminClubSeasonDrillSchema.parse(JSON.parse(clubSeasonDrillResponse.body));
+    expect(clubSeasonBody.squadCount).toBe(1);
+    expect(clubSeasonBody.squad?.some((row) => row.label === "Player One" && row.squadNumber === 10)).toBe(
+      true,
+    );
+    expect(clubSeasonBody.kits.some((row) => row.kitType === "home" && row.hasPhoto)).toBe(true);
 
     const seasonDrillResponse = await app.inject({
       method: "GET",

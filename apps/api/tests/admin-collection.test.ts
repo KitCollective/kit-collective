@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   adminCollectorJerseyDrillSchema,
+  adminCollectorJerseyIndexSchema,
   adminCollectorListSchema,
   collectionJerseysSchema,
   identitySessionSchema,
@@ -216,6 +217,20 @@ describe("Admin collectors /v1", () => {
     const collectorRow = listBody.rows.find((row) => row.email === "listed-collector@example.com");
     expect(collectorRow?.jerseyCount).toBe(1);
     expect(collectorRow).not.toHaveProperty("passwordHash");
+
+    const jerseyIndexResponse = await app.inject({
+      method: "GET",
+      url: "/v1/admin/collectors/jerseys",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(jerseyIndexResponse.statusCode).toBe(200);
+    const jerseyIndex = adminCollectorJerseyIndexSchema.parse(JSON.parse(jerseyIndexResponse.body));
+    expect(jerseyIndex.rows.some((row) => row.id === insertedJersey!.id)).toBe(true);
+    expect(jerseyIndex.rows.find((row) => row.id === insertedJersey!.id)?.userEmail).toBe(
+      "listed-collector@example.com",
+    );
 
     const jerseysResponse = await app.inject({
       method: "GET",

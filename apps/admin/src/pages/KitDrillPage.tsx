@@ -44,14 +44,22 @@ export function KitDrillPage() {
       )}
 
       {kit ? (
-        <dl className="meta-grid">
-          <dt>Kit type</dt>
-          <dd>{kit.kitType}</dd>
-          <dt>Club</dt>
-          <dd>{kit.clubLabel ?? "—"}</dd>
-          <dt>Season</dt>
-          <dd>{kit.seasonLabel}</dd>
-        </dl>
+        <section className="summary-panel">
+          <dl className="stats-row">
+            <div>
+              <dt>Kit type</dt>
+              <dd className="type-mono">{kit.kitType}</dd>
+            </div>
+            <div>
+              <dt>Club</dt>
+              <dd>{kit.clubLabel ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Season</dt>
+              <dd className="type-mono">{kit.seasonLabel}</dd>
+            </div>
+          </dl>
+        </section>
       ) : null}
     </div>
   );

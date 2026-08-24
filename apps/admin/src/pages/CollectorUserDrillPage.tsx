@@ -173,27 +173,33 @@ export function CollectorUserDrillPage() {
       {roleError ? <div className="banner-error">{roleError}</div> : null}
 
       {collector ? (
-        <>
-          <dl className="meta-grid">
-            <dt>Role</dt>
-            <dd>{collector.role}</dd>
-            <dt>Jerseys</dt>
-            <dd>{collector.jerseyCount}</dd>
-            <dt>Joined</dt>
-            <dd>
-              {new Date(collector.createdAt).toLocaleDateString("en-GB", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })}
-            </dd>
+        <section className="summary-panel">
+          <dl className="stats-row">
+            <div>
+              <dt>Role</dt>
+              <dd className="type-mono">{collector.role}</dd>
+            </div>
+            <div>
+              <dt>Jerseys</dt>
+              <dd className="type-mono">{collector.jerseyCount}</dd>
+            </div>
+            <div>
+              <dt>Joined</dt>
+              <dd className="type-mono">
+                {new Date(collector.createdAt).toLocaleDateString("en-GB", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </dd>
+            </div>
           </dl>
 
-          <div className="toolbar">
+          <div className="toolbar toolbar--actions">
             {collector.role === "user" ? (
               <button
                 type="button"
-                className="btn btn-secondary btn-primary--auto"
+                className="btn btn-secondary"
                 onClick={() => requestRoleChange("admin")}
               >
                 Grant Staff access
@@ -201,7 +207,7 @@ export function CollectorUserDrillPage() {
             ) : (
               <button
                 type="button"
-                className="btn btn-secondary btn-primary--auto"
+                className="btn btn-secondary"
                 onClick={() => requestRoleChange("user")}
                 disabled={demoteDisabled}
                 title={demoteHelperText ?? undefined}
@@ -209,58 +215,63 @@ export function CollectorUserDrillPage() {
                 Remove Staff access
               </button>
             )}
-            {demoteHelperText ? <p className="type-caption">{demoteHelperText}</p> : null}
+            {demoteHelperText ? <p className="type-caption toolbar-hint">{demoteHelperText}</p> : null}
           </div>
-        </>
+        </section>
       ) : null}
 
-      <div className="data-table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th scope="col">Thumb</th>
-              <th scope="col">Club</th>
-              <th scope="col">Season</th>
-              <th scope="col">Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!jerseys || jerseys.rows.length === 0 ? (
+      <section className="section-block">
+        <h3 className="section-title">Jerseys</h3>
+        <div className="data-table-wrap">
+          <table className="data-table">
+            <thead>
               <tr>
-                <td colSpan={4}>
-                  <div className="empty-state data-table-empty">
-                    <h2>No jerseys</h2>
-                    <p>This collector has not saved any jerseys yet.</p>
-                  </div>
-                </td>
+                <th className="data-table-mark" scope="col">
+                  Thumb
+                </th>
+                <th scope="col">Club</th>
+                <th scope="col">Season</th>
+                <th scope="col">Type</th>
               </tr>
-            ) : (
-              jerseys.rows.map((row, rowIndex) => (
-                <tr
-                  key={row.id}
-                  tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
-                  onClick={() => openJersey(row.id)}
-                  onFocus={() => setFocusedRowIndex(rowIndex)}
-                  onKeyDown={(event) => handleRowKeyDown(event, row.id, rowIndex)}
-                >
-                  <td>
-                    {row.photoPath && token ? (
-                      <span className="thumb-slot">
-                        <AuthenticatedImage path={row.photoPath} token={token} />
-                      </span>
-                    ) : (
-                      <span className="thumb-slot" aria-hidden />
-                    )}
+            </thead>
+            <tbody>
+              {!jerseys || jerseys.rows.length === 0 ? (
+                <tr>
+                  <td colSpan={4}>
+                    <div className="empty-state data-table-empty">
+                      <h2>No jerseys</h2>
+                      <p>This collector has not saved any jerseys yet.</p>
+                    </div>
                   </td>
-                  <td>{row.clubLabel}</td>
-                  <td>{row.seasonLabel}</td>
-                  <td>{row.type}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                jerseys.rows.map((row, rowIndex) => (
+                  <tr
+                    key={row.id}
+                    tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
+                    onClick={() => openJersey(row.id)}
+                    onFocus={() => setFocusedRowIndex(rowIndex)}
+                    onKeyDown={(event) => handleRowKeyDown(event, row.id, rowIndex)}
+                  >
+                    <td className="data-table-mark">
+                      {row.photoPath && token ? (
+                        <span className="thumb-slot">
+                          <AuthenticatedImage path={row.photoPath} token={token} />
+                        </span>
+                      ) : (
+                        <span className="thumb-slot" aria-hidden />
+                      )}
+                    </td>
+                    <td className="data-table-primary">{row.clubLabel}</td>
+                    <td className="data-table-mono">{row.seasonLabel}</td>
+                    <td className="data-table-mono">{row.type}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <ConfirmSheet
         open={roleSheetOpen}
