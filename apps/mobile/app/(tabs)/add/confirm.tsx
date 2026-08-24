@@ -28,15 +28,21 @@ import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/visio
 import { useAuth } from "@/auth/AuthProvider";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
 import {
+  addJerseyDraft,
+  bindUnboundPhotoToDraft,
   canSave,
   getDraft,
   photoUriForRole,
+  removeDraft,
   selectDraftCondition,
   selectDraftKitType,
   selectDraftSize,
+  setActiveDraft,
   setDraftClub,
   setDraftNotes,
   setDraftSeason,
+  switchSingleToBulkBind,
+  unbindPhoto,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
@@ -47,6 +53,7 @@ import {
   usePersistedCaptureSession,
 } from "@/capture/usePersistedCaptureSession";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
+import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
@@ -99,6 +106,25 @@ export default function ConfirmScreen() {
   const visionStartAttempted = useRef(false);
 
   const draft = state ? getDraft(state, state.activeDraftId) : null;
+  const isBulk = state?.branch === "bulk";
+
+  const resetVisionForDraft = useCallback(() => {
+    setVisionJobId(null);
+    setVisionPolling(false);
+    setVisionSuggestion(null);
+    visionStartAttempted.current = false;
+    appliedVisionJobId.current = null;
+    clubManuallySet.current = false;
+    seasonManuallySet.current = false;
+    kitTypeManuallySet.current = false;
+    setSelectedSeasonLabel(null);
+  }, []);
+
+  const visionDraftKey = `${state?.activeDraftId ?? ""}:${draft?.photos[0]?.uri ?? ""}`;
+
+  useEffect(() => {
+    resetVisionForDraft();
+  }, [resetVisionForDraft, visionDraftKey]);
 
   useEffect(() => {
     if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
@@ -312,7 +338,7 @@ export default function ConfirmScreen() {
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
   const pickPhotoForRole = async (role: PhotoRole) => {
-    if (!draft) {
+    if (!draft || isBulk) {
       return;
     }
 
@@ -402,6 +428,46 @@ export default function ConfirmScreen() {
     setVisionSuggestion(null);
   };
 
+  const handlePhotoSlotPress = (role: PhotoRole) => {
+    if (!state || !draft) {
+      return;
+    }
+
+    const uri = photoUriForRole(draft, role);
+    if (isBulk) {
+      if (uri) {
+        mutate((current) => unbindPhoto(current, uri));
+        return;
+      }
+
+      const firstUnbound = state.unboundUris[0];
+      if (firstUnbound) {
+        mutate((current) =>
+          bindUnboundPhotoToDraft(current, firstUnbound, current.activeDraftId, role),
+        );
+      }
+      return;
+    }
+
+    void pickPhotoForRole(role);
+  };
+
+  const handleBindUnboundPhoto = (uri: string) => {
+    mutate((current) => bindUnboundPhotoToDraft(current, uri, current.activeDraftId));
+  };
+
+  const handleSelectDraft = (draftId: string) => {
+    mutate((current) => setActiveDraft(current, draftId));
+  };
+
+  const handleAddJersey = () => {
+    mutate(addJerseyDraft);
+  };
+
+  const handleMoreJerseysInUpload = () => {
+    mutate(switchSingleToBulkBind);
+  };
+
   const handleSave = async () => {
     if (!draft || !sessionId) {
       return;
@@ -476,10 +542,28 @@ export default function ConfirmScreen() {
       }
 
       markJerseySaved();
-      clearPersistedCaptureSession(sessionId);
-      setSavedClub(draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null);
-      setSavedSeasonLabel(selectedSeasonLabel);
-      setPostSaveOpen(true);
+
+      if (state?.branch === "bulk") {
+        const nextState = mutate((current) => {
+          let next = removeDraft(current, draft.id);
+          if (next.drafts.length === 0 && next.unboundUris.length > 0) {
+            next = addJerseyDraft(next);
+          }
+          return next;
+        });
+
+        if (!nextState || nextState.drafts.length === 0) {
+          clearPersistedCaptureSession(sessionId);
+          setSavedClub(draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null);
+          setSavedSeasonLabel(selectedSeasonLabel);
+          setPostSaveOpen(true);
+        }
+      } else {
+        clearPersistedCaptureSession(sessionId);
+        setSavedClub(draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null);
+        setSavedSeasonLabel(selectedSeasonLabel);
+        setPostSaveOpen(true);
+      }
     } catch {
       setSaveError(true);
     } finally {
@@ -510,6 +594,7 @@ export default function ConfirmScreen() {
       : null;
   const dockHelper = saveBlockMessage ?? getSaveBlockMessage(draft);
   const saveEnabled = canSave(draft);
+  const saveLabel = isBulk && state.drafts.length > 1 ? "Gem og næste" : "Gem";
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -519,6 +604,15 @@ export default function ConfirmScreen() {
           Vælg klub, sæson og detaljer.
         </Text>
 
+        {isBulk && state ? (
+          <BulkChrome
+            state={state}
+            onSelectDraft={handleSelectDraft}
+            onAddJersey={handleAddJersey}
+            onBindUnboundPhoto={handleBindUnboundPhoto}
+          />
+        ) : null}
+
         <View style={styles.section}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
           <View style={styles.photoRow}>
@@ -527,7 +621,7 @@ export default function ConfirmScreen() {
                 key={role}
                 role={role}
                 uri={photoUris[role]}
-                onPress={() => void pickPhotoForRole(role)}
+                onPress={() => handlePhotoSlotPress(role)}
               />
             ))}
           </View>
@@ -661,6 +755,20 @@ export default function ConfirmScreen() {
           <Text style={[typography.label, { color: theme.contentSecondary }]}>Flere detaljer</Text>
         </Pressable>
 
+        {!isBulk ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Flere trøjer i denne upload"
+            accessibilityHint="Åbner binding af flere trøjer uden at vælge billeder igen"
+            onPress={handleMoreJerseysInUpload}
+            style={styles.detailsLink}
+          >
+            <Text style={[typography.label, { color: theme.contentSecondary }]}>
+              Flere trøjer i denne upload
+            </Text>
+          </Pressable>
+        ) : null}
+
         {saveError ? (
           <Banner
             tone="danger"
@@ -677,7 +785,7 @@ export default function ConfirmScreen() {
           <Text style={[typography.caption, { color: theme.contentMuted }]}>{dockHelper}</Text>
         ) : null}
         <Button
-          label="Gem"
+          label={saveLabel}
           variant="primary"
           width="fill"
           loading={saving}

@@ -4,20 +4,25 @@ import { describe, expect, it } from "vitest";
 import {
   addJerseyDraft,
   bindPhoto,
+  bindUnboundPhotoToDraft,
   branchFromPhotoCount,
   canSave,
   createCaptureSession,
   createMemoryCaptureSessionStore,
   getActiveDraft,
   getDraft,
+  nextAvailableRole,
   photoUriForRole,
   reloadCaptureSession,
+  removeDraft,
   selectDraftCondition,
   selectDraftKitType,
   selectDraftSize,
+  setActiveDraft,
   setDraftClub,
   setDraftNotes,
   setDraftSeason,
+  switchSingleToBulkBind,
   unbindPhoto,
 } from "../src/capture/captureSession";
 
@@ -149,6 +154,52 @@ describe("bind, unbind, and addJersey", () => {
     expect(withSecondJersey.activeDraftId).not.toBe(firstDraftId);
     expect(getDraft(withSecondJersey, withSecondJersey.activeDraftId).photos).toEqual([]);
     expect(withSecondJersey.unboundUris).toEqual(session.unboundUris);
+  });
+
+  it("setActiveDraft switches the bind target tab", () => {
+    const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
+    const withSecondJersey = addJerseyDraft(session);
+    const secondDraftId = withSecondJersey.activeDraftId;
+
+    const switched = setActiveDraft(withSecondJersey, session.drafts[0]!.id);
+
+    expect(switched.activeDraftId).toBe(session.drafts[0]!.id);
+    expect(switched.activeDraftId).not.toBe(secondDraftId);
+  });
+
+  it("removeDraft drops a saved jersey and advances the active tab", () => {
+    const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
+    const withSecondJersey = addJerseyDraft(session);
+    const firstDraftId = session.drafts[0]!.id;
+
+    const removed = removeDraft(withSecondJersey, firstDraftId);
+
+    expect(removed.drafts).toHaveLength(1);
+    expect(removed.activeDraftId).toBe(withSecondJersey.activeDraftId);
+  });
+
+  it("bindUnboundPhotoToDraft assigns the next available role", () => {
+    const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
+    const draftId = getActiveDraft(session).id;
+
+    const bound = bindUnboundPhotoToDraft(session, URI_EXTRA_A, draftId);
+    const draft = getDraft(bound, draftId);
+
+    expect(nextAvailableRole(draft)).toBe("back");
+    expect(photoUriForRole(draft, "front")).toBe(URI_EXTRA_A);
+  });
+
+  it("switchSingleToBulkBind keeps photos on the current draft", () => {
+    const session = createCaptureSession([URI_FRONT, URI_BACK, URI_LABEL]);
+    const draftId = getActiveDraft(session).id;
+
+    const bulk = switchSingleToBulkBind(session);
+    const draft = getDraft(bulk, draftId);
+
+    expect(bulk.branch).toBe("bulk");
+    expect(bulk.unboundUris).toEqual([]);
+    expect(draft.photos).toHaveLength(3);
+    expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
   });
 });
 
