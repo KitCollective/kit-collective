@@ -1,4 +1,4 @@
-import { KIT_TYPES } from "@kit/domain";
+import { CLUB_KINDS, KIT_TYPES } from "@kit/domain";
 import { z } from "zod";
 
 export const adminStamdataEntityTypeSchema = z.enum([
@@ -97,6 +97,18 @@ export const adminSquadPlayerSchema = z
 
 export type AdminSquadPlayer = z.infer<typeof adminSquadPlayerSchema>;
 
+export const adminClubSeasonKitSchema = z
+  .object({
+    id: z.string().uuid(),
+    label: z.string().min(1),
+    kitType: z.enum(KIT_TYPES),
+    hasPhoto: z.boolean(),
+    photoPath: z.string().optional(),
+  })
+  .strict();
+
+export type AdminClubSeasonKit = z.infer<typeof adminClubSeasonKitSchema>;
+
 export const adminClubSeasonDrillSchema = z
   .object({
     clubId: z.string().uuid(),
@@ -105,6 +117,7 @@ export const adminClubSeasonDrillSchema = z
     seasonLabel: z.string().min(1),
     squadCount: z.number().int().nonnegative(),
     squad: z.array(adminSquadPlayerSchema).optional(),
+    kits: z.array(adminClubSeasonKitSchema),
   })
   .strict();
 
@@ -127,12 +140,26 @@ export const adminKitIdParamSchema = z
 
 export type AdminKitIdParam = z.infer<typeof adminKitIdParamSchema>;
 
+export const adminClubSeasonOptionSchema = z
+  .object({
+    id: z.string().uuid(),
+    label: z.string().min(1),
+  })
+  .strict();
+
+export type AdminClubSeasonOption = z.infer<typeof adminClubSeasonOptionSchema>;
+
 export const adminClubDrillSchema = z
   .object({
     id: z.string().uuid(),
     label: z.string().min(1),
     countryLabel: z.string().optional(),
     monogram: z.string().min(1).max(3),
+    kind: z.enum(CLUB_KINDS),
+    validFrom: z.string().nullable(),
+    validTo: z.string().nullable(),
+    successorLabel: z.string().min(1).optional(),
+    seasons: z.array(adminClubSeasonOptionSchema),
   })
   .strict();
 

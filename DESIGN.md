@@ -253,9 +253,11 @@ Deferred here (do not invent): switch, checkbox, avatar, paywall, wishlist row, 
 - Do crop collection photos 4:5; letterbox on OG — do not crop the jersey to 16:9.
 - Do use a monogram when a crest/flag/portrait asset is missing.
 - Do honor `prefers-reduced-motion` (still equivalent; no transform travel).
-- Do put the KC mark / wordmark on splash, login, onboarding, OG, favicon, and store icons only.
-- Don't invent tokens, variants, or components. Flag the gap.
-- Don't put the wordmark or KC mark in the Samling header, tab bar, or on a jersey tile.
+- Do put **lockup** on login / onboarding / splash; **wordmark** on app header and narrow chrome; **favicon / filled monogram** as the tab icon; **appicon** files on store / home screen. `admin` uses black variants only.
+- Don't invent tokens, variants, stacked logos, or compact SVG files. Flag the gap.
+- Don't put the wordmark, lockup, or KC monogram in the Samling header, tab bar, or on a jersey tile.
+- Don't use white wordmark / lockup / monogram on `admin` (light only).
+- Don't use the product KC monogram as a club Mark, operator profile, or `KitPhoto` crest.
 - Don't put identity wash behind a jersey photo or on a CTA.
 - Don't use emoji as icons or category marks.
 - Don't build marketplace chrome (price, buy, boost, ratings).

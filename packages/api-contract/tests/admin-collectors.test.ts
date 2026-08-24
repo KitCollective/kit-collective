@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   adminCollectorJerseyDrillSchema,
+  adminCollectorJerseyIndexSchema,
   adminCollectorListSchema,
   adminCollectorUserSchema,
   adminRoleUpdateRequestSchema,
@@ -42,6 +43,25 @@ describe("adminCollectorListSchema", () => {
         ],
       }),
     ).toThrow();
+  });
+});
+
+describe("adminCollectorJerseyIndexSchema", () => {
+  it("accepts jersey index rows with owner email", () => {
+    const list = {
+      total: 1,
+      rows: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440001",
+          userId: "550e8400-e29b-41d4-a716-446655440000",
+          userEmail: "collector@example.com",
+          clubLabel: "FC Copenhagen",
+          seasonLabel: "2024/25",
+          type: "home" as const,
+        },
+      ],
+    };
+    expect(adminCollectorJerseyIndexSchema.parse(list)).toEqual(list);
   });
 });
 

@@ -1,11 +1,13 @@
 import {
   type AdminCollectorJerseyDrill,
+  type AdminCollectorJerseyIndex,
   type AdminCollectorJerseyList,
   type AdminCollectorList,
   type AdminCollectorQuery,
   type AdminCollectorUser,
   type AdminRoleUpdateRequest,
   adminCollectorJerseyDrillSchema,
+  adminCollectorJerseyIndexSchema,
   adminCollectorJerseyListSchema,
   adminCollectorListSchema,
   adminCollectorUserSchema,
@@ -22,7 +24,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from "@nestjs/common";
-import { and, asc, count, desc, eq, ilike, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, ilike, inArray, or } from "drizzle-orm";
 import { OBJECT_STORE } from "../collection/collection.service.js";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { DB } from "../db/db.module.js";
@@ -158,8 +160,7 @@ export class AdminCollectionService {
     const clubIds = [...new Set(rows.map((row) => row.clubId))];
     const clubLabels = await this.resolveClubLabels(clubIds);
     const photoPaths = await this.firstPhotoPathByJersey(
-      rows.map((row) => row.id),
-      userId,
+      rows.map((row) => ({ jerseyId: row.id, userId })),
     );
 
     return adminCollectorJerseyListSchema.parse({
@@ -171,6 +172,73 @@ export class AdminCollectionService {
         }
         return {
           id: row.id,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          type: row.type,
+          photoPath: photoPaths.get(row.id),
+        };
+      }),
+    });
+  }
+
+  async listAllJerseys(query: AdminCollectorQuery): Promise<AdminCollectorJerseyIndex> {
+    const searchPattern = query.q ? `%${query.q}%` : null;
+
+    const rows = await this.db
+      .select({
+        id: userJersey.id,
+        userId: userJersey.userId,
+        userEmail: user.email,
+        clubId: userJersey.clubId,
+        seasonLabel: season.label,
+        type: userJersey.type,
+      })
+      .from(userJersey)
+      .innerJoin(user, eq(userJersey.userId, user.id))
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .where(
+        searchPattern
+          ? or(
+              ilike(user.email, searchPattern),
+              ilike(season.label, searchPattern),
+              exists(
+                this.db
+                  .select({ id: catalogLabel.id })
+                  .from(catalogLabel)
+                  .where(
+                    and(
+                      eq(catalogLabel.entityType, "club"),
+                      eq(catalogLabel.entityId, userJersey.clubId),
+                      ilike(catalogLabel.text, searchPattern),
+                    ),
+                  ),
+              ),
+            )
+          : undefined,
+      )
+      .orderBy(desc(userJersey.createdAt));
+
+    if (rows.length === 0) {
+      return adminCollectorJerseyIndexSchema.parse({ total: 0, rows: [] });
+    }
+
+    const clubIds = [...new Set(rows.map((row) => row.clubId))];
+    const clubLabels = await this.resolveClubLabels(clubIds);
+    const photoPaths = await this.firstPhotoPathByJersey(
+      rows.map((row) => ({ jerseyId: row.id, userId: row.userId })),
+    );
+
+    return adminCollectorJerseyIndexSchema.parse({
+      total: rows.length,
+      rows: rows.map((row) => {
+        const clubLabel = clubLabels.get(row.clubId);
+        if (!clubLabel) {
+          throw new NotFoundException(`Club label missing for jersey ${row.id}`);
+        }
+        return {
+          id: row.id,
+          userId: row.userId,
+          userEmail: row.userEmail,
           clubLabel,
           seasonLabel: row.seasonLabel,
           type: row.type,
@@ -438,13 +506,15 @@ export class AdminCollectionService {
   }
 
   private async firstPhotoPathByJersey(
-    jerseyIds: string[],
-    userId: string,
+    jerseyUserPairs: { jerseyId: string; userId: string }[],
   ): Promise<Map<string, string>> {
     const paths = new Map<string, string>();
-    if (jerseyIds.length === 0) {
+    if (jerseyUserPairs.length === 0) {
       return paths;
     }
+
+    const jerseyIds = jerseyUserPairs.map((item) => item.jerseyId);
+    const userIdByJersey = new Map(jerseyUserPairs.map((item) => [item.jerseyId, item.userId]));
 
     const photoRows = await this.db
       .select({
@@ -456,12 +526,14 @@ export class AdminCollectionService {
       .orderBy(asc(userJerseyPhoto.createdAt));
 
     for (const row of photoRows) {
-      if (!paths.has(row.userJerseyId)) {
-        paths.set(
-          row.userJerseyId,
-          `/admin/collectors/${userId}/jerseys/${row.userJerseyId}/photos/${row.id}`,
-        );
+      const userId = userIdByJersey.get(row.userJerseyId);
+      if (!userId || paths.has(row.userJerseyId)) {
+        continue;
       }
+      paths.set(
+        row.userJerseyId,
+        `/admin/collectors/${userId}/jerseys/${row.userJerseyId}/photos/${row.id}`,
+      );
     }
 
     return paths;
