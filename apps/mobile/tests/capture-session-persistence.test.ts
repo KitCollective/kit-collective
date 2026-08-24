@@ -124,7 +124,7 @@ describe("captureSessionPersistence", () => {
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
     expect(photoUriForRole(draft, "label")).toBe(URI_LABEL);
-    expect(sessionState?.orderedUris).toEqual([URI_FRONT, URI_BACK, URI_LABEL]);
+    expect(sessionState.orderedUris).toEqual([URI_FRONT, URI_BACK, URI_LABEL]);
   });
 
   it("keeps the prior session when replace save fails", () => {
