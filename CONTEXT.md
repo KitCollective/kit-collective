@@ -169,3 +169,19 @@ _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authe
 **Take-down**:
 Removing one UserJersey and its UserJerseyPhoto bytes. The User remains. Not a Kit delete. Not a hide flag.
 _Avoid_: unpublish; soft-hide without a column; deleting the collector by default
+
+**Implement parent**:
+The Composer Pi session for the implement role. Owns helpers, the PR, the workpad, and the move to In Review. Writes `### Validation` from the Gate report.
+_Avoid_: Hy3 as `PI_MODEL`; Scout or Gate flipping In Review
+
+**Scout**:
+Read-only Pi subagent before implement writes. Required on every implement job. Maps files, seams, and risks. Sends paths and grep snippets only.
+_Avoid_: editing; opening a PR; moving Linear status; dumping whole files or the workpad to OpenRouter; inheriting Composer; skipping when `OPENROUTER_API_KEY` is missing
+
+**Gate**:
+Pi subagent that runs the mechanical half of pre-review (rebase, typecheck, required GitHub checks) and returns a green or red report to the Implement parent. Attempts rebase; a conflict is red — the parent resolves it. Never calls Linear, never writes the workpad, never moves In Review.
+_Avoid_: factory-checker; treating Gate as the pass verdict; inheriting Composer; resolving merge conflicts; Linear CLI from Hy3
+
+**Hy3**:
+OpenRouter model `tencent/hy3` for Scout and Gate only, no-think. Not product Vision. Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough.
+_Avoid_: stealth/ox-alpha; Hy3 for nest/expo/drizzle/ui-ux; Hy3 for planner, factory-checker, or land; blocking the slice on Exacto
