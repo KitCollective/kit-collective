@@ -123,6 +123,14 @@ export const ISSUE_UPDATE_STATE_MUTATION = `mutation IssueUpdateState($id: Strin
   issueUpdate(id: $id, input: { stateId: $stateId }) { success }
 }`;
 
+export const AGENT_ACTIVITY_CREATE_MUTATION = `mutation AgentActivityCreate($input: AgentActivityCreateInput!) {
+  agentActivityCreate(input: $input) { success }
+}`;
+
+export const ISSUE_CLEAR_DELEGATE_MUTATION = `mutation IssueClearDelegate($id: String!) {
+  issueUpdate(id: $id, input: { delegateId: null }) { success }
+}`;
+
 /**
  * @param {unknown} raw
  * @returns {object | null}
@@ -359,6 +367,30 @@ export function createLinearCliClient({ env = process.env, runCommand } = {}) {
       }
       await cli(ISSUE_UPDATE_STATE_MUTATION, { id: issueId, stateId: match.id });
       return { issueId, status };
+    },
+
+    /**
+     * Display-only AgentSession activity. Never a workpad write.
+     *
+     * @param {{ sessionId: string, content: object, ephemeral?: boolean }} input
+     */
+    async createAgentActivity({ sessionId, content, ephemeral }) {
+      await cli(AGENT_ACTIVITY_CREATE_MUTATION, {
+        input: {
+          agentSessionId: sessionId,
+          content,
+          ...(ephemeral === true ? { ephemeral: true } : {}),
+        },
+      });
+    },
+
+    /**
+     * Nicklas's turn: drop Pi from Assignee → Agents.
+     *
+     * @param {{ issueId: string }} input
+     */
+    async clearDelegate({ issueId }) {
+      await cli(ISSUE_CLEAR_DELEGATE_MUTATION, { id: issueId });
     },
   };
 }

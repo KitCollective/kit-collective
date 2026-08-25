@@ -1,0 +1,168 @@
+/**
+ * Display-only Linear AgentSession adapter (KIT-59).
+ *
+ * Posts thought / ephemeral action / elicitation so the issue UI is live.
+ * Never enqueues a coding job. Durable evidence stays on the workpad.
+ * Fake Linear at this seam; do not call Pi.
+ */
+
+export const CREATED_UNCLAIMED_THOUGHT =
+  "Factory coding jobs start only from the Issue status webhook after a planner claim. This session is display-only.";
+export const CREATED_CLAIMED_THOUGHT =
+  "Pi is working from the Issue webhook. This AgentSession is display-only.";
+export const PROMPTED_THOUGHT =
+  "This session does not enqueue a coding job. Durable evidence stays on the workpad.";
+export const HANDOFF_ELICITATION = "Ready for merge. This is Nicklas's turn.";
+
+/**
+ * @param {{ linear?: { clearDelegate?: Function, createAgentActivity?: Function, updateAgentSession?: Function } }} [deps]
+ */
+export function createMemorySessionAdapter({ linear } = {}) {
+  const activities = [];
+  const sessionsByIssue = new Map();
+  const adapter = {
+    activities,
+    handedOff: false,
+    ackedAt: undefined,
+    /**
+     * @param {{ sessionId: string, issueId?: string, claimed?: boolean, now?: number }} input
+     */
+    async ackCreated({ sessionId, issueId, claimed = false, now = Date.now() }) {
+      adapter.ackedAt = now;
+      if (typeof issueId === "string") {
+        sessionsByIssue.set(issueId, sessionId);
+      }
+      activities.push({
+        sessionId,
+        ephemeral: false,
+        content: {
+          type: "thought",
+          body: claimed ? CREATED_CLAIMED_THOUGHT : CREATED_UNCLAIMED_THOUGHT,
+        },
+      });
+    },
+    /**
+     * @param {{ sessionId: string, now?: number }} input
+     */
+    async ackPrompted({ sessionId, now = Date.now() }) {
+      adapter.ackedAt = now;
+      activities.push({
+        sessionId,
+        ephemeral: false,
+        content: { type: "thought", body: PROMPTED_THOUGHT },
+      });
+    },
+    /**
+     * @param {{ issueId?: string, identifier: string, role: string, sessionId?: string }} input
+     */
+    async emitWorking({ issueId, identifier, role, sessionId }) {
+      const resolved =
+        sessionId ?? (typeof issueId === "string" ? sessionsByIssue.get(issueId) : undefined);
+      if (role === "implement") {
+        activities.push({
+          sessionId: resolved,
+          ephemeral: true,
+          content: { type: "action", action: "Implementing", parameter: identifier },
+        });
+        return;
+      }
+      if (role === "factory-checker") {
+        activities.push({
+          sessionId: resolved,
+          ephemeral: true,
+          content: { type: "thought", body: `Factory checker is reviewing ${identifier}.` },
+        });
+      }
+    },
+    /**
+     * @param {{ issueId: string, identifier?: string, sessionId?: string }} input
+     */
+    async handOff({ issueId, sessionId }) {
+      adapter.handedOff = true;
+      const resolved = sessionId ?? sessionsByIssue.get(issueId);
+      activities.push({
+        sessionId: resolved,
+        ephemeral: false,
+        content: { type: "elicitation", body: HANDOFF_ELICITATION },
+      });
+      if (typeof linear?.clearDelegate === "function") {
+        await linear.clearDelegate({ issueId });
+      }
+    },
+  };
+  return adapter;
+}
+
+/**
+ * Production adapter: Linear CLI mutations only. Never updateWorkpad.
+ *
+ * @param {{ linear: { createAgentActivity: Function, clearDelegate: Function, updateAgentSession?: Function } }} deps
+ */
+export function createLinearSessionAdapter({ linear }) {
+  const memory = createMemorySessionAdapter({ linear });
+  return {
+    get activities() {
+      return memory.activities;
+    },
+    get handedOff() {
+      return memory.handedOff;
+    },
+    get ackedAt() {
+      return memory.ackedAt;
+    },
+    async ackCreated(input) {
+      await memory.ackCreated(input);
+      const last = memory.activities.at(-1);
+      if (typeof linear.createAgentActivity === "function" && last) {
+        await linear.createAgentActivity({
+          sessionId: input.sessionId,
+          content: last.content,
+          ephemeral: last.ephemeral,
+        });
+      }
+    },
+    async ackPrompted(input) {
+      await memory.ackPrompted(input);
+      const last = memory.activities.at(-1);
+      if (typeof linear.createAgentActivity === "function" && last) {
+        await linear.createAgentActivity({
+          sessionId: input.sessionId,
+          content: last.content,
+          ephemeral: last.ephemeral,
+        });
+      }
+    },
+    async emitWorking(input) {
+      await memory.emitWorking(input);
+      const last = memory.activities.at(-1);
+      const sessionId = last?.sessionId ?? input.sessionId;
+      if (
+        typeof linear.createAgentActivity === "function" &&
+        last &&
+        typeof sessionId === "string"
+      ) {
+        await linear.createAgentActivity({
+          sessionId,
+          content: last.content,
+          ephemeral: last.ephemeral,
+        });
+      }
+    },
+    async handOff(input) {
+      await memory.handOff(input);
+      const last = memory.activities.at(-1);
+      const sessionId = last?.sessionId ?? input.sessionId;
+      if (
+        typeof linear.createAgentActivity === "function" &&
+        last &&
+        typeof sessionId === "string"
+      ) {
+        await linear.createAgentActivity({
+          sessionId,
+          content: last.content,
+          ephemeral: last.ephemeral,
+        });
+      }
+    },
+  };
+}
