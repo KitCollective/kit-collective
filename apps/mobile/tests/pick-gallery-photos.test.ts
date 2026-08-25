@@ -1,36 +1,28 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const { launchImageLibraryAsync, requestMediaLibraryPermissionsAsync } = vi.hoisted(() => ({
-  launchImageLibraryAsync: vi.fn(),
-  requestMediaLibraryPermissionsAsync: vi.fn(),
-}));
-
-vi.mock("expo-image-picker", () => ({
-  launchImageLibraryAsync,
-  requestMediaLibraryPermissionsAsync,
-}));
-
-vi.mock("react-native", () => ({
-  Platform: { OS: "ios" },
-}));
-
-import { pickGalleryPhotos } from "../src/capture/pickGalleryPhotos";
+import { describe, expect, it } from "vitest";
+import { type GalleryPickerAdapter, pickGalleryPhotos } from "../src/capture/pickGalleryPhotos";
 
 describe("pickGalleryPhotos", () => {
-  beforeEach(() => {
-    launchImageLibraryAsync.mockReset();
-    requestMediaLibraryPermissionsAsync.mockReset();
-    launchImageLibraryAsync.mockResolvedValue({
-      canceled: false,
-      assets: [{ uri: "file:///photo.jpg" }],
-    });
-  });
-
   it("opens the system picker without requesting media-library permission", async () => {
-    const uris = await pickGalleryPhotos({ allowsMultipleSelection: true });
+    const requests: unknown[] = [];
+    const adapter: GalleryPickerAdapter = {
+      os: "ios",
+      async launchImageLibraryAsync(request) {
+        requests.push(request);
+        return { canceled: false, assets: [{ uri: "file:///photo.jpg" }] };
+      },
+    };
 
-    expect(requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
-    expect(launchImageLibraryAsync).toHaveBeenCalledOnce();
+    const uris = await pickGalleryPhotos({ allowsMultipleSelection: true }, adapter);
+
+    expect(requests).toEqual([
+      {
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        orderedSelection: true,
+        selectionLimit: undefined,
+        quality: 0.8,
+      },
+    ]);
     expect(uris).toEqual(["file:///photo.jpg"]);
   });
 });
