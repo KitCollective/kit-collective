@@ -10,6 +10,11 @@ import { promisify } from "node:util";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
+import {
+  createPiEventStreamConsumer,
+  pipeReadableJsonLines,
+  STREAMING_ROLES,
+} from "./pi-event-stream.mjs";
 import { runPlanner } from "./planner.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
@@ -107,6 +112,7 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
+ *   session?: { emitStream?: Function },
  *   now?: () => number,
  *   sleep?: (ms: number) => Promise<unknown>,
  *   waitTimeoutMs?: number,
@@ -123,6 +129,7 @@ export function createPiJobRunner({
   typecheckTouched,
   spawnProcess,
   runCommand,
+  session,
   now,
   sleep,
   waitTimeoutMs,
@@ -133,10 +140,44 @@ export function createPiJobRunner({
     spawnProcess ??
     ((command, args, options) =>
       new Promise((resolve, reject) => {
-        const child = spawn(command, args, { ...options, stdio: "inherit" });
+        const child = spawn(command, args, options);
         child.on("error", reject);
-        child.on("close", (status) => resolve({ status }));
+        child.on("close", (status) => resolve({ status, stdout: child.stdout }));
       }));
+
+  /**
+   * @param {{ role: string, identifier?: string, issueId?: string, adwFile?: string }} job
+   * @param {string} cwd
+   * @param {string} model
+   * @param {string} roleFile
+   * @param {string} prompt
+   * @param {NodeJS.ProcessEnv} spawnEnv
+   */
+  async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv) {
+    const args = [
+      "-p",
+      "-a",
+      ...(STREAMING_ROLES.has(job.role) ? ["--mode", "json"] : []),
+      "--model",
+      model,
+      "--append-system-prompt",
+      join(workspace, roleFile),
+      "--",
+      prompt,
+    ];
+    const streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
+    const shouldStream =
+      STREAMING_ROLES.has(job.role) &&
+      typeof session?.emitStream === "function" &&
+      typeof streamIssueId === "string";
+    const stdio = shouldStream ? ["inherit", "pipe", "inherit"] : "inherit";
+    const result = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
+    if (shouldStream && result.stdout) {
+      const consumer = createPiEventStreamConsumer({ session, issueId: streamIssueId, now });
+      await pipeReadableJsonLines(result.stdout, consumer);
+    }
+    return result;
+  }
 
   return {
     /**
@@ -182,20 +223,7 @@ export function createPiJobRunner({
         LINEAR_API_KEY: env.LINEAR_CLI_API_KEY,
       };
       delete spawnEnv.DATABASE_URL;
-      const result = await spawnJob(
-        "pi",
-        [
-          "-p",
-          "-a",
-          "--model",
-          model,
-          "--append-system-prompt",
-          join(workspace, roleFile),
-          "--",
-          prompt,
-        ],
-        { cwd, env: spawnEnv },
-      );
+      const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv);
       if (result.status !== 0) {
         throw new Error(`pi exited ${result.status} for ${identifier}`);
       }
