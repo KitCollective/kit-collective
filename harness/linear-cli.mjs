@@ -5,6 +5,7 @@
  */
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import { createActorTokenProvider, isLinearUnauthorized } from "./linear-actor-token.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -27,7 +28,7 @@ export const WORKER_ISSUE_QUERY = `query WorkerIssue($id: String!) {
     identifier
     state { name type }
     labels(first: 50) { nodes { name } }
-    delegate { name }
+    delegate { id name }
     inverseRelations(first: 100) {
       nodes {
         type
@@ -167,6 +168,7 @@ export function mapLinearApiIssue(raw) {
         }))
     : [];
   const delegateName = issue.delegate?.name;
+  const delegateId = issue.delegate?.id;
   const attachments = Array.isArray(issue.attachments?.nodes)
     ? issue.attachments.nodes
         .filter((node) => typeof node?.url === "string")
@@ -182,7 +184,13 @@ export function mapLinearApiIssue(raw) {
     labels,
     linearType,
     blockedBy,
-    delegate: typeof delegateName === "string" ? { name: delegateName } : null,
+    delegate:
+      typeof delegateName === "string"
+        ? {
+            name: delegateName,
+            ...(typeof delegateId === "string" ? { id: delegateId } : {}),
+          }
+        : null,
     attachments,
   };
 }
@@ -231,9 +239,10 @@ function parseJson(stdout) {
  * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   runCommand?: (command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => Promise<string>,
+ *   actorTokenProvider?: ReturnType<typeof createActorTokenProvider>,
  * }} [deps]
  */
-export function createLinearCliClient({ env = process.env, runCommand } = {}) {
+export function createLinearCliClient({ env = process.env, runCommand, actorTokenProvider } = {}) {
   const run =
     runCommand ??
     (async (command, args, options) => {
@@ -252,14 +261,42 @@ export function createLinearCliClient({ env = process.env, runCommand } = {}) {
     LINEAR_API_KEY: typeof env.LINEAR_CLI_API_KEY === "string" ? env.LINEAR_CLI_API_KEY : "",
   };
 
+  const actorTokens = actorTokenProvider ?? createActorTokenProvider({ env });
+
+  /**
+   * @param {string} query
+   * @param {object} variables
+   * @param {string} apiKey
+   */
+  async function cliWithKey(query, variables, apiKey) {
+    return run("linear", ["api", query, "--variables-json", JSON.stringify(variables)], {
+      env: { ...cliEnv, LINEAR_API_KEY: apiKey },
+    });
+  }
+
   /**
    * @param {string} query
    * @param {object} variables
    */
   async function cli(query, variables) {
-    return run("linear", ["api", query, "--variables-json", JSON.stringify(variables)], {
-      env: cliEnv,
-    });
+    return cliWithKey(query, variables, cliEnv.LINEAR_API_KEY);
+  }
+
+  /**
+   * @param {string} query
+   * @param {object} variables
+   */
+  async function cliActor(query, variables) {
+    const token = await actorTokens.getToken();
+    try {
+      return await cliWithKey(query, variables, token);
+    } catch (error) {
+      if (!isLinearUnauthorized(error)) {
+        throw error;
+      }
+      const refreshed = await actorTokens.refresh();
+      return cliWithKey(query, variables, refreshed);
+    }
   }
 
   return {
@@ -393,7 +430,7 @@ export function createLinearCliClient({ env = process.env, runCommand } = {}) {
      * @param {{ sessionId: string, content: object, ephemeral?: boolean }} input
      */
     async createAgentActivity({ sessionId, content, ephemeral }) {
-      await cli(AGENT_ACTIVITY_CREATE_MUTATION, {
+      await cliActor(AGENT_ACTIVITY_CREATE_MUTATION, {
         input: {
           agentSessionId: sessionId,
           content,

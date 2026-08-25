@@ -6,10 +6,15 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
+import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
 import { createSerialQueue } from "../job-queue.mjs";
+import { createActorTokenProvider } from "../linear-actor-token.mjs";
 import { createLinearCliClient } from "../linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
 import { createWorkerHandler, startWorkerServer } from "../server.mjs";
+import { createLinearSessionAdapter } from "../session-adapter.mjs";
+import { createMemoryAdapter } from "../webhook-router.mjs";
+import { createWorktreeAdapter } from "../worktree.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SECRET = "test-linear-webhook-secret";
@@ -20,13 +25,19 @@ function validWorkerEnv() {
     CURSOR_API_KEY: "cursor_test",
     LINEAR_CLI_API_KEY: "lin_cli_test",
     LINEAR_WEBHOOK_SECRET: SECRET,
+    LINEAR_PI_WEBHOOK_SECRET: "session-secret",
     GH_TOKEN: "ghp_test",
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
+    LINEAR_PI_CLIENT_ID: "client-id",
+    LINEAR_PI_CLIENT_SECRET: "client-secret",
+    LINEAR_PI_ACCESS_TOKEN: "actor-token",
     LINEAR_CLI_VERSION: LINEAR_CLI_PIN.version,
     PI_MODEL: "cursor/composer-2.5",
     PI_MODEL_FAST: "cursor/grok-4.6",
   };
 }
+
+const DELEGATE_GATE = createDelegateGateConfig({ LINEAR_PI_APP_USER_ID: "pi-app-user-1" });
 
 function dispatchableIssue(overrides = {}) {
   return {
@@ -104,7 +115,7 @@ test("Compose HTTP adapter serves /health without enqueueing a Pi job", async ()
     },
     gh: {},
     enqueue,
-    allowedDelegates: ["Pi"],
+    delegateGateConfig: DELEGATE_GATE,
   });
   const server = createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -138,7 +149,7 @@ test("Compose HTTP adapter still verifies Linear HMAC on POST /webhooks/linear",
     },
     gh: {},
     enqueue,
-    allowedDelegates: ["Pi"],
+    delegateGateConfig: DELEGATE_GATE,
   });
   const server = createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -184,6 +195,8 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /@schpet\/linear-cli@2\.5\.0/);
   assert.match(dockerfile, /session-adapter\.mjs/);
+  assert.match(dockerfile, /delegate-gate\.mjs/);
+  assert.match(dockerfile, /linear-actor-token\.mjs/);
   assert.doesNotMatch(dockerfile, /piagent\/platform/);
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
@@ -243,7 +256,8 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   }
   assert.match(envExample, /LINEAR_CLI_VERSION=2\.5\.0/);
   assert.match(envExample, /Do not set DATABASE_URL on the CX33 worker/i);
-  assert.match(envExample, /PI_MODEL=cursor\/composer-2\.5/);
+  assert.match(envExample, /LINEAR_PI_ACCESS_TOKEN=/);
+  assert.match(envExample, /30-day/);
   assert.match(envExample, /PI_MODEL_FAST=cursor\/grok-4\.6/);
   const bootstrapKeyIndex = envExample.indexOf(
     "# Linear admin key for scripts/bootstrap-linear.mjs only.",
@@ -259,6 +273,8 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /62\.238\.125\.114/);
   assert.match(host, /\/opt\/kit-collective\/harness\/\.env/);
   assert.match(host, /LINEAR_PI_WEBHOOK_SECRET/);
+  assert.match(host, /LINEAR_PI_ACCESS_TOKEN/);
+  assert.match(host, /30-day/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);
   assert.doesNotMatch(host, /:8080\/health/);
 
@@ -472,4 +488,152 @@ test("production adapter fetches Linear and runs one Pi job on a dispatchable Is
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("createAgentActivity uses the actor=app token, not the personal LINEAR_CLI_API_KEY", async () => {
+  const calls = [];
+  const linear = createLinearCliClient({
+    env: validWorkerEnv(),
+    actorTokenProvider: createActorTokenProvider({ env: validWorkerEnv() }),
+    async runCommand(command, args, options) {
+      calls.push({ command, args, env: options.env });
+      if (args[1]?.includes("AgentActivityCreate")) {
+        return JSON.stringify({ data: { agentActivityCreate: { success: true } } });
+      }
+      return JSON.stringify({ data: {} });
+    },
+  });
+
+  await linear.createAgentActivity({
+    sessionId: "session-1",
+    content: { type: "thought", body: "ack" },
+    ephemeral: false,
+  });
+
+  const activityCall = calls.find((call) => call.args[1]?.includes("AgentActivityCreate"));
+  assert.ok(activityCall);
+  assert.equal(activityCall.env.LINEAR_API_KEY, "actor-token");
+  assert.notEqual(activityCall.env.LINEAR_API_KEY, "lin_cli_test");
+});
+
+test("createAgentActivity remints via client_credentials after a 401", async () => {
+  let mintCount = 0;
+  const keys = [];
+  const linear = createLinearCliClient({
+    env: validWorkerEnv(),
+    actorTokenProvider: createActorTokenProvider({
+      env: {
+        LINEAR_PI_ACCESS_TOKEN: "expired-actor-token",
+        LINEAR_PI_CLIENT_ID: "client-id",
+        LINEAR_PI_CLIENT_SECRET: "client-secret",
+      },
+      async mint() {
+        mintCount += 1;
+        return `minted-${mintCount}`;
+      },
+    }),
+    async runCommand(_command, args, options) {
+      keys.push(options.env.LINEAR_API_KEY);
+      if (options.env.LINEAR_API_KEY === "expired-actor-token") {
+        throw new Error("HTTP 401 unauthorized");
+      }
+      if (args[1]?.includes("AgentActivityCreate")) {
+        return JSON.stringify({ data: { agentActivityCreate: { success: true } } });
+      }
+      return JSON.stringify({ data: {} });
+    },
+  });
+
+  await linear.createAgentActivity({
+    sessionId: "session-1",
+    content: { type: "thought", body: "ack" },
+    ephemeral: false,
+  });
+
+  assert.equal(mintCount, 1);
+  assert.deepEqual(keys, ["expired-actor-token", "minted-1"]);
+});
+
+test("compose worker ACKs AgentSession and enqueues implement when delegate is Pi Bot Agent", async () => {
+  const postedActivities = [];
+  const gitCalls = [];
+  const linear = {
+    async getIssue() {
+      return {
+        id: "issue-1",
+        identifier: "KIT-99",
+        status: "Implementing",
+        labels: ["Bug"],
+        linearType: "Bug",
+        blockedBy: [],
+        delegate: { id: "pi-app-user-1", name: PI_BOT_AGENT_NAME },
+      };
+    },
+    async createAgentActivity(input) {
+      postedActivities.push(input);
+    },
+    async getAgentSessionId() {
+      return "session-kit-99";
+    },
+    async clearDelegate() {},
+  };
+  const enqueue = {
+    jobs: [],
+    enqueue(job) {
+      this.jobs.push(job);
+    },
+  };
+  const adapter = createMemoryAdapter({
+    secret: SECRET,
+    sessionSecret: "session-secret",
+    now: () => NOW,
+    linear,
+    gh: {},
+    enqueue,
+    session: createLinearSessionAdapter({ linear }),
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  const sessionBody = JSON.stringify({
+    action: "created",
+    type: "AgentSessionEvent",
+    agentSession: { id: "session-kit-99", issueId: "issue-1" },
+    webhookTimestamp: NOW,
+  });
+  const sessionSignature = createHmac("sha256", "session-secret").update(sessionBody).digest("hex");
+  const sessionResult = await adapter.handle({
+    rawBody: sessionBody,
+    signature: sessionSignature,
+    hmacChannel: "session",
+  });
+  assert.equal(sessionResult.kind, "skip");
+  assert.equal(postedActivities.length, 1);
+
+  const issueBody = JSON.stringify({
+    action: "update",
+    type: "Issue",
+    data: { id: "issue-1" },
+    updatedFrom: { stateId: "prev" },
+    webhookTimestamp: NOW,
+  });
+  const issueSignature = createHmac("sha256", SECRET).update(issueBody).digest("hex");
+  const issueResult = await adapter.handle({ rawBody: issueBody, signature: issueSignature });
+  assert.equal(issueResult.kind, "enqueue");
+  assert.equal(issueResult.role, "implement");
+  assert.equal(enqueue.jobs.length, 1);
+
+  const worktree = createWorktreeAdapter({
+    mirrorDir: "/var/lib/kit-pi/mirror.git",
+    worktreesDir: "/var/lib/kit-pi/worktrees",
+    existsSync: () => false,
+    mkdirSync() {},
+    async runGit(args) {
+      gitCalls.push(args);
+      return { stdout: "", status: 0 };
+    },
+  });
+  const checkout = await worktree.checkout({ identifier: "KIT-99" });
+  assert.equal(checkout.lane, "development");
+  assert.ok(gitCalls.some((args) => args.includes("refs/heads/development")));
+  assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/bug.yaml");
 });
