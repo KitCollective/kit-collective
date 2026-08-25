@@ -270,8 +270,7 @@ test("factory-checker spawn also streams Pi json events", async () => {
   assert.ok(spawned[0].args.includes("json"));
   assert.equal(
     session.activities.some(
-      (activity) =>
-        activity.content.type === "action" && activity.content.action === "grep",
+      (activity) => activity.content.type === "action" && activity.content.action === "grep",
     ),
     true,
   );
