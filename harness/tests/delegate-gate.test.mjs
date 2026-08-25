@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  createDelegateGateConfig,
-  delegateGate,
-  PI_BOT_AGENT_NAME,
-} from "../delegate-gate.mjs";
+import { createDelegateGateConfig, delegateGate, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
 
 test("delegate gate accepts Pi and Pi Bot Agent display names", () => {
   const config = createDelegateGateConfig({ LINEAR_PI_APP_USER_ID: "pi-app-1" });
