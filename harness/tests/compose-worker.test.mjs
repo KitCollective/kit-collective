@@ -21,6 +21,7 @@ function validWorkerEnv() {
     LINEAR_CLI_API_KEY: "lin_cli_test",
     LINEAR_WEBHOOK_SECRET: SECRET,
     GH_TOKEN: "ghp_test",
+    LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     LINEAR_CLI_VERSION: LINEAR_CLI_PIN.version,
     PI_MODEL: "cursor/composer-2.5",
     PI_MODEL_FAST: "cursor/grok-4.6",
@@ -46,6 +47,7 @@ test("worker env lists Cursor SDK, Linear CLI key, webhook HMAC, gh, and the pin
     "LINEAR_CLI_API_KEY",
     "LINEAR_WEBHOOK_SECRET",
     "GH_TOKEN",
+    "LINEAR_PI_APP_USER_ID",
   ]);
   assert.equal(LINEAR_CLI_PIN.npmPackage, "@schpet/linear-cli");
   assert.equal(LINEAR_CLI_PIN.version, "2.5.0");
@@ -112,6 +114,7 @@ test("Compose HTTP adapter serves /health without enqueueing a Pi job", async ()
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.ok, true);
+    assert.equal(body.planner, "active");
     assert.equal(enqueue.jobs.length, 0);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -401,6 +404,7 @@ test("production adapter fetches Linear and runs one Pi job on a dispatchable Is
     listenHost: "127.0.0.1",
     listenPort: 0,
     now: () => NOW,
+    plannerPollMs: 0,
     linear: {
       async getIssue() {
         return dispatchableIssue();

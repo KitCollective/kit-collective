@@ -11,6 +11,7 @@ import { createTypecheckTouched } from "./implement-exit.mjs";
 import { createSerialQueue } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
+import { DEFAULT_PLANNER_POLL_MS, startPlannerPoller } from "./planner.mjs";
 import { createHttpHandler } from "./webhook-router.mjs";
 
 /**
@@ -23,7 +24,7 @@ export function createWorkerHandler(deps) {
     const path = (req.url ?? "/").split("?")[0];
     if (req.method === "GET" && path === "/health") {
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true }));
+      res.end(JSON.stringify({ ok: true, planner: "active" }));
       return;
     }
     return webhook(req, res);
@@ -40,6 +41,7 @@ export async function startWorkerServer({
   runCommand,
   spawnProcess,
   now = () => Date.now(),
+  plannerPollMs,
 } = {}) {
   assertWorkerEnv(env);
   const workspace = resolvePiWorkspace(env);
@@ -53,6 +55,7 @@ export async function startWorkerServer({
           env,
           workspace,
           spawnProcess,
+          runCommand,
           gh: ghClient,
           linear: linearClient,
           typecheckTouched: createTypecheckTouched({ runCommand }),
@@ -62,6 +65,10 @@ export async function startWorkerServer({
       return runner.run(job);
     },
   });
+  const pollMs =
+    typeof plannerPollMs === "number"
+      ? plannerPollMs
+      : Number(env.PI_PLANNER_POLL_MS ?? DEFAULT_PLANNER_POLL_MS);
   const handler = createWorkerHandler({
     secret: env.LINEAR_WEBHOOK_SECRET,
     now,
@@ -71,8 +78,17 @@ export async function startWorkerServer({
     allowedDelegates: ["Pi"],
   });
   const server = createServer(handler);
+  let stopPoller = () => {};
+  server.on("close", () => {
+    stopPoller();
+  });
   return new Promise((resolve) => {
-    server.listen(listenPort, listenHost, () => resolve(server));
+    server.listen(listenPort, listenHost, () => {
+      if (pollMs > 0) {
+        stopPoller = startPlannerPoller({ enqueue: queue, intervalMs: pollMs });
+      }
+      resolve(server);
+    });
   });
 }
 

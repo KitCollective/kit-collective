@@ -8,6 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
+import { createLinearCliClient } from "./linear-cli.mjs";
+import { runPlanner } from "./planner.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
@@ -102,6 +104,7 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
+ *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
  *   now?: () => number,
  *   sleep?: (ms: number) => Promise<unknown>,
  *   waitTimeoutMs?: number,
@@ -116,6 +119,7 @@ export function createPiJobRunner({
   linear,
   typecheckTouched,
   spawnProcess,
+  runCommand,
   now,
   sleep,
   waitTimeoutMs,
@@ -136,6 +140,10 @@ export function createPiJobRunner({
      * @param {{ role: string, identifier?: string, issueId?: string, adwFile?: string }} job
      */
     async run(job) {
+      if (job.role === "planner") {
+        const client = linear ?? createLinearCliClient({ env, runCommand });
+        return runPlanner({ env, linear: client });
+      }
       const roleFile = ROLE_FILES[job.role];
       if (typeof roleFile !== "string") {
         throw new Error(`no Pi role file for ${job.role}`);
