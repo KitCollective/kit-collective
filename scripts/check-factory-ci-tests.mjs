@@ -73,16 +73,70 @@ export function readScripts(packageSource) {
 }
 
 /**
+ * Run bodies only — step titles must not satisfy factory needles.
+ *
  * @param {string} step
+ * @returns {string}
+ */
+export function stepRunSource(step) {
+  const bodies = [];
+  const lines = step.split("\n");
+  let collectingBlock = false;
+  /** @type {string[]} */
+  let blockLines = [];
+
+  const flushBlock = () => {
+    if (collectingBlock) {
+      bodies.push(blockLines.join("\n"));
+      collectingBlock = false;
+      blockLines = [];
+    }
+  };
+
+  for (const line of lines) {
+    const runMatch = line.match(/^\s*run:\s*(.*)$/);
+    if (runMatch) {
+      flushBlock();
+      const rest = runMatch[1];
+      if (rest === "|" || rest === ">" || rest === "|-" || rest === ">-") {
+        collectingBlock = true;
+        blockLines = [];
+        continue;
+      }
+      bodies.push(rest);
+      continue;
+    }
+    if (collectingBlock) {
+      if (/^\s+(?:name|uses|env|if|continue-on-error|with|id|working-directory):/.test(line)) {
+        flushBlock();
+        continue;
+      }
+      if (line.trim() === "") {
+        blockLines.push(line);
+        continue;
+      }
+      if (/^\s+\S/.test(line)) {
+        blockLines.push(line);
+        continue;
+      }
+      flushBlock();
+    }
+  }
+  flushBlock();
+  return bodies.join("\n");
+}
+
+/**
+ * @param {string} runSource
  * @param {Record<string, string>} scripts
  * @returns {string}
  */
-export function expandPnpmScripts(step, scripts) {
-  let expanded = step;
+export function expandPnpmScripts(runSource, scripts) {
+  let expanded = runSource;
   for (const [name, body] of Object.entries(scripts)) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const pattern = new RegExp(`pnpm(?:\\s+run)?\\s+${escaped}\\b`);
-    if (pattern.test(step)) {
+    if (pattern.test(runSource)) {
       expanded += `\n${body}`;
     }
   }
@@ -98,12 +152,12 @@ function splitSteps(text) {
 }
 
 /**
- * @param {string} expandedStep
+ * @param {string} expandedRun
  * @param {string} fileNeedle
  * @returns {boolean}
  */
-function stepRunsNodeTestOn(expandedStep, fileNeedle) {
-  return expandedStep.includes("node --test") && expandedStep.includes(fileNeedle);
+function stepRunsNodeTestOn(expandedRun, fileNeedle) {
+  return expandedRun.includes("node --test") && expandedRun.includes(fileNeedle);
 }
 
 /**
@@ -143,7 +197,7 @@ export function missingFactoryCiCoverage({ workflowSource, packageSource }) {
 
   for (const needle of FACTORY_NODE_TEST_NEEDLES) {
     const matching = steps.filter((step) =>
-      stepRunsNodeTestOn(expandPnpmScripts(step, scripts), needle),
+      stepRunsNodeTestOn(expandPnpmScripts(stepRunSource(step), scripts), needle),
     );
     if (matching.length === 0) {
       missing.push(`${needle} via node --test`);
@@ -172,7 +226,7 @@ function isCli() {
 }
 
 if (isCli()) {
-  const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
   const workflowSource = readFileSync(join(root, CI_WORKFLOW_PATH), "utf8");
   const packageSource = readFileSync(join(root, PACKAGE_JSON_PATH), "utf8");
   const missing = missingFactoryCiCoverage({ workflowSource, packageSource });

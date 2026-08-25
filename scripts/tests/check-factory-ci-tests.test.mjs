@@ -5,7 +5,7 @@ import {
   CI_WORKFLOW_PATH,
   missingFactoryCiCoverage,
   PACKAGE_JSON_PATH,
-} from "./check-factory-ci-tests.mjs";
+} from "../check-factory-ci-tests.mjs";
 
 function currentFiles() {
   return {
@@ -47,6 +47,20 @@ test("coverage fails when the test job omits land-policy", () => {
     workflowSource: files.workflowSource.replaceAll("land-policy", "omitted-land"),
     packageSource: files.packageSource.replaceAll("land-policy", "omitted-land"),
   };
+  const missing = missingFactoryCiCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("land-policy")));
+});
+
+test("coverage fails when land-policy is omitted from the script body while the step title still names it", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    packageSource: files.packageSource.replace(
+      "scripts/tests/land-policy.test.mjs",
+      "scripts/tests/omitted-land.test.mjs",
+    ),
+  };
+  assert.match(mutated.workflowSource, /land-policy/);
   const missing = missingFactoryCiCoverage(mutated);
   assert.ok(missing.some((item) => item.includes("land-policy")));
 });

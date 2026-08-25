@@ -8,7 +8,7 @@
     "test": "turbo run test --concurrency=1",
     "test:harness": "node --test harness/tests/*.test.mjs",
     "test:factory-scripts": "node --test scripts/tests/webhook-router.test.mjs scripts/tests/land-policy.test.mjs",
-    "check:factory-ci-tests": "node .github/workflows/check-factory-ci-tests.mjs",
+    "check:factory-ci-tests": "node scripts/check-factory-ci-tests.mjs",
     "lint": "biome lint .",
     "lint:anti-slop": "oxlint",
     "format": "biome check --write .",
