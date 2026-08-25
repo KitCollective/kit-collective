@@ -37,6 +37,7 @@ export const WORKER_ISSUE_QUERY = `query WorkerIssue($id: String!) {
         }
       }
     }
+    attachments(first: 25) { nodes { url title } }
   }
 }`;
 
@@ -150,6 +151,14 @@ export function mapLinearApiIssue(raw) {
         }))
     : [];
   const delegateName = issue.delegate?.name;
+  const attachments = Array.isArray(issue.attachments?.nodes)
+    ? issue.attachments.nodes
+        .filter((node) => typeof node?.url === "string")
+        .map((node) => ({
+          url: node.url,
+          title: typeof node.title === "string" ? node.title : "",
+        }))
+    : [];
   return {
     id: issue.id,
     identifier: issue.identifier,
@@ -158,6 +167,7 @@ export function mapLinearApiIssue(raw) {
     linearType,
     blockedBy,
     delegate: typeof delegateName === "string" ? { name: delegateName } : null,
+    attachments,
   };
 }
 
