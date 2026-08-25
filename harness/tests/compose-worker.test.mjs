@@ -320,6 +320,28 @@ test("Linear CLI getIssue maps GraphQL JSON into the KIT-52 dispatch snapshot", 
   assert.equal(calls[0].env.LINEAR_CLI_API_KEY, "lin_cli_test");
 });
 
+test("Linear CLI getAgentSessionId reads the issue AgentSession id", async () => {
+  const calls = [];
+  const linear = createLinearCliClient({
+    env: validWorkerEnv(),
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      return JSON.stringify({
+        data: {
+          issue: {
+            agentSessions: { nodes: [{ id: "session-kit-99" }] },
+          },
+        },
+      });
+    },
+  });
+
+  assert.equal(await linear.getAgentSessionId("issue-1"), "session-kit-99");
+  assert.equal(calls[0].command, "linear");
+  assert.equal(calls[0].args[0], "api");
+  assert.match(calls[0].args[1], /IssueAgentSession/);
+});
+
 test("boot fails when required Pi packages are missing from pi list", async () => {
   await assert.rejects(
     () =>

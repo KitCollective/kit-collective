@@ -131,6 +131,14 @@ export const ISSUE_CLEAR_DELEGATE_MUTATION = `mutation IssueClearDelegate($id: S
   issueUpdate(id: $id, input: { delegateId: null }) { success }
 }`;
 
+export const ISSUE_AGENT_SESSION_QUERY = `query IssueAgentSession($id: String!) {
+  issue(id: $id) {
+    agentSessions(first: 5) {
+      nodes { id }
+    }
+  }
+}`;
+
 /**
  * @param {unknown} raw
  * @returns {object | null}
@@ -382,6 +390,21 @@ export function createLinearCliClient({ env = process.env, runCommand } = {}) {
           ...(ephemeral === true ? { ephemeral: true } : {}),
         },
       });
+    },
+
+    /**
+     * Live AgentSession id for an issue. Display-only; never starts Pi.
+     *
+     * @param {string} id
+     * @returns {Promise<string | undefined>}
+     */
+    async getAgentSessionId(id) {
+      const stdout = await cli(ISSUE_AGENT_SESSION_QUERY, { id });
+      const nodes = parseJson(stdout)?.data?.issue?.agentSessions?.nodes;
+      const sessionId = Array.isArray(nodes)
+        ? nodes.find((node) => typeof node?.id === "string")?.id
+        : undefined;
+      return typeof sessionId === "string" ? sessionId : undefined;
     },
 
     /**

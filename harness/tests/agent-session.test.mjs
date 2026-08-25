@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { createMemorySessionAdapter } from "../session-adapter.mjs";
+import {
+  createLinearSessionAdapter,
+  createMemorySessionAdapter,
+} from "../session-adapter.mjs";
 import { createHttpHandler, createMemoryAdapter, routeWebhook } from "../webhook-router.mjs";
 
 const ISSUE_SECRET = "test-linear-webhook-secret";
@@ -79,12 +82,14 @@ function snapshot(overrides = {}) {
   };
 }
 
-function fakeLinear(issue) {
+function fakeLinear(issue, extras = {}) {
   const calls = [];
   const workpad = [];
+  const postedActivities = [];
   return {
     calls,
     workpad,
+    postedActivities,
     async getIssue(id) {
       calls.push(["getIssue", id]);
       return issue;
@@ -94,6 +99,13 @@ function fakeLinear(issue) {
     },
     async clearDelegate(input) {
       calls.push(["clearDelegate", input]);
+    },
+    async getAgentSessionId(id) {
+      calls.push(["getAgentSessionId", id]);
+      return extras.agentSessionId;
+    },
+    async createAgentActivity(input) {
+      postedActivities.push(input);
     },
   };
 }
@@ -406,6 +418,89 @@ test("HTTP adapter uses Issue HMAC on /webhooks/linear and session HMAC on /agen
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("Issue implement enqueue posts ephemeral action to Linear without a prior session ack", async () => {
+  const linear = fakeLinear(
+    snapshot({
+      status: "Implementing",
+      delegate: { name: "Pi" },
+      labels: ["Feature"],
+      linearType: "Feature",
+    }),
+    { agentSessionId: SESSION_ID },
+  );
+  const { result, enqueue } = await routeIssue(issueUpdatePayload(), undefined, {
+    linear,
+    session: createLinearSessionAdapter({ linear }),
+  });
+
+  assert.equal(result.kind, "enqueue");
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(linear.workpad.length, 0);
+  assert.deepEqual(linear.postedActivities, [
+    {
+      sessionId: SESSION_ID,
+      ephemeral: true,
+      content: { type: "action", action: "Implementing", parameter: "KIT-99" },
+    },
+  ]);
+});
+
+test("Issue checker enqueue posts ephemeral thought to Linear without a prior session ack", async () => {
+  const linear = fakeLinear(
+    snapshot({
+      status: "In Review",
+      delegate: { name: "Pi" },
+      labels: ["Feature"],
+      linearType: "Feature",
+    }),
+    { agentSessionId: SESSION_ID },
+  );
+  const { enqueue } = await routeIssue(issueUpdatePayload(), undefined, {
+    linear,
+    session: createLinearSessionAdapter({ linear }),
+  });
+
+  assert.equal(enqueue.jobs[0].role, "factory-checker");
+  assert.equal(linear.workpad.length, 0);
+  assert.deepEqual(linear.postedActivities, [
+    {
+      sessionId: SESSION_ID,
+      ephemeral: true,
+      content: { type: "thought", body: "Factory checker is reviewing KIT-99." },
+    },
+  ]);
+});
+
+test("Ready for merge posts elicitation to Linear without a prior session ack", async () => {
+  const linear = fakeLinear(
+    snapshot({
+      status: "Ready for merge",
+      delegate: { name: "Pi" },
+      labels: ["Feature"],
+      linearType: "Feature",
+    }),
+    { agentSessionId: SESSION_ID },
+  );
+  const { result, enqueue } = await routeIssue(issueUpdatePayload(), undefined, {
+    linear,
+    session: createLinearSessionAdapter({ linear }),
+  });
+
+  assert.equal(result.kind, "skip");
+  assert.equal(enqueue.jobs.length, 0);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "clearDelegate"),
+    true,
+  );
+  assert.deepEqual(linear.postedActivities, [
+    {
+      sessionId: SESSION_ID,
+      ephemeral: false,
+      content: { type: "elicitation", body: HANDOFF_ELICITATION },
+    },
+  ]);
 });
 
 test("in-memory adapter matches HTTP session-channel skip for the same fixture", async () => {

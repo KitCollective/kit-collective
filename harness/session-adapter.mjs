@@ -15,7 +15,41 @@ export const PROMPTED_THOUGHT =
 export const HANDOFF_ELICITATION = "Ready for merge. This is Nicklas's turn.";
 
 /**
- * @param {{ linear?: { clearDelegate?: Function, createAgentActivity?: Function, updateAgentSession?: Function } }} [deps]
+ * Issue-webhook paths have issueId, not sessionId. Look the live AgentSession up
+ * on Linear so ephemeral activity still posts after a restart or a race with created.
+ *
+ * @param {{ getAgentSessionId?: Function }} [linear]
+ * @param {Map<string, string>} sessionsByIssue
+ * @param {{ sessionId?: string, issueId?: string }} input
+ * @returns {Promise<string | undefined>}
+ */
+async function resolveSessionId(linear, sessionsByIssue, { sessionId, issueId }) {
+  if (typeof sessionId === "string" && sessionId.length > 0) {
+    return sessionId;
+  }
+  if (typeof issueId === "string") {
+    const cached = sessionsByIssue.get(issueId);
+    if (typeof cached === "string" && cached.length > 0) {
+      return cached;
+    }
+  }
+  if (typeof linear?.getAgentSessionId !== "function" || typeof issueId !== "string") {
+    return undefined;
+  }
+  try {
+    const lookedUp = await linear.getAgentSessionId(issueId);
+    if (typeof lookedUp === "string" && lookedUp.length > 0) {
+      sessionsByIssue.set(issueId, lookedUp);
+      return lookedUp;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+/**
+ * @param {{ linear?: { clearDelegate?: Function, createAgentActivity?: Function, getAgentSessionId?: Function, updateAgentSession?: Function } }} [deps]
  */
 export function createMemorySessionAdapter({ linear } = {}) {
   const activities = [];
@@ -56,8 +90,7 @@ export function createMemorySessionAdapter({ linear } = {}) {
      * @param {{ issueId?: string, identifier: string, role: string, sessionId?: string }} input
      */
     async emitWorking({ issueId, identifier, role, sessionId }) {
-      const resolved =
-        sessionId ?? (typeof issueId === "string" ? sessionsByIssue.get(issueId) : undefined);
+      const resolved = await resolveSessionId(linear, sessionsByIssue, { sessionId, issueId });
       if (role === "implement") {
         activities.push({
           sessionId: resolved,
@@ -79,7 +112,7 @@ export function createMemorySessionAdapter({ linear } = {}) {
      */
     async handOff({ issueId, sessionId }) {
       adapter.handedOff = true;
-      const resolved = sessionId ?? sessionsByIssue.get(issueId);
+      const resolved = await resolveSessionId(linear, sessionsByIssue, { sessionId, issueId });
       activities.push({
         sessionId: resolved,
         ephemeral: false,
@@ -96,7 +129,7 @@ export function createMemorySessionAdapter({ linear } = {}) {
 /**
  * Production adapter: Linear CLI mutations only. Never updateWorkpad.
  *
- * @param {{ linear: { createAgentActivity: Function, clearDelegate: Function, updateAgentSession?: Function } }} deps
+ * @param {{ linear: { createAgentActivity: Function, clearDelegate: Function, getAgentSessionId?: Function, updateAgentSession?: Function } }} deps
  */
 export function createLinearSessionAdapter({ linear }) {
   const memory = createMemorySessionAdapter({ linear });
