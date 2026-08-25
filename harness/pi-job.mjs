@@ -1,14 +1,16 @@
 /**
  * Serial Pi job runner and package boot check (KIT-53).
- * KIT-54 still owns “ADW opens a PR”; this module starts one Pi session per job.
+ * KIT-54: implement checks out a worktree, then runs a coding Pi session there.
  */
 import { execFile as execFileCb, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { runPlanner } from "./planner.mjs";
+import { createWorktreeAdapter } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -26,6 +28,21 @@ const ROLE_FILES = {
 };
 
 const FAST_ROLES = new Set(["planner", "factory-checker", "land"]);
+
+/**
+ * @param {string} role
+ * @param {string} identifier
+ * @param {string | undefined} adwFile
+ */
+export function implementPrompt(role, identifier, adwFile) {
+  if (role === "implement") {
+    const adw = typeof adwFile === "string" ? ` ADW ${adwFile}.` : "";
+    return `Factory role implement for ${identifier}.${adw} Update the existing workpad. Open a PR into development and move the issue to In Review. Never merge. Never spawn factory-checker.`;
+  }
+  return typeof adwFile === "string"
+    ? `Factory role ${role} for ${identifier}. ADW ${adwFile}.`
+    : `Factory role ${role} for ${identifier}.`;
+}
 
 /**
  * @param {string | undefined} fromFile
@@ -82,16 +99,33 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   workspace?: string,
+ *   worktree?: { checkout: (input: { identifier: string }) => Promise<{ path: string, branch: string, lane: string }> },
+ *   gh?: object,
+ *   linear?: object,
+ *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
+ *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
+ *   now?: () => number,
+ *   sleep?: (ms: number) => Promise<unknown>,
+ *   waitTimeoutMs?: number,
+ *   waitIntervalMs?: number,
  * }} [deps]
  */
 export function createPiJobRunner({
   env = process.env,
   workspace = resolvePiWorkspace(env),
+  worktree,
+  gh,
+  linear,
+  typecheckTouched,
   spawnProcess,
   runCommand,
-  linear,
+  now,
+  sleep,
+  waitTimeoutMs,
+  waitIntervalMs,
 } = {}) {
+  const trees = worktree ?? createWorktreeAdapter({ env });
   const spawnJob =
     spawnProcess ??
     ((command, args, options) =>
@@ -119,9 +153,13 @@ export function createPiJobRunner({
         throw new Error(`missing Pi model env for role ${job.role}`);
       }
       const identifier = job.identifier ?? job.issueId ?? "unknown";
-      const prompt = job.adwFile
-        ? `Factory role ${job.role} for ${identifier}. ADW ${job.adwFile}.`
-        : `Factory role ${job.role} for ${identifier}.`;
+      let cwd = workspace;
+      let checkout;
+      if (job.role === "implement") {
+        checkout = await trees.checkout({ identifier });
+        cwd = checkout.path;
+      }
+      const prompt = implementPrompt(job.role, identifier, job.adwFile);
       const spawnEnv = {
         PATH: process.env.PATH,
         HOME: process.env.HOME,
@@ -141,10 +179,33 @@ export function createPiJobRunner({
           "--",
           prompt,
         ],
-        { cwd: workspace, env: spawnEnv },
+        { cwd, env: spawnEnv },
       );
       if (result.status !== 0) {
         throw new Error(`pi exited ${result.status} for ${identifier}`);
+      }
+      if (job.role === "implement") {
+        const adwFile = job.adwFile;
+        if (typeof adwFile !== "string") {
+          throw new Error("implement requires an ADW file");
+        }
+        const ghClient = gh ?? job.gh;
+        const linearClient = linear ?? job.linear;
+        if (!ghClient || !linearClient) {
+          throw new Error("implement requires gh and Linear adapters");
+        }
+        await completeImplementAdw({
+          job: { ...job, identifier, issueId: job.issueId ?? identifier },
+          checkout,
+          gh: ghClient,
+          linear: linearClient,
+          typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
+          adwText: readFileSync(join(workspace, adwFile), "utf8"),
+          now,
+          sleep,
+          waitTimeoutMs,
+          waitIntervalMs,
+        });
       }
       return job;
     },

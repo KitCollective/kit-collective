@@ -6,6 +6,8 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { assertWorkerEnv } from "./boot-env.mjs";
+import { createGhClient } from "./gh-cli.mjs";
+import { createTypecheckTouched } from "./implement-exit.mjs";
 import { createSerialQueue } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
@@ -45,10 +47,19 @@ export async function startWorkerServer({
   const workspace = resolvePiWorkspace(env);
   await assertPiPackagesReady({ root: workspace, listPackages });
   const linearClient = linear ?? createLinearCliClient({ env, runCommand });
+  const ghClient = createGhClient({ env, runCommand });
   const runner =
     typeof run === "function"
       ? { run }
-      : createPiJobRunner({ env, workspace, spawnProcess, runCommand, linear: linearClient });
+      : createPiJobRunner({
+          env,
+          workspace,
+          spawnProcess,
+          runCommand,
+          gh: ghClient,
+          linear: linearClient,
+          typecheckTouched: createTypecheckTouched({ runCommand }),
+        });
   const queue = createSerialQueue({
     async run(job) {
       return runner.run(job);

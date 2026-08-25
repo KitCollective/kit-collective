@@ -13,6 +13,8 @@ RUN apt-get update \
   && apt-get update \
   && apt-get install -y --no-install-recommends gh bubblewrap \
   && npm install -g @schpet/linear-cli@2.5.0 @earendil-works/pi-coding-agent@0.84.3 \
+  && corepack enable \
+  && corepack prepare pnpm@9.15.4 --activate \
   && rm -rf /var/lib/apt/lists/*
 
 COPY .pi /workspace/.pi
@@ -24,6 +26,6 @@ RUN pi install npm:pi-subagents \
   && pi install npm:pi-cursor-sdk
 
 WORKDIR /app
-COPY harness/boot-env.mjs harness/job-queue.mjs harness/linear-cli.mjs harness/pi-job.mjs harness/planner.mjs harness/server.mjs harness/webhook-router.mjs ./
+COPY harness/boot-env.mjs harness/job-queue.mjs harness/linear-cli.mjs harness/pi-job.mjs harness/planner.mjs harness/server.mjs harness/webhook-router.mjs harness/worktree.mjs harness/gh-cli.mjs harness/implement-exit.mjs ./
 EXPOSE 8080
 CMD ["node", "server.mjs"]

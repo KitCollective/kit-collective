@@ -196,6 +196,17 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-mobile-add-upload-files.mjs` (CI via `pnpm check:mobile-add-upload-files`) fails when `apps/mobile/app/(tabs)/add/index.tsx` bypasses `pickUploadFiles` for Upload filer, when `apps/mobile/src/capture/pickUploadFiles.ts` omits a `pickDocumentImages` branch, when `apps/mobile/src/capture/pickDocumentImages.ts` does not use `expo-document-picker`, or when `apps/mobile/tests/pick-upload-files.test.ts` drops the Files/documents regression case. `scripts/tests/check-mobile-add-upload-files.test.mjs` (CI via `node --test`) mutation-tests the ratchet. Prevents repeating the KIT-48 checker round-4 fail (Upload filer only opens the Photos library). Tighten only.
 
+### Implement ADW production gh ratchet (KIT-54)
+
+`harness/tests/implement-adw.test.mjs` drives `createGhClient` / `createTypecheckTouched` with fake `runCommand` only (not injected `fakeGh`). Coverage that must stay:
+
+- **"production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending"** — rebase is followed by a push of the issue branch, `gh pr create` has `--head`, a first pending required-check snapshot never becomes green before Linear `setStatus`, optional pending checks must not block.
+- **"production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending"** — `MERGEABLE` + empty `statusCheckRollup` + `gh pr checks --required` throw (exit 8) must **not** call `setStatus`.
+- **"typecheckTouched skips pnpm when the diff has no workspace packages"** — empty touched set does not spawn `pnpm`.
+- **"typecheckTouched fails closed when pnpm is missing and workspace packages are touched"** — missing `pnpm` (ENOENT) fails closed when packages are in the diff.
+
+`scripts/check-implement-adw-production-gh.mjs` (CI via `node` in `.github/workflows/ci.yml`) fails when that coverage is deleted. `scripts/tests/check-implement-adw-production-gh.test.mjs` mutation-tests the ratchet. Prevents repeating KIT-54 checker fail #2 (job-seam fakes skipped production push/wait) and fail #3 (empty rollup / exit 8 fail-open; pnpm spawned on harness-only diffs). Tighten only.
+
 ### PR write-scope ratchet (KIT-39)
 
 `scripts/check-pr-write-scope.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`; pure logic in `scripts/lib/pr-write-scope.mjs`, covered by `scripts/tests/check-pr-write-scope.test.mjs`) fails when a pull request's changed files (vs `origin/development`) fall outside the `write-scope:` globs declared in the PR body, except ratchet-exception paths (`.cursor/hooks/**`, `.cursor/rules/**`, `docs/agents/error-ratcheting.md`, `.github/workflows/**` for CI wiring, and the named ratchet script paths in `RATCHET_SCRIPT_PATHS`). When no `write-scope:` line is present, the check skips cleanly (exit 0) — write-scope is optional per `docs/agents/write-scope.md`. On `push` to feature branches without PR env vars, resolves scope from the open PR via `gh pr view` with `GITHUB_TOKEN`. Prevents repeating the KIT-39 checker fail (gratuitous edits outside declared issue scope, e.g. `seed/fkapi/tests/seed.test.ts` bundled into an admin slice). Tighten only.

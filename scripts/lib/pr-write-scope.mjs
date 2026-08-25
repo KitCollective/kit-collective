@@ -17,6 +17,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/check-admin-design-tokens.mjs",
   "scripts/check-admin-stamdata-navigation.mjs",
   "scripts/check-import-boundaries.mjs",
+  "scripts/check-implement-adw-production-gh.mjs",
   "scripts/check-mobile-add-confirm-redirect.mjs",
   "scripts/check-mobile-add-form-wiring.mjs",
   "scripts/check-mobile-add-upload-files.mjs",
@@ -42,6 +43,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/tests/check-mobile-drag-reorder.test.mjs",
   "scripts/tests/check-mobile-design-tokens.test.mjs",
   "scripts/tests/check-pr-write-scope.test.mjs",
+  "scripts/tests/check-implement-adw-production-gh.test.mjs",
 ]);
 
 export function matchesGlob(filePath, glob) {
