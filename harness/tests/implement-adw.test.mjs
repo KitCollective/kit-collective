@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
-import { execFile as execFileCb } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createGhClient } from "../gh-cli.mjs";
 import {
@@ -30,8 +26,6 @@ import {
   worktreeBranch,
   worktreePath,
 } from "../worktree.mjs";
-
-const execFile = promisify(execFileCb);
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -206,10 +200,7 @@ test("production git wrapper keeps GH_TOKEN in env via Bearer header, never argv
   );
   assert.equal(child.GH_TOKEN, "harness_git_auth_test_token");
   assert.equal(child.GIT_CONFIG_KEY_1, "http.extraHeader");
-  assert.equal(
-    child.GIT_CONFIG_VALUE_1,
-    "Authorization: Bearer harness_git_auth_test_token",
-  );
+  assert.equal(child.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
 
   const execs = [];
   const adapter = createWorktreeAdapter({
@@ -229,10 +220,7 @@ test("production git wrapper keeps GH_TOKEN in env via Bearer header, never argv
     assert.equal(exec.args.join(" ").includes("harness_git_auth_test_token"), false);
     assert.equal(JSON.stringify(exec.args).includes("Authorization"), false);
     assert.equal(exec.env.GIT_CONFIG_KEY_1, "http.extraHeader");
-    assert.equal(
-      exec.env.GIT_CONFIG_VALUE_1,
-      "Authorization: Bearer harness_git_auth_test_token",
-    );
+    assert.equal(exec.env.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
   }
 });
 
@@ -780,10 +768,7 @@ test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and
   assert.ok(gitCalls.length > 0);
   for (const call of gitCalls) {
     assert.equal(call.env.GIT_CONFIG_KEY_1, "http.extraHeader");
-    assert.equal(
-      call.env.GIT_CONFIG_VALUE_1,
-      "Authorization: Bearer harness_git_auth_test_token",
-    );
+    assert.equal(call.env.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
   }
   assert.equal(
     calls.some((call) => call.command === "gh" && call.args.includes("merge")),
