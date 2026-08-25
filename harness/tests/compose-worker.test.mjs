@@ -183,6 +183,7 @@ test("docker-compose runs webhook + one replica, no Coolify, no DATABASE_URL", (
 test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onboard", () => {
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /@schpet\/linear-cli@2\.5\.0/);
+  assert.match(dockerfile, /session-adapter\.mjs/);
   assert.doesNotMatch(dockerfile, /piagent\/platform/);
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
@@ -257,6 +258,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /416348660/);
   assert.match(host, /62\.238\.125\.114/);
   assert.match(host, /\/opt\/kit-collective\/harness\/\.env/);
+  assert.match(host, /LINEAR_PI_WEBHOOK_SECRET/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);
   assert.doesNotMatch(host, /:8080\/health/);
 
@@ -316,6 +318,28 @@ test("Linear CLI getIssue maps GraphQL JSON into the KIT-52 dispatch snapshot", 
   assert.equal(calls[0].args[0], "api");
   assert.equal(calls[0].env.LINEAR_API_KEY, "lin_cli_test");
   assert.equal(calls[0].env.LINEAR_CLI_API_KEY, "lin_cli_test");
+});
+
+test("Linear CLI getAgentSessionId reads the issue AgentSession id", async () => {
+  const calls = [];
+  const linear = createLinearCliClient({
+    env: validWorkerEnv(),
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      return JSON.stringify({
+        data: {
+          issue: {
+            agentSessions: { nodes: [{ id: "session-kit-99" }] },
+          },
+        },
+      });
+    },
+  });
+
+  assert.equal(await linear.getAgentSessionId("issue-1"), "session-kit-99");
+  assert.equal(calls[0].command, "linear");
+  assert.equal(calls[0].args[0], "api");
+  assert.match(calls[0].args[1], /IssueAgentSession/);
 });
 
 test("boot fails when required Pi packages are missing from pi list", async () => {
