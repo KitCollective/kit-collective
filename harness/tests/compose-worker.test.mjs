@@ -195,6 +195,7 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /@schpet\/linear-cli@2\.5\.0/);
   assert.match(dockerfile, /session-adapter\.mjs/);
+  assert.match(dockerfile, /pi-event-stream\.mjs/);
   assert.match(dockerfile, /delegate-gate\.mjs/);
   assert.match(dockerfile, /linear-actor-token\.mjs/);
   assert.doesNotMatch(dockerfile, /piagent\/platform/);
