@@ -36,6 +36,7 @@ function validWorkerEnv() {
     LINEAR_WEBHOOK_SECRET: "secret",
     GH_TOKEN: "ghp_test",
     LINEAR_CLI_VERSION: LINEAR_CLI_PIN.version,
+    LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     PI_MODEL: "cursor/composer-2.5",
     PI_MODEL_FAST: "cursor/grok-4.6",
   };
@@ -374,19 +375,29 @@ test("implement job fails closed when required checks are red and does not move 
 test("planner job does not check out a worktree, open a PR, or merge", async () => {
   const worktree = fakeWorktree();
   const gh = fakeGh();
-  const linear = fakeLinear();
+  const linear = {
+    async lookupUser() {
+      return { id: "pi-app-user-1", name: "Pi" };
+    },
+    async listDispatch() {
+      return { implementingState: { id: "s-impl", name: "Implementing" }, issues: [] };
+    },
+    async claimIssue() {
+      throw new Error("planner test must not claim");
+    },
+    async commentIssue() {},
+  };
   const spawned = [];
   await implementRunner({ gh, linear, worktree, spawned }).run({
     role: "planner",
     identifier: "KIT-99",
   });
   assert.equal(worktree.calls.length, 0);
-  assert.equal(spawned[0].options.cwd, ROOT);
+  assert.equal(spawned.length, 0);
   assert.equal(
     gh.calls.some((call) => call[0] === "createPr" || call[0] === "merge"),
     false,
   );
-  assert.equal(linear.calls.length, 0);
 });
 
 test("updateWorkpad edits the existing workpad and does not create a second comment", async () => {
