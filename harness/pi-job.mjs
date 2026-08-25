@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
+import { completeLand, createLandGh } from "./land.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { runPlanner } from "./planner.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
@@ -101,6 +102,7 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   workspace?: string,
  *   worktree?: { checkout: (input: { identifier: string }) => Promise<{ path: string, branch: string, lane: string }> },
  *   gh?: object,
+ *   landGh?: object,
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
@@ -116,6 +118,7 @@ export function createPiJobRunner({
   workspace = resolvePiWorkspace(env),
   worktree,
   gh,
+  landGh,
   linear,
   typecheckTouched,
   spawnProcess,
@@ -140,9 +143,22 @@ export function createPiJobRunner({
      * @param {{ role: string, identifier?: string, issueId?: string, adwFile?: string }} job
      */
     async run(job) {
+      const identifier = job.identifier ?? job.issueId ?? "unknown";
       if (job.role === "planner") {
         const client = linear ?? createLinearCliClient({ env, runCommand });
         return runPlanner({ env, linear: client });
+      }
+      if (job.role === "land") {
+        const linearClient = linear ?? createLinearCliClient({ env, runCommand });
+        const mergeGh = landGh ?? createLandGh({ env, runCommand });
+        return completeLand({
+          job: {
+            issueId: job.issueId ?? identifier,
+            identifier,
+          },
+          linear: linearClient,
+          gh: mergeGh,
+        });
       }
       const roleFile = ROLE_FILES[job.role];
       if (typeof roleFile !== "string") {
@@ -152,7 +168,6 @@ export function createPiJobRunner({
       if (typeof model !== "string" || model.length === 0) {
         throw new Error(`missing Pi model env for role ${job.role}`);
       }
-      const identifier = job.identifier ?? job.issueId ?? "unknown";
       let cwd = workspace;
       let checkout;
       if (job.role === "implement") {

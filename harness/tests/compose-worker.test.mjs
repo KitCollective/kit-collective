@@ -313,6 +313,7 @@ test("Linear CLI getIssue maps GraphQL JSON into the KIT-52 dispatch snapshot", 
     linearType: "Feature",
     blockedBy: [{ status: "Done", statusType: "completed" }],
     delegate: { name: "Pi" },
+    attachments: [],
   });
   assert.equal(calls[0].command, "linear");
   assert.equal(calls[0].args[0], "api");
