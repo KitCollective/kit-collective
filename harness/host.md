@@ -27,7 +27,7 @@ Product Postgres, Redis, and the PaaS panel stay on the other Helsinki CX33. Thi
 - Health: `https://harness.eskobar.dev/health` → `{"ok":true,"planner":"active"}` when the Linear-only planner poller is Active
 - TLS: Let’s Encrypt via Caddy
 - Worker `.env` on the box only — never git. Path: `/opt/kit-collective/harness/.env` (compose `env_file: .env` next to this compose file). Required names: `CURSOR_API_KEY`, `LINEAR_CLI_API_KEY`, `LINEAR_WEBHOOK_SECRET`, `GH_TOKEN`, `LINEAR_PI_APP_USER_ID`. AgentSession HMAC is `LINEAR_PI_WEBHOOK_SECRET` (KIT-59 display/ack; not a boot-fail if unset — session path returns 401). Values live on `kit-harness`, not in git. Do not reuse `LINEAR_API_KEY` (bootstrap admin key). `LINEAR_PI_APP_USER_ID` is the Pi app user UUID (KIT-58), not a token.
-- Implement worktrees: bare mirror `/var/lib/kit-pi/mirror.git`, issue trees `/var/lib/kit-pi/worktrees/KIT-n` from `origin/development`. One issue, one branch, one PR. Compose volume `kit_pi`.
+- Implement worktrees: bare mirror `/var/lib/kit-pi/mirror.git`, issue trees `/var/lib/kit-pi/worktrees/KIT-n`. Implement creates `kit-n` from `origin/development`. Factory-checker reuses that tree (or `origin/kit-n` once the PR exists). One issue, one branch, one PR. Compose volume `kit_pi`.
 
 ## Planner (Linear-only)
 

@@ -1,6 +1,6 @@
 # Factory checker
 
-Independent review role. Wake on `In Review` as a new Pi session, not a child of implement. No write, no edit, no general bash. gh for required checks and MERGEABLE only, plus the pinned Linear CLI.
+Run `/code-review` in the issue worktree (`/var/lib/kit-pi/worktrees/KIT-n` on branch `kit-n`) — the same tree implement used, not the worker image. No write, no edit, no general bash. gh for required checks and MERGEABLE only, plus the pinned Linear CLI.
 
 Run `/code-review` (Standards + Spec as parallel sub-agents). Update the existing workpad only — replace `### Review feedback` with the complete finding set in one pass. Use `- (none)` when both axes are clean.
 

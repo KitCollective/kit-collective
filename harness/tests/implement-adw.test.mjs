@@ -157,6 +157,12 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
     mkdirSync() {},
     async runGit(args) {
       gitCalls.push(args);
+      if (args.includes("kit-99") && args.includes("fetch")) {
+        throw new Error("issue branch not on origin");
+      }
+      if (args.some((arg) => String(arg).includes("refs/remotes/origin/kit-99"))) {
+        throw new Error("issue branch not on origin");
+      }
       return { stdout: "", status: 0 };
     },
   });
@@ -252,8 +258,53 @@ test("worktree adapter reuses an existing issue worktree (one issue, one branch)
 
   const result = await adapter.checkout({ identifier: "KIT-99" });
   assert.equal(result.path, "/var/lib/kit-pi/worktrees/KIT-99");
+  assert.equal(result.branch, "kit-99");
   assert.equal(
     gitCalls.some((args) => args.includes("worktree") && args.includes("add")),
+    false,
+  );
+  assert.ok(
+    gitCalls.some(
+      (args) =>
+        args.includes("-C") &&
+        args.includes("/var/lib/kit-pi/worktrees/KIT-99") &&
+        args.includes("checkout") &&
+        args.includes("kit-99"),
+    ),
+  );
+});
+
+test("worktree adapter creates from origin/issue-branch when implement has pushed the PR branch", async () => {
+  const gitCalls = [];
+  const adapter = createWorktreeAdapter({
+    mirrorDir: "/var/lib/kit-pi/mirror.git",
+    worktreesDir: "/var/lib/kit-pi/worktrees",
+    existsSync: (path) => path === "/var/lib/kit-pi/mirror.git",
+    mkdirSync() {},
+    async runGit(args) {
+      gitCalls.push(args);
+      return { stdout: "abc\n", status: 0 };
+    },
+  });
+
+  const result = await adapter.checkout({ identifier: "KIT-99" });
+  assert.equal(result.path, "/var/lib/kit-pi/worktrees/KIT-99");
+  assert.equal(result.branch, "kit-99");
+  assert.ok(gitCalls.some((args) => args.includes("fetch") && args.includes("kit-99")));
+  assert.ok(
+    gitCalls.some(
+      (args) =>
+        args.includes("worktree") &&
+        args.includes("add") &&
+        args.includes("/var/lib/kit-pi/worktrees/KIT-99") &&
+        args.includes("origin/kit-99"),
+    ),
+  );
+  assert.equal(
+    gitCalls.some(
+      (args) =>
+        args.includes("worktree") && args.includes("add") && args.includes("origin/development"),
+    ),
     false,
   );
 });
