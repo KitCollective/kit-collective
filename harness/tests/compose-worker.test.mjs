@@ -195,6 +195,8 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /@schpet\/linear-cli@2\.5\.0/);
   assert.match(dockerfile, /session-adapter\.mjs/);
+  assert.match(dockerfile, /delegate-gate\.mjs/);
+  assert.match(dockerfile, /linear-actor-token\.mjs/);
   assert.doesNotMatch(dockerfile, /piagent\/platform/);
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
@@ -271,6 +273,8 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /62\.238\.125\.114/);
   assert.match(host, /\/opt\/kit-collective\/harness\/\.env/);
   assert.match(host, /LINEAR_PI_WEBHOOK_SECRET/);
+  assert.match(host, /LINEAR_PI_ACCESS_TOKEN/);
+  assert.match(host, /30-day/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);
   assert.doesNotMatch(host, /:8080\/health/);
 
@@ -510,6 +514,44 @@ test("createAgentActivity uses the actor=app token, not the personal LINEAR_CLI_
   assert.ok(activityCall);
   assert.equal(activityCall.env.LINEAR_API_KEY, "actor-token");
   assert.notEqual(activityCall.env.LINEAR_API_KEY, "lin_cli_test");
+});
+
+test("createAgentActivity remints via client_credentials after a 401", async () => {
+  let mintCount = 0;
+  const keys = [];
+  const linear = createLinearCliClient({
+    env: validWorkerEnv(),
+    actorTokenProvider: createActorTokenProvider({
+      env: {
+        LINEAR_PI_ACCESS_TOKEN: "expired-actor-token",
+        LINEAR_PI_CLIENT_ID: "client-id",
+        LINEAR_PI_CLIENT_SECRET: "client-secret",
+      },
+      async mint() {
+        mintCount += 1;
+        return `minted-${mintCount}`;
+      },
+    }),
+    async runCommand(_command, args, options) {
+      keys.push(options.env.LINEAR_API_KEY);
+      if (options.env.LINEAR_API_KEY === "expired-actor-token") {
+        throw new Error("HTTP 401 unauthorized");
+      }
+      if (args[1]?.includes("AgentActivityCreate")) {
+        return JSON.stringify({ data: { agentActivityCreate: { success: true } } });
+      }
+      return JSON.stringify({ data: {} });
+    },
+  });
+
+  await linear.createAgentActivity({
+    sessionId: "session-1",
+    content: { type: "thought", body: "ack" },
+    ephemeral: false,
+  });
+
+  assert.equal(mintCount, 1);
+  assert.deepEqual(keys, ["expired-actor-token", "minted-1"]);
 });
 
 test("compose worker ACKs AgentSession and enqueues implement when delegate is Pi Bot Agent", async () => {

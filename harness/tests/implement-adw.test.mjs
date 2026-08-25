@@ -793,6 +793,8 @@ test("Compose persists kit-pi worktrees and copies implement-exit adapters", () 
   assert.match(dockerfile, /worktree\.mjs/);
   assert.match(dockerfile, /implement-exit\.mjs/);
   assert.match(dockerfile, /gh-cli\.mjs/);
+  assert.match(dockerfile, /delegate-gate\.mjs/);
+  assert.match(dockerfile, /linear-actor-token\.mjs/);
   assert.match(dockerfile, /corepack prepare pnpm@9\.15\.4/);
   const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
   assert.match(compose, /kit_pi:\/var\/lib\/kit-pi/);
