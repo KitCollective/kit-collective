@@ -9,6 +9,7 @@ import {
   completeImplementAdw,
   createTypecheckTouched,
   IN_REVIEW,
+  requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
 import {
@@ -450,18 +451,76 @@ test("setStatus moves the issue to In Review via Linear issueUpdate", async () =
   assert.equal(calls.includes(ISSUE_UPDATE_STATE_MUTATION), true);
 });
 
-test("typecheckTouched runs package typecheck and never pnpm test", async () => {
+test("empty required-check list is not green; all-optional checks do not block", () => {
+  assert.equal(requiredChecksGreen([]), false);
+  assert.equal(requiredChecksGreen(undefined), false);
+  assert.equal(
+    requiredChecksGreen([{ name: "Cursor Bugbot", isRequired: false, status: "IN_PROGRESS" }]),
+    true,
+  );
+});
+
+test("typecheckTouched skips pnpm when the diff has no workspace packages", async () => {
   const calls = [];
   const typecheckTouched = createTypecheckTouched({
     async runCommand(command, args) {
       calls.push([command, ...args]);
+      if (command === "git") {
+        return "harness/implement-exit.mjs\n.pi/roles/implement.md\n";
+      }
+      throw new Error("pnpm must not run when the touched set is empty");
+    },
+  });
+  await typecheckTouched({ cwd: "/var/lib/kit-pi/worktrees/KIT-99" });
+  assert.equal(
+    calls.some((call) => call[0] === "pnpm"),
+    false,
+  );
+  assert.equal(
+    calls.some((call) => call[0] === "git"),
+    true,
+  );
+});
+
+test("typecheckTouched fails closed when pnpm is missing and workspace packages are touched", async () => {
+  const typecheckTouched = createTypecheckTouched({
+    async runCommand(command) {
+      if (command === "git") {
+        return "apps/api/src/main.ts\n";
+      }
+      const err = new Error("spawn pnpm ENOENT");
+      err.code = "ENOENT";
+      throw err;
+    },
+  });
+  await assert.rejects(
+    () => typecheckTouched({ cwd: "/var/lib/kit-pi/worktrees/KIT-99" }),
+    (err) => err?.code === "ENOENT",
+  );
+});
+
+test("typecheckTouched typechecks only touched workspace packages and never pnpm test", async () => {
+  const calls = [];
+  const typecheckTouched = createTypecheckTouched({
+    async runCommand(command, args) {
+      calls.push([command, ...args]);
+      if (command === "git") {
+        return "apps/api/src/main.ts\npackages/db/src/index.ts\nharness/server.mjs\n";
+      }
       return "";
     },
   });
   await typecheckTouched({ cwd: "/var/lib/kit-pi/worktrees/KIT-99" });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], "pnpm");
-  assert.equal(calls[0].includes("typecheck"), true);
+  const pnpmCalls = calls.filter((call) => call[0] === "pnpm");
+  assert.equal(pnpmCalls.length, 2);
+  assert.equal(
+    pnpmCalls.some((call) => call.includes("./apps/api") && call.includes("typecheck")),
+    true,
+  );
+  assert.equal(
+    pnpmCalls.some((call) => call.includes("./packages/db") && call.includes("typecheck")),
+    true,
+  );
   assert.equal(
     calls.some((call) => call.includes("test")),
     false,
@@ -556,6 +615,60 @@ test("production createGhClient pushes the rebased head, waits through pending r
   );
 });
 
+test("production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending", async () => {
+  const calls = [];
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      if (command === "gh" && args[0] === "pr" && args[1] === "view") {
+        return JSON.stringify({
+          url: "https://github.com/KitCollective/kit-collective/pull/52",
+          mergeable: "MERGEABLE",
+          statusCheckRollup: [],
+        });
+      }
+      if (command === "gh" && args[0] === "pr" && args[1] === "checks") {
+        const err = new Error("checks pending");
+        err.code = 8;
+        throw err;
+      }
+      if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+        return "https://github.com/KitCollective/kit-collective/pull/52\n";
+      }
+      return "";
+    },
+  });
+  const linear = fakeLinear();
+  const spawned = [];
+  await assert.rejects(
+    () =>
+      implementRunner({
+        gh,
+        linear,
+        spawned,
+        typecheckTouched: async () => undefined,
+        sleep: async () => undefined,
+        waitIntervalMs: 0,
+        waitTimeoutMs: 0,
+      }).run({
+        role: "implement",
+        identifier: "KIT-99",
+        issueId: "issue-1",
+        adwFile: ".pi/adw/feature.yaml",
+      }),
+    /timed out waiting for required GitHub checks/,
+  );
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus"),
+    false,
+  );
+  assert.equal(
+    calls.some((call) => call.command === "gh" && call.args.includes("--required")),
+    true,
+  );
+});
+
 test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and implement never calls it", async () => {
   const calls = [];
   const gh = createGhClient({
@@ -626,6 +739,7 @@ test("Compose persists kit-pi worktrees and copies implement-exit adapters", () 
   assert.match(dockerfile, /worktree\.mjs/);
   assert.match(dockerfile, /implement-exit\.mjs/);
   assert.match(dockerfile, /gh-cli\.mjs/);
+  assert.match(dockerfile, /corepack prepare pnpm@9\.15\.4/);
   const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
   assert.match(compose, /kit_pi:\/var\/lib\/kit-pi/);
 });

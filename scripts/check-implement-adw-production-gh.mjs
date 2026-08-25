@@ -3,7 +3,8 @@
  * CI ratchet: implement ADW exit must be proven on production createGhClient
  * (fake runCommand only), not only injected fakeGh. Prevents repeating the
  * KIT-54 checker fail #2 (fakes skipped git push, --head, and waiting for
- * required GitHub checks).
+ * required GitHub checks) and fail #3 (empty rollup / `gh pr checks --required`
+ * exit 8 fail-open; typecheck spawned pnpm on harness-only diffs).
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,10 +13,15 @@ export const IMPLEMENT_ADW_TEST = "harness/tests/implement-adw.test.mjs";
 
 export const REQUIRED_NEEDLES = [
   'test("production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending"',
+  'test("production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending"',
+  'test("typecheckTouched skips pnpm when the diff has no workspace packages"',
+  'test("typecheckTouched fails closed when pnpm is missing and workspace packages are touched"',
   "createGhClient(",
   'call.args.includes("push")',
   'create.args.includes("--head")',
   "must poll viewPr until required checks are green",
+  "statusCheckRollup: []",
+  "err.code = 8",
   "setStatus",
 ];
 

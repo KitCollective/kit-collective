@@ -33,15 +33,11 @@ function stateToCheck(state) {
  */
 export function mapStatusChecks(rollup, requiredRows) {
   const list = Array.isArray(rollup) ? rollup : [];
-  if (requiredRows === null) {
-    return list.map((check) => ({
-      name: check.name,
-      conclusion: check.conclusion,
-      status: check.status,
-    }));
-  }
+  const requiredList = Array.isArray(requiredRows)
+    ? requiredRows
+    : [{ name: "required", state: "pending" }];
   const requiredNames = new Set(
-    requiredRows
+    requiredList
       .map((row) => row?.name)
       .filter((name) => typeof name === "string" && name.length > 0),
   );
@@ -58,7 +54,7 @@ export function mapStatusChecks(rollup, requiredRows) {
       isRequired: requiredNames.size > 0 ? requiredNames.has(name) : false,
     });
   }
-  for (const row of requiredRows) {
+  for (const row of requiredList) {
     const name = row?.name;
     if (typeof name !== "string") {
       continue;
@@ -112,18 +108,30 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
 
   /**
    * @param {string} cwd
-   * @returns {Promise<Array<{ name?: string, state?: string }> | null>}
+   * @returns {Promise<Array<{ name?: string, state?: string }>>}
    */
   async function loadRequiredChecks(cwd) {
+    const pending = [{ name: "required", state: "pending" }];
     try {
       const stdout = await run("gh", ["pr", "checks", "--required", "--json", "name,state"], {
         cwd,
         env,
       });
       const parsed = JSON.parse(stdout);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return null;
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : pending;
+    } catch (err) {
+      const stdout = typeof err?.stdout === "string" ? err.stdout : "";
+      if (stdout.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(stdout);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        } catch {
+          return pending;
+        }
+      }
+      return pending;
     }
   }
 

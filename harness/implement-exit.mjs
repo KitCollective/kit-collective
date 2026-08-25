@@ -62,9 +62,12 @@ export function selectRequiredChecks(checks) {
  * @param {Array<{ conclusion?: string, status?: string, isRequired?: boolean, state?: string }> | undefined} checks
  */
 export function requiredChecksGreen(checks) {
+  if (!Array.isArray(checks) || checks.length === 0) {
+    return false;
+  }
   const required = selectRequiredChecks(checks);
   if (required.length === 0) {
-    return Array.isArray(checks);
+    return checks.every((check) => check.isRequired === false);
   }
   for (const check of required) {
     const status = check?.status ?? check?.state ?? "";
@@ -102,8 +105,38 @@ export function assertAdwOpensPr(adwText) {
   }
 }
 
+const WORKSPACE_DIR_PREFIXES = ["apps/", "packages/", "seed/"];
+
+/**
+ * Map a git diff path list to pnpm `--filter` directory selectors.
+ * `harness/**` and `.pi/**` are not workspace packages.
+ *
+ * @param {string[]} paths
+ * @returns {string[]}
+ */
+export function workspacePackagesFromDiff(paths) {
+  const packages = new Set();
+  for (const file of paths) {
+    if (typeof file !== "string" || file.length === 0) {
+      continue;
+    }
+    const normalized = file.replaceAll("\\", "/");
+    for (const prefix of WORKSPACE_DIR_PREFIXES) {
+      if (!normalized.startsWith(prefix)) {
+        continue;
+      }
+      const name = normalized.slice(prefix.length).split("/")[0];
+      if (typeof name === "string" && name.length > 0) {
+        packages.add(`./${prefix}${name}`);
+      }
+    }
+  }
+  return [...packages].sort();
+}
+
 /**
  * Typecheck packages changed since `origin/development`. Never `pnpm test`.
+ * Skip when the diff has no workspace packages (do not spawn pnpm).
  *
  * @param {{
  *   runCommand?: (command: string, args: string[], options: { cwd?: string }) => Promise<string>,
@@ -121,7 +154,18 @@ export function createTypecheckTouched({ runCommand } = {}) {
       return stdout;
     });
   return async ({ cwd }) => {
-    await run("pnpm", ["--filter", "...[origin/development]", "typecheck"], { cwd });
+    const stdout = await run("git", ["diff", "--name-only", "origin/development...HEAD"], { cwd });
+    const files = String(stdout)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const packages = workspacePackagesFromDiff(files);
+    if (packages.length === 0) {
+      return;
+    }
+    for (const filter of packages) {
+      await run("pnpm", ["--filter", filter, "typecheck"], { cwd });
+    }
   };
 }
 

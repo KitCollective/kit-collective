@@ -198,7 +198,14 @@ catches it in the API tests and the container smoke test.
 
 ### Implement ADW production gh ratchet (KIT-54)
 
-`harness/tests/implement-adw.test.mjs` case **"production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending"** drives `createGhClient` with fake `runCommand` only (not injected `fakeGh`). It fails when rebase is not followed by a push of the issue branch, when `gh pr create` has no `--head`, or when a first pending required-check snapshot never becomes green before Linear `setStatus`. Optional pending checks must not block. `scripts/check-implement-adw-production-gh.mjs` (CI via `node` in `.github/workflows/ci.yml`) fails when that coverage is deleted. `scripts/tests/check-implement-adw-production-gh.test.mjs` mutation-tests the ratchet. Prevents repeating the KIT-54 checker fail #2 (job-seam fakes skipped production push/wait). Tighten only.
+`harness/tests/implement-adw.test.mjs` drives `createGhClient` / `createTypecheckTouched` with fake `runCommand` only (not injected `fakeGh`). Coverage that must stay:
+
+- **"production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending"** — rebase is followed by a push of the issue branch, `gh pr create` has `--head`, a first pending required-check snapshot never becomes green before Linear `setStatus`, optional pending checks must not block.
+- **"production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending"** — `MERGEABLE` + empty `statusCheckRollup` + `gh pr checks --required` throw (exit 8) must **not** call `setStatus`.
+- **"typecheckTouched skips pnpm when the diff has no workspace packages"** — empty touched set does not spawn `pnpm`.
+- **"typecheckTouched fails closed when pnpm is missing and workspace packages are touched"** — missing `pnpm` (ENOENT) fails closed when packages are in the diff.
+
+`scripts/check-implement-adw-production-gh.mjs` (CI via `node` in `.github/workflows/ci.yml`) fails when that coverage is deleted. `scripts/tests/check-implement-adw-production-gh.test.mjs` mutation-tests the ratchet. Prevents repeating KIT-54 checker fail #2 (job-seam fakes skipped production push/wait) and fail #3 (empty rollup / exit 8 fail-open; pnpm spawned on harness-only diffs). Tighten only.
 
 ### PR write-scope ratchet (KIT-39)
 
