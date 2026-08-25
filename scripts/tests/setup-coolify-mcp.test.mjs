@@ -8,10 +8,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const repoScript = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../setup-coolify-mcp.sh",
-);
+const repoScript = join(dirname(fileURLToPath(import.meta.url)), "../setup-coolify-mcp.sh");
 
 const COOLIFY_URL = "https://coolify.example.test/mcp";
 const COOLIFY_TOKEN = "fixture-coolify-token";
@@ -25,11 +22,7 @@ const LANE_R2_KEYS = [
   "R2_BUCKET",
   "R2_ENDPOINT",
 ];
-const COOLIFY_TOKEN_KEYS = [
-  "COOLIFY_API_URL",
-  "COOLIFY_API_TOKEN",
-  "COOLIFY_MCP_URL",
-];
+const COOLIFY_TOKEN_KEYS = ["COOLIFY_API_URL", "COOLIFY_API_TOKEN", "COOLIFY_MCP_URL"];
 
 async function generateMcpJson() {
   const root = await mkdtemp(join(tmpdir(), "kit-78-mcp-"));
