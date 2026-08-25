@@ -88,11 +88,11 @@ Who-acts labels: \`needs-triage\`, \`needs-info\`, \`ready-for-agent\`, \`ready-
 
 ### Signal-up
 
-Out-of-scope bugs/debt: new Linear issue, \`${dispatch}\`, labels \`signal-up\` + \`needs-triage\` (never delegate, never \`ready-for-agent\`). Cap ${signalCap} per run. See \`docs/agents/signal-up.md\`.
+Out-of-scope bugs/debt: new Linear issue, \`${dispatch}\`, label \`signal-up\` only (never delegate, never \`ready-for-agent\`, never \`needs-triage\` while the Triage group is exclusive). Cap ${signalCap} per run. See \`docs/agents/signal-up.md\`.
 
 ### Qualified proposals
 
-Out-of-scope features/optimisations: new Linear issue, \`${dispatch}\`, labels \`proposal\` + \`needs-triage\`. At most one per run. See \`docs/agents/qualified-proposals.md\`.
+Out-of-scope features/optimisations: new Linear issue, \`${dispatch}\`, label \`proposal\` only (never \`needs-triage\` while the Triage group is exclusive). At most one per run. See \`docs/agents/qualified-proposals.md\`.
 
 ### Error ratcheting
 
@@ -142,6 +142,8 @@ Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited pr
 
 \`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → ${approver} to Merging → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
 
+**Runtime**: PI worker (Compose + \`gh\` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and \`kc_seed_mcp\` are Desktop / Cloud Agent wiring.
+
 ## How work enters the factory
 
 1. \`/grill-with-docs\`
@@ -167,8 +169,12 @@ Linear. Status + \`ready-for-agent\` + blockers decide what runs.
 _Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
-Cursor Automations + Cloud Agents reading this repo’s harness.
-_Avoid_: Conductor board, local-only agents as the factory
+PI worker: Compose + \`gh\` + Linear CLI. Empty \`.pi/mcp.json\` — Linear MCP is not on the box.
+_Avoid_: Cursor Cloud Agents as dispatch, Linear MCP as the worker runtime
+
+**Product MCP**:
+Coolify MCP and \`kc_seed_mcp\` are Desktop or Cloud Agent wiring. Not default PI-worker MCP.
+_Avoid_: installing Coolify or Seed MCP on the PI worker as factory dispatch
 
 **Kickoff**:
 \`/to-spec\` for a new Linear project + milestones. No issues yet.

@@ -20,17 +20,18 @@ New Linear issue only. Do not edit issues you did not create. Do not delegate.
 **Required**
 
 - Status = `dispatch.state`
-- Labels: `signal-up` + `needs-triage`
+- Label: `signal-up` only
 - Same project as the origin; related to the origin
 - Cap: `agent.signalUpCapPerRun` (default 3). Further findings go in the workpad only.
 
 **Forbidden**
 
 - `ready-for-agent`
+- `needs-triage` on the same issue while the Triage group is exclusive (Linear rejects two labels from one exclusive group). A human may split that group in the workspace UI; until then do not pair the labels.
 - `proposal` on the same issue
 - Moving it to `Implementing`
 
-A human removes `needs-triage` / shapes the ticket, then may apply `ready-for-agent` and later **delegate**. Dispatch still requires status + delegate + unblocked.
+A human shapes the ticket, then may apply `ready-for-agent`. Dispatch still requires status + `ready-for-agent` + unblocked. Never delegate.
 
 ## Body shape
 

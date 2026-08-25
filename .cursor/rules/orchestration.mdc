@@ -12,7 +12,7 @@ Load `factory.config.json` then `WORKFLOW.md`. Do not invent Linear statuses.
 - Implement starts or resumes only while status is `Implementing`. Same issue, same branch, same PR.
 - One issue → one branch from `lanes.integration` → one PR into that lane.
 - **Checker** wakes on `In Review`. Pass = `/code-review` clean **and** required GitHub CI/CD checks green → `Ready for merge`.
-- The `approver` moving the issue to `Done` is merge approval. Then `/land`.
+- The `approver` moving the issue to `Merging` is merge approval. Then `/land`.
 - Never push to `lanes.staging` or `lanes.production` from an issue land run.
-- Runtime agents use Linear MCP. They must not create teams or workflow states.
+- Runtime is the PI worker: Compose + `gh` + Linear CLI. Linear MCP is not installed on the box (empty `.pi/mcp.json`). Do not treat Cursor Cloud Agents as dispatch. Product Coolify MCP and `kc_seed_mcp` stay Desktop or Cloud Agent wiring, not default PI-worker MCP. Runtime agents must not create teams or workflow states.
 - Domain helpers live in `paths.helpers`. They do not get their own Linear issues.

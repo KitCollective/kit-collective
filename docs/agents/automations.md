@@ -1,20 +1,22 @@
-# Cursor Automations
+# Factory runtime
 
-Wire **planner + implement + checker + land** first. Staging/production later.
+The dispatch runtime is the **PI worker** on kit-harness: Docker Compose + `gh` + Linear CLI. `.pi/mcp.json` is empty — Linear MCP is not installed on that box. Do **not** treat Cursor Cloud Agents as factory dispatch.
 
-Linear MCP must point at the workspace in `factory.config.json`. `linear.setup.json` must exist.
+Product Coolify MCP and `kc_seed_mcp` stay Desktop or Cloud Agent wiring. They are not default PI-worker MCP.
 
-Cursor’s Linear trigger fires on issue created / status changed / end of cycle — **not** on delegate. Planner therefore uses a short cron. **Do not** use Linear Assignee → Agents → Cursor as dispatch: that starts a Cloud Agent immediately. Assignee stays the human; Agent stays **No agent**. Planner claims on `ready-for-agent`. Implement and checker wake on **status**.
+`linear.setup.json` must exist. When the PI planner job is Active, keep any Cursor Automations planner cron **Inactive** so two planners cannot claim the same issue. The Cursor Automations paste-blocks below are a fallback cookbook, not the live worker.
 
-Each automation must read `factory.config.json` and `WORKFLOW.md` from the checkout. Do not paste a second copy of policy into the prompt. The **Instruction** field is what you paste into Cursor Automations.
+**Do not** use Linear Assignee → Agents → Cursor as dispatch: that starts a Cloud Agent immediately. Assignee stays the human; Agent stays **No agent**. Planner claims on `ready-for-agent`. Implement and checker wake on **status**.
 
-Checkout: `github.ownerRepo`, branch `lanes.integration`. Planner can be Linear-only (no product edits).
+Each role must read `factory.config.json` and `WORKFLOW.md` from the checkout. Do not paste a second copy of policy into a one-off prompt.
 
-Linear `get_issue` does **not** return comments. Every runtime that acts on an issue must also `list_comments`. The workpad is one comment; `### Review feedback` is why a pass was not good enough.
+Checkout: `github.ownerRepo`, branch `lanes.integration`. Planner is Linear-only (no product edits).
+
+Linear `get_issue` does **not** return comments. Every runtime that acts on an issue must also `list_comments` (Linear CLI on the PI worker). The workpad is one comment; `### Review feedback` is why a pass was not good enough.
 
 ## Handshake (implement ↔ checker)
 
-There is no “same Cloud Agent”. Each run is a new VM. **Same work** means: same Linear issue, same git branch, same PR, same workpad.
+There is no “same Cloud Agent”. Each run is a new Pi job. **Same work** means: same Linear issue, same git branch, same PR, same workpad.
 
 ```text
 planner:    Backlog + ready-for-agent + unblocked → Implementing (priority order)
@@ -30,7 +32,7 @@ Checker must **not** start implement. Planner must **not** write code. Implement
 
 ## Linear evidence
 
-Screenshots, recordings, and other files from the Cloud Agent VM belong on the **Linear issue**, not only in the VM log.
+Screenshots, recordings, and other files from the worker belong on the **Linear issue**, not only in the job log.
 
 1. `prepare_attachment_upload` on the issue (filename, contentType, size)
 2. PUT the raw bytes to the signed URL (headers verbatim)
@@ -59,7 +61,7 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | Field | Value |
 | --- | --- |
 | Trigger | Every 5 minutes (`*/5 * * * *`) |
-| Tools | **Linear MCP only** |
+| Tools | **Linear CLI** on the PI worker. Not Linear MCP on kit-harness. |
 | Eligibility | `dispatch.state` + `ready-for-agent` + no unresolved `blockedBy` + not `signal-up` + Agent field empty |
 | Action | No concurrency cap. Claim **all** currently eligible issues in `dispatch.priorityOrder`. Blocking is the limiter. No code. |
 | Instruction | See prompt below. |
@@ -98,7 +100,7 @@ Never claim Triage or Duplicate. Never move to In Review, Ready for merge, Mergi
 | Field | Value |
 | --- | --- |
 | Trigger | Linear status changed **to** `Implementing` |
-| Tools | Linear MCP, GitHub (PR + checks), browser if the slice is UI |
+| Tools | Linear CLI + `gh` (PR + checks). Browser if the slice is UI. Not Linear MCP on kit-harness. |
 | Eligibility (start) | Status `Implementing`, **no** branch/PR yet (planner just claimed) |
 | Eligibility (resume) | Status `Implementing` **with** an existing branch/PR (checker or land sent it back) |
 | Action | Follow `/implement`. Same issue, same branch, same PR. Never claim from Backlog. |
@@ -153,7 +155,7 @@ Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview 
 | Field | Value |
 | --- | --- |
 | Trigger | Linear status changed **to** `In Review` |
-| Tools | GitHub, Linear MCP |
+| Tools | `gh` + Linear CLI. Not Linear MCP on kit-harness. |
 | Action | Judge-only `/code-review` **and** GitHub CI/CD checks on the attached PR. Complete review each pass (no drip-feed). Pending checks → wait. Pass + required checks green + mergeable → `Ready for merge`. Fail → `Implementing` + full `### Review feedback`. Do not start implement. |
 | Instruction | See prompt below. |
 
@@ -187,7 +189,7 @@ Read ALL required GitHub check runs on the attached PR (including image/deploy s
 
 Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Comment on Linear that the issue is waiting for the approver.
 
-Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no way to resume the previous Cloud Agent VM.
+Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no resume of the previous Pi job.
 
 If this is the second fail of the same class on this issue, say so in ### Review feedback and require a ratchet in the next implement PR (docs/agents/error-ratcheting.md). Do not write the ratchet yourself. Ratchet paths are not a write-scope miss.
 ```
@@ -199,7 +201,7 @@ If this is the second fail of the same class on this issue, say so in ### Review
 | Field | Value |
 | --- | --- |
 | Trigger | Linear issue status changed **to** `Merging` |
-| Tools | GitHub, Linear MCP |
+| Tools | `gh` + Linear CLI. Not Linear MCP on kit-harness. |
 | Action | `/land` into `lanes.integration`. Merge fail → `Implementing` + `### Review feedback` (wakes implement on the same branch). |
 | Instruction | See prompt below. |
 
@@ -235,7 +237,7 @@ Merge fail → Implementing and write the error under workpad ### Review feedbac
 | Field | Value |
 | --- | --- |
 | Trigger | Every hour |
-| Tools | Linear MCP, GitHub |
+| Tools | Linear CLI + `gh`. Not Linear MCP on kit-harness. Staging/production promotion is not an issue land run. |
 | Action | If a **milestone’s** issues are all `Done` or `Canceled`, open or update a PR `lanes.integration` → `lanes.staging`. Do not wait for the whole Linear project. Do not merge without green checks. |
 
 ## 5. Production release (wire later)
@@ -243,5 +245,5 @@ Merge fail → Implementing and write the error under workpad ### Review feedbac
 | Field | Value |
 | --- | --- |
 | Trigger | Linear issue created with label `release`, or manual |
-| Tools | Linear MCP, GitHub |
+| Tools | Linear CLI + `gh`. Not Linear MCP on kit-harness. Staging/production promotion is not an issue land run. |
 | Action | Diff staging vs production. Draft Linear release notes. Open PR staging → production. **Do not merge.** The `approver` merges production. Follow `.cursor/agents/release.md`. |
