@@ -3,8 +3,10 @@
  * Fake Linear and a fake Pi event fixture; do not spawn a model.
  */
 import assert from "node:assert/strict";
+import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   createPiEventStreamConsumer,
   mapPiEventToActivity,
@@ -16,6 +18,7 @@ import { createPiJobRunner } from "../pi-job.mjs";
 import { createLinearSessionAdapter, createMemorySessionAdapter } from "../session-adapter.mjs";
 import { createMemoryAdapter } from "../webhook-router.mjs";
 
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ISSUE_ID = "issue-kit-79";
 const SESSION_ID = "session-kit-79";
 const NOW = 1_700_000_000_000;
@@ -183,10 +186,10 @@ test("implement Pi spawn uses json mode and pipes stdout into the session stream
       PI_MODEL_FAST: "cursor/grok-4.6",
       LINEAR_CLI_API_KEY: "lin_test",
     },
-    workspace: "/workspace",
+    workspace: ROOT,
     worktree: {
       async checkout() {
-        return { path: "/var/lib/kit-pi/worktrees/KIT-79", branch: "kit-79", lane: "development" };
+        return { path: ROOT, branch: "kit-79", lane: "development" };
       },
     },
     gh: {
@@ -248,7 +251,7 @@ test("factory-checker spawn also streams Pi json events", async () => {
       PI_MODEL: "cursor/composer-2.5",
       PI_MODEL_FAST: "cursor/grok-4.6",
     },
-    workspace: "/workspace",
+    workspace: ROOT,
     session,
     spawnProcess(_command, args, options) {
       spawned.push({ args, options });
