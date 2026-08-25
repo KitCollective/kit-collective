@@ -24,9 +24,14 @@ Product Postgres, Redis, and the PaaS panel stay on the other Helsinki CX33. Thi
 
 - Deploy dir: `/opt/kit-collective/harness`
 - Compose: `docker compose up -d` (webhook behind Caddy)
-- Health: `https://harness.eskobar.dev/health` → `{"ok":true}`
+- Health: `https://harness.eskobar.dev/health` → `{"ok":true,"planner":"active"}` when the Linear-only planner poller is Active
 - TLS: Let’s Encrypt via Caddy
-- Worker `.env` on the box only — never git. Path: `/opt/kit-collective/harness/.env` (compose `env_file: .env` next to this compose file). Required names: `CURSOR_API_KEY`, `LINEAR_CLI_API_KEY`, `LINEAR_WEBHOOK_SECRET`, `GH_TOKEN`. Values live on `kit-harness`, not in git. Do not reuse `LINEAR_API_KEY` (bootstrap admin key).
+- Worker `.env` on the box only — never git. Path: `/opt/kit-collective/harness/.env` (compose `env_file: .env` next to this compose file). Required names: `CURSOR_API_KEY`, `LINEAR_CLI_API_KEY`, `LINEAR_WEBHOOK_SECRET`, `GH_TOKEN`, `LINEAR_PI_APP_USER_ID`. Values live on `kit-harness`, not in git. Do not reuse `LINEAR_API_KEY` (bootstrap admin key). `LINEAR_PI_APP_USER_ID` is the Pi app user UUID (KIT-58), not a token.
+- Implement worktrees: bare mirror `/var/lib/kit-pi/mirror.git`, issue trees `/var/lib/kit-pi/worktrees/KIT-n` from `origin/development`. One issue, one branch, one PR. Compose volume `kit_pi`.
+
+## Planner (Linear-only)
+
+When this worker’s planner job is **Active** (health `planner: "active"`, 5-minute Linear CLI poller plus webhook `role=planner`), the Cursor Automations planner cron in `docs/agents/automations.md` must stay **Inactive** (paused or removed). Two planners must not claim the same issue. The PI wrapper talks only to the pinned Linear CLI: no file tools, no general bash, no Pi spawn. Delegate on claim is the Pi app user; never Cursor.
 
 ## Models (not Anthropic)
 
@@ -36,4 +41,4 @@ Use a Cursor SDK key + the Pi extension `pi-cursor-sdk`:
 
 1. Mint a **user or service-account** key at [cursor.com/dashboard](https://cursor.com/dashboard) → Integrations / API Keys. Team Admin keys are rejected by the SDK.
 2. Put it in `CURSOR_API_KEY` on this host (wizard or `/opt/kit-collective/harness/.env`).
-3. Jobs: `pi --model cursor/composer-2.5` (implement) or `pi --model cursor/grok-4.6` (fast/planner). Defaults: `PI_MODEL` / `PI_MODEL_FAST`.
+3. Jobs: `pi --model cursor/composer-2.5` (implement) or `pi --model cursor/grok-4.6` (factory-checker / land). Planner is the Linear CLI wrapper, not a Pi session. Defaults: `PI_MODEL` / `PI_MODEL_FAST`.

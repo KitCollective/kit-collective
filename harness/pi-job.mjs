@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { createLinearCliClient } from "./linear-cli.mjs";
+import { runPlanner } from "./planner.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -87,6 +89,8 @@ export function createPiJobRunner({
   env = process.env,
   workspace = resolvePiWorkspace(env),
   spawnProcess,
+  runCommand,
+  linear,
 } = {}) {
   const spawnJob =
     spawnProcess ??
@@ -102,6 +106,10 @@ export function createPiJobRunner({
      * @param {{ role: string, identifier?: string, issueId?: string, adwFile?: string }} job
      */
     async run(job) {
+      if (job.role === "planner") {
+        const client = linear ?? createLinearCliClient({ env, runCommand });
+        return runPlanner({ env, linear: client });
+      }
       const roleFile = ROLE_FILES[job.role];
       if (typeof roleFile !== "string") {
         throw new Error(`no Pi role file for ${job.role}`);
