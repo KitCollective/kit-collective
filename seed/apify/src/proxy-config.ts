@@ -47,13 +47,61 @@ export function isDecodoSiteUnblockerProxy(proxyUrl: string): boolean {
   }
 }
 
-function createSeedProxyAgent(proxyUrl: string): ProxyAgent {
+export type SeedProxyAgentOptions =
+  | string
+  | {
+      uri: string;
+      requestTls: { rejectUnauthorized: boolean };
+      proxyTls: { rejectUnauthorized: boolean };
+    };
+
+export type SeedProxyAgent = {
+  close: () => void | Promise<void>;
+};
+
+export type SeedProxyAgentFactory = (options: SeedProxyAgentOptions) => SeedProxyAgent;
+
+export type SeedProxyFetchResponse = {
+  ok: boolean;
+  status: number;
+  text: () => Promise<string>;
+};
+
+export type SeedProxyFetch = (
+  url: string,
+  init: {
+    dispatcher: SeedProxyAgent;
+    headers: Record<string, string>;
+  },
+) => Promise<SeedProxyFetchResponse>;
+
+function createUndiciProxyAgent(options: SeedProxyAgentOptions): SeedProxyAgent {
+  return new ProxyAgent(options);
+}
+
+async function defaultSeedProxyFetch(
+  url: string,
+  init: { dispatcher: SeedProxyAgent; headers: Record<string, string> },
+): Promise<SeedProxyFetchResponse> {
+  if (!(init.dispatcher instanceof ProxyAgent)) {
+    throw new Error("default Seed proxy fetch requires an undici ProxyAgent dispatcher");
+  }
+  return undiciFetch(url, {
+    dispatcher: init.dispatcher,
+    headers: init.headers,
+  });
+}
+
+function createSeedProxyAgent(
+  proxyUrl: string,
+  createProxyAgent: SeedProxyAgentFactory,
+): SeedProxyAgent {
   if (!isDecodoSiteUnblockerProxy(proxyUrl)) {
-    return new ProxyAgent(proxyUrl);
+    return createProxyAgent(proxyUrl);
   }
 
   // Site Unblocker MITMs TLS; Decodo's client examples use verify=False / curl -k.
-  return new ProxyAgent({
+  return createProxyAgent({
     uri: proxyUrl,
     requestTls: { rejectUnauthorized: false },
     proxyTls: { rejectUnauthorized: false },
@@ -74,11 +122,15 @@ function seedProxyRequestHeaders(proxyUrl: string): Record<string, string> {
   };
 }
 
-export function createProxyFetchHtml(proxyUrl: string): ProxyFetchHtml {
-  const agent = createSeedProxyAgent(proxyUrl);
+export function createProxyFetchHtml(
+  proxyUrl: string,
+  fetchImpl: SeedProxyFetch = defaultSeedProxyFetch,
+  createProxyAgent: SeedProxyAgentFactory = createUndiciProxyAgent,
+): ProxyFetchHtml {
+  const agent = createSeedProxyAgent(proxyUrl, createProxyAgent);
 
   const fetchHtml = async (url: string) => {
-    const response = await undiciFetch(url, {
+    const response = await fetchImpl(url, {
       dispatcher: agent,
       headers: seedProxyRequestHeaders(proxyUrl),
     });
@@ -93,6 +145,8 @@ export function createProxyFetchHtml(proxyUrl: string): ProxyFetchHtml {
 
   return {
     fetchHtml,
-    close: () => agent.close(),
+    close: async () => {
+      await agent.close();
+    },
   };
 }
