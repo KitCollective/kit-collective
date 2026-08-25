@@ -68,6 +68,7 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
       return { block: true, reason: "factory-checker: write/edit denied" };
     }
     if (name === "bash" || name === "shell") {
+      // SAFETY: pi tool_call input is a string-keyed object map for bash/shell commands.
       const command = shellCommand(event.input as Record<string, unknown>);
       if (!isReadonlyShell(command)) {
         return { block: true, reason: "factory-checker: general bash denied" };
@@ -90,8 +91,10 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
       if (typeof issueId !== "string" || issueId.length === 0) {
         throw new Error("LINEAR_ISSUE_ID is required for linear_cli");
       }
+      // SAFETY: TypeBox parameters schema requires body to be a string.
       const body = params.body as string;
       const stdout = await linearApi(ISSUE_COMMENTS_QUERY, { id: issueId });
+      // SAFETY: linear_cli reads JSON from the pinned IssueComments GraphQL query.
       const parsed = JSON.parse(stdout) as {
         data?: { issue?: { comments?: { nodes?: Array<{ id?: string; body?: string }> } } };
       };
