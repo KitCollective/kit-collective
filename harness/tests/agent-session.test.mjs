@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import { test } from "node:test";
-import { createLinearSessionAdapter, createMemorySessionAdapter } from "../session-adapter.mjs";
 import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
+import { createLinearSessionAdapter, createMemorySessionAdapter } from "../session-adapter.mjs";
 import { createHttpHandler, createMemoryAdapter, routeWebhook } from "../webhook-router.mjs";
 
 const ISSUE_SECRET = "test-linear-webhook-secret";

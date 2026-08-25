@@ -8,13 +8,13 @@ import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
 import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
 import { createSerialQueue } from "../job-queue.mjs";
-import { createLinearCliClient } from "../linear-cli.mjs";
 import { createActorTokenProvider } from "../linear-actor-token.mjs";
+import { createLinearCliClient } from "../linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
-import { createLinearSessionAdapter } from "../session-adapter.mjs";
-import { createWorktreeAdapter } from "../worktree.mjs";
 import { createWorkerHandler, startWorkerServer } from "../server.mjs";
+import { createLinearSessionAdapter } from "../session-adapter.mjs";
 import { createMemoryAdapter } from "../webhook-router.mjs";
+import { createWorktreeAdapter } from "../worktree.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SECRET = "test-linear-webhook-secret";

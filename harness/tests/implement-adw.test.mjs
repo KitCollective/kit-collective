@@ -4,9 +4,9 @@ import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { promisify } from "node:util";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createGhClient } from "../gh-cli.mjs";
 import {
@@ -16,6 +16,7 @@ import {
   requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
+import { gitAuthExtraHeader } from "../linear-actor-token.mjs";
 import {
   COMMENT_CREATE_MUTATION,
   COMMENT_UPDATE_MUTATION,
@@ -30,7 +31,6 @@ import {
   worktreeBranch,
   worktreePath,
 } from "../worktree.mjs";
-import { gitAuthExtraHeader } from "../linear-actor-token.mjs";
 
 const execFile = promisify(execFileCb);
 

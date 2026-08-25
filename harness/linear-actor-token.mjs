@@ -66,7 +66,11 @@ export async function mintPiAccessToken({ clientId, clientSecret, fetchImpl = fe
  *   mint?: typeof mintPiAccessToken,
  * }} [deps]
  */
-export function createActorTokenProvider({ env = process.env, fetchImpl = fetch, mint = mintPiAccessToken } = {}) {
+export function createActorTokenProvider({
+  env = process.env,
+  fetchImpl = fetch,
+  mint = mintPiAccessToken,
+} = {}) {
   let cached =
     typeof env.LINEAR_PI_ACCESS_TOKEN === "string" && env.LINEAR_PI_ACCESS_TOKEN.length > 0
       ? env.LINEAR_PI_ACCESS_TOKEN
@@ -81,7 +85,9 @@ export function createActorTokenProvider({ env = process.env, fetchImpl = fetch,
       typeof clientSecret !== "string" ||
       clientSecret.length === 0
     ) {
-      throw new Error("LINEAR_PI_CLIENT_ID and LINEAR_PI_CLIENT_SECRET are required to mint actor token");
+      throw new Error(
+        "LINEAR_PI_CLIENT_ID and LINEAR_PI_CLIENT_SECRET are required to mint actor token",
+      );
     }
     cached = await mint({ clientId, clientSecret, fetchImpl });
     return cached;
