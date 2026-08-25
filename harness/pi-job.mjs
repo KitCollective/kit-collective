@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
@@ -39,6 +40,9 @@ export function implementPrompt(role, identifier, adwFile) {
   if (role === "implement") {
     const adw = typeof adwFile === "string" ? ` ADW ${adwFile}.` : "";
     return `Factory role implement for ${identifier}.${adw} Update the existing workpad. Open a PR into development and move the issue to In Review. Never merge. Never spawn factory-checker.`;
+  }
+  if (role === "factory-checker") {
+    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec). Update the existing workpad: replace ### Review feedback with the complete finding set (- (none) on pass). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
   }
   return typeof adwFile === "string"
     ? `Factory role ${role} for ${identifier}. ADW ${adwFile}.`
@@ -103,6 +107,7 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   worktree?: { checkout: (input: { identifier: string }) => Promise<{ path: string, branch: string, lane: string }> },
  *   gh?: object,
  *   landGh?: object,
+ *   checkerGh?: object,
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
@@ -119,6 +124,7 @@ export function createPiJobRunner({
   worktree,
   gh,
   landGh,
+  checkerGh,
   linear,
   typecheckTouched,
   spawnProcess,
@@ -170,7 +176,7 @@ export function createPiJobRunner({
       }
       let cwd = workspace;
       let checkout;
-      if (job.role === "implement") {
+      if (job.role === "implement" || job.role === "factory-checker") {
         checkout = await trees.checkout({ identifier });
         cwd = checkout.path;
       }
@@ -216,6 +222,19 @@ export function createPiJobRunner({
           linear: linearClient,
           typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
           adwText: readFileSync(join(workspace, adwFile), "utf8"),
+          now,
+          sleep,
+          waitTimeoutMs,
+          waitIntervalMs,
+        });
+      }
+      if (job.role === "factory-checker") {
+        const linearClient = linear ?? createLinearCliClient({ env, runCommand });
+        const checkerGhClient = checkerGh ?? createCheckerGh({ env, runCommand });
+        await completeChecker({
+          job: { ...job, identifier, issueId: job.issueId ?? identifier },
+          linear: linearClient,
+          gh: checkerGhClient,
           now,
           sleep,
           waitTimeoutMs,
