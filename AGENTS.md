@@ -40,11 +40,11 @@ Who-acts labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-hum
 
 ### Signal-up
 
-Out-of-scope bugs/debt: new Linear issue, `Backlog`, labels `signal-up` + `needs-triage` (never delegate, never `ready-for-agent`). Cap 3 per run. See `docs/agents/signal-up.md`.
+Out-of-scope bugs/debt: new Linear issue, `Backlog`, label `signal-up` only (never delegate, never `ready-for-agent`, never `needs-triage` while the Triage group is exclusive). Cap 3 per run. See `docs/agents/signal-up.md`.
 
 ### Qualified proposals
 
-Out-of-scope features/optimisations: new Linear issue, `Backlog`, labels `proposal` + `needs-triage`. At most one per run. See `docs/agents/qualified-proposals.md`.
+Out-of-scope features/optimisations: new Linear issue, `Backlog`, label `proposal` only (never `needs-triage` while the Triage group is exclusive). At most one per run. See `docs/agents/qualified-proposals.md`.
 
 ### Error ratcheting
 
@@ -93,6 +93,8 @@ Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primar
 ### Planning stack
 
 `/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → Nicklas to Merging → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
+
+**Runtime**: PI worker (Compose + `gh` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring.
 
 ## How work enters the factory
 

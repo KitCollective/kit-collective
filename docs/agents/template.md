@@ -18,4 +18,4 @@ Replace per product:
 - `.cursor/rules/` that encode stack/import laws
 - `CONTEXT.md` / PRD / architecture under `paths.specs`
 
-Then `/bootstrap-linear` and wire automations from `docs/agents/automations.md`.
+Then `/bootstrap-linear`. Live factory runtime is the PI worker (Compose + `gh` + Linear CLI); see `docs/agents/automations.md`. Cursor Cloud Agents are not dispatch.

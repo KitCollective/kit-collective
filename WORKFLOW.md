@@ -5,8 +5,8 @@
 
 # Agent workflow
 
-Linear is the control plane. Cursor Automations + Cloud Agents are the runtime.
-This file is the contract. Automations must follow it, not a one-off prompt.
+Linear is the control plane. The PI worker (Compose + `gh` + Linear CLI) is the runtime. Cursor Cloud Agents are not factory dispatch. Linear MCP is not installed on kit-harness (empty `.pi/mcp.json`).
+This file is the contract. The worker and skills must follow it, not a one-off prompt.
 
 Load `factory.config.json` (product, team, states, lanes, approver, helper dir).
 Working skills are `.cursor/skills/` (self-contained). Follow this file for status, land, and comments.
@@ -33,7 +33,7 @@ Never claim from Linear **Triage** (Sentry/intake) or **Duplicate**. Those are L
 
 An issue may **start** implement when status is `Implementing` and it has no branch/PR yet.
 
-An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). Same issue, same branch, same PR. A new Cloud Agent VM — there is no resume of the previous session.
+An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session.
 
 ## Status map
 
@@ -78,7 +78,7 @@ Lanes come from `lanes` in factory config.
 6. Follow `/implement`: `/tdd` at the spec’s seams; spawn **every matching helper** in `paths.helpers` (never their own Linear issues). Workpad `### Domain helpers used` must list them — `(none)` on a slice that matches helper descriptions is a miss. Mobile/EAS slices also load `.cursor/skills/expo/` (`expo-overview` first, then the matching leaf).
 7. Out of scope → `/signal-up`. Cap `agent.signalUpCapPerRun`. Never expand the PR except ratchet paths required by `### Review feedback` (`docs/agents/write-scope.md`).
 8. Open or update a PR **into the integration lane**. Attach the PR URL on the issue.
-9. Upload screenshots/recordings from the VM to the Linear issue. Comment. Link under workpad `### Evidence`.
+9. Upload screenshots/recordings from the worker to the Linear issue. Comment. Link under workpad `### Evidence`.
 10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph plus typecheck of packages whose src or tests you edited; wait for **all** required GitHub checks (pending or red → do not flip, including image/deploy smokes); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff; spawn the UI/layout helper when the issue cites the design lock; every What to build clause has Validation or Evidence. On resume, fix the **class**, not only the cited file.
 11. Clear addressed `### Review feedback`. Move to `In Review` only after the gate. Do not merge. Do not move to `Done`.
 
@@ -102,7 +102,7 @@ The approver moving the issue to `Merging` **is** the merge approval. Land merge
 - Never push directly to staging or production lanes.
 - Never create Linear teams or workflow states at runtime (bootstrap skill only).
 - Never delegate or self-apply dispatch on `signal-up` issues.
-- Checker never validates in the same VM that wrote the code. Implement may run the mechanical pre-review gate (rebase, full tests, wait for required CI, lock checklist) in its own run; it must not call `/code-review` as the pass verdict.
+- Checker never validates in the same Pi job that wrote the code. Implement may run the mechanical pre-review gate (rebase, full tests, wait for required CI, lock checklist) in its own run; it must not call `/code-review` as the pass verdict.
 - Secrets stay in env / GitHub Environments.
 
 ## Workpad template

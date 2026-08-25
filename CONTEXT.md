@@ -12,8 +12,12 @@ Linear. Status + `ready-for-agent` + blockers decide what runs.
 _Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
-Cursor Automations + Cloud Agents reading this repo’s harness.
-_Avoid_: Conductor board, local-only agents as the factory
+PI worker: Compose + `gh` + Linear CLI. Empty `.pi/mcp.json` — Linear MCP is not on the box.
+_Avoid_: Cursor Cloud Agents as dispatch, Linear MCP as the worker runtime
+
+**Product MCP**:
+Coolify MCP and `kc_seed_mcp` are Desktop or Cloud Agent wiring. Not default PI-worker MCP.
+_Avoid_: installing Coolify or Seed MCP on the PI worker as factory dispatch
 
 **Kickoff**:
 `/to-spec` for a new Linear project + milestones. No issues yet.
@@ -147,8 +151,12 @@ Live Football Kit Archive fetch for the same Seed scope, only after that scope a
 _Avoid_: scraping FK with no TM clubs; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool in this slice
 
 **kc_seed_mcp**:
-The Cursor Seed MCP server id. Standalone stdio process — not Coolify MCP. Exposes `seed_apify` (Kader fetch / Transfermarkt facts) and `seed_fk` (Football Kit Archive kits + admin_only archive bytes) only. Gets Seed env (lane database, Seed proxy, FK origin, lane R2) — never Coolify API tokens. Coolify MCP stays the host catalog for long one-shot jobs; Seed scope args (`fromSeason` / `toSeason` / `club` + `season`) go through `kc_seed_mcp`, not Coolify `control`.
-_Avoid_: naming the server `seed` in Cursor config; mixing Coolify tokens into the Seed MCP process; using Coolify `control` for ingest scope; fusing `seed_apify` and `seed_fk` into one tool
+The Cursor Seed MCP server id. Standalone stdio process — not Coolify MCP. Exposes `seed_apify` (Kader fetch / Transfermarkt facts) and `seed_fk` (Football Kit Archive kits + admin_only archive bytes) only. Gets Seed env (lane database, Seed proxy, FK origin, lane R2) — never Coolify API tokens. Coolify MCP stays the host catalog for long one-shot jobs; Seed scope args (`fromSeason` / `toSeason` / `club` + `season`) go through `kc_seed_mcp`, not Coolify `control`. Wired on Desktop or Cloud Agent sessions. Not default PI-worker MCP (kit-harness `.pi/mcp.json` is empty).
+_Avoid_: naming the server `seed` in Cursor config; mixing Coolify tokens into the Seed MCP process; using Coolify `control` for ingest scope; fusing `seed_apify` and `seed_fk` into one tool; installing Seed MCP on the PI worker as factory dispatch
+
+**Coolify MCP**:
+Cursor MCP server for the Coolify host catalog. Desktop or Cloud Agent wiring. Not installed on the PI worker.
+_Avoid_: treating Coolify MCP as factory dispatch; mixing Coolify tokens into `kc_seed_mcp`
 
 **Catalog peek**:
 An unstyled HTML page on Nest (`GET /v1/catalog/peek`) so Nicklas can open a URL and see Seed run results: season, club names, squad counts, kit identity and photo counts. Not `apps/admin`, not the design system, not archive JPEGs on a public URL.
