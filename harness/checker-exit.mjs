@@ -1,0 +1,255 @@
+/**
+ * Factory checker exit (KIT-56).
+ *
+ * After the review Pi session: read workpad verdict + PR gates (MERGEABLE,
+ * required GitHub checks). Pass → Ready for merge. Fail → Implementing with
+ * complete ### Review feedback. Never merge. Fake `gh` + Linear at this seam.
+ */
+import { IN_REVIEW, requiredChecksFailed, requiredChecksGreen } from "./implement-exit.mjs";
+import { createLandGh, pullRequestFromAttachments } from "./land.mjs";
+import { WORKPAD_HEADING } from "./linear-cli.mjs";
+
+export const READY_FOR_MERGE = "Ready for merge";
+export const IMPLEMENTING = "Implementing";
+export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
+
+/**
+ * @param {string | undefined} body
+ * @returns {string}
+ */
+export function reviewFeedbackSection(body) {
+  if (typeof body !== "string") {
+    return "";
+  }
+  const match = body.match(/### Review feedback\n([\s\S]*?)(?=\n### |\s*$)/);
+  return match ? match[1].trim() : "";
+}
+
+/**
+ * @param {string | undefined} body
+ * @returns {boolean}
+ */
+export function reviewFeedbackIsClean(body) {
+  const section = reviewFeedbackSection(body);
+  if (section.length === 0) {
+    return false;
+  }
+  const lines = section
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return false;
+  }
+  return lines.length === 1 && /^-\s*\(none\)\s*$/i.test(lines[0]);
+}
+
+/**
+ * @param {string | undefined} body
+ * @returns {boolean}
+ */
+export function reviewFeedbackHasFindings(body) {
+  return !reviewFeedbackIsClean(body);
+}
+
+/**
+ * @param {object | null | undefined} pr
+ * @returns {string[]}
+ */
+export function ghGateFailures(pr) {
+  const failures = [];
+  if (pr?.mergeable !== "MERGEABLE") {
+    failures.push(`- PR is not MERGEABLE (${pr?.mergeable ?? "unknown"})`);
+  }
+  const checks = pr?.requiredChecks ?? pr?.checks;
+  if (requiredChecksFailed(checks)) {
+    failures.push("- Required GitHub checks failed");
+  } else if (!requiredChecksGreen(checks)) {
+    failures.push("- Required GitHub checks are not green");
+  }
+  return failures;
+}
+
+/**
+ * @param {string | undefined} current
+ * @param {{ feedbackLines: string[] }} input
+ */
+export function applyCheckerFailWorkpad(current, { feedbackLines }) {
+  const base =
+    typeof current === "string" && current.includes(WORKPAD_HEADING)
+      ? current.trimEnd()
+      : WORKPAD_HEADING;
+  const lines = Array.isArray(feedbackLines) ? feedbackLines.filter(Boolean) : ["- (none)"];
+  const content = lines.length > 0 ? lines.join("\n") : "- (none)";
+  if (base.includes(REVIEW_FEEDBACK_HEADING)) {
+    return `${base.replace(/### Review feedback\n[\s\S]*?(?=\n### |\s*$)/, `${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`)}\n`;
+  }
+  return `${base}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`;
+}
+
+/**
+ * @param {{
+ *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
+ *   repo?: string,
+ *   runCommand?: Function,
+ *   runSync?: Function,
+ * }} [deps]
+ */
+export function createCheckerGh(deps = {}) {
+  const land = createLandGh(deps);
+  return {
+    viewPr: land.viewPr.bind(land),
+    merge() {
+      throw new Error("checker never merges");
+    },
+  };
+}
+
+/**
+ * @param {{
+ *   job: { issueId: string, identifier?: string },
+ *   linear: {
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
+ *   },
+ *   feedbackLines: string[],
+ *   workpadBody?: string,
+ *   existingComment?: { id?: string, body?: string },
+ *   pr?: object | null,
+ * }} input
+ */
+async function checkerFailMove(input) {
+  const { job, linear, feedbackLines, workpadBody = "", existingComment, pr = null } = input;
+  const body = applyCheckerFailWorkpad(workpadBody, { feedbackLines });
+  await linear.updateWorkpad({
+    issueId: job.issueId,
+    body,
+    commentId: existingComment?.id,
+  });
+  await linear.setStatus({ issueId: job.issueId, status: IMPLEMENTING });
+  return {
+    passed: false,
+    nextStatus: IMPLEMENTING,
+    pr,
+    feedbackLines,
+  };
+}
+
+/**
+ * @param {{
+ *   job: { issueId: string, identifier?: string },
+ *   linear: {
+ *     getIssue: (id: string) => Promise<object | null>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
+ *   },
+ *   gh: {
+ *     viewPr: (input: { number: number, repo?: string }) => Promise<object | null>,
+ *     merge?: (input?: object) => unknown,
+ *   },
+ *   now?: () => number,
+ *   sleep?: (ms: number) => Promise<unknown>,
+ *   waitTimeoutMs?: number,
+ *   waitIntervalMs?: number,
+ * }} input
+ */
+export async function completeChecker(input) {
+  const {
+    job,
+    linear,
+    gh,
+    now = () => Date.now(),
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    waitTimeoutMs = 30 * 60 * 1000,
+    waitIntervalMs = 15_000,
+  } = input;
+
+  const issue = await linear.getIssue(job.issueId);
+  if (!issue || issue.status !== IN_REVIEW) {
+    return {
+      skipped: true,
+      passed: false,
+      nextStatus: issue?.status,
+      reason: "checker wakes only from In Review",
+    };
+  }
+
+  const linked = pullRequestFromAttachments(issue.attachments);
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
+  const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  const workpadBody = existing?.body ?? "";
+
+  if (!linked) {
+    return checkerFailMove({
+      job,
+      linear,
+      workpadBody,
+      existingComment: existing,
+      feedbackLines: ["- Linked GitHub PR is required for factory checker"],
+    });
+  }
+
+  const deadline = now() + waitTimeoutMs;
+  let pr = null;
+  let timedOut = false;
+  while (true) {
+    pr = await gh.viewPr({ number: linked.number, repo: linked.repo });
+    const checks = pr?.requiredChecks ?? pr?.checks;
+    if (requiredChecksFailed(checks)) {
+      break;
+    }
+    if (pr?.mergeable === "CONFLICTING") {
+      break;
+    }
+    if (pr?.mergeable === "MERGEABLE" && requiredChecksGreen(checks)) {
+      break;
+    }
+    if (now() >= deadline) {
+      timedOut = true;
+      break;
+    }
+    await sleep(waitIntervalMs);
+  }
+
+  const piFindings = reviewFeedbackHasFindings(workpadBody);
+  const gateFailures = ghGateFailures(pr);
+  if (timedOut) {
+    gateFailures.push("- Required GitHub checks timed out before turning green");
+  }
+  const passed = !piFindings && gateFailures.length === 0;
+
+  if (passed) {
+    await linear.setStatus({ issueId: job.issueId, status: READY_FOR_MERGE });
+    return { passed: true, nextStatus: READY_FOR_MERGE, pr };
+  }
+
+  const feedbackLines = [];
+  if (piFindings) {
+    const section = reviewFeedbackSection(workpadBody);
+    if (section.length === 0) {
+      feedbackLines.push("- Review feedback must include explicit `- (none)` on pass");
+    } else {
+      feedbackLines.push(
+        ...section
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean),
+      );
+    }
+  }
+  for (const line of gateFailures) {
+    if (!feedbackLines.includes(line)) {
+      feedbackLines.push(line);
+    }
+  }
+  return checkerFailMove({
+    job,
+    linear,
+    workpadBody,
+    existingComment: existing,
+    feedbackLines,
+    pr,
+  });
+}
