@@ -6,6 +6,7 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { assertWorkerEnv } from "./boot-env.mjs";
+import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
 import { createTypecheckTouched } from "./implement-exit.mjs";
 import { createSerialQueue } from "./job-queue.mjs";
@@ -71,6 +72,7 @@ export async function startWorkerServer({
       ? plannerPollMs
       : Number(env.PI_PLANNER_POLL_MS ?? DEFAULT_PLANNER_POLL_MS);
   const handler = createWorkerHandler({
+    env,
     secret: env.LINEAR_WEBHOOK_SECRET,
     sessionSecret: env.LINEAR_PI_WEBHOOK_SECRET,
     now,
@@ -78,7 +80,7 @@ export async function startWorkerServer({
     gh: { tokenName: "GH_TOKEN" },
     enqueue: queue,
     session: createLinearSessionAdapter({ linear: linearClient }),
-    allowedDelegates: ["Pi"],
+    delegateGateConfig: createDelegateGateConfig(env),
   });
   const server = createServer(handler);
   let stopPoller = () => {};

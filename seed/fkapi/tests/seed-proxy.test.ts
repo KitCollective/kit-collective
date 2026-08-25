@@ -1,14 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { fetchMock, ProxyAgentMock } = vi.hoisted(() => ({
-  fetchMock: vi.fn(),
-  ProxyAgentMock: vi.fn(),
-}));
-
-vi.mock("undici", () => ({
-  fetch: fetchMock,
-  ProxyAgent: ProxyAgentMock,
-}));
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createFkApiFetchAdapter } from "../src/fetch.js";
 import {
@@ -21,15 +11,15 @@ import type { ObjectStoreAdapter } from "../src/types.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
-beforeEach(() => {
-  fetchMock.mockReset();
-  ProxyAgentMock.mockReset();
-  ProxyAgentMock.mockImplementation(() => ({ kind: "proxy-agent" }));
-});
-
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
+
+function createProxyDoubles() {
+  const fetchMock = vi.fn();
+  const createProxyAgent = vi.fn(() => ({ kind: "proxy-agent" }));
+  return { fetchMock, createProxyAgent };
+}
 
 describe("resolveSeedProxyConfig", () => {
   it("returns no proxy by default", () => {
@@ -68,18 +58,23 @@ describe("assertSeedProxyAvailable", () => {
 
 describe("createSeedHttpFetch", () => {
   it("routes GETs through the configured proxy agent", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ kits: [] }),
     });
 
-    const httpFetch = createSeedHttpFetch({
-      proxyUrl: "http://proxy.example:8080",
-      requireProxy: true,
-    });
+    const httpFetch = createSeedHttpFetch(
+      {
+        proxyUrl: "http://proxy.example:8080",
+        requireProxy: true,
+      },
+      fetchMock,
+      createProxyAgent,
+    );
     await httpFetch("https://fkapi.example.invalid/kits");
 
-    expect(ProxyAgentMock).toHaveBeenCalledWith("http://proxy.example:8080");
+    expect(createProxyAgent).toHaveBeenCalledWith("http://proxy.example:8080");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://fkapi.example.invalid/kits",
       expect.objectContaining({
@@ -91,6 +86,7 @@ describe("createSeedHttpFetch", () => {
 
 describe("createFkApiFetchAdapter", () => {
   it("downloads imageUrl bytes when listings omit inline imageBytes", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
     fetchMock
       .mockResolvedValueOnce({
         ok: true,
@@ -114,7 +110,7 @@ describe("createFkApiFetchAdapter", () => {
 
     const adapter = createFkApiFetchAdapter({
       baseUrl: "https://fkapi.example.invalid",
-      httpFetch: createSeedHttpFetch({ requireProxy: false }),
+      httpFetch: createSeedHttpFetch({ requireProxy: false }, fetchMock, createProxyAgent),
     });
 
     const kits = await adapter.fetchKits({
@@ -124,8 +120,9 @@ describe("createFkApiFetchAdapter", () => {
     });
 
     expect(kits).toHaveLength(1);
-    expect(kits[0]!.imageBytes).toEqual(Uint8Array.from([255, 216, 255]));
+    expect(kits[0]?.imageBytes).toEqual(Uint8Array.from([255, 216, 255]));
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(createProxyAgent).not.toHaveBeenCalled();
   });
 });
 
