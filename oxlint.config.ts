@@ -23,9 +23,6 @@ export default defineConfig({
     // payloads that normalizeRawKit and normalize() exist to parse. Ratchet to error
     // once those adapters parse through a schema.
     "anti-slop/no-unsafe-dictionary-type": "warn",
-    // Warn only: seed-proxy.test.ts mocks undici because proxy-config.ts imports
-    // fetch and ProxyAgent at module scope. Ratchet to error once proxy-config
-    // takes those as an injected seam.
-    "anti-slop/no-module-mocking": "warn",
+    "anti-slop/no-module-mocking": "error",
   },
 });

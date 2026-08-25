@@ -78,17 +78,13 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 `pnpm lint:anti-slop`. `typecheck` runs each package's `tsconfig.test.json`, so test
 files are typechecked too. Tighten only.
 
-Three rules are deliberately at warn, not error, and are the ratchet targets:
+Two rules are deliberately at warn, not error, and are the ratchet targets:
 
 - `lint/style/noNonNullAssertion` (Biome) — the existing `!` sites are mostly
   `const [row] = await …returning()`. Ratchet to error once those reads carry a guard.
 - `anti-slop/no-unsafe-dictionary-type` — the remaining sites are the raw Transfermarkt
   and Football Kit Archive payloads that `normalize()` and `normalizeRawKit` exist to
   parse. Ratchet to error once those adapters parse through a schema.
-- `anti-slop/no-module-mocking` — `seed/apify/tests/seed-proxy.test.ts` mocks `undici`
-  because `seed/apify/src/proxy-config.ts` imports `fetch` and `ProxyAgent` at module
-  scope, leaving the test no seam to inject. Ratchet to error once `proxy-config` takes
-  those as an injected dependency.
 
 `tools/oxlint/anti-slop/README.md` records which upstream rules we left out and why.
 
