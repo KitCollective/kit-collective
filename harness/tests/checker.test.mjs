@@ -200,7 +200,10 @@ test("status change to In Review enqueues factory-checker and no ADW file", asyn
 });
 
 test("reviewFeedbackHasFindings treats - (none) as pass and bullets as fail", () => {
-  assert.equal(reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`), false);
+  assert.equal(
+    reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
+    false,
+  );
   assert.equal(
     reviewFeedbackHasFindings(
       `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: missing AC\n- Standards: lint\n`,
@@ -291,10 +294,7 @@ test("CONFLICTING mergeable fails to Implementing", async () => {
 
   assert.equal(result.passed, false);
   assert.equal(result.nextStatus, IMPLEMENTING);
-  assert.match(
-    linear.calls.find((call) => call[0] === "updateWorkpad")[1].body,
-    /not MERGEABLE/,
-  );
+  assert.match(linear.calls.find((call) => call[0] === "updateWorkpad")[1].body, /not MERGEABLE/);
 });
 
 test("pending required checks timeout without moving status", async () => {
