@@ -19,10 +19,73 @@ const GREEN_CONCLUSIONS = new Set([
   "success",
   "skipped",
   "neutral",
+  "pass",
   "SUCCESS",
   "SKIPPED",
   "NEUTRAL",
+  "PASS",
 ]);
+
+const FAILED_CONCLUSIONS = new Set([
+  "failure",
+  "cancelled",
+  "canceled",
+  "timed_out",
+  "fail",
+  "FAILURE",
+  "CANCELLED",
+  "CANCELED",
+  "TIMED_OUT",
+  "FAIL",
+]);
+
+const PENDING_STATUSES = new Set(["IN_PROGRESS", "QUEUED", "PENDING", "pending"]);
+
+/**
+ * @param {Array<{ isRequired?: boolean }> | undefined} checks
+ */
+export function selectRequiredChecks(checks) {
+  if (!Array.isArray(checks)) {
+    return [];
+  }
+  const explicit = checks.filter((check) => check.isRequired === true);
+  if (explicit.length > 0) {
+    return explicit;
+  }
+  if (checks.length > 0 && checks.every((check) => check.isRequired === false)) {
+    return [];
+  }
+  return checks.filter((check) => check.isRequired !== false);
+}
+
+/**
+ * @param {Array<{ conclusion?: string, status?: string, isRequired?: boolean, state?: string }> | undefined} checks
+ */
+export function requiredChecksGreen(checks) {
+  const required = selectRequiredChecks(checks);
+  if (required.length === 0) {
+    return Array.isArray(checks);
+  }
+  for (const check of required) {
+    const status = check?.status ?? check?.state ?? "";
+    if (PENDING_STATUSES.has(status)) {
+      return false;
+    }
+    const conclusion = check?.conclusion ?? "";
+    if (!GREEN_CONCLUSIONS.has(conclusion)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * @param {Array<{ conclusion?: string, status?: string, isRequired?: boolean, state?: string }> | undefined} checks
+ */
+export function requiredChecksFailed(checks) {
+  const required = selectRequiredChecks(checks);
+  return required.some((check) => FAILED_CONCLUSIONS.has(check?.conclusion ?? check?.state ?? ""));
+}
 
 /**
  * @param {string | undefined} adwText
@@ -37,26 +100,6 @@ export function assertAdwOpensPr(adwText) {
   if (!/^never:\s*$/m.test(adwText) || !/^ {2}- merge$/m.test(adwText)) {
     throw new Error("implement ADW must never merge");
   }
-}
-
-/**
- * @param {Array<{ conclusion?: string, status?: string }> | undefined} checks
- */
-export function requiredChecksGreen(checks) {
-  if (!Array.isArray(checks) || checks.length === 0) {
-    return false;
-  }
-  for (const check of checks) {
-    const status = check?.status ?? "";
-    if (status === "IN_PROGRESS" || status === "QUEUED" || status === "PENDING") {
-      return false;
-    }
-    const conclusion = check?.conclusion ?? "";
-    if (!GREEN_CONCLUSIONS.has(conclusion)) {
-      return false;
-    }
-  }
-  return true;
 }
 
 /**
@@ -119,13 +162,29 @@ export function upsertWorkpadEvidence(current, { prUrl, identifier }) {
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
  *   runPnpmTest?: (input: { cwd: string }) => Promise<unknown>,
  *   adwText: string,
+ *   now?: () => number,
+ *   sleep?: (ms: number) => Promise<unknown>,
+ *   waitTimeoutMs?: number,
+ *   waitIntervalMs?: number,
  * }} input
  */
 export async function completeImplementAdw(input) {
-  const { job, checkout, gh, linear, typecheckTouched, runPnpmTest, adwText } = input;
+  const {
+    job,
+    checkout,
+    gh,
+    linear,
+    typecheckTouched,
+    runPnpmTest,
+    adwText,
+    now = () => Date.now(),
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    waitTimeoutMs = 30 * 60 * 1000,
+    waitIntervalMs = 15_000,
+  } = input;
   assertAdwOpensPr(adwText);
 
-  await gh.rebase({ cwd: checkout.path, onto: "origin/development" });
+  await gh.rebase({ cwd: checkout.path, onto: "origin/development", branch: checkout.branch });
   await typecheckTouched({ cwd: checkout.path });
   if (typeof runPnpmTest === "function") {
     throw new Error("full pnpm test stays on GitHub Actions, not on this worker");
@@ -140,12 +199,20 @@ export async function completeImplementAdw(input) {
       title: `${job.identifier}: implement`,
     });
   }
-  pr = (await gh.viewPr({ cwd: checkout.path })) ?? pr;
-  if (pr?.mergeable !== "MERGEABLE") {
-    throw new Error("pre-review: PR is not MERGEABLE");
-  }
-  if (!requiredChecksGreen(pr.checks)) {
-    throw new Error("pre-review: required GitHub checks are not green");
+
+  const deadline = now() + waitTimeoutMs;
+  while (true) {
+    pr = (await gh.viewPr({ cwd: checkout.path })) ?? pr;
+    if (requiredChecksFailed(pr?.checks)) {
+      throw new Error("pre-review: required GitHub checks are not green");
+    }
+    if (pr?.mergeable === "MERGEABLE" && requiredChecksGreen(pr.checks)) {
+      break;
+    }
+    if (now() >= deadline) {
+      throw new Error("pre-review: timed out waiting for required GitHub checks");
+    }
+    await sleep(waitIntervalMs);
   }
 
   const comments =

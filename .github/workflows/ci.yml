@@ -178,6 +178,12 @@ jobs:
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
 
+      - name: Check implement ADW production gh ratchet
+        run: node scripts/check-implement-adw-production-gh.mjs
+
+      - name: Test implement ADW production gh ratchet logic
+        run: node --test scripts/tests/check-implement-adw-production-gh.test.mjs
+
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs
         env:

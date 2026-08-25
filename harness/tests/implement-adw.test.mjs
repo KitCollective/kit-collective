@@ -112,7 +112,17 @@ function fakeLinear() {
   };
 }
 
-function implementRunner({ gh, linear, worktree, typecheckTouched, spawned }) {
+function implementRunner({
+  gh,
+  linear,
+  worktree,
+  typecheckTouched,
+  spawned,
+  now,
+  sleep,
+  waitTimeoutMs,
+  waitIntervalMs,
+}) {
   return createPiJobRunner({
     env: validWorkerEnv(),
     workspace: ROOT,
@@ -128,6 +138,10 @@ function implementRunner({ gh, linear, worktree, typecheckTouched, spawned }) {
       spawned.push({ command, args, options });
       return Promise.resolve({ status: 0 });
     },
+    now,
+    sleep,
+    waitTimeoutMs,
+    waitIntervalMs,
   });
 }
 
@@ -267,6 +281,11 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
   assert.deepEqual(worktree.calls, [{ identifier: "KIT-99" }]);
   assert.equal(spawned.length, 1);
   assert.equal(spawned[0].options.cwd, "/var/lib/kit-pi/worktrees/KIT-99");
+  assert.equal(spawned[0].args.includes("-a"), true);
+  assert.equal(
+    spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/implement.md")),
+    true,
+  );
   assert.equal(
     spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/factory-checker.md")),
     false,
@@ -449,6 +468,94 @@ test("typecheckTouched runs package typecheck and never pnpm test", async () => 
   );
 });
 
+test("production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending", async () => {
+  const calls = [];
+  let viewCount = 0;
+  let requiredCount = 0;
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      if (command === "gh" && args[0] === "pr" && args[1] === "view") {
+        viewCount += 1;
+        if (viewCount === 1) {
+          throw new Error("no pull request");
+        }
+        const requiredPending = viewCount === 2;
+        return JSON.stringify({
+          url: "https://github.com/KitCollective/kit-collective/pull/52",
+          mergeable: "MERGEABLE",
+          statusCheckRollup: [
+            {
+              name: "test",
+              conclusion: requiredPending ? "" : "SUCCESS",
+              status: requiredPending ? "IN_PROGRESS" : "COMPLETED",
+            },
+            {
+              name: "Cursor Bugbot",
+              conclusion: "",
+              status: "IN_PROGRESS",
+            },
+          ],
+        });
+      }
+      if (command === "gh" && args[0] === "pr" && args[1] === "checks") {
+        requiredCount += 1;
+        return JSON.stringify([{ name: "test", state: requiredCount === 1 ? "pending" : "pass" }]);
+      }
+      if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+        return "https://github.com/KitCollective/kit-collective/pull/52\n";
+      }
+      return "";
+    },
+  });
+  const linear = fakeLinear();
+  const spawned = [];
+  await implementRunner({
+    gh,
+    linear,
+    spawned,
+    typecheckTouched: async () => undefined,
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  }).run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  const rebaseIdx = calls.findIndex(
+    (call) => call.command === "git" && call.args.includes("rebase"),
+  );
+  const pushAfterRebase = calls
+    .slice(rebaseIdx)
+    .find((call) => call.command === "git" && call.args.includes("push"));
+  assert.ok(pushAfterRebase, "rebase must be followed by git push");
+  assert.equal(
+    pushAfterRebase.args.some((arg) => String(arg).includes("kit-99")),
+    true,
+  );
+  const create = calls.find(
+    (call) => call.command === "gh" && call.args[0] === "pr" && call.args[1] === "create",
+  );
+  assert.ok(create);
+  assert.equal(create.args.includes("--head"), true);
+  assert.equal(create.args.includes("kit-99"), true);
+  assert.equal(create.args.includes("--base"), true);
+  assert.equal(create.args.includes("development"), true);
+  assert.equal(viewCount >= 3, true, "must poll viewPr until required checks are green");
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    true,
+  );
+  assert.equal(
+    calls.some((call) => call.command === "gh" && call.args.includes("merge")),
+    false,
+  );
+});
+
 test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and implement never calls it", async () => {
   const calls = [];
   const gh = createGhClient({
@@ -470,8 +577,13 @@ test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and
   });
   assert.equal(typeof gh.merge, "function");
   assert.throws(() => gh.merge(), /implement never merges/);
-  await gh.rebase({ cwd: "/tmp/KIT-99", onto: "origin/development" });
-  await gh.createPr({ cwd: "/tmp/KIT-99", base: "development", title: "KIT-99: implement" });
+  await gh.rebase({ cwd: "/tmp/KIT-99", onto: "origin/development", branch: "kit-99" });
+  await gh.createPr({
+    cwd: "/tmp/KIT-99",
+    base: "development",
+    head: "kit-99",
+    title: "KIT-99: implement",
+  });
   for (const call of calls) {
     assert.equal(call.args.join(" ").includes("ghp_secret_token"), false);
     assert.equal(JSON.stringify(call.args).includes("Authorization"), false);

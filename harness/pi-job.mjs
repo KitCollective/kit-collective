@@ -102,6 +102,10 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
+ *   now?: () => number,
+ *   sleep?: (ms: number) => Promise<unknown>,
+ *   waitTimeoutMs?: number,
+ *   waitIntervalMs?: number,
  * }} [deps]
  */
 export function createPiJobRunner({
@@ -112,6 +116,10 @@ export function createPiJobRunner({
   linear,
   typecheckTouched,
   spawnProcess,
+  now,
+  sleep,
+  waitTimeoutMs,
+  waitIntervalMs,
 } = {}) {
   const trees = worktree ?? createWorktreeAdapter({ env });
   const spawnJob =
@@ -185,6 +193,10 @@ export function createPiJobRunner({
           linear: linearClient,
           typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
           adwText: readFileSync(join(workspace, adwFile), "utf8"),
+          now,
+          sleep,
+          waitTimeoutMs,
+          waitIntervalMs,
         });
       }
       return job;
