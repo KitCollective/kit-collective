@@ -38,7 +38,9 @@ if (!checkerSpawn.includes("factory-checker-tools.ts")) {
   failures.push("harness/checker-spawn.mjs must load factory-checker-tools extension");
 }
 if (!checkerExit.includes("reviewFeedbackIsClean")) {
-  failures.push("harness/checker-exit.mjs must require explicit - (none) via reviewFeedbackIsClean");
+  failures.push(
+    "harness/checker-exit.mjs must require explicit - (none) via reviewFeedbackIsClean",
+  );
 }
 if (!checkerExit.includes("Linked GitHub PR is required")) {
   failures.push("harness/checker-exit.mjs must fail-move when PR is missing");

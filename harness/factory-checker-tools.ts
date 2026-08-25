@@ -10,10 +10,7 @@ import { Type } from "typebox";
 const execFileAsync = promisify(execFile);
 
 const BLOCKED_TOOLS = new Set(["write", "edit"]);
-const READONLY_SHELL = [
-  /^git\s+(rev-parse|diff|log)\b/i,
-  /^gh\s+(pr\s+(view|checks|diff)|api)\b/i,
-];
+const READONLY_SHELL = [/^git\s+(rev-parse|diff|log)\b/i, /^gh\s+(pr\s+(view|checks|diff)|api)\b/i];
 
 const COMMENT_UPDATE_MUTATION = `mutation CommentUpdate($id: String!, $body: String!) {
   commentUpdate(id: $id, input: { body: $body }) { success }
@@ -96,7 +93,8 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
       const body = params.body as string;
       const stdout = await linearApi(ISSUE_COMMENTS_QUERY, { id: issueId });
       const parsed = JSON.parse(stdout) as {
-        data?: { issue?: { comments?: { nodes?: Array<{ id?: string; body?: string }> } } } };
+        data?: { issue?: { comments?: { nodes?: Array<{ id?: string; body?: string }> } } };
+      };
       const nodes = parsed.data?.issue?.comments?.nodes ?? [];
       const existing = nodes.find(
         (node) => typeof node.body === "string" && node.body.includes(WORKPAD_HEADING),

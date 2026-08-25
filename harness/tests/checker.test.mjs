@@ -206,8 +206,14 @@ test("status change to In Review enqueues factory-checker and no ADW file", asyn
 });
 
 test("reviewFeedbackHasFindings treats - (none) as pass and bullets as fail", () => {
-  assert.equal(reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`), true);
-  assert.equal(reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`), false);
+  assert.equal(
+    reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
+    true,
+  );
+  assert.equal(
+    reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
+    false,
+  );
   assert.equal(reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n`), false);
   assert.equal(reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n`), true);
   assert.equal(reviewFeedbackIsClean(`${WORKPAD_HEADING}\n`), false);
@@ -301,10 +307,7 @@ test("CONFLICTING mergeable fails to Implementing", async () => {
 
   assert.equal(result.passed, false);
   assert.equal(result.nextStatus, IMPLEMENTING);
-  assert.match(
-    linear.calls.find((call) => call[0] === "updateWorkpad")[1].body,
-    /not MERGEABLE/,
-  );
+  assert.match(linear.calls.find((call) => call[0] === "updateWorkpad")[1].body, /not MERGEABLE/);
 });
 
 test("pending required checks timeout moves to Implementing with feedback", async () => {
@@ -344,7 +347,10 @@ test("missing linked PR moves to Implementing with feedback", async () => {
 
 test("missing Review feedback section fails even when GitHub gates are green", async () => {
   const gh = fakeGh();
-  const linear = fakeLinear(snapshot(), `${WORKPAD_HEADING}\n\n### Evidence\n\n- no feedback section\n`);
+  const linear = fakeLinear(
+    snapshot(),
+    `${WORKPAD_HEADING}\n\n### Evidence\n\n- no feedback section\n`,
+  );
   const result = await completeChecker({
     job: { issueId: ISSUE_ID, identifier: "KIT-56" },
     linear,
