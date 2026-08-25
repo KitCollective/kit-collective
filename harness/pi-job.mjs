@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
@@ -97,6 +98,9 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   workspace?: string,
  *   worktree?: { checkout: (input: { identifier: string }) => Promise<{ path: string, branch: string, lane: string }> },
+ *   gh?: object,
+ *   linear?: object,
+ *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
  * }} [deps]
  */
@@ -104,6 +108,9 @@ export function createPiJobRunner({
   env = process.env,
   workspace = resolvePiWorkspace(env),
   worktree,
+  gh,
+  linear,
+  typecheckTouched,
   spawnProcess,
 } = {}) {
   const trees = worktree ?? createWorktreeAdapter({ env });
@@ -131,8 +138,9 @@ export function createPiJobRunner({
       }
       const identifier = job.identifier ?? job.issueId ?? "unknown";
       let cwd = workspace;
+      let checkout;
       if (job.role === "implement") {
-        const checkout = await trees.checkout({ identifier });
+        checkout = await trees.checkout({ identifier });
         cwd = checkout.path;
       }
       const prompt = implementPrompt(job.role, identifier, job.adwFile);
@@ -159,6 +167,25 @@ export function createPiJobRunner({
       );
       if (result.status !== 0) {
         throw new Error(`pi exited ${result.status} for ${identifier}`);
+      }
+      if (job.role === "implement") {
+        const adwFile = job.adwFile;
+        if (typeof adwFile !== "string") {
+          throw new Error("implement requires an ADW file");
+        }
+        const ghClient = gh ?? job.gh;
+        const linearClient = linear ?? job.linear;
+        if (!ghClient || !linearClient) {
+          throw new Error("implement requires gh and Linear adapters");
+        }
+        await completeImplementAdw({
+          job: { ...job, identifier, issueId: job.issueId ?? identifier },
+          checkout,
+          gh: ghClient,
+          linear: linearClient,
+          typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
+          adwText: readFileSync(join(workspace, adwFile), "utf8"),
+        });
       }
       return job;
     },

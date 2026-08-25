@@ -338,6 +338,35 @@ test("Pi job runner starts one non-interactive Pi process with the role file", a
         return { path: "/var/lib/kit-pi/worktrees/KIT-99", branch: "kit-99", lane: "development" };
       },
     },
+    gh: {
+      calls: [],
+      async rebase() {},
+      async viewPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/1",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+      async createPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/1",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+      merge() {
+        throw new Error("implement never merges");
+      },
+    },
+    linear: {
+      async listComments() {
+        return [{ id: "c1", body: "## Agent Workpad\n" }];
+      },
+      async updateWorkpad() {},
+      async setStatus() {},
+    },
+    typecheckTouched: async () => undefined,
     spawnProcess(command, args, options) {
       spawned.push({ command, args, options });
       return Promise.resolve({ status: 0 });

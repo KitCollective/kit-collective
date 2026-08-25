@@ -19,6 +19,38 @@ export const IMPLEMENT_LANE = "development";
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
 
 /**
+ * Git child env: token stays in env (`GIT_CONFIG_*`), never in argv.
+ *
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ */
+export function remoteGitChildEnv(env = {}) {
+  const child = { ...env };
+  const configs = [["safe.directory", "*"]];
+  const token = env.GH_TOKEN;
+  if (typeof token === "string" && token.length > 0) {
+    configs.push(["http.extraHeader", `Authorization: Bearer ${token}`]);
+  }
+  child.GIT_CONFIG_COUNT = String(configs.length);
+  configs.forEach(([key, value], index) => {
+    child[`GIT_CONFIG_KEY_${index}`] = key;
+    child[`GIT_CONFIG_VALUE_${index}`] = value;
+  });
+  return child;
+}
+
+/**
+ * @param {string[]} args
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ */
+export function gitArgvContainsSecret(args, env) {
+  const token = env.GH_TOKEN;
+  if (typeof token !== "string" || token.length === 0) {
+    return false;
+  }
+  return args.some((arg) => String(arg).includes(token));
+}
+
+/**
  * @param {string} identifier
  * @returns {string}
  */
@@ -55,6 +87,7 @@ function assertIdentifier(identifier) {
  *   existsSync?: (path: string) => boolean,
  *   mkdirSync?: (path: string, options?: { recursive?: boolean }) => void,
  *   runGit?: (args: string[], options?: { env?: NodeJS.ProcessEnv }) => Promise<{ stdout?: string, status?: number | null }>,
+ *   execFileImpl?: (command: string, args: string[], options: object) => Promise<{ stdout: string }>,
  * }} [deps]
  */
 export function createWorktreeAdapter({
@@ -66,19 +99,19 @@ export function createWorktreeAdapter({
   existsSync = fsExistsSync,
   mkdirSync = fsMkdirSync,
   runGit,
+  execFileImpl,
 } = {}) {
+  const execGit = execFileImpl ?? execFile;
   const git =
     runGit ??
     (async (args, options = {}) => {
-      const token = env.GH_TOKEN;
-      const gitArgs =
-        typeof token === "string" && token.length > 0
-          ? ["-c", `http.extraHeader=Authorization: Bearer ${token}`, ...args]
-          : args;
-      const { stdout } = await execFile("git", gitArgs, {
+      if (gitArgvContainsSecret(args, env)) {
+        throw new Error("git argv must not contain GH_TOKEN");
+      }
+      const { stdout } = await execGit("git", args, {
         encoding: "utf8",
         timeout: 120_000,
-        env: { ...process.env, ...env, ...options.env },
+        env: remoteGitChildEnv({ ...process.env, ...env, ...options.env }),
       });
       return { stdout, status: 0 };
     });
@@ -93,7 +126,6 @@ export function createWorktreeAdapter({
       const path = worktreePath(identifier, worktreesDir);
       const branch = worktreeBranch(identifier);
       mkdirSync(worktreesDir, { recursive: true });
-      await git(["config", "--global", "--add", "safe.directory", mirrorDir]);
 
       if (!existsSync(mirrorDir)) {
         await git(["clone", "--bare", remoteUrl, mirrorDir]);

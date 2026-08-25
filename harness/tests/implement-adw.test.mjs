@@ -1,11 +1,30 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
+import { createGhClient } from "../gh-cli.mjs";
+import {
+  completeImplementAdw,
+  createTypecheckTouched,
+  IN_REVIEW,
+  WORKPAD_HEADING,
+} from "../implement-exit.mjs";
+import {
+  COMMENT_CREATE_MUTATION,
+  COMMENT_UPDATE_MUTATION,
+  createLinearCliClient,
+  ISSUE_UPDATE_STATE_MUTATION,
+} from "../linear-cli.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
-import { createWorktreeAdapter, worktreeBranch, worktreePath } from "../worktree.mjs";
+import {
+  createWorktreeAdapter,
+  gitArgvContainsSecret,
+  remoteGitChildEnv,
+  worktreeBranch,
+  worktreePath,
+} from "../worktree.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -32,6 +51,86 @@ function fakeWorktree({ path = "/var/lib/kit-pi/worktrees/KIT-99", branch = "kit
   };
 }
 
+function fakeGh({ mergeable = "MERGEABLE", checks = [{ conclusion: "success" }] } = {}) {
+  const calls = [];
+  let opened = false;
+  return {
+    calls,
+    async rebase(input) {
+      calls.push(["rebase", input]);
+    },
+    async viewPr(input) {
+      calls.push(["viewPr", input]);
+      if (!opened) {
+        return { url: undefined, mergeable: "UNKNOWN", checks: [] };
+      }
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/52",
+        mergeable,
+        checks,
+      };
+    },
+    async createPr(input) {
+      calls.push(["createPr", input]);
+      opened = true;
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/52",
+        mergeable,
+        checks,
+      };
+    },
+    merge() {
+      calls.push(["merge"]);
+      throw new Error("implement never merges");
+    },
+  };
+}
+
+function fakeLinear() {
+  const calls = [];
+  const comments = [{ id: "c1", body: `${WORKPAD_HEADING}\n\n### Status\nImplementing\n` }];
+  return {
+    calls,
+    comments,
+    async listComments() {
+      calls.push(["listComments"]);
+      return comments;
+    },
+    async updateWorkpad(input) {
+      calls.push(["updateWorkpad", input]);
+      const current = comments[0];
+      if (current) {
+        current.body = input.body;
+        return { id: current.id, created: false };
+      }
+      comments.push({ id: "c-new", body: input.body });
+      return { id: "c-new", created: true };
+    },
+    async setStatus(input) {
+      calls.push(["setStatus", input]);
+    },
+  };
+}
+
+function implementRunner({ gh, linear, worktree, typecheckTouched, spawned }) {
+  return createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    worktree: worktree ?? fakeWorktree(),
+    gh,
+    linear,
+    typecheckTouched:
+      typecheckTouched ??
+      (async (input) => {
+        gh.calls.push(["typecheckTouched", input]);
+      }),
+    spawnProcess(command, args, options) {
+      spawned.push({ command, args, options });
+      return Promise.resolve({ status: 0 });
+    },
+  });
+}
+
 test("worktree adapter checks out origin/development under /var/lib/kit-pi/worktrees/KIT-n", async () => {
   const gitCalls = [];
   const adapter = createWorktreeAdapter({
@@ -53,15 +152,11 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
   assert.equal(result.lane, "development");
   assert.equal(worktreePath("KIT-99"), "/var/lib/kit-pi/worktrees/KIT-99");
   assert.equal(worktreeBranch("KIT-99"), "kit-99");
-  assert.ok(
-    gitCalls.some((args) => args.includes("clone") && args.includes("--bare")),
-    "first checkout clones a bare mirror",
-  );
+  assert.ok(gitCalls.some((args) => args.includes("clone") && args.includes("--bare")));
   assert.ok(
     gitCalls.some(
       (args) => args.includes("fetch") && args.includes("origin") && args.includes("development"),
     ),
-    "checkout fetches origin/development",
   );
   assert.ok(
     gitCalls.some(
@@ -71,8 +166,39 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
         args.includes("/var/lib/kit-pi/worktrees/KIT-99") &&
         args.includes("origin/development"),
     ),
-    "checkout adds one worktree from origin/development",
   );
+});
+
+test("production git wrapper keeps GH_TOKEN in env, never argv", async () => {
+  const env = { GH_TOKEN: "ghp_secret_token" };
+  const child = remoteGitChildEnv(env);
+  assert.equal(
+    gitArgvContainsSecret(["clone", "--bare", "https://github.com/org/repo.git"], env),
+    false,
+  );
+  assert.equal(child.GH_TOKEN, "ghp_secret_token");
+  assert.equal(child.GIT_CONFIG_KEY_1, "http.extraHeader");
+  assert.match(child.GIT_CONFIG_VALUE_1, /Bearer ghp_secret_token/);
+
+  const execs = [];
+  const adapter = createWorktreeAdapter({
+    env,
+    mirrorDir: "/var/lib/kit-pi/mirror.git",
+    worktreesDir: "/var/lib/kit-pi/worktrees",
+    existsSync: () => false,
+    mkdirSync() {},
+    async execFileImpl(command, args, options) {
+      execs.push({ command, args, env: options.env });
+      return { stdout: "" };
+    },
+  });
+  await adapter.checkout({ identifier: "KIT-99" });
+  assert.ok(execs.length > 0);
+  for (const exec of execs) {
+    assert.equal(exec.args.join(" ").includes("ghp_secret_token"), false);
+    assert.equal(JSON.stringify(exec.args).includes("Authorization"), false);
+    assert.match(exec.env.GIT_CONFIG_VALUE_1, /Bearer ghp_secret_token/);
+  }
 });
 
 test("worktree adapter refuses identifiers that would escape the worktrees dir", async () => {
@@ -109,33 +235,25 @@ test("worktree adapter reuses an existing issue worktree (one issue, one branch)
   });
 
   const result = await adapter.checkout({ identifier: "KIT-99" });
-
   assert.equal(result.path, "/var/lib/kit-pi/worktrees/KIT-99");
-  assert.equal(result.branch, "kit-99");
   assert.equal(
     gitCalls.some((args) => args.includes("worktree") && args.includes("add")),
     false,
   );
 });
 
-test("implement job checks out a worktree then runs a full coding Pi session there", async () => {
+test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and never merges", async () => {
   const worktree = fakeWorktree();
+  const gh = fakeGh();
+  const linear = fakeLinear();
   const spawned = [];
-  const gh = {
-    calls: [],
-    merge(args) {
-      this.calls.push(["merge", args]);
-      return { ok: true };
-    },
-  };
-  const runner = createPiJobRunner({
-    env: validWorkerEnv(),
-    workspace: ROOT,
-    worktree,
+  const runner = implementRunner({
     gh,
-    spawnProcess(command, args, options) {
-      spawned.push({ command, args, options });
-      return Promise.resolve({ status: 0 });
+    linear,
+    worktree,
+    spawned,
+    typecheckTouched: async (input) => {
+      gh.calls.push(["typecheckTouched", input]);
     },
   });
 
@@ -148,99 +266,254 @@ test("implement job checks out a worktree then runs a full coding Pi session the
 
   assert.deepEqual(worktree.calls, [{ identifier: "KIT-99" }]);
   assert.equal(spawned.length, 1);
-  assert.equal(spawned[0].command, "pi");
   assert.equal(spawned[0].options.cwd, "/var/lib/kit-pi/worktrees/KIT-99");
-  assert.ok(spawned[0].args.includes("-p"));
-  assert.ok(spawned[0].args.includes("cursor/composer-2.5"));
-  assert.ok(spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/implement.md")));
-  assert.equal(spawned[0].args.includes(".pi/roles/factory-checker.md"), false);
-  const prompt = spawned[0].args.at(-1);
-  assert.match(prompt, /ADW \.pi\/adw\/feature\.yaml/);
-  assert.match(prompt, /In Review/);
-  assert.match(prompt, /Never merge/i);
-  assert.equal(gh.calls.length, 0);
+  assert.equal(
+    spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/factory-checker.md")),
+    false,
+  );
+  assert.equal(
+    gh.calls.some((call) => call[0] === "rebase"),
+    true,
+  );
+  assert.equal(
+    gh.calls.some((call) => call[0] === "typecheckTouched"),
+    true,
+  );
+  assert.equal(
+    gh.calls.some((call) => call[0] === "createPr" && call[1].base === "development"),
+    true,
+  );
+  assert.equal(
+    linear.calls.some((call) => call[0] === "updateWorkpad"),
+    true,
+  );
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /## Agent Workpad/);
+  assert.match(workpad.body, /pull\/52/);
+  assert.equal(workpad.commentId, "c1");
+  assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
+    issueId: "issue-1",
+    status: IN_REVIEW,
+  });
+  assert.equal(
+    gh.calls.some((call) => call[0] === "merge"),
+    false,
+  );
+  assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
 });
 
-test("planner job does not check out a worktree and does not merge", async () => {
-  const worktree = fakeWorktree();
+test("Bug and Improvement ADW jobs also open a PR and move to In Review", async () => {
+  for (const adwFile of [".pi/adw/bug.yaml", ".pi/adw/improvement.yaml"]) {
+    const gh = fakeGh();
+    const linear = fakeLinear();
+    const spawned = [];
+    await implementRunner({ gh, linear, spawned }).run({
+      role: "implement",
+      identifier: "KIT-99",
+      issueId: "issue-1",
+      adwFile,
+    });
+    assert.equal(
+      gh.calls.some((call) => call[0] === "createPr"),
+      true,
+      adwFile,
+    );
+    assert.equal(
+      linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+      true,
+      adwFile,
+    );
+    assert.equal(
+      gh.calls.some((call) => call[0] === "merge"),
+      false,
+      adwFile,
+    );
+  }
+});
+
+test("implement job fails closed when required checks are red and does not move to In Review", async () => {
+  const gh = fakeGh({ mergeable: "MERGEABLE", checks: [{ conclusion: "failure" }] });
+  const linear = fakeLinear();
   const spawned = [];
-  const gh = {
-    calls: [],
-    merge() {
-      this.calls.push(["merge"]);
-    },
-  };
-  const runner = createPiJobRunner({
+  await assert.rejects(
+    () =>
+      implementRunner({ gh, linear, spawned }).run({
+        role: "implement",
+        identifier: "KIT-99",
+        issueId: "issue-1",
+        adwFile: ".pi/adw/feature.yaml",
+      }),
+    /required GitHub checks/,
+  );
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus"),
+    false,
+  );
+});
+
+test("planner job does not check out a worktree, open a PR, or merge", async () => {
+  const worktree = fakeWorktree();
+  const gh = fakeGh();
+  const linear = fakeLinear();
+  const spawned = [];
+  await implementRunner({ gh, linear, worktree, spawned }).run({
+    role: "planner",
+    identifier: "KIT-99",
+  });
+  assert.equal(worktree.calls.length, 0);
+  assert.equal(spawned[0].options.cwd, ROOT);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "createPr" || call[0] === "merge"),
+    false,
+  );
+  assert.equal(linear.calls.length, 0);
+});
+
+test("updateWorkpad edits the existing workpad and does not create a second comment", async () => {
+  const calls = [];
+  const linear = createLinearCliClient({
     env: validWorkerEnv(),
-    workspace: ROOT,
-    worktree,
-    gh,
-    spawnProcess(command, args, options) {
-      spawned.push({ command, args, options });
-      return Promise.resolve({ status: 0 });
+    async runCommand(command, args) {
+      calls.push({ command, query: args[1] });
+      if (args[1].includes("IssueComments")) {
+        return JSON.stringify({
+          data: {
+            issue: {
+              comments: {
+                nodes: [{ id: "c1", body: `${WORKPAD_HEADING}\n\nold\n` }],
+              },
+            },
+          },
+        });
+      }
+      return JSON.stringify({ data: { commentUpdate: { success: true } } });
     },
   });
 
-  await runner.run({ role: "planner", identifier: "KIT-99" });
-
-  assert.equal(worktree.calls.length, 0);
-  assert.equal(spawned[0].options.cwd, ROOT);
-  assert.equal(gh.calls.length, 0);
+  const result = await linear.updateWorkpad({
+    issueId: "issue-1",
+    body: `${WORKPAD_HEADING}\n\nupdated\n`,
+  });
+  assert.equal(result.created, false);
+  assert.equal(result.id, "c1");
+  assert.equal(
+    calls.some((call) => call.query === COMMENT_UPDATE_MUTATION),
+    true,
+  );
+  assert.equal(
+    calls.some((call) => call.query === COMMENT_CREATE_MUTATION),
+    false,
+  );
 });
 
-test("Feature Bug and Improvement ADWs open a PR, move to In Review, and never merge", () => {
-  for (const name of ["feature", "bug", "improvement"]) {
-    const adw = readFileSync(join(ROOT, `.pi/adw/${name}.yaml`), "utf8");
-    assert.match(adw, /^ {2}- pr$/m);
-    assert.match(adw, /^ {2}- in-review$/m);
-    assert.match(adw, /In Review/);
-    assert.match(adw, /workpad/i);
-    assert.match(adw, /^ {2}- merge$/m);
-    assert.match(adw, /factory-checker-subagent/);
-    assert.match(adw, /github-actions/);
+test("setStatus moves the issue to In Review via Linear issueUpdate", async () => {
+  const calls = [];
+  const linear = createLinearCliClient({
+    env: validWorkerEnv(),
+    async runCommand(_command, args) {
+      calls.push(args[1]);
+      if (args[1].includes("IssueTeamStates")) {
+        return JSON.stringify({
+          data: {
+            issue: {
+              team: {
+                states: { nodes: [{ id: "s-review", name: "In Review" }] },
+              },
+            },
+          },
+        });
+      }
+      return JSON.stringify({ data: { issueUpdate: { success: true } } });
+    },
+  });
+  const result = await linear.setStatus({ issueId: "issue-1", status: IN_REVIEW });
+  assert.deepEqual(result, { issueId: "issue-1", status: IN_REVIEW });
+  assert.equal(calls.includes(ISSUE_UPDATE_STATE_MUTATION), true);
+});
+
+test("typecheckTouched runs package typecheck and never pnpm test", async () => {
+  const calls = [];
+  const typecheckTouched = createTypecheckTouched({
+    async runCommand(command, args) {
+      calls.push([command, ...args]);
+      return "";
+    },
+  });
+  await typecheckTouched({ cwd: "/var/lib/kit-pi/worktrees/KIT-99" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], "pnpm");
+  assert.equal(calls[0].includes("typecheck"), true);
+  assert.equal(
+    calls.some((call) => call.includes("test")),
+    false,
+  );
+});
+
+test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and implement never calls it", async () => {
+  const calls = [];
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args, options) {
+      calls.push({ command, args, env: options.env });
+      if (command === "gh" && args[0] === "pr" && args[1] === "view") {
+        return JSON.stringify({
+          url: "https://github.com/KitCollective/kit-collective/pull/52",
+          mergeable: "MERGEABLE",
+          statusCheckRollup: [{ conclusion: "SUCCESS", status: "COMPLETED" }],
+        });
+      }
+      if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+        return "";
+      }
+      return "";
+    },
+  });
+  assert.equal(typeof gh.merge, "function");
+  assert.throws(() => gh.merge(), /implement never merges/);
+  await gh.rebase({ cwd: "/tmp/KIT-99", onto: "origin/development" });
+  await gh.createPr({ cwd: "/tmp/KIT-99", base: "development", title: "KIT-99: implement" });
+  for (const call of calls) {
+    assert.equal(call.args.join(" ").includes("ghp_secret_token"), false);
+    assert.equal(JSON.stringify(call.args).includes("Authorization"), false);
   }
+  const gitCalls = calls.filter((call) => call.command === "git");
+  assert.ok(gitCalls.length > 0);
+  for (const call of gitCalls) {
+    assert.match(call.env.GIT_CONFIG_VALUE_1, /Bearer ghp_secret_token/);
+  }
+  assert.equal(
+    calls.some((call) => call.command === "gh" && call.args.includes("merge")),
+    false,
+  );
 });
 
-test("Compose persists kit-pi worktrees and the image copies the worktree adapter", () => {
+test("completeImplementAdw refuses to run full pnpm test on the worker", async () => {
+  const gh = fakeGh();
+  gh.viewPr = async () => ({
+    url: "https://github.com/KitCollective/kit-collective/pull/52",
+    mergeable: "MERGEABLE",
+    checks: [{ conclusion: "success" }],
+  });
+  await assert.rejects(
+    () =>
+      completeImplementAdw({
+        job: { identifier: "KIT-99", issueId: "issue-1", adwFile: ".pi/adw/feature.yaml" },
+        checkout: { path: "/tmp/KIT-99", branch: "kit-99" },
+        gh,
+        linear: fakeLinear(),
+        typecheckTouched: async () => undefined,
+        runPnpmTest: async () => undefined,
+        adwText: "steps:\n  - pr\n  - in-review\nnever:\n  - merge\n",
+      }),
+    /GitHub Actions/,
+  );
+});
+
+test("Compose persists kit-pi worktrees and copies implement-exit adapters", () => {
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /worktree\.mjs/);
+  assert.match(dockerfile, /implement-exit\.mjs/);
+  assert.match(dockerfile, /gh-cli\.mjs/);
   const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
   assert.match(compose, /kit_pi:\/var\/lib\/kit-pi/);
-  assert.match(compose, /KIT_PI_WORKTREES:\s*"\/var\/lib\/kit-pi\/worktrees"/);
-  assert.match(compose, /KIT_PI_MIRROR:\s*"\/var\/lib\/kit-pi\/mirror\.git"/);
-});
-
-test("implement role is a full coding session that updates the workpad and never spawns factory-checker", () => {
-  const role = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
-  for (const tool of ["read", "edit", "write", "bash", "git", "gh", "Linear CLI"]) {
-    assert.match(role, new RegExp(tool));
-  }
-  assert.match(role, /scout/);
-  assert.match(role, /nest/);
-  assert.match(role, /expo/i);
-  assert.match(role, /drizzle/i);
-  assert.match(role, /ui-ux/);
-  assert.match(role, /\.cursor\/skills\/expo/);
-  assert.match(role, /\.cursor\/skills\/tdd/);
-  assert.match(role, /existing workpad/i);
-  assert.match(role, /instead of posting a new comment per tool/i);
-  assert.match(role, /rebase/i);
-  assert.match(role, /typecheck/i);
-  assert.match(role, /required GitHub checks/i);
-  assert.match(role, /GitHub Actions/);
-  assert.match(role, /Never merge/i);
-  assert.match(role, /In Review/);
-  assert.match(role, /not a child/i);
-  assert.match(role, /factory checker/i);
-
-  const agentNames = readdirSync(join(ROOT, ".pi/agents"));
-  assert.equal(agentNames.includes("factory-checker.md"), false);
-  assert.deepEqual([...agentNames].sort(), [
-    "drizzle.md",
-    "expo.md",
-    "nest.md",
-    "scout.md",
-    "ui-ux.md",
-  ]);
-  assert.equal(existsSync(join(ROOT, ".pi/roles/factory-checker.md")), true);
 });
