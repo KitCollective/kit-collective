@@ -9,10 +9,10 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { createDelegateGateConfig, delegateGate } from "./delegate-gate.mjs";
 
 const HMAC_REJECT = "invalid hmac";
 const REPLAY_WINDOW_MS = 60_000;
-const DEFAULT_ALLOWED_DELEGATES = ["Pi"];
 const READY_FOR_AGENT = "ready-for-agent";
 const SIGNAL_UP = "signal-up";
 
@@ -79,22 +79,6 @@ function hasUnresolvedBlocker(blockedBy) {
 }
 
 /**
- * @param {string | undefined} name
- * @param {string[]} allowedDelegates
- * @returns {"none" | "pi" | "blocked"}
- */
-function delegateGate(name, allowedDelegates) {
-  if (typeof name !== "string" || name.length === 0) {
-    return "none";
-  }
-  const needle = name.toLowerCase();
-  if (allowedDelegates.some((allowed) => allowed.toLowerCase() === needle)) {
-    return "pi";
-  }
-  return "blocked";
-}
-
-/**
  * @param {{ linearType?: string, labels?: string[] }} issue
  * @returns {string | undefined}
  */
@@ -114,18 +98,18 @@ function adwFileFor(issue) {
 
 /**
  * @param {object} issue
- * @param {string[]} allowedDelegates
+ * @param {{ names: string[], appUserId?: string }} delegateGateConfig
  * @returns {{ kind: "skip", reason: string } | { kind: "enqueue", role: string, adwFile?: string }}
  */
-function dispatchIssue(issue, allowedDelegates) {
+function dispatchIssue(issue, delegateGateConfig) {
   const labels = Array.isArray(issue.labels) ? issue.labels : [];
   if (labels.includes(SIGNAL_UP)) {
     return { kind: "skip", reason: "signal-up" };
   }
 
-  const delegate = delegateGate(issue.delegate?.name, allowedDelegates);
+  const delegate = delegateGate(issue.delegate, delegateGateConfig);
   if (delegate === "blocked") {
-    return { kind: "skip", reason: "delegate is not Pi" };
+    return { kind: "skip", reason: "delegate is not Pi app" };
   }
 
   switch (issue.status) {
@@ -159,14 +143,14 @@ function dispatchIssue(issue, allowedDelegates) {
 
 /**
  * @param {object} issue
- * @param {string[]} allowedDelegates
+ * @param {{ names: string[], appUserId?: string }} delegateGateConfig
  * @returns {boolean}
  */
-function isFactoryClaim(issue, allowedDelegates) {
+function isFactoryClaim(issue, delegateGateConfig) {
   if (issue?.status !== "Implementing") {
     return false;
   }
-  if (delegateGate(issue.delegate?.name, allowedDelegates) !== "pi") {
+  if (delegateGate(issue.delegate, delegateGateConfig) !== "pi") {
     return false;
   }
   return Boolean(adwFileFor(issue));
@@ -197,11 +181,11 @@ function sessionEvent(payload) {
  *   session: object,
  *   event: { action: string, sessionId?: string, issueId?: string },
  *   issue: object | null,
- *   allowedDelegates: string[],
+ *   delegateGateConfig: { names: string[], appUserId?: string },
  *   now: number,
  * }} input
  */
-async function ackSession({ session, event, issue, allowedDelegates, now }) {
+async function ackSession({ session, event, issue, delegateGateConfig, now }) {
   if (!session) {
     return;
   }
@@ -216,7 +200,7 @@ async function ackSession({ session, event, issue, allowedDelegates, now }) {
     return;
   }
   if (event.action === "created" || event.action === "create") {
-    const claimed = issue ? isFactoryClaim(issue, allowedDelegates) : false;
+    const claimed = issue ? isFactoryClaim(issue, delegateGateConfig) : false;
     if (typeof session.ackCreated === "function") {
       await session.ackCreated({
         sessionId,
@@ -245,6 +229,7 @@ async function ackSession({ session, event, issue, allowedDelegates, now }) {
  *     emitWorking?: Function,
  *     handOff?: Function,
  *   },
+ *   delegateGateConfig?: { names: string[], appUserId?: string },
  *   allowedDelegates?: string[],
  * }} input
  */
@@ -260,8 +245,14 @@ export async function routeWebhook(input) {
     gh,
     enqueue,
     session,
-    allowedDelegates = DEFAULT_ALLOWED_DELEGATES,
+    delegateGateConfig = createDelegateGateConfig(input.env),
+    allowedDelegates,
   } = input;
+  const gateConfig =
+    delegateGateConfig ??
+    (Array.isArray(allowedDelegates)
+      ? { names: allowedDelegates, appUserId: undefined }
+      : createDelegateGateConfig(input.env));
 
   const hmacSecret = hmacChannel === "session" ? sessionSecret : secret;
   if (!hmacValid(rawBody, signature, hmacSecret)) {
@@ -290,7 +281,7 @@ export async function routeWebhook(input) {
     if (typeof event.issueId === "string" && typeof linear?.getIssue === "function") {
       issue = await linear.getIssue(event.issueId);
     }
-    await ackSession({ session, event, issue, allowedDelegates, now });
+    await ackSession({ session, event, issue, delegateGateConfig: gateConfig, now });
     return { kind: "skip", reason: "AgentSession never enqueues a coding job" };
   }
 
@@ -327,7 +318,7 @@ export async function routeWebhook(input) {
     return { kind: "skip", reason: "ready for merge — human turn" };
   }
 
-  const decision = dispatchIssue(issue, allowedDelegates);
+  const decision = dispatchIssue(issue, gateConfig);
   if (decision.kind !== "enqueue") {
     return decision;
   }

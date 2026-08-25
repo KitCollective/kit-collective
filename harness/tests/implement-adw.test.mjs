@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCb } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { promisify } from "node:util";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
@@ -26,6 +30,9 @@ import {
   worktreeBranch,
   worktreePath,
 } from "../worktree.mjs";
+import { gitAuthExtraHeader } from "../linear-actor-token.mjs";
+
+const execFile = promisify(execFileCb);
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -147,7 +154,7 @@ function implementRunner({
   });
 }
 
-test("worktree adapter checks out origin/development under /var/lib/kit-pi/worktrees/KIT-n", async () => {
+test("worktree adapter checks out refs/heads/development under /var/lib/kit-pi/worktrees/KIT-n", async () => {
   const gitCalls = [];
   const adapter = createWorktreeAdapter({
     mirrorDir: "/var/lib/kit-pi/mirror.git",
@@ -171,7 +178,10 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
   assert.ok(gitCalls.some((args) => args.includes("clone") && args.includes("--bare")));
   assert.ok(
     gitCalls.some(
-      (args) => args.includes("fetch") && args.includes("origin") && args.includes("development"),
+      (args) =>
+        args.includes("fetch") &&
+        args.includes("origin") &&
+        args.includes("development:refs/heads/development"),
     ),
   );
   assert.ok(
@@ -180,12 +190,12 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
         args.includes("worktree") &&
         args.includes("add") &&
         args.includes("/var/lib/kit-pi/worktrees/KIT-99") &&
-        args.includes("origin/development"),
+        args.includes("refs/heads/development"),
     ),
   );
 });
 
-test("production git wrapper keeps GH_TOKEN in env, never argv", async () => {
+test("production git wrapper keeps GH_TOKEN in env via Basic x-access-token header, never argv", async () => {
   const env = { GH_TOKEN: "ghp_secret_token" };
   const child = remoteGitChildEnv(env);
   assert.equal(
@@ -194,7 +204,8 @@ test("production git wrapper keeps GH_TOKEN in env, never argv", async () => {
   );
   assert.equal(child.GH_TOKEN, "ghp_secret_token");
   assert.equal(child.GIT_CONFIG_KEY_1, "http.extraHeader");
-  assert.match(child.GIT_CONFIG_VALUE_1, /Bearer ghp_secret_token/);
+  assert.equal(child.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("ghp_secret_token"));
+  assert.equal(child.GIT_CONFIG_VALUE_1.includes("ghp_secret_token"), false);
 
   const execs = [];
   const adapter = createWorktreeAdapter({
@@ -213,7 +224,7 @@ test("production git wrapper keeps GH_TOKEN in env, never argv", async () => {
   for (const exec of execs) {
     assert.equal(exec.args.join(" ").includes("ghp_secret_token"), false);
     assert.equal(JSON.stringify(exec.args).includes("Authorization"), false);
-    assert.match(exec.env.GIT_CONFIG_VALUE_1, /Bearer ghp_secret_token/);
+    assert.equal(exec.env.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("ghp_secret_token"));
   }
 });
 
@@ -256,6 +267,38 @@ test("worktree adapter reuses an existing issue worktree (one issue, one branch)
     gitCalls.some((args) => args.includes("worktree") && args.includes("add")),
     false,
   );
+});
+
+test("worktree add succeeds against a bare mirror that only has refs/heads/development", async () => {
+  const base = await mkdtemp(join(tmpdir(), "kit-pi-bare-"));
+  const source = join(base, "source.git");
+  const mirror = join(base, "mirror.git");
+  const worktrees = join(base, "worktrees");
+  try {
+    await execFile("git", ["init", source]);
+    await execFile("git", ["-C", source, "config", "user.email", "kit@example.com"]);
+    await execFile("git", ["-C", source, "config", "user.name", "Kit Harness"]);
+    await execFile("git", ["-C", source, "checkout", "-b", "development"]);
+    await execFile("git", ["-C", source, "commit", "--allow-empty", "-m", "seed"]);
+    await execFile("git", ["clone", "--bare", source, mirror]);
+
+    const adapter = createWorktreeAdapter({
+      mirrorDir: mirror,
+      worktreesDir: worktrees,
+      remoteUrl: source,
+      lane: "development",
+      env: {},
+      existsSync: (path) => path === mirror,
+    });
+
+    const result = await adapter.checkout({ identifier: "KIT-99" });
+    assert.equal(result.path, join(worktrees, "KIT-99"));
+    await execFile("git", ["-C", result.path, "rev-parse", "--abbrev-ref", "HEAD"], {
+      encoding: "utf8",
+    });
+  } finally {
+    await rm(base, { recursive: true, force: true });
+  }
 });
 
 test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and never merges", async () => {
@@ -715,7 +758,7 @@ test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and
   const gitCalls = calls.filter((call) => call.command === "git");
   assert.ok(gitCalls.length > 0);
   for (const call of gitCalls) {
-    assert.match(call.env.GIT_CONFIG_VALUE_1, /Bearer ghp_secret_token/);
+    assert.equal(call.env.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("ghp_secret_token"));
   }
   assert.equal(
     calls.some((call) => call.command === "gh" && call.args.includes("merge")),

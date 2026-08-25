@@ -8,6 +8,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { existsSync as fsExistsSync, mkdirSync as fsMkdirSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { gitAuthExtraHeader } from "./linear-actor-token.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -28,7 +29,7 @@ export function remoteGitChildEnv(env = {}) {
   const configs = [["safe.directory", "*"]];
   const token = env.GH_TOKEN;
   if (typeof token === "string" && token.length > 0) {
-    configs.push(["http.extraHeader", `Authorization: Bearer ${token}`]);
+    configs.push(["http.extraHeader", gitAuthExtraHeader(token)]);
   }
   child.GIT_CONFIG_COUNT = String(configs.length);
   configs.forEach(([key, value], index) => {
@@ -130,7 +131,7 @@ export function createWorktreeAdapter({
       if (!existsSync(mirrorDir)) {
         await git(["clone", "--bare", remoteUrl, mirrorDir]);
       }
-      await git(["--git-dir", mirrorDir, "fetch", "origin", lane]);
+      await git(["--git-dir", mirrorDir, "fetch", "origin", `${lane}:refs/heads/${lane}`]);
 
       if (!existsSync(path)) {
         await git([
@@ -141,7 +142,7 @@ export function createWorktreeAdapter({
           "-B",
           branch,
           path,
-          `origin/${lane}`,
+          `refs/heads/${lane}`,
         ]);
       }
 

@@ -7,11 +7,14 @@ import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import { test } from "node:test";
 import { createLinearSessionAdapter, createMemorySessionAdapter } from "../session-adapter.mjs";
+import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
 import { createHttpHandler, createMemoryAdapter, routeWebhook } from "../webhook-router.mjs";
 
 const ISSUE_SECRET = "test-linear-webhook-secret";
 const SESSION_SECRET = "test-pi-agent-session-secret";
 const NOW = 1_700_000_000_000;
+const PI_APP_USER_ID = "pi-app-user-1";
+const DELEGATE_GATE = createDelegateGateConfig({ LINEAR_PI_APP_USER_ID: PI_APP_USER_ID });
 const ISSUE_ID = "issue-kit-99";
 const SESSION_ID = "session-kit-99";
 
@@ -137,7 +140,7 @@ async function routeSession(payload, issue, extras = {}) {
     gh: fakeGh(),
     enqueue,
     session,
-    allowedDelegates: ["Pi"],
+    delegateGateConfig: DELEGATE_GATE,
   });
   return { result, linear, enqueue, session, rawBody, signature };
 }
@@ -158,7 +161,7 @@ async function routeIssue(payload, issue, extras = {}) {
     gh: fakeGh(),
     enqueue,
     session,
-    allowedDelegates: ["Pi"],
+    delegateGateConfig: DELEGATE_GATE,
   });
   return { result, linear, enqueue, session, rawBody, signature };
 }
@@ -293,6 +296,23 @@ test("Issue status webhook still enqueues implement; session webhook on the same
   assert.equal(sessionRoute.enqueue.jobs.length, 0);
 });
 
+test("implement enqueue accepts Pi Bot Agent production display name", async () => {
+  const { result, enqueue } = await routeIssue(
+    issueUpdatePayload(),
+    snapshot({
+      status: "Implementing",
+      delegate: { id: PI_APP_USER_ID, name: PI_BOT_AGENT_NAME },
+      labels: ["Bug"],
+      linearType: "Bug",
+    }),
+  );
+
+  assert.equal(result.kind, "enqueue");
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/bug.yaml");
+});
+
 test("implement enqueue emits ephemeral action and does not write the workpad", async () => {
   const { result, enqueue, session, linear } = await routeIssue(
     issueUpdatePayload(),
@@ -376,7 +396,7 @@ test("HTTP adapter uses Issue HMAC on /webhooks/linear and session HMAC on /agen
     gh: fakeGh(),
     enqueue,
     session,
-    allowedDelegates: ["Pi"],
+    delegateGateConfig: DELEGATE_GATE,
   });
   const server = createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -516,7 +536,7 @@ test("in-memory adapter matches HTTP session-channel skip for the same fixture",
     gh: fakeGh(),
     enqueue: fakeEnqueue(),
     session: createMemorySessionAdapter(),
-    allowedDelegates: ["Pi"],
+    delegateGateConfig: DELEGATE_GATE,
   };
   const memory = createMemoryAdapter(memoryDeps);
   const memoryResult = await memory.handle({
