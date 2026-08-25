@@ -49,6 +49,7 @@ function isReadonlyShell(command: string): boolean {
 }
 
 async function linearApi(query: string, variables: Record<string, unknown>): Promise<string> {
+  // biome-ignore lint/suspicious/noUndeclaredEnvVars: Pi worker injects Linear CLI secrets at spawn.
   const apiKey = process.env.LINEAR_API_KEY ?? process.env.LINEAR_CLI_API_KEY ?? "";
   const { stdout } = await execFileAsync(
     "linear",
@@ -87,6 +88,7 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
       body: Type.String({ description: "Full workpad markdown including ## Agent Workpad" }),
     }),
     async execute(_toolCallId, params) {
+      // biome-ignore lint/suspicious/noUndeclaredEnvVars: harness sets LINEAR_ISSUE_ID for factory-checker.
       const issueId = process.env.LINEAR_ISSUE_ID;
       if (typeof issueId !== "string" || issueId.length === 0) {
         throw new Error("LINEAR_ISSUE_ID is required for linear_cli");
