@@ -41,6 +41,10 @@
       {
         "command": "bash .cursor/hooks/block-seed-apify-test-on-shared-db.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-reset-database-test-on-shared-db.sh",
+        "failClosed": true
       }
     ]
   }
