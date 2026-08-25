@@ -15,6 +15,7 @@ import {
   createLandGh,
   LAND_LANES,
   pullRequestFromAttachments,
+  requiredChecksForMergeGate,
 } from "../land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "../linear-cli.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
@@ -445,6 +446,111 @@ test("production createLandGh calls gh pr merge without --force and reads the me
   for (const call of calls) {
     assert.equal(call.args.join(" ").includes("ghp_secret_token"), false);
   }
+});
+
+test("requiredChecksForMergeGate drops optional rollup entries and keeps required conclusions", () => {
+  assert.deepEqual(
+    requiredChecksForMergeGate([
+      { name: "test", conclusion: "SUCCESS", isRequired: true },
+      { name: "Cursor Bugbot", conclusion: "", isRequired: false },
+      { name: "lint", conclusion: "FAILURE", isRequired: false },
+    ]),
+    [{ name: "test", conclusion: "success" }],
+  );
+  assert.equal(requiredChecksForMergeGate([]), undefined);
+});
+
+test("production viewPr ignores optional pending or failing checks when required checks are green", async () => {
+  const gh = createLandGh({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    repo: "KitCollective/kit-collective",
+    async runCommand(_command, args) {
+      if (args[0] === "pr" && args[1] === "view") {
+        return JSON.stringify({
+          number: 57,
+          url: PR_URL,
+          mergeable: "MERGEABLE",
+          baseRefName: "development",
+          statusCheckRollup: [
+            { name: "test", conclusion: "SUCCESS", status: "COMPLETED" },
+            { name: "Cursor Bugbot", conclusion: "", status: "IN_PROGRESS" },
+            { name: "lint", conclusion: "FAILURE", status: "COMPLETED" },
+          ],
+        });
+      }
+      if (args[0] === "pr" && args[1] === "checks") {
+        return JSON.stringify([{ name: "test", state: "pass" }]);
+      }
+      return "";
+    },
+    runSync(_command, args) {
+      if (args[0] === "pr" && args[1] === "merge") {
+        return "";
+      }
+      if (args.includes("mergeCommit")) {
+        return JSON.stringify({ mergeCommit: { oid: SHA } });
+      }
+      return "";
+    },
+  });
+
+  const pr = await gh.viewPr({ number: 57 });
+  assert.deepEqual(pr.requiredChecks, [{ name: "test", conclusion: "success" }]);
+  assert.equal(
+    pr.requiredChecks.some((check) => check.name === "Cursor Bugbot" || check.name === "lint"),
+    false,
+  );
+
+  const linear = fakeLinear();
+  const result = await completeLand({
+    job: { issueId: ISSUE_ID, identifier: "KIT-57" },
+    linear,
+    gh,
+    lanes: LAND_LANES,
+  });
+  assert.equal(result.merged, true);
+  assert.equal(result.nextStatus, "Done");
+});
+
+test("production viewPr still refuses when a required check is red even if optional checks are green", async () => {
+  const gh = createLandGh({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    repo: "KitCollective/kit-collective",
+    async runCommand(_command, args) {
+      if (args[0] === "pr" && args[1] === "view") {
+        return JSON.stringify({
+          number: 57,
+          url: PR_URL,
+          mergeable: "MERGEABLE",
+          baseRefName: "development",
+          statusCheckRollup: [
+            { name: "test", conclusion: "FAILURE", status: "COMPLETED" },
+            { name: "Cursor Bugbot", conclusion: "SUCCESS", status: "COMPLETED" },
+          ],
+        });
+      }
+      if (args[0] === "pr" && args[1] === "checks") {
+        return JSON.stringify([{ name: "test", state: "fail" }]);
+      }
+      return "";
+    },
+    runSync() {
+      throw new Error("gh merge must not run when a required check is red");
+    },
+  });
+
+  const pr = await gh.viewPr({ number: 57 });
+  assert.deepEqual(pr.requiredChecks, [{ name: "test", conclusion: "failure" }]);
+
+  const linear = fakeLinear();
+  const result = await completeLand({
+    job: { issueId: ISSUE_ID, identifier: "KIT-57" },
+    linear,
+    gh,
+    lanes: LAND_LANES,
+  });
+  assert.equal(result.merged, false);
+  assert.notEqual(result.nextStatus, "Done");
 });
 
 test("Dockerfile copies the land job and the KIT-51 merge gate", () => {

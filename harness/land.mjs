@@ -14,6 +14,7 @@ import {
   MERGED_STATUS,
 } from "../scripts/lib/land-policy.mjs";
 import { mapStatusChecks } from "./gh-cli.mjs";
+import { selectRequiredChecks } from "./implement-exit.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 import { gitArgvContainsSecret, remoteGitChildEnv } from "./worktree.mjs";
 
@@ -26,6 +27,24 @@ export const LAND_LANES = {
 };
 
 export const DEFAULT_LAND_REPO = "KitCollective/kit-collective";
+
+/**
+ * KIT-51 `landAtMergeGate` treats every `requiredChecks` entry as required.
+ * Pass only `isRequired` rows, with lowercase conclusions the gate allows.
+ *
+ * @param {Array<{ name?: string, conclusion?: string, isRequired?: boolean }> | undefined} mapped
+ * @returns {Array<{ name?: string, conclusion: string }> | undefined}
+ */
+export function requiredChecksForMergeGate(mapped) {
+  const required = selectRequiredChecks(mapped);
+  if (required.length === 0) {
+    return undefined;
+  }
+  return required.map((check) => ({
+    name: check.name,
+    conclusion: String(check.conclusion ?? "").toLowerCase(),
+  }));
+}
 
 const GITHUB_PULL =
   /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)(?:\/(?:files|commits|checks)?)?(?:#.*)?$/;
@@ -198,16 +217,13 @@ export function createLandGh({
       } catch {
         requiredRows = [{ name: "required", state: "pending" }];
       }
-      const mapped = mapStatusChecks(parsed.statusCheckRollup, requiredRows).map((check) => ({
-        name: check.name,
-        conclusion: String(check.conclusion ?? "").toLowerCase(),
-      }));
+      const mapped = mapStatusChecks(parsed.statusCheckRollup, requiredRows);
       return {
         number: parsed.number ?? number,
         url: parsed.url,
         mergeable: parsed.mergeable,
         baseRef: parsed.baseRefName,
-        requiredChecks: mapped.length > 0 ? mapped : undefined,
+        requiredChecks: requiredChecksForMergeGate(mapped),
       };
     },
 
