@@ -95,7 +95,6 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
       const stdout = await linearApi(ISSUE_COMMENTS_QUERY, { id: issueId });
       const parsed = JSON.parse(stdout) as {
         data?: { issue?: { comments?: { nodes?: Array<{ id?: string; body?: string }> } } } };
-      };
       const nodes = parsed.data?.issue?.comments?.nodes ?? [];
       const existing = nodes.find(
         (node) => typeof node.body === "string" && node.body.includes(WORKPAD_HEADING),
