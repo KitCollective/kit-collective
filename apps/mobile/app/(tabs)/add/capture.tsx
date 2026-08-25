@@ -11,6 +11,7 @@ import {
   readPrefilledClub,
   showBulkUploadBlockedAlert,
 } from "@/capture/captureFlow";
+import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { isRepeatCaptureSession } from "@/session/addSession";
@@ -75,10 +76,13 @@ export default function CaptureScreen() {
 
   const openGalleryEscape = useCallback(
     async (existingPhotos: Array<{ role: PhotoRole; uri: string }>) => {
-      const uris = await pickGalleryPhotos({
-        allowsMultipleSelection: true,
-        quality: galleryMultiSelectQuality(),
-      });
+      const uris = await pickGalleryPhotos(
+        {
+          allowsMultipleSelection: true,
+          quality: galleryMultiSelectQuality(),
+        },
+        expoGalleryPickerAdapter,
+      );
 
       if (!uris) {
         return false;
