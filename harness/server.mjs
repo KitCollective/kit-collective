@@ -12,6 +12,7 @@ import { createSerialQueue } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS, startPlannerPoller } from "./planner.mjs";
+import { createLinearSessionAdapter } from "./session-adapter.mjs";
 import { createHttpHandler } from "./webhook-router.mjs";
 
 /**
@@ -71,10 +72,12 @@ export async function startWorkerServer({
       : Number(env.PI_PLANNER_POLL_MS ?? DEFAULT_PLANNER_POLL_MS);
   const handler = createWorkerHandler({
     secret: env.LINEAR_WEBHOOK_SECRET,
+    sessionSecret: env.LINEAR_PI_WEBHOOK_SECRET,
     now,
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
     enqueue: queue,
+    session: createLinearSessionAdapter({ linear: linearClient }),
     allowedDelegates: ["Pi"],
   });
   const server = createServer(handler);

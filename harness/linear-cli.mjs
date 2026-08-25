@@ -124,6 +124,22 @@ export const ISSUE_UPDATE_STATE_MUTATION = `mutation IssueUpdateState($id: Strin
   issueUpdate(id: $id, input: { stateId: $stateId }) { success }
 }`;
 
+export const AGENT_ACTIVITY_CREATE_MUTATION = `mutation AgentActivityCreate($input: AgentActivityCreateInput!) {
+  agentActivityCreate(input: $input) { success }
+}`;
+
+export const ISSUE_CLEAR_DELEGATE_MUTATION = `mutation IssueClearDelegate($id: String!) {
+  issueUpdate(id: $id, input: { delegateId: null }) { success }
+}`;
+
+export const ISSUE_AGENT_SESSION_QUERY = `query IssueAgentSession($id: String!) {
+  issue(id: $id) {
+    agentSessions(first: 5) {
+      nodes { id }
+    }
+  }
+}`;
+
 /**
  * @param {unknown} raw
  * @returns {object | null}
@@ -369,6 +385,45 @@ export function createLinearCliClient({ env = process.env, runCommand } = {}) {
       }
       await cli(ISSUE_UPDATE_STATE_MUTATION, { id: issueId, stateId: match.id });
       return { issueId, status };
+    },
+
+    /**
+     * Display-only AgentSession activity. Never a workpad write.
+     *
+     * @param {{ sessionId: string, content: object, ephemeral?: boolean }} input
+     */
+    async createAgentActivity({ sessionId, content, ephemeral }) {
+      await cli(AGENT_ACTIVITY_CREATE_MUTATION, {
+        input: {
+          agentSessionId: sessionId,
+          content,
+          ...(ephemeral === true ? { ephemeral: true } : {}),
+        },
+      });
+    },
+
+    /**
+     * Live AgentSession id for an issue. Display-only; never starts Pi.
+     *
+     * @param {string} id
+     * @returns {Promise<string | undefined>}
+     */
+    async getAgentSessionId(id) {
+      const stdout = await cli(ISSUE_AGENT_SESSION_QUERY, { id });
+      const nodes = parseJson(stdout)?.data?.issue?.agentSessions?.nodes;
+      const sessionId = Array.isArray(nodes)
+        ? nodes.find((node) => typeof node?.id === "string")?.id
+        : undefined;
+      return typeof sessionId === "string" ? sessionId : undefined;
+    },
+
+    /**
+     * Nicklas's turn: drop Pi from Assignee → Agents.
+     *
+     * @param {{ issueId: string }} input
+     */
+    async clearDelegate({ issueId }) {
+      await cli(ISSUE_CLEAR_DELEGATE_MUTATION, { id: issueId });
     },
   };
 }
