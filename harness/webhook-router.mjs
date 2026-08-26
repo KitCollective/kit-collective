@@ -222,7 +222,7 @@ async function ackSession({ session, event, issue, delegateGateConfig, now }) {
  *   sessionSecret?: string,
  *   hmacChannel?: "issue" | "session",
  *   now?: number,
- *   linear: { getIssue: (id: string) => Promise<object | null> | object | null },
+ *   linear: { getIssue: (id: string) => Promise<object | null> | object | null, clearDelegate?: Function },
  *   gh: object,
  *   enqueue: { enqueue: (job: object) => void },
  *   worktree?: { reap?: (input: { identifier: string }) => Promise<unknown> },
@@ -312,6 +312,11 @@ export async function routeWebhook(input) {
   }
 
   if (issue.status === "Done" || issue.status === "Canceled") {
+    if (delegateGate(issue.delegate, gateConfig) === "pi") {
+      if (typeof linear.clearDelegate === "function") {
+        await linear.clearDelegate({ issueId: issue.id });
+      }
+    }
     if (typeof worktree?.reap === "function" && typeof issue.identifier === "string") {
       await worktree.reap({ identifier: issue.identifier });
     }
