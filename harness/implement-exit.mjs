@@ -8,6 +8,7 @@
  */
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import { ensureLoopCounters, incrementCiFailCycles } from "./auto-merge.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -404,10 +405,12 @@ export async function completeImplementAdw(input) {
   const comments =
     typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
   const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
-  const body = upsertWorkpadEvidence(existing?.body, {
-    prUrl: pr.url,
-    identifier: job.identifier,
-  });
+  const body = ensureLoopCounters(
+    upsertWorkpadEvidence(existing?.body, {
+      prUrl: pr.url,
+      identifier: job.identifier,
+    }),
+  );
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
   await linear.setStatus({ issueId: job.issueId, status: IN_REVIEW });
 
@@ -444,7 +447,9 @@ async function writeCiRetryWorkpad(input) {
           identifier: job.identifier,
         })
       : (existing?.body ?? `${WORKPAD_HEADING}\n`);
-  const body = applyReviewFeedback(withEvidence, formatCiFailureFeedback(checks, { timedOut }));
+  const body = incrementCiFailCycles(
+    applyReviewFeedback(withEvidence, formatCiFailureFeedback(checks, { timedOut })),
+  );
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
   return { pr, status: IMPLEMENTING, ciRetry: true };
 }

@@ -25,7 +25,8 @@ implement:  Implementing (no PR) → branch + code + PR + pre-review gate → In
 checker:    In Review → complete review → Ready for merge
             or Implementing + full ### Review feedback (no drip-feed)
 implement:  Implementing (PR exists) → same branch, fix the class → In Review
-approver:   Ready for merge → Merging
+auto-merge: Ready for merge → Merging when MERGEABLE, checks green, loop cap clear
+approver:   Ready for merge → Merging (still allowed)
 land:       merge to lanes.integration → Done
 ```
 
@@ -52,7 +53,7 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | `Implementing` → `In Review` | **Implement** (PR + proof on Linear) |
 | `In Review` → `Ready for merge` | **Checker** (pass) |
 | `In Review` / `Ready for merge` / `Merging` → `Implementing` | **Checker** or **land** (fail) |
-| `Ready for merge` → `Merging` | **Approver only** |
+| `Ready for merge` → `Merging` | **Auto-merge** (loop cap) or **approver** |
 | `Merging` → `Done` | **Land** (merge succeeded) |
 | Merge to integration | **Land** |
 
@@ -185,7 +186,7 @@ Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview 
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}`. |
 | Status | Inactive until implement is wired — otherwise nothing ever reaches `In Review`. If the Instruction was pasted before the KIT-23/KIT-24 complete-review contract, **re-paste** the checker block below. |
 
-Checker is **judge-only**. Fail → `Implementing` wakes implement on the same issue. Pass → `Ready for merge` and stop. Nicklas (approver) moves to `Merging`; that is not this agent.
+Checker is **judge-only**. Fail → `Implementing` wakes implement on the same issue. Pass → `Ready for merge` and stop. Auto-merge or Nicklas (approver) moves to `Merging`; that is not this agent.
 
 ```text
 You are the checker for Linear issue {{ issue.identifier }}.
@@ -200,7 +201,7 @@ Complete review every pass — not a delta on last ### Review feedback. Dump eve
 
 Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status; do not fail early on Standards. Failed required checks or CONFLICTING → fail, and still include every Spec/Standards hard miss in the same ### Review feedback. Local tests are not a substitute.
 
-Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Comment on Linear that the issue is waiting for the approver.
+Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Auto-merge may then flip to Merging.
 
 Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no resume of the previous Pi job.
 
@@ -229,7 +230,7 @@ If this is the second fail of the same class on this issue, say so in ### Review
 | Do not add | **Open Pull Request** (PR already exists). Memories. Slack. Browser. |
 | Memories | Off. Empty. |
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}`. |
-| Status | Can go Active once implement + checker work — it only fires when **you** move an issue to `Merging`. |
+| Status | Can go Active once implement + checker work — it fires when Auto-merge or Nicklas moves an issue to `Merging`. |
 
 Land is **not** the staging/production promotion. Those are automations 4–5, later. This agent must refuse a PR whose base is `staging` or `production`. Merge fail → `Implementing` (same branch), not a second PR.
 

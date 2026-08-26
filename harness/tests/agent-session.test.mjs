@@ -24,7 +24,6 @@ const CREATED_CLAIMED_THOUGHT =
   "Pi is working from the Issue webhook. This AgentSession is display-only.";
 const PROMPTED_THOUGHT =
   "This session does not enqueue a coding job. Durable evidence stays on the workpad.";
-const HANDOFF_ELICITATION = "Ready for merge. This is Nicklas's turn.";
 
 function sign(rawBody, secret) {
   return createHmac("sha256", secret).update(rawBody).digest("hex");
@@ -353,7 +352,7 @@ test("factory-checker enqueue emits ephemeral thought and leaves workpad durable
   assert.equal(linear.workpad.length, 0);
 });
 
-test("Ready for merge clears delegate and sets awaitingInput without enqueueing", async () => {
+test("Ready for merge enqueues auto-merge and does not hand off as a human-only turn", async () => {
   const { result, enqueue, session, linear } = await routeIssue(
     issueUpdatePayload(),
     snapshot({
@@ -364,18 +363,15 @@ test("Ready for merge clears delegate and sets awaitingInput without enqueueing"
     }),
   );
 
-  assert.equal(result.kind, "skip");
-  assert.equal(enqueue.jobs.length, 0);
+  assert.equal(result.kind, "enqueue");
+  assert.equal(result.role, "auto-merge");
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "auto-merge");
   assert.equal(
     linear.calls.some((call) => call[0] === "clearDelegate"),
-    true,
+    false,
   );
-  const elicitation = session.activities.find(
-    (activity) => activity.content.type === "elicitation",
-  );
-  assert.ok(elicitation);
-  assert.equal(elicitation.content.body, HANDOFF_ELICITATION);
-  assert.equal(session.handedOff, true);
+  assert.equal(session.handedOff, false);
 });
 
 test("HTTP adapter uses Issue HMAC on /webhooks/linear and session HMAC on /agent-session", async () => {
@@ -490,7 +486,7 @@ test("Issue checker enqueue posts ephemeral thought to Linear without a prior se
   ]);
 });
 
-test("Ready for merge posts elicitation to Linear without a prior session ack", async () => {
+test("Ready for merge enqueues auto-merge without a prior session ack", async () => {
   const linear = fakeLinear(
     snapshot({
       status: "Ready for merge",
@@ -505,19 +501,15 @@ test("Ready for merge posts elicitation to Linear without a prior session ack", 
     session: createLinearSessionAdapter({ linear }),
   });
 
-  assert.equal(result.kind, "skip");
-  assert.equal(enqueue.jobs.length, 0);
+  assert.equal(result.kind, "enqueue");
+  assert.equal(result.role, "auto-merge");
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "auto-merge");
   assert.equal(
     linear.calls.some((call) => call[0] === "clearDelegate"),
-    true,
+    false,
   );
-  assert.deepEqual(linear.postedActivities, [
-    {
-      sessionId: SESSION_ID,
-      ephemeral: false,
-      content: { type: "elicitation", body: HANDOFF_ELICITATION },
-    },
-  ]);
+  assert.deepEqual(linear.postedActivities, []);
 });
 
 test("in-memory adapter matches HTTP session-channel skip for the same fixture", async () => {
