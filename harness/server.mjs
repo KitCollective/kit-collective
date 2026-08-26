@@ -15,6 +15,7 @@ import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./
 import { DEFAULT_PLANNER_POLL_MS, startPlannerPoller } from "./planner.mjs";
 import { createLinearSessionAdapter } from "./session-adapter.mjs";
 import { createHttpHandler } from "./webhook-router.mjs";
+import { createWorktreeAdapter } from "./worktree.mjs";
 
 /**
  * @param {object} deps
@@ -50,12 +51,14 @@ export async function startWorkerServer({
   await assertPiPackagesReady({ root: workspace, listPackages });
   const linearClient = linear ?? createLinearCliClient({ env, runCommand });
   const ghClient = createGhClient({ env, runCommand });
+  const trees = createWorktreeAdapter({ env });
   const runner =
     typeof run === "function"
       ? { run }
       : createPiJobRunner({
           env,
           workspace,
+          worktree: trees,
           spawnProcess,
           runCommand,
           gh: ghClient,
@@ -80,6 +83,7 @@ export async function startWorkerServer({
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
     enqueue: queue,
+    worktree: trees,
     session: createLinearSessionAdapter({ linear: linearClient }),
     delegateGateConfig: createDelegateGateConfig(env),
   });
