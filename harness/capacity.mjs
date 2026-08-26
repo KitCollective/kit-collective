@@ -14,6 +14,8 @@ export const DEFAULT_RAM_FLOOR_MB = 2048;
 export const DEFAULT_DISK_FLOOR_MB = 5120;
 export const DEFAULT_CAPACITY_POLL_MS = 15_000;
 export const CAPACITY_COMMENT_HEADING = "## Capacity gate";
+/** Extra free RAM Chromium must clear on top of the coding-job floor. */
+export const CHROMIUM_RAM_MB = 512;
 
 /**
  * @param {string | undefined} raw
@@ -50,6 +52,20 @@ export function evaluateCapacity({ ramFreeMb, diskFreeMb, ramFloorMb, diskFloorM
     diskFreeMb,
     ready: ramFreeMb >= ramFloorMb && diskFreeMb >= diskFloorMb,
   };
+}
+
+/**
+ * Chromium counts against the Capacity gate: coding-job floors plus CHROMIUM_RAM_MB.
+ *
+ * @param {{ ramFreeMb: number, diskFreeMb: number, ramFloorMb: number, diskFloorMb: number }} input
+ */
+export function evaluateChromiumCapacity({ ramFreeMb, diskFreeMb, ramFloorMb, diskFloorMb }) {
+  return evaluateCapacity({
+    ramFreeMb,
+    diskFreeMb,
+    ramFloorMb: ramFloorMb + CHROMIUM_RAM_MB,
+    diskFloorMb,
+  });
 }
 
 /**

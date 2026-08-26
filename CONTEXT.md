@@ -241,3 +241,7 @@ _Avoid_: 503 because a job is running, hung, or waiting on capacity; treating pl
 **Token use**:
 After an implement or factory-checker Pi job exits, the worker writes input/output counts per role and model onto the existing workpad (`### Token use`). Implement parent is Composer; Scout and Gate are separate Hy3 lines when those counts exist; factory-checker is Grok. Planner and Intake do not write model token lines (they do not spawn Pi). Unknown counts stay unknown — the job still completes.
 _Avoid_: inventing 0; putting API keys on the workpad; logging planner/intake model tokens
+
+**Implement browser**:
+Headless Chromium on the PI worker for implement UI evidence (screenshots onto Linear). A Pi package on implement only, and only when the slice is UI. Not planner. Not Intake. Not Nicklas’s Desktop Chrome.
+_Avoid_: browser on the planner mutex; attaching to a personal browser profile; loading browser tools on api/db-only implement
