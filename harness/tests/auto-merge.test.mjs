@@ -591,10 +591,7 @@ test("delegate already empty stays Ready for merge, clears delegate, and writes 
   assert.equal(result.nextStatus, "Ready for merge");
   assert.match(linear.comments[0].body, /delegate already empty/);
   assert.equal(linear.comments[0].body.split("Auto-merge blocked").length - 1, 1);
-  assert.equal(
-    linear.calls.filter((call) => call[0] === "clearDelegate").length,
-    1,
-  );
+  assert.equal(linear.calls.filter((call) => call[0] === "clearDelegate").length, 1);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
     false,
