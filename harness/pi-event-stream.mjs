@@ -5,33 +5,43 @@
 
 const MAX_THOUGHT_CHARS = 500;
 const MAX_PARAM_CHARS = 120;
-
-const SECRET_KEY =
-  /^(authorization|cookie|set-cookie|token|access_token|refresh_token|password|secret|api[_-]?key)$/i;
-const SECRET_VALUE = /(?:lin_api_|ghp_|github_pat_|xox[baprs]-|Bearer\s)/i;
+const SENSITIVE_KEY =
+  /^(authorization|cookie|set-cookie|x-api-key|api[_-]?key|token|secret|password|credential|auth)$/i;
+const TOKEN_VALUE =
+  /^(Bearer\s+\S+|ghp_[A-Za-z0-9_]+|gho_[A-Za-z0-9_]+|lin_[A-Za-z0-9_]+|sk-[A-Za-z0-9-]+)$/;
 
 /**
  * @param {unknown} value
+ * @param {number} [depth]
  * @returns {unknown}
  */
-function redactSecretValues(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => redactSecretValues(item));
+export function redactSensitiveArgs(value, depth = 0) {
+  if (depth > 8) {
+    return "[…]";
   }
-  if (value !== null && typeof value === "object") {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (TOKEN_VALUE.test(trimmed)) {
+      return "[redacted]";
+    }
+    if (trimmed.length >= 32 && /^[A-Za-z0-9+/=_-]+$/.test(trimmed)) {
+      return "[redacted]";
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactSensitiveArgs(entry, depth + 1));
+  }
+  if (typeof value === "object") {
     /** @type {Record<string, unknown>} */
     const out = {};
-    for (const [key, nested] of Object.entries(value)) {
-      if (SECRET_KEY.test(key)) {
-        out[key] = "[redacted]";
-      } else {
-        out[key] = redactSecretValues(nested);
-      }
+    for (const [key, entry] of Object.entries(value)) {
+      out[key] = SENSITIVE_KEY.test(key) ? "[redacted]" : redactSensitiveArgs(entry, depth + 1);
     }
     return out;
-  }
-  if (typeof value === "string" && SECRET_VALUE.test(value)) {
-    return "[redacted]";
   }
   return value;
 }
@@ -46,8 +56,8 @@ export function summarizeToolArgs(args) {
   }
   let text;
   try {
-    const redacted = redactSecretValues(args);
-    text = typeof redacted === "string" ? redacted : JSON.stringify(redacted);
+    const sanitized = redactSensitiveArgs(args);
+    text = typeof sanitized === "string" ? sanitized : JSON.stringify(sanitized);
   } catch {
     return "";
   }

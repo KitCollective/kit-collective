@@ -116,7 +116,7 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   checkerGh?: object,
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
- *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
+ *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status?: number | null, stdout?: import("node:stream").Readable, closePromise?: Promise<{ status: number | null }> }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
  *   session?: { emitStream?: Function },
  *   now?: () => number,
@@ -145,14 +145,18 @@ export function createPiJobRunner({
   const trees = worktree ?? createWorktreeAdapter({ env });
   const spawnJob =
     spawnProcess ??
-    ((command, args, options) => {
-      const child = spawn(command, args, options);
-      const closed = new Promise((resolve, reject) => {
+    ((command, args, options) =>
+      new Promise((resolve, reject) => {
+        const child = spawn(command, args, options);
         child.on("error", reject);
-        child.on("close", (status) => resolve({ status }));
-      });
-      return { stdout: child.stdout ?? undefined, closed };
-    });
+        resolve({
+          stdout: child.stdout,
+          closePromise: new Promise((res, rej) => {
+            child.on("error", rej);
+            child.on("close", (status) => res({ status }));
+          }),
+        });
+      }));
 
   /**
    * @param {{ role: string, identifier?: string, issueId?: string, adwFile?: string }} job
@@ -191,24 +195,18 @@ export function createPiJobRunner({
       args = [...args.slice(0, afterDashA + 1), "--mode", "json", ...args.slice(afterDashA + 1)];
     }
     const stdio = shouldStream ? ["inherit", "pipe", "inherit"] : "inherit";
-    const consumer = shouldStream
-      ? createPiEventStreamConsumer({ session, issueId: streamIssueId, now })
-      : null;
-    const started = spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
-    if (started !== null && typeof started === "object" && typeof started.then === "function") {
-      const result = await started;
-      if (consumer && result.stdout) {
-        await pipeReadableJsonLines(result.stdout, consumer);
-      }
-      return result;
+    const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
+    const waitClose =
+      spawned.closePromise ??
+      spawned.closed ??
+      Promise.resolve({ status: typeof spawned.status === "number" ? spawned.status : 0 });
+    let streamDone = Promise.resolve();
+    if (shouldStream && spawned.stdout) {
+      const consumer = createPiEventStreamConsumer({ session, issueId: streamIssueId, now });
+      streamDone = pipeReadableJsonLines(spawned.stdout, consumer);
     }
-    if (consumer && started.stdout) {
-      const piped = pipeReadableJsonLines(started.stdout, consumer);
-      const closed = await started.closed;
-      await piped;
-      return { status: closed.status, stdout: started.stdout };
-    }
-    return started.closed;
+    const [{ status }] = await Promise.all([waitClose, streamDone]);
+    return { status, stdout: spawned.stdout };
   }
 
   return {

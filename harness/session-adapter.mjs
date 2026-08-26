@@ -217,7 +217,7 @@ export function createLinearSessionAdapter({ linear }) {
             ephemeral: last.ephemeral,
           });
         } catch {
-          // Stream path failures must not fail the Issue webhook or Pi job.
+          // Session display failures must not fail the Issue webhook or Pi job enqueue.
         }
       }
     },
