@@ -49,6 +49,7 @@ export function createWorkerHandler(deps) {
             planner: snapshot.planner ?? "active",
             job: snapshot.job === undefined ? null : snapshot.job,
             capacity,
+            tokens: snapshot.tokens === undefined ? null : snapshot.tokens,
           }),
         ),
       );
@@ -97,9 +98,15 @@ export async function startWorkerServer({
           typecheckTouched: createTypecheckTouched({ runCommand }),
           readCapacity: capacitySnapshot,
         });
+  let lastTokens = null;
   const slots = createWorkerSlots({
     async run(job) {
-      return runner.run(job);
+      const result = await runner.run(job);
+      if (job.role === "implement" || job.role === "factory-checker") {
+        lastTokens =
+          result && typeof result === "object" && result.tokens ? result.tokens : lastTokens;
+      }
+      return result;
     },
   });
   const pollMs =
@@ -118,7 +125,7 @@ export async function startWorkerServer({
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
     enqueue: slots,
-    health: () => slots.health(),
+    health: () => ({ ...slots.health(), tokens: lastTokens }),
     worktree: trees,
     session: createLinearSessionAdapter({ linear: linearClient }),
     delegateGateConfig: createDelegateGateConfig(env),

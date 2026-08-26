@@ -43,6 +43,171 @@ const CAPACITY_GATED_ROLES = new Set(["implement", "factory-checker"]);
 
 export const DEFAULT_JOB_IDLE_MS = 45 * 60 * 1000;
 export const TIMEOUT_PARK_STATUS = "Parked";
+export const TOKEN_USE_HEADING = "### Token use";
+export const UNKNOWN_TOKEN_COUNT = "unknown";
+
+const TOKEN_ROLE_MODELS = {
+  implement: "Composer",
+  "factory-checker": "Grok",
+  scout: "Hy3",
+  gate: "Hy3",
+};
+
+const TOKEN_ROLE_LABELS = {
+  implement: "Implement",
+  "factory-checker": "Factory-checker",
+  scout: "Scout",
+  gate: "Gate",
+};
+
+const TOKEN_SUBAGENT_ROLES = new Set(["scout", "gate"]);
+
+/**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+export function isTokenCount(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/**
+ * Fail closed for numbers: non-numeric usage becomes unknown. Do not invent 0.
+ *
+ * @param {unknown} usage
+ * @returns {{ input: number | "unknown", output: number | "unknown" }}
+ */
+export function readUsageCounts(usage) {
+  if (usage === null || typeof usage !== "object") {
+    return { input: UNKNOWN_TOKEN_COUNT, output: UNKNOWN_TOKEN_COUNT };
+  }
+  const record = /** @type {Record<string, unknown>} */ (usage);
+  return {
+    input: isTokenCount(record.input) ? record.input : UNKNOWN_TOKEN_COUNT,
+    output: isTokenCount(record.output) ? record.output : UNKNOWN_TOKEN_COUNT,
+  };
+}
+
+/**
+ * @param {{ role: string, model: string, input: number | "unknown", output: number | "unknown" }} line
+ */
+export function formatTokenUseLine(line) {
+  const label = TOKEN_ROLE_LABELS[line.role] ?? line.role;
+  return `- ${label} (${line.model}): input ${line.input}, output ${line.output}`;
+}
+
+/**
+ * Public token snapshot for the workpad and `/health`. Numbers or unknown only.
+ *
+ * @param {{
+ *   role: string,
+ *   identifier: string,
+ *   lines: Array<{ role: string, model: string, input: number | "unknown", output: number | "unknown" }>,
+ * }} input
+ */
+export function publicTokenSnapshot(input) {
+  return {
+    role: input.role,
+    identifier: input.identifier,
+    lines: input.lines.map((line) => ({
+      role: line.role,
+      model: line.model,
+      input: isTokenCount(line.input) ? line.input : UNKNOWN_TOKEN_COUNT,
+      output: isTokenCount(line.output) ? line.output : UNKNOWN_TOKEN_COUNT,
+    })),
+  };
+}
+
+/**
+ * @param {string} jobRole
+ * @param {{ parentUsage?: object | null, subagents?: Record<string, object> }} collected
+ * @param {string} identifier
+ */
+export function tokenSnapshotFromCollected(jobRole, collected, identifier) {
+  const parentModel = TOKEN_ROLE_MODELS[jobRole] ?? UNKNOWN_TOKEN_COUNT;
+  const lines = [
+    {
+      role: jobRole,
+      model: parentModel,
+      ...readUsageCounts(collected?.parentUsage),
+    },
+  ];
+  const subagents = collected?.subagents ?? {};
+  for (const role of ["scout", "gate"]) {
+    if (subagents[role] && typeof subagents[role] === "object") {
+      lines.push({
+        role,
+        model: TOKEN_ROLE_MODELS[role],
+        ...readUsageCounts(subagents[role]),
+      });
+    }
+  }
+  return publicTokenSnapshot({ role: jobRole, identifier, lines });
+}
+
+/**
+ * Collect Pi JSON usage. Parent message_update.usage is cumulative.
+ * Scout/Gate counts come from subagent tool results — not invented.
+ */
+export function createTokenUseCollector() {
+  /** @type {object | null} */
+  let parentUsage = null;
+  /** @type {Record<string, object>} */
+  const subagents = {};
+
+  return {
+    /**
+     * @param {string} line
+     */
+    async consumeLine(line) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) {
+        return;
+      }
+      let event;
+      try {
+        event = JSON.parse(trimmed);
+      } catch {
+        return;
+      }
+      if (event === null || typeof event !== "object") {
+        return;
+      }
+      if (event.type === "message_update" && event.usage && typeof event.usage === "object") {
+        parentUsage = event.usage;
+      }
+      if (event.type === "tool_execution_end") {
+        const agent = event.result?.agent ?? event.args?.agent;
+        const usage = event.result?.usage;
+        if (TOKEN_SUBAGENT_ROLES.has(agent) && usage && typeof usage === "object") {
+          subagents[agent] = usage;
+        }
+      }
+    },
+    snapshot() {
+      return { parentUsage, subagents: { ...subagents } };
+    },
+  };
+}
+
+/**
+ * @param {string | undefined} current
+ * @param {{ lines: Array<{ role: string, model: string, input: number | "unknown", output: number | "unknown" }> }} tokens
+ */
+export function applyTokenUseWorkpad(current, tokens) {
+  const base =
+    typeof current === "string" && current.includes(WORKPAD_HEADING)
+      ? current.trimEnd()
+      : WORKPAD_HEADING;
+  const lines = Array.isArray(tokens?.lines) ? tokens.lines : [];
+  const content = `${lines.map((line) => formatTokenUseLine(line)).join("\n")}\n`;
+  if (base.includes(TOKEN_USE_HEADING)) {
+    return `${base.replace(/### Token use\n[\s\S]*?(?=\n### |\s*$)/, `${TOKEN_USE_HEADING}\n\n${content}`)}\n`;
+  }
+  if (base.includes("### Review feedback")) {
+    return `${base.replace("### Review feedback", `${TOKEN_USE_HEADING}\n\n${content}\n### Review feedback`)}\n`;
+  }
+  return `${base}\n\n${TOKEN_USE_HEADING}\n\n${content}\n`;
+}
 
 /**
  * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
@@ -286,11 +451,12 @@ export function createPiJobRunner({
   async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv) {
     const args = piArgsForRole(job.role, workspace, roleFile, model, prompt);
     const streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
+    const collectStdout = STREAMING_ROLES.has(job.role);
     const shouldStream =
-      STREAMING_ROLES.has(job.role) &&
+      collectStdout &&
       typeof session?.emitStream === "function" &&
       typeof streamIssueId === "string";
-    const stdio = shouldStream ? ["inherit", "pipe", "inherit"] : "inherit";
+    const stdio = collectStdout ? ["inherit", "pipe", "inherit"] : "inherit";
     const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
     const waitClose =
       spawned.closePromise ??
@@ -308,14 +474,29 @@ export function createPiJobRunner({
         lastStdoutAt = clock();
       });
     }
+    const tokenCollector = createTokenUseCollector();
     let streamDone = Promise.resolve();
-    if (shouldStream && spawned.stdout) {
-      const consumer = createPiEventStreamConsumer({ session, issueId: streamIssueId, now });
-      streamDone = pipeReadableJsonLines(spawned.stdout, consumer);
+    if (collectStdout && spawned.stdout) {
+      const streamConsumer = shouldStream
+        ? createPiEventStreamConsumer({ session, issueId: streamIssueId, now })
+        : null;
+      streamDone = pipeReadableJsonLines(spawned.stdout, {
+        async consumeLine(line) {
+          await tokenCollector.consumeLine(line);
+          if (streamConsumer) {
+            await streamConsumer.consumeLine(line);
+          }
+        },
+        async finish() {
+          if (streamConsumer) {
+            await streamConsumer.finish();
+          }
+        },
+      });
     }
     if (!liveChild) {
       const [{ status }] = await Promise.all([waitClose, streamDone]);
-      return { status, stdout: spawned.stdout };
+      return { status, stdout: spawned.stdout, tokenUse: tokenCollector.snapshot() };
     }
 
     let timedOut = false;
@@ -339,11 +520,20 @@ export function createPiJobRunner({
     })();
     await Promise.race([closed, idleWatch]);
     if (timedOut) {
-      return { status: null, idleTimeout: true, stdout: spawned.stdout };
+      return {
+        status: null,
+        idleTimeout: true,
+        stdout: spawned.stdout,
+        tokenUse: tokenCollector.snapshot(),
+      };
     }
     await streamDone;
     const closeResult = await closed;
-    return { status: closeResult.status, stdout: spawned.stdout };
+    return {
+      status: closeResult.status,
+      stdout: spawned.stdout,
+      tokenUse: tokenCollector.snapshot(),
+    };
   }
 
   /**
@@ -378,6 +568,59 @@ export function createPiJobRunner({
       await trees.reap({ identifier });
     }
     return { ...job, idleTimeout: true, nextStatus: TIMEOUT_PARK_STATUS };
+  }
+
+  /**
+   * Fold token lines into whatever workpad write the exit path already makes.
+   *
+   * @param {object | undefined} linearClient
+   * @param {{ lines: object[] } | null} tokens
+   */
+  function withTokenUse(linearClient, tokens) {
+    if (!linearClient || typeof linearClient.updateWorkpad !== "function" || !tokens) {
+      return linearClient;
+    }
+    return {
+      ...linearClient,
+      async updateWorkpad(input) {
+        return linearClient.updateWorkpad({
+          ...input,
+          body: applyTokenUseWorkpad(input.body, tokens),
+        });
+      },
+    };
+  }
+
+  /**
+   * Write ### Token use onto the existing workpad. Fail open if Linear is missing.
+   *
+   * @param {{ role: string, identifier?: string, issueId?: string }} job
+   * @param {string} identifier
+   * @param {{ parentUsage?: object | null, subagents?: Record<string, object> } | undefined} collected
+   */
+  async function recordTokenUse(job, identifier, collected) {
+    if (job.role !== "implement" && job.role !== "factory-checker") {
+      return null;
+    }
+    const tokens = tokenSnapshotFromCollected(job.role, collected ?? {}, identifier);
+    const linearClient = linear ?? job.linear;
+    if (
+      !linearClient ||
+      typeof linearClient.listComments !== "function" ||
+      typeof linearClient.updateWorkpad !== "function"
+    ) {
+      return tokens;
+    }
+    const issueId = job.issueId ?? identifier;
+    const comments = await linearClient.listComments(issueId);
+    const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+    const body = applyTokenUseWorkpad(existing?.body, tokens);
+    await linearClient.updateWorkpad({
+      issueId,
+      body,
+      commentId: existing?.id,
+    });
+    return tokens;
   }
 
   return {
@@ -488,11 +731,12 @@ export function createPiJobRunner({
         if (!ghClient || !linearClient) {
           throw new Error("implement requires gh and Linear adapters");
         }
+        const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier);
         const exit = await completeImplementAdw({
           job: { ...job, identifier, issueId: job.issueId ?? identifier },
           checkout,
           gh: ghClient,
-          linear: linearClient,
+          linear: withTokenUse(linearClient, tokens),
           typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
           adwText: readFileSync(join(workspace, adwFile), "utf8"),
           now,
@@ -500,20 +744,23 @@ export function createPiJobRunner({
           waitTimeoutMs,
           waitIntervalMs,
         });
-        return { ...job, ...exit };
+        return { ...job, ...exit, tokens };
       }
       if (job.role === "factory-checker") {
+        const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier);
         const linearClient = linear ?? createLinearCliClient({ env, runCommand });
         const checkerGhClient = checkerGh ?? createCheckerGh({ env, runCommand });
         await completeChecker({
           job: { ...job, identifier, issueId: job.issueId ?? identifier },
-          linear: linearClient,
+          linear: withTokenUse(linearClient, tokens),
           gh: checkerGhClient,
           now,
           sleep,
           waitTimeoutMs,
           waitIntervalMs,
         });
+        await recordTokenUse(job, identifier, result.tokenUse);
+        return { ...job, tokens };
       }
       return job;
     },

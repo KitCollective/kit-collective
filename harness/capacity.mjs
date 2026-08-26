@@ -220,15 +220,64 @@ export async function waitForCapacity({
   }
 }
 
+const UNKNOWN_TOKEN_COUNT = "unknown";
+
+/**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+function isHealthTokenCount(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/**
+ * Last coding-job token totals for `/health`. Null when none. Never secrets.
+ *
+ * @param {unknown} tokens
+ * @returns {{
+ *   role: string,
+ *   identifier: string,
+ *   lines: Array<{ role: string, model: string, input: number | "unknown", output: number | "unknown" }>,
+ * } | null}
+ */
+export function publicHealthTokens(tokens) {
+  if (tokens === null || tokens === undefined || typeof tokens !== "object") {
+    return null;
+  }
+  const record = /** @type {Record<string, unknown>} */ (tokens);
+  if (typeof record.role !== "string" || typeof record.identifier !== "string") {
+    return null;
+  }
+  if (!Array.isArray(record.lines)) {
+    return null;
+  }
+  return {
+    role: record.role,
+    identifier: record.identifier,
+    lines: record.lines.map((line) => {
+      const row =
+        line && typeof line === "object" ? /** @type {Record<string, unknown>} */ (line) : {};
+      return {
+        role: typeof row.role === "string" ? row.role : UNKNOWN_TOKEN_COUNT,
+        model: typeof row.model === "string" ? row.model : UNKNOWN_TOKEN_COUNT,
+        input: isHealthTokenCount(row.input) ? row.input : UNKNOWN_TOKEN_COUNT,
+        output: isHealthTokenCount(row.output) ? row.output : UNKNOWN_TOKEN_COUNT,
+      };
+    }),
+  };
+}
+
 /**
  * Spec health body. `job` stays null unless a sibling slice injects a snapshot.
+ * `tokens` is the last implement / factory-checker totals, or null.
  *
  * @param {{
  *   planner?: string,
  *   job?: { role: string, identifier: string } | null,
  *   capacity: { ramFreeMb: number, diskFreeMb: number, ready: boolean },
+ *   tokens?: unknown,
  * }} input
  */
-export function workerHealthBody({ planner = "active", job = null, capacity }) {
-  return { ok: true, planner, job, capacity };
+export function workerHealthBody({ planner = "active", job = null, capacity, tokens = null }) {
+  return { ok: true, planner, job, capacity, tokens: publicHealthTokens(tokens) };
 }
