@@ -4,8 +4,9 @@
  */
 
 /**
- * Worker health capacity stub (KIT-85). This slice reports always-ready;
- * KIT-87 replaces the readers. Values are above the Capacity gate floors.
+ * Worker health capacity stub when no reader is injected.
+ * KIT-87 overlays live RAM/disk readers on GET /health and before spawn.
+ * Values are above the Capacity gate floors.
  */
 export const ALWAYS_READY_CAPACITY = Object.freeze({
   ramFreeMb: 4096,

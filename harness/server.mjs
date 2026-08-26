@@ -6,6 +6,12 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { assertWorkerEnv } from "./boot-env.mjs";
+import {
+  evaluateCapacity,
+  floorsFromEnv,
+  snapshotCapacity,
+  workerHealthBody,
+} from "./capacity.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
 import { createTypecheckTouched } from "./implement-exit.mjs";
@@ -27,14 +33,23 @@ export function createWorkerHandler(deps) {
     const path = (req.url ?? "/").split("?")[0];
     if (req.method === "GET" && path === "/health") {
       const snapshot = typeof deps.health === "function" ? deps.health() : {};
+      let capacity = snapshot.capacity ?? ALWAYS_READY_CAPACITY;
+      if (typeof deps.readCapacity === "function") {
+        const raw = await deps.readCapacity();
+        capacity =
+          raw && typeof raw.ready === "boolean"
+            ? { ramFreeMb: raw.ramFreeMb, diskFreeMb: raw.diskFreeMb, ready: raw.ready }
+            : evaluateCapacity({ ...raw, ...floorsFromEnv(deps.env) });
+      }
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
-        JSON.stringify({
-          ok: true,
-          planner: snapshot.planner ?? "active",
-          job: snapshot.job === undefined ? null : snapshot.job,
-          capacity: snapshot.capacity ?? ALWAYS_READY_CAPACITY,
-        }),
+        JSON.stringify(
+          workerHealthBody({
+            planner: snapshot.planner ?? "active",
+            job: snapshot.job === undefined ? null : snapshot.job,
+            capacity,
+          }),
+        ),
       );
       return;
     }
@@ -53,6 +68,7 @@ export async function startWorkerServer({
   spawnProcess,
   now = () => Date.now(),
   plannerPollMs,
+  readCapacity,
 } = {}) {
   assertWorkerEnv(env);
   const workspace = resolvePiWorkspace(env);
@@ -60,6 +76,10 @@ export async function startWorkerServer({
   const linearClient = linear ?? createLinearCliClient({ env, runCommand });
   const ghClient = createGhClient({ env, runCommand });
   const trees = createWorktreeAdapter({ env });
+  const capacitySnapshot =
+    typeof readCapacity === "function"
+      ? readCapacity
+      : () => snapshotCapacity({ env, worktreesDir: env.KIT_PI_WORKTREES });
   const runner =
     typeof run === "function"
       ? { run }
@@ -73,6 +93,7 @@ export async function startWorkerServer({
           linear: linearClient,
           session: createLinearSessionAdapter({ linear: linearClient }),
           typecheckTouched: createTypecheckTouched({ runCommand }),
+          readCapacity: capacitySnapshot,
         });
   const slots = createWorkerSlots({
     async run(job) {
@@ -95,6 +116,7 @@ export async function startWorkerServer({
     worktree: trees,
     session: createLinearSessionAdapter({ linear: linearClient }),
     delegateGateConfig: createDelegateGateConfig(env),
+    readCapacity: capacitySnapshot,
   });
   const server = createServer(handler);
   let stopPoller = () => {};

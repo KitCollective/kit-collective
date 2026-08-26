@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
+import { snapshotCapacity } from "../capacity.mjs";
 import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
 import { ALWAYS_READY_CAPACITY, createSerialQueue, createWorkerSlots } from "../job-queue.mjs";
 import { createActorTokenProvider } from "../linear-actor-token.mjs";
@@ -651,8 +652,9 @@ test("GET /health stays HTTP 200 during a live Coding job and reports role plus 
     assert.equal(body.ok, true);
     assert.equal(body.planner, "active");
     assert.deepEqual(body.job, { role: "implement", identifier: "KIT-99" });
-    assert.deepEqual(body.capacity, ALWAYS_READY_CAPACITY);
-    assert.equal(body.capacity.ready, true);
+    assert.equal(typeof body.capacity.ramFreeMb, "number");
+    assert.equal(typeof body.capacity.diskFreeMb, "number");
+    assert.equal(typeof body.capacity.ready, "boolean");
   } finally {
     release();
     await new Promise((resolve) => server.close(resolve));
@@ -939,4 +941,396 @@ test("compose worker ACKs AgentSession and enqueues implement when delegate is P
   assert.equal(checkout.lane, "development");
   assert.ok(gitCalls.some((args) => args.includes("development")));
   assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/bug.yaml");
+});
+
+const DEFAULT_RAM_FLOOR_MB = 2048;
+const DEFAULT_DISK_FLOOR_MB = 5120;
+
+function fakeCapacityLinear(overrides = {}) {
+  const comments = [];
+  const statusCalls = [];
+  const claimed = [];
+  let nextId = 1;
+  const backlog = overrides.backlog ?? [];
+  return {
+    comments,
+    statusCalls,
+    claimed,
+    async commentIssue({ issueId, body }) {
+      const id = `cap-${nextId++}`;
+      comments.push({ id, issueId, body });
+      return { id };
+    },
+    async listComments() {
+      return comments.map((comment) => ({ id: comment.id, body: comment.body }));
+    },
+    async updateComment({ id, body }) {
+      const found = comments.find((comment) => comment.id === id);
+      if (!found) {
+        throw new Error(`missing comment ${id}`);
+      }
+      found.body = body;
+    },
+    async updateWorkpad() {},
+    async setStatus(input) {
+      statusCalls.push(input);
+    },
+    async lookupUser(id) {
+      return { id, name: "Pi" };
+    },
+    async listDispatch() {
+      return {
+        implementingState: { id: "state-implementing", name: "Implementing" },
+        issues: backlog,
+      };
+    },
+    async claimIssue(input) {
+      claimed.push(input);
+      const issue = backlog.find((row) => row.id === input.id) ?? backlog[0];
+      return {
+        assignee: issue?.assignee ?? { id: "human-1", name: "Nicklas" },
+        delegate: { id: "pi-app-user-1", name: "Pi" },
+      };
+    },
+  };
+}
+
+function implementFakes(linear) {
+  const spawned = [];
+  return {
+    spawned,
+    worktree: {
+      async checkout() {
+        return { path: "/var/lib/kit-pi/worktrees/KIT-87", branch: "kit-87", lane: "development" };
+      },
+    },
+    gh: {
+      async rebase() {},
+      async viewPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/87",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+      async createPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/87",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+      merge() {
+        throw new Error("implement never merges");
+      },
+    },
+    linear,
+    typecheckTouched: async () => undefined,
+    spawnProcess(command, args, options) {
+      spawned.push({ command, args, options });
+      return Promise.resolve({ status: 0 });
+    },
+  };
+}
+
+async function waitUntil(predicate, label) {
+  const deadline = Date.now() + 1000;
+  while (!predicate()) {
+    if (Date.now() > deadline) {
+      throw new Error(`timed out waiting for ${label}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+test("GET /health reports capacity numbers, ready false, and stays HTTP 200", async () => {
+  const enqueue = {
+    jobs: [],
+    enqueue(job) {
+      this.jobs.push(job);
+    },
+  };
+  const handler = createWorkerHandler({
+    secret: SECRET,
+    now: () => NOW,
+    linear: {
+      async getIssue() {
+        return null;
+      },
+    },
+    gh: {},
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+    readCapacity: async () => ({ ramFreeMb: 100, diskFreeMb: 200, ready: false }),
+  });
+  const server = createServer(handler);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      planner: "active",
+      job: null,
+      capacity: { ramFreeMb: 100, diskFreeMb: 200, ready: false },
+    });
+    assert.equal(enqueue.jobs.length, 0);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("coding spawn waits on RAM and disk floors; job stays queued; status unchanged; one comment updated in place", async () => {
+  const linear = fakeCapacityLinear();
+  const fakes = implementFakes(linear);
+  let ramFreeMb = 100;
+  let diskFreeMb = 200;
+  const sleepWaits = [];
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    ...fakes,
+    readCapacity: async () => ({
+      ramFreeMb,
+      diskFreeMb,
+      ready: ramFreeMb >= DEFAULT_RAM_FLOOR_MB && diskFreeMb >= DEFAULT_DISK_FLOOR_MB,
+    }),
+    capacitySleep: () => new Promise((resolve) => sleepWaits.push(resolve)),
+  });
+  const slots = createWorkerSlots({ run: (job) => runner.run(job) });
+  let settled = false;
+  const pending = slots
+    .enqueue({
+      role: "implement",
+      identifier: "KIT-87",
+      issueId: "issue-87",
+      adwFile: ".pi/adw/feature.yaml",
+    })
+    .then((result) => {
+      settled = true;
+      return result;
+    });
+
+  await waitUntil(
+    () => linear.comments.length === 1 && sleepWaits.length === 1,
+    "capacity comment",
+  );
+  assert.equal(fakes.spawned.length, 0);
+  assert.equal(settled, false);
+  assert.equal(linear.statusCalls.length, 0);
+  assert.match(linear.comments[0].body, /## Capacity gate/);
+  assert.match(linear.comments[0].body, /100/);
+  assert.match(linear.comments[0].body, /200/);
+
+  ramFreeMb = 101;
+  sleepWaits[0]();
+  await waitUntil(
+    () => linear.comments[0].body.includes("101") && sleepWaits.length >= 2,
+    "in-place comment update",
+  );
+  assert.equal(linear.comments.length, 1);
+  assert.equal(fakes.spawned.length, 0);
+  assert.equal(settled, false);
+  assert.equal(linear.statusCalls.length, 0);
+  assert.equal(
+    linear.statusCalls.some((call) => call.status === "Parked"),
+    false,
+  );
+
+  ramFreeMb = 4096;
+  diskFreeMb = 10_240;
+  sleepWaits[1]();
+  await pending;
+  assert.equal(settled, true);
+  assert.equal(fakes.spawned.length, 1);
+  assert.equal(fakes.spawned[0].command, "pi");
+  assert.equal(linear.comments.length, 1);
+  assert.equal(
+    linear.statusCalls.some((call) => call.status === "Parked"),
+    false,
+  );
+});
+
+test("planner still runs while a coding job waits on capacity", async () => {
+  const linear = fakeCapacityLinear({
+    backlog: [
+      {
+        id: "issue-plan",
+        identifier: "KIT-1",
+        status: "Backlog",
+        labels: ["ready-for-agent"],
+        priority: 3,
+        createdAt: "2026-08-26T00:00:00.000Z",
+        assignee: { id: "human-1", name: "Nicklas" },
+        blockedBy: [],
+      },
+    ],
+  });
+  const fakes = implementFakes(linear);
+  const sleepWaits = [];
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    ...fakes,
+    readCapacity: async () => ({ ramFreeMb: 100, diskFreeMb: 200, ready: false }),
+    capacitySleep: () => new Promise((resolve) => sleepWaits.push(resolve)),
+  });
+
+  const slots = createWorkerSlots({ run: (job) => runner.run(job) });
+  const coding = slots.enqueue({
+    role: "implement",
+    identifier: "KIT-87",
+    issueId: "issue-87",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  await waitUntil(() => sleepWaits.length === 1, "capacity wait sleep");
+
+  const planned = await slots.enqueue({ role: "planner", identifier: "KIT-1" });
+  assert.equal(planned.claimed.length, 1);
+  assert.equal(planned.claimed[0].identifier, "KIT-1");
+  assert.equal(fakes.spawned.length, 0);
+  assert.equal(linear.statusCalls.length, 0);
+
+  coding.catch(() => undefined);
+});
+
+test("env floors override the 2 GB RAM and 5 GB disk defaults", async () => {
+  const linear = fakeCapacityLinear();
+  const fakes = implementFakes(linear);
+  const sleepWaits = [];
+  const runner = createPiJobRunner({
+    env: {
+      ...validWorkerEnv(),
+      PI_CAPACITY_RAM_MB: "500",
+      PI_CAPACITY_DISK_MB: "800",
+    },
+    workspace: ROOT,
+    ...fakes,
+    readCapacity: async () => ({ ramFreeMb: 400, diskFreeMb: 700 }),
+    capacitySleep: () => new Promise((resolve) => sleepWaits.push(resolve)),
+  });
+
+  const pending = runner.run({
+    role: "implement",
+    identifier: "KIT-87",
+    issueId: "issue-87",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  pending.catch(() => undefined);
+  await waitUntil(() => linear.comments.length === 1, "capacity comment at custom floor");
+  assert.equal(fakes.spawned.length, 0);
+  assert.match(linear.comments[0].body, /500/);
+  assert.match(linear.comments[0].body, /800/);
+});
+
+test("host inventory and Dockerfile document worker health capacity", () => {
+  const host = readFileSync(join(ROOT, "harness/host.md"), "utf8");
+  assert.match(host, /ramFreeMb/);
+  assert.match(host, /diskFreeMb/);
+  assert.match(host, /PI_CAPACITY_RAM_MB/);
+  assert.match(host, /PI_CAPACITY_DISK_MB/);
+  assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /capacity\.mjs/);
+});
+
+const MISSING_WORKTREES = "/var/lib/kit-pi/worktrees";
+const VOLUME_PARENT = "/var/lib/kit-pi";
+const VOLUME_BLOCKS = { bavail: 20_000_000, bsize: 4096 };
+
+function enoentError(path) {
+  const error = new Error(`ENOENT: ${path}`);
+  error.code = "ENOENT";
+  return error;
+}
+
+test("missing worktrees dir still measures the worktree volume and is ready above the disk floor", async () => {
+  const snapshot = await snapshotCapacity({
+    worktreesDir: MISSING_WORKTREES,
+    readRamFreeMb: async () => 4096,
+    async statfs(path) {
+      if (path === MISSING_WORKTREES) {
+        throw enoentError(path);
+      }
+      assert.equal(path, VOLUME_PARENT);
+      return VOLUME_BLOCKS;
+    },
+  });
+  assert.equal(snapshot.diskFreeMb > DEFAULT_DISK_FLOOR_MB, true);
+  assert.equal(snapshot.ready, true);
+});
+
+test("missing worktrees dir with disk above floor starts the queued coding job and does not Park", async () => {
+  const linear = fakeCapacityLinear();
+  const fakes = implementFakes(linear);
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    ...fakes,
+    readCapacity: () =>
+      snapshotCapacity({
+        worktreesDir: MISSING_WORKTREES,
+        readRamFreeMb: async () => 4096,
+        async statfs(path) {
+          if (path === MISSING_WORKTREES) {
+            throw enoentError(path);
+          }
+          return VOLUME_BLOCKS;
+        },
+      }),
+  });
+
+  await runner.run({
+    role: "implement",
+    identifier: "KIT-87",
+    issueId: "issue-87",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(fakes.spawned.length, 1);
+  assert.equal(fakes.spawned[0].command, "pi");
+  assert.equal(linear.comments.length, 0);
+  assert.equal(
+    linear.statusCalls.some((call) => call.status === "Parked"),
+    false,
+  );
+});
+
+test("unreadable worktree volume fails closed so the coding job does not spawn", async () => {
+  const linear = fakeCapacityLinear();
+  const fakes = implementFakes(linear);
+  const sleepWaits = [];
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    ...fakes,
+    readCapacity: () =>
+      snapshotCapacity({
+        worktreesDir: MISSING_WORKTREES,
+        readRamFreeMb: async () => 4096,
+        async statfs() {
+          const error = new Error("EIO");
+          error.code = "EIO";
+          throw error;
+        },
+      }),
+    capacitySleep: () => new Promise((resolve) => sleepWaits.push(resolve)),
+  });
+
+  const pending = runner.run({
+    role: "implement",
+    identifier: "KIT-87",
+    issueId: "issue-87",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  pending.catch(() => undefined);
+  await waitUntil(
+    () => linear.comments.length === 1 && sleepWaits.length === 1,
+    "fail-closed wait",
+  );
+  assert.equal(fakes.spawned.length, 0);
+  assert.match(linear.comments[0].body, /0 MB/);
+  assert.equal(
+    linear.statusCalls.some((call) => call.status === "Parked"),
+    false,
+  );
 });
