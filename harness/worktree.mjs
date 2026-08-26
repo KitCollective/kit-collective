@@ -1,14 +1,14 @@
 /**
  * Git worktree adapter (KIT-54).
  *
- * Bare mirror + `/var/lib/kit-pi/worktrees/KIT-n` from `origin/development`.
- * One issue, one branch, one PR. Fake `runGit` at this seam.
+ * Bare mirror + `/var/lib/kit-pi/worktrees/KIT-n`. Implement creates the issue
+ * branch from `origin/development`. Checker reuses that tree (or `origin/kit-n`
+ * once the PR is on the remote). One issue, one branch, one PR. Fake `runGit`.
  */
 import { execFile as execFileCb } from "node:child_process";
 import { existsSync as fsExistsSync, mkdirSync as fsMkdirSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { gitAuthExtraHeader } from "./linear-actor-token.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -29,7 +29,7 @@ export function remoteGitChildEnv(env = {}) {
   const configs = [["safe.directory", "*"]];
   const token = env.GH_TOKEN;
   if (typeof token === "string" && token.length > 0) {
-    configs.push(["http.extraHeader", gitAuthExtraHeader(token)]);
+    configs.push(["http.extraHeader", `Authorization: Bearer ${token}`]);
   }
   child.GIT_CONFIG_COUNT = String(configs.length);
   configs.forEach(([key, value], index) => {
@@ -75,6 +75,28 @@ export function worktreeBranch(identifier) {
 function assertIdentifier(identifier) {
   if (typeof identifier !== "string" || !IDENTIFIER_PATTERN.test(identifier)) {
     throw new Error(`invalid issue identifier: ${identifier}`);
+  }
+}
+
+/**
+ * @param {(args: string[]) => Promise<unknown>} git
+ * @param {string} dir
+ * @param {string} branch
+ * @param {{ worktree?: boolean }} [opts]
+ */
+async function fetchIssueBranch(git, dir, branch, opts = {}) {
+  const prefix = opts.worktree ? ["-C", dir] : ["--git-dir", dir];
+  try {
+    await git([...prefix, "fetch", "origin", branch]);
+  } catch {
+    return false;
+  }
+  const verify = opts.worktree ? `origin/${branch}` : `refs/remotes/origin/${branch}`;
+  try {
+    await git([...prefix, "rev-parse", "--verify", verify]);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -131,19 +153,23 @@ export function createWorktreeAdapter({
       if (!existsSync(mirrorDir)) {
         await git(["clone", "--bare", remoteUrl, mirrorDir]);
       }
-      await git(["--git-dir", mirrorDir, "fetch", "origin", `${lane}:refs/heads/${lane}`]);
+      await git(["--git-dir", mirrorDir, "fetch", "origin", lane]);
+      const hasIssueBranch = await fetchIssueBranch(git, mirrorDir, branch);
 
       if (!existsSync(path)) {
-        await git([
-          "--git-dir",
-          mirrorDir,
-          "worktree",
-          "add",
-          "-B",
-          branch,
-          path,
-          `refs/heads/${lane}`,
-        ]);
+        const startPoint = hasIssueBranch ? `origin/${branch}` : `origin/${lane}`;
+        await git(["--git-dir", mirrorDir, "worktree", "add", "-B", branch, path, startPoint]);
+        return { path, branch, lane };
+      }
+
+      await git(["-C", path, "checkout", branch]);
+      if (hasIssueBranch) {
+        await fetchIssueBranch(git, path, branch, { worktree: true });
+        try {
+          await git(["-C", path, "merge", "--ff-only", `origin/${branch}`]);
+        } catch {
+          // Local implement commits stay; diverged remote is a later signal-up.
+        }
       }
 
       return { path, branch, lane };
