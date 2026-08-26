@@ -193,3 +193,35 @@ _Avoid_: factory-checker; treating Gate as the pass verdict; inheriting Composer
 **Hy3**:
 OpenRouter model `tencent/hy3` for Scout and Gate only, no-think. Not product Vision. Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough.
 _Avoid_: stealth/ox-alpha; Hy3 for nest/expo/drizzle/ui-ux; Hy3 for planner, factory-checker, or land; blocking the slice on Exacto
+
+**Coding job**:
+A factory role on the Pi coding path: implement, factory-checker, or land. Not planner.
+_Avoid_: treating a Linear claim as a Pi spawn; planner as a coding job
+
+**Planner job**:
+Linear-only skip/claim. Own mutex. Wakes on webhook or poll. Does not spawn Pi. May run while coding jobs are live.
+_Avoid_: enqueueing planner on the coding mutex; calling planner a Pi session
+
+**Idle timeout**:
+A spawned Pi child with no close and no stdout for 45 minutes (env `PI_JOB_IDLE_MS`) is hung. The harness kills it and frees that coding slot.
+_Avoid_: wall-clock as the only hang signal; leaving the mutex held after kill
+
+**Timeout park**:
+The worker moving that hung coding job to Parked after Idle timeout, with `### Review feedback` on the existing workpad. Planner still never claims Parked. Resume is a human status change.
+_Avoid_: treating Parked as human-only on this path; planner unparking; Canceled for a hang
+
+**Issue worktree**:
+The git worktree for one issue at `/var/lib/kit-pi/worktrees/KIT-n`. The coding-job cwd. Not a second Pi host.
+_Avoid_: sandbox as a synonym without saying worktree; one shared checkout for every issue
+
+**Worktree reap**:
+Remove that Issue worktree when the issue is Done (merged), Canceled, or Timeout park. The bare mirror stays. A later checkout creates the tree again.
+_Avoid_: deleting the mirror; leaving KIT-n after land; treating a human Park as reap
+
+**Capacity gate**:
+Before a coding-job spawn, free RAM and worktree-volume disk must clear env floors (default 2 GB RAM, 5 GB disk). If not, the job stays queued and the worker comments the issue; status does not change; not Timeout park.
+_Avoid_: starting Pi when the box is full; Parked for a capacity wait; Prometheus as the gate; a new comment on every retry
+
+**Worker health**:
+GET /health on the PI worker. HTTP 200 if the process is up. JSON includes planner state, the current coding job (role + identifier) or null, and capacity (ram, disk, ready).
+_Avoid_: 503 because a job is running, hung, or waiting on capacity; treating planner: active as “a Pi session is running”
