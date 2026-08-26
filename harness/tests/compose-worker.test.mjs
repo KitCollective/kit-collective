@@ -1074,6 +1074,7 @@ test("GET /health reports capacity numbers, ready false, and stays HTTP 200", as
       planner: "active",
       job: null,
       capacity: { ramFreeMb: 100, diskFreeMb: 200, ready: false },
+      tokens: null,
     });
     assert.equal(enqueue.jobs.length, 0);
   } finally {

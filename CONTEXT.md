@@ -235,5 +235,9 @@ Before a coding-job spawn, free RAM and worktree-volume disk must clear env floo
 _Avoid_: starting Pi when the box is full; Parked for a capacity wait; Prometheus as the gate; a new comment on every retry
 
 **Worker health**:
-GET /health on the PI worker. HTTP 200 if the process is up. JSON includes planner state, the current coding job (role + identifier) or null, and capacity (ram, disk, ready).
-_Avoid_: 503 because a job is running, hung, or waiting on capacity; treating planner: active as “a Pi session is running”
+GET /health on the PI worker. HTTP 200 if the process is up. JSON includes planner state, the current coding job (role + identifier) or null, capacity (ram, disk, ready), and `tokens` (last implement / factory-checker input/output per role and model, or null). Missing counts are `unknown`. Never API keys.
+_Avoid_: 503 because a job is running, hung, or waiting on capacity; treating planner: active as “a Pi session is running”; inventing token numbers; logging secrets in health JSON
+
+**Token use**:
+After an implement or factory-checker Pi job exits, the worker writes input/output counts per role and model onto the existing workpad (`### Token use`). Implement parent is Composer; Scout and Gate are separate Hy3 lines when those counts exist; factory-checker is Grok. Planner and Intake do not write model token lines (they do not spawn Pi). Unknown counts stay unknown — the job still completes.
+_Avoid_: inventing 0; putting API keys on the workpad; logging planner/intake model tokens
