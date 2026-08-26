@@ -3,6 +3,7 @@
  * Fake Linear and a fake Pi event fixture; do not spawn a model.
  */
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { test } from "node:test";
@@ -11,6 +12,7 @@ import {
   createPiEventStreamConsumer,
   mapPiEventToActivity,
   pipeReadableJsonLines,
+  redactSensitiveArgs,
   summarizeToolArgs,
   truncateText,
 } from "../pi-event-stream.mjs";
@@ -67,9 +69,23 @@ test("mapPiEventToActivity maps tool starts to ephemeral actions", () => {
 });
 
 test("summarizeToolArgs truncates long JSON parameters", () => {
-  const long = summarizeToolArgs({ body: "x".repeat(200) });
+  const long = summarizeToolArgs({ note: `word ${"segment ".repeat(30)}` });
   assert.ok(long.endsWith("…"));
   assert.ok(long.length <= 120);
+});
+
+test("summarizeToolArgs redacts secrets from tool parameters", () => {
+  const summary = summarizeToolArgs({
+    command: "curl https://api.example.com",
+    headers: { Authorization: "Bearer secret-token-value" },
+    cookie: "session=super-secret-cookie",
+  });
+  assert.equal(summary.includes("secret-token-value"), false);
+  assert.equal(summary.includes("super-secret-cookie"), false);
+  assert.match(summary, /\[redacted\]/);
+  assert.deepEqual(redactSensitiveArgs({ token: "ghp_abcdefghijklmnopqrstuvwxyz1234567890" }), {
+    token: "[redacted]",
+  });
 });
 
 test("truncateText caps thought bodies for Linear", () => {
@@ -97,6 +113,32 @@ test("Pi fixture stream posts thought then action without touching the workpad",
   assert.equal(ephemeral[1].content.action, "read");
   assert.match(ephemeral[1].content.parameter, /pi-job\.mjs/);
   assert.equal(linear.postedActivities.length, 2);
+});
+
+test("streamed tool args redact secrets before posting to Linear", async () => {
+  const linear = fakeLinear();
+  const session = createLinearSessionAdapter({ linear });
+  const consumer = createPiEventStreamConsumer({
+    session,
+    issueId: ISSUE_ID,
+    minIntervalMs: 0,
+  });
+  await consumer.consumeLine(
+    JSON.stringify({
+      type: "tool_execution_start",
+      toolName: "bash",
+      args: {
+        command: "curl https://api.example.com",
+        headers: { Authorization: "Bearer ghp_supersecrettokenvalue1234567890" },
+      },
+    }),
+  );
+
+  const action = session.activities.find((activity) => activity.content.type === "action");
+  assert.ok(action);
+  assert.equal(action.content.parameter.includes("ghp_supersecrettokenvalue1234567890"), false);
+  assert.equal(action.content.parameter.includes("Bearer"), false);
+  assert.match(action.content.parameter, /\[redacted\]/);
 });
 
 test("stream consumer swallows Linear failures without throwing", async () => {
@@ -140,7 +182,7 @@ test("Issue webhook enqueue is unchanged when the session stream adapter throws"
       throw new Error("stream path failed");
     },
   };
-  const session = createMemorySessionAdapter({ linear });
+  const session = createLinearSessionAdapter({ linear });
   const adapter = createMemoryAdapter({
     secret: "issue-secret",
     sessionSecret: "session-secret",
@@ -157,7 +199,6 @@ test("Issue webhook enqueue is unchanged when the session stream adapter throws"
     updatedFrom: { stateId: "prev" },
     webhookTimestamp: NOW,
   });
-  const { createHmac } = await import("node:crypto");
   const signature = createHmac("sha256", "issue-secret").update(rawBody).digest("hex");
   const result = await adapter.handle({ rawBody, signature, hmacChannel: "issue" });
 
@@ -166,8 +207,17 @@ test("Issue webhook enqueue is unchanged when the session stream adapter throws"
   assert.equal(enqueue.jobs.length, 1);
 });
 
-test("implement Pi spawn uses json mode and pipes stdout into the session stream", async () => {
+test("implement Pi spawn pipes stdout before spawn close resolves", async () => {
   const spawned = [];
+  let closeResolved = false;
+  let resolveClose;
+  const closePromise = new Promise((resolve) => {
+    resolveClose = (status) => {
+      closeResolved = true;
+      resolve({ status });
+    };
+  });
+  const activitiesDuringChild = [];
   const linear = {
     async listComments() {
       return [{ id: "c1", body: "## Agent Workpad\n" }];
@@ -177,9 +227,13 @@ test("implement Pi spawn uses json mode and pipes stdout into the session stream
     async getAgentSessionId() {
       return SESSION_ID;
     },
-    async createAgentActivity() {},
+    async createAgentActivity(input) {
+      if (!closeResolved) {
+        activitiesDuringChild.push(input);
+      }
+    },
   };
-  const session = createMemorySessionAdapter({ linear });
+  const session = createLinearSessionAdapter({ linear });
   const runner = createPiJobRunner({
     env: {
       PI_MODEL: "cursor/composer-2.5",
@@ -215,7 +269,8 @@ test("implement Pi spawn uses json mode and pipes stdout into the session stream
     spawnProcess(_command, args, options) {
       spawned.push({ args, options });
       const stdout = Readable.from(`${PI_IMPLEMENT_FIXTURE}\n`);
-      return Promise.resolve({ status: 0, stdout });
+      setImmediate(() => resolveClose(0));
+      return Promise.resolve({ stdout, closePromise });
     },
   });
 
@@ -230,14 +285,19 @@ test("implement Pi spawn uses json mode and pipes stdout into the session stream
   assert.ok(spawned[0].args.includes("--mode"));
   assert.ok(spawned[0].args.includes("json"));
   assert.deepEqual(spawned[0].options.stdio, ["inherit", "pipe", "inherit"]);
+  assert.ok(activitiesDuringChild.length >= 2);
+  assert.ok(activitiesDuringChild.some((activity) => activity.content.type === "thought"));
+  assert.ok(activitiesDuringChild.some((activity) => activity.content.type === "action"));
   const streamed = session.activities.filter((activity) => activity.ephemeral === true);
   assert.ok(streamed.length >= 2);
-  assert.ok(streamed.some((activity) => activity.content.type === "thought"));
-  assert.ok(streamed.some((activity) => activity.content.type === "action"));
 });
 
 test("factory-checker spawn also streams Pi json events", async () => {
   const spawned = [];
+  let resolveClose;
+  const closePromise = new Promise((resolve) => {
+    resolveClose = (status) => resolve({ status });
+  });
   const session = createMemorySessionAdapter({
     linear: {
       async getAgentSessionId() {
@@ -255,12 +315,11 @@ test("factory-checker spawn also streams Pi json events", async () => {
     session,
     spawnProcess(_command, args, options) {
       spawned.push({ args, options });
-      return Promise.resolve({
-        status: 0,
-        stdout: Readable.from(
-          '{"type":"tool_execution_start","toolName":"grep","args":{"pattern":"KIT-79"}}\n',
-        ),
-      });
+      const stdout = Readable.from(
+        '{"type":"tool_execution_start","toolName":"grep","args":{"pattern":"KIT-79"}}\n',
+      );
+      setImmediate(() => resolveClose(0));
+      return Promise.resolve({ stdout, closePromise });
     },
   });
 
