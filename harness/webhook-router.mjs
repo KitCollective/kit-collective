@@ -223,6 +223,7 @@ async function ackSession({ session, event, issue, delegateGateConfig, now }) {
  *   linear: { getIssue: (id: string) => Promise<object | null> | object | null },
  *   gh: object,
  *   enqueue: { enqueue: (job: object) => void },
+ *   worktree?: { reap?: (input: { identifier: string }) => Promise<unknown> },
  *   session?: {
  *     ackCreated?: Function,
  *     ackPrompted?: Function,
@@ -244,6 +245,7 @@ export async function routeWebhook(input) {
     linear,
     gh,
     enqueue,
+    worktree,
     session,
     delegateGateConfig = createDelegateGateConfig(input.env),
     allowedDelegates,
@@ -305,6 +307,13 @@ export async function routeWebhook(input) {
   const issue = await linear.getIssue(issueId);
   if (!issue) {
     return { kind: "skip", reason: "issue not found" };
+  }
+
+  if (issue.status === "Done" || issue.status === "Canceled") {
+    if (typeof worktree?.reap === "function" && typeof issue.identifier === "string") {
+      await worktree.reap({ identifier: issue.identifier });
+    }
+    return { kind: "skip", reason: `no factory role for ${issue.status}` };
   }
 
   if (issue.status === "Ready for merge") {

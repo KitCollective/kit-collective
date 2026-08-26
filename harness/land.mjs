@@ -272,9 +272,10 @@ export function createLandGh({
  *     merge: (args: string[]) => { ok: boolean, sha?: string, error?: string },
  *   },
  *   lanes?: { integration: string, staging?: string, production?: string },
+ *   worktree?: { reap?: (input: { identifier: string }) => Promise<unknown> },
  * }} input
  */
-export async function completeLand({ job, linear, gh, lanes = LAND_LANES }) {
+export async function completeLand({ job, linear, gh, lanes = LAND_LANES, worktree }) {
   const issue = await linear.getIssue(job.issueId);
   if (!issue || issue.status !== MERGE_PERMISSION_STATUS) {
     return {
@@ -308,6 +309,11 @@ export async function completeLand({ job, linear, gh, lanes = LAND_LANES }) {
     commentId: existing?.id,
   });
   await linear.setStatus({ issueId: job.issueId, status: nextStatus });
+
+  if (gate.merged && typeof worktree?.reap === "function") {
+    const identifier = job.identifier ?? job.issueId;
+    await worktree.reap({ identifier });
+  }
 
   return {
     merged: gate.merged,
