@@ -181,6 +181,9 @@ jobs:
       - name: Test factory-script webhook-router and land-policy
         run: pnpm test:factory-scripts
 
+      - name: Test setup-coolify-mcp script
+        run: node --test scripts/tests/setup-coolify-mcp.test.mjs
+
       - name: Check factory tests are wired on the test job
         run: pnpm check:factory-ci-tests
 
