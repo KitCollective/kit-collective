@@ -12,7 +12,13 @@ import {
   PLANNER_DISPATCH_QUERY,
 } from "../linear-cli.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
-import { DEFAULT_PLANNER_POLL_MS, findWriteScopeOverlap, globsOverlap, runPlanner, startPlannerPoller } from "../planner.mjs";
+import {
+  DEFAULT_PLANNER_POLL_MS,
+  findWriteScopeOverlap,
+  globsOverlap,
+  runPlanner,
+  startPlannerPoller,
+} from "../planner.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PI_APP_USER_ID = "pi-app-user-1";
@@ -219,10 +225,9 @@ test("planner continues claiming after a write-scope overlap skip", async () => 
 });
 
 test("findWriteScopeOverlap ignores Implementing issues without write-scope", () => {
-  const overlap = findWriteScopeOverlap(
-    { description: "write-scope: harness/planner.mjs" },
-    [{ identifier: "KIT-89", description: "No scope declared." }],
-  );
+  const overlap = findWriteScopeOverlap({ description: "write-scope: harness/planner.mjs" }, [
+    { identifier: "KIT-89", description: "No scope declared." },
+  ]);
   assert.equal(overlap, null);
 });
 

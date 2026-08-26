@@ -175,7 +175,11 @@ export async function runPlanner({ env = process.env, linear } = {}) {
     throw new Error("planner must not set Linear Agent to Cursor");
   }
 
-  const { implementingState, implementingIssues = [], issues } = await client.listDispatch({
+  const {
+    implementingState,
+    implementingIssues = [],
+    issues,
+  } = await client.listDispatch({
     teamKey: PLANNER_TEAM_KEY,
   });
   if (implementingState?.name !== "Implementing" || typeof implementingState.id !== "string") {
