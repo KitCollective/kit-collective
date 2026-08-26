@@ -17,7 +17,7 @@ If the setup file is missing, run `/bootstrap-linear`. Do not guess IDs.
 | `/to-spec` kickoff | Linear **project** (`planned`) filled in: summary, description, lead (`approver`), `craft:*` project labels (PM filter). **Milestones** with descriptions. Linear **document** with the spec body. Priority and dates only if the conversation named them. No issues. |
 | `/to-spec` feature | Linear **document** on the existing project. New **milestone** (with description) only if this feature is its own staging increment. Do not replace project labels. |
 | `/to-tickets` | One Linear **issue** per vertical slice. Status = `dispatch.state`. Parent project + milestone. Native `blockedBy`. Label `ready-for-agent`. Optional `write-scope:`. **Do not delegate.** |
-| `/signal-up` | New issue in the dispatch state with `signal-up` only (do not also apply `needs-triage` while the Triage group is exclusive). Related to the origin. Never `Implementing`. |
+| `/signal-up` | New issue in Linear **Triage** with `signal-up` only (do not also apply `needs-triage` while the Triage group is exclusive). Related to the origin. Never `Implementing`. Never Backlog. |
 
 ## When a skill says "fetch the relevant ticket"
 
@@ -33,7 +33,7 @@ Moving an issue to the dispatch state is **not** enough. It needs label `ready-f
 
 Team `linear.teamKey` keeps Linear’s **Triage** and **Duplicate** states. They are not in `factory.config.json` `states` (bootstrap must not rename or delete them). They are **not** the factory label group `Triage` / `needs-triage`.
 
-- **Triage** — inbox for Sentry bugs and other integrations. Automations must not claim, label-as-ready, or delegate them.
+- **Triage** — inbox for Sentry, `signal-up`, and `proposal`. Planner must not claim, label-as-ready, or delegate them.
 - **Duplicate** — mark that the work already exists on another issue. No agent action.
 - A human **Accepts** from Triage into `Parked` or `Backlog` (without `ready-for-agent`), or marks duplicate / declines / snoozes.
 - After accept: add `needs-triage` until a human has shaped the ticket. Then `ready-for-agent`. Dispatch requires `dispatch.state` + `ready-for-agent` + unblocked. Never set Linear Agent to Cursor.
