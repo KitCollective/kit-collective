@@ -353,6 +353,38 @@ test("factory-checker spawn also streams Pi json events", async () => {
       PI_MODEL_FAST: "cursor/grok-4.6",
     },
     workspace: ROOT,
+    worktree: {
+      async checkout() {
+        return { path: ROOT, branch: "kit-79", lane: "development" };
+      },
+    },
+    linear: {
+      async getIssue() {
+        return {
+          id: ISSUE_ID,
+          identifier: "KIT-79",
+          status: "In Review",
+          attachments: [{ url: "https://github.com/KitCollective/kit-collective/pull/64" }],
+        };
+      },
+      async listComments() {
+        return [{ id: "c1", body: "## Agent Workpad\n\n### Review feedback\n\n- (none)\n" }];
+      },
+      async setStatus() {},
+      async updateWorkpad() {},
+    },
+    checkerGh: {
+      async viewPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/64",
+          mergeable: "MERGEABLE",
+          requiredChecks: [{ name: "test", conclusion: "success" }],
+        };
+      },
+      merge() {
+        throw new Error("checker never merges");
+      },
+    },
     session,
     spawnProcess(_command, args, options) {
       spawned.push({ args, options });

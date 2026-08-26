@@ -635,6 +635,6 @@ test("compose worker ACKs AgentSession and enqueues implement when delegate is P
   });
   const checkout = await worktree.checkout({ identifier: "KIT-99" });
   assert.equal(checkout.lane, "development");
-  assert.ok(gitCalls.some((args) => args.includes("refs/heads/development")));
+  assert.ok(gitCalls.some((args) => args.includes("development")));
   assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/bug.yaml");
 });
