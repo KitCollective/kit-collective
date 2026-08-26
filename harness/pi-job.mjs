@@ -8,6 +8,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { completeAutoMerge } from "./auto-merge.mjs";
+import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { DEFAULT_CAPACITY_POLL_MS, floorsFromEnv, waitForCapacity } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
@@ -661,6 +662,8 @@ export function createPiJobRunner({
           },
           linear: linearClient,
           gh: mergeGh,
+          delegateGateConfig: createDelegateGateConfig(env),
+          env,
         });
       }
       if (job.role === "land") {

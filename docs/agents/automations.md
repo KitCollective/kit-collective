@@ -53,7 +53,7 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | `Implementing` → `In Review` | **Implement** (PR + proof on Linear) |
 | `In Review` → `Ready for merge` | **Checker** (pass) |
 | `In Review` / `Ready for merge` / `Merging` → `Implementing` | **Checker** or **land** (fail) |
-| `Ready for merge` → `Merging` | **Auto-merge** (loop cap) or **approver** |
+| `Ready for merge` → `Merging` | **Auto-merge** when delegate is Pi (loop cap + MERGEABLE + green checks) or **approver** |
 | `Merging` → `Done` | **Land** (merge succeeded) |
 | Merge to integration | **Land** |
 
@@ -201,7 +201,7 @@ Complete review every pass — not a delta on last ### Review feedback. Dump eve
 
 Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status; do not fail early on Standards. Failed required checks or CONFLICTING → fail, and still include every Spec/Standards hard miss in the same ### Review feedback. Local tests are not a substitute.
 
-Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Auto-merge may then flip to Merging.
+Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Pi stays delegate until Auto-merge decides. Auto-merge may then flip to Merging when delegate is Pi.
 
 Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no resume of the previous Pi job.
 
