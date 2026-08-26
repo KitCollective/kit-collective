@@ -29,7 +29,7 @@ There is **no** concurrency cap. Unresolved `blockedBy` is what keeps a later sl
 
 If any eligibility check fails: **do not modify the issue**. Stop.
 
-Never claim from Linear **Triage** (Sentry/intake) or **Duplicate**. Those are Linear-owned. A human accepts onto `Backlog`/`Parked` first.
+Never claim from Linear **Triage** or **Duplicate**. Planner still never claims Triage and never claims `signal-up`. A human may still accept onto `Backlog`/`Parked`.
 
 The worker writes **Parked** after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. Planner still never claims Parked. A human Park is not Idle timeout and keeps the Issue worktree.
 
@@ -45,9 +45,9 @@ Typical contract:
 
 | State | Linear type | Who moves here | Meaning |
 | --- | --- | --- | --- |
-| Backlog | backlog | humans, `/to-tickets`, signal-up | Dispatch-eligible when `ready-for-agent` + unblocked |
+| Backlog | backlog | humans, `/to-tickets` | Dispatch-eligible when `ready-for-agent` + unblocked |
 | Parked | unstarted | humans; worker on Idle timeout | Visible, never auto-dispatched |
-| Triage | triage | Sentry and other intake | Inbox. Human accepts. Never auto-dispatch |
+| Triage | triage | Sentry, `/signal-up`, `/proposal` | Inbox. Planner never claims |
 | Duplicate | duplicate | humans | Duplicate of another issue. Never auto-dispatch |
 | Implementing | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |
 | In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |

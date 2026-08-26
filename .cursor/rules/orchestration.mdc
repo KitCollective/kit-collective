@@ -8,7 +8,7 @@ alwaysApply: true
 Load `factory.config.json` then `WORKFLOW.md`. Do not invent Linear statuses.
 
 - Dispatch only when status is `dispatch.state`, the issue has `ready-for-agent`, and it has no unresolved `blockedBy`. Never set Linear Agent to Cursor (that starts a Cloud Agent). Assignee stays the human.
-- **Planner** claims by moving to `Implementing`, in Linear priority order (`dispatch.priorityOrder`). No concurrency cap — blocking is the limiter. Implement never claims from `dispatch.state`.
+- **Planner** claims by moving to `Implementing`, in Linear priority order (`dispatch.priorityOrder`). No concurrency cap — blocking is the limiter. Implement never claims from `dispatch.state`. Planner still never claims Triage and never claims `signal-up`.
 - Implement starts or resumes only while status is `Implementing`. Same issue, same branch, same PR.
 - One issue → one branch from `lanes.integration` → one PR into that lane.
 - **Checker** wakes on `In Review`. Pass = `/code-review` clean **and** required GitHub CI/CD checks green → `Ready for merge`.

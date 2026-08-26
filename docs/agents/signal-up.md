@@ -1,6 +1,6 @@
 # Signal-up
 
-When you discover work that is **out of scope** for the current Linear issue, file it as a new issue so a human can triage it. Do not expand the current PR.
+When you discover work that is **out of scope** for the current Linear issue, file it as a new Linear **Triage** issue so a human can triage it. Do not expand the current PR. Do not file into Backlog.
 
 ## When to use
 
@@ -19,7 +19,7 @@ New Linear issue only. Do not edit issues you did not create. Do not delegate.
 
 **Required**
 
-- Status = `dispatch.state`
+- Status = Linear **Triage** (the state, not the label group)
 - Label: `signal-up` only
 - Same project as the origin; related to the origin
 - Cap: `agent.signalUpCapPerRun` (default 3). Further findings go in the workpad only.
@@ -31,7 +31,7 @@ New Linear issue only. Do not edit issues you did not create. Do not delegate.
 - `proposal` on the same issue
 - Moving it to `Implementing`
 
-A human shapes the ticket, then may apply `ready-for-agent`. Dispatch still requires status + `ready-for-agent` + unblocked. Never delegate.
+A human shapes the ticket, then may apply `ready-for-agent`. Dispatch still requires `dispatch.state` + `ready-for-agent` + unblocked. Never delegate.
 
 ## Body shape
 

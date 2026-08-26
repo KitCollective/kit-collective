@@ -88,11 +88,11 @@ Who-acts labels: \`needs-triage\`, \`needs-info\`, \`ready-for-agent\`, \`ready-
 
 ### Signal-up
 
-Out-of-scope bugs/debt: new Linear issue, \`${dispatch}\`, label \`signal-up\` only (never delegate, never \`ready-for-agent\`, never \`needs-triage\` while the Triage group is exclusive). Cap ${signalCap} per run. See \`docs/agents/signal-up.md\`.
+Out-of-scope bugs/debt: new Linear issue in **Triage** (the state), label \`signal-up\` only (never delegate, never \`ready-for-agent\`, never \`needs-triage\` while the Triage group is exclusive). Cap ${signalCap} per run. See \`docs/agents/signal-up.md\`.
 
 ### Qualified proposals
 
-Out-of-scope features/optimisations: new Linear issue, \`${dispatch}\`, label \`proposal\` only (never \`needs-triage\` while the Triage group is exclusive). At most one per run. See \`docs/agents/qualified-proposals.md\`.
+Out-of-scope features/optimisations: new Linear issue in **Triage**, label \`proposal\` only (never \`needs-triage\` while the Triage group is exclusive). At most one per run. See \`docs/agents/qualified-proposals.md\`.
 
 ### Error ratcheting
 
@@ -197,12 +197,12 @@ The single workpad comment on an issue. \`### Review feedback\` is why a pass wa
 _Avoid_: a new comment thread per agent turn
 
 **Signal-up**:
-Out-of-scope bug or debt, filed as a new \`${dispatch}\` issue. Never coded in the current PR.
-_Avoid_: expanding the PR, applying \`ready-for-agent\` to the finding
+Out-of-scope bug or debt, filed as a new Linear **Triage** issue. Never coded in the current PR.
+_Avoid_: expanding the PR, applying \`ready-for-agent\` to the finding, filing into \`${dispatch}\`
 
 **Proposal**:
-Out-of-scope feature or optimisation. Same ingress as signal-up, different label.
-_Avoid_: mixing with \`signal-up\` on the same issue
+Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), different label.
+_Avoid_: mixing with \`signal-up\` on the same issue, filing into \`${dispatch}\`
 
 **Land**:
 Merge to \`${integration}\` after ${approver} moves the issue to Merging. Land sets Done only after the merge.
@@ -213,8 +213,8 @@ A Linear **milestone** complete → \`${staging}\`; release helper → \`${produ
 _Avoid_: deploy, release PR as a synonym for land, treating the Linear project as one staging dump
 
 **Triage** *(Linear state)*:
-Inbox for Sentry and other intake. Human accepts onto the board. Never auto-dispatch.
-_Avoid_: the Triage *label group*, \`needs-triage\`
+Inbox for Sentry, signal-up, and proposal. Planner never claims.
+_Avoid_: the Triage *label group*, \`needs-triage\`, filing leftovers into \`${dispatch}\`
 
 **Duplicate** *(Linear state)*:
 This work already exists on another issue. No agent action.

@@ -187,6 +187,12 @@ jobs:
       - name: Test factory CI wiring ratchet logic
         run: node --test scripts/tests/check-factory-ci-tests.test.mjs
 
+      - name: Check signal-up create contract
+        run: node scripts/tests/check-signal-up-create-contract.mjs
+
+      - name: Test signal-up create-contract ratchet logic
+        run: node --test scripts/tests/check-signal-up-create-contract.test.mjs
+
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
 

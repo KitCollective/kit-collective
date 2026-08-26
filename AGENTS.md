@@ -40,11 +40,11 @@ Who-acts labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-hum
 
 ### Signal-up
 
-Out-of-scope bugs/debt: new Linear issue, `Backlog`, label `signal-up` only (never delegate, never `ready-for-agent`, never `needs-triage` while the Triage group is exclusive). Cap 3 per run. See `docs/agents/signal-up.md`.
+Out-of-scope bugs/debt: new Linear issue in **Triage** (the state), label `signal-up` only (never delegate, never `ready-for-agent`, never `needs-triage` while the Triage group is exclusive). Cap 3 per run. See `docs/agents/signal-up.md`.
 
 ### Qualified proposals
 
-Out-of-scope features/optimisations: new Linear issue, `Backlog`, label `proposal` only (never `needs-triage` while the Triage group is exclusive). At most one per run. See `docs/agents/qualified-proposals.md`.
+Out-of-scope features/optimisations: new Linear issue in **Triage**, label `proposal` only (never `needs-triage` while the Triage group is exclusive). At most one per run. See `docs/agents/qualified-proposals.md`.
 
 ### Error ratcheting
 
