@@ -13,13 +13,13 @@ import {
   requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
+import { gitAuthExtraHeader } from "../linear-actor-token.mjs";
 import {
   COMMENT_CREATE_MUTATION,
   COMMENT_UPDATE_MUTATION,
   createLinearCliClient,
   ISSUE_UPDATE_STATE_MUTATION,
 } from "../linear-cli.mjs";
-import { gitAuthExtraHeader } from "../linear-actor-token.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
 import {
   createWorktreeAdapter,
