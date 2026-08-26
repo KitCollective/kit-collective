@@ -6,7 +6,7 @@
  * once the PR is on the remote). One issue, one branch, one PR. Fake `runGit`.
  */
 import { execFile as execFileCb } from "node:child_process";
-import { existsSync as fsExistsSync, mkdirSync as fsMkdirSync } from "node:fs";
+import { existsSync as fsExistsSync, mkdirSync as fsMkdirSync, rmSync as fsRmSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
@@ -109,6 +109,7 @@ async function fetchIssueBranch(git, dir, branch, opts = {}) {
  *   lane?: string,
  *   existsSync?: (path: string) => boolean,
  *   mkdirSync?: (path: string, options?: { recursive?: boolean }) => void,
+ *   rmSync?: (path: string, options?: { recursive?: boolean, force?: boolean }) => void,
  *   runGit?: (args: string[], options?: { env?: NodeJS.ProcessEnv }) => Promise<{ stdout?: string, status?: number | null }>,
  *   execFileImpl?: (command: string, args: string[], options: object) => Promise<{ stdout: string }>,
  * }} [deps]
@@ -121,6 +122,7 @@ export function createWorktreeAdapter({
   lane = IMPLEMENT_LANE,
   existsSync = fsExistsSync,
   mkdirSync = fsMkdirSync,
+  rmSync = fsRmSync,
   runGit,
   execFileImpl,
 } = {}) {
@@ -173,6 +175,30 @@ export function createWorktreeAdapter({
       }
 
       return { path, branch, lane };
+    },
+
+    /**
+     * Remove the Issue worktree. The bare mirror stays.
+     * Triggers: Timeout park, land Done, webhook Canceled/Done. Not a human Park.
+     *
+     * @param {{ identifier: string }} input
+     * @returns {Promise<{ reaped: boolean, path: string, mirror: string }>}
+     */
+    async reap({ identifier }) {
+      assertIdentifier(identifier);
+      const path = worktreePath(identifier, worktreesDir);
+      if (!existsSync(path)) {
+        return { reaped: false, path, mirror: mirrorDir };
+      }
+      try {
+        await git(["--git-dir", mirrorDir, "worktree", "remove", "--force", path]);
+      } catch {
+        // Directory delete below still runs when git worktree remove fails.
+      }
+      if (existsSync(path)) {
+        rmSync(path, { recursive: true, force: true });
+      }
+      return { reaped: true, path, mirror: mirrorDir };
     },
   };
 }
