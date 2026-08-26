@@ -62,6 +62,7 @@ export function createSerialQueue(deps) {
   };
 }
 
+const PLANNER_MUTEX_ROLES = new Set(["planner", "intake"]);
 const CODING_ROLES = new Set(["implement", "factory-checker", "land"]);
 
 /**
@@ -101,7 +102,7 @@ export function createWorkerSlots(deps) {
      * @param {object} job
      */
     enqueue(job) {
-      if (job.role === "planner") {
+      if (PLANNER_MUTEX_ROLES.has(job.role)) {
         return plannerQueue.enqueue(job);
       }
       if (!CODING_ROLES.has(job.role)) {

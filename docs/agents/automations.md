@@ -20,6 +20,7 @@ There is no “same Cloud Agent”. Each run is a new Pi job. **Same work** mean
 
 ```text
 planner:    Backlog + ready-for-agent + unblocked → Implementing (priority order)
+intake:     hourly Triage scan on the planner mutex → Backlog / Duplicate / comment
 implement:  Implementing (no PR) → branch + code + PR + pre-review gate → In Review
 checker:    In Review → complete review → Ready for merge
             or Implementing + full ### Review feedback (no drip-feed)
@@ -46,6 +47,7 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 
 | Move | Who |
 | --- | --- |
+| Triage → `Backlog` (shaped) / Duplicate (leftovers) | **Intake** (hourly, Linear CLI) |
 | `dispatch.state` → `Implementing` | **Planner** (claim) |
 | `Implementing` → `In Review` | **Implement** (PR + proof on Linear) |
 | `In Review` → `Ready for merge` | **Checker** (pass) |
@@ -90,8 +92,19 @@ Every run:
 3. Claim all currently eligible issues in dispatch.priorityOrder (Urgent 1, High 2, Medium 3, Low 4, None 0). Same rank: oldest first. Unset/None is last. Skip write-scope overlap with an Implementing issue (leave it in dispatch.state with ready-for-agent, comment why). Do not preempt Implementing. That is the only status move you make.
 4. If the same ### Review feedback class has failed twice on an Implementing issue, comment that the next implement pass must land a ratchet (docs/agents/error-ratcheting.md). Do not write the ratchet.
 
-Never claim Triage or Duplicate. Never move to In Review, Ready for merge, Merging, Done, Parked, or Canceled.
+Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage; planner does not. Never move to In Review, Ready for merge, Merging, Done, Parked, or Canceled.
 ```
+
+---
+
+## 0b. Intake (Triage)
+
+| Field | Value |
+| --- | --- |
+| Trigger | Every hour (`PI_INTAKE_POLL_MS`, default 1 hour) on the **planner mutex** |
+| Tools | **Linear CLI** on the PI worker. Not Pi. Not the coding slot. |
+| Action | List open KIT Triage. Promote well-formed slices (Linear Type, write-scope, What to build, AC) to Backlog with `ready-for-agent` and without `signal-up`. Related leftovers of the same class become one Backlog tech issue; origins become Duplicate. Unshaped Sentry stays in Triage with one comment updated in place. |
+| Never | Implementing, In Review, Merging, Done. Never set Linear Agent to Cursor. |
 
 ---
 

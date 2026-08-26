@@ -56,7 +56,7 @@ A Linear **milestone** complete → `staging`; release helper → `production`. 
 _Avoid_: deploy, release PR as a synonym for land, treating the Linear project as one staging dump
 
 **Triage** *(Linear state)*:
-Inbox for Sentry and other intake. Human accepts onto the board. Never auto-dispatch.
+Inbox for Sentry and other intake. The Intake job may shape, consolidate, or promote to Backlog. Planner never claims Triage.
 _Avoid_: the Triage *label group*, `needs-triage`
 
 **Duplicate** *(Linear state)*:
@@ -201,6 +201,10 @@ _Avoid_: treating a Linear claim as a Pi spawn; planner as a coding job
 **Planner job**:
 Linear-only skip/claim. Own mutex. Wakes on webhook or poll. Does not spawn Pi. May run while coding jobs are live.
 _Avoid_: enqueueing planner on the coding mutex; calling planner a Pi session
+
+**Intake job**:
+Hourly Linear-only scan of open KIT Triage on the planner mutex (`PI_INTAKE_POLL_MS`, default 1 hour). Promotes well-formed slices, consolidates related leftovers, comments unshaped Sentry. Never claims Implementing. Never spawns Pi. Never sets Linear Agent to Cursor.
+_Avoid_: filing leftovers into Backlog with `ready-for-agent`; treating Intake as planner claim; running Intake on the coding slot
 
 **Idle timeout**:
 A spawned Pi child with no close and no stdout for 45 minutes (env `PI_JOB_IDLE_MS`) is hung. The harness kills it and frees that coding slot.

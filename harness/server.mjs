@@ -15,6 +15,7 @@ import {
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
 import { createTypecheckTouched } from "./implement-exit.mjs";
+import { DEFAULT_INTAKE_POLL_MS, startIntakePoller } from "./intake.mjs";
 import { ALWAYS_READY_CAPACITY, createWorkerSlots } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
@@ -68,6 +69,7 @@ export async function startWorkerServer({
   spawnProcess,
   now = () => Date.now(),
   plannerPollMs,
+  intakePollMs,
   readCapacity,
 } = {}) {
   assertWorkerEnv(env);
@@ -104,6 +106,10 @@ export async function startWorkerServer({
     typeof plannerPollMs === "number"
       ? plannerPollMs
       : Number(env.PI_PLANNER_POLL_MS ?? DEFAULT_PLANNER_POLL_MS);
+  const intakeMs =
+    typeof intakePollMs === "number"
+      ? intakePollMs
+      : Number(env.PI_INTAKE_POLL_MS ?? DEFAULT_INTAKE_POLL_MS);
   const handler = createWorkerHandler({
     env,
     secret: env.LINEAR_WEBHOOK_SECRET,
@@ -120,13 +126,18 @@ export async function startWorkerServer({
   });
   const server = createServer(handler);
   let stopPoller = () => {};
+  let stopIntakePoller = () => {};
   server.on("close", () => {
     stopPoller();
+    stopIntakePoller();
   });
   return new Promise((resolve) => {
     server.listen(listenPort, listenHost, () => {
       if (pollMs > 0) {
         stopPoller = startPlannerPoller({ enqueue: slots, intervalMs: pollMs });
+      }
+      if (intakeMs > 0) {
+        stopIntakePoller = startIntakePoller({ enqueue: slots, intervalMs: intakeMs });
       }
       resolve(server);
     });
