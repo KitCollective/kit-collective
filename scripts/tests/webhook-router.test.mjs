@@ -351,14 +351,17 @@ test("Merging enqueues land", async () => {
   assert.equal(gh.calls.length, 0);
 });
 
-test("Ready for merge skips (approver, not a factory role)", async () => {
+test("Ready for merge enqueues auto-merge (not a human-only skip)", async () => {
   const { result, enqueue } = await dispatch(
     issueUpdatePayload(),
     snapshot({ status: "Ready for merge" }),
   );
 
-  assert.equal(result.kind, "skip");
-  assert.equal(enqueue.jobs.length, 0);
+  assert.equal(result.kind, "enqueue");
+  assert.equal(result.role, "auto-merge");
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "auto-merge");
+  assert.equal(enqueue.jobs[0].adwFile, undefined);
 });
 
 test("signal-up skips", async () => {

@@ -48,7 +48,7 @@ Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), differ
 _Avoid_: mixing with `signal-up` on the same issue, filing into `Backlog`
 
 **Land**:
-Merge to `development` after Nicklas moves the issue to Merging. Land sets Done only after the merge.
+Merge to `development` after Merging. Auto-merge may set Merging when loop caps allow; Nicklas can still move Merging. Land sets Done only after the merge.
 _Avoid_: landing to staging or production from an issue run
 
 **Promotion**:
@@ -195,7 +195,7 @@ OpenRouter model `tencent/hy3` for Scout and Gate only, no-think. Not product Vi
 _Avoid_: stealth/ox-alpha; Hy3 for nest/expo/drizzle/ui-ux; Hy3 for planner, factory-checker, or land; blocking the slice on Exacto
 
 **Coding job**:
-A factory role on the Pi coding path: implement, factory-checker, or land. Not planner.
+A factory role on the coding slot: implement, factory-checker, auto-merge, or land. Not planner. Auto-merge and land do not spawn Pi.
 _Avoid_: treating a Linear claim as a Pi spawn; planner as a coding job
 
 **Planner job**:
@@ -205,6 +205,14 @@ _Avoid_: enqueueing planner on the coding mutex; calling planner a Pi session
 **Intake job**:
 Hourly Linear-only scan of open KIT Triage on the planner mutex (`PI_INTAKE_POLL_MS`, default 1 hour). Promotes well-formed slices, consolidates related leftovers, comments unshaped Sentry. Never claims Implementing. Never spawns Pi. Never sets Linear Agent to Cursor.
 _Avoid_: filing leftovers into Backlog with `ready-for-agent`; treating Intake as planner claim; running Intake on the coding slot
+
+**Auto-merge**:
+Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and Loop cap is clear. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself.
+_Avoid_: force-push; merging to staging or production; treating Auto-merge as land
+
+**Loop cap**:
+Either five required-check failure cycles (`ciFailCycles`) or five checker-fail returns (`reviewLoops`) blocks Auto-merge. Counters live under workpad `### Loop counters`. Missing counters fail closed.
+_Avoid_: requiring both counters at 5; scraping GitHub as the only source; a synthetic Linear field
 
 **Idle timeout**:
 A spawned Pi child with no close and no stdout for 45 minutes (env `PI_JOB_IDLE_MS`) is hung. The harness kills it and frees that coding slot.

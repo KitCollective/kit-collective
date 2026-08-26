@@ -202,8 +202,12 @@ for (const [status, role] of notLand) {
   });
 }
 
-test("Ready for merge and Done never enqueue land", async () => {
-  for (const status of ["Ready for merge", "Done", "Parked", "Canceled"]) {
+test("Ready for merge enqueues auto-merge, not land; Done never enqueues land", async () => {
+  const ready = await routeIssue(snapshot({ status: "Ready for merge" }));
+  assert.notEqual(ready.result.role, "land");
+  assert.equal(ready.result.role, "auto-merge");
+  assert.equal(ready.enqueue.jobs.length, 1);
+  for (const status of ["Done", "Parked", "Canceled"]) {
     const { result, enqueue } = await routeIssue(snapshot({ status }));
     assert.notEqual(result.role, "land");
     assert.equal(enqueue.jobs.length, 0, status);

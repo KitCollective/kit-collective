@@ -2,7 +2,7 @@
  * Webhook router (KIT-52 + KIT-59).
  *
  * Issue HMAC (`hmacChannel: "issue"`) → enqueue exactly one factory role
- * (planner | implement | factory-checker | land) or skip.
+ * (planner | implement | factory-checker | auto-merge | land) or skip.
  * AgentSession HMAC (`hmacChannel: "session"`) → display-only ack; never enqueue.
  * Pi argv, worktree paths, and ADW yaml stay behind this interface.
  * Fake Linear and `gh` at this seam; do not call Pi or hosted MCP.
@@ -134,6 +134,8 @@ function dispatchIssue(issue, delegateGateConfig) {
     }
     case "In Review":
       return { kind: "enqueue", role: "factory-checker" };
+    case "Ready for merge":
+      return { kind: "enqueue", role: "auto-merge" };
     case "Merging":
       return { kind: "enqueue", role: "land" };
     default:
@@ -314,17 +316,6 @@ export async function routeWebhook(input) {
       await worktree.reap({ identifier: issue.identifier });
     }
     return { kind: "skip", reason: `no factory role for ${issue.status}` };
-  }
-
-  if (issue.status === "Ready for merge") {
-    if (typeof session?.handOff === "function") {
-      await session.handOff({
-        issueId: issue.id,
-        identifier: issue.identifier,
-        now,
-      });
-    }
-    return { kind: "skip", reason: "ready for merge — human turn" };
   }
 
   const decision = dispatchIssue(issue, gateConfig);
