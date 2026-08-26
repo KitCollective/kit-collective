@@ -87,6 +87,22 @@ export function createMemorySessionAdapter({ linear } = {}) {
       });
     },
     /**
+     * Ephemeral Pi child stream line. Never updates the workpad.
+     *
+     * @param {{ issueId: string, sessionId?: string, content: object, ephemeral?: boolean }} input
+     */
+    async emitStream({ issueId, sessionId, content, ephemeral = true }) {
+      const resolved = await resolveSessionId(linear, sessionsByIssue, { sessionId, issueId });
+      if (typeof resolved !== "string") {
+        return;
+      }
+      activities.push({
+        sessionId: resolved,
+        ephemeral,
+        content,
+      });
+    },
+    /**
      * @param {{ issueId?: string, identifier: string, role: string, sessionId?: string }} input
      */
     async emitWorking({ issueId, identifier, role, sessionId }) {
@@ -165,6 +181,26 @@ export function createLinearSessionAdapter({ linear }) {
         });
       }
     },
+    async emitStream(input) {
+      await memory.emitStream(input);
+      const last = memory.activities.at(-1);
+      const sessionId = last?.sessionId ?? input.sessionId;
+      if (
+        typeof linear.createAgentActivity === "function" &&
+        last &&
+        typeof sessionId === "string"
+      ) {
+        try {
+          await linear.createAgentActivity({
+            sessionId,
+            content: last.content,
+            ephemeral: last.ephemeral,
+          });
+        } catch {
+          // Stream path failures must not fail the Issue webhook or Pi job.
+        }
+      }
+    },
     async emitWorking(input) {
       await memory.emitWorking(input);
       const last = memory.activities.at(-1);
@@ -174,11 +210,15 @@ export function createLinearSessionAdapter({ linear }) {
         last &&
         typeof sessionId === "string"
       ) {
-        await linear.createAgentActivity({
-          sessionId,
-          content: last.content,
-          ephemeral: last.ephemeral,
-        });
+        try {
+          await linear.createAgentActivity({
+            sessionId,
+            content: last.content,
+            ephemeral: last.ephemeral,
+          });
+        } catch {
+          // Session display failures must not fail the Issue webhook or Pi job enqueue.
+        }
       }
     },
     async handOff(input) {

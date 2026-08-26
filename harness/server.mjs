@@ -60,6 +60,7 @@ export async function startWorkerServer({
           runCommand,
           gh: ghClient,
           linear: linearClient,
+          session: createLinearSessionAdapter({ linear: linearClient }),
           typecheckTouched: createTypecheckTouched({ runCommand }),
         });
   const queue = createSerialQueue({

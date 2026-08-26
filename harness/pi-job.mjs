@@ -12,6 +12,11 @@ import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
+import {
+  createPiEventStreamConsumer,
+  pipeReadableJsonLines,
+  STREAMING_ROLES,
+} from "./pi-event-stream.mjs";
 import { runPlanner } from "./planner.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
@@ -102,6 +107,38 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
 }
 
 /**
+ * @param {string} role
+ * @param {string} workspace
+ * @param {string} roleFile
+ * @param {string} model
+ * @param {string} prompt
+ * @returns {string[]}
+ */
+export function piArgsForRole(role, workspace, roleFile, model, prompt) {
+  if (role === "factory-checker") {
+    const args = factoryCheckerPiArgs({ workspace, roleFile, model, prompt });
+    if (STREAMING_ROLES.has(role)) {
+      const anchor = args.indexOf("-a");
+      if (anchor >= 0) {
+        return [...args.slice(0, anchor + 1), "--mode", "json", ...args.slice(anchor + 1)];
+      }
+    }
+    return args;
+  }
+  return [
+    "-p",
+    "-a",
+    ...(STREAMING_ROLES.has(role) ? ["--mode", "json"] : []),
+    "--model",
+    model,
+    "--append-system-prompt",
+    join(workspace, roleFile),
+    "--",
+    prompt,
+  ];
+}
+
+/**
  * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   workspace?: string,
@@ -111,8 +148,9 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   checkerGh?: object,
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
- *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
+ *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status?: number | null, stdout?: import("node:stream").Readable, closePromise?: Promise<{ status: number | null }> }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
+ *   session?: { emitStream?: Function },
  *   now?: () => number,
  *   sleep?: (ms: number) => Promise<unknown>,
  *   waitTimeoutMs?: number,
@@ -130,6 +168,7 @@ export function createPiJobRunner({
   typecheckTouched,
   spawnProcess,
   runCommand,
+  session,
   now,
   sleep,
   waitTimeoutMs,
@@ -140,10 +179,46 @@ export function createPiJobRunner({
     spawnProcess ??
     ((command, args, options) =>
       new Promise((resolve, reject) => {
-        const child = spawn(command, args, { ...options, stdio: "inherit" });
+        const child = spawn(command, args, options);
         child.on("error", reject);
-        child.on("close", (status) => resolve({ status }));
+        resolve({
+          stdout: child.stdout,
+          closePromise: new Promise((res, rej) => {
+            child.on("error", rej);
+            child.on("close", (status) => res({ status }));
+          }),
+        });
       }));
+
+  /**
+   * @param {{ role: string, identifier?: string, issueId?: string, adwFile?: string }} job
+   * @param {string} cwd
+   * @param {string} model
+   * @param {string} roleFile
+   * @param {string} prompt
+   * @param {NodeJS.ProcessEnv} spawnEnv
+   */
+  async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv) {
+    const args = piArgsForRole(job.role, workspace, roleFile, model, prompt);
+    const streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
+    const shouldStream =
+      STREAMING_ROLES.has(job.role) &&
+      typeof session?.emitStream === "function" &&
+      typeof streamIssueId === "string";
+    const stdio = shouldStream ? ["inherit", "pipe", "inherit"] : "inherit";
+    const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
+    const waitClose =
+      spawned.closePromise ??
+      spawned.closed ??
+      Promise.resolve({ status: typeof spawned.status === "number" ? spawned.status : 0 });
+    let streamDone = Promise.resolve();
+    if (shouldStream && spawned.stdout) {
+      const consumer = createPiEventStreamConsumer({ session, issueId: streamIssueId, now });
+      streamDone = pipeReadableJsonLines(spawned.stdout, consumer);
+    }
+    const [{ status }] = await Promise.all([waitClose, streamDone]);
+    return { status, stdout: spawned.stdout };
+  }
 
   return {
     /**
@@ -192,25 +267,7 @@ export function createPiJobRunner({
       if (job.role === "factory-checker") {
         spawnEnv.LINEAR_ISSUE_ID = job.issueId ?? identifier;
       }
-      const piArgs =
-        job.role === "factory-checker"
-          ? factoryCheckerPiArgs({
-              workspace,
-              roleFile,
-              model,
-              prompt,
-            })
-          : [
-              "-p",
-              "-a",
-              "--model",
-              model,
-              "--append-system-prompt",
-              join(workspace, roleFile),
-              "--",
-              prompt,
-            ];
-      const result = await spawnJob("pi", piArgs, { cwd, env: spawnEnv });
+      const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv);
       if (result.status !== 0) {
         throw new Error(`pi exited ${result.status} for ${identifier}`);
       }
