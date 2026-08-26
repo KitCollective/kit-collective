@@ -12,7 +12,7 @@ import {
   PLANNER_DISPATCH_QUERY,
 } from "../linear-cli.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
-import { DEFAULT_PLANNER_POLL_MS, runPlanner, startPlannerPoller } from "../planner.mjs";
+import { DEFAULT_PLANNER_POLL_MS, findWriteScopeOverlap, globsOverlap, runPlanner, startPlannerPoller } from "../planner.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PI_APP_USER_ID = "pi-app-user-1";
@@ -60,6 +60,7 @@ function parseVariables(args) {
 
 function fakeLinearCli({
   backlog = [],
+  implementing = [],
   implementingState = { id: IMPLEMENTING_STATE_ID, name: "Implementing" },
   users = { [PI_APP_USER_ID]: { id: PI_APP_USER_ID, name: "Pi" } },
 } = {}) {
@@ -81,6 +82,7 @@ function fakeLinearCli({
       return JSON.stringify({
         data: {
           implementingState: { nodes: implementingState ? [implementingState] : [] },
+          implementing: { nodes: implementing },
           backlog: { nodes: backlog },
         },
       });
@@ -117,12 +119,112 @@ function fakeLinearCli({
   return { calls, claims, comments, runCommand };
 }
 
-async function claimWith(backlog, env = validWorkerEnv()) {
-  const fake = fakeLinearCli({ backlog });
+async function claimWith(backlog, env = validWorkerEnv(), implementing = []) {
+  const fake = fakeLinearCli({ backlog, implementing });
   const linear = createLinearCliClient({ env, runCommand: fake.runCommand });
   const result = await runPlanner({ env, linear });
   return { ...fake, result, linear };
 }
+
+test("globsOverlap detects shared paths and ignores disjoint trees", () => {
+  assert.equal(globsOverlap("harness/planner.mjs", "harness/**"), true);
+  assert.equal(globsOverlap("harness/**", "harness/tests/**"), true);
+  assert.equal(globsOverlap("apps/api/**", "packages/db/**"), false);
+});
+
+test("planner skips Backlog issue whose write-scope overlaps an Implementing issue", async () => {
+  const { claims, comments, result } = await claimWith(
+    [
+      gqlNode({
+        id: "issue-overlap",
+        identifier: "KIT-92",
+        priority: 1,
+        description: "write-scope: harness/planner.mjs, harness/linear-cli.mjs",
+      }),
+    ],
+    validWorkerEnv(),
+    [
+      {
+        id: "issue-active",
+        identifier: "KIT-89",
+        description: "write-scope: harness/planner.mjs, harness/intake.mjs",
+      },
+    ],
+  );
+
+  assert.equal(claims.length, 0);
+  assert.equal(result.skipped.length, 1);
+  assert.equal(result.skipped[0].reason, "write-scope overlap");
+  assert.equal(comments.length, 1);
+  assert.match(comments[0].body, /KIT-92: skipped — write-scope overlaps KIT-89/);
+  assert.match(comments[0].body, /harness\/planner\.mjs/);
+});
+
+test("planner does not skip Backlog issue without write-scope for path overlap", async () => {
+  const { claims, comments } = await claimWith(
+    [
+      gqlNode({
+        id: "issue-no-scope",
+        identifier: "KIT-93",
+        description: "What to build\n\nNo write-scope line here.",
+      }),
+    ],
+    validWorkerEnv(),
+    [
+      {
+        id: "issue-active",
+        identifier: "KIT-89",
+        description: "write-scope: harness/**",
+      },
+    ],
+  );
+
+  assert.equal(claims.length, 1);
+  assert.equal(comments.length, 0);
+});
+
+test("planner continues claiming after a write-scope overlap skip", async () => {
+  const { claims, comments, result } = await claimWith(
+    [
+      gqlNode({
+        id: "issue-overlap",
+        identifier: "KIT-92",
+        priority: 1,
+        description: "write-scope: harness/planner.mjs",
+      }),
+      gqlNode({
+        id: "issue-ok",
+        identifier: "KIT-94",
+        priority: 2,
+        description: "write-scope: apps/mobile/**",
+      }),
+    ],
+    validWorkerEnv(),
+    [
+      {
+        id: "issue-active",
+        identifier: "KIT-89",
+        description: "write-scope: harness/**",
+      },
+    ],
+  );
+
+  assert.deepEqual(
+    claims.map((claim) => claim.id),
+    ["issue-ok"],
+  );
+  assert.equal(result.claimed[0].identifier, "KIT-94");
+  assert.equal(comments.length, 1);
+  assert.match(comments[0].body, /KIT-92: skipped — write-scope overlaps KIT-89/);
+});
+
+test("findWriteScopeOverlap ignores Implementing issues without write-scope", () => {
+  const overlap = findWriteScopeOverlap(
+    { description: "write-scope: harness/planner.mjs" },
+    [{ identifier: "KIT-89", description: "No scope declared." }],
+  );
+  assert.equal(overlap, null);
+});
 
 test("planner claims Backlog + ready-for-agent + unblocked issues in Linear priority order", async () => {
   const { claims, calls, result } = await claimWith([

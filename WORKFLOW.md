@@ -25,7 +25,7 @@ Planner may move an issue to `Implementing` **only** when all of these are true:
 4. It is not labelled `signal-up`
 5. Linear **Agent** is empty (Assignee stays the human). If Agent is Cursor, skip and comment — that path starts a Cloud Agent and is not factory dispatch.
 
-There is **no** concurrency cap. Unresolved `blockedBy` is what keeps a later slice out of `Implementing`. Among issues that pass, claim **all** currently eligible issues in `dispatch.priorityOrder` (default Linear: Urgent `1`, High `2`, Medium `3`, Low `4`, None `0`). Same rank: oldest first. Unset / None is last. Do not preempt `Implementing`. Priority is **claim order**, not eligibility — an Urgent issue without `ready-for-agent` still does not run.
+There is **no** concurrency cap. Unresolved `blockedBy` is what keeps a later slice out of `Implementing`. Among issues that pass, claim **all** currently eligible issues in `dispatch.priorityOrder` (default Linear: Urgent `1`, High `2`, Medium `3`, Low `4`, None `0`). Same rank: oldest first. Unset / None is last. Do not preempt `Implementing`. When a candidate declares `write-scope:` globs that overlap an issue already `Implementing`, skip it, leave it in `dispatch.state` with `ready-for-agent`, comment the overlapping identifier and globs, and continue with the next eligible issue. Issues without a `write-scope:` line are not skipped for path overlap. Priority is **claim order**, not eligibility — an Urgent issue without `ready-for-agent` still does not run.
 
 If any eligibility check fails: **do not modify the issue**. Stop.
 
