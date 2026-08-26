@@ -110,7 +110,7 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  *   landGh?: object,
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
- *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status: number | null }>,
+ *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status?: number | null, stdout?: import("node:stream").Readable, closePromise?: Promise<{ status: number | null }> }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
  *   session?: { emitStream?: Function },
  *   now?: () => number,
@@ -142,7 +142,13 @@ export function createPiJobRunner({
       new Promise((resolve, reject) => {
         const child = spawn(command, args, options);
         child.on("error", reject);
-        child.on("close", (status) => resolve({ status, stdout: child.stdout }));
+        resolve({
+          stdout: child.stdout,
+          closePromise: new Promise((res, rej) => {
+            child.on("error", rej);
+            child.on("close", (status) => res({ status }));
+          }),
+        });
       }));
 
   /**
@@ -171,12 +177,17 @@ export function createPiJobRunner({
       typeof session?.emitStream === "function" &&
       typeof streamIssueId === "string";
     const stdio = shouldStream ? ["inherit", "pipe", "inherit"] : "inherit";
-    const result = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
-    if (shouldStream && result.stdout) {
+    const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
+    const waitClose =
+      spawned.closePromise ??
+      Promise.resolve({ status: typeof spawned.status === "number" ? spawned.status : 0 });
+    let streamDone = Promise.resolve();
+    if (shouldStream && spawned.stdout) {
       const consumer = createPiEventStreamConsumer({ session, issueId: streamIssueId, now });
-      await pipeReadableJsonLines(result.stdout, consumer);
+      streamDone = pipeReadableJsonLines(spawned.stdout, consumer);
     }
-    return result;
+    const [{ status }] = await Promise.all([waitClose, streamDone]);
+    return { status, stdout: spawned.stdout };
   }
 
   return {

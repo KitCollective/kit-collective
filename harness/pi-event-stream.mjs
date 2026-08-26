@@ -5,6 +5,46 @@
 
 const MAX_THOUGHT_CHARS = 500;
 const MAX_PARAM_CHARS = 120;
+const SENSITIVE_KEY =
+  /^(authorization|cookie|set-cookie|x-api-key|api[_-]?key|token|secret|password|credential|auth)$/i;
+const TOKEN_VALUE =
+  /^(Bearer\s+\S+|ghp_[A-Za-z0-9_]+|gho_[A-Za-z0-9_]+|lin_[A-Za-z0-9_]+|sk-[A-Za-z0-9-]+)$/;
+
+/**
+ * @param {unknown} value
+ * @param {number} [depth]
+ * @returns {unknown}
+ */
+export function redactSensitiveArgs(value, depth = 0) {
+  if (depth > 8) {
+    return "[…]";
+  }
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (TOKEN_VALUE.test(trimmed)) {
+      return "[redacted]";
+    }
+    if (trimmed.length >= 32 && /^[A-Za-z0-9+/=_-]+$/.test(trimmed)) {
+      return "[redacted]";
+    }
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => redactSensitiveArgs(entry, depth + 1));
+  }
+  if (typeof value === "object") {
+    /** @type {Record<string, unknown>} */
+    const out = {};
+    for (const [key, entry] of Object.entries(value)) {
+      out[key] = SENSITIVE_KEY.test(key) ? "[redacted]" : redactSensitiveArgs(entry, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
 
 /**
  * @param {unknown} args
@@ -16,7 +56,8 @@ export function summarizeToolArgs(args) {
   }
   let text;
   try {
-    text = typeof args === "string" ? args : JSON.stringify(args);
+    const sanitized = typeof args === "string" ? redactSensitiveArgs(args) : redactSensitiveArgs(args);
+    text = typeof sanitized === "string" ? sanitized : JSON.stringify(sanitized);
   } catch {
     return "";
   }
