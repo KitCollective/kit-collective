@@ -219,11 +219,13 @@ ask_secret LINEAR_CLI_API_KEY "Linear CLI key for the worker (not the bootstrap 
 ask_secret LINEAR_WEBHOOK_SECRET "Linear Issue webhook HMAC secret:"
 ask_secret GH_TOKEN "GitHub token for gh:"
 ask_secret LINEAR_PI_APP_USER_ID "Pi Linear app user UUID (KIT-58, not a token, not Cursor):"
+ask_secret OPENROUTER_API_KEY "OpenRouter key for Scout and Gate (tencent/hy3). Value stays on kit-harness:"
 [[ -n "${CURSOR_API_KEY:-}" ]] && write_env CURSOR_API_KEY "$CURSOR_API_KEY"
 [[ -n "${LINEAR_CLI_API_KEY:-}" ]] && write_env LINEAR_CLI_API_KEY "$LINEAR_CLI_API_KEY"
 [[ -n "${LINEAR_WEBHOOK_SECRET:-}" ]] && write_env LINEAR_WEBHOOK_SECRET "$LINEAR_WEBHOOK_SECRET"
 [[ -n "${GH_TOKEN:-}" ]] && write_env GH_TOKEN "$GH_TOKEN"
 [[ -n "${LINEAR_PI_APP_USER_ID:-}" ]] && write_env LINEAR_PI_APP_USER_ID "$LINEAR_PI_APP_USER_ID"
+[[ -n "${OPENROUTER_API_KEY:-}" ]] && write_env OPENROUTER_API_KEY "$OPENROUTER_API_KEY"
 write_env LINEAR_CLI_VERSION "2.5.0"
 pause "Press Enter to continue."
 

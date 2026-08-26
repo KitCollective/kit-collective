@@ -239,6 +239,7 @@ test("implement Pi spawn pipes stdout before spawn close resolves", async () => 
       PI_MODEL: "cursor/composer-2.5",
       PI_MODEL_FAST: "cursor/grok-4.6",
       LINEAR_CLI_API_KEY: "lin_test",
+      OPENROUTER_API_KEY: "or_test",
     },
     workspace: ROOT,
     worktree: {
@@ -320,6 +321,7 @@ test("AgentSession receives thought and action before the Pi child closes", asyn
       PI_MODEL: "cursor/composer-2.5",
       PI_MODEL_FAST: "cursor/grok-4.6",
       LINEAR_CLI_API_KEY: "lin_test",
+      OPENROUTER_API_KEY: "or_test",
     },
     workspace: ROOT,
     worktree: {
@@ -398,6 +400,7 @@ test("factory-checker spawn also streams Pi json events", async () => {
       PI_MODEL: "cursor/composer-2.5",
       PI_MODEL_FAST: "cursor/grok-4.6",
       LINEAR_CLI_API_KEY: "lin_test",
+      OPENROUTER_API_KEY: "or_test",
     },
     workspace: ROOT,
     worktree: {

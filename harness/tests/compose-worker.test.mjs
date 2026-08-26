@@ -34,6 +34,7 @@ function validWorkerEnv() {
     LINEAR_CLI_VERSION: LINEAR_CLI_PIN.version,
     PI_MODEL: "cursor/composer-2.5",
     PI_MODEL_FAST: "cursor/grok-4.6",
+    OPENROUTER_API_KEY: "or_test",
   };
 }
 
@@ -59,6 +60,7 @@ test("worker env lists Cursor SDK, Linear CLI key, webhook HMAC, gh, and the pin
     "LINEAR_WEBHOOK_SECRET",
     "GH_TOKEN",
     "LINEAR_PI_APP_USER_ID",
+    "OPENROUTER_API_KEY",
   ]);
   assert.equal(LINEAR_CLI_PIN.npmPackage, "@schpet/linear-cli");
   assert.equal(LINEAR_CLI_PIN.version, "2.5.0");
@@ -76,6 +78,12 @@ test("worker env fails closed when a named secret is missing", () => {
   const env = validWorkerEnv();
   delete env.CURSOR_API_KEY;
   assert.throws(() => assertWorkerEnv(env), /CURSOR_API_KEY/);
+});
+
+test("worker env fails closed when OPENROUTER_API_KEY is missing", () => {
+  const env = validWorkerEnv();
+  delete env.OPENROUTER_API_KEY;
+  assert.throws(() => assertWorkerEnv(env), /OPENROUTER_API_KEY/);
 });
 
 test("serial queue runs only one Pi job at a time", async () => {
@@ -223,6 +231,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
     ".pi/adw/bug.yaml",
     ".pi/adw/improvement.yaml",
     ".pi/agents/scout.md",
+    ".pi/agents/gate.md",
     ".pi/agents/nest.md",
     ".pi/agents/expo.md",
     ".pi/agents/drizzle.md",
@@ -260,6 +269,9 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(envExample, /LINEAR_PI_ACCESS_TOKEN=/);
   assert.match(envExample, /30-day/);
   assert.match(envExample, /PI_MODEL_FAST=cursor\/grok-4\.6/);
+  assert.match(envExample, /^OPENROUTER_API_KEY=$/m);
+  assert.match(envExample, /PI_MODEL=cursor\/composer-2\.5/);
+  assert.doesNotMatch(envExample, /stealth|ox-alpha/i);
   const bootstrapKeyIndex = envExample.indexOf(
     "# Linear admin key for scripts/bootstrap-linear.mjs only.",
   );
@@ -275,6 +287,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /\/opt\/kit-collective\/harness\/\.env/);
   assert.match(host, /LINEAR_PI_WEBHOOK_SECRET/);
   assert.match(host, /LINEAR_PI_ACCESS_TOKEN/);
+  assert.match(host, /OPENROUTER_API_KEY/);
   assert.match(host, /30-day/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);
   assert.doesNotMatch(host, /:8080\/health/);
@@ -282,6 +295,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   const wizard = readFileSync(join(ROOT, "harness/cx33-wizard.sh"), "utf8");
   assert.match(wizard, /harness\/\.env/);
   assert.match(wizard, /LINEAR_CLI_API_KEY/);
+  assert.match(wizard, /OPENROUTER_API_KEY/);
   assert.doesNotMatch(wizard, /:8080\/health/);
   assert.doesNotMatch(wizard, /Copy worker keys into \/opt\/kit-collective\/\.env/);
 });
