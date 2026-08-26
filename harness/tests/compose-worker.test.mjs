@@ -303,6 +303,15 @@ test("compose build context includes the repo so .pi lands in the image", () => 
   assert.match(compose, /PI_WORKSPACE:\s*"\/workspace"/);
 });
 
+test("root dockerignore re-includes Pi role and agent markdown after excluding **/*.md", () => {
+  const lines = readFileSync(join(ROOT, ".dockerignore"), "utf8")
+    .split("\n")
+    .map((line) => line.trim());
+  const excludeMd = lines.indexOf("**/*.md");
+  assert.notEqual(excludeMd, -1);
+  assert.equal(lines[excludeMd + 1], "!.pi/**/*.md");
+});
+
 test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control exist", () => {
   const files = [
     ".pi/roles/planner.md",
