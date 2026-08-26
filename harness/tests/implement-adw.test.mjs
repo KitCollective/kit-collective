@@ -19,6 +19,7 @@ import {
   createLinearCliClient,
   ISSUE_UPDATE_STATE_MUTATION,
 } from "../linear-cli.mjs";
+import { gitAuthExtraHeader } from "../linear-actor-token.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
 import {
   createWorktreeAdapter,
@@ -199,7 +200,7 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
   );
 });
 
-test("production git wrapper keeps GH_TOKEN in env via Bearer header, never argv", async () => {
+test("production git wrapper keeps GH_TOKEN in env via Basic header, never argv", async () => {
   const env = { GH_TOKEN: "harness_git_auth_test_token" };
   const child = remoteGitChildEnv(env);
   assert.equal(
@@ -208,7 +209,7 @@ test("production git wrapper keeps GH_TOKEN in env via Bearer header, never argv
   );
   assert.equal(child.GH_TOKEN, "harness_git_auth_test_token");
   assert.equal(child.GIT_CONFIG_KEY_1, "http.extraHeader");
-  assert.equal(child.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
+  assert.equal(child.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("harness_git_auth_test_token"));
 
   const execs = [];
   const adapter = createWorktreeAdapter({
@@ -228,7 +229,7 @@ test("production git wrapper keeps GH_TOKEN in env via Bearer header, never argv
     assert.equal(exec.args.join(" ").includes("harness_git_auth_test_token"), false);
     assert.equal(JSON.stringify(exec.args).includes("Authorization"), false);
     assert.equal(exec.env.GIT_CONFIG_KEY_1, "http.extraHeader");
-    assert.equal(exec.env.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
+    assert.equal(exec.env.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("harness_git_auth_test_token"));
   }
 });
 
@@ -776,7 +777,7 @@ test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and
   assert.ok(gitCalls.length > 0);
   for (const call of gitCalls) {
     assert.equal(call.env.GIT_CONFIG_KEY_1, "http.extraHeader");
-    assert.equal(call.env.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
+    assert.equal(call.env.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("harness_git_auth_test_token"));
   }
   assert.equal(
     calls.some((call) => call.command === "gh" && call.args.includes("merge")),
