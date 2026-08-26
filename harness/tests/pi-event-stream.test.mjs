@@ -292,6 +292,93 @@ test("implement Pi spawn pipes stdout before spawn close resolves", async () => 
   assert.ok(streamed.length >= 2);
 });
 
+test("AgentSession receives thought and action before the Pi child closes", async () => {
+  const spawned = [];
+  const linear = {
+    async listComments() {
+      return [{ id: "c1", body: "## Agent Workpad\n" }];
+    },
+    async updateWorkpad() {},
+    async setStatus() {},
+    async getAgentSessionId() {
+      return SESSION_ID;
+    },
+    async createAgentActivity() {},
+  };
+  const session = createMemorySessionAdapter({ linear });
+  let resolveClose;
+  let childClosed = false;
+  const closed = new Promise((resolve) => {
+    resolveClose = () => {
+      childClosed = true;
+      resolve({ status: 0 });
+    };
+  });
+  const stdout = new Readable({ read() {} });
+  const runner = createPiJobRunner({
+    env: {
+      PI_MODEL: "cursor/composer-2.5",
+      PI_MODEL_FAST: "cursor/grok-4.6",
+      LINEAR_CLI_API_KEY: "lin_test",
+    },
+    workspace: ROOT,
+    worktree: {
+      async checkout() {
+        return { path: ROOT, branch: "kit-79", lane: "development" };
+      },
+    },
+    gh: {
+      async rebase() {},
+      async viewPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/64",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+      async createPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/64",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+    },
+    linear,
+    session,
+    typecheckTouched: async () => undefined,
+    spawnProcess(_command, args, options) {
+      spawned.push({ args, options });
+      return { stdout, closePromise: closed };
+    },
+  });
+
+  const runPromise = runner.run({
+    role: "implement",
+    identifier: "KIT-79",
+    issueId: ISSUE_ID,
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  stdout.push(`${PI_IMPLEMENT_FIXTURE}\n`);
+
+  const deadline = Date.now() + 2000;
+  while (session.activities.filter((activity) => activity.ephemeral === true).length < 2) {
+    if (Date.now() > deadline) {
+      throw new Error("timed out waiting for live stream activities while child still open");
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.equal(childClosed, false);
+  const streamed = session.activities.filter((activity) => activity.ephemeral === true);
+  assert.ok(streamed.some((activity) => activity.content.type === "thought"));
+  assert.ok(streamed.some((activity) => activity.content.type === "action"));
+
+  stdout.push(null);
+  resolveClose();
+  await runPromise;
+});
+
 test("factory-checker spawn also streams Pi json events", async () => {
   const spawned = [];
   let resolveClose;
@@ -340,6 +427,9 @@ test("factory-checker spawn also streams Pi json events", async () => {
           mergeable: "MERGEABLE",
           requiredChecks: [{ name: "test", conclusion: "success" }],
         };
+      },
+      merge() {
+        throw new Error("checker never merges");
       },
     },
     session,

@@ -56,7 +56,7 @@ export function summarizeToolArgs(args) {
   }
   let text;
   try {
-    const sanitized = typeof args === "string" ? redactSensitiveArgs(args) : redactSensitiveArgs(args);
+    const sanitized = redactSensitiveArgs(args);
     text = typeof sanitized === "string" ? sanitized : JSON.stringify(sanitized);
   } catch {
     return "";

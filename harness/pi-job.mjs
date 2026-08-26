@@ -209,6 +209,7 @@ export function createPiJobRunner({
     const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
     const waitClose =
       spawned.closePromise ??
+      spawned.closed ??
       Promise.resolve({ status: typeof spawned.status === "number" ? spawned.status : 0 });
     let streamDone = Promise.resolve();
     if (shouldStream && spawned.stdout) {
