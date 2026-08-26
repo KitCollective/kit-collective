@@ -249,7 +249,7 @@ test("planner and Intake have no browser tools and do not spawn Pi", async () =>
           teamId: "team-1",
           backlogState: { id: "s-back", name: "Backlog" },
           duplicateState: { id: "s-dup", name: "Duplicate" },
-          labels: {},
+          labels: { "ready-for-agent": "label-rfa" },
           issues: [],
         };
       },
