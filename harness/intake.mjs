@@ -1,10 +1,13 @@
 /**
- * Linear-only Intake job (KIT-89).
+ * Linear-only Intake job (KIT-89 / KIT-99).
  *
- * Lists open KIT Triage issues. Promotes well-formed slices, consolidates
- * related leftovers, comments unshaped Sentry. Interface: runIntake /
- * startIntakePoller. Linear CLI (or a fake) at this seam. No Pi spawn.
+ * Lists open KIT Triage issues. Promotes well-formed slices, shapes leftovers
+ * that have an inferable write-scope, comments unshaped Sentry or unscoped
+ * leftovers. Interface: runIntake / startIntakePoller. Linear CLI (or a fake)
+ * at this seam. No Pi spawn. Planner claims and sets Pi delegate.
  */
+import { parseWriteScopeGlobs } from "../scripts/lib/pr-write-scope.mjs";
+
 export const DEFAULT_INTAKE_POLL_MS = 3_600_000;
 export const INTAKE_TEAM_KEY = "KIT";
 export const INTAKE_COMMENT_HEADING = "## Intake";
@@ -19,10 +22,26 @@ const DROP_ON_PROMOTE = [
   "ready-for-human",
   "wontfix",
 ];
+const PATH_RE =
+  /(?:^|[\s`'"(])((?:harness|apps|packages|scripts|docs|\.cursor|\.pi|\.github)\/[A-Za-z0-9_./?*+-]+)/g;
+const BUG_RE =
+  /\b(omit|omits|missing|does not|fail|crash|wipe|broken|wrong|still says|cannot|can't)\b/i;
+const SURFACE_PATHS = [
+  ["apps/mobile", "surface:mobile"],
+  ["apps/web", "surface:web"],
+  ["apps/admin", "surface:admin"],
+  ["apps/api", "surface:api"],
+  ["packages/db", "surface:api"],
+];
 
 export const SENTRY_INTAKE_COMMENT = `${INTAKE_COMMENT_HEADING}
 
 Unshaped Sentry issue. Left in Triage. Intake will not invent a product slice.
+`;
+
+export const UNSCOPED_INTAKE_COMMENT = `${INTAKE_COMMENT_HEADING}
+
+Could not infer write-scope from this leftover. Left in Triage for a human to shape.
 `;
 
 /**
@@ -50,111 +69,126 @@ export function isSentryIssue(issue) {
 }
 
 /**
- * Class of finding from the signal-up body — paths, CI graph, or lock wording.
- * No synthetic `class:` line; create-contract writes `## Finding` only.
- *
- * @param {object} issue
+ * @param {string} text
  */
-function leftoverClass(issue) {
-  const description = String(issue.description ?? "");
-  const findingMatch = description.match(/##\s*Finding\n([\s\S]*?)(?=\n##\s|\s*$)/i);
-  const text =
-    `${issue.title ?? ""}\n${findingMatch ? findingMatch[1] : description}`.toLowerCase();
-  if (/\bci[-\s]?graph\b|required github check|\.github\/workflows|\bci\.yml\b/.test(text)) {
-    return "ci-graph";
-  }
-  if (/\block wording\b|\barchitecture lock\b|\badr-00|\bdesign-system\.md\b/.test(text)) {
-    return "lock-wording";
-  }
-  if (/\bwrite-scope\b|\bpath glob/.test(text)) {
-    return "paths";
-  }
-  return "unclassified";
+function issueText(issue) {
+  return `${issue.title ?? ""}\n${issue.description ?? ""}`;
 }
 
 /**
- * Origin keys from relatedTo (origin may be outside Triage) and the body Origin line.
+ * @param {string} description
+ * @param {string} heading
+ */
+function markdownSection(description, heading) {
+  const match = String(description).match(
+    new RegExp(`##\\s*${heading}\\n([\\s\\S]*?)(?=\\n##\\s|\\s*$)`, "i"),
+  );
+  return match ? match[1].trim() : "";
+}
+
+/**
+ * Repo paths from an existing write-scope line or mentioned files.
  *
  * @param {object} issue
  * @returns {string[]}
  */
-function leftoverOriginKeys(issue) {
-  const keys = [];
-  for (const related of issue.relatedTo ?? []) {
-    if (typeof related.id === "string" && related.id.length > 0) {
-      keys.push(`id:${related.id}`);
-    }
-    if (typeof related.identifier === "string" && related.identifier.length > 0) {
-      keys.push(`ident:${related.identifier}`);
-    }
+export function inferWriteScopeGlobs(issue) {
+  const declared = parseWriteScopeGlobs(issue.description ?? "");
+  if (Array.isArray(declared) && declared.length > 0) {
+    return declared;
   }
-  const originLine = String(issue.description ?? "").match(/Origin:\s*(KIT-\d+)/i);
-  if (originLine) {
-    keys.push(`ident:${originLine[1]}`);
+  const found = new Set();
+  const text = issueText(issue);
+  PATH_RE.lastIndex = 0;
+  let match = PATH_RE.exec(text);
+  while (match) {
+    found.add(match[1].replace(/[.,;:]+$/, ""));
+    match = PATH_RE.exec(text);
   }
-  return keys;
+  return [...found];
 }
 
 /**
- * Cluster leftovers that share a finding class or the same origin.
- * Origin need not be in the Triage list. Leftover↔leftover related is not required.
- *
- * @param {object[]} issues
+ * @param {object} issue
  */
-function leftoverClusters(issues) {
-  const parent = new Map(issues.map((issue) => [issue.id, issue.id]));
-
-  function find(id) {
-    let current = id;
-    while (parent.get(current) !== current) {
-      parent.set(current, parent.get(parent.get(current)));
-      current = parent.get(current);
-    }
-    return current;
+export function inferLinearType(issue) {
+  if (typeof issue.linearType === "string" && issue.linearType.length > 0) {
+    return issue.linearType;
   }
+  return BUG_RE.test(issueText(issue)) ? "Bug" : "Improvement";
+}
 
-  function union(left, right) {
-    const rootLeft = find(left);
-    const rootRight = find(right);
-    if (rootLeft !== rootRight) {
-      parent.set(rootLeft, rootRight);
-    }
-  }
-
-  const byClass = new Map();
-  for (const issue of issues) {
-    const className = leftoverClass(issue);
-    if (className === "unclassified") {
-      continue;
-    }
-    const existing = byClass.get(className);
-    if (existing) {
-      union(existing.id, issue.id);
-    } else {
-      byClass.set(className, issue);
+/**
+ * @param {object} issue
+ * @returns {string[]}
+ */
+export function inferSurfaceLabels(issue) {
+  const text = issueText(issue);
+  const labels = [];
+  for (const [needle, label] of SURFACE_PATHS) {
+    if (text.includes(needle) && !labels.includes(label)) {
+      labels.push(label);
     }
   }
+  return labels;
+}
 
-  const byOrigin = new Map();
-  for (const issue of issues) {
-    for (const key of leftoverOriginKeys(issue)) {
-      const existing = byOrigin.get(key);
-      if (existing) {
-        union(existing.id, issue.id);
-      } else {
-        byOrigin.set(key, issue);
-      }
-    }
-  }
+/**
+ * @param {object} issue
+ */
+export function canShapeLeftover(issue) {
+  return inferWriteScopeGlobs(issue).length > 0;
+}
 
-  const groups = new Map();
-  for (const issue of issues) {
-    const root = find(issue.id);
-    const bucket = groups.get(root) ?? [];
-    bucket.push(issue);
-    groups.set(root, bucket);
+/**
+ * @param {object} issue
+ */
+export function shapeLeftoverDescription(issue) {
+  const description = String(issue.description ?? "");
+  const globs = inferWriteScopeGlobs(issue);
+  const finding = markdownSection(description, "Finding");
+  const existingWhat = markdownSection(description, "What to build");
+  const what = existingWhat || finding || String(issue.title ?? "");
+  const suggested = markdownSection(description, "Suggested acceptance(?: \\(optional\\))?");
+  const existingAc = markdownSection(description, "Acceptance criteria");
+  const ac = existingAc || suggested || `- [ ] ${issue.title}`;
+  const scopeLine = `write-scope: ${globs.join(", ")}`;
+  let next = description;
+  if (!/##\s*What to build/i.test(next)) {
+    next = `## What to build\n\n${what}\n\n${scopeLine}\n\n${next}`.trim();
+  } else if (!/write-scope:\s*\S/.test(next)) {
+    next = next.replace(/(##\s*What to build[\s\S]*?)(?=\n##\s|$)/i, (block) => {
+      return `${block.trimEnd()}\n\n${scopeLine}\n`;
+    });
   }
-  return [...groups.values()].filter((group) => group.length >= 2);
+  if (!/##\s*Acceptance criteria/i.test(next)) {
+    next = `${next.trim()}\n\n## Acceptance criteria\n\n${ac}\n`;
+  }
+  return next;
+}
+
+/**
+ * @param {object} issue
+ * @param {Record<string, string>} labels
+ */
+function promoteLabelIds(issue, labels) {
+  const added = [labels?.[READY_FOR_AGENT]];
+  if (!issue.linearType) {
+    added.push(labels?.[inferLinearType(issue)]);
+  }
+  for (const name of inferSurfaceLabels(issue)) {
+    added.push(labels?.[name]);
+  }
+  return added.filter((id) => typeof id === "string" && id.length > 0);
+}
+
+/**
+ * @param {object} issue
+ */
+function dropLabelIds(issue) {
+  return (issue.labelIds ?? [])
+    .filter((label) => DROP_ON_PROMOTE.includes(label.name))
+    .map((label) => label.id);
 }
 
 /**
@@ -163,8 +197,6 @@ function leftoverClusters(issues) {
  *   linear?: {
  *     listTriage: (input?: { teamKey?: string }) => Promise<object>,
  *     promoteIssue: (input: object) => Promise<unknown>,
- *     createTechIssue: (input: object) => Promise<{ id: string, identifier: string }>,
- *     markDuplicate: (input: object) => Promise<unknown>,
  *     commentIssue: (input: { issueId: string, body: string }) => Promise<unknown>,
  *     updateComment: (input: { id: string, body: string }) => Promise<unknown>,
  *   },
@@ -175,17 +207,11 @@ export async function runIntake({ linear } = {}) {
     throw new Error("intake requires a Linear CLI client");
   }
 
-  const { teamId, backlogState, duplicateState, labels, issues } = await linear.listTriage({
+  const { backlogState, labels, issues } = await linear.listTriage({
     teamKey: INTAKE_TEAM_KEY,
   });
   if (backlogState?.name !== "Backlog" || typeof backlogState.id !== "string") {
     throw new Error("Backlog workflow state not found");
-  }
-  if (duplicateState?.name !== "Duplicate" || typeof duplicateState.id !== "string") {
-    throw new Error("Duplicate workflow state not found");
-  }
-  if (typeof teamId !== "string") {
-    throw new Error("KIT team not found");
   }
 
   const promoted = [];
@@ -193,82 +219,58 @@ export async function runIntake({ linear } = {}) {
   const processed = new Set();
 
   for (const issue of issues) {
-    if (!isWellFormedSlice(issue)) {
+    if (isWellFormedSlice(issue)) {
+      await linear.promoteIssue({
+        id: issue.id,
+        stateId: backlogState.id,
+        addedLabelIds: promoteLabelIds(issue, labels),
+        removedLabelIds: dropLabelIds(issue),
+        description: issue.description ?? "",
+      });
+      promoted.push({ identifier: issue.identifier });
+      processed.add(issue.id);
       continue;
     }
-    const addedLabelIds = [labels?.[READY_FOR_AGENT]].filter(
-      (id) => typeof id === "string" && id.length > 0,
-    );
-    const removedLabelIds = (issue.labelIds ?? [])
-      .filter((label) => DROP_ON_PROMOTE.includes(label.name))
-      .map((label) => label.id);
-    await linear.promoteIssue({
-      id: issue.id,
-      stateId: backlogState.id,
-      addedLabelIds,
-      removedLabelIds,
-    });
-    promoted.push({ identifier: issue.identifier });
-    processed.add(issue.id);
+    if (canShapeLeftover(issue)) {
+      const description = shapeLeftoverDescription(issue);
+      await linear.promoteIssue({
+        id: issue.id,
+        stateId: backlogState.id,
+        addedLabelIds: promoteLabelIds(issue, labels),
+        removedLabelIds: dropLabelIds(issue),
+        description,
+      });
+      promoted.push({ identifier: issue.identifier });
+      processed.add(issue.id);
+    }
   }
 
   const remaining = issues.filter((issue) => !processed.has(issue.id));
 
   for (const issue of remaining) {
-    if (!isSentryIssue(issue)) {
-      continue;
-    }
+    const body = isSentryIssue(issue) ? SENTRY_INTAKE_COMMENT : UNSCOPED_INTAKE_COMMENT;
     const existing = (issue.comments ?? []).find(
       (comment) =>
         typeof comment.body === "string" && comment.body.includes(INTAKE_COMMENT_HEADING),
     );
     if (existing) {
-      await linear.updateComment({ id: existing.id, body: SENTRY_INTAKE_COMMENT });
+      await linear.updateComment({ id: existing.id, body });
     } else {
-      await linear.commentIssue({ issueId: issue.id, body: SENTRY_INTAKE_COMMENT });
+      await linear.commentIssue({ issueId: issue.id, body });
     }
     commented.push(issue.identifier);
     processed.add(issue.id);
   }
 
-  const leftovers = remaining.filter((issue) => !processed.has(issue.id));
-  const consolidated = [];
-  for (const cluster of leftoverClusters(leftovers)) {
-    const className = leftoverClass(cluster[0]);
-    const origins = cluster.map((issue) => issue.identifier).sort();
-    const created = await linear.createTechIssue({
-      title: `Tech: ${className}`,
-      description: `Consolidated leftovers of class ${className}.\n\nOrigins: ${origins.join(", ")}`,
-      teamId,
-      stateId: backlogState.id,
-      labelIds: labels?.Improvement ? [labels.Improvement] : undefined,
-    });
-    await linear.commentIssue({
-      issueId: created.id,
-      body: `${INTAKE_COMMENT_HEADING}
-
-Origins: ${origins.join(", ")}
-`,
-    });
-    for (const origin of cluster) {
-      await linear.markDuplicate({
-        issueId: origin.id,
-        canonicalId: created.id,
-        stateId: duplicateState.id,
-      });
-    }
-    consolidated.push({ identifier: created.identifier, origins });
-  }
-
   return {
     promoted,
     commented,
-    consolidated: consolidated[0] ?? { identifier: null, origins: [] },
+    consolidated: { identifier: null, origins: [] },
   };
 }
 
 /**
- * Same list/promote/consolidate job the hourly poller enqueues.
+ * Same list/promote job the hourly poller enqueues.
  * Poller enqueues onto the planner mutex, not the coding slot.
  *
  * @param {{

@@ -104,7 +104,7 @@ Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage
 | --- | --- |
 | Trigger | Every hour (`PI_INTAKE_POLL_MS`, default 1 hour) on the **planner mutex** |
 | Tools | **Linear CLI** on the PI worker. Not Pi. Not the coding slot. |
-| Action | List open KIT Triage. Promote well-formed slices (Linear Type, write-scope, What to build, AC) to Backlog with `ready-for-agent` and without `signal-up`. Related leftovers of the same class become one Backlog tech issue; origins become Duplicate. Unshaped Sentry stays in Triage with one comment updated in place. |
+| Action | List open KIT Triage. Promote well-formed slices (Linear Type, write-scope, What to build, AC) to Backlog with `ready-for-agent` and without `signal-up`. Shape leftovers that have an inferable repo path onto the **same** issue (Type, What to build, AC, `write-scope:`). One finding stays one ticket — do not lump leftovers into `Tech: paths`. Unshaped Sentry or leftovers with no path stay in Triage with one comment updated in place. Planner claims Pi delegate after promote. |
 | Never | Implementing, In Review, Merging, Done. Never set Linear Agent to Cursor. |
 
 ---
