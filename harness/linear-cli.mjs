@@ -55,6 +55,19 @@ export const PLANNER_DISPATCH_QUERY = `query PlannerDispatch($teamKey: String!) 
   ) {
     nodes { id name }
   }
+  implementing: issues(
+    first: 100
+    filter: {
+      team: { key: { eq: $teamKey } }
+      state: { name: { eq: "Implementing" } }
+    }
+  ) {
+    nodes {
+      id
+      identifier
+      description
+    }
+  }
   backlog: issues(
     first: 100
     filter: {
@@ -453,10 +466,24 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
       const stdout = await cli(PLANNER_DISPATCH_QUERY, { teamKey });
       const data = parseJson(stdout)?.data;
       const implementingState = data?.implementingState?.nodes?.[0] ?? null;
+      const implementingIssues = Array.isArray(data?.implementing?.nodes)
+        ? data.implementing.nodes
+            .map((node) => {
+              if (typeof node?.id !== "string" || typeof node?.identifier !== "string") {
+                return null;
+              }
+              return {
+                id: node.id,
+                identifier: node.identifier,
+                description: typeof node.description === "string" ? node.description : "",
+              };
+            })
+            .filter(Boolean)
+        : [];
       const issues = Array.isArray(data?.backlog?.nodes)
         ? data.backlog.nodes.map((node) => mapPlannerIssue(node)).filter(Boolean)
         : [];
-      return { implementingState, issues };
+      return { implementingState, implementingIssues, issues };
     },
 
     /**

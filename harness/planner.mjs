@@ -5,6 +5,7 @@
  * Interface: runPlanner / startPlannerPoller. Linear CLI (or a fake) at this seam.
  * No file tools. No general bash. No Pi spawn.
  */
+import { matchesGlob, parseWriteScopeGlobs } from "../scripts/lib/pr-write-scope.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 
 export const DEFAULT_PLANNER_POLL_MS = 300_000;
@@ -14,6 +15,78 @@ export const PLANNER_TEAM_KEY = "KIT";
 const READY_FOR_AGENT = "ready-for-agent";
 const SIGNAL_UP = "signal-up";
 const CURSOR_NAME = "cursor";
+
+/**
+ * @param {string} globA
+ * @param {string} globB
+ */
+export function globsOverlap(globA, globB) {
+  if (!globA.includes("*") && matchesGlob(globA, globB)) {
+    return true;
+  }
+  if (!globB.includes("*") && matchesGlob(globB, globA)) {
+    return true;
+  }
+  const prefixA = globA.split("*")[0];
+  const prefixB = globB.split("*")[0];
+  if (prefixA.startsWith(prefixB) || prefixB.startsWith(prefixA)) {
+    return true;
+  }
+  const probeA = globA.replace(/\*\*/g, "x").replace(/\*/g, "y");
+  const probeB = globB.replace(/\*\*/g, "x").replace(/\*/g, "y");
+  return matchesGlob(probeA, globB) || matchesGlob(probeB, globA);
+}
+
+/**
+ * @param {string[] | null | undefined} left
+ * @param {string[] | null | undefined} right
+ */
+export function writeScopeSetsOverlap(left, right) {
+  if (!Array.isArray(left) || left.length === 0 || !Array.isArray(right) || right.length === 0) {
+    return false;
+  }
+  for (const leftGlob of left) {
+    for (const rightGlob of right) {
+      if (globsOverlap(leftGlob, rightGlob)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * @param {string | undefined} description
+ * @returns {string[] | null}
+ */
+export function parseIssueWriteScope(description) {
+  return parseWriteScopeGlobs(typeof description === "string" ? description : "");
+}
+
+/**
+ * @param {object} issue
+ * @param {Array<{ identifier: string, description?: string }>} implementingIssues
+ */
+export function findWriteScopeOverlap(issue, implementingIssues) {
+  const candidateGlobs = parseIssueWriteScope(issue.description);
+  if (!candidateGlobs || candidateGlobs.length === 0) {
+    return null;
+  }
+  for (const active of implementingIssues) {
+    const activeGlobs = parseIssueWriteScope(active.description);
+    if (!activeGlobs || activeGlobs.length === 0) {
+      continue;
+    }
+    if (writeScopeSetsOverlap(candidateGlobs, activeGlobs)) {
+      return {
+        identifier: active.identifier,
+        candidateGlobs,
+        activeGlobs,
+      };
+    }
+  }
+  return null;
+}
 
 /**
  * @param {Array<{ status?: string, statusType?: string }> | undefined} blockedBy
@@ -82,7 +155,7 @@ function sortByPriority(issues) {
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   linear?: {
  *     lookupUser: (id: string) => Promise<{ id: string, name: string } | null>,
- *     listDispatch: (input?: { teamKey?: string }) => Promise<{ implementingState: { id?: string, name?: string } | null, issues: object[] }>,
+ *     listDispatch: (input?: { teamKey?: string }) => Promise<{ implementingState: { id?: string, name?: string } | null, implementingIssues?: object[], issues: object[] }>,
  *     claimIssue: (input: { id: string, stateId: string, delegateId: string }) => Promise<object | null>,
  *     commentIssue: (input: { issueId: string, body: string }) => Promise<unknown>,
  *   },
@@ -102,7 +175,13 @@ export async function runPlanner({ env = process.env, linear } = {}) {
     throw new Error("planner must not set Linear Agent to Cursor");
   }
 
-  const { implementingState, issues } = await client.listDispatch({ teamKey: PLANNER_TEAM_KEY });
+  const {
+    implementingState,
+    implementingIssues = [],
+    issues,
+  } = await client.listDispatch({
+    teamKey: PLANNER_TEAM_KEY,
+  });
   if (implementingState?.name !== "Implementing" || typeof implementingState.id !== "string") {
     throw new Error("Implementing workflow state not found");
   }
@@ -119,6 +198,15 @@ export async function runPlanner({ env = process.env, linear } = {}) {
           body: `${issue.identifier}: skipped — Linear Agent is ${issue.delegate.name}. Factory planner does not claim Cursor-delegated issues.`,
         });
       }
+      continue;
+    }
+    const overlap = findWriteScopeOverlap(issue, implementingIssues);
+    if (overlap) {
+      skipped.push({ identifier: issue.identifier, reason: "write-scope overlap" });
+      await client.commentIssue({
+        issueId: issue.id,
+        body: `${issue.identifier}: skipped — write-scope overlaps ${overlap.identifier} (${overlap.candidateGlobs.filter((glob) => overlap.activeGlobs.some((activeGlob) => globsOverlap(glob, activeGlob))).join(", ")}).`,
+      });
       continue;
     }
     const updated = await client.claimIssue({
