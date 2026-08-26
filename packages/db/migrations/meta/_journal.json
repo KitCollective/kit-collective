@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786854945555,
+      "tag": "0000_naive_vanisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787368675318,
+      "tag": "0001_abnormal_pandemic",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787450000000,
+      "tag": "0002_vision_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787488430511,
+      "tag": "0003_collection_shortcut",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787490000000,
+      "tag": "0004_collection_shortcut_club_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787500000000,
+      "tag": "0005_collection_shortcut_facets",
+      "breakpoints": true
+    }
+  ]
+}

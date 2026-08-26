@@ -1,0 +1,35 @@
+# Apify / Transfermarkt seed job (one-shot)
+#
+# Coolify: create a Docker Compose resource from this file. Set restart to "no" or use
+# Coolify's job/cron trigger. Pass competition + season range via environment variables
+# or override `command` at run time.
+#
+# Required secrets (development lane example):
+#   DATABASE_URL — Postgres for the lane
+#   SEED_PROXY_URL — residential HTTP(S) proxy for live Kader fetch (Coolify / Hetzner IP)
+#   SEED_REQUIRE_PROXY — set to true on Coolify so missing proxy fails closed
+#   APIFY_TOKEN — Apify actor token (only when SEED_FETCH=apify)
+#
+# mem_limit is the cgroup cap Coolify applies on this compose parser (not Swarm deploy.resources).
+
+services:
+  seed-apify-job:
+    build:
+      context: ../..
+      dockerfile: seed/coolify/Dockerfile
+    image: kit-collective-seed:latest
+    restart: "no"
+    mem_limit: 512m
+    environment:
+      SEED_LANE: ${SEED_LANE:-development}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      SEED_PROXY_URL: ${SEED_PROXY_URL:?SEED_PROXY_URL is required}
+      SEED_REQUIRE_PROXY: ${SEED_REQUIRE_PROXY:-true}
+      APIFY_TOKEN: ${APIFY_TOKEN:-}
+    command:
+      - node
+      - seed/apify/dist/cli.js
+      - ${SEED_COMPETITION:?SEED_COMPETITION is required}
+      - ${SEED_FROM_SEASON:?SEED_FROM_SEASON is required}
+      - ${SEED_TO_SEASON:?SEED_TO_SEASON is required}
+      - ${SEED_LANE:-development}

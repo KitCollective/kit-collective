@@ -19,7 +19,7 @@ A **flow** is a path through the skills. Most paths run along one **main flow**,
 - Never `/grill-me`. We always have a repo → `/grill-with-docs`.
 - Never `/wayfinder`. Linear **project + milestones** are the map (`/to-spec` kickoff).
 - Never `/setup-matt-pocock-skills`. Missing board → `/bootstrap-linear`.
-- Do not invent Linear statuses. Dispatch is `dispatch.state` + delegated to `linear.delegateAgentName` + unblocked — not a label. Linear priority is claim order, not eligibility.
+- Do not invent Linear statuses. Dispatch is `dispatch.state` + `ready-for-agent` + unblocked. Never set Linear Agent to Cursor. Linear priority is claim order, not eligibility.
 - `/land` merges to `lanes.integration` only. Never staging/production from an issue run.
 
 ## The main flow: idea → ship
@@ -30,10 +30,10 @@ The route most work travels. You have an idea and want it built.
 2. **Branch — can you settle every question in conversation?** If a question needs a runnable answer (state, business logic, a UI you have to see), detour through **`/prototype`**. Same repo → invoke it here. New session or directory → **`/handoff`** out and back. The prototype answers the question; it does not implement the issue.
 3. **`/to-design`** — when implementing agents will build UI and taste is still implicit. HITL. Writes `docs/design-system.md`. A look you must see is still `/prototype`, then back. Skip this step when the work is not visual.
 4. **`/to-spec`** — kickoff = one Linear project + milestones (no issues). Feature = document on the existing project; new milestone only if this feature is its own staging increment.
-5. **`/to-tickets`** — vertical slices onto **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not delegated.**
-6. **Human** delegates to `linear.delegateAgentName` (human stays assignee).
+5. **`/to-tickets`** — vertical slices onto **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. Never set Linear Agent to Cursor.
+6. **Planner** claims `Backlog` + `ready-for-agent` + unblocked → `Implementing`. Human stays assignee. Do not set Agent to Cursor.
 7. **`/implement`** — one issue, one branch from `lanes.integration`, one PR into that lane. Drives **`/tdd`** at spec seams (`/codebase-design` vocabulary). Hard repro with no loop yet → **`/diagnosing-bugs`** first. Out of scope → **`/signal-up`** (cap applies). Closes with **`/code-review`** before `In Review`. UI slices follow `docs/design-system.md` when it exists.
-8. **Checker** — `/code-review` again (judge only). Pass → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`.
+8. **Checker** — `/code-review` again (judge only) **and** GitHub CI/CD on the PR. Pass + required checks green → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`.
 9. **Approver** reads the GitHub PR, moves Linear to `Done`. That **is** merge approval.
 10. **`/land`** into `lanes.integration`. A complete **milestone** then staging / production (not this skill).
 
@@ -65,10 +65,11 @@ Not feature work — upkeep.
 
 ## Factory-only
 
-- **`/signal-up`** — out-of-scope bug/debt: new `dispatch.state` issue, labels `signal-up` + `needs-triage`. Never delegate. Cap per run.
+- **`/signal-up`** — out-of-scope bug/debt: new Linear issue in **Triage**, label `signal-up` only. Never delegate. Cap per run.
 - **`/land`** — merge the GitHub PR after `Done`. Integration lane only.
 - **`/bootstrap-linear`** — board missing or unshaped (`linear.setup.json` absent).
 - **`/create-new-skill`** — author a factory skill under `.cursor/skills/`.
+- **Vendor Expo skills** — `.cursor/skills/expo/`. Not slash commands. `/implement`, `/tdd`, and checker load them on mobile and EAS work. Product docs win on conflict.
 - **`/to-design`** — HITL visual lock into `docs/design-system.md`. Factory-original.
 - **`/ask-me`** — this router.
 

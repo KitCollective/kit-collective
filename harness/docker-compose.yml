@@ -1,0 +1,65 @@
+# KIT-53 — dedicated PI worker (Hetzner CX33 `kit-harness`; ticket named CX23).
+# Product PaaS stays on the other Helsinki box. Never install that panel or Postgres here.
+# Inventory: harness/host.md. Webhook on :8080 behind Caddy on 80/443.
+
+services:
+  webhook:
+    build:
+      context: ..
+      dockerfile: harness/Dockerfile
+    command: ["node", "server.mjs"]
+    restart: unless-stopped
+    expose:
+      - "8080"
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      PORT: "8080"
+      PI_WORKSPACE: "/workspace"
+      LINEAR_CLI_VERSION: "2.5.0"
+      PI_MODEL: "cursor/composer-2.5"
+      PI_MODEL_FAST: "cursor/grok-4.6"
+      PI_JOB_IDLE_MS: "2700000"
+      KIT_PI_MIRROR: "/var/lib/kit-pi/mirror.git"
+      KIT_PI_WORKTREES: "/var/lib/kit-pi/worktrees"
+      KIT_PI_REMOTE: "https://github.com/KitCollective/kit-collective.git"
+      PI_CAPACITY_RAM_MB: "2048"
+      PI_CAPACITY_DISK_MB: "5120"
+    volumes:
+      - kit_pi:/var/lib/kit-pi
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      replicas: 1
+    mem_limit: 768m
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      webhook:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:
+  kit_pi:

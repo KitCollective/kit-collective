@@ -1,0 +1,44 @@
+{
+  "name": "@kit/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "pnpm build && vitest run",
+    "start": "node dist/main.js",
+    "dev": "node --watch dist/main.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "@fastify/cors": "^11.3.0",
+    "@kit/api-contract": "workspace:*",
+    "@kit/db": "workspace:*",
+    "@kit/domain": "workspace:*",
+    "@nestjs/bullmq": "^11.0.5",
+    "@nestjs/common": "^11.0.6",
+    "@nestjs/core": "^11.0.6",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-fastify": "^11.0.6",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^6.2.0",
+    "drizzle-orm": "^0.39.1",
+    "ioredis": "^6.0.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.0.6",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.10.5",
+    "@types/passport-jwt": "^4.0.1",
+    "fastify": "^5.2.0",
+    "pg": "^8.13.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

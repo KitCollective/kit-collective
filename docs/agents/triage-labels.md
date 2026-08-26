@@ -2,7 +2,7 @@
 
 Canonical Matt Pocock roles, plus factory extras. Names must match `factory.config.json` / `linear.setup.json`. Linear **label groups** are layout only — agents still match the leaf name.
 
-Dispatch is **not** a label. Dispatch = `dispatch.state` + delegated to `linear.delegateAgentName` + unblocked. Linear priority is claim order among eligible issues, not eligibility.
+Dispatch = `dispatch.state` + `ready-for-agent` + unblocked. Linear **Agent** stays empty. Linear priority is claim order among eligible issues, not eligibility.
 
 Linear **Triage** (Sentry inbox) and **Duplicate** are Linear product states. They are not this label group and not factory dispatch statuses. See `docs/agents/issue-tracker.md`.
 
@@ -16,7 +16,7 @@ Linear **Triage** (Sentry inbox) and **Duplicate** are Linear product states. Th
 | Surface | `surface:<name>` from `labels.surfaces` | `/to-tickets` — helper hint, **not** a horizontal split |
 | Work | `seed` and other `labels.extra` | humans / specs |
 
-`ready-for-agent` is ticket quality, **not** dispatch. `signal-up` and `proposal` must also have `needs-triage`. Never put both `signal-up` and `proposal` on the same issue.
+`ready-for-agent` is the planner’s go label when the issue is in `dispatch.state` and unblocked. `signal-up` and `proposal` file into Linear **Triage** (the state) and must **not** have `ready-for-agent` at create time. Do not also apply `needs-triage` on the same issue while the Triage group is exclusive (Linear rejects two labels from one exclusive group). A human may split that group; until then file `signal-up` or `proposal` alone. Never put both `signal-up` and `proposal` on the same issue.
 
 ## Project groups (EP filter)
 

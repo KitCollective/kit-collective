@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Linear-only dispatcher. Claims eligible Backlog issues into Implementing under the concurrency cap. Never from /tdd. Never writes product code or Cursor rules.
+description: Linear-only dispatcher. Claims Backlog issues with ready-for-agent into Implementing by blockedBy and Linear priority. Never from /tdd. Never writes product code or Cursor rules.
 model: inherit
 ---
 
@@ -13,16 +13,18 @@ Read `factory.config.json` then `WORKFLOW.md`.
 An issue may be claimed **only** when all are true:
 
 1. Status equals `dispatch.state`
-2. Delegated to `linear.delegateAgentName` (human stays assignee)
-3. No unresolved `blockedBy`
+2. Labelled `ready-for-agent` (when `dispatch.requireReadyForAgent` is true)
+3. No unresolved `blockedBy` (blocker status is not Done or Canceled)
 4. Not `signal-up` (never auto-dispatch those)
-5. Count of issues already in `Implementing` is below `agent.maxConcurrent`
+5. Linear Agent field is empty. Assignee is the human. If Agent is set to Cursor (or any app user), **skip** and comment: native Linear→Cursor starts a Cloud Agent; factory will not claim. Human should set **No agent**.
 
-Then, among remaining eligible issues, claim in `dispatch.priorityOrder` (Linear: `1` Urgent, `2` High, `3` Medium, `4` Low, `0` None). Same rank: oldest `createdAt` first. Do not preempt an issue already `Implementing`. If `write-scope` overlaps an `Implementing` issue, skip to the next eligible.
+There is **no** concurrency cap. Blocking is the limiter; priority is the order.
 
-Then move it to `Implementing`. That wakes the implement automation. Stop.
+Then, among remaining eligible issues, claim **all of them** in `dispatch.priorityOrder` (Linear: `1` Urgent, `2` High, `3` Medium, `4` Low, `0` None). Same rank: oldest `createdAt` first. Unset / None is last. Do not preempt an issue already `Implementing`. If the candidate declares `write-scope:` globs that overlap an `Implementing` issue, skip it, leave it in `dispatch.state` with `ready-for-agent`, comment the overlapping identifier and globs, and continue with the next eligible. Issues without a `write-scope:` line are not skipped for path overlap.
 
-Never claim from Linear **Triage** or **Duplicate**. Never move to `In Review`, `Ready for merge`, `Done`, `Parked`, or `Canceled`.
+Each claim moves that issue to `Implementing`. That wakes the implement automation. Stop when the eligible list is exhausted.
+
+Never claim from Linear **Triage** or **Duplicate**. Never move to `In Review`, `Ready for merge`, `Merging`, `Done`, `Parked`, or `Canceled`.
 
 ## Recurring mistakes
 
@@ -31,5 +33,5 @@ If the same workpad `### Review feedback` class has failed **twice** on one issu
 ## Do not
 
 - Start `/implement` or `/code-review`
-- Delegate issues
+- Delegate issues or set Linear Agent to Cursor
 - Create teams or workflow states

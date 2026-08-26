@@ -9,12 +9,14 @@ Every harness skill starts here.
 
 Working skills are `.cursor/skills/` — self-contained (Matt’s loop plus this factory). Do not recreate `.agents/`.
 
+Vendored Expo/EAS skills live under `.cursor/skills/expo/`. They are not factory skills. `/implement`, `/tdd`, and checker load them on mobile and EAS slices. Product docs (`CONTEXT.md`, ADRs, `docs/design-system.md`, this helper layer) win on conflict.
+
 Resolve names from config, not from memory:
 
 | Need | Config path |
 | --- | --- |
 | Team key | `linear.teamKey` |
-| Delegate agent | `linear.delegateAgentName` |
+| Dispatch label | `ready-for-agent` |
 | Approver | `approver` |
 | Integration branch | `lanes.integration` |
 | Dispatch state | `dispatch.state` |

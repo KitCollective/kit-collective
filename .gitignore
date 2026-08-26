@@ -2,8 +2,11 @@
 .env
 .env.*
 !.env.example
+.cursor/mcp.json
+.agents/
 node_modules/
 dist/
+.turbo/
 .idea/
 .vscode/
 *.log

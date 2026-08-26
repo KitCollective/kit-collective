@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "KitCollective",
+    "slug": "kit-collective",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "kitcollective",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": ["ios", "android", "web"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.kitcollective.mobile",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "KitCollective bruger dit galleri til at tilføje trøjer."
+      }
+    },
+    "android": {
+      "package": "app.kitcollective.mobile"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Tag fotos af forsiden, bagsiden og mærket på trøjen.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-sqlite",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ddddf92b-e7cd-4ec5-b07c-643106041550"
+      }
+    },
+    "owner": "kitcollective"
+  }
+}

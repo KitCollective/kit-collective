@@ -36,15 +36,15 @@ Work lives in Linear workspace **KitCollective**, team **Engineering** (`KIT`). 
 
 ### Triage labels
 
-Who-acts labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `signal-up`, `proposal`. See `docs/agents/triage-labels.md`. Dispatch is not a label.
+Who-acts labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `signal-up`, `proposal`. See `docs/agents/triage-labels.md`. Dispatch = `Backlog` + `ready-for-agent` + unblocked.
 
 ### Signal-up
 
-Out-of-scope bugs/debt: new Linear issue, `Backlog`, labels `signal-up` + `needs-triage` (never delegate, never `ready-for-agent`). Cap 3 per run. See `docs/agents/signal-up.md`.
+Out-of-scope bugs/debt: new Linear issue in **Triage** (the state), label `signal-up` only (never delegate, never `ready-for-agent`, never `needs-triage` while the Triage group is exclusive). Cap 3 per run. See `docs/agents/signal-up.md`.
 
 ### Qualified proposals
 
-Out-of-scope features/optimisations: new Linear issue, `Backlog`, labels `proposal` + `needs-triage`. At most one per run. See `docs/agents/qualified-proposals.md`.
+Out-of-scope features/optimisations: new Linear issue in **Triage**, label `proposal` only (never `needs-triage` while the Triage group is exclusive). At most one per run. See `docs/agents/qualified-proposals.md`.
 
 ### Error ratcheting
 
@@ -82,23 +82,28 @@ Lost? `/ask-me` maps the situation to a factory skill. It hints; it does not fir
 
 New or edited factory skill under `.cursor/skills/`. Not a domain helper. See `.cursor/skills/create-new-skill/SKILL.md`.
 
+### Vendor Expo skills
+
+Official Expo/EAS skills live under `.cursor/skills/expo/` (not factory skills). `/implement` and the `react-expo` helper load `expo-overview` first, then the matching leaf. Checker `/code-review` Standards includes them when the diff touches `apps/mobile` or EAS. Product docs win on conflict. Do not recreate `.agents/`.
+
 ### Prototype, research, handoff, wizard
 
 Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primary sources: `/research`. Session must travel: `/handoff`. Human-only setup: `/wizard`.
 
 ### Planning stack
 
-`/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → delegate to **Cursor** → planner claims → `/implement` (`/tdd`) → checker → Nicklas to Done → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
+`/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → Nicklas to Merging → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
+
+**Runtime**: PI worker (Compose + `gh` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring.
 
 ## How work enters the factory
 
 1. `/grill-with-docs`
 2. `/to-design` — HITL visual lock into `docs/design-system.md` when agents will implement UI
 3. `/to-spec` — kickoff = Linear project + milestones; feature = document on an existing project
-4. `/to-tickets` — vertical slices in `Backlog`
-5. Human delegates to `Cursor` (human stays assignee)
-6. planner claims → implement → PR + Linear evidence → checker → `Ready for merge`
-7. `Nicklas` reads the GitHub PR, moves Linear to `Done`
-8. `/land` into `development`. A complete **milestone** then `staging` / `production` promotions
+4. `/to-tickets` — vertical slices in `Backlog` with `ready-for-agent`
+5. planner claims (unblocked) → implement → PR + Linear evidence → checker → `Ready for merge`
+6. `Nicklas` reads the GitHub PR, moves Linear to `Merging`
+7. `/land` into `development` (merge success → `Done`). A complete **milestone** then `staging` / `production` promotions
 
 Product truth lives under `.scratch`. If a spec fights a stack lock, change the lock first.

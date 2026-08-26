@@ -1,0 +1,41 @@
+{
+  "name": "kit-collective",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test --concurrency=1",
+    "test:harness": "node --test harness/tests/*.test.mjs",
+    "test:factory-scripts": "node --test scripts/tests/webhook-router.test.mjs scripts/tests/land-policy.test.mjs",
+    "check:factory-ci-tests": "node scripts/check-factory-ci-tests.mjs",
+    "check:factory-checker-spawn": "node scripts/check-factory-checker-spawn.mjs",
+    "lint": "biome lint .",
+    "lint:anti-slop": "oxlint",
+    "format": "biome check --write .",
+    "format:check": "biome ci .",
+    "typecheck": "turbo run typecheck",
+    "check:imports": "node scripts/check-import-boundaries.mjs",
+    "check:seed-fkapi-tests": "node scripts/check-seed-fkapi-test-isolation.mjs",
+    "check:seed-development-proof-scripts": "node scripts/check-seed-development-proof-scripts.mjs",
+    "check:seed-scope-isolation-test": "node scripts/check-seed-scope-isolation-test.mjs",
+    "check:seed-apify-test-database-isolation": "node scripts/check-seed-apify-test-database-isolation.mjs",
+    "check:mobile-tab-bar": "node scripts/check-mobile-tab-bar.mjs",
+    "check:mobile-design-tokens": "node scripts/check-mobile-design-tokens.mjs",
+    "check:mobile-collection-ui-evidence": "node scripts/check-mobile-collection-ui-evidence.mjs",
+    "check:mobile-drag-reorder": "node scripts/check-mobile-drag-reorder.mjs",
+    "check:mobile-add-form-wiring": "node scripts/check-mobile-add-form-wiring.mjs",
+    "check:mobile-add-confirm-redirect": "node scripts/check-mobile-add-confirm-redirect.mjs",
+    "check:mobile-add-upload-files": "node scripts/check-mobile-add-upload-files.mjs",
+    "check:workflow-api-boot-env": "node scripts/check-workflow-api-boot-env.mjs",
+    "check:vision-log-save-action": "node scripts/check-vision-log-save-action.mjs",
+    "check:workflows": "bash scripts/lint-workflows.sh"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.10",
+    "@oxlint/plugins": "1.79.0",
+    "oxlint": "1.79.0",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  }
+}

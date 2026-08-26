@@ -25,7 +25,7 @@ Use this file when writing specs (`to-spec`). If a spec fights a lock below, cha
 | Database | Self-hosted Postgres | — | No Neon. No pgvector in MVP. |
 | ORM | Drizzle | `packages/db` | Schema lives here. **Only `apps/api` imports it.** |
 | Monorepo | pnpm workspaces + Turborepo | repo root | One git repo. |
-| Compute | Hetzner **CX33** (4 vCPU / 8 GB / 80 GB), **Nürnberg** | — | Coolify + Nest + Postgres + Redis. See [server-stack](./server-stack.md). |
+| Compute | Hetzner **CX33** (4 vCPU / 8 GB / 80 GB), **Helsinki** | — | Coolify + Nest + Postgres + Redis. See [server-stack](./server-stack.md). |
 | Object storage | **Cloudflare R2** (S3 API) | — | User photos + admin-only kit archive bytes. **Not** on the CX33 disk. |
 | Jobs | **BullMQ** via `@nestjs/bullmq`, worker in the same Nest process | `apps/api` | Wishlist, push, Vision, seed. Redis beside Nest per lane. See §9. |
 
@@ -138,6 +138,8 @@ Port from Huddle: prompt shape, ID match, confidence gates. Do **not** port the 
 
 The product monorepo (`kit-collective`) does **not** scrape and does **not** contain Apify/FKApi fetch code. Stamdata is two **separate GitHub repos**. Create them when we leave restructuring — not inside this monorepo.
 
+> **Interim exception (ADR 0001):** until `kit-collective-seed-fkapi` exists on GitHub, FK seed CLI lives at `seed/fkapi/` in this monorepo. It uses `DATABASE_URL` only (no `@kit/db`). Move out and delete the folder when the standalone repo is created. Apify seed is **not** interim — still a separate future repo.
+
 | Repo | Learns | Writes into KitCollective |
 | --- | --- | --- |
 | `kit-collective-seed-apify` | Clubs, seasons, team-seasons, players, squad numbers (facts only) via Apify | `Club`, `Season`, `TeamSeason`, `Player`, `PlayerClubSeason`, `CatalogLabel`, `ExternalId` |
@@ -227,12 +229,12 @@ Compute and object storage: [server-stack](./server-stack.md). Inventory: [ops-e
 
 | App | Runtime |
 | --- | --- |
-| `apps/api` | Long-running Node on **Hetzner CX33 Nürnberg**, Coolify + Docker. Own Postgres + Redis beside it. **`api.kitcollective.app`** |
+| `apps/api` | Long-running Node on **Hetzner CX33 Helsinki**, Coolify + Docker. Own Postgres + Redis beside it. **`api.kitcollective.app`** |
 | `apps/web` | Astro on Pages / Workers. **`kitcollective.app`** (www → apex). Read Nest. |
 | `apps/admin` | Static SPA behind auth. **`admin.kitcollective.app`**. Never indexed. |
-| `apps/mobile` | EAS Build / Submit. Channels: `development` / `staging` / `production`. |
+| `apps/mobile` | EAS Build / Submit. **Project id `ddddf92b-e7cd-4ec5-b07c-643106041550`.** Channels: `development` / `staging` / `production`. One Expo project; do not `eas init` a second id. |
 | Files | **Cloudflare R2.** Nest is the only writer/reader of secrets. |
-| Email | **AWS SES** from Nest, **EU region** (pick at provision — Frankfurt `eu-central-1` is the usual pair with Nürnberg). Verify-email first; match mail later. How templates/from-address work is Notify-spec, not a lock now. |
+| Email | **AWS SES** from Nest, **EU region** (pick at provision — Frankfurt `eu-central-1` is the usual pair with Helsinki). Verify-email first; match mail later. How templates/from-address work is Notify-spec, not a lock now. |
 
 Three deploy loops, one repo. Path-filtered CI.
 

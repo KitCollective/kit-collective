@@ -1,0 +1,27 @@
+{
+  "name": "@kit/seed-fkapi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "kit-seed-fkapi": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "pnpm build && vitest run",
+    "seed": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "pg": "^8.13.1",
+    "undici": "^7.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "drizzle-orm": "^0.39.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

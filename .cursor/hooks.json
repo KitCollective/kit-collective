@@ -13,6 +13,38 @@
       {
         "command": "bash .cursor/hooks/protect-ratchet.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-seed-substitute-db.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-coolify-rest-service-control.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-manual-getmcptools-evidence.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-push-behind-development.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-manual-seed-development-proof.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-hand-typed-seed-db-counts.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-seed-apify-test-on-shared-db.sh",
+        "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-reset-database-test-on-shared-db.sh",
+        "failClosed": true
       }
     ]
   }

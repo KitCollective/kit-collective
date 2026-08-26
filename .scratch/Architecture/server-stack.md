@@ -19,7 +19,7 @@ This is a **stance**, not another inventory. Numbers below use the load already 
 | Packaging | Dockerfile for `apps/api` (and later Astro only if it needs SSR) |
 | Process list | Docker Compose: Nest + Postgres + **Redis** (BullMQ broker). Worker stays inside Nest ([tech-stack §9](./tech-stack.md)) |
 | Control plane | Coolify on that VPS — Git deploy, TLS, health, Postgres backups |
-| Machines we SSH into | **One Hetzner CX33** (4 vCPU / 8 GB / 80 GB NVMe), **Nürnberg** |
+| Machines we SSH into | **One Hetzner CX33** (4 vCPU / 8 GB / 80 GB NVMe), **Helsinki** (`hel1`, host `kc-hef1`) |
 | Staging | Second Coolify **environment** on the **same** VPS (own Nest + own Postgres volume) |
 | Development | Laptop + Compose. Not a 24/7 third server |
 | Files | **Cloudflare R2** — user uploads **and** kit-archive bytes. Not on the CX33 disk |
@@ -66,7 +66,9 @@ Coolify’s own model is Project → Environments (`development`, `production`, 
 
 Coolify official minimum for the **panel** is 2 CPU / 2 GB RAM / 30 GB disk, and they recommend more when several apps share the box ([Coolify installation](https://github.com/coollabsio/coolify-docs/blob/v4.x/content/docs/get-started/installation.mdx)). They also say putting every resource on the Coolify localhost is “not recommended” under high load ([Coolify server introduction](https://github.com/coollabsio/coolify-docs/blob/v4.x/content/docs/knowledge-base/server/introduction.mdx)). For this product that caveat is about *later* saturation, not a reason to start with two machines.
 
-**SKU (locked):** Hetzner **CX33**, Cost-Optimized shared x86, **Nürnberg**. **BullMQ does not force a rescale.** IPv4 required (+€0.50). Photos must not live on the 80 GB disk. Coolify **PR preview deploys are off** in MVP — a fourth stack on this box next to staging+prod is how 8 GB dies. Use the `staging` lane for TestFlight.
+**SKU (locked):** Hetzner **CX33**, Cost-Optimized shared x86, **Helsinki** (`hel1`). **BullMQ does not force a rescale.** IPv4 required (+€0.50). Photos must not live on the 80 GB disk. Coolify **PR preview deploys are off** in MVP — a fourth stack on this box next to staging+prod is how 8 GB dies. Use the `staging` lane for TestFlight.
+
+Drafted as Nürnberg. Nicklas chose Helsinki on 2026-08-16 (KIT-11) for Nordic collector latency; still EU, same SKU. Host name: `kc-hef1`.
 
 ---
 
@@ -128,6 +130,17 @@ CX33                          R2 (per lane)
 **How a jersey save works:** client resizes → Nest `PUT` to `user/…` → row in `UserJerseyPhoto` with the key → Vision reads via Nest (server-side GET), never a public kit URL.
 
 **How a kit seed works:** fkapi repo downloads archive bytes → mapper `PUT` to `kit/…` → `KitPhoto` row with `rights: unresolved`, `visibility: admin_only`. Re-run mapper; do not hot-link the source site.
+
+---
+
+## Cursor MCP (Coolify)
+
+Nicklas operates the CX33 from Cursor via Coolify’s built-in MCP server ([Coolify MCP docs](https://coolify.io/docs/integrations/mcp)):
+
+1. Enable MCP in Coolify **Settings → Advanced** (root API token).
+2. Endpoint: `{panel_url}/mcp` with `Authorization: Bearer <token>`.
+3. **Cloud Agents:** commit `.cursor/mcp.json.example` + `scripts/setup-coolify-mcp.sh`; `.cursor/environment.json` `install` generates `.cursor/mcp.json` when the Cloud Agent environment has `COOLIFY_API_URL`, `COOLIFY_API_TOKEN`, and optionally `COOLIFY_MCP_URL`. Secret names are in `.env.example`; values never in git.
+4. **Evidence:** an implement or checker run must see a `coolify` server in `GetMcpTools` in that same session — not prose from a prior VM.
 
 ---
 
