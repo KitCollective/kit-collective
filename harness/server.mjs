@@ -9,7 +9,7 @@ import { assertWorkerEnv } from "./boot-env.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
 import { createTypecheckTouched } from "./implement-exit.mjs";
-import { createSerialQueue } from "./job-queue.mjs";
+import { ALWAYS_READY_CAPACITY, createWorkerSlots } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS, startPlannerPoller } from "./planner.mjs";
@@ -25,8 +25,16 @@ export function createWorkerHandler(deps) {
   return async (req, res) => {
     const path = (req.url ?? "/").split("?")[0];
     if (req.method === "GET" && path === "/health") {
+      const snapshot = typeof deps.health === "function" ? deps.health() : {};
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, planner: "active" }));
+      res.end(
+        JSON.stringify({
+          ok: true,
+          planner: snapshot.planner ?? "active",
+          job: snapshot.job === undefined ? null : snapshot.job,
+          capacity: snapshot.capacity ?? ALWAYS_READY_CAPACITY,
+        }),
+      );
       return;
     }
     return webhook(req, res);
@@ -63,7 +71,7 @@ export async function startWorkerServer({
           session: createLinearSessionAdapter({ linear: linearClient }),
           typecheckTouched: createTypecheckTouched({ runCommand }),
         });
-  const queue = createSerialQueue({
+  const slots = createWorkerSlots({
     async run(job) {
       return runner.run(job);
     },
@@ -79,7 +87,8 @@ export async function startWorkerServer({
     now,
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
-    enqueue: queue,
+    enqueue: slots,
+    health: () => slots.health(),
     session: createLinearSessionAdapter({ linear: linearClient }),
     delegateGateConfig: createDelegateGateConfig(env),
   });
@@ -91,7 +100,7 @@ export async function startWorkerServer({
   return new Promise((resolve) => {
     server.listen(listenPort, listenHost, () => {
       if (pollMs > 0) {
-        stopPoller = startPlannerPoller({ enqueue: queue, intervalMs: pollMs });
+        stopPoller = startPlannerPoller({ enqueue: slots, intervalMs: pollMs });
       }
       resolve(server);
     });

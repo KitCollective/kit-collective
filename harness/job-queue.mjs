@@ -1,4 +1,19 @@
 /**
+ * Worker job mutexes: one Planner job mutex plus one Coding job slot.
+ * Compose replicas stay at 1; these mutexes are the in-process seam.
+ */
+
+/**
+ * Worker health capacity stub (KIT-85). This slice reports always-ready;
+ * KIT-87 replaces the readers. Values are above the Capacity gate floors.
+ */
+export const ALWAYS_READY_CAPACITY = Object.freeze({
+  ramFreeMb: 4096,
+  diskFreeMb: 10240,
+  ready: true,
+});
+
+/**
  * One Pi job at a time. Compose replicas stay at 1; this mutex is the in-process seam.
  *
  * Implement CI retry: when `run` returns `{ ciRetry: true }`, re-run the same
@@ -42,6 +57,63 @@ export function createSerialQueue(deps) {
         () => undefined,
       );
       return next;
+    },
+  };
+}
+
+const CODING_ROLES = new Set(["implement", "factory-checker", "land"]);
+
+/**
+ * Two mutexes: Planner job vs one Coding job slot (implement / factory-checker / land).
+ *
+ * @param {{
+ *   run: (job: object) => Promise<unknown>,
+ *   capacity?: { ramFreeMb: number, diskFreeMb: number, ready: boolean },
+ * }} deps
+ */
+export function createWorkerSlots(deps) {
+  let currentJob = null;
+  const capacity = deps.capacity ?? ALWAYS_READY_CAPACITY;
+
+  const plannerQueue = createSerialQueue({
+    run(job) {
+      return deps.run(job);
+    },
+  });
+
+  const codingQueue = createSerialQueue({
+    async run(job) {
+      currentJob = {
+        role: job.role,
+        identifier: job.identifier ?? job.issueId ?? "unknown",
+      };
+      try {
+        return await deps.run(job);
+      } finally {
+        currentJob = null;
+      }
+    },
+  });
+
+  return {
+    /**
+     * @param {object} job
+     */
+    enqueue(job) {
+      if (job.role === "planner") {
+        return plannerQueue.enqueue(job);
+      }
+      if (!CODING_ROLES.has(job.role)) {
+        throw new Error(`no coding slot for role ${job.role}`);
+      }
+      return codingQueue.enqueue(job);
+    },
+    health() {
+      return {
+        planner: "active",
+        job: currentJob,
+        capacity,
+      };
     },
   };
 }
