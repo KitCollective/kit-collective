@@ -22,6 +22,8 @@ export const FORBIDDEN_PLANNER_STATES = [
   "Canceled",
 ];
 
+export const FORBIDDEN_INTAKE_MUTATION_STATES = ["Implementing", "In Review", "Merging", "Done"];
+
 export const WORKER_ISSUE_QUERY = `query WorkerIssue($id: String!) {
   issue(id: $id) {
     id
@@ -97,6 +99,79 @@ export const PLANNER_CLAIM_MUTATION = `mutation PlannerClaim($id: String!, $stat
 
 export const PLANNER_COMMENT_MUTATION = `mutation PlannerComment($issueId: String!, $body: String!) {
   commentCreate(input: { issueId: $issueId, body: $body }) { success comment { id } }
+}`;
+
+export const INTAKE_TRIAGE_QUERY = `query IntakeTriage($teamKey: String!) {
+  team: teams(filter: { key: { eq: $teamKey } }, first: 1) {
+    nodes { id }
+  }
+  backlogState: workflowStates(
+    first: 1
+    filter: { name: { eq: "Backlog" }, team: { key: { eq: $teamKey } } }
+  ) {
+    nodes { id name }
+  }
+  duplicateState: workflowStates(
+    first: 1
+    filter: { name: { eq: "Duplicate" }, team: { key: { eq: $teamKey } } }
+  ) {
+    nodes { id name }
+  }
+  labels: issueLabels(first: 50, filter: { team: { key: { eq: $teamKey } } }) {
+    nodes { id name }
+  }
+  triage: issues(
+    first: 100
+    filter: {
+      team: { key: { eq: $teamKey } }
+      state: { name: { eq: "Triage" } }
+    }
+  ) {
+    nodes {
+      id
+      identifier
+      title
+      description
+      state { name type }
+      labels(first: 50) { nodes { id name } }
+      attachments(first: 25) { nodes { url title } }
+      comments(first: 50) { nodes { id body } }
+      relations(first: 50) {
+        nodes {
+          type
+          issue { id identifier }
+          relatedIssue { id identifier }
+        }
+      }
+      inverseRelations(first: 50) {
+        nodes {
+          type
+          issue { id identifier }
+          relatedIssue { id identifier }
+        }
+      }
+    }
+  }
+}`;
+
+export const INTAKE_PROMOTE_MUTATION = `mutation IntakePromote($id: String!, $stateId: String!, $addedLabelIds: [String!], $removedLabelIds: [String!]) {
+  issueUpdate(id: $id, input: { stateId: $stateId, addedLabelIds: $addedLabelIds, removedLabelIds: $removedLabelIds }) {
+    success
+    issue { id state { name } }
+  }
+}`;
+
+export const INTAKE_CREATE_MUTATION = `mutation IntakeCreate($input: IssueCreateInput!) {
+  issueCreate(input: $input) {
+    success
+    issue { id identifier }
+  }
+}`;
+
+export const INTAKE_DUPLICATE_MUTATION = `mutation IntakeDuplicate($issueId: String!, $relatedIssueId: String!) {
+  issueRelationCreate(input: { type: duplicate, issueId: $issueId, relatedIssueId: $relatedIssueId }) {
+    success
+  }
 }`;
 
 export const ISSUE_COMMENTS_QUERY = `query IssueComments($id: String!) {
@@ -221,6 +296,55 @@ export function mapPlannerIssue(raw) {
             ...(typeof delegateId === "string" ? { id: delegateId } : {}),
           }
         : null,
+  };
+}
+
+/**
+ * @param {unknown} raw
+ */
+export function mapIntakeIssue(raw) {
+  const base = mapPlannerIssue(raw);
+  if (!base || raw === null || typeof raw !== "object") {
+    return null;
+  }
+  const issue = raw;
+  const relatedTo = [];
+  const seen = new Set();
+  const relationNodes = [
+    ...(Array.isArray(issue.relations?.nodes) ? issue.relations.nodes : []),
+    ...(Array.isArray(issue.inverseRelations?.nodes) ? issue.inverseRelations.nodes : []),
+  ];
+  for (const rel of relationNodes) {
+    if (rel?.type !== "related") {
+      continue;
+    }
+    const other = rel.relatedIssue ?? rel.issue;
+    if (typeof other?.id !== "string" || other.id === issue.id || seen.has(other.id)) {
+      continue;
+    }
+    seen.add(other.id);
+    relatedTo.push({
+      id: other.id,
+      identifier: typeof other.identifier === "string" ? other.identifier : "",
+    });
+  }
+  const comments = Array.isArray(issue.comments?.nodes)
+    ? issue.comments.nodes.filter((node) => typeof node?.id === "string")
+    : [];
+  const labelIds = Array.isArray(issue.labels?.nodes)
+    ? issue.labels.nodes
+        .filter((node) => typeof node?.id === "string")
+        .map((node) => ({
+          id: node.id,
+          name: typeof node.name === "string" ? node.name : "",
+        }))
+    : [];
+  return {
+    ...base,
+    title: typeof issue.title === "string" ? issue.title : "",
+    relatedTo,
+    comments,
+    labelIds,
   };
 }
 
@@ -370,6 +494,74 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
       const stdout = await cli(PLANNER_COMMENT_MUTATION, { issueId, body });
       const parsed = parseJson(stdout);
       return { id: parsed?.data?.commentCreate?.comment?.id };
+    },
+
+    /**
+     * Open KIT Triage issues plus Backlog/Duplicate ids. Never looks up Implementing.
+     *
+     * @param {{ teamKey?: string }} [input]
+     */
+    async listTriage({ teamKey = "KIT" } = {}) {
+      const stdout = await cli(INTAKE_TRIAGE_QUERY, { teamKey });
+      const data = parseJson(stdout)?.data;
+      const labels = {};
+      for (const node of data?.labels?.nodes ?? []) {
+        if (typeof node?.id === "string" && typeof node?.name === "string") {
+          labels[node.name] = node.id;
+        }
+      }
+      const issues = Array.isArray(data?.triage?.nodes)
+        ? data.triage.nodes.map((node) => mapIntakeIssue(node)).filter(Boolean)
+        : [];
+      return {
+        teamId: typeof data?.team?.nodes?.[0]?.id === "string" ? data.team.nodes[0].id : null,
+        backlogState: data?.backlogState?.nodes?.[0] ?? null,
+        duplicateState: data?.duplicateState?.nodes?.[0] ?? null,
+        labels,
+        issues,
+      };
+    },
+
+    /**
+     * Move a shaped Triage slice to Backlog. Never delegate.
+     *
+     * @param {{ id: string, stateId: string, addedLabelIds?: string[], removedLabelIds?: string[] }} input
+     */
+    async promoteIssue({ id, stateId, addedLabelIds = [], removedLabelIds = [] }) {
+      await cli(INTAKE_PROMOTE_MUTATION, { id, stateId, addedLabelIds, removedLabelIds });
+    },
+
+    /**
+     * @param {{ title: string, description: string, teamId: string, stateId: string, labelIds?: string[] }} input
+     */
+    async createTechIssue({ title, description, teamId, stateId, labelIds }) {
+      const stdout = await cli(INTAKE_CREATE_MUTATION, {
+        input: {
+          title,
+          description,
+          teamId,
+          stateId,
+          ...(Array.isArray(labelIds) ? { labelIds } : {}),
+        },
+      });
+      const issue = parseJson(stdout)?.data?.issueCreate?.issue;
+      if (typeof issue?.id !== "string") {
+        throw new Error("intake failed to create tech issue");
+      }
+      return {
+        id: issue.id,
+        identifier: typeof issue.identifier === "string" ? issue.identifier : "",
+      };
+    },
+
+    /**
+     * Origin leftover becomes Duplicate of the canonical tech issue. Never delegate.
+     *
+     * @param {{ issueId: string, canonicalId: string, stateId: string }} input
+     */
+    async markDuplicate({ issueId, canonicalId, stateId }) {
+      await cli(INTAKE_DUPLICATE_MUTATION, { issueId, relatedIssueId: canonicalId });
+      await cli(ISSUE_UPDATE_STATE_MUTATION, { id: issueId, stateId });
     },
 
     /**

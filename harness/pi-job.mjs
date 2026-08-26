@@ -11,6 +11,7 @@ import { DEFAULT_CAPACITY_POLL_MS, floorsFromEnv, waitForCapacity } from "./capa
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
+import { runIntake } from "./intake.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import {
@@ -387,6 +388,10 @@ export function createPiJobRunner({
       if (job.role === "planner") {
         const client = linear ?? createLinearCliClient({ env, runCommand });
         return runPlanner({ env, linear: client });
+      }
+      if (job.role === "intake") {
+        const client = linear ?? createLinearCliClient({ env, runCommand });
+        return runIntake({ env, linear: client });
       }
       if (CAPACITY_GATED_ROLES.has(job.role) && typeof readCapacity === "function") {
         const client =
