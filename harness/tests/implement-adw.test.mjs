@@ -8,6 +8,7 @@ import { createGhClient } from "../gh-cli.mjs";
 import {
   completeImplementAdw,
   createTypecheckTouched,
+  IMPLEMENTING,
   IN_REVIEW,
   requiredChecksGreen,
   WORKPAD_HEADING,
@@ -404,23 +405,25 @@ test("Bug and Improvement ADW jobs also open a PR and move to In Review", async 
   }
 });
 
-test("implement job fails closed when required checks are red and does not move to In Review", async () => {
+test("implement job stays Implementing when required checks are red and does not move to In Review", async () => {
   const gh = fakeGh({ mergeable: "MERGEABLE", checks: [{ conclusion: "failure" }] });
   const linear = fakeLinear();
   const spawned = [];
-  await assert.rejects(
-    () =>
-      implementRunner({ gh, linear, spawned }).run({
-        role: "implement",
-        identifier: "KIT-99",
-        issueId: "issue-1",
-        adwFile: ".pi/adw/feature.yaml",
-      }),
-    /required GitHub checks/,
-  );
+  const result = await implementRunner({ gh, linear, spawned }).run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  assert.equal(result.ciRetry, true);
+  assert.equal(result.status, IMPLEMENTING);
   assert.equal(
     linear.calls.some((call) => call[0] === "setStatus"),
     false,
+  );
+  assert.equal(
+    linear.calls.some((call) => call[0] === "updateWorkpad"),
+    true,
   );
 });
 
@@ -704,24 +707,22 @@ test("production createGhClient does not move to In Review on MERGEABLE empty ro
   });
   const linear = fakeLinear();
   const spawned = [];
-  await assert.rejects(
-    () =>
-      implementRunner({
-        gh,
-        linear,
-        spawned,
-        typecheckTouched: async () => undefined,
-        sleep: async () => undefined,
-        waitIntervalMs: 0,
-        waitTimeoutMs: 0,
-      }).run({
-        role: "implement",
-        identifier: "KIT-99",
-        issueId: "issue-1",
-        adwFile: ".pi/adw/feature.yaml",
-      }),
-    /timed out waiting for required GitHub checks/,
-  );
+  const result = await implementRunner({
+    gh,
+    linear,
+    spawned,
+    typecheckTouched: async () => undefined,
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 0,
+  }).run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  assert.equal(result.ciRetry, true);
+  assert.equal(result.status, IMPLEMENTING);
   assert.equal(
     linear.calls.some((call) => call[0] === "setStatus"),
     false,

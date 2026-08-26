@@ -14,6 +14,9 @@ const execFile = promisify(execFileCb);
 export const WORKPAD_HEADING = "## Agent Workpad";
 export const IMPLEMENT_PR_BASE = "development";
 export const IN_REVIEW = "In Review";
+export const IMPLEMENTING = "Implementing";
+export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
+export const CI_LOG_EXCERPT_MAX = 1500;
 
 const GREEN_CONCLUSIONS = new Set([
   "success",
@@ -91,6 +94,131 @@ export function requiredChecksFailed(checks) {
 }
 
 /**
+ * Strip tokens and auth headers from CI log excerpts before they hit the workpad.
+ *
+ * @param {string | undefined} text
+ */
+export function redactLogSecrets(text) {
+  if (typeof text !== "string" || text.length === 0) {
+    return "";
+  }
+  return text
+    .replace(/Authorization:\s*Bearer\s+\S+/gi, "Authorization: Bearer [redacted]")
+    .replace(/\b(gh[pousr]_|github_pat_)[A-Za-z0-9_]+/g, "[redacted-token]")
+    .replace(/\blin_api_[A-Za-z0-9]+/g, "[redacted-token]")
+    .replace(
+      /\b(LINEAR_API_KEY|GH_TOKEN|CURSOR_API_KEY|LINEAR_CLI_API_KEY)=[^\s]+/g,
+      "$1=[redacted]",
+    );
+}
+
+/**
+ * @param {string | undefined} text
+ * @param {number} [max]
+ */
+export function excerptLog(text, max = CI_LOG_EXCERPT_MAX) {
+  const redacted = redactLogSecrets(text).trim();
+  if (redacted.length <= max) {
+    return redacted;
+  }
+  return `${redacted.slice(0, max).trimEnd()}\n…`;
+}
+
+/**
+ * @param {Array<{ name?: string, conclusion?: string, status?: string, isRequired?: boolean, state?: string, log?: string }> | undefined} checks
+ */
+export function failedRequiredChecks(checks) {
+  return selectRequiredChecks(checks).filter((check) =>
+    FAILED_CONCLUSIONS.has(check?.conclusion ?? check?.state ?? ""),
+  );
+}
+
+/**
+ * @param {Array<{ name?: string, conclusion?: string, status?: string, isRequired?: boolean, state?: string, log?: string }> | undefined} checks
+ * @param {{ timedOut?: boolean }} [options]
+ * @returns {string[]}
+ */
+export function formatCiFailureFeedback(checks, { timedOut = false } = {}) {
+  const lines = [];
+  if (timedOut) {
+    lines.push("- CI: timed out waiting for required GitHub checks");
+  }
+  const failed = failedRequiredChecks(checks);
+  for (const check of failed) {
+    const name = typeof check.name === "string" && check.name.length > 0 ? check.name : "unknown";
+    lines.push(`- CI: required check \`${name}\` failed`);
+    if (typeof check.log === "string" && check.log.trim().length > 0) {
+      const excerpt = excerptLog(check.log);
+      for (const line of excerpt.split("\n")) {
+        lines.push(`  ${line}`);
+      }
+    }
+  }
+  if (timedOut) {
+    const required = selectRequiredChecks(checks);
+    for (const check of required) {
+      if (FAILED_CONCLUSIONS.has(check?.conclusion ?? check?.state ?? "")) {
+        continue;
+      }
+      const name = typeof check.name === "string" && check.name.length > 0 ? check.name : "unknown";
+      const status = check?.status ?? check?.state ?? "unknown";
+      lines.push(`- CI: required check \`${name}\` still ${status}`);
+    }
+  }
+  if (!timedOut && failed.length === 0) {
+    lines.push("- CI: required GitHub checks are not green");
+  }
+  return lines;
+}
+
+/**
+ * @param {string | undefined} current
+ * @param {string[]} feedbackLines
+ */
+export function applyReviewFeedback(current, feedbackLines) {
+  const base =
+    typeof current === "string" && current.includes(WORKPAD_HEADING)
+      ? current.trimEnd()
+      : WORKPAD_HEADING;
+  const lines =
+    Array.isArray(feedbackLines) && feedbackLines.length > 0 ? feedbackLines : ["- (none)"];
+  const content = lines.join("\n");
+  if (base.includes(REVIEW_FEEDBACK_HEADING)) {
+    return `${base.replace(/### Review feedback\n[\s\S]*?(?=\n### |\s*$)/, `${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`)}\n`;
+  }
+  return `${base}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`;
+}
+
+/**
+ * @param {Array<{ name?: string, conclusion?: string, status?: string, isRequired?: boolean, state?: string, log?: string }> | undefined} checks
+ * @param {{ fetchCheckLog?: (input: { cwd: string, name?: string }) => Promise<string> }} gh
+ * @param {string} cwd
+ */
+export async function attachFailedCheckLogs(checks, gh, cwd) {
+  if (!Array.isArray(checks)) {
+    return [];
+  }
+  const attached = [];
+  for (const check of checks) {
+    let log = check.log;
+    const failed = FAILED_CONCLUSIONS.has(check?.conclusion ?? check?.state ?? "");
+    if (
+      failed &&
+      (typeof log !== "string" || log.trim().length === 0) &&
+      typeof gh?.fetchCheckLog === "function"
+    ) {
+      try {
+        log = await gh.fetchCheckLog({ cwd, name: check.name });
+      } catch {
+        log = "";
+      }
+    }
+    attached.push({ ...check, log });
+  }
+  return attached;
+}
+
+/**
  * @param {string | undefined} adwText
  */
 export function assertAdwOpensPr(adwText) {
@@ -98,7 +226,7 @@ export function assertAdwOpensPr(adwText) {
     throw new Error("implement ADW is missing");
   }
   if (!/^ {2}- pr$/m.test(adwText) || !/^ {2}- in-review$/m.test(adwText)) {
-    throw new Error("implement ADW must open a PR and move to In Review");
+    throw new Error("implement ADW must open a PR; harness moves to In Review after green checks");
   }
   if (!/^never:\s*$/m.test(adwText) || !/^ {2}- merge$/m.test(adwText)) {
     throw new Error("implement ADW must never merge");
@@ -248,13 +376,27 @@ export async function completeImplementAdw(input) {
   while (true) {
     pr = (await gh.viewPr({ cwd: checkout.path })) ?? pr;
     if (requiredChecksFailed(pr?.checks)) {
-      throw new Error("pre-review: required GitHub checks are not green");
+      return writeCiRetryWorkpad({
+        job,
+        checkout,
+        gh,
+        linear,
+        pr,
+        timedOut: false,
+      });
     }
     if (pr?.mergeable === "MERGEABLE" && requiredChecksGreen(pr.checks)) {
       break;
     }
     if (now() >= deadline) {
-      throw new Error("pre-review: timed out waiting for required GitHub checks");
+      return writeCiRetryWorkpad({
+        job,
+        checkout,
+        gh,
+        linear,
+        pr,
+        timedOut: true,
+      });
     }
     await sleep(waitIntervalMs);
   }
@@ -269,5 +411,40 @@ export async function completeImplementAdw(input) {
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
   await linear.setStatus({ issueId: job.issueId, status: IN_REVIEW });
 
-  return { pr, status: IN_REVIEW };
+  return { pr, status: IN_REVIEW, ciRetry: false };
+}
+
+/**
+ * Stay Implementing, write CI failure onto the existing workpad, signal retry.
+ * Never setStatus(In Review). Never spawn factory-checker.
+ *
+ * @param {{
+ *   job: { identifier: string, issueId: string },
+ *   checkout: { path: string },
+ *   gh: { fetchCheckLog?: Function },
+ *   linear: {
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
+ *   },
+ *   pr: { url?: string, checks?: object[] },
+ *   timedOut: boolean,
+ * }} input
+ */
+async function writeCiRetryWorkpad(input) {
+  const { job, checkout, gh, linear, pr, timedOut } = input;
+  const checks = await attachFailedCheckLogs(pr?.checks, gh, checkout.path);
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
+  const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  const withEvidence =
+    typeof pr?.url === "string" && pr.url.length > 0
+      ? upsertWorkpadEvidence(existing?.body, {
+          prUrl: pr.url,
+          identifier: job.identifier,
+        })
+      : (existing?.body ?? `${WORKPAD_HEADING}\n`);
+  const body = applyReviewFeedback(withEvidence, formatCiFailureFeedback(checks, { timedOut }));
+  await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  return { pr, status: IMPLEMENTING, ciRetry: true };
 }
