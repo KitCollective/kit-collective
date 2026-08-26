@@ -879,6 +879,9 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
   assert.match(gate.text, /conflict/i);
   assert.match(gate.text, /never calls Linear/i);
   assert.match(gate.text, /never .*In Review/i);
+  assert.match(gate.text, /this worktree's PR only|this worktree’s PR only/i);
+  assert.match(gate.text, /Do not mention sibling/i);
+  assert.doesNotMatch(gate.text, /KIT-99/);
   for (const relative of [
     ".pi/agents/nest.md",
     ".pi/agents/expo.md",
@@ -899,6 +902,9 @@ test("implement role requires Scout then helpers then Gate; parent owns In Revie
   assert.match(implement, /In Review/);
   assert.match(implement, /only when Gate is green|Gate is green/i);
   assert.match(implement, /Implementing/);
+  assert.match(implement, /this job's identifier|this job’s identifier/i);
+  assert.match(implement, /Do not mention sibling KIT issues/i);
+  assert.match(implement, /this PR only/i);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   const checker = readFileSync(join(ROOT, ".pi/roles/factory-checker.md"), "utf8");
   const land = readFileSync(join(ROOT, ".pi/roles/land.md"), "utf8");
