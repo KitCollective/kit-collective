@@ -50,18 +50,57 @@ export function isSentryIssue(issue) {
 }
 
 /**
+ * Class of finding from the signal-up body — paths, CI graph, or lock wording.
+ * No synthetic `class:` line; create-contract writes `## Finding` only.
+ *
  * @param {object} issue
  */
 function leftoverClass(issue) {
-  const match = String(issue.description ?? "").match(/^class:\s*(.+)$/m);
-  return match ? match[1].trim() : "related";
+  const description = String(issue.description ?? "");
+  const findingMatch = description.match(/##\s*Finding\n([\s\S]*?)(?=\n##\s|\s*$)/i);
+  const text = `${issue.title ?? ""}\n${findingMatch ? findingMatch[1] : description}`.toLowerCase();
+  if (/\bci[-\s]?graph\b|required github check|\.github\/workflows|\bci\.yml\b/.test(text)) {
+    return "ci-graph";
+  }
+  if (/\block wording\b|\barchitecture lock\b|\badr-00|\bdesign-system\.md\b/.test(text)) {
+    return "lock-wording";
+  }
+  if (/\bwrite-scope\b|\bpath glob/.test(text)) {
+    return "paths";
+  }
+  return "unclassified";
 }
 
 /**
+ * Origin keys from relatedTo (origin may be outside Triage) and the body Origin line.
+ *
+ * @param {object} issue
+ * @returns {string[]}
+ */
+function leftoverOriginKeys(issue) {
+  const keys = [];
+  for (const related of issue.relatedTo ?? []) {
+    if (typeof related.id === "string" && related.id.length > 0) {
+      keys.push(`id:${related.id}`);
+    }
+    if (typeof related.identifier === "string" && related.identifier.length > 0) {
+      keys.push(`ident:${related.identifier}`);
+    }
+  }
+  const originLine = String(issue.description ?? "").match(/Origin:\s*(KIT-\d+)/i);
+  if (originLine) {
+    keys.push(`ident:${originLine[1]}`);
+  }
+  return keys;
+}
+
+/**
+ * Cluster leftovers that share a finding class or the same origin.
+ * Origin need not be in the Triage list. Leftover↔leftover related is not required.
+ *
  * @param {object[]} issues
  */
 function leftoverClusters(issues) {
-  const byId = new Map(issues.map((issue) => [issue.id, issue]));
   const parent = new Map(issues.map((issue) => [issue.id, issue.id]));
 
   function find(id) {
@@ -81,14 +120,29 @@ function leftoverClusters(issues) {
     }
   }
 
+  const byClass = new Map();
   for (const issue of issues) {
-    const ownClass = leftoverClass(issue);
-    for (const related of issue.relatedTo ?? []) {
-      const other = byId.get(related.id);
-      if (!other || leftoverClass(other) !== ownClass) {
-        continue;
+    const className = leftoverClass(issue);
+    if (className === "unclassified") {
+      continue;
+    }
+    const existing = byClass.get(className);
+    if (existing) {
+      union(existing.id, issue.id);
+    } else {
+      byClass.set(className, issue);
+    }
+  }
+
+  const byOrigin = new Map();
+  for (const issue of issues) {
+    for (const key of leftoverOriginKeys(issue)) {
+      const existing = byOrigin.get(key);
+      if (existing) {
+        union(existing.id, issue.id);
+      } else {
+        byOrigin.set(key, issue);
       }
-      union(issue.id, other.id);
     }
   }
 
@@ -187,6 +241,13 @@ export async function runIntake({ linear } = {}) {
       teamId,
       stateId: backlogState.id,
       labelIds: labels?.Improvement ? [labels.Improvement] : undefined,
+    });
+    await linear.commentIssue({
+      issueId: created.id,
+      body: `${INTAKE_COMMENT_HEADING}
+
+Origins: ${origins.join(", ")}
+`,
     });
     for (const origin of cluster) {
       await linear.markDuplicate({

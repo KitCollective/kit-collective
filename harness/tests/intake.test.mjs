@@ -55,10 +55,13 @@ write-scope: harness/**
 `;
 }
 
-function leftoverBody(className) {
-  return `Out of scope leftover.
+function leftoverBody(finding) {
+  return `## Signal-up
+- Origin: KIT-87
+- Why out of scope: leftover from the origin slice
 
-class: ${className}
+## Finding
+${finding}
 `;
 }
 
@@ -290,33 +293,51 @@ test("well-formed Triage slice moves to Backlog with ready-for-agent and without
 });
 
 test("related leftovers of the same class become one Backlog tech issue; origins become Duplicate", async () => {
-  const { created, updates, relations, result } = await intakeWith([
+  const { created, updates, relations, comments, result } = await intakeWith([
     triageNode({
       id: "leftover-a",
       identifier: "KIT-81",
       title: "CI graph miss A",
-      description: leftoverBody("ci-graph"),
+      description: leftoverBody(
+        "The required GitHub test job CI graph does not run lint-workflows.sh.",
+      ),
       labels: { nodes: [{ id: "label-signal", name: "signal-up" }] },
       relations: {
-        nodes: [{ type: "related", issue: { id: "leftover-b", identifier: "KIT-82" } }],
+        nodes: [
+          {
+            type: "related",
+            issue: { id: "leftover-a", identifier: "KIT-81" },
+            relatedIssue: { id: "origin-87", identifier: "KIT-87" },
+          },
+        ],
       },
     }),
     triageNode({
       id: "leftover-b",
       identifier: "KIT-82",
       title: "CI graph miss B",
-      description: leftoverBody("ci-graph"),
+      description: leftoverBody(
+        "The same CI graph miss: required GitHub checks skip lint-workflows.sh.",
+      ),
       labels: { nodes: [{ id: "label-signal", name: "signal-up" }] },
       relations: {
-        nodes: [{ type: "related", issue: { id: "leftover-a", identifier: "KIT-81" } }],
+        nodes: [
+          {
+            type: "related",
+            issue: { id: "leftover-b", identifier: "KIT-82" },
+            relatedIssue: { id: "origin-87", identifier: "KIT-87" },
+          },
+        ],
       },
     }),
   ]);
 
+  assert.match(INTAKE_TRIAGE_QUERY, /relatedIssue/);
   assert.equal(created.length, 1);
   assert.equal(created[0].input.stateId, BACKLOG_STATE_ID);
   assert.equal(created[0].input.teamId, "team-kit");
   assert.match(created[0].input.title, /ci-graph/i);
+  assert.equal(/class:\s*/.test(created[0].input.description), false);
   assert.equal(Object.hasOwn(created[0].input, "delegateId"), false);
   assert.deepEqual(updates.map((row) => row.id).sort(), ["leftover-a", "leftover-b"]);
   assert.equal(
@@ -328,6 +349,10 @@ test("related leftovers of the same class become one Backlog tech issue; origins
     relations.every((row) => row.relatedIssueId === "tech-1"),
     true,
   );
+  assert.equal(comments.length, 1);
+  assert.equal(comments[0].issueId, "tech-1");
+  assert.match(comments[0].body, /KIT-81/);
+  assert.match(comments[0].body, /KIT-82/);
   assert.deepEqual(result.consolidated.identifier, "KIT-100");
   assert.deepEqual(result.consolidated.origins.sort(), ["KIT-81", "KIT-82"]);
 });

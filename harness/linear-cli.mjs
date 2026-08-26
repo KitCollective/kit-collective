@@ -140,12 +140,14 @@ export const INTAKE_TRIAGE_QUERY = `query IntakeTriage($teamKey: String!) {
         nodes {
           type
           issue { id identifier }
+          relatedIssue { id identifier }
         }
       }
       inverseRelations(first: 50) {
         nodes {
           type
           issue { id identifier }
+          relatedIssue { id identifier }
         }
       }
     }
