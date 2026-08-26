@@ -137,6 +137,7 @@ export async function runPlanner({ env = process.env, linear } = {}) {
 
 /**
  * Same skip/claim job the webhook router enqueues for role=planner.
+ * Poller and webhook planner enqueue onto the planner mutex, not the coding slot.
  *
  * @param {{
  *   enqueue: { enqueue: (job: object) => unknown },
