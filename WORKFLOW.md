@@ -31,6 +31,8 @@ If any eligibility check fails: **do not modify the issue**. Stop.
 
 Never claim from Linear **Triage** (Sentry/intake) or **Duplicate**. Those are Linear-owned. A human accepts onto `Backlog`/`Parked` first.
 
+The worker writes **Parked** after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. Planner still never claims Parked. A human Park is not Idle timeout and keeps the Issue worktree.
+
 An issue may **start** implement when status is `Implementing` and it has no branch/PR yet.
 
 An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session.
@@ -44,7 +46,7 @@ Typical contract:
 | State | Linear type | Who moves here | Meaning |
 | --- | --- | --- | --- |
 | Backlog | backlog | humans, `/to-tickets`, signal-up | Dispatch-eligible when `ready-for-agent` + unblocked |
-| Parked | unstarted | humans only | Visible, never auto-dispatched |
+| Parked | unstarted | humans; worker on Idle timeout | Visible, never auto-dispatched |
 | Triage | triage | Sentry and other intake | Inbox. Human accepts. Never auto-dispatch |
 | Duplicate | duplicate | humans | Duplicate of another issue. Never auto-dispatch |
 | Implementing | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |

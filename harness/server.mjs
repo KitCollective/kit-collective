@@ -15,12 +15,13 @@ import {
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
 import { createTypecheckTouched } from "./implement-exit.mjs";
-import { createSerialQueue } from "./job-queue.mjs";
+import { ALWAYS_READY_CAPACITY, createWorkerSlots } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS, startPlannerPoller } from "./planner.mjs";
 import { createLinearSessionAdapter } from "./session-adapter.mjs";
 import { createHttpHandler } from "./webhook-router.mjs";
+import { createWorktreeAdapter } from "./worktree.mjs";
 
 /**
  * @param {object} deps
@@ -28,22 +29,28 @@ import { createHttpHandler } from "./webhook-router.mjs";
  */
 export function createWorkerHandler(deps) {
   const webhook = createHttpHandler(deps);
-  const readCapacity =
-    typeof deps.readCapacity === "function"
-      ? deps.readCapacity
-      : () => snapshotCapacity({ env: deps.env });
-  const currentJob =
-    typeof deps.currentJob === "function" ? deps.currentJob : () => deps.job ?? null;
   return async (req, res) => {
     const path = (req.url ?? "/").split("?")[0];
     if (req.method === "GET" && path === "/health") {
-      const raw = await readCapacity();
-      const capacity =
-        raw && typeof raw.ready === "boolean"
-          ? { ramFreeMb: raw.ramFreeMb, diskFreeMb: raw.diskFreeMb, ready: raw.ready }
-          : evaluateCapacity({ ...raw, ...floorsFromEnv(deps.env) });
+      const snapshot = typeof deps.health === "function" ? deps.health() : {};
+      let capacity = snapshot.capacity ?? ALWAYS_READY_CAPACITY;
+      if (typeof deps.readCapacity === "function") {
+        const raw = await deps.readCapacity();
+        capacity =
+          raw && typeof raw.ready === "boolean"
+            ? { ramFreeMb: raw.ramFreeMb, diskFreeMb: raw.diskFreeMb, ready: raw.ready }
+            : evaluateCapacity({ ...raw, ...floorsFromEnv(deps.env) });
+      }
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify(workerHealthBody({ job: currentJob(), capacity })));
+      res.end(
+        JSON.stringify(
+          workerHealthBody({
+            planner: snapshot.planner ?? "active",
+            job: snapshot.job === undefined ? null : snapshot.job,
+            capacity,
+          }),
+        ),
+      );
       return;
     }
     return webhook(req, res);
@@ -68,6 +75,7 @@ export async function startWorkerServer({
   await assertPiPackagesReady({ root: workspace, listPackages });
   const linearClient = linear ?? createLinearCliClient({ env, runCommand });
   const ghClient = createGhClient({ env, runCommand });
+  const trees = createWorktreeAdapter({ env });
   const capacitySnapshot =
     typeof readCapacity === "function"
       ? readCapacity
@@ -78,6 +86,7 @@ export async function startWorkerServer({
       : createPiJobRunner({
           env,
           workspace,
+          worktree: trees,
           spawnProcess,
           runCommand,
           gh: ghClient,
@@ -86,7 +95,7 @@ export async function startWorkerServer({
           typecheckTouched: createTypecheckTouched({ runCommand }),
           readCapacity: capacitySnapshot,
         });
-  const queue = createSerialQueue({
+  const slots = createWorkerSlots({
     async run(job) {
       return runner.run(job);
     },
@@ -102,7 +111,9 @@ export async function startWorkerServer({
     now,
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
-    enqueue: queue,
+    enqueue: slots,
+    health: () => slots.health(),
+    worktree: trees,
     session: createLinearSessionAdapter({ linear: linearClient }),
     delegateGateConfig: createDelegateGateConfig(env),
     readCapacity: capacitySnapshot,
@@ -115,7 +126,7 @@ export async function startWorkerServer({
   return new Promise((resolve) => {
     server.listen(listenPort, listenHost, () => {
       if (pollMs > 0) {
-        stopPoller = startPlannerPoller({ enqueue: queue, intervalMs: pollMs });
+        stopPoller = startPlannerPoller({ enqueue: slots, intervalMs: pollMs });
       }
       resolve(server);
     });

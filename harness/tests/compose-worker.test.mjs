@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
 import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
-import { createSerialQueue } from "../job-queue.mjs";
+import { ALWAYS_READY_CAPACITY, createSerialQueue, createWorkerSlots } from "../job-queue.mjs";
 import { createActorTokenProvider } from "../linear-actor-token.mjs";
 import { createLinearCliClient } from "../linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
@@ -106,6 +106,83 @@ test("serial queue runs only one Pi job at a time", async () => {
   assert.equal(Math.max(...maxSeen), 1);
 });
 
+test("planner job runs on its own mutex while a Coding job occupies the slot", async () => {
+  let codingStarted;
+  const started = new Promise((resolve) => {
+    codingStarted = resolve;
+  });
+  let releaseCoding;
+  const hold = new Promise((resolve) => {
+    releaseCoding = resolve;
+  });
+  const plannerFinished = [];
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "planner") {
+        plannerFinished.push(job);
+        return job;
+      }
+      codingStarted();
+      await hold;
+      return job;
+    },
+  });
+
+  const codingPromise = slots.enqueue({ role: "implement", identifier: "KIT-99" });
+  await started;
+  await slots.enqueue({ role: "planner" });
+  assert.equal(plannerFinished.length, 1);
+  assert.deepEqual(slots.health().job, { role: "implement", identifier: "KIT-99" });
+  releaseCoding();
+  await codingPromise;
+  assert.equal(slots.health().job, null);
+});
+
+test("one Coding job occupies the coding slot at a time", async () => {
+  const running = [];
+  const maxSeen = [];
+  const slots = createWorkerSlots({
+    async run(job) {
+      running.push(job.role);
+      maxSeen.push(running.length);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      running.splice(running.indexOf(job.role), 1);
+      return job.role;
+    },
+  });
+
+  const [implement, checker, land] = await Promise.all([
+    slots.enqueue({ role: "implement", identifier: "KIT-1" }),
+    slots.enqueue({ role: "factory-checker", identifier: "KIT-2" }),
+    slots.enqueue({ role: "land", identifier: "KIT-3" }),
+  ]);
+
+  assert.equal(implement, "implement");
+  assert.equal(checker, "factory-checker");
+  assert.equal(land, "land");
+  assert.equal(Math.max(...maxSeen), 1);
+});
+
+test("planner enqueue does not occupy the coding slot", async () => {
+  const coding = [];
+  const planner = [];
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "planner") {
+        planner.push(job);
+        return job;
+      }
+      coding.push(job);
+      return job;
+    },
+  });
+
+  await slots.enqueue({ role: "planner" });
+  assert.equal(coding.length, 0);
+  assert.equal(planner.length, 1);
+  assert.equal(slots.health().job, null);
+});
+
 test("Compose HTTP adapter serves /health without enqueueing a Pi job", async () => {
   const enqueue = {
     jobs: [],
@@ -135,9 +212,8 @@ test("Compose HTTP adapter serves /health without enqueueing a Pi job", async ()
     assert.equal(body.ok, true);
     assert.equal(body.planner, "active");
     assert.equal(body.job, null);
-    assert.equal(typeof body.capacity.ramFreeMb, "number");
-    assert.equal(typeof body.capacity.diskFreeMb, "number");
-    assert.equal(typeof body.capacity.ready, "boolean");
+    assert.deepEqual(body.capacity, ALWAYS_READY_CAPACITY);
+    assert.equal(body.capacity.ready, true);
     assert.equal(enqueue.jobs.length, 0);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -293,6 +369,9 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /LINEAR_PI_ACCESS_TOKEN/);
   assert.match(host, /OPENROUTER_API_KEY/);
   assert.match(host, /30-day/);
+  assert.match(host, /"job"/);
+  assert.match(host, /ramFreeMb/);
+  assert.match(host, /diskFreeMb/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);
   assert.doesNotMatch(host, /:8080\/health/);
 
@@ -504,6 +583,212 @@ test("production adapter fetches Linear and runs one Pi job on a dispatchable Is
     assert.equal(ran.length, 1);
     assert.equal(ran[0].role, "implement");
     assert.equal(ran[0].adwFile, ".pi/adw/feature.yaml");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+async function postWebhook(port, payload, { path = "/webhooks/linear", secret = SECRET } = {}) {
+  const rawBody = JSON.stringify(payload);
+  const signature = createHmac("sha256", secret).update(rawBody).digest("hex");
+  return fetch(`http://127.0.0.1:${port}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "linear-signature": signature },
+    body: rawBody,
+  });
+}
+
+test("GET /health stays HTTP 200 during a live Coding job and reports role plus identifier", async () => {
+  let release;
+  const hold = new Promise((resolve) => {
+    release = resolve;
+  });
+  let started;
+  const startedPromise = new Promise((resolve) => {
+    started = resolve;
+  });
+  const server = await startWorkerServer({
+    env: validWorkerEnv(),
+    listenHost: "127.0.0.1",
+    listenPort: 0,
+    now: () => NOW,
+    plannerPollMs: 0,
+    linear: {
+      async getIssue() {
+        return dispatchableIssue();
+      },
+    },
+    run: async (job) => {
+      started();
+      await hold;
+      return job;
+    },
+    async listPackages() {
+      return REQUIRED_PI_PACKAGES.join("\n");
+    },
+  });
+  const { port } = server.address();
+  try {
+    const ok = await postWebhook(port, {
+      action: "update",
+      type: "Issue",
+      data: { id: "issue-1" },
+      updatedFrom: { stateId: "prev" },
+      webhookTimestamp: NOW,
+    });
+    assert.equal(ok.status, 200);
+    await Promise.race([
+      startedPromise,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Coding job never started")), 1000);
+      }),
+    ]);
+
+    const response = await fetch(`http://127.0.0.1:${port}/health`);
+    assert.equal(response.status, 200);
+    assert.notEqual(response.status, 503);
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.planner, "active");
+    assert.deepEqual(body.job, { role: "implement", identifier: "KIT-99" });
+    assert.equal(typeof body.capacity.ramFreeMb, "number");
+    assert.equal(typeof body.capacity.diskFreeMb, "number");
+    assert.equal(typeof body.capacity.ready, "boolean");
+  } finally {
+    release();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("planner webhook runs while a Coding job occupies the slot", async () => {
+  let release;
+  const hold = new Promise((resolve) => {
+    release = resolve;
+  });
+  let codingStarted;
+  const codingStartedPromise = new Promise((resolve) => {
+    codingStarted = resolve;
+  });
+  let plannerFinished;
+  const plannerDone = new Promise((resolve) => {
+    plannerFinished = resolve;
+  });
+  const ran = [];
+  const server = await startWorkerServer({
+    env: validWorkerEnv(),
+    listenHost: "127.0.0.1",
+    listenPort: 0,
+    now: () => NOW,
+    plannerPollMs: 0,
+    linear: {
+      async getIssue(id) {
+        if (id === "issue-planner") {
+          return {
+            id: "issue-planner",
+            identifier: "KIT-10",
+            status: "Backlog",
+            labels: ["ready-for-agent", "Feature"],
+            linearType: "Feature",
+            blockedBy: [],
+            delegate: null,
+          };
+        }
+        return dispatchableIssue();
+      },
+    },
+    run: async (job) => {
+      ran.push(job);
+      if (job.role === "planner") {
+        plannerFinished(job);
+        return job;
+      }
+      codingStarted();
+      await hold;
+      return job;
+    },
+    async listPackages() {
+      return REQUIRED_PI_PACKAGES.join("\n");
+    },
+  });
+  const { port } = server.address();
+  try {
+    const implementPost = await postWebhook(port, {
+      action: "update",
+      type: "Issue",
+      data: { id: "issue-1" },
+      updatedFrom: { stateId: "prev" },
+      webhookTimestamp: NOW,
+    });
+    assert.equal(implementPost.status, 200);
+    await codingStartedPromise;
+
+    const plannerPost = await postWebhook(port, {
+      action: "update",
+      type: "Issue",
+      data: { id: "issue-planner" },
+      updatedFrom: { stateId: "prev" },
+      webhookTimestamp: NOW,
+    });
+    assert.equal(plannerPost.status, 200);
+    await Promise.race([
+      plannerDone,
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("planner stuck on the coding mutex")), 500);
+      }),
+    ]);
+
+    const health = await fetch(`http://127.0.0.1:${port}/health`).then((r) => r.json());
+    assert.deepEqual(health.job, { role: "implement", identifier: "KIT-99" });
+    assert.equal(
+      ran.some((job) => job.role === "planner"),
+      true,
+    );
+  } finally {
+    release();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("AgentSession created and prompted still do not enqueue a Coding job", async () => {
+  const ran = [];
+  const server = await startWorkerServer({
+    env: validWorkerEnv(),
+    listenHost: "127.0.0.1",
+    listenPort: 0,
+    now: () => NOW,
+    plannerPollMs: 0,
+    linear: {
+      async getIssue() {
+        return dispatchableIssue();
+      },
+    },
+    run: async (job) => {
+      ran.push(job);
+      return job;
+    },
+    async listPackages() {
+      return REQUIRED_PI_PACKAGES.join("\n");
+    },
+  });
+  const { port } = server.address();
+  try {
+    for (const action of ["created", "prompted"]) {
+      const response = await postWebhook(
+        port,
+        {
+          action,
+          type: "AgentSessionEvent",
+          agentSession: { id: "session-kit-99", issueId: "issue-1" },
+          webhookTimestamp: NOW,
+        },
+        { path: "/webhooks/linear/agent-session", secret: "session-secret" },
+      );
+      assert.equal(response.status, 200);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(ran.length, 0);
+    const health = await fetch(`http://127.0.0.1:${port}/health`).then((r) => r.json());
+    assert.equal(health.job, null);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -812,9 +1097,9 @@ test("coding spawn waits on RAM and disk floors; job stays queued; status unchan
     }),
     capacitySleep: () => new Promise((resolve) => sleepWaits.push(resolve)),
   });
-  const queue = createSerialQueue({ run: (job) => runner.run(job) });
+  const slots = createWorkerSlots({ run: (job) => runner.run(job) });
   let settled = false;
-  const pending = queue
+  const pending = slots
     .enqueue({
       role: "implement",
       identifier: "KIT-87",
@@ -891,7 +1176,8 @@ test("planner still runs while a coding job waits on capacity", async () => {
     capacitySleep: () => new Promise((resolve) => sleepWaits.push(resolve)),
   });
 
-  const coding = runner.run({
+  const slots = createWorkerSlots({ run: (job) => runner.run(job) });
+  const coding = slots.enqueue({
     role: "implement",
     identifier: "KIT-87",
     issueId: "issue-87",
@@ -899,7 +1185,7 @@ test("planner still runs while a coding job waits on capacity", async () => {
   });
   await waitUntil(() => sleepWaits.length === 1, "capacity wait sleep");
 
-  const planned = await runner.run({ role: "planner", identifier: "KIT-1" });
+  const planned = await slots.enqueue({ role: "planner", identifier: "KIT-1" });
   assert.equal(planned.claimed.length, 1);
   assert.equal(planned.claimed[0].identifier, "KIT-1");
   assert.equal(fakes.spawned.length, 0);

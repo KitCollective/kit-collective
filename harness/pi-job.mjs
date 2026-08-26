@@ -12,7 +12,7 @@ import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
-import { createLinearCliClient } from "./linear-cli.mjs";
+import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import {
   createPiEventStreamConsumer,
   pipeReadableJsonLines,
@@ -38,6 +38,76 @@ const ROLE_FILES = {
 
 const FAST_ROLES = new Set(["planner", "factory-checker", "land"]);
 const CAPACITY_GATED_ROLES = new Set(["implement", "factory-checker"]);
+
+export const DEFAULT_JOB_IDLE_MS = 45 * 60 * 1000;
+export const TIMEOUT_PARK_STATUS = "Parked";
+
+/**
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ * @returns {number}
+ */
+export function jobIdleMs(env = {}) {
+  const raw = env.PI_JOB_IDLE_MS;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return raw;
+  }
+  if (typeof raw === "string" && raw.length > 0) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_JOB_IDLE_MS;
+}
+
+/**
+ * @param {string} body
+ * @param {string} line
+ */
+function replaceReviewFeedback(body, line) {
+  if (body.includes("### Review feedback")) {
+    return body.replace(
+      /### Review feedback\n[\s\S]*?(?=\n### |\s*$)/,
+      `### Review feedback\n\n${line}\n`,
+    );
+  }
+  return `${body}\n\n### Review feedback\n\n${line}\n`;
+}
+
+/**
+ * @param {string | undefined} current
+ * @param {{ role: string, identifier: string, idleMs: number }} input
+ */
+export function applyIdleTimeoutWorkpad(current, { role, identifier, idleMs }) {
+  const base =
+    typeof current === "string" && current.includes(WORKPAD_HEADING)
+      ? current.trimEnd()
+      : WORKPAD_HEADING;
+  const minutes = idleMs / 60_000;
+  const line = `- Idle timeout: ${role} ${identifier} had no close and no stdout for ${minutes} minutes (PI_JOB_IDLE_MS).`;
+  return `${replaceReviewFeedback(base, line)}\n`;
+}
+
+/**
+ * Kill the Pi child process group. Prefer the negative pid so grandchildren die too.
+ *
+ * @param {{ pid?: number, kill?: (signal?: string) => void }} spawned
+ * @param {string} [signal]
+ */
+export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
+  const pid = spawned?.pid;
+  if (typeof pid === "number") {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      // Not a process-group leader, or already gone.
+    }
+  }
+  if (typeof spawned?.kill === "function") {
+    spawned.kill(signal);
+  }
+}
 
 /**
  * @param {string} role
@@ -159,6 +229,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt) {
  *   readCapacity?: () => Promise<{ ramFreeMb: number, diskFreeMb: number, ready?: boolean }>,
  *   waitTimeoutMs?: number,
  *   waitIntervalMs?: number,
+ *   killProcessGroup?: (spawned: object, signal?: string) => void | Promise<void>,
  * }} [deps]
  */
 export function createPiJobRunner({
@@ -179,16 +250,22 @@ export function createPiJobRunner({
   readCapacity,
   waitTimeoutMs,
   waitIntervalMs,
+  killProcessGroup,
 } = {}) {
   const trees = worktree ?? createWorktreeAdapter({ env });
+  const killGroup = killProcessGroup ?? killProcessGroupDefault;
   const spawnJob =
     spawnProcess ??
     ((command, args, options) =>
       new Promise((resolve, reject) => {
-        const child = spawn(command, args, options);
+        const child = spawn(command, args, { ...options, detached: true });
         child.on("error", reject);
         resolve({
+          pid: child.pid,
           stdout: child.stdout,
+          kill(signal) {
+            killProcessGroupDefault({ pid: child.pid, kill: (sig) => child.kill(sig) }, signal);
+          },
           closePromise: new Promise((res, rej) => {
             child.on("error", rej);
             child.on("close", (status) => res({ status }));
@@ -217,13 +294,88 @@ export function createPiJobRunner({
       spawned.closePromise ??
       spawned.closed ??
       Promise.resolve({ status: typeof spawned.status === "number" ? spawned.status : 0 });
+    const liveChild =
+      spawned.closePromise != null || spawned.closed != null || typeof spawned.pid === "number";
+    const clock = now ?? Date.now;
+    const snooze = sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    const idleMs = jobIdleMs(env);
+    const pollMs = 1000;
+    let lastStdoutAt = clock();
+    if (spawned.stdout && typeof spawned.stdout.on === "function") {
+      spawned.stdout.on("data", () => {
+        lastStdoutAt = clock();
+      });
+    }
     let streamDone = Promise.resolve();
     if (shouldStream && spawned.stdout) {
       const consumer = createPiEventStreamConsumer({ session, issueId: streamIssueId, now });
       streamDone = pipeReadableJsonLines(spawned.stdout, consumer);
     }
-    const [{ status }] = await Promise.all([waitClose, streamDone]);
-    return { status, stdout: spawned.stdout };
+    if (!liveChild) {
+      const [{ status }] = await Promise.all([waitClose, streamDone]);
+      return { status, stdout: spawned.stdout };
+    }
+
+    let timedOut = false;
+    let finished = false;
+    const closed = waitClose.then((closeResult) => {
+      finished = true;
+      return closeResult;
+    });
+    const idleWatch = (async () => {
+      while (!finished) {
+        const elapsed = clock() - lastStdoutAt;
+        if (elapsed >= idleMs) {
+          timedOut = true;
+          finished = true;
+          await killGroup(spawned);
+          return;
+        }
+        const remaining = idleMs - elapsed;
+        await snooze(Math.max(1, Math.min(pollMs, remaining)));
+      }
+    })();
+    await Promise.race([closed, idleWatch]);
+    if (timedOut) {
+      return { status: null, idleTimeout: true, stdout: spawned.stdout };
+    }
+    await streamDone;
+    const closeResult = await closed;
+    return { status: closeResult.status, stdout: spawned.stdout };
+  }
+
+  /**
+   * @param {{ role: string, identifier?: string, issueId?: string }} job
+   * @param {string} identifier
+   * @param {number} idleMs
+   */
+  async function timeoutPark(job, identifier, idleMs) {
+    const linearClient = linear ?? job.linear ?? createLinearCliClient({ env, runCommand });
+    const issueId = job.issueId ?? identifier;
+    const comments =
+      typeof linearClient.listComments === "function"
+        ? await linearClient.listComments(issueId)
+        : [];
+    const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+    const body = applyIdleTimeoutWorkpad(existing?.body, {
+      role: job.role,
+      identifier,
+      idleMs,
+    });
+    if (typeof linearClient.updateWorkpad === "function") {
+      await linearClient.updateWorkpad({
+        issueId,
+        body,
+        commentId: existing?.id,
+      });
+    }
+    if (typeof linearClient.setStatus === "function") {
+      await linearClient.setStatus({ issueId, status: TIMEOUT_PARK_STATUS });
+    }
+    if (typeof trees.reap === "function") {
+      await trees.reap({ identifier });
+    }
+    return { ...job, idleTimeout: true, nextStatus: TIMEOUT_PARK_STATUS };
   }
 
   return {
@@ -260,6 +412,7 @@ export function createPiJobRunner({
           },
           linear: linearClient,
           gh: mergeGh,
+          worktree: trees,
         });
       }
       const roleFile = ROLE_FILES[job.role];
@@ -301,6 +454,9 @@ export function createPiJobRunner({
         spawnEnv.LINEAR_ISSUE_ID = job.issueId ?? identifier;
       }
       const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv);
+      if (result.idleTimeout) {
+        return timeoutPark(job, identifier, jobIdleMs(env));
+      }
       if (result.status !== 0) {
         throw new Error(`pi exited ${result.status} for ${identifier}`);
       }

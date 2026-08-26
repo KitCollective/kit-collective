@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
+import { createWorkerSlots } from "../job-queue.mjs";
 import {
   createLinearCliClient,
   FORBIDDEN_PLANNER_STATES,
@@ -308,6 +309,49 @@ test("Linear-only poller enqueues planner on the same skip/claim path as the web
   timers[0].fn();
   assert.deepEqual(jobs, [{ role: "planner" }]);
   stop();
+});
+
+test("planner poller does not enqueue onto the coding slot", async () => {
+  const planner = [];
+  const coding = [];
+  let codingStarted;
+  const started = new Promise((resolve) => {
+    codingStarted = resolve;
+  });
+  let releaseCoding;
+  const hold = new Promise((resolve) => {
+    releaseCoding = resolve;
+  });
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "planner") {
+        planner.push(job);
+        return job;
+      }
+      coding.push(job);
+      codingStarted();
+      await hold;
+      return job;
+    },
+  });
+
+  const codingPromise = slots.enqueue({ role: "implement", identifier: "KIT-1" });
+  await started;
+  const stop = startPlannerPoller({
+    enqueue: slots,
+    intervalMs: DEFAULT_PLANNER_POLL_MS,
+    setIntervalFn(fn) {
+      fn();
+      return 1;
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(planner.length, 1);
+  assert.equal(coding.length, 1);
+  assert.equal(slots.health().job.role, "implement");
+  stop();
+  releaseCoding();
+  await codingPromise;
 });
 
 test("planner role and host inventory keep Cursor cron paused while the PI planner job is Active", () => {
