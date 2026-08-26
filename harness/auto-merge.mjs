@@ -150,13 +150,7 @@ function requiredChecksAreGreen(pr) {
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  * }} input
  */
-export async function completeAutoMerge({
-  job,
-  linear,
-  gh,
-  delegateGateConfig,
-  env,
-}) {
+export async function completeAutoMerge({ job, linear, gh, delegateGateConfig, env }) {
   const gateConfig = delegateGateConfig ?? createDelegateGateConfig(env);
   const issue = await linear.getIssue(job.issueId);
   if (!issue || issue.status !== READY_FOR_MERGE) {
@@ -196,9 +190,7 @@ export async function completeAutoMerge({
   const delegate = delegateGate(issue.delegate, gateConfig);
   if (delegate !== "pi") {
     return block(
-      delegate === "none"
-        ? "delegate already empty (Nicklas's turn)."
-        : "delegate is not Pi.",
+      delegate === "none" ? "delegate already empty (Nicklas's turn)." : "delegate is not Pi.",
     );
   }
 
