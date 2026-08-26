@@ -1,12 +1,13 @@
 name: improvement
 linearType: Improvement
-summary: Tight change against existing behavior, then open a PR and move to In Review, with evidence on the workpad.
+summary: Tight change against existing behavior, then open a PR. The harness moves Linear to In Review after required GitHub checks are green and MERGEABLE.
 steps:
   - scout
   - plan
   - build
   - code-gates
   - pr
+  # in-review: harness after green required checks + MERGEABLE. Model does not setStatus.
   - in-review
 codeGates:
   rebase: true

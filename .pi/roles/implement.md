@@ -8,4 +8,4 @@ Update the existing workpad (`## Agent Workpad`): list comments first, then edit
 
 Pre-review still holds: rebase onto `origin/development` until `gh pr view --json mergeable` is `MERGEABLE`; typecheck of touched packages on this box; wait for required GitHub checks. Full `pnpm test` stays on GitHub Actions, not on this 4 GB / 8 GB box.
 
-Follow the named ADW. Open a PR into `development` and move the issue to `In Review` with evidence on the workpad. Never merge. Never set Linear Agent to Cursor.
+Follow the named ADW. Open a PR into `development` with evidence on the workpad. The harness moves the issue to `In Review` after required GitHub checks are green and the PR is MERGEABLE — do not set Linear status yourself. Never merge. Never set Linear Agent to Cursor.
