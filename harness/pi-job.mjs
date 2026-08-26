@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { completeAutoMerge } from "./auto-merge.mjs";
 import { DEFAULT_CAPACITY_POLL_MS, floorsFromEnv, waitForCapacity } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
@@ -405,6 +406,18 @@ export function createPiJobRunner({
           identifier,
           sleep: capacitySleep ?? sleep,
           pollMs: Number(env.PI_CAPACITY_POLL_MS ?? DEFAULT_CAPACITY_POLL_MS),
+        });
+      }
+      if (job.role === "auto-merge") {
+        const linearClient = linear ?? createLinearCliClient({ env, runCommand });
+        const mergeGh = landGh ?? createLandGh({ env, runCommand });
+        return completeAutoMerge({
+          job: {
+            issueId: job.issueId ?? identifier,
+            identifier,
+          },
+          linear: linearClient,
+          gh: mergeGh,
         });
       }
       if (job.role === "land") {

@@ -63,10 +63,11 @@ export function createSerialQueue(deps) {
 }
 
 const PLANNER_MUTEX_ROLES = new Set(["planner", "intake"]);
-const CODING_ROLES = new Set(["implement", "factory-checker", "land"]);
+const CODING_ROLES = new Set(["implement", "factory-checker", "auto-merge", "land"]);
 
 /**
- * Two mutexes: Planner job vs one Coding job slot (implement / factory-checker / land).
+ * Two mutexes: Planner job vs one Coding job slot
+ * (implement / factory-checker / auto-merge / land).
  *
  * @param {{
  *   run: (job: object) => Promise<unknown>,
