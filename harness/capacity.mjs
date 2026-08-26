@@ -8,6 +8,7 @@
 
 import { statfs } from "node:fs/promises";
 import os from "node:os";
+import { dirname } from "node:path";
 
 export const DEFAULT_RAM_FLOOR_MB = 2048;
 export const DEFAULT_DISK_FLOOR_MB = 5120;
@@ -52,20 +53,49 @@ export function evaluateCapacity({ ramFreeMb, diskFreeMb, ramFloorMb, diskFloorM
 }
 
 /**
- * @param {{ worktreesDir?: string }} [input]
+ * Free megabytes on the volume that holds `targetDir`.
+ * ENOENT walks to an existing parent on the same volume (fresh kit_pi has no worktrees dir yet).
+ * Any other error, or walking off the root, fails closed at 0.
+ *
+ * @param {string} targetDir
+ * @param {(path: string) => Promise<{ bavail: number | bigint, bsize: number | bigint }>} [statfsFn]
+ * @returns {Promise<number>}
  */
-export function createOsCapacityReaders({ worktreesDir = "/var/lib/kit-pi/worktrees" } = {}) {
+export async function diskFreeMbOnVolume(targetDir, statfsFn = statfs) {
+  let path = targetDir;
+  for (;;) {
+    try {
+      const stats = await statfsFn(path);
+      return Math.floor((Number(stats.bavail) * Number(stats.bsize)) / (1024 * 1024));
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        return 0;
+      }
+      const parent = dirname(path);
+      if (parent === path) {
+        return 0;
+      }
+      path = parent;
+    }
+  }
+}
+
+/**
+ * @param {{
+ *   worktreesDir?: string,
+ *   statfs?: (path: string) => Promise<{ bavail: number | bigint, bsize: number | bigint }>,
+ * }} [input]
+ */
+export function createOsCapacityReaders({
+  worktreesDir = "/var/lib/kit-pi/worktrees",
+  statfs: statfsFn = statfs,
+} = {}) {
   return {
     async ramFreeMb() {
       return Math.floor(os.freemem() / (1024 * 1024));
     },
     async diskFreeMb() {
-      try {
-        const stats = await statfs(worktreesDir);
-        return Math.floor((Number(stats.bavail) * Number(stats.bsize)) / (1024 * 1024));
-      } catch {
-        return 0;
-      }
+      return diskFreeMbOnVolume(worktreesDir, statfsFn);
     },
   };
 }
@@ -76,6 +106,7 @@ export function createOsCapacityReaders({ worktreesDir = "/var/lib/kit-pi/worktr
  *   readRamFreeMb?: () => Promise<number>,
  *   readDiskFreeMb?: () => Promise<number>,
  *   worktreesDir?: string,
+ *   statfs?: (path: string) => Promise<{ bavail: number | bigint, bsize: number | bigint }>,
  * }} [input]
  */
 export async function snapshotCapacity({
@@ -83,10 +114,12 @@ export async function snapshotCapacity({
   readRamFreeMb,
   readDiskFreeMb,
   worktreesDir,
+  statfs: statfsFn,
 } = {}) {
   const floors = floorsFromEnv(env);
   const osReaders = createOsCapacityReaders({
     worktreesDir: worktreesDir ?? env.KIT_PI_WORKTREES ?? "/var/lib/kit-pi/worktrees",
+    statfs: statfsFn,
   });
   const ramFreeMb = await (readRamFreeMb ?? osReaders.ramFreeMb)();
   const diskFreeMb = await (readDiskFreeMb ?? osReaders.diskFreeMb)();

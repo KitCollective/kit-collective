@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
+import { snapshotCapacity } from "../capacity.mjs";
 import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
 import { ALWAYS_READY_CAPACITY, createSerialQueue, createWorkerSlots } from "../job-queue.mjs";
 import { createActorTokenProvider } from "../linear-actor-token.mjs";
@@ -1230,4 +1231,106 @@ test("host inventory and Dockerfile document worker health capacity", () => {
   assert.match(host, /PI_CAPACITY_RAM_MB/);
   assert.match(host, /PI_CAPACITY_DISK_MB/);
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /capacity\.mjs/);
+});
+
+const MISSING_WORKTREES = "/var/lib/kit-pi/worktrees";
+const VOLUME_PARENT = "/var/lib/kit-pi";
+const VOLUME_BLOCKS = { bavail: 20_000_000, bsize: 4096 };
+
+function enoentError(path) {
+  const error = new Error(`ENOENT: ${path}`);
+  error.code = "ENOENT";
+  return error;
+}
+
+test("missing worktrees dir still measures the worktree volume and is ready above the disk floor", async () => {
+  const snapshot = await snapshotCapacity({
+    worktreesDir: MISSING_WORKTREES,
+    readRamFreeMb: async () => 4096,
+    async statfs(path) {
+      if (path === MISSING_WORKTREES) {
+        throw enoentError(path);
+      }
+      assert.equal(path, VOLUME_PARENT);
+      return VOLUME_BLOCKS;
+    },
+  });
+  assert.equal(snapshot.diskFreeMb > DEFAULT_DISK_FLOOR_MB, true);
+  assert.equal(snapshot.ready, true);
+});
+
+test("missing worktrees dir with disk above floor starts the queued coding job and does not Park", async () => {
+  const linear = fakeCapacityLinear();
+  const fakes = implementFakes(linear);
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    ...fakes,
+    readCapacity: () =>
+      snapshotCapacity({
+        worktreesDir: MISSING_WORKTREES,
+        readRamFreeMb: async () => 4096,
+        async statfs(path) {
+          if (path === MISSING_WORKTREES) {
+            throw enoentError(path);
+          }
+          return VOLUME_BLOCKS;
+        },
+      }),
+  });
+
+  await runner.run({
+    role: "implement",
+    identifier: "KIT-87",
+    issueId: "issue-87",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(fakes.spawned.length, 1);
+  assert.equal(fakes.spawned[0].command, "pi");
+  assert.equal(linear.comments.length, 0);
+  assert.equal(
+    linear.statusCalls.some((call) => call.status === "Parked"),
+    false,
+  );
+});
+
+test("unreadable worktree volume fails closed so the coding job does not spawn", async () => {
+  const linear = fakeCapacityLinear();
+  const fakes = implementFakes(linear);
+  const sleepWaits = [];
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    ...fakes,
+    readCapacity: () =>
+      snapshotCapacity({
+        worktreesDir: MISSING_WORKTREES,
+        readRamFreeMb: async () => 4096,
+        async statfs() {
+          const error = new Error("EIO");
+          error.code = "EIO";
+          throw error;
+        },
+      }),
+    capacitySleep: () => new Promise((resolve) => sleepWaits.push(resolve)),
+  });
+
+  const pending = runner.run({
+    role: "implement",
+    identifier: "KIT-87",
+    issueId: "issue-87",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  pending.catch(() => undefined);
+  await waitUntil(
+    () => linear.comments.length === 1 && sleepWaits.length === 1,
+    "fail-closed wait",
+  );
+  assert.equal(fakes.spawned.length, 0);
+  assert.match(linear.comments[0].body, /0 MB/);
+  assert.equal(
+    linear.statusCalls.some((call) => call.status === "Parked"),
+    false,
+  );
 });
