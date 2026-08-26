@@ -107,6 +107,38 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
 }
 
 /**
+ * @param {string} role
+ * @param {string} workspace
+ * @param {string} roleFile
+ * @param {string} model
+ * @param {string} prompt
+ * @returns {string[]}
+ */
+export function piArgsForRole(role, workspace, roleFile, model, prompt) {
+  if (role === "factory-checker") {
+    const args = factoryCheckerPiArgs({ workspace, roleFile, model, prompt });
+    if (STREAMING_ROLES.has(role)) {
+      const anchor = args.indexOf("-a");
+      if (anchor >= 0) {
+        return [...args.slice(0, anchor + 1), "--mode", "json", ...args.slice(anchor + 1)];
+      }
+    }
+    return args;
+  }
+  return [
+    "-p",
+    "-a",
+    ...(STREAMING_ROLES.has(role) ? ["--mode", "json"] : []),
+    "--model",
+    model,
+    "--append-system-prompt",
+    join(workspace, roleFile),
+    "--",
+    prompt,
+  ];
+}
+
+/**
  * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   workspace?: string,
@@ -167,33 +199,12 @@ export function createPiJobRunner({
    * @param {NodeJS.ProcessEnv} spawnEnv
    */
   async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv) {
-    let args =
-      job.role === "factory-checker"
-        ? factoryCheckerPiArgs({
-            workspace,
-            roleFile,
-            model,
-            prompt,
-          })
-        : [
-            "-p",
-            "-a",
-            "--model",
-            model,
-            "--append-system-prompt",
-            join(workspace, roleFile),
-            "--",
-            prompt,
-          ];
+    const args = piArgsForRole(job.role, workspace, roleFile, model, prompt);
     const streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
     const shouldStream =
       STREAMING_ROLES.has(job.role) &&
       typeof session?.emitStream === "function" &&
       typeof streamIssueId === "string";
-    if (shouldStream) {
-      const afterDashA = args.indexOf("-a");
-      args = [...args.slice(0, afterDashA + 1), "--mode", "json", ...args.slice(afterDashA + 1)];
-    }
     const stdio = shouldStream ? ["inherit", "pipe", "inherit"] : "inherit";
     const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
     const waitClose =
