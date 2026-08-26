@@ -454,4 +454,7 @@ test("server starts Intake poller from PI_INTAKE_POLL_MS and image copies intake
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /intake\.mjs/);
   assert.match(readFileSync(join(ROOT, "harness/host.md"), "utf8"), /Intake/);
   assert.match(readFileSync(join(ROOT, ".pi/roles/planner.md"), "utf8"), /Intake/);
+  assert.match(INTAKE_TRIAGE_QUERY, /name:\s*\{\s*in:/);
+  assert.match(INTAKE_TRIAGE_QUERY, /ready-for-agent/);
+  assert.match(INTAKE_TRIAGE_QUERY, /"Bug"/);
 });

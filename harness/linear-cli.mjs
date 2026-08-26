@@ -130,7 +130,30 @@ export const INTAKE_TRIAGE_QUERY = `query IntakeTriage($teamKey: String!) {
   ) {
     nodes { id name }
   }
-  labels: issueLabels(first: 50, filter: { team: { key: { eq: $teamKey } } }) {
+  labels: issueLabels(
+    first: 50
+    filter: {
+      team: { key: { eq: $teamKey } }
+      name: {
+        in: [
+          "ready-for-agent"
+          "signal-up"
+          "proposal"
+          "needs-triage"
+          "needs-info"
+          "ready-for-human"
+          "wontfix"
+          "Feature"
+          "Bug"
+          "Improvement"
+          "surface:mobile"
+          "surface:web"
+          "surface:admin"
+          "surface:api"
+        ]
+      }
+    }
+  ) {
     nodes { id name }
   }
   triage: issues(

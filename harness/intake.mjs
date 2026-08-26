@@ -124,13 +124,12 @@ export function inferLinearType(issue) {
  */
 export function inferSurfaceLabels(issue) {
   const text = issueText(issue);
-  const labels = [];
   for (const [needle, label] of SURFACE_PATHS) {
-    if (text.includes(needle) && !labels.includes(label)) {
-      labels.push(label);
+    if (text.includes(needle)) {
+      return [label];
     }
   }
-  return labels;
+  return [];
 }
 
 /**
@@ -212,6 +211,9 @@ export async function runIntake({ linear } = {}) {
   });
   if (backlogState?.name !== "Backlog" || typeof backlogState.id !== "string") {
     throw new Error("Backlog workflow state not found");
+  }
+  if (typeof labels?.[READY_FOR_AGENT] !== "string") {
+    throw new Error("ready-for-agent label not found");
   }
 
   const promoted = [];
