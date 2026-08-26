@@ -40,12 +40,12 @@ The single workpad comment on an issue. `### Review feedback` is why a pass was 
 _Avoid_: a new comment thread per agent turn
 
 **Signal-up**:
-Out-of-scope bug or debt, filed as a new `Backlog` issue. Never coded in the current PR.
-_Avoid_: expanding the PR, applying `ready-for-agent` to the finding
+Out-of-scope bug or debt, filed as a new Linear **Triage** issue. Never coded in the current PR.
+_Avoid_: expanding the PR, applying `ready-for-agent` to the finding, filing into `Backlog`
 
 **Proposal**:
-Out-of-scope feature or optimisation. Same ingress as signal-up, different label.
-_Avoid_: mixing with `signal-up` on the same issue
+Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), different label.
+_Avoid_: mixing with `signal-up` on the same issue, filing into `Backlog`
 
 **Land**:
 Merge to `development` after Nicklas moves the issue to Merging. Land sets Done only after the merge.
@@ -56,8 +56,8 @@ A Linear **milestone** complete → `staging`; release helper → `production`. 
 _Avoid_: deploy, release PR as a synonym for land, treating the Linear project as one staging dump
 
 **Triage** *(Linear state)*:
-Inbox for Sentry and other intake. Human accepts onto the board. Never auto-dispatch.
-_Avoid_: the Triage *label group*, `needs-triage`
+Inbox for Sentry, signal-up, and proposal. Planner never claims.
+_Avoid_: the Triage *label group*, `needs-triage`, filing leftovers into `Backlog`
 
 **Duplicate** *(Linear state)*:
 This work already exists on another issue. No agent action.

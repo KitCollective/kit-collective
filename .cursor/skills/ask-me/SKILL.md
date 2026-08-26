@@ -65,7 +65,7 @@ Not feature work — upkeep.
 
 ## Factory-only
 
-- **`/signal-up`** — out-of-scope bug/debt: new `dispatch.state` issue, labels `signal-up` + `needs-triage`. Never delegate. Cap per run.
+- **`/signal-up`** — out-of-scope bug/debt: new Linear issue in **Triage**, label `signal-up` only. Never delegate. Cap per run.
 - **`/land`** — merge the GitHub PR after `Done`. Integration lane only.
 - **`/bootstrap-linear`** — board missing or unshaped (`linear.setup.json` absent).
 - **`/create-new-skill`** — author a factory skill under `.cursor/skills/`.
