@@ -5,8 +5,9 @@
  * Fail closed: no Pi spawn. Job stays queued. One Linear comment, updated in place.
  * Status unchanged — not Timeout park. Planner is not gated.
  */
-import os from "node:os";
+
 import { statfs } from "node:fs/promises";
+import os from "node:os";
 
 export const DEFAULT_RAM_FLOOR_MB = 2048;
 export const DEFAULT_DISK_FLOOR_MB = 5120;
@@ -122,16 +123,20 @@ Status is unchanged. Not Timeout park. Planner may still run.
  * }} input
  */
 export async function upsertCapacityComment({ linear, issueId, body }) {
-  const comments = typeof linear.listComments === "function" ? await linear.listComments(issueId) : [];
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(issueId) : [];
   const existing = comments.find(
-    (comment) => typeof comment.body === "string" && comment.body.includes(CAPACITY_COMMENT_HEADING),
+    (comment) =>
+      typeof comment.body === "string" && comment.body.includes(CAPACITY_COMMENT_HEADING),
   );
   if (existing && typeof linear.updateComment === "function") {
     await linear.updateComment({ id: existing.id, body });
     return existing.id;
   }
   const created = await linear.commentIssue({ issueId, body });
-  return created && typeof created === "object" && typeof created.id === "string" ? created.id : undefined;
+  return created && typeof created === "object" && typeof created.id === "string"
+    ? created.id
+    : undefined;
 }
 
 /**

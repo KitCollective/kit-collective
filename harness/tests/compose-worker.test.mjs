@@ -767,7 +767,11 @@ test("GET /health reports capacity numbers, ready false, and stays HTTP 200", as
   const handler = createWorkerHandler({
     secret: SECRET,
     now: () => NOW,
-    linear: { async getIssue() { return null; } },
+    linear: {
+      async getIssue() {
+        return null;
+      },
+    },
     gh: {},
     enqueue,
     delegateGateConfig: DELEGATE_GATE,
@@ -822,7 +826,10 @@ test("coding spawn waits on RAM and disk floors; job stays queued; status unchan
       return result;
     });
 
-  await waitUntil(() => linear.comments.length === 1 && sleepWaits.length === 1, "capacity comment");
+  await waitUntil(
+    () => linear.comments.length === 1 && sleepWaits.length === 1,
+    "capacity comment",
+  );
   assert.equal(fakes.spawned.length, 0);
   assert.equal(settled, false);
   assert.equal(linear.statusCalls.length, 0);
@@ -938,4 +945,3 @@ test("host inventory and Dockerfile document worker health capacity", () => {
   assert.match(host, /PI_CAPACITY_DISK_MB/);
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /capacity\.mjs/);
 });
-

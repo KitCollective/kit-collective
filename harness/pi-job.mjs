@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { floorsFromEnv, waitForCapacity, DEFAULT_CAPACITY_POLL_MS } from "./capacity.mjs";
+import { DEFAULT_CAPACITY_POLL_MS, floorsFromEnv, waitForCapacity } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
@@ -238,7 +238,8 @@ export function createPiJobRunner({
       }
       if (CAPACITY_GATED_ROLES.has(job.role) && typeof readCapacity === "function") {
         const client =
-          linear ?? (typeof runCommand === "function" ? createLinearCliClient({ env, runCommand }) : linear);
+          linear ??
+          (typeof runCommand === "function" ? createLinearCliClient({ env, runCommand }) : linear);
         await waitForCapacity({
           readCapacity,
           floors: floorsFromEnv(env),

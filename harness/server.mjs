@@ -6,7 +6,12 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { assertWorkerEnv } from "./boot-env.mjs";
-import { evaluateCapacity, floorsFromEnv, snapshotCapacity, workerHealthBody } from "./capacity.mjs";
+import {
+  evaluateCapacity,
+  floorsFromEnv,
+  snapshotCapacity,
+  workerHealthBody,
+} from "./capacity.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
 import { createTypecheckTouched } from "./implement-exit.mjs";
@@ -27,7 +32,8 @@ export function createWorkerHandler(deps) {
     typeof deps.readCapacity === "function"
       ? deps.readCapacity
       : () => snapshotCapacity({ env: deps.env });
-  const currentJob = typeof deps.currentJob === "function" ? deps.currentJob : () => deps.job ?? null;
+  const currentJob =
+    typeof deps.currentJob === "function" ? deps.currentJob : () => deps.job ?? null;
   return async (req, res) => {
     const path = (req.url ?? "/").split("?")[0];
     if (req.method === "GET" && path === "/health") {
