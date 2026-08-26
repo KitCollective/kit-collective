@@ -11,7 +11,7 @@ Run the mechanical half of pre-review in this implement worktree. Return a green
 
 - Attempt rebase onto `origin/development`. A rebase conflict is a red report. Do not resolve conflict markers.
 - Typecheck touched packages on this box. Never run full `pnpm test`.
-- Wait for required GitHub checks on **this worktree's PR only** (`gh pr view` / `gh pr checks` from cwd). Include this PR's check names and typecheck output in the report. If checks are empty or pending, say so for this PR. Do not `gh` other PRs. Do not mention sibling issues or their CI as proof that Actions work.
+- Wait for required GitHub checks. Include check names and typecheck output in the report.
 
 Gate never calls Linear and never moves In Review. Do not write the workpad.
 

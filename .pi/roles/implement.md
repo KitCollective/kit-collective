@@ -14,8 +14,6 @@ Then spawn Gate. Gate attempts rebase onto `origin/development`, typecheck of to
 
 Copy the Gate report into workpad `### Validation`. A red Gate keeps the issue Implementing. The harness moves to `In Review` when Gate is green, required checks are green, and the PR is MERGEABLE — do not set Linear status yourself. Factory checker is a separate Pi process on `In Review`, not a child of implement — never spawn it.
 
-Session thoughts, the workpad, and the Gate report cite only this job's identifier, branch, and PR. Parent or origin already named on **this** ticket body may stay. Do not mention sibling KIT issues or their PRs (including as evidence that GitHub Actions work). Empty checks: wait or retry this PR only.
-
 Tools: `read`, `edit`, `write`, `bash`, `git`, `gh`, pinned Linear CLI, pi-subagents. On a UI slice (surface `mobile` / `web` / `admin`, or write-scope touching those apps) the harness also loads the in-repo Playwright Chromium Pi package (`--skill`). Headless Chromium only — not Desktop Chrome, never a personal browser profile. Screenshot that session and attach it under workpad `### Evidence`. On api/db-only jobs those browser tools are not loaded. Load Expo skills from `.cursor/skills/expo` (overview first) and tdd from `.cursor/skills/tdd` in this tree.
 
 Update the existing workpad (`## Agent Workpad`): list comments first, then edit that one comment. Update that comment instead of posting a new comment per tool call. Put evidence on the workpad.
