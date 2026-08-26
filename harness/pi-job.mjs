@@ -138,12 +138,14 @@ export function createPiJobRunner({
   const trees = worktree ?? createWorktreeAdapter({ env });
   const spawnJob =
     spawnProcess ??
-    ((command, args, options) =>
-      new Promise((resolve, reject) => {
-        const child = spawn(command, args, options);
+    ((command, args, options) => {
+      const child = spawn(command, args, options);
+      const closed = new Promise((resolve, reject) => {
         child.on("error", reject);
-        child.on("close", (status) => resolve({ status, stdout: child.stdout }));
-      }));
+        child.on("close", (status) => resolve({ status }));
+      });
+      return { stdout: child.stdout ?? undefined, closed };
+    });
 
   /**
    * @param {{ role: string, identifier?: string, issueId?: string, adwFile?: string }} job
@@ -171,12 +173,24 @@ export function createPiJobRunner({
       typeof session?.emitStream === "function" &&
       typeof streamIssueId === "string";
     const stdio = shouldStream ? ["inherit", "pipe", "inherit"] : "inherit";
-    const result = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
-    if (shouldStream && result.stdout) {
-      const consumer = createPiEventStreamConsumer({ session, issueId: streamIssueId, now });
-      await pipeReadableJsonLines(result.stdout, consumer);
+    const consumer = shouldStream
+      ? createPiEventStreamConsumer({ session, issueId: streamIssueId, now })
+      : null;
+    const started = spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
+    if (started !== null && typeof started === "object" && typeof started.then === "function") {
+      const result = await started;
+      if (consumer && result.stdout) {
+        await pipeReadableJsonLines(result.stdout, consumer);
+      }
+      return result;
     }
-    return result;
+    if (consumer && started.stdout) {
+      const piped = pipeReadableJsonLines(started.stdout, consumer);
+      const closed = await started.closed;
+      await piped;
+      return { status: closed.status, stdout: started.stdout };
+    }
+    return started.closed;
   }
 
   return {

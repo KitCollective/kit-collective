@@ -3,6 +3,7 @@
  * Fake Linear and a fake Pi event fixture; do not spawn a model.
  */
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { test } from "node:test";
@@ -70,6 +71,20 @@ test("summarizeToolArgs truncates long JSON parameters", () => {
   const long = summarizeToolArgs({ body: "x".repeat(200) });
   assert.ok(long.endsWith("…"));
   assert.ok(long.length <= 120);
+});
+
+test("summarizeToolArgs redacts secret keys and token shapes before Linear", () => {
+  const text = summarizeToolArgs({
+    Authorization: "Bearer super-secret",
+    cookie: "sid=abc",
+    command: "curl -H 'Authorization: Bearer lin_api_live_xxx' https://api.linear.app",
+    path: "harness/pi-job.mjs",
+  });
+  assert.doesNotMatch(text, /super-secret/);
+  assert.doesNotMatch(text, /lin_api_live_xxx/);
+  assert.doesNotMatch(text, /sid=abc/);
+  assert.match(text, /\[redacted\]/);
+  assert.match(text, /pi-job\.mjs/);
 });
 
 test("truncateText caps thought bodies for Linear", () => {
@@ -140,7 +155,7 @@ test("Issue webhook enqueue is unchanged when the session stream adapter throws"
       throw new Error("stream path failed");
     },
   };
-  const session = createMemorySessionAdapter({ linear });
+  const session = createLinearSessionAdapter({ linear });
   const adapter = createMemoryAdapter({
     secret: "issue-secret",
     sessionSecret: "session-secret",
@@ -157,7 +172,6 @@ test("Issue webhook enqueue is unchanged when the session stream adapter throws"
     updatedFrom: { stateId: "prev" },
     webhookTimestamp: NOW,
   });
-  const { createHmac } = await import("node:crypto");
   const signature = createHmac("sha256", "issue-secret").update(rawBody).digest("hex");
   const result = await adapter.handle({ rawBody, signature, hmacChannel: "issue" });
 
@@ -234,6 +248,93 @@ test("implement Pi spawn uses json mode and pipes stdout into the session stream
   assert.ok(streamed.length >= 2);
   assert.ok(streamed.some((activity) => activity.content.type === "thought"));
   assert.ok(streamed.some((activity) => activity.content.type === "action"));
+});
+
+test("AgentSession receives thought and action before the Pi child closes", async () => {
+  const spawned = [];
+  const linear = {
+    async listComments() {
+      return [{ id: "c1", body: "## Agent Workpad\n" }];
+    },
+    async updateWorkpad() {},
+    async setStatus() {},
+    async getAgentSessionId() {
+      return SESSION_ID;
+    },
+    async createAgentActivity() {},
+  };
+  const session = createMemorySessionAdapter({ linear });
+  let resolveClose;
+  let childClosed = false;
+  const closed = new Promise((resolve) => {
+    resolveClose = () => {
+      childClosed = true;
+      resolve({ status: 0 });
+    };
+  });
+  const stdout = new Readable({ read() {} });
+  const runner = createPiJobRunner({
+    env: {
+      PI_MODEL: "cursor/composer-2.5",
+      PI_MODEL_FAST: "cursor/grok-4.6",
+      LINEAR_CLI_API_KEY: "lin_test",
+    },
+    workspace: ROOT,
+    worktree: {
+      async checkout() {
+        return { path: ROOT, branch: "kit-79", lane: "development" };
+      },
+    },
+    gh: {
+      async rebase() {},
+      async viewPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/64",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+      async createPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/64",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+    },
+    linear,
+    session,
+    typecheckTouched: async () => undefined,
+    spawnProcess(_command, args, options) {
+      spawned.push({ args, options });
+      return { stdout, closed };
+    },
+  });
+
+  const runPromise = runner.run({
+    role: "implement",
+    identifier: "KIT-79",
+    issueId: ISSUE_ID,
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  stdout.push(`${PI_IMPLEMENT_FIXTURE}\n`);
+
+  const deadline = Date.now() + 2000;
+  while (session.activities.filter((activity) => activity.ephemeral === true).length < 2) {
+    if (Date.now() > deadline) {
+      throw new Error("timed out waiting for live stream activities while child still open");
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  assert.equal(childClosed, false);
+  const streamed = session.activities.filter((activity) => activity.ephemeral === true);
+  assert.ok(streamed.some((activity) => activity.content.type === "thought"));
+  assert.ok(streamed.some((activity) => activity.content.type === "action"));
+
+  stdout.push(null);
+  resolveClose();
+  await runPromise;
 });
 
 test("factory-checker spawn also streams Pi json events", async () => {

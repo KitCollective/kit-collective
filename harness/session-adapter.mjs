@@ -210,11 +210,15 @@ export function createLinearSessionAdapter({ linear }) {
         last &&
         typeof sessionId === "string"
       ) {
-        await linear.createAgentActivity({
-          sessionId,
-          content: last.content,
-          ephemeral: last.ephemeral,
-        });
+        try {
+          await linear.createAgentActivity({
+            sessionId,
+            content: last.content,
+            ephemeral: last.ephemeral,
+          });
+        } catch {
+          // Stream path failures must not fail the Issue webhook or Pi job.
+        }
       }
     },
     async handOff(input) {

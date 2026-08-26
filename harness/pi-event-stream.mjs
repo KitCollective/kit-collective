@@ -6,6 +6,36 @@
 const MAX_THOUGHT_CHARS = 500;
 const MAX_PARAM_CHARS = 120;
 
+const SECRET_KEY =
+  /^(authorization|cookie|set-cookie|token|access_token|refresh_token|password|secret|api[_-]?key)$/i;
+const SECRET_VALUE = /(?:lin_api_|ghp_|github_pat_|xox[baprs]-|Bearer\s)/i;
+
+/**
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function redactSecretValues(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSecretValues(item));
+  }
+  if (value !== null && typeof value === "object") {
+    /** @type {Record<string, unknown>} */
+    const out = {};
+    for (const [key, nested] of Object.entries(value)) {
+      if (SECRET_KEY.test(key)) {
+        out[key] = "[redacted]";
+      } else {
+        out[key] = redactSecretValues(nested);
+      }
+    }
+    return out;
+  }
+  if (typeof value === "string" && SECRET_VALUE.test(value)) {
+    return "[redacted]";
+  }
+  return value;
+}
+
 /**
  * @param {unknown} args
  * @returns {string}
@@ -16,7 +46,8 @@ export function summarizeToolArgs(args) {
   }
   let text;
   try {
-    text = typeof args === "string" ? args : JSON.stringify(args);
+    const redacted = redactSecretValues(args);
+    text = typeof redacted === "string" ? redacted : JSON.stringify(redacted);
   } catch {
     return "";
   }
