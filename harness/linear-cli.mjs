@@ -367,7 +367,16 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
      * @param {{ issueId: string, body: string }} input
      */
     async commentIssue({ issueId, body }) {
-      await cli(PLANNER_COMMENT_MUTATION, { issueId, body });
+      const stdout = await cli(PLANNER_COMMENT_MUTATION, { issueId, body });
+      const parsed = parseJson(stdout);
+      return { id: parsed?.data?.commentCreate?.comment?.id };
+    },
+
+    /**
+     * @param {{ id: string, body: string }} input
+     */
+    async updateComment({ id, body }) {
+      await cli(COMMENT_UPDATE_MUTATION, { id, body });
     },
 
     /**

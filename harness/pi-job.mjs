@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { floorsFromEnv, waitForCapacity, DEFAULT_CAPACITY_POLL_MS } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
@@ -36,6 +37,7 @@ const ROLE_FILES = {
 };
 
 const FAST_ROLES = new Set(["planner", "factory-checker", "land"]);
+const CAPACITY_GATED_ROLES = new Set(["implement", "factory-checker"]);
 
 /**
  * @param {string} role
@@ -153,6 +155,8 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt) {
  *   session?: { emitStream?: Function },
  *   now?: () => number,
  *   sleep?: (ms: number) => Promise<unknown>,
+ *   capacitySleep?: (ms: number) => Promise<unknown>,
+ *   readCapacity?: () => Promise<{ ramFreeMb: number, diskFreeMb: number, ready?: boolean }>,
  *   waitTimeoutMs?: number,
  *   waitIntervalMs?: number,
  * }} [deps]
@@ -171,6 +175,8 @@ export function createPiJobRunner({
   session,
   now,
   sleep,
+  capacitySleep,
+  readCapacity,
   waitTimeoutMs,
   waitIntervalMs,
 } = {}) {
@@ -229,6 +235,19 @@ export function createPiJobRunner({
       if (job.role === "planner") {
         const client = linear ?? createLinearCliClient({ env, runCommand });
         return runPlanner({ env, linear: client });
+      }
+      if (CAPACITY_GATED_ROLES.has(job.role) && typeof readCapacity === "function") {
+        const client =
+          linear ?? (typeof runCommand === "function" ? createLinearCliClient({ env, runCommand }) : linear);
+        await waitForCapacity({
+          readCapacity,
+          floors: floorsFromEnv(env),
+          linear: client,
+          issueId: typeof job.issueId === "string" ? job.issueId : undefined,
+          identifier,
+          sleep: capacitySleep ?? sleep,
+          pollMs: Number(env.PI_CAPACITY_POLL_MS ?? DEFAULT_CAPACITY_POLL_MS),
+        });
       }
       if (job.role === "land") {
         const linearClient = linear ?? createLinearCliClient({ env, runCommand });

@@ -6,6 +6,7 @@
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { assertWorkerEnv } from "./boot-env.mjs";
+import { evaluateCapacity, floorsFromEnv, snapshotCapacity, workerHealthBody } from "./capacity.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
 import { createTypecheckTouched } from "./implement-exit.mjs";
@@ -22,11 +23,21 @@ import { createHttpHandler } from "./webhook-router.mjs";
  */
 export function createWorkerHandler(deps) {
   const webhook = createHttpHandler(deps);
+  const readCapacity =
+    typeof deps.readCapacity === "function"
+      ? deps.readCapacity
+      : () => snapshotCapacity({ env: deps.env });
+  const currentJob = typeof deps.currentJob === "function" ? deps.currentJob : () => deps.job ?? null;
   return async (req, res) => {
     const path = (req.url ?? "/").split("?")[0];
     if (req.method === "GET" && path === "/health") {
+      const raw = await readCapacity();
+      const capacity =
+        raw && typeof raw.ready === "boolean"
+          ? { ramFreeMb: raw.ramFreeMb, diskFreeMb: raw.diskFreeMb, ready: raw.ready }
+          : evaluateCapacity({ ...raw, ...floorsFromEnv(deps.env) });
       res.writeHead(200, { "content-type": "application/json" });
-      res.end(JSON.stringify({ ok: true, planner: "active" }));
+      res.end(JSON.stringify(workerHealthBody({ job: currentJob(), capacity })));
       return;
     }
     return webhook(req, res);
@@ -44,12 +55,17 @@ export async function startWorkerServer({
   spawnProcess,
   now = () => Date.now(),
   plannerPollMs,
+  readCapacity,
 } = {}) {
   assertWorkerEnv(env);
   const workspace = resolvePiWorkspace(env);
   await assertPiPackagesReady({ root: workspace, listPackages });
   const linearClient = linear ?? createLinearCliClient({ env, runCommand });
   const ghClient = createGhClient({ env, runCommand });
+  const capacitySnapshot =
+    typeof readCapacity === "function"
+      ? readCapacity
+      : () => snapshotCapacity({ env, worktreesDir: env.KIT_PI_WORKTREES });
   const runner =
     typeof run === "function"
       ? { run }
@@ -62,6 +78,7 @@ export async function startWorkerServer({
           linear: linearClient,
           session: createLinearSessionAdapter({ linear: linearClient }),
           typecheckTouched: createTypecheckTouched({ runCommand }),
+          readCapacity: capacitySnapshot,
         });
   const queue = createSerialQueue({
     async run(job) {
@@ -82,6 +99,7 @@ export async function startWorkerServer({
     enqueue: queue,
     session: createLinearSessionAdapter({ linear: linearClient }),
     delegateGateConfig: createDelegateGateConfig(env),
+    readCapacity: capacitySnapshot,
   });
   const server = createServer(handler);
   let stopPoller = () => {};
