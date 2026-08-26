@@ -36,6 +36,7 @@ function validWorkerEnv() {
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     PI_MODEL: "cursor/composer-2.5",
     PI_MODEL_FAST: "cursor/grok-4.6",
+    OPENROUTER_API_KEY: "or_test",
   };
 }
 

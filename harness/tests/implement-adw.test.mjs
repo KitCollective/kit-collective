@@ -40,7 +40,14 @@ function validWorkerEnv() {
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     PI_MODEL: "cursor/composer-2.5",
     PI_MODEL_FAST: "cursor/grok-4.6",
+    OPENROUTER_API_KEY: "or_test",
   };
+}
+
+function agentFrontmatter(relative) {
+  const text = readFileSync(join(ROOT, relative), "utf8");
+  const match = text.match(/^---\n([\s\S]*?)\n---/);
+  return { text, frontmatter: match ? match[1] : "" };
 }
 
 function fakeWorktree({ path = "/var/lib/kit-pi/worktrees/KIT-99", branch = "kit-99" } = {}) {
@@ -797,6 +804,109 @@ test("completeImplementAdw refuses to run full pnpm test on the worker", async (
       }),
     /GitHub Actions/,
   );
+});
+
+test("implement job fails closed when OPENROUTER_API_KEY is missing and does not spawn Pi", async () => {
+  const spawned = [];
+  const env = validWorkerEnv();
+  delete env.OPENROUTER_API_KEY;
+  const runner = createPiJobRunner({
+    env,
+    workspace: ROOT,
+    worktree: fakeWorktree(),
+    gh: fakeGh(),
+    linear: fakeLinear(),
+    typecheckTouched: async () => undefined,
+    spawnProcess(command, args, options) {
+      spawned.push({ command, args, options });
+      return Promise.resolve({ status: 0 });
+    },
+  });
+  await assert.rejects(
+    () =>
+      runner.run({
+        role: "implement",
+        identifier: "KIT-99",
+        issueId: "issue-1",
+        adwFile: ".pi/adw/feature.yaml",
+      }),
+    /OPENROUTER_API_KEY/,
+  );
+  assert.equal(spawned.length, 0);
+});
+
+test("implement parent spawn stays Composer and is not Hy3", async () => {
+  const spawned = [];
+  await implementRunner({
+    gh: fakeGh(),
+    linear: fakeLinear(),
+    spawned,
+  }).run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  const modelIdx = spawned[0].args.indexOf("--model");
+  assert.equal(spawned[0].args[modelIdx + 1], "cursor/composer-2.5");
+  assert.equal(
+    spawned[0].args.some((arg) => String(arg).includes("tencent/hy3")),
+    false,
+  );
+  assert.equal(spawned[0].options.env.OPENROUTER_API_KEY, "or_test");
+  assert.equal(String(spawned[0].args.join(" ")).includes("or_test"), false);
+});
+
+test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
+  const scout = agentFrontmatter(".pi/agents/scout.md");
+  const gate = agentFrontmatter(".pi/agents/gate.md");
+  for (const agent of [scout, gate]) {
+    assert.match(agent.frontmatter, /^model:\s+openrouter\/tencent\/hy3\s*$/m);
+    assert.match(agent.frontmatter, /^thinking:\s+off\s*$/m);
+    assert.doesNotMatch(agent.frontmatter, /cursor\/composer-2\.5/);
+    assert.doesNotMatch(agent.frontmatter, /stealth|ox-alpha/i);
+    assert.doesNotMatch(agent.frontmatter, /^fallbackModels:/m);
+    assert.match(agent.text, /Exacto/);
+    assert.match(agent.text, /not a hard fail|do not fail/i);
+    assert.match(agent.text, /do not fall back to stealth\/ox-alpha/i);
+  }
+  assert.match(scout.frontmatter, /^tools:\s+read,\s*grep,\s*find,\s*ls\s*$/m);
+  assert.doesNotMatch(scout.frontmatter, /^tools:.*\b(edit|write|bash)\b/m);
+  assert.doesNotMatch(gate.frontmatter, /^tools:.*\blinear/i);
+  assert.match(gate.text, /rebase/i);
+  assert.match(gate.text, /typecheck/i);
+  assert.match(gate.text, /GitHub checks/i);
+  assert.match(gate.text, /conflict/i);
+  assert.match(gate.text, /never calls Linear/i);
+  assert.match(gate.text, /never .*In Review/i);
+  for (const relative of [
+    ".pi/agents/nest.md",
+    ".pi/agents/expo.md",
+    ".pi/agents/drizzle.md",
+    ".pi/agents/ui-ux.md",
+  ]) {
+    const helper = agentFrontmatter(relative);
+    assert.doesNotMatch(helper.frontmatter, /^model:/m);
+    assert.doesNotMatch(helper.text, /tencent\/hy3|stealth|ox-alpha/i);
+  }
+});
+
+test("implement role requires Scout then helpers then Gate; parent owns In Review from a green Gate report", () => {
+  const implement = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
+  assert.match(implement, /Scout/i);
+  assert.match(implement, /Gate/);
+  assert.match(implement, /### Validation/);
+  assert.match(implement, /In Review/);
+  assert.match(implement, /only when Gate is green|Gate is green/i);
+  assert.match(implement, /Implementing/);
+  assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
+  const checker = readFileSync(join(ROOT, ".pi/roles/factory-checker.md"), "utf8");
+  const land = readFileSync(join(ROOT, ".pi/roles/land.md"), "utf8");
+  const planner = readFileSync(join(ROOT, ".pi/roles/planner.md"), "utf8");
+  for (const role of [checker, land, planner]) {
+    assert.doesNotMatch(role, /tencent\/hy3/);
+    assert.doesNotMatch(role, /^model:.*stealth|^fallbackModels:.*ox-alpha/m);
+  }
 });
 
 test("Compose persists kit-pi worktrees and copies implement-exit adapters", () => {

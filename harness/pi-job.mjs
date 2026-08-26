@@ -250,6 +250,19 @@ export function createPiJobRunner({
       if (typeof model !== "string" || model.length === 0) {
         throw new Error(`missing Pi model env for role ${job.role}`);
       }
+      if (job.role === "implement") {
+        const openRouterKey = env.OPENROUTER_API_KEY;
+        if (typeof openRouterKey !== "string" || openRouterKey.length === 0) {
+          throw new Error("missing OPENROUTER_API_KEY");
+        }
+        for (const relative of [".pi/agents/scout.md", ".pi/agents/gate.md"]) {
+          try {
+            readFileSync(join(workspace, relative), "utf8");
+          } catch {
+            throw new Error(`implement requires ${relative}`);
+          }
+        }
+      }
       let cwd = workspace;
       let checkout;
       if (job.role === "implement" || job.role === "factory-checker") {
