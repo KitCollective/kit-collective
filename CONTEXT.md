@@ -207,8 +207,8 @@ Hourly Linear-only scan of open KIT Triage on the planner mutex (`PI_INTAKE_POLL
 _Avoid_: filing leftovers into Backlog with `ready-for-agent`; treating Intake as planner claim; running Intake on the coding slot
 
 **Auto-merge**:
-Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and Loop cap is clear. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself.
-_Avoid_: force-push; merging to staging or production; treating Auto-merge as land
+Worker moving Ready for merge → Merging when delegate is Pi, the PR is MERGEABLE, required checks are green, and Loop cap is clear. On refuse, clears delegate to `null` and writes one workpad note. Implementing, In Review, and Ready for merge keep Pi as delegate until Auto-merge decides. Done and Canceled clear leftover Pi delegate. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself when delegate is empty.
+_Avoid_: force-push; merging to staging or production; treating Auto-merge as land; clearing delegate before Auto-merge decides
 
 **Loop cap**:
 Either five required-check failure cycles (`ciFailCycles`) or five checker-fail returns (`reviewLoops`) blocks Auto-merge. Counters live under workpad `### Loop counters`. Missing counters fail closed.

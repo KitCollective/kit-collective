@@ -86,7 +86,7 @@ function snapshot(overrides = {}) {
     labels: ["Feature"],
     linearType: "Feature",
     blockedBy: [],
-    delegate: null,
+    delegate: { name: "Pi" },
     attachments: [{ url: PR_URL, title: "KIT-90: Auto-merge Ready for merge under the loop cap" }],
     ...overrides,
   };
@@ -175,6 +175,10 @@ function fakeLinear(issue = snapshot(), { body = loopCountersBody() } = {}) {
     async setStatus(input) {
       calls.push(["setStatus", input]);
       this.issue = { ...this.issue, status: input.status };
+    },
+    async clearDelegate(input) {
+      calls.push(["clearDelegate", input]);
+      this.issue = { ...this.issue, delegate: null };
     },
   };
 }
@@ -279,6 +283,32 @@ test("Auto-merge job does not spawn Pi", async () => {
   );
 });
 
+test("MERGEABLE + green checks + delegate Pi moves Ready for merge to Merging without clearing delegate", async () => {
+  const gh = fakeGh();
+  const linear = fakeLinear();
+  const result = await completeAutoMerge({
+    job: { issueId: ISSUE_ID, identifier: "KIT-90" },
+    linear,
+    gh,
+  });
+
+  assert.equal(result.flipped, true);
+  assert.equal(result.nextStatus, "Merging");
+  assert.equal(linear.issue.delegate?.name, "Pi");
+  assert.equal(
+    linear.calls.some((call) => call[0] === "clearDelegate"),
+    false,
+  );
+  assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
+    issueId: ISSUE_ID,
+    status: "Merging",
+  });
+  assert.equal(
+    gh.calls.some((call) => call[0] === "merge"),
+    false,
+  );
+});
+
 test("MERGEABLE + green checks + counters 0 moves Ready for merge to Merging and never merges", async () => {
   const gh = fakeGh();
   const linear = fakeLinear();
@@ -352,6 +382,11 @@ test("ciFailCycles >= 5 or reviewLoops >= 5 stays Ready for merge with one workp
     assert.match(linear.comments[0].body, /Auto-merge blocked/);
     assert.equal(linear.comments[0].body.split("Auto-merge blocked").length - 1, 1);
     assert.equal(
+      linear.calls.some((call) => call[0] === "clearDelegate"),
+      true,
+      JSON.stringify(counters),
+    );
+    assert.equal(
       gh.calls.some((call) => call[0] === "merge"),
       false,
     );
@@ -390,6 +425,10 @@ test("CONFLICTING or missing ### Loop counters stays Ready for merge (fail close
   assert.equal(conflicting.nextStatus, "Ready for merge");
   assert.equal(conflictingLinear.issue.status, "Ready for merge");
   assert.match(conflictingLinear.comments[0].body, /CONFLICTING/);
+  assert.equal(
+    conflictingLinear.calls.some((call) => call[0] === "clearDelegate"),
+    true,
+  );
 
   const missingLinear = fakeLinear(snapshot(), {
     body: `${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`,
@@ -404,6 +443,10 @@ test("CONFLICTING or missing ### Loop counters stays Ready for merge (fail close
   assert.equal(missingLinear.issue.status, "Ready for merge");
   assert.equal(parseLoopCounters(missingLinear.comments[0].body), null);
   assert.match(missingLinear.comments[0].body, /missing ### Loop counters/);
+  assert.equal(
+    missingLinear.calls.some((call) => call[0] === "clearDelegate"),
+    true,
+  );
 });
 
 test("missing ### Loop counters does not invent a synthetic loopCounters field", async () => {
@@ -534,6 +577,73 @@ test("Missing Linear Type on Implementing still skips implement (no ADW, no Pi)"
   assert.equal(result.reason, "missing Linear Type for ADW");
   assert.equal(enqueue.jobs.length, 0);
   assert.equal(spawned.length, 0);
+});
+
+test("delegate already empty stays Ready for merge, clears delegate, and writes one workpad note", async () => {
+  const gh = fakeGh();
+  const linear = fakeLinear(snapshot({ delegate: null }));
+  const result = await completeAutoMerge({
+    job: { issueId: ISSUE_ID, identifier: "KIT-95" },
+    linear,
+    gh,
+  });
+  assert.equal(result.flipped, false);
+  assert.equal(result.nextStatus, "Ready for merge");
+  assert.match(linear.comments[0].body, /delegate already empty/);
+  assert.equal(linear.comments[0].body.split("Auto-merge blocked").length - 1, 1);
+  assert.equal(linear.calls.filter((call) => call[0] === "clearDelegate").length, 1);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "merge"),
+    false,
+  );
+});
+
+test("Nicklas can still move Merging when delegate is null and land merges onto development", async () => {
+  const gh = fakeGh();
+  const linear = fakeLinear(snapshot({ status: "Merging", delegate: null }));
+  const landed = await completeLand({
+    job: { issueId: ISSUE_ID, identifier: "KIT-95" },
+    linear,
+    gh,
+    lanes: LAND_LANES,
+  });
+  assert.equal(landed.merged, true);
+  assert.equal(landed.nextStatus, "Done");
+  const merge = gh.calls.find((call) => call[0] === "merge");
+  assert.ok(merge);
+  assert.deepEqual(merge[1], ["pr", "merge", "90"]);
+});
+
+test("Done and Canceled clear leftover Pi delegate on the webhook seam", async () => {
+  for (const status of ["Done", "Canceled"]) {
+    const linear = {
+      calls: [],
+      async getIssue() {
+        return {
+          id: ISSUE_ID,
+          identifier: "KIT-95",
+          status,
+          delegate: { name: "Pi" },
+          labels: ["Feature"],
+        };
+      },
+      async clearDelegate(input) {
+        this.calls.push(["clearDelegate", input]);
+      },
+    };
+    const enqueue = fakeEnqueue();
+    const { result } = await routeIssue(
+      { id: ISSUE_ID, identifier: "KIT-95", status, delegate: { name: "Pi" } },
+      { linear, enqueue },
+    );
+    assert.equal(result.kind, "skip", status);
+    assert.equal(
+      linear.calls.some((call) => call[0] === "clearDelegate"),
+      true,
+      status,
+    );
+    assert.equal(enqueue.jobs.length, 0, status);
+  }
 });
 
 test("Dockerfile copies the auto-merge job", () => {

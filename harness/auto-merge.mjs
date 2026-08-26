@@ -5,6 +5,7 @@
  * required checks are green, and workpad `### Loop counters` are under the
  * cap. Never merges. Never force-pushes. Fake Linear + `gh` at this seam.
  */
+import { createDelegateGateConfig, delegateGate } from "./delegate-gate.mjs";
 import { pullRequestFromAttachments } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 
@@ -139,14 +140,18 @@ function requiredChecksAreGreen(pr) {
  *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
  *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
  *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
+ *     clearDelegate?: (input: { issueId: string }) => Promise<unknown>,
  *   },
  *   gh: {
  *     viewPr: (input: { number: number, repo?: string }) => Promise<object | null>,
  *     merge?: (input?: object) => unknown,
  *   },
+ *   delegateGateConfig?: { names: string[], appUserId?: string },
+ *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  * }} input
  */
-export async function completeAutoMerge({ job, linear, gh }) {
+export async function completeAutoMerge({ job, linear, gh, delegateGateConfig, env }) {
+  const gateConfig = delegateGateConfig ?? createDelegateGateConfig(env);
   const issue = await linear.getIssue(job.issueId);
   if (!issue || issue.status !== READY_FOR_MERGE) {
     return {
@@ -172,11 +177,21 @@ export async function completeAutoMerge({ job, linear, gh }) {
       body,
       commentId: existing?.id,
     });
+    if (typeof linear.clearDelegate === "function") {
+      await linear.clearDelegate({ issueId: job.issueId });
+    }
     return {
       flipped: false,
       nextStatus: READY_FOR_MERGE,
       reason,
     };
+  }
+
+  const delegate = delegateGate(issue.delegate, gateConfig);
+  if (delegate !== "pi") {
+    return block(
+      delegate === "none" ? "delegate already empty (Nicklas's turn)." : "delegate is not Pi.",
+    );
   }
 
   const counters = parseLoopCounters(workpadBody);

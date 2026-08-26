@@ -51,8 +51,8 @@ Typical contract:
 | Duplicate | duplicate | humans, Intake consolidate | Duplicate of another issue. Never auto-dispatch |
 | Implementing | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |
 | In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |
-| Ready for merge | started | checker on pass | Auto-merge may flip to Merging when loop caps allow. Nicklas can still move. |
-| Merging | started | **Auto-merge** or **approver** from `Ready for merge` | Merge permission. Land auto-merges into the integration lane |
+| Ready for merge | started | checker on pass | Pi stays delegate until Auto-merge decides. Auto-merge may flip to Merging when delegate is Pi and loop caps allow. Nicklas can still move. |
+| Merging | started | **Auto-merge** or **approver** from `Ready for merge` | Merge permission. Land auto-merges into the integration lane. Works when delegate is empty. |
 | Done | completed | **land only** after `gh pr merge` succeeds | SHA is on `lanes.integration`. `blockedBy` may resolve |
 | Canceled | canceled | humans | Dead. No agent action |
 
@@ -97,7 +97,7 @@ Every pass is a **complete** review of the current diff, not a delta against las
 
 ## Land run (status became `Merging`)
 
-**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and Loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Nicklas can still move `Merging` himself. A conflict or missing `### Loop counters` fail closed — stay `Ready for merge`. Land merges into the integration lane only, then moves the issue to `Done`. Merge fail → `Implementing` and write the merge error under `### Review feedback`. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded. `Ready for merge` → `Merging` does not resolve `blockedBy`; dependents stay blocked until the blocker is `Done` or `Canceled`. The factory produces on `development`. Staging and production are a later human Cursor promotion — not this run.
+**Auto-merge** may move `Ready for merge` → `Merging` when delegate is Pi, the PR is MERGEABLE, required checks are green, and Loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). On refuse (loop cap, CONFLICTING, missing `### Loop counters`, or delegate already empty), stay `Ready for merge`, set delegate to `null`, and write one workpad note. Implementing, In Review, and Ready for merge keep Pi as delegate until Auto-merge decides. Done and Canceled clear leftover Pi delegate. Nicklas can still move `Merging` himself when delegate is empty. A conflict or missing counters fail closed — stay `Ready for merge`. Land merges into the integration lane only, then moves the issue to `Done`. Merge fail → `Implementing` and write the merge error under `### Review feedback`. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded. `Ready for merge` → `Merging` does not resolve `blockedBy`; dependents stay blocked until the blocker is `Done` or `Canceled`. The factory produces on `development`. Staging and production are a later human Cursor promotion — not this run.
 
 ## Guardrails
 

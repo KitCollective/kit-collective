@@ -16,6 +16,7 @@ import {
 } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
+import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
@@ -832,6 +833,8 @@ export function createPiJobRunner({
           },
           linear: linearClient,
           gh: mergeGh,
+          delegateGateConfig: createDelegateGateConfig(env),
+          env,
         });
       }
       if (job.role === "land") {
