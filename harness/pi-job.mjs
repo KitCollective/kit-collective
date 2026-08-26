@@ -45,7 +45,7 @@ const FAST_ROLES = new Set(["planner", "factory-checker", "land"]);
 export function implementPrompt(role, identifier, adwFile) {
   if (role === "implement") {
     const adw = typeof adwFile === "string" ? ` ADW ${adwFile}.` : "";
-    return `Factory role implement for ${identifier}.${adw} Update the existing workpad. Open a PR into development and move the issue to In Review. Never merge. Never spawn factory-checker.`;
+    return `Factory role implement for ${identifier}.${adw} Update the existing workpad. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
   }
   if (role === "factory-checker") {
     return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete finding set (- (none) on pass). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
@@ -294,7 +294,7 @@ export function createPiJobRunner({
         if (!ghClient || !linearClient) {
           throw new Error("implement requires gh and Linear adapters");
         }
-        await completeImplementAdw({
+        const exit = await completeImplementAdw({
           job: { ...job, identifier, issueId: job.issueId ?? identifier },
           checkout,
           gh: ghClient,
@@ -306,6 +306,7 @@ export function createPiJobRunner({
           waitTimeoutMs,
           waitIntervalMs,
         });
+        return { ...job, ...exit };
       }
       if (job.role === "factory-checker") {
         const linearClient = linear ?? createLinearCliClient({ env, runCommand });

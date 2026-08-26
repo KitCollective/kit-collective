@@ -193,6 +193,19 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
       return { url, mergeable: "UNKNOWN", checks: [] };
     },
 
+    /**
+     * Best-effort failed-job log for the workpad. Redaction happens in implement-exit.
+     *
+     * @param {{ cwd: string, name?: string }} input
+     */
+    async fetchCheckLog({ cwd }) {
+      try {
+        return await run("gh", ["run", "view", "--log-failed"], { cwd, env });
+      } catch {
+        return "";
+      }
+    },
+
     merge() {
       throw new Error("implement never merges");
     },

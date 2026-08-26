@@ -12,7 +12,7 @@ Helpers write the failing test and the minimal green. They inherit this parent.
 
 Then spawn Gate. Gate attempts rebase onto `origin/development`, typecheck of touched packages, and wait for required GitHub checks. A rebase conflict is a red Gate report — you resolve markers; Gate does not. Gate never calls Linear and never moves In Review.
 
-Copy the Gate report into workpad `### Validation`. Move the issue to `In Review` only when Gate is green. A red Gate keeps the issue Implementing. Factory checker is a separate Pi process on `In Review`, not a child of implement — never spawn it.
+Copy the Gate report into workpad `### Validation`. A red Gate keeps the issue Implementing. The harness moves to `In Review` when Gate is green, required checks are green, and the PR is MERGEABLE — do not set Linear status yourself. Factory checker is a separate Pi process on `In Review`, not a child of implement — never spawn it.
 
 Tools: `read`, `edit`, `write`, `bash`, `git`, `gh`, pinned Linear CLI, pi-subagents. Load Expo skills from `.cursor/skills/expo` (overview first) and tdd from `.cursor/skills/tdd` in this tree.
 
@@ -20,4 +20,4 @@ Update the existing workpad (`## Agent Workpad`): list comments first, then edit
 
 Pre-review still holds: rebase onto `origin/development` until `gh pr view --json mergeable` is `MERGEABLE`; typecheck of touched packages on this box; wait for required GitHub checks. Full `pnpm test` stays on GitHub Actions, not on this 4 GB / 8 GB box.
 
-Follow the named ADW. Open a PR into `development`. Never merge. Never set Linear Agent to Cursor. Prefer OpenRouter Exacto for Scout/Gate when the client allows it; it is not a hard fail. Do not fall back to stealth/ox-alpha.
+Follow the named ADW. Open a PR into `development` with evidence on the workpad. The harness moves the issue to `In Review` after required GitHub checks are green and the PR is MERGEABLE — do not set Linear status yourself. Never merge. Never set Linear Agent to Cursor. Prefer OpenRouter Exacto for Scout/Gate when the client allows it; it is not a hard fail. Do not fall back to stealth/ox-alpha.
