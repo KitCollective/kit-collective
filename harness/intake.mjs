@@ -58,7 +58,8 @@ export function isSentryIssue(issue) {
 function leftoverClass(issue) {
   const description = String(issue.description ?? "");
   const findingMatch = description.match(/##\s*Finding\n([\s\S]*?)(?=\n##\s|\s*$)/i);
-  const text = `${issue.title ?? ""}\n${findingMatch ? findingMatch[1] : description}`.toLowerCase();
+  const text =
+    `${issue.title ?? ""}\n${findingMatch ? findingMatch[1] : description}`.toLowerCase();
   if (/\bci[-\s]?graph\b|required github check|\.github\/workflows|\bci\.yml\b/.test(text)) {
     return "ci-graph";
   }
