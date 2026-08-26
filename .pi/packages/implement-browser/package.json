@@ -3,8 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "description": "Headless Chromium Pi package for implement UI evidence on the PI worker.",
-  "keywords": ["pi-package", "playwright", "chromium"],
+  "keywords": [
+    "pi-package",
+    "playwright",
+    "chromium"
+  ],
   "pi": {
-    "skills": ["./skills"]
+    "skills": [
+      "./skills"
+    ]
   }
 }
