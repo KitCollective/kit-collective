@@ -277,6 +277,7 @@ test("factory-checker workpad records Grok token counts for the checker role", a
   });
 
   const body = pad.comments[0].body;
+  assert.match(body, /All good — checker pass/);
   assert.match(body, /Factory-checker \(Grok\): input 500, output 80/);
   assert.equal(body.includes("Scout (Hy3)"), false);
   assert.deepEqual(result.tokens.lines, [
