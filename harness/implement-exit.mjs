@@ -8,6 +8,11 @@
  */
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import {
+  findWriteScopeViolations,
+  parseWriteScopeGlobs,
+  shouldEnforceWriteScope,
+} from "../scripts/lib/pr-write-scope.mjs";
 import { ensureLoopCounters, incrementCiFailCycles } from "./auto-merge.mjs";
 
 const execFile = promisify(execFileCb);
@@ -132,6 +137,116 @@ export function failedRequiredChecks(checks) {
   return selectRequiredChecks(checks).filter((check) =>
     FAILED_CONCLUSIONS.has(check?.conclusion ?? check?.state ?? ""),
   );
+}
+
+/**
+ * @returns {string[]}
+ */
+export function formatWriteScopeDiffUnavailableFeedback() {
+  return ["- Write-scope: could not read PR diff against origin/development"];
+}
+
+/**
+ * @param {string[]} violations
+ * @returns {string[]}
+ */
+export function formatWriteScopeViolationFeedback(violations) {
+  const lines = ["- Write-scope: PR diff includes paths outside the issue globs:"];
+  for (const file of violations) {
+    lines.push(`  - \`${file}\``);
+  }
+  return lines;
+}
+
+/**
+ * @param {string | undefined} description
+ * @param {string[]} changedFiles
+ */
+export function evaluateWriteScopeExit(description, changedFiles) {
+  const globs = parseWriteScopeGlobs(typeof description === "string" ? description : "");
+  if (!shouldEnforceWriteScope(globs)) {
+    return { enforce: false, violations: [] };
+  }
+  const files = Array.isArray(changedFiles) ? changedFiles : [];
+  const violations = findWriteScopeViolations(files, globs);
+  return { enforce: true, violations };
+}
+
+/**
+ * @param {{
+ *   runCommand?: (command: string, args: string[], options: { cwd?: string }) => Promise<string>,
+ * }} [deps]
+ */
+export function createListChangedFiles({ runCommand } = {}) {
+  const run =
+    runCommand ??
+    (async (command, args, options = {}) => {
+      const { stdout } = await execFile(command, args, {
+        encoding: "utf8",
+        timeout: 120_000,
+        cwd: options.cwd,
+      });
+      return stdout;
+    });
+  return async ({ cwd }) => {
+    const stdout = await run("git", ["diff", "--name-only", "origin/development...HEAD"], { cwd });
+    return String(stdout)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  };
+}
+
+/**
+ * @param {string | undefined} description
+ * @param {{
+ *   linear: { getIssue?: (id: string) => Promise<{ description?: string } | null> },
+ *   job: { issueId: string, description?: string },
+ * }} input
+ */
+async function resolveIssueDescription(description, { linear, job }) {
+  if (typeof description === "string" && description.length > 0) {
+    return description;
+  }
+  if (typeof job?.description === "string" && job.description.length > 0) {
+    return job.description;
+  }
+  if (typeof linear?.getIssue === "function") {
+    const issue = await linear.getIssue(job.issueId);
+    if (typeof issue?.description === "string") {
+      return issue.description;
+    }
+  }
+  return "";
+}
+
+/**
+ * @param {{
+ *   job: { identifier: string, issueId: string },
+ *   checkout: { path: string },
+ *   linear: {
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *   },
+ *   pr: { url?: string },
+ *   feedbackLines: string[],
+ * }} input
+ */
+async function writeWriteScopeRetryWorkpad(input) {
+  const { job, linear, pr, feedbackLines } = input;
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
+  const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  const withEvidence =
+    typeof pr?.url === "string" && pr.url.length > 0
+      ? upsertWorkpadEvidence(existing?.body, {
+          prUrl: pr.url,
+          identifier: job.identifier,
+        })
+      : (existing?.body ?? `${WORKPAD_HEADING}\n`);
+  const body = applyReviewFeedback(withEvidence, feedbackLines);
+  await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  return { status: IMPLEMENTING, writeScopeRetry: true };
 }
 
 /**
@@ -331,8 +446,11 @@ export function upsertWorkpadEvidence(current, { prUrl, identifier }) {
  *     updateWorkpad: (input: { issueId: string, body: string }) => Promise<unknown>,
  *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
  *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
+ *     getIssue?: (id: string) => Promise<{ description?: string } | null>,
  *   },
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
+ *   listChangedFiles?: (input: { cwd: string }) => Promise<string[]>,
+ *   issueDescription?: string,
  *   runPnpmTest?: (input: { cwd: string }) => Promise<unknown>,
  *   adwText: string,
  *   now?: () => number,
@@ -348,6 +466,8 @@ export async function completeImplementAdw(input) {
     gh,
     linear,
     typecheckTouched,
+    listChangedFiles: listChangedFilesInput,
+    issueDescription,
     runPnpmTest,
     adwText,
     now = () => Date.now(),
@@ -420,6 +540,34 @@ export async function completeImplementAdw(input) {
     await sleep(waitIntervalMs);
   }
 
+  const description = await resolveIssueDescription(issueDescription, { linear, job });
+  const globs = parseWriteScopeGlobs(description);
+  if (shouldEnforceWriteScope(globs)) {
+    const listChangedFiles = listChangedFilesInput ?? createListChangedFiles();
+    let changedFiles;
+    try {
+      changedFiles = await listChangedFiles({ cwd: checkout.path });
+    } catch {
+      const retry = await writeWriteScopeRetryWorkpad({
+        job,
+        linear,
+        pr,
+        feedbackLines: formatWriteScopeDiffUnavailableFeedback(),
+      });
+      return { pr, ...retry, ciRetry: false };
+    }
+    const violations = findWriteScopeViolations(changedFiles, globs);
+    if (violations.length > 0) {
+      const retry = await writeWriteScopeRetryWorkpad({
+        job,
+        linear,
+        pr,
+        feedbackLines: formatWriteScopeViolationFeedback(violations),
+      });
+      return { pr, ...retry, ciRetry: false };
+    }
+  }
+
   const comments =
     typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
   const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
@@ -432,7 +580,7 @@ export async function completeImplementAdw(input) {
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
   await linear.setStatus({ issueId: job.issueId, status: IN_REVIEW });
 
-  return { pr, status: IN_REVIEW, ciRetry: false };
+  return { pr, status: IN_REVIEW, ciRetry: false, writeScopeRetry: false };
 }
 
 /**
