@@ -8,6 +8,8 @@ import { createGhClient } from "../gh-cli.mjs";
 import {
   completeImplementAdw,
   createTypecheckTouched,
+  evaluateWriteScopeExit,
+  formatWriteScopeViolationFeedback,
   IMPLEMENTING,
   IN_REVIEW,
   requiredChecksGreen,
@@ -981,6 +983,120 @@ test("implement role requires Scout then helpers then Gate; parent owns In Revie
     assert.doesNotMatch(role, /tencent\/hy3/);
     assert.doesNotMatch(role, /^model:.*stealth|^fallbackModels:.*ox-alpha/m);
   }
+});
+
+test("evaluateWriteScopeExit skips when the issue has no write-scope line", () => {
+  const result = evaluateWriteScopeExit("What to build\n\nNo scope.", [
+    "apps/api/src/main.ts",
+    "packages/db/schema.ts",
+  ]);
+  assert.equal(result.enforce, false);
+  assert.deepEqual(result.violations, []);
+});
+
+test("evaluateWriteScopeExit names paths outside declared globs", () => {
+  const description = "write-scope: harness/implement-exit.mjs, harness/tests/implement-adw.test.mjs";
+  const result = evaluateWriteScopeExit(description, [
+    "harness/implement-exit.mjs",
+    "apps/api/src/main.ts",
+  ]);
+  assert.equal(result.enforce, true);
+  assert.deepEqual(result.violations, ["apps/api/src/main.ts"]);
+});
+
+test("evaluateWriteScopeExit allows ratchet-exception paths outside globs", () => {
+  const description = "write-scope: harness/implement-exit.mjs";
+  const result = evaluateWriteScopeExit(description, [
+    "harness/implement-exit.mjs",
+    ".cursor/rules/write-scope.mdc",
+    "scripts/check-pr-write-scope.mjs",
+  ]);
+  assert.equal(result.enforce, true);
+  assert.deepEqual(result.violations, []);
+});
+
+test("formatWriteScopeViolationFeedback lists each out-of-glob path", () => {
+  const lines = formatWriteScopeViolationFeedback(["apps/api/src/main.ts", "apps/web/page.astro"]);
+  assert.match(lines.join("\n"), /Write-scope/);
+  assert.match(lines.join("\n"), /apps\/api\/src\/main\.ts/);
+  assert.match(lines.join("\n"), /apps\/web\/page\.astro/);
+});
+
+function fakeLinearWithIssue(description) {
+  const linear = fakeLinear();
+  linear.getIssue = async () => ({ description });
+  return linear;
+}
+
+function completeImplementWithChangedFiles({ description, changedFiles, linear, gh }) {
+  return completeImplementAdw({
+    job: { identifier: "KIT-108", issueId: "issue-108", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-108", branch: "kit-108" },
+    gh: gh ?? fakeGh(),
+    linear: linear ?? fakeLinearWithIssue(description),
+    typecheckTouched: async () => undefined,
+    listChangedFiles: async () => changedFiles,
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+}
+
+test("implement-exit with out-of-glob diffs stays Implementing and writes Review feedback paths", async () => {
+  const description =
+    "write-scope: harness/implement-exit.mjs, harness/tests/implement-adw.test.mjs";
+  const linear = fakeLinearWithIssue(description);
+  const result = await completeImplementWithChangedFiles({
+    description,
+    changedFiles: ["harness/implement-exit.mjs", "apps/mobile/App.tsx"],
+    linear,
+  });
+
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.writeScopeRetry, true);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    false,
+  );
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /### Review feedback/);
+  assert.match(workpad.body, /apps\/mobile\/App\.tsx/);
+  assert.doesNotMatch(workpad.body, /harness\/implement-exit\.mjs/);
+});
+
+test("implement-exit with only in-glob and ratchet-exception paths may move to In Review", async () => {
+  const description =
+    "write-scope: harness/implement-exit.mjs, harness/tests/implement-adw.test.mjs";
+  const linear = fakeLinearWithIssue(description);
+  const result = await completeImplementWithChangedFiles({
+    description,
+    changedFiles: [
+      "harness/implement-exit.mjs",
+      "harness/tests/implement-adw.test.mjs",
+      ".cursor/rules/write-scope.mdc",
+    ],
+    linear,
+  });
+
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.writeScopeRetry, false);
+  assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
+    issueId: "issue-108",
+    status: IN_REVIEW,
+  });
+});
+
+test("implement-exit without write-scope does not fail on out-of-glob paths", async () => {
+  const linear = fakeLinearWithIssue("What to build\n\nNo write-scope line.");
+  const result = await completeImplementWithChangedFiles({
+    description: "What to build\n\nNo write-scope line.",
+    changedFiles: ["apps/api/src/main.ts", "packages/db/schema.ts"],
+    linear,
+  });
+
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.writeScopeRetry, false);
 });
 
 test("Compose persists kit-pi worktrees and copies implement-exit adapters", () => {
