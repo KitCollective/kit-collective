@@ -192,6 +192,14 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-mobile-add-upload-files.mjs` (CI via `pnpm check:mobile-add-upload-files`) fails when `apps/mobile/app/(tabs)/add/index.tsx` bypasses `pickUploadFiles` for Upload filer, when `apps/mobile/src/capture/pickUploadFiles.ts` omits a `pickDocumentImages` branch, when `apps/mobile/src/capture/pickDocumentImages.ts` does not use `expo-document-picker`, or when `apps/mobile/tests/pick-upload-files.test.ts` drops the Files/documents regression case. `scripts/tests/check-mobile-add-upload-files.test.mjs` (CI via `node --test`) mutation-tests the ratchet. Prevents repeating the KIT-48 checker round-4 fail (Upload filer only opens the Photos library). Tighten only.
 
+### Mobile add camera-resume ratchet (KIT-48)
+
+`scripts/check-mobile-add-camera-resume.mjs` (CI via `pnpm check:mobile-add-camera-resume`) fails when `apps/mobile/app/(tabs)/add/capture.tsx` does not resolve a resumable camera session on mount, pass resumed photos into `CaptureCameraSession` `initialPhotos`, or clear the active camera pointer when navigating to Confirm; when `apps/mobile/src/capture/captureSessionPersistence.ts` omits `resolveResumableCameraSession` or does not mark the active in-progress session when persisting camera shots; when `apps/mobile/src/capture/captureSessionActivePointer.ts` omits `getActiveCameraCaptureSessionId`; when `apps/mobile/src/capture/CaptureCameraSession.tsx` omits `initialPhotos`; or when `apps/mobile/tests/capture-session-persistence.test.ts` drops the camera-resume or atomic-replace regression cases. Prevents repeating the KIT-48 checker round-6 fail (SQLite writes per shot but CaptureScreen remount could not recover them). Tighten only.
+
+### Mobile capture dead-export ratchet (KIT-48)
+
+`scripts/check-mobile-capture-dead-exports.mjs` (CI via `pnpm check:mobile-capture-dead-exports`) fails when `apps/mobile/src/capture/captureFlow.ts` keeps dead `createPersistedCaptureSessionFromPhotos` after the persistence refactor or places re-exports between import blocks instead of grouping imports at the top. Prevents repeating the KIT-48 checker round-1/round-6 fail (leftover dead code after capture refactors). Tighten only.
+
 ### Implement ADW production gh ratchet (KIT-54)
 
 `harness/tests/implement-adw.test.mjs` drives `createGhClient` / `createTypecheckTouched` with fake `runCommand` only (not injected `fakeGh`). Coverage that must stay:

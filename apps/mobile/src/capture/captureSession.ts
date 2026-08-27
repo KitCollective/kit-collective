@@ -297,6 +297,22 @@ export function upsertDraftPhoto(
   }));
 }
 
+export function appendCameraShotToSession(
+  state: CaptureSessionState,
+  photo: CaptureSessionPhoto & { role: PhotoRole },
+  source: PhotoSource = "camera",
+): CaptureSessionState {
+  const next = upsertDraftPhoto(state, state.activeDraftId, photo.role, photo.uri, source);
+  const draft = getActiveDraft(next);
+  const orderedUris = PHOTO_ROLES.map(
+    (role) => draft.photos.find((entry) => entry.role === role)?.uri,
+  ).filter((uri): uri is string => Boolean(uri));
+  return {
+    ...next,
+    orderedUris,
+  };
+}
+
 function serializableState(state: CaptureSessionState): CaptureSessionState {
   const { store: _store, ...rest } = state;
   return rest;

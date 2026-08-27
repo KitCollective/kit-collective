@@ -27,6 +27,8 @@
     "check:mobile-add-form-wiring": "node scripts/check-mobile-add-form-wiring.mjs",
     "check:mobile-add-confirm-redirect": "node scripts/check-mobile-add-confirm-redirect.mjs",
     "check:mobile-add-upload-files": "node scripts/check-mobile-add-upload-files.mjs",
+    "check:mobile-add-camera-resume": "node scripts/check-mobile-add-camera-resume.mjs",
+    "check:mobile-capture-dead-exports": "node scripts/check-mobile-capture-dead-exports.mjs",
     "check:workflow-api-boot-env": "node scripts/check-workflow-api-boot-env.mjs",
     "check:vision-log-save-action": "node scripts/check-vision-log-save-action.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"
