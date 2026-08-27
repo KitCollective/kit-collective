@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider.js";
+import { BrandLogo } from "../brand/BrandLogo.js";
 
 export function LoginPage() {
   const { login, user } = useAuth();
@@ -37,6 +38,7 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={onSubmit}>
+        <BrandLogo variant="lockup" className="login-lockup" />
         <h1>Sign in</h1>
         {error ? <div className="banner-error">{error}</div> : null}
         <div className="field">

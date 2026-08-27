@@ -1,0 +1,3 @@
+harness.eskobar.dev {
+	reverse_proxy webhook:8080
+}

@@ -1,29 +1,60 @@
-import { ActionSheetIOS, Alert, Platform } from "react-native";
-import { galleryMultiSelectQuality } from "./photoBytes";
-import { pickDocumentImages } from "./pickDocumentImages";
-import { pickGalleryPhotos } from "./pickGalleryPhotos";
+import type { PickDocumentImagesOptions } from "./pickDocumentImages";
+import type { PickGalleryPhotosOptions } from "./pickGalleryPhotos";
 
-type PickUploadFilesOptions = {
+export type PickUploadFilesOptions = {
   allowsMultipleSelection?: boolean;
 };
 
-async function pickFromGallery(options: PickUploadFilesOptions): Promise<string[] | null> {
-  return pickGalleryPhotos({
+export type UploadSource = "gallery" | "documents";
+
+export type UploadActionSheetRequest = {
+  options: string[];
+  cancelButtonIndex: number;
+};
+
+export type UploadAlertButtonStyle = "cancel" | "default" | "destructive";
+
+export type UploadAlertButton = {
+  text: string;
+  style?: UploadAlertButtonStyle;
+  onPress?: () => void;
+};
+
+export type UploadFilesAdapter = {
+  os: string;
+  showActionSheet: (
+    request: UploadActionSheetRequest,
+    callback: (buttonIndex: number) => void,
+  ) => void;
+  showAlert: (title: string, message: string, buttons: UploadAlertButton[]) => void;
+  pickGalleryPhotos: (options: PickGalleryPhotosOptions) => Promise<string[] | null>;
+  pickDocumentImages: (options: PickDocumentImagesOptions) => Promise<string[] | null>;
+  galleryMultiSelectQuality: () => number;
+};
+
+async function pickFromGallery(
+  options: PickUploadFilesOptions,
+  adapter: UploadFilesAdapter,
+): Promise<string[] | null> {
+  return adapter.pickGalleryPhotos({
     allowsMultipleSelection: options.allowsMultipleSelection ?? true,
-    quality: galleryMultiSelectQuality(),
+    quality: adapter.galleryMultiSelectQuality(),
   });
 }
 
-async function pickFromDocuments(options: PickUploadFilesOptions): Promise<string[] | null> {
-  return pickDocumentImages({
+async function pickFromDocuments(
+  options: PickUploadFilesOptions,
+  adapter: UploadFilesAdapter,
+): Promise<string[] | null> {
+  return adapter.pickDocumentImages({
     multiple: options.allowsMultipleSelection ?? true,
   });
 }
 
-function showUploadSourcePicker(): Promise<"gallery" | "documents" | null> {
-  if (Platform.OS === "ios") {
+function showUploadSourcePicker(adapter: UploadFilesAdapter): Promise<UploadSource | null> {
+  if (adapter.os === "ios") {
     return new Promise((resolve) => {
-      ActionSheetIOS.showActionSheetWithOptions(
+      adapter.showActionSheet(
         {
           options: ["Fotos", "Filer", "Annuller"],
           cancelButtonIndex: 2,
@@ -44,7 +75,7 @@ function showUploadSourcePicker(): Promise<"gallery" | "documents" | null> {
   }
 
   return new Promise((resolve) => {
-    Alert.alert("Upload filer", "Vælg hvor billederne skal hentes fra.", [
+    adapter.showAlert("Upload filer", "Vælg hvor billederne skal hentes fra.", [
       { text: "Galleri", onPress: () => resolve("gallery") },
       { text: "Filer", onPress: () => resolve("documents") },
       { text: "Annuller", style: "cancel", onPress: () => resolve(null) },
@@ -57,19 +88,25 @@ function showUploadSourcePicker(): Promise<"gallery" | "documents" | null> {
  */
 export async function pickUploadFiles(
   options: PickUploadFilesOptions = {},
+  adapter: UploadFilesAdapter,
 ): Promise<string[] | null> {
-  if (Platform.OS === "web") {
-    return pickFromGallery(options);
+  if (adapter.os === "web") {
+    return pickFromGallery(options, adapter);
   }
 
-  const source = await showUploadSourcePicker();
+  const source = await showUploadSourcePicker(adapter);
   if (!source) {
     return null;
   }
 
-  if (source === "gallery") {
-    return pickFromGallery(options);
+  switch (source) {
+    case "gallery":
+      return pickFromGallery(options, adapter);
+    case "documents":
+      return pickFromDocuments(options, adapter);
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
   }
-
-  return pickFromDocuments(options);
 }

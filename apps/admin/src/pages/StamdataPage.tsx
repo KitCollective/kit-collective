@@ -11,13 +11,67 @@ import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
+import { useAdminChrome } from "../components/AdminShell.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
 import { FiltersSheet } from "../components/FiltersSheet.js";
+
+type StamdataTable = (typeof ADMIN_STAMDATA_LIST_ENTITY_TYPES)[number];
+
+function tableLabel(table: StamdataTable): string {
+  switch (table) {
+    case "club":
+      return "Clubs";
+    case "season":
+      return "Seasons";
+    case "club_season":
+      return "Club seasons";
+    case "kit":
+      return "Kits";
+    default: {
+      const exhaustive: never = table;
+      return exhaustive;
+    }
+  }
+}
+
+function tableSearchPlaceholder(table: StamdataTable): string {
+  switch (table) {
+    case "club":
+      return "Search clubs";
+    case "season":
+      return "Search seasons";
+    case "club_season":
+      return "Search club seasons";
+    case "kit":
+      return "Search kits";
+    default: {
+      const exhaustive: never = table;
+      return exhaustive;
+    }
+  }
+}
+
+function columnCount(table: StamdataTable): number {
+  switch (table) {
+    case "club":
+    case "season":
+      return 2;
+    case "club_season":
+      return 4;
+    case "kit":
+      return 5;
+    default: {
+      const exhaustive: never = table;
+      return exhaustive;
+    }
+  }
+}
 
 export function StamdataPage() {
   const { token } = useAuth();
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
+  const { search, setSearch, setSearchPlaceholder } = useAdminChrome();
+  const [table, setTable] = useState<StamdataTable>("club");
   const [filters, setFilters] = useState<AdminStamdataQuery>({});
   const [filterOptions, setFilterOptions] = useState<AdminFilterOptions | null>(null);
   const [rows, setRows] = useState<AdminStamdataList | null>(null);
@@ -33,6 +87,10 @@ export function StamdataPage() {
     }),
     [filters, search],
   );
+
+  useEffect(() => {
+    setSearchPlaceholder(tableSearchPlaceholder(table));
+  }, [setSearchPlaceholder, table]);
 
   useEffect(() => {
     if (!token) {
@@ -66,6 +124,11 @@ export function StamdataPage() {
       })
       .finally(() => setLoading(false));
   }, [token, query]);
+
+  const visibleRows = useMemo(
+    () => (rows ? rows.rows.filter((row) => row.entityType === table) : []),
+    [rows, table],
+  );
 
   function clearFilters() {
     setFilters({});
@@ -131,31 +194,47 @@ export function StamdataPage() {
   // Ratchet: ADMIN_STAMDATA_LIST_ENTITY_TYPES must each have navigation in openRow above.
   void ADMIN_STAMDATA_LIST_ENTITY_TYPES;
 
-  const hasActiveFilters = Boolean(
+  const hasCatalogFilters = Boolean(
     filters.countryId ||
       filters.leagueId ||
       filters.seasonId ||
       filters.kitType ||
-      filters.hasPhoto ||
-      search.trim(),
+      filters.hasPhoto,
   );
+  const hasActiveFilters = Boolean(hasCatalogFilters || search.trim());
+
+  const columns = columnCount(table);
 
   return (
-    <>
+    <div className="list-page">
       <div className="toolbar">
-        <input
-          className="search-field"
-          type="search"
-          placeholder="Search clubs, kits, or collectors"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          aria-label="Search stamdata"
-        />
-        <button type="button" className="btn btn-secondary" onClick={() => setFiltersOpen(true)}>
-          Filters
-        </button>
+        <fieldset className="chip-group toolbar-chips">
+          <legend className="chip-group-legend">Master Data tables</legend>
+          {ADMIN_STAMDATA_LIST_ENTITY_TYPES.map((entityType) => (
+            <button
+              key={entityType}
+              type="button"
+              className="chip"
+              aria-pressed={table === entityType}
+              onClick={() => {
+                setTable(entityType);
+                setFocusedRowIndex(0);
+              }}
+            >
+              {tableLabel(entityType)}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={hasCatalogFilters}
+            onClick={() => setFiltersOpen(true)}
+          >
+            Filters
+          </button>
+        </fieldset>
         <span className="record-count">
-          {rows ? `${rows.total} records` : loading ? "Loading…" : "0 records"}
+          {loading ? "Loading…" : `${visibleRows.length} ${tableLabel(table).toLowerCase()}`}
         </span>
       </div>
 
@@ -165,23 +244,30 @@ export function StamdataPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th scope="col">Mark</th>
+              <th className="data-table-mark" scope="col">
+                {table === "kit" ? "Thumb" : "Mark"}
+              </th>
               <th scope="col">Name</th>
-              <th scope="col">Type</th>
-              <th scope="col">Season</th>
-              <th scope="col">Meta</th>
+              {table === "kit" ? <th scope="col">Type</th> : null}
+              {table === "club_season" || table === "kit" ? <th scope="col">Season</th> : null}
+              {table === "club_season" ? (
+                <th className="data-table-numeric" scope="col">
+                  Players
+                </th>
+              ) : null}
+              {table === "kit" ? <th scope="col">Meta</th> : null}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={columns}>
                   <div className="empty-state data-table-empty">Loading stamdata…</div>
                 </td>
               </tr>
-            ) : !rows || rows.rows.length === 0 ? (
+            ) : visibleRows.length === 0 ? (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={columns}>
                   <div className="empty-state data-table-empty">
                     <h2>No records match</h2>
                     <p>Try a different search or clear your filters.</p>
@@ -194,7 +280,7 @@ export function StamdataPage() {
                 </td>
               </tr>
             ) : (
-              rows.rows.map((row, rowIndex) => (
+              visibleRows.map((row, rowIndex) => (
                 <tr
                   key={`${row.entityType}:${row.id}`}
                   tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
@@ -202,7 +288,7 @@ export function StamdataPage() {
                   onFocus={() => setFocusedRowIndex(rowIndex)}
                   onKeyDown={(event) => handleRowKeyDown(event, row, rowIndex)}
                 >
-                  <td>
+                  <td className="data-table-mark">
                     {row.entityType === "kit" ? (
                       row.photoPath && token ? (
                         <span className="thumb-slot">
@@ -215,18 +301,21 @@ export function StamdataPage() {
                       <span className="monogram-slot">{row.monogram ?? "?"}</span>
                     )}
                   </td>
-                  <td>{row.label}</td>
-                  <td>
-                    {row.entityType === "kit" ? row.kitType : row.entityType.replace("_", " ")}
-                  </td>
-                  <td>{row.seasonLabel ?? "—"}</td>
-                  <td>
-                    {row.entityType === "club_season" && row.squadCount !== undefined
-                      ? `${row.squadCount} players`
-                      : row.hasPhoto === false
-                        ? "No photo"
-                        : "—"}
-                  </td>
+                  <td className="data-table-primary">{row.label}</td>
+                  {table === "kit" ? (
+                    <td className="data-table-mono">{row.kitType ?? "—"}</td>
+                  ) : null}
+                  {table === "club_season" || table === "kit" ? (
+                    <td className="data-table-mono">{row.seasonLabel ?? "—"}</td>
+                  ) : null}
+                  {table === "club_season" ? (
+                    <td className="data-table-mono data-table-numeric">
+                      {row.squadCount !== undefined ? `${row.squadCount} players` : "—"}
+                    </td>
+                  ) : null}
+                  {table === "kit" ? (
+                    <td className="data-table-meta">{row.hasPhoto === false ? "No photo" : "—"}</td>
+                  ) : null}
                 </tr>
               ))
             )}
@@ -243,6 +332,6 @@ export function StamdataPage() {
           onApply={setFilters}
         />
       ) : null}
-    </>
+    </div>
   );
 }

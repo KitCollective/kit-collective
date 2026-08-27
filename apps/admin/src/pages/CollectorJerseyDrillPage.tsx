@@ -81,24 +81,32 @@ export function CollectorJerseyDrillPage() {
             )}
           </div>
 
-          <dl className="meta-grid">
-            <dt>Type</dt>
-            <dd>{jersey.type}</dd>
-            <dt>Size</dt>
-            <dd>{jersey.size}</dd>
-            <dt>Condition</dt>
-            <dd>{jersey.condition}</dd>
-          </dl>
+          <section className="summary-panel">
+            <dl className="stats-row">
+              <div>
+                <dt>Type</dt>
+                <dd className="type-mono">{jersey.type}</dd>
+              </div>
+              <div>
+                <dt>Size</dt>
+                <dd className="type-mono">{jersey.size}</dd>
+              </div>
+              <div>
+                <dt>Condition</dt>
+                <dd>{jersey.condition}</dd>
+              </div>
+            </dl>
 
-          <div className="toolbar">
-            <button
-              type="button"
-              className="btn btn-destructive btn-primary--auto"
-              onClick={() => setConfirmOpen(true)}
-            >
-              Take down
-            </button>
-          </div>
+            <div className="toolbar toolbar--actions">
+              <button
+                type="button"
+                className="btn btn-destructive"
+                onClick={() => setConfirmOpen(true)}
+              >
+                Take down
+              </button>
+            </div>
+          </section>
         </>
       ) : null}
 

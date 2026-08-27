@@ -50,8 +50,43 @@ export type SeedHttpFetch = (
   init?: SeedHttpFetchOptions,
 ) => Promise<Awaited<ReturnType<typeof undiciFetch>>>;
 
-export function createSeedHttpFetch(proxyConfig: SeedProxyConfig): SeedHttpFetch {
-  const dispatcher = proxyConfig.proxyUrl ? new ProxyAgent(proxyConfig.proxyUrl) : undefined;
+export type SeedHttpFetcher = (
+  url: string,
+  init: {
+    dispatcher?: unknown;
+    headers: Record<string, string>;
+  },
+) => Promise<Awaited<ReturnType<typeof undiciFetch>>>;
+
+export type SeedHttpProxyAgentFactory = (proxyUrl: string) => unknown;
+
+function createUndiciProxyAgent(proxyUrl: string): ProxyAgent {
+  return new ProxyAgent(proxyUrl);
+}
+
+async function defaultSeedHttpFetcher(
+  url: string,
+  init: {
+    dispatcher?: unknown;
+    headers: Record<string, string>;
+  },
+): Promise<Awaited<ReturnType<typeof undiciFetch>>> {
+  const dispatcher = init.dispatcher instanceof ProxyAgent ? init.dispatcher : undefined;
+  if (init.dispatcher !== undefined && dispatcher === undefined) {
+    throw new Error("default Seed HTTP fetch requires an undici ProxyAgent dispatcher");
+  }
+  return undiciFetch(url, {
+    dispatcher,
+    headers: init.headers,
+  });
+}
+
+export function createSeedHttpFetch(
+  proxyConfig: SeedProxyConfig,
+  fetchImpl: SeedHttpFetcher = defaultSeedHttpFetcher,
+  createProxyAgent: SeedHttpProxyAgentFactory = createUndiciProxyAgent,
+): SeedHttpFetch {
+  const dispatcher = proxyConfig.proxyUrl ? createProxyAgent(proxyConfig.proxyUrl) : undefined;
 
   return async (url: string, init?: SeedHttpFetchOptions) => {
     const headers: Record<string, string> = {
@@ -60,7 +95,7 @@ export function createSeedHttpFetch(proxyConfig: SeedProxyConfig): SeedHttpFetch
       ...init?.headers,
     };
 
-    const response = await undiciFetch(url, {
+    const response = await fetchImpl(url, {
       dispatcher,
       headers,
     });

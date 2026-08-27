@@ -1,36 +1,40 @@
-# Cursor Automations
+# Factory runtime
 
-Wire **planner + implement + checker + land** first. Staging/production later.
+The dispatch runtime is the **PI worker** on kit-harness: Docker Compose + `gh` + Linear CLI. `.pi/mcp.json` is empty — Linear MCP is not installed on that box. Do **not** treat Cursor Cloud Agents as factory dispatch.
 
-Linear MCP must point at the workspace in `factory.config.json`. `linear.setup.json` must exist.
+Product Coolify MCP and `kc_seed_mcp` stay Desktop or Cloud Agent wiring. They are not default PI-worker MCP.
 
-Cursor’s Linear trigger fires on issue created / status changed / end of cycle — **not** on delegate. Planner therefore uses a short cron. **Do not** use Linear Assignee → Agents → Cursor as dispatch: that starts a Cloud Agent immediately. Assignee stays the human; Agent stays **No agent**. Planner claims on `ready-for-agent`. Implement and checker wake on **status**.
+`linear.setup.json` must exist. When the PI planner job is Active, keep any Cursor Automations planner cron **Inactive** so two planners cannot claim the same issue. The Cursor Automations paste-blocks below are a fallback cookbook, not the live worker.
 
-Each automation must read `factory.config.json` and `WORKFLOW.md` from the checkout. Do not paste a second copy of policy into the prompt. The **Instruction** field is what you paste into Cursor Automations.
+**Do not** use Linear Assignee → Agents → Cursor as dispatch: that starts a Cloud Agent immediately. Assignee stays the human; Agent stays **No agent**. Planner claims on `ready-for-agent`. Implement and checker wake on **status**.
 
-Checkout: `github.ownerRepo`, branch `lanes.integration`. Planner can be Linear-only (no product edits).
+Each role must read `factory.config.json` and `WORKFLOW.md` from the checkout. Do not paste a second copy of policy into a one-off prompt.
 
-Linear `get_issue` does **not** return comments. Every runtime that acts on an issue must also `list_comments`. The workpad is one comment; `### Review feedback` is why a pass was not good enough.
+Checkout: `github.ownerRepo`, branch `lanes.integration`. Planner is Linear-only (no product edits).
+
+Linear `get_issue` does **not** return comments. Every runtime that acts on an issue must also `list_comments` (Linear CLI on the PI worker). The workpad is one comment; `### Review feedback` is why a pass was not good enough.
 
 ## Handshake (implement ↔ checker)
 
-There is no “same Cloud Agent”. Each run is a new VM. **Same work** means: same Linear issue, same git branch, same PR, same workpad.
+There is no “same Cloud Agent”. Each run is a new Pi job. **Same work** means: same Linear issue, same git branch, same PR, same workpad.
 
 ```text
 planner:    Backlog + ready-for-agent + unblocked → Implementing (priority order)
+intake:     hourly Triage scan on the planner mutex → Backlog / Duplicate / comment
 implement:  Implementing (no PR) → branch + code + PR + pre-review gate → In Review
 checker:    In Review → complete review → Ready for merge
             or Implementing + full ### Review feedback (no drip-feed)
 implement:  Implementing (PR exists) → same branch, fix the class → In Review
-approver:   Done
-land:       merge to lanes.integration
+auto-merge: Ready for merge → Merging when MERGEABLE, checks green, loop cap clear
+approver:   Ready for merge → Merging (still allowed)
+land:       merge to lanes.integration → Done
 ```
 
 Checker must **not** start implement. Planner must **not** write code. Implement must **not** claim from Backlog.
 
 ## Linear evidence
 
-Screenshots, recordings, and other files from the Cloud Agent VM belong on the **Linear issue**, not only in the VM log.
+Screenshots, recordings, and other files from the worker belong on the **Linear issue**, not only in the job log.
 
 1. `prepare_attachment_upload` on the issue (filename, contentType, size)
 2. PUT the raw bytes to the signed URL (headers verbatim)
@@ -44,11 +48,13 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 
 | Move | Who |
 | --- | --- |
+| Triage → `Backlog` (shaped) / Duplicate (leftovers) | **Intake** (hourly, Linear CLI) |
 | `dispatch.state` → `Implementing` | **Planner** (claim) |
 | `Implementing` → `In Review` | **Implement** (PR + proof on Linear) |
 | `In Review` → `Ready for merge` | **Checker** (pass) |
-| `In Review` / `Ready for merge` → `Implementing` | **Checker** or **land** (fail) |
-| → `Done` | **Approver only** |
+| `In Review` / `Ready for merge` / `Merging` → `Implementing` | **Checker** or **land** (fail) |
+| `Ready for merge` → `Merging` | **Auto-merge** when delegate is Pi (loop cap + MERGEABLE + green checks) or **approver** |
+| `Merging` → `Done` | **Land** (merge succeeded) |
 | Merge to integration | **Land** |
 
 ---
@@ -58,7 +64,7 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | Field | Value |
 | --- | --- |
 | Trigger | Every 5 minutes (`*/5 * * * *`) |
-| Tools | **Linear MCP only** |
+| Tools | **Linear CLI** on the PI worker. Not Linear MCP on kit-harness. |
 | Eligibility | `dispatch.state` + `ready-for-agent` + no unresolved `blockedBy` + not `signal-up` + Agent field empty |
 | Action | No concurrency cap. Claim **all** currently eligible issues in `dispatch.priorityOrder`. Blocking is the limiter. No code. |
 | Instruction | See prompt below. |
@@ -87,8 +93,19 @@ Every run:
 3. Claim all currently eligible issues in dispatch.priorityOrder (Urgent 1, High 2, Medium 3, Low 4, None 0). Same rank: oldest first. Unset/None is last. Skip write-scope overlap with an Implementing issue (leave it in dispatch.state with ready-for-agent, comment why). Do not preempt Implementing. That is the only status move you make.
 4. If the same ### Review feedback class has failed twice on an Implementing issue, comment that the next implement pass must land a ratchet (docs/agents/error-ratcheting.md). Do not write the ratchet.
 
-Never claim Triage or Duplicate. Never move to In Review, Ready for merge, Done, Parked, or Canceled.
+Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage; planner does not. Never move to In Review, Ready for merge, Merging, Done, Parked, or Canceled.
 ```
+
+---
+
+## 0b. Intake (Triage)
+
+| Field | Value |
+| --- | --- |
+| Trigger | Every hour (`PI_INTAKE_POLL_MS`, default 1 hour) on the **planner mutex** |
+| Tools | **Linear CLI** on the PI worker. Not Pi. Not the coding slot. |
+| Action | List open KIT Triage. Promote well-formed slices (Linear Type, write-scope, What to build, AC) to Backlog with `ready-for-agent` and without `signal-up`. Shape leftovers that have an inferable repo path onto the **same** issue (Type, What to build, AC, `write-scope:`). One finding stays one ticket — do not lump leftovers into `Tech: paths`. Unshaped Sentry or leftovers with no path stay in Triage with one comment updated in place. Planner claims Pi delegate after promote. |
+| Never | Implementing, In Review, Merging, Done. Never set Linear Agent to Cursor. |
 
 ---
 
@@ -96,8 +113,8 @@ Never claim Triage or Duplicate. Never move to In Review, Ready for merge, Done,
 
 | Field | Value |
 | --- | --- |
-| Trigger | Linear status changed **to** `Implementing` |
-| Tools | Linear MCP, GitHub (PR + checks), browser if the slice is UI |
+| Trigger | Linear status changed **to** `Implementing`. PI worker also wakes orphans on boot and the resume poller. |
+| Tools | Linear CLI + `gh` (PR + checks). Browser if the slice is UI. Not Linear MCP on kit-harness. |
 | Eligibility (start) | Status `Implementing`, **no** branch/PR yet (planner just claimed) |
 | Eligibility (resume) | Status `Implementing` **with** an existing branch/PR (checker or land sent it back) |
 | Action | Follow `/implement`. Same issue, same branch, same PR. Never claim from Backlog. |
@@ -116,7 +133,7 @@ Never claim Triage or Duplicate. Never move to In Review, Ready for merge, Done,
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}` — Linear-triggeren fylder den. |
 | Status | Inactive until planner + checker exist, and `development` has `/implement` + `WORKFLOW.md`. If the Instruction was pasted before the KIT-23/KIT-24 pre-review gate, **re-paste** the implement block below. |
 
-The Linear trigger is what makes checker-fail → `Implementing` wake **this** automation on the **same issue**. A new VM each time; same branch/PR because the workpad and the attached PR say so.
+The Linear trigger is what makes checker-fail → `Implementing` wake **this** automation on the **same issue**. A new VM each time; same branch/PR because the workpad and the attached PR say so. On kit-harness the resume poller (boot + planner interval) re-enqueues implement when the issue is already Implementing and the coding slot is empty — Compose rebuild does not wait for another status change.
 
 ```text
 You are the implement runtime for Linear issue {{ issue.identifier }}.
@@ -138,7 +155,7 @@ Spawn every matching domain helper. Read docs/design-system.md before UI and the
 
 Screenshots or recordings from this VM: upload to this Linear issue (prepare_attachment_upload → PUT → create_attachment_from_upload), then save_comment and link under workpad ### Evidence.
 
-Pre-review gate before In Review (do not skip): rebase until gh pr view --json mergeable is MERGEABLE; full test graph plus typecheck of every package whose src or tests you edited; wait for ALL required GitHub checks (pending or red → do not flip) including image/deploy smokes; if you added a required boot env, grep every workflow that boots that process; every What to build clause and AC has Validation or Evidence. If the issue cites docs/design-system.md or lock components, spawn the UI/layout helper — nest+expo alone is not enough. Then clear addressed ### Review feedback and move to In Review. Do not merge. Do not move to Done.
+Pre-review gate before In Review (do not skip): rebase until gh pr view --json mergeable is MERGEABLE; full test graph plus typecheck of every package whose src or tests you edited; wait for ALL required GitHub checks (pending or red → do not flip) including image/deploy smokes; if you added a required boot env, grep every workflow that boots that process; every What to build clause and AC has Validation or Evidence. If the issue cites docs/design-system.md or lock components, spawn the UI/layout helper — nest+expo alone is not enough. Then clear addressed ### Review feedback and move to In Review. Do not merge. Do not move to Merging or Done.
 If ### Review feedback asked for a ratchet, land it in this PR (docs/agents/error-ratcheting.md). Tighten only. Ratchet paths are in-scope (docs/agents/write-scope.md).
 
 Out of scope → /signal-up (cap applies).
@@ -152,7 +169,7 @@ Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview 
 | Field | Value |
 | --- | --- |
 | Trigger | Linear status changed **to** `In Review` |
-| Tools | GitHub, Linear MCP |
+| Tools | `gh` + Linear CLI. Not Linear MCP on kit-harness. |
 | Action | Judge-only `/code-review` **and** GitHub CI/CD checks on the attached PR. Complete review each pass (no drip-feed). Pending checks → wait. Pass + required checks green + mergeable → `Ready for merge`. Fail → `Implementing` + full `### Review feedback`. Do not start implement. |
 | Instruction | See prompt below. |
 
@@ -169,7 +186,7 @@ Mobile/EAS slices: follow /implement — load .cursor/skills/expo/expo-overview 
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}`. |
 | Status | Inactive until implement is wired — otherwise nothing ever reaches `In Review`. If the Instruction was pasted before the KIT-23/KIT-24 complete-review contract, **re-paste** the checker block below. |
 
-Checker is **judge-only**. Fail → `Implementing` wakes implement on the same issue. Pass → `Ready for merge` and stop. Nicklas (approver) moves to `Done`; that is not this agent.
+Checker is **judge-only**. Fail → `Implementing` wakes implement on the same issue. Pass → `Ready for merge` and stop. Auto-merge or Nicklas (approver) moves to `Merging`; that is not this agent.
 
 ```text
 You are the checker for Linear issue {{ issue.identifier }}.
@@ -184,9 +201,9 @@ Complete review every pass — not a delta on last ### Review feedback. Dump eve
 
 Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status; do not fail early on Standards. Failed required checks or CONFLICTING → fail, and still include every Spec/Standards hard miss in the same ### Review feedback. Local tests are not a substitute.
 
-Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Comment on Linear that the issue is waiting for the approver.
+Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Pi stays delegate until Auto-merge decides. Auto-merge may then flip to Merging when delegate is Pi.
 
-Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no way to resume the previous Cloud Agent VM.
+Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no resume of the previous Pi job.
 
 If this is the second fail of the same class on this issue, say so in ### Review feedback and require a ratchet in the next implement PR (docs/agents/error-ratcheting.md). Do not write the ratchet yourself. Ratchet paths are not a write-scope miss.
 ```
@@ -197,8 +214,8 @@ If this is the second fail of the same class on this issue, say so in ### Review
 
 | Field | Value |
 | --- | --- |
-| Trigger | Linear issue status changed **to** `Done` |
-| Tools | GitHub, Linear MCP |
+| Trigger | Linear issue status changed **to** `Merging` |
+| Tools | `gh` + Linear CLI. Not Linear MCP on kit-harness. |
 | Action | `/land` into `lanes.integration`. Merge fail → `Implementing` + `### Review feedback` (wakes implement on the same branch). |
 | Instruction | See prompt below. |
 
@@ -207,13 +224,13 @@ If this is the second fail of the same class on this issue, say so in ### Review
 | Setting | Value |
 | --- | --- |
 | Environment / checkout | `KitCollective/kit-collective`, branch **`development`**. Never `production`. Land merges **into** this lane only. |
-| Trigger | Linear: issue **status changed to `Done`**. Team **Engineering** (`KIT`). Not a cron. Not “any completed issue”. |
+| Trigger | Linear: issue **status changed to `Merging`**. Team **Engineering** (`KIT`). Not a cron. Not “any completed issue”. |
 | Model | Cheap/fast is fine (merge, not coding). Composer 2.5 Fast is enough. |
 | Tools | **Linear** (KitCollective). **GitHub** with permission to **merge** an existing PR. |
 | Do not add | **Open Pull Request** (PR already exists). Memories. Slack. Browser. |
 | Memories | Off. Empty. |
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}`. |
-| Status | Can go Active once implement + checker work — it only fires when **you** move an issue to `Done`. |
+| Status | Can go Active once implement + checker work — it fires when Auto-merge or Nicklas moves an issue to `Merging`. |
 
 Land is **not** the staging/production promotion. Those are automations 4–5, later. This agent must refuse a PR whose base is `staging` or `production`. Merge fail → `Implementing` (same branch), not a second PR.
 
@@ -221,9 +238,10 @@ Land is **not** the staging/production promotion. Those are automations 4–5, l
 You are the land runtime for Linear issue {{ issue.identifier }}.
 Read factory.config.json then WORKFLOW.md. Follow /land.
 
-Only run if the new status is Done. Fetch get_issue, list_comments, and the linked PR.
+Only run if the new status is Merging. Fetch get_issue, list_comments, and the linked PR.
 Merge into lanes.integration only. Never staging or production. Never force-push.
-Merge fail → Implementing and write the error under workpad ### Review feedback. That wakes implement on the same branch.
+Merge success → Done and record the SHA in the workpad.
+Merge fail → Implementing and write the error under workpad ### Review feedback. That wakes implement on the same branch. Never Done on a failed merge.
 ```
 
 ---
@@ -233,7 +251,7 @@ Merge fail → Implementing and write the error under workpad ### Review feedbac
 | Field | Value |
 | --- | --- |
 | Trigger | Every hour |
-| Tools | Linear MCP, GitHub |
+| Tools | Linear CLI + `gh`. Not Linear MCP on kit-harness. Staging/production promotion is not an issue land run. |
 | Action | If a **milestone’s** issues are all `Done` or `Canceled`, open or update a PR `lanes.integration` → `lanes.staging`. Do not wait for the whole Linear project. Do not merge without green checks. |
 
 ## 5. Production release (wire later)
@@ -241,5 +259,5 @@ Merge fail → Implementing and write the error under workpad ### Review feedbac
 | Field | Value |
 | --- | --- |
 | Trigger | Linear issue created with label `release`, or manual |
-| Tools | Linear MCP, GitHub |
+| Tools | Linear CLI + `gh`. Not Linear MCP on kit-harness. Staging/production promotion is not an issue land run. |
 | Action | Diff staging vs production. Draft Linear release notes. Open PR staging → production. **Do not merge.** The `approver` merges production. Follow `.cursor/agents/release.md`. |

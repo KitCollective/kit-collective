@@ -10,6 +10,7 @@ node_modules/
 **/*.test.ts
 **/tests/
 **/*.md
+!.pi/**/*.md
 .env
 .env.*
 !.env.example

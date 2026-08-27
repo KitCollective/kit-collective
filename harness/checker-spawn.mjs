@@ -1,0 +1,56 @@
+/**
+ * Factory checker Pi spawn allowlist (KIT-56).
+ * Mechanical deny for write/edit/general bash; Linear CLI is a registered host tool.
+ */
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HARNESS_DIR = dirname(fileURLToPath(import.meta.url));
+const FACTORY_CHECKER_TOOLS = join(HARNESS_DIR, "factory-checker-tools.ts");
+
+/** @readonly */
+export const FACTORY_CHECKER_EXCLUDED_TOOLS = ["write", "edit", "bash"];
+
+/** @readonly */
+export const FACTORY_CHECKER_ALLOWED_TOOLS = ["read", "grep", "find", "ls", "linear_cli"];
+
+/**
+ * Extra pi CLI args for factory-checker (tool gate + extension).
+ * Extension path is this module's directory (repo `harness/`, image `/app`).
+ *
+ * @returns {string[]}
+ */
+export function factoryCheckerToolArgs() {
+  return [
+    "--no-builtin-tools",
+    "--tools",
+    FACTORY_CHECKER_ALLOWED_TOOLS.join(","),
+    "--exclude-tools",
+    FACTORY_CHECKER_EXCLUDED_TOOLS.join(","),
+    "-e",
+    FACTORY_CHECKER_TOOLS,
+  ];
+}
+
+/**
+ * @param {{
+ *   workspace: string,
+ *   roleFile: string,
+ *   model: string,
+ *   prompt: string,
+ * }} input
+ * @returns {string[]}
+ */
+export function factoryCheckerPiArgs({ workspace, roleFile, model, prompt }) {
+  return [
+    "-p",
+    "-a",
+    "--model",
+    model,
+    ...factoryCheckerToolArgs(),
+    "--append-system-prompt",
+    join(workspace, roleFile),
+    "--",
+    prompt,
+  ];
+}

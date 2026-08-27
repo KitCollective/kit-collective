@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { createPersistedCaptureSession, readPrefilledClub } from "@/capture/captureFlow";
+import { expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { pickUploadFiles } from "@/capture/pickUploadFiles";
 import { ScreenHeader } from "@/components/screen-header";
 import { Button, IconButton } from "@/components/ui";
@@ -24,9 +25,12 @@ export default function AddChooserScreen() {
   }, [router]);
 
   const handleUpload = useCallback(async () => {
-    const uris = await pickUploadFiles({
-      allowsMultipleSelection: true,
-    });
+    const uris = await pickUploadFiles(
+      {
+        allowsMultipleSelection: true,
+      },
+      expoUploadFilesAdapter,
+    );
 
     if (!uris) {
       return;

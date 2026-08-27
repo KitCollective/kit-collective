@@ -45,6 +45,8 @@ import {
   unbindPhoto,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
+import { resolveConfirmBanner } from "@/capture/confirmBanner";
+import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
@@ -352,9 +354,12 @@ export default function ConfirmScreen() {
     }
 
     const hadPhotos = draft.photos.length > 0;
-    const uris = await pickGalleryPhotos({
-      quality: captureQualityForRole(role),
-    });
+    const uris = await pickGalleryPhotos(
+      {
+        quality: captureQualityForRole(role),
+      },
+      expoGalleryPickerAdapter,
+    );
 
     if (!uris?.[0] || !sessionId) {
       return;
@@ -476,6 +481,13 @@ export default function ConfirmScreen() {
   const handleMoreJerseysInUpload = () => {
     mutate(switchSingleToBulkBind);
   };
+
+  const activeBanner = resolveConfirmBanner({
+    saveError,
+    visionSuggestionVisible: Boolean(visionSuggestion?.suggestions),
+    catalogMiss,
+    clubSheetOpen,
+  });
 
   const handleSave = async () => {
     if (!draft || !sessionId) {
@@ -649,7 +661,7 @@ export default function ConfirmScreen() {
           <Text style={[typography.caption, { color: theme.contentMuted }]}>Analyserer foto…</Text>
         ) : null}
 
-        {visionSuggestion?.suggestions ? (
+        {activeBanner === "visionSuggestion" && visionSuggestion?.suggestions ? (
           <Animated.View style={{ opacity: suggestionOpacity }}>
             <Banner
               tone="info"
@@ -676,7 +688,7 @@ export default function ConfirmScreen() {
           </Animated.View>
         ) : null}
 
-        {catalogMiss && !clubSheetOpen ? (
+        {activeBanner === "catalogMiss" ? (
           <Banner
             tone="info"
             message="Klubben findes ikke i kataloget endnu. Dit draft bliver gemt."
@@ -778,7 +790,7 @@ export default function ConfirmScreen() {
           </Pressable>
         ) : null}
 
-        {saveError ? (
+        {activeBanner === "saveError" ? (
           <Banner
             tone="danger"
             message="Kunne ikke gemme trøjen. Prøv igen."

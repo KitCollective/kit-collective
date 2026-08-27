@@ -1,10 +1,31 @@
-import * as ImagePicker from "expo-image-picker";
-import { Platform } from "react-native";
-
-type PickGalleryPhotosOptions = {
+export type PickGalleryPhotosOptions = {
   allowsMultipleSelection?: boolean;
   selectionLimit?: number;
   quality?: number;
+};
+
+export type GalleryMediaType = "images" | "videos" | "livePhotos";
+
+export type GalleryPickerRequest = {
+  mediaTypes: GalleryMediaType[];
+  allowsMultipleSelection: boolean;
+  orderedSelection: boolean;
+  selectionLimit?: number;
+  quality: number;
+};
+
+export type GalleryPickerAsset = {
+  uri?: string;
+};
+
+export type GalleryPickerResponse = {
+  canceled: boolean;
+  assets: GalleryPickerAsset[];
+};
+
+export type GalleryPickerAdapter = {
+  os: string;
+  launchImageLibraryAsync: (request: GalleryPickerRequest) => Promise<GalleryPickerResponse>;
 };
 
 /**
@@ -13,11 +34,13 @@ type PickGalleryPhotosOptions = {
  */
 export async function pickGalleryPhotos(
   options: PickGalleryPhotosOptions = {},
+  adapter: GalleryPickerAdapter,
 ): Promise<string[] | null> {
-  const result = await ImagePicker.launchImageLibraryAsync({
+  const allowsMultipleSelection = options.allowsMultipleSelection ?? false;
+  const result = await adapter.launchImageLibraryAsync({
     mediaTypes: ["images"],
-    allowsMultipleSelection: options.allowsMultipleSelection ?? false,
-    orderedSelection: Platform.OS === "ios" && (options.allowsMultipleSelection ?? false),
+    allowsMultipleSelection,
+    orderedSelection: adapter.os === "ios" && allowsMultipleSelection,
     selectionLimit: options.selectionLimit,
     quality: options.quality ?? 0.8,
   });

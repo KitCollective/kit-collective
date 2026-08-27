@@ -1,14 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { fetchMock, ProxyAgentMock } = vi.hoisted(() => ({
-  fetchMock: vi.fn(),
-  ProxyAgentMock: vi.fn(),
-}));
-
-vi.mock("undici", () => ({
-  fetch: fetchMock,
-  ProxyAgent: ProxyAgentMock,
-}));
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   assertSeedProxyAvailable,
@@ -19,15 +9,15 @@ import { resolveFetchAdapter } from "../src/resolve-fetch-adapter.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
-beforeEach(() => {
-  fetchMock.mockReset();
-  ProxyAgentMock.mockReset();
-  ProxyAgentMock.mockImplementation(() => ({ kind: "proxy-agent" }));
-});
-
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
+
+function createProxyDoubles() {
+  const fetchMock = vi.fn();
+  const createProxyAgent = vi.fn(() => ({ kind: "proxy-agent", close: vi.fn() }));
+  return { fetchMock, createProxyAgent };
+}
 
 describe("resolveSeedProxyConfig", () => {
   it("returns no proxy by default", () => {
@@ -75,16 +65,21 @@ describe("assertSeedProxyAvailable", () => {
 
 describe("createProxyFetchHtml", () => {
   it("routes GETs through the configured proxy agent", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
     fetchMock.mockResolvedValue({
       ok: true,
       text: async () => "<html>ok</html>",
     });
 
-    const { fetchHtml } = createProxyFetchHtml("http://proxy.example:8080");
+    const { fetchHtml } = createProxyFetchHtml(
+      "http://proxy.example:8080",
+      fetchMock,
+      createProxyAgent,
+    );
     const html = await fetchHtml("https://www.transfermarkt.com/test");
 
     expect(html).toBe("<html>ok</html>");
-    expect(ProxyAgentMock).toHaveBeenCalledWith("http://proxy.example:8080");
+    expect(createProxyAgent).toHaveBeenCalledWith("http://proxy.example:8080");
     expect(fetchMock).toHaveBeenCalledWith(
       "https://www.transfermarkt.com/test",
       expect.objectContaining({
@@ -97,16 +92,17 @@ describe("createProxyFetchHtml", () => {
   });
 
   it("uses Site Unblocker TLS skip and geo header without a custom User-Agent", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
     fetchMock.mockResolvedValue({
       ok: true,
       text: async () => "<html>ok</html>",
     });
 
     const unblockerUrl = "http://user:pass@unblock.decodo.com:60000";
-    const { fetchHtml } = createProxyFetchHtml(unblockerUrl);
+    const { fetchHtml } = createProxyFetchHtml(unblockerUrl, fetchMock, createProxyAgent);
     await fetchHtml("https://www.transfermarkt.com/test");
 
-    expect(ProxyAgentMock).toHaveBeenCalledWith({
+    expect(createProxyAgent).toHaveBeenCalledWith({
       uri: unblockerUrl,
       requestTls: { rejectUnauthorized: false },
       proxyTls: { rejectUnauthorized: false },
@@ -123,6 +119,7 @@ describe("createProxyFetchHtml", () => {
   });
 
   it("drains the response body before throwing on non-OK", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
     const textMock = vi.fn().mockResolvedValue("");
     fetchMock.mockResolvedValue({
       ok: false,
@@ -130,7 +127,11 @@ describe("createProxyFetchHtml", () => {
       text: textMock,
     });
 
-    const { fetchHtml } = createProxyFetchHtml("http://proxy.example:8080");
+    const { fetchHtml } = createProxyFetchHtml(
+      "http://proxy.example:8080",
+      fetchMock,
+      createProxyAgent,
+    );
     await expect(fetchHtml("https://www.transfermarkt.com/test")).rejects.toThrow(
       /Transfermarkt HTTP 202/,
     );
@@ -139,12 +140,17 @@ describe("createProxyFetchHtml", () => {
 
   it("closes the proxy agent when close is called", async () => {
     const closeMock = vi.fn().mockResolvedValue(undefined);
-    ProxyAgentMock.mockImplementation(() => ({
+    const fetchMock = vi.fn();
+    const createProxyAgent = vi.fn(() => ({
       kind: "proxy-agent",
       close: closeMock,
     }));
 
-    const { close } = createProxyFetchHtml("http://proxy.example:8080");
+    const { close } = createProxyFetchHtml(
+      "http://proxy.example:8080",
+      fetchMock,
+      createProxyAgent,
+    );
     await close();
     expect(closeMock).toHaveBeenCalled();
   });
@@ -179,16 +185,9 @@ describe("resolveFetchAdapter proxy behaviour", () => {
     delete process.env.SEED_REQUIRE_PROXY;
     process.env.SEED_PROXY_URL = "http://proxy.example:8080";
 
-    const closeMock = vi.fn().mockResolvedValue(undefined);
-    ProxyAgentMock.mockImplementation(() => ({
-      kind: "proxy-agent",
-      close: closeMock,
-    }));
-
     const resolved = await resolveFetchAdapter();
     expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
     expect(resolved.close).toBeTypeOf("function");
     await resolved.close?.();
-    expect(closeMock).toHaveBeenCalled();
   });
 });

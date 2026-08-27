@@ -1,0 +1,9 @@
+# Append to ~/.ssh/config. Private key stays on the laptop — not in git.
+#   cat harness/ssh-config.example >> ~/.ssh/config
+
+Host kit-harness
+  HostName 62.238.125.114
+  User root
+  IdentityFile ~/.ssh/hetzner_key
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new

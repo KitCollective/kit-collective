@@ -36,26 +36,35 @@ export function ClubSeasonDrillPage() {
       {error ? <div className="banner-error">{error}</div> : null}
 
       {drill ? (
-        <>
-          <p>{drill.squadCount} players in squad</p>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? "Hide squad" : "Expand squad"}
-          </button>
+        <section className="summary-panel">
+          <dl className="stats-row">
+            <div>
+              <dt>Squad</dt>
+              <dd className="type-mono">{drill.squadCount} players</dd>
+            </div>
+          </dl>
+          <div className="toolbar toolbar--actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {expanded ? "Hide squad" : "Expand squad"}
+            </button>
+          </div>
           {expanded && drill.squad && drill.squad.length > 0 ? (
             <ul className="squad-list">
               {drill.squad.map((player) => (
                 <li key={player.id}>
-                  {player.squadNumber !== null ? `#${player.squadNumber} ` : ""}
+                  {player.squadNumber !== null ? (
+                    <span className="type-mono">#{player.squadNumber}</span>
+                  ) : null}{" "}
                   {player.label}
                 </li>
               ))}
             </ul>
           ) : null}
-        </>
+        </section>
       ) : null}
     </div>
   );
