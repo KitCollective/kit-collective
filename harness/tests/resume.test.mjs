@@ -281,15 +281,56 @@ test("resume enqueue does not occupy the coding slot", async () => {
   await codingPromise;
 });
 
+test("planner and resume enqueue during three live implements without extra Pi slots", async () => {
+  let releaseImplements;
+  const holdImplements = new Promise((resolve) => {
+    releaseImplements = resolve;
+  });
+  const planner = [];
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "planner" || job.role === "resume" || job.role === "intake") {
+        planner.push(job);
+        return job;
+      }
+      if (job.role === "implement") {
+        await holdImplements;
+      }
+      return job;
+    },
+  });
+
+  for (const identifier of ["KIT-1", "KIT-2", "KIT-3"]) {
+    slots.enqueue({ role: "implement", identifier });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(slots.health().jobs.length, 3);
+
+  await slots.enqueue({ role: "planner" });
+  await slots.enqueue({ role: "resume" });
+  await slots.enqueue({ role: "intake" });
+  assert.equal(planner.length, 3);
+  assert.equal(slots.health().jobs.length, 3);
+
+  releaseImplements();
+});
+
 test("coding slot reports queued identifiers including pending jobs", async () => {
-  let release;
-  const hold = new Promise((resolve) => {
-    release = resolve;
+  let releaseImplement;
+  const holdImplement = new Promise((resolve) => {
+    releaseImplement = resolve;
+  });
+  let releaseChecker;
+  const holdChecker = new Promise((resolve) => {
+    releaseChecker = resolve;
   });
   const slots = createWorkerSlots({
     async run(job) {
       if (job.identifier === "KIT-94") {
-        await hold;
+        await holdImplement;
+      }
+      if (job.role === "factory-checker") {
+        await holdChecker;
       }
       return job;
     },
@@ -301,7 +342,8 @@ test("coding slot reports queued identifiers including pending jobs", async () =
   const queued = slots.queuedIdentifiers();
   assert.equal(queued.includes("KIT-94"), true);
   assert.equal(queued.includes("KIT-47"), true);
-  release();
+  releaseChecker();
+  releaseImplement();
   await first;
 });
 

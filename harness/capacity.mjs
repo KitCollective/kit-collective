@@ -284,16 +284,37 @@ export function publicHealthTokens(tokens) {
 }
 
 /**
- * Spec health body. `job` stays null unless a sibling slice injects a snapshot.
+ * Spec health body. `jobs` and `queued` are the occupancy source of truth.
+ * `job` is derived (first occupant or null) for backward-compatible readers.
  * `tokens` is the last implement / factory-checker totals, or null.
  *
  * @param {{
  *   planner?: string,
  *   job?: { role: string, identifier: string } | null,
+ *   jobs?: Array<{ role: string, identifier: string }>,
+ *   queued?: string[],
  *   capacity: { ramFreeMb: number, diskFreeMb: number, ready: boolean },
  *   tokens?: unknown,
  * }} input
  */
-export function workerHealthBody({ planner = "active", job = null, capacity, tokens = null }) {
-  return { ok: true, planner, job, capacity, tokens: publicHealthTokens(tokens) };
+export function workerHealthBody({
+  planner = "active",
+  job = null,
+  jobs,
+  queued,
+  capacity,
+  tokens = null,
+}) {
+  const occupants = Array.isArray(jobs) ? jobs : job ? [job] : [];
+  const waiting = Array.isArray(queued) ? queued : [];
+  const derivedJob = job ?? occupants[0] ?? null;
+  return {
+    ok: true,
+    planner,
+    jobs: occupants,
+    queued: waiting,
+    job: derivedJob,
+    capacity,
+    tokens: publicHealthTokens(tokens),
+  };
 }

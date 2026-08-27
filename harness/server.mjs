@@ -49,6 +49,8 @@ export function createWorkerHandler(deps) {
           workerHealthBody({
             planner: snapshot.planner ?? "active",
             job: snapshot.job === undefined ? null : snapshot.job,
+            jobs: snapshot.jobs,
+            queued: snapshot.queued,
             capacity,
             tokens: snapshot.tokens === undefined ? null : snapshot.tokens,
           }),

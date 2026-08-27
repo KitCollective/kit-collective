@@ -1,5 +1,5 @@
 /**
- * Worker job mutexes: one Planner job mutex plus one Coding job slot.
+ * Worker job mutexes: Planner mutex plus an Implement pool and a Finisher slot.
  * Compose replicas stay at 1; these mutexes are the in-process seam.
  */
 
@@ -15,13 +15,33 @@ export const ALWAYS_READY_CAPACITY = Object.freeze({
 });
 
 /**
- * One Pi job at a time. Compose replicas stay at 1; this mutex is the in-process seam.
+ * One Pi job at a time per slot. Compose replicas stay at 1; these mutexes are the in-process seam.
  *
  * Implement CI retry: when `run` returns `{ ciRetry: true }`, re-run the same
  * implement job (same issue / worktree / PR) until required checks are green
  * or the cap is hit. Fail closed at the cap. Never enqueue factory-checker.
  */
 export const IMPLEMENT_CI_RETRY_CAP = 3;
+
+export const DEFAULT_IMPLEMENT_SLOTS = 3;
+export const MIN_IMPLEMENT_SLOTS = 1;
+export const MAX_IMPLEMENT_SLOTS = 3;
+
+/**
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined> | undefined} [env]
+ * @returns {number}
+ */
+export function parseImplementSlots(env = {}) {
+  const raw = env.PI_IMPLEMENT_SLOTS;
+  if (typeof raw !== "string" || raw.length === 0) {
+    return DEFAULT_IMPLEMENT_SLOTS;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_IMPLEMENT_SLOTS;
+  }
+  return Math.min(MAX_IMPLEMENT_SLOTS, Math.max(MIN_IMPLEMENT_SLOTS, Math.floor(parsed)));
+}
 
 /**
  * @param {{ run: (job: object) => Promise<unknown> }} deps
@@ -63,21 +83,30 @@ export function createSerialQueue(deps) {
 }
 
 const PLANNER_MUTEX_ROLES = new Set(["planner", "intake", "resume"]);
-const CODING_ROLES = new Set(["implement", "factory-checker", "auto-merge", "land"]);
+const IMPLEMENT_ROLES = new Set(["implement"]);
+const FINISHER_ROLES = new Set(["factory-checker", "auto-merge", "land"]);
+const CODING_ROLES = new Set([...IMPLEMENT_ROLES, ...FINISHER_ROLES]);
 
 /**
- * Two mutexes: Planner job vs one Coding job slot
- * (implement / factory-checker / auto-merge / land).
+ * Planner mutex plus an Implement pool (default 3) and one reserved Finisher slot
+ * (factory-checker / auto-merge / land).
  *
  * @param {{
  *   run: (job: object) => Promise<unknown>,
  *   capacity?: { ramFreeMb: number, diskFreeMb: number, ready: boolean },
+ *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  * }} deps
  */
 export function createWorkerSlots(deps) {
-  let currentJob = null;
-  const pendingCoding = [];
+  const maxImplementSlots = parseImplementSlots(deps.env);
   const capacity = deps.capacity ?? ALWAYS_READY_CAPACITY;
+
+  /** @type {Array<{ role: string, identifier: string, slot: "implement" | "finisher" }>} */
+  const runningJobs = [];
+  /** @type {object[]} */
+  const pendingCoding = [];
+  let implementActive = 0;
+  let finisherActive = false;
 
   const plannerQueue = createSerialQueue({
     run(job) {
@@ -85,19 +114,100 @@ export function createWorkerSlots(deps) {
     },
   });
 
-  const codingQueue = createSerialQueue({
-    async run(job) {
-      currentJob = {
-        role: job.role,
-        identifier: job.identifier ?? job.issueId ?? "unknown",
-      };
-      try {
-        return await deps.run(job);
-      } finally {
-        currentJob = null;
+  /**
+   * @param {object} job
+   */
+  async function runMaybeRetry(job) {
+    const result = await deps.run(job);
+    if (result?.ciRetry !== true) {
+      return result;
+    }
+    const attempt = Number(job.ciRetryAttempt ?? 1);
+    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      throw new Error("implement CI retry cap hit");
+    }
+    return runMaybeRetry({ ...job, ciRetryAttempt: attempt + 1 });
+  }
+
+  /**
+   * @param {object} job
+   * @param {"implement" | "finisher"} slot
+   */
+  async function executeJob(job, slot) {
+    const identifier = job.identifier ?? job.issueId ?? "unknown";
+    const entry = { role: job.role, identifier, slot };
+    runningJobs.push(entry);
+    if (slot === "implement") {
+      implementActive += 1;
+    } else {
+      finisherActive = true;
+    }
+    try {
+      const result = await runMaybeRetry(job);
+      job._deferred?.resolve(result);
+      return result;
+    } catch (error) {
+      job._deferred?.reject(error);
+      throw error;
+    } finally {
+      const index = runningJobs.indexOf(entry);
+      if (index >= 0) {
+        runningJobs.splice(index, 1);
       }
-    },
-  });
+      if (slot === "implement") {
+        implementActive -= 1;
+      } else {
+        finisherActive = false;
+      }
+      dispatchPending();
+    }
+  }
+
+  /**
+   * @param {object} job
+   * @param {"implement" | "finisher"} slot
+   */
+  function startJob(job, slot) {
+    executeJob(job, slot).catch(() => undefined);
+  }
+
+  function dispatchPending() {
+    if (!finisherActive) {
+      const finisherIdx = pendingCoding.findIndex((row) => FINISHER_ROLES.has(row.role));
+      if (finisherIdx >= 0) {
+        const job = pendingCoding.splice(finisherIdx, 1)[0];
+        startJob(job, "finisher");
+      }
+    }
+    while (implementActive < maxImplementSlots) {
+      const implementIdx = pendingCoding.findIndex((row) => IMPLEMENT_ROLES.has(row.role));
+      if (implementIdx < 0) {
+        break;
+      }
+      const job = pendingCoding.splice(implementIdx, 1)[0];
+      startJob(job, "implement");
+    }
+  }
+
+  function canStartNow(job) {
+    if (IMPLEMENT_ROLES.has(job.role)) {
+      return implementActive < maxImplementSlots;
+    }
+    if (FINISHER_ROLES.has(job.role)) {
+      return !finisherActive;
+    }
+    return false;
+  }
+
+  function slotFor(job) {
+    if (IMPLEMENT_ROLES.has(job.role)) {
+      return "implement";
+    }
+    if (FINISHER_ROLES.has(job.role)) {
+      return "finisher";
+    }
+    throw new Error(`no slot for role ${job.role}`);
+  }
 
   return {
     /**
@@ -112,30 +222,44 @@ export function createWorkerSlots(deps) {
       if (!CODING_ROLES.has(job.role)) {
         throw new Error(`no coding slot for role ${job.role}`);
       }
-      pendingCoding.push(job);
-      const done = codingQueue.enqueue(job);
-      const tracked = done.finally(() => {
-        const index = pendingCoding.indexOf(job);
-        if (index >= 0) {
-          pendingCoding.splice(index, 1);
-        }
+
+      /** @type {{ resolve: (value: unknown) => void, reject: (reason?: unknown) => void }} */
+      let deferred;
+      const promise = new Promise((resolve, reject) => {
+        deferred = { resolve, reject };
       });
-      tracked.catch(() => undefined);
-      return tracked;
+      const entry = { ...job, _deferred: deferred };
+
+      if (canStartNow(entry)) {
+        startJob(entry, slotFor(entry));
+      } else {
+        pendingCoding.push(entry);
+      }
+
+      promise.catch(() => undefined);
+      return promise;
     },
     queuedIdentifiers() {
-      return [
+      const identifiers = [
+        ...runningJobs.map((row) => row.identifier),
+        ...pendingCoding.map((row) => row.identifier),
+      ].filter((identifier) => typeof identifier === "string" && identifier.length > 0);
+      return [...new Set(identifiers)];
+    },
+    health() {
+      const jobs = runningJobs.map(({ role, identifier }) => ({ role, identifier }));
+      const queued = [
         ...new Set(
           pendingCoding
-            .map((job) => job.identifier)
+            .map((row) => row.identifier)
             .filter((identifier) => typeof identifier === "string" && identifier.length > 0),
         ),
       ];
-    },
-    health() {
       return {
         planner: "active",
-        job: currentJob,
+        jobs,
+        queued,
+        job: jobs[0] ?? null,
         capacity,
       };
     },
