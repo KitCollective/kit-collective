@@ -590,7 +590,15 @@ export function createPiJobRunner({
   waitIntervalMs,
   killProcessGroup,
 } = {}) {
-  const trees = worktree ?? createWorktreeAdapter({ env });
+  const trees =
+    worktree ??
+    createWorktreeAdapter({
+      env,
+      findOpenIssuePr:
+        typeof gh?.findOpenIssuePr === "function"
+          ? (identifier) => gh.findOpenIssuePr({ identifier })
+          : undefined,
+    });
   const killGroup = killProcessGroup ?? killProcessGroupDefault;
   const spawnJob =
     spawnProcess ??
@@ -874,7 +882,10 @@ export function createPiJobRunner({
       let cwd = workspace;
       let checkout;
       if (job.role === "implement" || job.role === "factory-checker") {
-        checkout = await trees.checkout({ identifier });
+        checkout = await trees.checkout({
+          identifier,
+          mode: job.role === "implement" ? "implement" : "reuse",
+        });
         cwd = checkout.path;
       }
       const prompt = implementPrompt(job.role, identifier, job.adwFile);

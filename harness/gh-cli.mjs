@@ -8,6 +8,33 @@ import { gitArgvContainsSecret, remoteGitChildEnv } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
 
+export const DEFAULT_GH_REPO = "KitCollective/kit-collective";
+
+/**
+ * Open PRs whose title starts with the issue id. KIT-47 does not match KIT-470.
+ *
+ * @param {Array<{ title?: string }> | undefined} rows
+ * @param {string} identifier
+ * @returns {Array<{ title?: string, headRefName?: string, url?: string, number?: number }>}
+ */
+export function selectOpenIssuePrs(rows, identifier) {
+  if (!Array.isArray(rows) || typeof identifier !== "string" || identifier.length === 0) {
+    return [];
+  }
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const prefix = new RegExp(`^${escaped}(?:[:\\s]|$)`);
+  return rows.filter((row) => typeof row?.title === "string" && prefix.test(row.title));
+}
+
+/**
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ */
+function repoFromEnv(env = {}) {
+  const remote = env.KIT_PI_REMOTE;
+  const match = typeof remote === "string" ? remote.match(/github\.com[:/]([^/]+\/[^/.]+)/) : null;
+  return match ? match[1] : DEFAULT_GH_REPO;
+}
+
 /**
  * @param {string | undefined} state
  */
@@ -155,8 +182,45 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
     },
 
     /**
-     * @param {{ cwd: string }} input
+     * Exactly one open development PR for the identifier, or null.
+     * Two matches fail closed — do not guess which PR to extend.
+     *
+     * @param {{ identifier: string }} input
      */
+    async findOpenIssuePr({ identifier }) {
+      if (typeof identifier !== "string" || identifier.length === 0) {
+        throw new Error("findOpenIssuePr requires identifier");
+      }
+      const stdout = await run(
+        "gh",
+        [
+          "pr",
+          "list",
+          "--repo",
+          repoFromEnv(env),
+          "--search",
+          identifier,
+          "--state",
+          "open",
+          "--base",
+          "development",
+          "--json",
+          "number,title,headRefName,url",
+        ],
+        { env },
+      );
+      const parsed = JSON.parse(stdout);
+      const matched = selectOpenIssuePrs(parsed, identifier);
+      if (matched.length > 1) {
+        throw new Error(`${identifier} has multiple open PRs`);
+      }
+      const row = matched[0];
+      if (!row || typeof row.headRefName !== "string" || typeof row.url !== "string") {
+        return null;
+      }
+      return { head: row.headRefName, url: row.url, number: row.number };
+    },
+
     async viewPr({ cwd }) {
       try {
         const stdout = await run(
@@ -179,9 +243,15 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
     /**
      * @param {{ cwd: string, base: string, head?: string, title: string, body?: string }} input
      */
-    async createPr({ cwd, base, head, title, body }) {
+    async createPr({ cwd, base, head, title, body, identifier }) {
       if (typeof head !== "string" || head.length === 0) {
         throw new Error("createPr requires head branch");
+      }
+      if (typeof identifier === "string" && identifier.length > 0) {
+        const existing = await this.findOpenIssuePr({ identifier });
+        if (existing?.url) {
+          throw new Error(`${identifier} already has open PR ${existing.url}`);
+        }
       }
       await run("git", ["push", "-u", "origin", `HEAD:refs/heads/${head}`], { cwd, env });
       const args = ["pr", "create", "--base", base, "--head", head, "--title", title];

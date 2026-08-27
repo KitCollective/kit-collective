@@ -81,6 +81,10 @@ function fakeGh({ mergeable = "MERGEABLE", checks = [{ conclusion: "success" }] 
         checks,
       };
     },
+    async findOpenIssuePr(input) {
+      calls.push(["findOpenIssuePr", input]);
+      return null;
+    },
     async createPr(input) {
       calls.push(["createPr", input]);
       opened = true;
@@ -176,7 +180,7 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
     },
   });
 
-  const result = await adapter.checkout({ identifier: "KIT-99" });
+  const result = await adapter.checkout({ identifier: "KIT-99", mode: "implement" });
 
   assert.equal(result.path, "/var/lib/kit-pi/worktrees/KIT-99");
   assert.equal(result.branch, "kit-99");
@@ -341,7 +345,7 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
     adwFile: ".pi/adw/feature.yaml",
   });
 
-  assert.deepEqual(worktree.calls, [{ identifier: "KIT-99" }]);
+  assert.deepEqual(worktree.calls, [{ identifier: "KIT-99", mode: "implement" }]);
   assert.equal(spawned.length, 1);
   assert.equal(spawned[0].options.cwd, "/var/lib/kit-pi/worktrees/KIT-99");
   assert.equal(spawned[0].args.includes("-a"), true);
@@ -382,6 +386,63 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
     false,
   );
   assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
+});
+
+test("implement ADW reuses the open issue PR and does not create a second", async () => {
+  const existingUrl = "https://github.com/KitCollective/kit-collective/pull/45";
+  const calls = [];
+  const gh = {
+    calls,
+    async rebase(input) {
+      calls.push(["rebase", input]);
+    },
+    async findOpenIssuePr(input) {
+      calls.push(["findOpenIssuePr", input]);
+      return {
+        url: existingUrl,
+        head: "nicklas/kit-47-bulk",
+        mergeable: "MERGEABLE",
+        checks: [{ conclusion: "success" }],
+      };
+    },
+    async viewPr(input) {
+      calls.push(["viewPr", input]);
+      return { url: undefined, mergeable: "UNKNOWN", checks: [] };
+    },
+    async createPr(input) {
+      calls.push(["createPr", input]);
+      throw new Error("must not create a second PR");
+    },
+    merge() {
+      throw new Error("implement never merges");
+    },
+  };
+  const linear = fakeLinear();
+  await completeImplementAdw({
+    job: { identifier: "KIT-47", issueId: "issue-47", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-47", branch: "kit-47" },
+    gh,
+    linear,
+    typecheckTouched: async () => {},
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    now: (() => {
+      let t = 0;
+      return () => {
+        t += 1;
+        return t;
+      };
+    })(),
+    sleep: async () => {},
+    waitTimeoutMs: 2,
+    waitIntervalMs: 1,
+  });
+
+  assert.equal(
+    calls.some((call) => call[0] === "createPr"),
+    false,
+  );
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /pull\/45/);
 });
 
 test("Bug and Improvement ADW jobs also open a PR and move to In Review", async () => {
@@ -636,6 +697,9 @@ test("production createGhClient pushes the rebased head, waits through pending r
         requiredCount += 1;
         return JSON.stringify([{ name: "test", state: requiredCount === 1 ? "pending" : "pass" }]);
       }
+      if (command === "gh" && args[0] === "pr" && args[1] === "list") {
+        return "[]";
+      }
       if (command === "gh" && args[0] === "pr" && args[1] === "create") {
         return "https://github.com/KitCollective/kit-collective/pull/52\n";
       }
@@ -706,6 +770,9 @@ test("production createGhClient does not move to In Review on MERGEABLE empty ro
         const err = new Error("checks pending");
         err.code = 8;
         throw err;
+      }
+      if (command === "gh" && args[0] === "pr" && args[1] === "list") {
+        return "[]";
       }
       if (command === "gh" && args[0] === "pr" && args[1] === "create") {
         return "https://github.com/KitCollective/kit-collective/pull/52\n";

@@ -1,9 +1,10 @@
 /**
  * Git worktree adapter (KIT-54).
  *
- * Bare mirror + `/var/lib/kit-pi/worktrees/KIT-n`. Implement creates the issue
- * branch from `origin/development`. Checker reuses that tree (or `origin/kit-n`
- * once the PR is on the remote). One issue, one branch, one PR. Fake `runGit`.
+ * Bare mirror + `/var/lib/kit-pi/worktrees/KIT-n`. Implement may create `kit-n`
+ * from `origin/development` only when no issue PR exists. Checker/land reuse the
+ * open PR head (or `origin/kit-n`). Never review the integration lane because
+ * `kit-n` is missing. One issue, one open PR. Fake `runGit`.
  */
 import { execFile as execFileCb } from "node:child_process";
 import { existsSync as fsExistsSync, mkdirSync as fsMkdirSync, rmSync as fsRmSync } from "node:fs";
@@ -80,6 +81,44 @@ function assertIdentifier(identifier) {
 }
 
 /**
+ * Pick the git head for an issue worktree. One open PR wins over kit-n.
+ * Reuse (checker) never falls back to the integration lane.
+ *
+ * @param {{
+ *   canonicalBranch: string,
+ *   lane: string,
+ *   canonicalOnRemote: boolean,
+ *   openPrHeads?: string[],
+ *   mode?: "implement" | "reuse",
+ * }} input
+ * @returns {{ branch: string, startPoint: string }}
+ */
+export function resolveIssueGitHead({
+  canonicalBranch,
+  lane,
+  canonicalOnRemote,
+  openPrHeads = [],
+  mode = "reuse",
+}) {
+  const unique = [
+    ...new Set(openPrHeads.filter((head) => typeof head === "string" && head.length > 0)),
+  ];
+  if (unique.length > 1) {
+    throw new Error(`multiple open PRs for ${canonicalBranch}`);
+  }
+  if (unique.length === 1) {
+    return { branch: unique[0], startPoint: `origin/${unique[0]}` };
+  }
+  if (canonicalOnRemote) {
+    return { branch: canonicalBranch, startPoint: `origin/${canonicalBranch}` };
+  }
+  if (mode === "implement") {
+    return { branch: canonicalBranch, startPoint: `origin/${lane}` };
+  }
+  throw new Error(`no issue head for ${canonicalBranch}`);
+}
+
+/**
  * @param {(args: string[]) => Promise<unknown>} git
  * @param {string} dir
  * @param {string} branch
@@ -113,6 +152,7 @@ async function fetchIssueBranch(git, dir, branch, opts = {}) {
  *   rmSync?: (path: string, options?: { recursive?: boolean, force?: boolean }) => void,
  *   runGit?: (args: string[], options?: { env?: NodeJS.ProcessEnv }) => Promise<{ stdout?: string, status?: number | null }>,
  *   execFileImpl?: (command: string, args: string[], options: object) => Promise<{ stdout: string }>,
+ *   findOpenIssuePr?: (identifier: string) => Promise<{ head?: string, url?: string } | null>,
  * }} [deps]
  */
 export function createWorktreeAdapter({
@@ -126,6 +166,7 @@ export function createWorktreeAdapter({
   rmSync = fsRmSync,
   runGit,
   execFileImpl,
+  findOpenIssuePr,
 } = {}) {
   const execGit = execFileImpl ?? execFile;
   const git =
@@ -144,38 +185,65 @@ export function createWorktreeAdapter({
 
   return {
     /**
-     * @param {{ identifier: string }} input
+     * @param {{ identifier: string, mode?: "implement" | "reuse" }} input
      * @returns {Promise<{ path: string, branch: string, lane: string }>}
      */
-    async checkout({ identifier }) {
+    async checkout({ identifier, mode = "reuse" }) {
       assertIdentifier(identifier);
       const path = worktreePath(identifier, worktreesDir);
-      const branch = worktreeBranch(identifier);
+      const canonicalBranch = worktreeBranch(identifier);
       mkdirSync(worktreesDir, { recursive: true });
 
       if (!existsSync(mirrorDir)) {
         await git(["clone", "--bare", remoteUrl, mirrorDir]);
       }
       await git(["--git-dir", mirrorDir, "fetch", "origin", lane]);
-      const hasIssueBranch = await fetchIssueBranch(git, mirrorDir, branch);
-
-      if (!existsSync(path)) {
-        const startPoint = hasIssueBranch ? `origin/${branch}` : `origin/${lane}`;
-        await git(["--git-dir", mirrorDir, "worktree", "add", "-B", branch, path, startPoint]);
-        return { path, branch, lane };
+      const canonicalOnRemote = await fetchIssueBranch(git, mirrorDir, canonicalBranch);
+      let openPrHeads = [];
+      if (typeof findOpenIssuePr === "function") {
+        const listed = await findOpenIssuePr(identifier);
+        if (typeof listed?.head === "string" && listed.head.length > 0) {
+          openPrHeads = [listed.head];
+        }
+      }
+      const resolved = resolveIssueGitHead({
+        canonicalBranch,
+        lane,
+        canonicalOnRemote,
+        openPrHeads,
+        mode,
+      });
+      if (resolved.startPoint !== `origin/${lane}`) {
+        await fetchIssueBranch(git, mirrorDir, resolved.branch);
       }
 
-      await git(["-C", path, "checkout", branch]);
-      if (hasIssueBranch) {
-        await fetchIssueBranch(git, path, branch, { worktree: true });
+      if (!existsSync(path)) {
+        await git([
+          "--git-dir",
+          mirrorDir,
+          "worktree",
+          "add",
+          "-B",
+          resolved.branch,
+          path,
+          resolved.startPoint,
+        ]);
+        return { path, branch: resolved.branch, lane };
+      }
+
+      if (resolved.startPoint !== `origin/${lane}`) {
+        await fetchIssueBranch(git, path, resolved.branch, { worktree: true });
+      }
+      await git(["-C", path, "checkout", "-B", resolved.branch, resolved.startPoint]);
+      if (resolved.startPoint !== `origin/${lane}`) {
         try {
-          await git(["-C", path, "merge", "--ff-only", `origin/${branch}`]);
+          await git(["-C", path, "merge", "--ff-only", `origin/${resolved.branch}`]);
         } catch {
           // Local implement commits stay; diverged remote is a later signal-up.
         }
       }
 
-      return { path, branch, lane };
+      return { path, branch: resolved.branch, lane };
     },
 
     /**

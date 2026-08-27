@@ -219,6 +219,17 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit `- (none)` verdict guard (`reviewFeedbackIsClean`), missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.
 
+### Issue PR head checkout ratchet (KIT-105)
+
+`harness/tests/worktree-head.test.mjs` plus `implement ADW reuses the open issue PR and does not create a second` in `harness/tests/implement-adw.test.mjs` keep these locks:
+
+- Checker reuse without `origin/kit-n` and without an open issue PR throws `no issue head` and must not `worktree add` from `origin/development`.
+- A single open PR head (`nicklas/kit-n-…`) is the checkout start point; a stale `KIT-n` worktree is moved onto that head.
+- Two open PRs whose titles start with the identifier fail closed.
+- `completeImplementAdw` reuses `findOpenIssuePr` and must not call `createPr` when that issue already has an open `development` PR.
+
+Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `development` while PR #45 lived on `nicklas/kit-47-…`, and a second PR after `gh pr view` in that tree saw nothing. Tighten only.
+
 ### PR lane ratchet (KIT-102)
 
 `.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review). Tighten only.
