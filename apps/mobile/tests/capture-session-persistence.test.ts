@@ -1,27 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@/drafts/db", () => {
-  const rows = new Map<string, string>();
-  return {
-    draftDb: {
-      execSync: () => {},
-      runSync: (_sql: string, params?: unknown[]) => {
-        if (params?.[0] === "capture_camera_active_session" && params[1]) {
-          rows.set("capture_camera_active_session", String(params[1]));
-        }
-      },
-      getFirstSync: (_sql: string, params?: unknown[]) => {
-        if (params?.[0] === "capture_camera_active_session") {
-          const value = rows.get("capture_camera_active_session");
-          return value ? { value } : null;
-        }
-        return null;
-      },
-      getAllSync: () => [],
-    },
-  };
-});
-
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   createMemoryCaptureSessionStore,
   getActiveDraft,
