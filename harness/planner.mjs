@@ -7,10 +7,7 @@
  */
 import { matchesGlob, parseWriteScopeGlobs } from "../scripts/lib/pr-write-scope.mjs";
 import { parseLoopCounters } from "./auto-merge.mjs";
-import {
-  hasRatchetNudge,
-  ratchetNudgeComment,
-} from "./checker-exit.mjs";
+import { hasRatchetNudge, ratchetNudgeComment } from "./checker-exit.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 
 export const DEFAULT_PLANNER_POLL_MS = 300_000;

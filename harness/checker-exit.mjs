@@ -53,9 +53,7 @@ export function applyRatchetNudge(body) {
   }
   const line = ratchetNudgeWorkpadLine();
   const base =
-    typeof body === "string" && body.includes(WORKPAD_HEADING)
-      ? body.trimEnd()
-      : WORKPAD_HEADING;
+    typeof body === "string" && body.includes(WORKPAD_HEADING) ? body.trimEnd() : WORKPAD_HEADING;
   if (base.includes(NOTES_HEADING)) {
     return `${base.replace(/### Notes\n([\s\S]*?)(?=\n### |\s*$)/, `${NOTES_HEADING}\n\n$1\n${line}\n`)}\n`;
   }

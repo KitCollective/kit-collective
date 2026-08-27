@@ -490,9 +490,7 @@ test("planner role and host inventory keep Cursor cron paused while the PI plann
 });
 
 function implementingWorkpad({ reviewLoops = 2, withNudge = false } = {}) {
-  const nudgeLine = withNudge
-    ? `\n### Notes\n\n- Ratchet: ${RATCHET_NUDGE_TEXT}\n`
-    : "";
+  const nudgeLine = withNudge ? `\n### Notes\n\n- Ratchet: ${RATCHET_NUDGE_TEXT}\n` : "";
   return `${WORKPAD_HEADING}
 
 ${LOOP_COUNTERS_HEADING}
@@ -514,7 +512,9 @@ test("planner poll comments ratchet nudge on Implementing when reviewLoops >= 2 
     [{ id: issueId, identifier: "KIT-109", description: "write-scope: harness/**" }],
     {
       issueComments: {
-        [issueId]: [{ id: "wp-1", body: implementingWorkpad({ reviewLoops: 2, withNudge: false }) }],
+        [issueId]: [
+          { id: "wp-1", body: implementingWorkpad({ reviewLoops: 2, withNudge: false }) },
+        ],
       },
     },
   );
