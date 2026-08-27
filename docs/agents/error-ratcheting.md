@@ -78,17 +78,13 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 `pnpm lint:anti-slop`. `typecheck` runs each package's `tsconfig.test.json`, so test
 files are typechecked too. Tighten only.
 
-Three rules are deliberately at warn, not error, and are the ratchet targets:
+Two rules are deliberately at warn, not error, and are the ratchet targets:
 
 - `lint/style/noNonNullAssertion` (Biome) — the existing `!` sites are mostly
   `const [row] = await …returning()`. Ratchet to error once those reads carry a guard.
 - `anti-slop/no-unsafe-dictionary-type` — the remaining sites are the raw Transfermarkt
   and Football Kit Archive payloads that `normalize()` and `normalizeRawKit` exist to
   parse. Ratchet to error once those adapters parse through a schema.
-- `anti-slop/no-module-mocking` — `seed/apify/tests/seed-proxy.test.ts` mocks `undici`
-  because `seed/apify/src/proxy-config.ts` imports `fetch` and `ProxyAgent` at module
-  scope, leaving the test no seam to inject. Ratchet to error once `proxy-config` takes
-  those as an injected dependency.
 
 `tools/oxlint/anti-slop/README.md` records which upstream rules we left out and why.
 
@@ -203,6 +199,29 @@ catches it in the API tests and the container smoke test.
 ### Mobile capture dead-export ratchet (KIT-48)
 
 `scripts/check-mobile-capture-dead-exports.mjs` (CI via `pnpm check:mobile-capture-dead-exports`) fails when `apps/mobile/src/capture/captureFlow.ts` keeps dead `createPersistedCaptureSessionFromPhotos` after the persistence refactor or places re-exports between import blocks instead of grouping imports at the top. Prevents repeating the KIT-48 checker round-1/round-6 fail (leftover dead code after capture refactors). Tighten only.
+
+### Implement ADW production gh ratchet (KIT-54)
+
+`harness/tests/implement-adw.test.mjs` drives `createGhClient` / `createTypecheckTouched` with fake `runCommand` only (not injected `fakeGh`). Coverage that must stay:
+
+- **"production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending"** — rebase is followed by a push of the issue branch, `gh pr create` has `--head`, a first pending required-check snapshot never becomes green before Linear `setStatus`, optional pending checks must not block.
+- **"production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending"** — `MERGEABLE` + empty `statusCheckRollup` + `gh pr checks --required` throw (exit 8) must **not** call `setStatus`.
+- **"typecheckTouched skips pnpm when the diff has no workspace packages"** — empty touched set does not spawn `pnpm`.
+- **"typecheckTouched fails closed when pnpm is missing and workspace packages are touched"** — missing `pnpm` (ENOENT) fails closed when packages are in the diff.
+
+`scripts/check-implement-adw-production-gh.mjs` (CI via `node` in `.github/workflows/ci.yml`) fails when that coverage is deleted. `scripts/tests/check-implement-adw-production-gh.test.mjs` mutation-tests the ratchet. Prevents repeating KIT-54 checker fail #2 (job-seam fakes skipped production push/wait) and fail #3 (empty rollup / exit 8 fail-open; pnpm spawned on harness-only diffs). Tighten only.
+
+### Factory CI test-job ratchet (KIT-75)
+
+`scripts/check-factory-ci-tests.mjs` (CI via `pnpm check:factory-ci-tests` in `.github/workflows/ci.yml`) fails when the required GitHub `test` job omits harness node tests or webhook-router / land-policy factory-script tests, or when existing mobile check-scripts leave that job. Needles are asserted on expanded `run:` / script bodies only — a step title that names `land-policy` does not satisfy coverage if the script body dropped it. `scripts/tests/check-factory-ci-tests.test.mjs` mutation-tests the ratchet. Prevents repeating the KIT-75 checker fail (colocating the check-script under `.github/workflows/` and matching factory needles from the step name). Tighten only.
+
+### Factory checker spawn ratchet (KIT-56)
+
+`scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit `- (none)` verdict guard (`reviewFeedbackIsClean`), missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.
+
+### PR lane ratchet (KIT-102)
+
+`.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review). Tighten only.
 
 ### PR write-scope ratchet (KIT-39)
 

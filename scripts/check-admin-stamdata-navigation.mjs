@@ -58,6 +58,7 @@ for (const route of requiredRoutes) {
 const dataTablePages = [
   "apps/admin/src/pages/StamdataPage.tsx",
   "apps/admin/src/pages/CollectorsPage.tsx",
+  "apps/admin/src/pages/ClubDrillPage.tsx",
 ];
 
 for (const pagePath of dataTablePages) {

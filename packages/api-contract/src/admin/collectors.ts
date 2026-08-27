@@ -75,6 +75,29 @@ export const adminCollectorJerseyListSchema = z
 
 export type AdminCollectorJerseyList = z.infer<typeof adminCollectorJerseyListSchema>;
 
+export const adminCollectorJerseyIndexRowSchema = z
+  .object({
+    id: z.string().uuid(),
+    userId: z.string().uuid(),
+    userEmail: z.string().email(),
+    clubLabel: z.string().min(1),
+    seasonLabel: z.string().min(1),
+    type: z.enum(KIT_TYPES),
+    photoPath: z.string().optional(),
+  })
+  .strict();
+
+export type AdminCollectorJerseyIndexRow = z.infer<typeof adminCollectorJerseyIndexRowSchema>;
+
+export const adminCollectorJerseyIndexSchema = z
+  .object({
+    total: z.number().int().nonnegative(),
+    rows: z.array(adminCollectorJerseyIndexRowSchema),
+  })
+  .strict();
+
+export type AdminCollectorJerseyIndex = z.infer<typeof adminCollectorJerseyIndexSchema>;
+
 export const adminCollectorJerseyParamsSchema = z
   .object({
     userId: z.string().uuid(),

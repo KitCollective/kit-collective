@@ -213,30 +213,37 @@ export class AdminCatalogService {
     seasonId: string,
     expandSquad = false,
   ): Promise<AdminClubSeasonDrill> {
-    const [header] = await this.db
+    const [clubRow] = await this.db
       .select({
         clubLabel: resolvedEnLabel,
-        seasonLabel: season.label,
-        squadCount: sql<number>`count(distinct ${playerClubSeason.id})::int`,
       })
-      .from(teamSeason)
-      .innerJoin(club, eq(teamSeason.clubId, club.id))
-      .innerJoin(season, eq(teamSeason.seasonId, season.id))
+      .from(club)
       .leftJoin(
         catalogLabel,
         and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
       )
-      .leftJoin(
-        playerClubSeason,
-        and(eq(playerClubSeason.clubId, club.id), eq(playerClubSeason.seasonId, season.id)),
-      )
-      .where(and(eq(teamSeason.clubId, clubId), eq(teamSeason.seasonId, seasonId)))
-      .groupBy(club.id, season.label)
+      .where(eq(club.id, clubId))
+      .groupBy(club.id)
       .limit(1);
 
-    if (!header?.clubLabel) {
+    const [seasonRow] = await this.db
+      .select({
+        seasonLabel: season.label,
+      })
+      .from(season)
+      .where(eq(season.id, seasonId))
+      .limit(1);
+
+    if (!clubRow?.clubLabel || !seasonRow) {
       throw new NotFoundException("Club season not found");
     }
+
+    const [countRow] = await this.db
+      .select({
+        squadCount: sql<number>`count(${playerClubSeason.id})::int`,
+      })
+      .from(playerClubSeason)
+      .where(and(eq(playerClubSeason.clubId, clubId), eq(playerClubSeason.seasonId, seasonId)));
 
     let squad: AdminClubSeasonDrill["squad"];
     if (expandSquad) {
@@ -265,13 +272,16 @@ export class AdminCatalogService {
         }));
     }
 
+    const kits = await this.listClubSeasonKits(clubId, seasonId);
+
     return adminClubSeasonDrillSchema.parse({
       clubId,
       seasonId,
-      clubLabel: header.clubLabel,
-      seasonLabel: header.seasonLabel,
-      squadCount: header.squadCount,
+      clubLabel: clubRow.clubLabel,
+      seasonLabel: seasonRow.seasonLabel,
+      squadCount: countRow?.squadCount ?? 0,
       squad,
+      kits,
     });
   }
 
@@ -280,6 +290,10 @@ export class AdminCatalogService {
       .select({
         id: club.id,
         countryId: club.countryId,
+        kind: club.kind,
+        validFrom: club.validFrom,
+        validTo: club.validTo,
+        successorClubId: club.successorClubId,
         label: resolvedEnLabel,
       })
       .from(club)
@@ -288,7 +302,14 @@ export class AdminCatalogService {
         and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
       )
       .where(eq(club.id, clubId))
-      .groupBy(club.id, club.countryId)
+      .groupBy(
+        club.id,
+        club.countryId,
+        club.kind,
+        club.validFrom,
+        club.validTo,
+        club.successorClubId,
+      )
       .limit(1);
 
     if (!row?.label) {
@@ -312,11 +333,33 @@ export class AdminCatalogService {
       countryLabel = countryRow?.label ?? undefined;
     }
 
+    let successorLabel: string | undefined;
+    if (row.successorClubId) {
+      const [successorRow] = await this.db
+        .select({
+          label: resolvedEnLabel,
+        })
+        .from(club)
+        .leftJoin(
+          catalogLabel,
+          and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+        )
+        .where(eq(club.id, row.successorClubId))
+        .groupBy(club.id)
+        .limit(1);
+      successorLabel = successorRow?.label ?? undefined;
+    }
+
     return adminClubDrillSchema.parse({
       id: row.id,
       label: row.label,
       countryLabel,
       monogram: monogramFromLabel(row.label),
+      kind: row.kind,
+      validFrom: row.validFrom ?? null,
+      validTo: row.validTo ?? null,
+      successorLabel,
+      seasons: await this.listClubSeasons(clubId),
     });
   }
 
@@ -705,5 +748,78 @@ export class AdminCatalogService {
           photoPath: hasPhoto ? `/admin/catalog/kits/${row.id}/photo` : undefined,
         };
       });
+  }
+
+  private async listClubSeasons(clubId: string): Promise<Array<{ id: string; label: string }>> {
+    const fromTeam = await this.db
+      .select({
+        id: season.id,
+        label: season.label,
+        startsOn: season.startsOn,
+      })
+      .from(teamSeason)
+      .innerJoin(season, eq(teamSeason.seasonId, season.id))
+      .where(eq(teamSeason.clubId, clubId));
+
+    const fromKits = await this.db
+      .select({
+        id: season.id,
+        label: season.label,
+        startsOn: season.startsOn,
+      })
+      .from(kit)
+      .innerJoin(season, eq(kit.seasonId, season.id))
+      .where(eq(kit.clubId, clubId));
+
+    const fromSquad = await this.db
+      .select({
+        id: season.id,
+        label: season.label,
+        startsOn: season.startsOn,
+      })
+      .from(playerClubSeason)
+      .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+      .where(eq(playerClubSeason.clubId, clubId));
+
+    const byId = new Map<string, { id: string; label: string; startsOn: string }>();
+    for (const row of [...fromTeam, ...fromKits, ...fromSquad]) {
+      byId.set(row.id, row);
+    }
+    return [...byId.values()]
+      .sort((left, right) => right.startsOn.localeCompare(left.startsOn))
+      .map(({ id, label }) => ({ id, label }));
+  }
+
+  private async listClubSeasonKits(clubId: string, seasonId: string) {
+    const photoCountSql = sql<number>`count(${kitPhoto.id})::int`;
+    const rows = await this.db
+      .select({
+        id: kit.id,
+        kitType: kit.type,
+        clubLabel: resolvedEnLabel,
+        photoCount: photoCountSql,
+      })
+      .from(kit)
+      .leftJoin(club, eq(kit.clubId, club.id))
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+      )
+      .leftJoin(kitPhoto, eq(kitPhoto.kitId, kit.id))
+      .where(and(eq(kit.clubId, clubId), eq(kit.seasonId, seasonId)))
+      .groupBy(kit.id, kit.type)
+      .orderBy(asc(kit.type));
+
+    return rows.map((row) => {
+      const hasPhoto = row.photoCount > 0;
+      const clubName = row.clubLabel ?? "Kit";
+      return {
+        id: row.id,
+        label: `${clubName} ${row.kitType}`,
+        kitType: row.kitType,
+        hasPhoto,
+        photoPath: hasPhoto ? `/admin/catalog/kits/${row.id}/photo` : undefined,
+      };
+    });
   }
 }

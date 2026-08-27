@@ -88,11 +88,11 @@ Who-acts labels: \`needs-triage\`, \`needs-info\`, \`ready-for-agent\`, \`ready-
 
 ### Signal-up
 
-Out-of-scope bugs/debt: new Linear issue, \`${dispatch}\`, labels \`signal-up\` + \`needs-triage\` (never delegate, never \`ready-for-agent\`). Cap ${signalCap} per run. See \`docs/agents/signal-up.md\`.
+Out-of-scope bugs/debt: new Linear issue in **Triage** (the state), label \`signal-up\` only (never delegate, never \`ready-for-agent\`, never \`needs-triage\` while the Triage group is exclusive). Cap ${signalCap} per run. See \`docs/agents/signal-up.md\`.
 
 ### Qualified proposals
 
-Out-of-scope features/optimisations: new Linear issue, \`${dispatch}\`, labels \`proposal\` + \`needs-triage\`. At most one per run. See \`docs/agents/qualified-proposals.md\`.
+Out-of-scope features/optimisations: new Linear issue in **Triage**, label \`proposal\` only (never \`needs-triage\` while the Triage group is exclusive). At most one per run. See \`docs/agents/qualified-proposals.md\`.
 
 ### Error ratcheting
 
@@ -140,7 +140,9 @@ Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited pr
 
 ### Planning stack
 
-\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → ${approver} to Done → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
+\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → ${approver} to Merging → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
+
+**Runtime**: PI worker (Compose + \`gh\` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and \`kc_seed_mcp\` are Desktop / Cloud Agent wiring.
 
 ## How work enters the factory
 
@@ -149,8 +151,8 @@ Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited pr
 3. \`/to-spec\` — kickoff = Linear project + milestones; feature = document on an existing project
 4. \`/to-tickets\` — vertical slices in \`${dispatch}\` with \`ready-for-agent\`
 5. planner claims (unblocked) → implement → PR + Linear evidence → checker → \`Ready for merge\`
-6. \`${approver}\` reads the GitHub PR, moves Linear to \`Done\`
-7. \`/land\` into \`${integration}\`. A complete **milestone** then \`${staging}\` / \`${production}\` promotions
+6. \`${approver}\` reads the GitHub PR, moves Linear to \`Merging\`
+7. \`/land\` into \`${integration}\` (merge success → \`Done\`). A complete **milestone** then \`${staging}\` / \`${production}\` promotions
 
 Product truth lives under \`${specs}\`. If a spec fights a stack lock, change the lock first.
 `;
@@ -167,8 +169,12 @@ Linear. Status + \`ready-for-agent\` + blockers decide what runs.
 _Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
-Cursor Automations + Cloud Agents reading this repo’s harness.
-_Avoid_: Conductor board, local-only agents as the factory
+PI worker: Compose + \`gh\` + Linear CLI. Empty \`.pi/mcp.json\` — Linear MCP is not on the box.
+_Avoid_: Cursor Cloud Agents as dispatch, Linear MCP as the worker runtime
+
+**Product MCP**:
+Coolify MCP and \`kc_seed_mcp\` are Desktop or Cloud Agent wiring. Not default PI-worker MCP.
+_Avoid_: installing Coolify or Seed MCP on the PI worker as factory dispatch
 
 **Kickoff**:
 \`/to-spec\` for a new Linear project + milestones. No issues yet.
@@ -191,15 +197,15 @@ The single workpad comment on an issue. \`### Review feedback\` is why a pass wa
 _Avoid_: a new comment thread per agent turn
 
 **Signal-up**:
-Out-of-scope bug or debt, filed as a new \`${dispatch}\` issue. Never coded in the current PR.
-_Avoid_: expanding the PR, applying \`ready-for-agent\` to the finding
+Out-of-scope bug or debt, filed as a new Linear **Triage** issue. Never coded in the current PR.
+_Avoid_: expanding the PR, applying \`ready-for-agent\` to the finding, filing into \`${dispatch}\`
 
 **Proposal**:
-Out-of-scope feature or optimisation. Same ingress as signal-up, different label.
-_Avoid_: mixing with \`signal-up\` on the same issue
+Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), different label.
+_Avoid_: mixing with \`signal-up\` on the same issue, filing into \`${dispatch}\`
 
 **Land**:
-Merge to \`${integration}\` after ${approver} moves the issue to Done.
+Merge to \`${integration}\` after ${approver} moves the issue to Merging. Land sets Done only after the merge.
 _Avoid_: landing to ${staging} or ${production} from an issue run
 
 **Promotion**:
@@ -207,8 +213,8 @@ A Linear **milestone** complete → \`${staging}\`; release helper → \`${produ
 _Avoid_: deploy, release PR as a synonym for land, treating the Linear project as one staging dump
 
 **Triage** *(Linear state)*:
-Inbox for Sentry and other intake. Human accepts onto the board. Never auto-dispatch.
-_Avoid_: the Triage *label group*, \`needs-triage\`
+Inbox for Sentry, signal-up, and proposal. Planner never claims.
+_Avoid_: the Triage *label group*, \`needs-triage\`, filing leftovers into \`${dispatch}\`
 
 **Duplicate** *(Linear state)*:
 This work already exists on another issue. No agent action.

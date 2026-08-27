@@ -40,6 +40,7 @@ import {
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
+import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
@@ -318,9 +319,12 @@ export default function ConfirmScreen() {
     }
 
     const hadPhotos = draft.photos.length > 0;
-    const uris = await pickGalleryPhotos({
-      quality: captureQualityForRole(role),
-    });
+    const uris = await pickGalleryPhotos(
+      {
+        quality: captureQualityForRole(role),
+      },
+      expoGalleryPickerAdapter,
+    );
 
     if (!uris?.[0] || !sessionId) {
       return;

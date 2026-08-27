@@ -8,7 +8,7 @@ Control plane: [`WORKFLOW.md`](./WORKFLOW.md) + [`factory.config.json`](./factor
 
 ## Factory (Linear + Cursor)
 
-Linear is the board. Cursor Cloud Agents execute. Config is `factory.config.json` (copy `factory.config.example.json` on a new repo). See `docs/agents/template.md`.
+Linear is the board. The PI worker (Compose + `gh` + Linear CLI) is the runtime. Cursor Cloud Agents are not factory dispatch. Config is `factory.config.json` (copy `factory.config.example.json` on a new repo). See `docs/agents/template.md`.
 
 1. Create a Linear workspace named in `product.name` (API cannot do this).
 2. Connect Cursor’s Linear integration to that workspace.
@@ -25,7 +25,7 @@ node scripts/generate-harness-docs.mjs
 
 6. Wire Cursor Automations from `docs/agents/automations.md`. Re-paste planner, implement, and checker Instruction after contract changes.
 
-Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → planner claims (`ready-for-agent` + unblocked).
+Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked). `/signal-up` files into Linear **Triage**.
 
 Working skills: `.cursor/skills/` (Expo/EAS vendor pack: `.cursor/skills/expo/`). Domain helpers: `.cursor/agents/`.
 

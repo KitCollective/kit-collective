@@ -32,14 +32,20 @@ export function SeasonDrillPage() {
       {error ? <div className="banner-error">{error}</div> : null}
 
       {season ? (
-        <dl className="meta-grid">
-          <dt>League</dt>
-          <dd>{season.leagueLabel ?? "—"}</dd>
-          <dt>Mark</dt>
-          <dd>
-            <span className="monogram-slot">{season.monogram}</span>
-          </dd>
-        </dl>
+        <section className="summary-panel">
+          <dl className="stats-row">
+            <div>
+              <dt>League</dt>
+              <dd>{season.leagueLabel ?? "—"}</dd>
+            </div>
+            <div>
+              <dt>Mark</dt>
+              <dd>
+                <span className="monogram-slot">{season.monogram}</span>
+              </dd>
+            </div>
+          </dl>
+        </section>
       ) : null}
     </div>
   );

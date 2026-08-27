@@ -1,0 +1,21 @@
+name: bug
+linearType: Bug
+summary: Repro, smallest fix, then open a PR. The harness moves Linear to In Review after required GitHub checks are green and MERGEABLE.
+steps:
+  - scout
+  - repro
+  - fix
+  - code-gates
+  - pr
+  # in-review: harness after green required checks + MERGEABLE. Model does not setStatus.
+  - in-review
+codeGates:
+  rebase: true
+  typecheckTouchedPackages: true
+  waitRequiredGithubChecks: true
+  fullPnpmTest: github-actions
+workpad:
+  updateExisting: true
+never:
+  - merge
+  - factory-checker-subagent

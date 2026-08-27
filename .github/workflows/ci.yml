@@ -181,8 +181,35 @@ jobs:
       - name: Check mobile capture dead-export ratchet
         run: pnpm check:mobile-capture-dead-exports
 
+      - name: Test harness node tests
+        run: pnpm test:harness
+
+      - name: Test factory-script webhook-router and land-policy
+        run: pnpm test:factory-scripts
+
+      - name: Test setup-coolify-mcp script
+        run: node --test scripts/tests/setup-coolify-mcp.test.mjs
+
+      - name: Check factory tests are wired on the test job
+        run: pnpm check:factory-ci-tests
+
+      - name: Test factory CI wiring ratchet logic
+        run: node --test scripts/tests/check-factory-ci-tests.test.mjs
+
+      - name: Check signal-up create contract
+        run: node scripts/tests/check-signal-up-create-contract.mjs
+
+      - name: Test signal-up create-contract ratchet logic
+        run: node --test scripts/tests/check-signal-up-create-contract.test.mjs
+
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
+
+      - name: Check implement ADW production gh ratchet
+        run: node scripts/check-implement-adw-production-gh.mjs
+
+      - name: Test implement ADW production gh ratchet logic
+        run: node --test scripts/tests/check-implement-adw-production-gh.test.mjs
 
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs

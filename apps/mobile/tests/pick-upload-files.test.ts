@@ -1,73 +1,49 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { pickUploadFiles, type UploadFilesAdapter } from "../src/capture/pickUploadFiles";
 
-const { pickGalleryPhotos } = vi.hoisted(() => ({
-  pickGalleryPhotos: vi.fn(),
-}));
+function createRecordingAdapter(buttonIndex: number): {
+  adapter: UploadFilesAdapter;
+  counts: { gallery: number; documents: number };
+} {
+  const counts = { gallery: 0, documents: 0 };
+  const adapter: UploadFilesAdapter = {
+    os: "ios",
+    showActionSheet(_options, callback) {
+      callback(buttonIndex);
+    },
+    showAlert() {},
+    async pickGalleryPhotos() {
+      counts.gallery += 1;
+      return ["file:///gallery/front.jpg"];
+    },
+    async pickDocumentImages() {
+      counts.documents += 1;
+      return ["file:///files/front.jpg"];
+    },
+    galleryMultiSelectQuality: () => 0.8,
+  };
 
-const { pickDocumentImages } = vi.hoisted(() => ({
-  pickDocumentImages: vi.fn(),
-}));
-
-const { showActionSheetWithOptions } = vi.hoisted(() => ({
-  showActionSheetWithOptions: vi.fn(),
-}));
-
-vi.mock("../src/capture/pickGalleryPhotos", () => ({
-  pickGalleryPhotos,
-}));
-
-vi.mock("../src/capture/pickDocumentImages", () => ({
-  pickDocumentImages,
-}));
-
-vi.mock("../src/capture/photoBytes", () => ({
-  galleryMultiSelectQuality: () => 0.8,
-}));
-
-vi.mock("react-native", () => ({
-  Platform: { OS: "ios" },
-  ActionSheetIOS: {
-    showActionSheetWithOptions,
-  },
-  Alert: {
-    alert: vi.fn(),
-  },
-  NativeModules: {},
-}));
-
-import { pickUploadFiles } from "../src/capture/pickUploadFiles";
+  return { adapter, counts };
+}
 
 describe("pickUploadFiles", () => {
-  beforeEach(() => {
-    pickGalleryPhotos.mockReset();
-    pickDocumentImages.mockReset();
-    showActionSheetWithOptions.mockReset();
-    pickGalleryPhotos.mockResolvedValue(["file:///gallery/front.jpg"]);
-    pickDocumentImages.mockResolvedValue(["file:///files/front.jpg"]);
-  });
-
   it("routes Fotos to the gallery picker on iOS", async () => {
-    showActionSheetWithOptions.mockImplementation((_options, callback) => {
-      callback(0);
-    });
+    const recording = createRecordingAdapter(0);
 
-    const uris = await pickUploadFiles();
+    const uris = await pickUploadFiles({}, recording.adapter);
 
-    expect(showActionSheetWithOptions).toHaveBeenCalledOnce();
-    expect(pickGalleryPhotos).toHaveBeenCalledOnce();
-    expect(pickDocumentImages).not.toHaveBeenCalled();
+    expect(recording.counts.gallery).toBe(1);
+    expect(recording.counts.documents).toBe(0);
     expect(uris).toEqual(["file:///gallery/front.jpg"]);
   });
 
   it("routes Filer to the document picker on iOS", async () => {
-    showActionSheetWithOptions.mockImplementation((_options, callback) => {
-      callback(1);
-    });
+    const recording = createRecordingAdapter(1);
 
-    const uris = await pickUploadFiles();
+    const uris = await pickUploadFiles({}, recording.adapter);
 
-    expect(pickDocumentImages).toHaveBeenCalledOnce();
-    expect(pickGalleryPhotos).not.toHaveBeenCalled();
+    expect(recording.counts.documents).toBe(1);
+    expect(recording.counts.gallery).toBe(0);
     expect(uris).toEqual(["file:///files/front.jpg"]);
   });
 });
