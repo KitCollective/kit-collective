@@ -1,7 +1,6 @@
 import type { PhotoSource } from "@kit/domain";
 import * as Crypto from "expo-crypto";
-import { Alert } from "react-native";
-import { branchFromPhotoCount, createCaptureSession, setDraftClub } from "./captureSession";
+import { createCaptureSession, setDraftClub } from "./captureSession";
 import {
   clearActiveCameraCaptureSessionId,
   clearMemoryActiveCameraCaptureSessionIdForTests,
@@ -48,13 +47,6 @@ export function readPrefilledClub(params: {
   return { id: clubId, label: clubLabel };
 }
 
-export function showBulkUploadBlockedAlert(): void {
-  Alert.alert(
-    "For mange billeder",
-    "Du har valgt mere end tre billeder. Vælg op til tre billeder for én trøje.",
-  );
-}
-
 export function createPersistedCaptureSession(
   orderedUris: string[],
   options?: {
@@ -94,8 +86,4 @@ export function withPersistedCaptureSession(
 export function clearPersistedCaptureSession(sessionId: string): void {
   createSqliteCaptureSessionStore(sessionId).clear();
   clearActiveCameraCaptureSessionId();
-}
-
-export function isBulkUpload(photoCount: number): boolean {
-  return branchFromPhotoCount(photoCount) === "bulk";
 }

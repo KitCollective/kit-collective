@@ -6,13 +6,11 @@ import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
   clearActiveCameraCaptureSessionId,
   createPersistedCaptureSession,
-  isBulkUpload,
   mergeGalleryEscapePhotos,
   persistCameraShotInSession,
   readPrefilledClub,
   replacePersistedCapturePhotos,
   resolveResumableCameraSession,
-  showBulkUploadBlockedAlert,
 } from "@/capture/captureFlow";
 import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
@@ -52,11 +50,6 @@ export default function CaptureScreen() {
         return;
       }
 
-      if (isBulkUpload(photos.length)) {
-        showBulkUploadBlockedAlert();
-        return;
-      }
-
       const sessionId = replacePersistedCapturePhotos(sessionIdRef.current, photos, {
         prefilledClub,
       });
@@ -69,11 +62,6 @@ export default function CaptureScreen() {
   const finishCapture = useCallback(
     (uris: string[], photoSource: PhotoSource) => {
       if (uris.length === 0) {
-        return;
-      }
-
-      if (isBulkUpload(uris.length)) {
-        showBulkUploadBlockedAlert();
         return;
       }
 
@@ -117,11 +105,6 @@ export default function CaptureScreen() {
       }
 
       const merged = mergeGalleryEscapePhotos(existingPhotos, uris);
-      if (isBulkUpload(merged.length)) {
-        showBulkUploadBlockedAlert();
-        return false;
-      }
-
       finishCaptureFromPhotos(merged);
       return true;
     },

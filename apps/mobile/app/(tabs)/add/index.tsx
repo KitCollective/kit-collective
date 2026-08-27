@@ -1,12 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import {
-  createPersistedCaptureSession,
-  isBulkUpload,
-  readPrefilledClub,
-  showBulkUploadBlockedAlert,
-} from "@/capture/captureFlow";
+import { createPersistedCaptureSession, readPrefilledClub } from "@/capture/captureFlow";
 import { expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { pickUploadFiles } from "@/capture/pickUploadFiles";
 import { ScreenHeader } from "@/components/screen-header";
@@ -41,11 +36,6 @@ export default function AddChooserScreen() {
       return;
     }
 
-    if (isBulkUpload(uris.length)) {
-      showBulkUploadBlockedAlert();
-      return;
-    }
-
     const { sessionId } = createPersistedCaptureSession(uris, {
       prefilledClub,
       photoSource: "gallery",
@@ -77,7 +67,8 @@ export default function AddChooserScreen() {
 
       <View style={styles.body}>
         <Text style={[typography.body, { color: theme.contentMuted }]}>
-          Vælg op til tre billeder — de bliver én trøje med forside, bagside og mærke.
+          Få billeder bliver én trøje. Mange billeder lander som uredigerede, som du binder til
+          trøjer.
         </Text>
 
         <View style={styles.actions}>

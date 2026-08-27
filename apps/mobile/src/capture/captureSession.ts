@@ -212,6 +212,75 @@ export function addJerseyDraft(state: CaptureSessionState): CaptureSessionState 
   });
 }
 
+export function setActiveDraft(state: CaptureSessionState, draftId: string): CaptureSessionState {
+  if (!state.drafts.some((draft) => draft.id === draftId)) {
+    throw new Error("Draft not found");
+  }
+
+  return withState(state, {
+    ...state,
+    activeDraftId: draftId,
+  });
+}
+
+export function removeDraft(state: CaptureSessionState, draftId: string): CaptureSessionState {
+  const remaining = state.drafts.filter((draft) => draft.id !== draftId);
+  if (remaining.length === 0) {
+    return withState(state, {
+      ...state,
+      drafts: remaining,
+      activeDraftId: "",
+    });
+  }
+
+  const nextActiveId =
+    state.activeDraftId === draftId
+      ? (remaining[0]?.id ?? state.activeDraftId)
+      : state.activeDraftId;
+
+  return withState(state, {
+    ...state,
+    drafts: remaining,
+    activeDraftId: nextActiveId,
+  });
+}
+
+export function switchSingleToBulkBind(state: CaptureSessionState): CaptureSessionState {
+  if (state.branch !== "single") {
+    return state;
+  }
+
+  return withState(state, {
+    ...state,
+    branch: "bulk",
+  });
+}
+
+export function nextAvailableRole(draft: CaptureJerseyDraft): PhotoRole | null {
+  for (const role of PHOTO_ROLES) {
+    if (!draft.photos.some((photo) => photo.role === role)) {
+      return role;
+    }
+  }
+  return null;
+}
+
+export function bindUnboundPhotoToDraft(
+  state: CaptureSessionState,
+  uri: string,
+  draftId: string,
+  role?: PhotoRole,
+  source: PhotoSource = "gallery",
+): CaptureSessionState {
+  const draft = getDraft(state, draftId);
+  const targetRole = role ?? nextAvailableRole(draft);
+  if (!targetRole) {
+    return state;
+  }
+
+  return bindPhoto(state, uri, draftId, targetRole, source);
+}
+
 export function setDraftClub(
   state: CaptureSessionState,
   draftId: string,
