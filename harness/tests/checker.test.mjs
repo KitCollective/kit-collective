@@ -8,14 +8,18 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { LOOP_COUNTERS_HEADING, parseLoopCounters } from "../auto-merge.mjs";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import {
   applyCheckerFailWorkpad,
   applyCheckerPassWorkpad,
+  applyRatchetNudge,
   completeChecker,
   createCheckerGh,
   ghGateFailures,
+  hasRatchetNudge,
   IMPLEMENTING,
+  RATCHET_NUDGE_TEXT,
   READY_FOR_MERGE,
   reviewFeedbackHasFindings,
   reviewFeedbackIsClean,
@@ -588,4 +592,68 @@ test("completeChecker skips when the issue is no longer In Review", async () => 
     linear.calls.some((call) => call[0] === "setStatus"),
     false,
   );
+});
+
+function loopCountersBody({ ciFailCycles = 0, reviewLoops = 0 } = {}) {
+  return `${WORKPAD_HEADING}
+
+${LOOP_COUNTERS_HEADING}
+
+- ciFailCycles: ${ciFailCycles}
+- reviewLoops: ${reviewLoops}
+
+### Review feedback
+
+- Spec: missing evidence
+`;
+}
+
+test("checker fail incrementing reviewLoops from 1 to 2 writes ratchet nudge and stays Implementing", async () => {
+  const gh = fakeGh({
+    pr: greenPr({ requiredChecks: [{ name: "test", conclusion: "failure" }] }),
+  });
+  const linear = fakeLinear(snapshot(), loopCountersBody({ reviewLoops: 1 }));
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-109" },
+    linear,
+    gh,
+  });
+
+  assert.equal(result.passed, false);
+  assert.equal(result.nextStatus, IMPLEMENTING);
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.deepEqual(parseLoopCounters(workpad.body), {
+    ciFailCycles: 0,
+    reviewLoops: 2,
+  });
+  assert.equal(hasRatchetNudge(workpad.body), true);
+  assert.match(workpad.body, new RegExp(RATCHET_NUDGE_TEXT));
+});
+
+test("checker fail incrementing reviewLoops from 0 to 1 does not write ratchet nudge", async () => {
+  const gh = fakeGh({
+    pr: greenPr({ requiredChecks: [{ name: "test", conclusion: "failure" }] }),
+  });
+  const linear = fakeLinear(snapshot(), loopCountersBody({ reviewLoops: 0 }));
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-109" },
+    linear,
+    gh,
+  });
+
+  assert.equal(result.passed, false);
+  assert.equal(result.nextStatus, IMPLEMENTING);
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.deepEqual(parseLoopCounters(workpad.body), {
+    ciFailCycles: 0,
+    reviewLoops: 1,
+  });
+  assert.equal(hasRatchetNudge(workpad.body), false);
+});
+
+test("applyRatchetNudge ignores high ciFailCycles when reviewLoops stays below 2", () => {
+  const body = loopCountersBody({ ciFailCycles: 5, reviewLoops: 1 });
+  const next = applyRatchetNudge(body);
+  assert.equal(hasRatchetNudge(next), false);
+  assert.deepEqual(parseLoopCounters(next), { ciFailCycles: 5, reviewLoops: 1 });
 });
