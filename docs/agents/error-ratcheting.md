@@ -211,6 +211,10 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit `- (none)` verdict guard (`reviewFeedbackIsClean`), missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.
 
+### PR lane ratchet (KIT-102)
+
+`.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review). Tighten only.
+
 ### PR write-scope ratchet (KIT-39)
 
 `scripts/check-pr-write-scope.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`; pure logic in `scripts/lib/pr-write-scope.mjs`, covered by `scripts/tests/check-pr-write-scope.test.mjs`) fails when a pull request's changed files (vs `origin/development`) fall outside the `write-scope:` globs declared in the PR body, except ratchet-exception paths (`.cursor/hooks/**`, `.cursor/rules/**`, `docs/agents/error-ratcheting.md`, `.github/workflows/**` for CI wiring, and the named ratchet script paths in `RATCHET_SCRIPT_PATHS`). When no `write-scope:` line is present, the check skips cleanly (exit 0) — write-scope is optional per `docs/agents/write-scope.md`. On `push` to feature branches without PR env vars, resolves scope from the open PR via `gh pr view` with `GITHUB_TOKEN`. Prevents repeating the KIT-39 checker fail (gratuitous edits outside declared issue scope, e.g. `seed/fkapi/tests/seed.test.ts` bundled into an admin slice). Tighten only.

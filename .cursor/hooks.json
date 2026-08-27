@@ -45,6 +45,10 @@
       {
         "command": "bash .cursor/hooks/block-reset-database-test-on-shared-db.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-pr-lane.sh",
+        "failClosed": true
       }
     ]
   }
