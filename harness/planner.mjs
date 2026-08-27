@@ -6,7 +6,12 @@
  * No file tools. No general bash. No Pi spawn.
  */
 import { matchesGlob, parseWriteScopeGlobs } from "../scripts/lib/pr-write-scope.mjs";
-import { createLinearCliClient } from "./linear-cli.mjs";
+import { parseLoopCounters } from "./auto-merge.mjs";
+import {
+  hasRatchetNudge,
+  ratchetNudgeComment,
+} from "./checker-exit.mjs";
+import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 
 export const DEFAULT_PLANNER_POLL_MS = 300_000;
 export const PLANNER_PRIORITY_ORDER = [1, 2, 3, 4, 0];
@@ -152,12 +157,52 @@ function sortByPriority(issues) {
 
 /**
  * @param {{
+ *   listComments: (issueId: string) => Promise<Array<{ body?: string }>>,
+ *   commentIssue: (input: { issueId: string, body: string }) => Promise<unknown>,
+ * }} client
+ * @param {Array<{ id: string, identifier: string }>} implementingIssues
+ */
+export async function nudgeImplementingRatchets(client, implementingIssues) {
+  const nudged = [];
+  if (!Array.isArray(implementingIssues) || implementingIssues.length === 0) {
+    return nudged;
+  }
+  for (const issue of implementingIssues) {
+    if (typeof issue?.id !== "string" || typeof issue?.identifier !== "string") {
+      continue;
+    }
+    const comments =
+      typeof client.listComments === "function" ? await client.listComments(issue.id) : [];
+    if (comments.some((comment) => hasRatchetNudge(comment.body))) {
+      continue;
+    }
+    const workpad = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+    const workpadBody = workpad?.body ?? "";
+    if (hasRatchetNudge(workpadBody)) {
+      continue;
+    }
+    const counters = parseLoopCounters(workpadBody);
+    if (!counters || counters.reviewLoops < 2) {
+      continue;
+    }
+    await client.commentIssue({
+      issueId: issue.id,
+      body: ratchetNudgeComment(issue.identifier),
+    });
+    nudged.push(issue.identifier);
+  }
+  return nudged;
+}
+
+/**
+ * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   linear?: {
  *     lookupUser: (id: string) => Promise<{ id: string, name: string } | null>,
  *     listDispatch: (input?: { teamKey?: string }) => Promise<{ implementingState: { id?: string, name?: string } | null, implementingIssues?: object[], issues: object[] }>,
  *     claimIssue: (input: { id: string, stateId: string, delegateId: string }) => Promise<object | null>,
  *     commentIssue: (input: { issueId: string, body: string }) => Promise<unknown>,
+ *     listComments?: (issueId: string) => Promise<Array<{ body?: string }>>,
  *   },
  * }} [input]
  */
@@ -220,7 +265,8 @@ export async function runPlanner({ env = process.env, linear } = {}) {
       delegate: updated?.delegate ?? { id: piAppUserId, name: user.name },
     });
   }
-  return { claimed, skipped };
+  const ratchetNudged = await nudgeImplementingRatchets(client, implementingIssues);
+  return { claimed, skipped, ratchetNudged };
 }
 
 /**

@@ -5,7 +5,7 @@
  * required GitHub checks). Pass → Ready for merge. Fail → Implementing with
  * complete ### Review feedback. Never merge. Fake `gh` + Linear at this seam.
  */
-import { incrementReviewLoops } from "./auto-merge.mjs";
+import { incrementReviewLoops, parseLoopCounters } from "./auto-merge.mjs";
 import { IN_REVIEW, requiredChecksFailed, requiredChecksGreen } from "./implement-exit.mjs";
 import { createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
@@ -13,7 +13,57 @@ import { WORKPAD_HEADING } from "./linear-cli.mjs";
 export const READY_FOR_MERGE = "Ready for merge";
 export const IMPLEMENTING = "Implementing";
 export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
+export const NOTES_HEADING = "### Notes";
 export const CHECKER_PASS_STATUS = "All good — checker pass. MERGEABLE, required checks green.";
+export const RATCHET_NUDGE_TEXT =
+  "next implement pass must land a ratchet per docs/agents/error-ratcheting.md";
+
+/**
+ * @returns {string}
+ */
+export function ratchetNudgeWorkpadLine() {
+  return `- Ratchet: ${RATCHET_NUDGE_TEXT}`;
+}
+
+/**
+ * @param {string} identifier
+ * @returns {string}
+ */
+export function ratchetNudgeComment(identifier) {
+  return `${identifier}: ${RATCHET_NUDGE_TEXT}`;
+}
+
+/**
+ * @param {string | undefined} body
+ * @returns {boolean}
+ */
+export function hasRatchetNudge(body) {
+  return typeof body === "string" && body.includes(RATCHET_NUDGE_TEXT);
+}
+
+/**
+ * Append the ratchet nudge workpad line when reviewLoops >= 2 (ADR-0026).
+ *
+ * @param {string | undefined} body
+ */
+export function applyRatchetNudge(body) {
+  const counters = parseLoopCounters(body);
+  if (!counters || counters.reviewLoops < 2 || hasRatchetNudge(body)) {
+    return typeof body === "string" ? body : `${WORKPAD_HEADING}\n`;
+  }
+  const line = ratchetNudgeWorkpadLine();
+  const base =
+    typeof body === "string" && body.includes(WORKPAD_HEADING)
+      ? body.trimEnd()
+      : WORKPAD_HEADING;
+  if (base.includes(NOTES_HEADING)) {
+    return `${base.replace(/### Notes\n([\s\S]*?)(?=\n### |\s*$)/, `${NOTES_HEADING}\n\n$1\n${line}\n`)}\n`;
+  }
+  if (base.includes(REVIEW_FEEDBACK_HEADING)) {
+    return `${base.replace(REVIEW_FEEDBACK_HEADING, `${NOTES_HEADING}\n\n${line}\n\n${REVIEW_FEEDBACK_HEADING}`)}\n`;
+  }
+  return `${base}\n\n${NOTES_HEADING}\n\n${line}\n`;
+}
 
 /**
  * @param {string | undefined} body
@@ -148,7 +198,9 @@ export function createCheckerGh(deps = {}) {
  */
 async function checkerFailMove(input) {
   const { job, linear, feedbackLines, workpadBody = "", existingComment, pr = null } = input;
-  const body = incrementReviewLoops(applyCheckerFailWorkpad(workpadBody, { feedbackLines }));
+  const body = applyRatchetNudge(
+    incrementReviewLoops(applyCheckerFailWorkpad(workpadBody, { feedbackLines })),
+  );
   await linear.updateWorkpad({
     issueId: job.issueId,
     body,
