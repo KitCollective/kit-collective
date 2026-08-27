@@ -37,6 +37,8 @@ An issue may **start** implement when status is `Implementing` and it has no bra
 
 An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session.
 
+The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. Parked is never resumed. Implementing without a Pi delegate is skipped. Write-scope overlap among Implementing issues still enqueues only the first in `dispatch.priorityOrder`.
+
 ## Status map
 
 Use the `states` array in factory config. Do not invent extra issue statuses.

@@ -98,6 +98,27 @@ export const PLANNER_DISPATCH_QUERY = `query PlannerDispatch($teamKey: String!) 
   }
 }`;
 
+export const RESUME_ORPHANS_QUERY = `query ResumeOrphans($teamKey: String!) {
+  issues(
+    first: 100
+    filter: {
+      team: { key: { eq: $teamKey } }
+      state: { name: { in: ["Implementing", "In Review", "Ready for merge", "Merging"] } }
+    }
+  ) {
+    nodes {
+      id
+      identifier
+      description
+      priority
+      createdAt
+      state { name type }
+      labels(first: 50) { nodes { name } }
+      delegate { id name }
+    }
+  }
+}`;
+
 export const PLANNER_CLAIM_MUTATION = `mutation PlannerClaim($id: String!, $stateId: String!, $delegateId: String!) {
   issueUpdate(id: $id, input: { stateId: $stateId, delegateId: $delegateId }) {
     success
@@ -507,6 +528,21 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
         ? data.backlog.nodes.map((node) => mapPlannerIssue(node)).filter(Boolean)
         : [];
       return { implementingState, implementingIssues, issues };
+    },
+
+    /**
+     * Started factory states that may need a new job after rebuild.
+     * Never Parked, Backlog, or Triage.
+     *
+     * @param {{ teamKey?: string }} [input]
+     */
+    async listOrphans({ teamKey = "KIT" } = {}) {
+      const stdout = await cli(RESUME_ORPHANS_QUERY, { teamKey });
+      const nodes = parseJson(stdout)?.data?.issues?.nodes;
+      if (!Array.isArray(nodes)) {
+        return [];
+      }
+      return nodes.map((node) => mapPlannerIssue(node)).filter(Boolean);
     },
 
     /**

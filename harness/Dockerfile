@@ -26,7 +26,7 @@ RUN pi install npm:pi-subagents \
   && pi install npm:pi-cursor-sdk
 
 WORKDIR /app
-COPY harness/boot-env.mjs harness/capacity.mjs harness/job-queue.mjs harness/linear-cli.mjs harness/linear-actor-token.mjs harness/delegate-gate.mjs harness/pi-job.mjs harness/pi-event-stream.mjs harness/planner.mjs harness/intake.mjs harness/server.mjs harness/webhook-router.mjs harness/worktree.mjs harness/gh-cli.mjs harness/implement-exit.mjs harness/checker-exit.mjs harness/checker-spawn.mjs harness/factory-checker-tools.ts harness/session-adapter.mjs harness/land.mjs harness/auto-merge.mjs ./
+COPY harness/boot-env.mjs harness/capacity.mjs harness/job-queue.mjs harness/linear-cli.mjs harness/linear-actor-token.mjs harness/delegate-gate.mjs harness/pi-job.mjs harness/pi-event-stream.mjs harness/planner.mjs harness/intake.mjs harness/resume.mjs harness/server.mjs harness/webhook-router.mjs harness/worktree.mjs harness/gh-cli.mjs harness/implement-exit.mjs harness/checker-exit.mjs harness/checker-spawn.mjs harness/factory-checker-tools.ts harness/session-adapter.mjs harness/land.mjs harness/auto-merge.mjs ./
 COPY scripts/lib/land-policy.mjs scripts/lib/pr-write-scope.mjs /scripts/lib/
 EXPOSE 8080
 CMD ["node", "server.mjs"]

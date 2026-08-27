@@ -35,6 +35,8 @@ Product Postgres, Redis, and the PaaS panel stay on the other Helsinki CX33. Thi
 
 When this worker’s planner job is **Active** (health `planner: "active"`, 5-minute Linear CLI poller plus webhook `role=planner`), the Cursor Automations planner cron in `docs/agents/automations.md` must stay **Inactive** (paused or removed). Two planners must not claim the same issue. The PI wrapper talks only to the pinned Linear CLI: no file tools, no general bash, no Pi spawn. Delegate on claim is the Pi app user; never Cursor.
 
+Resume is a Linear CLI job on the same planner mutex (`startResumePoller`, same interval as the planner poller). On listen it lists Implementing / In Review / Ready for merge / Merging and enqueues the matching factory role when the coding slot does not already hold that identifier. Checkout reuses the Issue worktree. Parked and Implementing without Pi are skipped. Write-scope overlap among Implementing issues enqueues only the first in Linear priority order. It does not claim, move status, or set delegate.
+
 Intake is a separate hourly Linear CLI job (`PI_INTAKE_POLL_MS`, default 1 hour) on the same planner mutex. It lists open KIT Triage, promotes well-formed slices, and shapes leftovers that have an inferable write-scope (Type, What to build, AC, `write-scope:`) onto the same issue — one finding stays one ticket. Unshaped Sentry or leftovers with no path stay in Triage with one comment. It does not spawn Pi, does not occupy the coding slot, never sets Implementing / In Review / Merging / Done, never sets delegate (planner claims Pi), and never sets Linear Agent to Cursor.
 
 ## Models (not Anthropic)
