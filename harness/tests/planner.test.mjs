@@ -3,13 +3,16 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { LOOP_CAP, LOOP_COUNTERS_HEADING } from "../auto-merge.mjs";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
+import { RATCHET_NUDGE_TEXT } from "../checker-exit.mjs";
 import { createWorkerSlots } from "../job-queue.mjs";
 import {
   createLinearCliClient,
   FORBIDDEN_PLANNER_STATES,
   PLANNER_CLAIM_MUTATION,
   PLANNER_DISPATCH_QUERY,
+  WORKPAD_HEADING,
 } from "../linear-cli.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
 import {
@@ -69,6 +72,7 @@ function fakeLinearCli({
   implementing = [],
   implementingState = { id: IMPLEMENTING_STATE_ID, name: "Implementing" },
   users = { [PI_APP_USER_ID]: { id: PI_APP_USER_ID, name: "Pi" } },
+  issueComments = {},
 } = {}) {
   const calls = [];
   const claims = [];
@@ -122,12 +126,19 @@ function fakeLinearCli({
     throw new Error(`unexpected Linear CLI query: ${query.slice(0, 80)}`);
   }
 
-  return { calls, claims, comments, runCommand };
+  const client = createLinearCliClient({ env: validWorkerEnv(), runCommand });
+  const listCommentsCalls = [];
+  client.listComments = async (issueId) => {
+    listCommentsCalls.push(issueId);
+    return issueComments[issueId] ?? [];
+  };
+
+  return { calls, claims, comments, listCommentsCalls, runCommand, client };
 }
 
-async function claimWith(backlog, env = validWorkerEnv(), implementing = []) {
-  const fake = fakeLinearCli({ backlog, implementing });
-  const linear = createLinearCliClient({ env, runCommand: fake.runCommand });
+async function claimWith(backlog, env = validWorkerEnv(), implementing = [], extras = {}) {
+  const fake = fakeLinearCli({ backlog, implementing, ...extras });
+  const linear = extras.linear ?? fake.client;
   const result = await runPlanner({ env, linear });
   return { ...fake, result, linear };
 }
@@ -476,4 +487,90 @@ test("planner role and host inventory keep Cursor cron paused while the PI plann
   assert.match(host, /Active/);
   assert.match(host, /LINEAR_PI_APP_USER_ID/);
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /planner\.mjs/);
+});
+
+function implementingWorkpad({ reviewLoops = 2, withNudge = false } = {}) {
+  const nudgeLine = withNudge ? `\n### Notes\n\n- Ratchet: ${RATCHET_NUDGE_TEXT}\n` : "";
+  return `${WORKPAD_HEADING}
+
+${LOOP_COUNTERS_HEADING}
+
+- ciFailCycles: 0
+- reviewLoops: ${reviewLoops}
+${nudgeLine}
+### Review feedback
+
+- Spec: still missing
+`;
+}
+
+test("planner poll comments ratchet nudge on Implementing when reviewLoops >= 2 and line is missing", async () => {
+  const issueId = "issue-ratchet";
+  const { comments, claims, result } = await claimWith(
+    [],
+    validWorkerEnv(),
+    [{ id: issueId, identifier: "KIT-109", description: "write-scope: harness/**" }],
+    {
+      issueComments: {
+        [issueId]: [
+          { id: "wp-1", body: implementingWorkpad({ reviewLoops: 2, withNudge: false }) },
+        ],
+      },
+    },
+  );
+
+  assert.equal(claims.length, 0);
+  assert.deepEqual(result.ratchetNudged, ["KIT-109"]);
+  assert.equal(comments.length, 1);
+  assert.match(comments[0].body, new RegExp(RATCHET_NUDGE_TEXT));
+  assert.match(comments[0].body, /KIT-109:/);
+});
+
+test("planner poll skips ratchet comment when workpad already has the nudge line", async () => {
+  const issueId = "issue-has-nudge";
+  const { comments, result } = await claimWith(
+    [],
+    validWorkerEnv(),
+    [{ id: issueId, identifier: "KIT-99", description: "write-scope: harness/**" }],
+    {
+      issueComments: {
+        [issueId]: [{ id: "wp-1", body: implementingWorkpad({ reviewLoops: 3, withNudge: true }) }],
+      },
+    },
+  );
+
+  assert.deepEqual(result.ratchetNudged, []);
+  assert.equal(comments.length, 0);
+});
+
+test("planner ratchet nudge does not move status or spawn Pi", async () => {
+  const issueId = "issue-nudge-only";
+  const spawned = [];
+  const fake = fakeLinearCli({
+    implementing: [{ id: issueId, identifier: "KIT-109", description: "write-scope: harness/**" }],
+    issueComments: {
+      [issueId]: [{ id: "wp-1", body: implementingWorkpad({ reviewLoops: 2 }) }],
+    },
+  });
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    linear: fake.client,
+    runCommand: fake.runCommand,
+    spawnProcess(command, args) {
+      spawned.push({ command, args });
+      return Promise.resolve({ status: 0 });
+    },
+  });
+
+  const result = await runner.run({ role: "planner", identifier: "KIT-109" });
+
+  assert.equal(spawned.length, 0);
+  assert.equal(fake.claims.length, 0);
+  assert.deepEqual(result.ratchetNudged, ["KIT-109"]);
+  assert.equal(fake.comments.length, 1);
+});
+
+test("reviewLoops loop cap stays at five (Auto-merge contract unchanged)", () => {
+  assert.equal(LOOP_CAP, 5);
 });
