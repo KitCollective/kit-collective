@@ -105,19 +105,23 @@ export function createWorkerSlots(deps) {
      */
     enqueue(job) {
       if (PLANNER_MUTEX_ROLES.has(job.role)) {
-        return plannerQueue.enqueue(job);
+        const planned = plannerQueue.enqueue(job);
+        planned.catch(() => undefined);
+        return planned;
       }
       if (!CODING_ROLES.has(job.role)) {
         throw new Error(`no coding slot for role ${job.role}`);
       }
       pendingCoding.push(job);
       const done = codingQueue.enqueue(job);
-      return done.finally(() => {
+      const tracked = done.finally(() => {
         const index = pendingCoding.indexOf(job);
         if (index >= 0) {
           pendingCoding.splice(index, 1);
         }
       });
+      tracked.catch(() => undefined);
+      return tracked;
     },
     queuedIdentifiers() {
       return [
