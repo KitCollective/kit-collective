@@ -215,6 +215,16 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-factory-ci-tests.mjs` (CI via `pnpm check:factory-ci-tests` in `.github/workflows/ci.yml`) fails when the required GitHub `test` job omits harness node tests or webhook-router / land-policy factory-script tests, or when existing mobile check-scripts leave that job. Needles are asserted on expanded `run:` / script bodies only — a step title that names `land-policy` does not satisfy coverage if the script body dropped it. `scripts/tests/check-factory-ci-tests.test.mjs` mutation-tests the ratchet. Prevents repeating the KIT-75 checker fail (colocating the check-script under `.github/workflows/` and matching factory needles from the step name). Tighten only.
 
+### Checker pass workpad ratchet (KIT-106)
+
+`harness/tests/checker.test.mjs` (`clean workpad + MERGEABLE + green checks moves to Ready for merge`) and `factory-checker workpad records Grok token counts` in `harness/tests/token-use.test.mjs` keep these locks:
+
+- Checker pass updates the existing workpad (same comment) with `All good — checker pass` under `### Status`.
+- `### Review feedback` stays exactly `- (none)` so `reviewFeedbackIsClean` remains true.
+- Factory-checker token use lands on that same workpad after pass.
+
+Prevents repeating the KIT-105 silent pass (status flip only, no durable note or token line). Tighten only.
+
 ### Factory checker spawn ratchet (KIT-56)
 
 `scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit `- (none)` verdict guard (`reviewFeedbackIsClean`), missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.

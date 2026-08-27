@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import {
   applyCheckerFailWorkpad,
+  applyCheckerPassWorkpad,
   completeChecker,
   createCheckerGh,
   ghGateFailures,
@@ -246,10 +247,20 @@ test("clean workpad + MERGEABLE + green checks moves to Ready for merge and neve
     gh.calls.some((call) => call[0] === "merge"),
     false,
   );
-  assert.equal(
-    linear.calls.some((call) => call[0] === "updateWorkpad"),
-    false,
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.equal(workpad.commentId, "c1");
+  assert.match(workpad.body, /### Status\nAll good — checker pass/);
+  assert.equal(reviewFeedbackIsClean(workpad.body), true);
+  assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
+});
+
+test("applyCheckerPassWorkpad keeps Review feedback as - (none)", () => {
+  const next = applyCheckerPassWorkpad(
+    `${WORKPAD_HEADING}\n\n### Status\nIn Review\n\n### Review feedback\n\n- (none)\n`,
   );
+  assert.match(next, /### Status\nAll good — checker pass/);
+  assert.equal(reviewFeedbackIsClean(next), true);
+  assert.equal(reviewFeedbackHasFindings(next), false);
 });
 
 test("Pi review findings move to Implementing with complete Review feedback preserved", async () => {

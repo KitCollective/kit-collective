@@ -13,6 +13,7 @@ import { WORKPAD_HEADING } from "./linear-cli.mjs";
 export const READY_FOR_MERGE = "Ready for merge";
 export const IMPLEMENTING = "Implementing";
 export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
+export const CHECKER_PASS_STATUS = "All good — checker pass. MERGEABLE, required checks green.";
 
 /**
  * @param {string | undefined} body
@@ -75,6 +76,32 @@ export function ghGateFailures(pr) {
  * @param {string | undefined} current
  * @param {{ feedbackLines: string[] }} input
  */
+/**
+ * Durable pass note on the existing workpad. Keep Review feedback as `- (none)`
+ * so a later checker does not treat the pass line as findings.
+ *
+ * @param {string | undefined} current
+ */
+export function applyCheckerPassWorkpad(current) {
+  const base =
+    typeof current === "string" && current.includes(WORKPAD_HEADING)
+      ? current.trimEnd()
+      : WORKPAD_HEADING;
+  const statusBlock = `### Status\n${CHECKER_PASS_STATUS}\n`;
+  let next = base.includes("### Status")
+    ? base.replace(/### Status\n[\s\S]*?(?=\n### |\s*$)/, statusBlock)
+    : base.replace(WORKPAD_HEADING, `${WORKPAD_HEADING}\n\n${statusBlock}`);
+  if (next.includes(REVIEW_FEEDBACK_HEADING)) {
+    next = next.replace(
+      /### Review feedback\n[\s\S]*?(?=\n### |\s*$)/,
+      `${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`,
+    );
+  } else {
+    next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`;
+  }
+  return `${next.trimEnd()}\n`;
+}
+
 export function applyCheckerFailWorkpad(current, { feedbackLines }) {
   const base =
     typeof current === "string" && current.includes(WORKPAD_HEADING)
@@ -222,6 +249,11 @@ export async function completeChecker(input) {
   const passed = !piFindings && gateFailures.length === 0;
 
   if (passed) {
+    await linear.updateWorkpad({
+      issueId: job.issueId,
+      body: applyCheckerPassWorkpad(workpadBody),
+      commentId: existing?.id,
+    });
     await linear.setStatus({ issueId: job.issueId, status: READY_FOR_MERGE });
     return { passed: true, nextStatus: READY_FOR_MERGE, pr };
   }
