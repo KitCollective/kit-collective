@@ -164,6 +164,23 @@ test("one Coding job occupies the coding slot at a time", async () => {
   assert.equal(Math.max(...maxSeen), 1);
 });
 
+test("rejected coding job stays on the queue and does not become unhandled", async () => {
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "factory-checker") {
+        throw new Error("pi exited 1 for KIT-47");
+      }
+      return job;
+    },
+  });
+  await assert.rejects(
+    slots.enqueue({ role: "factory-checker", identifier: "KIT-47" }),
+    /pi exited 1 for KIT-47/,
+  );
+  const next = await slots.enqueue({ role: "land", identifier: "KIT-51" });
+  assert.equal(next.role, "land");
+});
+
 test("planner enqueue does not occupy the coding slot", async () => {
   const coding = [];
   const planner = [];
