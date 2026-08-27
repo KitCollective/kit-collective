@@ -176,7 +176,7 @@ test("runResume skips Parked and Implementing without Pi", async () => {
   assert.ok(result.skipped.some((row) => row.identifier === "KIT-11"));
 });
 
-test("runResume skips overlapping Implementing write-scope after the first priority issue", async () => {
+test("runResume skips overlapping Implementing write-scope after first priority", async () => {
   const enqueue = fakeEnqueue();
   const result = await runResume({
     linear: fakeLinear([
@@ -203,7 +203,11 @@ test("runResume skips overlapping Implementing write-scope after the first prior
     enqueue.jobs.map((job) => job.identifier),
     ["KIT-94"],
   );
-  assert.ok(result.skipped.some((row) => row.identifier === "KIT-97" && row.reason === "write-scope overlap"));
+  assert.ok(
+    result.skipped.some(
+      (row) => row.identifier === "KIT-97" && row.reason === "write-scope overlap",
+    ),
+  );
 });
 
 test("runResume skips identifiers already on the coding slot", async () => {
@@ -216,10 +220,12 @@ test("runResume skips identifiers already on the coding slot", async () => {
   });
 
   assert.equal(enqueue.jobs.length, 0);
-  assert.ok(result.skipped.some((row) => row.identifier === "KIT-94" && row.reason === "already queued"));
+  assert.ok(
+    result.skipped.some((row) => row.identifier === "KIT-94" && row.reason === "already queued"),
+  );
 });
 
-test("resume poller enqueues immediately and on the planner interval, on the planner mutex", async () => {
+test("resume poller enqueues immediately and on the planner interval", async () => {
   const jobs = [];
   const timers = [];
   const stop = startResumePoller({
@@ -317,7 +323,7 @@ test("server starts resume on listen and image copies resume.mjs", () => {
   assert.match(readFileSync(join(ROOT, "docs/agents/automations.md"), "utf8"), /resume poller/);
 });
 
-test("startWorkerServer resume on listen enqueues implement for an Implementing orphan", async () => {
+test("startWorkerServer resume on listen enqueues implement for an orphan", async () => {
   const ran = [];
   let finished;
   const done = new Promise((resolve) => {
