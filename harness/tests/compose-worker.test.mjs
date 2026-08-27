@@ -8,7 +8,12 @@ import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
 import { capacityCommentBody, floorsFromEnv, snapshotCapacity } from "../capacity.mjs";
 import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
-import { ALWAYS_READY_CAPACITY, createSerialQueue, createWorkerSlots, parseImplementSlots } from "../job-queue.mjs";
+import {
+  ALWAYS_READY_CAPACITY,
+  createSerialQueue,
+  createWorkerSlots,
+  parseImplementSlots,
+} from "../job-queue.mjs";
 import { createActorTokenProvider } from "../linear-actor-token.mjs";
 import { createLinearCliClient } from "../linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
@@ -163,10 +168,7 @@ test("three implement jobs run concurrently; a fourth waits in queued", async ()
 
   const health = slots.health();
   assert.equal(health.jobs.length, 3);
-  assert.deepEqual(
-    health.jobs.map((row) => row.identifier).sort(),
-    ["KIT-1", "KIT-2", "KIT-3"],
-  );
+  assert.deepEqual(health.jobs.map((row) => row.identifier).sort(), ["KIT-1", "KIT-2", "KIT-3"]);
   assert.deepEqual(health.queued, ["KIT-4"]);
   assert.equal(Math.max(...maxSeen), 3);
 
@@ -206,14 +208,14 @@ test("factory-checker uses the Finisher slot while three implements stay live", 
 
   const health = slots.health();
   assert.equal(health.jobs.length, 4);
-  assert.equal(
-    health.jobs.filter((row) => row.role === "implement").length,
-    3,
+  assert.equal(health.jobs.filter((row) => row.role === "implement").length, 3);
+  assert.deepEqual(
+    health.jobs.find((row) => row.role === "factory-checker"),
+    {
+      role: "factory-checker",
+      identifier: "KIT-99",
+    },
   );
-  assert.deepEqual(health.jobs.find((row) => row.role === "factory-checker"), {
-    role: "factory-checker",
-    identifier: "KIT-99",
-  });
   assert.deepEqual(health.queued, []);
 
   releaseFinisher();
@@ -365,14 +367,11 @@ test("each implement checkout uses its own Issue worktree path", async () => {
     slots.enqueue({ role: "implement", identifier: "KIT-11" }),
   ]);
 
-  assert.deepEqual(
-    checkouts.map((row) => row.identifier).sort(),
-    ["KIT-10", "KIT-11"],
-  );
-  assert.deepEqual(
-    checkouts.map((row) => row.path).sort(),
-    ["/var/lib/kit-pi/worktrees/KIT-10", "/var/lib/kit-pi/worktrees/KIT-11"],
-  );
+  assert.deepEqual(checkouts.map((row) => row.identifier).sort(), ["KIT-10", "KIT-11"]);
+  assert.deepEqual(checkouts.map((row) => row.path).sort(), [
+    "/var/lib/kit-pi/worktrees/KIT-10",
+    "/var/lib/kit-pi/worktrees/KIT-11",
+  ]);
 });
 
 test("parseImplementSlots defaults to 3 and clamps 1–3", () => {
@@ -1496,11 +1495,7 @@ test("capacity below floor on the second implement spawn keeps first in jobs and
       }
       await linear.commentIssue({
         issueId: job.issueId,
-        body: capacityCommentBody(
-          { ramFreeMb: 100, diskFreeMb: 200, ready: false },
-          floors,
-          job,
-        ),
+        body: capacityCommentBody({ ramFreeMb: 100, diskFreeMb: 200, ready: false }, floors, job),
       });
       await new Promise((resolve) => sleepWaits.push(resolve));
       return job;
@@ -1512,7 +1507,10 @@ test("capacity below floor on the second implement spawn keeps first in jobs and
     identifier: "KIT-87",
     issueId: "issue-87",
   });
-  await waitUntil(() => slots.health().jobs.some((row) => row.identifier === "KIT-87"), "first job");
+  await waitUntil(
+    () => slots.health().jobs.some((row) => row.identifier === "KIT-87"),
+    "first job",
+  );
   assert.deepEqual(slots.health().queued, []);
 
   const second = slots.enqueue({
@@ -1525,7 +1523,10 @@ test("capacity below floor on the second implement spawn keeps first in jobs and
 
   releaseFirst();
   await waitUntil(() => linear.comments.length === 1 && sleepWaits.length === 1, "capacity wait");
-  assert.deepEqual(slots.health().jobs.map((row) => row.identifier), ["KIT-88"]);
+  assert.deepEqual(
+    slots.health().jobs.map((row) => row.identifier),
+    ["KIT-88"],
+  );
   assert.deepEqual(slots.health().queued, []);
   assert.match(linear.comments[0].body, /## Capacity gate/);
 

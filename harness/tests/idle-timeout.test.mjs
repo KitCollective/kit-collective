@@ -283,9 +283,7 @@ test("idle timeout on one implement frees only that slot; sibling implement keep
   });
 
   const first = slots.enqueue(implementJob({ identifier: "KIT-86", issueId: "issue-kit-86" }));
-  const second = slots.enqueue(
-    implementJob({ identifier: "KIT-87", issueId: "issue-kit-87" }),
-  );
+  const second = slots.enqueue(implementJob({ identifier: "KIT-87", issueId: "issue-kit-87" }));
   assert.equal(slots.health().jobs.length, 2);
 
   releaseKit86();
