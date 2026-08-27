@@ -164,6 +164,23 @@ test("one Coding job occupies the coding slot at a time", async () => {
   assert.equal(Math.max(...maxSeen), 1);
 });
 
+test("rejected coding job stays on the queue and does not become unhandled", async () => {
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "factory-checker") {
+        throw new Error("pi exited 1 for KIT-47");
+      }
+      return job;
+    },
+  });
+  await assert.rejects(
+    slots.enqueue({ role: "factory-checker", identifier: "KIT-47" }),
+    /pi exited 1 for KIT-47/,
+  );
+  const next = await slots.enqueue({ role: "land", identifier: "KIT-51" });
+  assert.equal(next.role, "land");
+});
+
 test("planner enqueue does not occupy the coding slot", async () => {
   const coding = [];
   const planner = [];
@@ -290,6 +307,7 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.doesNotMatch(dockerfile, /piagent\/platform/);
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
+  assert.match(dockerfile, /pr-write-scope\.mjs/);
   assert.match(dockerfile, /COPY \.pi /);
   assert.match(dockerfile, /pi install/);
   assert.match(dockerfile, /PI_WORKSPACE=\/workspace/);
@@ -300,6 +318,15 @@ test("compose build context includes the repo so .pi lands in the image", () => 
   assert.match(compose, /context:\s*\.\./);
   assert.match(compose, /dockerfile:\s*harness\/Dockerfile/);
   assert.match(compose, /PI_WORKSPACE:\s*"\/workspace"/);
+});
+
+test("root dockerignore re-includes Pi role and agent markdown after excluding **/*.md", () => {
+  const lines = readFileSync(join(ROOT, ".dockerignore"), "utf8")
+    .split("\n")
+    .map((line) => line.trim());
+  const excludeMd = lines.indexOf("**/*.md");
+  assert.notEqual(excludeMd, -1);
+  assert.equal(lines[excludeMd + 1], "!.pi/**/*.md");
 });
 
 test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control exist", () => {

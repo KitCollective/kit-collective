@@ -13,6 +13,7 @@ import {
   requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
+import { gitAuthExtraHeader } from "../linear-actor-token.mjs";
 import {
   COMMENT_CREATE_MUTATION,
   COMMENT_UPDATE_MUTATION,
@@ -199,7 +200,7 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
   );
 });
 
-test("production git wrapper keeps GH_TOKEN in env via Bearer header, never argv", async () => {
+test("production git wrapper keeps GH_TOKEN in env via Basic header, never argv", async () => {
   const env = { GH_TOKEN: "harness_git_auth_test_token" };
   const child = remoteGitChildEnv(env);
   assert.equal(
@@ -208,7 +209,7 @@ test("production git wrapper keeps GH_TOKEN in env via Bearer header, never argv
   );
   assert.equal(child.GH_TOKEN, "harness_git_auth_test_token");
   assert.equal(child.GIT_CONFIG_KEY_1, "http.extraHeader");
-  assert.equal(child.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
+  assert.equal(child.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("harness_git_auth_test_token"));
 
   const execs = [];
   const adapter = createWorktreeAdapter({
@@ -228,7 +229,7 @@ test("production git wrapper keeps GH_TOKEN in env via Bearer header, never argv
     assert.equal(exec.args.join(" ").includes("harness_git_auth_test_token"), false);
     assert.equal(JSON.stringify(exec.args).includes("Authorization"), false);
     assert.equal(exec.env.GIT_CONFIG_KEY_1, "http.extraHeader");
-    assert.equal(exec.env.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
+    assert.equal(exec.env.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("harness_git_auth_test_token"));
   }
 });
 
@@ -776,7 +777,7 @@ test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and
   assert.ok(gitCalls.length > 0);
   for (const call of gitCalls) {
     assert.equal(call.env.GIT_CONFIG_KEY_1, "http.extraHeader");
-    assert.equal(call.env.GIT_CONFIG_VALUE_1, "Authorization: Bearer harness_git_auth_test_token");
+    assert.equal(call.env.GIT_CONFIG_VALUE_1, gitAuthExtraHeader("harness_git_auth_test_token"));
   }
   assert.equal(
     calls.some((call) => call.command === "gh" && call.args.includes("merge")),
@@ -879,6 +880,9 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
   assert.match(gate.text, /conflict/i);
   assert.match(gate.text, /never calls Linear/i);
   assert.match(gate.text, /never .*In Review/i);
+  assert.match(gate.text, /this worktree's PR only|this worktree’s PR only/i);
+  assert.match(gate.text, /Do not mention sibling/i);
+  assert.doesNotMatch(gate.text, /KIT-99/);
   for (const relative of [
     ".pi/agents/nest.md",
     ".pi/agents/expo.md",
@@ -899,6 +903,9 @@ test("implement role requires Scout then helpers then Gate; parent owns In Revie
   assert.match(implement, /In Review/);
   assert.match(implement, /only when Gate is green|Gate is green/i);
   assert.match(implement, /Implementing/);
+  assert.match(implement, /this job's identifier|this job’s identifier/i);
+  assert.match(implement, /Do not mention sibling KIT issues/i);
+  assert.match(implement, /this PR only/i);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   const checker = readFileSync(join(ROOT, ".pi/roles/factory-checker.md"), "utf8");
   const land = readFileSync(join(ROOT, ".pi/roles/land.md"), "utf8");

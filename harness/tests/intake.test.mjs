@@ -119,6 +119,8 @@ function fakeIntakeCli({ triage = [] } = {}) {
               { id: "label-signal", name: "signal-up" },
               { id: "label-improvement", name: "Improvement" },
               { id: "label-feature", name: "Feature" },
+              { id: "label-bug", name: "Bug" },
+              { id: "label-mobile", name: "surface:mobile" },
             ],
           },
           triage: { nodes: triage },
@@ -292,69 +294,91 @@ test("well-formed Triage slice moves to Backlog with ready-for-agent and without
   );
 });
 
-test("related leftovers of the same class become one Backlog tech issue; origins become Duplicate", async () => {
-  const { created, updates, relations, comments, result } = await intakeWith([
+test("signal-up leftover with a Finding and repo path is shaped onto the same issue", async () => {
+  const { updates, created, result } = await intakeWith([
     triageNode({
-      id: "leftover-a",
-      identifier: "KIT-81",
-      title: "CI graph miss A",
+      id: "leftover-shape",
+      identifier: "KIT-94",
+      title: "Dockerfile omits Playwright Chromium",
       description: leftoverBody(
-        "The required GitHub test job CI graph does not run lint-workflows.sh.",
+        "The kit-harness image does not install Playwright Chromium. Path: harness/Dockerfile",
       ),
       labels: { nodes: [{ id: "label-signal", name: "signal-up" }] },
-      relations: {
-        nodes: [
-          {
-            type: "related",
-            issue: { id: "leftover-a", identifier: "KIT-81" },
-            relatedIssue: { id: "origin-87", identifier: "KIT-87" },
-          },
-        ],
-      },
-    }),
-    triageNode({
-      id: "leftover-b",
-      identifier: "KIT-82",
-      title: "CI graph miss B",
-      description: leftoverBody(
-        "The same CI graph miss: required GitHub checks skip lint-workflows.sh.",
-      ),
-      labels: { nodes: [{ id: "label-signal", name: "signal-up" }] },
-      relations: {
-        nodes: [
-          {
-            type: "related",
-            issue: { id: "leftover-b", identifier: "KIT-82" },
-            relatedIssue: { id: "origin-87", identifier: "KIT-87" },
-          },
-        ],
-      },
     }),
   ]);
 
-  assert.match(INTAKE_TRIAGE_QUERY, /relatedIssue/);
-  assert.equal(created.length, 1);
-  assert.equal(created[0].input.stateId, BACKLOG_STATE_ID);
-  assert.equal(created[0].input.teamId, "team-kit");
-  assert.match(created[0].input.title, /ci-graph/i);
-  assert.equal(/class:\s*/.test(created[0].input.description), false);
-  assert.equal(Object.hasOwn(created[0].input, "delegateId"), false);
+  assert.equal(created.length, 0);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].id, "leftover-shape");
+  assert.equal(updates[0].stateId, BACKLOG_STATE_ID);
+  assert.equal(updates[0].addedLabelIds.includes("label-rfa"), true);
+  assert.equal(updates[0].addedLabelIds.includes("label-bug"), true);
+  assert.equal(updates[0].removedLabelIds.includes("label-signal"), true);
+  assert.equal(Object.hasOwn(updates[0], "delegateId"), false);
+  assert.match(updates[0].description, /##\s*What to build/i);
+  assert.match(updates[0].description, /##\s*Acceptance criteria/i);
+  assert.match(updates[0].description, /write-scope:\s*harness\/Dockerfile/);
+  assert.deepEqual(
+    result.promoted.map((row) => row.identifier),
+    ["KIT-94"],
+  );
+});
+
+test("two leftovers that only share the word write-scope stay separate slices", async () => {
+  const { created, updates, relations, result } = await intakeWith([
+    triageNode({
+      id: "leftover-a",
+      identifier: "KIT-96",
+      title: "Dockerfile does not install Chromium",
+      description: leftoverBody(
+        "Out of write-scope. Install Chromium in harness/Dockerfile so implement UI evidence works.",
+      ),
+      labels: { nodes: [{ id: "label-signal", name: "signal-up" }] },
+    }),
+    triageNode({
+      id: "leftover-b",
+      identifier: "KIT-97",
+      title: "getIssue omits description",
+      description: leftoverBody(
+        "Out of write-scope. WORKER_ISSUE_QUERY in harness/linear-cli.mjs must return description.",
+      ),
+      labels: { nodes: [{ id: "label-signal", name: "signal-up" }] },
+    }),
+  ]);
+
+  assert.equal(created.length, 0);
+  assert.equal(relations.length, 0);
   assert.deepEqual(updates.map((row) => row.id).sort(), ["leftover-a", "leftover-b"]);
   assert.equal(
-    updates.every((row) => row.stateId === DUPLICATE_STATE_ID),
+    updates.every((row) => row.stateId === BACKLOG_STATE_ID),
     true,
   );
-  assert.equal(relations.length, 2);
   assert.equal(
-    relations.every((row) => row.relatedIssueId === "tech-1"),
+    updates.every((row) => row.description.includes("write-scope:")),
     true,
   );
+  assert.deepEqual(result.promoted.map((row) => row.identifier).sort(), ["KIT-96", "KIT-97"]);
+  assert.equal(result.consolidated.identifier, null);
+});
+
+test("leftover with no inferable write-scope stays in Triage with one Intake comment", async () => {
+  const { updates, created, comments, result } = await intakeWith([
+    triageNode({
+      id: "leftover-vague",
+      identifier: "KIT-94",
+      title: "Docs still say Nicklas-only Merging",
+      description: leftoverBody("The generator sentence is stale after Auto-merge."),
+      labels: { nodes: [{ id: "label-signal", name: "signal-up" }] },
+    }),
+  ]);
+
+  assert.equal(created.length, 0);
+  assert.equal(updates.length, 0);
   assert.equal(comments.length, 1);
-  assert.equal(comments[0].issueId, "tech-1");
-  assert.match(comments[0].body, /KIT-81/);
-  assert.match(comments[0].body, /KIT-82/);
-  assert.deepEqual(result.consolidated.identifier, "KIT-100");
-  assert.deepEqual(result.consolidated.origins.sort(), ["KIT-81", "KIT-82"]);
+  assert.equal(comments[0].issueId, "leftover-vague");
+  assert.match(comments[0].body, /write-scope/i);
+  assert.deepEqual(result.promoted, []);
+  assert.deepEqual(result.commented, ["KIT-94"]);
 });
 
 test("unshaped Sentry issue stays in Triage with one comment, updated in place on later runs", async () => {
@@ -430,4 +454,7 @@ test("server starts Intake poller from PI_INTAKE_POLL_MS and image copies intake
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /intake\.mjs/);
   assert.match(readFileSync(join(ROOT, "harness/host.md"), "utf8"), /Intake/);
   assert.match(readFileSync(join(ROOT, ".pi/roles/planner.md"), "utf8"), /Intake/);
+  assert.match(INTAKE_TRIAGE_QUERY, /name:\s*\{\s*in:/);
+  assert.match(INTAKE_TRIAGE_QUERY, /ready-for-agent/);
+  assert.match(INTAKE_TRIAGE_QUERY, /"Bug"/);
 });

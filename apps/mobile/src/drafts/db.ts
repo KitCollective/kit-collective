@@ -63,6 +63,10 @@ draftDb.execSync(`
     FOREIGN KEY (draft_id) REFERENCES capture_session_draft(id) ON DELETE CASCADE,
     FOREIGN KEY (session_id) REFERENCES capture_session(id) ON DELETE CASCADE
   );
+  CREATE TABLE IF NOT EXISTS app_kv (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+  );
 `);
 
 function ensureColumn(table: string, column: string, definition: string): void {

@@ -53,7 +53,7 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | `Implementing` → `In Review` | **Implement** (PR + proof on Linear) |
 | `In Review` → `Ready for merge` | **Checker** (pass) |
 | `In Review` / `Ready for merge` / `Merging` → `Implementing` | **Checker** or **land** (fail) |
-| `Ready for merge` → `Merging` | **Auto-merge** (loop cap) or **approver** |
+| `Ready for merge` → `Merging` | **Auto-merge** when delegate is Pi (loop cap + MERGEABLE + green checks) or **approver** |
 | `Merging` → `Done` | **Land** (merge succeeded) |
 | Merge to integration | **Land** |
 
@@ -104,7 +104,7 @@ Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage
 | --- | --- |
 | Trigger | Every hour (`PI_INTAKE_POLL_MS`, default 1 hour) on the **planner mutex** |
 | Tools | **Linear CLI** on the PI worker. Not Pi. Not the coding slot. |
-| Action | List open KIT Triage. Promote well-formed slices (Linear Type, write-scope, What to build, AC) to Backlog with `ready-for-agent` and without `signal-up`. Related leftovers of the same class become one Backlog tech issue; origins become Duplicate. Unshaped Sentry stays in Triage with one comment updated in place. |
+| Action | List open KIT Triage. Promote well-formed slices (Linear Type, write-scope, What to build, AC) to Backlog with `ready-for-agent` and without `signal-up`. Shape leftovers that have an inferable repo path onto the **same** issue (Type, What to build, AC, `write-scope:`). One finding stays one ticket — do not lump leftovers into `Tech: paths`. Unshaped Sentry or leftovers with no path stay in Triage with one comment updated in place. Planner claims Pi delegate after promote. |
 | Never | Implementing, In Review, Merging, Done. Never set Linear Agent to Cursor. |
 
 ---
@@ -113,7 +113,7 @@ Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage
 
 | Field | Value |
 | --- | --- |
-| Trigger | Linear status changed **to** `Implementing` |
+| Trigger | Linear status changed **to** `Implementing`. PI worker also wakes orphans on boot and the resume poller. |
 | Tools | Linear CLI + `gh` (PR + checks). Browser if the slice is UI. Not Linear MCP on kit-harness. |
 | Eligibility (start) | Status `Implementing`, **no** branch/PR yet (planner just claimed) |
 | Eligibility (resume) | Status `Implementing` **with** an existing branch/PR (checker or land sent it back) |
@@ -133,7 +133,7 @@ Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}` — Linear-triggeren fylder den. |
 | Status | Inactive until planner + checker exist, and `development` has `/implement` + `WORKFLOW.md`. If the Instruction was pasted before the KIT-23/KIT-24 pre-review gate, **re-paste** the implement block below. |
 
-The Linear trigger is what makes checker-fail → `Implementing` wake **this** automation on the **same issue**. A new VM each time; same branch/PR because the workpad and the attached PR say so.
+The Linear trigger is what makes checker-fail → `Implementing` wake **this** automation on the **same issue**. A new VM each time; same branch/PR because the workpad and the attached PR say so. On kit-harness the resume poller (boot + planner interval) re-enqueues implement when the issue is already Implementing and the coding slot is empty — Compose rebuild does not wait for another status change.
 
 ```text
 You are the implement runtime for Linear issue {{ issue.identifier }}.
@@ -201,7 +201,7 @@ Complete review every pass — not a delta on last ### Review feedback. Dump eve
 
 Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status; do not fail early on Standards. Failed required checks or CONFLICTING → fail, and still include every Spec/Standards hard miss in the same ### Review feedback. Local tests are not a substitute.
 
-Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Auto-merge may then flip to Merging.
+Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Pi stays delegate until Auto-merge decides. Auto-merge may then flip to Merging when delegate is Pi.
 
 Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no resume of the previous Pi job.
 

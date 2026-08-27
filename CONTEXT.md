@@ -207,8 +207,8 @@ Hourly Linear-only scan of open KIT Triage on the planner mutex (`PI_INTAKE_POLL
 _Avoid_: filing leftovers into Backlog with `ready-for-agent`; treating Intake as planner claim; running Intake on the coding slot
 
 **Auto-merge**:
-Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and Loop cap is clear. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself.
-_Avoid_: force-push; merging to staging or production; treating Auto-merge as land
+Worker moving Ready for merge → Merging when delegate is Pi, the PR is MERGEABLE, required checks are green, and Loop cap is clear. On refuse, clears delegate to `null` and writes one workpad note. Implementing, In Review, and Ready for merge keep Pi as delegate until Auto-merge decides. Done and Canceled clear leftover Pi delegate. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself when delegate is empty.
+_Avoid_: force-push; merging to staging or production; treating Auto-merge as land; clearing delegate before Auto-merge decides
 
 **Loop cap**:
 Either five required-check failure cycles (`ciFailCycles`) or five checker-fail returns (`reviewLoops`) blocks Auto-merge. Counters live under workpad `### Loop counters`. Missing counters fail closed.
@@ -241,3 +241,7 @@ _Avoid_: 503 because a job is running, hung, or waiting on capacity; treating pl
 **Token use**:
 After an implement or factory-checker Pi job exits, the worker writes input/output counts per role and model onto the existing workpad (`### Token use`). Implement parent is Composer; Scout and Gate are separate Hy3 lines when those counts exist; factory-checker is Grok. Planner and Intake do not write model token lines (they do not spawn Pi). Unknown counts stay unknown — the job still completes.
 _Avoid_: inventing 0; putting API keys on the workpad; logging planner/intake model tokens
+
+**Implement browser**:
+Headless Chromium on the PI worker for implement UI evidence (screenshots onto Linear). A Pi package on implement only, and only when the slice is UI. Not planner. Not Intake. Not Nicklas’s Desktop Chrome.
+_Avoid_: browser on the planner mutex; attaching to a personal browser profile; loading browser tools on api/db-only implement

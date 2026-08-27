@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,7 @@ import {
   FACTORY_CHECKER_ALLOWED_TOOLS,
   FACTORY_CHECKER_EXCLUDED_TOOLS,
   factoryCheckerPiArgs,
+  factoryCheckerToolArgs,
 } from "../checker-spawn.mjs";
 import { IN_REVIEW } from "../implement-exit.mjs";
 import { pullRequestFromAttachments } from "../land.mjs";
@@ -459,6 +460,14 @@ test("factory-checker spawn uses tool allowlist and linear_cli extension", async
     true,
   );
   assert.equal(spawned[0].options.env.LINEAR_ISSUE_ID, ISSUE_ID);
+});
+
+test("factory-checker tools extension sits next to checker-spawn, not PI_WORKSPACE/harness", () => {
+  const args = factoryCheckerToolArgs();
+  const extension = args[args.indexOf("-e") + 1];
+  assert.equal(extension.includes("/workspace/harness/"), false);
+  assert.equal(extension.endsWith("factory-checker-tools.ts"), true);
+  assert.equal(existsSync(extension), true);
 });
 
 test("factoryCheckerPiArgs pins role file and prompt", () => {

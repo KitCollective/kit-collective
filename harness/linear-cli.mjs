@@ -98,6 +98,27 @@ export const PLANNER_DISPATCH_QUERY = `query PlannerDispatch($teamKey: String!) 
   }
 }`;
 
+export const RESUME_ORPHANS_QUERY = `query ResumeOrphans($teamKey: String!) {
+  issues(
+    first: 100
+    filter: {
+      team: { key: { eq: $teamKey } }
+      state: { name: { in: ["Implementing", "In Review", "Ready for merge", "Merging"] } }
+    }
+  ) {
+    nodes {
+      id
+      identifier
+      description
+      priority
+      createdAt
+      state { name type }
+      labels(first: 50) { nodes { name } }
+      delegate { id name }
+    }
+  }
+}`;
+
 export const PLANNER_CLAIM_MUTATION = `mutation PlannerClaim($id: String!, $stateId: String!, $delegateId: String!) {
   issueUpdate(id: $id, input: { stateId: $stateId, delegateId: $delegateId }) {
     success
@@ -130,7 +151,30 @@ export const INTAKE_TRIAGE_QUERY = `query IntakeTriage($teamKey: String!) {
   ) {
     nodes { id name }
   }
-  labels: issueLabels(first: 50, filter: { team: { key: { eq: $teamKey } } }) {
+  labels: issueLabels(
+    first: 50
+    filter: {
+      team: { key: { eq: $teamKey } }
+      name: {
+        in: [
+          "ready-for-agent"
+          "signal-up"
+          "proposal"
+          "needs-triage"
+          "needs-info"
+          "ready-for-human"
+          "wontfix"
+          "Feature"
+          "Bug"
+          "Improvement"
+          "surface:mobile"
+          "surface:web"
+          "surface:admin"
+          "surface:api"
+        ]
+      }
+    }
+  ) {
     nodes { id name }
   }
   triage: issues(
@@ -167,8 +211,8 @@ export const INTAKE_TRIAGE_QUERY = `query IntakeTriage($teamKey: String!) {
   }
 }`;
 
-export const INTAKE_PROMOTE_MUTATION = `mutation IntakePromote($id: String!, $stateId: String!, $addedLabelIds: [String!], $removedLabelIds: [String!]) {
-  issueUpdate(id: $id, input: { stateId: $stateId, addedLabelIds: $addedLabelIds, removedLabelIds: $removedLabelIds }) {
+export const INTAKE_PROMOTE_MUTATION = `mutation IntakePromote($id: String!, $stateId: String!, $addedLabelIds: [String!], $removedLabelIds: [String!], $description: String) {
+  issueUpdate(id: $id, input: { stateId: $stateId, addedLabelIds: $addedLabelIds, removedLabelIds: $removedLabelIds, description: $description }) {
     success
     issue { id state { name } }
   }
@@ -487,6 +531,21 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
     },
 
     /**
+     * Started factory states that may need a new job after rebuild.
+     * Never Parked, Backlog, or Triage.
+     *
+     * @param {{ teamKey?: string }} [input]
+     */
+    async listOrphans({ teamKey = "KIT" } = {}) {
+      const stdout = await cli(RESUME_ORPHANS_QUERY, { teamKey });
+      const nodes = parseJson(stdout)?.data?.issues?.nodes;
+      if (!Array.isArray(nodes)) {
+        return [];
+      }
+      return nodes.map((node) => mapPlannerIssue(node)).filter(Boolean);
+    },
+
+    /**
      * Claim is Implementing + Pi delegate only. Never assignee. Never a forbidden status.
      *
      * @param {{ id: string, stateId: string, delegateId: string }} input
@@ -552,10 +611,16 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
     /**
      * Move a shaped Triage slice to Backlog. Never delegate.
      *
-     * @param {{ id: string, stateId: string, addedLabelIds?: string[], removedLabelIds?: string[] }} input
+     * @param {{ id: string, stateId: string, addedLabelIds?: string[], removedLabelIds?: string[], description?: string }} input
      */
-    async promoteIssue({ id, stateId, addedLabelIds = [], removedLabelIds = [] }) {
-      await cli(INTAKE_PROMOTE_MUTATION, { id, stateId, addedLabelIds, removedLabelIds });
+    async promoteIssue({ id, stateId, addedLabelIds = [], removedLabelIds = [], description }) {
+      await cli(INTAKE_PROMOTE_MUTATION, {
+        id,
+        stateId,
+        addedLabelIds,
+        removedLabelIds,
+        ...(typeof description === "string" ? { description } : {}),
+      });
     },
 
     /**

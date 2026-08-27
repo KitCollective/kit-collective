@@ -400,7 +400,7 @@ test("Intake does not write model token lines", async () => {
           teamId: "team-kit",
           backlogState: { id: "state-backlog", name: "Backlog" },
           duplicateState: { id: "state-duplicate", name: "Duplicate" },
-          labels: {},
+          labels: { "ready-for-agent": "label-rfa" },
           issues: [],
         };
       },

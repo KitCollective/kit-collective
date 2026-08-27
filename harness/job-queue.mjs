@@ -62,7 +62,7 @@ export function createSerialQueue(deps) {
   };
 }
 
-const PLANNER_MUTEX_ROLES = new Set(["planner", "intake"]);
+const PLANNER_MUTEX_ROLES = new Set(["planner", "intake", "resume"]);
 const CODING_ROLES = new Set(["implement", "factory-checker", "auto-merge", "land"]);
 
 /**
@@ -76,6 +76,7 @@ const CODING_ROLES = new Set(["implement", "factory-checker", "auto-merge", "lan
  */
 export function createWorkerSlots(deps) {
   let currentJob = null;
+  const pendingCoding = [];
   const capacity = deps.capacity ?? ALWAYS_READY_CAPACITY;
 
   const plannerQueue = createSerialQueue({
@@ -104,12 +105,32 @@ export function createWorkerSlots(deps) {
      */
     enqueue(job) {
       if (PLANNER_MUTEX_ROLES.has(job.role)) {
-        return plannerQueue.enqueue(job);
+        const planned = plannerQueue.enqueue(job);
+        planned.catch(() => undefined);
+        return planned;
       }
       if (!CODING_ROLES.has(job.role)) {
         throw new Error(`no coding slot for role ${job.role}`);
       }
-      return codingQueue.enqueue(job);
+      pendingCoding.push(job);
+      const done = codingQueue.enqueue(job);
+      const tracked = done.finally(() => {
+        const index = pendingCoding.indexOf(job);
+        if (index >= 0) {
+          pendingCoding.splice(index, 1);
+        }
+      });
+      tracked.catch(() => undefined);
+      return tracked;
+    },
+    queuedIdentifiers() {
+      return [
+        ...new Set(
+          pendingCoding
+            .map((job) => job.identifier)
+            .filter((identifier) => typeof identifier === "string" && identifier.length > 0),
+        ),
+      ];
     },
     health() {
       return {

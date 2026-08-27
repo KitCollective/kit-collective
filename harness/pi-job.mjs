@@ -8,9 +8,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { completeAutoMerge } from "./auto-merge.mjs";
-import { DEFAULT_CAPACITY_POLL_MS, floorsFromEnv, waitForCapacity } from "./capacity.mjs";
+import {
+  DEFAULT_CAPACITY_POLL_MS,
+  evaluateChromiumCapacity,
+  floorsFromEnv,
+  waitForCapacity,
+} from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
+import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
@@ -29,6 +35,22 @@ export const REQUIRED_PI_PACKAGES = [
   "npm:pi-subagents",
   "npm:@ghoseb/pi-damage-control",
   "npm:pi-cursor-sdk",
+];
+
+/** In-repo Pi package. Loaded via `--skill` on UI implement only — not `.pi/settings.json`. */
+export const IMPLEMENT_BROWSER_PACKAGE = "kit-implement-browser";
+export const IMPLEMENT_BROWSER_SKILL = "playwright-chromium";
+export const IMPLEMENT_BROWSER_SKILL_PATH =
+  ".pi/packages/implement-browser/skills/playwright-chromium";
+export const UI_SURFACE_LABELS = ["mobile", "web", "admin"];
+export const UI_WRITE_SCOPE_PREFIXES = ["apps/mobile", "apps/web", "apps/admin"];
+
+const PERSONAL_BROWSER_PROFILE_MARKERS = [
+  "Application Support/Google",
+  "google-chrome",
+  "Google/Chrome",
+  "AppData/Local/Google/Chrome",
+  "AppData\\Local\\Google\\Chrome",
 ];
 
 const ROLE_FILES = {
@@ -61,6 +83,149 @@ const TOKEN_ROLE_LABELS = {
 };
 
 const TOKEN_SUBAGENT_ROLES = new Set(["scout", "gate"]);
+
+/**
+ * @param {string | undefined} description
+ * @returns {string}
+ */
+export function parseWriteScopeLine(description = "") {
+  const match = String(description).match(/^write-scope:\s*(.+)$/m);
+  return match ? match[1] : "";
+}
+
+/**
+ * UI slice: Surface label mobile/web/admin, or write-scope touching those apps.
+ *
+ * @param {{ labels?: string[], description?: string }} [slice]
+ */
+export function isUiImplementSlice({ labels = [], description = "" } = {}) {
+  const names = Array.isArray(labels) ? labels : [];
+  if (names.some((label) => UI_SURFACE_LABELS.includes(label))) {
+    return true;
+  }
+  const scope = parseWriteScopeLine(description);
+  return UI_WRITE_SCOPE_PREFIXES.some((prefix) => scope.includes(prefix));
+}
+
+/**
+ * @param {unknown} userDataDir
+ */
+export function isPersonalBrowserProfile(userDataDir) {
+  if (typeof userDataDir !== "string" || userDataDir.length === 0) {
+    return false;
+  }
+  return PERSONAL_BROWSER_PROFILE_MARKERS.some((marker) => userDataDir.includes(marker));
+}
+
+export function workerChromiumLaunchOptions() {
+  return {
+    browser: "chromium",
+    headless: true,
+    channel: undefined,
+    userDataDir: null,
+  };
+}
+
+/**
+ * Fake-able Chromium adapter. CI injects `launch`; production never uses Desktop Chrome.
+ *
+ * @param {{
+ *   readCapacity?: () => Promise<{ ramFreeMb: number, diskFreeMb: number, ready?: boolean }>,
+ *   floors?: { ramFloorMb: number, diskFloorMb: number },
+ *   launch?: (input: object) => Promise<{ bytes?: Buffer, filename?: string }>,
+ * }} [deps]
+ */
+export function createBrowserAdapter({ readCapacity, floors, launch } = {}) {
+  return {
+    /**
+     * @param {{ url?: string, userDataDir?: string, channel?: string }} [input]
+     */
+    async captureScreenshot(input = {}) {
+      if (input.channel === "chrome" || isPersonalBrowserProfile(input.userDataDir)) {
+        return { ok: false, reason: "personal-profile" };
+      }
+      const raw =
+        typeof readCapacity === "function" ? await readCapacity() : { ramFreeMb: 0, diskFreeMb: 0 };
+      const capacity = evaluateChromiumCapacity({
+        ramFreeMb: raw.ramFreeMb,
+        diskFreeMb: raw.diskFreeMb,
+        ...floorsFromEnv({}),
+        ...floors,
+      });
+      if (!capacity.ready) {
+        return { ok: false, reason: "capacity" };
+      }
+      if (typeof launch !== "function") {
+        return { ok: false, reason: "no-adapter" };
+      }
+      const screenshot = await launch({
+        ...workerChromiumLaunchOptions(),
+        url: input.url,
+      });
+      return { ok: true, screenshot };
+    },
+  };
+}
+
+/**
+ * @param {string | undefined} current
+ * @param {{ title: string, url: string }} evidence
+ */
+export function linkWorkpadScreenshot(current, { title, url }) {
+  const base =
+    typeof current === "string" && current.includes(WORKPAD_HEADING)
+      ? current.trimEnd()
+      : WORKPAD_HEADING;
+  const line = `- ${title}: ${url}`;
+  if (base.includes(url)) {
+    return `${base}\n`;
+  }
+  if (base.includes("### Evidence")) {
+    if (base.includes("- (none)")) {
+      return `${base.replace("### Evidence\n\n- (none)", `### Evidence\n\n${line}`)}\n`;
+    }
+    return `${base.replace("### Evidence", `### Evidence\n${line}`)}\n`;
+  }
+  return `${base}\n\n### Evidence\n\n${line}\n`;
+}
+
+/**
+ * @param {{
+ *   linear: {
+ *     attachFile: (input: object) => Promise<{ url?: string, title?: string }>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *     updateWorkpad?: (input: object) => Promise<unknown>,
+ *   },
+ *   issueId: string,
+ *   screenshot: { bytes?: Buffer, filename?: string },
+ *   title: string,
+ * }} input
+ */
+export async function attachWorkpadScreenshot({ linear, issueId, screenshot, title }) {
+  if (!linear || typeof linear.attachFile !== "function") {
+    throw new Error("screenshot evidence requires linear.attachFile");
+  }
+  const uploaded = await linear.attachFile({
+    issueId,
+    title,
+    filename: screenshot?.filename,
+    bytes: screenshot?.bytes,
+  });
+  const url = uploaded?.url;
+  if (typeof url !== "string" || url.length === 0) {
+    throw new Error("screenshot evidence upload missing url");
+  }
+  if (typeof linear.listComments === "function" && typeof linear.updateWorkpad === "function") {
+    const comments = await linear.listComments(issueId);
+    const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+    await linear.updateWorkpad({
+      issueId,
+      body: linkWorkpadScreenshot(existing?.body, { title, url }),
+      commentId: existing?.id,
+    });
+  }
+  return { url, title };
+}
 
 /**
  * @param {unknown} value
@@ -351,9 +516,10 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  * @param {string} roleFile
  * @param {string} model
  * @param {string} prompt
+ * @param {{ browserSkill?: string }} [options]
  * @returns {string[]}
  */
-export function piArgsForRole(role, workspace, roleFile, model, prompt) {
+export function piArgsForRole(role, workspace, roleFile, model, prompt, options = {}) {
   if (role === "factory-checker") {
     const args = factoryCheckerPiArgs({ workspace, roleFile, model, prompt });
     if (STREAMING_ROLES.has(role)) {
@@ -364,12 +530,17 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt) {
     }
     return args;
   }
+  const skillArgs =
+    typeof options.browserSkill === "string" && options.browserSkill.length > 0
+      ? ["--skill", options.browserSkill]
+      : [];
   return [
     "-p",
     "-a",
     ...(STREAMING_ROLES.has(role) ? ["--mode", "json"] : []),
     "--model",
     model,
+    ...skillArgs,
     "--append-system-prompt",
     join(workspace, roleFile),
     "--",
@@ -447,9 +618,10 @@ export function createPiJobRunner({
    * @param {string} roleFile
    * @param {string} prompt
    * @param {NodeJS.ProcessEnv} spawnEnv
+   * @param {{ browserSkill?: string }} [piOptions]
    */
-  async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv) {
-    const args = piArgsForRole(job.role, workspace, roleFile, model, prompt);
+  async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, piOptions = {}) {
+    const args = piArgsForRole(job.role, workspace, roleFile, model, prompt, piOptions);
     const streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
     const collectStdout = STREAMING_ROLES.has(job.role);
     const shouldStream =
@@ -661,6 +833,8 @@ export function createPiJobRunner({
           },
           linear: linearClient,
           gh: mergeGh,
+          delegateGateConfig: createDelegateGateConfig(env),
+          env,
         });
       }
       if (job.role === "land") {
@@ -714,7 +888,32 @@ export function createPiJobRunner({
       if (job.role === "factory-checker") {
         spawnEnv.LINEAR_ISSUE_ID = job.issueId ?? identifier;
       }
-      const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv);
+      let browserSkill;
+      if (job.role === "implement") {
+        const linearClient = linear ?? job.linear;
+        const issue =
+          typeof linearClient?.getIssue === "function"
+            ? await linearClient.getIssue(job.issueId ?? identifier)
+            : null;
+        const slice = {
+          labels: issue?.labels ?? job.labels ?? [],
+          description: issue?.description ?? job.description ?? "",
+        };
+        if (isUiImplementSlice(slice) && typeof readCapacity === "function") {
+          const raw = await readCapacity();
+          const chromium = evaluateChromiumCapacity({
+            ramFreeMb: raw.ramFreeMb,
+            diskFreeMb: raw.diskFreeMb,
+            ...floorsFromEnv(env),
+          });
+          if (chromium.ready) {
+            browserSkill = join(workspace, IMPLEMENT_BROWSER_SKILL_PATH);
+          }
+        }
+      }
+      const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, {
+        browserSkill,
+      });
       if (result.idleTimeout) {
         return timeoutPark(job, identifier, jobIdleMs(env));
       }

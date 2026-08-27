@@ -175,11 +175,20 @@ jobs:
       - name: Test mobile add upload-files ratchet logic
         run: node --test scripts/tests/check-mobile-add-upload-files.test.mjs
 
+      - name: Check mobile add camera-resume ratchet
+        run: pnpm check:mobile-add-camera-resume
+
+      - name: Check mobile capture dead-export ratchet
+        run: pnpm check:mobile-capture-dead-exports
+
       - name: Test harness node tests
         run: pnpm test:harness
 
       - name: Test factory-script webhook-router and land-policy
         run: pnpm test:factory-scripts
+
+      - name: Test setup-coolify-mcp script
+        run: node --test scripts/tests/setup-coolify-mcp.test.mjs
 
       - name: Check factory tests are wired on the test job
         run: pnpm check:factory-ci-tests

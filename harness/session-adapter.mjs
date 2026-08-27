@@ -12,7 +12,8 @@ export const CREATED_CLAIMED_THOUGHT =
   "Pi is working from the Issue webhook. This AgentSession is display-only.";
 export const PROMPTED_THOUGHT =
   "This session does not enqueue a coding job. Durable evidence stays on the workpad.";
-export const HANDOFF_ELICITATION = "Ready for merge. This is Nicklas's turn.";
+export const HANDOFF_ELICITATION =
+  "Auto-merge refused or the issue is Nicklas's turn. Delegate is cleared on refuse only.";
 
 /**
  * Issue-webhook paths have issueId, not sessionId. Look the live AgentSession up
@@ -134,9 +135,6 @@ export function createMemorySessionAdapter({ linear } = {}) {
         ephemeral: false,
         content: { type: "elicitation", body: HANDOFF_ELICITATION },
       });
-      if (typeof linear?.clearDelegate === "function") {
-        await linear.clearDelegate({ issueId });
-      }
     },
   };
   return adapter;

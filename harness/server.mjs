@@ -20,6 +20,7 @@ import { ALWAYS_READY_CAPACITY, createWorkerSlots } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS, startPlannerPoller } from "./planner.mjs";
+import { runResume, startResumePoller } from "./resume.mjs";
 import { createLinearSessionAdapter } from "./session-adapter.mjs";
 import { createHttpHandler } from "./webhook-router.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
@@ -99,8 +100,19 @@ export async function startWorkerServer({
           readCapacity: capacitySnapshot,
         });
   let lastTokens = null;
-  const slots = createWorkerSlots({
+  const delegateGateConfig = createDelegateGateConfig(env);
+  let slots;
+  slots = createWorkerSlots({
     async run(job) {
+      if (job.role === "resume") {
+        return runResume({
+          env,
+          linear: linearClient,
+          enqueue: slots,
+          delegateGateConfig,
+          queuedIdentifiers: slots.queuedIdentifiers(),
+        });
+      }
       const result = await runner.run(job);
       if (job.role === "implement" || job.role === "factory-checker") {
         lastTokens =
@@ -128,20 +140,23 @@ export async function startWorkerServer({
     health: () => ({ ...slots.health(), tokens: lastTokens }),
     worktree: trees,
     session: createLinearSessionAdapter({ linear: linearClient }),
-    delegateGateConfig: createDelegateGateConfig(env),
+    delegateGateConfig,
     readCapacity: capacitySnapshot,
   });
   const server = createServer(handler);
   let stopPoller = () => {};
+  let stopResumePoller = () => {};
   let stopIntakePoller = () => {};
   server.on("close", () => {
     stopPoller();
+    stopResumePoller();
     stopIntakePoller();
   });
   return new Promise((resolve) => {
     server.listen(listenPort, listenHost, () => {
       if (pollMs > 0) {
         stopPoller = startPlannerPoller({ enqueue: slots, intervalMs: pollMs });
+        stopResumePoller = startResumePoller({ enqueue: slots, intervalMs: pollMs });
       }
       if (intakeMs > 0) {
         stopIntakePoller = startIntakePoller({ enqueue: slots, intervalMs: intakeMs });
