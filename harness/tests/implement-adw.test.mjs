@@ -995,7 +995,8 @@ test("evaluateWriteScopeExit skips when the issue has no write-scope line", () =
 });
 
 test("evaluateWriteScopeExit names paths outside declared globs", () => {
-  const description = "write-scope: harness/implement-exit.mjs, harness/tests/implement-adw.test.mjs";
+  const description =
+    "write-scope: harness/implement-exit.mjs, harness/tests/implement-adw.test.mjs";
   const result = evaluateWriteScopeExit(description, [
     "harness/implement-exit.mjs",
     "apps/api/src/main.ts",
