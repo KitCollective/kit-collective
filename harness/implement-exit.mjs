@@ -363,19 +363,37 @@ export async function completeImplementAdw(input) {
     throw new Error("full pnpm test stays on GitHub Actions, not on this worker");
   }
 
+  let listed = null;
+  if (typeof gh.findOpenIssuePr === "function") {
+    listed = await gh.findOpenIssuePr({ identifier: job.identifier });
+  }
   let pr = await gh.viewPr({ cwd: checkout.path });
+  if (listed?.url && typeof pr?.url === "string" && pr.url.length > 0 && listed.url !== pr.url) {
+    throw new Error(`${job.identifier} has multiple open PRs`);
+  }
+  if ((typeof pr?.url !== "string" || pr.url.length === 0) && typeof listed?.url === "string") {
+    pr = {
+      url: listed.url,
+      mergeable: listed.mergeable ?? "UNKNOWN",
+      checks: listed.checks ?? [],
+    };
+  }
   if (typeof pr?.url !== "string" || pr.url.length === 0) {
     pr = await gh.createPr({
       cwd: checkout.path,
       base: IMPLEMENT_PR_BASE,
       head: checkout.branch,
       title: `${job.identifier}: implement`,
+      identifier: job.identifier,
     });
   }
 
   const deadline = now() + waitTimeoutMs;
   while (true) {
-    pr = (await gh.viewPr({ cwd: checkout.path })) ?? pr;
+    const next = await gh.viewPr({ cwd: checkout.path });
+    if (typeof next?.url === "string" && next.url.length > 0) {
+      pr = next;
+    }
     if (requiredChecksFailed(pr?.checks)) {
       return writeCiRetryWorkpad({
         job,

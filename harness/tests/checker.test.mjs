@@ -414,7 +414,7 @@ test("factory-checker job spawns Pi in the issue worktree then applies harness p
     issueId: ISSUE_ID,
   });
 
-  assert.deepEqual(worktree.calls, [{ identifier: "KIT-56" }]);
+  assert.deepEqual(worktree.calls, [{ identifier: "KIT-56", mode: "reuse" }]);
   assert.equal(spawned.length, 1);
   assert.equal(spawned[0].options.cwd, "/var/lib/kit-pi/worktrees/KIT-56");
   assert.equal(
