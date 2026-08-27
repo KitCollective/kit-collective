@@ -3,26 +3,25 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { LOOP_CAP, LOOP_COUNTERS_HEADING } from "../auto-merge.mjs";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
+import { RATCHET_NUDGE_TEXT } from "../checker-exit.mjs";
 import { createWorkerSlots } from "../job-queue.mjs";
 import {
   createLinearCliClient,
   FORBIDDEN_PLANNER_STATES,
   PLANNER_CLAIM_MUTATION,
   PLANNER_DISPATCH_QUERY,
+  WORKPAD_HEADING,
 } from "../linear-cli.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
 import {
   DEFAULT_PLANNER_POLL_MS,
   findWriteScopeOverlap,
   globsOverlap,
-  nudgeImplementingRatchets,
   runPlanner,
   startPlannerPoller,
 } from "../planner.mjs";
-import { LOOP_COUNTERS_HEADING, LOOP_CAP } from "../auto-merge.mjs";
-import { RATCHET_NUDGE_TEXT } from "../checker-exit.mjs";
-import { WORKPAD_HEADING } from "../linear-cli.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PI_APP_USER_ID = "pi-app-user-1";

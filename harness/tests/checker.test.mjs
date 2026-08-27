@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { LOOP_COUNTERS_HEADING, parseLoopCounters } from "../auto-merge.mjs";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import {
   applyCheckerFailWorkpad,
@@ -24,7 +25,6 @@ import {
   reviewFeedbackIsClean,
   reviewFeedbackSection,
 } from "../checker-exit.mjs";
-import { LOOP_COUNTERS_HEADING, parseLoopCounters } from "../auto-merge.mjs";
 import {
   FACTORY_CHECKER_ALLOWED_TOOLS,
   FACTORY_CHECKER_EXCLUDED_TOOLS,
