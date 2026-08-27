@@ -113,7 +113,7 @@ Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage
 
 | Field | Value |
 | --- | --- |
-| Trigger | Linear status changed **to** `Implementing` |
+| Trigger | Linear status changed **to** `Implementing`. PI worker also wakes orphans on boot and the resume poller. |
 | Tools | Linear CLI + `gh` (PR + checks). Browser if the slice is UI. Not Linear MCP on kit-harness. |
 | Eligibility (start) | Status `Implementing`, **no** branch/PR yet (planner just claimed) |
 | Eligibility (resume) | Status `Implementing` **with** an existing branch/PR (checker or land sent it back) |
@@ -133,7 +133,7 @@ Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage
 | Instruction | Paste the block below. Keep `{{ issue.identifier }}` — Linear-triggeren fylder den. |
 | Status | Inactive until planner + checker exist, and `development` has `/implement` + `WORKFLOW.md`. If the Instruction was pasted before the KIT-23/KIT-24 pre-review gate, **re-paste** the implement block below. |
 
-The Linear trigger is what makes checker-fail → `Implementing` wake **this** automation on the **same issue**. A new VM each time; same branch/PR because the workpad and the attached PR say so.
+The Linear trigger is what makes checker-fail → `Implementing` wake **this** automation on the **same issue**. A new VM each time; same branch/PR because the workpad and the attached PR say so. On kit-harness the resume poller (boot + planner interval) re-enqueues implement when the issue is already Implementing and the coding slot is empty — Compose rebuild does not wait for another status change.
 
 ```text
 You are the implement runtime for Linear issue {{ issue.identifier }}.

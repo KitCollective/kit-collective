@@ -101,7 +101,7 @@ function adwFileFor(issue) {
  * @param {{ names: string[], appUserId?: string }} delegateGateConfig
  * @returns {{ kind: "skip", reason: string } | { kind: "enqueue", role: string, adwFile?: string }}
  */
-function dispatchIssue(issue, delegateGateConfig) {
+export function dispatchIssue(issue, delegateGateConfig) {
   const labels = Array.isArray(issue.labels) ? issue.labels : [];
   if (labels.includes(SIGNAL_UP)) {
     return { kind: "skip", reason: "signal-up" };
