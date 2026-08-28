@@ -40,7 +40,7 @@ test("ratchet fails when factory-checker regains repo write on allowlist", () =>
   const mutated = {
     ...files,
     checkerSpawn: files.checkerSpawn.replace(
-      'export const FACTORY_CHECKER_ALLOWED_TOOLS = [',
+      "export const FACTORY_CHECKER_ALLOWED_TOOLS = [",
       'export const FACTORY_CHECKER_ALLOWED_TOOLS = ["write", ',
     ),
   };
@@ -53,7 +53,7 @@ test("ratchet fails when skill_manage appears on factory-checker allowlist", () 
   const mutated = {
     ...files,
     checkerSpawn: files.checkerSpawn.replace(
-      'export const FACTORY_CHECKER_ALLOWED_TOOLS = [',
+      "export const FACTORY_CHECKER_ALLOWED_TOOLS = [",
       'export const FACTORY_CHECKER_ALLOWED_TOOLS = ["skill_manage", ',
     ),
   };

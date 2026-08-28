@@ -24,9 +24,7 @@ export const FACTORY_CHECKER_MEMORY_TOOLS = [
  * @returns {string[]}
  */
 function stringArrayConst(source, constName) {
-  const match = source.match(
-    new RegExp(`export const ${constName}\\s*=\\s*\\[([\\s\\S]*?)\\];`),
-  );
+  const match = source.match(new RegExp(`export const ${constName}\\s*=\\s*\\[([\\s\\S]*?)\\];`));
   if (!match) {
     return [];
   }
@@ -77,7 +75,9 @@ export function missingFactoryCheckerSpawnCoverage(files) {
     failures.push("harness/pi-job.mjs must set LINEAR_ISSUE_ID for factory-checker");
   }
   if (!piJob.includes("HERMES_CHECKER_AGENT_DIR_REL")) {
-    failures.push("harness/pi-job.mjs must declare HERMES_CHECKER_AGENT_DIR_REL for Memory writer config");
+    failures.push(
+      "harness/pi-job.mjs must declare HERMES_CHECKER_AGENT_DIR_REL for Memory writer config",
+    );
   }
   if (!checkerSpawn.includes("FACTORY_CHECKER_EXCLUDED_TOOLS")) {
     failures.push("harness/checker-spawn.mjs must declare excluded tools");
@@ -119,7 +119,10 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!checkerExit.includes("timed out before turning green")) {
     failures.push("harness/checker-exit.mjs must fail-move on GitHub wait timeout");
   }
-  if (!dockerfile.includes("checker-spawn.mjs") || !dockerfile.includes("factory-checker-tools.ts")) {
+  if (
+    !dockerfile.includes("checker-spawn.mjs") ||
+    !dockerfile.includes("factory-checker-tools.ts")
+  ) {
     failures.push("harness/Dockerfile must copy checker-spawn and factory-checker-tools");
   }
   if (!role.includes("linear_cli")) {
@@ -135,7 +138,9 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   try {
     const config = JSON.parse(checkerHermes);
     if (config.reviewEnabled !== true) {
-      failures.push(".pi/agent-checker/hermes-memory-config.json must enable reviewEnabled for writer");
+      failures.push(
+        ".pi/agent-checker/hermes-memory-config.json must enable reviewEnabled for writer",
+      );
     }
     if (config.correctionDetection !== true) {
       failures.push(
