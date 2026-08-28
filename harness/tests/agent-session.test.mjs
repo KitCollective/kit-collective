@@ -1,6 +1,6 @@
 /**
  * KIT-113 — AgentSession factory path removed. Issue HMAC still enqueues factory roles.
- * Fake Linear at this seam; do not call Pi.
+ * POST /webhooks/linear/agent-session returns 404 (no session HMAC). Fake Linear; no Pi.
  */
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
@@ -10,7 +10,6 @@ import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mj
 import { createHttpHandler, createMemoryAdapter, routeWebhook } from "../webhook-router.mjs";
 
 const ISSUE_SECRET = "test-linear-webhook-secret";
-const SESSION_SECRET = "test-pi-agent-session-secret";
 const NOW = 1_700_000_000_000;
 const PI_APP_USER_ID = "pi-app-user-1";
 const DELEGATE_GATE = createDelegateGateConfig({ LINEAR_PI_APP_USER_ID: PI_APP_USER_ID });
@@ -20,11 +19,6 @@ const AGENT_SESSION_REMOVED = "AgentSession path removed (KIT-113)";
 
 function sign(rawBody, secret) {
   return createHmac("sha256", secret).update(rawBody).digest("hex");
-}
-
-function signed(payload, secret) {
-  const rawBody = JSON.stringify(payload);
-  return { rawBody, signature: sign(rawBody, secret), payload };
 }
 
 function issueUpdatePayload({
@@ -127,48 +121,17 @@ async function routeIssue(payload, issue, extras = {}) {
   return { result, enqueue, linear };
 }
 
-async function routeSession(payload, issue, extras = {}) {
-  const rawBody = JSON.stringify(payload);
-  const signature = sign(rawBody, extras.secret ?? SESSION_SECRET);
-  const enqueue = extras.enqueue ?? fakeEnqueue();
-  const linear = extras.linear ?? fakeLinear(issue);
-  const result = await routeWebhook({
-    rawBody,
-    signature,
-    secret: ISSUE_SECRET,
-    sessionSecret: extras.secret ?? SESSION_SECRET,
-    hmacChannel: "session",
-    now: NOW,
-    linear,
-    gh: extras.gh ?? fakeGh(),
-    enqueue,
-    delegateGateConfig: extras.delegateGateConfig ?? DELEGATE_GATE,
-  });
-  return { result, enqueue, linear };
-}
-
-test("AgentSession HMAC on session channel skips without enqueue or Linear activity", async () => {
-  const { result, enqueue, linear } = await routeSession(
-    sessionPayload(),
-    snapshot({ status: "Implementing", labels: ["Feature"], linearType: "Feature" }),
-  );
-
-  assert.equal(result.kind, "skip");
-  assert.equal(result.reason, AGENT_SESSION_REMOVED);
-  assert.equal(enqueue.jobs.length, 0);
-  assert.equal(linear.calls.length, 0);
-});
-
-test("AgentSession payload on Issue channel also skips without enqueue", async () => {
+test("AgentSession payload on Issue channel skips without enqueue or Linear activity", async () => {
   const rawBody = JSON.stringify(sessionPayload());
   const signature = sign(rawBody, ISSUE_SECRET);
   const enqueue = fakeEnqueue();
+  const linear = fakeLinear(snapshot());
   const result = await routeWebhook({
     rawBody,
     signature,
     secret: ISSUE_SECRET,
     now: NOW,
-    linear: fakeLinear(snapshot()),
+    linear,
     gh: fakeGh(),
     enqueue,
     delegateGateConfig: DELEGATE_GATE,
@@ -177,6 +140,7 @@ test("AgentSession payload on Issue channel also skips without enqueue", async (
   assert.equal(result.kind, "skip");
   assert.equal(result.reason, AGENT_SESSION_REMOVED);
   assert.equal(enqueue.jobs.length, 0);
+  assert.equal(linear.calls.length, 0);
 });
 
 test("Issue status webhook enqueues implement when Linear Agent is empty", async () => {
@@ -228,7 +192,7 @@ test("implement skips when Linear Agent is Pi (requires empty Agent)", async () 
   assert.equal(enqueue.jobs.length, 0);
 });
 
-test("Issue status webhook still enqueues; session webhook on the same issue does not", async () => {
+test("Issue status webhook still enqueues; AgentSession payload on issue channel does not", async () => {
   const claimed = snapshot({
     status: "Implementing",
     delegate: null,
@@ -237,13 +201,26 @@ test("Issue status webhook still enqueues; session webhook on the same issue doe
   });
 
   const issueRoute = await routeIssue(issueUpdatePayload(), claimed);
-  const sessionRoute = await routeSession(sessionPayload(), claimed);
+  const rawBody = JSON.stringify(sessionPayload());
+  const signature = sign(rawBody, ISSUE_SECRET);
+  const sessionEnqueue = fakeEnqueue();
+  const sessionResult = await routeWebhook({
+    rawBody,
+    signature,
+    secret: ISSUE_SECRET,
+    now: NOW,
+    linear: fakeLinear(claimed),
+    gh: fakeGh(),
+    enqueue: sessionEnqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
 
   assert.equal(issueRoute.result.kind, "enqueue");
   assert.equal(issueRoute.enqueue.jobs.length, 1);
   assert.equal(issueRoute.enqueue.jobs[0].role, "implement");
-  assert.equal(sessionRoute.result.kind, "skip");
-  assert.equal(sessionRoute.enqueue.jobs.length, 0);
+  assert.equal(sessionResult.kind, "skip");
+  assert.equal(sessionResult.reason, AGENT_SESSION_REMOVED);
+  assert.equal(sessionEnqueue.jobs.length, 0);
 });
 
 test("Ready for merge enqueues auto-merge without clearing delegate", async () => {
@@ -266,7 +243,7 @@ test("Ready for merge enqueues auto-merge without clearing delegate", async () =
   );
 });
 
-test("HTTP adapter enqueues Issue webhook and skips AgentSession without activity ack", async () => {
+test("HTTP adapter returns 404 for agent-session path without enqueue or activity ack", async () => {
   const claimed = snapshot({
     status: "Implementing",
     delegate: null,
@@ -277,7 +254,6 @@ test("HTTP adapter enqueues Issue webhook and skips AgentSession without activit
   const enqueue = fakeEnqueue();
   const handler = createHttpHandler({
     secret: ISSUE_SECRET,
-    sessionSecret: SESSION_SECRET,
     now: () => NOW,
     linear,
     gh: fakeGh(),
@@ -288,30 +264,24 @@ test("HTTP adapter enqueues Issue webhook and skips AgentSession without activit
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
 
-  const issue = signed(issueUpdatePayload(), ISSUE_SECRET);
-  const agent = signed(sessionPayload(), SESSION_SECRET);
-  const cross = signed(sessionPayload(), ISSUE_SECRET);
+  const issue = JSON.stringify(issueUpdatePayload());
+  const issueSignature = sign(issue, ISSUE_SECRET);
+  const sessionBody = JSON.stringify(sessionPayload());
 
   try {
     const spawned = await fetch(`http://127.0.0.1:${port}/webhooks/linear`, {
       method: "POST",
-      headers: { "content-type": "application/json", "linear-signature": issue.signature },
-      body: issue.rawBody,
+      headers: { "content-type": "application/json", "linear-signature": issueSignature },
+      body: issue,
     });
-    const acked = await fetch(`http://127.0.0.1:${port}/webhooks/linear/agent-session`, {
+    const removed = await fetch(`http://127.0.0.1:${port}/webhooks/linear/agent-session`, {
       method: "POST",
-      headers: { "content-type": "application/json", "linear-signature": agent.signature },
-      body: agent.rawBody,
-    });
-    const forged = await fetch(`http://127.0.0.1:${port}/webhooks/linear/agent-session`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "linear-signature": cross.signature },
-      body: cross.rawBody,
+      headers: { "content-type": "application/json", "linear-signature": "deadbeef" },
+      body: sessionBody,
     });
 
     assert.equal(spawned.status, 200);
-    assert.equal(acked.status, 200);
-    assert.equal(forged.status, 401);
+    assert.equal(removed.status, 404);
     assert.equal(enqueue.jobs.length, 1);
     assert.equal(enqueue.jobs[0].role, "implement");
     assert.equal(
@@ -323,10 +293,9 @@ test("HTTP adapter enqueues Issue webhook and skips AgentSession without activit
   }
 });
 
-test("in-memory adapter matches HTTP session-channel skip for the same fixture", async () => {
+test("in-memory adapter skips AgentSession payload without session HMAC channel", async () => {
   const adapter = createMemoryAdapter({
     secret: ISSUE_SECRET,
-    sessionSecret: SESSION_SECRET,
     now: () => NOW,
     linear: fakeLinear(snapshot()),
     gh: fakeGh(),
@@ -334,12 +303,8 @@ test("in-memory adapter matches HTTP session-channel skip for the same fixture",
     delegateGateConfig: DELEGATE_GATE,
   });
   const body = JSON.stringify(sessionPayload());
-  const signature = sign(body, SESSION_SECRET);
-  const result = await adapter.handle({
-    rawBody: body,
-    signature,
-    hmacChannel: "session",
-  });
+  const signature = sign(body, ISSUE_SECRET);
+  const result = await adapter.handle({ rawBody: body, signature });
   assert.equal(result.kind, "skip");
   assert.equal(result.reason, AGENT_SESSION_REMOVED);
 });

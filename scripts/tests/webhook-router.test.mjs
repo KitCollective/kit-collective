@@ -253,43 +253,22 @@ test("unknown app delegate skips", async () => {
   assert.equal(enqueue.jobs.length, 0);
 });
 
-test("Implementing with empty Agent enqueues implement", async () => {
+test("Implementing without Pi delegate skips", async () => {
   const { result, enqueue } = await dispatch(
     issueUpdatePayload(),
-    snapshot({
-      status: "Implementing",
-      delegate: null,
-      linearType: "Feature",
-      labels: ["Feature"],
-    }),
-  );
-
-  assert.equal(result.kind, "enqueue");
-  assert.equal(enqueue.jobs.length, 1);
-  assert.equal(enqueue.jobs[0].role, "implement");
-});
-
-test("Implementing with Pi delegate skips (requires empty Agent)", async () => {
-  const { result, enqueue } = await dispatch(
-    issueUpdatePayload(),
-    snapshot({
-      status: "Implementing",
-      delegate: { name: "Pi" },
-      linearType: "Feature",
-      labels: ["Feature"],
-    }),
+    snapshot({ status: "Implementing", delegate: null }),
   );
 
   assert.equal(result.kind, "skip");
   assert.equal(enqueue.jobs.length, 0);
 });
 
-test("Implementing + empty Agent + Feature enqueues implement and names feature ADW", async () => {
+test("Implementing + Pi + Feature enqueues implement and names feature ADW", async () => {
   const { result, enqueue } = await dispatch(
     issueUpdatePayload(),
     snapshot({
       status: "Implementing",
-      delegate: null,
+      delegate: { name: "Pi" },
       labels: ["ready-for-agent", "Feature"],
       linearType: "Feature",
     }),
@@ -305,12 +284,12 @@ test("Implementing + empty Agent + Feature enqueues implement and names feature 
   assertHiddenBehindInterface(result, enqueue.jobs);
 });
 
-test("Implementing + empty Agent + Bug names bug ADW, not a Linear status", async () => {
+test("Implementing + Pi + Bug names bug ADW, not a Linear status", async () => {
   const { result, enqueue } = await dispatch(
     issueUpdatePayload(),
     snapshot({
       status: "Implementing",
-      delegate: null,
+      delegate: { name: "Pi" },
       labels: ["Bug"],
       linearType: "Bug",
     }),
@@ -322,12 +301,12 @@ test("Implementing + empty Agent + Bug names bug ADW, not a Linear status", asyn
   assert.equal(result.kind, "enqueue");
 });
 
-test("Implementing + empty Agent + Improvement names improvement ADW", async () => {
+test("Implementing + Pi + Improvement names improvement ADW", async () => {
   const { enqueue } = await dispatch(
     issueUpdatePayload(),
     snapshot({
       status: "Implementing",
-      delegate: null,
+      delegate: { name: "Pi" },
       labels: ["Improvement"],
       linearType: "Improvement",
     }),

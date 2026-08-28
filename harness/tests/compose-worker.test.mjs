@@ -34,7 +34,6 @@ function validWorkerEnv() {
     CURSOR_API_KEY: "cursor_test",
     LINEAR_CLI_API_KEY: "lin_cli_test",
     LINEAR_WEBHOOK_SECRET: SECRET,
-    LINEAR_PI_WEBHOOK_SECRET: "session-secret",
     GH_TOKEN: "ghp_test",
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     LINEAR_PI_CLIENT_ID: "client-id",
@@ -1038,7 +1037,7 @@ test("planner webhook runs while a Coding job occupies the slot", async () => {
   }
 });
 
-test("AgentSession created and prompted still do not enqueue a Coding job", async () => {
+test("agent-session HTTP path returns 404 and does not enqueue a Coding job", async () => {
   const ran = [];
   const server = await startWorkerServer({
     env: validWorkerEnv(),
@@ -1070,9 +1069,9 @@ test("AgentSession created and prompted still do not enqueue a Coding job", asyn
           agentSession: { id: "session-kit-99", issueId: "issue-1" },
           webhookTimestamp: NOW,
         },
-        { path: "/webhooks/linear/agent-session", secret: "session-secret" },
+        { path: "/webhooks/linear/agent-session", secret: "ignored" },
       );
-      assert.equal(response.status, 200);
+      assert.equal(response.status, 404);
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.equal(ran.length, 0);
@@ -1083,7 +1082,7 @@ test("AgentSession created and prompted still do not enqueue a Coding job", asyn
   }
 });
 
-test("AgentSession webhook skips without ack; implement enqueues when Linear Agent is empty", async () => {
+test("AgentSession payload on issue channel skips without ack; implement enqueues when Linear Agent is empty", async () => {
   const gitCalls = [];
   const linear = {
     async getIssue() {
@@ -1107,7 +1106,6 @@ test("AgentSession webhook skips without ack; implement enqueues when Linear Age
   };
   const adapter = createMemoryAdapter({
     secret: SECRET,
-    sessionSecret: "session-secret",
     now: () => NOW,
     linear,
     gh: {},
@@ -1121,11 +1119,10 @@ test("AgentSession webhook skips without ack; implement enqueues when Linear Age
     agentSession: { id: "session-kit-99", issueId: "issue-1" },
     webhookTimestamp: NOW,
   });
-  const sessionSignature = createHmac("sha256", "session-secret").update(sessionBody).digest("hex");
+  const sessionSignature = createHmac("sha256", SECRET).update(sessionBody).digest("hex");
   const sessionResult = await adapter.handle({
     rawBody: sessionBody,
     signature: sessionSignature,
-    hmacChannel: "session",
   });
   assert.equal(sessionResult.kind, "skip");
   assert.equal(sessionResult.reason, "AgentSession path removed (KIT-113)");

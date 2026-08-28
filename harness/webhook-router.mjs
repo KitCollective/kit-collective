@@ -1,9 +1,10 @@
 /**
  * Webhook router (KIT-52 + KIT-113).
  *
- * Issue HMAC (`hmacChannel: "issue"`) → enqueue exactly one factory role
+ * Issue HMAC on POST /webhooks/linear → enqueue exactly one factory role
  * (planner | implement | factory-checker | auto-merge | land) or skip.
- * AgentSession HMAC is ignored — no ack, no enqueue (KIT-113).
+ * POST /webhooks/linear/agent-session is not registered (404). AgentSession
+ * payloads on the issue channel are skipped without enqueue or activity ack.
  * Pi argv, worktree paths, and ADW yaml stay behind this interface.
  * Fake Linear and `gh` at this seam; do not call Pi or hosted MCP.
  */
@@ -15,6 +16,7 @@ const HMAC_REJECT = "invalid hmac";
 const REPLAY_WINDOW_MS = 60_000;
 const READY_FOR_AGENT = "ready-for-agent";
 const SIGNAL_UP = "signal-up";
+const AGENT_SESSION_PATH = "/webhooks/linear/agent-session";
 
 const ADW_BY_TYPE = {
   Feature: ".pi/adw/feature.yaml",
@@ -162,8 +164,6 @@ function isAgentSessionPayload(payload) {
  *   rawBody: string | Buffer,
  *   signature: unknown,
  *   secret: string,
- *   sessionSecret?: string,
- *   hmacChannel?: "issue" | "session",
  *   now?: number,
  *   linear: { getIssue: (id: string) => Promise<object | null> | object | null, clearDelegate?: Function },
  *   gh: object,
@@ -178,8 +178,6 @@ export async function routeWebhook(input) {
     rawBody,
     signature,
     secret,
-    sessionSecret,
-    hmacChannel = "issue",
     now = Date.now(),
     linear,
     gh,
@@ -194,8 +192,7 @@ export async function routeWebhook(input) {
       ? { names: allowedDelegates, appUserId: undefined }
       : createDelegateGateConfig(input.env));
 
-  const hmacSecret = hmacChannel === "session" ? sessionSecret : secret;
-  if (!hmacValid(rawBody, signature, hmacSecret)) {
+  if (!hmacValid(rawBody, signature, secret)) {
     return { kind: "rejected", reason: HMAC_REJECT };
   }
 
@@ -211,7 +208,7 @@ export async function routeWebhook(input) {
     return { kind: "rejected", reason: "stale webhook" };
   }
 
-  if (hmacChannel === "session" || isAgentSessionPayload(payload)) {
+  if (isAgentSessionPayload(payload)) {
     return { kind: "skip", reason: "AgentSession path removed (KIT-113)" };
   }
 
@@ -272,14 +269,13 @@ export async function routeWebhook(input) {
 export function createMemoryAdapter(deps) {
   return {
     /**
-     * @param {{ rawBody: string | Buffer, signature: unknown, now?: number, hmacChannel?: "issue" | "session" }} request
+     * @param {{ rawBody: string | Buffer, signature: unknown, now?: number }} request
      */
-    handle({ rawBody, signature, now, hmacChannel }) {
+    handle({ rawBody, signature, now }) {
       return routeWebhook({
         ...deps,
         rawBody,
         signature,
-        hmacChannel: hmacChannel ?? deps.hmacChannel ?? "issue",
         now: now ?? (typeof deps.now === "function" ? deps.now() : deps.now),
       });
     },
@@ -287,7 +283,8 @@ export function createMemoryAdapter(deps) {
 }
 
 /**
- * Production HTTP adapter. Responds 401 on HMAC/replay rejection, 200 on skip or enqueue.
+ * Production HTTP adapter. Responds 401 on HMAC/replay rejection, 404 on removed
+ * agent-session path, 200 on skip or enqueue.
  *
  * @param {object} deps
  * @returns {(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => Promise<void>}
@@ -300,19 +297,22 @@ export function createHttpHandler(deps) {
         res.end();
         return;
       }
+      const path = (req.url ?? "/").split("?")[0];
+      if (path === AGENT_SESSION_PATH) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
       const chunks = [];
       for await (const chunk of req) {
         chunks.push(chunk);
       }
       const rawBody = Buffer.concat(chunks);
       const now = typeof deps.now === "function" ? deps.now() : (deps.now ?? Date.now());
-      const path = (req.url ?? "/").split("?")[0];
-      const hmacChannel = path === "/webhooks/linear/agent-session" ? "session" : "issue";
       const result = await routeWebhook({
         ...deps,
         rawBody,
         signature: req.headers["linear-signature"],
-        hmacChannel,
         now,
       });
       res.writeHead(result.kind === "rejected" ? 401 : 200);

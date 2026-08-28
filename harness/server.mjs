@@ -135,9 +135,6 @@ export async function startWorkerServer({
   const handler = createWorkerHandler({
     env,
     secret: env.LINEAR_WEBHOOK_SECRET,
-    ...(typeof env.LINEAR_PI_WEBHOOK_SECRET === "string" && env.LINEAR_PI_WEBHOOK_SECRET.length > 0
-      ? { sessionSecret: env.LINEAR_PI_WEBHOOK_SECRET }
-      : {}),
     now,
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
