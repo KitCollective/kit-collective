@@ -17,6 +17,8 @@ import { ensureLoopCounters, incrementCiFailCycles } from "./auto-merge.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 import { implementInReviewComment } from "./role-comments.mjs";
 
+const execFile = promisify(execFileCb);
+
 export { WORKPAD_HEADING };
 export const IMPLEMENT_PR_BASE = "development";
 export const IN_REVIEW = "In Review";
