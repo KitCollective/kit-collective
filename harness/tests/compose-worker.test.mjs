@@ -1361,7 +1361,9 @@ test("coding spawn waits on RAM and disk floors; job stays queued; status unchan
   assert.equal(settled, true);
   assert.equal(fakes.spawned.length, 1);
   assert.equal(fakes.spawned[0].command, "pi");
-  assert.equal(linear.comments.length, 1);
+  assert.equal(linear.comments.length, 2);
+  assert.match(linear.comments[0].body, /## Capacity gate/);
+  assert.match(linear.comments[1].body, /In Review/);
   assert.equal(
     linear.statusCalls.some((call) => call.status === "Parked"),
     false,
@@ -1648,7 +1650,8 @@ test("missing worktrees dir with disk above floor starts the queued coding job a
 
   assert.equal(fakes.spawned.length, 1);
   assert.equal(fakes.spawned[0].command, "pi");
-  assert.equal(linear.comments.length, 0);
+  assert.equal(linear.comments.length, 1);
+  assert.match(linear.comments[0].body, /In Review/);
   assert.equal(
     linear.statusCalls.some((call) => call.status === "Parked"),
     false,

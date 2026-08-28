@@ -257,6 +257,10 @@ export const ISSUE_UPDATE_STATE_MUTATION = `mutation IssueUpdateState($id: Strin
   issueUpdate(id: $id, input: { stateId: $stateId }) { success }
 }`;
 
+export const ISSUE_UPDATE_DESCRIPTION_MUTATION = `mutation IssueUpdateDescription($id: String!, $description: String!) {
+  issueUpdate(id: $id, input: { description: $description }) { success }
+}`;
+
 export const ISSUE_CLEAR_DELEGATE_MUTATION = `mutation IssueClearDelegate($id: String!) {
   issueUpdate(id: $id, input: { delegateId: null }) { success }
 }`;
@@ -672,6 +676,14 @@ export function createLinearCliClient({ env = process.env, runCommand } = {}) {
       }
       await cli(ISSUE_UPDATE_STATE_MUTATION, { id: issueId, stateId: match.id });
       return { issueId, status };
+    },
+
+    /**
+     * @param {{ issueId: string, description: string }} input
+     */
+    async updateIssueDescription({ issueId, description }) {
+      await cli(ISSUE_UPDATE_DESCRIPTION_MUTATION, { id: issueId, description });
+      return { issueId };
     },
 
     /**

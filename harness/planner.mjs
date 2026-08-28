@@ -9,6 +9,7 @@ import { matchesGlob, parseWriteScopeGlobs } from "../scripts/lib/pr-write-scope
 import { parseLoopCounters } from "./auto-merge.mjs";
 import { hasRatchetNudge, ratchetNudgeComment } from "./checker-exit.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
+import { plannerClaimComment } from "./role-comments.mjs";
 
 export const DEFAULT_PLANNER_POLL_MS = 300_000;
 export const PLANNER_PRIORITY_ORDER = [1, 2, 3, 4, 0];
@@ -242,6 +243,10 @@ export async function runPlanner({ env = process.env, linear } = {}) {
     const updated = await client.claimIssue({
       id: issue.id,
       stateId: implementingState.id,
+    });
+    await client.commentIssue({
+      issueId: issue.id,
+      body: plannerClaimComment(issue.identifier),
     });
     claimed.push({
       identifier: issue.identifier,

@@ -81,6 +81,7 @@ function snapshot(overrides = {}) {
     blockedBy: [],
     delegate: { name: "Pi" },
     attachments: [{ url: PR_URL, title: "KIT-56: Factory checker" }],
+    description: `## Acceptance criteria\n\n- [ ] Spec is met\n- [ ] Standards are clean\n`,
     ...overrides,
   };
 }
@@ -167,6 +168,13 @@ function fakeLinear(issue = snapshot(), workpadBody) {
     async updateWorkpad(input) {
       calls.push(["updateWorkpad", input]);
       comments[0].body = input.body;
+    },
+    async commentIssue(input) {
+      calls.push(["commentIssue", input]);
+    },
+    async updateIssueDescription(input) {
+      calls.push(["updateIssueDescription", input]);
+      this.issue = { ...this.issue, description: input.description };
     },
     async setStatus(input) {
       calls.push(["setStatus", input]);
@@ -257,6 +265,12 @@ test("clean workpad + MERGEABLE + green checks moves to Ready for merge and neve
   assert.match(workpad.body, /### Status\nAll good — checker pass/);
   assert.equal(reviewFeedbackIsClean(workpad.body), true);
   assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
+  const passComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(passComment.body, /checker pass/);
+  assert.match(passComment.body, /✓ Spec is met/);
+  const descriptionUpdate = linear.calls.find((call) => call[0] === "updateIssueDescription")[1];
+  assert.match(descriptionUpdate.description, /- \[x\] Spec is met/);
+  assert.match(descriptionUpdate.description, /- \[x\] Standards are clean/);
 });
 
 test("applyCheckerPassWorkpad keeps Review feedback as - (none)", () => {
@@ -292,6 +306,12 @@ test("Pi review findings move to Implementing with complete Review feedback pres
   assert.match(workpad.body, /Standards: smell/);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
+    false,
+  );
+  const failComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(failComment.body, /returned to Implementing/);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "updateIssueDescription"),
     false,
   );
 });

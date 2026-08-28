@@ -9,6 +9,13 @@ import { incrementReviewLoops, parseLoopCounters } from "./auto-merge.mjs";
 import { IN_REVIEW, requiredChecksFailed, requiredChecksGreen } from "./implement-exit.mjs";
 import { createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
+import {
+  applyCheckerPassDescription,
+  buildCheckerPassVerdicts,
+  checkerFailComment,
+  checkerPassComment,
+  parseDescriptionAcRewrites,
+} from "./role-comments.mjs";
 
 export const READY_FOR_MERGE = "Ready for merge";
 export const IMPLEMENTING = "Implementing";
@@ -187,6 +194,7 @@ export function createCheckerGh(deps = {}) {
  *   linear: {
  *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
  *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
+ *     commentIssue?: (input: { issueId: string, body: string }) => Promise<unknown>,
  *   },
  *   feedbackLines: string[],
  *   workpadBody?: string,
@@ -204,6 +212,14 @@ async function checkerFailMove(input) {
     body,
     commentId: existingComment?.id,
   });
+  const identifier =
+    typeof job.identifier === "string" && job.identifier.length > 0 ? job.identifier : job.issueId;
+  if (typeof linear.commentIssue === "function") {
+    await linear.commentIssue({
+      issueId: job.issueId,
+      body: checkerFailComment(identifier),
+    });
+  }
   await linear.setStatus({ issueId: job.issueId, status: IMPLEMENTING });
   return {
     passed: false,
@@ -221,6 +237,8 @@ async function checkerFailMove(input) {
  *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
  *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
  *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
+ *     commentIssue?: (input: { issueId: string, body: string }) => Promise<unknown>,
+ *     updateIssueDescription?: (input: { issueId: string, description: string }) => Promise<unknown>,
  *   },
  *   gh: {
  *     viewPr: (input: { number: number, repo?: string }) => Promise<object | null>,
@@ -299,11 +317,32 @@ export async function completeChecker(input) {
   const passed = !piFindings && gateFailures.length === 0;
 
   if (passed) {
+    const identifier =
+      typeof job.identifier === "string" && job.identifier.length > 0
+        ? job.identifier
+        : issue.identifier;
+    const rewrites = parseDescriptionAcRewrites(workpadBody);
+    const description =
+      typeof issue.description === "string" ? issue.description : "";
+    const updatedDescription = applyCheckerPassDescription(description, { rewrites });
+    const verdicts = buildCheckerPassVerdicts(description, { rewrites });
     await linear.updateWorkpad({
       issueId: job.issueId,
       body: applyCheckerPassWorkpad(workpadBody),
       commentId: existing?.id,
     });
+    if (typeof linear.updateIssueDescription === "function") {
+      await linear.updateIssueDescription({
+        issueId: job.issueId,
+        description: updatedDescription,
+      });
+    }
+    if (typeof linear.commentIssue === "function") {
+      await linear.commentIssue({
+        issueId: job.issueId,
+        body: checkerPassComment(identifier, verdicts),
+      });
+    }
     await linear.setStatus({ issueId: job.issueId, status: READY_FOR_MERGE });
     return { passed: true, nextStatus: READY_FOR_MERGE, pr };
   }

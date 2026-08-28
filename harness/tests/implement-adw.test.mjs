@@ -127,6 +127,9 @@ function fakeLinear() {
       comments.push({ id: "c-new", body: input.body });
       return { id: "c-new", created: true };
     },
+    async commentIssue(input) {
+      calls.push(["commentIssue", input]);
+    },
     async setStatus(input) {
       calls.push(["setStatus", input]);
     },
@@ -387,6 +390,9 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
     issueId: "issue-1",
     status: IN_REVIEW,
   });
+  const inReviewComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(inReviewComment.body, /In Review/);
+  assert.match(inReviewComment.body, /pull\/52/);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
     false,

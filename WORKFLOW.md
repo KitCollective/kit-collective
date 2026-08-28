@@ -84,7 +84,20 @@ Lanes come from `lanes` in factory config.
 8. Open or update a PR **into the integration lane**. Attach the PR URL on the issue.
 9. Upload screenshots/recordings from the worker to the Linear issue. Comment. Link under workpad `### Evidence`.
 10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph plus typecheck of packages whose src or tests you edited; wait for **all** required GitHub checks (pending or red → do not flip, including image/deploy smokes); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff; spawn the UI/layout helper when the issue cites the design lock; every What to build clause has Validation or Evidence. On resume, fix the **class**, not only the cited file.
-11. Clear addressed `### Review feedback`. Move to `In Review` only after the gate. Do not merge. Do not move to `Done`.
+11. Clear addressed `### Review feedback`. Move to `In Review` only after the gate. Write **one role comment** (PR URL + what was built). Do not merge. Do not move to `Done`. Do not tick description Acceptance criteria — checker pass owns that.
+
+## Role comments
+
+Each factory role writes **one new top-level issue comment** at its status transition (not per tool call). The workpad stays exactly one `## Agent Workpad` comment edited in place.
+
+| Transition | Comment |
+| --- | --- |
+| Planner claim | Issue claimed (eligible, unblocked, write-scope clear) |
+| Implement → In Review | PR URL + what was built |
+| Checker fail | Short return to Implementing; findings stay in workpad `### Review feedback` |
+| Checker pass | Verdict per Acceptance criterion; ticks description AC |
+| Auto-merge flip / refuse | Moved to Merging, or refused with reason |
+| Land success / fail | Merge SHA on Done, or merge error on return to Implementing |
 
 ## Checker run
 
@@ -94,12 +107,12 @@ Every pass is a **complete** review of the current diff, not a delta against las
 
 1. `/code-review` (Standards + Spec) against the attached PR. Sub-agents list **every** hard finding; do not stop at the first three. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis.
 2. GitHub CI/CD on that PR: read **all** required check runs (not only `test` — image/deploy smokes count). `gh pr view --json mergeable` must be `MERGEABLE`. Pending required checks → wait; stay in `In Review`. Do **not** fail early on Standards while checks are still running. Red or failed required checks, or `CONFLICTING` → fail, and still include every Spec/Standards hard miss in the same feedback.
-3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Ready for merge`.
-4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). If the miss is a new required env, “done” includes every workflow that boots that process. Linear comment + attachments. That status change wakes implement. Do not start implement yourself.
+3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Ready for merge`. Write **one role comment** with a verdict per Acceptance criterion. Tick those criteria `[x]` in the issue **description** (rewrite a line and comment why if the contract changed; never silently tick unmet or stale text).
+4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). Write **one short role comment** that the issue returned to Implementing. Do **not** tick description Acceptance criteria. If the miss is a new required env, “done” includes every workflow that boots that process. That status change wakes implement. Do not start implement yourself.
 
 ## Land run (status became `Merging`)
 
-**Auto-merge** may move `Ready for merge` → `Merging` when delegate is Pi, the PR is MERGEABLE, required checks are green, and Loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). On refuse (loop cap, CONFLICTING, missing `### Loop counters`, or delegate already empty), stay `Ready for merge`, set delegate to `null`, and write one workpad note. Implementing, In Review, and Ready for merge keep Pi as delegate until Auto-merge decides. Done and Canceled clear leftover Pi delegate. Nicklas can still move `Merging` himself when delegate is empty. A conflict or missing counters fail closed — stay `Ready for merge`. Land merges into the integration lane only, then moves the issue to `Done`. Merge fail → `Implementing` and write the merge error under `### Review feedback`. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded. `Ready for merge` → `Merging` does not resolve `blockedBy`; dependents stay blocked until the blocker is `Done` or `Canceled`. The factory produces on `development`. Staging and production are a later human Cursor promotion — not this run.
+**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Ready for merge`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land merges into the integration lane only, then moves the issue to `Done` and writes **one role comment** with the merge SHA. Merge fail → `Implementing`, merge error under `### Review feedback`, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
 
 ## Guardrails
 

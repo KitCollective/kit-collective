@@ -7,6 +7,7 @@
  */
 import { pullRequestFromAttachments } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
+import { autoMergeFlipComment, autoMergeRefuseComment } from "./role-comments.mjs";
 
 export const LOOP_COUNTERS_HEADING = "### Loop counters";
 export const LOOP_CAP = 5;
@@ -140,6 +141,7 @@ function requiredChecksAreGreen(pr) {
  *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
  *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
  *     clearDelegate?: (input: { issueId: string }) => Promise<unknown>,
+ *     commentIssue?: (input: { issueId: string, body: string }) => Promise<unknown>,
  *   },
  *   gh: {
  *     viewPr: (input: { number: number, repo?: string }) => Promise<object | null>,
@@ -176,6 +178,16 @@ export async function completeAutoMerge({ job, linear, gh, env: _env }) {
     });
     if (typeof linear.clearDelegate === "function") {
       await linear.clearDelegate({ issueId: job.issueId });
+    }
+    const identifier =
+      typeof job.identifier === "string" && job.identifier.length > 0
+        ? job.identifier
+        : issue.identifier;
+    if (typeof linear.commentIssue === "function") {
+      await linear.commentIssue({
+        issueId: job.issueId,
+        body: autoMergeRefuseComment(identifier, reason),
+      });
     }
     return {
       flipped: false,
@@ -214,5 +226,15 @@ export async function completeAutoMerge({ job, linear, gh, env: _env }) {
   }
 
   await linear.setStatus({ issueId: job.issueId, status: MERGING });
+  const identifier =
+    typeof job.identifier === "string" && job.identifier.length > 0
+      ? job.identifier
+      : issue.identifier;
+  if (typeof linear.commentIssue === "function") {
+    await linear.commentIssue({
+      issueId: job.issueId,
+      body: autoMergeFlipComment(identifier),
+    });
+  }
   return { flipped: true, nextStatus: MERGING, pr };
 }
