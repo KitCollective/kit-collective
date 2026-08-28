@@ -339,7 +339,9 @@ test("planner skips missing ready-for-agent, signal-up, unresolved blockedBy, an
 });
 
 test("claim moves to Implementing without setting delegate and keeps the human assignee", async () => {
-  const { claims, result, comments } = await claimWith([gqlNode({ id: "issue-ok", identifier: "KIT-20" })]);
+  const { claims, result, comments } = await claimWith([
+    gqlNode({ id: "issue-ok", identifier: "KIT-20" }),
+  ]);
 
   assert.equal(claims.length, 1);
   assert.equal(Object.hasOwn(claims[0], "delegateId"), false);

@@ -322,8 +322,7 @@ export async function completeChecker(input) {
         ? job.identifier
         : issue.identifier;
     const rewrites = parseDescriptionAcRewrites(workpadBody);
-    const description =
-      typeof issue.description === "string" ? issue.description : "";
+    const description = typeof issue.description === "string" ? issue.description : "";
     const updatedDescription = applyCheckerPassDescription(description, { rewrites });
     const verdicts = buildCheckerPassVerdicts(description, { rewrites });
     await linear.updateWorkpad({
