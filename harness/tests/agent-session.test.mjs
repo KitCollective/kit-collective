@@ -176,7 +176,7 @@ test("implement skips when Linear Agent is Cursor", async () => {
   assert.equal(enqueue.jobs.length, 0);
 });
 
-test("implement skips when Linear Agent is Pi (requires empty Agent)", async () => {
+test("implement enqueues leftover Pi delegate (empty Agent is not required)", async () => {
   const { result, enqueue } = await routeIssue(
     issueUpdatePayload(),
     snapshot({
@@ -187,9 +187,10 @@ test("implement skips when Linear Agent is Pi (requires empty Agent)", async () 
     }),
   );
 
-  assert.equal(result.kind, "skip");
-  assert.match(result.reason, /empty Linear Agent/);
-  assert.equal(enqueue.jobs.length, 0);
+  assert.equal(result.kind, "enqueue");
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/bug.yaml");
 });
 
 test("Issue status webhook still enqueues; AgentSession payload on issue channel does not", async () => {

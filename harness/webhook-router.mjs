@@ -125,15 +125,6 @@ export function dispatchIssue(issue, delegateGateConfig) {
       return { kind: "enqueue", role: "planner" };
     }
     case "Implementing": {
-      if (delegate !== "none") {
-        return {
-          kind: "skip",
-          reason:
-            delegate === "blocked"
-              ? "implement skips when Linear Agent is Cursor"
-              : "implement requires empty Linear Agent",
-        };
-      }
       const adwFile = adwFileFor(issue);
       if (!adwFile) {
         return { kind: "skip", reason: "missing Linear Type for ADW" };
