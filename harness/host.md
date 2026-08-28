@@ -7,7 +7,7 @@ Dedicated Agent-harness box. Not the product app host. Do not install the produc
 | Role | PI factory worker (webhook + up to three Implement slots + one Finisher slot) |
 | Hetzner name | `kit-harness` |
 | Hetzner server id | `416348660` |
-| SKU | CX33 (4 vCPU / 8 GB / 80 GB). Ticket KIT-53 said CX23; Nicklas sized up. |
+| SKU | CX43 (8 vCPU / 16 GB / 160 GB). Intended current SKU after Nicklas resize (KIT-110; was CX33). Worker does not call Hetzner. |
 | Location | Helsinki, Finland (`eu-central`) |
 | IPv4 | `62.238.125.114` |
 | IPv6 | `2a01:4f9:c015:40af::/64` |
@@ -19,6 +19,8 @@ Dedicated Agent-harness box. Not the product app host. Do not install the produc
 | Backups | off at create time |
 
 Product Postgres, Redis, and the PaaS panel stay on the other Helsinki CX33. This box has no `DATABASE_URL`.
+
+**Intended occupancy on CX43:** three concurrent Implement slots (live Composer sessions) plus one Finisher slot. That size clears the Capacity gate RAM floor for three implements; slot count does not waive the floor — each Pi spawn still checks free RAM and worktree disk.
 
 ## Runtime
 
