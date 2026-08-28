@@ -148,7 +148,7 @@ function requiredChecksAreGreen(pr) {
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  * }} input
  */
-export async function completeAutoMerge({ job, linear, gh, env }) {
+export async function completeAutoMerge({ job, linear, gh, env: _env }) {
   const issue = await linear.getIssue(job.issueId);
   if (!issue || issue.status !== READY_FOR_MERGE) {
     return {

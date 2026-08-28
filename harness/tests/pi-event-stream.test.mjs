@@ -59,7 +59,7 @@ test("implement Pi spawn pipes stdout before spawn close resolves", async () => 
       resolve({ status });
     };
   });
-  const consumedDuringChild = [];
+  const _consumedDuringChild = [];
   const runner = createPiJobRunner({
     env: {
       PI_MODEL: "cursor/composer-2.5",

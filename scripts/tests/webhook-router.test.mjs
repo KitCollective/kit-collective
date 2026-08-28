@@ -256,7 +256,12 @@ test("unknown app delegate skips", async () => {
 test("Implementing with empty Agent enqueues implement", async () => {
   const { result, enqueue } = await dispatch(
     issueUpdatePayload(),
-    snapshot({ status: "Implementing", delegate: null, linearType: "Feature", labels: ["Feature"] }),
+    snapshot({
+      status: "Implementing",
+      delegate: null,
+      linearType: "Feature",
+      labels: ["Feature"],
+    }),
   );
 
   assert.equal(result.kind, "enqueue");
@@ -267,7 +272,12 @@ test("Implementing with empty Agent enqueues implement", async () => {
 test("Implementing with Pi delegate skips (requires empty Agent)", async () => {
   const { result, enqueue } = await dispatch(
     issueUpdatePayload(),
-    snapshot({ status: "Implementing", delegate: { name: "Pi" }, linearType: "Feature", labels: ["Feature"] }),
+    snapshot({
+      status: "Implementing",
+      delegate: { name: "Pi" },
+      linearType: "Feature",
+      labels: ["Feature"],
+    }),
   );
 
   assert.equal(result.kind, "skip");

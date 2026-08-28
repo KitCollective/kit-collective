@@ -124,7 +124,13 @@ export function dispatchIssue(issue, delegateGateConfig) {
     }
     case "Implementing": {
       if (delegate !== "none") {
-        return { kind: "skip", reason: delegate === "blocked" ? "implement skips when Linear Agent is Cursor" : "implement requires empty Linear Agent" };
+        return {
+          kind: "skip",
+          reason:
+            delegate === "blocked"
+              ? "implement skips when Linear Agent is Cursor"
+              : "implement requires empty Linear Agent",
+        };
       }
       const adwFile = adwFileFor(issue);
       if (!adwFile) {

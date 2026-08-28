@@ -352,7 +352,10 @@ test("claim moves to Implementing without setting delegate and keeps the human a
 test("planner runs without LINEAR_PI_APP_USER_ID", async () => {
   const env = validWorkerEnv();
   delete env.LINEAR_PI_APP_USER_ID;
-  const { claims, result } = await claimWith([gqlNode({ id: "issue-ok", identifier: "KIT-21" })], env);
+  const { claims, result } = await claimWith(
+    [gqlNode({ id: "issue-ok", identifier: "KIT-21" })],
+    env,
+  );
   assert.equal(claims.length, 1);
   assert.equal(result.claimed[0].identifier, "KIT-21");
 });

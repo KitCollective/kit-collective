@@ -15,7 +15,6 @@ import {
   requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
-import { gitAuthExtraHeader } from "../worktree.mjs";
 import {
   COMMENT_CREATE_MUTATION,
   COMMENT_UPDATE_MUTATION,
@@ -30,6 +29,7 @@ import {
 import {
   createWorktreeAdapter,
   gitArgvContainsSecret,
+  gitAuthExtraHeader,
   remoteGitChildEnv,
   worktreeBranch,
   worktreePath,

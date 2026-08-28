@@ -21,10 +21,7 @@ import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.m
 import { runIntake } from "./intake.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
-import {
-  pipeReadableJsonLines,
-  STREAMING_ROLES,
-} from "./pi-event-stream.mjs";
+import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { runPlanner } from "./planner.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
@@ -648,7 +645,7 @@ export function createPiJobRunner({
    */
   async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, piOptions = {}) {
     const args = piArgsForRole(job.role, workspace, roleFile, model, prompt, piOptions);
-    const streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
+    const _streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
     const collectStdout = STREAMING_ROLES.has(job.role);
     const stdio = collectStdout ? ["inherit", "pipe", "inherit"] : "inherit";
     const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
