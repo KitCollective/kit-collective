@@ -35,6 +35,21 @@ export const REQUIRED_PI_PACKAGES = [
   "npm:pi-subagents",
   "npm:@ghoseb/pi-damage-control",
   "npm:pi-cursor-sdk",
+  "npm:pi-hermes-memory",
+];
+
+/** Worker memory store on the kit_pi volume — outside Issue worktrees (KIT-111). */
+export const WORKER_MEMORY_DIR = "/var/lib/kit-pi/hermes";
+
+/** Relative to PI_WORKSPACE; holds committed hermes-memory-config.json. */
+export const HERMES_AGENT_DIR_REL = ".pi/agent";
+
+/** Implement parent and subagents are Memory readers — no writes or skill_manage (KIT-111). */
+export const IMPLEMENT_MEMORY_EXCLUDED_TOOLS = [
+  "memory_add",
+  "memory_replace",
+  "memory_remove",
+  "skill_manage",
 ];
 
 /** In-repo Pi package. Loaded via `--skill` on UI implement only — not `.pi/settings.json`. */
@@ -534,6 +549,8 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
     typeof options.browserSkill === "string" && options.browserSkill.length > 0
       ? ["--skill", options.browserSkill]
       : [];
+  const memoryReaderArgs =
+    role === "implement" ? ["--exclude-tools", IMPLEMENT_MEMORY_EXCLUDED_TOOLS.join(",")] : [];
   return [
     "-p",
     "-a",
@@ -541,6 +558,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
     "--model",
     model,
     ...skillArgs,
+    ...memoryReaderArgs,
     "--append-system-prompt",
     join(workspace, roleFile),
     "--",
@@ -889,11 +907,21 @@ export function createPiJobRunner({
         cwd = checkout.path;
       }
       const prompt = implementPrompt(job.role, identifier, job.adwFile);
+      const hermesDir =
+        typeof env.KIT_PI_HERMES === "string" && env.KIT_PI_HERMES.length > 0
+          ? env.KIT_PI_HERMES
+          : WORKER_MEMORY_DIR;
+      const agentDir =
+        typeof env.PI_CODING_AGENT_DIR === "string" && env.PI_CODING_AGENT_DIR.length > 0
+          ? env.PI_CODING_AGENT_DIR
+          : join(workspace, HERMES_AGENT_DIR_REL);
       const spawnEnv = {
         PATH: process.env.PATH,
         HOME: process.env.HOME,
         ...env,
         LINEAR_API_KEY: env.LINEAR_CLI_API_KEY,
+        KIT_PI_HERMES: hermesDir,
+        PI_CODING_AGENT_DIR: agentDir,
       };
       delete spawnEnv.DATABASE_URL;
       if (job.role === "factory-checker") {
