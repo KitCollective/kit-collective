@@ -140,7 +140,7 @@ Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited pr
 
 ### Planning stack
 
-\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → ${approver} to Merging → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
+\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → \`Ready for merge\` → Auto-merge or ${approver} to Merging → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
 
 **Runtime**: PI worker (Compose + \`gh\` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and \`kc_seed_mcp\` are Desktop / Cloud Agent wiring.
 
@@ -151,7 +151,7 @@ Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited pr
 3. \`/to-spec\` — kickoff = Linear project + milestones; feature = document on an existing project
 4. \`/to-tickets\` — vertical slices in \`${dispatch}\` with \`ready-for-agent\`
 5. planner claims (unblocked) → implement → PR + Linear evidence → checker → \`Ready for merge\`
-6. \`${approver}\` reads the GitHub PR, moves Linear to \`Merging\`
+6. Auto-merge or \`${approver}\` moves Linear to \`Merging\` (merge approval; loop cap may block Auto-merge)
 7. \`/land\` into \`${integration}\` (merge success → \`Done\`). A complete **milestone** then \`${staging}\` / \`${production}\` promotions
 
 Product truth lives under \`${specs}\`. If a spec fights a stack lock, change the lock first.
@@ -205,7 +205,7 @@ Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), differ
 _Avoid_: mixing with \`signal-up\` on the same issue, filing into \`${dispatch}\`
 
 **Land**:
-Merge to \`${integration}\` after ${approver} moves the issue to Merging. Land sets Done only after the merge.
+Merge to \`${integration}\` after Merging. Auto-merge may set Merging when loop caps allow; ${approver} can still move Merging. Land sets Done only after the merge.
 _Avoid_: landing to ${staging} or ${production} from an issue run
 
 **Promotion**:

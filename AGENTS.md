@@ -92,7 +92,7 @@ Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primar
 
 ### Planning stack
 
-`/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → Nicklas to Merging → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
+`/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → `Ready for merge` → Auto-merge or Nicklas to Merging → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
 
 **Runtime**: PI worker (Compose + `gh` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring.
 
@@ -103,7 +103,7 @@ Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primar
 3. `/to-spec` — kickoff = Linear project + milestones; feature = document on an existing project
 4. `/to-tickets` — vertical slices in `Backlog` with `ready-for-agent`
 5. planner claims (unblocked) → implement → PR + Linear evidence → checker → `Ready for merge`
-6. `Nicklas` reads the GitHub PR, moves Linear to `Merging`
+6. Auto-merge or `Nicklas` moves Linear to `Merging` (merge approval; loop cap may block Auto-merge)
 7. `/land` into `development` (merge success → `Done`). A complete **milestone** then `staging` / `production` promotions
 
 Product truth lives under `.scratch`. If a spec fights a stack lock, change the lock first.
