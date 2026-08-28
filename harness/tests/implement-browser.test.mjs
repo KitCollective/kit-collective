@@ -197,6 +197,28 @@ test("UI implement spawn loads the in-repo Playwright Chromium Pi package and no
   assert.match(skillText, /not Desktop Chrome/i);
 });
 
+test("api-labelled implement loads browser tools when getIssue write-scope includes apps/mobile and job has no description", async () => {
+  const spawned = [];
+  const linear = workpadLinear({
+    labels: ["api", "Feature"],
+    description: "write-scope: apps/mobile/**, apps/api/**",
+  });
+  await spawnRunner({
+    linear,
+    spawned,
+    readCapacity: async () => ({ ramFreeMb: 4096, diskFreeMb: 10_240, ready: true }),
+  }).run({
+    role: "implement",
+    identifier: "KIT-97",
+    issueId: "issue-97",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 1);
+  assert.equal(browserArgs(spawned[0].args), true);
+  assert.equal(spawned[0].args.includes("--skill"), true);
+});
+
 test("api/db-only implement omits browser tools so they do not sit in Composer context", async () => {
   const spawned = [];
   await spawnRunner({
