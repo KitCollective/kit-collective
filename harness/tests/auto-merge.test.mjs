@@ -563,12 +563,12 @@ ${LOOP_COUNTERS_HEADING}
   assert.match(linear.comments[0].body, /### Loop counters/);
 });
 
-test("Missing Linear Type on Implementing still skips implement (no ADW, no Pi)", async () => {
+test("Missing Linear Type on Implementing still skips implement (no ADW)", async () => {
   const spawned = [];
   const { result, enqueue } = await routeIssue(
     snapshot({
       status: IMPLEMENTING,
-      delegate: { name: "Pi" },
+      delegate: null,
       labels: ["ready-for-agent"],
       linearType: undefined,
     }),
@@ -579,7 +579,7 @@ test("Missing Linear Type on Implementing still skips implement (no ADW, no Pi)"
   assert.equal(spawned.length, 0);
 });
 
-test("delegate already empty stays Ready for merge, clears delegate, and writes one workpad note", async () => {
+test("empty Agent is not an auto-merge refuse reason", async () => {
   const gh = fakeGh();
   const linear = fakeLinear(snapshot({ delegate: null }));
   const result = await completeAutoMerge({
@@ -587,11 +587,12 @@ test("delegate already empty stays Ready for merge, clears delegate, and writes 
     linear,
     gh,
   });
-  assert.equal(result.flipped, false);
-  assert.equal(result.nextStatus, "Ready for merge");
-  assert.match(linear.comments[0].body, /delegate already empty/);
-  assert.equal(linear.comments[0].body.split("Auto-merge blocked").length - 1, 1);
-  assert.equal(linear.calls.filter((call) => call[0] === "clearDelegate").length, 1);
+  assert.equal(result.flipped, true);
+  assert.equal(result.nextStatus, "Merging");
+  assert.equal(
+    linear.calls.some((call) => call[0] === "clearDelegate"),
+    false,
+  );
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
     false,

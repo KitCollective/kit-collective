@@ -10,7 +10,6 @@ import { execFile as execFileCb } from "node:child_process";
 import { existsSync as fsExistsSync, mkdirSync as fsMkdirSync, rmSync as fsRmSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { gitAuthExtraHeader } from "./linear-actor-token.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -20,6 +19,16 @@ export const DEFAULT_REMOTE_URL = "https://github.com/KitCollective/kit-collecti
 export const IMPLEMENT_LANE = "development";
 
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
+
+/**
+ * Git child env: token stays in env (`GIT_CONFIG_*`), never in argv.
+ *
+ * @param {string} token
+ */
+export function gitAuthExtraHeader(token) {
+  const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
+  return `Authorization: Basic ${basic}`;
+}
 
 /**
  * Git child env: token stays in env (`GIT_CONFIG_*`), never in argv.

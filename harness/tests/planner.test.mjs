@@ -108,7 +108,9 @@ function fakeLinearCli({
             issue: {
               id: variables.id,
               assignee: node?.assignee ?? { id: "human-1", name: "Nicklas" },
-              delegate: { id: variables.delegateId, name: "Pi" },
+              delegate: variables.delegateId
+                ? { id: variables.delegateId, name: "Pi" }
+                : (node?.delegate ?? null),
               state: { name: "Implementing" },
             },
           },
@@ -334,30 +336,25 @@ test("planner skips missing ready-for-agent, signal-up, unresolved blockedBy, an
   );
 });
 
-test("claim sets delegate to the Pi app user, keeps the human assignee, and never names Cursor", async () => {
+test("claim moves to Implementing without setting delegate and keeps the human assignee", async () => {
   const { claims, result } = await claimWith([gqlNode({ id: "issue-ok", identifier: "KIT-20" })]);
 
   assert.equal(claims.length, 1);
-  assert.equal(claims[0].delegateId, PI_APP_USER_ID);
+  assert.equal(Object.hasOwn(claims[0], "delegateId"), false);
   assert.equal(claims[0].stateId, IMPLEMENTING_STATE_ID);
   assert.equal(Object.hasOwn(claims[0], "assigneeId"), false);
-  assert.equal(JSON.stringify(claims).includes(CURSOR_USER_ID), false);
   assert.equal(PLANNER_CLAIM_MUTATION.includes("assigneeId"), false);
-  assert.equal(PLANNER_CLAIM_MUTATION.includes("delegateId"), true);
+  assert.equal(PLANNER_CLAIM_MUTATION.includes("delegateId"), false);
   assert.equal(result.claimed[0].assignee.id, "human-1");
-  assert.equal(result.claimed[0].delegate.id, PI_APP_USER_ID);
+  assert.equal(result.claimed[0].delegate, null);
 });
 
-test("planner refuses when LINEAR_PI_APP_USER_ID is the Cursor app user", async () => {
-  const env = validWorkerEnv({ LINEAR_PI_APP_USER_ID: CURSOR_USER_ID });
-  const fake = fakeLinearCli({
-    backlog: [gqlNode()],
-    users: { [CURSOR_USER_ID]: { id: CURSOR_USER_ID, name: "Cursor" } },
-  });
-  const linear = createLinearCliClient({ env, runCommand: fake.runCommand });
-
-  await assert.rejects(() => runPlanner({ env, linear }), /Cursor/);
-  assert.equal(fake.claims.length, 0);
+test("planner runs without LINEAR_PI_APP_USER_ID", async () => {
+  const env = validWorkerEnv();
+  delete env.LINEAR_PI_APP_USER_ID;
+  const { claims, result } = await claimWith([gqlNode({ id: "issue-ok", identifier: "KIT-21" })], env);
+  assert.equal(claims.length, 1);
+  assert.equal(result.claimed[0].identifier, "KIT-21");
 });
 
 test("planner never issueUpdates to In Review, Ready for merge, Merging, Done, Parked, or Canceled", async () => {
@@ -397,7 +394,7 @@ test("planner job uses the Linear CLI wrapper and does not spawn Pi, bash, or fi
 
   assert.equal(spawned.length, 0);
   assert.equal(fake.claims.length, 1);
-  assert.equal(fake.claims[0].delegateId, PI_APP_USER_ID);
+  assert.equal(Object.hasOwn(fake.claims[0], "delegateId"), false);
   assert.equal(result.claimed[0].identifier, "KIT-30");
   assert.equal(
     fake.calls.every((call) => call.command === "linear"),
@@ -485,7 +482,8 @@ test("planner role and host inventory keep Cursor cron paused while the PI plann
   assert.match(host, /Cursor/);
   assert.match(host, /Inactive|paused|removed/i);
   assert.match(host, /Active/);
-  assert.match(host, /LINEAR_PI_APP_USER_ID/);
+  assert.match(host, /without setting Linear Agent/);
+  assert.match(host, /Implement enqueues when Linear Agent is empty/);
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /planner\.mjs/);
 });
 
