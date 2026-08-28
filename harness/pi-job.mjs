@@ -44,6 +44,9 @@ export const WORKER_MEMORY_DIR = "/var/lib/kit-pi/hermes";
 /** Relative to PI_WORKSPACE; holds committed hermes-memory-config.json. */
 export const HERMES_AGENT_DIR_REL = ".pi/agent";
 
+/** Factory-checker Memory writer Hermes config (KIT-112). */
+export const HERMES_CHECKER_AGENT_DIR_REL = ".pi/agent-checker";
+
 /** Implement parent and subagents are Memory readers — no writes or skill_manage (KIT-111). */
 export const IMPLEMENT_MEMORY_EXCLUDED_TOOLS = [
   "memory_add",
@@ -912,9 +915,11 @@ export function createPiJobRunner({
           ? env.KIT_PI_HERMES
           : WORKER_MEMORY_DIR;
       const agentDir =
-        typeof env.PI_CODING_AGENT_DIR === "string" && env.PI_CODING_AGENT_DIR.length > 0
-          ? env.PI_CODING_AGENT_DIR
-          : join(workspace, HERMES_AGENT_DIR_REL);
+        job.role === "factory-checker"
+          ? join(workspace, HERMES_CHECKER_AGENT_DIR_REL)
+          : typeof env.PI_CODING_AGENT_DIR === "string" && env.PI_CODING_AGENT_DIR.length > 0
+            ? env.PI_CODING_AGENT_DIR
+            : join(workspace, HERMES_AGENT_DIR_REL);
       const spawnEnv = {
         PATH: process.env.PATH,
         HOME: process.env.HOME,

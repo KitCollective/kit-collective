@@ -28,6 +28,7 @@ import {
 import {
   FACTORY_CHECKER_ALLOWED_TOOLS,
   FACTORY_CHECKER_EXCLUDED_TOOLS,
+  FACTORY_CHECKER_MEMORY_TOOLS,
   factoryCheckerPiArgs,
   factoryCheckerToolArgs,
 } from "../checker-spawn.mjs";
@@ -466,6 +467,13 @@ test("factory-checker spawn uses tool allowlist and linear_cli extension", async
     spawned[0].args.some((arg) => String(arg).includes(FACTORY_CHECKER_ALLOWED_TOOLS.join(","))),
     true,
   );
+  for (const tool of FACTORY_CHECKER_MEMORY_TOOLS) {
+    assert.equal(
+      spawned[0].args.some((arg) => String(arg).includes(tool)),
+      true,
+      `spawn args missing ${tool}`,
+    );
+  }
   assert.equal(
     spawned[0].args.some((arg) => String(arg).includes(FACTORY_CHECKER_EXCLUDED_TOOLS.join(","))),
     true,
@@ -483,6 +491,38 @@ test("factory-checker tools extension sits next to checker-spawn, not PI_WORKSPA
   assert.equal(extension.includes("/workspace/harness/"), false);
   assert.equal(extension.endsWith("factory-checker-tools.ts"), true);
   assert.equal(existsSync(extension), true);
+});
+
+test("factory-checker allowlist includes memory tools and excludes skill_manage", () => {
+  for (const tool of FACTORY_CHECKER_MEMORY_TOOLS) {
+    assert.ok(FACTORY_CHECKER_ALLOWED_TOOLS.includes(tool), `missing allow ${tool}`);
+  }
+  assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("skill_manage"), false);
+  assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("write"), false);
+  assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("edit"), false);
+  assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("bash"), false);
+});
+
+test("factory-checker spawn uses Memory writer Hermes config", async () => {
+  const spawned = [];
+  await checkerRunner({
+    gh: fakeGh(),
+    linear: fakeLinear(),
+    spawned,
+  }).run({
+    role: "factory-checker",
+    identifier: "KIT-112",
+    issueId: ISSUE_ID,
+  });
+  const agentDir = spawned[0].options.env.PI_CODING_AGENT_DIR;
+  assert.match(agentDir, /agent-checker$/);
+  const configPath = join(agentDir, "hermes-memory-config.json");
+  assert.equal(existsSync(configPath), true);
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  assert.equal(config.reviewEnabled, true);
+  assert.equal(config.correctionDetection, true);
+  assert.equal(config.flushOnShutdown, true);
+  assert.equal(config.memoryMode, "policy-only");
 });
 
 test("factoryCheckerPiArgs pins role file and prompt", () => {
