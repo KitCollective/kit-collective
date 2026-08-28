@@ -550,9 +550,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
       ? ["--skill", options.browserSkill]
       : [];
   const memoryReaderArgs =
-    role === "implement"
-      ? ["--exclude-tools", IMPLEMENT_MEMORY_EXCLUDED_TOOLS.join(",")]
-      : [];
+    role === "implement" ? ["--exclude-tools", IMPLEMENT_MEMORY_EXCLUDED_TOOLS.join(",")] : [];
   return [
     "-p",
     "-a",
