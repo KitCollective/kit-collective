@@ -3,11 +3,11 @@
  * Compose replicas stay at 1; these mutexes are the in-process seam.
  */
 import {
+  capacityCommentBody,
   DEFAULT_CAPACITY_POLL_MS,
   evaluateCapacity,
   floorsFromEnv,
   upsertCapacityComment,
-  capacityCommentBody,
 } from "./capacity.mjs";
 
 /**
@@ -217,7 +217,11 @@ export function createWorkerSlots(deps) {
       return false;
     }
     const raw = await deps.readCapacity();
-    const snapshot = evaluateCapacity({ ramFreeMb: raw.ramFreeMb, diskFreeMb: raw.diskFreeMb, ...floors });
+    const snapshot = evaluateCapacity({
+      ramFreeMb: raw.ramFreeMb,
+      diskFreeMb: raw.diskFreeMb,
+      ...floors,
+    });
     if (snapshot.ready) {
       return false;
     }

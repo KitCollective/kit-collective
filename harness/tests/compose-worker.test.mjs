@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
-import { capacityCommentBody, floorsFromEnv, snapshotCapacity } from "../capacity.mjs";
+import { snapshotCapacity } from "../capacity.mjs";
 import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
 import {
   ALWAYS_READY_CAPACITY,
