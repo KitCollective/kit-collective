@@ -52,9 +52,9 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | `dispatch.state` → `Implementing` | **Planner** (claim + one role comment) |
 | `Implementing` → `In Review` | **Implement** (PR + proof on Linear + one role comment) |
 | `In Review` → `Ready for merge` | **Checker** (pass + description AC + one role comment) |
-| `In Review` / `Ready for merge` / `Merging` → `Implementing` | **Checker** or **land** (fail + one role comment on checker fail) |
+| `In Review` / `Ready for merge` / `Merging` → `Implementing` | **Checker** or **land** (fail + one role comment) |
 | `Ready for merge` → `Merging` | **Auto-merge** when MERGEABLE + green checks + loop cap clear (+ one role comment) or **approver** |
-| `Merging` → `Done` | **Land** (merge succeeded + one role comment with SHA) |
+| `Merging` → `Done` | **Land** (merge succeeded + one role comment with SHA; merge fail → Implementing + one role comment with the error) |
 | Merge to integration | **Land** |
 
 ---
@@ -216,7 +216,7 @@ If this is the second fail of the same class on this issue, say so in ### Review
 | --- | --- |
 | Trigger | Linear issue status changed **to** `Merging` |
 | Tools | `gh` + Linear CLI. Not Linear MCP on kit-harness. |
-| Action | `/land` into `lanes.integration`. Merge fail → `Implementing` + `### Review feedback` (wakes implement on the same branch). |
+| Action | `/land` into `lanes.integration`. Merge fail → `Implementing` + `### Review feedback` + one role comment with the error (wakes implement on the same branch). |
 | Instruction | See prompt below. |
 
 ### Cursor UI checklist
@@ -240,8 +240,8 @@ Read factory.config.json then WORKFLOW.md. Follow /land.
 
 Only run if the new status is Merging. Fetch get_issue, list_comments, and the linked PR.
 Merge into lanes.integration only. Never staging or production. Never force-push.
-Merge success → Done and record the SHA in the workpad.
-Merge fail → Implementing and write the error under workpad ### Review feedback. That wakes implement on the same branch. Never Done on a failed merge.
+Merge success → Done, record the SHA in the workpad, and write one role comment with the merge SHA.
+Merge fail → Implementing, write the error under workpad ### Review feedback, and write one role comment with the merge error. That wakes implement on the same branch. Never Done on a failed merge.
 ```
 
 ---

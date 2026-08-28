@@ -33,6 +33,14 @@ test("WORKFLOW.md does not skip Implementing without Pi or key Auto-merge on Pi"
   assert.match(workflow, /### Description AC rewrites/);
 });
 
+test("automations.md locks land success and fail as role comments", () => {
+  const automations = readFileSync(join(ROOT, "docs/agents/automations.md"), "utf8");
+  assert.match(automations, /fail \+ one role comment\)/);
+  assert.match(automations, /one role comment with SHA; merge fail/);
+  assert.match(automations, /one role comment with the merge SHA/);
+  assert.match(automations, /one role comment with the merge error/);
+});
+
 test("ADR-0025 keeps a supersession note and the original Pi-delegate body", () => {
   const adr = readFileSync(join(ROOT, "docs/adr/0025-auto-merge-ready-for-merge.md"), "utf8");
   assert.match(adr, /Superseded \(Pi-delegate ownership\)/);
