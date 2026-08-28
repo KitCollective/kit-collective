@@ -37,7 +37,7 @@ An issue may **start** implement when status is `Implementing` and it has no bra
 
 An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session.
 
-The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. Parked is never resumed. Implementing without a Pi delegate is skipped. Write-scope overlap among Implementing issues still enqueues only the first in `dispatch.priorityOrder`.
+The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. Parked is never resumed. Empty Linear Agent is the Implementing happy path (Cursor is skipped; leftover Pi still enqueues). Write-scope overlap among Implementing issues still enqueues only the first in `dispatch.priorityOrder`.
 
 ## Status map
 
@@ -53,7 +53,7 @@ Typical contract:
 | Duplicate | duplicate | humans, Intake consolidate | Duplicate of another issue. Never auto-dispatch |
 | Implementing | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |
 | In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |
-| Ready for merge | started | checker on pass | Pi stays delegate until Auto-merge decides. Auto-merge may flip to Merging when delegate is Pi and loop caps allow. Nicklas can still move. |
+| Ready for merge | started | checker on pass | Empty Linear Agent is the happy path. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop caps allow. Pi delegate is not a gate. Nicklas can still move. |
 | Merging | started | **Auto-merge** or **approver** from `Ready for merge` | Merge permission. Land auto-merges into the integration lane. Works when delegate is empty. |
 | Done | completed | **land only** after `gh pr merge` succeeds | SHA is on `lanes.integration`. `blockedBy` may resolve |
 | Canceled | canceled | humans | Dead. No agent action |
