@@ -241,6 +241,35 @@ test("reviewFeedbackHasFindings treats - (none) as pass and bullets as fail", ()
   assert.equal(reviewFeedbackSection("### Review feedback\n\n- Spec miss\n"), "- Spec miss");
 });
 
+test("clean workpad with Description AC rewrites ticks the renamed line and comments why on that verdict only", async () => {
+  const gh = fakeGh();
+  const workpad = `${WORKPAD_HEADING}
+
+### Review feedback
+
+- (none)
+
+### Description AC rewrites
+
+- Spec is met → Spec AC is met | contract renamed in PR
+`;
+  const linear = fakeLinear(snapshot(), workpad);
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-56" },
+    linear,
+    gh,
+  });
+
+  assert.equal(result.passed, true);
+  const passComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(passComment.body, /✓ Spec AC is met \(rewrote: contract renamed in PR\)/);
+  assert.doesNotMatch(passComment.body, /Standards are clean \(rewrote/);
+  const descriptionUpdate = linear.calls.find((call) => call[0] === "updateIssueDescription")[1];
+  assert.match(descriptionUpdate.description, /- \[x\] Spec AC is met/);
+  assert.match(descriptionUpdate.description, /- \[x\] Standards are clean/);
+  assert.doesNotMatch(descriptionUpdate.description, /- \[x\] Spec is met/);
+});
+
 test("clean workpad + MERGEABLE + green checks moves to Ready for merge and never merges", async () => {
   const gh = fakeGh();
   const linear = fakeLinear();

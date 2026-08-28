@@ -13,6 +13,37 @@ export function plannerClaimComment(identifier) {
 }
 
 /**
+ * Short "what was built" from the workpad Notes or first checked Plan item.
+ *
+ * @param {string | undefined} body
+ * @returns {string}
+ */
+export function implementSummaryFromWorkpad(body) {
+  if (typeof body !== "string") {
+    return "";
+  }
+  const notes = body.match(/### Notes\n([\s\S]*?)(?=\n### |\s*$)/);
+  if (notes) {
+    for (const line of notes[1].split("\n")) {
+      const bullet = line.match(/^-\s+(.+)$/);
+      if (bullet && !/^\(none\)\s*$/i.test(bullet[1].trim())) {
+        return bullet[1].trim();
+      }
+    }
+  }
+  const plan = body.match(/### Plan\n([\s\S]*?)(?=\n### |\s*$)/);
+  if (plan) {
+    for (const line of plan[1].split("\n")) {
+      const checked = line.match(/^-\s*\[[xX]\]\s+(.+)$/);
+      if (checked) {
+        return checked[1].trim();
+      }
+    }
+  }
+  return "";
+}
+
+/**
  * @param {string} identifier
  * @param {{ prUrl: string, summary?: string }} input
  */
@@ -140,12 +171,40 @@ export function parseDescriptionAcRewrites(workpadBody) {
  * @param {string | undefined} description
  * @param {{ rewrites?: Array<{ from: string, to: string }> }} [input]
  */
+/**
+ * Rewrite one Acceptance criterion line in the AC section only.
+ *
+ * @param {string} description
+ * @param {string} from
+ * @param {string} to
+ */
+function rewriteAcceptanceCriterionLine(description, from, to) {
+  const section = acceptanceCriteriaSection(description);
+  if (!section || typeof from !== "string" || typeof to !== "string") {
+    return description;
+  }
+  const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const nextSection = section.replace(
+    new RegExp(`^(- \\[[ xX]\\] )${escaped}\\s*$`, "gm"),
+    `$1${to}`,
+  );
+  if (nextSection === section) {
+    return description;
+  }
+  return description.replace(
+    /##\s*Acceptance criteria\n[\s\S]*?(?=\n##\s|$)/i,
+    `## Acceptance criteria\n\n${nextSection.trim()}\n`,
+  );
+}
+
+/**
+ * @param {string | undefined} description
+ * @param {{ rewrites?: Array<{ from: string, to: string }> }} [input]
+ */
 export function applyCheckerPassDescription(description, { rewrites = [] } = {}) {
   let next = typeof description === "string" ? description : "";
   for (const rewrite of rewrites) {
-    if (typeof rewrite.from === "string" && typeof rewrite.to === "string") {
-      next = next.replace(rewrite.from, rewrite.to);
-    }
+    next = rewriteAcceptanceCriterionLine(next, rewrite.from, rewrite.to);
   }
   const section = acceptanceCriteriaSection(next);
   if (!section) {
@@ -165,9 +224,7 @@ export function applyCheckerPassDescription(description, { rewrites = [] } = {})
 export function buildCheckerPassVerdicts(description, { rewrites = [] } = {}) {
   const updated = applyCheckerPassDescription(description, { rewrites });
   return parseAcceptanceCriteria(updated).map((criterion) => {
-    const rewrite = rewrites.find(
-      (row) => row.to === criterion.text || (description ?? "").includes(row.from),
-    );
+    const rewrite = rewrites.find((row) => row.to === criterion.text);
     return {
       text: criterion.text,
       ...(typeof rewrite?.reason === "string" && rewrite.reason.length > 0

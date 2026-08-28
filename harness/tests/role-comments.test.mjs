@@ -13,6 +13,7 @@ import {
   checkerPassComment,
   descriptionAcceptanceCriteriaTicked,
   implementInReviewComment,
+  implementSummaryFromWorkpad,
   landFailComment,
   landSuccessComment,
   parseAcceptanceCriteria,
@@ -57,17 +58,50 @@ test("checker pass ticks description Acceptance criteria and builds verdicts", (
 });
 
 test("checker pass applies description rewrites from workpad and comments why", () => {
+  const description = `## What to build
+
+First criterion in prose.
+
+## Acceptance criteria
+
+- [ ] First criterion
+- [ ] Second criterion
+`;
   const workpad = `${AC_REWRITES_HEADING}
 
 - First criterion → Renamed criterion | contract changed in PR
 `;
   const rewrites = parseDescriptionAcRewrites(workpad);
   assert.equal(rewrites.length, 1);
-  const updated = applyCheckerPassDescription(DESCRIPTION, { rewrites });
-  assert.match(updated, /Renamed criterion/);
-  assert.doesNotMatch(updated, /First criterion/);
-  const verdicts = buildCheckerPassVerdicts(DESCRIPTION, { rewrites });
+  const updated = applyCheckerPassDescription(description, { rewrites });
+  assert.match(updated, /First criterion in prose/);
+  assert.match(updated, /- \[x\] Renamed criterion/);
+  assert.match(updated, /- \[x\] Second criterion/);
+  assert.doesNotMatch(updated, /- \[x\] First criterion/);
+  const verdicts = buildCheckerPassVerdicts(description, { rewrites });
+  assert.equal(verdicts[0].text, "Renamed criterion");
   assert.equal(verdicts[0].rewriteReason, "contract changed in PR");
+  assert.equal(verdicts[1].text, "Second criterion");
+  assert.equal(verdicts[1].rewriteReason, undefined);
+  assert.match(
+    checkerPassComment("KIT-56", verdicts),
+    /✓ Renamed criterion \(rewrote: contract changed in PR\)/,
+  );
+  assert.doesNotMatch(checkerPassComment("KIT-56", verdicts), /Second criterion \(rewrote/);
+});
+
+test("implementSummaryFromWorkpad uses Notes then checked Plan", () => {
+  assert.equal(
+    implementSummaryFromWorkpad("## Agent Workpad\n\n### Notes\n\n- Role comments wired\n"),
+    "Role comments wired",
+  );
+  assert.equal(
+    implementSummaryFromWorkpad(
+      "## Agent Workpad\n\n### Plan\n\n- [x] Wire role comments\n- [ ] Open PR\n",
+    ),
+    "Wire role comments",
+  );
+  assert.equal(implementSummaryFromWorkpad("## Agent Workpad\n\n### Notes\n\n- (none)\n"), "");
 });
 
 test("checker fail comment stays short and points at workpad Review feedback", () => {

@@ -109,7 +109,12 @@ function fakeGh({ mergeable = "MERGEABLE", checks = [{ conclusion: "success" }] 
 
 function fakeLinear() {
   const calls = [];
-  const comments = [{ id: "c1", body: `${WORKPAD_HEADING}\n\n### Status\nImplementing\n` }];
+  const comments = [
+    {
+      id: "c1",
+      body: `${WORKPAD_HEADING}\n\n### Status\nImplementing\n\n### Notes\n\n- Role comments and description AC on checker pass\n`,
+    },
+  ];
   return {
     calls,
     comments,
@@ -393,6 +398,7 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
   const inReviewComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
   assert.match(inReviewComment.body, /In Review/);
   assert.match(inReviewComment.body, /pull\/52/);
+  assert.match(inReviewComment.body, /Role comments and description AC on checker pass/);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
     false,

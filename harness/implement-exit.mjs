@@ -15,7 +15,7 @@ import {
 } from "../scripts/lib/pr-write-scope.mjs";
 import { ensureLoopCounters, incrementCiFailCycles } from "./auto-merge.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
-import { implementInReviewComment } from "./role-comments.mjs";
+import { implementInReviewComment, implementSummaryFromWorkpad } from "./role-comments.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -585,7 +585,7 @@ export async function completeImplementAdw(input) {
       issueId: job.issueId,
       body: implementInReviewComment(job.identifier, {
         prUrl: pr.url,
-        summary: "Pre-review gate passed — MERGEABLE, required checks green.",
+        summary: implementSummaryFromWorkpad(body),
       }),
     });
   }

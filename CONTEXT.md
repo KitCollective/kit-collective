@@ -56,7 +56,7 @@ Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), differ
 _Avoid_: mixing with `signal-up` on the same issue, filing into `Backlog`
 
 **Land**:
-Merge to `development` after Nicklas moves the issue to Merging. Land sets Done only after the merge and writes one role comment with the merge SHA (or merge error on return to Implementing).
+Merge to `development` after Auto-merge or Nicklas moves the issue to Merging. Land sets Done only after the merge and writes one role comment with the merge SHA (or merge error on return to Implementing).
 _Avoid_: landing to staging or production from an issue run
 
 **Auto-merge**:

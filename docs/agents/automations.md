@@ -201,7 +201,7 @@ Complete review every pass — not a delta on last ### Review feedback. Dump eve
 
 Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status; do not fail early on Standards. Failed required checks or CONFLICTING → fail, and still include every Spec/Standards hard miss in the same ### Review feedback. Local tests are not a substitute.
 
-Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Write one role comment with a verdict per Acceptance criterion; harness ticks description AC. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop cap clear (Pi delegate not required).
+Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Write one role comment with a verdict per Acceptance criterion; harness ticks description AC. Optional workpad `### Description AC rewrites` rewrites one criterion line and comments why on that verdict only. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop cap clear (Pi delegate not required).
 
 Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set. Write one short role comment that the issue returned to Implementing. Do not tick description Acceptance criteria. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no resume of the previous Pi job.
 
