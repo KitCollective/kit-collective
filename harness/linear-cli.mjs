@@ -28,6 +28,7 @@ export const WORKER_ISSUE_QUERY = `query WorkerIssue($id: String!) {
   issue(id: $id) {
     id
     identifier
+    description
     state { name type }
     labels(first: 50) { nodes { name } }
     delegate { id name }
@@ -324,6 +325,7 @@ export function mapLinearApiIssue(raw) {
           }
         : null,
     attachments,
+    description: typeof issue.description === "string" ? issue.description : "",
   };
 }
 

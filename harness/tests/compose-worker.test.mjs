@@ -653,6 +653,7 @@ test("Linear CLI getIssue maps GraphQL JSON into the KIT-52 dispatch snapshot", 
           issue: {
             id: "issue-1",
             identifier: "KIT-99",
+            description: "write-scope: harness/linear-cli.mjs, harness/tests/**",
             state: { name: "Implementing", type: "started" },
             labels: { nodes: [{ name: "Feature" }, { name: "ready-for-agent" }] },
             delegate: { name: "Pi" },
@@ -680,6 +681,7 @@ test("Linear CLI getIssue maps GraphQL JSON into the KIT-52 dispatch snapshot", 
     blockedBy: [{ status: "Done", statusType: "completed" }],
     delegate: { name: "Pi" },
     attachments: [],
+    description: "write-scope: harness/linear-cli.mjs, harness/tests/**",
   });
   assert.equal(calls[0].command, "linear");
   assert.equal(calls[0].args[0], "api");
