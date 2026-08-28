@@ -21,7 +21,6 @@ import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS, startPlannerPoller } from "./planner.mjs";
 import { runResume, startResumePoller } from "./resume.mjs";
-import { createLinearSessionAdapter } from "./session-adapter.mjs";
 import { createHttpHandler } from "./webhook-router.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
@@ -95,7 +94,6 @@ export async function startWorkerServer({
           runCommand,
           gh: ghClient,
           linear: linearClient,
-          session: createLinearSessionAdapter({ linear: linearClient }),
           typecheckTouched: createTypecheckTouched({ runCommand }),
           readCapacity: capacitySnapshot,
         });
@@ -132,14 +130,15 @@ export async function startWorkerServer({
   const handler = createWorkerHandler({
     env,
     secret: env.LINEAR_WEBHOOK_SECRET,
-    sessionSecret: env.LINEAR_PI_WEBHOOK_SECRET,
+    ...(typeof env.LINEAR_PI_WEBHOOK_SECRET === "string" && env.LINEAR_PI_WEBHOOK_SECRET.length > 0
+      ? { sessionSecret: env.LINEAR_PI_WEBHOOK_SECRET }
+      : {}),
     now,
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
     enqueue: slots,
     health: () => ({ ...slots.health(), tokens: lastTokens }),
     worktree: trees,
-    session: createLinearSessionAdapter({ linear: linearClient }),
     delegateGateConfig,
     readCapacity: capacitySnapshot,
   });

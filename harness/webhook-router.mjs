@@ -1,9 +1,9 @@
 /**
- * Webhook router (KIT-52 + KIT-59).
+ * Webhook router (KIT-52 + KIT-113).
  *
  * Issue HMAC (`hmacChannel: "issue"`) → enqueue exactly one factory role
  * (planner | implement | factory-checker | auto-merge | land) or skip.
- * AgentSession HMAC (`hmacChannel: "session"`) → display-only ack; never enqueue.
+ * AgentSession HMAC is ignored — no ack, no enqueue (KIT-113).
  * Pi argv, worktree paths, and ADW yaml stay behind this interface.
  * Fake Linear and `gh` at this seam; do not call Pi or hosted MCP.
  */
@@ -123,8 +123,8 @@ export function dispatchIssue(issue, delegateGateConfig) {
       return { kind: "enqueue", role: "planner" };
     }
     case "Implementing": {
-      if (delegate !== "pi") {
-        return { kind: "skip", reason: "implement requires delegate Pi" };
+      if (delegate !== "none") {
+        return { kind: "skip", reason: delegate === "blocked" ? "implement skips when Linear Agent is Cursor" : "implement requires empty Linear Agent" };
       }
       const adwFile = adwFileFor(issue);
       if (!adwFile) {
@@ -144,74 +144,11 @@ export function dispatchIssue(issue, delegateGateConfig) {
 }
 
 /**
- * @param {object} issue
- * @param {{ names: string[], appUserId?: string }} delegateGateConfig
- * @returns {boolean}
- */
-function isFactoryClaim(issue, delegateGateConfig) {
-  if (issue?.status !== "Implementing") {
-    return false;
-  }
-  if (delegateGate(issue.delegate, delegateGateConfig) !== "pi") {
-    return false;
-  }
-  return Boolean(adwFileFor(issue));
-}
-
-/**
  * @param {object} payload
- * @returns {{ action: string, sessionId?: string, issueId?: string } | null}
  */
-function sessionEvent(payload) {
+function isAgentSessionPayload(payload) {
   const type = payload?.type;
-  if (type !== "AgentSessionEvent" && type !== "AgentSession") {
-    return null;
-  }
-  const action = typeof payload.action === "string" ? payload.action : "";
-  const sessionId = payload.agentSession?.id ?? payload.data?.id;
-  const issueId =
-    payload.agentSession?.issueId ?? payload.agentSession?.issue?.id ?? payload.data?.issueId;
-  return {
-    action,
-    sessionId: typeof sessionId === "string" ? sessionId : undefined,
-    issueId: typeof issueId === "string" ? issueId : undefined,
-  };
-}
-
-/**
- * @param {{
- *   session: object,
- *   event: { action: string, sessionId?: string, issueId?: string },
- *   issue: object | null,
- *   delegateGateConfig: { names: string[], appUserId?: string },
- *   now: number,
- * }} input
- */
-async function ackSession({ session, event, issue, delegateGateConfig, now }) {
-  if (!session) {
-    return;
-  }
-  const sessionId = event.sessionId;
-  if (typeof sessionId !== "string") {
-    return;
-  }
-  if (event.action === "prompted") {
-    if (typeof session.ackPrompted === "function") {
-      await session.ackPrompted({ sessionId, issueId: event.issueId, now });
-    }
-    return;
-  }
-  if (event.action === "created" || event.action === "create") {
-    const claimed = issue ? isFactoryClaim(issue, delegateGateConfig) : false;
-    if (typeof session.ackCreated === "function") {
-      await session.ackCreated({
-        sessionId,
-        issueId: event.issueId,
-        claimed,
-        now,
-      });
-    }
-  }
+  return type === "AgentSessionEvent" || type === "AgentSession";
 }
 
 /**
@@ -226,12 +163,6 @@ async function ackSession({ session, event, issue, delegateGateConfig, now }) {
  *   gh: object,
  *   enqueue: { enqueue: (job: object) => void },
  *   worktree?: { reap?: (input: { identifier: string }) => Promise<unknown> },
- *   session?: {
- *     ackCreated?: Function,
- *     ackPrompted?: Function,
- *     emitWorking?: Function,
- *     handOff?: Function,
- *   },
  *   delegateGateConfig?: { names: string[], appUserId?: string },
  *   allowedDelegates?: string[],
  * }} input
@@ -248,7 +179,6 @@ export async function routeWebhook(input) {
     gh,
     enqueue,
     worktree,
-    session,
     delegateGateConfig = createDelegateGateConfig(input.env),
     allowedDelegates,
   } = input;
@@ -275,22 +205,8 @@ export async function routeWebhook(input) {
     return { kind: "rejected", reason: "stale webhook" };
   }
 
-  const event = sessionEvent(payload);
-
-  if (hmacChannel === "session") {
-    if (!event) {
-      return { kind: "skip", reason: "not an AgentSession webhook" };
-    }
-    let issue = null;
-    if (typeof event.issueId === "string" && typeof linear?.getIssue === "function") {
-      issue = await linear.getIssue(event.issueId);
-    }
-    await ackSession({ session, event, issue, delegateGateConfig: gateConfig, now });
-    return { kind: "skip", reason: "AgentSession never enqueues a coding job" };
-  }
-
-  if (event) {
-    return { kind: "skip", reason: "AgentSession never enqueues a coding job" };
+  if (hmacChannel === "session" || isAgentSessionPayload(payload)) {
+    return { kind: "skip", reason: "AgentSession path removed (KIT-113)" };
   }
 
   if (payload?.type !== "Issue") {
@@ -326,18 +242,6 @@ export async function routeWebhook(input) {
   const decision = dispatchIssue(issue, gateConfig);
   if (decision.kind !== "enqueue") {
     return decision;
-  }
-
-  if (
-    typeof session?.emitWorking === "function" &&
-    (decision.role === "implement" || decision.role === "factory-checker")
-  ) {
-    await session.emitWorking({
-      issueId: issue.id,
-      identifier: issue.identifier,
-      role: decision.role,
-      now,
-    });
   }
 
   enqueue.enqueue({
