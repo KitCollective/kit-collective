@@ -571,6 +571,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
     ".pi/damage-control.yaml",
     ".pi/extensions.json",
     ".pi/agent/hermes-memory-config.json",
+    ".pi/agent-checker/hermes-memory-config.json",
     ".pi/settings.json",
     "harness/host.md",
   ];
@@ -756,7 +757,8 @@ test("compose and host name Worker memory on kit_pi at /var/lib/kit-pi/hermes", 
   assert.doesNotMatch(compose, /worktrees\/KIT-/);
   const host = readFileSync(join(ROOT, "harness/host.md"), "utf8");
   assert.match(host, /\/var\/lib\/kit-pi\/hermes/);
-  assert.match(host, /Memory readers only|readers only/i);
+  assert.match(host, /factory-checker.*Memory writer|Memory writer.*factory-checker/i);
+  assert.match(host, /Memory readers?/i);
   assert.equal(WORKER_MEMORY_DIR, "/var/lib/kit-pi/hermes");
 });
 
@@ -770,6 +772,17 @@ test("committed Hermes config is policy-only with review and flush off for reade
   assert.equal(config.flushOnShutdown, false);
   assert.equal(config.memoryDir, "/var/lib/kit-pi/hermes");
   assert.doesNotMatch(JSON.stringify(config), /legacy-inject/);
+});
+
+test("factory-checker Hermes config enables review, correction detection, and shutdown flush", () => {
+  const configPath = join(ROOT, ".pi/agent-checker/hermes-memory-config.json");
+  assert.equal(existsSync(configPath), true, "missing .pi/agent-checker/hermes-memory-config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  assert.equal(config.memoryMode, "policy-only");
+  assert.equal(config.reviewEnabled, true);
+  assert.equal(config.correctionDetection, true);
+  assert.equal(config.flushOnShutdown, true);
+  assert.equal(config.memoryDir, "/var/lib/kit-pi/hermes");
 });
 
 test("Pi job runner starts one non-interactive Pi process with the role file", async () => {

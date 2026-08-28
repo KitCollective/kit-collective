@@ -12,7 +12,23 @@ const FACTORY_CHECKER_TOOLS = join(HARNESS_DIR, "factory-checker-tools.ts");
 export const FACTORY_CHECKER_EXCLUDED_TOOLS = ["write", "edit", "bash"];
 
 /** @readonly */
-export const FACTORY_CHECKER_ALLOWED_TOOLS = ["read", "grep", "find", "ls", "linear_cli"];
+export const FACTORY_CHECKER_MEMORY_TOOLS = [
+  "memory_search",
+  "session_search",
+  "memory_add",
+  "memory_replace",
+  "memory_remove",
+];
+
+/** @readonly */
+export const FACTORY_CHECKER_ALLOWED_TOOLS = [
+  "read",
+  "grep",
+  "find",
+  "ls",
+  "linear_cli",
+  ...FACTORY_CHECKER_MEMORY_TOOLS,
+];
 
 /**
  * Extra pi CLI args for factory-checker (tool gate + extension).
