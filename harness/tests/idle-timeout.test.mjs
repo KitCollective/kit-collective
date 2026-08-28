@@ -10,7 +10,7 @@ import { PassThrough } from "node:stream";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
-import { createSerialQueue } from "../job-queue.mjs";
+import { createSerialQueue, createWorkerSlots } from "../job-queue.mjs";
 import { completeLand, LAND_LANES } from "../land.mjs";
 import { FORBIDDEN_PLANNER_STATES, WORKPAD_HEADING } from "../linear-cli.mjs";
 import { createPiJobRunner, DEFAULT_JOB_IDLE_MS } from "../pi-job.mjs";
@@ -260,6 +260,39 @@ test("idle timeout with no close and no stdout kills the process group, Parks, w
   assert.equal(worktree.mirror, MIRROR_DIR);
   assert.ok(worktree.calls.some((call) => call[0] === "reap" && call[1].identifier === IDENTIFIER));
   assert.equal(clock.now() >= DEFAULT_JOB_IDLE_MS, true);
+});
+
+test("idle timeout on one implement frees only that slot; sibling implement keeps running", async () => {
+  let releaseKit86;
+  const holdKit86 = new Promise((resolve) => {
+    releaseKit86 = resolve;
+  });
+  let releaseKit87;
+  const holdKit87 = new Promise((resolve) => {
+    releaseKit87 = resolve;
+  });
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.identifier === "KIT-86") {
+        await holdKit86;
+        return { ...job, idleTimeout: true, nextStatus: "Parked" };
+      }
+      await holdKit87;
+      return job;
+    },
+  });
+
+  const first = slots.enqueue(implementJob({ identifier: "KIT-86", issueId: "issue-kit-86" }));
+  const second = slots.enqueue(implementJob({ identifier: "KIT-87", issueId: "issue-kit-87" }));
+  assert.equal(slots.health().jobs.length, 2);
+
+  releaseKit86();
+  await first;
+  assert.equal(slots.health().jobs.length, 1);
+  assert.deepEqual(slots.health().jobs[0], { role: "implement", identifier: "KIT-87" });
+
+  releaseKit87();
+  await second;
 });
 
 test("after Idle timeout a later factory-checker enqueue can run on the coding slot", async () => {

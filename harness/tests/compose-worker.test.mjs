@@ -8,7 +8,12 @@ import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
 import { snapshotCapacity } from "../capacity.mjs";
 import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
-import { ALWAYS_READY_CAPACITY, createSerialQueue, createWorkerSlots } from "../job-queue.mjs";
+import {
+  ALWAYS_READY_CAPACITY,
+  createSerialQueue,
+  createWorkerSlots,
+  parseImplementSlots,
+} from "../job-queue.mjs";
 import { createActorTokenProvider } from "../linear-actor-token.mjs";
 import { createLinearCliClient } from "../linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
@@ -139,29 +144,242 @@ test("planner job runs on its own mutex while a Coding job occupies the slot", a
   assert.equal(slots.health().job, null);
 });
 
-test("one Coding job occupies the coding slot at a time", async () => {
+test("three implement jobs run concurrently; a fourth waits in queued", async () => {
   const running = [];
   const maxSeen = [];
+  let releaseAll;
+  const hold = new Promise((resolve) => {
+    releaseAll = resolve;
+  });
   const slots = createWorkerSlots({
     async run(job) {
-      running.push(job.role);
+      running.push(job.identifier);
       maxSeen.push(running.length);
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      running.splice(running.indexOf(job.role), 1);
-      return job.role;
+      await hold;
+      running.splice(running.indexOf(job.identifier), 1);
+      return job;
     },
   });
 
-  const [implement, checker, land] = await Promise.all([
-    slots.enqueue({ role: "implement", identifier: "KIT-1" }),
-    slots.enqueue({ role: "factory-checker", identifier: "KIT-2" }),
-    slots.enqueue({ role: "land", identifier: "KIT-3" }),
+  const jobs = ["KIT-1", "KIT-2", "KIT-3", "KIT-4"].map((identifier) =>
+    slots.enqueue({ role: "implement", identifier }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const health = slots.health();
+  assert.equal(health.jobs.length, 3);
+  assert.deepEqual(health.jobs.map((row) => row.identifier).sort(), ["KIT-1", "KIT-2", "KIT-3"]);
+  assert.deepEqual(health.queued, ["KIT-4"]);
+  assert.equal(Math.max(...maxSeen), 3);
+
+  releaseAll();
+  await Promise.all(jobs);
+  assert.deepEqual(slots.health().jobs, []);
+  assert.deepEqual(slots.health().queued, []);
+});
+
+test("factory-checker uses the Finisher slot while three implements stay live", async () => {
+  let releaseImplements;
+  const holdImplements = new Promise((resolve) => {
+    releaseImplements = resolve;
+  });
+  let releaseFinisher;
+  const holdFinisher = new Promise((resolve) => {
+    releaseFinisher = resolve;
+  });
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "implement") {
+        await holdImplements;
+      }
+      if (job.role === "factory-checker") {
+        await holdFinisher;
+      }
+      return job;
+    },
+  });
+
+  for (const identifier of ["KIT-1", "KIT-2", "KIT-3"]) {
+    slots.enqueue({ role: "implement", identifier });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const checker = slots.enqueue({ role: "factory-checker", identifier: "KIT-99" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const health = slots.health();
+  assert.equal(health.jobs.length, 4);
+  assert.equal(health.jobs.filter((row) => row.role === "implement").length, 3);
+  assert.deepEqual(
+    health.jobs.find((row) => row.role === "factory-checker"),
+    {
+      role: "factory-checker",
+      identifier: "KIT-99",
+    },
+  );
+  assert.deepEqual(health.queued, []);
+
+  releaseFinisher();
+  await checker;
+  releaseImplements();
+});
+
+test("auto-merge and land use the Finisher slot and jump a queued fourth implement", async () => {
+  let releaseImplements;
+  const holdImplements = new Promise((resolve) => {
+    releaseImplements = resolve;
+  });
+  const finisherGate = {
+    promise: /** @type {Promise<void>} */ (Promise.resolve()),
+    release: /** @type {(() => void) | null} */ (null),
+  };
+  function armFinisherGate() {
+    finisherGate.promise = new Promise((resolve) => {
+      finisherGate.release = resolve;
+    });
+  }
+  armFinisherGate();
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "implement") {
+        await holdImplements;
+      }
+      if (job.role === "auto-merge" || job.role === "land") {
+        await finisherGate.promise;
+      }
+      return job;
+    },
+  });
+
+  for (const identifier of ["KIT-1", "KIT-2", "KIT-3", "KIT-4"]) {
+    slots.enqueue({ role: "implement", identifier });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+
+  const autoMerge = slots.enqueue({ role: "auto-merge", identifier: "KIT-90" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(
+    slots.health().jobs.find((row) => row.role === "auto-merge"),
+    { role: "auto-merge", identifier: "KIT-90" },
+  );
+  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+
+  finisherGate.release?.();
+  await autoMerge;
+
+  armFinisherGate();
+  const land = slots.enqueue({ role: "land", identifier: "KIT-51" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(
+    slots.health().jobs.find((row) => row.role === "land"),
+    { role: "land", identifier: "KIT-51" },
+  );
+  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+
+  finisherGate.release?.();
+  await land;
+  releaseImplements();
+});
+
+test("Finisher is never stolen for a fourth implement", async () => {
+  let releaseImplements;
+  const holdImplements = new Promise((resolve) => {
+    releaseImplements = resolve;
+  });
+  let releaseFinisher;
+  const holdFinisher = new Promise((resolve) => {
+    releaseFinisher = resolve;
+  });
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "implement") {
+        await holdImplements;
+      }
+      if (job.role === "factory-checker") {
+        await holdFinisher;
+      }
+      return job;
+    },
+  });
+
+  for (const identifier of ["KIT-1", "KIT-2", "KIT-3"]) {
+    slots.enqueue({ role: "implement", identifier });
+  }
+  slots.enqueue({ role: "implement", identifier: "KIT-4" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+
+  const checker = slots.enqueue({ role: "factory-checker", identifier: "KIT-47" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(
+    slots.health().jobs.find((row) => row.role === "factory-checker"),
+    { role: "factory-checker", identifier: "KIT-47" },
+  );
+  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+
+  releaseFinisher();
+  await checker;
+  releaseImplements();
+});
+
+test("a second checker waits in queued while the Finisher slot is busy", async () => {
+  let releaseChecker;
+  const holdChecker = new Promise((resolve) => {
+    releaseChecker = resolve;
+  });
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "factory-checker") {
+        await holdChecker;
+      }
+      return job;
+    },
+  });
+
+  const first = slots.enqueue({ role: "factory-checker", identifier: "KIT-47" });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  slots.enqueue({ role: "factory-checker", identifier: "KIT-48" });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  const health = slots.health();
+  assert.equal(health.jobs.length, 1);
+  assert.deepEqual(health.jobs[0], { role: "factory-checker", identifier: "KIT-47" });
+  assert.deepEqual(health.queued, ["KIT-48"]);
+
+  releaseChecker();
+  await first;
+});
+
+test("each implement checkout uses its own Issue worktree path", async () => {
+  const checkouts = [];
+  const slots = createWorkerSlots({
+    async run(job) {
+      checkouts.push({
+        identifier: job.identifier,
+        path: `/var/lib/kit-pi/worktrees/${job.identifier}`,
+      });
+      return job;
+    },
+  });
+
+  await Promise.all([
+    slots.enqueue({ role: "implement", identifier: "KIT-10" }),
+    slots.enqueue({ role: "implement", identifier: "KIT-11" }),
   ]);
 
-  assert.equal(implement, "implement");
-  assert.equal(checker, "factory-checker");
-  assert.equal(land, "land");
-  assert.equal(Math.max(...maxSeen), 1);
+  assert.deepEqual(checkouts.map((row) => row.identifier).sort(), ["KIT-10", "KIT-11"]);
+  assert.deepEqual(checkouts.map((row) => row.path).sort(), [
+    "/var/lib/kit-pi/worktrees/KIT-10",
+    "/var/lib/kit-pi/worktrees/KIT-11",
+  ]);
+});
+
+test("parseImplementSlots defaults to 3 and clamps 1–3", () => {
+  assert.equal(parseImplementSlots({}), 3);
+  assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "2" }), 2);
+  assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "0" }), 1);
+  assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "9" }), 3);
+  assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "bad" }), 3);
 });
 
 test("rejected coding job stays on the queue and does not become unhandled", async () => {
@@ -379,6 +597,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(envExample, /PI_MODEL_FAST=cursor\/grok-4\.6/);
   assert.match(envExample, /^OPENROUTER_API_KEY=$/m);
   assert.match(envExample, /PI_MODEL=cursor\/composer-2\.5/);
+  assert.match(envExample, /PI_IMPLEMENT_SLOTS=3/);
   assert.doesNotMatch(envExample, /stealth|ox-alpha/i);
   const bootstrapKeyIndex = envExample.indexOf(
     "# Linear admin key for scripts/bootstrap-linear.mjs only.",
@@ -398,6 +617,11 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /OPENROUTER_API_KEY/);
   assert.match(host, /30-day/);
   assert.match(host, /"job"/);
+  assert.match(host, /"jobs"/);
+  assert.match(host, /"queued"/);
+  assert.match(host, /Implement pool/);
+  assert.match(host, /Finisher/);
+  assert.match(host, /PI_IMPLEMENT_SLOTS/);
   assert.match(host, /ramFreeMb/);
   assert.match(host, /diskFreeMb/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);
@@ -1099,6 +1323,8 @@ test("GET /health reports capacity numbers, ready false, and stays HTTP 200", as
     assert.deepEqual(await response.json(), {
       ok: true,
       planner: "active",
+      jobs: [],
+      queued: [],
       job: null,
       capacity: { ramFreeMb: 100, diskFreeMb: 200, ready: false },
       tokens: null,
@@ -1250,6 +1476,150 @@ test("env floors override the 2 GB RAM and 5 GB disk defaults", async () => {
   assert.equal(fakes.spawned.length, 0);
   assert.match(linear.comments[0].body, /500/);
   assert.match(linear.comments[0].body, /800/);
+});
+
+test("capacity below floor blocks a second implement in queued while the first stays in jobs", async () => {
+  const linear = fakeCapacityLinear();
+  const fakes = implementFakes(linear);
+  let releaseFirst;
+  const holdFirst = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let ramFreeMb = 4096;
+  let diskFreeMb = 10_240;
+  const readCapacity = async () => ({
+    ramFreeMb,
+    diskFreeMb,
+    ready: ramFreeMb >= DEFAULT_RAM_FLOOR_MB && diskFreeMb >= DEFAULT_DISK_FLOOR_MB,
+  });
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    ...fakes,
+    readCapacity,
+    capacitySleep: () => new Promise(() => undefined),
+  });
+  const slots = createWorkerSlots({
+    env: { ...validWorkerEnv(), PI_IMPLEMENT_SLOTS: "3" },
+    readCapacity,
+    linear,
+    run: async (job) => {
+      if (job.identifier === "KIT-87") {
+        await holdFirst;
+        return job;
+      }
+      return runner.run(job);
+    },
+  });
+
+  const first = slots.enqueue({
+    role: "implement",
+    identifier: "KIT-87",
+    issueId: "issue-87",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  await waitUntil(
+    () => slots.health().jobs.some((row) => row.identifier === "KIT-87"),
+    "first job running",
+  );
+  assert.deepEqual(slots.health().queued, []);
+
+  ramFreeMb = 100;
+  diskFreeMb = 200;
+
+  const second = slots.enqueue({
+    role: "implement",
+    identifier: "KIT-88",
+    issueId: "issue-88",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  await waitUntil(() => slots.health().queued.includes("KIT-88"), "second queued on capacity");
+  assert.deepEqual(
+    slots.health().jobs.map((row) => row.identifier),
+    ["KIT-87"],
+  );
+  assert.deepEqual(slots.health().queued, ["KIT-88"]);
+  assert.equal(fakes.spawned.length, 0);
+  await waitUntil(() => linear.comments.length === 1, "capacity comment");
+  assert.match(linear.comments[0].body, /## Capacity gate/);
+  assert.match(linear.comments[0].body, /KIT-88/);
+  assert.equal(linear.statusCalls.length, 0);
+
+  releaseFirst();
+  ramFreeMb = 4096;
+  diskFreeMb = 10_240;
+  await second;
+  await first;
+  assert.equal(fakes.spawned.length, 1);
+});
+
+test("startWorkerServer honors PI_IMPLEMENT_SLOTS=1 so only one implement runs at a time", async () => {
+  const running = [];
+  const maxSeen = [];
+  let releaseAll;
+  const hold = new Promise((resolve) => {
+    releaseAll = resolve;
+  });
+  let issueCounter = 0;
+  const server = await startWorkerServer({
+    env: { ...validWorkerEnv(), PI_IMPLEMENT_SLOTS: "1" },
+    listenHost: "127.0.0.1",
+    listenPort: 0,
+    now: () => NOW,
+    plannerPollMs: 0,
+    intakePollMs: 0,
+    linear: {
+      async getIssue(id) {
+        issueCounter += 1;
+        return dispatchableIssue({
+          id,
+          identifier: `KIT-${80 + issueCounter}`,
+        });
+      },
+    },
+    run: async (job) => {
+      if (job.role === "implement") {
+        running.push(job.identifier);
+        maxSeen.push(running.length);
+        await hold;
+        running.splice(running.indexOf(job.identifier), 1);
+      }
+      return job;
+    },
+    async listPackages() {
+      return REQUIRED_PI_PACKAGES.join("\n");
+    },
+  });
+  const { port } = server.address();
+  try {
+    const firstPost = await postWebhook(port, {
+      action: "update",
+      type: "Issue",
+      data: { id: "issue-a" },
+      updatedFrom: { stateId: "prev" },
+      webhookTimestamp: NOW,
+    });
+    const secondPost = await postWebhook(port, {
+      action: "update",
+      type: "Issue",
+      data: { id: "issue-b" },
+      updatedFrom: { stateId: "prev" },
+      webhookTimestamp: NOW,
+    });
+    assert.equal(firstPost.status, 200);
+    assert.equal(secondPost.status, 200);
+    await waitUntil(() => running.length === 1, "first implement started");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(Math.max(...maxSeen), 1);
+    const health = await fetch(`http://127.0.0.1:${port}/health`).then((response) =>
+      response.json(),
+    );
+    assert.equal(health.jobs.length, 1);
+    assert.equal(health.queued.length, 1);
+    releaseAll();
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test("host inventory and Dockerfile document worker health capacity", () => {

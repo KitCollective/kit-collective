@@ -49,6 +49,8 @@ export function createWorkerHandler(deps) {
           workerHealthBody({
             planner: snapshot.planner ?? "active",
             job: snapshot.job === undefined ? null : snapshot.job,
+            jobs: snapshot.jobs,
+            queued: snapshot.queued,
             capacity,
             tokens: snapshot.tokens === undefined ? null : snapshot.tokens,
           }),
@@ -103,6 +105,9 @@ export async function startWorkerServer({
   const delegateGateConfig = createDelegateGateConfig(env);
   let slots;
   slots = createWorkerSlots({
+    env,
+    readCapacity: capacitySnapshot,
+    linear: linearClient,
     async run(job) {
       if (job.role === "resume") {
         return runResume({
