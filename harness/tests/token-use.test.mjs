@@ -444,7 +444,7 @@ test("/health includes the last coding job token totals after implement; HTTP st
           labels: ["Feature"],
           linearType: "Feature",
           blockedBy: [],
-          delegate: { name: "Pi" },
+          delegate: null,
         };
       },
     },

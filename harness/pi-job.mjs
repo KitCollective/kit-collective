@@ -22,7 +22,6 @@ import { runIntake } from "./intake.mjs";
 import { completeLand, createLandGh } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import {
-  createPiEventStreamConsumer,
   pipeReadableJsonLines,
   STREAMING_ROLES,
 } from "./pi-event-stream.mjs";
@@ -581,7 +580,6 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status?: number | null, stdout?: import("node:stream").Readable, closePromise?: Promise<{ status: number | null }> }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
- *   session?: { emitStream?: Function },
  *   now?: () => number,
  *   sleep?: (ms: number) => Promise<unknown>,
  *   capacitySleep?: (ms: number) => Promise<unknown>,
@@ -602,7 +600,6 @@ export function createPiJobRunner({
   typecheckTouched,
   spawnProcess,
   runCommand,
-  session,
   now,
   sleep,
   capacitySleep,
@@ -653,10 +650,6 @@ export function createPiJobRunner({
     const args = piArgsForRole(job.role, workspace, roleFile, model, prompt, piOptions);
     const streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
     const collectStdout = STREAMING_ROLES.has(job.role);
-    const shouldStream =
-      collectStdout &&
-      typeof session?.emitStream === "function" &&
-      typeof streamIssueId === "string";
     const stdio = collectStdout ? ["inherit", "pipe", "inherit"] : "inherit";
     const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
     const waitClose =
@@ -678,20 +671,9 @@ export function createPiJobRunner({
     const tokenCollector = createTokenUseCollector();
     let streamDone = Promise.resolve();
     if (collectStdout && spawned.stdout) {
-      const streamConsumer = shouldStream
-        ? createPiEventStreamConsumer({ session, issueId: streamIssueId, now })
-        : null;
       streamDone = pipeReadableJsonLines(spawned.stdout, {
         async consumeLine(line) {
           await tokenCollector.consumeLine(line);
-          if (streamConsumer) {
-            await streamConsumer.consumeLine(line);
-          }
-        },
-        async finish() {
-          if (streamConsumer) {
-            await streamConsumer.finish();
-          }
         },
       });
     }

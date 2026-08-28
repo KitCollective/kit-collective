@@ -5,7 +5,6 @@
  * required checks are green, and workpad `### Loop counters` are under the
  * cap. Never merges. Never force-pushes. Fake Linear + `gh` at this seam.
  */
-import { createDelegateGateConfig, delegateGate } from "./delegate-gate.mjs";
 import { pullRequestFromAttachments } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 
@@ -146,12 +145,10 @@ function requiredChecksAreGreen(pr) {
  *     viewPr: (input: { number: number, repo?: string }) => Promise<object | null>,
  *     merge?: (input?: object) => unknown,
  *   },
- *   delegateGateConfig?: { names: string[], appUserId?: string },
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  * }} input
  */
-export async function completeAutoMerge({ job, linear, gh, delegateGateConfig, env }) {
-  const gateConfig = delegateGateConfig ?? createDelegateGateConfig(env);
+export async function completeAutoMerge({ job, linear, gh, env }) {
   const issue = await linear.getIssue(job.issueId);
   if (!issue || issue.status !== READY_FOR_MERGE) {
     return {
@@ -185,13 +182,6 @@ export async function completeAutoMerge({ job, linear, gh, delegateGateConfig, e
       nextStatus: READY_FOR_MERGE,
       reason,
     };
-  }
-
-  const delegate = delegateGate(issue.delegate, gateConfig);
-  if (delegate !== "pi") {
-    return block(
-      delegate === "none" ? "delegate already empty (Nicklas's turn)." : "delegate is not Pi.",
-    );
   }
 
   const counters = parseLoopCounters(workpadBody);
