@@ -16,7 +16,12 @@ import {
 } from "../job-queue.mjs";
 import { createActorTokenProvider } from "../linear-actor-token.mjs";
 import { createLinearCliClient } from "../linear-cli.mjs";
-import { assertPiPackagesReady, createPiJobRunner, REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
+import {
+  assertPiPackagesReady,
+  createPiJobRunner,
+  REQUIRED_PI_PACKAGES,
+  WORKER_MEMORY_DIR,
+} from "../pi-job.mjs";
 import { createWorkerHandler, startWorkerServer } from "../server.mjs";
 import { createLinearSessionAdapter } from "../session-adapter.mjs";
 import { createMemoryAdapter } from "../webhook-router.mjs";
@@ -565,6 +570,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
     ".pi/mcp.json",
     ".pi/damage-control.yaml",
     ".pi/extensions.json",
+    ".pi/agent/hermes-memory-config.json",
     ".pi/settings.json",
     "harness/host.md",
   ];
@@ -722,6 +728,48 @@ test("boot fails when required Pi packages are missing from pi list", async () =
       }),
     /pi-subagents/,
   );
+});
+
+test("boot fails closed when pi list omits pi-hermes-memory", async () => {
+  await assert.rejects(
+    () =>
+      assertPiPackagesReady({
+        root: ROOT,
+        async listPackages() {
+          return ["pi-subagents", "@ghoseb/pi-damage-control", "pi-cursor-sdk"].join("\n");
+        },
+      }),
+    /pi-hermes-memory/,
+  );
+});
+
+test("Dockerfile installs pi-hermes-memory with the other global Pi packages", () => {
+  const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
+  assert.match(dockerfile, /pi install npm:pi-hermes-memory/);
+  assert.match(dockerfile, /pi install npm:pi-subagents/);
+});
+
+test("compose and host name Worker memory on kit_pi at /var/lib/kit-pi/hermes", () => {
+  const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
+  assert.match(compose, /KIT_PI_HERMES:\s*"\/var\/lib\/kit-pi\/hermes"/);
+  assert.match(compose, /kit_pi:\/var\/lib\/kit-pi/);
+  assert.doesNotMatch(compose, /worktrees\/KIT-/);
+  const host = readFileSync(join(ROOT, "harness/host.md"), "utf8");
+  assert.match(host, /\/var\/lib\/kit-pi\/hermes/);
+  assert.match(host, /Memory readers only|readers only/i);
+  assert.equal(WORKER_MEMORY_DIR, "/var/lib/kit-pi/hermes");
+});
+
+test("committed Hermes config is policy-only with review and flush off for readers", () => {
+  const configPath = join(ROOT, ".pi/agent/hermes-memory-config.json");
+  assert.equal(existsSync(configPath), true, "missing .pi/agent/hermes-memory-config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  assert.equal(config.memoryMode, "policy-only");
+  assert.equal(config.reviewEnabled, false);
+  assert.equal(config.correctionDetection, false);
+  assert.equal(config.flushOnShutdown, false);
+  assert.equal(config.memoryDir, "/var/lib/kit-pi/hermes");
+  assert.doesNotMatch(JSON.stringify(config), /legacy-inject/);
 });
 
 test("Pi job runner starts one non-interactive Pi process with the role file", async () => {

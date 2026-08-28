@@ -245,3 +245,19 @@ _Avoid_: inventing 0; putting API keys on the workpad; logging planner/intake mo
 **Implement browser**:
 Headless Chromium on the PI worker for implement UI evidence (screenshots onto Linear). A Pi package on implement only, and only when the slice is UI. Not planner. Not Intake. Not Nicklas’s Desktop Chrome.
 _Avoid_: browser on the planner mutex; attaching to a personal browser profile; loading browser tools on api/db-only implement
+
+**Worker memory**:
+One Hermes store on the `kit_pi` volume at `/var/lib/kit-pi/hermes`, outside every Issue worktree. Survives image rebuild and Worktree reap. Not `/root/.pi`. Not a worktree path.
+_Avoid_: project-tier memory keyed on Issue worktree cwd; Cursor `MEMORIES.md` or sessionStart dump as a second source of truth
+
+**Memory writer**:
+The factory role that may call `memory_add`, `memory_replace`, and `memory_remove` on Worker memory (factory-checker in the full design). Background review, correction detection, and shutdown flush run only on the writer.
+_Avoid_: implement, Scout, Gate, or helpers writing the store; land or Auto-merge as writers
+
+**Memory reader**:
+Pi roles that may search Worker memory (`memory_search`, `session_search`) but not write. Implement parent, Scout, Gate, and domain helpers in the reader slice. No background review, correction detection, shutdown flush, or `skill_manage`.
+_Avoid_: side-channel writes that bypass the tool allowlist; MEMORY.md dump into the system prompt
+
+**Memory policy-only**:
+Hermes injects only a short memory policy into the system prompt — not a MEMORY.md dump, not a session_start lesson block. Repo evidence, `CONTEXT.md`, the workpad, and git ratchets still win over a Hermes hit.
+_Avoid_: legacy-inject mode; treating Worker memory as factory law without a ratchet

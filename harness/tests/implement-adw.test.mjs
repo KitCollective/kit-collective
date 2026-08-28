@@ -22,7 +22,11 @@ import {
   createLinearCliClient,
   ISSUE_UPDATE_STATE_MUTATION,
 } from "../linear-cli.mjs";
-import { createPiJobRunner } from "../pi-job.mjs";
+import {
+  createPiJobRunner,
+  IMPLEMENT_MEMORY_EXCLUDED_TOOLS,
+  WORKER_MEMORY_DIR,
+} from "../pi-job.mjs";
 import {
   createWorktreeAdapter,
   gitArgvContainsSecret,
@@ -927,6 +931,28 @@ test("implement parent spawn stays Composer and is not Hy3", async () => {
   assert.equal(String(spawned[0].args.join(" ")).includes("or_test"), false);
 });
 
+test("implement spawn excludes memory-write tools and skill_manage", async () => {
+  const spawned = [];
+  await implementRunner({
+    gh: fakeGh(),
+    linear: fakeLinear(),
+    spawned,
+  }).run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  const args = spawned[0].args;
+  const excludeIdx = args.indexOf("--exclude-tools");
+  assert.notEqual(excludeIdx, -1);
+  const excluded = String(args[excludeIdx + 1]).split(",");
+  for (const tool of IMPLEMENT_MEMORY_EXCLUDED_TOOLS) {
+    assert.ok(excluded.includes(tool), `missing exclude ${tool}`);
+  }
+  assert.equal(spawned[0].options.env.KIT_PI_HERMES, WORKER_MEMORY_DIR);
+});
+
 test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
   const scout = agentFrontmatter(".pi/agents/scout.md");
   const gate = agentFrontmatter(".pi/agents/gate.md");
@@ -939,6 +965,7 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
     assert.match(agent.text, /Exacto/);
     assert.match(agent.text, /not a hard fail|do not fail/i);
     assert.match(agent.text, /do not fall back to stealth\/ox-alpha/i);
+    assert.doesNotMatch(agent.frontmatter, /memory_add|memory_replace|memory_remove|skill_manage/);
   }
   assert.match(scout.frontmatter, /^tools:\s+read,\s*grep,\s*find,\s*ls\s*$/m);
   assert.doesNotMatch(scout.frontmatter, /^tools:.*\b(edit|write|bash)\b/m);

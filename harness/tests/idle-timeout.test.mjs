@@ -333,10 +333,11 @@ test("after Idle timeout a later factory-checker enqueue can run on the coding s
   assert.equal(checkerResult.role, "factory-checker");
 });
 
-test("worktree reap removes the Issue worktree and keeps the bare mirror", async () => {
+test("worktree reap removes the Issue worktree and does not delete Worker memory", async () => {
+  const HERMES_DIR = "/var/lib/kit-pi/hermes";
   const gitCalls = [];
   const removed = [];
-  const present = new Set([MIRROR_DIR, WORKTREE_PATH]);
+  const present = new Set([MIRROR_DIR, WORKTREE_PATH, HERMES_DIR]);
   const adapter = createWorktreeAdapter({
     mirrorDir: MIRROR_DIR,
     worktreesDir: "/var/lib/kit-pi/worktrees",
@@ -366,6 +367,11 @@ test("worktree reap removes the Issue worktree and keeps the bare mirror", async
   assert.equal(removeCall.at(-1), WORKTREE_PATH);
   assert.equal(
     removed.some((entry) => entry.path === MIRROR_DIR),
+    false,
+  );
+  assert.equal(present.has(HERMES_DIR), true);
+  assert.equal(
+    removed.some((entry) => entry.path === HERMES_DIR),
     false,
   );
 });
