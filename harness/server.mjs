@@ -105,6 +105,9 @@ export async function startWorkerServer({
   const delegateGateConfig = createDelegateGateConfig(env);
   let slots;
   slots = createWorkerSlots({
+    env,
+    readCapacity: capacitySnapshot,
+    linear: linearClient,
     async run(job) {
       if (job.role === "resume") {
         return runResume({

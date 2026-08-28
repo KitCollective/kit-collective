@@ -1478,27 +1478,37 @@ test("env floors override the 2 GB RAM and 5 GB disk defaults", async () => {
   assert.match(linear.comments[0].body, /800/);
 });
 
-test("capacity below floor on the second implement spawn keeps first in jobs and second queued", async () => {
+test("capacity below floor blocks a second implement in queued while the first stays in jobs", async () => {
   const linear = fakeCapacityLinear();
+  const fakes = implementFakes(linear);
   let releaseFirst;
   const holdFirst = new Promise((resolve) => {
     releaseFirst = resolve;
   });
-  const sleepWaits = [];
-  const floors = floorsFromEnv(validWorkerEnv());
+  let ramFreeMb = 4096;
+  let diskFreeMb = 10_240;
+  const readCapacity = async () => ({
+    ramFreeMb,
+    diskFreeMb,
+    ready: ramFreeMb >= DEFAULT_RAM_FLOOR_MB && diskFreeMb >= DEFAULT_DISK_FLOOR_MB,
+  });
+  const runner = createPiJobRunner({
+    env: validWorkerEnv(),
+    workspace: ROOT,
+    ...fakes,
+    readCapacity,
+    capacitySleep: () => new Promise(() => undefined),
+  });
   const slots = createWorkerSlots({
-    env: { PI_IMPLEMENT_SLOTS: "1" },
-    async run(job) {
+    env: { ...validWorkerEnv(), PI_IMPLEMENT_SLOTS: "3" },
+    readCapacity,
+    linear,
+    run: async (job) => {
       if (job.identifier === "KIT-87") {
         await holdFirst;
         return job;
       }
-      await linear.commentIssue({
-        issueId: job.issueId,
-        body: capacityCommentBody({ ramFreeMb: 100, diskFreeMb: 200, ready: false }, floors, job),
-      });
-      await new Promise((resolve) => sleepWaits.push(resolve));
-      return job;
+      return runner.run(job);
     },
   });
 
@@ -1506,33 +1516,110 @@ test("capacity below floor on the second implement spawn keeps first in jobs and
     role: "implement",
     identifier: "KIT-87",
     issueId: "issue-87",
+    adwFile: ".pi/adw/feature.yaml",
   });
   await waitUntil(
     () => slots.health().jobs.some((row) => row.identifier === "KIT-87"),
-    "first job",
+    "first job running",
   );
   assert.deepEqual(slots.health().queued, []);
+
+  ramFreeMb = 100;
+  diskFreeMb = 200;
 
   const second = slots.enqueue({
     role: "implement",
     identifier: "KIT-88",
     issueId: "issue-88",
+    adwFile: ".pi/adw/feature.yaml",
   });
-  await waitUntil(() => slots.health().queued.includes("KIT-88"), "second queued on full slot");
-  assert.equal(linear.comments.length, 0);
-
-  releaseFirst();
-  await waitUntil(() => linear.comments.length === 1 && sleepWaits.length === 1, "capacity wait");
+  await waitUntil(() => slots.health().queued.includes("KIT-88"), "second queued on capacity");
   assert.deepEqual(
     slots.health().jobs.map((row) => row.identifier),
-    ["KIT-88"],
+    ["KIT-87"],
   );
-  assert.deepEqual(slots.health().queued, []);
+  assert.deepEqual(slots.health().queued, ["KIT-88"]);
+  assert.equal(fakes.spawned.length, 0);
+  await waitUntil(() => linear.comments.length === 1, "capacity comment");
   assert.match(linear.comments[0].body, /## Capacity gate/);
+  assert.match(linear.comments[0].body, /KIT-88/);
+  assert.equal(linear.statusCalls.length, 0);
 
-  sleepWaits[0]();
+  releaseFirst();
+  ramFreeMb = 4096;
+  diskFreeMb = 10_240;
   await second;
   await first;
+  assert.equal(fakes.spawned.length, 1);
+});
+
+test("startWorkerServer honors PI_IMPLEMENT_SLOTS=1 so only one implement runs at a time", async () => {
+  const running = [];
+  const maxSeen = [];
+  let releaseAll;
+  const hold = new Promise((resolve) => {
+    releaseAll = resolve;
+  });
+  let issueCounter = 0;
+  const server = await startWorkerServer({
+    env: { ...validWorkerEnv(), PI_IMPLEMENT_SLOTS: "1" },
+    listenHost: "127.0.0.1",
+    listenPort: 0,
+    now: () => NOW,
+    plannerPollMs: 0,
+    intakePollMs: 0,
+    linear: {
+      async getIssue(id) {
+        issueCounter += 1;
+        return dispatchableIssue({
+          id,
+          identifier: `KIT-${80 + issueCounter}`,
+        });
+      },
+    },
+    run: async (job) => {
+      if (job.role === "implement") {
+        running.push(job.identifier);
+        maxSeen.push(running.length);
+        await hold;
+        running.splice(running.indexOf(job.identifier), 1);
+      }
+      return job;
+    },
+    async listPackages() {
+      return REQUIRED_PI_PACKAGES.join("\n");
+    },
+  });
+  const { port } = server.address();
+  try {
+    const firstPost = await postWebhook(port, {
+      action: "update",
+      type: "Issue",
+      data: { id: "issue-a" },
+      updatedFrom: { stateId: "prev" },
+      webhookTimestamp: NOW,
+    });
+    const secondPost = await postWebhook(port, {
+      action: "update",
+      type: "Issue",
+      data: { id: "issue-b" },
+      updatedFrom: { stateId: "prev" },
+      webhookTimestamp: NOW,
+    });
+    assert.equal(firstPost.status, 200);
+    assert.equal(secondPost.status, 200);
+    await waitUntil(() => running.length === 1, "first implement started");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(Math.max(...maxSeen), 1);
+    const health = await fetch(`http://127.0.0.1:${port}/health`).then((response) =>
+      response.json(),
+    );
+    assert.equal(health.jobs.length, 1);
+    assert.equal(health.queued.length, 1);
+    releaseAll();
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test("host inventory and Dockerfile document worker health capacity", () => {

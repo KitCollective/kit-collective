@@ -2,6 +2,13 @@
  * Worker job mutexes: Planner mutex plus an Implement pool and a Finisher slot.
  * Compose replicas stay at 1; these mutexes are the in-process seam.
  */
+import {
+  DEFAULT_CAPACITY_POLL_MS,
+  evaluateCapacity,
+  floorsFromEnv,
+  upsertCapacityComment,
+  capacityCommentBody,
+} from "./capacity.mjs";
 
 /**
  * Worker health capacity stub when no reader is injected.
@@ -95,11 +102,18 @@ const CODING_ROLES = new Set([...IMPLEMENT_ROLES, ...FINISHER_ROLES]);
  *   run: (job: object) => Promise<unknown>,
  *   capacity?: { ramFreeMb: number, diskFreeMb: number, ready: boolean },
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
+ *   readCapacity?: () => Promise<{ ramFreeMb: number, diskFreeMb: number, ready?: boolean }>,
+ *   linear?: {
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *     commentIssue?: (input: { issueId: string, body: string }) => Promise<{ id?: string } | unknown>,
+ *     updateComment?: (input: { id: string, body: string }) => Promise<unknown>,
+ *   },
  * }} deps
  */
 export function createWorkerSlots(deps) {
   const maxImplementSlots = parseImplementSlots(deps.env);
   const capacity = deps.capacity ?? ALWAYS_READY_CAPACITY;
+  const floors = floorsFromEnv(deps.env);
 
   /** @type {Array<{ role: string, identifier: string, slot: "implement" | "finisher" }>} */
   const runningJobs = [];
@@ -107,6 +121,9 @@ export function createWorkerSlots(deps) {
   const pendingCoding = [];
   let implementActive = 0;
   let finisherActive = false;
+  let dispatchTail = Promise.resolve();
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let capacityRetryTimer = null;
 
   const plannerQueue = createSerialQueue({
     run(job) {
@@ -159,7 +176,7 @@ export function createWorkerSlots(deps) {
       } else {
         finisherActive = false;
       }
-      dispatchPending();
+      scheduleDispatch();
     }
   }
 
@@ -171,7 +188,55 @@ export function createWorkerSlots(deps) {
     executeJob(job, slot).catch(() => undefined);
   }
 
-  function dispatchPending() {
+  function scheduleCapacityRetry() {
+    if (capacityRetryTimer !== null) {
+      return;
+    }
+    const pollMs = Number(deps.env?.PI_CAPACITY_POLL_MS ?? DEFAULT_CAPACITY_POLL_MS);
+    capacityRetryTimer = setTimeout(() => {
+      capacityRetryTimer = null;
+      scheduleDispatch();
+    }, pollMs);
+  }
+
+  function scheduleDispatch() {
+    dispatchTail = dispatchTail.then(() => dispatchPendingAsync()).catch(() => undefined);
+  }
+
+  /**
+   * When one implement is already live, a second must not occupy a slot until capacity clears.
+   * The first implement may wait inside `pi-job.run`; queued jobs stay in `health().queued`.
+   *
+   * @param {object} job
+   */
+  async function capacityBlocksSecondImplement(job) {
+    if (!IMPLEMENT_ROLES.has(job.role) || implementActive < 1) {
+      return false;
+    }
+    if (typeof deps.readCapacity !== "function") {
+      return false;
+    }
+    const raw = await deps.readCapacity();
+    const snapshot = evaluateCapacity({ ramFreeMb: raw.ramFreeMb, diskFreeMb: raw.diskFreeMb, ...floors });
+    if (snapshot.ready) {
+      return false;
+    }
+    if (
+      deps.linear &&
+      typeof deps.linear.commentIssue === "function" &&
+      typeof job.issueId === "string"
+    ) {
+      await upsertCapacityComment({
+        linear: deps.linear,
+        issueId: job.issueId,
+        body: capacityCommentBody(snapshot, floors, job),
+      });
+    }
+    scheduleCapacityRetry();
+    return true;
+  }
+
+  async function dispatchPendingAsync() {
     if (!finisherActive) {
       const finisherIdx = pendingCoding.findIndex((row) => FINISHER_ROLES.has(row.role));
       if (finisherIdx >= 0) {
@@ -184,7 +249,11 @@ export function createWorkerSlots(deps) {
       if (implementIdx < 0) {
         break;
       }
-      const job = pendingCoding.splice(implementIdx, 1)[0];
+      const job = pendingCoding[implementIdx];
+      if (await capacityBlocksSecondImplement(job)) {
+        break;
+      }
+      pendingCoding.splice(implementIdx, 1);
       startJob(job, "implement");
     }
   }
@@ -230,10 +299,16 @@ export function createWorkerSlots(deps) {
       });
       const entry = { ...job, _deferred: deferred };
 
-      if (canStartNow(entry)) {
+      const needsCapacityDispatch =
+        IMPLEMENT_ROLES.has(entry.role) &&
+        implementActive >= 1 &&
+        typeof deps.readCapacity === "function";
+
+      if (canStartNow(entry) && !needsCapacityDispatch) {
         startJob(entry, slotFor(entry));
       } else {
         pendingCoding.push(entry);
+        scheduleDispatch();
       }
 
       promise.catch(() => undefined);
