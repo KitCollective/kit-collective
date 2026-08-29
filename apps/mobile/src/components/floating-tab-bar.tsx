@@ -70,8 +70,10 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
   const activeRoute = state.routes[state.index]?.name ?? "collection";
 
   const hideForProfileDrill = segments.length > 2 && segments.at(1) === "profile";
+  const hideForConversation =
+    segments.length > 2 && segments.at(1) === "inbox" && segments.at(2) !== undefined;
 
-  if (activeRoute === "add" || hideForProfileDrill) {
+  if (activeRoute === "add" || hideForProfileDrill || hideForConversation) {
     return null;
   }
 
