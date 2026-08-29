@@ -8,13 +8,13 @@ import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
 import { snapshotCapacity } from "../capacity.mjs";
 import { createDelegateGateConfig } from "../delegate-gate.mjs";
+import { harnessDockerCursorPaths } from "../implement-context.mjs";
 import {
   ALWAYS_READY_CAPACITY,
   createSerialQueue,
   createWorkerSlots,
   parseImplementSlots,
 } from "../job-queue.mjs";
-import { harnessDockerCursorPaths } from "../implement-context.mjs";
 import { createLinearCliClient } from "../linear-cli.mjs";
 import {
   assertPiPackagesReady,

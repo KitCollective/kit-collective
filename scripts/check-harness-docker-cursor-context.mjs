@@ -29,7 +29,10 @@ export function missingHarnessDockerCursorContextCoverage(sources) {
   if (!/!\.cursor\/rules\//.test(dockerignore) || !/!\.cursor\/rules\/\*\.mdc/.test(dockerignore)) {
     missing.push(".dockerignore re-includes .cursor/rules/*.mdc after .cursor/ exclusion");
   }
-  if (!/!\.cursor\/skills\//.test(dockerignore) || !/!\.cursor\/skills\/\*\*\/SKILL\.md/.test(dockerignore)) {
+  if (
+    !/!\.cursor\/skills\//.test(dockerignore) ||
+    !/!\.cursor\/skills\/\*\*\/SKILL\.md/.test(dockerignore)
+  ) {
     missing.push(".dockerignore re-includes .cursor/skills/**/SKILL.md");
   }
   const mdExclude = dockerignore.indexOf("**/*.md");

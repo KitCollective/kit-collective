@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { harnessDockerCursorPaths } from "../../harness/implement-context.mjs";
 import {
   missingHarnessDockerCursorContextCoverage,
   missingHarnessDockerCursorPaths,
   REQUIRED_FILES,
 } from "../check-harness-docker-cursor-context.mjs";
-import { harnessDockerCursorPaths } from "../../harness/implement-context.mjs";
 
 function loadSources() {
   /** @type {Record<string, string>} */
