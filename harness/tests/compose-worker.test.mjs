@@ -1175,7 +1175,10 @@ test("AgentSession payload on issue channel skips without ack; implement enqueue
   });
   const checkout = await worktree.checkout({ identifier: "KIT-99" });
   assert.equal(checkout.lane, "development");
-  assert.ok(gitCalls.some((args) => args.includes("development")));
+  assert.ok(
+    gitCalls.some((args) => args.includes("development:refs/remotes/origin/development")),
+    "expected fetch refspec that updates refs/remotes/origin/development",
+  );
   assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/bug.yaml");
 });
 
