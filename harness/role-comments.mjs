@@ -64,7 +64,7 @@ export const IMPLEMENT_RETRY_CAP_MARKER = "implement retry cap";
  * @param {string} identifier
  * @param {{ cap?: number }} [options]
  */
-export function implementRetryCapComment(identifier, { cap = 3 } = {}) {
+export function implementRetryCapComment(identifier, { cap = 5 } = {}) {
   return `${identifier}: implement retry cap — stayed Implementing after ${cap} in-slot retries. Nicklas must act. Linear Agent left empty. No Cursor Cloud Agent.`;
 }
 

@@ -31,7 +31,7 @@ export const ALWAYS_READY_CAPACITY = Object.freeze({
  * factory-checker. Write-scope retry keeps the slot so an out-of-glob path cannot drop
  * the issue behind a resume overlap skip (KIT-119). Format retry is cheap like CI retry.
  */
-export const IMPLEMENT_CI_RETRY_CAP = 3;
+export const IMPLEMENT_CI_RETRY_CAP = 5;
 
 /**
  * Cheap in-slot retry: Scout+helpers already ran on attempt 1.
@@ -70,7 +70,7 @@ export async function runImplementWithRetries(run, job) {
       gate: "yellow",
       reason: "ci",
       attempt: attempt + 1,
-      loopRisk: loopRiskForRetry(attempt + 1),
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
     });
     return runImplementWithRetries(run, { ...job, ciRetryAttempt: attempt + 1 });
   }
@@ -86,7 +86,7 @@ export async function runImplementWithRetries(run, job) {
       gate: "yellow",
       reason: "write-scope",
       attempt: attempt + 1,
-      loopRisk: loopRiskForRetry(attempt + 1),
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
     });
     return runImplementWithRetries(run, { ...job, writeScopeRetryAttempt: attempt + 1 });
   }
@@ -102,7 +102,7 @@ export async function runImplementWithRetries(run, job) {
       gate: "yellow",
       reason: "format",
       attempt: attempt + 1,
-      loopRisk: loopRiskForRetry(attempt + 1),
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
     });
     return runImplementWithRetries(run, { ...job, formatRetryAttempt: attempt + 1 });
   }

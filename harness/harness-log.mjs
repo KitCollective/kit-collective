@@ -44,9 +44,9 @@ export function redactHarnessError(error) {
  * @param {number} [cap]
  * @returns {number}
  */
-export function loopRiskForRetry(attempt, cap = 3) {
+export function loopRiskForRetry(attempt, cap = 5) {
   const safe = Number.isFinite(attempt) && attempt > 0 ? attempt : 1;
-  const limit = Number.isFinite(cap) && cap > 0 ? cap : 3;
+  const limit = Number.isFinite(cap) && cap > 0 ? cap : 5;
   return Math.min(10, Math.max(2, Math.round((safe / limit) * 7 + 2)));
 }
 
