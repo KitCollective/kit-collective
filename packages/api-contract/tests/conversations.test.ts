@@ -3,8 +3,9 @@ import { collectionConversationsSchema } from "../src/collection/conversations.j
 
 describe("collectionConversationsSchema", () => {
   it("accepts an empty conversation list", () => {
-    expect(collectionConversationsSchema.parse({ conversations: [] })).toEqual({
+    expect(collectionConversationsSchema.parse({ conversations: [], unreadCount: 0 })).toEqual({
       conversations: [],
+      unreadCount: 0,
     });
   });
 });

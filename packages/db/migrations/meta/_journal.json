@@ -50,6 +50,13 @@
       "when": 1787510000000,
       "tag": "0006_user_handle",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787520000000,
+      "tag": "0007_bidding_conversations",
+      "breakpoints": true
     }
   ]
 }

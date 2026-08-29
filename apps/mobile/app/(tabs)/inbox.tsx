@@ -1,9 +1,11 @@
+import type { CollectionConversation } from "@kit/api-contract";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, FlatList, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchConversations } from "@/api/conversations";
 import { useAuth } from "@/auth/AuthProvider";
 import { ScreenHeader } from "@/components/screen-header";
+import { formatThreadTime, ThreadRow } from "@/components/thread-row";
 import { TopTabs } from "@/components/top-tabs";
 import { EmptyState } from "@/components/ui";
 import { space } from "@/theme/tokens";
@@ -25,7 +27,7 @@ export default function InboxScreen() {
     space.insetMd;
   const [activeTab, setActiveTab] = useState<InboxTab>("Beskeder");
   const [loading, setLoading] = useState(true);
-  const [conversationCount, setConversationCount] = useState(0);
+  const [conversations, setConversations] = useState<CollectionConversation[]>([]);
 
   const loadConversations = useCallback(async () => {
     if (!accessToken) {
@@ -35,7 +37,7 @@ export default function InboxScreen() {
     setLoading(true);
     try {
       const response = await fetchConversations(accessToken);
-      setConversationCount(response.conversations.length);
+      setConversations(response.conversations);
     } finally {
       setLoading(false);
     }
@@ -55,12 +57,32 @@ export default function InboxScreen() {
         <View style={styles.loading}>
           <ActivityIndicator color={theme.contentPrimary} />
         </View>
-      ) : conversationCount === 0 ? (
+      ) : activeTab === "Aktivitet" ? (
+        <EmptyState
+          title="Ingen aktivitet endnu"
+          body="Bud og svar vises her, når samtaler kommer i gang."
+        />
+      ) : conversations.length === 0 ? (
         <EmptyState
           title="Ingen beskeder endnu"
           body="Når en anden samler byder på en af dine trøjer, starter samtalen her."
         />
-      ) : null}
+      ) : (
+        <FlatList
+          data={conversations}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <ThreadRow
+              handle={item.peerHandle}
+              initial={item.peerInitial}
+              snippet={item.snippet}
+              timeLabel={formatThreadTime(item.updatedAt)}
+              unread={item.unread}
+              onPress={() => undefined}
+            />
+          )}
+        />
+      )}
     </View>
   );
 }

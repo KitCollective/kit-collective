@@ -2,8 +2,9 @@ import type { CollectionJersey } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { patchJerseyBidding } from "@/api/bidding";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { IconButton } from "@/components/ui";
@@ -28,6 +29,8 @@ export default function JerseyDetailScreen() {
     space.insetMd;
   const [loading, setLoading] = useState(true);
   const [jersey, setJersey] = useState<CollectionJersey | null>(null);
+  const [biddingEnabled, setBiddingEnabled] = useState(false);
+  const [savingBidding, setSavingBidding] = useState(false);
 
   const loadJersey = useCallback(async () => {
     if (!accessToken || !jerseyId) {
@@ -37,6 +40,7 @@ export default function JerseyDetailScreen() {
     const response = await fetchCollectionJerseys(accessToken);
     const found = response.jerseys.find((item) => item.id === jerseyId) ?? null;
     setJersey(found);
+    setBiddingEnabled(found?.biddingEnabled ?? false);
   }, [accessToken, jerseyId]);
 
   useEffect(() => {
@@ -78,6 +82,22 @@ export default function JerseyDetailScreen() {
 
   const metaLine = `${jersey.seasonLabel} · ${KIT_TYPE_LABELS_DA[jersey.type]}`;
 
+  const toggleBidding = async (nextValue: boolean) => {
+    if (!accessToken || !jerseyId) {
+      return;
+    }
+
+    setBiddingEnabled(nextValue);
+    setSavingBidding(true);
+    try {
+      await patchJerseyBidding(accessToken, jerseyId, { biddingEnabled: nextValue });
+    } catch {
+      setBiddingEnabled(!nextValue);
+    } finally {
+      setSavingBidding(false);
+    }
+  };
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.canvas }}
@@ -94,6 +114,27 @@ export default function JerseyDetailScreen() {
       <View style={styles.titleBlock}>
         <Text style={[typography.title, { color: theme.contentPrimary }]}>{jersey.clubLabel}</Text>
         <Text style={[typography.mono, { color: theme.contentSecondary }]}>{metaLine}</Text>
+      </View>
+      <View
+        style={[
+          styles.biddingRow,
+          { backgroundColor: theme.surface, borderColor: theme.borderSubtle },
+        ]}
+      >
+        <View style={styles.biddingCopy}>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Åben for bud</Text>
+          <Text style={[typography.caption, { color: theme.contentSecondary }]}>
+            Andre samlere kan finde trøjen under Søg og sende bud.
+          </Text>
+        </View>
+        <Switch
+          accessibilityLabel="Åben for bud"
+          value={biddingEnabled}
+          disabled={savingBidding}
+          onValueChange={(value) => void toggleBidding(value)}
+          trackColor={{ false: theme.borderSubtle, true: theme.fillPrimary }}
+          thumbColor={theme.contentInverse}
+        />
       </View>
       <View style={styles.photoGrid}>
         {jersey.photos.map((photo) => (
@@ -126,6 +167,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   titleBlock: {
+    gap: space.gapSm,
+  },
+  biddingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.gapMd,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: space.insetMd,
+  },
+  biddingCopy: {
+    flex: 1,
     gap: space.gapSm,
   },
   photoGrid: {

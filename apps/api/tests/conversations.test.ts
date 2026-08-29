@@ -68,6 +68,6 @@ describe("Collection conversations /v1", () => {
 
     expect(response.statusCode).toBe(200);
     const body = collectionConversationsSchema.parse(JSON.parse(response.body));
-    expect(body).toEqual({ conversations: [] });
+    expect(body).toEqual({ conversations: [], unreadCount: 0 });
   });
 });

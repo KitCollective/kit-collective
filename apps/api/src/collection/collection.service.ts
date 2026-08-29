@@ -1,28 +1,46 @@
 import {
   type CollectionConversations,
+  type CollectionDiscoverJerseys,
   type CollectionJersey,
   type CollectionJerseys,
+  type CollectionPeerJersey,
   type CollectionSavePhoto,
   type CollectionSaveResponse,
+  type CollectionSendBidResponse,
+  collectionBiddingPatchSchema,
   collectionConversationsSchema,
+  collectionDiscoverJerseysSchema,
   collectionJerseysSchema,
+  collectionPeerJerseySchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
+  collectionSendBidRequestSchema,
+  collectionSendBidResponseSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
   catalogLabel,
   club,
+  conversation,
+  conversationMessage,
+  conversationParticipant,
   jerseyDraft,
   playerClubSeason,
   season,
   teamSeason,
+  user,
   userJersey,
   userJerseyPhoto,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
@@ -31,6 +49,22 @@ import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store
 import { createR2ObjectStore } from "./r2-object-store.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
+
+function canonicalCollectorPair(leftId: string, rightId: string): [string, string] {
+  return leftId < rightId ? [leftId, rightId] : [rightId, leftId];
+}
+
+function handleInitial(handle: string): string {
+  const trimmed = handle.trim();
+  if (!trimmed) {
+    return "?";
+  }
+  return trimmed.charAt(0).toUpperCase();
+}
+
+function bidSnippet(amountDkk: number): string {
+  return `Bud på ${amountDkk} kr`;
+}
 
 function hasR2Config(): boolean {
   return Boolean(
@@ -92,6 +126,7 @@ export class CollectionService {
         size: userJersey.size,
         condition: userJersey.condition,
         seasonLabel: season.label,
+        biddingEnabled: userJersey.biddingEnabled,
       })
       .from(userJersey)
       .innerJoin(season, eq(userJersey.seasonId, season.id))
@@ -167,14 +202,366 @@ export class CollectionService {
         seasonLabel: row.seasonLabel,
         squadPlayers: squadPlayersByScope.get(`${row.clubId}:${row.seasonId}`) ?? [],
         photos,
+        biddingEnabled: row.biddingEnabled,
       };
     });
 
     return collectionJerseysSchema.parse({ jerseys });
   }
 
-  listConversations(_userId: string): CollectionConversations {
-    return collectionConversationsSchema.parse({ conversations: [] });
+  async listConversations(userId: string): Promise<CollectionConversations> {
+    const participantRows = await this.db
+      .select({
+        conversationId: conversationParticipant.conversationId,
+        lastReadAt: conversationParticipant.lastReadAt,
+      })
+      .from(conversationParticipant)
+      .where(
+        and(
+          eq(conversationParticipant.userId, userId),
+          sql`${conversationParticipant.hiddenAt} IS NULL`,
+        ),
+      );
+
+    if (participantRows.length === 0) {
+      return collectionConversationsSchema.parse({ conversations: [], unreadCount: 0 });
+    }
+
+    const conversationIds = participantRows.map((row) => row.conversationId);
+    const lastReadByConversation = new Map(
+      participantRows.map((row) => [row.conversationId, row.lastReadAt]),
+    );
+
+    const conversationRows = await this.db
+      .select({
+        id: conversation.id,
+        lowerCollectorId: conversation.lowerCollectorId,
+        upperCollectorId: conversation.upperCollectorId,
+        updatedAt: conversation.updatedAt,
+      })
+      .from(conversation)
+      .where(inArray(conversation.id, conversationIds))
+      .orderBy(desc(conversation.updatedAt));
+
+    const peerIds = conversationRows.map((row) =>
+      row.lowerCollectorId === userId ? row.upperCollectorId : row.lowerCollectorId,
+    );
+    const uniquePeerIds = [...new Set(peerIds)];
+
+    const peerRows =
+      uniquePeerIds.length === 0
+        ? []
+        : await this.db
+            .select({ id: user.id, handle: user.handle })
+            .from(user)
+            .where(inArray(user.id, uniquePeerIds));
+
+    const peerById = new Map(peerRows.map((row) => [row.id, row.handle]));
+
+    const latestMessages = await this.db
+      .select({
+        conversationId: conversationMessage.conversationId,
+        senderId: conversationMessage.senderId,
+        kind: conversationMessage.kind,
+        body: conversationMessage.body,
+        bidAmountDkk: conversationMessage.bidAmountDkk,
+        createdAt: conversationMessage.createdAt,
+      })
+      .from(conversationMessage)
+      .where(inArray(conversationMessage.conversationId, conversationIds))
+      .orderBy(desc(conversationMessage.createdAt));
+
+    const latestByConversation = new Map<string, (typeof latestMessages)[number]>();
+    for (const message of latestMessages) {
+      if (!latestByConversation.has(message.conversationId)) {
+        latestByConversation.set(message.conversationId, message);
+      }
+    }
+
+    const conversations = conversationRows.map((row) => {
+      const peerId = row.lowerCollectorId === userId ? row.upperCollectorId : row.lowerCollectorId;
+      const peerHandle = peerById.get(peerId);
+      if (!peerHandle) {
+        throw new NotFoundException(`Peer handle missing for conversation ${row.id}`);
+      }
+
+      const latest = latestByConversation.get(row.id);
+      const snippet =
+        latest?.kind === "bid" && latest.bidAmountDkk
+          ? bidSnippet(latest.bidAmountDkk)
+          : (latest?.body ?? "Ny besked");
+
+      const lastReadAt = lastReadByConversation.get(row.id);
+      const unread =
+        Boolean(latest) &&
+        latest!.senderId !== userId &&
+        (!lastReadAt || latest!.createdAt > lastReadAt);
+
+      return {
+        id: row.id,
+        peerHandle,
+        peerInitial: handleInitial(peerHandle),
+        snippet,
+        updatedAt: (latest?.createdAt ?? row.updatedAt).toISOString(),
+        unread,
+      };
+    });
+
+    const unreadCount = conversations.filter((item) => item.unread).length;
+
+    return collectionConversationsSchema.parse({ conversations, unreadCount });
+  }
+
+  async patchBidding(userId: string, jerseyId: string, rawBody: unknown) {
+    const body = collectionBiddingPatchSchema.parse(rawBody);
+
+    const [row] = await this.db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    await this.db
+      .update(userJersey)
+      .set({ biddingEnabled: body.biddingEnabled, updatedAt: new Date() })
+      .where(eq(userJersey.id, jerseyId));
+
+    const jerseys = await this.listJerseys(userId);
+    const jersey = jerseys.jerseys.find((item) => item.id === jerseyId);
+    if (!jersey) {
+      throw new NotFoundException("UserJersey not found after update");
+    }
+
+    return { jersey };
+  }
+
+  async discoverJerseys(
+    userId: string,
+    query: string | undefined,
+    locale: LabelLocale = "da",
+  ): Promise<CollectionDiscoverJerseys> {
+    const rows = await this.db
+      .select({
+        id: userJersey.id,
+        clubId: userJersey.clubId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        seasonLabel: season.label,
+        ownerHandle: user.handle,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(user, eq(userJersey.userId, user.id))
+      .where(and(ne(userJersey.userId, userId), eq(userJersey.biddingEnabled, true)))
+      .orderBy(desc(userJersey.updatedAt));
+
+    if (rows.length === 0) {
+      return collectionDiscoverJerseysSchema.parse({ jerseys: [] });
+    }
+
+    const clubIds = [...new Set(rows.map((row) => row.clubId))];
+    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const normalizedQuery = query?.trim().toLowerCase() ?? "";
+
+    const filteredRows = rows.filter((row) => {
+      const clubLabel = clubLabels.get(row.clubId);
+      if (!clubLabel) {
+        return false;
+      }
+      if (!normalizedQuery) {
+        return true;
+      }
+      const haystack = `${clubLabel} ${row.seasonLabel}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+
+    if (filteredRows.length === 0) {
+      return collectionDiscoverJerseysSchema.parse({ jerseys: [] });
+    }
+
+    const photosByJersey = await this.loadPhotosForJerseys(filteredRows.map((row) => row.id));
+
+    const jerseys = filteredRows.flatMap((row) => {
+      const clubLabel = clubLabels.get(row.clubId);
+      const photos = photosByJersey.get(row.id);
+      if (!clubLabel || !photos || photos.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          id: row.id,
+          clubId: row.clubId,
+          seasonId: row.seasonId,
+          type: row.type,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          ownerHandle: row.ownerHandle,
+          photos,
+        },
+      ];
+    });
+
+    return collectionDiscoverJerseysSchema.parse({ jerseys });
+  }
+
+  async getPeerJersey(
+    userId: string,
+    jerseyId: string,
+    locale: LabelLocale = "da",
+  ): Promise<CollectionPeerJersey> {
+    const [row] = await this.db
+      .select({
+        id: userJersey.id,
+        userId: userJersey.userId,
+        clubId: userJersey.clubId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        seasonLabel: season.label,
+        ownerHandle: user.handle,
+        biddingEnabled: userJersey.biddingEnabled,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(user, eq(userJersey.userId, user.id))
+      .where(eq(userJersey.id, jerseyId))
+      .limit(1);
+
+    if (!row || row.userId === userId) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    const clubLabels = await this.resolveEntityLabels("club", [row.clubId], locale);
+    const clubLabel = clubLabels.get(row.clubId);
+    if (!clubLabel) {
+      throw new NotFoundException("Club label missing");
+    }
+
+    const photosByJersey = await this.loadPhotosForJerseys([row.id]);
+    const photos = photosByJersey.get(row.id);
+    if (!photos || photos.length === 0) {
+      throw new NotFoundException("Photos missing");
+    }
+
+    const [latestBid] = await this.db
+      .select({ amount: conversationMessage.bidAmountDkk })
+      .from(conversationMessage)
+      .innerJoin(conversation, eq(conversationMessage.conversationId, conversation.id))
+      .where(and(eq(conversation.userJerseyId, jerseyId), eq(conversationMessage.kind, "bid")))
+      .orderBy(desc(conversationMessage.createdAt))
+      .limit(1);
+
+    return collectionPeerJerseySchema.parse({
+      id: row.id,
+      clubId: row.clubId,
+      seasonId: row.seasonId,
+      type: row.type,
+      clubLabel,
+      seasonLabel: row.seasonLabel,
+      ownerHandle: row.ownerHandle,
+      ownerInitial: handleInitial(row.ownerHandle),
+      biddingEnabled: row.biddingEnabled,
+      latestBidAmountDkk: latestBid?.amount ?? null,
+      photos,
+    });
+  }
+
+  async sendBid(
+    userId: string,
+    jerseyId: string,
+    rawBody: unknown,
+  ): Promise<CollectionSendBidResponse> {
+    const body = collectionSendBidRequestSchema.parse(rawBody);
+
+    const [jerseyRow] = await this.db
+      .select({
+        id: userJersey.id,
+        ownerId: userJersey.userId,
+        biddingEnabled: userJersey.biddingEnabled,
+      })
+      .from(userJersey)
+      .where(eq(userJersey.id, jerseyId))
+      .limit(1);
+
+    if (!jerseyRow) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    if (jerseyRow.ownerId === userId) {
+      throw new ForbiddenException("Cannot bid on your own UserJersey");
+    }
+
+    if (!jerseyRow.biddingEnabled) {
+      throw new BadRequestException("Bidding is not enabled for this UserJersey");
+    }
+
+    const [lowerCollectorId, upperCollectorId] = canonicalCollectorPair(userId, jerseyRow.ownerId);
+
+    let conversationId: string;
+    const [existingConversation] = await this.db
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(
+        and(
+          eq(conversation.userJerseyId, jerseyId),
+          eq(conversation.lowerCollectorId, lowerCollectorId),
+          eq(conversation.upperCollectorId, upperCollectorId),
+        ),
+      )
+      .limit(1);
+
+    if (existingConversation) {
+      conversationId = existingConversation.id;
+    } else {
+      const [insertedConversation] = await this.db
+        .insert(conversation)
+        .values({
+          userJerseyId: jerseyId,
+          lowerCollectorId,
+          upperCollectorId,
+        })
+        .returning({ id: conversation.id });
+
+      if (!insertedConversation) {
+        throw new BadRequestException("Could not create conversation");
+      }
+
+      conversationId = insertedConversation.id;
+
+      await this.db.insert(conversationParticipant).values([
+        { conversationId, userId: jerseyRow.ownerId },
+        { conversationId, userId },
+      ]);
+    }
+
+    const [insertedMessage] = await this.db
+      .insert(conversationMessage)
+      .values({
+        conversationId,
+        senderId: userId,
+        kind: "bid",
+        bidAmountDkk: body.amountDkk,
+        bidStatus: "pending",
+      })
+      .returning({ id: conversationMessage.id });
+
+    if (!insertedMessage) {
+      throw new BadRequestException("Could not create bid message");
+    }
+
+    await this.db
+      .update(conversation)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversation.id, conversationId));
+
+    return collectionSendBidResponseSchema.parse({
+      conversationId,
+      messageId: insertedMessage.id,
+    });
   }
 
   async saveJersey(
@@ -335,6 +722,7 @@ export class CollectionService {
       seasonLabel: seasonRow.label,
       squadPlayers: squadPlayersByScope.get(`${body.clubId}:${body.seasonId}`) ?? [],
       photos,
+      biddingEnabled: false,
     };
 
     return collectionSaveResponseSchema.parse({
@@ -348,17 +736,30 @@ export class CollectionService {
       .select({
         objectKey: userJerseyPhoto.objectKey,
         jerseyUserId: userJersey.userId,
+        jerseyId: userJersey.id,
+        biddingEnabled: userJersey.biddingEnabled,
       })
       .from(userJerseyPhoto)
       .innerJoin(userJersey, eq(userJerseyPhoto.userJerseyId, userJersey.id))
       .where(eq(userJerseyPhoto.id, photoId))
       .limit(1);
 
-    if (!row || row.jerseyUserId !== userId) {
+    if (!row) {
       throw new NotFoundException("Photo not found");
     }
 
-    if (!row.objectKey.startsWith(`user/${userId}/`)) {
+    const isOwner = row.jerseyUserId === userId;
+    const isPeerBidTarget = !isOwner && row.biddingEnabled;
+
+    if (!isOwner && !isPeerBidTarget) {
+      throw new NotFoundException("Photo not found");
+    }
+
+    if (isOwner && !row.objectKey.startsWith(`user/${userId}/`)) {
+      throw new NotFoundException("Photo not found");
+    }
+
+    if (isPeerBidTarget && !row.objectKey.startsWith(`user/${row.jerseyUserId}/`)) {
       throw new NotFoundException("Photo not found");
     }
 

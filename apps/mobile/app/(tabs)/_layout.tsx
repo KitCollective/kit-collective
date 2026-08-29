@@ -1,4 +1,7 @@
-import { Tabs } from "expo-router";
+import { Tabs, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import { fetchConversations } from "@/api/conversations";
+import { useAuth } from "@/auth/AuthProvider";
 import { FloatingTabBar } from "@/components/floating-tab-bar";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
@@ -6,10 +9,32 @@ import { useTheme } from "@/theme/use-theme";
 export default function TabsLayout() {
   const theme = useTheme();
   const reduceMotion = useReduceMotion();
+  const { accessToken } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const refreshUnreadCount = useCallback(async () => {
+    if (!accessToken) {
+      setUnreadCount(0);
+      return;
+    }
+
+    try {
+      const response = await fetchConversations(accessToken);
+      setUnreadCount(response.unreadCount);
+    } catch {
+      setUnreadCount(0);
+    }
+  }, [accessToken]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshUnreadCount();
+    }, [refreshUnreadCount]),
+  );
 
   return (
     <Tabs
-      tabBar={(props) => <FloatingTabBar {...props} />}
+      tabBar={(props) => <FloatingTabBar {...props} unreadCount={unreadCount} />}
       screenOptions={{
         headerShown: false,
         animation: reduceMotion ? "none" : "fade",
