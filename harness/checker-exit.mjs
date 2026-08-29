@@ -160,11 +160,8 @@ export function ghGateFailures(pr) {
 }
 
 /**
- * @param {string | undefined} current
- * @param {{ feedbackLines: string[] }} input
- */
-/**
- * Durable pass note on the existing workpad. Keep Review feedback as `- (none)`
+ * Durable pass note on the existing workpad. Keep Review feedback as the
+ * three-axis pass lines (`- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`)
  * so a later checker does not treat the pass line as findings.
  *
  * @param {string | undefined} current
@@ -189,6 +186,10 @@ export function applyCheckerPassWorkpad(current) {
   return `${next.trimEnd()}\n`;
 }
 
+/**
+ * @param {string | undefined} current
+ * @param {{ feedbackLines: string[] }} input
+ */
 export function applyCheckerFailWorkpad(current, { feedbackLines }) {
   const base =
     typeof current === "string" && current.includes(WORKPAD_HEADING)

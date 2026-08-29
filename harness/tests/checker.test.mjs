@@ -38,7 +38,7 @@ import {
 import { IN_REVIEW } from "../implement-exit.mjs";
 import { pullRequestFromAttachments } from "../land.mjs";
 import { WORKPAD_HEADING } from "../linear-cli.mjs";
-import { createPiJobRunner } from "../pi-job.mjs";
+import { createPiJobRunner, implementPrompt } from "../pi-job.mjs";
 import { routeWebhook } from "../webhook-router.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -807,8 +807,7 @@ test("factory-checker allowlist includes subagent and Slop child excludes memory
   }
 });
 
-test("implementPrompt names Standards + Spec + Slop for factory-checker", async () => {
-  const { implementPrompt } = await import("../pi-job.mjs");
+test("implementPrompt names Standards + Spec + Slop for factory-checker", () => {
   const prompt = implementPrompt("factory-checker", "KIT-126");
   assert.match(prompt, /Standards \+ Spec \+ Slop/);
   assert.match(prompt, /Slop:\s*\(none\)/);
