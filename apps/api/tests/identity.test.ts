@@ -121,7 +121,7 @@ describe("Identity /v1", () => {
   });
 
   it("returns the current user with a valid bearer token", async () => {
-    const session = await registerSession(app, "me@example.com");
+    const session = await registerSession(app, "alpha@example.com");
 
     const response = await app.inject({
       method: "GET",
@@ -133,7 +133,7 @@ describe("Identity /v1", () => {
 
     expect(response.statusCode).toBe(200);
     const body = identityMeSchema.parse(JSON.parse(response.body));
-    expect(body.handle).toBe("me");
+    expect(body.handle).toBe("alpha");
     expect(body.aboutMe).toBeNull();
     expect(body.avatarUrl).toBeNull();
   });

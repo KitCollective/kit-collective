@@ -1,4 +1,4 @@
-import { HANDLE_MAX_LENGTH, HANDLE_PATTERN } from "@kit/domain";
+import { HANDLE_MAX_LENGTH, HANDLE_MIN_LENGTH, HANDLE_PATTERN } from "@kit/domain";
 
 export function baseHandleFromEmail(email: string): string {
   const localPart = email.split("@")[0] ?? "user";
@@ -13,6 +13,14 @@ export function baseHandleFromEmail(email: string): string {
   }
 
   if (!handle || !HANDLE_PATTERN.test(handle)) {
+    handle = "user";
+  }
+
+  if (handle.length < HANDLE_MIN_LENGTH) {
+    handle = `u_${handle}`.replace(/_+/g, "_").slice(0, HANDLE_MAX_LENGTH);
+  }
+
+  if (handle.length < HANDLE_MIN_LENGTH || !HANDLE_PATTERN.test(handle)) {
     handle = "user";
   }
 

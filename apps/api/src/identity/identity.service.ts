@@ -308,7 +308,11 @@ export class IdentityService {
       throw new BadRequestException("handle query parameter is required");
     }
 
-    return handleSchema.parse(handleValue);
+    try {
+      return handleSchema.parse(handleValue);
+    } catch {
+      throw new BadRequestException("handle query parameter is invalid");
+    }
   }
 
   private async resolveHandleStatus(
