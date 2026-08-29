@@ -343,6 +343,7 @@ test("clean workpad + MERGEABLE + green checks moves to Ready for merge and neve
   assert.equal(workpad.commentId, "c1");
   assert.match(workpad.body, /### Status\nAll good — checker pass/);
   assert.equal(reviewFeedbackIsClean(workpad.body), true);
+  assert.deepEqual(parseLoopCounters(workpad.body), { ciFailCycles: 0, reviewLoops: 0 });
   assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
   const passComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
   assert.match(passComment.body, /checker pass/);
@@ -362,6 +363,27 @@ test("applyCheckerPassWorkpad keeps Review feedback as three-axis (none)", () =>
   for (const line of REVIEW_PASS_FEEDBACK_LINES) {
     assert.match(next, new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.deepEqual(parseLoopCounters(next), { ciFailCycles: 0, reviewLoops: 0 });
+});
+
+test("applyCheckerPassWorkpad keeps existing ### Loop counters", () => {
+  const next = applyCheckerPassWorkpad(
+    `${WORKPAD_HEADING}
+
+${LOOP_COUNTERS_HEADING}
+
+- ciFailCycles: 1
+- reviewLoops: 3
+
+### Review feedback
+
+- Spec: (none)
+- Standards: (none)
+- Slop: (none)
+`,
+  );
+  assert.deepEqual(parseLoopCounters(next), { ciFailCycles: 1, reviewLoops: 3 });
+  assert.equal(reviewFeedbackIsClean(next), true);
 });
 
 test("Pi review findings move to Implementing with complete Review feedback preserved", async () => {
