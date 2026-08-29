@@ -3,9 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import {
-  IMPLEMENT_MEMORY_EXCLUDED_TOOLS,
-} from "../pi-job.mjs";
+import { IMPLEMENT_MEMORY_EXCLUDED_TOOLS } from "../pi-job.mjs";
 import {
   formatWorkerMemoryEntry,
   isRatchetPath,
@@ -90,10 +88,9 @@ test("ratchet paths are detectable for memory_remove promotion", () => {
   assert.equal(isRatchetPath(".cursor/hooks/block-dangerous-git.sh"), true);
   assert.equal(isRatchetPath("scripts/check-factory-checker-spawn.mjs"), true);
   assert.equal(isRatchetPath("harness/worker-memory.mjs"), false);
-  assert.deepEqual(
-    listRatchetPaths(["harness/foo.mjs", ".cursor/rules/secrets.mdc"]),
-    [".cursor/rules/secrets.mdc"],
-  );
+  assert.deepEqual(listRatchetPaths(["harness/foo.mjs", ".cursor/rules/secrets.mdc"]), [
+    ".cursor/rules/secrets.mdc",
+  ]);
 });
 
 test("implement spawn still excludes memory writes", () => {
