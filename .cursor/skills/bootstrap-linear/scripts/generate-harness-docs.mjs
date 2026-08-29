@@ -140,11 +140,9 @@ Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited pr
 
 ### Planning stack
 
-\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → Auto-merge or ${approver} to Merging → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
+\`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → ${approver} to Merging → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
 
 **Runtime**: PI worker (Compose + \`gh\` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and \`kc_seed_mcp\` are Desktop / Cloud Agent wiring.
-
-Linear Agent stays empty (Cursor skip). One role comment per factory transition. Checker pass ticks description AC. Auto-merge without Pi.
 
 ## How work enters the factory
 
@@ -153,7 +151,7 @@ Linear Agent stays empty (Cursor skip). One role comment per factory transition.
 3. \`/to-spec\` — kickoff = Linear project + milestones; feature = document on an existing project
 4. \`/to-tickets\` — vertical slices in \`${dispatch}\` with \`ready-for-agent\`
 5. planner claims (unblocked) → implement → PR + Linear evidence → checker → \`Ready for merge\`
-6. Auto-merge or \`${approver}\` moves Linear to \`Merging\`
+6. \`${approver}\` reads the GitHub PR, moves Linear to \`Merging\`
 7. \`/land\` into \`${integration}\` (merge success → \`Done\`). A complete **milestone** then \`${staging}\` / \`${production}\` promotions
 
 Product truth lives under \`${specs}\`. If a spec fights a stack lock, change the lock first.
@@ -195,16 +193,8 @@ _Avoid_: horizontal tickets (schema-only, API-only)
 _Avoid_: assigning Cursor as Agent or Assignee, treating priority as eligibility
 
 **Workpad**:
-The single workpad comment on an issue. \`### Review feedback\` is why a pass was sent back. Edited in place — never a second \`## Agent Workpad\`.
+The single workpad comment on an issue. \`### Review feedback\` is why a pass was sent back.
 _Avoid_: a new comment thread per agent turn
-
-**Role comment**:
-One new top-level Linear issue comment per factory role transition (planner claim, implement → In Review, checker pass/fail, Auto-merge flip/refuse, land success/fail). Separate from the workpad.
-_Avoid_: a new comment per tool call; duplicating findings that belong in \`### Review feedback\`
-
-**Description AC**:
-Checker pass ticks \`[x]\` on Acceptance criteria in the issue **description** and writes one verdict comment per criterion. Rewrites a stale line and comments why — never silently ticks unmet text.
-_Avoid_: implement ticking description AC before checker pass; checker pass without updating description when criteria are met
 
 **Signal-up**:
 Out-of-scope bug or debt, filed as a new Linear **Triage** issue. Never coded in the current PR.
@@ -215,12 +205,8 @@ Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), differ
 _Avoid_: mixing with \`signal-up\` on the same issue, filing into \`${dispatch}\`
 
 **Land**:
-Merge to \`${integration}\` after Auto-merge or ${approver} moves the issue to Merging. Land sets Done only after the merge and writes one role comment with the merge SHA (or merge error on return to Implementing).
+Merge to \`${integration}\` after ${approver} moves the issue to Merging. Land sets Done only after the merge.
 _Avoid_: landing to ${staging} or ${production} from an issue run
-
-**Auto-merge**:
-Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and loop counters under workpad \`### Loop counters\` are under the cap. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment; Nicklas can still move Merging.
-_Avoid_: force-push; treating Auto-merge as land; requiring Pi delegate for flip
 
 **Promotion**:
 A Linear **milestone** complete → \`${staging}\`; release helper → \`${production}\`. Separate from land. Not the whole project at once.

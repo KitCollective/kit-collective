@@ -25,6 +25,7 @@ function validWorkerEnv() {
     CURSOR_API_KEY: "cursor_test",
     LINEAR_CLI_API_KEY: "lin_cli_test",
     LINEAR_WEBHOOK_SECRET: SECRET,
+    LINEAR_PI_WEBHOOK_SECRET: "session-secret",
     GH_TOKEN: "ghp_test",
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     LINEAR_PI_CLIENT_ID: "client-id",
@@ -43,7 +44,7 @@ function orphan({
   status = "Implementing",
   labels = ["Feature"],
   linearType = "Feature",
-  delegate = null,
+  delegate = { name: "Pi", id: "pi-app-user-1" },
   description = "write-scope: harness/**",
   priority = 2,
   createdAt = "2026-08-27T00:00:00.000Z",
@@ -92,7 +93,7 @@ function fakeEnqueue() {
   };
 }
 
-test("runResume enqueues implement for Implementing with empty Agent without moving status", async () => {
+test("runResume enqueues implement for Implementing + Pi without moving status", async () => {
   const enqueue = fakeEnqueue();
   const result = await runResume({
     linear: fakeLinear([orphan()]),
@@ -149,7 +150,7 @@ test("runResume enqueues checker, auto-merge, and land for started factory state
   );
 });
 
-test("runResume skips Parked and Implementing with Cursor Agent", async () => {
+test("runResume skips Parked and Implementing without Pi", async () => {
   const enqueue = fakeEnqueue();
   const result = await runResume({
     linear: fakeLinear([
@@ -160,10 +161,10 @@ test("runResume skips Parked and Implementing with Cursor Agent", async () => {
         delegate: { name: "Pi" },
       }),
       orphan({
-        id: "issue-cursor",
+        id: "issue-human",
         identifier: "KIT-11",
         status: "Implementing",
-        delegate: { name: "Cursor" },
+        delegate: null,
       }),
     ]),
     enqueue,
