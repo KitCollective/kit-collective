@@ -128,6 +128,15 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!role.includes("linear_cli")) {
     failures.push(".pi/roles/factory-checker.md must document linear_cli host tool");
   }
+  if (!role.includes("gh_cli")) {
+    failures.push(".pi/roles/factory-checker.md must document gh_cli comment-only host tool");
+  }
+  if (!checkerSpawn.includes('"gh_cli"')) {
+    failures.push("harness/checker-spawn.mjs must allow gh_cli on factory-checker");
+  }
+  if (!dockerfile.includes("slop-review.mjs")) {
+    failures.push("harness/Dockerfile must copy slop-review.mjs");
+  }
   if (!host.match(/factory-checker.*Memory writer|Memory writer.*factory-checker/i)) {
     failures.push("harness/host.md must name factory-checker as the Memory writer");
   }

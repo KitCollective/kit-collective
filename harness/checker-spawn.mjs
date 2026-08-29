@@ -27,6 +27,7 @@ export const FACTORY_CHECKER_ALLOWED_TOOLS = [
   "find",
   "ls",
   "linear_cli",
+  "gh_cli",
   ...FACTORY_CHECKER_MEMORY_TOOLS,
 ];
 

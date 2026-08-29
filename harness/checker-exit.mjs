@@ -16,6 +16,7 @@ import {
   checkerPassComment,
   parseDescriptionAcRewrites,
 } from "./role-comments.mjs";
+import { createSlopReviewGh, parseSlopFindings } from "./slop-review.mjs";
 
 export const READY_FOR_MERGE = "Ready for merge";
 export const IMPLEMENTING = "Implementing";
@@ -179,9 +180,12 @@ export function applyCheckerPassWorkpad(current) {
     ? base.replace(/### Status\n[\s\S]*?(?=\n### |\s*$)/, statusBlock)
     : base.replace(WORKPAD_HEADING, `${WORKPAD_HEADING}\n\n${statusBlock}`);
   if (REVIEW_FEEDBACK_HEADING_AT.test(next)) {
-    next = next.replace(REVIEW_FEEDBACK_BLOCK, `$1${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`);
+    next = next.replace(
+      REVIEW_FEEDBACK_BLOCK,
+      `$1${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_PASS_FEEDBACK_LINES.join("\n")}\n`,
+    );
   } else {
-    next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`;
+    next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_PASS_FEEDBACK_LINES.join("\n")}\n`;
   }
   return `${next.trimEnd()}\n`;
 }
@@ -209,10 +213,18 @@ export function applyCheckerFailWorkpad(current, { feedbackLines }) {
  */
 export function createCheckerGh(deps = {}) {
   const land = createLandGh(deps);
+  const slop = createSlopReviewGh(deps);
   return {
     viewPr: land.viewPr.bind(land),
+    postInlineComment: slop.postInlineComment.bind(slop),
+    listSlopThreads: slop.listSlopThreads.bind(slop),
+    resolveReviewThread: slop.resolveReviewThread.bind(slop),
+    syncSlopReviewThreads: slop.syncSlopReviewThreads.bind(slop),
     merge() {
       throw new Error("checker never merges");
+    },
+    approve() {
+      throw new Error("checker never approves");
     },
   };
 }
@@ -229,10 +241,21 @@ export function createCheckerGh(deps = {}) {
  *   workpadBody?: string,
  *   existingComment?: { id?: string, body?: string },
  *   pr?: object | null,
+ *   gh?: object | null,
+ *   linked?: { repo: string, number: number } | null,
  * }} input
  */
 async function checkerFailMove(input) {
-  const { job, linear, feedbackLines, workpadBody = "", existingComment, pr = null } = input;
+  const {
+    job,
+    linear,
+    feedbackLines,
+    workpadBody = "",
+    existingComment,
+    pr = null,
+    gh = null,
+    linked = null,
+  } = input;
   const body = applyRatchetNudge(
     incrementReviewLoops(applyCheckerFailWorkpad(workpadBody, { feedbackLines })),
   );
@@ -241,6 +264,19 @@ async function checkerFailMove(input) {
     body,
     commentId: existingComment?.id,
   });
+  if (
+    gh &&
+    typeof gh.syncSlopReviewThreads === "function" &&
+    linked &&
+    typeof linked.number === "number" &&
+    parseSlopFindings(workpadBody).length > 0
+  ) {
+    await gh.syncSlopReviewThreads({
+      repo: linked.repo,
+      number: linked.number,
+      workpadBody,
+    });
+  }
   const identifier =
     typeof job.identifier === "string" && job.identifier.length > 0 ? job.identifier : job.issueId;
   if (typeof linear.commentIssue === "function") {
@@ -313,6 +349,7 @@ export async function completeChecker(input) {
       workpadBody,
       existingComment: existing,
       feedbackLines: ["- Linked GitHub PR is required for factory checker"],
+      gh,
     });
   }
 
@@ -350,6 +387,14 @@ export async function completeChecker(input) {
       typeof job.identifier === "string" && job.identifier.length > 0
         ? job.identifier
         : issue.identifier;
+    if (typeof gh.syncSlopReviewThreads === "function") {
+      await gh.syncSlopReviewThreads({
+        repo: linked.repo,
+        number: linked.number,
+        workpadBody,
+        findings: [],
+      });
+    }
     const rewrites = parseDescriptionAcRewrites(workpadBody);
     const description = typeof issue.description === "string" ? issue.description : "";
     const updatedDescription = applyCheckerPassDescription(description, { rewrites });
@@ -401,5 +446,7 @@ export async function completeChecker(input) {
     existingComment: existing,
     feedbackLines,
     pr,
+    gh,
+    linked,
   });
 }

@@ -19,7 +19,7 @@ import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
-import { completeLand, createLandGh } from "./land.mjs";
+import { completeLand, createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { runPlanner } from "./planner.mjs";
@@ -466,7 +466,7 @@ export function implementPrompt(role, identifier, adwFile) {
     return `Factory role implement for ${identifier}.${adw} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
   }
   if (role === "factory-checker") {
-    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete finding set (- (none) on pass). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
+    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete finding set (three axes; \`- Slop: (none)\` on pass; \`Slop/\` prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
   }
   return typeof adwFile === "string"
     ? `Factory role ${role} for ${identifier}. ADW ${adwFile}.`
@@ -913,6 +913,16 @@ export function createPiJobRunner({
       delete spawnEnv.DATABASE_URL;
       if (job.role === "factory-checker") {
         spawnEnv.LINEAR_ISSUE_ID = job.issueId ?? identifier;
+        const linearClient = linear ?? job.linear;
+        const issue =
+          typeof linearClient?.getIssue === "function"
+            ? await linearClient.getIssue(job.issueId ?? identifier)
+            : null;
+        const linkedPr = pullRequestFromAttachments(issue?.attachments);
+        if (linkedPr) {
+          spawnEnv.GITHUB_PR_REPO = linkedPr.repo;
+          spawnEnv.GITHUB_PR_NUMBER = String(linkedPr.number);
+        }
       }
       let browserSkill;
       if (job.role === "implement") {
