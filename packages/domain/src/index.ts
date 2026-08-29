@@ -105,3 +105,11 @@ export const JERSEY_CONDITION_LABELS_DA: Record<JerseyCondition, string> = {
   used: "Brugt",
   worn: "Slidt",
 };
+
+export {
+  HANDLE_MAX_LENGTH,
+  HANDLE_MIN_LENGTH,
+  HANDLE_PATTERN,
+  HANDLE_STATUSES,
+  type HandleStatus,
+} from "./identity.js";

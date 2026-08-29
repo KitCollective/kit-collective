@@ -113,12 +113,24 @@ describe("stamdata schema", () => {
 
   it("enforces User email unique", async () => {
     await pool.query(
-      `INSERT INTO "user" (email, handle, password_hash) VALUES ('a@example.com', 'a', 'hash')`,
+      `INSERT INTO "user" (email, password_hash, handle) VALUES ('a@example.com', 'hash', 'user_a')`,
     );
 
     await expect(
       pool.query(
-        `INSERT INTO "user" (email, handle, password_hash) VALUES ('a@example.com', 'a2', 'hash2')`,
+        `INSERT INTO "user" (email, password_hash, handle) VALUES ('a@example.com', 'hash2', 'user_a2')`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("enforces User handle unique", async () => {
+    await pool.query(
+      `INSERT INTO "user" (email, password_hash, handle) VALUES ('b@example.com', 'hash', 'shared_handle')`,
+    );
+
+    await expect(
+      pool.query(
+        `INSERT INTO "user" (email, password_hash, handle) VALUES ('c@example.com', 'hash2', 'shared_handle')`,
       ),
     ).rejects.toThrow();
   });

@@ -158,6 +158,20 @@ export {
   type VisionSaveActionResult,
 } from "./collection/vision-save-action.js";
 export {
+  type Handle,
+  type HandleAvailabilityQuery,
+  type HandleAvailabilityResponse,
+  type HandleAvailabilityStatus,
+  handleAvailabilityQuerySchema,
+  handleAvailabilityResponseSchema,
+  handleAvailabilityStatusSchema,
+  handleSchema,
+  type IdentityAvatarUpload,
+  type IdentityProfileUpdate,
+  identityAvatarUploadSchema,
+  identityProfileUpdateSchema,
+} from "./identity/profile.js";
+export {
   type AdminRoleUpdateRequest,
   adminRoleUpdateRequestSchema,
   IDENTITY_ROLE_ERROR_CODES,
