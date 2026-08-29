@@ -27,11 +27,7 @@ export function redactHarnessError(error) {
     return undefined;
   }
   let text =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : String(error);
+    error instanceof Error ? error.message : typeof error === "string" ? error : String(error);
   for (const pattern of SECRET_PATTERNS) {
     text = text.replace(pattern, "[redacted]");
   }

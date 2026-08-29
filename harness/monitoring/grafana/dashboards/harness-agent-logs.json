@@ -151,10 +151,7 @@
           "color": { "fixedColor": "yellow", "mode": "fixed" },
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 }
-            ]
+            "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }]
           },
           "unit": "short"
         },
@@ -185,9 +182,18 @@
           "unit": "short"
         },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "green" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "yellow" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "red" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+          {
+            "matcher": { "id": "byName", "options": "green" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "yellow" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "red" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          }
         ]
       },
       "gridPos": { "h": 4, "w": 6, "x": 12, "y": 4 },
@@ -213,10 +219,7 @@
           "color": { "mode": "thresholds" },
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 1 }
-            ]
+            "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }]
           },
           "unit": "short"
         },
