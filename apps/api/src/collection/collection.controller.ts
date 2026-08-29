@@ -56,6 +56,49 @@ export class CollectionController {
     return this.collectionService.listConversations(user.sub);
   }
 
+  @Get("collection/conversations/:conversationId")
+  @UseGuards(JwtAuthGuard)
+  getConversation(
+    @CurrentUser() user: JwtPayload,
+    @Param("conversationId") conversationId: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.getConversationDetail(
+      user.sub,
+      conversationId,
+      resolveLocale(acceptLanguage),
+    );
+  }
+
+  @Post("collection/conversations/:conversationId/messages")
+  @HttpCode(201)
+  @UseGuards(JwtAuthGuard)
+  sendConversationMessage(
+    @CurrentUser() user: JwtPayload,
+    @Param("conversationId") conversationId: string,
+    @Body() body: unknown,
+  ) {
+    return this.collectionService.sendConversationMessage(user.sub, conversationId, body);
+  }
+
+  @Get("collection/conversations/:conversationId/messages/:messageId/photo")
+  @UseGuards(JwtAuthGuard)
+  async getConversationMessagePhoto(
+    @CurrentUser() user: JwtPayload,
+    @Param("conversationId") conversationId: string,
+    @Param("messageId") messageId: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const bytes = await this.collectionService.getConversationMessagePhotoBytes(
+      user.sub,
+      conversationId,
+      messageId,
+    );
+    reply.header("Content-Type", "image/jpeg");
+    reply.header("Cache-Control", "private, max-age=3600");
+    return reply.send(Buffer.from(bytes));
+  }
+
   @Get("collection/discover/jerseys")
   @UseGuards(JwtAuthGuard)
   discoverJerseys(
