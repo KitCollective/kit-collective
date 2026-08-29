@@ -304,9 +304,11 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
         return { content: [{ type: "text", text: stdout.trim() }] };
       }
 
-      // SAFETY: TypeBox parameters schema requires path, line, and message when action is comment.
+      // SAFETY: TypeBox parameters schema requires path when action is comment.
       const path = params.path as string | undefined;
+      // SAFETY: TypeBox parameters schema requires line when action is comment.
       const line = params.line as number | undefined;
+      // SAFETY: TypeBox parameters schema requires message when action is comment.
       const message = params.message as string | undefined;
       if (typeof path !== "string" || path.length === 0) {
         throw new Error("comment requires path");
