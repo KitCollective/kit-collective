@@ -1,4 +1,4 @@
-import type { IdentitySession, IdentityUser } from "@kit/api-contract";
+import type { IdentityMe, IdentitySession } from "@kit/api-contract";
 import {
   createContext,
   type ReactNode,
@@ -13,18 +13,24 @@ import { clearSession, loadSession, saveSession } from "@/auth/session";
 import { resetAddSession } from "@/session/addSession";
 
 type AuthContextValue = {
-  user: IdentityUser | null;
+  user: IdentityMe | null;
   accessToken: string | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+async function hydrateUser(session: IdentitySession): Promise<IdentityMe> {
+  return fetchCurrentUser(session.accessToken);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<IdentitySession | null>(null);
+  const [user, setUser] = useState<IdentityMe | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -40,14 +46,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const user = await fetchCurrentUser(stored.accessToken);
+        const profile = await hydrateUser(stored);
         if (active) {
-          setSession({ ...stored, user });
+          setSession(stored);
+          setUser(profile);
         }
       } catch {
         await clearSession();
         if (active) {
           setSession(null);
+          setUser(null);
         }
       } finally {
         if (active) {
@@ -64,8 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applySession = useCallback(async (next: IdentitySession) => {
+    const profile = await hydrateUser(next);
     await saveSession(next);
     setSession(next);
+    setUser(profile);
   }, []);
 
   const signIn = useCallback(
@@ -88,18 +98,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearSession();
     resetAddSession();
     setSession(null);
+    setUser(null);
   }, []);
+
+  const refreshUser = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    const profile = await fetchCurrentUser(session.accessToken);
+    setUser(profile);
+  }, [session]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      user: session?.user ?? null,
+      user,
       accessToken: session?.accessToken ?? null,
       isLoading,
       signIn,
       signUp,
       signOut,
+      refreshUser,
     }),
-    [session, isLoading, signIn, signUp, signOut],
+    [user, session, isLoading, signIn, signUp, signOut, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

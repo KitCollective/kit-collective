@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useRouter } from "expo-router";
+import { useRouter, useSegments } from "expo-router";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTypography } from "@/theme/brand-fonts";
@@ -62,13 +62,16 @@ function inboxAccessibilityLabel(unreadCount: number): string {
 
 export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingTabBarProps) {
   const router = useRouter();
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const typography = useTypography();
 
   const activeRoute = state.routes[state.index]?.name ?? "collection";
 
-  if (activeRoute === "add") {
+  const hideForProfileDrill = segments.length > 2 && segments.at(1) === "profile";
+
+  if (activeRoute === "add" || hideForProfileDrill) {
     return null;
   }
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { handleSchema } from "./profile.js";
 
 export const identityRoleSchema = z.enum(["user", "admin"]);
 
@@ -8,8 +9,8 @@ export const identityUserSchema = z
   .object({
     id: z.string().uuid(),
     email: z.string().email(),
-    handle: z.string().min(1).max(64),
     role: identityRoleSchema,
+    handle: handleSchema,
   })
   .strict();
 
@@ -24,15 +25,18 @@ export const identityCredentialsSchema = z
 
 export type IdentityCredentials = z.infer<typeof identityCredentialsSchema>;
 
+export const identityMeSchema = identityUserSchema.extend({
+  aboutMe: z.string().nullable(),
+  avatarUrl: z.string().min(1).nullable(),
+});
+
+export type IdentityMe = z.infer<typeof identityMeSchema>;
+
 export const identitySessionSchema = z
   .object({
     accessToken: z.string().min(1),
-    user: identityUserSchema,
+    user: identityMeSchema,
   })
   .strict();
 
 export type IdentitySession = z.infer<typeof identitySessionSchema>;
-
-export const identityMeSchema = identityUserSchema;
-
-export type IdentityMe = z.infer<typeof identityMeSchema>;

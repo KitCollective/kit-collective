@@ -182,9 +182,17 @@ _Avoid_: Catalog peek as the product admin; a second login product; Expo as the 
 A User in Expo. The same row can later hold Staff access. Not a separate account type.
 _Avoid_: a dedicated admin user table; locking `role=admin` out of Expo
 
+**Profil**:
+Own collector place in Expo tab slot 5 — identity card, favorites drill, and settings under one person tab. Not the other-collector Detaljer stub.
+_Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar
+
 **Handle**:
-A collector’s unique public username shown in Indbakke thread rows and Detaljer stubs. Assigned at register from the email local-part with a numeric suffix on collision. Not the email address. Editing is own Profil (later milestone).
-_Avoid_: raw email as the thread-row name; a second login identifier
+The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision. Never the email. Availability is `yours`, `available`, or `taken`.
+_Avoid_: raw email as the thread-row name; a second login identifier; success-green availability chrome
+
+**Favorit**:
+A saved foreign UserJersey — another collector's shirt on the Profil favorites grid. Not own Samling tiles.
+_Avoid_: marketplace listing chrome; owner handle on the favorite tile
 
 **Indbakke**:
 The collector messages place in tab slot 4 (envelope). Beskeder and Aktivitet are two views of one conversation model. Not Ønske, not marketplace checkout.
