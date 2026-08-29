@@ -20,6 +20,14 @@ import {
 export const READY_FOR_MERGE = "Ready for merge";
 export const IMPLEMENTING = "Implementing";
 export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
+export const REVIEW_AXIS_SPEC_CLEAN = /^-\s*Spec:\s*\(none\)\s*$/i;
+export const REVIEW_AXIS_STANDARDS_CLEAN = /^-\s*Standards:\s*\(none\)\s*$/i;
+export const REVIEW_AXIS_SLOP_CLEAN = /^-\s*Slop:\s*\(none\)\s*$/i;
+export const REVIEW_PASS_FEEDBACK_LINES = [
+  "- Spec: (none)",
+  "- Standards: (none)",
+  "- Slop: (none)",
+];
 export const NOTES_HEADING = "### Notes";
 export const CHECKER_PASS_STATUS = "All good — checker pass. MERGEABLE, required checks green.";
 export const RATCHET_NUDGE_TEXT =
@@ -84,21 +92,45 @@ export function reviewFeedbackSection(body) {
 
 /**
  * @param {string | undefined} body
- * @returns {boolean}
+ * @returns {string[]}
  */
-export function reviewFeedbackIsClean(body) {
+export function reviewFeedbackLines(body) {
   const section = reviewFeedbackSection(body);
   if (section.length === 0) {
-    return false;
+    return [];
   }
-  const lines = section
+  return section
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+/**
+ * @param {string | undefined} body
+ * @returns {boolean}
+ */
+export function reviewFeedbackMissingSlopAxis(body) {
+  const lines = reviewFeedbackLines(body);
   if (lines.length === 0) {
+    return true;
+  }
+  return !lines.some((line) => /^-\s*Slop:/i.test(line) || /^-\s*Slop\//i.test(line));
+}
+
+/**
+ * @param {string | undefined} body
+ * @returns {boolean}
+ */
+export function reviewFeedbackIsClean(body) {
+  const lines = reviewFeedbackLines(body);
+  if (lines.length !== REVIEW_PASS_FEEDBACK_LINES.length) {
     return false;
   }
-  return lines.length === 1 && /^-\s*\(none\)\s*$/i.test(lines[0]);
+  return (
+    REVIEW_AXIS_SPEC_CLEAN.test(lines[0]) &&
+    REVIEW_AXIS_STANDARDS_CLEAN.test(lines[1]) &&
+    REVIEW_AXIS_SLOP_CLEAN.test(lines[2])
+  );
 }
 
 /**
@@ -149,10 +181,10 @@ export function applyCheckerPassWorkpad(current) {
   if (next.includes(REVIEW_FEEDBACK_HEADING)) {
     next = next.replace(
       /### Review feedback\n[\s\S]*?(?=\n### |\s*$)/,
-      `${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`,
+      `${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_PASS_FEEDBACK_LINES.join("\n")}\n`,
     );
   } else {
-    next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`;
+    next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_PASS_FEEDBACK_LINES.join("\n")}\n`;
   }
   return `${next.trimEnd()}\n`;
 }
@@ -310,11 +342,12 @@ export async function completeChecker(input) {
   }
 
   const piFindings = reviewFeedbackHasFindings(workpadBody);
+  const missingSlopAxis = reviewFeedbackMissingSlopAxis(workpadBody);
   const gateFailures = ghGateFailures(pr);
   if (timedOut) {
     gateFailures.push("- Required GitHub checks timed out before turning green");
   }
-  const passed = !piFindings && gateFailures.length === 0;
+  const passed = !piFindings && !missingSlopAxis && gateFailures.length === 0;
 
   if (passed) {
     const identifier =
@@ -347,10 +380,10 @@ export async function completeChecker(input) {
   }
 
   const feedbackLines = [];
-  if (piFindings) {
+  if (piFindings || missingSlopAxis) {
     const section = reviewFeedbackSection(workpadBody);
     if (section.length === 0) {
-      feedbackLines.push("- Review feedback must include explicit `- (none)` on pass");
+      feedbackLines.push("- Review feedback must include Spec, Standards, and Slop axis lines");
     } else {
       feedbackLines.push(
         ...section
@@ -358,6 +391,9 @@ export async function completeChecker(input) {
           .map((line) => line.trim())
           .filter(Boolean),
       );
+    }
+    if (missingSlopAxis && !feedbackLines.some((line) => /Slop/i.test(line))) {
+      feedbackLines.push("- Slop axis missing from Review feedback (checker miss)");
     }
   }
   for (const line of gateFailures) {

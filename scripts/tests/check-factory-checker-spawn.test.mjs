@@ -71,6 +71,26 @@ test("ratchet fails when checker Hermes config disables review", () => {
   assert.ok(missing.some((item) => item.includes("reviewEnabled")));
 });
 
+test("ratchet fails when factory-checker loses subagent on allowlist", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerSpawn: files.checkerSpawn.replace('"subagent",', ""),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("subagent")));
+});
+
+test("ratchet fails when checker-exit loses missing Slop axis guard", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerExit: files.checkerExit.replaceAll("reviewFeedbackMissingSlopAxis", "missingSlopGuard"),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("Slop axis")));
+});
+
 test("exported memory tools match spec allowlist", () => {
   assert.deepEqual(FACTORY_CHECKER_MEMORY_TOOLS, [
     "memory_search",

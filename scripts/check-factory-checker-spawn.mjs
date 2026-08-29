@@ -110,8 +110,44 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   }
   if (!checkerExit.includes("reviewFeedbackIsClean")) {
     failures.push(
-      "harness/checker-exit.mjs must require explicit - (none) via reviewFeedbackIsClean",
+      "harness/checker-exit.mjs must require explicit three-axis pass via reviewFeedbackIsClean",
     );
+  }
+  if (!checkerExit.includes("reviewFeedbackMissingSlopAxis")) {
+    failures.push("harness/checker-exit.mjs must detect missing Slop axis");
+  }
+  if (!checkerExit.includes("REVIEW_PASS_FEEDBACK_LINES")) {
+    failures.push("harness/checker-exit.mjs must declare REVIEW_PASS_FEEDBACK_LINES");
+  }
+  if (!allowedTools.includes("subagent")) {
+    failures.push("factory-checker allowlist must include subagent for /code-review fan-out");
+  }
+  if (!checkerSpawn.includes("SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
+    failures.push("harness/checker-spawn.mjs must declare SLOP_AGENT_MEMORY_EXCLUDED_TOOLS");
+  }
+  const slopAgentPath = join(ROOT, ".pi/agents/slop.md");
+  try {
+    const slopAgent = readFileSync(slopAgentPath, "utf8");
+    if (!slopAgent.includes("memory_add")) {
+      failures.push(".pi/agents/slop.md must document that Slop child has no memory_add");
+    }
+    for (const tool of ["memory_add", "memory_replace", "memory_remove"]) {
+      if (new RegExp(`^tools:.*\\b${tool}\\b`, "m").test(slopAgent)) {
+        failures.push(`.pi/agents/slop.md must not grant Slop child tool ${tool}`);
+      }
+    }
+  } catch {
+    failures.push(".pi/agents/slop.md must exist for read-only Slop sub-agent");
+  }
+  const codeReviewSkill = read(".cursor/skills/code-review/SKILL.md");
+  if (!codeReviewSkill.includes("## Slop") && !codeReviewSkill.includes("**Slop**")) {
+    failures.push(".cursor/skills/code-review/SKILL.md must define the Slop axis");
+  }
+  if (!piJob.includes("Standards + Spec + Slop")) {
+    failures.push("harness/pi-job.mjs factory-checker prompt must name all three axes");
+  }
+  if (!role.includes("Slop")) {
+    failures.push(".pi/roles/factory-checker.md must document the Slop axis");
   }
   if (!checkerExit.includes("Linked GitHub PR is required")) {
     failures.push("harness/checker-exit.mjs must fail-move when PR is missing");
