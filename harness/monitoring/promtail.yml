@@ -40,9 +40,16 @@ scrape_configs:
             gate: gate
             loopRisk: loopRisk
             error: error
+            phase: phase
+            stopPoint: stopPoint
+            tool: tool
+            detail: detail
+            tokensIn: tokensIn
+            tokensOut: tokensOut
           source: harness_json
       - labels:
           role:
           kit: identifier
           event:
           gate:
+          phase:
