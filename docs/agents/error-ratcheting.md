@@ -208,6 +208,8 @@ catches it in the API tests and the container smoke test.
 - **"production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending"** — `MERGEABLE` + empty `statusCheckRollup` + `gh pr checks --required` throw (exit 8) must **not** call `setStatus`.
 - **"typecheckTouched skips pnpm when the diff has no workspace packages"** — empty touched set does not spawn `pnpm`.
 - **"typecheckTouched fails closed when pnpm is missing and workspace packages are touched"** — missing `pnpm` (ENOENT) fails closed when packages are in the diff.
+- **"completeImplementAdw skips worker typecheck when the open PR is MERGEABLE and required checks are already green"** — do not spawn worker `pnpm typecheck` when GitHub `test` is already SUCCESS (KIT-116 parked on local typecheck despite green CI).
+- **"completeImplementAdw still moves to In Review when worker typecheck fails and GitHub required checks are green"** — a throwing worker typecheck does not abort implement-exit; GitHub required checks remain the gate.
 
 `scripts/check-implement-adw-production-gh.mjs` (CI via `node` in `.github/workflows/ci.yml`) fails when that coverage is deleted. `scripts/tests/check-implement-adw-production-gh.test.mjs` mutation-tests the ratchet. Prevents repeating KIT-54 checker fail #2 (job-seam fakes skipped production push/wait) and fail #3 (empty rollup / exit 8 fail-open; pnpm spawned on harness-only diffs). Tighten only.
 
@@ -238,6 +240,7 @@ Prevents repeating the KIT-105 silent pass (status flip only, no durable note or
 - `reviewFeedbackIsClean` requires exactly `- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`; bare `- (none)` is rejected.
 - `applyCheckerFailWorkpad` never falls back to legacy `- (none)` — use `REVIEW_FEEDBACK_HARNESS_INCOMPLETE` instead.
 - Read-only Slop child: `applySlopAgentSpawnEnv()` calls `slopAgentToolArgs()` at factory-checker spawn; `harness/slop-agent-tools.ts` (via `.pi/agents/slop.md` `subagentOnlyExtensions`) and `harness/factory-checker-tools.ts` consume `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` + `SLOP_AGENT_PI_ARGS`.
+- **`SLOP_AGENT_PI_ARGS` is newline-joined, never NUL** — Node `spawn` rejects env values with `\0` (KIT-116 factory-checker never started). `"applySlopAgentSpawnEnv calls slopAgentToolArgs and wires both env keys"` asserts no null byte and round-trips via `split("\\n")`.
 
 Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` export, stale `- (none)` fail fallback, incomplete spawn-ratchet doc). Tighten only.
 

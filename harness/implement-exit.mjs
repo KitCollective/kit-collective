@@ -2,8 +2,10 @@
  * Implement ADW exit (KIT-54).
  *
  * After the coding Pi session: update the existing workpad, pre-review
- * (rebase, typecheck-touched, MERGEABLE + required GitHub checks), open one
- * PR into development, move Linear to In Review. Never merge.
+ * (rebase, optional worker typecheck-touched, MERGEABLE + required GitHub
+ * checks), open one PR into development, move Linear to In Review. Never merge.
+ * Worker typecheck is not the gate: skip it when required checks are already
+ * green, and do not abort when it throws — GitHub `test` is.
  * Fake `gh` + Linear at this seam. Do not spawn Pi TUI.
  */
 import { execFile as execFileCb } from "node:child_process";
@@ -521,7 +523,16 @@ export async function completeImplementAdw(input) {
       pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
     }
   }
-  await typecheckTouched({ cwd: checkout.path });
+  const checksAlreadyGreen = alreadyMergeable && requiredChecksGreen(pr?.checks);
+  if (!checksAlreadyGreen) {
+    try {
+      await typecheckTouched({ cwd: checkout.path });
+    } catch {
+      // Worker typecheck is a best-effort fast fail. Missing node_modules or
+      // OOM on the 4 GB box must not park Implementing while GitHub test is
+      // the required check (KIT-116).
+    }
+  }
   if (typeof runPnpmTest === "function") {
     throw new Error("full pnpm test stays on GitHub Actions, not on this worker");
   }

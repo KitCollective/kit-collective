@@ -505,6 +505,105 @@ test("completeImplementAdw skips rebase when the open PR is already MERGEABLE", 
   assert.equal(result.status, IN_REVIEW);
 });
 
+test("completeImplementAdw skips worker typecheck when the open PR is MERGEABLE and required checks are already green", async () => {
+  const calls = [];
+  const gh = {
+    calls,
+    async rebase() {
+      throw new Error("must not rebase");
+    },
+    async syncToRemoteBranch() {
+      calls.push(["syncToRemoteBranch"]);
+    },
+    async findOpenIssuePr() {
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/115",
+        head: "kit-116",
+      };
+    },
+    async viewPr() {
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/115",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "SUCCESS", isRequired: true }],
+      };
+    },
+    async createPr() {
+      throw new Error("must not create a second PR");
+    },
+    merge() {
+      throw new Error("implement never merges");
+    },
+  };
+  const linear = fakeLinear();
+  let typecheckCalls = 0;
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-116", issueId: "issue-116", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-116", branch: "kit-116" },
+    gh,
+    linear,
+    typecheckTouched: async () => {
+      typecheckCalls += 1;
+      throw new Error("Command failed: pnpm --filter ./apps/api typecheck");
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    now: (() => {
+      let t = 0;
+      return () => {
+        t += 1;
+        return t;
+      };
+    })(),
+    sleep: async () => {},
+    waitTimeoutMs: 2,
+    waitIntervalMs: 1,
+  });
+
+  assert.equal(typecheckCalls, 0);
+  assert.equal(result.status, IN_REVIEW);
+  assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
+    issueId: "issue-116",
+    status: IN_REVIEW,
+  });
+});
+
+test("completeImplementAdw still moves to In Review when worker typecheck fails and GitHub required checks are green", async () => {
+  const gh = fakeGh({
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  let typecheckCalls = 0;
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-116", issueId: "issue-116", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-116", branch: "kit-116" },
+    gh,
+    linear,
+    typecheckTouched: async () => {
+      typecheckCalls += 1;
+      throw new Error("Command failed: pnpm --filter ./apps/api typecheck");
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    now: (() => {
+      let t = 0;
+      return () => {
+        t += 1;
+        return t;
+      };
+    })(),
+    sleep: async () => {},
+    waitTimeoutMs: 2,
+    waitIntervalMs: 1,
+  });
+
+  assert.equal(typecheckCalls, 1);
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "createPr"),
+    true,
+  );
+});
+
 test("production gh.rebase aborts a conflicted rebase instead of leaving the tree wedged", async () => {
   const calls = [];
   const gh = createGhClient({

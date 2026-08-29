@@ -886,7 +886,9 @@ test("applySlopAgentSpawnEnv calls slopAgentToolArgs and wires both env keys", (
     SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(","),
   );
   assert.equal(typeof spawnEnv[SLOP_AGENT_PI_ARGS_ENV], "string");
-  const args = spawnEnv[SLOP_AGENT_PI_ARGS_ENV].split("\0");
+  const raw = spawnEnv[SLOP_AGENT_PI_ARGS_ENV];
+  assert.equal(raw.includes("\0"), false);
+  const args = raw.split("\n");
   assert.deepEqual(args, slopAgentToolArgs());
 });
 
