@@ -65,6 +65,7 @@ export const collectionJerseySchema = z
     seasonLabel: z.string().min(1),
     squadPlayers: z.array(collectionJerseySquadPlayerSchema),
     photos: z.array(collectionJerseyPhotoSchema).min(1),
+    biddingEnabled: z.boolean(),
   })
   .strict();
 
