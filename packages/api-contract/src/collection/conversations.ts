@@ -5,6 +5,7 @@ export const collectionConversationSchema = z
   .object({
     id: z.string().uuid(),
     peerHandle: z.string().min(1),
+    peerInitial: z.string().min(1),
     snippet: z.string(),
     updatedAt: z.string().datetime(),
     unread: z.boolean(),
@@ -17,6 +18,7 @@ export type CollectionConversation = z.infer<typeof collectionConversationSchema
 export const collectionConversationsSchema = z
   .object({
     conversations: z.array(collectionConversationSchema),
+    unreadCount: z.number().int().min(0),
   })
   .strict();
 

@@ -2,8 +2,12 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  collectionConversationsSchema,
+  collectionDiscoverJerseysSchema,
   collectionJerseysSchema,
+  collectionPeerJerseySchema,
   collectionSaveResponseSchema,
+  collectionSendBidResponseSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
@@ -120,6 +124,32 @@ async function insertClubSeasonFixture() {
     clubId: insertedClub!.id,
     seasonId: insertedSeason!.id,
   };
+}
+
+async function saveJerseyForUser(
+  app: NestFastifyApplication,
+  session: Awaited<ReturnType<typeof registerSession>>,
+  fixture: Awaited<ReturnType<typeof insertClubSeasonFixture>>,
+) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/collection/jerseys/save",
+    headers: {
+      authorization: `Bearer ${session.accessToken}`,
+      "accept-language": "da",
+    },
+    payload: {
+      clubId: fixture.clubId,
+      seasonId: fixture.seasonId,
+      type: "home",
+      size: "m",
+      condition: "used",
+      photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+    },
+  });
+
+  expect(response.statusCode).toBe(201);
+  return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
 }
 
 describe("Collection /v1", () => {
@@ -387,5 +417,157 @@ describe("Collection /v1", () => {
     await pool.end();
 
     expect(row?.userAction).toBe("ignored");
+  });
+
+  it("rejects unauthenticated inbox and bid calls with 401", async () => {
+    const fixture = await insertClubSeasonFixture();
+
+    const conversations = await app.inject({
+      method: "GET",
+      url: "/v1/collection/conversations",
+    });
+    const discover = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/jerseys",
+    });
+    const bid = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/00000000-0000-0000-0000-000000000099/bids",
+      payload: { amountDkk: 100 },
+    });
+    const peer = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys/00000000-0000-0000-0000-000000000099/peer",
+    });
+
+    expect(conversations.statusCode).toBe(401);
+    expect(discover.statusCode).toBe(401);
+    expect(bid.statusCode).toBe(401);
+    expect(peer.statusCode).toBe(401);
+    expect(fixture.clubId).toBeDefined();
+  });
+
+  it("creates a pending bid conversation and lists unread for the owner", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-bid@example.com");
+    const bidder = await registerSession(app, "bidder@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const enableResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/bidding`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { biddingEnabled: true },
+    });
+    expect(enableResponse.statusCode).toBe(200);
+
+    const discoverResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/jerseys?q=københavn",
+      headers: {
+        authorization: `Bearer ${bidder.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(discoverResponse.statusCode).toBe(200);
+    const discoverBody = collectionDiscoverJerseysSchema.parse(JSON.parse(discoverResponse.body));
+    expect(discoverBody.jerseys.some((jersey) => jersey.id === ownerJersey.id)).toBe(true);
+
+    const peerResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/peer`,
+      headers: {
+        authorization: `Bearer ${bidder.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(peerResponse.statusCode).toBe(200);
+    const peerBody = collectionPeerJerseySchema.parse(JSON.parse(peerResponse.body));
+    expect(peerBody.biddingEnabled).toBe(true);
+    expect(peerBody.ownerHandle).toBeTruthy();
+    expect(peerBody.photos.length).toBeGreaterThan(0);
+
+    const bidResponse = await app.inject({
+      method: "POST",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/bids`,
+      headers: { authorization: `Bearer ${bidder.accessToken}` },
+      payload: { amountDkk: 350 },
+    });
+    expect(bidResponse.statusCode).toBe(201);
+    collectionSendBidResponseSchema.parse(JSON.parse(bidResponse.body));
+
+    const inboxResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/conversations",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(inboxResponse.statusCode).toBe(200);
+    const inboxBody = collectionConversationsSchema.parse(JSON.parse(inboxResponse.body));
+    expect(inboxBody.unreadCount).toBe(1);
+    expect(inboxBody.conversations.length).toBe(1);
+    expect(inboxBody.conversations[0]?.unread).toBe(true);
+    expect(inboxBody.conversations[0]?.snippet).toContain("350");
+  });
+
+  it("rejects bidding on own UserJersey and when bidding is disabled", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-self@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const ownBid = await app.inject({
+      method: "POST",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/bids`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { amountDkk: 200 },
+    });
+    expect(ownBid.statusCode).toBe(403);
+
+    await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/bidding`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { biddingEnabled: true },
+    });
+
+    const bidder = await registerSession(app, "bidder-disabled@example.com");
+    await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/bidding`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { biddingEnabled: false },
+    });
+
+    const disabledBid = await app.inject({
+      method: "POST",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/bids`,
+      headers: { authorization: `Bearer ${bidder.accessToken}` },
+      payload: { amountDkk: 200 },
+    });
+    expect(disabledBid.statusCode).toBe(400);
+  });
+
+  it("excludes own jerseys from discover results", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-discover@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/bidding`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { biddingEnabled: true },
+    });
+
+    const discoverResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/jerseys",
+      headers: {
+        authorization: `Bearer ${owner.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+
+    const discoverBody = collectionDiscoverJerseysSchema.parse(JSON.parse(discoverResponse.body));
+    expect(discoverBody.jerseys.some((jersey) => jersey.id === ownerJersey.id)).toBe(false);
   });
 });
