@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Avatar } from "@/components/avatar";
-import { IconButton } from "@/components/ui";
+import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -142,21 +142,7 @@ export function IdentityCard({ handle, avatarUri, avatarHeaders, onEditPress }: 
           {handle}
         </Text>
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Rediger profil"
-        onPress={onEditPress}
-        style={({ pressed }) => [
-          styles.editButton,
-          {
-            backgroundColor: theme.fillSecondary,
-            borderColor: theme.borderSubtle,
-          },
-          pressed && styles.pressed,
-        ]}
-      >
-        <Text style={[typography.label, { color: theme.contentPrimary }]}>Rediger profil</Text>
-      </Pressable>
+      <Button label="Rediger profil" variant="secondary" width="fill" onPress={onEditPress} />
     </View>
   );
 }
@@ -280,14 +266,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.gapMd,
-  },
-  editButton: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: space.insetMd,
   },
   group: {
     borderWidth: 1,

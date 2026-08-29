@@ -5,7 +5,6 @@ import { resolveAvatarUrl } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
 import { IdentityCard, ListNavigateRow, ProfileSurfaceGroup } from "@/components/profile-ui";
 import { ScreenHeader } from "@/components/screen-header";
-import { IconButton } from "@/components/ui";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -13,7 +12,7 @@ export default function ProfileHomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, accessToken, signOut } = useAuth();
+  const { user, accessToken } = useAuth();
 
   const tabBarPadding =
     space.insetLg * 2 +
@@ -33,12 +32,7 @@ export default function ProfileHomeScreen() {
         { backgroundColor: theme.fillSecondary, paddingBottom: tabBarPadding },
       ]}
     >
-      <ScreenHeader
-        title="Profil"
-        trailing={
-          <IconButton name="Log ud" icon="log-out-outline" onPress={() => void signOut()} />
-        }
-      />
+      <ScreenHeader title="Profil" />
       <ScrollView contentContainerStyle={styles.content}>
         {user ? (
           <IdentityCard
@@ -56,7 +50,9 @@ export default function ProfileHomeScreen() {
             icon="heart-outline"
             onPress={() => router.push("/(tabs)/profile/favoritter")}
           />
-          <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+        </ProfileSurfaceGroup>
+
+        <ProfileSurfaceGroup>
           <ListNavigateRow
             title="Indstillinger"
             icon="settings-outline"
