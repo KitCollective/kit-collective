@@ -18,7 +18,7 @@ export default function CookieIndstillingerScreen() {
       </View>
       <EmptyState
         title="Cookie-valg kommer snart"
-        body="Nødvendige, analyse- og marketing-cookies gemmes her, når det slice lander."
+        body="Her kan du vælge nødvendige, analyse- og marketing-cookies, når funktionen er klar."
       />
     </View>
   );
