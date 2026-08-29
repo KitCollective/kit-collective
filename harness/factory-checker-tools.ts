@@ -145,6 +145,7 @@ async function loadHeadRefOid(repo: string, number: number): Promise<string> {
     "-F",
     `number=${number}`,
   ]);
+  // SAFETY: gh_cli GraphQL query returns JSON with repository.pullRequest.headRefOid.
   const parsed = JSON.parse(stdout) as {
     data?: { repository?: { pullRequest?: { headRefOid?: string } } };
   };
@@ -251,6 +252,7 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
           "-F",
           `number=${number}`,
         ]);
+        // SAFETY: gh_cli GraphQL query returns JSON with repository.pullRequest.reviewThreads.nodes.
         const parsed = JSON.parse(stdout) as {
           data?: {
             repository?: {
@@ -286,6 +288,7 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
       }
 
       if (action === "resolve_thread") {
+        // SAFETY: TypeBox parameters schema requires threadId when action is resolve_thread.
         const threadId = params.threadId as string | undefined;
         if (typeof threadId !== "string" || threadId.length === 0) {
           throw new Error("resolve_thread requires threadId");
@@ -301,6 +304,7 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
         return { content: [{ type: "text", text: stdout.trim() }] };
       }
 
+      // SAFETY: TypeBox parameters schema requires path, line, and message when action is comment.
       const path = params.path as string | undefined;
       const line = params.line as number | undefined;
       const message = params.message as string | undefined;
