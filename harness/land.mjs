@@ -16,6 +16,7 @@ import {
 import { mapStatusChecks } from "./gh-cli.mjs";
 import { selectRequiredChecks } from "./implement-exit.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
+import { landFailComment, landSuccessComment } from "./role-comments.mjs";
 import { gitArgvContainsSecret, remoteGitChildEnv } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
@@ -266,6 +267,7 @@ export function createLandGh({
  *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
  *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
  *     setStatus: (input: { issueId: string, status: string }) => Promise<unknown>,
+ *     commentIssue?: (input: { issueId: string, body: string }) => Promise<unknown>,
  *   },
  *   gh: {
  *     viewPr: (input: { number: number, repo?: string }) => Promise<object | null>,
@@ -308,6 +310,18 @@ export async function completeLand({ job, linear, gh, lanes = LAND_LANES, worktr
     body,
     commentId: existing?.id,
   });
+  const identifier =
+    typeof job.identifier === "string" && job.identifier.length > 0
+      ? job.identifier
+      : issue.identifier;
+  if (typeof linear.commentIssue === "function") {
+    await linear.commentIssue({
+      issueId: job.issueId,
+      body: gate.merged
+        ? landSuccessComment(identifier, gate.sha ?? "")
+        : landFailComment(identifier, gate.reason ?? "merge failed"),
+    });
+  }
   await linear.setStatus({ issueId: job.issueId, status: nextStatus });
 
   if (gate.merged && typeof worktree?.reap === "function") {

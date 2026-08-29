@@ -14,10 +14,12 @@ import {
   shouldEnforceWriteScope,
 } from "../scripts/lib/pr-write-scope.mjs";
 import { ensureLoopCounters, incrementCiFailCycles } from "./auto-merge.mjs";
+import { WORKPAD_HEADING } from "./linear-cli.mjs";
+import { implementInReviewComment, implementSummaryFromWorkpad } from "./role-comments.mjs";
 
 const execFile = promisify(execFileCb);
 
-export const WORKPAD_HEADING = "## Agent Workpad";
+export { WORKPAD_HEADING };
 export const IMPLEMENT_PR_BASE = "development";
 export const IN_REVIEW = "In Review";
 export const IMPLEMENTING = "Implementing";
@@ -578,6 +580,15 @@ export async function completeImplementAdw(input) {
     }),
   );
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  if (typeof linear.commentIssue === "function") {
+    await linear.commentIssue({
+      issueId: job.issueId,
+      body: implementInReviewComment(job.identifier, {
+        prUrl: pr.url,
+        summary: implementSummaryFromWorkpad(body),
+      }),
+    });
+  }
   await linear.setStatus({ issueId: job.issueId, status: IN_REVIEW });
 
   return { pr, status: IN_REVIEW, ciRetry: false, writeScopeRetry: false };
