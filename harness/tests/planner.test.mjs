@@ -199,7 +199,8 @@ test("planner does not skip Backlog issue without write-scope for path overlap",
   );
 
   assert.equal(claims.length, 1);
-  assert.equal(comments.length, 0);
+  assert.equal(comments.length, 1);
+  assert.match(comments[0].body, /KIT-93: claimed/);
 });
 
 test("planner continues claiming after a write-scope overlap skip", async () => {
@@ -233,8 +234,9 @@ test("planner continues claiming after a write-scope overlap skip", async () => 
     ["issue-ok"],
   );
   assert.equal(result.claimed[0].identifier, "KIT-94");
-  assert.equal(comments.length, 1);
+  assert.equal(comments.length, 2);
   assert.match(comments[0].body, /KIT-92: skipped — write-scope overlaps KIT-89/);
+  assert.match(comments[1].body, /KIT-94: claimed/);
 });
 
 test("findWriteScopeOverlap ignores Implementing issues without write-scope", () => {
@@ -337,7 +339,9 @@ test("planner skips missing ready-for-agent, signal-up, unresolved blockedBy, an
 });
 
 test("claim moves to Implementing without setting delegate and keeps the human assignee", async () => {
-  const { claims, result } = await claimWith([gqlNode({ id: "issue-ok", identifier: "KIT-20" })]);
+  const { claims, result, comments } = await claimWith([
+    gqlNode({ id: "issue-ok", identifier: "KIT-20" }),
+  ]);
 
   assert.equal(claims.length, 1);
   assert.equal(Object.hasOwn(claims[0], "delegateId"), false);
@@ -347,6 +351,10 @@ test("claim moves to Implementing without setting delegate and keeps the human a
   assert.equal(PLANNER_CLAIM_MUTATION.includes("delegateId"), false);
   assert.equal(result.claimed[0].assignee.id, "human-1");
   assert.equal(result.claimed[0].delegate, null);
+  assert.equal(
+    comments.some((comment) => String(comment.body).includes("KIT-20: claimed")),
+    true,
+  );
 });
 
 test("planner runs without LINEAR_PI_APP_USER_ID", async () => {

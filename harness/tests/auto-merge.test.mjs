@@ -172,6 +172,9 @@ function fakeLinear(issue = snapshot(), { body = loopCountersBody() } = {}) {
       calls.push(["updateWorkpad", input]);
       comments[0].body = input.body;
     },
+    async commentIssue(input) {
+      calls.push(["commentIssue", input]);
+    },
     async setStatus(input) {
       calls.push(["setStatus", input]);
       this.issue = { ...this.issue, status: input.status };
@@ -303,6 +306,8 @@ test("MERGEABLE + green checks + delegate Pi moves Ready for merge to Merging wi
     issueId: ISSUE_ID,
     status: "Merging",
   });
+  const flipComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(flipComment.body, /Auto-merge → Merging/);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
     false,
@@ -425,6 +430,8 @@ test("CONFLICTING or missing ### Loop counters stays Ready for merge (fail close
   assert.equal(conflicting.nextStatus, "Ready for merge");
   assert.equal(conflictingLinear.issue.status, "Ready for merge");
   assert.match(conflictingLinear.comments[0].body, /CONFLICTING/);
+  const refuseComment = conflictingLinear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(refuseComment.body, /Auto-merge refused/);
   assert.equal(
     conflictingLinear.calls.some((call) => call[0] === "clearDelegate"),
     true,
