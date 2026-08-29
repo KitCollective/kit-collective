@@ -50,6 +50,12 @@ export class CollectionController {
     return this.collectionService.listJerseys(user.sub, resolveLocale(acceptLanguage), shortcutId);
   }
 
+  @Get("collection/conversations")
+  @UseGuards(JwtAuthGuard)
+  listConversations(@CurrentUser() user: JwtPayload) {
+    return this.collectionService.listConversations(user.sub);
+  }
+
   @Get("collection/shortcuts")
   @UseGuards(JwtAuthGuard)
   listShortcuts(

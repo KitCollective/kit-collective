@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { radius, space, withAlpha } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -21,9 +21,10 @@ type FloatingTabBarProps = {
     routes: { name: string; key: string }[];
   };
   navigation: TabBarNavigation;
+  unreadCount?: number;
 };
 
-type TabPlace = "collection" | "search" | "wishlist" | "profile";
+type TabPlace = "collection" | "search" | "inbox" | "profile";
 
 const PLACE_CONFIG: Record<
   TabPlace,
@@ -35,7 +36,7 @@ const PLACE_CONFIG: Record<
 > = {
   collection: { icon: "home-outline", iconActive: "home", label: "Samling" },
   search: { icon: "compass-outline", iconActive: "compass", label: "Søg" },
-  wishlist: { icon: "heart-outline", iconActive: "heart", label: "Ønske" },
+  inbox: { icon: "mail-outline", iconActive: "mail", label: "Indbakke" },
   profile: { icon: "person-outline", iconActive: "person", label: "Profil" },
 };
 
@@ -43,7 +44,7 @@ function isTabPlace(name: string): name is TabPlace {
   switch (name) {
     case "collection":
     case "search":
-    case "wishlist":
+    case "inbox":
     case "profile":
       return true;
     default:
@@ -51,7 +52,14 @@ function isTabPlace(name: string): name is TabPlace {
   }
 }
 
-export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
+function inboxAccessibilityLabel(unreadCount: number): string {
+  if (unreadCount > 0) {
+    return `Indbakke, ${unreadCount} ulæste`;
+  }
+  return "Indbakke";
+}
+
+export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingTabBarProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
@@ -75,21 +83,31 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
   const renderSlot = (place: TabPlace) => {
     const config = PLACE_CONFIG[place];
     const isActive = activePlace === place;
+    const showUnreadBadge = place === "inbox" && unreadCount > 0;
+    const accessibilityLabel =
+      place === "inbox" ? inboxAccessibilityLabel(unreadCount) : config.label;
 
     return (
       <Pressable
         key={place}
         accessibilityRole="tab"
         accessibilityState={{ selected: isActive }}
-        accessibilityLabel={config.label}
+        accessibilityLabel={accessibilityLabel}
         onPress={() => navigatePlace(place)}
         style={styles.slot}
       >
-        <Ionicons
-          name={isActive ? config.iconActive : config.icon}
-          size={24}
-          color={isActive ? theme.contentPrimary : theme.contentMuted}
-        />
+        <View style={styles.iconWrap}>
+          <Ionicons
+            name={isActive ? config.iconActive : config.icon}
+            size={24}
+            color={isActive ? theme.contentPrimary : theme.contentMuted}
+          />
+          {showUnreadBadge ? (
+            <View style={[styles.badge, { backgroundColor: theme.fillPrimary }]}>
+              <Text style={[styles.badgeText, { color: theme.contentInverse }]}>{unreadCount}</Text>
+            </View>
+          ) : null}
+        </View>
       </Pressable>
     );
   };
@@ -113,7 +131,7 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
           <Ionicons name="add" size={26} color={theme.contentInverse} />
         </View>
       </Pressable>
-      {renderSlot("wishlist")}
+      {renderSlot("inbox")}
       {renderSlot("profile")}
     </View>
   );
@@ -187,6 +205,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 48,
     minWidth: 48,
+  },
+  iconWrap: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 14,
   },
   plusSlot: {
     flex: 1,

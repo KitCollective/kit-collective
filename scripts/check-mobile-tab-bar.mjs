@@ -35,7 +35,7 @@ export function checkMobileTabBar(overrides = {}) {
     );
   }
 
-  const requiredAccessibleNames = ["Samling", "Søg", "Tilføj trøje", "Ønske", "Profil"];
+  const requiredAccessibleNames = ["Samling", "Søg", "Tilføj trøje", "Indbakke", "Profil"];
   for (const name of requiredAccessibleNames) {
     if (!barSource.includes(name)) {
       violations.push(`${floatingBarPath}: missing Danish accessible name "${name}"`);
@@ -51,7 +51,7 @@ export function checkMobileTabBar(overrides = {}) {
     "home-outline",
     "compass-outline",
     "add",
-    "heart-outline",
+    "mail-outline",
     "person-outline",
   ];
   const missingIconNames = requiredIconNames.filter((name) => !barSource.includes(`"${name}"`));
