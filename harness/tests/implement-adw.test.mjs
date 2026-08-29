@@ -1475,6 +1475,44 @@ test("implement-exit without write-scope does not fail on out-of-glob paths", as
   assert.equal(result.writeScopeRetry, false);
 });
 
+test("createListChangedFiles uses two-dot git diff when no PR URL is present", async () => {
+  const calls = [];
+  const listChangedFiles = createListChangedFiles({
+    async runCommand(command, args) {
+      calls.push([command, ...args]);
+      if (command === "git") {
+        return "apps/api/src/main.ts\n";
+      }
+      throw new Error("unexpected command");
+    },
+  });
+  const files = await listChangedFiles({ cwd: "/var/lib/kit-pi/worktrees/KIT-117" });
+  assert.deepEqual(files, ["apps/api/src/main.ts"]);
+  assert.deepEqual(calls, [["git", "diff", "--name-only", "origin/development..HEAD"]]);
+});
+
+test("createTypecheckTouched uses two-dot git diff for touched packages", async () => {
+  const calls = [];
+  const typecheckTouched = createTypecheckTouched({
+    async runCommand(command, args) {
+      calls.push([command, ...args]);
+      if (command === "git") {
+        return "apps/api/src/main.ts\n";
+      }
+      if (command === "pnpm") {
+        return "";
+      }
+      throw new Error("unexpected command");
+    },
+  });
+  await typecheckTouched({ cwd: "/var/lib/kit-pi/worktrees/KIT-117" });
+  assert.deepEqual(calls[0], ["git", "diff", "--name-only", "origin/development..HEAD"]);
+  assert.equal(
+    calls.some((call) => call[0] === "pnpm" && call.includes("./apps/api")),
+    true,
+  );
+});
+
 test("createListChangedFiles uses gh pr diff when a PR URL is present", async () => {
   const calls = [];
   const listChangedFiles = createListChangedFiles({

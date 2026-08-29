@@ -11,6 +11,7 @@
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  changedFilesDiffArgs,
   findWriteScopeViolations,
   parseWriteScopeGlobs,
   shouldEnforceWriteScope,
@@ -196,7 +197,7 @@ export function createListChangedFiles({ runCommand } = {}) {
     const stdout =
       typeof prUrl === "string" && prUrl.length > 0
         ? await run("gh", ["pr", "diff", prUrl, "--name-only"], { cwd })
-        : await run("git", ["diff", "--name-only", "origin/development...HEAD"], { cwd });
+        : await run("git", changedFilesDiffArgs("origin/development"), { cwd });
     return String(stdout)
       .split("\n")
       .map((line) => line.trim())
@@ -514,7 +515,7 @@ export function createTypecheckTouched({ runCommand } = {}) {
       return stdout;
     });
   return async ({ cwd }) => {
-    const stdout = await run("git", ["diff", "--name-only", "origin/development...HEAD"], { cwd });
+    const stdout = await run("git", changedFilesDiffArgs("origin/development"), { cwd });
     const files = String(stdout)
       .split("\n")
       .map((line) => line.trim())

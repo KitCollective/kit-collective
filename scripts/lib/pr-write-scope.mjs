@@ -54,7 +54,18 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/tests/check-implement-cheap-retry.test.mjs",
   "scripts/tests/check-implement-checker-fail-resume.test.mjs",
   "scripts/tests/check-implement-first-run-loop.test.mjs",
+  "harness/implement-exit.mjs",
+  "harness/tests/implement-adw.test.mjs",
 ]);
+
+/**
+ * Git args for listing files changed on a feature branch vs the integration lane.
+ * Two-dot `..` (not three-dot `...`) so merge-commits from the base are excluded
+ * (KIT-117 — inflated PR file counts when branches merge origin/development).
+ */
+export function changedFilesDiffArgs(baseRef = "origin/development") {
+  return ["diff", "--name-only", `${baseRef}..HEAD`];
+}
 
 export function matchesGlob(filePath, glob) {
   const regexSource = `^${glob

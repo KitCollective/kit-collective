@@ -6,6 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
+  changedFilesDiffArgs,
   findWriteScopeViolations,
   parseWriteScopeGlobs,
   shouldEnforceWriteScope,
@@ -54,7 +55,7 @@ function getScopeSourceText() {
 
 function getChangedFiles(baseRef) {
   try {
-    return execFileSync("git", ["diff", "--name-only", `${baseRef}...HEAD`], {
+    return execFileSync("git", changedFilesDiffArgs(baseRef), {
       encoding: "utf8",
     })
       .trim()
