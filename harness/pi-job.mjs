@@ -506,10 +506,13 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
   const list =
     listPackages ??
     (async () => {
+      const childEnv = { ...process.env };
+      delete childEnv.PI_CODING_AGENT_DIR;
       const { stdout } = await execFile("pi", ["list"], {
         encoding: "utf8",
         timeout: 30_000,
         cwd: root,
+        env: childEnv,
       });
       return stdout;
     });

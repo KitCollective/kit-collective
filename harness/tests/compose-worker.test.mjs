@@ -736,6 +736,11 @@ test("compose and host name Worker memory on kit_pi at /var/lib/kit-pi/hermes", 
   assert.equal(WORKER_MEMORY_DIR, "/var/lib/kit-pi/hermes");
 });
 
+test("compose does not set PI_CODING_AGENT_DIR so boot pi list sees global packages", () => {
+  const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
+  assert.doesNotMatch(compose, /PI_CODING_AGENT_DIR:/);
+});
+
 test("committed Hermes config is policy-only with review and flush off for readers", () => {
   const configPath = join(ROOT, ".pi/agent/hermes-memory-config.json");
   assert.equal(existsSync(configPath), true, "missing .pi/agent/hermes-memory-config.json");
