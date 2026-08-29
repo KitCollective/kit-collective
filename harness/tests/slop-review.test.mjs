@@ -66,7 +66,10 @@ test("createSlopReviewGh posts inline comments on fail sync", async () => {
     repo: "KitCollective/kit-collective",
     async runCommand(command, args) {
       calls.push([command, ...args]);
-      if (args.includes("graphql") && args.some((part) => String(part).includes("SlopReviewThreads"))) {
+      if (
+        args.includes("graphql") &&
+        args.some((part) => String(part).includes("SlopReviewThreads"))
+      ) {
         return JSON.stringify({
           data: {
             repository: {
@@ -99,8 +102,7 @@ test("createSlopReviewGh posts inline comments on fail sync", async () => {
   assert.equal(
     calls.some(
       (call) =>
-        call.includes("POST") &&
-        call.some((part) => String(part).includes("/pulls/127/comments")),
+        call.includes("POST") && call.some((part) => String(part).includes("/pulls/127/comments")),
     ),
     true,
   );
@@ -127,7 +129,10 @@ test("createSlopReviewGh resolves stale threads on second pass", async () => {
     repo: "KitCollective/kit-collective",
     async runCommand(command, args) {
       calls.push([command, ...args]);
-      if (args.includes("graphql") && args.some((part) => String(part).includes("SlopReviewThreads"))) {
+      if (
+        args.includes("graphql") &&
+        args.some((part) => String(part).includes("SlopReviewThreads"))
+      ) {
         return JSON.stringify({
           data: {
             repository: {
