@@ -182,6 +182,18 @@ _Avoid_: Catalog peek as the product admin; a second login product; Expo as the 
 A User in Expo. The same row can later hold Staff access. Not a separate account type.
 _Avoid_: a dedicated admin user table; locking `role=admin` out of Expo
 
+**Profil**:
+Own collector place in Expo tab slot 5 — identity card, favorites drill, and settings under one person tab. Not the other-collector Detaljer stub.
+_Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar
+
+**Handle**:
+The collector's unique public name on Profil and in Indbakke threads. Never the email. Availability is `yours`, `available`, or `taken`.
+_Avoid_: email local-part as the permanent public name; success-green availability chrome
+
+**Favorit**:
+A saved foreign UserJersey — another collector's shirt on the Profil favorites grid. Not own Samling tiles.
+_Avoid_: marketplace listing chrome; owner handle on the favorite tile
+
 **Staff access**:
 Authorization on that same User that opens Admin SPA. Stored as `User.role` `admin`. Not a second login and not a second column. Later scoped staff roles may replace this binary grant. An admin may promote or demote another User; not themselves, and not the last admin.
 _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authentication; locking admins out of Expo; self-demote; demoting the last admin

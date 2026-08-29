@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useRouter } from "expo-router";
+import { useRouter, useSegments } from "expo-router";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { radius, space, withAlpha } from "@/theme/tokens";
@@ -53,12 +53,16 @@ function isTabPlace(name: string): name is TabPlace {
 
 export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
   const router = useRouter();
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
 
   const activeRoute = state.routes[state.index]?.name ?? "collection";
 
-  if (activeRoute === "add") {
+  const hideForProfileDrill =
+    segments[0] === "(tabs)" && segments[1] === "profile" && segments.length > 2;
+
+  if (activeRoute === "add" || hideForProfileDrill) {
     return null;
   }
 

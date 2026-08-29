@@ -146,6 +146,20 @@ export {
   identityRoleErrorSchema,
 } from "./identity/role.js";
 export {
+  type Handle,
+  type HandleAvailabilityQuery,
+  type HandleAvailabilityResponse,
+  type HandleAvailabilityStatus,
+  type IdentityAvatarUpload,
+  type IdentityProfileUpdate,
+  handleAvailabilityQuerySchema,
+  handleAvailabilityResponseSchema,
+  handleAvailabilityStatusSchema,
+  handleSchema,
+  identityAvatarUploadSchema,
+  identityProfileUpdateSchema,
+} from "./identity/profile.js";
+export {
   type IdentityCredentials,
   type IdentityMe,
   type IdentityRole,
