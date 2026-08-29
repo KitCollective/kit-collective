@@ -725,6 +725,7 @@ test("pullRequestFromAttachments reads the linked GitHub PR for checker", () => 
     number: 56,
     repo: "KitCollective/kit-collective",
     url: PR_URL,
+    title: "KIT-56: Factory checker",
   });
 });
 

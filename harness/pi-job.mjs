@@ -36,7 +36,7 @@ import {
 } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
 import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
-import { completeLand, createLandGh, pullRequestFromAttachments } from "./land.mjs";
+import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { createSessionLogCollector } from "./pi-session-log.mjs";
@@ -1116,7 +1116,16 @@ export function createPiJobRunner({
           typeof linearClient?.getIssue === "function"
             ? await linearClient.getIssue(job.issueId ?? identifier)
             : null;
-        const linkedPr = pullRequestFromAttachments(issue?.attachments);
+        const checkerGhClient = checkerGh ?? createCheckerGh({ env, runCommand });
+        const linkedResolution =
+          issue && checkerGhClient
+            ? await resolveLinkedPullRequest({
+                attachments: issue.attachments,
+                identifier,
+                gh: checkerGhClient,
+              })
+            : null;
+        const linkedPr = linkedResolution?.linked ?? null;
         if (linkedPr) {
           spawnEnv.GITHUB_PR_REPO = linkedPr.repo;
           spawnEnv.GITHUB_PR_NUMBER = String(linkedPr.number);

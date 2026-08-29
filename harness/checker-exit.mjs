@@ -12,8 +12,13 @@ import {
   requiredChecksFailed,
   requiredChecksGreen,
 } from "./implement-exit.mjs";
-import { createLandGh, pullRequestFromAttachments } from "./land.mjs";
+import { createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
+import {
+  logFactoryExitDone,
+  logFactoryExitStart,
+  logFactoryGatePoll,
+} from "./factory-exit-log.mjs";
 import {
   applyCheckerPassDescription,
   buildCheckerPassVerdicts,
@@ -364,12 +369,22 @@ export async function completeChecker(input) {
     };
   }
 
-  const linked = pullRequestFromAttachments(issue.attachments);
   const comments =
     typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
   const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
   const workpadBody = existing?.body ?? "";
 
+  const identifier =
+    typeof job.identifier === "string" && job.identifier.length > 0
+      ? job.identifier
+      : issue.identifier;
+
+  const linkedResolution = await resolveLinkedPullRequest({
+    attachments: issue.attachments,
+    identifier,
+    gh,
+  });
+  const linked = linkedResolution?.linked ?? null;
   if (!linked) {
     return checkerFailMove({
       job,
@@ -380,20 +395,38 @@ export async function completeChecker(input) {
       gh,
     });
   }
+  logFactoryExitStart({
+    role: "factory-checker",
+    identifier,
+    phase: "checker-exit",
+    linked,
+    skipped: linkedResolution?.skipped ?? [],
+  });
 
   const deadline = now() + waitTimeoutMs;
   let pr = null;
   let timedOut = false;
+  let attempt = 0;
   while (true) {
+    attempt += 1;
     pr = await gh.viewPr({ number: linked.number, repo: linked.repo });
     const checks = pr?.requiredChecks ?? pr?.checks;
+    const checksGreen = requiredChecksGreen(checks);
+    logFactoryGatePoll({
+      role: "factory-checker",
+      identifier,
+      phase: "checker-exit",
+      attempt,
+      pr,
+      checksGreen,
+    });
     if (requiredChecksFailed(checks)) {
       break;
     }
     if (pr?.mergeable === "CONFLICTING") {
       break;
     }
-    if (pr?.mergeable === "MERGEABLE" && requiredChecksGreen(checks)) {
+    if (pr?.mergeable === "MERGEABLE" && checksGreen) {
       break;
     }
     if (now() >= deadline) {
@@ -412,10 +445,6 @@ export async function completeChecker(input) {
   const passed = !piFindings && !missingSlopAxis && gateFailures.length === 0;
 
   if (passed) {
-    const identifier =
-      typeof job.identifier === "string" && job.identifier.length > 0
-        ? job.identifier
-        : issue.identifier;
     await syncSlopReviewThreadsSafely(gh, {
       repo: linked.repo,
       number: linked.number,
@@ -444,6 +473,13 @@ export async function completeChecker(input) {
       });
     }
     await linear.setStatus({ issueId: job.issueId, status: READY_FOR_MERGE });
+    logFactoryExitDone({
+      role: "factory-checker",
+      identifier,
+      phase: "checker-exit",
+      passed: true,
+      nextStatus: READY_FOR_MERGE,
+    });
     return { passed: true, nextStatus: READY_FOR_MERGE, pr };
   }
 
@@ -469,7 +505,7 @@ export async function completeChecker(input) {
       feedbackLines.push(line);
     }
   }
-  return checkerFailMove({
+  const failResult = await checkerFailMove({
     job,
     linear,
     workpadBody,
@@ -479,4 +515,13 @@ export async function completeChecker(input) {
     gh,
     linked,
   });
+  logFactoryExitDone({
+    role: "factory-checker",
+    identifier,
+    phase: "checker-exit",
+    passed: false,
+    nextStatus: failResult.nextStatus ?? IMPLEMENTING,
+    reason: feedbackLines[0],
+  });
+  return failResult;
 }

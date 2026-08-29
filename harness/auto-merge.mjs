@@ -5,8 +5,9 @@
  * required checks are green, and workpad `### Loop counters` are under the
  * cap. Never merges. Never force-pushes. Fake Linear + `gh` at this seam.
  */
-import { pullRequestFromAttachments } from "./land.mjs";
+import { resolveLinkedPullRequest } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
+import { logFactoryExitDone, logFactoryExitStart } from "./factory-exit-log.mjs";
 import { autoMergeFlipComment, autoMergeRefuseComment } from "./role-comments.mjs";
 
 export const LOOP_COUNTERS_HEADING = "### Loop counters";
@@ -209,10 +210,27 @@ export async function completeAutoMerge({ job, linear, gh, env: _env }) {
     return block(`loop cap (reviewLoops=${counters.reviewLoops}). Nicklas can still move Merging.`);
   }
 
-  const linked = pullRequestFromAttachments(issue.attachments);
+  const identifier =
+    typeof job.identifier === "string" && job.identifier.length > 0
+      ? job.identifier
+      : issue.identifier;
+
+  const linkedResolution = await resolveLinkedPullRequest({
+    attachments: issue.attachments,
+    identifier,
+    gh,
+  });
+  const linked = linkedResolution?.linked ?? null;
   if (!linked) {
     return block("linked GitHub PR is required.");
   }
+  logFactoryExitStart({
+    role: "auto-merge",
+    identifier,
+    phase: "auto-merge",
+    linked,
+    skipped: linkedResolution?.skipped ?? [],
+  });
 
   const pr = await gh.viewPr({ number: linked.number, repo: linked.repo });
   if (pr?.mergeable === "CONFLICTING") {
@@ -226,15 +244,18 @@ export async function completeAutoMerge({ job, linear, gh, env: _env }) {
   }
 
   await linear.setStatus({ issueId: job.issueId, status: MERGING });
-  const identifier =
-    typeof job.identifier === "string" && job.identifier.length > 0
-      ? job.identifier
-      : issue.identifier;
   if (typeof linear.commentIssue === "function") {
     await linear.commentIssue({
       issueId: job.issueId,
       body: autoMergeFlipComment(identifier),
     });
   }
+  logFactoryExitDone({
+    role: "auto-merge",
+    identifier,
+    phase: "auto-merge",
+    passed: true,
+    nextStatus: MERGING,
+  });
   return { flipped: true, nextStatus: MERGING, pr };
 }
