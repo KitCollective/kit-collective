@@ -26,6 +26,7 @@ import {
   reviewFeedbackIsClean,
   reviewFeedbackMissingSlopAxis,
   reviewFeedbackSection,
+  syncSlopReviewThreadsSafely,
 } from "../checker-exit.mjs";
 import {
   applySlopAgentSpawnEnv,
@@ -909,6 +910,67 @@ test("applyRatchetNudge ignores high ciFailCycles when reviewLoops stays below 2
   const next = applyRatchetNudge(body);
   assert.equal(hasRatchetNudge(next), false);
   assert.deepEqual(parseLoopCounters(next), { ciFailCycles: 5, reviewLoops: 1 });
+});
+
+test("checker fail with clean Slop axis still syncs stale GitHub threads", async () => {
+  const gh = fakeGh({
+    slopSync(input) {
+      assert.equal(input.repo, "KitCollective/kit-collective");
+      assert.equal(input.number, 56);
+      assert.match(input.workpadBody, /Spec: \(none\)/);
+      return { posted: [], resolved: ["harness/old.mjs:4"] };
+    },
+  });
+  const linear = fakeLinear(
+    snapshot(),
+    `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: hard fail\n- Standards: (none)\n- Slop: (none)\n`,
+  );
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-127" },
+    linear,
+    gh,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "syncSlopReviewThreads"),
+    true,
+  );
+});
+
+test("checker fail still moves to Implementing when Slop sync throws", async () => {
+  const gh = fakeGh({
+    async slopSync() {
+      throw new Error("GitHub 422");
+    },
+  });
+  const linear = fakeLinear(
+    snapshot(),
+    `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: hard fail\n- Standards: (none)\n- Slop: (none)\n`,
+  );
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-127" },
+    linear,
+    gh,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.nextStatus, IMPLEMENTING);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IMPLEMENTING),
+    true,
+  );
+});
+
+test("syncSlopReviewThreadsSafely swallows GitHub errors", async () => {
+  await assert.doesNotReject(() =>
+    syncSlopReviewThreadsSafely(
+      {
+        async syncSlopReviewThreads() {
+          throw new Error("timeout");
+        },
+      },
+      { number: 1, workpadBody: "" },
+    ),
+  );
 });
 
 test("checker fail with Slop findings syncs inline GitHub review comments", async () => {

@@ -293,6 +293,43 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
         if (typeof threadId !== "string" || threadId.length === 0) {
           throw new Error("resolve_thread requires threadId");
         }
+        const listStdout = await ghApi([
+          "api",
+          "graphql",
+          "-f",
+          `query=${REVIEW_THREADS_QUERY}`,
+          "-f",
+          `owner=${owner}`,
+          "-f",
+          `name=${name}`,
+          "-F",
+          `number=${number}`,
+        ]);
+        const listParsed = JSON.parse(listStdout) as {
+          data?: {
+            repository?: {
+              pullRequest?: {
+                reviewThreads?: {
+                  nodes?: Array<{
+                    id?: string;
+                    comments?: { nodes?: Array<{ body?: string }> };
+                  }>;
+                };
+              };
+            };
+          };
+        };
+        const slopThreadIds = new Set(
+          (listParsed.data?.repository?.pullRequest?.reviewThreads?.nodes ?? [])
+            .filter((node) => node.comments?.nodes?.[0]?.body?.includes(SLOP_REVIEW_MARKER))
+            .map((node) => node.id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0),
+        );
+        if (!slopThreadIds.has(threadId)) {
+          throw new Error(
+            `resolve_thread refused: not a ${SLOP_REVIEW_MARKER} thread (${threadId})`,
+          );
+        }
         const stdout = await ghApi([
           "api",
           "graphql",

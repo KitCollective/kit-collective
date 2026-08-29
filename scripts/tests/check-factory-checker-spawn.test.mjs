@@ -124,6 +124,29 @@ test("ratchet fails when checker-exit loses harness incomplete fallback", () => 
   assert.ok(missing.some((item) => item.includes("REVIEW_FEEDBACK_HARNESS_INCOMPLETE")));
 });
 
+test("ratchet fails when checker-exit skips Slop sync on empty findings", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerExit: files.checkerExit.replace(
+      "await syncSlopReviewThreadsSafely(gh, {",
+      "if (parseSlopFindings(workpadBody).length > 0) { await gh.syncSlopReviewThreads({",
+    ),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("sync Slop threads on every checker fail")));
+});
+
+test("ratchet fails when checker-exit loses Slop sync error isolation", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerExit: files.checkerExit.replaceAll("syncSlopReviewThreadsSafely", "syncSlopReviewThreads"),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("isolate GitHub Slop sync errors")));
+});
+
 test("exported memory tools match spec allowlist", () => {
   assert.deepEqual(FACTORY_CHECKER_MEMORY_TOOLS, [
     "memory_search",

@@ -227,6 +227,33 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!dockerfile.includes("slop-review.mjs")) {
     failures.push("harness/Dockerfile must copy slop-review.mjs");
   }
+  if (checkerExit.includes("parseSlopFindings(workpadBody).length > 0")) {
+    failures.push(
+      "harness/checker-exit.mjs must sync Slop threads on every checker fail with linked PR",
+    );
+  }
+  if (!checkerExit.includes("syncSlopReviewThreadsSafely")) {
+    failures.push(
+      "harness/checker-exit.mjs must isolate GitHub Slop sync errors from Linear status moves",
+    );
+  }
+  const slopReview = read("harness/slop-review.mjs");
+  if (!slopReview.includes("isPostableSlopFinding")) {
+    failures.push(
+      "harness/slop-review.mjs must skip Slop inline POST when path/line cannot be resolved",
+    );
+  }
+  if (!slopReview.includes("resolveReviewThread refused")) {
+    failures.push(
+      "harness/slop-review.mjs must refuse resolveReviewThread for non-factory-checker Slop threads",
+    );
+  }
+  const factoryCheckerTools = read("harness/factory-checker-tools.ts");
+  if (!factoryCheckerTools.includes("resolve_thread refused")) {
+    failures.push(
+      "harness/factory-checker-tools.ts must refuse gh_cli resolve_thread for non-marker threads",
+    );
+  }
   if (!host.match(/factory-checker.*Memory writer|Memory writer.*factory-checker/i)) {
     failures.push("harness/host.md must name factory-checker as the Memory writer");
   }

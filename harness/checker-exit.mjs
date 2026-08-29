@@ -16,7 +16,7 @@ import {
   checkerPassComment,
   parseDescriptionAcRewrites,
 } from "./role-comments.mjs";
-import { createSlopReviewGh, parseSlopFindings } from "./slop-review.mjs";
+import { createSlopReviewGh } from "./slop-review.mjs";
 
 export const READY_FOR_MERGE = "Ready for merge";
 export const IMPLEMENTING = "Implementing";
@@ -220,6 +220,26 @@ export function applyCheckerFailWorkpad(current, { feedbackLines }) {
  *   runSync?: Function,
  * }} [deps]
  */
+/**
+ * @param {object | null | undefined} gh
+ * @param {{
+ *   repo?: string,
+ *   number: number,
+ *   workpadBody?: string,
+ *   findings?: Array<{ path: string, lineNumber: number, message: string }>,
+ * }} input
+ */
+export async function syncSlopReviewThreadsSafely(gh, input) {
+  if (!gh || typeof gh.syncSlopReviewThreads !== "function") {
+    return;
+  }
+  try {
+    await gh.syncSlopReviewThreads(input);
+  } catch {
+    // GitHub thread sync must not block Linear status moves.
+  }
+}
+
 export function createCheckerGh(deps = {}) {
   const land = createLandGh(deps);
   const slop = createSlopReviewGh(deps);
@@ -273,14 +293,8 @@ async function checkerFailMove(input) {
     body,
     commentId: existingComment?.id,
   });
-  if (
-    gh &&
-    typeof gh.syncSlopReviewThreads === "function" &&
-    linked &&
-    typeof linked.number === "number" &&
-    parseSlopFindings(workpadBody).length > 0
-  ) {
-    await gh.syncSlopReviewThreads({
+  if (linked && typeof linked.number === "number") {
+    await syncSlopReviewThreadsSafely(gh, {
       repo: linked.repo,
       number: linked.number,
       workpadBody,
@@ -397,14 +411,12 @@ export async function completeChecker(input) {
       typeof job.identifier === "string" && job.identifier.length > 0
         ? job.identifier
         : issue.identifier;
-    if (typeof gh.syncSlopReviewThreads === "function") {
-      await gh.syncSlopReviewThreads({
-        repo: linked.repo,
-        number: linked.number,
-        workpadBody,
-        findings: [],
-      });
-    }
+    await syncSlopReviewThreadsSafely(gh, {
+      repo: linked.repo,
+      number: linked.number,
+      workpadBody,
+      findings: [],
+    });
     const rewrites = parseDescriptionAcRewrites(workpadBody);
     const description = typeof issue.description === "string" ? issue.description : "";
     const updatedDescription = applyCheckerPassDescription(description, { rewrites });

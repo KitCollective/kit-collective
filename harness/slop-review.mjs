@@ -88,7 +88,26 @@ export function parseSlopFindingLine(line) {
       message,
     };
   }
-  return null;
+  return {
+    raw: line,
+    path: null,
+    lineNumber: null,
+    message,
+  };
+}
+
+/**
+ * @param {{ path?: string | null, lineNumber?: number | null }} finding
+ * @returns {boolean}
+ */
+export function isPostableSlopFinding(finding) {
+  return (
+    typeof finding?.path === "string" &&
+    finding.path.length > 0 &&
+    typeof finding.lineNumber === "number" &&
+    Number.isFinite(finding.lineNumber) &&
+    finding.lineNumber > 0
+  );
 }
 
 const REVIEW_FEEDBACK_BLOCK = /(^|\n)### Review feedback\n([\s\S]*?)(?=\n### |$)/;
@@ -290,6 +309,13 @@ export function createSlopReviewGh({ env = process.env, repo = DEFAULT_GH_REPO, 
      */
     async resolveReviewThread({ repo: repoOverride, number, threadId }) {
       const targetRepo = repoOverride ?? repo;
+      const ctx = await loadReviewContext({ number, repo: targetRepo });
+      const thread = ctx.threads.find((entry) => entry.id === threadId);
+      if (!thread) {
+        throw new Error(
+          `resolveReviewThread refused: not a ${SLOP_REVIEW_MARKER} thread (${threadId})`,
+        );
+      }
       const { owner, name } = splitRepo(targetRepo);
       const stdout = await runGh("gh", [
         "api",
@@ -318,15 +344,15 @@ export function createSlopReviewGh({ env = process.env, repo = DEFAULT_GH_REPO, 
      * }} input
      */
     async syncSlopReviewThreads(input) {
-      const findings =
-        Array.isArray(input.findings) && input.findings.length > 0
-          ? input.findings
-          : parseSlopFindings(input.workpadBody);
+      const findings = Array.isArray(input.findings)
+        ? input.findings
+        : parseSlopFindings(input.workpadBody);
       const ctx = await loadReviewContext(input);
-      const active = new Set(findings.map((f) => `${f.path}:${f.lineNumber}`));
+      const postable = findings.filter(isPostableSlopFinding);
+      const active = new Set(postable.map((f) => `${f.path}:${f.lineNumber}`));
       const posted = [];
 
-      for (const finding of findings) {
+      for (const finding of postable) {
         const fingerprint = `${finding.path}:${finding.lineNumber}`;
         const existing = ctx.threads.find(
           (thread) => !thread.isResolved && thread.fingerprint === fingerprint,
