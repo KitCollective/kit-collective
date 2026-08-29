@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useTypography } from "@/theme/brand-fonts";
-import { radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type ThreadRowProps = {

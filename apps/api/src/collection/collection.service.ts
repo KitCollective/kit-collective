@@ -33,7 +33,13 @@ import {
   userJerseyPhoto,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import { VisionService } from "../vision/vision.service.js";
@@ -211,7 +217,10 @@ export class CollectionService {
       })
       .from(conversationParticipant)
       .where(
-        and(eq(conversationParticipant.userId, userId), sql`${conversationParticipant.hiddenAt} IS NULL`),
+        and(
+          eq(conversationParticipant.userId, userId),
+          sql`${conversationParticipant.hiddenAt} IS NULL`,
+        ),
       );
 
     if (participantRows.length === 0) {
