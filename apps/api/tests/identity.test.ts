@@ -148,16 +148,16 @@ describe("Identity /v1", () => {
   });
 
   it("reports handle availability for yours, available, and taken", async () => {
-    const sessionA = await registerSession(app, "alpha@example.com");
-    const sessionB = await registerSession(app, "beta@example.com");
+    const sessionA = await registerSession(app, "avail_a@example.com");
+    const sessionB = await registerSession(app, "avail_b@example.com");
 
     const yours = await app.inject({
       method: "GET",
-      url: "/v1/identity/handle-availability?handle=alpha",
+      url: "/v1/identity/handle-availability?handle=avail_a",
       headers: { authorization: `Bearer ${sessionA.accessToken}` },
     });
     expect(handleAvailabilityResponseSchema.parse(JSON.parse(yours.body))).toEqual({
-      handle: "alpha",
+      handle: "avail_a",
       status: "yours",
     });
 
@@ -173,17 +173,17 @@ describe("Identity /v1", () => {
 
     const taken = await app.inject({
       method: "GET",
-      url: "/v1/identity/handle-availability?handle=beta",
+      url: "/v1/identity/handle-availability?handle=avail_b",
       headers: { authorization: `Bearer ${sessionA.accessToken}` },
     });
     expect(handleAvailabilityResponseSchema.parse(JSON.parse(taken.body))).toEqual({
-      handle: "beta",
+      handle: "avail_b",
       status: "taken",
     });
 
     const emailTaken = await app.inject({
       method: "GET",
-      url: "/v1/identity/handle-availability?handle=beta@example.com",
+      url: "/v1/identity/handle-availability?handle=avail_b@example.com",
       headers: { authorization: `Bearer ${sessionB.accessToken}` },
     });
     expect(emailTaken.statusCode).toBe(400);
