@@ -131,7 +131,9 @@ export function missingFactoryCheckerSpawnCoverage(files) {
     failures.push("harness/checker-spawn.mjs must declare SLOP_AGENT_MEMORY_EXCLUDED_TOOLS");
   }
   if (!checkerSpawn.includes("slopAgentToolArgs")) {
-    failures.push("harness/checker-spawn.mjs must declare slopAgentToolArgs for Slop sub-agent spawn");
+    failures.push(
+      "harness/checker-spawn.mjs must declare slopAgentToolArgs for Slop sub-agent spawn",
+    );
   }
   if (!piJob.includes("SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
     failures.push(
@@ -145,9 +147,7 @@ export function missingFactoryCheckerSpawnCoverage(files) {
       failures.push(".pi/agents/slop.md must document that Slop child has no memory_add");
     }
     const slopToolsMatch = slopAgent.match(/^tools:\s*(.+)$/m);
-    const slopTools = slopToolsMatch
-      ? slopToolsMatch[1].split(",").map((tool) => tool.trim())
-      : [];
+    const slopTools = slopToolsMatch ? slopToolsMatch[1].split(",").map((tool) => tool.trim()) : [];
     for (const tool of stringArrayConst(checkerSpawn, "SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
       if (slopTools.includes(tool)) {
         failures.push(`.pi/agents/slop.md must not grant Slop child tool ${tool}`);
