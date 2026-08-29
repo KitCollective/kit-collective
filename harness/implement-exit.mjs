@@ -190,8 +190,11 @@ export function createListChangedFiles({ runCommand } = {}) {
       });
       return stdout;
     });
-  return async ({ cwd }) => {
-    const stdout = await run("git", ["diff", "--name-only", "origin/development...HEAD"], { cwd });
+  return async ({ cwd, prUrl } = {}) => {
+    const stdout =
+      typeof prUrl === "string" && prUrl.length > 0
+        ? await run("gh", ["pr", "diff", prUrl, "--name-only"], { cwd })
+        : await run("git", ["diff", "--name-only", "origin/development...HEAD"], { cwd });
     return String(stdout)
       .split("\n")
       .map((line) => line.trim())
@@ -571,7 +574,7 @@ export async function completeImplementAdw(input) {
     const listChangedFiles = listChangedFilesInput ?? createListChangedFiles();
     let changedFiles;
     try {
-      changedFiles = await listChangedFiles({ cwd: checkout.path });
+      changedFiles = await listChangedFiles({ cwd: checkout.path, prUrl: pr?.url });
     } catch {
       const retry = await writeWriteScopeRetryWorkpad({
         job,

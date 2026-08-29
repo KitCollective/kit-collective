@@ -7,6 +7,7 @@ import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createGhClient } from "../gh-cli.mjs";
 import {
   completeImplementAdw,
+  createListChangedFiles,
   createTypecheckTouched,
   evaluateWriteScopeExit,
   formatWriteScopeViolationFeedback,
@@ -1294,6 +1295,32 @@ test("implement-exit without write-scope does not fail on out-of-glob paths", as
 
   assert.equal(result.status, IN_REVIEW);
   assert.equal(result.writeScopeRetry, false);
+});
+
+test("createListChangedFiles uses gh pr diff when a PR URL is present", async () => {
+  const calls = [];
+  const listChangedFiles = createListChangedFiles({
+    async runCommand(command, args) {
+      calls.push([command, ...args]);
+      if (command === "gh") {
+        return "harness/checker-exit.mjs\n.pi/agents/slop.md\n";
+      }
+      throw new Error("git three-dot must not run when the PR URL is known");
+    },
+  });
+  const files = await listChangedFiles({
+    cwd: "/var/lib/kit-pi/worktrees/KIT-126",
+    prUrl: "https://github.com/KitCollective/kit-collective/pull/105",
+  });
+  assert.deepEqual(files, ["harness/checker-exit.mjs", ".pi/agents/slop.md"]);
+  assert.equal(
+    calls.some((call) => call[0] === "gh" && call.includes("diff") && call.includes("--name-only")),
+    true,
+  );
+  assert.equal(
+    calls.some((call) => call[0] === "git"),
+    false,
+  );
 });
 
 test("Compose persists kit-pi worktrees and copies implement-exit adapters", () => {
