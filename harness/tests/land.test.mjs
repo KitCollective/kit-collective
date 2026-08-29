@@ -14,9 +14,7 @@ import {
   completeLand,
   createLandGh,
   LAND_LANES,
-  listPullRequestsFromAttachments,
   pullRequestFromAttachments,
-  rankPullRequestCandidate,
   requiredChecksForMergeGate,
   resolveLinkedPullRequest,
   selectPullRequestFromAttachments,
@@ -299,7 +297,10 @@ test("resolveLinkedPullRequest skips merged PR attachments", async () => {
     gh,
   });
   assert.equal(resolved?.linked.number, 117);
-  assert.deepEqual(resolved?.skipped.map((row) => row.number), [118]);
+  assert.deepEqual(
+    resolved?.skipped.map((row) => row.number),
+    [118],
+  );
 });
 
 test("Merging + MERGEABLE + green checks merges into development without --force, sets Done, and records the SHA", async () => {

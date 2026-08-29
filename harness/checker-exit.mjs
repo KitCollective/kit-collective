@@ -7,6 +7,11 @@
  */
 import { ensureLoopCounters, incrementReviewLoops, parseLoopCounters } from "./auto-merge.mjs";
 import {
+  logFactoryExitDone,
+  logFactoryExitStart,
+  logFactoryGatePoll,
+} from "./factory-exit-log.mjs";
+import {
   extractReviewFeedback,
   IN_REVIEW,
   requiredChecksFailed,
@@ -14,11 +19,6 @@ import {
 } from "./implement-exit.mjs";
 import { createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
-import {
-  logFactoryExitDone,
-  logFactoryExitStart,
-  logFactoryGatePoll,
-} from "./factory-exit-log.mjs";
 import {
   applyCheckerPassDescription,
   buildCheckerPassVerdicts,

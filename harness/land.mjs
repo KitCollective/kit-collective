@@ -15,13 +15,13 @@ import {
   MERGE_PERMISSION_STATUS,
   MERGED_STATUS,
 } from "../scripts/lib/land-policy.mjs";
-import { mapStatusChecks } from "./gh-cli.mjs";
 import {
   logFactoryExitDone,
   logFactoryExitStart,
   logFactoryGatePoll,
 } from "./factory-exit-log.mjs";
-import { selectRequiredChecks, requiredChecksGreen } from "./implement-exit.mjs";
+import { mapStatusChecks } from "./gh-cli.mjs";
+import { requiredChecksGreen, selectRequiredChecks } from "./implement-exit.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 import { landFailComment, landSuccessComment } from "./role-comments.mjs";
 import { gitArgvContainsSecret, remoteGitChildEnv } from "./worktree.mjs";

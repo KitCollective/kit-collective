@@ -5,9 +5,10 @@
  * required checks are green, and workpad `### Loop counters` are under the
  * cap. Never merges. Never force-pushes. Fake Linear + `gh` at this seam.
  */
+
+import { logFactoryExitDone, logFactoryExitStart } from "./factory-exit-log.mjs";
 import { resolveLinkedPullRequest } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
-import { logFactoryExitDone, logFactoryExitStart } from "./factory-exit-log.mjs";
 import { autoMergeFlipComment, autoMergeRefuseComment } from "./role-comments.mjs";
 
 export const LOOP_COUNTERS_HEADING = "### Loop counters";
