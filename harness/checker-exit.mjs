@@ -28,12 +28,14 @@ export const REVIEW_PASS_FEEDBACK_LINES = [
   "- Standards: (none)",
   "- Slop: (none)",
 ];
+
+/** Fail-path fallback when harness has no axis lines — never the legacy single `- (none)`. */
+export const REVIEW_FEEDBACK_HARNESS_INCOMPLETE = "- Review feedback incomplete (harness)";
 export const NOTES_HEADING = "### Notes";
 export const CHECKER_PASS_STATUS = "All good — checker pass. MERGEABLE, required checks green.";
 export const RATCHET_NUDGE_TEXT =
   "next implement pass must land a ratchet per docs/agents/error-ratcheting.md";
 
-const LEGACY_PASS_LINE = /^-\s*\(none\)\s*$/i;
 const REVIEW_FEEDBACK_HEADING_AT = /(?:^|\n)### Review feedback(?:\n|$)/;
 const REVIEW_FEEDBACK_BLOCK = /(^|\n)### Review feedback\n([\s\S]*?)(?=\n### |$)/;
 const NOTES_HEADING_AT = /(?:^|\n)### Notes(?:\n|$)/;
@@ -112,17 +114,25 @@ export function reviewFeedbackLines(body) {
 }
 
 /**
- * Pass is the legacy single `- (none)` token or the three labeled axes.
- * Empty / missing feedback is still a fail.
+ * @param {string | undefined} body
+ * @returns {boolean}
+ */
+export function reviewFeedbackMissingSlopAxis(body) {
+  const lines = reviewFeedbackLines(body);
+  if (lines.length === 0) {
+    return true;
+  }
+  return !lines.some((line) => /^-\s*Slop:/i.test(line) || /^-\s*Slop\//i.test(line));
+}
+
+/**
+ * Pass is exactly the three labeled axes. Bare `- (none)` and empty feedback fail.
  *
  * @param {string | undefined} body
  * @returns {boolean}
  */
 export function reviewFeedbackIsClean(body) {
   const lines = reviewFeedbackLines(body);
-  if (lines.length === 1 && LEGACY_PASS_LINE.test(lines[0])) {
-    return true;
-  }
   if (lines.length !== REVIEW_PASS_FEEDBACK_LINES.length) {
     return false;
   }
@@ -160,11 +170,8 @@ export function ghGateFailures(pr) {
 }
 
 /**
- * @param {string | undefined} current
- * @param {{ feedbackLines: string[] }} input
- */
-/**
- * Durable pass note on the existing workpad. Keep Review feedback as `- (none)`
+ * Durable pass note on the existing workpad. Keep Review feedback as the
+ * three-axis pass lines (`- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`)
  * so a later checker does not treat the pass line as findings.
  *
  * @param {string | undefined} current
@@ -179,9 +186,12 @@ export function applyCheckerPassWorkpad(current) {
     ? base.replace(/### Status\n[\s\S]*?(?=\n### |\s*$)/, statusBlock)
     : base.replace(WORKPAD_HEADING, `${WORKPAD_HEADING}\n\n${statusBlock}`);
   if (REVIEW_FEEDBACK_HEADING_AT.test(next)) {
-    next = next.replace(REVIEW_FEEDBACK_BLOCK, `$1${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`);
+    next = next.replace(
+      REVIEW_FEEDBACK_BLOCK,
+      `$1${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_PASS_FEEDBACK_LINES.join("\n")}\n`,
+    );
   } else {
-    next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`;
+    next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_PASS_FEEDBACK_LINES.join("\n")}\n`;
   }
   return `${next.trimEnd()}\n`;
 }
@@ -191,8 +201,10 @@ export function applyCheckerFailWorkpad(current, { feedbackLines }) {
     typeof current === "string" && current.includes(WORKPAD_HEADING)
       ? current.trimEnd()
       : WORKPAD_HEADING;
-  const lines = Array.isArray(feedbackLines) ? feedbackLines.filter(Boolean) : ["- (none)"];
-  const content = lines.length > 0 ? lines.join("\n") : "- (none)";
+  const lines = Array.isArray(feedbackLines)
+    ? feedbackLines.filter(Boolean)
+    : [REVIEW_FEEDBACK_HARNESS_INCOMPLETE];
+  const content = lines.length > 0 ? lines.join("\n") : REVIEW_FEEDBACK_HARNESS_INCOMPLETE;
   if (REVIEW_FEEDBACK_HEADING_AT.test(base)) {
     return `${base.replace(REVIEW_FEEDBACK_BLOCK, `$1${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`)}\n`;
   }
@@ -339,11 +351,12 @@ export async function completeChecker(input) {
   }
 
   const piFindings = reviewFeedbackHasFindings(workpadBody);
+  const missingSlopAxis = reviewFeedbackMissingSlopAxis(workpadBody);
   const gateFailures = ghGateFailures(pr);
   if (timedOut) {
     gateFailures.push("- Required GitHub checks timed out before turning green");
   }
-  const passed = !piFindings && gateFailures.length === 0;
+  const passed = !piFindings && !missingSlopAxis && gateFailures.length === 0;
 
   if (passed) {
     const identifier =
@@ -376,10 +389,10 @@ export async function completeChecker(input) {
   }
 
   const feedbackLines = [];
-  if (piFindings) {
+  if (piFindings || missingSlopAxis) {
     const section = reviewFeedbackSection(workpadBody);
     if (section.length === 0) {
-      feedbackLines.push("- Review feedback must include explicit `- (none)` on pass");
+      feedbackLines.push("- Review feedback must include Spec, Standards, and Slop axis lines");
     } else {
       feedbackLines.push(
         ...section
@@ -387,6 +400,9 @@ export async function completeChecker(input) {
           .map((line) => line.trim())
           .filter(Boolean),
       );
+    }
+    if (missingSlopAxis && !feedbackLines.some((line) => /Slop/i.test(line))) {
+      feedbackLines.push("- Slop axis missing from Review feedback (checker miss)");
     }
   }
   for (const line of gateFailures) {

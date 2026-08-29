@@ -21,21 +21,27 @@ import {
   IMPLEMENTING,
   RATCHET_NUDGE_TEXT,
   READY_FOR_MERGE,
+  REVIEW_PASS_FEEDBACK_LINES,
   reviewFeedbackHasFindings,
   reviewFeedbackIsClean,
+  reviewFeedbackMissingSlopAxis,
   reviewFeedbackSection,
 } from "../checker-exit.mjs";
 import {
+  applySlopAgentSpawnEnv,
   FACTORY_CHECKER_ALLOWED_TOOLS,
   FACTORY_CHECKER_EXCLUDED_TOOLS,
   FACTORY_CHECKER_MEMORY_TOOLS,
   factoryCheckerPiArgs,
   factoryCheckerToolArgs,
+  SLOP_AGENT_MEMORY_EXCLUDED_TOOLS,
+  SLOP_AGENT_PI_ARGS_ENV,
+  slopAgentToolArgs,
 } from "../checker-spawn.mjs";
 import { IN_REVIEW } from "../implement-exit.mjs";
 import { pullRequestFromAttachments } from "../land.mjs";
 import { WORKPAD_HEADING } from "../linear-cli.mjs";
-import { createPiJobRunner } from "../pi-job.mjs";
+import { createPiJobRunner, implementPrompt } from "../pi-job.mjs";
 import { routeWebhook } from "../webhook-router.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -43,6 +49,12 @@ const ISSUE_SECRET = "test-linear-webhook-secret";
 const NOW = 1_700_000_000_000;
 const ISSUE_ID = "issue-kit-56";
 const PR_URL = "https://github.com/KitCollective/kit-collective/pull/56";
+
+const CLEAN_REVIEW_FEEDBACK = REVIEW_PASS_FEEDBACK_LINES.join("\n");
+
+function cleanWorkpad(extra = "") {
+  return `${WORKPAD_HEADING}\n\n### Review feedback\n\n${CLEAN_REVIEW_FEEDBACK}\n${extra}`;
+}
 
 function sign(rawBody) {
   return createHmac("sha256", ISSUE_SECRET).update(rawBody).digest("hex");
@@ -148,9 +160,7 @@ function fakeLinear(issue = snapshot(), workpadBody) {
   const comments = [
     {
       id: "c1",
-      body:
-        workpadBody ??
-        `${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n\n### Evidence\n\n- KIT-56 PR: ${PR_URL}\n`,
+      body: workpadBody ?? `${cleanWorkpad()}\n\n### Evidence\n\n- KIT-56 PR: ${PR_URL}\n`,
     },
   ];
   return {
@@ -228,14 +238,16 @@ test("Issue update without updatedFrom still enqueues checker when status is In 
   assert.equal(enqueue.jobs[0].role, "factory-checker");
 });
 
-test("reviewFeedbackHasFindings treats - (none) as pass and bullets as fail", () => {
+test("reviewFeedbackHasFindings treats three-axis (none) as pass and bullets as fail", () => {
+  assert.equal(reviewFeedbackIsClean(cleanWorkpad()), true);
+  assert.equal(reviewFeedbackHasFindings(cleanWorkpad()), false);
   assert.equal(
     reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
-    true,
+    false,
   );
   assert.equal(
     reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
-    false,
+    true,
   );
   assert.equal(reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n`), false);
   assert.equal(reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n`), true);
@@ -246,20 +258,14 @@ test("reviewFeedbackHasFindings treats - (none) as pass and bullets as fail", ()
     ),
     true,
   );
+  assert.equal(
+    reviewFeedbackMissingSlopAxis(
+      `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: missing AC\n- Standards: lint\n`,
+    ),
+    true,
+  );
+  assert.equal(reviewFeedbackMissingSlopAxis(cleanWorkpad()), false);
   assert.equal(reviewFeedbackSection("### Review feedback\n\n- Spec miss\n"), "- Spec miss");
-});
-
-test("reviewFeedbackIsClean accepts the three labeled axis pass lines", () => {
-  const body = `${WORKPAD_HEADING}
-
-### Review feedback
-
-- Spec: (none)
-- Standards: (none)
-- Slop: (none)
-`;
-  assert.equal(reviewFeedbackIsClean(body), true);
-  assert.equal(reviewFeedbackHasFindings(body), false);
 });
 
 test("applyRatchetNudge does not rewrite an inline ### Review feedback mention", () => {
@@ -291,7 +297,7 @@ test("clean workpad with Description AC rewrites ticks the renamed line and comm
 
 ### Review feedback
 
-- (none)
+${CLEAN_REVIEW_FEEDBACK}
 
 ### Description AC rewrites
 
@@ -312,24 +318,6 @@ test("clean workpad with Description AC rewrites ticks the renamed line and comm
   assert.match(descriptionUpdate.description, /- \[x\] Spec AC is met/);
   assert.match(descriptionUpdate.description, /- \[x\] Standards are clean/);
   assert.doesNotMatch(descriptionUpdate.description, /- \[x\] Spec is met/);
-});
-
-test("clean three-axis workpad + MERGEABLE + green checks moves to Ready for merge", async () => {
-  const workpad = `${WORKPAD_HEADING}
-
-### Review feedback
-
-- Spec: (none)
-- Standards: (none)
-- Slop: (none)
-`;
-  const result = await completeChecker({
-    job: { issueId: ISSUE_ID, identifier: "KIT-56" },
-    linear: fakeLinear(snapshot(), workpad),
-    gh: fakeGh(),
-  });
-  assert.equal(result.passed, true);
-  assert.equal(result.nextStatus, READY_FOR_MERGE);
 });
 
 test("clean workpad + MERGEABLE + green checks moves to Ready for merge and never merges", async () => {
@@ -364,13 +352,16 @@ test("clean workpad + MERGEABLE + green checks moves to Ready for merge and neve
   assert.match(descriptionUpdate.description, /- \[x\] Standards are clean/);
 });
 
-test("applyCheckerPassWorkpad keeps Review feedback as - (none)", () => {
+test("applyCheckerPassWorkpad keeps Review feedback as three-axis (none)", () => {
   const next = applyCheckerPassWorkpad(
-    `${WORKPAD_HEADING}\n\n### Status\nIn Review\n\n### Review feedback\n\n- (none)\n`,
+    `${WORKPAD_HEADING}\n\n### Status\nIn Review\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop: (none)\n`,
   );
   assert.match(next, /### Status\nAll good — checker pass/);
   assert.equal(reviewFeedbackIsClean(next), true);
   assert.equal(reviewFeedbackHasFindings(next), false);
+  for (const line of REVIEW_PASS_FEEDBACK_LINES) {
+    assert.match(next, new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
 });
 
 test("Pi review findings move to Implementing with complete Review feedback preserved", async () => {
@@ -488,7 +479,7 @@ test("missing Review feedback section fails even when GitHub gates are green", a
   assert.equal(result.nextStatus, IMPLEMENTING);
   assert.match(
     linear.calls.find((call) => call[0] === "updateWorkpad")[1].body,
-    /explicit `- \(none\)` on pass/,
+    /Spec, Standards, and Slop axis lines/,
   );
 });
 
@@ -594,6 +585,9 @@ test("factory-checker spawn uses tool allowlist and linear_cli extension", async
     true,
   );
   assert.equal(spawned[0].options.env.LINEAR_ISSUE_ID, ISSUE_ID);
+  assert.equal(typeof spawned[0].options.env.SLOP_AGENT_MEMORY_EXCLUDED_TOOLS, "string");
+  assert.equal(typeof spawned[0].options.env[SLOP_AGENT_PI_ARGS_ENV], "string");
+  assert.ok(spawned[0].options.env[SLOP_AGENT_PI_ARGS_ENV].includes("--exclude-tools"));
 });
 
 test("factory-checker tools extension sits next to checker-spawn, not PI_WORKSPACE/harness", () => {
@@ -800,6 +794,103 @@ test("checker fail incrementing reviewLoops from 0 to 1 does not write ratchet n
     reviewLoops: 1,
   });
   assert.equal(hasRatchetNudge(workpad.body), false);
+});
+
+test("missing Slop axis fails even when Spec and Standards are clean and GitHub gates are green", async () => {
+  const gh = fakeGh();
+  const linear = fakeLinear(
+    snapshot(),
+    `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n`,
+  );
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-126" },
+    linear,
+    gh,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.nextStatus, IMPLEMENTING);
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /Slop axis missing/);
+});
+
+test("Slop findings are preserved alongside Spec and Standards in one fail dump", async () => {
+  const gh = fakeGh();
+  const linear = fakeLinear(
+    snapshot(),
+    `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: AC missing\n- Standards: lint in harness/foo.mjs\n- Slop/ narrating comment in harness/bar.mjs\n`,
+  );
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-126" },
+    linear,
+    gh,
+  });
+  assert.equal(result.passed, false);
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /Spec: AC missing/);
+  assert.match(workpad.body, /Standards: lint/);
+  assert.match(workpad.body, /Slop\/ narrating comment/);
+});
+
+test("factory-checker allowlist includes subagent and Slop child excludes memory writes", () => {
+  assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("subagent"), true);
+  assert.deepEqual(SLOP_AGENT_MEMORY_EXCLUDED_TOOLS, [
+    "memory_add",
+    "memory_replace",
+    "memory_remove",
+  ]);
+  const slopAgent = readFileSync(join(ROOT, ".pi/agents/slop.md"), "utf8");
+  for (const tool of SLOP_AGENT_MEMORY_EXCLUDED_TOOLS) {
+    assert.equal(new RegExp(`^tools:.*\\b${tool}\\b`, "m").test(slopAgent), false);
+  }
+});
+
+test("applySlopAgentSpawnEnv calls slopAgentToolArgs and wires both env keys", () => {
+  const spawnEnv = {};
+  applySlopAgentSpawnEnv(spawnEnv);
+  assert.equal(
+    spawnEnv.SLOP_AGENT_MEMORY_EXCLUDED_TOOLS,
+    SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(","),
+  );
+  assert.equal(typeof spawnEnv[SLOP_AGENT_PI_ARGS_ENV], "string");
+  const args = spawnEnv[SLOP_AGENT_PI_ARGS_ENV].split("\0");
+  assert.deepEqual(args, slopAgentToolArgs());
+});
+
+test("slop.md loads slop-agent-tools via subagentOnlyExtensions", () => {
+  const slopAgent = readFileSync(join(ROOT, ".pi/agents/slop.md"), "utf8");
+  assert.match(slopAgent, /subagentOnlyExtensions:\s*harness\/slop-agent-tools\.ts/);
+});
+
+test("slopAgentToolArgs excludes memory writes and mirrors slop.md tools", () => {
+  const args = slopAgentToolArgs();
+  assert.equal(args.includes("--exclude-tools"), true);
+  const excludeIdx = args.indexOf("--exclude-tools");
+  const excluded = args[excludeIdx + 1].split(",");
+  for (const tool of SLOP_AGENT_MEMORY_EXCLUDED_TOOLS) {
+    assert.equal(excluded.includes(tool), true);
+  }
+  const toolsIdx = args.indexOf("--tools");
+  const allowed = args[toolsIdx + 1].split(",");
+  const slopAgent = readFileSync(join(ROOT, ".pi/agents/slop.md"), "utf8");
+  const toolsMatch = slopAgent.match(/^tools:\s*(.+)$/m);
+  assert.ok(toolsMatch);
+  const frontmatterTools = toolsMatch[1].split(",").map((tool) => tool.trim());
+  assert.deepEqual(allowed.sort(), frontmatterTools.sort());
+});
+
+test("applyCheckerFailWorkpad never falls back to legacy single - (none)", () => {
+  const updated = applyCheckerFailWorkpad(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- old\n`, {
+    feedbackLines: [],
+  });
+  assert.doesNotMatch(updated, /^- \(none\)$/m);
+  assert.match(updated, /Review feedback incomplete \(harness\)/);
+});
+
+test("implementPrompt names Standards + Spec + Slop for factory-checker", () => {
+  const prompt = implementPrompt("factory-checker", "KIT-126");
+  assert.match(prompt, /Standards \+ Spec \+ Slop/);
+  assert.match(prompt, /Slop:\s*\(none\)/);
+  assert.match(prompt, /Slop\//);
 });
 
 test("applyRatchetNudge ignores high ciFailCycles when reviewLoops stays below 2", () => {

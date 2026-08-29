@@ -110,8 +110,95 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   }
   if (!checkerExit.includes("reviewFeedbackIsClean")) {
     failures.push(
-      "harness/checker-exit.mjs must require explicit - (none) via reviewFeedbackIsClean",
+      "harness/checker-exit.mjs must require explicit three-axis pass via reviewFeedbackIsClean",
     );
+  }
+  if (checkerExit.includes("LEGACY_PASS_LINE")) {
+    failures.push("harness/checker-exit.mjs must reject legacy bare - (none) pass line");
+  }
+  if (!checkerExit.includes("reviewFeedbackMissingSlopAxis")) {
+    failures.push("harness/checker-exit.mjs must detect missing Slop axis");
+  }
+  if (!checkerExit.includes("REVIEW_PASS_FEEDBACK_LINES")) {
+    failures.push("harness/checker-exit.mjs must declare REVIEW_PASS_FEEDBACK_LINES");
+  }
+  if (!checkerExit.includes("REVIEW_FEEDBACK_HARNESS_INCOMPLETE")) {
+    failures.push(
+      "harness/checker-exit.mjs must declare REVIEW_FEEDBACK_HARNESS_INCOMPLETE for fail fallback",
+    );
+  }
+  if (!allowedTools.includes("subagent")) {
+    failures.push("factory-checker allowlist must include subagent for /code-review fan-out");
+  }
+  if (!checkerSpawn.includes("SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
+    failures.push("harness/checker-spawn.mjs must declare SLOP_AGENT_MEMORY_EXCLUDED_TOOLS");
+  }
+  if (!checkerSpawn.includes("slopAgentToolArgs")) {
+    failures.push(
+      "harness/checker-spawn.mjs must declare slopAgentToolArgs for Slop sub-agent spawn",
+    );
+  }
+  if (!checkerSpawn.includes("applySlopAgentSpawnEnv")) {
+    failures.push("harness/checker-spawn.mjs must declare applySlopAgentSpawnEnv");
+  }
+  if (!piJob.includes("applySlopAgentSpawnEnv")) {
+    failures.push("harness/pi-job.mjs must wire Slop child spawn via applySlopAgentSpawnEnv");
+  }
+  const slopToolsPath = join(ROOT, "harness/slop-agent-tools.ts");
+  try {
+    const slopTools = readFileSync(slopToolsPath, "utf8");
+    if (!slopTools.includes("SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
+      failures.push("harness/slop-agent-tools.ts must read SLOP_AGENT_MEMORY_EXCLUDED_TOOLS");
+    }
+    if (!slopTools.includes("SLOP_AGENT_PI_ARGS")) {
+      failures.push(
+        "harness/slop-agent-tools.ts must read SLOP_AGENT_PI_ARGS from slopAgentToolArgs wiring",
+      );
+    }
+  } catch {
+    failures.push("harness/slop-agent-tools.ts must exist for read-only Slop sub-agent spawn deny");
+  }
+  const slopAgentPath = join(ROOT, ".pi/agents/slop.md");
+  try {
+    const slopAgent = readFileSync(slopAgentPath, "utf8");
+    if (!slopAgent.includes("memory_add")) {
+      failures.push(".pi/agents/slop.md must document that Slop child has no memory_add");
+    }
+    const slopToolsMatch = slopAgent.match(/^tools:\s*(.+)$/m);
+    const slopTools = slopToolsMatch ? slopToolsMatch[1].split(",").map((tool) => tool.trim()) : [];
+    if (
+      !slopAgent.includes("subagentOnlyExtensions:") ||
+      !slopAgent.includes("slop-agent-tools.ts")
+    ) {
+      failures.push(
+        ".pi/agents/slop.md must load harness/slop-agent-tools.ts via subagentOnlyExtensions",
+      );
+    }
+    for (const tool of stringArrayConst(checkerSpawn, "SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
+      if (slopTools.includes(tool)) {
+        failures.push(`.pi/agents/slop.md must not grant Slop child tool ${tool}`);
+      }
+    }
+    for (const tool of stringArrayConst(checkerSpawn, "SLOP_AGENT_ALLOWED_TOOLS")) {
+      if (!slopTools.includes(tool)) {
+        failures.push(`.pi/agents/slop.md must grant Slop child tool ${tool}`);
+      }
+    }
+  } catch {
+    failures.push(".pi/agents/slop.md must exist for read-only Slop sub-agent");
+  }
+  const codeReviewSkill = read(".cursor/skills/code-review/SKILL.md");
+  if (!codeReviewSkill.includes("## Slop") && !codeReviewSkill.includes("**Slop**")) {
+    failures.push(".cursor/skills/code-review/SKILL.md must define the Slop axis");
+  }
+  if (!piJob.includes("Standards + Spec + Slop")) {
+    failures.push("harness/pi-job.mjs factory-checker prompt must name all three axes");
+  }
+  if (!role.includes("Slop")) {
+    failures.push(".pi/roles/factory-checker.md must document the Slop axis");
+  }
+  if (!read("harness/factory-checker-tools.ts").includes("SLOP_AGENT_PI_ARGS")) {
+    failures.push("harness/factory-checker-tools.ts must guard Slop subagent spawn env");
   }
   if (!checkerExit.includes("Linked GitHub PR is required")) {
     failures.push("harness/checker-exit.mjs must fail-move when PR is missing");
@@ -121,9 +208,12 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   }
   if (
     !dockerfile.includes("checker-spawn.mjs") ||
-    !dockerfile.includes("factory-checker-tools.ts")
+    !dockerfile.includes("factory-checker-tools.ts") ||
+    !dockerfile.includes("slop-agent-tools.ts")
   ) {
-    failures.push("harness/Dockerfile must copy checker-spawn and factory-checker-tools");
+    failures.push(
+      "harness/Dockerfile must copy checker-spawn, factory-checker-tools, and slop-agent-tools",
+    );
   }
   if (!role.includes("linear_cli")) {
     failures.push(".pi/roles/factory-checker.md must document linear_cli host tool");
