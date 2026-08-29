@@ -3,11 +3,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resolveAvatarUrl } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
-import {
-  IdentityCard,
-  ListNavigateRow,
-  ProfileSurfaceGroup,
-} from "@/components/profile-ui";
+import { IdentityCard, ListNavigateRow, ProfileSurfaceGroup } from "@/components/profile-ui";
 import { ScreenHeader } from "@/components/screen-header";
 import { IconButton } from "@/components/ui";
 import { space } from "@/theme/tokens";
@@ -28,9 +24,7 @@ export default function ProfileHomeScreen() {
     space.insetMd;
 
   const avatarHeaders =
-    accessToken && user?.avatarUrl
-      ? { Authorization: `Bearer ${accessToken}` }
-      : undefined;
+    accessToken && user?.avatarUrl ? { Authorization: `Bearer ${accessToken}` } : undefined;
 
   return (
     <View

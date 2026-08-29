@@ -1,10 +1,10 @@
 import {
   type HandleAvailabilityResponse,
+  handleAvailabilityResponseSchema,
   type IdentityCredentials,
   type IdentityMe,
   type IdentityProfileUpdate,
   type IdentitySession,
-  handleAvailabilityResponseSchema,
   identityCredentialsSchema,
   identityMeSchema,
   identitySessionSchema,
@@ -110,7 +110,10 @@ export async function updateProfile(
   return identityMeSchema.parse(await response.json());
 }
 
-export async function uploadAvatar(accessToken: string, contentBase64: string): Promise<IdentityMe> {
+export async function uploadAvatar(
+  accessToken: string,
+  contentBase64: string,
+): Promise<IdentityMe> {
   const response = await requestJson("/v1/identity/avatar", {
     method: "POST",
     headers: {

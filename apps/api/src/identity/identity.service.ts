@@ -1,12 +1,12 @@
 import {
   type HandleAvailabilityResponse,
+  handleAvailabilityResponseSchema,
+  handleSchema,
   type IdentityAvatarUpload,
   type IdentityMe,
   type IdentityProfileUpdate,
   type IdentityRole,
   type IdentitySession,
-  handleAvailabilityResponseSchema,
-  handleSchema,
   identityAvatarUploadSchema,
   identityCredentialsSchema,
   identityMeSchema,
@@ -25,11 +25,8 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
+import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
-import {
-  createMemoryObjectStore,
-  type ObjectStoreAdapter,
-} from "../collection/object-store.js";
 import { DB, type DbToken } from "../db/db.module.js";
 import {
   avatarObjectKeyForUser,

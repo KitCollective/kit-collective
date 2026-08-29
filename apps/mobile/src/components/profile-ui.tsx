@@ -106,9 +106,7 @@ export function ListNavigateRow({ title, meta, icon, onPress }: ListNavigateRowP
       <Ionicons name={icon} size={22} color={theme.contentPrimary} accessibilityElementsHidden />
       <View style={styles.rowBody}>
         <Text style={[typography.body, { color: theme.contentPrimary }]}>{title}</Text>
-        {meta ? (
-          <Text style={[typography.mono, { color: theme.contentMuted }]}>{meta}</Text>
-        ) : null}
+        {meta ? <Text style={[typography.mono, { color: theme.contentMuted }]}>{meta}</Text> : null}
       </View>
       <Ionicons
         name="chevron-forward"
@@ -132,10 +130,17 @@ export function IdentityCard({ handle, avatarUri, avatarHeaders, onEditPress }: 
   const typography = useTypography();
 
   return (
-    <View style={[styles.identityCard, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
+    <View
+      style={[
+        styles.identityCard,
+        { backgroundColor: theme.surface, borderColor: theme.borderSubtle },
+      ]}
+    >
       <View style={styles.identityRow}>
         <Avatar handle={handle} uri={avatarUri} uriHeaders={avatarHeaders} size="lg" />
-        <Text style={[typography.headingSm, { color: theme.contentPrimary, flex: 1 }]}>{handle}</Text>
+        <Text style={[typography.headingSm, { color: theme.contentPrimary, flex: 1 }]}>
+          {handle}
+        </Text>
       </View>
       <Pressable
         accessibilityRole="button"
@@ -163,7 +168,12 @@ type AvatarChangeRowProps = {
   onPress: () => void;
 };
 
-export function AvatarChangeRow({ handle, avatarUri, avatarHeaders, onPress }: AvatarChangeRowProps) {
+export function AvatarChangeRow({
+  handle,
+  avatarUri,
+  avatarHeaders,
+  onPress,
+}: AvatarChangeRowProps) {
   const theme = useTheme();
   const typography = useTypography();
 
