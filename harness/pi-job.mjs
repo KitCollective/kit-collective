@@ -15,7 +15,7 @@ import {
   waitForCapacity,
 } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
-import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
+import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
@@ -470,7 +470,7 @@ export function implementPrompt(role, identifier, adwFile) {
     return `Factory role implement for ${identifier}.${adw} Update the existing workpad. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
   }
   if (role === "factory-checker") {
-    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete finding set (- (none) on pass). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
+    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
   }
   return typeof adwFile === "string"
     ? `Factory role ${role} for ${identifier}. ADW ${adwFile}.`
@@ -931,6 +931,7 @@ export function createPiJobRunner({
       delete spawnEnv.DATABASE_URL;
       if (job.role === "factory-checker") {
         spawnEnv.LINEAR_ISSUE_ID = job.issueId ?? identifier;
+        applySlopAgentSpawnEnv(spawnEnv);
       }
       let browserSkill;
       if (job.role === "implement") {

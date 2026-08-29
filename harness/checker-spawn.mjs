@@ -20,12 +20,48 @@ export const FACTORY_CHECKER_MEMORY_TOOLS = [
   "memory_remove",
 ];
 
+/** Read-only Slop sub-agent — no memory writes (KIT-126). */
+export const SLOP_AGENT_MEMORY_EXCLUDED_TOOLS = ["memory_add", "memory_replace", "memory_remove"];
+
+/** Mirrors `.pi/agents/slop.md` frontmatter `tools:` — keep in sync. */
+export const SLOP_AGENT_ALLOWED_TOOLS = ["read", "grep", "find", "ls"];
+
+/**
+ * Pi CLI tool gate for the read-only Slop sub-agent (`.pi/agents/slop.md`).
+ * pi-subagents honors agent frontmatter; this is the harness source of truth.
+ *
+ * @returns {string[]}
+ */
+export function slopAgentToolArgs() {
+  return [
+    "--no-builtin-tools",
+    "--tools",
+    SLOP_AGENT_ALLOWED_TOOLS.join(","),
+    "--exclude-tools",
+    SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(","),
+  ];
+}
+
+/** Env the Slop child extension reads — must call `slopAgentToolArgs()` here. */
+export const SLOP_AGENT_PI_ARGS_ENV = "SLOP_AGENT_PI_ARGS";
+
+/**
+ * Wire mechanical Slop child tool deny at factory-checker spawn.
+ *
+ * @param {Record<string, string | undefined>} spawnEnv
+ */
+export function applySlopAgentSpawnEnv(spawnEnv) {
+  spawnEnv.SLOP_AGENT_MEMORY_EXCLUDED_TOOLS = SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(",");
+  spawnEnv[SLOP_AGENT_PI_ARGS_ENV] = slopAgentToolArgs().join("\0");
+}
+
 /** @readonly */
 export const FACTORY_CHECKER_ALLOWED_TOOLS = [
   "read",
   "grep",
   "find",
   "ls",
+  "subagent",
   "linear_cli",
   ...FACTORY_CHECKER_MEMORY_TOOLS,
 ];
