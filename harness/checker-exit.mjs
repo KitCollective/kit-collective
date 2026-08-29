@@ -5,7 +5,7 @@
  * required GitHub checks). Pass → Ready for merge. Fail → Implementing with
  * complete ### Review feedback. Never merge. Fake `gh` + Linear at this seam.
  */
-import { incrementReviewLoops, parseLoopCounters } from "./auto-merge.mjs";
+import { ensureLoopCounters, incrementReviewLoops, parseLoopCounters } from "./auto-merge.mjs";
 import { IN_REVIEW, requiredChecksFailed, requiredChecksGreen } from "./implement-exit.mjs";
 import { createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
@@ -194,7 +194,7 @@ export function applyCheckerPassWorkpad(current) {
   } else {
     next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_PASS_FEEDBACK_LINES.join("\n")}\n`;
   }
-  return `${next.trimEnd()}\n`;
+  return ensureLoopCounters(`${next.trimEnd()}\n`);
 }
 
 export function applyCheckerFailWorkpad(current, { feedbackLines }) {

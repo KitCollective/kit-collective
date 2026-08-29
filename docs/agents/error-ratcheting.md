@@ -221,6 +221,7 @@ catches it in the API tests and the container smoke test.
 
 - Checker pass updates the existing workpad (same comment) with `All good — checker pass` under `### Status`.
 - `### Review feedback` stays exactly the three-axis pass lines (`- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`) so `reviewFeedbackIsClean` remains true.
+- Checker pass keeps `### Loop counters` (preserves counts, or writes `ciFailCycles: 0` / `reviewLoops: 0` when Pi stripped the heading) so Auto-merge can parse the cap.
 - Factory-checker token use lands on that same workpad after pass.
 
 Prevents repeating the KIT-105 silent pass (status flip only, no durable note or token line). Tighten only.
