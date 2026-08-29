@@ -1138,6 +1138,7 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
     assert.doesNotMatch(agent.frontmatter, /memory_add|memory_replace|memory_remove|skill_manage/);
   }
   assert.match(scout.frontmatter, /^tools:\s+read,\s*grep,\s*find,\s*ls\s*$/m);
+  assert.doesNotMatch(scout.frontmatter, /memory_search/);
   assert.doesNotMatch(scout.frontmatter, /^tools:.*\b(edit|write|bash)\b/m);
   assert.doesNotMatch(gate.frontmatter, /^tools:.*\blinear/i);
   assert.match(gate.text, /rebase/i);
@@ -1172,8 +1173,14 @@ test("implement role requires Scout then helpers then Gate; parent owns In Revie
   assert.match(implement, /this job's identifier|this job’s identifier/i);
   assert.match(implement, /Do not mention sibling KIT issues/i);
   assert.match(implement, /this PR only/i);
+  assert.match(implement, /memory_search/);
+  assert.match(implement, /Scout stays without `memory_search`|Scout stays without memory_search/i);
+  assert.match(implement, /before writing code/i);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   const checker = readFileSync(join(ROOT, ".pi/roles/factory-checker.md"), "utf8");
+  assert.match(checker, /class → lesson|class -> lesson/);
+  assert.match(checker, /memory_remove/);
+  assert.match(checker, /Do not.*memory_add.*Spec|not.*memory_add.*Spec/i);
   const land = readFileSync(join(ROOT, ".pi/roles/land.md"), "utf8");
   const planner = readFileSync(join(ROOT, ".pi/roles/planner.md"), "utf8");
   for (const role of [checker, land, planner]) {
