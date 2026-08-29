@@ -249,6 +249,42 @@ test("reviewFeedbackHasFindings treats - (none) as pass and bullets as fail", ()
   assert.equal(reviewFeedbackSection("### Review feedback\n\n- Spec miss\n"), "- Spec miss");
 });
 
+test("reviewFeedbackIsClean accepts the three labeled axis pass lines", () => {
+  const body = `${WORKPAD_HEADING}
+
+### Review feedback
+
+- Spec: (none)
+- Standards: (none)
+- Slop: (none)
+`;
+  assert.equal(reviewFeedbackIsClean(body), true);
+  assert.equal(reviewFeedbackHasFindings(body), false);
+});
+
+test("applyRatchetNudge does not rewrite an inline ### Review feedback mention", () => {
+  const body = `${WORKPAD_HEADING}
+
+### Plan
+
+- [x] Hard findings use a prefix in \`### Review feedback\`
+
+${LOOP_COUNTERS_HEADING}
+
+- ciFailCycles: 0
+- reviewLoops: 2
+
+### Review feedback
+
+- Spec: missing evidence
+`;
+  const next = applyRatchetNudge(body);
+  assert.match(next, /prefix in `### Review feedback`/);
+  assert.match(next, /### Notes/);
+  assert.equal(reviewFeedbackSection(next), "- Spec: missing evidence");
+  assert.equal(hasRatchetNudge(next), true);
+});
+
 test("clean workpad with Description AC rewrites ticks the renamed line and comments why on that verdict only", async () => {
   const gh = fakeGh();
   const workpad = `${WORKPAD_HEADING}
@@ -276,6 +312,24 @@ test("clean workpad with Description AC rewrites ticks the renamed line and comm
   assert.match(descriptionUpdate.description, /- \[x\] Spec AC is met/);
   assert.match(descriptionUpdate.description, /- \[x\] Standards are clean/);
   assert.doesNotMatch(descriptionUpdate.description, /- \[x\] Spec is met/);
+});
+
+test("clean three-axis workpad + MERGEABLE + green checks moves to Ready for merge", async () => {
+  const workpad = `${WORKPAD_HEADING}
+
+### Review feedback
+
+- Spec: (none)
+- Standards: (none)
+- Slop: (none)
+`;
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-56" },
+    linear: fakeLinear(snapshot(), workpad),
+    gh: fakeGh(),
+  });
+  assert.equal(result.passed, true);
+  assert.equal(result.nextStatus, READY_FOR_MERGE);
 });
 
 test("clean workpad + MERGEABLE + green checks moves to Ready for merge and never merges", async () => {
