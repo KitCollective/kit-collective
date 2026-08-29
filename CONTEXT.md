@@ -187,12 +187,24 @@ Own collector place in Expo tab slot 5 — identity card, favorites drill, and s
 _Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar
 
 **Handle**:
-The collector's unique public name on Profil and in Indbakke threads. Never the email. Availability is `yours`, `available`, or `taken`.
-_Avoid_: email local-part as the permanent public name; success-green availability chrome
+The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision. Never the email. Availability is `yours`, `available`, or `taken`.
+_Avoid_: raw email as the thread-row name; a second login identifier; success-green availability chrome
 
 **Favorit**:
 A saved foreign UserJersey — another collector's shirt on the Profil favorites grid. Not own Samling tiles.
 _Avoid_: marketplace listing chrome; owner handle on the favorite tile
+
+**Indbakke**:
+The collector messages place in tab slot 4 (envelope). Beskeder and Aktivitet are two views of one conversation model. Not Ønske, not marketplace checkout.
+_Avoid_: heart / wishlist chrome in slot 4; a second unread model on the Samling bell
+
+**Conversation**:
+One thread between two collectors about a UserJersey. Shared unread across Beskeder and Aktivitet. Created when a bud is sent or a reply is posted (later slices).
+_Avoid_: two parallel inbox tables; fake threads to avoid empty state
+
+**Bud**:
+A collector-to-collector bid message in a Conversation — an integer DKK amount, not payment or checkout. Accept/decline records outcome in the thread; no money moves in this product gap.
+_Avoid_: price overlay on Samling tiles; treating bud as a marketplace purchase
 
 **Staff access**:
 Authorization on that same User that opens Admin SPA. Stored as `User.role` `admin`. Not a second login and not a second column. Later scoped staff roles may replace this binary grant. An admin may promote or demote another User; not themselves, and not the last admin.

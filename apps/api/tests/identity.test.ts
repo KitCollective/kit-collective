@@ -73,6 +73,7 @@ describe("Identity /v1", () => {
     expect(response.statusCode).toBe(201);
     const body = identitySessionSchema.parse(JSON.parse(response.body));
     expect(body.user.email).toBe("collector@example.com");
+    expect(body.user.handle).toBe("collector");
     expect(body.user.role).toBe("user");
     expect(body.user.handle).toBe("collector");
     expect(body.accessToken.length).toBeGreaterThan(10);
@@ -235,6 +236,31 @@ describe("Identity /v1", () => {
     });
 
     expect(response.statusCode).toBe(401);
+  });
+
+  it("assigns a unique handle with suffix on collision", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/identity/register",
+      payload: {
+        email: "same@example.com",
+        password: "password123",
+      },
+    });
+    const firstSession = identitySessionSchema.parse(JSON.parse(first.body));
+    expect(firstSession.user.handle).toBe("same");
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/v1/identity/register",
+      payload: {
+        email: "same@other.com",
+        password: "password123",
+      },
+    });
+    const secondSession = identitySessionSchema.parse(JSON.parse(second.body));
+    expect(secondSession.user.handle).toBe("same2");
+    expect(secondSession.user.handle).not.toBe(secondSession.user.email);
   });
 
   it("returns an empty jersey list for an authenticated collector", async () => {
