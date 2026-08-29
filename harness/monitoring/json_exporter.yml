@@ -4,16 +4,31 @@ modules:
     headers:
       Accept: application/json
     metrics:
-      - name: harness_health
-        type: object
-        help: Snapshot from GET /health on the PI webhook adapter
-        path: "{ . }"
+      - name: harness_health_jobs
+        help: Active jobs from GET /health on the PI webhook adapter
+        path: "{ .jobsActive }"
         labels:
           planner: "{ .planner }"
           ok: "{ .ok }"
           capacity_ready: "{ .capacity.ready }"
-        values:
-          jobs: "{ .jobs | length }"
-          queued: "{ .queued | length }"
-          ram_free_mb: "{ .capacity.ramFreeMb }"
-          disk_free_mb: "{ .capacity.diskFreeMb }"
+      - name: harness_health_queued
+        help: Queued jobs from GET /health on the PI webhook adapter
+        path: "{ .jobsQueued }"
+        labels:
+          planner: "{ .planner }"
+          ok: "{ .ok }"
+          capacity_ready: "{ .capacity.ready }"
+      - name: harness_health_ram_free_mb
+        help: RAM free MB from GET /health on the PI webhook adapter
+        path: "{ .capacity.ramFreeMb }"
+        labels:
+          planner: "{ .planner }"
+          ok: "{ .ok }"
+          capacity_ready: "{ .capacity.ready }"
+      - name: harness_health_disk_free_mb
+        help: Disk free MB from GET /health on the PI webhook adapter
+        path: "{ .capacity.diskFreeMb }"
+        labels:
+          planner: "{ .planner }"
+          ok: "{ .ok }"
+          capacity_ready: "{ .capacity.ready }"

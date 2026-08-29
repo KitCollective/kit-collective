@@ -1338,6 +1338,8 @@ test("GET /health reports capacity numbers, ready false, and stays HTTP 200", as
       planner: "active",
       jobs: [],
       queued: [],
+      jobsActive: 0,
+      jobsQueued: 0,
       job: null,
       capacity: { ramFreeMb: 100, diskFreeMb: 200, ready: false },
       tokens: null,

@@ -13,20 +13,24 @@ scrape_configs:
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["com.docker.compose.service=webhook"]
     relabel_configs:
-      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
-        regex: webhook
-        action: keep
       - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
         target_label: compose_service
       - source_labels: ["__meta_docker_container_name"]
         regex: "/(.*)"
         target_label: container
+      - target_label: job
+        replacement: harness_webhook
     pipeline_stages:
       - docker: {}
-      - json:
-          expressions:
-            log_line: log
+      - static_labels:
+          compose_service: webhook
+          job: harness_webhook
+      - regex:
+          expression: "^(?P<harness_json>\\{.*\\})\\s*$"
       - json:
           expressions:
             source: source
@@ -36,7 +40,7 @@ scrape_configs:
             gate: gate
             loopRisk: loopRisk
             error: error
-          source: log_line
+          source: harness_json
       - labels:
           role:
           kit: identifier
