@@ -15,8 +15,13 @@ import {
   MERGE_PERMISSION_STATUS,
   MERGED_STATUS,
 } from "../scripts/lib/land-policy.mjs";
+import {
+  logFactoryExitDone,
+  logFactoryExitStart,
+  logFactoryGatePoll,
+} from "./factory-exit-log.mjs";
 import { mapStatusChecks } from "./gh-cli.mjs";
-import { selectRequiredChecks } from "./implement-exit.mjs";
+import { requiredChecksGreen, selectRequiredChecks } from "./implement-exit.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 import { landFailComment, landSuccessComment } from "./role-comments.mjs";
 import { gitArgvContainsSecret, remoteGitChildEnv } from "./worktree.mjs";
@@ -53,29 +58,158 @@ const GITHUB_PULL =
   /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)(?:\/(?:files|commits|checks)?)?(?:#.*)?$/;
 
 /**
- * @param {Array<{ url?: string }> | undefined} attachments
- * @returns {{ number: number, repo: string, url: string } | null}
+ * @param {string | undefined} url
+ * @returns {{ number: number, repo: string, url: string, title?: string } | null}
  */
-export function pullRequestFromAttachments(attachments) {
-  if (!Array.isArray(attachments)) {
+export function parsePullRequestAttachment(url, title) {
+  if (typeof url !== "string") {
     return null;
   }
-  for (const attachment of attachments) {
-    const url = attachment?.url;
-    if (typeof url !== "string") {
-      continue;
-    }
-    const match = url.match(GITHUB_PULL);
-    if (!match) {
-      continue;
-    }
-    return {
-      repo: match[1],
-      number: Number(match[2]),
-      url: `https://github.com/${match[1]}/pull/${match[2]}`,
-    };
+  const match = url.match(GITHUB_PULL);
+  if (!match) {
+    return null;
   }
-  return null;
+  const parsed = {
+    repo: match[1],
+    number: Number(match[2]),
+    url: `https://github.com/${match[1]}/pull/${match[2]}`,
+  };
+  if (typeof title === "string" && title.length > 0) {
+    parsed.title = title;
+  }
+  return parsed;
+}
+
+/**
+ * @param {Array<{ url?: string, title?: string }> | undefined} attachments
+ * @returns {Array<{ number: number, repo: string, url: string, title?: string }>}
+ */
+export function listPullRequestsFromAttachments(attachments) {
+  if (!Array.isArray(attachments)) {
+    return [];
+  }
+  /** @type {Array<{ number: number, repo: string, url: string, title?: string }>} */
+  const candidates = [];
+  for (const attachment of attachments) {
+    const parsed = parsePullRequestAttachment(attachment?.url, attachment?.title);
+    if (parsed) {
+      candidates.push(parsed);
+    }
+  }
+  return candidates;
+}
+
+/**
+ * @param {string | undefined} title
+ * @param {string | undefined} identifier
+ */
+function titleMatchesIssueIdentifier(title, identifier) {
+  if (typeof title !== "string" || typeof identifier !== "string") {
+    return false;
+  }
+  return title.toUpperCase().includes(identifier.toUpperCase());
+}
+
+/**
+ * Rank pull-request candidates for an issue. Higher wins.
+ *
+ * @param {{ number: number, title?: string }} candidate
+ * @param {{ identifier?: string, states?: Map<number, { state?: string, mergeable?: string }> }} ctx
+ */
+export function rankPullRequestCandidate(candidate, ctx) {
+  const state = ctx.states?.get(candidate.number);
+  let rank = candidate.number;
+  if (state?.state === "OPEN") {
+    rank += 1_000_000;
+  }
+  if (state?.state === "MERGED" || state?.state === "CLOSED") {
+    rank -= 500_000;
+  }
+  if (titleMatchesIssueIdentifier(candidate.title, ctx.identifier)) {
+    rank += 500_000;
+  }
+  if (state?.mergeable === "MERGEABLE") {
+    rank += 10_000;
+  }
+  if (state?.mergeable === "UNKNOWN") {
+    rank -= 5_000;
+  }
+  if (state?.mergeable === "CONFLICTING") {
+    rank -= 20_000;
+  }
+  return rank;
+}
+
+/**
+ * Pick the best linked PR from Linear attachments.
+ *
+ * @param {Array<{ url?: string, title?: string }> | undefined} attachments
+ * @param {{ identifier?: string, states?: Map<number, { state?: string, mergeable?: string }> }} [options]
+ * @returns {{ number: number, repo: string, url: string, title?: string } | null}
+ */
+export function selectPullRequestFromAttachments(attachments, options = {}) {
+  const candidates = listPullRequestsFromAttachments(attachments);
+  if (candidates.length === 0) {
+    return null;
+  }
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+  const ctx = {
+    identifier: options.identifier,
+    states: options.states,
+  };
+  return [...candidates].sort(
+    (left, right) => rankPullRequestCandidate(right, ctx) - rankPullRequestCandidate(left, ctx),
+  )[0];
+}
+
+/**
+ * @param {{
+ *   attachments: Array<{ url?: string, title?: string }> | undefined,
+ *   identifier?: string,
+ *   gh: { viewPr: (input: { number: number, repo?: string }) => Promise<object | null> },
+ * }} input
+ * @returns {Promise<{ linked: { number: number, repo: string, url: string, title?: string }, skipped: Array<{ number: number, repo: string, url: string, title?: string }> } | null>}
+ */
+export async function resolveLinkedPullRequest({ attachments, identifier, gh }) {
+  const candidates = listPullRequestsFromAttachments(attachments);
+  if (candidates.length === 0) {
+    return null;
+  }
+  if (candidates.length === 1) {
+    return { linked: candidates[0], skipped: [] };
+  }
+  /** @type {Map<number, { state?: string, mergeable?: string }>} */
+  const states = new Map();
+  await Promise.all(
+    candidates.map(async (candidate) => {
+      try {
+        const pr = await gh.viewPr({ number: candidate.number, repo: candidate.repo });
+        states.set(candidate.number, {
+          state: typeof pr?.state === "string" ? pr.state : undefined,
+          mergeable: typeof pr?.mergeable === "string" ? pr.mergeable : undefined,
+        });
+      } catch {
+        states.set(candidate.number, { state: "UNKNOWN", mergeable: "UNKNOWN" });
+      }
+    }),
+  );
+  const linked = selectPullRequestFromAttachments(attachments, { identifier, states });
+  if (!linked) {
+    return null;
+  }
+  const skipped = candidates.filter((candidate) => candidate.number !== linked.number);
+  return { linked, skipped };
+}
+
+/**
+ * @param {Array<{ url?: string, title?: string }> | undefined} attachments
+ * @param {{ identifier?: string, states?: Map<number, { state?: string, mergeable?: string }> }} [options]
+ * @returns {{ number: number, repo: string, url: string, title?: string } | null}
+ */
+export function pullRequestFromAttachments(attachments, options = {}) {
+  return selectPullRequestFromAttachments(attachments, options);
 }
 
 /**
@@ -192,7 +326,7 @@ export function createLandGh({
           "--repo",
           targetRepo,
           "--json",
-          "number,url,mergeable,baseRefName,statusCheckRollup",
+          "number,url,mergeable,baseRefName,state,statusCheckRollup",
         ],
         "async",
       );
@@ -225,6 +359,7 @@ export function createLandGh({
         number: parsed.number ?? number,
         url: parsed.url,
         mergeable: parsed.mergeable,
+        state: parsed.state,
         baseRef: parsed.baseRefName,
         requiredChecks: requiredChecksForMergeGate(mapped),
       };
@@ -302,10 +437,39 @@ export async function completeLand({
     };
   }
 
-  const linked = pullRequestFromAttachments(issue.attachments);
+  const linkedResolution = await resolveLinkedPullRequest({
+    attachments: issue.attachments,
+    identifier:
+      typeof job.identifier === "string" && job.identifier.length > 0
+        ? job.identifier
+        : issue.identifier,
+    gh,
+  });
+  const linked = linkedResolution?.linked ?? null;
+  const identifier =
+    typeof job.identifier === "string" && job.identifier.length > 0
+      ? job.identifier
+      : issue.identifier;
+  if (linked) {
+    logFactoryExitStart({
+      role: "land",
+      identifier,
+      phase: "land-exit",
+      linked,
+      skipped: linkedResolution?.skipped ?? [],
+    });
+  }
   let pr = linked ? await gh.viewPr({ number: linked.number, repo: linked.repo }) : null;
   if (pr?.mergeable === "UNKNOWN" && linked) {
-    for (let attempt = 0; attempt < unknownRetryAttempts; attempt += 1) {
+    for (let attempt = 1; attempt <= unknownRetryAttempts; attempt += 1) {
+      logFactoryGatePoll({
+        role: "land",
+        identifier,
+        phase: "land-exit",
+        attempt,
+        pr,
+        checksGreen: requiredChecksGreen(pr?.requiredChecks ?? pr?.checks),
+      });
       await sleep(unknownRetryMs);
       pr = await gh.viewPr({ number: linked.number, repo: linked.repo });
       if (pr?.mergeable !== "UNKNOWN") {
@@ -333,10 +497,15 @@ export async function completeLand({
     body,
     commentId: existing?.id,
   });
-  const identifier =
-    typeof job.identifier === "string" && job.identifier.length > 0
-      ? job.identifier
-      : issue.identifier;
+  logFactoryExitDone({
+    role: "land",
+    identifier,
+    phase: "land-exit",
+    passed: gate.merged,
+    nextStatus,
+    reason: gate.merged ? `merged ${gate.sha ?? ""}`.trim() : gate.reason,
+  });
+
   if (typeof linear.commentIssue === "function") {
     await linear.commentIssue({
       issueId: job.issueId,
