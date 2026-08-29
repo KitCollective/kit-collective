@@ -305,10 +305,7 @@ test("land fail-closed after UNKNOWN mergeable retries exhaust", async () => {
   assert.equal(result.merged, false);
   assert.equal(result.nextStatus, "Implementing");
   assert.match(result.reason, /UNKNOWN/);
-  assert.equal(
-    gh.calls.filter((call) => call[0] === "merge").length,
-    0,
-  );
+  assert.equal(gh.calls.filter((call) => call[0] === "merge").length, 0);
 });
 
 test("merge failure returns Implementing with the error under Review feedback and never Done", async () => {

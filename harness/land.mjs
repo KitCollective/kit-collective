@@ -8,9 +8,9 @@
 import { execFile as execFileCb, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import {
-  landAtMergeGate,
   LAND_UNKNOWN_MERGEABLE_RETRIES,
   LAND_UNKNOWN_RETRY_MS,
+  landAtMergeGate,
   MERGE_FAILURE_STATUS,
   MERGE_PERMISSION_STATUS,
   MERGED_STATUS,
