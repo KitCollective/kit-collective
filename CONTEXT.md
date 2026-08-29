@@ -182,6 +182,22 @@ _Avoid_: Catalog peek as the product admin; a second login product; Expo as the 
 A User in Expo. The same row can later hold Staff access. Not a separate account type.
 _Avoid_: a dedicated admin user table; locking `role=admin` out of Expo
 
+**Handle**:
+A collector’s unique public username shown in Indbakke thread rows and Detaljer stubs. Assigned at register from the email local-part with a numeric suffix on collision. Not the email address. Editing is own Profil (later milestone).
+_Avoid_: raw email as the thread-row name; a second login identifier
+
+**Indbakke**:
+The collector messages place in tab slot 4 (envelope). Beskeder and Aktivitet are two views of one conversation model. Not Ønske, not marketplace checkout.
+_Avoid_: heart / wishlist chrome in slot 4; a second unread model on the Samling bell
+
+**Conversation**:
+One thread between two collectors about a UserJersey. Shared unread across Beskeder and Aktivitet. Created when a bud is sent or a reply is posted (later slices).
+_Avoid_: two parallel inbox tables; fake threads to avoid empty state
+
+**Bud**:
+A collector-to-collector bid message in a Conversation — an integer DKK amount, not payment or checkout. Accept/decline records outcome in the thread; no money moves in this product gap.
+_Avoid_: price overlay on Samling tiles; treating bud as a marketplace purchase
+
 **Staff access**:
 Authorization on that same User that opens Admin SPA. Stored as `User.role` `admin`. Not a second login and not a second column. Later scoped staff roles may replace this binary grant. An admin may promote or demote another User; not themselves, and not the last admin.
 _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authentication; locking admins out of Expo; self-demote; demoting the last admin
