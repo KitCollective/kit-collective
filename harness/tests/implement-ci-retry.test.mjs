@@ -674,6 +674,7 @@ test("merge-fail resume uses dedicated prompt and skips Scout and helpers", asyn
   assert.match(prompt, /Skip Scout/);
   assert.match(prompt, /Skip helpers/);
   assert.match(prompt, /Do not re-implement the feature/);
+  assert.match(prompt, /Do not sleep/i);
   assert.equal(/Checker-fail resume/i.test(prompt), false);
   assert.equal(/Required helpers:/i.test(prompt), false);
 });
@@ -753,6 +754,31 @@ test("reviewFeedbackIsLandFail distinguishes merge gate from checker Spec/Standa
   assert.equal(reviewFeedbackIsLandFail(checkerFail), false);
   assert.equal(reviewFeedbackIsLandFail("- required checks are not green"), true);
   assert.equal(reviewFeedbackIsLandFail("- CI: required check `test` failed"), false);
+  assert.equal(reviewFeedbackIsLandFail("- Command failed: gh pr merge 118 --merge"), true);
+  assert.equal(
+    reviewFeedbackIsLandFail(
+      "- merge failed — GraphQL: Head branch is not up to date with the base branch",
+    ),
+    true,
+  );
+});
+
+test("merge-fail and cheap-retry prompts forbid Pi sleep on GitHub", () => {
+  const merge = implementPrompt("implement", "KIT-118", ".pi/adw/feature.yaml", {
+    mergeFailResume: true,
+    reviewFeedback: "- merge failed — not up to date",
+  });
+  const cheap = implementPrompt("implement", "KIT-118", ".pi/adw/feature.yaml", {
+    cheapRetry: true,
+    reviewFeedback: "- Format: biome ci failed",
+  });
+  const first = implementPrompt("implement", "KIT-118", ".pi/adw/feature.yaml", {
+    implementContext: { requiredHelpers: ["expo"] },
+  });
+  for (const prompt of [merge, cheap, first]) {
+    assert.match(prompt, /Do not sleep/i);
+  }
+  assert.match(first, /react-expo is expo/);
 });
 
 test("merge-fail fast path does not skip Pi when PR is not MERGEABLE", async () => {

@@ -189,6 +189,7 @@ test("piArgsForRole passes multiple --skill paths and generated append on first 
   const generated = readFileSync(String(appendPath), "utf8");
   assert.match(generated, /write-scope/);
   assert.match(generated, /GitHub Actions only/);
+  assert.match(generated, /Do not sleep/);
   assert.match(generated, /## Unattended run/);
   const base = readFileSync(join(ROOT, GENERATED_CONTEXT_REL), "utf8");
   assert.match(base, /sources-sha256:/);

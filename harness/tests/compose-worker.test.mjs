@@ -384,6 +384,37 @@ test("parseImplementSlots defaults to 3 and clamps 1–3", () => {
   assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "bad" }), 3);
 });
 
+test("enqueue skips a second implement for an identifier that is already running", async () => {
+  let release;
+  const hold = new Promise((resolve) => {
+    release = resolve;
+  });
+  let runs = 0;
+  const slots = createWorkerSlots({
+    async run(job) {
+      runs += 1;
+      await hold;
+      return job;
+    },
+  });
+  const first = slots.enqueue({
+    role: "implement",
+    identifier: "KIT-118",
+    issueId: "issue-118",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const second = await slots.enqueue({
+    role: "implement",
+    identifier: "KIT-118",
+    issueId: "issue-118",
+  });
+  assert.deepEqual(second, { skipped: true, reason: "already running" });
+  assert.equal(runs, 1);
+  release();
+  await first;
+  assert.equal(runs, 1);
+});
+
 test("rejected coding job stays on the queue and does not become unhandled", async () => {
   const slots = createWorkerSlots({
     async run(job) {
@@ -1201,8 +1232,8 @@ test("AgentSession payload on issue channel skips without ack; implement enqueue
   const checkout = await worktree.checkout({ identifier: "KIT-99" });
   assert.equal(checkout.lane, "development");
   assert.ok(
-    gitCalls.some((args) => args.includes("development:refs/remotes/origin/development")),
-    "expected fetch refspec that updates refs/remotes/origin/development",
+    gitCalls.some((args) => args.includes("+development:refs/remotes/origin/development")),
+    "expected force-update fetch refspec for refs/remotes/origin/development",
   );
   assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/bug.yaml");
 });

@@ -575,7 +575,87 @@ test("applyLandWorkpad records SHA on success and the merge error under Review f
   });
   assert.match(failure, /### Review feedback/);
   assert.match(failure, /protected branch hook declined/);
+  assert.match(failure, /^- merge failed — /m);
   assert.equal(failure.includes("Done"), false);
+});
+
+test("applyLandWorkpad prefixes gh pr merge errors so implement-exit treats them as land-fail", () => {
+  const failure = applyLandWorkpad(`${WORKPAD_HEADING}\n`, {
+    error: "Command failed: gh pr merge 118 --merge\nGraphQL: Head branch is not up to date with the base branch",
+  });
+  assert.match(failure, /^- merge failed — /m);
+  assert.match(failure, /not up to date with the base branch/);
+});
+
+test("land updates the PR branch when mergeStateStatus is BEHIND before merge", async () => {
+  let views = 0;
+  const gh = {
+    calls: [],
+    async viewPr(input) {
+      gh.calls.push(["viewPr", input]);
+      views += 1;
+      if (views === 1) {
+        return greenPr({ mergeStateStatus: "BEHIND" });
+      }
+      return greenPr({ mergeStateStatus: "CLEAN" });
+    },
+    async updateBranch(input) {
+      gh.calls.push(["updateBranch", input]);
+    },
+    merge(args) {
+      gh.calls.push(["merge", args]);
+      return { ok: true, sha: SHA };
+    },
+  };
+  const linear = fakeLinear();
+  const result = await completeLand({
+    job: { issueId: ISSUE_ID, identifier: "KIT-57" },
+    linear,
+    gh,
+    lanes: LAND_LANES,
+  });
+
+  assert.equal(result.merged, true);
+  assert.equal(result.nextStatus, "Done");
+  assert.ok(gh.calls.some((call) => call[0] === "updateBranch"));
+  assert.equal(gh.calls.filter((call) => call[0] === "merge").length, 1);
+});
+
+test("land retries merge after not-up-to-date by updating the branch", async () => {
+  let merges = 0;
+  const gh = {
+    calls: [],
+    async viewPr(input) {
+      gh.calls.push(["viewPr", input]);
+      return greenPr();
+    },
+    async updateBranch(input) {
+      gh.calls.push(["updateBranch", input]);
+    },
+    merge(args) {
+      gh.calls.push(["merge", args]);
+      merges += 1;
+      if (merges === 1) {
+        return {
+          ok: false,
+          error: "GraphQL: Head branch is not up to date with the base branch",
+        };
+      }
+      return { ok: true, sha: SHA };
+    },
+  };
+  const linear = fakeLinear();
+  const result = await completeLand({
+    job: { issueId: ISSUE_ID, identifier: "KIT-57" },
+    linear,
+    gh,
+    lanes: LAND_LANES,
+  });
+
+  assert.equal(result.merged, true);
+  assert.equal(result.nextStatus, "Done");
+  assert.equal(gh.calls.filter((call) => call[0] === "updateBranch").length, 1);
+  assert.equal(gh.calls.filter((call) => call[0] === "merge").length, 2);
 });
 
 test("land-policy source locks gh pr merge strategy flag (no bare merge)", () => {

@@ -409,6 +409,26 @@ export function createWorkerSlots(deps) {
         throw new Error(`no coding slot for role ${job.role}`);
       }
 
+      if (IMPLEMENT_ROLES.has(job.role)) {
+        const id = job.identifier;
+        if (typeof id === "string" && id.length > 0) {
+          const occupied =
+            runningJobs.some((row) => row.identifier === id && IMPLEMENT_ROLES.has(row.role)) ||
+            pendingCoding.some((row) => row.identifier === id && IMPLEMENT_ROLES.has(row.role));
+          if (occupied) {
+            harnessLog({
+              role: job.role,
+              identifier: id,
+              event: "skip",
+              gate: "yellow",
+              reason: "already running",
+              loopRisk: 3,
+            });
+            return Promise.resolve({ skipped: true, reason: "already running" });
+          }
+        }
+      }
+
       /** @type {{ resolve: (value: unknown) => void, reject: (reason?: unknown) => void }} */
       let deferred;
       const promise = new Promise((resolve, reject) => {

@@ -47,6 +47,18 @@ test("session collector logs scout and gate subagent lifecycle", () => {
   assert.equal(gateFail?.gate, "red");
 });
 
+test("session collector keeps helper agent name on start and fail", () => {
+  const lines = [
+    '{"type":"tool_execution_start","toolName":"subagent","args":{"agent":"expo"}}',
+    '{"type":"tool_execution_end","toolName":"subagent","args":{"agent":"expo"},"isError":true}',
+  ];
+  const entries = collectSessionLogs({ role: "implement", identifier: "KIT-99", lines });
+  const start = entries.find((row) => row.phase === "helper" && row.detail === "expo started");
+  assert.equal(start?.gate, "yellow");
+  const fail = entries.find((row) => row.phase === "helper" && row.detail === "expo failed");
+  assert.equal(fail?.gate, "red");
+});
+
 test("session collector throttles token snapshots from message_update", () => {
   const lines = [
     '{"type":"message_update","usage":{"input":100,"output":10}}',

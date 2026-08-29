@@ -417,7 +417,9 @@ export function reviewFeedbackIsLandFail(feedback) {
       /^-\s*no linked PR/i.test(line) ||
       /^-\s*protected branch/i.test(line) ||
       /^-\s*refusing --force/i.test(line) ||
-      /^-\s*merge (?:failed|succeeded but)/i.test(line),
+      /^-\s*merge (?:failed|succeeded but)/i.test(line) ||
+      /^-\s*Command failed: gh pr merge/i.test(line) ||
+      /not up to date with the base branch/i.test(line),
   );
 }
 

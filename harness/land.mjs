@@ -228,9 +228,32 @@ export function applyLandWorkpad(current, { sha, error } = {}) {
     return `${replaceReviewFeedback(withEvidence, "- (none)")}\n`;
   }
   if (typeof error === "string" && error.length > 0) {
-    return `${replaceReviewFeedback(base, `- ${error}`)}\n`;
+    return `${replaceReviewFeedback(base, formatLandFailFeedback(error))}\n`;
   }
   return `${base}\n`;
+}
+
+/**
+ * Prefix land errors so `reviewFeedbackIsLandFail` matches (`- merge failed — …`).
+ *
+ * @param {string} error
+ */
+export function formatLandFailFeedback(error) {
+  const text = String(error).trim();
+  if (/^-\s*merge (?:failed|succeeded but)/i.test(text)) {
+    return text;
+  }
+  if (/^merge (?:failed|succeeded but)/i.test(text)) {
+    return `- ${text}`;
+  }
+  return `- merge failed — ${text}`;
+}
+
+/**
+ * @param {string | undefined} reason
+ */
+export function mergeErrorLooksBehind(reason) {
+  return /not up to date with the base branch/i.test(String(reason ?? ""));
 }
 
 /**
@@ -327,7 +350,7 @@ export function createLandGh({
           "--repo",
           targetRepo,
           "--json",
-          "number,url,mergeable,baseRefName,state,statusCheckRollup",
+          "number,url,mergeable,mergeStateStatus,baseRefName,state,statusCheckRollup",
         ],
         "async",
       );
@@ -360,6 +383,7 @@ export function createLandGh({
         number: parsed.number ?? number,
         url: parsed.url,
         mergeable: parsed.mergeable,
+        mergeStateStatus: parsed.mergeStateStatus,
         state: parsed.state,
         baseRef: parsed.baseRefName,
         requiredChecks: requiredChecksForMergeGate(mapped),
@@ -400,6 +424,20 @@ export function createLandGh({
         return { ok: false, error: err instanceof Error ? err.message : "merge failed" };
       }
     },
+
+    /**
+     * Bring the head up to date with the base (`gh pr update-branch`).
+     *
+     * @param {{ number: number, repo?: string }} input
+     */
+    async updateBranch({ number, repo: repoOverride }) {
+      const targetRepo = repoOverride ?? repo;
+      await guarded(
+        "gh",
+        ["pr", "update-branch", String(number), "--repo", targetRepo],
+        "async",
+      );
+    },
   };
 }
 
@@ -416,6 +454,7 @@ export function createLandGh({
  *   gh: {
  *     viewPr: (input: { number: number, repo?: string }) => Promise<object | null>,
  *     merge: (args: string[]) => { ok: boolean, sha?: string, error?: string },
+ *     updateBranch?: (input: { number: number, repo?: string }) => Promise<unknown>,
  *   },
  *   lanes?: { integration: string, staging?: string, production?: string },
  *   worktree?: { reap?: (input: { identifier: string }) => Promise<unknown> },
@@ -484,12 +523,42 @@ export async function completeLand({
       }
     }
   }
-  const gate = landAtMergeGate({
+  if (linked && pr && typeof gh.updateBranch === "function") {
+    const behind = pr.mergeStateStatus === "BEHIND" || mergeErrorLooksBehind(pr.mergeable);
+    if (behind) {
+      try {
+        await gh.updateBranch({ number: linked.number, repo: linked.repo });
+        pr = await gh.viewPr({ number: linked.number, repo: linked.repo });
+      } catch {
+        // landAtMergeGate fail-closes if the head is still behind
+      }
+    }
+  }
+  let gate = landAtMergeGate({
     issueStatus: issue.status,
     pr,
     lanes,
     gh,
   });
+  if (
+    !gate.merged &&
+    linked &&
+    typeof gh.updateBranch === "function" &&
+    mergeErrorLooksBehind(gate.reason)
+  ) {
+    try {
+      await gh.updateBranch({ number: linked.number, repo: linked.repo });
+      pr = await gh.viewPr({ number: linked.number, repo: linked.repo });
+      gate = landAtMergeGate({
+        issueStatus: issue.status,
+        pr,
+        lanes,
+        gh,
+      });
+    } catch {
+      // keep the first gate result
+    }
+  }
 
   const nextStatus = gate.merged ? MERGED_STATUS : MERGE_FAILURE_STATUS;
   const comments =

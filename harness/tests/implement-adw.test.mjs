@@ -205,8 +205,8 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
   assert.equal(worktreeBranch("KIT-99"), "kit-99");
   assert.ok(gitCalls.some((args) => args.includes("clone") && args.includes("--bare")));
   assert.ok(
-    gitCalls.some((args) => args.includes("development:refs/remotes/origin/development")),
-    "expected fetch refspec that updates refs/remotes/origin/development",
+    gitCalls.some((args) => args.includes("+development:refs/remotes/origin/development")),
+    "expected force-update fetch refspec for refs/remotes/origin/development",
   );
   assert.ok(
     gitCalls.some(
@@ -321,7 +321,7 @@ test("worktree adapter creates from origin/issue-branch when implement has pushe
   assert.equal(result.branch, "kit-99");
   assert.ok(
     gitCalls.some(
-      (args) => args.includes("fetch") && args.includes("kit-99:refs/remotes/origin/kit-99"),
+      (args) => args.includes("fetch") && args.includes("+kit-99:refs/remotes/origin/kit-99"),
     ),
   );
   assert.ok(
@@ -689,7 +689,7 @@ test("production gh.syncToRemoteBranch fetches the issue refspec and resets hard
       (call) =>
         call.command === "git" &&
         call.args.includes("fetch") &&
-        call.args.includes("kit-126:refs/remotes/origin/kit-126"),
+        call.args.includes("+kit-126:refs/remotes/origin/kit-126"),
     ),
   );
   assert.ok(
@@ -718,7 +718,7 @@ test("production gh.rebase fetches the lane into refs/remotes/origin/development
       (call) =>
         call.command === "git" &&
         call.args.includes("fetch") &&
-        call.args.includes("development:refs/remotes/origin/development"),
+        call.args.includes("+development:refs/remotes/origin/development"),
     ),
     "expected rebase fetch to update refs/remotes/origin/development",
   );
@@ -1304,6 +1304,8 @@ test("Scout and Gate pin Hy3 no-think with Composer fallback; helpers omit a mod
   assert.match(gate.text, /typecheck/i);
   assert.match(gate.text, /format:check|biome ci/i);
   assert.match(gate.text, /GitHub checks/i);
+  assert.match(gate.text, /do not sleep/i);
+  assert.doesNotMatch(gate.text, /Wait for required GitHub checks/);
   assert.match(gate.text, /conflict/i);
   assert.match(gate.text, /never calls Linear/i);
   assert.match(gate.text, /never .*In Review/i);
@@ -1337,6 +1339,7 @@ test("implement role stays thin; harness pi-job owns hard first-run and checker-
   assert.match(implement, /Scout stays without `memory_search`|Scout stays without memory_search/i);
   assert.match(implement, /never call `memory_add`|never call memory_add/i);
   assert.match(implement, /In Review/);
+  assert.match(implement, /Do not sleep/);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   assert.match(piJob, /format vs Zod vs unique-email/i);
   assert.match(piJob, /Checker-fail resume/i);
