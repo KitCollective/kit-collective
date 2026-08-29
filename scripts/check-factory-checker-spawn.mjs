@@ -232,7 +232,9 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!implementRole.includes("memory_search")) {
     failures.push(".pi/roles/implement.md must document memory_search at resume");
   }
-  if (!implementRole.match(/Scout stays without `memory_search`|Scout stays without memory_search/i)) {
+  if (
+    !implementRole.match(/Scout stays without `memory_search`|Scout stays without memory_search/i)
+  ) {
     failures.push(".pi/roles/implement.md must keep Scout without memory_search");
   }
   if (!implementRole.match(/never call `memory_add`|never call memory_add/i)) {
