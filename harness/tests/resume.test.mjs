@@ -183,6 +183,51 @@ test("runResume enqueues implement for land-fail even when retry cap is posted",
   assert.deepEqual(result.enqueued, [{ identifier: "KIT-119", role: "implement" }]);
 });
 
+test("runResume re-enqueues merge-fail Implementing after slot freed with no status change", async () => {
+  const enqueue = fakeEnqueue();
+  const linear = fakeLinear([
+    orphan({
+      id: "issue-119",
+      identifier: "KIT-119",
+      status: "Implementing",
+      labels: ["Feature"],
+      linearType: "Feature",
+      delegate: { name: "Pi" },
+    }),
+  ]);
+  linear.listComments = async () => [
+    { id: "c-cap", body: implementRetryCapComment("KIT-119") },
+    {
+      id: "c1",
+      body: `${WORKPAD_HEADING}\n\n### Review feedback\n\n- PR is CONFLICTING\n`,
+    },
+  ];
+
+  const whileQueued = await runResume({
+    linear,
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+    queuedIdentifiers: ["KIT-119"],
+  });
+  assert.equal(enqueue.jobs.length, 0);
+  assert.ok(
+    whileQueued.skipped.some(
+      (row) => row.identifier === "KIT-119" && row.reason === "already queued",
+    ),
+  );
+
+  const afterSlotFreed = await runResume({
+    linear,
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+    queuedIdentifiers: [],
+  });
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].identifier, "KIT-119");
+  assert.deepEqual(afterSlotFreed.enqueued, [{ identifier: "KIT-119", role: "implement" }]);
+});
+
 test("runResume enqueues checker, auto-merge, and land for started factory states", async () => {
   const enqueue = fakeEnqueue();
   await runResume({

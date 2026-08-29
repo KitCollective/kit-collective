@@ -14,6 +14,7 @@ import {
   completeImplementAdw,
   IMPLEMENTING,
   IN_REVIEW,
+  reviewFeedbackIsLandFail,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
 import { createSerialQueue, IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "../job-queue.mjs";
@@ -737,5 +738,74 @@ test("merge-fail fast path skips Pi when PR is MERGEABLE and checks are green", 
   assert.equal(
     linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
     true,
+  );
+});
+
+test("reviewFeedbackIsLandFail distinguishes merge gate from checker Spec/Standards/Slop", () => {
+  const landFail = "- PR is UNKNOWN";
+  const checkerFail = [
+    "- Spec: Collection tab missing badge count",
+    "- Standards: unused Badge export in apps/mobile/src/components/badge.tsx",
+    "- Slop: unused import in apps/mobile/src/components/badge.tsx",
+  ].join("\n");
+  assert.equal(reviewFeedbackIsLandFail(landFail), true);
+  assert.equal(reviewFeedbackIsLandFail(checkerFail), false);
+  assert.equal(reviewFeedbackIsLandFail("- required checks are not green"), true);
+  assert.equal(reviewFeedbackIsLandFail("- CI: required check `test` failed"), false);
+});
+
+test("merge-fail fast path does not skip Pi when PR is not MERGEABLE", async () => {
+  const gh = fakeGhWithOpenPr({ mergeable: "CONFLICTING" });
+  const linear = fakeLinear();
+  linear.comments[0].body = `${WORKPAD_HEADING}\n\n### Review feedback\n\n- PR is UNKNOWN\n`;
+  linear.getIssue = async () => ({
+    status: IMPLEMENTING,
+    attachments: [{ url: "https://github.com/KitCollective/kit-collective/pull/119" }],
+    description: "",
+    labels: ["Feature"],
+  });
+  const spawned = [];
+  const runner = implementRunner({ gh, linear, spawned });
+  const result = await runner.run({
+    role: "implement",
+    identifier: "KIT-119",
+    issueId: "issue-119",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 1);
+  assert.equal(result.mergeFailFastPath, undefined);
+  const prompt = promptFromSpawn(spawned[0]);
+  assert.match(prompt, /Merge-fail resume/);
+  assert.equal(/Checker-fail resume/i.test(prompt), false);
+});
+
+test("merge-fail fast path does not skip Pi when required checks are red", async () => {
+  const gh = fakeGhWithOpenPr({
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "failure", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  linear.comments[0].body = `${WORKPAD_HEADING}\n\n### Review feedback\n\n- required checks are not green\n`;
+  linear.getIssue = async () => ({
+    status: IMPLEMENTING,
+    attachments: [{ url: "https://github.com/KitCollective/kit-collective/pull/119" }],
+    description: "",
+    labels: ["Feature"],
+  });
+  const spawned = [];
+  const runner = implementRunner({ gh, linear, spawned });
+  const result = await runner.run({
+    role: "implement",
+    identifier: "KIT-119",
+    issueId: "issue-119",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 1);
+  assert.equal(result.mergeFailFastPath, undefined);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    false,
   );
 });

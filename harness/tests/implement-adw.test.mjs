@@ -370,7 +370,12 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
   assert.equal(spawned[0].options.cwd, "/var/lib/kit-pi/worktrees/KIT-99");
   assert.equal(spawned[0].args.includes("-a"), true);
   assert.equal(
-    spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/implement.md")),
+    spawned[0].args.some(
+      (arg) =>
+        String(arg).endsWith(".pi/roles/implement.md") ||
+        String(arg).includes(".pi/generated/implement-append.md") ||
+        String(arg).includes(".pi/generated/implement-context.md"),
+    ),
     true,
   );
   assert.equal(
@@ -1293,6 +1298,7 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
     ".pi/agents/expo.md",
     ".pi/agents/drizzle.md",
     ".pi/agents/ui-ux.md",
+    ".pi/agents/devops.md",
   ]) {
     const helper = agentFrontmatter(relative);
     assert.doesNotMatch(helper.frontmatter, /^model:/m);
@@ -1300,30 +1306,28 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
   }
 });
 
-test("implement role requires Scout then helpers then Gate; parent owns In Review from a green Gate report", () => {
+test("implement role stays thin; harness pi-job owns hard first-run and checker-fail prompts", () => {
   const implement = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
+  const piJob = readFileSync(join(ROOT, "harness/pi-job.mjs"), "utf8");
+  assert.match(implement, /selectImplementContext/);
   assert.match(implement, /Scout/i);
   assert.match(implement, /Gate/);
   assert.match(implement, /Skip Scout/i);
   assert.match(implement, /Skip helpers/i);
-  assert.match(implement, /format vs Zod vs unique-email/i);
-  assert.match(implement, /every .*line|every axis|every workpad/i);
-  assert.match(implement, /factory-checker\/slop/);
-  assert.match(implement, /ui-ux/);
-  assert.match(implement, /tokens|typograph|layout/i);
-  assert.match(implement, /checker-fail|checker fail/i);
-  assert.match(implement, /do not Skip Scout|not Skip Scout|Do not skip Scout/i);
-  assert.match(implement, /### Validation/);
-  assert.match(implement, /In Review/);
-  assert.match(implement, /only when Gate is green|Gate is green/i);
-  assert.match(implement, /Implementing/);
-  assert.match(implement, /this job's identifier|this job’s identifier/i);
-  assert.match(implement, /Do not mention sibling KIT issues/i);
-  assert.match(implement, /this PR only/i);
   assert.match(implement, /memory_search/);
   assert.match(implement, /Scout stays without `memory_search`|Scout stays without memory_search/i);
-  assert.match(implement, /before writing code/i);
+  assert.match(implement, /never call `memory_add`|never call memory_add/i);
+  assert.match(implement, /In Review/);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
+  assert.match(piJob, /format vs Zod vs unique-email/i);
+  assert.match(piJob, /Checker-fail resume/i);
+  assert.match(piJob, /\[factory-checker\/slop\]/);
+  assert.match(piJob, /Required helpers:/);
+  assert.match(piJob, /First run/i);
+  assert.match(piJob, /Merge-fail resume/);
+  assert.match(piJob, /Do not Skip Scout/);
+  assert.match(piJob, /Do not Skip helpers/);
+  assert.match(piJob, /selectImplementContext/);
   const checker = readFileSync(join(ROOT, ".pi/roles/factory-checker.md"), "utf8");
   assert.match(checker, /class → lesson|class -> lesson/);
   assert.match(checker, /memory_remove/);

@@ -84,6 +84,12 @@ export function missingImplementFirstRunLoopCoverage(sources) {
   if (!/db scope selects drizzle not ui-ux/.test(contextTest)) {
     missing.push("implement-context.test.mjs db drizzle not ui-ux");
   }
+  if (!/combined mobile\+api\+db scope/.test(contextTest)) {
+    missing.push("implement-context.test.mjs combined mobile+api+db scope");
+  }
+  if (!/Required helpers: expo, ui-ux/.test(contextTest)) {
+    missing.push("implement-context.test.mjs mobile Required helpers in prompt");
+  }
   if (!/cheap retry implementPrompt still Skip helpers/.test(contextTest)) {
     missing.push("implement-context.test.mjs cheap retry Skip helpers");
   }

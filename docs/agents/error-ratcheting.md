@@ -17,6 +17,7 @@ This is not a memory store. Wrong lessons are reverted with git.
 | `.cursor/hooks.json` | Which events run which scripts |
 | `.cursor/hooks/*.sh` | Command hooks (deny/allow) |
 | `.cursor/rules/*.mdc` | Always-applied agent rules |
+| `.pi/generated/implement-context.md` | Generated PI implement overlay from `.cursor` — edit sources, run `node scripts/generate-pi-implement-context.mjs`; never hand-edit |
 | `biome.json` / `oxlint.config.ts` | Format, lint, and anti-slop gates run in CI |
 | `docs/agents/error-ratcheting.md` | This contract |
 

@@ -73,6 +73,9 @@ export function missingImplementMergeFailResumeCoverage(sources) {
   if (!/UNKNOWN mergeable/.test(landTest)) {
     missing.push("land.test.mjs UNKNOWN mergeable retry coverage");
   }
+  if (!/UNKNOWN race resolves to MERGEABLE on the final retry/.test(landTest)) {
+    missing.push("land.test.mjs UNKNOWN race final retry coverage");
+  }
 
   const ciRetryTest = sources.ciRetryTest ?? "";
   if (!/Merge-fail resume/.test(ciRetryTest)) {
@@ -81,10 +84,22 @@ export function missingImplementMergeFailResumeCoverage(sources) {
   if (!/merge-fail fast path/i.test(ciRetryTest)) {
     missing.push("implement-ci-retry.test.mjs merge-fail fast path");
   }
+  if (!/reviewFeedbackIsLandFail distinguishes merge gate/.test(ciRetryTest)) {
+    missing.push("implement-ci-retry.test.mjs reviewFeedbackIsLandFail vs checker-fail");
+  }
+  if (!/fast path does not skip Pi when PR is not MERGEABLE/.test(ciRetryTest)) {
+    missing.push("implement-ci-retry.test.mjs merge-fail fast path refuses non-MERGEABLE");
+  }
+  if (!/fast path does not skip Pi when required checks are red/.test(ciRetryTest)) {
+    missing.push("implement-ci-retry.test.mjs merge-fail fast path refuses red checks");
+  }
 
   const resumeTest = sources.resumeTest ?? "";
   if (!/land-fail/i.test(resumeTest)) {
     missing.push("resume.test.mjs land-fail not blocked by retry cap");
+  }
+  if (!/re-enqueues merge-fail Implementing after slot freed/.test(resumeTest)) {
+    missing.push("resume.test.mjs merge-fail re-enqueue after slot freed");
   }
 
   return missing;

@@ -1,3 +1,4 @@
 npm/
 git/
-generated/
+generated/*
+!generated/implement-context.md

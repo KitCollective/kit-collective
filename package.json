@@ -31,6 +31,8 @@
     "check:mobile-capture-dead-exports": "node scripts/check-mobile-capture-dead-exports.mjs",
     "check:workflow-api-boot-env": "node scripts/check-workflow-api-boot-env.mjs",
     "check:vision-log-save-action": "node scripts/check-vision-log-save-action.mjs",
+    "check:pi-implement-context": "node scripts/check-pi-implement-context-generated.mjs",
+    "generate:pi-implement-context": "node scripts/generate-pi-implement-context.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"
   },
   "devDependencies": {

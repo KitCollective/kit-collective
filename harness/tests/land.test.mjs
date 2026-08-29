@@ -308,6 +308,44 @@ test("land fail-closed after UNKNOWN mergeable retries exhaust", async () => {
   assert.equal(gh.calls.filter((call) => call[0] === "merge").length, 0);
 });
 
+test("land UNKNOWN race resolves to MERGEABLE on the final retry attempt", async () => {
+  let viewCount = 0;
+  const gh = {
+    calls: [],
+    async viewPr(input) {
+      gh.calls.push(["viewPr", input]);
+      viewCount += 1;
+      if (viewCount <= 3) {
+        return greenPr({ mergeable: "UNKNOWN" });
+      }
+      return greenPr({ mergeable: "MERGEABLE" });
+    },
+    merge(args) {
+      gh.calls.push(["merge", args]);
+      return { ok: true, sha: SHA };
+    },
+  };
+  const sleeps = [];
+  const linear = fakeLinear();
+  const result = await completeLand({
+    job: { issueId: ISSUE_ID, identifier: "KIT-57" },
+    linear,
+    gh,
+    lanes: LAND_LANES,
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
+    unknownRetryMs: 0,
+    unknownRetryAttempts: 3,
+  });
+
+  assert.equal(result.merged, true);
+  assert.equal(result.nextStatus, "Done");
+  assert.equal(sleeps.length, 3);
+  assert.equal(gh.calls.filter((call) => call[0] === "viewPr").length, 4);
+  assert.equal(gh.calls.filter((call) => call[0] === "merge").length, 1);
+});
+
 test("merge failure returns Implementing with the error under Review feedback and never Done", async () => {
   const gh = fakeGh({ mergeOk: false, error: "protected branch hook declined" });
   const linear = fakeLinear();

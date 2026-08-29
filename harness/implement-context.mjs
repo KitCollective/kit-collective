@@ -2,13 +2,14 @@
  * PI implement context selector — hard first-run / checker-fail injection.
  * Maps slice signals to helpers, skills, and .cursor/rules for Pi --skill / append.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const UI_SURFACE_LABELS = ["mobile", "web", "admin"];
 export const UI_WRITE_SCOPE_PREFIXES = ["apps/mobile", "apps/web", "apps/admin"];
 
 export const GENERATED_CONTEXT_REL = ".pi/generated/implement-context.md";
+export const GENERATED_APPEND_REL = ".pi/generated/implement-append.md";
 
 export const ALWAYS_RULES = [
   ".cursor/rules/write-scope.mdc",
@@ -196,25 +197,40 @@ export function shouldInjectImplementContext(input = {}) {
 }
 
 /**
+ * Rules injected at runtime beyond the committed generated base (e.g. design-system for UI slices).
+ *
+ * @param {string[]} selectedRules
+ * @returns {string[]}
+ */
+export function dynamicAppendRules(selectedRules = []) {
+  const generatedBase = new Set(ALWAYS_RULES);
+  return selectedRules.filter((ruleRel) => !generatedBase.has(ruleRel));
+}
+
+/**
  * @param {string} workspace
  * @param {string} roleFile
  * @param {{ rules: string[], appendOverlay: string }} context
  */
 export function buildImplementAppendPath(workspace, roleFile, context) {
+  const generatedPath = join(workspace, GENERATED_CONTEXT_REL);
+  if (!existsSync(generatedPath)) {
+    throw new Error(
+      `Missing ${GENERATED_CONTEXT_REL}. Run node scripts/generate-pi-implement-context.mjs`,
+    );
+  }
   const parts = [
     readFileSync(join(workspace, roleFile), "utf8"),
     "\n\n---\n\n# Injected factory context\n\n",
+    readFileSync(generatedPath, "utf8"),
+    "\n",
   ];
-  for (const ruleRel of context.rules) {
+  for (const ruleRel of dynamicAppendRules(context.rules)) {
     parts.push(`## ${ruleRel}\n\n`);
     parts.push(readFileSync(join(workspace, ruleRel), "utf8"));
     parts.push("\n\n");
   }
-  if (typeof context.appendOverlay === "string" && context.appendOverlay.length > 0) {
-    parts.push(context.appendOverlay);
-    parts.push("\n");
-  }
-  const outPath = join(workspace, GENERATED_CONTEXT_REL);
+  const outPath = join(workspace, GENERATED_APPEND_REL);
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, parts.join(""));
   return outPath;

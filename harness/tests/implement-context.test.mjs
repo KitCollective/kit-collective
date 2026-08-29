@@ -11,6 +11,7 @@ import {
   ALWAYS_SKILLS,
   buildImplementAppendOverlay,
   detectRequiredHelpers,
+  GENERATED_APPEND_REL,
   GENERATED_CONTEXT_REL,
   parseWriteScopeGlobs,
   selectImplementContext,
@@ -80,6 +81,19 @@ test("db scope selects drizzle not ui-ux", () => {
   });
   assert.deepEqual(ctx.requiredHelpers, ["drizzle"]);
   assert.equal(ctx.requiredHelpers.includes("ui-ux"), false);
+});
+
+test("combined mobile+api+db scope selects expo, nest, drizzle, and ui-ux", () => {
+  const ctx = selectImplementContext({
+    writeScope: "apps/mobile/**, apps/api/**, packages/db/**",
+    labels: ["mobile"],
+    body: "Nest /v1 auth with Drizzle schema",
+    cheapRetry: false,
+  });
+  assert.deepEqual(ctx.requiredHelpers, ["drizzle", "expo", "nest", "ui-ux"]);
+  assert.ok(ctx.skills.includes(".cursor/skills/expo/expo-overview/SKILL.md"));
+  assert.ok(ctx.skills.includes(".cursor/skills/codebase-design/SKILL.md"));
+  assert.ok(ctx.rules.includes(".cursor/rules/design-system.mdc"));
 });
 
 test("cheap retry returns empty selector context", () => {
@@ -171,10 +185,13 @@ test("piArgsForRole passes multiple --skill paths and generated append on first 
   const appendIdx = args.indexOf("--append-system-prompt");
   assert.ok(appendIdx >= 0);
   const appendPath = args[appendIdx + 1];
-  assert.match(String(appendPath), new RegExp(GENERATED_CONTEXT_REL.replace(/\./g, "\\.")));
+  assert.match(String(appendPath), new RegExp(GENERATED_APPEND_REL.replace(/\./g, "\\.")));
   const generated = readFileSync(String(appendPath), "utf8");
   assert.match(generated, /write-scope/);
   assert.match(generated, /GitHub Actions only/);
+  assert.match(generated, /## Unattended run/);
+  const base = readFileSync(join(ROOT, GENERATED_CONTEXT_REL), "utf8");
+  assert.match(base, /sources-sha256:/);
 });
 
 test("detectRequiredHelpers is exported for ratchet tests", () => {

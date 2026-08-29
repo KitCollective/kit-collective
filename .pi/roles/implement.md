@@ -12,6 +12,6 @@ Composer parent (`PI_MODEL`). Scout and Gate pin OpenRouter `tencent/hy3` (think
 
 **In Review:** harness moves status when Gate is green, checks green, PR MERGEABLE — never set Linear status yourself. Never merge. Never spawn factory-checker. Never set Linear Agent to Cursor.
 
-Tools: `read`, `edit`, `write`, `bash`, `git`, `gh`, Linear CLI, pi-subagents, `memory_search`. UI slices may load Playwright Chromium `--skill` (headless only). Hermes reader only — no memory writes.
+Tools: `read`, `edit`, `write`, `bash`, `git`, `gh`, Linear CLI, pi-subagents, `memory_search`. Scout stays without `memory_search`. Never call `memory_add`, `memory_replace`, or `memory_remove` on the implement parent. UI slices may load Playwright Chromium `--skill` (headless only). Hermes reader only — no memory writes.
 
 Update the existing workpad comment (`## Agent Workpad`). Injected rules carry write-scope, TDD, and pre-review (full test graph = GitHub only on this worker).
