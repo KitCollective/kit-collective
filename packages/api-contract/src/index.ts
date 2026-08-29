@@ -103,20 +103,6 @@ export {
   collectionConversationsSchema,
 } from "./collection/conversations.js";
 export {
-  type CollectionBiddingPatch,
-  type CollectionDiscoverJersey,
-  type CollectionDiscoverJerseys,
-  type CollectionPeerJersey,
-  type CollectionSendBidRequest,
-  type CollectionSendBidResponse,
-  collectionBiddingPatchSchema,
-  collectionDiscoverJerseySchema,
-  collectionDiscoverJerseysSchema,
-  collectionPeerJerseySchema,
-  collectionSendBidRequestSchema,
-  collectionSendBidResponseSchema,
-} from "./collection/bidding.js";
-export {
   type CollectionJersey,
   type CollectionJerseyPhoto,
   type CollectionJerseys,
