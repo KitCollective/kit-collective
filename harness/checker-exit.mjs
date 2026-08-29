@@ -20,10 +20,24 @@ import {
 export const READY_FOR_MERGE = "Ready for merge";
 export const IMPLEMENTING = "Implementing";
 export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
+export const REVIEW_AXIS_SPEC_CLEAN = /^-\s*Spec:\s*\(none\)\s*$/i;
+export const REVIEW_AXIS_STANDARDS_CLEAN = /^-\s*Standards:\s*\(none\)\s*$/i;
+export const REVIEW_AXIS_SLOP_CLEAN = /^-\s*Slop:\s*\(none\)\s*$/i;
+export const REVIEW_PASS_FEEDBACK_LINES = [
+  "- Spec: (none)",
+  "- Standards: (none)",
+  "- Slop: (none)",
+];
 export const NOTES_HEADING = "### Notes";
 export const CHECKER_PASS_STATUS = "All good — checker pass. MERGEABLE, required checks green.";
 export const RATCHET_NUDGE_TEXT =
   "next implement pass must land a ratchet per docs/agents/error-ratcheting.md";
+
+const LEGACY_PASS_LINE = /^-\s*\(none\)\s*$/i;
+const REVIEW_FEEDBACK_HEADING_AT = /(?:^|\n)### Review feedback(?:\n|$)/;
+const REVIEW_FEEDBACK_BLOCK = /(^|\n)### Review feedback\n([\s\S]*?)(?=\n### |$)/;
+const NOTES_HEADING_AT = /(?:^|\n)### Notes(?:\n|$)/;
+const NOTES_BLOCK = /(^|\n)### Notes\n([\s\S]*?)(?=\n### |$)/;
 
 /**
  * @returns {string}
@@ -61,11 +75,11 @@ export function applyRatchetNudge(body) {
   const line = ratchetNudgeWorkpadLine();
   const base =
     typeof body === "string" && body.includes(WORKPAD_HEADING) ? body.trimEnd() : WORKPAD_HEADING;
-  if (base.includes(NOTES_HEADING)) {
-    return `${base.replace(/### Notes\n([\s\S]*?)(?=\n### |\s*$)/, `${NOTES_HEADING}\n\n$1\n${line}\n`)}\n`;
+  if (NOTES_HEADING_AT.test(base)) {
+    return `${base.replace(NOTES_BLOCK, `$1${NOTES_HEADING}\n\n$2\n${line}\n`)}\n`;
   }
-  if (base.includes(REVIEW_FEEDBACK_HEADING)) {
-    return `${base.replace(REVIEW_FEEDBACK_HEADING, `${NOTES_HEADING}\n\n${line}\n\n${REVIEW_FEEDBACK_HEADING}`)}\n`;
+  if (REVIEW_FEEDBACK_HEADING_AT.test(base)) {
+    return `${base.replace(/(^|\n)### Review feedback(\n|$)/, `$1${NOTES_HEADING}\n\n${line}\n\n${REVIEW_FEEDBACK_HEADING}$2`)}\n`;
   }
   return `${base}\n\n${NOTES_HEADING}\n\n${line}\n`;
 }
@@ -78,27 +92,45 @@ export function reviewFeedbackSection(body) {
   if (typeof body !== "string") {
     return "";
   }
-  const match = body.match(/### Review feedback\n([\s\S]*?)(?=\n### |\s*$)/);
-  return match ? match[1].trim() : "";
+  const match = body.match(REVIEW_FEEDBACK_BLOCK);
+  return match ? match[2].trim() : "";
 }
 
 /**
  * @param {string | undefined} body
- * @returns {boolean}
+ * @returns {string[]}
  */
-export function reviewFeedbackIsClean(body) {
+export function reviewFeedbackLines(body) {
   const section = reviewFeedbackSection(body);
   if (section.length === 0) {
-    return false;
+    return [];
   }
-  const lines = section
+  return section
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
-  if (lines.length === 0) {
+}
+
+/**
+ * Pass is the legacy single `- (none)` token or the three labeled axes.
+ * Empty / missing feedback is still a fail.
+ *
+ * @param {string | undefined} body
+ * @returns {boolean}
+ */
+export function reviewFeedbackIsClean(body) {
+  const lines = reviewFeedbackLines(body);
+  if (lines.length === 1 && LEGACY_PASS_LINE.test(lines[0])) {
+    return true;
+  }
+  if (lines.length !== REVIEW_PASS_FEEDBACK_LINES.length) {
     return false;
   }
-  return lines.length === 1 && /^-\s*\(none\)\s*$/i.test(lines[0]);
+  return (
+    REVIEW_AXIS_SPEC_CLEAN.test(lines[0]) &&
+    REVIEW_AXIS_STANDARDS_CLEAN.test(lines[1]) &&
+    REVIEW_AXIS_SLOP_CLEAN.test(lines[2])
+  );
 }
 
 /**
@@ -146,11 +178,8 @@ export function applyCheckerPassWorkpad(current) {
   let next = base.includes("### Status")
     ? base.replace(/### Status\n[\s\S]*?(?=\n### |\s*$)/, statusBlock)
     : base.replace(WORKPAD_HEADING, `${WORKPAD_HEADING}\n\n${statusBlock}`);
-  if (next.includes(REVIEW_FEEDBACK_HEADING)) {
-    next = next.replace(
-      /### Review feedback\n[\s\S]*?(?=\n### |\s*$)/,
-      `${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`,
-    );
+  if (REVIEW_FEEDBACK_HEADING_AT.test(next)) {
+    next = next.replace(REVIEW_FEEDBACK_BLOCK, `$1${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`);
   } else {
     next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n- (none)\n`;
   }
@@ -164,8 +193,8 @@ export function applyCheckerFailWorkpad(current, { feedbackLines }) {
       : WORKPAD_HEADING;
   const lines = Array.isArray(feedbackLines) ? feedbackLines.filter(Boolean) : ["- (none)"];
   const content = lines.length > 0 ? lines.join("\n") : "- (none)";
-  if (base.includes(REVIEW_FEEDBACK_HEADING)) {
-    return `${base.replace(/### Review feedback\n[\s\S]*?(?=\n### |\s*$)/, `${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`)}\n`;
+  if (REVIEW_FEEDBACK_HEADING_AT.test(base)) {
+    return `${base.replace(REVIEW_FEEDBACK_BLOCK, `$1${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`)}\n`;
   }
   return `${base}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`;
 }

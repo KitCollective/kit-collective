@@ -423,6 +423,7 @@ export function createLinearCliClient({ env = process.env, runCommand } = {}) {
         env: options.env,
         encoding: "utf8",
         timeout: 30_000,
+        killSignal: "SIGKILL",
         maxBuffer: 2_000_000,
       });
       return stdout;

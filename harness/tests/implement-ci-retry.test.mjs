@@ -373,6 +373,7 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(prompt, /harness/i);
   assert.match(prompt, /Never merge/);
   assert.match(prompt, /Never spawn factory-checker/);
+  assert.match(prompt, /Review feedback/);
 
   const role = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
   assert.equal(/move the issue to In Review/i.test(role), false);

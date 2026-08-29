@@ -528,6 +528,7 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
   assert.match(dockerfile, /pr-write-scope\.mjs/);
+  assert.match(dockerfile, /role-comments\.mjs/);
   assert.match(dockerfile, /COPY \.pi /);
   assert.match(dockerfile, /pi install/);
   assert.match(dockerfile, /PI_WORKSPACE=\/workspace/);

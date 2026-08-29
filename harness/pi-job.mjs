@@ -463,7 +463,7 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
 export function implementPrompt(role, identifier, adwFile) {
   if (role === "implement") {
     const adw = typeof adwFile === "string" ? ` ADW ${adwFile}.` : "";
-    return `Factory role implement for ${identifier}.${adw} Update the existing workpad. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
+    return `Factory role implement for ${identifier}.${adw} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
   }
   if (role === "factory-checker") {
     return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete finding set (- (none) on pass). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
@@ -940,7 +940,7 @@ export function createPiJobRunner({
       if (result.idleTimeout) {
         return timeoutPark(job, identifier, jobIdleMs(env));
       }
-      if (result.status !== 0) {
+      if (result.status !== 0 && job.role !== "implement") {
         throw new Error(`pi exited ${result.status} for ${identifier}`);
       }
       if (job.role === "implement") {

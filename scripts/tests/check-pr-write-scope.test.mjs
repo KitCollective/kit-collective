@@ -34,6 +34,8 @@ test("matchesGlob supports single-segment and recursive globs", () => {
 
 test("isRatchetException allows named ratchet scripts, not arbitrary scripts/lib paths", () => {
   assert.equal(isRatchetException("scripts/check-pr-write-scope.mjs"), true);
+  assert.equal(isRatchetException("scripts/check-factory-checker-spawn.mjs"), true);
+  assert.equal(isRatchetException("scripts/tests/check-factory-checker-spawn.test.mjs"), true);
   assert.equal(isRatchetException("scripts/lib/pr-write-scope.mjs"), true);
   assert.equal(isRatchetException("scripts/tests/check-pr-write-scope.test.mjs"), true);
   assert.equal(isRatchetException(".cursor/rules/write-scope.mdc"), true);
