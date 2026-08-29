@@ -172,9 +172,6 @@ function fakeLinear(issue = snapshot(), { body = loopCountersBody() } = {}) {
       calls.push(["updateWorkpad", input]);
       comments[0].body = input.body;
     },
-    async commentIssue(input) {
-      calls.push(["commentIssue", input]);
-    },
     async setStatus(input) {
       calls.push(["setStatus", input]);
       this.issue = { ...this.issue, status: input.status };
@@ -306,8 +303,6 @@ test("MERGEABLE + green checks + delegate Pi moves Ready for merge to Merging wi
     issueId: ISSUE_ID,
     status: "Merging",
   });
-  const flipComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
-  assert.match(flipComment.body, /Auto-merge → Merging/);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
     false,
@@ -430,8 +425,6 @@ test("CONFLICTING or missing ### Loop counters stays Ready for merge (fail close
   assert.equal(conflicting.nextStatus, "Ready for merge");
   assert.equal(conflictingLinear.issue.status, "Ready for merge");
   assert.match(conflictingLinear.comments[0].body, /CONFLICTING/);
-  const refuseComment = conflictingLinear.calls.find((call) => call[0] === "commentIssue")[1];
-  assert.match(refuseComment.body, /Auto-merge refused/);
   assert.equal(
     conflictingLinear.calls.some((call) => call[0] === "clearDelegate"),
     true,
@@ -570,12 +563,12 @@ ${LOOP_COUNTERS_HEADING}
   assert.match(linear.comments[0].body, /### Loop counters/);
 });
 
-test("Missing Linear Type on Implementing still skips implement (no ADW)", async () => {
+test("Missing Linear Type on Implementing still skips implement (no ADW, no Pi)", async () => {
   const spawned = [];
   const { result, enqueue } = await routeIssue(
     snapshot({
       status: IMPLEMENTING,
-      delegate: null,
+      delegate: { name: "Pi" },
       labels: ["ready-for-agent"],
       linearType: undefined,
     }),
@@ -586,7 +579,7 @@ test("Missing Linear Type on Implementing still skips implement (no ADW)", async
   assert.equal(spawned.length, 0);
 });
 
-test("empty Agent is not an auto-merge refuse reason", async () => {
+test("delegate already empty stays Ready for merge, clears delegate, and writes one workpad note", async () => {
   const gh = fakeGh();
   const linear = fakeLinear(snapshot({ delegate: null }));
   const result = await completeAutoMerge({
@@ -594,12 +587,11 @@ test("empty Agent is not an auto-merge refuse reason", async () => {
     linear,
     gh,
   });
-  assert.equal(result.flipped, true);
-  assert.equal(result.nextStatus, "Merging");
-  assert.equal(
-    linear.calls.some((call) => call[0] === "clearDelegate"),
-    false,
-  );
+  assert.equal(result.flipped, false);
+  assert.equal(result.nextStatus, "Ready for merge");
+  assert.match(linear.comments[0].body, /delegate already empty/);
+  assert.equal(linear.comments[0].body.split("Auto-merge blocked").length - 1, 1);
+  assert.equal(linear.calls.filter((call) => call[0] === "clearDelegate").length, 1);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
     false,
