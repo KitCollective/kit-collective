@@ -21,11 +21,7 @@ export const FACTORY_CHECKER_MEMORY_TOOLS = [
 ];
 
 /** Read-only Slop sub-agent — no memory writes (KIT-126). */
-export const SLOP_AGENT_MEMORY_EXCLUDED_TOOLS = [
-  "memory_add",
-  "memory_replace",
-  "memory_remove",
-];
+export const SLOP_AGENT_MEMORY_EXCLUDED_TOOLS = ["memory_add", "memory_replace", "memory_remove"];
 
 /** @readonly */
 export const FACTORY_CHECKER_ALLOWED_TOOLS = [

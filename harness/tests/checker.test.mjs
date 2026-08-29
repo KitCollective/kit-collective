@@ -157,9 +157,7 @@ function fakeLinear(issue = snapshot(), workpadBody) {
   const comments = [
     {
       id: "c1",
-      body:
-        workpadBody ??
-        `${cleanWorkpad()}\n\n### Evidence\n\n- KIT-56 PR: ${PR_URL}\n`,
+      body: workpadBody ?? `${cleanWorkpad()}\n\n### Evidence\n\n- KIT-56 PR: ${PR_URL}\n`,
     },
   ];
   return {
@@ -232,7 +230,10 @@ test("status change to In Review enqueues factory-checker and no ADW file", asyn
 test("reviewFeedbackHasFindings treats three-axis (none) as pass and bullets as fail", () => {
   assert.equal(reviewFeedbackIsClean(cleanWorkpad()), true);
   assert.equal(reviewFeedbackHasFindings(cleanWorkpad()), false);
-  assert.equal(reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`), false);
+  assert.equal(
+    reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
+    false,
+  );
   assert.equal(
     reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
     true,
@@ -262,7 +263,7 @@ test("clean workpad with Description AC rewrites ticks the renamed line and comm
 
 ### Review feedback
 
-- (none)
+${CLEAN_REVIEW_FEEDBACK}
 
 ### Description AC rewrites
 
