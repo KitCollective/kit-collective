@@ -1307,6 +1307,12 @@ test("implement role requires Scout then helpers then Gate; parent owns In Revie
   assert.match(implement, /Skip Scout/i);
   assert.match(implement, /Skip helpers/i);
   assert.match(implement, /format vs Zod vs unique-email/i);
+  assert.match(implement, /every .*line|every axis|every workpad/i);
+  assert.match(implement, /factory-checker\/slop/);
+  assert.match(implement, /ui-ux/);
+  assert.match(implement, /tokens|typograph|layout/i);
+  assert.match(implement, /checker-fail|checker fail/i);
+  assert.match(implement, /do not Skip Scout|not Skip Scout|Do not skip Scout/i);
   assert.match(implement, /### Validation/);
   assert.match(implement, /In Review/);
   assert.match(implement, /only when Gate is green|Gate is green/i);

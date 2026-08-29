@@ -112,6 +112,28 @@ test("runResume enqueues implement for Implementing with empty Agent without mov
   assert.deepEqual(result.enqueued, [{ identifier: "KIT-94", role: "implement" }]);
 });
 
+test("runResume enqueues full implement after checker fail, not a cheap CI retry", async () => {
+  const enqueue = fakeEnqueue();
+  const result = await runResume({
+    linear: fakeLinear([
+      orphan({
+        identifier: "KIT-116",
+        description: "write-scope: apps/mobile/**",
+      }),
+    ]),
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].identifier, "KIT-116");
+  assert.equal(enqueue.jobs[0].ciRetryAttempt, undefined);
+  assert.equal(enqueue.jobs[0].writeScopeRetryAttempt, undefined);
+  assert.equal(enqueue.jobs[0].formatRetryAttempt, undefined);
+  assert.deepEqual(result.enqueued, [{ identifier: "KIT-116", role: "implement" }]);
+});
+
 test("runResume skips Implementing after implement retry cap without a new Composer", async () => {
   const enqueue = fakeEnqueue();
   const linear = fakeLinear([orphan()]);

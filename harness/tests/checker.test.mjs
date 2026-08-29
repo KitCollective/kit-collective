@@ -426,6 +426,10 @@ test("Pi review findings move to Implementing with complete Review feedback pres
   );
   const failComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
   assert.match(failComment.body, /returned to Implementing/);
+  assert.match(failComment.body, /Spec: AC missing|### Spec/i);
+  assert.match(failComment.body, /AC missing/);
+  assert.match(failComment.body, /Standards: smell|### Standards/i);
+  assert.match(failComment.body, /smell in harness\/foo\.mjs/);
   assert.equal(
     linear.calls.some((call) => call[0] === "updateIssueDescription"),
     false,

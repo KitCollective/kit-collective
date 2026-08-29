@@ -264,6 +264,17 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 
 Prevents repeating 4–9 full Composer sessions per issue (first fail is GitHub, then Scout→helpers→Gate from scratch; resume poller re-enqueues after the in-slot cap). Tighten only.
 
+### Implement checker-fail resume findings (KIT-116)
+
+`scripts/check-implement-checker-fail-resume.mjs` (CI via `node` in `.github/workflows/ci.yml`) plus `harness/tests/implement-ci-retry.test.mjs` / `harness/tests/role-comments.test.mjs` / `harness/tests/checker.test.mjs` keep these locks:
+
+- Checker-fail implement resume uses the same `extractReviewFeedback` as cheap CI retry and **inlines** `### Review feedback` in the Composer prompt. Fix **every** workpad axis (Spec / Standards / Tests / Slop). GitHub `[factory-checker/slop]` threads are a subset.
+- Checker-fail resume does **not** Skip Scout or Skip helpers. Cheap retry (`{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }`) still does.
+- Spawn `ui-ux` when write-scope touches `apps/mobile` / `apps/web` / `apps/admin`, or when findings mention tokens, typography, or layout. The box reads `.pi/roles/implement.md` — not Cursor skills.
+- `checkerFailComment` includes the finding lines under Spec / Standards / … headings (KIT-116-class 2–5 findings verbatim; huge dumps truncate with a workpad pointer). One role comment per transition. Linear Agent stays empty.
+
+Prevents repeating KIT-116 loop 2 (resume prompt was only «fix the class»; GitHub Slop showed unused; Nicklas could not read Standards on Linear). Tighten only.
+
 ### Factory checker Slop GitHub threads ratchet (KIT-127)
 
 `scripts/check-factory-checker-spawn.mjs` and `scripts/tests/check-factory-checker-spawn.test.mjs` keep these locks:

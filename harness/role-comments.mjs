@@ -84,9 +84,141 @@ export function commentsHoldImplementRetryCap(comments) {
 
 /**
  * @param {string} identifier
+ * @param {string} [reviewFeedback]
  */
-export function checkerFailComment(identifier) {
-  return `${identifier}: returned to Implementing — findings in workpad ### Review feedback.`;
+export function checkerFailComment(identifier, reviewFeedback) {
+  const selected = selectCheckerFailFindings(reviewFeedback);
+  const formatted = formatCheckerFailFindings(selected.text);
+  const suffix = selected.truncated
+    ? "\n\n… truncated — remaining findings in workpad ### Review feedback."
+    : "";
+  return `${identifier}: returned to Implementing.\n\n${formatted}${suffix}`;
+}
+
+export const CHECKER_FAIL_COMMENT_MAX_CHARS = 4000;
+export const CHECKER_FAIL_MIN_VERBATIM_FINDINGS = 5;
+
+const AXIS_LINE = /^-\s*(Spec|Standards|Tests|Slop)(?:\/|:)\s*(.*)$/i;
+
+/**
+ * @param {string} name
+ */
+function normalizeReviewAxis(name) {
+  const lower = String(name).toLowerCase();
+  if (lower === "spec") {
+    return "Spec";
+  }
+  if (lower === "standards") {
+    return "Standards";
+  }
+  if (lower === "tests") {
+    return "Tests";
+  }
+  if (lower === "slop") {
+    return "Slop";
+  }
+  return name;
+}
+
+/**
+ * One markdown bullet plus indented continuation lines.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+function splitFindingBlocks(text) {
+  const blocks = [];
+  /** @type {string[]} */
+  let current = [];
+  const flush = () => {
+    if (current.length > 0) {
+      blocks.push(current.join("\n"));
+      current = [];
+    }
+  };
+  for (const line of text.split("\n")) {
+    if (/^-\s+/.test(line)) {
+      flush();
+      current = [line];
+      continue;
+    }
+    if (current.length === 0) {
+      current = [line];
+    } else {
+      current.push(line);
+    }
+  }
+  flush();
+  return blocks;
+}
+
+/**
+ * Keep KIT-116-sized (2–5) findings verbatim, then stop at the char cap.
+ *
+ * @param {string | undefined} reviewFeedback
+ * @returns {{ text: string, truncated: boolean }}
+ */
+export function selectCheckerFailFindings(reviewFeedback) {
+  const text = typeof reviewFeedback === "string" ? reviewFeedback.trim() : "";
+  if (text.length === 0) {
+    return { text: "", truncated: false };
+  }
+  const blocks = splitFindingBlocks(text);
+  /** @type {string[]} */
+  const kept = [];
+  let size = 0;
+  for (const block of blocks) {
+    const extra = (kept.length === 0 ? 0 : 1) + block.length;
+    if (
+      size + extra > CHECKER_FAIL_COMMENT_MAX_CHARS &&
+      kept.length >= CHECKER_FAIL_MIN_VERBATIM_FINDINGS
+    ) {
+      return { text: kept.join("\n"), truncated: true };
+    }
+    kept.push(block);
+    size += extra;
+  }
+  return { text: kept.join("\n"), truncated: kept.length < blocks.length };
+}
+
+/**
+ * Group workpad Review feedback lines under Spec / Standards / Tests / Slop headings.
+ *
+ * @param {string | undefined} reviewFeedback
+ */
+export function formatCheckerFailFindings(reviewFeedback) {
+  const text = typeof reviewFeedback === "string" ? reviewFeedback.trim() : "";
+  if (text.length === 0) {
+    return "### Review feedback\n\n(none — see workpad)";
+  }
+  /** @type {Map<string, string[]>} */
+  const groups = new Map();
+  /** @type {string[]} */
+  const order = [];
+  let currentAxis = "Review feedback";
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.replace(/\s+$/, "");
+    const axisMatch = line.match(AXIS_LINE);
+    if (axisMatch) {
+      const heading = normalizeReviewAxis(axisMatch[1]);
+      if (!groups.has(heading)) {
+        groups.set(heading, []);
+        order.push(heading);
+      }
+      const rest = axisMatch[2].trim();
+      groups.get(heading)?.push(rest.length > 0 ? `- ${rest}` : "-");
+      currentAxis = heading;
+      continue;
+    }
+    if (!groups.has(currentAxis)) {
+      groups.set(currentAxis, []);
+      order.push(currentAxis);
+    }
+    groups.get(currentAxis)?.push(line);
+  }
+  return order
+    .map((heading) => `### ${heading}\n\n${(groups.get(heading) ?? []).join("\n")}`)
+    .join("\n\n");
 }
 
 /**

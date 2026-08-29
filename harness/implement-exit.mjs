@@ -365,6 +365,31 @@ export function extractReviewFeedback(body) {
 }
 
 /**
+ * Workpad Review feedback that implement must act on (checker fail or CI excerpt).
+ * Clean three-axis `(none)` and a lone `- (none)` are not actionable.
+ *
+ * @param {string | undefined} feedback
+ */
+export function reviewFeedbackIsActionable(feedback) {
+  const text = typeof feedback === "string" ? feedback.trim() : "";
+  if (text.length === 0) {
+    return false;
+  }
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return false;
+  }
+  return !lines.every(
+    (line) =>
+      /^-\s*(?:Spec|Standards|Slop|Tests):\s*\(none\)\s*$/i.test(line) ||
+      /^-\s*\(none\)\s*$/i.test(line),
+  );
+}
+
+/**
  * @param {Array<{ name?: string, conclusion?: string, status?: string, isRequired?: boolean, state?: string, log?: string }> | undefined} checks
  * @param {{ fetchCheckLog?: (input: { cwd: string, name?: string }) => Promise<string> }} gh
  * @param {string} cwd

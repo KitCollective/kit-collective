@@ -10,6 +10,8 @@ Spawn Scout first (`read` / `grep` / `find` / `ls` only). Do not put the workpad
 
 **Resume:** before writing code, read `### Review feedback` on the workpad **and** `memory_search` each recurring **class** named there (Standards or Slop lines) or called out in `### Notes` / ratchet nudge. Hermes hits are staging hints — git ratchets and the workpad still win. You are a Memory reader only; never call `memory_add`, `memory_replace`, `memory_remove`, or `skill_manage`.
 
+**Resume (checker fail):** the job prompt inlines `### Review feedback`. Fix every axis line (Spec / Standards / Tests / Slop) — GitHub `[factory-checker/slop]` threads are a subset, not the whole request. Do not Skip Scout or Skip helpers on checker-fail resume (only cheap CI / write-scope / format retry skips those). Spawn `ui-ux` when write-scope touches `apps/mobile` / `apps/web` / `apps/admin`, or when findings mention tokens, typography, or layout.
+
 Helpers write the failing test and the minimal green. They inherit this parent.
 
 **Cheap retry:** when the job prompt says this is a CI, write-scope, or format retry, Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in `### Review feedback` (format vs Zod vs unique-email — not only the file a checker named). You MUST use the CI log excerpt in the prompt and workpad. Then spawn Gate. First run still Scout → helpers → Gate.

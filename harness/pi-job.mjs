@@ -22,6 +22,7 @@ import {
   createTypecheckTouched,
   extractReviewFeedback,
   IMPLEMENTING,
+  reviewFeedbackIsActionable,
 } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
 import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
@@ -466,7 +467,7 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
  * @param {string} role
  * @param {string} identifier
  * @param {string | undefined} adwFile
- * @param {{ cheapRetry?: boolean, reviewFeedback?: string }} [options]
+ * @param {{ cheapRetry?: boolean, reviewFeedback?: string, writeScope?: string }} [options]
  */
 export function implementPrompt(role, identifier, adwFile, options = {}) {
   if (role === "implement") {
@@ -477,6 +478,18 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
       return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.
+
+### Review feedback
+
+${feedback}`;
+    }
+    if (reviewFeedbackIsActionable(options.reviewFeedback)) {
+      const feedback = String(options.reviewFeedback).trim();
+      const writeScope =
+        typeof options.writeScope === "string" && options.writeScope.trim().length > 0
+          ? ` Write-scope: ${options.writeScope.trim()}.`
+          : "";
+      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScope} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Do not Skip Scout. Do not Skip helpers. Spawn ui-ux when write-scope touches apps/mobile, apps/web, or apps/admin, or when findings mention tokens, typography, or layout. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.
 
 ### Review feedback
 
@@ -903,11 +916,13 @@ export function createPiJobRunner({
           }
         }
       }
+      /** @type {Array<{ id?: string, body?: string }>} */
+      let implementComments = [];
       if (job.role === "implement") {
         const holdLinear = linear ?? job.linear;
         if (holdLinear && typeof holdLinear.listComments === "function") {
-          const comments = await holdLinear.listComments(job.issueId ?? identifier);
-          if (commentsHoldImplementRetryCap(comments)) {
+          implementComments = await holdLinear.listComments(job.issueId ?? identifier);
+          if (commentsHoldImplementRetryCap(implementComments)) {
             return {
               ...job,
               status: IMPLEMENTING,
@@ -930,15 +945,19 @@ export function createPiJobRunner({
       }
       const linearForPrompt = linear ?? job.linear;
       let prompt = implementPrompt(job.role, identifier, job.adwFile);
-      if (job.role === "implement" && isCheapImplementRetry(job)) {
-        const comments =
-          typeof linearForPrompt?.listComments === "function"
-            ? await linearForPrompt.listComments(job.issueId ?? identifier)
-            : [];
-        const workpad = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+      let implementIssue = null;
+      if (job.role === "implement") {
+        const workpad = implementComments.find((comment) =>
+          comment.body?.includes(WORKPAD_HEADING),
+        );
+        implementIssue =
+          typeof linearForPrompt?.getIssue === "function"
+            ? await linearForPrompt.getIssue(job.issueId ?? identifier)
+            : null;
         prompt = implementPrompt(job.role, identifier, job.adwFile, {
-          cheapRetry: true,
+          cheapRetry: isCheapImplementRetry(job),
           reviewFeedback: extractReviewFeedback(workpad?.body),
+          writeScope: parseWriteScopeLine(implementIssue?.description ?? job.description ?? ""),
         });
       }
       const hermesDir =
@@ -976,11 +995,7 @@ export function createPiJobRunner({
       }
       let browserSkill;
       if (job.role === "implement") {
-        const linearClient = linear ?? job.linear;
-        const issue =
-          typeof linearClient?.getIssue === "function"
-            ? await linearClient.getIssue(job.issueId ?? identifier)
-            : null;
+        const issue = implementIssue;
         const slice = {
           labels: issue?.labels ?? job.labels ?? [],
           description: issue?.description ?? job.description ?? "",

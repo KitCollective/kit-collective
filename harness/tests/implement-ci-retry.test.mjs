@@ -27,6 +27,13 @@ const SECRET_LOG = [
   "GH_TOKEN=ghp_secret_token",
 ].join("\n");
 
+/** KIT-116 class: a handful of workpad findings, not only the GitHub Slop thread. */
+const KIT116_REVIEW_FEEDBACK = [
+  "- Spec: Collection tab missing badge count",
+  "- Standards: unused Badge export in apps/mobile/src/components/badge.tsx",
+  "- Slop: unused import in apps/mobile/src/components/badge.tsx",
+].join("\n");
+
 function validWorkerEnv() {
   return {
     CURSOR_API_KEY: "cursor_test",
@@ -458,6 +465,26 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(cheap, /AssertionError/);
   assert.match(cheap, /### Review feedback/);
   assert.equal(/move the issue to In Review/i.test(cheap), false);
+
+  const checkerFail = implementPrompt("implement", "KIT-116", ".pi/adw/feature.yaml", {
+    reviewFeedback: KIT116_REVIEW_FEEDBACK,
+    writeScope: "apps/mobile/**",
+  });
+  assert.match(checkerFail, /### Review feedback/);
+  assert.match(checkerFail, /Collection tab missing badge count/);
+  assert.match(checkerFail, /unused Badge export/);
+  assert.match(checkerFail, /unused import/);
+  assert.match(checkerFail, /every workpad axis|every axis/i);
+  assert.match(checkerFail, /Spec/);
+  assert.match(checkerFail, /Standards/);
+  assert.match(checkerFail, /subset/i);
+  assert.match(checkerFail, /\[factory-checker\/slop\]/);
+  assert.match(checkerFail, /Do not Skip Scout/i);
+  assert.match(checkerFail, /Do not Skip helpers/i);
+  assert.equal(/Skip Scout\. Skip helpers/i.test(checkerFail), false);
+  assert.match(checkerFail, /ui-ux/i);
+  assert.match(checkerFail, /apps\/mobile/);
+  assert.match(checkerFail, /tokens|typograph|layout/i);
   assert.equal(isCheapImplementRetry({ role: "implement" }), false);
   assert.equal(isCheapImplementRetry({ role: "implement", ciRetryAttempt: 2 }), true);
   assert.equal(isCheapImplementRetry({ role: "implement", writeScopeRetryAttempt: 2 }), true);
@@ -473,6 +500,39 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
     assert.equal(/move to In Review/i.test(text), false, file);
     assert.match(text, /harness/i, file);
   }
+});
+
+test("checker-fail resume inlines workpad findings and does not Skip Scout or helpers", async () => {
+  const gh = fakeGh();
+  const linear = fakeLinear();
+  linear.comments[0].body = `${WORKPAD_HEADING}\n\n### Review feedback\n\n${KIT116_REVIEW_FEEDBACK}\n`;
+  linear.getIssue = async () => ({
+    status: IMPLEMENTING,
+    attachments: [],
+    description: "write-scope: apps/mobile/**",
+    labels: ["mobile"],
+  });
+  const spawned = [];
+  const runner = implementRunner({ gh, linear, spawned });
+  await runner.run({
+    role: "implement",
+    identifier: "KIT-116",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 1);
+  const prompt = promptFromSpawn(spawned[0]);
+  assert.match(prompt, /### Review feedback/);
+  assert.match(prompt, /Collection tab missing badge count/);
+  assert.match(prompt, /unused Badge export/);
+  assert.match(prompt, /unused import/);
+  assert.match(prompt, /every workpad axis|every axis/i);
+  assert.match(prompt, /subset/i);
+  assert.match(prompt, /Do not Skip Scout/i);
+  assert.match(prompt, /Do not Skip helpers/i);
+  assert.equal(/Skip Scout\. Skip helpers/i.test(prompt), false);
+  assert.match(prompt, /ui-ux/i);
 });
 
 test("implement does not spawn Pi when comments already hold the retry cap", async () => {
