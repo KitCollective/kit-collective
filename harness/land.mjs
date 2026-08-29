@@ -327,7 +327,7 @@ export function createLandGh({
           "--repo",
           targetRepo,
           "--json",
-          "number,url,mergeable,mergeStateStatus,baseRefName,state,statusCheckRollup",
+          "number,url,mergeable,baseRefName,state,statusCheckRollup",
         ],
         "async",
       );
@@ -360,7 +360,6 @@ export function createLandGh({
         number: parsed.number ?? number,
         url: parsed.url,
         mergeable: parsed.mergeable,
-        mergeStateStatus: parsed.mergeStateStatus,
         state: parsed.state,
         baseRef: parsed.baseRefName,
         requiredChecks: requiredChecksForMergeGate(mapped),

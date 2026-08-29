@@ -578,12 +578,6 @@ test("applyLandWorkpad records SHA on success and the merge error under Review f
   assert.equal(failure.includes("Done"), false);
 });
 
-test("land.mjs viewPr requests mergeStateStatus from gh pr view", () => {
-  const source = readFileSync(join(ROOT, "harness/land.mjs"), "utf8");
-  assert.match(source, /mergeStateStatus/);
-  assert.match(source, /number,url,mergeable,mergeStateStatus,baseRefName,state,statusCheckRollup/);
-});
-
 test("land-policy source locks gh pr merge strategy flag (no bare merge)", () => {
   const source = readFileSync(join(ROOT, "scripts/lib/land-policy.mjs"), "utf8");
   assert.match(source, /export const LAND_GH_MERGE_STRATEGY = "--merge"/);

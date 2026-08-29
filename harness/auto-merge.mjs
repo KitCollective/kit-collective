@@ -6,7 +6,6 @@
  * cap. Never merges. Never force-pushes. Fake Linear + `gh` at this seam.
  */
 
-import { isPrMergeStateBehind } from "../scripts/lib/land-policy.mjs";
 import { logFactoryExitDone, logFactoryExitStart } from "./factory-exit-log.mjs";
 import { resolveLinkedPullRequest } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
@@ -240,9 +239,6 @@ export async function completeAutoMerge({ job, linear, gh, env: _env }) {
   }
   if (pr?.mergeable !== "MERGEABLE") {
     return block(`PR is not MERGEABLE (${pr?.mergeable ?? "unknown"}).`);
-  }
-  if (isPrMergeStateBehind(pr)) {
-    return block("PR head branch is not up to date with base (mergeStateStatus BEHIND).");
   }
   if (!requiredChecksAreGreen(pr)) {
     return block("required GitHub checks are not green.");

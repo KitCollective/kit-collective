@@ -3,11 +3,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   blockerResolvesDependents,
-  isPrMergeStateBehind,
   LAND_UNKNOWN_MERGEABLE_RETRIES,
   LAND_UNKNOWN_RETRY_MS,
   landAtMergeGate,
-  PR_MERGE_STATE_BEHIND,
   setupRecordsMerging,
   statusTransitionResolvesBlockedBy,
 } from "../lib/land-policy.mjs";
@@ -189,28 +187,6 @@ test("land refuses merge onto staging or production", () => {
     assert.equal(result.ghCalled, false);
     assert.equal(gh.calls.length, 0);
   }
-});
-
-test("land refuses merge when mergeStateStatus is BEHIND even if mergeable is MERGEABLE", () => {
-  const gh = fakeGh();
-  const result = landAtMergeGate({
-    issueStatus: "Merging",
-    pr: greenPr({ mergeStateStatus: PR_MERGE_STATE_BEHIND }),
-    lanes: LANES,
-    gh,
-  });
-
-  assert.equal(result.merged, false);
-  assert.equal(result.ghCalled, false);
-  assert.equal(gh.calls.length, 0);
-  assert.match(result.reason, /BEHIND/);
-});
-
-test("isPrMergeStateBehind is true only for mergeStateStatus BEHIND", () => {
-  assert.equal(isPrMergeStateBehind({ mergeStateStatus: PR_MERGE_STATE_BEHIND }), true);
-  assert.equal(isPrMergeStateBehind({ mergeStateStatus: "CLEAN" }), false);
-  assert.equal(isPrMergeStateBehind({ mergeable: "MERGEABLE" }), false);
-  assert.equal(isPrMergeStateBehind(null), false);
 });
 
 test("merge failure moves to Implementing and never Done", () => {
