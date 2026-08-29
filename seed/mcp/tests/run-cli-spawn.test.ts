@@ -72,6 +72,50 @@ describe("runSeedCli spawn integration", () => {
     expect(argv).not.toContain("--");
   });
 
+  it("rejects production before spawning seed_fk via pnpm exec", async () => {
+    const runner = createSpawnRunner();
+    const result = await runSeedCli(
+      "fkapi",
+      {
+        competition: "superligaen",
+        fromSeason: "2017/18",
+        toSeason: "2017/18",
+        lane: "production",
+      },
+      runner,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/production/i);
+    }
+  });
+
+  it("builds pnpm exec argv for seed_fk without a literal --", () => {
+    const { argv } = buildSeedCliInvocation("fkapi", {
+      scope: {
+        kind: "competition",
+        competition: "superligaen",
+        fromSeason: "2017/18",
+        toSeason: "2017/18",
+      },
+      lane: "development",
+    });
+
+    expect(argv).toEqual([
+      "--filter",
+      "@kit/seed-fkapi",
+      "exec",
+      "node",
+      "dist/cli.js",
+      "superligaen",
+      "2017/18",
+      "2017/18",
+      "development",
+    ]);
+    expect(argv).not.toContain("--");
+  });
+
   it("records spawn argv for a mocked successful seed_apify run", async () => {
     const runner = vi.fn<CliRunner>().mockResolvedValue({
       exitCode: 0,

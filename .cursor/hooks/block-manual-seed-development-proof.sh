@@ -27,12 +27,12 @@ process.stdin.on("end", () => {
 
 [ -z "${COMMAND}" ] && allow
 
-if printf '%s' "$COMMAND" | grep -qE 'scripts/record-seed-development-proof\.sh'; then
+if printf '%s' "$COMMAND" | grep -qE 'scripts/record-seed-(development|fk-development)-proof\.sh'; then
   allow
 fi
 
 if printf '%s' "$COMMAND" | grep -qE 'seed/mcp/proof-output/'; then
-  deny "BLOCKED: do not write seed/mcp/proof-output/ manually. Run scripts/record-seed-development-proof.sh and attach its output to Linear Evidence."
+  deny "BLOCKED: do not write seed/mcp/proof-output/ manually. Run scripts/record-seed-development-proof.sh or scripts/record-seed-fk-development-proof.sh and attach its output to Linear Evidence."
 fi
 
 allow

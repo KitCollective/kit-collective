@@ -47,12 +47,40 @@ try {
   const s201516 = byLabel["2015/16"] ?? null;
   const s201617 = byLabel["2016/17"] ?? null;
 
+  const kits = await pool.query(`
+    SELECT
+      s.label,
+      COUNT(DISTINCT k.id)::int AS kit_rows,
+      COUNT(DISTINCT k.type)::int AS kit_types,
+      COUNT(DISTINCT k.manufacturer_id)::int AS manufacturers,
+      COUNT(kp.id)::int AS photo_rows,
+      COUNT(*) FILTER (WHERE kp.visibility = 'admin_only')::int AS admin_only_photos,
+      COUNT(*) FILTER (WHERE kp.rights = 'unresolved')::int AS unresolved_rights
+    FROM season s
+    LEFT JOIN kit k ON k.season_id = s.id
+    LEFT JOIN kit_photo kp ON kp.kit_id = k.id
+    WHERE s.label IN ('2015/16', '2016/17', '2017/18')
+    GROUP BY s.label
+    ORDER BY s.label
+  `);
+
+  const kitByLabel = Object.fromEntries(kits.rows.map((r) => [r.label, r]));
+  const k201718 = kitByLabel["2017/18"] ?? {
+    kit_rows: 0,
+    kit_types: 0,
+    manufacturers: 0,
+    photo_rows: 0,
+    admin_only_photos: 0,
+    unresolved_rights: 0,
+  };
+
   const output = {
     ok: true,
     verifiedAt: new Date().toISOString(),
     lane: "development",
     database: meta.rows[0],
     squadBySeason: squad.rows,
+    kitsBySeason: kits.rows,
     ac: {
       season201718: {
         clubs: s201718.clubs,
@@ -61,6 +89,19 @@ try {
         complete: s201718.clubs >= 14 && s201718.squad_rows >= 450,
       },
       baselinesPresent: Boolean(s201516 && s201617),
+      kits201718: {
+        kitRows: k201718.kit_rows,
+        kitTypes: k201718.kit_types,
+        manufacturers: k201718.manufacturers,
+        photoRows: k201718.photo_rows,
+        adminOnlyPhotos: k201718.admin_only_photos,
+        unresolvedRights: k201718.unresolved_rights,
+        complete:
+          k201718.kit_rows >= 14 &&
+          k201718.photo_rows >= 14 &&
+          k201718.admin_only_photos === k201718.photo_rows &&
+          k201718.unresolved_rights === k201718.photo_rows,
+      },
     },
   };
 

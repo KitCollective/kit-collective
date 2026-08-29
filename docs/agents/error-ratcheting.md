@@ -67,6 +67,10 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 
 `.cursor/hooks/block-hand-typed-seed-db-counts.sh` denies `git commit` messages on seed-proof branches that hand-type squad/club count patterns without referencing `verify-dev-catalog` or `kit-34-verify-output.json`. Use `seed/mcp/scripts/verify-dev-catalog.mjs` (or the record script above) and paste its JSON output — do not type counts by hand. Tighten only.
 
+### Seed FK development proof ratchet (KIT-35)
+
+`scripts/record-seed-fk-development-proof.sh` records the chat-path `seed_fk` proof for Superliga 2017/18: baseline `verify-dev-catalog.mjs` (now includes kit/photo counts), two `run-seed-fk-mcp-path.mjs` invocations (live FK fetch + idempotent upsert), and post-verify catalog JSON. Requires `DATABASE_URL`, `FKAPI_BASE_URL`, and lane `R2_*` credentials — not fixture JSON. `scripts/check-seed-development-proof-scripts.mjs` also requires `run-seed-fk-mcp-path.mjs` and the FK record script. `.cursor/hooks/block-manual-seed-development-proof.sh` allows only the committed record scripts to write `seed/mcp/proof-output/`. Tighten only.
+
 `scripts/check-seed-scope-isolation-test.mjs` (CI via `pnpm check:seed-scope-isolation-test`) fails when `seed/apify/tests/scope-isolation.test.ts` drops the cross-season isolation coverage (`runSeed` must not mutate `player_club_season` rows outside the requested scope). Prevents repeating the KIT-34 checker round-4 fail (2017/18 skip run mutating 2016/17). Tighten only.
 
 `.cursor/hooks/block-seed-apify-test-on-shared-db.sh` denies `@kit/seed-apify` vitest/test invocations when `DATABASE_URL` points at the shared development Postgres and `SEED_APIFY_TEST_DATABASE_URL` is not set to a disposable test database. `scripts/check-seed-apify-test-database-isolation.mjs` (CI via `pnpm check:seed-apify-test-database-isolation`) fails when any `seed/apify/tests/**` file that calls `resetDatabase` reads `process.env.DATABASE_URL` for `resetDatabase`/`createDb`. Prevents repeating the KIT-34 checker round-6 fail (shared dev Postgres wiped by `resetDatabase` during local test runs). Tighten only.

@@ -50,6 +50,19 @@ describe("FK seed CLI args", () => {
     }
   });
 
+  it("accepts superligaen competition alias for KIT-34/KIT-35 chat scope", () => {
+    const parsed = parseCliArgs(["superligaen", "2017/18", "2017/18", "development"]);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.args).toEqual({
+        competition: "superligaen",
+        fromSeason: "2017/18",
+        toSeason: "2017/18",
+        lane: "development",
+      });
+    }
+  });
+
   it("rejects lane production", () => {
     const parsed = parseCliArgs(["superliga", "0001", "today", "production"]);
     expect(parsed.ok).toBe(false);
