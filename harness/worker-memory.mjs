@@ -49,21 +49,37 @@ export function isWorkerMemoryWritableAxis(axis) {
 }
 
 /**
+ * @param {unknown} text
+ * @returns {"empty" | "kit-id" | "hunk" | null}
+ */
+function rejectsWorkerMemoryText(text) {
+  if (typeof text !== "string" || text.trim().length === 0) {
+    return "empty";
+  }
+  const normalized = text.trim();
+  if (KIT_IDENTIFIER_PATTERN.test(normalized)) {
+    return "kit-id";
+  }
+  if (HUNK_LIKE_PATTERN.test(normalized)) {
+    return "hunk";
+  }
+  return null;
+}
+
+/**
+ * @param {unknown} className
+ * @returns {"empty" | "kit-id" | "hunk" | null}
+ */
+export function rejectsWorkerMemoryClass(className) {
+  return rejectsWorkerMemoryText(className);
+}
+
+/**
  * @param {unknown} lesson
  * @returns {"empty" | "kit-id" | "hunk" | null}
  */
 export function rejectsWorkerMemoryLesson(lesson) {
-  if (typeof lesson !== "string" || lesson.trim().length === 0) {
-    return "empty";
-  }
-  const text = lesson.trim();
-  if (KIT_IDENTIFIER_PATTERN.test(text)) {
-    return "kit-id";
-  }
-  if (HUNK_LIKE_PATTERN.test(text)) {
-    return "hunk";
-  }
-  return null;
+  return rejectsWorkerMemoryText(lesson);
 }
 
 /**
@@ -101,15 +117,13 @@ export function shouldRecordWorkerMemoryFinding({ axis, finding }) {
 export function formatWorkerMemoryEntry({ className, lesson }) {
   const cls = String(className ?? "").trim();
   const body = String(lesson ?? "").trim();
-  const reject = rejectsWorkerMemoryLesson(body);
-  if (cls.length === 0) {
-    throw new Error("worker memory class is required");
+  const classReject = rejectsWorkerMemoryClass(cls);
+  const lessonReject = rejectsWorkerMemoryLesson(body);
+  if (classReject) {
+    throw new Error(`worker memory class rejected: ${classReject}`);
   }
-  if (KIT_IDENTIFIER_PATTERN.test(cls)) {
-    throw new Error("worker memory class must not contain a KIT identifier");
-  }
-  if (reject) {
-    throw new Error(`worker memory lesson rejected: ${reject}`);
+  if (lessonReject) {
+    throw new Error(`worker memory lesson rejected: ${lessonReject}`);
   }
   return {
     className: cls,
@@ -117,14 +131,6 @@ export function formatWorkerMemoryEntry({ className, lesson }) {
     text: `${cls} → ${body}`,
     target: WORKER_MEMORY_TARGET,
   };
-}
-
-/**
- * @param {unknown} className
- * @returns {string}
- */
-export function workerMemorySearchQuery(className) {
-  return String(className ?? "").trim();
 }
 
 /**
@@ -153,16 +159,4 @@ export function listRatchetPaths(changedFiles) {
  */
 export function roleMayWriteWorkerMemory(role) {
   return String(role ?? "").trim() === "factory-checker";
-}
-
-/**
- * @param {unknown} role
- * @returns {boolean}
- */
-export function roleMaySearchWorkerMemory(role) {
-  const name = String(role ?? "").trim();
-  if (roleMayWriteWorkerMemory(name)) {
-    return true;
-  }
-  return name === "implement";
 }

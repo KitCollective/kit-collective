@@ -9,10 +9,10 @@ import {
   isRatchetPath,
   isValidWorkerMemoryLesson,
   listRatchetPaths,
+  rejectsWorkerMemoryClass,
   roleMayWriteWorkerMemory,
   shouldRecordWorkerMemoryFinding,
   WORKER_MEMORY_NON_WRITER_ROLES,
-  workerMemorySearchQuery,
 } from "../worker-memory.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -71,16 +71,25 @@ test("Spec miss is never written to Worker memory", () => {
   );
 });
 
-test("reject hunk citations and KIT identifiers in lessons", () => {
+test("reject hunk citations and KIT identifiers in lessons and classes", () => {
   assert.equal(isValidWorkerMemoryLesson("harness/foo.mjs:12 narrating comment"), false);
   assert.equal(isValidWorkerMemoryLesson("fix KIT-128 before merge"), false);
+  assert.equal(rejectsWorkerMemoryClass("harness/foo.mjs:12"), "hunk");
+  assert.throws(
+    () =>
+      formatWorkerMemoryEntry({
+        className: "harness/foo.mjs:12",
+        lesson: "keep imports at top of file",
+      }),
+    /class rejected: hunk/,
+  );
   assert.throws(
     () =>
       formatWorkerMemoryEntry({
         className: "KIT-128 lesson",
         lesson: "do the thing",
       }),
-    /KIT identifier/,
+    /class rejected: kit-id/,
   );
 });
 
@@ -105,11 +114,4 @@ test("Scout spawn still omits memory_search", () => {
   assert.match(scout, /^tools:\s+read,\s*grep,\s*find,\s*ls\s*$/m);
   assert.doesNotMatch(scout, /memory_search/);
   assert.ok(WORKER_MEMORY_NON_WRITER_ROLES.includes("scout"));
-});
-
-test("workerMemorySearchQuery returns the class string for implement resume", () => {
-  assert.equal(
-    workerMemorySearchQuery("narrating comments in harness tests"),
-    "narrating comments in harness tests",
-  );
 });
