@@ -604,6 +604,42 @@ test("completeImplementAdw still moves to In Review when worker typecheck fails 
   );
 });
 
+test("completeImplementAdw stays Implementing when format-check fails even if GitHub checks are green", async () => {
+  const gh = fakeGh({
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-116", issueId: "issue-116", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-116", branch: "kit-116" },
+    gh,
+    linear,
+    typecheckTouched: async () => {
+      throw new Error("typecheck is yellow and must not hide format-check");
+    },
+    formatCheck: async () => {
+      throw new Error("Checked 2 files in 4ms. Found 1 error.\nbiome ci .");
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.formatRetry, true);
+  assert.equal(result.ciRetry, false);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    false,
+  );
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /### Review feedback/);
+  assert.match(workpad.body, /format/i);
+  assert.match(workpad.body, /biome ci/i);
+});
+
 test("production gh.rebase aborts a conflicted rebase instead of leaving the tree wedged", async () => {
   const calls = [];
   const gh = createGhClient({
@@ -1242,12 +1278,15 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
   assert.doesNotMatch(gate.frontmatter, /^tools:.*\blinear/i);
   assert.match(gate.text, /rebase/i);
   assert.match(gate.text, /typecheck/i);
+  assert.match(gate.text, /format:check|biome ci/i);
   assert.match(gate.text, /GitHub checks/i);
   assert.match(gate.text, /conflict/i);
   assert.match(gate.text, /never calls Linear/i);
   assert.match(gate.text, /never .*In Review/i);
   assert.match(gate.text, /this worktree's PR only|this worktree’s PR only/i);
   assert.match(gate.text, /Do not mention sibling/i);
+  assert.match(gate.text, /yellow/i);
+  assert.match(gate.text, /not .*typecheck|must not .*typecheck|do not treat format/i);
   assert.doesNotMatch(gate.text, /KIT-99/);
   for (const relative of [
     ".pi/agents/nest.md",
@@ -1265,6 +1304,9 @@ test("implement role requires Scout then helpers then Gate; parent owns In Revie
   const implement = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
   assert.match(implement, /Scout/i);
   assert.match(implement, /Gate/);
+  assert.match(implement, /Skip Scout/i);
+  assert.match(implement, /Skip helpers/i);
+  assert.match(implement, /format vs Zod vs unique-email/i);
   assert.match(implement, /### Validation/);
   assert.match(implement, /In Review/);
   assert.match(implement, /only when Gate is green|Gate is green/i);
@@ -1437,6 +1479,7 @@ test("Compose persists kit-pi worktrees and copies implement-exit adapters", () 
   assert.match(dockerfile, /delegate-gate\.mjs/);
   assert.match(dockerfile, /worktree\.mjs/);
   assert.match(dockerfile, /corepack prepare pnpm@9\.15\.4/);
+  assert.match(dockerfile, /@biomejs\/biome@2\.5\.10/);
   const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
   assert.match(compose, /kit_pi:\/var\/lib\/kit-pi/);
 });

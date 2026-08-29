@@ -248,6 +248,22 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 
 `harness/tests/compose-worker.test.mjs` (`docker-compose runs webhook + one replica`) requires `mem_limit: 5g` and forbids `768m`. `harness/host.md` names **mem_limit 5g**. Prevents repeating the KIT-116 factory-checker `pi exited null` (cgroup OOM while implement KIT-119 was live). Tighten only.
 
+### Implement write-scope retry (KIT-119)
+
+`harness/tests/implement-ci-retry.test.mjs` (`job-queue re-runs implement on write-scope retry until In Review`, `job-queue fail-closes when the implement write-scope retry cap is already exhausted`) keeps the slot on `{ writeScopeRetry: true }` the same way as CI retry, with `IMPLEMENT_CI_RETRY_CAP`. Prevents repeating KIT-119 sitting Implementing with an empty slot after an out-of-glob path (`apps/admin/...`) while resume skipped it for write-scope overlap. Tighten only.
+
+### Implement Gate format-check and cheap retry
+
+`scripts/check-implement-cheap-retry.mjs` (CI via `node` in `.github/workflows/ci.yml`) plus `harness/tests/implement-adw.test.mjs` / `harness/tests/implement-ci-retry.test.mjs` / `harness/tests/resume.test.mjs` keep these locks:
+
+- Gate (`.pi/agents/gate.md`) runs `pnpm format:check` or `biome ci .`. Format-fail is red. Do not treat format as typecheck. Typecheck may be yellow.
+- Worker image installs global `@biomejs/biome@2.5.10` so Gate does not need worktree `node_modules`.
+- `completeImplementAdw` format-check is a safety net after Pi: a throwing `formatCheck` stays Implementing (`formatRetry: true`) even when GitHub required checks are green. Worker typecheck throw still may move In Review.
+- First implement run still Scout → helpers → Gate. `{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }` retries **Skip Scout** and skip helpers. Prompt includes workpad `### Review feedback` and requires the CI excerpt, pointing at the class (format vs Zod vs unique-email).
+- After `IMPLEMENT_CI_RETRY_CAP` in-slot retries, the worker posts `implementRetryCapComment` (Linear Agent left empty; no Cursor Cloud Agent) and **resume skips** that Implementing issue. A later enqueue no-ops without spawning Pi.
+
+Prevents repeating 4–9 full Composer sessions per issue (first fail is GitHub, then Scout→helpers→Gate from scratch; resume poller re-enqueues after the in-slot cap). Tighten only.
+
 ### Factory checker Slop GitHub threads ratchet (KIT-127)
 
 `scripts/check-factory-checker-spawn.mjs` and `scripts/tests/check-factory-checker-spawn.test.mjs` keep these locks:

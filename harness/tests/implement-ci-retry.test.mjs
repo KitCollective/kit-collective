@@ -15,8 +15,9 @@ import {
   IN_REVIEW,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
-import { createSerialQueue, IMPLEMENT_CI_RETRY_CAP } from "../job-queue.mjs";
+import { createSerialQueue, IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "../job-queue.mjs";
 import { createPiJobRunner, implementPrompt } from "../pi-job.mjs";
+import { commentsHoldImplementRetryCap, implementRetryCapComment } from "../role-comments.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ADW = "steps:\n  - pr\n  - in-review\nnever:\n  - merge\n";
@@ -38,6 +39,11 @@ function validWorkerEnv() {
     PI_MODEL_FAST: "cursor/grok-4.6",
     OPENROUTER_API_KEY: "or_test",
   };
+}
+
+function promptFromSpawn(spawned) {
+  const dash = spawned.args.indexOf("--");
+  return dash >= 0 ? String(spawned.args[dash + 1] ?? "") : "";
 }
 
 function fakeWorktree({ path = "/var/lib/kit-pi/worktrees/KIT-99", branch = "kit-99" } = {}) {
@@ -121,6 +127,9 @@ function fakeLinear() {
     },
     async setStatus(input) {
       calls.push(["setStatus", input]);
+    },
+    async commentIssue(input) {
+      calls.push(["commentIssue", input]);
     },
     async getIssue() {
       return { status: "In Review", attachments: [] };
@@ -296,6 +305,22 @@ test("job-queue re-enqueues the same implement job on red CI and never calls che
   );
   assert.equal(worktree.calls.length, IMPLEMENT_CI_RETRY_CAP);
   assert.equal(spawned.length, IMPLEMENT_CI_RETRY_CAP);
+  const firstPrompt = promptFromSpawn(spawned[0]);
+  assert.equal(/skip scout/i.test(firstPrompt), false);
+  assert.equal(/skip helpers/i.test(firstPrompt), false);
+  for (const spawn of spawned.slice(1)) {
+    const prompt = promptFromSpawn(spawn);
+    assert.match(prompt, /Skip Scout/i);
+    assert.match(prompt, /Skip helpers/i);
+    assert.match(prompt, /format vs Zod vs unique-email/i);
+    assert.match(prompt, /AssertionError/);
+    assert.match(prompt, /### Review feedback/);
+  }
+  const capComment = linear.calls.find((call) => call[0] === "commentIssue");
+  assert.ok(capComment, "retry cap must post a Linear comment");
+  assert.match(capComment[1].body, /implement retry cap/i);
+  assert.match(capComment[1].body, /Linear Agent left empty/i);
+  assert.equal(/Cursor Cloud Agent/i.test(capComment[1].body), true);
   assert.equal(
     spawned.every((spawn) =>
       spawn.args.some((arg) => String(arg).endsWith(".pi/roles/implement.md")),
@@ -367,6 +392,53 @@ test("job-queue fail-closes when the implement CI retry cap is already exhausted
   assert.deepEqual(runs, [IMPLEMENT_CI_RETRY_CAP]);
 });
 
+test("job-queue re-runs implement on write-scope retry until In Review", async () => {
+  const runs = [];
+  const queue = createSerialQueue({
+    async run(job) {
+      runs.push(job.writeScopeRetryAttempt ?? 1);
+      if ((job.writeScopeRetryAttempt ?? 1) < 2) {
+        return { status: IMPLEMENTING, writeScopeRetry: true, ciRetry: false };
+      }
+      return { status: IN_REVIEW, writeScopeRetry: false, ciRetry: false };
+    },
+  });
+
+  const result = await queue.enqueue({
+    role: "implement",
+    identifier: "KIT-119",
+    issueId: "issue-119",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.deepEqual(runs, [1, 2]);
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.writeScopeRetry, false);
+});
+
+test("job-queue fail-closes when the implement write-scope retry cap is already exhausted", async () => {
+  const runs = [];
+  const queue = createSerialQueue({
+    async run(job) {
+      runs.push(job.writeScopeRetryAttempt ?? 1);
+      return { ...job, writeScopeRetry: true, ciRetry: false, status: IMPLEMENTING };
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      queue.enqueue({
+        role: "implement",
+        identifier: "KIT-119",
+        issueId: "issue-119",
+        adwFile: ".pi/adw/feature.yaml",
+        writeScopeRetryAttempt: IMPLEMENT_CI_RETRY_CAP,
+      }),
+    /implement write-scope retry cap hit/,
+  );
+  assert.deepEqual(runs, [IMPLEMENT_CI_RETRY_CAP]);
+});
+
 test("implement prompt and role/ADW text leave In Review to the harness", () => {
   const prompt = implementPrompt("implement", "KIT-99", ".pi/adw/feature.yaml");
   assert.equal(/move the issue to In Review/i.test(prompt), false);
@@ -374,6 +446,22 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(prompt, /Never merge/);
   assert.match(prompt, /Never spawn factory-checker/);
   assert.match(prompt, /Review feedback/);
+  assert.equal(/Skip Scout/i.test(prompt), false);
+
+  const cheap = implementPrompt("implement", "KIT-99", ".pi/adw/feature.yaml", {
+    cheapRetry: true,
+    reviewFeedback: "- CI: required check `test` failed\n  AssertionError: expected 2 to equal 1",
+  });
+  assert.match(cheap, /Skip Scout/i);
+  assert.match(cheap, /Skip helpers/i);
+  assert.match(cheap, /format vs Zod vs unique-email/i);
+  assert.match(cheap, /AssertionError/);
+  assert.match(cheap, /### Review feedback/);
+  assert.equal(/move the issue to In Review/i.test(cheap), false);
+  assert.equal(isCheapImplementRetry({ role: "implement" }), false);
+  assert.equal(isCheapImplementRetry({ role: "implement", ciRetryAttempt: 2 }), true);
+  assert.equal(isCheapImplementRetry({ role: "implement", writeScopeRetryAttempt: 2 }), true);
+  assert.equal(isCheapImplementRetry({ role: "implement", formatRetryAttempt: 2 }), true);
 
   const role = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
   assert.equal(/move the issue to In Review/i.test(role), false);
@@ -385,6 +473,33 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
     assert.equal(/move to In Review/i.test(text), false, file);
     assert.match(text, /harness/i, file);
   }
+});
+
+test("implement does not spawn Pi when comments already hold the retry cap", async () => {
+  const gh = fakeGh();
+  const linear = fakeLinear();
+  linear.comments.push({
+    id: "c-cap",
+    body: implementRetryCapComment("KIT-99"),
+  });
+  const spawned = [];
+  const runner = implementRunner({ gh, linear, spawned });
+  const result = await runner.run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 0);
+  assert.equal(result.ciRetry, false);
+  assert.equal(result.retryCapHold, true);
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(commentsHoldImplementRetryCap(linear.comments), true);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus"),
+    false,
+  );
 });
 
 test("checker still wakes only on In Review and fail-closes with Review feedback, not CI retry", async () => {

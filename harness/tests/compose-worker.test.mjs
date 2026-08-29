@@ -628,6 +628,10 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /Finisher/);
   assert.match(host, /PI_IMPLEMENT_SLOTS/);
   assert.match(host, /mem_limit 5g/);
+  assert.match(host, /re-runs implement in the same slot/);
+  assert.match(host, /format:check/);
+  assert.match(host, /Skip Scout/);
+  assert.match(host, /implement retry cap/);
   assert.match(host, /ramFreeMb/);
   assert.match(host, /diskFreeMb/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);

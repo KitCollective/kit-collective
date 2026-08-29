@@ -12,7 +12,7 @@ RUN apt-get update \
     > /etc/apt/sources.list.d/github-cli.list \
   && apt-get update \
   && apt-get install -y --no-install-recommends gh bubblewrap \
-  && npm install -g @schpet/linear-cli@2.5.0 @earendil-works/pi-coding-agent@0.84.3 \
+  && npm install -g @schpet/linear-cli@2.5.0 @earendil-works/pi-coding-agent@0.84.3 @biomejs/biome@2.5.10 \
   && corepack enable \
   && corepack prepare pnpm@9.15.4 --activate \
   && rm -rf /var/lib/apt/lists/*

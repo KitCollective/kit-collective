@@ -55,6 +55,33 @@ export function implementInReviewComment(identifier, { prUrl, summary }) {
   return `${identifier}: In Review — ${built}\n\nPR: ${prUrl}`;
 }
 
+export const IMPLEMENT_RETRY_CAP_MARKER = "implement retry cap";
+
+/**
+ * Durable human hold after in-slot implement retries are exhausted.
+ * Linear Agent stays empty. No Cursor Cloud Agent.
+ *
+ * @param {string} identifier
+ * @param {{ cap?: number }} [options]
+ */
+export function implementRetryCapComment(identifier, { cap = 3 } = {}) {
+  return `${identifier}: implement retry cap — stayed Implementing after ${cap} in-slot retries. Nicklas must act. Linear Agent left empty. No Cursor Cloud Agent.`;
+}
+
+/**
+ * @param {Array<{ body?: string }> | undefined} comments
+ */
+export function commentsHoldImplementRetryCap(comments) {
+  if (!Array.isArray(comments)) {
+    return false;
+  }
+  return comments.some(
+    (comment) =>
+      typeof comment?.body === "string" &&
+      comment.body.toLowerCase().includes(IMPLEMENT_RETRY_CAP_MARKER),
+  );
+}
+
 /**
  * @param {string} identifier
  */

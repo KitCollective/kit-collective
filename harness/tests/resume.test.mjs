@@ -14,6 +14,7 @@ import { RESUME_ORPHANS_QUERY } from "../linear-cli.mjs";
 import { REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS } from "../planner.mjs";
 import { runResume, startResumePoller } from "../resume.mjs";
+import { implementRetryCapComment } from "../role-comments.mjs";
 import { startWorkerServer } from "../server.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -78,6 +79,9 @@ function fakeLinear(issues) {
     async clearDelegate() {
       throw new Error("resume must not clear delegate");
     },
+    async listComments() {
+      return [];
+    },
   };
 }
 
@@ -106,6 +110,24 @@ test("runResume enqueues implement for Implementing with empty Agent without mov
   assert.equal(enqueue.jobs[0].issueId, "issue-94");
   assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/feature.yaml");
   assert.deepEqual(result.enqueued, [{ identifier: "KIT-94", role: "implement" }]);
+});
+
+test("runResume skips Implementing after implement retry cap without a new Composer", async () => {
+  const enqueue = fakeEnqueue();
+  const linear = fakeLinear([orphan()]);
+  linear.listComments = async () => [{ id: "c-cap", body: implementRetryCapComment("KIT-94") }];
+  const result = await runResume({
+    linear,
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 0);
+  assert.ok(
+    result.skipped.some(
+      (row) => row.identifier === "KIT-94" && row.reason === "implement retry cap",
+    ),
+  );
 });
 
 test("runResume enqueues checker, auto-merge, and land for started factory states", async () => {

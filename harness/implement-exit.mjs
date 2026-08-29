@@ -257,6 +257,47 @@ async function writeWriteScopeRetryWorkpad(input) {
 }
 
 /**
+ * Stay Implementing, write format failure onto the existing workpad, signal cheap retry.
+ * Never setStatus(In Review). Never treat this as typecheck (yellow).
+ *
+ * @param {{
+ *   job: { identifier: string, issueId: string },
+ *   linear: {
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *   },
+ *   pr: { url?: string },
+ *   error?: unknown,
+ * }} input
+ */
+async function writeFormatRetryWorkpad(input) {
+  const { job, linear, pr, error } = input;
+  const message = error instanceof Error ? error.message : String(error ?? "format-check failed");
+  const excerpt = excerptLog(message);
+  const feedbackLines = [
+    "- Format: `pnpm format:check` / `biome ci .` failed. This is red — not typecheck. Fix format before GitHub wait.",
+  ];
+  for (const line of excerpt.split("\n")) {
+    if (line.length > 0) {
+      feedbackLines.push(`  ${line}`);
+    }
+  }
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
+  const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  const withEvidence =
+    typeof pr?.url === "string" && pr.url.length > 0
+      ? upsertWorkpadEvidence(existing?.body, {
+          prUrl: pr.url,
+          identifier: job.identifier,
+        })
+      : (existing?.body ?? `${WORKPAD_HEADING}\n`);
+  const body = applyReviewFeedback(withEvidence, feedbackLines);
+  await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  return { pr, status: IMPLEMENTING, formatRetry: true, ciRetry: false, writeScopeRetry: false };
+}
+
+/**
  * @param {Array<{ name?: string, conclusion?: string, status?: string, isRequired?: boolean, state?: string, log?: string }> | undefined} checks
  * @param {{ timedOut?: boolean }} [options]
  * @returns {string[]}
@@ -310,6 +351,17 @@ export function applyReviewFeedback(current, feedbackLines) {
     return `${base.replace(/### Review feedback\n[\s\S]*?(?=\n### |\s*$)/, `${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`)}\n`;
   }
   return `${base}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`;
+}
+
+/**
+ * @param {string | undefined} body
+ */
+export function extractReviewFeedback(body) {
+  if (typeof body !== "string" || !body.includes(REVIEW_FEEDBACK_HEADING)) {
+    return "";
+  }
+  const match = body.match(/### Review feedback\n([\s\S]*?)(?=\n### |\s*$)/);
+  return match ? match[1].trim() : "";
 }
 
 /**
@@ -421,6 +473,34 @@ export function createTypecheckTouched({ runCommand } = {}) {
 }
 
 /**
+ * `pnpm format:check` (`biome ci .`). Fall back to image-global `biome` when
+ * the worktree has no node_modules. Format-fail is red — not typecheck.
+ *
+ * @param {{
+ *   runCommand?: (command: string, args: string[], options: { cwd?: string }) => Promise<string>,
+ * }} [deps]
+ */
+export function createFormatCheck({ runCommand } = {}) {
+  const run =
+    runCommand ??
+    (async (command, args, options = {}) => {
+      const { stdout } = await execFile(command, args, {
+        encoding: "utf8",
+        timeout: 120_000,
+        cwd: options.cwd,
+      });
+      return stdout;
+    });
+  return async ({ cwd }) => {
+    try {
+      await run("pnpm", ["format:check"], { cwd });
+    } catch {
+      await run("biome", ["ci", "."], { cwd });
+    }
+  };
+}
+
+/**
  * @param {string | undefined} current
  * @param {{ prUrl: string, identifier: string }} evidence
  */
@@ -475,6 +555,7 @@ function applyListedPr(pr, listed, identifier) {
  *     getIssue?: (id: string) => Promise<{ description?: string } | null>,
  *   },
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
+ *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
  *   listChangedFiles?: (input: { cwd: string }) => Promise<string[]>,
  *   issueDescription?: string,
  *   runPnpmTest?: (input: { cwd: string }) => Promise<unknown>,
@@ -492,6 +573,7 @@ export async function completeImplementAdw(input) {
     gh,
     linear,
     typecheckTouched,
+    formatCheck,
     listChangedFiles: listChangedFilesInput,
     issueDescription,
     runPnpmTest,
@@ -531,6 +613,13 @@ export async function completeImplementAdw(input) {
       // Worker typecheck is a best-effort fast fail. Missing node_modules or
       // OOM on the 4 GB box must not park Implementing while GitHub test is
       // the required check (KIT-116).
+    }
+  }
+  if (typeof formatCheck === "function") {
+    try {
+      await formatCheck({ cwd: checkout.path });
+    } catch (error) {
+      return writeFormatRetryWorkpad({ job, linear, pr, error });
     }
   }
   if (typeof runPnpmTest === "function") {
@@ -628,7 +717,7 @@ export async function completeImplementAdw(input) {
   }
   await linear.setStatus({ issueId: job.issueId, status: IN_REVIEW });
 
-  return { pr, status: IN_REVIEW, ciRetry: false, writeScopeRetry: false };
+  return { pr, status: IN_REVIEW, ciRetry: false, writeScopeRetry: false, formatRetry: false };
 }
 
 /**

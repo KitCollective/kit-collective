@@ -11,8 +11,10 @@ import {
   buildCheckerPassVerdicts,
   checkerFailComment,
   checkerPassComment,
+  commentsHoldImplementRetryCap,
   descriptionAcceptanceCriteriaTicked,
   implementInReviewComment,
+  implementRetryCapComment,
   implementSummaryFromWorkpad,
   landFailComment,
   landSuccessComment,
@@ -34,6 +36,15 @@ Do the thing.
 test("plannerClaimComment names the claim transition", () => {
   assert.match(plannerClaimComment("KIT-114"), /KIT-114: claimed/);
   assert.match(plannerClaimComment("KIT-114"), /Linear Agent left empty/);
+});
+
+test("implementRetryCapComment holds Implementing with empty Linear Agent", () => {
+  const body = implementRetryCapComment("KIT-99");
+  assert.match(body, /KIT-99: implement retry cap/);
+  assert.match(body, /Linear Agent left empty/);
+  assert.match(body, /No Cursor Cloud Agent/i);
+  assert.equal(commentsHoldImplementRetryCap([{ body }]), true);
+  assert.equal(commentsHoldImplementRetryCap([{ body: "## Agent Workpad\n\n- (none)\n" }]), false);
 });
 
 test("implementInReviewComment includes PR URL and summary", () => {

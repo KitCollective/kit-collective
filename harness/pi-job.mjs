@@ -17,12 +17,19 @@ import {
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
-import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
+import {
+  completeImplementAdw,
+  createTypecheckTouched,
+  extractReviewFeedback,
+  IMPLEMENTING,
+} from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
+import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { runPlanner } from "./planner.mjs";
+import { commentsHoldImplementRetryCap, implementRetryCapComment } from "./role-comments.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
@@ -459,10 +466,22 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
  * @param {string} role
  * @param {string} identifier
  * @param {string | undefined} adwFile
+ * @param {{ cheapRetry?: boolean, reviewFeedback?: string }} [options]
  */
-export function implementPrompt(role, identifier, adwFile) {
+export function implementPrompt(role, identifier, adwFile, options = {}) {
   if (role === "implement") {
     const adw = typeof adwFile === "string" ? ` ADW ${adwFile}.` : "";
+    if (options.cheapRetry === true) {
+      const feedback =
+        typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
+          ? options.reviewFeedback.trim()
+          : "(missing — fail closed: do not invent a fix without the excerpt)";
+      return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.
+
+### Review feedback
+
+${feedback}`;
+    }
     return `Factory role implement for ${identifier}.${adw} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
   }
   if (role === "factory-checker") {
@@ -578,6 +597,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
  *   checkerGh?: object,
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
+ *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status?: number | null, stdout?: import("node:stream").Readable, closePromise?: Promise<{ status: number | null }> }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
  *   now?: () => number,
@@ -598,6 +618,7 @@ export function createPiJobRunner({
   checkerGh,
   linear,
   typecheckTouched,
+  formatCheck,
   spawnProcess,
   runCommand,
   now,
@@ -882,6 +903,22 @@ export function createPiJobRunner({
           }
         }
       }
+      if (job.role === "implement") {
+        const holdLinear = linear ?? job.linear;
+        if (holdLinear && typeof holdLinear.listComments === "function") {
+          const comments = await holdLinear.listComments(job.issueId ?? identifier);
+          if (commentsHoldImplementRetryCap(comments)) {
+            return {
+              ...job,
+              status: IMPLEMENTING,
+              ciRetry: false,
+              writeScopeRetry: false,
+              formatRetry: false,
+              retryCapHold: true,
+            };
+          }
+        }
+      }
       let cwd = workspace;
       let checkout;
       if (job.role === "implement" || job.role === "factory-checker") {
@@ -891,7 +928,19 @@ export function createPiJobRunner({
         });
         cwd = checkout.path;
       }
-      const prompt = implementPrompt(job.role, identifier, job.adwFile);
+      const linearForPrompt = linear ?? job.linear;
+      let prompt = implementPrompt(job.role, identifier, job.adwFile);
+      if (job.role === "implement" && isCheapImplementRetry(job)) {
+        const comments =
+          typeof linearForPrompt?.listComments === "function"
+            ? await linearForPrompt.listComments(job.issueId ?? identifier)
+            : [];
+        const workpad = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+        prompt = implementPrompt(job.role, identifier, job.adwFile, {
+          cheapRetry: true,
+          reviewFeedback: extractReviewFeedback(workpad?.body),
+        });
+      }
       const hermesDir =
         typeof env.KIT_PI_HERMES === "string" && env.KIT_PI_HERMES.length > 0
           ? env.KIT_PI_HERMES
@@ -974,12 +1023,25 @@ export function createPiJobRunner({
           gh: ghClient,
           linear: withTokenUse(linearClient, tokens),
           typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
+          formatCheck,
           adwText: readFileSync(join(workspace, adwFile), "utf8"),
           now,
           sleep,
           waitTimeoutMs,
           waitIntervalMs,
         });
+        const atCap =
+          (exit.ciRetry === true && Number(job.ciRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
+          (exit.writeScopeRetry === true &&
+            Number(job.writeScopeRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
+          (exit.formatRetry === true &&
+            Number(job.formatRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP);
+        if (atCap && typeof linearClient.commentIssue === "function") {
+          await linearClient.commentIssue({
+            issueId: job.issueId ?? identifier,
+            body: implementRetryCapComment(identifier, { cap: IMPLEMENT_CI_RETRY_CAP }),
+          });
+        }
         return { ...job, ...exit, tokens };
       }
       if (job.role === "factory-checker") {

@@ -7,6 +7,7 @@
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
 import { findWriteScopeOverlap, PLANNER_PRIORITY_ORDER, PLANNER_TEAM_KEY } from "./planner.mjs";
+import { commentsHoldImplementRetryCap } from "./role-comments.mjs";
 import { dispatchIssue } from "./webhook-router.mjs";
 
 const RESUME_STATUS_ORDER = ["Merging", "Ready for merge", "In Review"];
@@ -103,6 +104,14 @@ export async function runResume({
       skipped.push({ identifier: issue.identifier, reason: "already queued" });
       selected.push(issue);
       continue;
+    }
+    if (typeof client.listComments === "function") {
+      const comments = await client.listComments(issue.id);
+      if (commentsHoldImplementRetryCap(comments)) {
+        skipped.push({ identifier: issue.identifier, reason: "implement retry cap" });
+        selected.push(issue);
+        continue;
+      }
     }
     const overlap = findWriteScopeOverlap(issue, selected);
     if (overlap) {
