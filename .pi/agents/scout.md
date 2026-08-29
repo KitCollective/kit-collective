@@ -3,6 +3,7 @@ name: scout
 description: Read-only codebase recon before writes.
 tools: read, grep, find, ls
 model: openrouter/tencent/hy3
+fallbackModels: cursor/composer-2.5
 thinking: off
 inheritProjectContext: false
 ---
