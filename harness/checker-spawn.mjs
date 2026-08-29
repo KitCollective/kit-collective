@@ -42,6 +42,19 @@ export function slopAgentToolArgs() {
   ];
 }
 
+/** Env the Slop child extension reads — must call `slopAgentToolArgs()` here. */
+export const SLOP_AGENT_PI_ARGS_ENV = "SLOP_AGENT_PI_ARGS";
+
+/**
+ * Wire mechanical Slop child tool deny at factory-checker spawn.
+ *
+ * @param {Record<string, string | undefined>} spawnEnv
+ */
+export function applySlopAgentSpawnEnv(spawnEnv) {
+  spawnEnv.SLOP_AGENT_MEMORY_EXCLUDED_TOOLS = SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(",");
+  spawnEnv[SLOP_AGENT_PI_ARGS_ENV] = slopAgentToolArgs().join("\0");
+}
+
 /** @readonly */
 export const FACTORY_CHECKER_ALLOWED_TOOLS = [
   "read",

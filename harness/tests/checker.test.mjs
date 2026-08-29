@@ -34,6 +34,8 @@ import {
   factoryCheckerPiArgs,
   factoryCheckerToolArgs,
   SLOP_AGENT_MEMORY_EXCLUDED_TOOLS,
+  SLOP_AGENT_PI_ARGS_ENV,
+  applySlopAgentSpawnEnv,
   slopAgentToolArgs,
 } from "../checker-spawn.mjs";
 import { IN_REVIEW } from "../implement-exit.mjs";
@@ -552,6 +554,9 @@ test("factory-checker spawn uses tool allowlist and linear_cli extension", async
     true,
   );
   assert.equal(spawned[0].options.env.LINEAR_ISSUE_ID, ISSUE_ID);
+  assert.equal(typeof spawned[0].options.env.SLOP_AGENT_MEMORY_EXCLUDED_TOOLS, "string");
+  assert.equal(typeof spawned[0].options.env[SLOP_AGENT_PI_ARGS_ENV], "string");
+  assert.ok(spawned[0].options.env[SLOP_AGENT_PI_ARGS_ENV].includes("--exclude-tools"));
 });
 
 test("factory-checker tools extension sits next to checker-spawn, not PI_WORKSPACE/harness", () => {
@@ -806,6 +811,23 @@ test("factory-checker allowlist includes subagent and Slop child excludes memory
   for (const tool of SLOP_AGENT_MEMORY_EXCLUDED_TOOLS) {
     assert.equal(new RegExp(`^tools:.*\\b${tool}\\b`, "m").test(slopAgent), false);
   }
+});
+
+test("applySlopAgentSpawnEnv calls slopAgentToolArgs and wires both env keys", () => {
+  const spawnEnv = {};
+  applySlopAgentSpawnEnv(spawnEnv);
+  assert.equal(
+    spawnEnv.SLOP_AGENT_MEMORY_EXCLUDED_TOOLS,
+    SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(","),
+  );
+  assert.equal(typeof spawnEnv[SLOP_AGENT_PI_ARGS_ENV], "string");
+  const args = spawnEnv[SLOP_AGENT_PI_ARGS_ENV].split("\0");
+  assert.deepEqual(args, slopAgentToolArgs());
+});
+
+test("slop.md loads slop-agent-tools via subagentOnlyExtensions", () => {
+  const slopAgent = readFileSync(join(ROOT, ".pi/agents/slop.md"), "utf8");
+  assert.match(slopAgent, /subagentOnlyExtensions:\s*harness\/slop-agent-tools\.ts/);
 });
 
 test("slopAgentToolArgs excludes memory writes and mirrors slop.md tools", () => {

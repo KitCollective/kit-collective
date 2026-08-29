@@ -91,14 +91,14 @@ test("ratchet fails when checker-exit loses missing Slop axis guard", () => {
   assert.ok(missing.some((item) => item.includes("Slop axis")));
 });
 
-test("ratchet fails when pi-job loses Slop memory deny wiring", () => {
+test("ratchet fails when pi-job loses Slop spawn wiring", () => {
   const files = currentFiles();
   const mutated = {
     ...files,
-    piJob: files.piJob.replaceAll("SLOP_AGENT_MEMORY_EXCLUDED_TOOLS", "SLOP_MEMORY_DENY"),
+    piJob: files.piJob.replaceAll("applySlopAgentSpawnEnv", "applySlopSpawnEnv"),
   };
   const missing = missingFactoryCheckerSpawnCoverage(mutated);
-  assert.ok(missing.some((item) => item.includes("SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")));
+  assert.ok(missing.some((item) => item.includes("applySlopAgentSpawnEnv")));
 });
 
 test("ratchet fails when checker-exit loses harness incomplete fallback", () => {

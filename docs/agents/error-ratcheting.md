@@ -236,7 +236,7 @@ Prevents repeating the KIT-105 silent pass (status flip only, no durable note or
 - `/code-review` runs Spec, Standards, and Slop in one pass — not as a pre-gate.
 - `reviewFeedbackIsClean` requires exactly `- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`; bare `- (none)` is rejected.
 - `applyCheckerFailWorkpad` never falls back to legacy `- (none)` — use `REVIEW_FEEDBACK_HARNESS_INCOMPLETE` instead.
-- Read-only Slop child: `slopAgentToolArgs()` + `.pi/agents/slop.md` frontmatter deny `memory_add`, `memory_replace`, `memory_remove`; `harness/pi-job.mjs` wires `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` at factory-checker spawn.
+- Read-only Slop child: `applySlopAgentSpawnEnv()` calls `slopAgentToolArgs()` at factory-checker spawn; `harness/slop-agent-tools.ts` (via `.pi/agents/slop.md` `subagentOnlyExtensions`) and `harness/factory-checker-tools.ts` consume `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` + `SLOP_AGENT_PI_ARGS`.
 
 Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` export, stale `- (none)` fail fallback, incomplete spawn-ratchet doc). Tighten only.
 
