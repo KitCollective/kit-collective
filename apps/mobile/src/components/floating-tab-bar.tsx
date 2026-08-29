@@ -104,9 +104,7 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
           />
           {showUnreadBadge ? (
             <View style={[styles.badge, { backgroundColor: theme.fillPrimary }]}>
-              <Text style={[styles.badgeText, { color: theme.contentInverse }]}>
-                {unreadCount}
-              </Text>
+              <Text style={[styles.badgeText, { color: theme.contentInverse }]}>{unreadCount}</Text>
             </View>
           ) : null}
         </View>
