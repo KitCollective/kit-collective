@@ -258,7 +258,7 @@
       },
       "targets": [
         {
-          "expr": "{compose_service=\"webhook\", gate=\"red\"} | json | source=\"harness\" | line_format \"{{.identifier}} · {{.role}} · {{.event}} · gate={{.gate}} · risk={{.loopRisk}}{{ if .attempt }} · try={{.attempt}}{{ end }}{{ if .reason }} · {{.reason}}{{ end }}{{ if .error }} · {{.error}}{{ end }}\"",
+          "expr": "{compose_service=\"webhook\", gate=\"red\"} | json | source=\"harness\" | identifier != \"\" | line_format \"{{.identifier}} · {{.role}} · {{.event}}{{ if .stopPoint }} · stop={{.stopPoint}}{{ end }}{{ if .phase }} · {{.phase}}{{ end }}{{ if .tool }} · {{.tool}}{{ end }}{{ if .tokensIn }} · in={{.tokensIn}}{{ end }}{{ if .tokensOut }} out={{.tokensOut}}{{ end }} · gate={{.gate}}{{ if .loopRisk }} · risk={{.loopRisk}}{{ end }}{{ if .detail }} · {{.detail}}{{ end }}{{ if .reason }} · {{.reason}}{{ end }}{{ if .error }} · {{.error}}{{ end }}\"",
           "refId": "A"
         }
       ],
@@ -281,7 +281,7 @@
       },
       "targets": [
         {
-          "expr": "{compose_service=\"webhook\"} | json | source=\"harness\" | line_format \"{{.identifier}} · {{.role}} · {{.event}} · gate={{.gate}} · risk={{.loopRisk}}{{ if .attempt }} · try={{.attempt}}{{ end }}{{ if .reason }} · {{.reason}}{{ end }}{{ if .error }} · {{.error}}{{ end }}\"",
+          "expr": "{compose_service=\"webhook\"} | json | source=\"harness\" | identifier != \"\" | line_format \"{{.identifier}} · {{.role}} · {{.event}}{{ if .stopPoint }} · stop={{.stopPoint}}{{ end }}{{ if .phase }} · {{.phase}}{{ end }}{{ if .tool }} · {{.tool}}{{ end }}{{ if .tokensIn }} · in={{.tokensIn}}{{ end }}{{ if .tokensOut }} out={{.tokensOut}}{{ end }} · gate={{.gate}}{{ if .loopRisk }} · risk={{.loopRisk}}{{ end }}{{ if .detail }} · {{.detail}}{{ end }}{{ if .reason }} · {{.reason}}{{ end }}{{ if .error }} · {{.error}}{{ end }}\"",
           "refId": "A"
         }
       ],
@@ -298,5 +298,5 @@
   "timezone": "browser",
   "title": "Kit harness agent logs",
   "uid": "kit-harness-agent-logs",
-  "version": 3
+  "version": 4
 }

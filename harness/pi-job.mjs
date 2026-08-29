@@ -39,6 +39,7 @@ import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
+import { createSessionLogCollector } from "./pi-session-log.mjs";
 import { runPlanner } from "./planner.mjs";
 import { commentsHoldImplementRetryCap, implementRetryCapComment } from "./role-comments.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
@@ -753,11 +754,22 @@ export function createPiJobRunner({
       });
     }
     const tokenCollector = createTokenUseCollector();
+    const jobIdentifier =
+      typeof job.identifier === "string" && job.identifier.length > 0
+        ? job.identifier
+        : typeof job.issueId === "string"
+          ? job.issueId
+          : "unknown";
+    const sessionLogger = createSessionLogCollector({
+      role: job.role,
+      identifier: jobIdentifier,
+    });
     let streamDone = Promise.resolve();
     if (collectStdout && spawned.stdout) {
       streamDone = pipeReadableJsonLines(spawned.stdout, {
         async consumeLine(line) {
           await tokenCollector.consumeLine(line);
+          await sessionLogger.consumeLine(line);
         },
       });
     }
