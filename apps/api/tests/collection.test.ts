@@ -630,6 +630,29 @@ describe("Collection /v1", () => {
     expect(listBody.favorites[0]).not.toHaveProperty("ownerHandle");
     expect(listBody.favorites[0]?.photoUrl).toContain("/v1/collection/photos/");
 
+    const photoResponse = await app.inject({
+      method: "GET",
+      url: listBody.favorites[0]!.photoUrl,
+      headers: { authorization: `Bearer ${collector.accessToken}` },
+    });
+    expect(photoResponse.statusCode).toBe(200);
+    expect(photoResponse.headers["content-type"]).toMatch(/image\//);
+
+    const disableBidding = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${ownerJersey.id}/bidding`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { biddingEnabled: false },
+    });
+    expect(disableBidding.statusCode).toBe(200);
+
+    const photoAfterBiddingOff = await app.inject({
+      method: "GET",
+      url: listBody.favorites[0]!.photoUrl,
+      headers: { authorization: `Bearer ${collector.accessToken}` },
+    });
+    expect(photoAfterBiddingOff.statusCode).toBe(200);
+
     const removeResponse = await app.inject({
       method: "DELETE",
       url: `/v1/collection/favorites/${ownerJersey.id}`,

@@ -841,8 +841,23 @@ export class CollectionService {
 
     const isOwner = row.jerseyUserId === userId;
     const isPeerBidTarget = !isOwner && row.biddingEnabled;
+    let isFavoriteCollector = false;
 
     if (!isOwner && !isPeerBidTarget) {
+      const [favorite] = await this.db
+        .select({ id: userJerseyFavorite.id })
+        .from(userJerseyFavorite)
+        .where(
+          and(
+            eq(userJerseyFavorite.collectorId, userId),
+            eq(userJerseyFavorite.userJerseyId, row.jerseyId),
+          ),
+        )
+        .limit(1);
+      isFavoriteCollector = Boolean(favorite);
+    }
+
+    if (!isOwner && !isPeerBidTarget && !isFavoriteCollector) {
       throw new NotFoundException("Photo not found");
     }
 
@@ -850,7 +865,10 @@ export class CollectionService {
       throw new NotFoundException("Photo not found");
     }
 
-    if (isPeerBidTarget && !row.objectKey.startsWith(`user/${row.jerseyUserId}/`)) {
+    if (
+      (isPeerBidTarget || isFavoriteCollector) &&
+      !row.objectKey.startsWith(`user/${row.jerseyUserId}/`)
+    ) {
       throw new NotFoundException("Photo not found");
     }
 
