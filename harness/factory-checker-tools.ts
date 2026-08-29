@@ -11,6 +11,8 @@ const execFileAsync = promisify(execFile);
 
 const BLOCKED_TOOLS = new Set(["write", "edit"]);
 const READONLY_SHELL = [/^git\s+(rev-parse|diff|log)\b/i, /^gh\s+(pr\s+(view|checks|diff)|api)\b/i];
+const SLOP_AGENT_MEMORY_EXCLUDED_TOOLS_ENV = "SLOP_AGENT_MEMORY_EXCLUDED_TOOLS";
+const SLOP_AGENT_PI_ARGS_ENV = "SLOP_AGENT_PI_ARGS";
 
 const COMMENT_UPDATE_MUTATION = `mutation CommentUpdate($id: String!, $body: String!) {
   commentUpdate(id: $id, input: { body: $body }) { success }
@@ -61,9 +63,37 @@ async function linearApi(query: string, variables: Record<string, unknown>): Pro
   return stdout;
 }
 
+function slopSpawnEnvWired(): boolean {
+  const excluded = process.env[SLOP_AGENT_MEMORY_EXCLUDED_TOOLS_ENV];
+  const piArgs = process.env[SLOP_AGENT_PI_ARGS_ENV];
+  return (
+    typeof excluded === "string" &&
+    excluded.length > 0 &&
+    typeof piArgs === "string" &&
+    piArgs.length > 0
+  );
+}
+
+function subagentTargetAgent(input: Record<string, unknown>): string {
+  if (typeof input.agent === "string") {
+    return input.agent.trim();
+  }
+  return "";
+}
+
 export default function factoryCheckerTools(pi: ExtensionAPI) {
   pi.on("tool_call", async (event) => {
     const name = event.toolName.toLowerCase();
+    if (name === "subagent") {
+      // SAFETY: pi tool_call input is a string-keyed object map for subagent delegation.
+      const input = event.input as Record<string, unknown>;
+      if (subagentTargetAgent(input) === "slop" && !slopSpawnEnvWired()) {
+        return {
+          block: true,
+          reason: "factory-checker: Slop child spawn env missing (applySlopAgentSpawnEnv)",
+        };
+      }
+    }
     if (BLOCKED_TOOLS.has(name)) {
       return { block: true, reason: "factory-checker: write/edit denied" };
     }

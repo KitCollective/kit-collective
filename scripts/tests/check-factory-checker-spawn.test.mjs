@@ -71,6 +71,49 @@ test("ratchet fails when checker Hermes config disables review", () => {
   assert.ok(missing.some((item) => item.includes("reviewEnabled")));
 });
 
+test("ratchet fails when factory-checker loses subagent on allowlist", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerSpawn: files.checkerSpawn.replace('"subagent",', ""),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("subagent")));
+});
+
+test("ratchet fails when checker-exit loses missing Slop axis guard", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerExit: files.checkerExit.replaceAll("reviewFeedbackMissingSlopAxis", "missingSlopGuard"),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("Slop axis")));
+});
+
+test("ratchet fails when pi-job loses Slop spawn wiring", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    piJob: files.piJob.replaceAll("applySlopAgentSpawnEnv", "applySlopSpawnEnv"),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("applySlopAgentSpawnEnv")));
+});
+
+test("ratchet fails when checker-exit loses harness incomplete fallback", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerExit: files.checkerExit.replaceAll(
+      "REVIEW_FEEDBACK_HARNESS_INCOMPLETE",
+      "HARNESS_INCOMPLETE",
+    ),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("REVIEW_FEEDBACK_HARNESS_INCOMPLETE")));
+});
+
 test("exported memory tools match spec allowlist", () => {
   assert.deepEqual(FACTORY_CHECKER_MEMORY_TOOLS, [
     "memory_search",
