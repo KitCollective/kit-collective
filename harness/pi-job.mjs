@@ -17,6 +17,7 @@ import {
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
+import { harnessLog } from "./harness-log.mjs";
 import {
   buildImplementAppendPath,
   resolveImplementSkillPaths,
@@ -41,7 +42,6 @@ import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { runPlanner } from "./planner.mjs";
 import { commentsHoldImplementRetryCap, implementRetryCapComment } from "./role-comments.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
-import { harnessLog } from "./harness-log.mjs";
 
 const execFile = promisify(execFileCb);
 

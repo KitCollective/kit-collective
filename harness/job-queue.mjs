@@ -9,12 +9,7 @@ import {
   floorsFromEnv,
   upsertCapacityComment,
 } from "./capacity.mjs";
-import {
-  harnessLog,
-  loopRiskForGate,
-  loopRiskForRetry,
-  resolveExitGate,
-} from "./harness-log.mjs";
+import { harnessLog, loopRiskForGate, loopRiskForRetry, resolveExitGate } from "./harness-log.mjs";
 
 /**
  * Worker health capacity stub when no reader is injected.
