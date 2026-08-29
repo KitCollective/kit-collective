@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   collectionConversationsSchema,
   collectionDiscoverJerseysSchema,
+  collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionPeerJerseySchema,
   collectionSaveResponseSchema,
@@ -569,5 +570,79 @@ describe("Collection /v1", () => {
 
     const discoverBody = collectionDiscoverJerseysSchema.parse(JSON.parse(discoverResponse.body));
     expect(discoverBody.jerseys.some((jersey) => jersey.id === ownerJersey.id)).toBe(false);
+  });
+
+  it("rejects unauthenticated favorites calls with 401", async () => {
+    const list = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+    });
+    const add = await app.inject({
+      method: "POST",
+      url: "/v1/collection/favorites",
+      payload: { userJerseyId: "00000000-0000-0000-0000-000000000099" },
+    });
+    const remove = await app.inject({
+      method: "DELETE",
+      url: "/v1/collection/favorites/00000000-0000-0000-0000-000000000099",
+    });
+
+    expect(list.statusCode).toBe(401);
+    expect(add.statusCode).toBe(401);
+    expect(remove.statusCode).toBe(401);
+  });
+
+  it("adds, lists, and removes another collector's UserJersey as a favorite", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-fav@example.com");
+    const collector = await registerSession(app, "collector-fav@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const ownFavorite = await app.inject({
+      method: "POST",
+      url: "/v1/collection/favorites",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { userJerseyId: ownerJersey.id },
+    });
+    expect(ownFavorite.statusCode).toBe(403);
+
+    const addResponse = await app.inject({
+      method: "POST",
+      url: "/v1/collection/favorites",
+      headers: { authorization: `Bearer ${collector.accessToken}` },
+      payload: { userJerseyId: ownerJersey.id },
+    });
+    expect(addResponse.statusCode).toBe(201);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${collector.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(listResponse.statusCode).toBe(200);
+    const listBody = collectionFavoritesSchema.parse(JSON.parse(listResponse.body));
+    expect(listBody.favorites).toHaveLength(1);
+    expect(listBody.favorites[0]?.userJerseyId).toBe(ownerJersey.id);
+    expect(listBody.favorites[0]?.clubLabel).toBe("F.C. København");
+    expect(listBody.favorites[0]).not.toHaveProperty("ownerHandle");
+    expect(listBody.favorites[0]?.photoUrl).toContain("/v1/collection/photos/");
+
+    const removeResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/favorites/${ownerJersey.id}`,
+      headers: { authorization: `Bearer ${collector.accessToken}` },
+    });
+    expect(removeResponse.statusCode).toBe(204);
+
+    const emptyList = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: { authorization: `Bearer ${collector.accessToken}` },
+    });
+    const emptyBody = collectionFavoritesSchema.parse(JSON.parse(emptyList.body));
+    expect(emptyBody.favorites).toHaveLength(0);
   });
 });

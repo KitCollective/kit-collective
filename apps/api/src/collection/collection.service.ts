@@ -1,15 +1,18 @@
 import {
   type CollectionConversations,
   type CollectionDiscoverJerseys,
+  type CollectionFavorites,
   type CollectionJersey,
   type CollectionJerseys,
   type CollectionPeerJersey,
   type CollectionSavePhoto,
   type CollectionSaveResponse,
   type CollectionSendBidResponse,
+  collectionAddFavoriteRequestSchema,
   collectionBiddingPatchSchema,
   collectionConversationsSchema,
   collectionDiscoverJerseysSchema,
+  collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionPeerJerseySchema,
   collectionSaveRequestSchema,
@@ -30,6 +33,7 @@ import {
   teamSeason,
   user,
   userJersey,
+  userJerseyFavorite,
   userJerseyPhoto,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
@@ -468,6 +472,93 @@ export class CollectionService {
       latestBidAmountDkk: latestBid?.amount ?? null,
       photos,
     });
+  }
+
+  async listFavorites(userId: string, locale: LabelLocale = "da"): Promise<CollectionFavorites> {
+    const rows = await this.db
+      .select({
+        userJerseyId: userJerseyFavorite.userJerseyId,
+        clubId: userJersey.clubId,
+        type: userJersey.type,
+        seasonLabel: season.label,
+      })
+      .from(userJerseyFavorite)
+      .innerJoin(userJersey, eq(userJerseyFavorite.userJerseyId, userJersey.id))
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .where(eq(userJerseyFavorite.collectorId, userId))
+      .orderBy(desc(userJerseyFavorite.createdAt));
+
+    if (rows.length === 0) {
+      return collectionFavoritesSchema.parse({ favorites: [] });
+    }
+
+    const clubIds = [...new Set(rows.map((row) => row.clubId))];
+    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const photosByJersey = await this.loadPhotosForJerseys(rows.map((row) => row.userJerseyId));
+
+    const favorites = rows.flatMap((row) => {
+      const clubLabel = clubLabels.get(row.clubId);
+      const photos = photosByJersey.get(row.userJerseyId);
+      if (!clubLabel || !photos || photos.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          userJerseyId: row.userJerseyId,
+          photoUrl: photos[0]!.photoUrl,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          type: row.type,
+        },
+      ];
+    });
+
+    return collectionFavoritesSchema.parse({ favorites });
+  }
+
+  async addFavorite(userId: string, rawBody: unknown): Promise<void> {
+    const body = collectionAddFavoriteRequestSchema.parse(rawBody);
+
+    const [jerseyRow] = await this.db
+      .select({ ownerId: userJersey.userId })
+      .from(userJersey)
+      .where(eq(userJersey.id, body.userJerseyId))
+      .limit(1);
+
+    if (!jerseyRow) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    if (jerseyRow.ownerId === userId) {
+      throw new ForbiddenException("Cannot favorite your own UserJersey");
+    }
+
+    await this.db
+      .insert(userJerseyFavorite)
+      .values({
+        collectorId: userId,
+        userJerseyId: body.userJerseyId,
+      })
+      .onConflictDoNothing({
+        target: [userJerseyFavorite.collectorId, userJerseyFavorite.userJerseyId],
+      });
+  }
+
+  async removeFavorite(userId: string, userJerseyId: string): Promise<void> {
+    const deleted = await this.db
+      .delete(userJerseyFavorite)
+      .where(
+        and(
+          eq(userJerseyFavorite.collectorId, userId),
+          eq(userJerseyFavorite.userJerseyId, userJerseyId),
+        ),
+      )
+      .returning({ id: userJerseyFavorite.id });
+
+    if (deleted.length === 0) {
+      throw new NotFoundException("Favorite not found");
+    }
   }
 
   async sendBid(
