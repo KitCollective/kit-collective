@@ -3,6 +3,7 @@ import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTypography } from "@/theme/brand-fonts";
 import { radius, space, withAlpha } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -63,6 +64,7 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const typography = useTypography();
 
   const activeRoute = state.routes[state.index]?.name ?? "collection";
 
@@ -104,7 +106,7 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
           />
           {showUnreadBadge ? (
             <View style={[styles.badge, { backgroundColor: theme.fillPrimary }]}>
-              <Text style={[styles.badgeText, { color: theme.contentInverse }]}>{unreadCount}</Text>
+              <Text style={[typography.mono, { color: theme.contentInverse }]}>{unreadCount}</Text>
             </View>
           ) : null}
         </View>
@@ -221,11 +223,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 4,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-    lineHeight: 14,
   },
   plusSlot: {
     flex: 1,
