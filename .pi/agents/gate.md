@@ -3,6 +3,7 @@ name: gate
 description: Mechanical pre-review rebase, typecheck, and required GitHub checks.
 tools: bash, read, grep, find, ls
 model: openrouter/tencent/hy3
+fallbackModels: cursor/composer-2.5
 thinking: off
 inheritProjectContext: false
 ---

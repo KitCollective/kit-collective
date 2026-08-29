@@ -2,7 +2,7 @@
 
 PI coding factory role. cwd is the issue worktree at `/var/lib/kit-pi/worktrees/<id>`.
 
-Composer parent (`PI_MODEL`). Scout and Gate pin OpenRouter `tencent/hy3` (thinking off); helpers inherit Composer. Missing `OPENROUTER_API_KEY` fails closed.
+Composer parent (`PI_MODEL`). Scout and Gate pin OpenRouter `tencent/hy3` (thinking off) with `fallbackModels: cursor/composer-2.5` when Hy3 or OpenRouter is unavailable; helpers inherit Composer. Missing `OPENROUTER_API_KEY` fails closed.
 
 **Loop order:** harness `selectImplementContext` injects rules + skills; the job prompt lists `Required helpers:` — then **Scout → required helpers → Gate**. Do not Skip Scout or helpers except on cheap retry (CI / write-scope / format).
 

@@ -1283,15 +1283,14 @@ test("implement spawn excludes memory-write tools and skill_manage", async () =>
   assert.equal(spawned[0].options.env.KIT_PI_HERMES, WORKER_MEMORY_DIR);
 });
 
-test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
+test("Scout and Gate pin Hy3 no-think with Composer fallback; helpers omit a model pin", () => {
   const scout = agentFrontmatter(".pi/agents/scout.md");
   const gate = agentFrontmatter(".pi/agents/gate.md");
   for (const agent of [scout, gate]) {
     assert.match(agent.frontmatter, /^model:\s+openrouter\/tencent\/hy3\s*$/m);
+    assert.match(agent.frontmatter, /^fallbackModels:\s+cursor\/composer-2\.5\s*$/m);
     assert.match(agent.frontmatter, /^thinking:\s+off\s*$/m);
-    assert.doesNotMatch(agent.frontmatter, /cursor\/composer-2\.5/);
-    assert.doesNotMatch(agent.frontmatter, /stealth|ox-alpha/i);
-    assert.doesNotMatch(agent.frontmatter, /^fallbackModels:/m);
+    assert.doesNotMatch(agent.frontmatter, /stealth|ox-alpha|kimi|moonshot/i);
     assert.match(agent.text, /Exacto/);
     assert.match(agent.text, /not a hard fail|do not fail/i);
     assert.match(agent.text, /do not fall back to stealth\/ox-alpha/i);
