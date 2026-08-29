@@ -1,5 +1,6 @@
 import type { CollectionConversationMessage } from "@kit/api-contract";
 import { StyleSheet, Text, View } from "react-native";
+import { bidCardAmountTypography } from "@/components/bid-card-amount";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -79,8 +80,5 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     maxWidth: 320,
   },
-  amount: {
-    fontSize: 20,
-    lineHeight: 28,
-  },
+  amount: bidCardAmountTypography(),
 });
