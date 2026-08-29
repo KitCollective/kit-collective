@@ -14,6 +14,7 @@ import {
   createWorkerSlots,
   parseImplementSlots,
 } from "../job-queue.mjs";
+import { harnessDockerCursorPaths } from "../implement-context.mjs";
 import { createLinearCliClient } from "../linear-cli.mjs";
 import {
   assertPiPackagesReady,
@@ -534,6 +535,8 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.match(dockerfile, /pr-write-scope\.mjs/);
   assert.match(dockerfile, /role-comments\.mjs/);
   assert.match(dockerfile, /COPY \.pi /);
+  assert.match(dockerfile, /COPY \.cursor\/rules /);
+  assert.match(dockerfile, /COPY \.cursor\/skills /);
   assert.match(dockerfile, /pi install/);
   assert.match(dockerfile, /PI_WORKSPACE=\/workspace/);
 });
@@ -552,6 +555,28 @@ test("root dockerignore re-includes Pi role and agent markdown after excluding *
   const excludeMd = lines.indexOf("**/*.md");
   assert.notEqual(excludeMd, -1);
   assert.equal(lines[excludeMd + 1], "!.pi/**/*.md");
+  assert.equal(lines[excludeMd + 2], "!.cursor/skills/**/SKILL.md");
+});
+
+test("root dockerignore and Dockerfile ship runtime .cursor rules and skills for PI worker", () => {
+  const dockerignore = readFileSync(join(ROOT, ".dockerignore"), "utf8");
+  assert.match(dockerignore, /^\.cursor\/$/m);
+  assert.match(dockerignore, /^!\.cursor\/rules\/$/m);
+  assert.match(dockerignore, /^!\.cursor\/rules\/\*\.mdc$/m);
+  assert.match(dockerignore, /^!\.cursor\/skills\/$/m);
+  assert.match(dockerignore, /^!\.cursor\/skills\/\*\*\/SKILL\.md$/m);
+
+  const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
+  assert.match(dockerfile, /COPY \.cursor\/rules /);
+  assert.match(dockerfile, /COPY \.cursor\/skills /);
+
+  const { skills, rules } = harnessDockerCursorPaths();
+  assert.ok(rules.includes(".cursor/rules/design-system.mdc"));
+  assert.ok(skills.includes(".cursor/skills/tdd/SKILL.md"));
+  assert.ok(skills.includes(".cursor/skills/implement/SKILL.md"));
+  for (const rel of [...skills, ...rules]) {
+    assert.equal(existsSync(join(ROOT, rel)), true, `missing ${rel}`);
+  }
 });
 
 test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control exist", () => {
