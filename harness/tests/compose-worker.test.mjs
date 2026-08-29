@@ -521,6 +521,8 @@ test("docker-compose runs webhook + one replica, no Coolify, no DATABASE_URL", (
 test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onboard", () => {
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /@schpet\/linear-cli@2\.5\.0/);
+  assert.match(dockerfile, /implement-context\.mjs/);
+  assert.match(dockerfile, /pi-job\.mjs/);
   assert.match(dockerfile, /pi-event-stream\.mjs/);
   assert.match(dockerfile, /delegate-gate\.mjs/);
   assert.match(dockerfile, /worktree\.mjs/);
