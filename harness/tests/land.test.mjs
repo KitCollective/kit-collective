@@ -614,6 +614,12 @@ test("createLandGh.merge refuses bare gh pr merge without a strategy flag", () =
   assert.match(result.error, /--merge, --squash, or --rebase/);
 });
 
+test("land.mjs viewPr requests mergeStateStatus from gh pr view", () => {
+  const source = readFileSync(join(ROOT, "harness/land.mjs"), "utf8");
+  assert.match(source, /mergeStateStatus/);
+  assert.match(source, /number,url,mergeable,mergeStateStatus,baseRefName,state,statusCheckRollup/);
+});
+
 test("production createLandGh calls gh pr merge without --force and reads the merge commit SHA", async () => {
   const calls = [];
   const gh = createLandGh({
