@@ -8,6 +8,7 @@
 import { execFile as execFileCb, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  ghMergeArgsIncludeStrategy,
   LAND_UNKNOWN_MERGEABLE_RETRIES,
   LAND_UNKNOWN_RETRY_MS,
   landAtMergeGate,
@@ -373,6 +374,12 @@ export function createLandGh({
     merge(args) {
       if (!Array.isArray(args) || args.includes("--force")) {
         return { ok: false, error: "refusing --force" };
+      }
+      if (!ghMergeArgsIncludeStrategy(args)) {
+        return {
+          ok: false,
+          error: "gh pr merge requires --merge, --squash, or --rebase",
+        };
       }
       try {
         const number = args[2];

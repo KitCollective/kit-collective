@@ -8,6 +8,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  GH_PR_MERGE_STRATEGY_FLAGS,
+  ghMergeArgsIncludeStrategy,
+  LAND_GH_MERGE_STRATEGY,
+} from "../../scripts/lib/land-policy.mjs";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import {
   applyLandWorkpad,
@@ -571,6 +576,42 @@ test("applyLandWorkpad records SHA on success and the merge error under Review f
   assert.match(failure, /### Review feedback/);
   assert.match(failure, /protected branch hook declined/);
   assert.equal(failure.includes("Done"), false);
+});
+
+test("land-policy source locks gh pr merge strategy flag (no bare merge)", () => {
+  const source = readFileSync(join(ROOT, "scripts/lib/land-policy.mjs"), "utf8");
+  assert.match(source, /export const LAND_GH_MERGE_STRATEGY = "--merge"/);
+  assert.match(
+    source,
+    /ghArgs:\s*\["pr",\s*"merge",\s*String\(pr\.number\),\s*LAND_GH_MERGE_STRATEGY\]/,
+  );
+  assert.equal(
+    source.includes('["pr", "merge", String(pr.number)]'),
+    false,
+    "bare gh pr merge without strategy flag must not appear in land-policy.mjs",
+  );
+});
+
+test("ghMergeArgsIncludeStrategy accepts --merge, --squash, or --rebase and rejects bare merge", () => {
+  for (const flag of GH_PR_MERGE_STRATEGY_FLAGS) {
+    assert.equal(ghMergeArgsIncludeStrategy(["pr", "merge", "57", flag]), true, flag);
+  }
+  assert.equal(ghMergeArgsIncludeStrategy(["pr", "merge", "57"]), false);
+  assert.equal(ghMergeArgsIncludeStrategy(["pr", "view", "57"]), false);
+  assert.equal(LAND_GH_MERGE_STRATEGY, "--merge");
+});
+
+test("createLandGh.merge refuses bare gh pr merge without a strategy flag", () => {
+  const gh = createLandGh({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    repo: "KitCollective/kit-collective",
+    runSync() {
+      throw new Error("gh must not run for bare merge args");
+    },
+  });
+  const result = gh.merge(["pr", "merge", "57"]);
+  assert.equal(result.ok, false);
+  assert.match(result.error, /--merge, --squash, or --rebase/);
 });
 
 test("production createLandGh calls gh pr merge without --force and reads the merge commit SHA", async () => {
