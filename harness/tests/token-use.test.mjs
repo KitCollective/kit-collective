@@ -73,7 +73,9 @@ const PI_CHECKER_USAGE_FIXTURE = [
   '{"type":"agent_end","messages":[]}',
 ].join("\n");
 
-function workpadStore(initial = `${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`) {
+function workpadStore(
+  initial = `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop: (none)\n`,
+) {
   const comments = [{ id: "c1", body: initial }];
   const updates = [];
   return {
