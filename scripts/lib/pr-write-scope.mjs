@@ -54,8 +54,6 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/tests/check-implement-cheap-retry.test.mjs",
   "scripts/tests/check-implement-checker-fail-resume.test.mjs",
   "scripts/tests/check-implement-first-run-loop.test.mjs",
-  "harness/implement-exit.mjs",
-  "harness/tests/implement-adw.test.mjs",
 ]);
 
 /**
