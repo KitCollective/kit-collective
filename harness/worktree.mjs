@@ -207,7 +207,7 @@ export function createWorktreeAdapter({
       if (!existsSync(mirrorDir)) {
         await git(["clone", "--bare", remoteUrl, mirrorDir]);
       }
-      await git(["--git-dir", mirrorDir, "fetch", "origin", lane]);
+      await git(["--git-dir", mirrorDir, "fetch", "origin", `${lane}:refs/remotes/origin/${lane}`]);
       const canonicalOnRemote = await fetchIssueBranch(git, mirrorDir, canonicalBranch);
       let openPrHeads = [];
       if (typeof findOpenIssuePr === "function") {

@@ -205,9 +205,8 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
   assert.equal(worktreeBranch("KIT-99"), "kit-99");
   assert.ok(gitCalls.some((args) => args.includes("clone") && args.includes("--bare")));
   assert.ok(
-    gitCalls.some(
-      (args) => args.includes("fetch") && args.includes("origin") && args.includes("development"),
-    ),
+    gitCalls.some((args) => args.includes("development:refs/remotes/origin/development")),
+    "expected fetch refspec that updates refs/remotes/origin/development",
   );
   assert.ok(
     gitCalls.some(
@@ -561,6 +560,27 @@ test("production gh.syncToRemoteBranch fetches the issue refspec and resets hard
         call.args.includes("--hard") &&
         call.args.includes("origin/kit-126"),
     ),
+  );
+});
+
+test("production gh.rebase fetches the lane into refs/remotes/origin/development", async () => {
+  const calls = [];
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      return "";
+    },
+  });
+  await gh.rebase({ cwd: "/tmp/KIT-116", onto: "origin/development", branch: "kit-116" });
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.command === "git" &&
+        call.args.includes("fetch") &&
+        call.args.includes("development:refs/remotes/origin/development"),
+    ),
+    "expected rebase fetch to update refs/remotes/origin/development",
   );
 });
 

@@ -331,6 +331,38 @@ test("reuse checkout of a dirty worktree force-resets onto the PR head", async (
   );
 });
 
+test("implement checkout fetches the lane into refs/remotes/origin/development", async () => {
+  const gitCalls = [];
+  const adapter = createWorktreeAdapter({
+    mirrorDir: "/var/lib/kit-pi/mirror.git",
+    worktreesDir: "/var/lib/kit-pi/worktrees",
+    existsSync: (path) => path === "/var/lib/kit-pi/mirror.git",
+    mkdirSync() {},
+    async findOpenIssuePr() {
+      return null;
+    },
+    async runGit(args) {
+      gitCalls.push(args);
+      if (args.some((arg) => String(arg).includes("refs/remotes/origin/kit-116"))) {
+        throw new Error("issue branch not on origin");
+      }
+      return { stdout: "ok\n", status: 0 };
+    },
+  });
+
+  await adapter.checkout({ identifier: "KIT-116", mode: "implement" });
+  assert.ok(
+    gitCalls.some((args) => args.includes("development:refs/remotes/origin/development")),
+    "expected fetch refspec that updates refs/remotes/origin/development",
+  );
+  assert.ok(
+    gitCalls.some(
+      (args) =>
+        args.includes("worktree") && args.includes("add") && args.includes("origin/development"),
+    ),
+  );
+});
+
 test("fetch of an issue branch writes refs/remotes/origin so reuse can see a missing kit-n", async () => {
   const gitCalls = [];
   const adapter = createWorktreeAdapter({

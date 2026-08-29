@@ -260,6 +260,7 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 - A single open PR head (`nicklas/kit-n-…`) is the checkout start point; a stale `KIT-n` worktree is moved onto that head.
 - Two open PRs whose titles start with the identifier fail closed.
 - `completeImplementAdw` reuses `findOpenIssuePr` and must not call `createPr` when that issue already has an open `development` PR.
+- Implement checkout and `gh.rebase` fetch the integration lane with `development:refs/remotes/origin/development` so `worktree add` / rebase sit on GitHub `development`, not a stale mirror tracking ref.
 
 Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `development` while PR #45 lived on `nicklas/kit-47-…`, and a second PR after `gh pr view` in that tree saw nothing. Tighten only.
 
