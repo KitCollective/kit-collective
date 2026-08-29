@@ -141,6 +141,7 @@ export default function InboxScreen() {
             <ConversationView
               conversationId={selectedConversationId}
               onBack={() => setSelectedConversationId(null)}
+              onOpenDetails={() => undefined}
             />
           ) : (
             <EmptyState
