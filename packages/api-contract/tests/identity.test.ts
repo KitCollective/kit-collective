@@ -37,6 +37,8 @@ describe("identitySessionSchema", () => {
         email: "collector@example.com",
         role: "user" as const,
         handle: "collector",
+        aboutMe: null,
+        avatarUrl: null,
       },
     };
     expect(identitySessionSchema.parse(session)).toEqual(session);

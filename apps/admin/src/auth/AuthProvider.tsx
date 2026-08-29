@@ -109,9 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (sessionBody.user.role !== "admin") {
       throw new Error("Staff access required");
     }
-    const me = await apiFetch<IdentityMe>("/identity/me", { token: sessionBody.accessToken });
-    const parsedUser = identityMeSchema.parse(me);
-    const next = { token: sessionBody.accessToken, user: parsedUser };
+    const next = { token: sessionBody.accessToken, user: sessionBody.user };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setSession(next);
   }, []);

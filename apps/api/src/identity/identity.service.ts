@@ -93,6 +93,8 @@ export class IdentityService {
         email: user.email,
         role: user.role,
         handle: user.handle,
+        aboutMe: user.aboutMe,
+        avatarObjectKey: user.avatarObjectKey,
       });
 
     if (!created) {
@@ -110,6 +112,8 @@ export class IdentityService {
         email: user.email,
         role: user.role,
         handle: user.handle,
+        aboutMe: user.aboutMe,
+        avatarObjectKey: user.avatarObjectKey,
         passwordHash: user.passwordHash,
       })
       .from(user)
@@ -125,12 +129,7 @@ export class IdentityService {
       throw new UnauthorizedException("Invalid email or password");
     }
 
-    return this.buildSession({
-      id: found.id,
-      email: found.email,
-      role: found.role,
-      handle: found.handle,
-    });
+    return this.buildSession(found);
   }
 
   async getMe(userId: string): Promise<IdentityMe> {
@@ -370,6 +369,8 @@ export class IdentityService {
     email: string;
     role: IdentityRole;
     handle: string;
+    aboutMe: string | null;
+    avatarObjectKey: string | null;
   }): IdentitySession {
     const payload: JwtPayload = {
       sub: row.id,
@@ -384,6 +385,8 @@ export class IdentityService {
         email: row.email,
         role: row.role,
         handle: row.handle,
+        aboutMe: row.aboutMe,
+        avatarUrl: row.avatarObjectKey ? avatarUrlForUser() : null,
       },
     });
   }

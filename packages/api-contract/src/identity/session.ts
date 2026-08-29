@@ -25,18 +25,18 @@ export const identityCredentialsSchema = z
 
 export type IdentityCredentials = z.infer<typeof identityCredentialsSchema>;
 
-export const identitySessionSchema = z
-  .object({
-    accessToken: z.string().min(1),
-    user: identityUserSchema,
-  })
-  .strict();
-
-export type IdentitySession = z.infer<typeof identitySessionSchema>;
-
 export const identityMeSchema = identityUserSchema.extend({
   aboutMe: z.string().nullable(),
   avatarUrl: z.string().min(1).nullable(),
 });
 
 export type IdentityMe = z.infer<typeof identityMeSchema>;
+
+export const identitySessionSchema = z
+  .object({
+    accessToken: z.string().min(1),
+    user: identityMeSchema,
+  })
+  .strict();
+
+export type IdentitySession = z.infer<typeof identitySessionSchema>;
