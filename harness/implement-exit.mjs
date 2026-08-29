@@ -14,10 +14,12 @@ import {
   shouldEnforceWriteScope,
 } from "../scripts/lib/pr-write-scope.mjs";
 import { ensureLoopCounters, incrementCiFailCycles } from "./auto-merge.mjs";
+import { WORKPAD_HEADING } from "./linear-cli.mjs";
+import { implementInReviewComment, implementSummaryFromWorkpad } from "./role-comments.mjs";
 
 const execFile = promisify(execFileCb);
 
-export const WORKPAD_HEADING = "## Agent Workpad";
+export { WORKPAD_HEADING };
 export const IMPLEMENT_PR_BASE = "development";
 export const IN_REVIEW = "In Review";
 export const IMPLEMENTING = "Implementing";
@@ -188,8 +190,11 @@ export function createListChangedFiles({ runCommand } = {}) {
       });
       return stdout;
     });
-  return async ({ cwd }) => {
-    const stdout = await run("git", ["diff", "--name-only", "origin/development...HEAD"], { cwd });
+  return async ({ cwd, prUrl } = {}) => {
+    const stdout =
+      typeof prUrl === "string" && prUrl.length > 0
+        ? await run("gh", ["pr", "diff", prUrl, "--name-only"], { cwd })
+        : await run("git", ["diff", "--name-only", "origin/development...HEAD"], { cwd });
     return String(stdout)
       .split("\n")
       .map((line) => line.trim())
@@ -433,6 +438,25 @@ export function upsertWorkpadEvidence(current, { prUrl, identifier }) {
 }
 
 /**
+ * @param {{ url?: string, mergeable?: string, checks?: object[] } | null | undefined} pr
+ * @param {{ url?: string, mergeable?: string, checks?: object[] } | null} listed
+ * @param {string} identifier
+ */
+function applyListedPr(pr, listed, identifier) {
+  if (listed?.url && typeof pr?.url === "string" && pr.url.length > 0 && listed.url !== pr.url) {
+    throw new Error(`${identifier} has multiple open PRs`);
+  }
+  if ((typeof pr?.url !== "string" || pr.url.length === 0) && typeof listed?.url === "string") {
+    return {
+      url: listed.url,
+      mergeable: listed.mergeable ?? pr?.mergeable ?? "UNKNOWN",
+      checks: listed.checks ?? pr?.checks ?? [],
+    };
+  }
+  return pr;
+}
+
+/**
  * @param {{
  *   job: { identifier: string, issueId: string, adwFile?: string },
  *   checkout: { path: string, branch: string },
@@ -477,27 +501,31 @@ export async function completeImplementAdw(input) {
   } = input;
   assertAdwOpensPr(adwText);
 
-  await gh.rebase({ cwd: checkout.path, onto: "origin/development", branch: checkout.branch });
+  let listed = null;
+  if (typeof gh.findOpenIssuePr === "function") {
+    listed = await gh.findOpenIssuePr({ identifier: job.identifier });
+  }
+  let pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
+  const existingPrUrl =
+    (typeof pr?.url === "string" && pr.url.length > 0 && pr.url) ||
+    (typeof listed?.url === "string" && listed.url) ||
+    "";
+  const alreadyMergeable = pr?.mergeable === "MERGEABLE" && existingPrUrl.length > 0;
+  if (alreadyMergeable) {
+    if (typeof gh.syncToRemoteBranch === "function") {
+      await gh.syncToRemoteBranch({ cwd: checkout.path, branch: checkout.branch });
+    }
+  } else {
+    await gh.rebase({ cwd: checkout.path, onto: "origin/development", branch: checkout.branch });
+    if (existingPrUrl.length > 0) {
+      pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
+    }
+  }
   await typecheckTouched({ cwd: checkout.path });
   if (typeof runPnpmTest === "function") {
     throw new Error("full pnpm test stays on GitHub Actions, not on this worker");
   }
 
-  let listed = null;
-  if (typeof gh.findOpenIssuePr === "function") {
-    listed = await gh.findOpenIssuePr({ identifier: job.identifier });
-  }
-  let pr = await gh.viewPr({ cwd: checkout.path });
-  if (listed?.url && typeof pr?.url === "string" && pr.url.length > 0 && listed.url !== pr.url) {
-    throw new Error(`${job.identifier} has multiple open PRs`);
-  }
-  if ((typeof pr?.url !== "string" || pr.url.length === 0) && typeof listed?.url === "string") {
-    pr = {
-      url: listed.url,
-      mergeable: listed.mergeable ?? "UNKNOWN",
-      checks: listed.checks ?? [],
-    };
-  }
   if (typeof pr?.url !== "string" || pr.url.length === 0) {
     pr = await gh.createPr({
       cwd: checkout.path,
@@ -546,7 +574,7 @@ export async function completeImplementAdw(input) {
     const listChangedFiles = listChangedFilesInput ?? createListChangedFiles();
     let changedFiles;
     try {
-      changedFiles = await listChangedFiles({ cwd: checkout.path });
+      changedFiles = await listChangedFiles({ cwd: checkout.path, prUrl: pr?.url });
     } catch {
       const retry = await writeWriteScopeRetryWorkpad({
         job,
@@ -578,6 +606,15 @@ export async function completeImplementAdw(input) {
     }),
   );
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  if (typeof linear.commentIssue === "function") {
+    await linear.commentIssue({
+      issueId: job.issueId,
+      body: implementInReviewComment(job.identifier, {
+        prUrl: pr.url,
+        summary: implementSummaryFromWorkpad(body),
+      }),
+    });
+  }
   await linear.setStatus({ issueId: job.issueId, status: IN_REVIEW });
 
   return { pr, status: IN_REVIEW, ciRetry: false, writeScopeRetry: false };

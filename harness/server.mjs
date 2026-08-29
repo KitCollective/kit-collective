@@ -21,7 +21,6 @@ import { createLinearCliClient } from "./linear-cli.mjs";
 import { assertPiPackagesReady, createPiJobRunner, resolvePiWorkspace } from "./pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS, startPlannerPoller } from "./planner.mjs";
 import { runResume, startResumePoller } from "./resume.mjs";
-import { createLinearSessionAdapter } from "./session-adapter.mjs";
 import { createHttpHandler } from "./webhook-router.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
@@ -81,7 +80,10 @@ export async function startWorkerServer({
   await assertPiPackagesReady({ root: workspace, listPackages });
   const linearClient = linear ?? createLinearCliClient({ env, runCommand });
   const ghClient = createGhClient({ env, runCommand });
-  const trees = createWorktreeAdapter({ env });
+  const trees = createWorktreeAdapter({
+    env,
+    findOpenIssuePr: (identifier) => ghClient.findOpenIssuePr({ identifier }),
+  });
   const capacitySnapshot =
     typeof readCapacity === "function"
       ? readCapacity
@@ -97,7 +99,6 @@ export async function startWorkerServer({
           runCommand,
           gh: ghClient,
           linear: linearClient,
-          session: createLinearSessionAdapter({ linear: linearClient }),
           typecheckTouched: createTypecheckTouched({ runCommand }),
           readCapacity: capacitySnapshot,
         });
@@ -137,14 +138,12 @@ export async function startWorkerServer({
   const handler = createWorkerHandler({
     env,
     secret: env.LINEAR_WEBHOOK_SECRET,
-    sessionSecret: env.LINEAR_PI_WEBHOOK_SECRET,
     now,
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
     enqueue: slots,
     health: () => ({ ...slots.health(), tokens: lastTokens }),
     worktree: trees,
-    session: createLinearSessionAdapter({ linear: linearClient }),
     delegateGateConfig,
     readCapacity: capacitySnapshot,
   });
@@ -159,6 +158,7 @@ export async function startWorkerServer({
   });
   return new Promise((resolve) => {
     server.listen(listenPort, listenHost, () => {
+      console.error(`[worker] listen pollMs=${pollMs} intakeMs=${intakeMs}`);
       if (pollMs > 0) {
         stopPoller = startPlannerPoller({ enqueue: slots, intervalMs: pollMs });
         stopResumePoller = startResumePoller({ enqueue: slots, intervalMs: pollMs });

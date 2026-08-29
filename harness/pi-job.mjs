@@ -15,17 +15,13 @@ import {
   waitForCapacity,
 } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
-import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
+import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
-import { completeLand, createLandGh } from "./land.mjs";
+import { completeLand, createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
-import {
-  createPiEventStreamConsumer,
-  pipeReadableJsonLines,
-  STREAMING_ROLES,
-} from "./pi-event-stream.mjs";
+import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { runPlanner } from "./planner.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
@@ -35,6 +31,24 @@ export const REQUIRED_PI_PACKAGES = [
   "npm:pi-subagents",
   "npm:@ghoseb/pi-damage-control",
   "npm:pi-cursor-sdk",
+  "npm:pi-hermes-memory",
+];
+
+/** Worker memory store on the kit_pi volume — outside Issue worktrees (KIT-111). */
+export const WORKER_MEMORY_DIR = "/var/lib/kit-pi/hermes";
+
+/** Relative to PI_WORKSPACE; holds committed hermes-memory-config.json. */
+export const HERMES_AGENT_DIR_REL = ".pi/agent";
+
+/** Factory-checker Memory writer Hermes config (KIT-112). */
+export const HERMES_CHECKER_AGENT_DIR_REL = ".pi/agent-checker";
+
+/** Implement parent and subagents are Memory readers — no writes or skill_manage (KIT-111). */
+export const IMPLEMENT_MEMORY_EXCLUDED_TOOLS = [
+  "memory_add",
+  "memory_replace",
+  "memory_remove",
+  "skill_manage",
 ];
 
 /** In-repo Pi package. Loaded via `--skill` on UI implement only — not `.pi/settings.json`. */
@@ -449,10 +463,10 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
 export function implementPrompt(role, identifier, adwFile) {
   if (role === "implement") {
     const adw = typeof adwFile === "string" ? ` ADW ${adwFile}.` : "";
-    return `Factory role implement for ${identifier}.${adw} Update the existing workpad. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
+    return `Factory role implement for ${identifier}.${adw} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
   }
   if (role === "factory-checker") {
-    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete finding set (- (none) on pass). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
+    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
   }
   return typeof adwFile === "string"
     ? `Factory role ${role} for ${identifier}. ADW ${adwFile}.`
@@ -492,10 +506,13 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
   const list =
     listPackages ??
     (async () => {
+      const childEnv = { ...process.env };
+      delete childEnv.PI_CODING_AGENT_DIR;
       const { stdout } = await execFile("pi", ["list"], {
         encoding: "utf8",
         timeout: 30_000,
         cwd: root,
+        env: childEnv,
       });
       return stdout;
     });
@@ -534,6 +551,8 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
     typeof options.browserSkill === "string" && options.browserSkill.length > 0
       ? ["--skill", options.browserSkill]
       : [];
+  const memoryReaderArgs =
+    role === "implement" ? ["--exclude-tools", IMPLEMENT_MEMORY_EXCLUDED_TOOLS.join(",")] : [];
   return [
     "-p",
     "-a",
@@ -541,6 +560,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
     "--model",
     model,
     ...skillArgs,
+    ...memoryReaderArgs,
     "--append-system-prompt",
     join(workspace, roleFile),
     "--",
@@ -560,7 +580,6 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status?: number | null, stdout?: import("node:stream").Readable, closePromise?: Promise<{ status: number | null }> }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
- *   session?: { emitStream?: Function },
  *   now?: () => number,
  *   sleep?: (ms: number) => Promise<unknown>,
  *   capacitySleep?: (ms: number) => Promise<unknown>,
@@ -581,7 +600,6 @@ export function createPiJobRunner({
   typecheckTouched,
   spawnProcess,
   runCommand,
-  session,
   now,
   sleep,
   capacitySleep,
@@ -630,12 +648,8 @@ export function createPiJobRunner({
    */
   async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, piOptions = {}) {
     const args = piArgsForRole(job.role, workspace, roleFile, model, prompt, piOptions);
-    const streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
+    const _streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
     const collectStdout = STREAMING_ROLES.has(job.role);
-    const shouldStream =
-      collectStdout &&
-      typeof session?.emitStream === "function" &&
-      typeof streamIssueId === "string";
     const stdio = collectStdout ? ["inherit", "pipe", "inherit"] : "inherit";
     const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
     const waitClose =
@@ -657,20 +671,9 @@ export function createPiJobRunner({
     const tokenCollector = createTokenUseCollector();
     let streamDone = Promise.resolve();
     if (collectStdout && spawned.stdout) {
-      const streamConsumer = shouldStream
-        ? createPiEventStreamConsumer({ session, issueId: streamIssueId, now })
-        : null;
       streamDone = pipeReadableJsonLines(spawned.stdout, {
         async consumeLine(line) {
           await tokenCollector.consumeLine(line);
-          if (streamConsumer) {
-            await streamConsumer.consumeLine(line);
-          }
-        },
-        async finish() {
-          if (streamConsumer) {
-            await streamConsumer.finish();
-          }
         },
       });
     }
@@ -889,15 +892,38 @@ export function createPiJobRunner({
         cwd = checkout.path;
       }
       const prompt = implementPrompt(job.role, identifier, job.adwFile);
+      const hermesDir =
+        typeof env.KIT_PI_HERMES === "string" && env.KIT_PI_HERMES.length > 0
+          ? env.KIT_PI_HERMES
+          : WORKER_MEMORY_DIR;
+      const agentDir =
+        job.role === "factory-checker"
+          ? join(workspace, HERMES_CHECKER_AGENT_DIR_REL)
+          : typeof env.PI_CODING_AGENT_DIR === "string" && env.PI_CODING_AGENT_DIR.length > 0
+            ? env.PI_CODING_AGENT_DIR
+            : join(workspace, HERMES_AGENT_DIR_REL);
       const spawnEnv = {
         PATH: process.env.PATH,
         HOME: process.env.HOME,
         ...env,
         LINEAR_API_KEY: env.LINEAR_CLI_API_KEY,
+        KIT_PI_HERMES: hermesDir,
+        PI_CODING_AGENT_DIR: agentDir,
       };
       delete spawnEnv.DATABASE_URL;
       if (job.role === "factory-checker") {
         spawnEnv.LINEAR_ISSUE_ID = job.issueId ?? identifier;
+        applySlopAgentSpawnEnv(spawnEnv);
+        const linearClient = linear ?? job.linear;
+        const issue =
+          typeof linearClient?.getIssue === "function"
+            ? await linearClient.getIssue(job.issueId ?? identifier)
+            : null;
+        const linkedPr = pullRequestFromAttachments(issue?.attachments);
+        if (linkedPr) {
+          spawnEnv.GITHUB_PR_REPO = linkedPr.repo;
+          spawnEnv.GITHUB_PR_NUMBER = String(linkedPr.number);
+        }
       }
       let browserSkill;
       if (job.role === "implement") {
@@ -928,7 +954,7 @@ export function createPiJobRunner({
       if (result.idleTimeout) {
         return timeoutPark(job, identifier, jobIdleMs(env));
       }
-      if (result.status !== 0) {
+      if (result.status !== 0 && job.role !== "implement") {
         throw new Error(`pi exited ${result.status} for ${identifier}`);
       }
       if (job.role === "implement") {

@@ -154,6 +154,9 @@ function fakeLinear(issue = snapshot()) {
       calls.push(["updateWorkpad", input]);
       comments[0].body = input.body;
     },
+    async commentIssue(input) {
+      calls.push(["commentIssue", input]);
+    },
     async setStatus(input) {
       calls.push(["setStatus", input]);
       this.issue = { ...this.issue, status: input.status };
@@ -238,7 +241,7 @@ test("Merging + MERGEABLE + green checks merges into development without --force
   assert.equal(result.sha, SHA);
   const merge = gh.calls.find((call) => call[0] === "merge");
   assert.ok(merge);
-  assert.deepEqual(merge[1], ["pr", "merge", "57"]);
+  assert.deepEqual(merge[1], ["pr", "merge", "57", "--merge"]);
   assert.equal(merge[1].includes("--force"), false);
   assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
     issueId: ISSUE_ID,
@@ -247,6 +250,8 @@ test("Merging + MERGEABLE + green checks merges into development without --force
   const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
   assert.match(workpad.body, /abc1234def567890/);
   assert.equal(workpad.commentId, "c1");
+  const mergeComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(mergeComment.body, /merged to development — abc1234def567890/);
 });
 
 test("merge failure returns Implementing with the error under Review feedback and never Done", async () => {
@@ -270,6 +275,8 @@ test("merge failure returns Implementing with the error under Review feedback an
   assert.match(workpad.body, /### Review feedback/);
   assert.match(workpad.body, /protected branch hook declined/);
   assert.equal(linear.issue.status, "Implementing");
+  const failComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(failComment.body, /merge failed/);
 });
 
 test("land never merges a PR whose base is staging or production", async () => {
@@ -349,7 +356,7 @@ test("fail loop then success loop run on the same branch/PR", async () => {
   const merges = gh.calls.filter((call) => call[0] === "merge");
   assert.equal(merges.length, 2);
   assert.deepEqual(merges[0][1], merges[1][1]);
-  assert.deepEqual(merges[0][1], ["pr", "merge", "57"]);
+  assert.deepEqual(merges[0][1], ["pr", "merge", "57", "--merge"]);
   assert.match(linear.comments[0].body, /abc1234def567890/);
 });
 
@@ -434,7 +441,7 @@ test("production createLandGh calls gh pr merge without --force and reads the me
   assert.equal(pr.number, 57);
   assert.equal(pr.baseRef, "development");
   assert.equal(pr.mergeable, "MERGEABLE");
-  const merged = gh.merge(["pr", "merge", "57"]);
+  const merged = gh.merge(["pr", "merge", "57", "--merge"]);
   assert.equal(merged.ok, true);
   assert.equal(merged.sha, SHA);
   assert.equal(

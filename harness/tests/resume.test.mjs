@@ -25,7 +25,6 @@ function validWorkerEnv() {
     CURSOR_API_KEY: "cursor_test",
     LINEAR_CLI_API_KEY: "lin_cli_test",
     LINEAR_WEBHOOK_SECRET: SECRET,
-    LINEAR_PI_WEBHOOK_SECRET: "session-secret",
     GH_TOKEN: "ghp_test",
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     LINEAR_PI_CLIENT_ID: "client-id",
@@ -44,7 +43,7 @@ function orphan({
   status = "Implementing",
   labels = ["Feature"],
   linearType = "Feature",
-  delegate = { name: "Pi", id: "pi-app-user-1" },
+  delegate = null,
   description = "write-scope: harness/**",
   priority = 2,
   createdAt = "2026-08-27T00:00:00.000Z",
@@ -93,7 +92,7 @@ function fakeEnqueue() {
   };
 }
 
-test("runResume enqueues implement for Implementing + Pi without moving status", async () => {
+test("runResume enqueues implement for Implementing with empty Agent without moving status", async () => {
   const enqueue = fakeEnqueue();
   const result = await runResume({
     linear: fakeLinear([orphan()]),
@@ -150,7 +149,7 @@ test("runResume enqueues checker, auto-merge, and land for started factory state
   );
 });
 
-test("runResume skips Parked and Implementing without Pi", async () => {
+test("runResume skips Parked and Implementing with Cursor Agent", async () => {
   const enqueue = fakeEnqueue();
   const result = await runResume({
     linear: fakeLinear([
@@ -161,10 +160,10 @@ test("runResume skips Parked and Implementing without Pi", async () => {
         delegate: { name: "Pi" },
       }),
       orphan({
-        id: "issue-human",
+        id: "issue-cursor",
         identifier: "KIT-11",
         status: "Implementing",
-        delegate: null,
+        delegate: { name: "Cursor" },
       }),
     ]),
     enqueue,
@@ -247,6 +246,68 @@ test("resume poller enqueues immediately and on the planner interval", async () 
   timers[0].fn();
   assert.deepEqual(jobs, [{ role: "resume" }, { role: "resume" }]);
   stop();
+});
+
+test("resume enqueues factory-checker while planner is still in flight", async () => {
+  let releasePlanner;
+  const holdPlanner = new Promise((resolve) => {
+    releasePlanner = resolve;
+  });
+  let plannerStarted;
+  const plannerStartedPromise = new Promise((resolve) => {
+    plannerStarted = resolve;
+  });
+  let releaseChecker;
+  const holdChecker = new Promise((resolve) => {
+    releaseChecker = resolve;
+  });
+  const ran = [];
+  const slots = createWorkerSlots({
+    async run(job) {
+      ran.push(job.role);
+      if (job.role === "planner") {
+        plannerStarted();
+        await holdPlanner;
+        return job;
+      }
+      if (job.role === "resume") {
+        return runResume({
+          linear: fakeLinear([
+            orphan({
+              id: "issue-126",
+              identifier: "KIT-126",
+              status: "In Review",
+              description: "",
+            }),
+          ]),
+          enqueue: slots,
+          delegateGateConfig: DELEGATE_GATE,
+        });
+      }
+      if (job.role === "factory-checker") {
+        await holdChecker;
+      }
+      return job;
+    },
+  });
+
+  slots.enqueue({ role: "planner" });
+  await plannerStartedPromise;
+  await Promise.race([
+    slots.enqueue({ role: "resume" }),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("resume blocked behind hung planner")), 500);
+    }),
+  ]);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(ran.includes("resume"), true);
+  assert.deepEqual(
+    slots.health().jobs.find((job) => job.role === "factory-checker"),
+    { role: "factory-checker", identifier: "KIT-126" },
+  );
+  releaseChecker();
+  releasePlanner();
 });
 
 test("resume enqueue does not occupy the coding slot", async () => {
@@ -360,6 +421,7 @@ test("server starts resume on listen and image copies resume.mjs", () => {
   const server = readFileSync(join(ROOT, "harness/server.mjs"), "utf8");
   assert.match(server, /startResumePoller/);
   assert.match(server, /role === "resume"/);
+  assert.match(server, /findOpenIssuePr/);
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /resume\.mjs/);
   assert.match(readFileSync(join(ROOT, "WORKFLOW.md"), "utf8"), /boot and on the resume poller/);
   assert.match(readFileSync(join(ROOT, "docs/agents/automations.md"), "utf8"), /resume poller/);

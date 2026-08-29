@@ -5,7 +5,6 @@
  */
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import { createActorTokenProvider, isLinearUnauthorized } from "./linear-actor-token.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -28,6 +27,7 @@ export const WORKER_ISSUE_QUERY = `query WorkerIssue($id: String!) {
   issue(id: $id) {
     id
     identifier
+    description
     state { name type }
     labels(first: 50) { nodes { name } }
     delegate { id name }
@@ -119,8 +119,8 @@ export const RESUME_ORPHANS_QUERY = `query ResumeOrphans($teamKey: String!) {
   }
 }`;
 
-export const PLANNER_CLAIM_MUTATION = `mutation PlannerClaim($id: String!, $stateId: String!, $delegateId: String!) {
-  issueUpdate(id: $id, input: { stateId: $stateId, delegateId: $delegateId }) {
+export const PLANNER_CLAIM_MUTATION = `mutation PlannerClaim($id: String!, $stateId: String!) {
+  issueUpdate(id: $id, input: { stateId: $stateId }) {
     success
     issue {
       id
@@ -257,20 +257,12 @@ export const ISSUE_UPDATE_STATE_MUTATION = `mutation IssueUpdateState($id: Strin
   issueUpdate(id: $id, input: { stateId: $stateId }) { success }
 }`;
 
-export const AGENT_ACTIVITY_CREATE_MUTATION = `mutation AgentActivityCreate($input: AgentActivityCreateInput!) {
-  agentActivityCreate(input: $input) { success }
+export const ISSUE_UPDATE_DESCRIPTION_MUTATION = `mutation IssueUpdateDescription($id: String!, $description: String!) {
+  issueUpdate(id: $id, input: { description: $description }) { success }
 }`;
 
 export const ISSUE_CLEAR_DELEGATE_MUTATION = `mutation IssueClearDelegate($id: String!) {
   issueUpdate(id: $id, input: { delegateId: null }) { success }
-}`;
-
-export const ISSUE_AGENT_SESSION_QUERY = `query IssueAgentSession($id: String!) {
-  issue(id: $id) {
-    agentSessions(first: 5) {
-      nodes { id }
-    }
-  }
 }`;
 
 /**
@@ -324,6 +316,7 @@ export function mapLinearApiIssue(raw) {
           }
         : null,
     attachments,
+    description: typeof issue.description === "string" ? issue.description : "",
   };
 }
 
@@ -420,10 +413,9 @@ function parseJson(stdout) {
  * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   runCommand?: (command: string, args: string[], options: { env: NodeJS.ProcessEnv }) => Promise<string>,
- *   actorTokenProvider?: ReturnType<typeof createActorTokenProvider>,
  * }} [deps]
  */
-export function createLinearCliClient({ env = process.env, runCommand, actorTokenProvider } = {}) {
+export function createLinearCliClient({ env = process.env, runCommand } = {}) {
   const run =
     runCommand ??
     (async (command, args, options) => {
@@ -431,6 +423,7 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
         env: options.env,
         encoding: "utf8",
         timeout: 30_000,
+        killSignal: "SIGKILL",
         maxBuffer: 2_000_000,
       });
       return stdout;
@@ -442,42 +435,14 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
     LINEAR_API_KEY: typeof env.LINEAR_CLI_API_KEY === "string" ? env.LINEAR_CLI_API_KEY : "",
   };
 
-  const actorTokens = actorTokenProvider ?? createActorTokenProvider({ env });
-
-  /**
-   * @param {string} query
-   * @param {object} variables
-   * @param {string} apiKey
-   */
-  async function cliWithKey(query, variables, apiKey) {
-    return run("linear", ["api", query, "--variables-json", JSON.stringify(variables)], {
-      env: { ...cliEnv, LINEAR_API_KEY: apiKey },
-    });
-  }
-
   /**
    * @param {string} query
    * @param {object} variables
    */
   async function cli(query, variables) {
-    return cliWithKey(query, variables, cliEnv.LINEAR_API_KEY);
-  }
-
-  /**
-   * @param {string} query
-   * @param {object} variables
-   */
-  async function cliActor(query, variables) {
-    const token = await actorTokens.getToken();
-    try {
-      return await cliWithKey(query, variables, token);
-    } catch (error) {
-      if (!isLinearUnauthorized(error)) {
-        throw error;
-      }
-      const refreshed = await actorTokens.refresh();
-      return cliWithKey(query, variables, refreshed);
-    }
+    return run("linear", ["api", query, "--variables-json", JSON.stringify(variables)], {
+      env: cliEnv,
+    });
   }
 
   return {
@@ -546,15 +511,12 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
     },
 
     /**
-     * Claim is Implementing + Pi delegate only. Never assignee. Never a forbidden status.
+     * Claim is Implementing only. Never assignee, never delegate, never a forbidden status.
      *
-     * @param {{ id: string, stateId: string, delegateId: string }} input
+     * @param {{ id: string, stateId: string }} input
      */
-    async claimIssue({ id, stateId, delegateId }) {
-      if (typeof delegateId !== "string" || delegateId.length === 0) {
-        throw new Error("planner claim requires Pi delegateId");
-      }
-      const stdout = await cli(PLANNER_CLAIM_MUTATION, { id, stateId, delegateId });
+    async claimIssue({ id, stateId }) {
+      const stdout = await cli(PLANNER_CLAIM_MUTATION, { id, stateId });
       const issue = parseJson(stdout)?.data?.issueUpdate?.issue;
       if (!issue) {
         return null;
@@ -718,33 +680,11 @@ export function createLinearCliClient({ env = process.env, runCommand, actorToke
     },
 
     /**
-     * Display-only AgentSession activity. Never a workpad write.
-     *
-     * @param {{ sessionId: string, content: object, ephemeral?: boolean }} input
+     * @param {{ issueId: string, description: string }} input
      */
-    async createAgentActivity({ sessionId, content, ephemeral }) {
-      await cliActor(AGENT_ACTIVITY_CREATE_MUTATION, {
-        input: {
-          agentSessionId: sessionId,
-          content,
-          ...(ephemeral === true ? { ephemeral: true } : {}),
-        },
-      });
-    },
-
-    /**
-     * Live AgentSession id for an issue. Display-only; never starts Pi.
-     *
-     * @param {string} id
-     * @returns {Promise<string | undefined>}
-     */
-    async getAgentSessionId(id) {
-      const stdout = await cli(ISSUE_AGENT_SESSION_QUERY, { id });
-      const nodes = parseJson(stdout)?.data?.issue?.agentSessions?.nodes;
-      const sessionId = Array.isArray(nodes)
-        ? nodes.find((node) => typeof node?.id === "string")?.id
-        : undefined;
-      return typeof sessionId === "string" ? sessionId : undefined;
+    async updateIssueDescription({ issueId, description }) {
+      await cli(ISSUE_UPDATE_DESCRIPTION_MUTATION, { id: issueId, description });
+      return { issueId };
     },
 
     /**

@@ -36,8 +36,16 @@ _Avoid_: horizontal tickets (schema-only, API-only)
 _Avoid_: assigning Cursor as Agent or Assignee, treating priority as eligibility
 
 **Workpad**:
-The single workpad comment on an issue. `### Review feedback` is why a pass was sent back.
+The single workpad comment on an issue. `### Review feedback` is why a pass was sent back. Edited in place — never a second `## Agent Workpad`.
 _Avoid_: a new comment thread per agent turn
+
+**Role comment**:
+One new top-level Linear issue comment per factory role transition (planner claim, implement → In Review, checker pass/fail, Auto-merge flip/refuse, land success/fail). Separate from the workpad.
+_Avoid_: a new comment per tool call; duplicating findings that belong in `### Review feedback`
+
+**Description AC**:
+Checker pass ticks `[x]` on Acceptance criteria in the issue **description** and writes one verdict comment per criterion. Rewrites a stale line and comments why — never silently ticks unmet text.
+_Avoid_: implement ticking description AC before checker pass; checker pass without updating description when criteria are met
 
 **Signal-up**:
 Out-of-scope bug or debt, filed as a new Linear **Triage** issue. Never coded in the current PR.
@@ -48,15 +56,19 @@ Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), differ
 _Avoid_: mixing with `signal-up` on the same issue, filing into `Backlog`
 
 **Land**:
-Merge to `development` after Merging. Auto-merge may set Merging when loop caps allow; Nicklas can still move Merging. Land sets Done only after the merge.
+Merge to `development` after Auto-merge or Nicklas moves the issue to Merging. Land sets Done only after the merge and writes one role comment with the merge SHA (or merge error on return to Implementing).
 _Avoid_: landing to staging or production from an issue run
+
+**Auto-merge**:
+Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and loop counters under workpad `### Loop counters` are under the cap. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment; Nicklas can still move Merging.
+_Avoid_: force-push; treating Auto-merge as land; requiring Pi delegate for flip
 
 **Promotion**:
 A Linear **milestone** complete → `staging`; release helper → `production`. Separate from land. Not the whole project at once.
 _Avoid_: deploy, release PR as a synonym for land, treating the Linear project as one staging dump
 
 **Triage** *(Linear state)*:
-Inbox for Sentry, signal-up, and proposal. The Intake job may shape, consolidate, or promote to Backlog. Planner never claims Triage.
+Inbox for Sentry, signal-up, and proposal. Planner never claims.
 _Avoid_: the Triage *label group*, `needs-triage`, filing leftovers into `Backlog`
 
 **Duplicate** *(Linear state)*:
@@ -207,8 +219,16 @@ Hourly Linear-only scan of open KIT Triage on the planner mutex (`PI_INTAKE_POLL
 _Avoid_: filing leftovers into Backlog with `ready-for-agent`; treating Intake as planner claim; running Intake on the coding slot
 
 **Auto-merge**:
-Worker moving Ready for merge → Merging when delegate is Pi, the PR is MERGEABLE, required checks are green, and Loop cap is clear. On refuse, clears delegate to `null` and writes one workpad note. Implementing, In Review, and Ready for merge keep Pi as delegate until Auto-merge decides. Done and Canceled clear leftover Pi delegate. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself when delegate is empty.
-_Avoid_: force-push; merging to staging or production; treating Auto-merge as land; clearing delegate before Auto-merge decides
+Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and Loop cap is clear. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself.
+_Avoid_: force-push; merging to staging or production; treating Auto-merge as land; requiring Pi delegate for flip
+
+**Role comment**:
+One new top-level Linear issue comment per factory role transition (planner claim, implement → In Review, checker pass/fail, Auto-merge, land). Separate from the workpad.
+_Avoid_: a new comment per tool call; duplicating workpad Review feedback on checker fail
+
+**Description AC**:
+Checker pass ticks `[x]` on Acceptance criteria in the issue description and writes one verdict comment per criterion. Rewrites stale lines and comments why — never silently ticks unmet text.
+_Avoid_: implement ticking description AC; checker pass without updating description when criteria are met
 
 **Loop cap**:
 Either five required-check failure cycles (`ciFailCycles`) or five checker-fail returns (`reviewLoops`) blocks Auto-merge. Counters live under workpad `### Loop counters`. Missing counters fail closed.
@@ -245,3 +265,19 @@ _Avoid_: inventing 0; putting API keys on the workpad; logging planner/intake mo
 **Implement browser**:
 Headless Chromium on the PI worker for implement UI evidence (screenshots onto Linear). A Pi package on implement only, and only when the slice is UI. Not planner. Not Intake. Not Nicklas’s Desktop Chrome.
 _Avoid_: browser on the planner mutex; attaching to a personal browser profile; loading browser tools on api/db-only implement
+
+**Worker memory**:
+One Hermes store on the `kit_pi` volume at `/var/lib/kit-pi/hermes`, outside every Issue worktree. Survives image rebuild and Worktree reap. Not `/root/.pi`. Not a worktree path.
+_Avoid_: project-tier memory keyed on Issue worktree cwd; Cursor `MEMORIES.md` or sessionStart dump as a second source of truth
+
+**Memory writer**:
+The factory role that may call `memory_add`, `memory_replace`, and `memory_remove` on Worker memory (factory-checker in the full design). Background review, correction detection, and shutdown flush run only on the writer.
+_Avoid_: implement, Scout, Gate, or helpers writing the store; land or Auto-merge as writers
+
+**Memory reader**:
+Pi roles that may search Worker memory (`memory_search`, `session_search`) but not write. Implement parent, Scout, Gate, and domain helpers in the reader slice. No background review, correction detection, shutdown flush, or `skill_manage`.
+_Avoid_: side-channel writes that bypass the tool allowlist; MEMORY.md dump into the system prompt
+
+**Memory policy-only**:
+Hermes injects only a short memory policy into the system prompt — not a MEMORY.md dump, not a session_start lesson block. Repo evidence, `CONTEXT.md`, the workpad, and git ratchets still win over a Hermes hit.
+_Avoid_: legacy-inject mode; treating Worker memory as factory law without a ratchet

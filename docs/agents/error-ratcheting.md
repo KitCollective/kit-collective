@@ -220,14 +220,37 @@ catches it in the API tests and the container smoke test.
 `harness/tests/checker.test.mjs` (`clean workpad + MERGEABLE + green checks moves to Ready for merge`) and `factory-checker workpad records Grok token counts` in `harness/tests/token-use.test.mjs` keep these locks:
 
 - Checker pass updates the existing workpad (same comment) with `All good — checker pass` under `### Status`.
-- `### Review feedback` stays exactly `- (none)` so `reviewFeedbackIsClean` remains true.
+- `### Review feedback` stays exactly the three-axis pass lines (`- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`) so `reviewFeedbackIsClean` remains true.
+- Checker pass keeps `### Loop counters` (preserves counts, or writes `ciFailCycles: 0` / `reviewLoops: 0` when Pi stripped the heading) so Auto-merge can parse the cap.
 - Factory-checker token use lands on that same workpad after pass.
 
 Prevents repeating the KIT-105 silent pass (status flip only, no durable note or token line). Tighten only.
 
 ### Factory checker spawn ratchet (KIT-56)
 
-`scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit `- (none)` verdict guard (`reviewFeedbackIsClean`), missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.
+`scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit three-axis pass verdict guard (`reviewFeedbackIsClean`), missing Slop axis guard (`reviewFeedbackMissingSlopAxis`), three-axis pass lines (`REVIEW_PASS_FEEDBACK_LINES`), read-only Slop sub-agent (`.pi/agents/slop.md` + `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS`), `subagent` on parent allowlist, missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.
+
+### Factory checker Slop axis ratchet (KIT-126)
+
+`harness/tests/checker.test.mjs` (`missing Slop axis fails`, `three-axis pass`, `Slop findings preserved with Spec and Standards`, `factory-checker allowlist includes subagent and Slop child excludes memory writes`, `slopAgentToolArgs excludes memory writes`) and `scripts/tests/check-factory-checker-spawn.test.mjs` keep these locks:
+
+- `/code-review` runs Spec, Standards, and Slop in one pass — not as a pre-gate.
+- `reviewFeedbackIsClean` requires exactly `- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`; bare `- (none)` is rejected.
+- `applyCheckerFailWorkpad` never falls back to legacy `- (none)` — use `REVIEW_FEEDBACK_HARNESS_INCOMPLETE` instead.
+- Read-only Slop child: `applySlopAgentSpawnEnv()` calls `slopAgentToolArgs()` at factory-checker spawn; `harness/slop-agent-tools.ts` (via `.pi/agents/slop.md` `subagentOnlyExtensions`) and `harness/factory-checker-tools.ts` consume `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` + `SLOP_AGENT_PI_ARGS`.
+
+Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` export, stale `- (none)` fail fallback, incomplete spawn-ratchet doc). Tighten only.
+
+### Factory checker Slop GitHub threads ratchet (KIT-127)
+
+`scripts/check-factory-checker-spawn.mjs` and `scripts/tests/check-factory-checker-spawn.test.mjs` keep these locks:
+
+- `completeChecker` fail with a linked PR always calls `syncSlopReviewThreadsSafely` (empty Slop findings still resolve stale `[factory-checker/slop]` threads).
+- `syncSlopReviewThreadsSafely` isolates GitHub sync errors so Linear still moves to Implementing or Ready for merge.
+- `harness/slop-review.mjs` posts inline comments only for postable Slop hunks (`isPostableSlopFinding`); pathless `Slop/` lines still trigger stale-thread resolve.
+- `resolveReviewThread` / `gh_cli resolve_thread` refuse non-marker review threads.
+
+`harness/tests/checker.test.mjs` and `harness/tests/slop-review.test.mjs` cover fail sync with clean Slop axis, sync throw isolation, pathless findings, and non-marker resolve refusal. Prevents repeating the KIT-127 checker fail (empty-findings skip, unisolated GitHub throws, pathless Slop gating, resolve without marker check). Tighten only.
 
 ### Issue PR head checkout ratchet (KIT-105)
 
@@ -247,3 +270,7 @@ Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `d
 ### PR write-scope ratchet (KIT-39)
 
 `scripts/check-pr-write-scope.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`; pure logic in `scripts/lib/pr-write-scope.mjs`, covered by `scripts/tests/check-pr-write-scope.test.mjs`) fails when a pull request's changed files (vs `origin/development`) fall outside the `write-scope:` globs declared in the PR body, except ratchet-exception paths (`.cursor/hooks/**`, `.cursor/rules/**`, `docs/agents/error-ratcheting.md`, `.github/workflows/**` for CI wiring, and the named ratchet script paths in `RATCHET_SCRIPT_PATHS`). When no `write-scope:` line is present, the check skips cleanly (exit 0) — write-scope is optional per `docs/agents/write-scope.md`. On `push` to feature branches without PR env vars, resolves scope from the open PR via `gh pr view` with `GITHUB_TOKEN`. Prevents repeating the KIT-39 checker fail (gratuitous edits outside declared issue scope, e.g. `seed/fkapi/tests/seed.test.ts` bundled into an admin slice). Tighten only.
+
+### Factory lock docs ratchet (KIT-114)
+
+`harness/tests/harness-docs-locks.test.mjs` fails when generated `AGENTS.md` / `CONTEXT.md` orchestration omit empty Linear Agent, one role comment per transition, description AC on checker pass, or Auto-merge without Pi; when `WORKFLOW.md` still skips Implementing without Pi or keys Auto-merge on Pi delegate; when ADR-0025 loses its supersession note; or when `docs/agents/automations.md` omits land success/fail role comments. Prevents repeating the KIT-114 checker fails (Pi-delegate leftovers in factory locks, unregenerated `AGENTS.md`, rewritten ADR body, land-fail lock missing a role comment). Tighten only.

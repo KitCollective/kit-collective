@@ -23,6 +23,7 @@ services:
       PI_JOB_IDLE_MS: "2700000"
       KIT_PI_MIRROR: "/var/lib/kit-pi/mirror.git"
       KIT_PI_WORKTREES: "/var/lib/kit-pi/worktrees"
+      KIT_PI_HERMES: "/var/lib/kit-pi/hermes"
       KIT_PI_REMOTE: "https://github.com/KitCollective/kit-collective.git"
       PI_CAPACITY_RAM_MB: "2048"
       PI_CAPACITY_DISK_MB: "5120"

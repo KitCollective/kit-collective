@@ -9,6 +9,7 @@ import { matchesGlob, parseWriteScopeGlobs } from "../scripts/lib/pr-write-scope
 import { parseLoopCounters } from "./auto-merge.mjs";
 import { hasRatchetNudge, ratchetNudgeComment } from "./checker-exit.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
+import { plannerClaimComment } from "./role-comments.mjs";
 
 export const DEFAULT_PLANNER_POLL_MS = 300_000;
 export const PLANNER_PRIORITY_ORDER = [1, 2, 3, 4, 0];
@@ -195,27 +196,15 @@ export async function nudgeImplementingRatchets(client, implementingIssues) {
  * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   linear?: {
- *     lookupUser: (id: string) => Promise<{ id: string, name: string } | null>,
  *     listDispatch: (input?: { teamKey?: string }) => Promise<{ implementingState: { id?: string, name?: string } | null, implementingIssues?: object[], issues: object[] }>,
- *     claimIssue: (input: { id: string, stateId: string, delegateId: string }) => Promise<object | null>,
+ *     claimIssue: (input: { id: string, stateId: string }) => Promise<object | null>,
  *     commentIssue: (input: { issueId: string, body: string }) => Promise<unknown>,
  *     listComments?: (issueId: string) => Promise<Array<{ body?: string }>>,
  *   },
  * }} [input]
  */
 export async function runPlanner({ env = process.env, linear } = {}) {
-  const piAppUserId = env.LINEAR_PI_APP_USER_ID;
-  if (typeof piAppUserId !== "string" || piAppUserId.length === 0) {
-    throw new Error("missing LINEAR_PI_APP_USER_ID");
-  }
   const client = linear ?? createLinearCliClient({ env });
-  const user = await client.lookupUser(piAppUserId);
-  if (!user) {
-    throw new Error("LINEAR_PI_APP_USER_ID did not resolve to a Linear user");
-  }
-  if (user.name.toLowerCase() === CURSOR_NAME) {
-    throw new Error("planner must not set Linear Agent to Cursor");
-  }
 
   const {
     implementingState,
@@ -254,12 +243,15 @@ export async function runPlanner({ env = process.env, linear } = {}) {
     const updated = await client.claimIssue({
       id: issue.id,
       stateId: implementingState.id,
-      delegateId: piAppUserId,
+    });
+    await client.commentIssue({
+      issueId: issue.id,
+      body: plannerClaimComment(issue.identifier),
     });
     claimed.push({
       identifier: issue.identifier,
       assignee: updated?.assignee ?? issue.assignee,
-      delegate: updated?.delegate ?? { id: piAppUserId, name: user.name },
+      delegate: updated?.delegate ?? issue.delegate ?? null,
     });
   }
   const ratchetNudged = await nudgeImplementingRatchets(client, implementingIssues);

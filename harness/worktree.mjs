@@ -10,7 +10,6 @@ import { execFile as execFileCb } from "node:child_process";
 import { existsSync as fsExistsSync, mkdirSync as fsMkdirSync, rmSync as fsRmSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { gitAuthExtraHeader } from "./linear-actor-token.mjs";
 
 const execFile = promisify(execFileCb);
 
@@ -20,6 +19,16 @@ export const DEFAULT_REMOTE_URL = "https://github.com/KitCollective/kit-collecti
 export const IMPLEMENT_LANE = "development";
 
 const IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
+
+/**
+ * Git child env: token stays in env (`GIT_CONFIG_*`), never in argv.
+ *
+ * @param {string} token
+ */
+export function gitAuthExtraHeader(token) {
+  const basic = Buffer.from(`x-access-token:${token}`).toString("base64");
+  return `Authorization: Basic ${basic}`;
+}
 
 /**
  * Git child env: token stays in env (`GIT_CONFIG_*`), never in argv.
@@ -126,8 +135,9 @@ export function resolveIssueGitHead({
  */
 async function fetchIssueBranch(git, dir, branch, opts = {}) {
   const prefix = opts.worktree ? ["-C", dir] : ["--git-dir", dir];
+  const refspec = `${branch}:refs/remotes/origin/${branch}`;
   try {
-    await git([...prefix, "fetch", "origin", branch]);
+    await git([...prefix, "fetch", "origin", refspec]);
   } catch {
     return false;
   }
@@ -231,16 +241,20 @@ export function createWorktreeAdapter({
         return { path, branch: resolved.branch, lane };
       }
 
+      try {
+        await git(["-C", path, "rebase", "--abort"]);
+      } catch {
+        // no rebase in progress
+      }
       if (resolved.startPoint !== `origin/${lane}`) {
         await fetchIssueBranch(git, path, resolved.branch, { worktree: true });
       }
-      await git(["-C", path, "checkout", "-B", resolved.branch, resolved.startPoint]);
-      if (resolved.startPoint !== `origin/${lane}`) {
-        try {
-          await git(["-C", path, "merge", "--ff-only", `origin/${resolved.branch}`]);
-        } catch {
-          // Local implement commits stay; diverged remote is a later signal-up.
-        }
+      const ontoIssueHead = mode === "reuse" || resolved.startPoint !== `origin/${lane}`;
+      if (ontoIssueHead) {
+        await git(["-C", path, "reset", "--hard"]);
+        await git(["-C", path, "checkout", "-f", "-B", resolved.branch, resolved.startPoint]);
+      } else {
+        await git(["-C", path, "checkout", "-B", resolved.branch, resolved.startPoint]);
       }
 
       return { path, branch: resolved.branch, lane };

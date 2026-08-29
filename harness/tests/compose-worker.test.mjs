@@ -7,18 +7,21 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { assertWorkerEnv, LINEAR_CLI_PIN, WORKER_SECRET_NAMES } from "../boot-env.mjs";
 import { snapshotCapacity } from "../capacity.mjs";
-import { createDelegateGateConfig, PI_BOT_AGENT_NAME } from "../delegate-gate.mjs";
+import { createDelegateGateConfig } from "../delegate-gate.mjs";
 import {
   ALWAYS_READY_CAPACITY,
   createSerialQueue,
   createWorkerSlots,
   parseImplementSlots,
 } from "../job-queue.mjs";
-import { createActorTokenProvider } from "../linear-actor-token.mjs";
 import { createLinearCliClient } from "../linear-cli.mjs";
-import { assertPiPackagesReady, createPiJobRunner, REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
+import {
+  assertPiPackagesReady,
+  createPiJobRunner,
+  REQUIRED_PI_PACKAGES,
+  WORKER_MEMORY_DIR,
+} from "../pi-job.mjs";
 import { createWorkerHandler, startWorkerServer } from "../server.mjs";
-import { createLinearSessionAdapter } from "../session-adapter.mjs";
 import { createMemoryAdapter } from "../webhook-router.mjs";
 import { createWorktreeAdapter } from "../worktree.mjs";
 
@@ -31,7 +34,6 @@ function validWorkerEnv() {
     CURSOR_API_KEY: "cursor_test",
     LINEAR_CLI_API_KEY: "lin_cli_test",
     LINEAR_WEBHOOK_SECRET: SECRET,
-    LINEAR_PI_WEBHOOK_SECRET: "session-secret",
     GH_TOKEN: "ghp_test",
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     LINEAR_PI_CLIENT_ID: "client-id",
@@ -54,7 +56,7 @@ function dispatchableIssue(overrides = {}) {
     labels: ["Feature"],
     linearType: "Feature",
     blockedBy: [],
-    delegate: { name: "Pi" },
+    delegate: null,
     ...overrides,
   };
 }
@@ -65,7 +67,6 @@ test("worker env lists Cursor SDK, Linear CLI key, webhook HMAC, gh, and the pin
     "LINEAR_CLI_API_KEY",
     "LINEAR_WEBHOOK_SECRET",
     "GH_TOKEN",
-    "LINEAR_PI_APP_USER_ID",
     "OPENROUTER_API_KEY",
   ]);
   assert.equal(LINEAR_CLI_PIN.npmPackage, "@schpet/linear-cli");
@@ -518,14 +519,16 @@ test("docker-compose runs webhook + one replica, no Coolify, no DATABASE_URL", (
 test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onboard", () => {
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /@schpet\/linear-cli@2\.5\.0/);
-  assert.match(dockerfile, /session-adapter\.mjs/);
   assert.match(dockerfile, /pi-event-stream\.mjs/);
   assert.match(dockerfile, /delegate-gate\.mjs/);
-  assert.match(dockerfile, /linear-actor-token\.mjs/);
+  assert.match(dockerfile, /worktree\.mjs/);
+  assert.doesNotMatch(dockerfile, /session-adapter\.mjs/);
+  assert.doesNotMatch(dockerfile, /linear-actor-token\.mjs/);
   assert.doesNotMatch(dockerfile, /piagent\/platform/);
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
   assert.match(dockerfile, /pr-write-scope\.mjs/);
+  assert.match(dockerfile, /role-comments\.mjs/);
   assert.match(dockerfile, /COPY \.pi /);
   assert.match(dockerfile, /pi install/);
   assert.match(dockerfile, /PI_WORKSPACE=\/workspace/);
@@ -565,6 +568,8 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
     ".pi/mcp.json",
     ".pi/damage-control.yaml",
     ".pi/extensions.json",
+    ".pi/agent/hermes-memory-config.json",
+    ".pi/agent-checker/hermes-memory-config.json",
     ".pi/settings.json",
     "harness/host.md",
   ];
@@ -592,8 +597,8 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   }
   assert.match(envExample, /LINEAR_CLI_VERSION=2\.5\.0/);
   assert.match(envExample, /Do not set DATABASE_URL on the CX33 worker/i);
-  assert.match(envExample, /LINEAR_PI_ACCESS_TOKEN=/);
-  assert.match(envExample, /30-day/);
+  assert.match(envExample, /# LINEAR_PI_ACCESS_TOKEN=/);
+  assert.match(envExample, /Not required for worker boot \(KIT-113\)/);
   assert.match(envExample, /PI_MODEL_FAST=cursor\/grok-4\.6/);
   assert.match(envExample, /^OPENROUTER_API_KEY=$/m);
   assert.match(envExample, /PI_MODEL=cursor\/composer-2\.5/);
@@ -612,10 +617,8 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /416348660/);
   assert.match(host, /62\.238\.125\.114/);
   assert.match(host, /\/opt\/kit-collective\/harness\/\.env/);
-  assert.match(host, /LINEAR_PI_WEBHOOK_SECRET/);
-  assert.match(host, /LINEAR_PI_ACCESS_TOKEN/);
+  assert.match(host, /AgentSession HMAC and actor=app activity tokens are not used \(KIT-113\)/);
   assert.match(host, /OPENROUTER_API_KEY/);
-  assert.match(host, /30-day/);
   assert.match(host, /"job"/);
   assert.match(host, /"jobs"/);
   assert.match(host, /"queued"/);
@@ -653,6 +656,7 @@ test("Linear CLI getIssue maps GraphQL JSON into the KIT-52 dispatch snapshot", 
           issue: {
             id: "issue-1",
             identifier: "KIT-99",
+            description: "write-scope: harness/linear-cli.mjs, harness/tests/**",
             state: { name: "Implementing", type: "started" },
             labels: { nodes: [{ name: "Feature" }, { name: "ready-for-agent" }] },
             delegate: { name: "Pi" },
@@ -680,33 +684,12 @@ test("Linear CLI getIssue maps GraphQL JSON into the KIT-52 dispatch snapshot", 
     blockedBy: [{ status: "Done", statusType: "completed" }],
     delegate: { name: "Pi" },
     attachments: [],
+    description: "write-scope: harness/linear-cli.mjs, harness/tests/**",
   });
   assert.equal(calls[0].command, "linear");
   assert.equal(calls[0].args[0], "api");
   assert.equal(calls[0].env.LINEAR_API_KEY, "lin_cli_test");
   assert.equal(calls[0].env.LINEAR_CLI_API_KEY, "lin_cli_test");
-});
-
-test("Linear CLI getAgentSessionId reads the issue AgentSession id", async () => {
-  const calls = [];
-  const linear = createLinearCliClient({
-    env: validWorkerEnv(),
-    async runCommand(command, args) {
-      calls.push({ command, args });
-      return JSON.stringify({
-        data: {
-          issue: {
-            agentSessions: { nodes: [{ id: "session-kit-99" }] },
-          },
-        },
-      });
-    },
-  });
-
-  assert.equal(await linear.getAgentSessionId("issue-1"), "session-kit-99");
-  assert.equal(calls[0].command, "linear");
-  assert.equal(calls[0].args[0], "api");
-  assert.match(calls[0].args[1], /IssueAgentSession/);
 });
 
 test("boot fails when required Pi packages are missing from pi list", async () => {
@@ -720,6 +703,65 @@ test("boot fails when required Pi packages are missing from pi list", async () =
       }),
     /pi-subagents/,
   );
+});
+
+test("boot fails closed when pi list omits pi-hermes-memory", async () => {
+  await assert.rejects(
+    () =>
+      assertPiPackagesReady({
+        root: ROOT,
+        async listPackages() {
+          return ["pi-subagents", "@ghoseb/pi-damage-control", "pi-cursor-sdk"].join("\n");
+        },
+      }),
+    /pi-hermes-memory/,
+  );
+});
+
+test("Dockerfile installs pi-hermes-memory with the other global Pi packages", () => {
+  const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
+  assert.match(dockerfile, /pi install npm:pi-hermes-memory/);
+  assert.match(dockerfile, /pi install npm:pi-subagents/);
+});
+
+test("compose and host name Worker memory on kit_pi at /var/lib/kit-pi/hermes", () => {
+  const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
+  assert.match(compose, /KIT_PI_HERMES:\s*"\/var\/lib\/kit-pi\/hermes"/);
+  assert.match(compose, /kit_pi:\/var\/lib\/kit-pi/);
+  assert.doesNotMatch(compose, /worktrees\/KIT-/);
+  const host = readFileSync(join(ROOT, "harness/host.md"), "utf8");
+  assert.match(host, /\/var\/lib\/kit-pi\/hermes/);
+  assert.match(host, /factory-checker.*Memory writer|Memory writer.*factory-checker/i);
+  assert.match(host, /Memory readers?/i);
+  assert.equal(WORKER_MEMORY_DIR, "/var/lib/kit-pi/hermes");
+});
+
+test("compose does not set PI_CODING_AGENT_DIR so boot pi list sees global packages", () => {
+  const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
+  assert.doesNotMatch(compose, /PI_CODING_AGENT_DIR:/);
+});
+
+test("committed Hermes config is policy-only with review and flush off for readers", () => {
+  const configPath = join(ROOT, ".pi/agent/hermes-memory-config.json");
+  assert.equal(existsSync(configPath), true, "missing .pi/agent/hermes-memory-config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  assert.equal(config.memoryMode, "policy-only");
+  assert.equal(config.reviewEnabled, false);
+  assert.equal(config.correctionDetection, false);
+  assert.equal(config.flushOnShutdown, false);
+  assert.equal(config.memoryDir, "/var/lib/kit-pi/hermes");
+  assert.doesNotMatch(JSON.stringify(config), /legacy-inject/);
+});
+
+test("factory-checker Hermes config enables review, correction detection, and shutdown flush", () => {
+  const configPath = join(ROOT, ".pi/agent-checker/hermes-memory-config.json");
+  assert.equal(existsSync(configPath), true, "missing .pi/agent-checker/hermes-memory-config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  assert.equal(config.memoryMode, "policy-only");
+  assert.equal(config.reviewEnabled, true);
+  assert.equal(config.correctionDetection, true);
+  assert.equal(config.flushOnShutdown, true);
+  assert.equal(config.memoryDir, "/var/lib/kit-pi/hermes");
 });
 
 test("Pi job runner starts one non-interactive Pi process with the role file", async () => {
@@ -1001,7 +1043,7 @@ test("planner webhook runs while a Coding job occupies the slot", async () => {
   }
 });
 
-test("AgentSession created and prompted still do not enqueue a Coding job", async () => {
+test("agent-session HTTP path returns 404 and does not enqueue a Coding job", async () => {
   const ran = [];
   const server = await startWorkerServer({
     env: validWorkerEnv(),
@@ -1033,9 +1075,9 @@ test("AgentSession created and prompted still do not enqueue a Coding job", asyn
           agentSession: { id: "session-kit-99", issueId: "issue-1" },
           webhookTimestamp: NOW,
         },
-        { path: "/webhooks/linear/agent-session", secret: "session-secret" },
+        { path: "/webhooks/linear/agent-session", secret: "ignored" },
       );
-      assert.equal(response.status, 200);
+      assert.equal(response.status, 404);
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.equal(ran.length, 0);
@@ -1046,72 +1088,7 @@ test("AgentSession created and prompted still do not enqueue a Coding job", asyn
   }
 });
 
-test("createAgentActivity uses the actor=app token, not the personal LINEAR_CLI_API_KEY", async () => {
-  const calls = [];
-  const linear = createLinearCliClient({
-    env: validWorkerEnv(),
-    actorTokenProvider: createActorTokenProvider({ env: validWorkerEnv() }),
-    async runCommand(command, args, options) {
-      calls.push({ command, args, env: options.env });
-      if (args[1]?.includes("AgentActivityCreate")) {
-        return JSON.stringify({ data: { agentActivityCreate: { success: true } } });
-      }
-      return JSON.stringify({ data: {} });
-    },
-  });
-
-  await linear.createAgentActivity({
-    sessionId: "session-1",
-    content: { type: "thought", body: "ack" },
-    ephemeral: false,
-  });
-
-  const activityCall = calls.find((call) => call.args[1]?.includes("AgentActivityCreate"));
-  assert.ok(activityCall);
-  assert.equal(activityCall.env.LINEAR_API_KEY, "actor-token");
-  assert.notEqual(activityCall.env.LINEAR_API_KEY, "lin_cli_test");
-});
-
-test("createAgentActivity remints via client_credentials after a 401", async () => {
-  let mintCount = 0;
-  const keys = [];
-  const linear = createLinearCliClient({
-    env: validWorkerEnv(),
-    actorTokenProvider: createActorTokenProvider({
-      env: {
-        LINEAR_PI_ACCESS_TOKEN: "expired-actor-token",
-        LINEAR_PI_CLIENT_ID: "client-id",
-        LINEAR_PI_CLIENT_SECRET: "client-secret",
-      },
-      async mint() {
-        mintCount += 1;
-        return `minted-${mintCount}`;
-      },
-    }),
-    async runCommand(_command, args, options) {
-      keys.push(options.env.LINEAR_API_KEY);
-      if (options.env.LINEAR_API_KEY === "expired-actor-token") {
-        throw new Error("HTTP 401 unauthorized");
-      }
-      if (args[1]?.includes("AgentActivityCreate")) {
-        return JSON.stringify({ data: { agentActivityCreate: { success: true } } });
-      }
-      return JSON.stringify({ data: {} });
-    },
-  });
-
-  await linear.createAgentActivity({
-    sessionId: "session-1",
-    content: { type: "thought", body: "ack" },
-    ephemeral: false,
-  });
-
-  assert.equal(mintCount, 1);
-  assert.deepEqual(keys, ["expired-actor-token", "minted-1"]);
-});
-
-test("compose worker ACKs AgentSession and enqueues implement when delegate is Pi Bot Agent", async () => {
-  const postedActivities = [];
+test("AgentSession payload on issue channel skips without ack; implement enqueues when Linear Agent is empty", async () => {
   const gitCalls = [];
   const linear = {
     async getIssue() {
@@ -1122,14 +1099,8 @@ test("compose worker ACKs AgentSession and enqueues implement when delegate is P
         labels: ["Bug"],
         linearType: "Bug",
         blockedBy: [],
-        delegate: { id: "pi-app-user-1", name: PI_BOT_AGENT_NAME },
+        delegate: null,
       };
-    },
-    async createAgentActivity(input) {
-      postedActivities.push(input);
-    },
-    async getAgentSessionId() {
-      return "session-kit-99";
     },
     async clearDelegate() {},
   };
@@ -1141,12 +1112,10 @@ test("compose worker ACKs AgentSession and enqueues implement when delegate is P
   };
   const adapter = createMemoryAdapter({
     secret: SECRET,
-    sessionSecret: "session-secret",
     now: () => NOW,
     linear,
     gh: {},
     enqueue,
-    session: createLinearSessionAdapter({ linear }),
     delegateGateConfig: DELEGATE_GATE,
   });
 
@@ -1156,14 +1125,13 @@ test("compose worker ACKs AgentSession and enqueues implement when delegate is P
     agentSession: { id: "session-kit-99", issueId: "issue-1" },
     webhookTimestamp: NOW,
   });
-  const sessionSignature = createHmac("sha256", "session-secret").update(sessionBody).digest("hex");
+  const sessionSignature = createHmac("sha256", SECRET).update(sessionBody).digest("hex");
   const sessionResult = await adapter.handle({
     rawBody: sessionBody,
     signature: sessionSignature,
-    hmacChannel: "session",
   });
   assert.equal(sessionResult.kind, "skip");
-  assert.equal(postedActivities.length, 1);
+  assert.equal(sessionResult.reason, "AgentSession path removed (KIT-113)");
 
   const issueBody = JSON.stringify({
     action: "update",
@@ -1399,7 +1367,9 @@ test("coding spawn waits on RAM and disk floors; job stays queued; status unchan
   assert.equal(settled, true);
   assert.equal(fakes.spawned.length, 1);
   assert.equal(fakes.spawned[0].command, "pi");
-  assert.equal(linear.comments.length, 1);
+  assert.equal(linear.comments.length, 2);
+  assert.match(linear.comments[0].body, /## Capacity gate/);
+  assert.match(linear.comments[1].body, /In Review/);
   assert.equal(
     linear.statusCalls.some((call) => call.status === "Parked"),
     false,
@@ -1686,7 +1656,8 @@ test("missing worktrees dir with disk above floor starts the queued coding job a
 
   assert.equal(fakes.spawned.length, 1);
   assert.equal(fakes.spawned[0].command, "pi");
-  assert.equal(linear.comments.length, 0);
+  assert.equal(linear.comments.length, 1);
+  assert.match(linear.comments[0].body, /In Review/);
   assert.equal(
     linear.statusCalls.some((call) => call.status === "Parked"),
     false,
