@@ -306,7 +306,9 @@ export function createWorkerSlots(deps) {
       if (PLANNER_MUTEX_ROLES.has(job.role)) {
         const planned = plannerQueue.enqueue(job);
         planned.catch((error) => {
-          console.error(`${job.role} job failed: ${error instanceof Error ? error.message : error}`);
+          console.error(
+            `${job.role} job failed: ${error instanceof Error ? error.message : error}`,
+          );
         });
         return planned;
       }
