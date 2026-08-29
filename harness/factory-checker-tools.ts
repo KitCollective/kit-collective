@@ -43,29 +43,6 @@ const RESOLVE_THREAD_MUTATION = `mutation ResolveSlopThread($threadId: ID!) {
   }
 }`;
 
-const REVIEW_THREADS_QUERY = `query SlopReviewThreads($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {
-      headRefOid
-      reviewThreads(first: 100) {
-        nodes {
-          id
-          isResolved
-          comments(first: 1) {
-            nodes { body path line originalLine }
-          }
-        }
-      }
-    }
-  }
-}`;
-
-const RESOLVE_THREAD_MUTATION = `mutation ResolveSlopThread($threadId: ID!) {
-  resolveReviewThread(input: { threadId: $threadId }) {
-    thread { id isResolved }
-  }
-}`;
-
 const COMMENT_UPDATE_MUTATION = `mutation CommentUpdate($id: String!, $body: String!) {
   commentUpdate(id: $id, input: { body: $body }) { success }
 }`;

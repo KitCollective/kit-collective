@@ -9,9 +9,9 @@ import {
   isSlopReviewComment,
   parseSlopFindingLine,
   parseSlopFindings,
+  SLOP_REVIEW_MARKER,
   slopCommentBody,
   slopThreadFingerprint,
-  SLOP_REVIEW_MARKER,
 } from "../slop-review.mjs";
 
 test("parseSlopFindingLine reads path:line and in-path hunks", () => {
