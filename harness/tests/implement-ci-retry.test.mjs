@@ -336,6 +336,7 @@ test("job-queue re-enqueues the same implement job on red CI and never calls che
       spawn.args.some(
         (arg) =>
           String(arg).endsWith(".pi/roles/implement.md") ||
+          String(arg).includes(".pi/generated/implement-append.md") ||
           String(arg).includes(".pi/generated/implement-context.md"),
       ),
     ),
@@ -765,7 +766,7 @@ test("merge-fail fast path does not skip Pi when PR is not MERGEABLE", async () 
     labels: ["Feature"],
   });
   const spawned = [];
-  const runner = implementRunner({ gh, linear, spawned });
+  const runner = implementRunner({ gh, linear, spawned, waitTimeoutMs: 0, waitIntervalMs: 0 });
   const result = await runner.run({
     role: "implement",
     identifier: "KIT-119",
@@ -794,7 +795,7 @@ test("merge-fail fast path does not skip Pi when required checks are red", async
     labels: ["Feature"],
   });
   const spawned = [];
-  const runner = implementRunner({ gh, linear, spawned });
+  const runner = implementRunner({ gh, linear, spawned, waitTimeoutMs: 0, waitIntervalMs: 0 });
   const result = await runner.run({
     role: "implement",
     identifier: "KIT-119",
