@@ -4,7 +4,10 @@ import type { DbToken } from "../db/db.module.js";
 
 export function baseHandleFromEmail(email: string): string {
   const localPart = email.split("@")[0] ?? "user";
-  const sanitized = localPart.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 30);
+  const sanitized = localPart
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, "")
+    .slice(0, 30);
   return sanitized.length > 0 ? sanitized : "user";
 }
 

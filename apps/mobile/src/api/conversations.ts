@@ -38,6 +38,8 @@ export async function fetchConversations(accessToken: string): Promise<Collectio
   return collectionConversationsSchema.parse(await response.json());
 }
 
-export function countUnreadConversations(conversations: CollectionConversations["conversations"]): number {
+export function countUnreadConversations(
+  conversations: CollectionConversations["conversations"],
+): number {
   return conversations.filter((conversation) => conversation.unread).length;
 }
