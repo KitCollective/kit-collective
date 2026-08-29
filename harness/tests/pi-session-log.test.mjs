@@ -3,8 +3,8 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PI_IMPLEMENT_FIXTURE } from "./pi-event-stream.test.mjs";
 import { createSessionLogCollector, PHASE_STOP } from "../pi-session-log.mjs";
+import { PI_IMPLEMENT_FIXTURE } from "./pi-event-stream.test.mjs";
 
 /**
  * @param {Parameters<typeof createSessionLogCollector>[0] & { lines?: string[] }} input
