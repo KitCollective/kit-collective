@@ -49,12 +49,12 @@ Redact secrets. Never attach `.env`, cookies, or `Authorization` headers.
 | Move | Who |
 | --- | --- |
 | Triage → `Backlog` (shaped) / Duplicate (leftovers) | **Intake** (hourly, Linear CLI) |
-| `dispatch.state` → `Implementing` | **Planner** (claim + one role comment) |
-| `Implementing` → `In Review` | **Implement** (PR + proof on Linear + one role comment) |
-| `In Review` → `Ready for merge` | **Checker** (pass + description AC + one role comment) |
-| `In Review` / `Ready for merge` / `Merging` → `Implementing` | **Checker** or **land** (fail + one role comment) |
-| `Ready for merge` → `Merging` | **Auto-merge** when MERGEABLE + green checks + loop cap clear (+ one role comment) or **approver** |
-| `Merging` → `Done` | **Land** (merge succeeded + one role comment with SHA; merge fail → Implementing + one role comment with the error) |
+| `dispatch.state` → `Implementing` | **Planner** (claim) |
+| `Implementing` → `In Review` | **Implement** (PR + proof on Linear) |
+| `In Review` → `Ready for merge` | **Checker** (pass) |
+| `In Review` / `Ready for merge` / `Merging` → `Implementing` | **Checker** or **land** (fail) |
+| `Ready for merge` → `Merging` | **Auto-merge** when delegate is Pi (loop cap + MERGEABLE + green checks) or **approver** |
+| `Merging` → `Done` | **Land** (merge succeeded) |
 | Merge to integration | **Land** |
 
 ---
@@ -104,7 +104,7 @@ Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage
 | --- | --- |
 | Trigger | Every hour (`PI_INTAKE_POLL_MS`, default 1 hour) on the **planner mutex** |
 | Tools | **Linear CLI** on the PI worker. Not Pi. Not the coding slot. |
-| Action | List open KIT Triage. Promote well-formed slices (Linear Type, write-scope, What to build, AC) to Backlog with `ready-for-agent` and without `signal-up`. Shape leftovers that have an inferable repo path onto the **same** issue (Type, What to build, AC, `write-scope:`). One finding stays one ticket — do not lump leftovers into `Tech: paths`. Unshaped Sentry or leftovers with no path stay in Triage with one comment updated in place. Never set delegate or Linear Agent. |
+| Action | List open KIT Triage. Promote well-formed slices (Linear Type, write-scope, What to build, AC) to Backlog with `ready-for-agent` and without `signal-up`. Shape leftovers that have an inferable repo path onto the **same** issue (Type, What to build, AC, `write-scope:`). One finding stays one ticket — do not lump leftovers into `Tech: paths`. Unshaped Sentry or leftovers with no path stay in Triage with one comment updated in place. Planner claims Pi delegate after promote. |
 | Never | Implementing, In Review, Merging, Done. Never set Linear Agent to Cursor. |
 
 ---
@@ -201,9 +201,9 @@ Complete review every pass — not a delta on last ### Review feedback. Dump eve
 
 Read ALL required GitHub check runs on the attached PR (including image/deploy smokes, not only test). gh pr view --json mergeable must be MERGEABLE. Pending required checks → wait; do not move status; do not fail early on Standards. Failed required checks or CONFLICTING → fail, and still include every Spec/Standards hard miss in the same ### Review feedback. Local tests are not a substitute.
 
-Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Write one role comment with a verdict per Acceptance criterion; harness ticks description AC. Optional workpad `### Description AC rewrites` rewrites one criterion line and comments why on that verdict only. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop cap clear (Pi delegate not required).
+Pass (Standards + Spec clean, mergeable, required GitHub CI/CD green) → Ready for merge. Pi stays delegate until Auto-merge decides. Auto-merge may then flip to Merging when delegate is Pi.
 
-Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set. Write one short role comment that the issue returned to Implementing. Do not tick description Acceptance criteria. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no resume of the previous Pi job.
+Fail → Implementing (same branch/PR). Replace workpad ### Review feedback with the complete set: what failed, file/criterion, and what done looks like (a new required env includes every workflow that boots that process). save_comment on the issue so the next implement run sees it. Upload failing screenshots/recordings to the issue. That status change is what wakes implement — there is no resume of the previous Pi job.
 
 If this is the second fail of the same class on this issue, say so in ### Review feedback and require a ratchet in the next implement PR (docs/agents/error-ratcheting.md). Do not write the ratchet yourself. Ratchet paths are not a write-scope miss.
 ```
@@ -216,7 +216,7 @@ If this is the second fail of the same class on this issue, say so in ### Review
 | --- | --- |
 | Trigger | Linear issue status changed **to** `Merging` |
 | Tools | `gh` + Linear CLI. Not Linear MCP on kit-harness. |
-| Action | `/land` into `lanes.integration`. Merge fail → `Implementing` + `### Review feedback` + one role comment with the error (wakes implement on the same branch). |
+| Action | `/land` into `lanes.integration`. Merge fail → `Implementing` + `### Review feedback` (wakes implement on the same branch). |
 | Instruction | See prompt below. |
 
 ### Cursor UI checklist
@@ -240,8 +240,8 @@ Read factory.config.json then WORKFLOW.md. Follow /land.
 
 Only run if the new status is Merging. Fetch get_issue, list_comments, and the linked PR.
 Merge into lanes.integration only. Never staging or production. Never force-push.
-Merge success → Done, record the SHA in the workpad, and write one role comment with the merge SHA.
-Merge fail → Implementing, write the error under workpad ### Review feedback, and write one role comment with the merge error. That wakes implement on the same branch. Never Done on a failed merge.
+Merge success → Done and record the SHA in the workpad.
+Merge fail → Implementing and write the error under workpad ### Review feedback. That wakes implement on the same branch. Never Done on a failed merge.
 ```
 
 ---

@@ -22,7 +22,7 @@ There is **no** concurrency cap. Blocking is the limiter; priority is the order.
 
 Then, among remaining eligible issues, claim **all of them** in `dispatch.priorityOrder` (Linear: `1` Urgent, `2` High, `3` Medium, `4` Low, `0` None). Same rank: oldest `createdAt` first. Unset / None is last. Do not preempt an issue already `Implementing`. If the candidate declares `write-scope:` globs that overlap an `Implementing` issue, skip it, leave it in `dispatch.state` with `ready-for-agent`, comment the overlapping identifier and globs, and continue with the next eligible. Issues without a `write-scope:` line are not skipped for path overlap.
 
-Each claim moves that issue to `Implementing` and writes **one role comment** that the issue was claimed. That wakes the implement automation. Stop when the eligible list is exhausted.
+Each claim moves that issue to `Implementing`. That wakes the implement automation. Stop when the eligible list is exhausted.
 
 Never claim from Linear **Triage** or **Duplicate**. Never move to `In Review`, `Ready for merge`, `Merging`, `Done`, `Parked`, or `Canceled`.
 

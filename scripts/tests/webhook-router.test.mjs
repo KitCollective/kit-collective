@@ -253,21 +253,14 @@ test("unknown app delegate skips", async () => {
   assert.equal(enqueue.jobs.length, 0);
 });
 
-test("Implementing with empty Agent enqueues implement and names feature ADW", async () => {
+test("Implementing without Pi delegate skips", async () => {
   const { result, enqueue } = await dispatch(
     issueUpdatePayload(),
-    snapshot({
-      status: "Implementing",
-      delegate: null,
-      labels: ["ready-for-agent", "Feature"],
-      linearType: "Feature",
-    }),
+    snapshot({ status: "Implementing", delegate: null }),
   );
 
-  assert.equal(result.kind, "enqueue");
-  assert.equal(enqueue.jobs.length, 1);
-  assert.equal(enqueue.jobs[0].role, "implement");
-  assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/feature.yaml");
+  assert.equal(result.kind, "skip");
+  assert.equal(enqueue.jobs.length, 0);
 });
 
 test("Implementing + Pi + Feature enqueues implement and names feature ADW", async () => {
