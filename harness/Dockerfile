@@ -18,6 +18,8 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY .pi /workspace/.pi
+COPY .cursor/rules /workspace/.cursor/rules
+COPY .cursor/skills /workspace/.cursor/skills
 ENV PI_WORKSPACE=/workspace
 WORKDIR /workspace
 # Global install only: `pi install -l` refuses untrusted project trees in Docker.

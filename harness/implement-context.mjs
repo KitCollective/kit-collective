@@ -244,3 +244,33 @@ export function buildImplementAppendPath(workspace, roleFile, context) {
 export function resolveImplementSkillPaths(workspace, skillRels) {
   return skillRels.map((rel) => join(workspace, rel));
 }
+
+/**
+ * All `.cursor` paths the harness may read from `/workspace` at runtime (--skill + append).
+ * Used by Docker build-context ratchets; keep in sync with selectImplementSkills/Rules.
+ *
+ * @returns {{ skills: string[], rules: string[] }}
+ */
+export function harnessDockerCursorPaths() {
+  /** @type {Set<string>} */
+  const skills = new Set(ALWAYS_SKILLS);
+  for (const helper of ["expo", "nest"]) {
+    for (const skillRel of selectImplementSkills([helper])) {
+      skills.add(skillRel);
+    }
+  }
+  /** @type {Set<string>} */
+  const rules = new Set();
+  for (const ruleRel of dynamicAppendRules(
+    selectImplementRules(["ui-ux"], {
+      labels: ["mobile"],
+      writeScopeGlobs: ["apps/mobile"],
+    }),
+  )) {
+    rules.add(ruleRel);
+  }
+  return {
+    skills: [...skills].sort(),
+    rules: [...rules].sort(),
+  };
+}
