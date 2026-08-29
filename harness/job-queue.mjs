@@ -9,6 +9,7 @@ import {
   floorsFromEnv,
   upsertCapacityComment,
 } from "./capacity.mjs";
+import { harnessLog, loopRiskForGate, loopRiskForRetry, resolveExitGate } from "./harness-log.mjs";
 
 /**
  * Worker health capacity stub when no reader is injected.
@@ -30,7 +31,7 @@ export const ALWAYS_READY_CAPACITY = Object.freeze({
  * factory-checker. Write-scope retry keeps the slot so an out-of-glob path cannot drop
  * the issue behind a resume overlap skip (KIT-119). Format retry is cheap like CI retry.
  */
-export const IMPLEMENT_CI_RETRY_CAP = 3;
+export const IMPLEMENT_CI_RETRY_CAP = 5;
 
 /**
  * Cheap in-slot retry: Scout+helpers already ran on attempt 1.
@@ -62,6 +63,15 @@ export async function runImplementWithRetries(run, job) {
     if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
       throw new Error("implement CI retry cap hit");
     }
+    harnessLog({
+      role: job.role,
+      identifier: job.identifier,
+      event: "retry",
+      gate: "yellow",
+      reason: "ci",
+      attempt: attempt + 1,
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
+    });
     return runImplementWithRetries(run, { ...job, ciRetryAttempt: attempt + 1 });
   }
   if (result?.writeScopeRetry === true) {
@@ -69,6 +79,15 @@ export async function runImplementWithRetries(run, job) {
     if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
       throw new Error("implement write-scope retry cap hit");
     }
+    harnessLog({
+      role: job.role,
+      identifier: job.identifier,
+      event: "retry",
+      gate: "yellow",
+      reason: "write-scope",
+      attempt: attempt + 1,
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
+    });
     return runImplementWithRetries(run, { ...job, writeScopeRetryAttempt: attempt + 1 });
   }
   if (result?.formatRetry === true) {
@@ -76,6 +95,15 @@ export async function runImplementWithRetries(run, job) {
     if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
       throw new Error("implement format retry cap hit");
     }
+    harnessLog({
+      role: job.role,
+      identifier: job.identifier,
+      event: "retry",
+      gate: "yellow",
+      reason: "format",
+      attempt: attempt + 1,
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
+    });
     return runImplementWithRetries(run, { ...job, formatRetryAttempt: attempt + 1 });
   }
   return result;
@@ -200,15 +228,37 @@ export function createWorkerSlots(deps) {
     } else {
       finisherActive = true;
     }
+    harnessLog({ role: job.role, identifier, event: "start", gate: "green" });
     try {
       const result = await runMaybeRetry(job);
+      if (
+        !(
+          result &&
+          typeof result === "object" &&
+          (result.idleTimeout === true || result.retryCapHold === true)
+        )
+      ) {
+        const exitGate = resolveExitGate(result, job);
+        harnessLog({
+          role: job.role,
+          identifier,
+          event: "exit",
+          gate: exitGate,
+          loopRisk: loopRiskForGate(exitGate),
+        });
+      }
       job._deferred?.resolve(result);
       return result;
     } catch (error) {
       job._deferred?.reject(error);
-      console.error(
-        `${job.role} ${identifier} failed: ${error instanceof Error ? error.message : error}`,
-      );
+      harnessLog({
+        role: job.role,
+        identifier,
+        event: "fail",
+        gate: "red",
+        error,
+        loopRisk: 10,
+      });
       throw error;
     } finally {
       const index = runningJobs.indexOf(entry);
@@ -280,6 +330,14 @@ export function createWorkerSlots(deps) {
         body: capacityCommentBody(snapshot, floors, job),
       });
     }
+    harnessLog({
+      role: job.role,
+      identifier: job.identifier ?? job.issueId,
+      event: "wait",
+      gate: "yellow",
+      reason: "capacity",
+      loopRisk: 4,
+    });
     scheduleCapacityRetry();
     return true;
   }

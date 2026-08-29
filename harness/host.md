@@ -24,12 +24,96 @@ Product Postgres, Redis, and the PaaS panel stay on the other Helsinki CX33. Thi
 
 - Deploy dir: `/opt/kit-collective/harness`
 - Compose: `docker compose up -d` (webhook behind Caddy)
-- Health: `https://harness.eskobar.dev/health` → `{"ok":true,"planner":"active","jobs":[{"role":"implement","identifier":"KIT-n"},…],"queued":["KIT-m",…],"job":{"role":"implement","identifier":"KIT-n"}|null,"capacity":{"ramFreeMb":…,"diskFreeMb":…,"ready":true|false},"tokens":{"role":"implement","identifier":"KIT-n","lines":[{"role":"implement","model":"Composer","input":…,"output":…}]}|null}` HTTP 200 while the process is up. **`jobs`** lists every running occupant (Implement pool + Finisher). **`queued`** lists KIT identifiers waiting for a free slot. Singular **`job`** is derived (first occupant or `null`) for older readers — not the occupancy source of truth. **`tokens`** is the last implement / factory-checker totals per role and model (input/output, or `unknown`) after that job exits, else `null`. Capacity is free RAM and worktree-volume disk against env floors. Never 503 because a job is running, hung, or waiting on the Capacity gate. Never API keys in this JSON.
+- Health: `https://harness.eskobar.dev/health` → `{"ok":true,"planner":"active","jobs":[{"role":"implement","identifier":"KIT-n"},…],"queued":["KIT-m",…],"jobsActive":…,"jobsQueued":…,"job":{"role":"implement","identifier":"KIT-n"}|null,"capacity":{"ramFreeMb":…,"diskFreeMb":…,"ready":true|false},"tokens":{"role":"implement","identifier":"KIT-n","lines":[{"role":"implement","model":"Composer","input":…,"output":…}]}|null}` HTTP 200 while the process is up. **`jobs`** lists every running occupant (Implement pool + Finisher). **`queued`** lists KIT identifiers waiting for a free slot. **`jobsActive`** / **`jobsQueued`** are numeric counts for Prometheus json_exporter (same lengths as `jobs` / `queued`). Singular **`job`** is derived (first occupant or `null`) for older readers — not the occupancy source of truth. **`tokens`** is the last implement / factory-checker totals per role and model (input/output, or `unknown`) after that job exits, else `null`. Capacity is free RAM and worktree-volume disk against env floors. Never 503 because a job is running, hung, or waiting on the Capacity gate. Never API keys in this JSON.
 - **Implement pool:** up to `PI_IMPLEMENT_SLOTS` concurrent implement jobs (default **3**, clamp **1–3**). Each implement checks out its own Issue worktree under `/var/lib/kit-pi/worktrees/KIT-n`. A fourth implement waits in **`queued`** without preempting live Composers.
 - **Finisher slot:** one reserved slot for factory-checker, auto-merge, and land (no Pi for auto-merge/land). Finisher jobs may start while the Implement pool is full — they jump a queued implement without killing a live Composer. A second checker while Finisher is busy waits in **`queued`**, not on an Implement slot. Finisher is never stolen for a fourth implement.
 - Webhook cgroup **mem_limit 5g** (not 768m). Each Pi child is ~470 MB RSS; 768m OOM-kills factory-checker when an implement is already live (`pi exited null`). The CX33 has 8 GB; Caddy and the host keep the rest.
 - Capacity gate: before a coding-job spawn, free RAM and the `kit_pi` worktree volume must clear env floors (defaults 2048 MB RAM / 5120 MB disk). Names: `PI_CAPACITY_RAM_MB`, `PI_CAPACITY_DISK_MB`. When `ready` is false the job stays queued, status is unchanged (not Timeout park), and the worker writes one Linear comment (`## Capacity gate`) updated in place. Planner still runs. Chromium for implement UI evidence counts extra (`CHROMIUM_RAM_MB`, 512 MB on top of the RAM floor). If that Chromium floor is not ready, the job may still spawn Pi but browser tools are omitted and Chromium spawn is refused. Headless Chromium only — never Nicklas’s Desktop Chrome or a personal browser profile. The worker image installs the Playwright Chromium headless-shell binary at build (`npx playwright install --with-deps --only-shell chromium`); that is not Desktop Chrome. Image boot still only `pi install`s the four global packages — it does not load the implement-browser Pi package. The Playwright Chromium Pi package is loaded via `--skill` on UI implement only; it is not in `.pi/settings.json`, so planner, Intake, factory-checker, and api/db-only implement do not load those tools. GitHub Actions still never opens Chromium.
 - TLS: Let’s Encrypt via Caddy
+
+## Observability (optional)
+
+Prometheus + Grafana + Loki overlay on the same CX33. **Metrics:** host (`node_exporter`) and harness state from the webhook service `GET /health` (compose network) via `json_exporter` (15s). **Logs:** structured JSON lines from the webhook container (`harness-log.mjs` on stderr) → Promtail → Loki. Pi stdout still lands in Docker logs but is unstructured; use structured `event` + `gate` lines for alerting.
+
+### Agent log flow
+
+| Source | Where it goes | Structured? |
+| --- | --- | --- |
+| Job slot lifecycle (`start`, `exit`, `fail`, `retry`, `wait`) | `harness/job-queue.mjs` → stderr JSON | yes — `role`, `identifier`, `event`, `gate`, `loopRisk` |
+| Pi idle timeout / non-implement Pi exit | `harness/pi-job.mjs` → stderr JSON | yes — `event=fail`, `gate=red` |
+| Implement CI / write-scope / format retry | `harness/job-queue.mjs` → stderr JSON | yes — `event=retry`, `gate=yellow`, `reason`, `attempt` |
+| Capacity gate (spawn blocked) | `harness/capacity.mjs`, `harness/job-queue.mjs` | yes — `event=wait`, `gate=yellow`, `reason=capacity` |
+| Pi stdout (Composer/Grok JSONL) | Docker json-file log for `webhook` | no — tail via Loki without `source=harness` filter |
+| Planner / resume / intake pollers | legacy `[role] …` on stderr | no |
+| Job queue throw after cap | structured `event=fail`, `gate=red` | yes |
+
+**Gate semantics** (factory ship-ready / merge-with-follow-up / do-not-merge):
+
+| Gate | Meaning | Typical events |
+| --- | --- | --- |
+| `green` | Ship-ready — on track | `start`, clean `exit` (In Review, checker pass) |
+| `yellow` | Loop debt / waiting — monitor | `retry` (CI, format, write-scope under cap), `wait` (capacity), `exit` still Implementing |
+| `red` | Do not merge / stuck | `fail` (idle timeout, retry cap, Pi exit, queue throw), checker-fail `exit` |
+
+Promtail keeps only the `webhook` compose service, parses JSON lines with `source=harness`, and labels `role`, `kit` (KIT identifier), `event`, `gate`.
+
+| Item | Value |
+| --- | --- |
+| Compose overlay | `harness/docker-compose.monitoring.yml` |
+| Up command | `docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d` |
+| Grafana URL | `https://grafana.eskobar.dev` (DNS A → `62.238.125.114`, same as harness) |
+| Default login | `admin` + `GRAFANA_ADMIN_PASSWORD` from box `.env` |
+| Dashboards | **Harness → Kit harness overview** (metrics), **Kit harness agent logs** (Loki) |
+| RAM budget | ~1 GB cgroup caps (Prometheus 384m + Grafana 256m + Loki 256m + Promtail 128m) + ~50 MB exporters |
+
+**Enable on kit-harness**
+
+1. `ssh kit-harness` → `cd /opt/kit-collective/harness` → `git pull`.
+2. Rebuild webhook so structured logs ship: `docker compose build webhook && docker compose up -d webhook`.
+3. Add to `.env` (never git): `GRAFANA_ADMIN_PASSWORD=<strong>`; optional `GRAFANA_ROOT_URL=https://grafana.eskobar.dev/`.
+4. Cloudflare/DNS: `grafana.eskobar.dev` A record → `62.238.125.114`.
+5. `docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d`.
+6. `curl -sS https://grafana.eskobar.dev/api/health` → `{"database":"ok",…}`.
+7. Open **Kit harness agent logs** — run a test job and confirm `event=start` / `event=exit` lines.
+8. Import extras (optional): Grafana.com **1860** (Node Exporter Full) against Prometheus.
+
+**Example LogQL**
+
+```logql
+# Failures for one issue
+{compose_service="webhook", kit="KIT-113", event="fail"} | json
+
+# Red gate rate (5m)
+sum(rate({compose_service="webhook", gate="red"}[5m]))
+
+# Yellow warnings — retries + capacity waits (1h)
+sum(count_over_time({compose_service="webhook", gate="yellow"}[1h]))
+
+# Gate distribution (1h)
+sum by (gate) (count_over_time({compose_service="webhook", source="harness"} | json | gate != "" [1h]))
+
+# Potentially stuck: started but no exit/fail in 45m
+sum by (kit) (
+  count_over_time({compose_service="webhook", event="start"}[45m])
+)
+unless
+sum by (kit) (
+  count_over_time({compose_service="webhook", event=~"exit|fail"}[45m])
+)
+
+# Implement error rate (5m)
+sum(rate({compose_service="webhook", role="implement", event="fail"}[5m]))
+
+# Recent structured tail (all roles)
+{compose_service="webhook"} | json | source="harness"
+
+# Raw Pi stdout noise (unstructured docker wrapper)
+{compose_service="webhook"} != `source":"harness"`
+```
+
+**Disable:** `docker compose -f docker-compose.yml -f docker-compose.monitoring.yml down` (volumes keep history; add `-v` to wipe).
+
+Caddy serves `grafana.eskobar.dev` only when the overlay is up; otherwise that hostname 502s — harness webhook is unaffected.
 - Worker `.env` on the box only — never git. Path: `/opt/kit-collective/harness/.env` (compose `env_file: .env` next to this compose file). Required names: `CURSOR_API_KEY`, `LINEAR_CLI_API_KEY`, `LINEAR_WEBHOOK_SECRET`, `GH_TOKEN`, `OPENROUTER_API_KEY`. Issue status webhooks use `LINEAR_WEBHOOK_SECRET`. AgentSession HMAC and actor=app activity tokens are not used (KIT-113). Values live on `kit-harness`, not in git. Do not reuse `LINEAR_API_KEY` (bootstrap admin key). `OPENROUTER_API_KEY` is for Scout and Gate (`tencent/hy3`); missing it fails implement closed. The value stays on kit-harness.
 - Implement worktrees: bare mirror `/var/lib/kit-pi/mirror.git`, issue trees `/var/lib/kit-pi/worktrees/KIT-n`. Checkout sits on the open `development` PR head for that identifier, else `origin/kit-n`. Implement may create `kit-n` from `origin/development` only when neither exists. A leftover rebase is aborted; implement with an open PR force-resets onto that head. implement-exit rebases only when the open PR is not already `MERGEABLE`; a MERGEABLE PR is reset onto `origin/<branch>` before write-scope so the diff matches the PR. A conflicted rebase is aborted instead of leaving the tree wedged. Implement-exit still runs after a non-zero Pi so a green MERGEABLE PR can move In Review. Gate runs `pnpm format:check` (or image-global `biome ci .`) as a red report — not typecheck (yellow). Out-of-glob write-scope keeps Implementing and **re-runs implement in the same slot** (same cap as CI retry) so the issue is not dropped behind a resume overlap skip. CI, write-scope, and format retries **Skip Scout** and skip helpers: prompt is workpad `### Review feedback` plus the redacted CI excerpt (fix the class — format vs Zod vs unique-email). After the in-slot **implement retry cap**, the worker holds Implementing with a Linear comment (`Linear Agent left empty`; no Cursor Cloud Agent); resume does not enqueue a new Composer. Checker reuse throws instead of reviewing the lane. Two open issue PRs fail closed. One issue, one open PR. Checker pass updates the existing workpad with an all-good status line and token use; fail writes `### Review feedback`. Compose volume `kit_pi`.
 - **Worker memory:** Hermes store at `/var/lib/kit-pi/hermes` on the same `kit_pi` volume — outside Issue worktrees, survives Worktree reap and image rebuild. **factory-checker is the Memory writer:** may search and write (`memory_add`, `memory_replace`, `memory_remove`) with background review, correction detection, and shutdown flush (`PI_CODING_AGENT_DIR` → `.pi/agent-checker` on checker spawn). **Memory readers** (implement, Scout, Gate, helpers) search only; memory-write tools and `skill_manage` stay excluded from implement spawn. Injection is Memory policy-only (no MEMORY.md dump). Reader config lives at `PI_CODING_AGENT_DIR=/workspace/.pi/agent`; `KIT_PI_HERMES=/var/lib/kit-pi/hermes`. Git ratchets still win over Hermes.

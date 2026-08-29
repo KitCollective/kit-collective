@@ -1338,6 +1338,8 @@ test("GET /health reports capacity numbers, ready false, and stays HTTP 200", as
       planner: "active",
       jobs: [],
       queued: [],
+      jobsActive: 0,
+      jobsQueued: 0,
       job: null,
       capacity: { ramFreeMb: 100, diskFreeMb: 200, ready: false },
       tokens: null,
@@ -1644,6 +1646,7 @@ test("host inventory and Dockerfile document worker health capacity", () => {
   assert.match(host, /PI_CAPACITY_RAM_MB/);
   assert.match(host, /PI_CAPACITY_DISK_MB/);
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /capacity\.mjs/);
+  assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /harness-log\.mjs/);
 });
 
 const MISSING_WORKTREES = "/var/lib/kit-pi/worktrees";
