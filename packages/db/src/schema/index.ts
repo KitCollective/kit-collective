@@ -310,6 +310,10 @@ export const conversationMessage = pgTable("conversation_message", {
     .references(() => user.id),
   kind: messageKindEnum("kind").notNull(),
   body: text("body"),
+  imageObjectKey: text("image_object_key"),
+  replyToMessageId: uuid("reply_to_message_id").references(
+    (): AnyPgColumn => conversationMessage.id,
+  ),
   bidAmountDkk: integer("bid_amount_dkk"),
   bidStatus: bidStatusEnum("bid_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

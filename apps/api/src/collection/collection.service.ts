@@ -1,4 +1,5 @@
 import {
+  type CollectionConversationDetail,
   type CollectionConversations,
   type CollectionDiscoverJerseys,
   type CollectionJersey,
@@ -7,7 +8,9 @@ import {
   type CollectionSavePhoto,
   type CollectionSaveResponse,
   type CollectionSendBidResponse,
+  type CollectionSendMessageResponse,
   collectionBiddingPatchSchema,
+  collectionConversationDetailSchema,
   collectionConversationsSchema,
   collectionDiscoverJerseysSchema,
   collectionJerseysSchema,
@@ -16,6 +19,8 @@ import {
   collectionSaveResponseSchema,
   collectionSendBidRequestSchema,
   collectionSendBidResponseSchema,
+  collectionSendMessageRequestSchema,
+  collectionSendMessageResponseSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
@@ -289,7 +294,9 @@ export class CollectionService {
       const snippet =
         latest?.kind === "bid" && latest.bidAmountDkk
           ? bidSnippet(latest.bidAmountDkk)
-          : (latest?.body ?? "Ny besked");
+          : latest?.kind === "image"
+            ? "Billede"
+            : (latest?.body ?? "Ny besked");
 
       const lastReadAt = lastReadByConversation.get(row.id);
       const unread =
@@ -310,6 +317,267 @@ export class CollectionService {
     const unreadCount = conversations.filter((item) => item.unread).length;
 
     return collectionConversationsSchema.parse({ conversations, unreadCount });
+  }
+
+  async getConversationDetail(
+    userId: string,
+    conversationId: string,
+    locale: LabelLocale = "da",
+  ): Promise<CollectionConversationDetail> {
+    await this.assertConversationParticipant(userId, conversationId);
+
+    const [conversationRow] = await this.db
+      .select({
+        id: conversation.id,
+        userJerseyId: conversation.userJerseyId,
+        lowerCollectorId: conversation.lowerCollectorId,
+        upperCollectorId: conversation.upperCollectorId,
+      })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+
+    if (!conversationRow) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    const peerId =
+      conversationRow.lowerCollectorId === userId
+        ? conversationRow.upperCollectorId
+        : conversationRow.lowerCollectorId;
+
+    const [peerRow] = await this.db
+      .select({ handle: user.handle })
+      .from(user)
+      .where(eq(user.id, peerId))
+      .limit(1);
+
+    if (!peerRow) {
+      throw new NotFoundException("Peer handle missing");
+    }
+
+    const [jerseyRow] = await this.db
+      .select({
+        clubId: userJersey.clubId,
+        type: userJersey.type,
+        seasonLabel: season.label,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .where(eq(userJersey.id, conversationRow.userJerseyId))
+      .limit(1);
+
+    let jerseyContext: CollectionConversationDetail["jerseyContext"];
+    if (jerseyRow) {
+      const clubLabels = await this.resolveEntityLabels("club", [jerseyRow.clubId], locale);
+      const clubLabel = clubLabels.get(jerseyRow.clubId);
+      if (clubLabel) {
+        jerseyContext = {
+          clubLabel,
+          seasonLabel: jerseyRow.seasonLabel,
+          type: jerseyRow.type,
+        };
+      }
+    }
+
+    const messageRows = await this.db
+      .select({
+        id: conversationMessage.id,
+        senderId: conversationMessage.senderId,
+        kind: conversationMessage.kind,
+        body: conversationMessage.body,
+        imageObjectKey: conversationMessage.imageObjectKey,
+        replyToMessageId: conversationMessage.replyToMessageId,
+        bidAmountDkk: conversationMessage.bidAmountDkk,
+        bidStatus: conversationMessage.bidStatus,
+        createdAt: conversationMessage.createdAt,
+      })
+      .from(conversationMessage)
+      .where(eq(conversationMessage.conversationId, conversationId))
+      .orderBy(asc(conversationMessage.createdAt));
+
+    const replyIds = messageRows
+      .map((row) => row.replyToMessageId)
+      .filter((id): id is string => Boolean(id));
+    const replyBodies =
+      replyIds.length === 0
+        ? new Map<string, string>()
+        : new Map(
+            (
+              await this.db
+                .select({ id: conversationMessage.id, body: conversationMessage.body })
+                .from(conversationMessage)
+                .where(inArray(conversationMessage.id, replyIds))
+            )
+              .filter((row) => Boolean(row.body))
+              .map((row) => [row.id, row.body!] as const),
+          );
+
+    const messages = messageRows.map((row) => {
+      const role = row.senderId === userId ? ("outgoing" as const) : ("incoming" as const);
+      const replyText = row.replyToMessageId ? replyBodies.get(row.replyToMessageId) : undefined;
+
+      return {
+        id: row.id,
+        kind: row.kind,
+        role,
+        text: row.body ?? undefined,
+        imageUrl:
+          row.kind === "image" && row.imageObjectKey
+            ? `/v1/collection/conversations/${conversationId}/messages/${row.id}/photo`
+            : undefined,
+        bidAmountDkk: row.bidAmountDkk ?? undefined,
+        bidStatus: row.bidStatus ?? undefined,
+        createdAt: row.createdAt.toISOString(),
+        replyTo:
+          row.replyToMessageId && replyText
+            ? { id: row.replyToMessageId, text: replyText }
+            : undefined,
+      };
+    });
+
+    await this.db
+      .update(conversationParticipant)
+      .set({ lastReadAt: new Date() })
+      .where(
+        and(
+          eq(conversationParticipant.conversationId, conversationId),
+          eq(conversationParticipant.userId, userId),
+        ),
+      );
+
+    return collectionConversationDetailSchema.parse({
+      id: conversationId,
+      peerHandle: peerRow.handle,
+      jerseyContext,
+      messages,
+    });
+  }
+
+  async sendConversationMessage(
+    userId: string,
+    conversationId: string,
+    rawBody: unknown,
+  ): Promise<CollectionSendMessageResponse> {
+    await this.assertConversationParticipant(userId, conversationId);
+    const body = collectionSendMessageRequestSchema.parse(rawBody);
+
+    const hasText = Boolean(body.text?.trim());
+    const hasImage = Boolean(body.contentBase64);
+    const kind = hasImage ? "image" : "text";
+
+    let imageObjectKey: string | undefined;
+    let presetMessageId: string | undefined;
+    if (hasImage) {
+      const bytes = decodeBase64Photo(body.contentBase64!);
+      presetMessageId = crypto.randomUUID();
+      imageObjectKey = `conversation/${conversationId}/${presetMessageId}.jpg`;
+      await this.objectStore.putObject(imageObjectKey, bytes);
+
+      const exists = await this.objectStore.objectExists(imageObjectKey);
+      if (!exists) {
+        throw new BadRequestException(`Object store missing key after put: ${imageObjectKey}`);
+      }
+    }
+
+    if (body.replyToMessageId) {
+      const [replyRow] = await this.db
+        .select({ id: conversationMessage.id })
+        .from(conversationMessage)
+        .where(
+          and(
+            eq(conversationMessage.id, body.replyToMessageId),
+            eq(conversationMessage.conversationId, conversationId),
+          ),
+        )
+        .limit(1);
+
+      if (!replyRow) {
+        throw new BadRequestException("Reply target message not found in conversation");
+      }
+    }
+
+    const [insertedMessage] = await this.db
+      .insert(conversationMessage)
+      .values({
+        ...(presetMessageId ? { id: presetMessageId } : {}),
+        conversationId,
+        senderId: userId,
+        kind,
+        body: hasText ? body.text!.trim() : null,
+        imageObjectKey: imageObjectKey ?? null,
+        replyToMessageId: body.replyToMessageId ?? null,
+      })
+      .returning({ id: conversationMessage.id });
+
+    if (!insertedMessage) {
+      throw new BadRequestException("Could not create message");
+    }
+
+    await this.db
+      .update(conversation)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversation.id, conversationId));
+
+    return collectionSendMessageResponseSchema.parse({ messageId: insertedMessage.id });
+  }
+
+  async getConversationMessagePhotoBytes(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<Uint8Array> {
+    await this.assertConversationParticipant(userId, conversationId);
+
+    const [row] = await this.db
+      .select({
+        kind: conversationMessage.kind,
+        imageObjectKey: conversationMessage.imageObjectKey,
+      })
+      .from(conversationMessage)
+      .where(
+        and(
+          eq(conversationMessage.id, messageId),
+          eq(conversationMessage.conversationId, conversationId),
+        ),
+      )
+      .limit(1);
+
+    if (!row || row.kind !== "image" || !row.imageObjectKey) {
+      throw new NotFoundException("Message photo not found");
+    }
+
+    if (!row.imageObjectKey.startsWith(`conversation/${conversationId}/`)) {
+      throw new NotFoundException("Message photo not found");
+    }
+
+    const bytes = await this.objectStore.getObject(row.imageObjectKey);
+    if (!bytes) {
+      throw new NotFoundException("Message photo bytes missing");
+    }
+
+    return bytes;
+  }
+
+  private async assertConversationParticipant(
+    userId: string,
+    conversationId: string,
+  ): Promise<void> {
+    const [participant] = await this.db
+      .select({ conversationId: conversationParticipant.conversationId })
+      .from(conversationParticipant)
+      .where(
+        and(
+          eq(conversationParticipant.conversationId, conversationId),
+          eq(conversationParticipant.userId, userId),
+          sql`${conversationParticipant.hiddenAt} IS NULL`,
+        ),
+      )
+      .limit(1);
+
+    if (!participant) {
+      throw new NotFoundException("Conversation not found");
+    }
   }
 
   async patchBidding(userId: string, jerseyId: string, rawBody: unknown) {
