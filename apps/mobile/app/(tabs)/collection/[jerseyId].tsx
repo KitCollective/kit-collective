@@ -2,15 +2,7 @@ import type { CollectionJersey } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { patchJerseyBidding } from "@/api/bidding";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
@@ -123,7 +115,12 @@ export default function JerseyDetailScreen() {
         <Text style={[typography.title, { color: theme.contentPrimary }]}>{jersey.clubLabel}</Text>
         <Text style={[typography.mono, { color: theme.contentSecondary }]}>{metaLine}</Text>
       </View>
-      <View style={[styles.biddingRow, { backgroundColor: theme.surface, borderColor: theme.borderSubtle }]}>
+      <View
+        style={[
+          styles.biddingRow,
+          { backgroundColor: theme.surface, borderColor: theme.borderSubtle },
+        ]}
+      >
         <View style={styles.biddingCopy}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Åben for bud</Text>
           <Text style={[typography.caption, { color: theme.contentSecondary }]}>

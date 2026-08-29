@@ -126,7 +126,9 @@ export default function SendBidScreen() {
         <View style={styles.headerRow}>
           <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
         </View>
-        <Text style={[typography.title, { color: theme.contentPrimary, marginBottom: space.insetMd }]}>
+        <Text
+          style={[typography.title, { color: theme.contentPrimary, marginBottom: space.insetMd }]}
+        >
           Send bud
         </Text>
       </View>
