@@ -17,6 +17,7 @@ import {
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
+import { harnessLog } from "./harness-log.mjs";
 import {
   buildImplementAppendPath,
   resolveImplementSkillPaths,
@@ -913,6 +914,7 @@ export function createPiJobRunner({
           linear: client,
           issueId: typeof job.issueId === "string" ? job.issueId : undefined,
           identifier,
+          role: job.role,
           sleep: capacitySleep ?? sleep,
           pollMs: Number(env.PI_CAPACITY_POLL_MS ?? DEFAULT_CAPACITY_POLL_MS),
         });
@@ -972,6 +974,15 @@ export function createPiJobRunner({
         if (holdLinear && typeof holdLinear.listComments === "function") {
           implementComments = await holdLinear.listComments(job.issueId ?? identifier);
           if (commentsHoldImplementRetryCap(implementComments)) {
+            harnessLog({
+              role: job.role,
+              identifier,
+              event: "fail",
+              gate: "red",
+              reason: "retry-cap-hold",
+              error: "implement retry cap hold",
+              loopRisk: 10,
+            });
             return {
               ...job,
               status: IMPLEMENTING,
@@ -1123,9 +1134,27 @@ export function createPiJobRunner({
         implementContext,
       });
       if (result.idleTimeout) {
+        harnessLog({
+          role: job.role,
+          identifier,
+          event: "fail",
+          gate: "red",
+          reason: "idle-timeout",
+          error: `idle timeout after ${jobIdleMs(env)}ms`,
+          loopRisk: 10,
+        });
         return timeoutPark(job, identifier, jobIdleMs(env));
       }
       if (result.status !== 0 && job.role !== "implement") {
+        harnessLog({
+          role: job.role,
+          identifier,
+          event: "fail",
+          gate: "red",
+          reason: "pi-exit",
+          error: `pi exited ${result.status}`,
+          loopRisk: 8,
+        });
         throw new Error(`pi exited ${result.status} for ${identifier}`);
       }
       if (job.role === "implement") {

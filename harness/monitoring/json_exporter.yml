@@ -1,0 +1,19 @@
+---
+modules:
+  harness_health:
+    headers:
+      Accept: application/json
+    metrics:
+      - name: harness_health
+        type: object
+        help: Snapshot from GET /health on the PI webhook adapter
+        path: "{ . }"
+        labels:
+          planner: "{ .planner }"
+          ok: "{ .ok }"
+          capacity_ready: "{ .capacity.ready }"
+        values:
+          jobs: "{ .jobs | length }"
+          queued: "{ .queued | length }"
+          ram_free_mb: "{ .capacity.ramFreeMb }"
+          disk_free_mb: "{ .capacity.diskFreeMb }"
