@@ -167,7 +167,10 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
      * @param {{ cwd: string, onto: string, branch?: string }} input
      */
     async rebase({ cwd, onto, branch }) {
-      await run("git", ["fetch", "origin", "development"], { cwd, env });
+      await run("git", ["fetch", "origin", "development:refs/remotes/origin/development"], {
+        cwd,
+        env,
+      });
       try {
         await run("git", ["rebase", onto], { cwd, env });
       } catch (error) {

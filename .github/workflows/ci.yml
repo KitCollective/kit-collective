@@ -235,6 +235,12 @@ jobs:
       - name: Test implement merge-fail resume ratchet logic
         run: node --test scripts/tests/check-implement-merge-fail-resume.test.mjs
 
+      - name: Check harness Docker ships runtime .cursor context
+        run: node scripts/check-harness-docker-cursor-context.mjs
+
+      - name: Test harness Docker .cursor context ratchet logic
+        run: node --test scripts/tests/check-harness-docker-cursor-context.test.mjs
+
       - name: Check PI implement context generated from .cursor sources
         run: node scripts/check-pi-implement-context-generated.mjs
 
