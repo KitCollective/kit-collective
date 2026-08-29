@@ -305,6 +305,7 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
           "-F",
           `number=${number}`,
         ]);
+        // SAFETY: gh_cli GraphQL query returns JSON with repository.pullRequest.reviewThreads.nodes.
         const listParsed = JSON.parse(listStdout) as {
           data?: {
             repository?: {
