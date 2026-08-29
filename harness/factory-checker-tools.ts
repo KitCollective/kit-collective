@@ -8,9 +8,9 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
   assertGhCliActionAllowed,
+  SLOP_REVIEW_MARKER,
   slopCommentBody,
   splitRepo,
-  SLOP_REVIEW_MARKER,
 } from "./slop-review.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -113,6 +113,7 @@ function subagentTargetAgent(input: Record<string, unknown>): string {
 function requireGithubPr(): { repo: string; number: number } {
   // biome-ignore lint/suspicious/noUndeclaredEnvVars: harness sets GitHub PR env for factory-checker.
   const repo = process.env.GITHUB_PR_REPO ?? "";
+  // biome-ignore lint/suspicious/noUndeclaredEnvVars: harness sets GitHub PR env for factory-checker.
   const numberRaw = process.env.GITHUB_PR_NUMBER ?? "";
   const number = Number(numberRaw);
   if (typeof repo !== "string" || repo.length === 0 || !Number.isFinite(number) || number <= 0) {
