@@ -168,7 +168,16 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
      */
     async rebase({ cwd, onto, branch }) {
       await run("git", ["fetch", "origin", "development"], { cwd, env });
-      await run("git", ["rebase", onto], { cwd, env });
+      try {
+        await run("git", ["rebase", onto], { cwd, env });
+      } catch (error) {
+        try {
+          await run("git", ["rebase", "--abort"], { cwd, env });
+        } catch {
+          // already aborted or not in a rebase
+        }
+        throw error;
+      }
       if (typeof branch === "string" && branch.length > 0) {
         await run(
           "git",

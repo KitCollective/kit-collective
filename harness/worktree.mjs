@@ -90,6 +90,34 @@ function assertIdentifier(identifier) {
 }
 
 /**
+ * @param {{ stdout?: string } | string | undefined} result
+ */
+function gitStdout(result) {
+  if (typeof result === "string") {
+    return result.trim();
+  }
+  return String(result?.stdout ?? "").trim();
+}
+
+/**
+ * @param {(args: string[], options?: object) => Promise<{ stdout?: string }>} git
+ * @param {string} path
+ * @param {(path: string) => boolean} existsSync
+ */
+async function leftoverRebaseInProgress(git, path, existsSync) {
+  const mergeRaw = gitStdout(await git(["-C", path, "rev-parse", "--git-path", "rebase-merge"]));
+  const applyRaw = gitStdout(await git(["-C", path, "rev-parse", "--git-path", "rebase-apply"]));
+  const mergePath =
+    mergeRaw.length === 0 ? "" : mergeRaw.startsWith("/") ? mergeRaw : join(path, mergeRaw);
+  const applyPath =
+    applyRaw.length === 0 ? "" : applyRaw.startsWith("/") ? applyRaw : join(path, applyRaw);
+  return (
+    (mergePath.length > 0 && existsSync(mergePath)) ||
+    (applyPath.length > 0 && existsSync(applyPath))
+  );
+}
+
+/**
  * Pick the git head for an issue worktree. One open PR wins over kit-n.
  * Reuse (checker) never falls back to the integration lane.
  *
@@ -241,10 +269,18 @@ export function createWorktreeAdapter({
         return { path, branch: resolved.branch, lane };
       }
 
+      const leftoverRebase = await leftoverRebaseInProgress(git, path, existsSync);
+      if (leftoverRebase) {
+        try {
+          await git(["-C", path, "rebase", "--abort"]);
+        } catch {
+          // already aborted or the index is still dirty; force-reset below
+        }
+      }
       if (resolved.startPoint !== `origin/${lane}`) {
         await fetchIssueBranch(git, path, resolved.branch, { worktree: true });
       }
-      if (mode === "reuse") {
+      if (mode === "reuse" || leftoverRebase) {
         await git(["-C", path, "reset", "--hard"]);
         await git(["-C", path, "checkout", "-f", "-B", resolved.branch, resolved.startPoint]);
       } else {

@@ -435,6 +435,25 @@ export function upsertWorkpadEvidence(current, { prUrl, identifier }) {
 }
 
 /**
+ * @param {{ url?: string, mergeable?: string, checks?: object[] } | null | undefined} pr
+ * @param {{ url?: string, mergeable?: string, checks?: object[] } | null} listed
+ * @param {string} identifier
+ */
+function applyListedPr(pr, listed, identifier) {
+  if (listed?.url && typeof pr?.url === "string" && pr.url.length > 0 && listed.url !== pr.url) {
+    throw new Error(`${identifier} has multiple open PRs`);
+  }
+  if ((typeof pr?.url !== "string" || pr.url.length === 0) && typeof listed?.url === "string") {
+    return {
+      url: listed.url,
+      mergeable: listed.mergeable ?? pr?.mergeable ?? "UNKNOWN",
+      checks: listed.checks ?? pr?.checks ?? [],
+    };
+  }
+  return pr;
+}
+
+/**
  * @param {{
  *   job: { identifier: string, issueId: string, adwFile?: string },
  *   checkout: { path: string, branch: string },
@@ -479,27 +498,27 @@ export async function completeImplementAdw(input) {
   } = input;
   assertAdwOpensPr(adwText);
 
-  await gh.rebase({ cwd: checkout.path, onto: "origin/development", branch: checkout.branch });
+  let listed = null;
+  if (typeof gh.findOpenIssuePr === "function") {
+    listed = await gh.findOpenIssuePr({ identifier: job.identifier });
+  }
+  let pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
+  const existingPrUrl =
+    (typeof pr?.url === "string" && pr.url.length > 0 && pr.url) ||
+    (typeof listed?.url === "string" && listed.url) ||
+    "";
+  const alreadyMergeable = pr?.mergeable === "MERGEABLE" && existingPrUrl.length > 0;
+  if (!alreadyMergeable) {
+    await gh.rebase({ cwd: checkout.path, onto: "origin/development", branch: checkout.branch });
+    if (existingPrUrl.length > 0) {
+      pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
+    }
+  }
   await typecheckTouched({ cwd: checkout.path });
   if (typeof runPnpmTest === "function") {
     throw new Error("full pnpm test stays on GitHub Actions, not on this worker");
   }
 
-  let listed = null;
-  if (typeof gh.findOpenIssuePr === "function") {
-    listed = await gh.findOpenIssuePr({ identifier: job.identifier });
-  }
-  let pr = await gh.viewPr({ cwd: checkout.path });
-  if (listed?.url && typeof pr?.url === "string" && pr.url.length > 0 && listed.url !== pr.url) {
-    throw new Error(`${job.identifier} has multiple open PRs`);
-  }
-  if ((typeof pr?.url !== "string" || pr.url.length === 0) && typeof listed?.url === "string") {
-    pr = {
-      url: listed.url,
-      mergeable: listed.mergeable ?? "UNKNOWN",
-      checks: listed.checks ?? [],
-    };
-  }
   if (typeof pr?.url !== "string" || pr.url.length === 0) {
     pr = await gh.createPr({
       cwd: checkout.path,

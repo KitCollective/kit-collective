@@ -151,6 +151,7 @@ function implementRunner({
   sleep,
   waitTimeoutMs,
   waitIntervalMs,
+  spawnStatus = 0,
 }) {
   return createPiJobRunner({
     env: validWorkerEnv(),
@@ -165,7 +166,7 @@ function implementRunner({
       }),
     spawnProcess(command, args, options) {
       spawned.push({ command, args, options });
-      return Promise.resolve({ status: 0 });
+      return Promise.resolve({ status: spawnStatus });
     },
     now,
     sleep,
@@ -319,7 +320,9 @@ test("worktree adapter creates from origin/issue-branch when implement has pushe
   assert.equal(result.path, "/var/lib/kit-pi/worktrees/KIT-99");
   assert.equal(result.branch, "kit-99");
   assert.ok(
-    gitCalls.some((args) => args.includes("fetch") && args.includes("kit-99:refs/remotes/origin/kit-99")),
+    gitCalls.some(
+      (args) => args.includes("fetch") && args.includes("kit-99:refs/remotes/origin/kit-99"),
+    ),
   );
   assert.ok(
     gitCalls.some(
@@ -406,6 +409,117 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
     false,
   );
   assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
+});
+
+test("implement Pi non-zero still runs implement-exit and moves In Review when checks are green", async () => {
+  const gh = fakeGh();
+  gh.viewPr = async () => ({
+    url: "https://github.com/KitCollective/kit-collective/pull/52",
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  const spawned = [];
+  const result = await implementRunner({ gh, linear, spawned, spawnStatus: 1 }).run({
+    role: "implement",
+    identifier: "KIT-126",
+    issueId: "issue-126",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 1);
+  assert.equal(result.status, IN_REVIEW);
+  assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
+    issueId: "issue-126",
+    status: IN_REVIEW,
+  });
+});
+
+test("completeImplementAdw skips rebase when the open PR is already MERGEABLE", async () => {
+  const calls = [];
+  const gh = {
+    calls,
+    async rebase(input) {
+      calls.push(["rebase", input]);
+    },
+    async findOpenIssuePr(input) {
+      calls.push(["findOpenIssuePr", input]);
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/105",
+        head: "kit-126",
+      };
+    },
+    async viewPr(input) {
+      calls.push(["viewPr", input]);
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/105",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "success", isRequired: true }],
+      };
+    },
+    async createPr() {
+      calls.push(["createPr"]);
+      throw new Error("must not create a second PR");
+    },
+    merge() {
+      throw new Error("implement never merges");
+    },
+  };
+  const linear = fakeLinear();
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-126", issueId: "issue-126", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-126", branch: "kit-126" },
+    gh,
+    linear,
+    typecheckTouched: async () => {},
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    now: (() => {
+      let t = 0;
+      return () => {
+        t += 1;
+        return t;
+      };
+    })(),
+    sleep: async () => {},
+    waitTimeoutMs: 2,
+    waitIntervalMs: 1,
+  });
+
+  assert.equal(
+    calls.some((call) => call[0] === "rebase"),
+    false,
+  );
+  assert.equal(result.status, IN_REVIEW);
+});
+
+test("production gh.rebase aborts a conflicted rebase instead of leaving the tree wedged", async () => {
+  const calls = [];
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      if (command === "git" && args.includes("rebase") && !args.includes("--abort")) {
+        throw new Error("CONFLICT (content): Merge conflict in harness/pi-job.mjs");
+      }
+      return "";
+    },
+  });
+
+  await assert.rejects(
+    () => gh.rebase({ cwd: "/tmp/KIT-126", onto: "origin/development", branch: "kit-126" }),
+    /Merge conflict/,
+  );
+  assert.equal(
+    calls.some(
+      (call) =>
+        call.command === "git" && call.args.includes("rebase") && call.args.includes("--abort"),
+    ),
+    true,
+  );
+  assert.equal(
+    calls.some((call) => call.command === "git" && call.args.includes("push")),
+    false,
+  );
 });
 
 test("implement ADW reuses the open issue PR and does not create a second", async () => {

@@ -940,7 +940,7 @@ export function createPiJobRunner({
       if (result.idleTimeout) {
         return timeoutPark(job, identifier, jobIdleMs(env));
       }
-      if (result.status !== 0) {
+      if (result.status !== 0 && job.role !== "implement") {
         throw new Error(`pi exited ${result.status} for ${identifier}`);
       }
       if (job.role === "implement") {
