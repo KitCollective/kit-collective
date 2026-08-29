@@ -16,6 +16,8 @@ export const REQUIRED_NEEDLES = [
   'test("production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending"',
   'test("typecheckTouched skips pnpm when the diff has no workspace packages"',
   'test("typecheckTouched fails closed when pnpm is missing and workspace packages are touched"',
+  'test("completeImplementAdw skips worker typecheck when the open PR is MERGEABLE and required checks are already green"',
+  'test("completeImplementAdw still moves to In Review when worker typecheck fails and GitHub required checks are green"',
   "createGhClient(",
   'call.args.includes("push")',
   'create.args.includes("--head")',

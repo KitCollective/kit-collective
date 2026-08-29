@@ -14,7 +14,7 @@ import {
 } from "./capacity.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
-import { createTypecheckTouched } from "./implement-exit.mjs";
+import { createFormatCheck, createTypecheckTouched } from "./implement-exit.mjs";
 import { DEFAULT_INTAKE_POLL_MS, startIntakePoller } from "./intake.mjs";
 import { ALWAYS_READY_CAPACITY, createWorkerSlots } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
@@ -100,6 +100,7 @@ export async function startWorkerServer({
           gh: ghClient,
           linear: linearClient,
           typecheckTouched: createTypecheckTouched({ runCommand }),
+          formatCheck: createFormatCheck({ runCommand }),
           readCapacity: capacitySnapshot,
         });
   let lastTokens = null;

@@ -143,6 +143,16 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!checkerSpawn.includes("applySlopAgentSpawnEnv")) {
     failures.push("harness/checker-spawn.mjs must declare applySlopAgentSpawnEnv");
   }
+  if (checkerSpawn.includes('join("\\0")')) {
+    failures.push(
+      "SLOP_AGENT_PI_ARGS must not join with NUL; Node spawn rejects null bytes in env",
+    );
+  }
+  if (!checkerSpawn.includes('join("\\n")')) {
+    failures.push(
+      "SLOP_AGENT_PI_ARGS must join slopAgentToolArgs with newline so spawn env stays legal",
+    );
+  }
   if (!piJob.includes("applySlopAgentSpawnEnv")) {
     failures.push("harness/pi-job.mjs must wire Slop child spawn via applySlopAgentSpawnEnv");
   }

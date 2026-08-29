@@ -426,6 +426,10 @@ test("Pi review findings move to Implementing with complete Review feedback pres
   );
   const failComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
   assert.match(failComment.body, /returned to Implementing/);
+  assert.match(failComment.body, /Spec: AC missing|### Spec/i);
+  assert.match(failComment.body, /AC missing/);
+  assert.match(failComment.body, /Standards: smell|### Standards/i);
+  assert.match(failComment.body, /smell in harness\/foo\.mjs/);
   assert.equal(
     linear.calls.some((call) => call[0] === "updateIssueDescription"),
     false,
@@ -886,7 +890,9 @@ test("applySlopAgentSpawnEnv calls slopAgentToolArgs and wires both env keys", (
     SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(","),
   );
   assert.equal(typeof spawnEnv[SLOP_AGENT_PI_ARGS_ENV], "string");
-  const args = spawnEnv[SLOP_AGENT_PI_ARGS_ENV].split("\0");
+  const raw = spawnEnv[SLOP_AGENT_PI_ARGS_ENV];
+  assert.equal(raw.includes("\0"), false);
+  const args = raw.split("\n");
   assert.deepEqual(args, slopAgentToolArgs());
 });
 

@@ -10,8 +10,9 @@ inheritProjectContext: false
 Run the mechanical half of pre-review in this implement worktree. Return a green or red report to the Implement parent.
 
 - Attempt rebase onto `origin/development`. A rebase conflict is a red report. Do not resolve conflict markers.
-- Typecheck touched packages on this box. Never run full `pnpm test`.
-- Wait for required GitHub checks on **this worktree's PR only** (`gh pr view` / `gh pr checks` from cwd). Include this PR's check names and typecheck output in the report. If checks are empty or pending, say so for this PR. Do not `gh` other PRs. Do not mention sibling issues or their CI as proof that Actions work.
+- Typecheck touched packages on this box. Typecheck may be yellow — a worker typecheck failure is not a red report by itself. Never run full `pnpm test`.
+- Run `pnpm format:check` (or `biome ci .` with the image-global Biome when the worktree has no `node_modules`). A format failure is a red report. Do not treat format failures as typecheck. Format-fail must be fixed before waiting on GitHub checks.
+- Wait for required GitHub checks on **this worktree's PR only** (`gh pr view` / `gh pr checks` from cwd). Include this PR's check names, format:check output, and typecheck output in the report. If checks are empty or pending, say so for this PR. Do not `gh` other PRs. Do not mention sibling issues or their CI as proof that Actions work.
 
 Gate never calls Linear and never moves In Review. Do not write the workpad.
 
