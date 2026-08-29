@@ -50,3 +50,23 @@ test("implement ADW production gh coverage fails when the missing-pnpm test is r
   const missing = missingImplementAdwProductionGhCoverage(mutated);
   assert.ok(missing.some((item) => item.includes("pnpm is missing")));
 });
+
+test("implement ADW production gh coverage fails when the skip-green-typecheck test is removed", () => {
+  const source = readFileSync(IMPLEMENT_ADW_TEST, "utf8");
+  const mutated = source.replace(
+    'test("completeImplementAdw skips worker typecheck when the open PR is MERGEABLE and required checks are already green"',
+    'test("removed skip worker typecheck coverage"',
+  );
+  const missing = missingImplementAdwProductionGhCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("skips worker typecheck")));
+});
+
+test("implement ADW production gh coverage fails when the typecheck-throw In Review test is removed", () => {
+  const source = readFileSync(IMPLEMENT_ADW_TEST, "utf8");
+  const mutated = source.replace(
+    'test("completeImplementAdw still moves to In Review when worker typecheck fails and GitHub required checks are green"',
+    'test("removed typecheck throw coverage"',
+  );
+  const missing = missingImplementAdwProductionGhCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("worker typecheck fails")));
+});

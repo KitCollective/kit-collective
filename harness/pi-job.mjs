@@ -17,12 +17,29 @@ import {
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
-import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
+import {
+  buildImplementAppendPath,
+  resolveImplementSkillPaths,
+  selectImplementContext,
+  UI_SURFACE_LABELS,
+  UI_WRITE_SCOPE_PREFIXES,
+} from "./implement-context.mjs";
+import {
+  completeImplementAdw,
+  createTypecheckTouched,
+  extractReviewFeedback,
+  IMPLEMENTING,
+  requiredChecksGreen,
+  reviewFeedbackIsActionable,
+  reviewFeedbackIsLandFail,
+} from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
+import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { runPlanner } from "./planner.mjs";
+import { commentsHoldImplementRetryCap, implementRetryCapComment } from "./role-comments.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
@@ -56,8 +73,7 @@ export const IMPLEMENT_BROWSER_PACKAGE = "kit-implement-browser";
 export const IMPLEMENT_BROWSER_SKILL = "playwright-chromium";
 export const IMPLEMENT_BROWSER_SKILL_PATH =
   ".pi/packages/implement-browser/skills/playwright-chromium";
-export const UI_SURFACE_LABELS = ["mobile", "web", "admin"];
-export const UI_WRITE_SCOPE_PREFIXES = ["apps/mobile", "apps/web", "apps/admin"];
+export { UI_SURFACE_LABELS, UI_WRITE_SCOPE_PREFIXES };
 
 const PERSONAL_BROWSER_PROFILE_MARKERS = [
   "Application Support/Google",
@@ -459,11 +475,61 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
  * @param {string} role
  * @param {string} identifier
  * @param {string | undefined} adwFile
+ * @param {{
+ *   cheapRetry?: boolean,
+ *   mergeFailResume?: boolean,
+ *   reviewFeedback?: string,
+ *   writeScope?: string,
+ *   implementContext?: { requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string },
+ * }} [options]
  */
-export function implementPrompt(role, identifier, adwFile) {
+export function implementPrompt(role, identifier, adwFile, options = {}) {
   if (role === "implement") {
     const adw = typeof adwFile === "string" ? ` ADW ${adwFile}.` : "";
-    return `Factory role implement for ${identifier}.${adw} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
+    const writeScopeLine =
+      typeof options.writeScope === "string" && options.writeScope.trim().length > 0
+        ? options.writeScope.trim()
+        : "";
+    const writeScopeSuffix = writeScopeLine.length > 0 ? ` Write-scope: ${writeScopeLine}.` : "";
+    const helpers =
+      Array.isArray(options.implementContext?.requiredHelpers) &&
+      options.implementContext.requiredHelpers.length > 0
+        ? options.implementContext.requiredHelpers.join(", ")
+        : "(none)";
+    const loopTail = `Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
+    const tddBlock =
+      "TDD: each required helper writes the failing test at its seam (red), then minimal green. Run the helper's targeted test command — not `pnpm test` (full graph is GitHub Actions only on this worker).";
+    if (options.cheapRetry === true) {
+      const feedback =
+        typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
+          ? options.reviewFeedback.trim()
+          : "(missing — fail closed: do not invent a fix without the excerpt)";
+      return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). ${loopTail}
+
+### Review feedback
+
+${feedback}`;
+    }
+    if (options.mergeFailResume === true) {
+      const feedback =
+        typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
+          ? options.reviewFeedback.trim()
+          : "(missing — fail closed: verify PR MERGEABLE and required checks green)";
+      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. ${loopTail}
+
+### Review feedback
+
+${feedback}`;
+    }
+    if (reviewFeedbackIsActionable(options.reviewFeedback)) {
+      const feedback = String(options.reviewFeedback).trim();
+      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper. Do not Skip helpers. ${tddBlock} ${loopTail}
+
+### Review feedback
+
+${feedback}`;
+    }
+    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper before green implementation. Do not Skip helpers. ${tddBlock} ${loopTail}`;
   }
   if (role === "factory-checker") {
     return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
@@ -533,7 +599,10 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  * @param {string} roleFile
  * @param {string} model
  * @param {string} prompt
- * @param {{ browserSkill?: string }} [options]
+ * @param {{
+ *   browserSkill?: string,
+ *   implementContext?: { requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string },
+ * }} [options]
  * @returns {string[]}
  */
 export function piArgsForRole(role, workspace, roleFile, model, prompt, options = {}) {
@@ -547,12 +616,24 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
     }
     return args;
   }
-  const skillArgs =
-    typeof options.browserSkill === "string" && options.browserSkill.length > 0
-      ? ["--skill", options.browserSkill]
-      : [];
+  /** @type {string[]} */
+  const skillPaths = [];
+  if (typeof options.browserSkill === "string" && options.browserSkill.length > 0) {
+    skillPaths.push(options.browserSkill);
+  }
+  if (role === "implement" && options.implementContext?.skills?.length) {
+    skillPaths.push(...resolveImplementSkillPaths(workspace, options.implementContext.skills));
+  }
+  const skillArgs = skillPaths.flatMap((skillPath) => ["--skill", skillPath]);
   const memoryReaderArgs =
     role === "implement" ? ["--exclude-tools", IMPLEMENT_MEMORY_EXCLUDED_TOOLS.join(",")] : [];
+  const appendPrompt =
+    role === "implement" &&
+    options.implementContext &&
+    Array.isArray(options.implementContext.rules) &&
+    options.implementContext.rules.length > 0
+      ? buildImplementAppendPath(workspace, roleFile, options.implementContext)
+      : join(workspace, roleFile);
   return [
     "-p",
     "-a",
@@ -562,7 +643,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
     ...skillArgs,
     ...memoryReaderArgs,
     "--append-system-prompt",
-    join(workspace, roleFile),
+    appendPrompt,
     "--",
     prompt,
   ];
@@ -578,6 +659,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
  *   checkerGh?: object,
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
+ *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status?: number | null, stdout?: import("node:stream").Readable, closePromise?: Promise<{ status: number | null }> }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
  *   now?: () => number,
@@ -598,6 +680,7 @@ export function createPiJobRunner({
   checkerGh,
   linear,
   typecheckTouched,
+  formatCheck,
   spawnProcess,
   runCommand,
   now,
@@ -882,6 +965,24 @@ export function createPiJobRunner({
           }
         }
       }
+      /** @type {Array<{ id?: string, body?: string }>} */
+      let implementComments = [];
+      if (job.role === "implement") {
+        const holdLinear = linear ?? job.linear;
+        if (holdLinear && typeof holdLinear.listComments === "function") {
+          implementComments = await holdLinear.listComments(job.issueId ?? identifier);
+          if (commentsHoldImplementRetryCap(implementComments)) {
+            return {
+              ...job,
+              status: IMPLEMENTING,
+              ciRetry: false,
+              writeScopeRetry: false,
+              formatRetry: false,
+              retryCapHold: true,
+            };
+          }
+        }
+      }
       let cwd = workspace;
       let checkout;
       if (job.role === "implement" || job.role === "factory-checker") {
@@ -891,7 +992,80 @@ export function createPiJobRunner({
         });
         cwd = checkout.path;
       }
-      const prompt = implementPrompt(job.role, identifier, job.adwFile);
+      const linearForPrompt = linear ?? job.linear;
+      let prompt = implementPrompt(job.role, identifier, job.adwFile);
+      let implementIssue = null;
+      /** @type {{ requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string } | undefined} */
+      let implementContext;
+      let mergeFailResume = false;
+      if (job.role === "implement") {
+        const workpad = implementComments.find((comment) =>
+          comment.body?.includes(WORKPAD_HEADING),
+        );
+        implementIssue =
+          typeof linearForPrompt?.getIssue === "function"
+            ? await linearForPrompt.getIssue(job.issueId ?? identifier)
+            : null;
+        const reviewFeedback = extractReviewFeedback(workpad?.body);
+        mergeFailResume = reviewFeedbackIsLandFail(reviewFeedback);
+        const cheapRetry = isCheapImplementRetry(job);
+        const ghClient = gh ?? job.gh;
+        const linearClient = linear ?? job.linear;
+        const adwFile = job.adwFile;
+        if (
+          mergeFailResume &&
+          !cheapRetry &&
+          typeof adwFile === "string" &&
+          ghClient &&
+          linearClient &&
+          checkout
+        ) {
+          let pr = await ghClient.viewPr({ cwd: checkout.path });
+          if (typeof ghClient.findOpenIssuePr === "function") {
+            const listed = await ghClient.findOpenIssuePr({ identifier });
+            if (listed?.url && typeof pr?.url !== "string") {
+              pr = { ...listed, ...pr };
+            }
+          }
+          if (pr?.mergeable === "MERGEABLE" && requiredChecksGreen(pr.checks)) {
+            const tokens = tokenSnapshotFromCollected(job.role, {}, identifier);
+            const exit = await completeImplementAdw({
+              job: { ...job, identifier, issueId: job.issueId ?? identifier },
+              checkout,
+              gh: ghClient,
+              linear: withTokenUse(linearClient, tokens),
+              typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
+              formatCheck,
+              adwText: readFileSync(join(workspace, adwFile), "utf8"),
+              now,
+              sleep,
+              waitTimeoutMs,
+              waitIntervalMs,
+            });
+            return { ...job, ...exit, tokens, mergeFailFastPath: true };
+          }
+        }
+        const writeScope = parseWriteScopeLine(
+          implementIssue?.description ?? job.description ?? "",
+        );
+        if (!cheapRetry && !mergeFailResume) {
+          implementContext = selectImplementContext({
+            writeScope,
+            labels: implementIssue?.labels ?? job.labels ?? [],
+            body: implementIssue?.description ?? job.description ?? "",
+            reviewFeedback,
+            cheapRetry,
+            mergeFailResume,
+          });
+        }
+        prompt = implementPrompt(job.role, identifier, job.adwFile, {
+          cheapRetry,
+          mergeFailResume,
+          reviewFeedback,
+          writeScope,
+          implementContext,
+        });
+      }
       const hermesDir =
         typeof env.KIT_PI_HERMES === "string" && env.KIT_PI_HERMES.length > 0
           ? env.KIT_PI_HERMES
@@ -927,11 +1101,7 @@ export function createPiJobRunner({
       }
       let browserSkill;
       if (job.role === "implement") {
-        const linearClient = linear ?? job.linear;
-        const issue =
-          typeof linearClient?.getIssue === "function"
-            ? await linearClient.getIssue(job.issueId ?? identifier)
-            : null;
+        const issue = implementIssue;
         const slice = {
           labels: issue?.labels ?? job.labels ?? [],
           description: issue?.description ?? job.description ?? "",
@@ -950,6 +1120,7 @@ export function createPiJobRunner({
       }
       const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, {
         browserSkill,
+        implementContext,
       });
       if (result.idleTimeout) {
         return timeoutPark(job, identifier, jobIdleMs(env));
@@ -974,12 +1145,25 @@ export function createPiJobRunner({
           gh: ghClient,
           linear: withTokenUse(linearClient, tokens),
           typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
+          formatCheck,
           adwText: readFileSync(join(workspace, adwFile), "utf8"),
           now,
           sleep,
           waitTimeoutMs,
           waitIntervalMs,
         });
+        const atCap =
+          (exit.ciRetry === true && Number(job.ciRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
+          (exit.writeScopeRetry === true &&
+            Number(job.writeScopeRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
+          (exit.formatRetry === true &&
+            Number(job.formatRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP);
+        if (atCap && typeof linearClient.commentIssue === "function") {
+          await linearClient.commentIssue({
+            issueId: job.issueId ?? identifier,
+            body: implementRetryCapComment(identifier, { cap: IMPLEMENT_CI_RETRY_CAP }),
+          });
+        }
         return { ...job, ...exit, tokens };
       }
       if (job.role === "factory-checker") {

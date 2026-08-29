@@ -17,6 +17,7 @@ This is not a memory store. Wrong lessons are reverted with git.
 | `.cursor/hooks.json` | Which events run which scripts |
 | `.cursor/hooks/*.sh` | Command hooks (deny/allow) |
 | `.cursor/rules/*.mdc` | Always-applied agent rules |
+| `.pi/generated/implement-context.md` | Generated PI implement overlay from `.cursor` — edit sources, run `node scripts/generate-pi-implement-context.mjs`; never hand-edit |
 | `biome.json` / `oxlint.config.ts` | Format, lint, and anti-slop gates run in CI |
 | `docs/agents/error-ratcheting.md` | This contract |
 
@@ -208,6 +209,8 @@ catches it in the API tests and the container smoke test.
 - **"production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending"** — `MERGEABLE` + empty `statusCheckRollup` + `gh pr checks --required` throw (exit 8) must **not** call `setStatus`.
 - **"typecheckTouched skips pnpm when the diff has no workspace packages"** — empty touched set does not spawn `pnpm`.
 - **"typecheckTouched fails closed when pnpm is missing and workspace packages are touched"** — missing `pnpm` (ENOENT) fails closed when packages are in the diff.
+- **"completeImplementAdw skips worker typecheck when the open PR is MERGEABLE and required checks are already green"** — do not spawn worker `pnpm typecheck` when GitHub `test` is already SUCCESS (KIT-116 parked on local typecheck despite green CI).
+- **"completeImplementAdw still moves to In Review when worker typecheck fails and GitHub required checks are green"** — a throwing worker typecheck does not abort implement-exit; GitHub required checks remain the gate.
 
 `scripts/check-implement-adw-production-gh.mjs` (CI via `node` in `.github/workflows/ci.yml`) fails when that coverage is deleted. `scripts/tests/check-implement-adw-production-gh.test.mjs` mutation-tests the ratchet. Prevents repeating KIT-54 checker fail #2 (job-seam fakes skipped production push/wait) and fail #3 (empty rollup / exit 8 fail-open; pnpm spawned on harness-only diffs). Tighten only.
 
@@ -238,8 +241,40 @@ Prevents repeating the KIT-105 silent pass (status flip only, no durable note or
 - `reviewFeedbackIsClean` requires exactly `- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`; bare `- (none)` is rejected.
 - `applyCheckerFailWorkpad` never falls back to legacy `- (none)` — use `REVIEW_FEEDBACK_HARNESS_INCOMPLETE` instead.
 - Read-only Slop child: `applySlopAgentSpawnEnv()` calls `slopAgentToolArgs()` at factory-checker spawn; `harness/slop-agent-tools.ts` (via `.pi/agents/slop.md` `subagentOnlyExtensions`) and `harness/factory-checker-tools.ts` consume `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` + `SLOP_AGENT_PI_ARGS`.
+- **`SLOP_AGENT_PI_ARGS` is newline-joined, never NUL** — Node `spawn` rejects env values with `\0` (KIT-116 factory-checker never started). `"applySlopAgentSpawnEnv calls slopAgentToolArgs and wires both env keys"` asserts no null byte and round-trips via `split("\\n")`.
 
 Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` export, stale `- (none)` fail fallback, incomplete spawn-ratchet doc). Tighten only.
+
+### Webhook mem_limit (KIT-116 OOM)
+
+`harness/tests/compose-worker.test.mjs` (`docker-compose runs webhook + one replica`) requires `mem_limit: 5g` and forbids `768m`. `harness/host.md` names **mem_limit 5g**. Prevents repeating the KIT-116 factory-checker `pi exited null` (cgroup OOM while implement KIT-119 was live). Tighten only.
+
+### Implement write-scope retry (KIT-119)
+
+`harness/tests/implement-ci-retry.test.mjs` (`job-queue re-runs implement on write-scope retry until In Review`, `job-queue fail-closes when the implement write-scope retry cap is already exhausted`) keeps the slot on `{ writeScopeRetry: true }` the same way as CI retry, with `IMPLEMENT_CI_RETRY_CAP`. Prevents repeating KIT-119 sitting Implementing with an empty slot after an out-of-glob path (`apps/admin/...`) while resume skipped it for write-scope overlap. Tighten only.
+
+### Implement Gate format-check and cheap retry
+
+`scripts/check-implement-cheap-retry.mjs` (CI via `node` in `.github/workflows/ci.yml`) plus `harness/tests/implement-adw.test.mjs` / `harness/tests/implement-ci-retry.test.mjs` / `harness/tests/resume.test.mjs` keep these locks:
+
+- Gate (`.pi/agents/gate.md`) runs `pnpm format:check` or `biome ci .`. Format-fail is red. Do not treat format as typecheck. Typecheck may be yellow.
+- Worker image installs global `@biomejs/biome@2.5.10` so Gate does not need worktree `node_modules`.
+- `completeImplementAdw` format-check is a safety net after Pi: a throwing `formatCheck` stays Implementing (`formatRetry: true`) even when GitHub required checks are green. Worker typecheck throw still may move In Review.
+- First implement run still Scout → helpers → Gate. `{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }` retries **Skip Scout** and skip helpers. Prompt includes workpad `### Review feedback` and requires the CI excerpt, pointing at the class (format vs Zod vs unique-email).
+- After `IMPLEMENT_CI_RETRY_CAP` in-slot retries, the worker posts `implementRetryCapComment` (Linear Agent left empty; no Cursor Cloud Agent) and **resume skips** that Implementing issue. A later enqueue no-ops without spawning Pi.
+
+Prevents repeating 4–9 full Composer sessions per issue (first fail is GitHub, then Scout→helpers→Gate from scratch; resume poller re-enqueues after the in-slot cap). Tighten only.
+
+### Implement checker-fail resume findings (KIT-116)
+
+`scripts/check-implement-checker-fail-resume.mjs` (CI via `node` in `.github/workflows/ci.yml`) plus `harness/tests/implement-ci-retry.test.mjs` / `harness/tests/role-comments.test.mjs` / `harness/tests/checker.test.mjs` keep these locks:
+
+- Checker-fail implement resume uses the same `extractReviewFeedback` as cheap CI retry and **inlines** `### Review feedback` in the Composer prompt. Fix **every** workpad axis (Spec / Standards / Tests / Slop). GitHub `[factory-checker/slop]` threads are a subset.
+- Checker-fail resume does **not** Skip Scout or Skip helpers. Cheap retry (`{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }`) still does.
+- Spawn `ui-ux` when write-scope touches `apps/mobile` / `apps/web` / `apps/admin`, or when findings mention tokens, typography, or layout. The box reads `.pi/roles/implement.md` — not Cursor skills.
+- `checkerFailComment` includes the finding lines under Spec / Standards / … headings (KIT-116-class 2–5 findings verbatim; huge dumps truncate with a workpad pointer). One role comment per transition. Linear Agent stays empty.
+
+Prevents repeating KIT-116 loop 2 (resume prompt was only «fix the class»; GitHub Slop showed unused; Nicklas could not read Standards on Linear). Tighten only.
 
 ### Factory checker Slop GitHub threads ratchet (KIT-127)
 

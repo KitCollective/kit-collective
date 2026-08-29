@@ -2,8 +2,10 @@
  * Implement ADW exit (KIT-54).
  *
  * After the coding Pi session: update the existing workpad, pre-review
- * (rebase, typecheck-touched, MERGEABLE + required GitHub checks), open one
- * PR into development, move Linear to In Review. Never merge.
+ * (rebase, optional worker typecheck-touched, MERGEABLE + required GitHub
+ * checks), open one PR into development, move Linear to In Review. Never merge.
+ * Worker typecheck is not the gate: skip it when required checks are already
+ * green, and do not abort when it throws — GitHub `test` is.
  * Fake `gh` + Linear at this seam. Do not spawn Pi TUI.
  */
 import { execFile as execFileCb } from "node:child_process";
@@ -255,6 +257,47 @@ async function writeWriteScopeRetryWorkpad(input) {
 }
 
 /**
+ * Stay Implementing, write format failure onto the existing workpad, signal cheap retry.
+ * Never setStatus(In Review). Never treat this as typecheck (yellow).
+ *
+ * @param {{
+ *   job: { identifier: string, issueId: string },
+ *   linear: {
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *   },
+ *   pr: { url?: string },
+ *   error?: unknown,
+ * }} input
+ */
+async function writeFormatRetryWorkpad(input) {
+  const { job, linear, pr, error } = input;
+  const message = error instanceof Error ? error.message : String(error ?? "format-check failed");
+  const excerpt = excerptLog(message);
+  const feedbackLines = [
+    "- Format: `pnpm format:check` / `biome ci .` failed. This is red — not typecheck. Fix format before GitHub wait.",
+  ];
+  for (const line of excerpt.split("\n")) {
+    if (line.length > 0) {
+      feedbackLines.push(`  ${line}`);
+    }
+  }
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
+  const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  const withEvidence =
+    typeof pr?.url === "string" && pr.url.length > 0
+      ? upsertWorkpadEvidence(existing?.body, {
+          prUrl: pr.url,
+          identifier: job.identifier,
+        })
+      : (existing?.body ?? `${WORKPAD_HEADING}\n`);
+  const body = applyReviewFeedback(withEvidence, feedbackLines);
+  await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  return { pr, status: IMPLEMENTING, formatRetry: true, ciRetry: false, writeScopeRetry: false };
+}
+
+/**
  * @param {Array<{ name?: string, conclusion?: string, status?: string, isRequired?: boolean, state?: string, log?: string }> | undefined} checks
  * @param {{ timedOut?: boolean }} [options]
  * @returns {string[]}
@@ -308,6 +351,74 @@ export function applyReviewFeedback(current, feedbackLines) {
     return `${base.replace(/### Review feedback\n[\s\S]*?(?=\n### |\s*$)/, `${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`)}\n`;
   }
   return `${base}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`;
+}
+
+/**
+ * @param {string | undefined} body
+ */
+export function extractReviewFeedback(body) {
+  if (typeof body !== "string" || !body.includes(REVIEW_FEEDBACK_HEADING)) {
+    return "";
+  }
+  const match = body.match(/### Review feedback\n([\s\S]*?)(?=\n### |\s*$)/);
+  return match ? match[1].trim() : "";
+}
+
+/**
+ * Workpad Review feedback that implement must act on (checker fail or CI excerpt).
+ * Clean three-axis `(none)` and a lone `- (none)` are not actionable.
+ *
+ * @param {string | undefined} feedback
+ */
+export function reviewFeedbackIsActionable(feedback) {
+  const text = typeof feedback === "string" ? feedback.trim() : "";
+  if (text.length === 0) {
+    return false;
+  }
+  if (reviewFeedbackIsLandFail(text)) {
+    return true;
+  }
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return false;
+  }
+  return !lines.every(
+    (line) =>
+      /^-\s*(?:Spec|Standards|Slop|Tests):\s*\(none\)\s*$/i.test(line) ||
+      /^-\s*\(none\)\s*$/i.test(line),
+  );
+}
+
+/**
+ * Land merge gate wrote this feedback — orchestration, not checker Spec/Standards/Slop.
+ *
+ * @param {string | undefined} feedback
+ */
+export function reviewFeedbackIsLandFail(feedback) {
+  const text = typeof feedback === "string" ? feedback.trim() : "";
+  if (text.length === 0) {
+    return false;
+  }
+  if (/^-\s*(?:Spec|Standards|Slop|Tests|Format|CI):/im.test(text)) {
+    return false;
+  }
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.some(
+    (line) =>
+      /^-\s*PR is (UNKNOWN|CONFLICTING)/i.test(line) ||
+      /^-\s*required checks are not green/i.test(line) ||
+      /^-\s*PR base .+ is not /i.test(line) ||
+      /^-\s*no linked PR/i.test(line) ||
+      /^-\s*protected branch/i.test(line) ||
+      /^-\s*refusing --force/i.test(line) ||
+      /^-\s*merge (?:failed|succeeded but)/i.test(line),
+  );
 }
 
 /**
@@ -419,6 +530,34 @@ export function createTypecheckTouched({ runCommand } = {}) {
 }
 
 /**
+ * `pnpm format:check` (`biome ci .`). Fall back to image-global `biome` when
+ * the worktree has no node_modules. Format-fail is red — not typecheck.
+ *
+ * @param {{
+ *   runCommand?: (command: string, args: string[], options: { cwd?: string }) => Promise<string>,
+ * }} [deps]
+ */
+export function createFormatCheck({ runCommand } = {}) {
+  const run =
+    runCommand ??
+    (async (command, args, options = {}) => {
+      const { stdout } = await execFile(command, args, {
+        encoding: "utf8",
+        timeout: 120_000,
+        cwd: options.cwd,
+      });
+      return stdout;
+    });
+  return async ({ cwd }) => {
+    try {
+      await run("pnpm", ["format:check"], { cwd });
+    } catch {
+      await run("biome", ["ci", "."], { cwd });
+    }
+  };
+}
+
+/**
  * @param {string | undefined} current
  * @param {{ prUrl: string, identifier: string }} evidence
  */
@@ -473,6 +612,7 @@ function applyListedPr(pr, listed, identifier) {
  *     getIssue?: (id: string) => Promise<{ description?: string } | null>,
  *   },
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
+ *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
  *   listChangedFiles?: (input: { cwd: string }) => Promise<string[]>,
  *   issueDescription?: string,
  *   runPnpmTest?: (input: { cwd: string }) => Promise<unknown>,
@@ -490,6 +630,7 @@ export async function completeImplementAdw(input) {
     gh,
     linear,
     typecheckTouched,
+    formatCheck,
     listChangedFiles: listChangedFilesInput,
     issueDescription,
     runPnpmTest,
@@ -521,7 +662,23 @@ export async function completeImplementAdw(input) {
       pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
     }
   }
-  await typecheckTouched({ cwd: checkout.path });
+  const checksAlreadyGreen = alreadyMergeable && requiredChecksGreen(pr?.checks);
+  if (!checksAlreadyGreen) {
+    try {
+      await typecheckTouched({ cwd: checkout.path });
+    } catch {
+      // Worker typecheck is a best-effort fast fail. Missing node_modules or
+      // OOM on the 4 GB box must not park Implementing while GitHub test is
+      // the required check (KIT-116).
+    }
+  }
+  if (typeof formatCheck === "function") {
+    try {
+      await formatCheck({ cwd: checkout.path });
+    } catch (error) {
+      return writeFormatRetryWorkpad({ job, linear, pr, error });
+    }
+  }
   if (typeof runPnpmTest === "function") {
     throw new Error("full pnpm test stays on GitHub Actions, not on this worker");
   }
@@ -617,7 +774,7 @@ export async function completeImplementAdw(input) {
   }
   await linear.setStatus({ issueId: job.issueId, status: IN_REVIEW });
 
-  return { pr, status: IN_REVIEW, ciRetry: false, writeScopeRetry: false };
+  return { pr, status: IN_REVIEW, ciRetry: false, writeScopeRetry: false, formatRetry: false };
 }
 
 /**

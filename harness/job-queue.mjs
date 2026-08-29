@@ -24,11 +24,62 @@ export const ALWAYS_READY_CAPACITY = Object.freeze({
 /**
  * One Pi job at a time per slot. Compose replicas stay at 1; these mutexes are the in-process seam.
  *
- * Implement CI retry: when `run` returns `{ ciRetry: true }`, re-run the same
- * implement job (same issue / worktree / PR) until required checks are green
- * or the cap is hit. Fail closed at the cap. Never enqueue factory-checker.
+ * Implement retry: when `run` returns `{ ciRetry: true }`, `{ writeScopeRetry: true }`,
+ * or `{ formatRetry: true }`, re-run the same implement job (same issue / worktree / PR)
+ * until the gate is clear or the cap is hit. Fail closed at the cap. Never enqueue
+ * factory-checker. Write-scope retry keeps the slot so an out-of-glob path cannot drop
+ * the issue behind a resume overlap skip (KIT-119). Format retry is cheap like CI retry.
  */
 export const IMPLEMENT_CI_RETRY_CAP = 3;
+
+/**
+ * Cheap in-slot retry: Scout+helpers already ran on attempt 1.
+ *
+ * @param {object | undefined} job
+ */
+export function isCheapImplementRetry(job) {
+  if (job?.role !== "implement") {
+    return false;
+  }
+  return (
+    Number(job.ciRetryAttempt ?? 1) > 1 ||
+    Number(job.writeScopeRetryAttempt ?? 1) > 1 ||
+    Number(job.formatRetryAttempt ?? 1) > 1
+  );
+}
+
+/**
+ * Re-run implement in the same slot on CI, write-scope, or format retry.
+ *
+ * @param {(job: object) => Promise<unknown>} run
+ * @param {object} job
+ * @returns {Promise<unknown>}
+ */
+export async function runImplementWithRetries(run, job) {
+  const result = await run(job);
+  if (result?.ciRetry === true) {
+    const attempt = Number(job.ciRetryAttempt ?? 1);
+    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      throw new Error("implement CI retry cap hit");
+    }
+    return runImplementWithRetries(run, { ...job, ciRetryAttempt: attempt + 1 });
+  }
+  if (result?.writeScopeRetry === true) {
+    const attempt = Number(job.writeScopeRetryAttempt ?? 1);
+    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      throw new Error("implement write-scope retry cap hit");
+    }
+    return runImplementWithRetries(run, { ...job, writeScopeRetryAttempt: attempt + 1 });
+  }
+  if (result?.formatRetry === true) {
+    const attempt = Number(job.formatRetryAttempt ?? 1);
+    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      throw new Error("implement format retry cap hit");
+    }
+    return runImplementWithRetries(run, { ...job, formatRetryAttempt: attempt + 1 });
+  }
+  return result;
+}
 
 export const DEFAULT_IMPLEMENT_SLOTS = 3;
 export const MIN_IMPLEMENT_SLOTS = 1;
@@ -60,15 +111,7 @@ export function createSerialQueue(deps) {
    * @param {object} job
    */
   async function runMaybeRetry(job) {
-    const result = await deps.run(job);
-    if (result?.ciRetry !== true) {
-      return result;
-    }
-    const attempt = Number(job.ciRetryAttempt ?? 1);
-    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
-      throw new Error("implement CI retry cap hit");
-    }
-    return runMaybeRetry({ ...job, ciRetryAttempt: attempt + 1 });
+    return runImplementWithRetries(deps.run, job);
   }
 
   return {
@@ -141,15 +184,7 @@ export function createWorkerSlots(deps) {
    * @param {object} job
    */
   async function runMaybeRetry(job) {
-    const result = await deps.run(job);
-    if (result?.ciRetry !== true) {
-      return result;
-    }
-    const attempt = Number(job.ciRetryAttempt ?? 1);
-    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
-      throw new Error("implement CI retry cap hit");
-    }
-    return runMaybeRetry({ ...job, ciRetryAttempt: attempt + 1 });
+    return runImplementWithRetries(deps.run, job);
   }
 
   /**

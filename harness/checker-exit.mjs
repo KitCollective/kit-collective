@@ -6,7 +6,12 @@
  * complete ### Review feedback. Never merge. Fake `gh` + Linear at this seam.
  */
 import { ensureLoopCounters, incrementReviewLoops, parseLoopCounters } from "./auto-merge.mjs";
-import { IN_REVIEW, requiredChecksFailed, requiredChecksGreen } from "./implement-exit.mjs";
+import {
+  extractReviewFeedback,
+  IN_REVIEW,
+  requiredChecksFailed,
+  requiredChecksGreen,
+} from "./implement-exit.mjs";
 import { createLandGh, pullRequestFromAttachments } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 import {
@@ -305,7 +310,7 @@ async function checkerFailMove(input) {
   if (typeof linear.commentIssue === "function") {
     await linear.commentIssue({
       issueId: job.issueId,
-      body: checkerFailComment(identifier),
+      body: checkerFailComment(identifier, extractReviewFeedback(body)),
     });
   }
   await linear.setStatus({ issueId: job.issueId, status: IMPLEMENTING });

@@ -218,11 +218,15 @@ export const user = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     email: text("email").notNull(),
+    handle: text("handle").notNull(),
     passwordHash: text("password_hash").notNull(),
     role: userRoleEnum("role").notNull().default("user"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("user_email_unique").on(table.email)],
+  (table) => [
+    uniqueIndex("user_email_unique").on(table.email),
+    uniqueIndex("user_handle_unique").on(table.handle),
+  ],
 );
 
 export const userJersey = pgTable("user_jersey", {

@@ -237,7 +237,12 @@ test("api/db-only implement omits browser tools so they do not sit in Composer c
 
   assert.equal(spawned.length, 1);
   assert.equal(browserArgs(spawned[0].args), false);
-  assert.equal(spawned[0].args.includes("--skill"), false);
+  const skillPaths = spawned[0].args.filter((_arg, index, all) => all[index - 1] === "--skill");
+  assert.equal(
+    skillPaths.some((path) => String(path).includes("playwright")),
+    false,
+  );
+  assert.ok(skillPaths.some((path) => String(path).includes("tdd/SKILL.md")));
 });
 
 test("project settings do not load the browser package for every Pi role", () => {
@@ -290,7 +295,7 @@ test("planner and Intake have no browser tools and do not spawn Pi", async () =>
   assert.match(planner, /No browser tools/i);
   assert.match(planner, /No file tools/i);
   const implement = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
-  assert.match(implement, /Pi package/i);
+  assert.match(implement, /Playwright Chromium/i);
   const factoryChecker = piArgsForRole(
     "factory-checker",
     ROOT,

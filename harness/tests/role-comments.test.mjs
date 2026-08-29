@@ -11,8 +11,10 @@ import {
   buildCheckerPassVerdicts,
   checkerFailComment,
   checkerPassComment,
+  commentsHoldImplementRetryCap,
   descriptionAcceptanceCriteriaTicked,
   implementInReviewComment,
+  implementRetryCapComment,
   implementSummaryFromWorkpad,
   landFailComment,
   landSuccessComment,
@@ -34,6 +36,15 @@ Do the thing.
 test("plannerClaimComment names the claim transition", () => {
   assert.match(plannerClaimComment("KIT-114"), /KIT-114: claimed/);
   assert.match(plannerClaimComment("KIT-114"), /Linear Agent left empty/);
+});
+
+test("implementRetryCapComment holds Implementing with empty Linear Agent", () => {
+  const body = implementRetryCapComment("KIT-99");
+  assert.match(body, /KIT-99: implement retry cap/);
+  assert.match(body, /Linear Agent left empty/);
+  assert.match(body, /No Cursor Cloud Agent/i);
+  assert.equal(commentsHoldImplementRetryCap([{ body }]), true);
+  assert.equal(commentsHoldImplementRetryCap([{ body: "## Agent Workpad\n\n- (none)\n" }]), false);
 });
 
 test("implementInReviewComment includes PR URL and summary", () => {
@@ -107,6 +118,45 @@ test("implementSummaryFromWorkpad uses Notes then checked Plan", () => {
 test("checker fail comment stays short and points at workpad Review feedback", () => {
   assert.match(checkerFailComment("KIT-56"), /returned to Implementing/);
   assert.match(checkerFailComment("KIT-56"), /Review feedback/);
+});
+
+test("checker fail comment inlines KIT-116-class findings under axis headings", () => {
+  const findings = [
+    "- Spec: Collection tab missing badge count",
+    "- Standards: unused Badge export in apps/mobile/src/components/badge.tsx",
+    "- Slop: unused import in apps/mobile/src/components/badge.tsx",
+  ].join("\n");
+  const body = checkerFailComment("KIT-116", findings);
+  assert.match(body, /KIT-116: returned to Implementing/);
+  assert.match(body, /### Spec/i);
+  assert.match(body, /Collection tab missing badge count/);
+  assert.match(body, /### Standards/i);
+  assert.match(body, /unused Badge export/);
+  assert.match(body, /### Slop/i);
+  assert.match(body, /unused import/);
+  assert.equal(body.includes("Collection tab missing badge count"), true);
+});
+
+test("checker fail comment truncates a huge dump but keeps the first findings verbatim", () => {
+  const first = [
+    "- Spec: Collection tab missing badge count",
+    "- Standards: unused Badge export in apps/mobile/src/components/badge.tsx",
+    "- Tests: no regression for badge count",
+    "- Slop: unused import in apps/mobile/src/components/badge.tsx",
+    "- Standards: invented token on Collection screen",
+  ];
+  const padding = Array.from(
+    { length: 80 },
+    (_, index) => `- Standards: filler finding ${index} ${"x".repeat(120)}`,
+  );
+  const body = checkerFailComment("KIT-116", [...first, ...padding].join("\n"));
+  assert.match(body, /Collection tab missing badge count/);
+  assert.match(body, /unused Badge export/);
+  assert.match(body, /no regression for badge count/);
+  assert.match(body, /unused import/);
+  assert.match(body, /invented token on Collection screen/);
+  assert.match(body, /truncated|workpad/i);
+  assert.equal(body.includes("filler finding 79"), false);
 });
 
 test("auto-merge and land role comments name the transition", () => {
