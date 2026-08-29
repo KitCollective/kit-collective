@@ -151,6 +151,7 @@ function implementRunner({
   sleep,
   waitTimeoutMs,
   waitIntervalMs,
+  spawnStatus = 0,
 }) {
   return createPiJobRunner({
     env: validWorkerEnv(),
@@ -165,7 +166,7 @@ function implementRunner({
       }),
     spawnProcess(command, args, options) {
       spawned.push({ command, args, options });
-      return Promise.resolve({ status: 0 });
+      return Promise.resolve({ status: spawnStatus });
     },
     now,
     sleep,
@@ -404,6 +405,30 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
     false,
   );
   assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
+});
+
+test("implement Pi non-zero still runs implement-exit and moves In Review when checks are green", async () => {
+  const gh = fakeGh();
+  gh.viewPr = async () => ({
+    url: "https://github.com/KitCollective/kit-collective/pull/52",
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  const spawned = [];
+  const result = await implementRunner({ gh, linear, spawned, spawnStatus: 1 }).run({
+    role: "implement",
+    identifier: "KIT-126",
+    issueId: "issue-126",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 1);
+  assert.equal(result.status, IN_REVIEW);
+  assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
+    issueId: "issue-126",
+    status: IN_REVIEW,
+  });
 });
 
 test("implement ADW reuses the open issue PR and does not create a second", async () => {
