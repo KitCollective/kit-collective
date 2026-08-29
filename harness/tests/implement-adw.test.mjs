@@ -15,7 +15,6 @@ import {
   requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
-import { gitAuthExtraHeader } from "../linear-actor-token.mjs";
 import {
   COMMENT_CREATE_MUTATION,
   COMMENT_UPDATE_MUTATION,
@@ -30,6 +29,7 @@ import {
 import {
   createWorktreeAdapter,
   gitArgvContainsSecret,
+  gitAuthExtraHeader,
   remoteGitChildEnv,
   worktreeBranch,
   worktreePath,
@@ -109,7 +109,12 @@ function fakeGh({ mergeable = "MERGEABLE", checks = [{ conclusion: "success" }] 
 
 function fakeLinear() {
   const calls = [];
-  const comments = [{ id: "c1", body: `${WORKPAD_HEADING}\n\n### Status\nImplementing\n` }];
+  const comments = [
+    {
+      id: "c1",
+      body: `${WORKPAD_HEADING}\n\n### Status\nImplementing\n\n### Notes\n\n- Role comments and description AC on checker pass\n`,
+    },
+  ];
   return {
     calls,
     comments,
@@ -126,6 +131,9 @@ function fakeLinear() {
       }
       comments.push({ id: "c-new", body: input.body });
       return { id: "c-new", created: true };
+    },
+    async commentIssue(input) {
+      calls.push(["commentIssue", input]);
     },
     async setStatus(input) {
       calls.push(["setStatus", input]);
@@ -387,6 +395,10 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
     issueId: "issue-1",
     status: IN_REVIEW,
   });
+  const inReviewComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(inReviewComment.body, /In Review/);
+  assert.match(inReviewComment.body, /pull\/52/);
+  assert.match(inReviewComment.body, /Role comments and description AC on checker pass/);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
     false,
@@ -1133,7 +1145,7 @@ test("Compose persists kit-pi worktrees and copies implement-exit adapters", () 
   assert.match(dockerfile, /implement-exit\.mjs/);
   assert.match(dockerfile, /gh-cli\.mjs/);
   assert.match(dockerfile, /delegate-gate\.mjs/);
-  assert.match(dockerfile, /linear-actor-token\.mjs/);
+  assert.match(dockerfile, /worktree\.mjs/);
   assert.match(dockerfile, /corepack prepare pnpm@9\.15\.4/);
   const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
   assert.match(compose, /kit_pi:\/var\/lib\/kit-pi/);
