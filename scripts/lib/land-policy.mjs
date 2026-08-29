@@ -33,6 +33,17 @@ export const GH_PR_MERGE_STRATEGY_FLAGS = ["--merge", "--squash", "--rebase"];
 /** Land uses a merge commit onto the integration lane — not squash or rebase. */
 export const LAND_GH_MERGE_STRATEGY = "--merge";
 
+/** GitHub may report mergeable MERGEABLE while the head branch is still behind base (KIT-118). */
+export const PR_MERGE_STATE_BEHIND = "BEHIND";
+
+/**
+ * @param {{ mergeStateStatus?: string } | null | undefined} pr
+ * @returns {boolean}
+ */
+export function isPrMergeStateBehind(pr) {
+  return pr?.mergeStateStatus === PR_MERGE_STATE_BEHIND;
+}
+
 /**
  * @param {unknown} args
  * @returns {boolean}
