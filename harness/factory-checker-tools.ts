@@ -66,7 +66,12 @@ async function linearApi(query: string, variables: Record<string, unknown>): Pro
 function slopSpawnEnvWired(): boolean {
   const excluded = process.env[SLOP_AGENT_MEMORY_EXCLUDED_TOOLS_ENV];
   const piArgs = process.env[SLOP_AGENT_PI_ARGS_ENV];
-  return typeof excluded === "string" && excluded.length > 0 && typeof piArgs === "string" && piArgs.length > 0;
+  return (
+    typeof excluded === "string" &&
+    excluded.length > 0 &&
+    typeof piArgs === "string" &&
+    piArgs.length > 0
+  );
 }
 
 function subagentTargetAgent(input: Record<string, unknown>): string {

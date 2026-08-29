@@ -35,7 +35,12 @@ export function slopMemoryDeniedTools(env = process.env) {
 export function slopSpawnEnvWired(env = process.env) {
   const excluded = env[SLOP_AGENT_MEMORY_EXCLUDED_TOOLS_ENV];
   const piArgs = env[SLOP_AGENT_PI_ARGS_ENV];
-  return typeof excluded === "string" && excluded.length > 0 && typeof piArgs === "string" && piArgs.length > 0;
+  return (
+    typeof excluded === "string" &&
+    excluded.length > 0 &&
+    typeof piArgs === "string" &&
+    piArgs.length > 0
+  );
 }
 
 export default function slopAgentTools(pi: ExtensionAPI) {

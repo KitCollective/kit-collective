@@ -28,6 +28,7 @@ import {
   reviewFeedbackSection,
 } from "../checker-exit.mjs";
 import {
+  applySlopAgentSpawnEnv,
   FACTORY_CHECKER_ALLOWED_TOOLS,
   FACTORY_CHECKER_EXCLUDED_TOOLS,
   FACTORY_CHECKER_MEMORY_TOOLS,
@@ -35,7 +36,6 @@ import {
   factoryCheckerToolArgs,
   SLOP_AGENT_MEMORY_EXCLUDED_TOOLS,
   SLOP_AGENT_PI_ARGS_ENV,
-  applySlopAgentSpawnEnv,
   slopAgentToolArgs,
 } from "../checker-spawn.mjs";
 import { IN_REVIEW } from "../implement-exit.mjs";
