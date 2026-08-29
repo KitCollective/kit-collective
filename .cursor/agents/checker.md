@@ -53,11 +53,11 @@ The attached PR’s required GitHub checks are part of the verdict. Read check r
 - PR is mergeable against the integration lane
 - Required GitHub CI/CD checks on the PR are green
 
-Then move the Linear issue to `Ready for merge`. Write **one role comment** with a verdict per Acceptance criterion. The harness ticks those criteria `[x]` in the issue **description** (rewrite a line and comment why if the contract changed). Stop.
+Then move the Linear issue to `Ready for merge`. Comment that the approver should read the GitHub PR. Stop.
 
 ## Fail
 
-Move the issue to `Implementing` (same branch/PR). In the existing workpad, replace `### Review feedback` with the **complete** finding set (what failed, file/criterion, what “done” looks like). Write **one short role comment** that the issue returned to Implementing. Do **not** tick description Acceptance criteria.
+Move the issue to `Implementing` (same branch/PR). In the existing workpad, replace `### Review feedback` with the **complete** finding set (what failed, file/criterion, what “done” looks like). `save_comment` on the issue. Upload screenshots or recordings from this VM to the Linear issue (`prepare_attachment_upload` → PUT → `create_attachment_from_upload`) and link them under `### Evidence`.
 
 That status change wakes the **implement automation** on this issue. You cannot resume the previous Cloud Agent VM.
 

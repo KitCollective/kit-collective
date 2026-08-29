@@ -154,9 +154,6 @@ function fakeLinear(issue = snapshot()) {
       calls.push(["updateWorkpad", input]);
       comments[0].body = input.body;
     },
-    async commentIssue(input) {
-      calls.push(["commentIssue", input]);
-    },
     async setStatus(input) {
       calls.push(["setStatus", input]);
       this.issue = { ...this.issue, status: input.status };
@@ -250,8 +247,6 @@ test("Merging + MERGEABLE + green checks merges into development without --force
   const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
   assert.match(workpad.body, /abc1234def567890/);
   assert.equal(workpad.commentId, "c1");
-  const mergeComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
-  assert.match(mergeComment.body, /merged to development — abc1234def567890/);
 });
 
 test("merge failure returns Implementing with the error under Review feedback and never Done", async () => {
@@ -275,8 +270,6 @@ test("merge failure returns Implementing with the error under Review feedback an
   assert.match(workpad.body, /### Review feedback/);
   assert.match(workpad.body, /protected branch hook declined/);
   assert.equal(linear.issue.status, "Implementing");
-  const failComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
-  assert.match(failComment.body, /merge failed/);
 });
 
 test("land never merges a PR whose base is staging or production", async () => {

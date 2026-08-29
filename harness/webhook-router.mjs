@@ -1,10 +1,9 @@
 /**
- * Webhook router (KIT-52 + KIT-113).
+ * Webhook router (KIT-52 + KIT-59).
  *
- * Issue HMAC on POST /webhooks/linear → enqueue exactly one factory role
+ * Issue HMAC (`hmacChannel: "issue"`) → enqueue exactly one factory role
  * (planner | implement | factory-checker | auto-merge | land) or skip.
- * POST /webhooks/linear/agent-session is not registered (404). AgentSession
- * payloads on the issue channel are skipped without enqueue or activity ack.
+ * AgentSession HMAC (`hmacChannel: "session"`) → display-only ack; never enqueue.
  * Pi argv, worktree paths, and ADW yaml stay behind this interface.
  * Fake Linear and `gh` at this seam; do not call Pi or hosted MCP.
  */
@@ -16,7 +15,6 @@ const HMAC_REJECT = "invalid hmac";
 const REPLAY_WINDOW_MS = 60_000;
 const READY_FOR_AGENT = "ready-for-agent";
 const SIGNAL_UP = "signal-up";
-const AGENT_SESSION_PATH = "/webhooks/linear/agent-session";
 
 const ADW_BY_TYPE = {
   Feature: ".pi/adw/feature.yaml",
@@ -125,6 +123,9 @@ export function dispatchIssue(issue, delegateGateConfig) {
       return { kind: "enqueue", role: "planner" };
     }
     case "Implementing": {
+      if (delegate !== "pi") {
+        return { kind: "skip", reason: "implement requires delegate Pi" };
+      }
       const adwFile = adwFileFor(issue);
       if (!adwFile) {
         return { kind: "skip", reason: "missing Linear Type for ADW" };
@@ -143,11 +144,74 @@ export function dispatchIssue(issue, delegateGateConfig) {
 }
 
 /**
- * @param {object} payload
+ * @param {object} issue
+ * @param {{ names: string[], appUserId?: string }} delegateGateConfig
+ * @returns {boolean}
  */
-function isAgentSessionPayload(payload) {
+function isFactoryClaim(issue, delegateGateConfig) {
+  if (issue?.status !== "Implementing") {
+    return false;
+  }
+  if (delegateGate(issue.delegate, delegateGateConfig) !== "pi") {
+    return false;
+  }
+  return Boolean(adwFileFor(issue));
+}
+
+/**
+ * @param {object} payload
+ * @returns {{ action: string, sessionId?: string, issueId?: string } | null}
+ */
+function sessionEvent(payload) {
   const type = payload?.type;
-  return type === "AgentSessionEvent" || type === "AgentSession";
+  if (type !== "AgentSessionEvent" && type !== "AgentSession") {
+    return null;
+  }
+  const action = typeof payload.action === "string" ? payload.action : "";
+  const sessionId = payload.agentSession?.id ?? payload.data?.id;
+  const issueId =
+    payload.agentSession?.issueId ?? payload.agentSession?.issue?.id ?? payload.data?.issueId;
+  return {
+    action,
+    sessionId: typeof sessionId === "string" ? sessionId : undefined,
+    issueId: typeof issueId === "string" ? issueId : undefined,
+  };
+}
+
+/**
+ * @param {{
+ *   session: object,
+ *   event: { action: string, sessionId?: string, issueId?: string },
+ *   issue: object | null,
+ *   delegateGateConfig: { names: string[], appUserId?: string },
+ *   now: number,
+ * }} input
+ */
+async function ackSession({ session, event, issue, delegateGateConfig, now }) {
+  if (!session) {
+    return;
+  }
+  const sessionId = event.sessionId;
+  if (typeof sessionId !== "string") {
+    return;
+  }
+  if (event.action === "prompted") {
+    if (typeof session.ackPrompted === "function") {
+      await session.ackPrompted({ sessionId, issueId: event.issueId, now });
+    }
+    return;
+  }
+  if (event.action === "created" || event.action === "create") {
+    const claimed = issue ? isFactoryClaim(issue, delegateGateConfig) : false;
+    if (typeof session.ackCreated === "function") {
+      await session.ackCreated({
+        sessionId,
+        issueId: event.issueId,
+        claimed,
+        now,
+      });
+    }
+  }
 }
 
 /**
@@ -155,11 +219,19 @@ function isAgentSessionPayload(payload) {
  *   rawBody: string | Buffer,
  *   signature: unknown,
  *   secret: string,
+ *   sessionSecret?: string,
+ *   hmacChannel?: "issue" | "session",
  *   now?: number,
  *   linear: { getIssue: (id: string) => Promise<object | null> | object | null, clearDelegate?: Function },
  *   gh: object,
  *   enqueue: { enqueue: (job: object) => void },
  *   worktree?: { reap?: (input: { identifier: string }) => Promise<unknown> },
+ *   session?: {
+ *     ackCreated?: Function,
+ *     ackPrompted?: Function,
+ *     emitWorking?: Function,
+ *     handOff?: Function,
+ *   },
  *   delegateGateConfig?: { names: string[], appUserId?: string },
  *   allowedDelegates?: string[],
  * }} input
@@ -169,11 +241,14 @@ export async function routeWebhook(input) {
     rawBody,
     signature,
     secret,
+    sessionSecret,
+    hmacChannel = "issue",
     now = Date.now(),
     linear,
     gh,
     enqueue,
     worktree,
+    session,
     delegateGateConfig = createDelegateGateConfig(input.env),
     allowedDelegates,
   } = input;
@@ -183,7 +258,8 @@ export async function routeWebhook(input) {
       ? { names: allowedDelegates, appUserId: undefined }
       : createDelegateGateConfig(input.env));
 
-  if (!hmacValid(rawBody, signature, secret)) {
+  const hmacSecret = hmacChannel === "session" ? sessionSecret : secret;
+  if (!hmacValid(rawBody, signature, hmacSecret)) {
     return { kind: "rejected", reason: HMAC_REJECT };
   }
 
@@ -199,8 +275,22 @@ export async function routeWebhook(input) {
     return { kind: "rejected", reason: "stale webhook" };
   }
 
-  if (isAgentSessionPayload(payload)) {
-    return { kind: "skip", reason: "AgentSession path removed (KIT-113)" };
+  const event = sessionEvent(payload);
+
+  if (hmacChannel === "session") {
+    if (!event) {
+      return { kind: "skip", reason: "not an AgentSession webhook" };
+    }
+    let issue = null;
+    if (typeof event.issueId === "string" && typeof linear?.getIssue === "function") {
+      issue = await linear.getIssue(event.issueId);
+    }
+    await ackSession({ session, event, issue, delegateGateConfig: gateConfig, now });
+    return { kind: "skip", reason: "AgentSession never enqueues a coding job" };
+  }
+
+  if (event) {
+    return { kind: "skip", reason: "AgentSession never enqueues a coding job" };
   }
 
   if (payload?.type !== "Issue") {
@@ -238,6 +328,18 @@ export async function routeWebhook(input) {
     return decision;
   }
 
+  if (
+    typeof session?.emitWorking === "function" &&
+    (decision.role === "implement" || decision.role === "factory-checker")
+  ) {
+    await session.emitWorking({
+      issueId: issue.id,
+      identifier: issue.identifier,
+      role: decision.role,
+      now,
+    });
+  }
+
   enqueue.enqueue({
     role: decision.role,
     issueId: issue.id,
@@ -260,13 +362,14 @@ export async function routeWebhook(input) {
 export function createMemoryAdapter(deps) {
   return {
     /**
-     * @param {{ rawBody: string | Buffer, signature: unknown, now?: number }} request
+     * @param {{ rawBody: string | Buffer, signature: unknown, now?: number, hmacChannel?: "issue" | "session" }} request
      */
-    handle({ rawBody, signature, now }) {
+    handle({ rawBody, signature, now, hmacChannel }) {
       return routeWebhook({
         ...deps,
         rawBody,
         signature,
+        hmacChannel: hmacChannel ?? deps.hmacChannel ?? "issue",
         now: now ?? (typeof deps.now === "function" ? deps.now() : deps.now),
       });
     },
@@ -274,8 +377,7 @@ export function createMemoryAdapter(deps) {
 }
 
 /**
- * Production HTTP adapter. Responds 401 on HMAC/replay rejection, 404 on removed
- * agent-session path, 200 on skip or enqueue.
+ * Production HTTP adapter. Responds 401 on HMAC/replay rejection, 200 on skip or enqueue.
  *
  * @param {object} deps
  * @returns {(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => Promise<void>}
@@ -288,22 +390,19 @@ export function createHttpHandler(deps) {
         res.end();
         return;
       }
-      const path = (req.url ?? "/").split("?")[0];
-      if (path === AGENT_SESSION_PATH) {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
       const chunks = [];
       for await (const chunk of req) {
         chunks.push(chunk);
       }
       const rawBody = Buffer.concat(chunks);
       const now = typeof deps.now === "function" ? deps.now() : (deps.now ?? Date.now());
+      const path = (req.url ?? "/").split("?")[0];
+      const hmacChannel = path === "/webhooks/linear/agent-session" ? "session" : "issue";
       const result = await routeWebhook({
         ...deps,
         rawBody,
         signature: req.headers["linear-signature"],
+        hmacChannel,
         now,
       });
       res.writeHead(result.kind === "rejected" ? 401 : 200);
