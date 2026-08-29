@@ -260,12 +260,12 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({compose_service=\"webhook\", kit=~\"$kit\", event=~\"phase|tool|tokens\"}[5m]))",
-          "legendFormat": "session events / 5m",
+          "expr": "sum(count_over_time({compose_service=\"webhook\", kit=~\"$kit\", event=~\"phase|tool|tokens\"}[1m]))",
+          "legendFormat": "events / 1m",
           "refId": "A"
         }
       ],
-      "title": "Live session activity (5m)",
+      "title": "Session events (last 1m)",
       "type": "stat"
     },
     {
@@ -338,7 +338,7 @@
       "type": "logs"
     }
   ],
-  "refresh": "15s",
+  "refresh": "5s",
   "schemaVersion": 39,
   "tags": ["harness", "kit-collective", "agent-logs"],
   "templating": {
@@ -367,5 +367,5 @@
   "timezone": "browser",
   "title": "Kit harness agent logs",
   "uid": "kit-harness-agent-logs",
-  "version": 5
+  "version": 6
 }

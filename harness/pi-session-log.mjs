@@ -74,7 +74,7 @@ export function createSessionLogCollector({
   identifier,
   log = harnessLog,
   now = () => Date.now(),
-  tokenLogIntervalMs = 30_000,
+  tokenLogIntervalMs = 15_000,
 }) {
   let lastTokenLogAt = 0;
   let scoutDone = false;

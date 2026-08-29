@@ -57,7 +57,7 @@ Prometheus + Grafana + Loki overlay on the same CX33. **Metrics:** host (`node_e
 
 Promtail keeps only the `webhook` compose service, parses JSON lines with `source=harness`, and labels `role`, `kit` (KIT identifier), `event`, `gate`, `phase`.
 
-**Session progress (Pi stdout):** while implement or factory-checker runs, `pi-session-log.mjs` emits structured `phase`, `tool`, and `tokens` events (Scout/Gate/helpers, bash/read, live token snapshots every 30s). Stop-points 1–10: session=1, scout=2, helper=3, gate=4, implement=6, checker=8. Full JSON stays in Grafana log details (click row).
+**Session progress (Pi stdout):** while implement or factory-checker runs, `pi-session-log.mjs` emits structured `phase`, `tool`, and `tokens` events (Scout/Gate/helpers, bash/read, live token snapshots every **15s**). Stop-points 1–10: session=1, scout=2, helper=3, gate=4, implement=6, checker=8. Full JSON stays in Grafana log details (click row). Grafana dashboard auto-refresh defaults to **5s**; the stat **Session events (last 1m)** is a rolling count — not the poll interval.
 
 | Item | Value |
 | --- | --- |
