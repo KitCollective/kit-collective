@@ -1,9 +1,4 @@
-import {
-  HANDLE_MAX_LENGTH,
-  HANDLE_MIN_LENGTH,
-  HANDLE_PATTERN,
-  HANDLE_STATUSES,
-} from "@kit/domain";
+import { HANDLE_MAX_LENGTH, HANDLE_MIN_LENGTH, HANDLE_PATTERN, HANDLE_STATUSES } from "@kit/domain";
 import { z } from "zod";
 
 export const handleSchema = z
