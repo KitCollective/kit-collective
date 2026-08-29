@@ -233,7 +233,10 @@ test("createSlopReviewGh skips post for pathless Slop findings but resolves stal
   assert.deepEqual(result.posted, []);
   assert.deepEqual(result.resolved, ["harness/old.mjs:4"]);
   assert.equal(
-    calls.some((call) => call.includes("POST") && call.some((part) => String(part).includes("/comments"))),
+    calls.some(
+      (call) =>
+        call.includes("POST") && call.some((part) => String(part).includes("/comments")),
+    ),
     false,
   );
 });
