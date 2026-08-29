@@ -16,6 +16,8 @@ import {
   LAND_LANES,
   pullRequestFromAttachments,
   requiredChecksForMergeGate,
+  resolveLinkedPullRequest,
+  selectPullRequestFromAttachments,
 } from "../land.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "../linear-cli.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
@@ -222,8 +224,83 @@ test("pullRequestFromAttachments reads the linked GitHub PR number", () => {
     number: 57,
     repo: "KitCollective/kit-collective",
     url: PR_URL,
+    title: "KIT-57: Land from Merging to Done on development",
   });
   assert.equal(pullRequestFromAttachments([]), null);
+});
+
+test("selectPullRequestFromAttachments prefers issue-titled open PR over merged harness PR", () => {
+  const attachments = [
+    {
+      url: "https://github.com/KitCollective/kit-collective/pull/118",
+      title: "Unblock factory-checker spawn",
+    },
+    {
+      url: "https://github.com/KitCollective/kit-collective/pull/117",
+      title: "KIT-119: Profil-hjem — identitetskort, handle og avatar",
+    },
+  ];
+  const states = new Map([
+    [118, { state: "MERGED", mergeable: "UNKNOWN" }],
+    [117, { state: "OPEN", mergeable: "MERGEABLE" }],
+  ]);
+  assert.deepEqual(
+    selectPullRequestFromAttachments(attachments, { identifier: "KIT-119", states }),
+    {
+      number: 117,
+      repo: "KitCollective/kit-collective",
+      url: "https://github.com/KitCollective/kit-collective/pull/117",
+      title: "KIT-119: Profil-hjem — identitetskort, handle og avatar",
+    },
+  );
+});
+
+test("selectPullRequestFromAttachments matches issue identifier in title without gh state", () => {
+  const attachments = [
+    {
+      url: "https://github.com/KitCollective/kit-collective/pull/118",
+      title: "Unblock factory-checker spawn",
+    },
+    {
+      url: "https://github.com/KitCollective/kit-collective/pull/117",
+      title: "KIT-119: Profil-hjem",
+    },
+  ];
+  assert.equal(
+    selectPullRequestFromAttachments(attachments, { identifier: "KIT-119" })?.number,
+    117,
+  );
+});
+
+test("resolveLinkedPullRequest skips merged PR attachments", async () => {
+  const attachments = [
+    {
+      url: "https://github.com/KitCollective/kit-collective/pull/118",
+      title: "Harness fix",
+    },
+    {
+      url: "https://github.com/KitCollective/kit-collective/pull/117",
+      title: "KIT-119: Profil-hjem",
+    },
+  ];
+  const gh = {
+    async viewPr({ number }) {
+      if (number === 118) {
+        return { number: 118, state: "MERGED", mergeable: "UNKNOWN" };
+      }
+      return { number: 117, state: "OPEN", mergeable: "MERGEABLE" };
+    },
+  };
+  const resolved = await resolveLinkedPullRequest({
+    attachments,
+    identifier: "KIT-119",
+    gh,
+  });
+  assert.equal(resolved?.linked.number, 117);
+  assert.deepEqual(
+    resolved?.skipped.map((row) => row.number),
+    [118],
+  );
 });
 
 test("Merging + MERGEABLE + green checks merges into development without --force, sets Done, and records the SHA", async () => {
@@ -659,6 +736,7 @@ test("production viewPr still refuses when a required check is red even if optio
 test("Dockerfile copies the land job and the KIT-51 merge gate", () => {
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /land\.mjs/);
+  assert.match(dockerfile, /factory-exit-log\.mjs/);
   assert.match(dockerfile, /land-policy\.mjs/);
 });
 

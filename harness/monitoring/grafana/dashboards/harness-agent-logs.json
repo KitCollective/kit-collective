@@ -284,16 +284,39 @@
       },
       "targets": [
         {
-          "expr": "{compose_service=\"webhook\", kit=~\"$kit\"} | json | source=\"harness\" | event=~\"phase|tool|tokens\" | identifier != \"\" | line_format \"{{.identifier}} · {{.role}} · {{.event}}{{ if .stopPoint }} · stop={{.stopPoint}}{{ end }}{{ if .phase }} · {{.phase}}{{ end }}{{ if .tool }} · {{.tool}}{{ end }}{{ if .tokensIn }} · in={{.tokensIn}}{{ end }}{{ if .tokensOut }} out={{.tokensOut}}{{ end }} · gate={{.gate}}{{ if .detail }} · {{.detail}}{{ end }}{{ if .error }} · {{.error}}{{ end }}\"",
+          "expr": "{compose_service=\"webhook\", kit=~\"$kit\"} | json | source=\"harness\" | event=~\"phase|tool|tokens|wait\" | identifier != \"\" | line_format \"{{.identifier}} · {{.role}} · {{.event}}{{ if .stopPoint }} · stop={{.stopPoint}}{{ end }}{{ if .phase }} · {{.phase}}{{ end }}{{ if .tool }} · {{.tool}}{{ end }}{{ if .attempt }} · attempt={{.attempt}}{{ end }}{{ if .tokensIn }} · in={{.tokensIn}}{{ end }}{{ if .tokensOut }} out={{.tokensOut}}{{ end }} · gate={{.gate}}{{ if .detail }} · {{.detail}}{{ end }}{{ if .error }} · {{.error}}{{ end }}\"",
           "refId": "A"
         }
       ],
-      "title": "Live agent session (phase · tool · tokens)",
+      "title": "Live agent session (phase · tool · tokens · wait)",
       "type": "logs"
     },
     {
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 26 },
+      "id": 13,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      },
+      "targets": [
+        {
+          "expr": "{compose_service=\"webhook\", kit=~\"$kit\"} | json | source=\"harness\" | phase=~\"checker-exit|auto-merge|land-exit\" | identifier != \"\" | line_format \"{{.identifier}} · {{.role}} · {{.event}} · {{.phase}}{{ if .attempt }} · attempt={{.attempt}}{{ end }} · gate={{.gate}}{{ if .detail }} · {{.detail}}{{ end }}\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Factory exit (checker · auto-merge · land)",
+      "type": "logs"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 36 },
       "id": 5,
       "options": {
         "dedupStrategy": "none",
@@ -316,7 +339,7 @@
     },
     {
       "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 36 },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 46 },
       "id": 6,
       "options": {
         "dedupStrategy": "none",
@@ -367,5 +390,5 @@
   "timezone": "browser",
   "title": "Kit harness agent logs",
   "uid": "kit-harness-agent-logs",
-  "version": 6
+  "version": 7
 }
