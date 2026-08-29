@@ -58,12 +58,14 @@ export function factoryCheckerAllowedToolsFromSource(checkerSpawn) {
  *   role: string,
  *   host: string,
  *   checkerHermes: string,
+ *   implementRole: string,
  * }} files
  * @returns {string[]}
  */
 export function missingFactoryCheckerSpawnCoverage(files) {
   const failures = [];
-  const { piJob, checkerSpawn, checkerExit, dockerfile, role, host, checkerHermes } = files;
+  const { piJob, checkerSpawn, checkerExit, dockerfile, role, host, checkerHermes, implementRole } =
+    files;
 
   if (!piJob.includes('from "./checker-spawn.mjs"')) {
     failures.push("harness/pi-job.mjs must import checker-spawn");
@@ -254,6 +256,26 @@ export function missingFactoryCheckerSpawnCoverage(files) {
       "harness/factory-checker-tools.ts must refuse gh_cli resolve_thread for non-marker threads",
     );
   }
+  if (!role.includes("class → lesson") && !role.includes("class -> lesson")) {
+    failures.push(".pi/roles/factory-checker.md must document Worker memory class → lesson schema");
+  }
+  if (!role.includes("memory_remove")) {
+    failures.push(".pi/roles/factory-checker.md must document memory_remove when a ratchet lands");
+  }
+  if (!role.match(/do not.*memory_add.*Spec|not.*memory_add.*Spec/i)) {
+    failures.push(".pi/roles/factory-checker.md must forbid memory_add on Spec misses");
+  }
+  if (!implementRole.includes("memory_search")) {
+    failures.push(".pi/roles/implement.md must document memory_search at resume");
+  }
+  if (
+    !implementRole.match(/Scout stays without `memory_search`|Scout stays without memory_search/i)
+  ) {
+    failures.push(".pi/roles/implement.md must keep Scout without memory_search");
+  }
+  if (!implementRole.match(/never call `memory_add`|never call memory_add/i)) {
+    failures.push(".pi/roles/implement.md must forbid memory_add on implement parent");
+  }
   if (!host.match(/factory-checker.*Memory writer|Memory writer.*factory-checker/i)) {
     failures.push("harness/host.md must name factory-checker as the Memory writer");
   }
@@ -301,6 +323,7 @@ const failures = missingFactoryCheckerSpawnCoverage({
   role: read(".pi/roles/factory-checker.md"),
   host: read("harness/host.md"),
   checkerHermes: read(".pi/agent-checker/hermes-memory-config.json"),
+  implementRole: read(".pi/roles/implement.md"),
 });
 
 if (failures.length > 0) {

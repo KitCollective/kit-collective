@@ -106,7 +106,9 @@ Every axis must appear on pass and fail. Hard Slop findings use the `Slop/` pref
 
 Spec source is the whole Linear issue body (What to build + AC), not AC alone. A red required check is not a Spec-clean license — finish all three axes before the verdict. Hard Spec miss, hard Standards violation, hard Slop finding, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `Implementing`. Pending required checks → wait; stay in `In Review` (do not fail early on one axis while checks are still running). Otherwise → `Ready for merge` only when required GitHub checks are green **and** the PR is mergeable.
 
-When the checker parent records a Slop lesson via `memory_add`, write the **class** (e.g. "narrating comments in harness tests"), not a hunk or KIT identifier. A spawned Slop child is read-only and must not call `memory_add`, `memory_replace`, or `memory_remove`.
+### Worker memory (checker parent only)
+
+When the checker parent records a recurring **Standards** or **Slop** lesson via `memory_add`, use one schema: **`class → lesson`** with target `failure`. The **class** names the recurring mistake (e.g. `inline imports in Nest modules`, `narrating comments in harness tests`). The **lesson** states what to do differently — never a hunk, never a KIT identifier. **Never** `memory_add` Spec misses; Spec feedback stays on the workpad only. Sub-agents are read-only and must not call `memory_add`, `memory_replace`, or `memory_remove`. When this PR lands a git ratchet (`.cursor/hooks/`, `.cursor/rules/`, `scripts/check-*`) for a class you previously staged in Hermes, call `memory_remove` for that staging lesson so git wins.
 
 ## Why three axes
 
