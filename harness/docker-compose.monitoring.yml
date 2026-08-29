@@ -59,7 +59,7 @@ services:
       - loki_data:/loki
     expose:
       - "3100"
-    mem_limit: 256m
+    mem_limit: 512m
 
   promtail:
     image: grafana/promtail:3.0.0
@@ -80,6 +80,8 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme}
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://grafana.eskobar.dev/}
+      GF_SERVER_DOMAIN: grafana.eskobar.dev
+      GF_SECURITY_COOKIE_SECURE: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     volumes:
@@ -88,7 +90,7 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     expose:
       - "3000"
-    mem_limit: 256m
+    mem_limit: 512m
     depends_on:
       - prometheus
       - loki

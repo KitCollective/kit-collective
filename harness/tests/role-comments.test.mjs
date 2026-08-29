@@ -41,6 +41,7 @@ test("plannerClaimComment names the claim transition", () => {
 test("implementRetryCapComment holds Implementing with empty Linear Agent", () => {
   const body = implementRetryCapComment("KIT-99");
   assert.match(body, /KIT-99: implement retry cap/);
+  assert.match(body, /after 5 in-slot retries/);
   assert.match(body, /Linear Agent left empty/);
   assert.match(body, /No Cursor Cloud Agent/i);
   assert.equal(commentsHoldImplementRetryCap([{ body }]), true);

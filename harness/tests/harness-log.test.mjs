@@ -79,9 +79,10 @@ test("harnessLog defaults loopRisk from gate when omitted", () => {
 });
 
 test("loopRiskForRetry scales with attempt toward cap", () => {
-  assert.equal(loopRiskForRetry(1), 4);
-  assert.equal(loopRiskForRetry(2), 7);
-  assert.equal(loopRiskForRetry(3), 9);
+  assert.equal(loopRiskForRetry(1), 3);
+  assert.equal(loopRiskForRetry(2), 5);
+  assert.equal(loopRiskForRetry(3), 6);
+  assert.equal(loopRiskForRetry(5), 9);
 });
 
 test("resolveExitGate maps factory outcomes", () => {

@@ -328,6 +328,8 @@ export function workerHealthBody({
     planner,
     jobs: occupants,
     queued: waiting,
+    jobsActive: occupants.length,
+    jobsQueued: waiting.length,
     job: derivedJob,
     capacity,
     tokens: publicHealthTokens(tokens),
