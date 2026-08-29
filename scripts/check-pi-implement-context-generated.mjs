@@ -5,7 +5,6 @@
  */
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { missingImplementContextSources } from "./generate-pi-implement-context.mjs";
 
 const root = join(import.meta.dirname, "..");

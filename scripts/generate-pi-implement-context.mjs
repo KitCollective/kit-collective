@@ -180,8 +180,7 @@ export function buildPiAgentMarkdown(mapping) {
   const description =
     frontmatterValue(frontmatter, "description") ??
     `PI wrapper for ${cursorPath}. Regenerate; do not edit by hand.`;
-  const inherit =
-    mapping.inheritProjectContext === false ? "inheritProjectContext: false\n" : "";
+  const inherit = mapping.inheritProjectContext === false ? "inheritProjectContext: false\n" : "";
   return `${GENERATED_HEADER}
 ---
 name: ${mapping.pi}
@@ -221,7 +220,6 @@ export function buildGeneratedOutputs() {
 export function generatePiImplementContext(options = {}) {
   const write = options.write !== false;
   const { implementContext, agents } = buildGeneratedOutputs();
-  const paths = [GENERATED_CONTEXT_REL, ...Object.keys(agents).sort()];
   /** @type {string[]} */
   const changedPaths = [];
 
