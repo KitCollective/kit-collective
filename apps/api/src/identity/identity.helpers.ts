@@ -32,7 +32,7 @@ export function nextHandleCandidate(base: string, attempt: number): string {
     return base.slice(0, HANDLE_MAX_LENGTH);
   }
 
-  const suffix = String(attempt);
+  const suffix = String(attempt + 1);
   const trimmedBase = base.slice(0, Math.max(1, HANDLE_MAX_LENGTH - suffix.length));
   return `${trimmedBase}${suffix}`.slice(0, HANDLE_MAX_LENGTH);
 }
