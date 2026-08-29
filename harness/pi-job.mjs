@@ -29,7 +29,9 @@ import {
   createTypecheckTouched,
   extractReviewFeedback,
   IMPLEMENTING,
+  requiredChecksGreen,
   reviewFeedbackIsActionable,
+  reviewFeedbackIsLandFail,
 } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
 import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
@@ -475,6 +477,7 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
  * @param {string | undefined} adwFile
  * @param {{
  *   cheapRetry?: boolean,
+ *   mergeFailResume?: boolean,
  *   reviewFeedback?: string,
  *   writeScope?: string,
  *   implementContext?: { requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string },
@@ -502,6 +505,17 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
       return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). ${loopTail}
+
+### Review feedback
+
+${feedback}`;
+    }
+    if (options.mergeFailResume === true) {
+      const feedback =
+        typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
+          ? options.reviewFeedback.trim()
+          : "(missing — fail closed: verify PR MERGEABLE and required checks green)";
+      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. ${loopTail}
 
 ### Review feedback
 
@@ -983,6 +997,7 @@ export function createPiJobRunner({
       let implementIssue = null;
       /** @type {{ requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string } | undefined} */
       let implementContext;
+      let mergeFailResume = false;
       if (job.role === "implement") {
         const workpad = implementComments.find((comment) =>
           comment.body?.includes(WORKPAD_HEADING),
@@ -991,22 +1006,61 @@ export function createPiJobRunner({
           typeof linearForPrompt?.getIssue === "function"
             ? await linearForPrompt.getIssue(job.issueId ?? identifier)
             : null;
-        const cheapRetry = isCheapImplementRetry(job);
         const reviewFeedback = extractReviewFeedback(workpad?.body);
+        mergeFailResume = reviewFeedbackIsLandFail(reviewFeedback);
+        const cheapRetry = isCheapImplementRetry(job);
+        const ghClient = gh ?? job.gh;
+        const linearClient = linear ?? job.linear;
+        const adwFile = job.adwFile;
+        if (
+          mergeFailResume &&
+          !cheapRetry &&
+          typeof adwFile === "string" &&
+          ghClient &&
+          linearClient &&
+          checkout
+        ) {
+          let pr = await ghClient.viewPr({ cwd: checkout.path });
+          if (typeof ghClient.findOpenIssuePr === "function") {
+            const listed = await ghClient.findOpenIssuePr({ identifier });
+            if (listed?.url && typeof pr?.url !== "string") {
+              pr = { ...listed, ...pr };
+            }
+          }
+          if (pr?.mergeable === "MERGEABLE" && requiredChecksGreen(pr.checks)) {
+            const tokens = tokenSnapshotFromCollected(job.role, {}, identifier);
+            const exit = await completeImplementAdw({
+              job: { ...job, identifier, issueId: job.issueId ?? identifier },
+              checkout,
+              gh: ghClient,
+              linear: withTokenUse(linearClient, tokens),
+              typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
+              formatCheck,
+              adwText: readFileSync(join(workspace, adwFile), "utf8"),
+              now,
+              sleep,
+              waitTimeoutMs,
+              waitIntervalMs,
+            });
+            return { ...job, ...exit, tokens, mergeFailFastPath: true };
+          }
+        }
         const writeScope = parseWriteScopeLine(
           implementIssue?.description ?? job.description ?? "",
         );
-        if (!cheapRetry) {
+        if (!cheapRetry && !mergeFailResume) {
           implementContext = selectImplementContext({
             writeScope,
             labels: implementIssue?.labels ?? job.labels ?? [],
             body: implementIssue?.description ?? job.description ?? "",
             reviewFeedback,
             cheapRetry,
+            mergeFailResume,
           });
         }
         prompt = implementPrompt(job.role, identifier, job.adwFile, {
           cheapRetry,
+          mergeFailResume,
           reviewFeedback,
           writeScope,
           implementContext,

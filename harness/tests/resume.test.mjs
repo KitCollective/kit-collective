@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createDelegateGateConfig } from "../delegate-gate.mjs";
 import { createWorkerSlots } from "../job-queue.mjs";
-import { RESUME_ORPHANS_QUERY } from "../linear-cli.mjs";
+import { RESUME_ORPHANS_QUERY, WORKPAD_HEADING } from "../linear-cli.mjs";
 import { REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS } from "../planner.mjs";
 import { runResume, startResumePoller } from "../resume.mjs";
@@ -150,6 +150,37 @@ test("runResume skips Implementing after implement retry cap without a new Compo
       (row) => row.identifier === "KIT-94" && row.reason === "implement retry cap",
     ),
   );
+});
+
+test("runResume enqueues implement for land-fail even when retry cap is posted", async () => {
+  const enqueue = fakeEnqueue();
+  const linear = fakeLinear([
+    orphan({
+      id: "issue-119",
+      identifier: "KIT-119",
+      status: "Implementing",
+      labels: ["Feature"],
+      linearType: "Feature",
+      delegate: { name: "Pi" },
+    }),
+  ]);
+  linear.listComments = async () => [
+    { id: "c-cap", body: implementRetryCapComment("KIT-119") },
+    {
+      id: "c1",
+      body: `${WORKPAD_HEADING}\n\n### Review feedback\n\n- PR is UNKNOWN\n`,
+    },
+  ];
+  const result = await runResume({
+    linear,
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].identifier, "KIT-119");
+  assert.deepEqual(result.enqueued, [{ identifier: "KIT-119", role: "implement" }]);
 });
 
 test("runResume enqueues checker, auto-merge, and land for started factory states", async () => {

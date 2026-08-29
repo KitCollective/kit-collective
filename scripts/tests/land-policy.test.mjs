@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   blockerResolvesDependents,
+  LAND_UNKNOWN_MERGEABLE_RETRIES,
+  LAND_UNKNOWN_RETRY_MS,
   landAtMergeGate,
   setupRecordsMerging,
   statusTransitionResolvesBlockedBy,
@@ -45,6 +47,11 @@ function fakeGh({ ok = true, sha = "abc1234", error = "merge failed" } = {}) {
     },
   };
 }
+
+test("land policy exports UNKNOWN mergeable retry constants", () => {
+  assert.equal(LAND_UNKNOWN_MERGEABLE_RETRIES, 3);
+  assert.equal(LAND_UNKNOWN_RETRY_MS, 15_000);
+});
 
 test("setupRecordsMerging is true only when Merging has a real id", () => {
   assert.equal(

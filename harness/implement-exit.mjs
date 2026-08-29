@@ -375,6 +375,9 @@ export function reviewFeedbackIsActionable(feedback) {
   if (text.length === 0) {
     return false;
   }
+  if (reviewFeedbackIsLandFail(text)) {
+    return true;
+  }
   const lines = text
     .split("\n")
     .map((line) => line.trim())
@@ -386,6 +389,35 @@ export function reviewFeedbackIsActionable(feedback) {
     (line) =>
       /^-\s*(?:Spec|Standards|Slop|Tests):\s*\(none\)\s*$/i.test(line) ||
       /^-\s*\(none\)\s*$/i.test(line),
+  );
+}
+
+/**
+ * Land merge gate wrote this feedback — orchestration, not checker Spec/Standards/Slop.
+ *
+ * @param {string | undefined} feedback
+ */
+export function reviewFeedbackIsLandFail(feedback) {
+  const text = typeof feedback === "string" ? feedback.trim() : "";
+  if (text.length === 0) {
+    return false;
+  }
+  if (/^-\s*(?:Spec|Standards|Slop|Tests|Format|CI):/im.test(text)) {
+    return false;
+  }
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.some(
+    (line) =>
+      /^-\s*PR is (UNKNOWN|CONFLICTING)/i.test(line) ||
+      /^-\s*required checks are not green/i.test(line) ||
+      /^-\s*PR base .+ is not /i.test(line) ||
+      /^-\s*no linked PR/i.test(line) ||
+      /^-\s*protected branch/i.test(line) ||
+      /^-\s*refusing --force/i.test(line) ||
+      /^-\s*merge (?:failed|succeeded but)/i.test(line),
   );
 }
 

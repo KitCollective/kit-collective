@@ -5,7 +5,8 @@
  * set delegate. Worktree reuse stays in checkout.
  */
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
-import { createLinearCliClient } from "./linear-cli.mjs";
+import { extractReviewFeedback, reviewFeedbackIsLandFail } from "./implement-exit.mjs";
+import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { findWriteScopeOverlap, PLANNER_PRIORITY_ORDER, PLANNER_TEAM_KEY } from "./planner.mjs";
 import { commentsHoldImplementRetryCap } from "./role-comments.mjs";
 import { dispatchIssue } from "./webhook-router.mjs";
@@ -108,9 +109,13 @@ export async function runResume({
     if (typeof client.listComments === "function") {
       const comments = await client.listComments(issue.id);
       if (commentsHoldImplementRetryCap(comments)) {
-        skipped.push({ identifier: issue.identifier, reason: "implement retry cap" });
-        selected.push(issue);
-        continue;
+        const workpad = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+        const feedback = extractReviewFeedback(workpad?.body);
+        if (!reviewFeedbackIsLandFail(feedback)) {
+          skipped.push({ identifier: issue.identifier, reason: "implement retry cap" });
+          selected.push(issue);
+          continue;
+        }
       }
     }
     const overlap = findWriteScopeOverlap(issue, selected);

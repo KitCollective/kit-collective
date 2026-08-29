@@ -157,11 +157,12 @@ export function buildImplementAppendOverlay() {
  *   body?: string,
  *   reviewFeedback?: string,
  *   cheapRetry?: boolean,
+ *   mergeFailResume?: boolean,
  * }} input
  * @returns {{ requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string }}
  */
 export function selectImplementContext(input = {}) {
-  if (input.cheapRetry === true) {
+  if (input.cheapRetry === true || input.mergeFailResume === true) {
     return {
       requiredHelpers: [],
       skills: [],
@@ -186,12 +187,12 @@ export function selectImplementContext(input = {}) {
 
 /**
  * Whether harness should inject full factory context (first run or checker-fail resume).
- * Only cheap CI / write-scope / format retry skips injection.
+ * Only cheap CI / write-scope / format retry and merge-fail resume skip injection.
  *
- * @param {{ cheapRetry?: boolean }} input
+ * @param {{ cheapRetry?: boolean, mergeFailResume?: boolean }} input
  */
 export function shouldInjectImplementContext(input = {}) {
-  return input.cheapRetry !== true;
+  return input.cheapRetry !== true && input.mergeFailResume !== true;
 }
 
 /**

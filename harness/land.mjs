@@ -9,6 +9,8 @@ import { execFile as execFileCb, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import {
   landAtMergeGate,
+  LAND_UNKNOWN_MERGEABLE_RETRIES,
+  LAND_UNKNOWN_RETRY_MS,
   MERGE_FAILURE_STATUS,
   MERGE_PERMISSION_STATUS,
   MERGED_STATUS,
@@ -275,9 +277,21 @@ export function createLandGh({
  *   },
  *   lanes?: { integration: string, staging?: string, production?: string },
  *   worktree?: { reap?: (input: { identifier: string }) => Promise<unknown> },
+ *   sleep?: (ms: number) => Promise<unknown>,
+ *   unknownRetryAttempts?: number,
+ *   unknownRetryMs?: number,
  * }} input
  */
-export async function completeLand({ job, linear, gh, lanes = LAND_LANES, worktree }) {
+export async function completeLand({
+  job,
+  linear,
+  gh,
+  lanes = LAND_LANES,
+  worktree,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  unknownRetryAttempts = LAND_UNKNOWN_MERGEABLE_RETRIES,
+  unknownRetryMs = LAND_UNKNOWN_RETRY_MS,
+}) {
   const issue = await linear.getIssue(job.issueId);
   if (!issue || issue.status !== MERGE_PERMISSION_STATUS) {
     return {
@@ -289,7 +303,16 @@ export async function completeLand({ job, linear, gh, lanes = LAND_LANES, worktr
   }
 
   const linked = pullRequestFromAttachments(issue.attachments);
-  const pr = linked ? await gh.viewPr({ number: linked.number, repo: linked.repo }) : null;
+  let pr = linked ? await gh.viewPr({ number: linked.number, repo: linked.repo }) : null;
+  if (pr?.mergeable === "UNKNOWN" && linked) {
+    for (let attempt = 0; attempt < unknownRetryAttempts; attempt += 1) {
+      await sleep(unknownRetryMs);
+      pr = await gh.viewPr({ number: linked.number, repo: linked.repo });
+      if (pr?.mergeable !== "UNKNOWN") {
+        break;
+      }
+    }
+  }
   const gate = landAtMergeGate({
     issueStatus: issue.status,
     pr,

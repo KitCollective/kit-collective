@@ -229,6 +229,12 @@ jobs:
       - name: Test implement first-run loop ratchet logic
         run: node --test scripts/tests/check-implement-first-run-loop.test.mjs
 
+      - name: Check implement merge-fail resume ratchet
+        run: node scripts/check-implement-merge-fail-resume.mjs
+
+      - name: Test implement merge-fail resume ratchet logic
+        run: node --test scripts/tests/check-implement-merge-fail-resume.test.mjs
+
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs
         env:
