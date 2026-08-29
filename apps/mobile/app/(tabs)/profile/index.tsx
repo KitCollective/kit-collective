@@ -1,8 +1,11 @@
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fetchFavorites } from "@/api/favorites";
 import { resolveAvatarUrl } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
+import { favoritesMetaLine } from "@/components/favorites-meta";
 import { IdentityCard, ListNavigateRow, ProfileSurfaceGroup } from "@/components/profile-ui";
 import { ScreenHeader } from "@/components/screen-header";
 import { space } from "@/theme/tokens";
@@ -13,6 +16,7 @@ export default function ProfileHomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, accessToken } = useAuth();
+  const [favoriteCount, setFavoriteCount] = useState(0);
 
   const tabBarPadding =
     space.insetLg * 2 +
@@ -24,6 +28,26 @@ export default function ProfileHomeScreen() {
 
   const avatarHeaders =
     accessToken && user?.avatarUrl ? { Authorization: `Bearer ${accessToken}` } : undefined;
+
+  const refreshFavoriteCount = useCallback(async () => {
+    if (!accessToken) {
+      setFavoriteCount(0);
+      return;
+    }
+
+    try {
+      const response = await fetchFavorites(accessToken);
+      setFavoriteCount(response.favorites.length);
+    } catch {
+      setFavoriteCount(0);
+    }
+  }, [accessToken]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshFavoriteCount();
+    }, [refreshFavoriteCount]),
+  );
 
   return (
     <View
@@ -46,7 +70,7 @@ export default function ProfileHomeScreen() {
         <ProfileSurfaceGroup>
           <ListNavigateRow
             title="Favoritter"
-            meta="0 trøjer"
+            meta={favoritesMetaLine(favoriteCount)}
             icon="heart-outline"
             onPress={() => router.push("/(tabs)/profile/favoritter")}
           />

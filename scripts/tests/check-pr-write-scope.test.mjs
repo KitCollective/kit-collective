@@ -46,6 +46,7 @@ test("isRatchetException allows named ratchet scripts, not arbitrary scripts/lib
   assert.equal(isRatchetException("scripts/check-pr-write-scope.mjs"), true);
   assert.equal(isRatchetException("scripts/check-factory-checker-spawn.mjs"), true);
   assert.equal(isRatchetException("scripts/check-implement-checker-fail-resume.mjs"), true);
+  assert.equal(isRatchetException("scripts/check-mobile-inbox-conversation-chrome.mjs"), true);
   assert.equal(
     isRatchetException("scripts/tests/check-implement-checker-fail-resume.test.mjs"),
     true,

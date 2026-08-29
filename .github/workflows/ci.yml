@@ -182,7 +182,10 @@ jobs:
         run: pnpm check:mobile-capture-dead-exports
 
       - name: Check mobile inbox conversation chrome
-        run: pnpm check:mobile-inbox-conversation-chrome
+        run: node scripts/check-mobile-inbox-conversation-chrome.mjs
+
+      - name: Test mobile inbox conversation chrome ratchet logic
+        run: node --test scripts/tests/check-mobile-inbox-conversation-chrome.test.mjs
 
       - name: Test harness node tests
         run: pnpm test:harness
