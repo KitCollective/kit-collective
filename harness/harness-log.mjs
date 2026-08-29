@@ -3,7 +3,7 @@
  * Fields: source, ts, role, identifier, event, gate (green|yellow|red), loopRisk (1-10), error (redacted).
  */
 
-/** @typedef {"start" | "fail" | "exit" | "retry" | "wait"} HarnessLogEvent */
+/** @typedef {"start" | "fail" | "exit" | "retry" | "wait" | "phase" | "tool" | "tokens"} HarnessLogEvent */
 /** @typedef {"green" | "yellow" | "red"} HarnessGate */
 
 export const IMPLEMENTING = "Implementing";
@@ -44,9 +44,9 @@ export function redactHarnessError(error) {
  * @param {number} [cap]
  * @returns {number}
  */
-export function loopRiskForRetry(attempt, cap = 3) {
+export function loopRiskForRetry(attempt, cap = 5) {
   const safe = Number.isFinite(attempt) && attempt > 0 ? attempt : 1;
-  const limit = Number.isFinite(cap) && cap > 0 ? cap : 3;
+  const limit = Number.isFinite(cap) && cap > 0 ? cap : 5;
   return Math.min(10, Math.max(2, Math.round((safe / limit) * 7 + 2)));
 }
 
@@ -101,6 +101,12 @@ export function loopRiskForGate(gate) {
  *   reason?: string,
  *   attempt?: number,
  *   loopRisk?: number,
+ *   phase?: string,
+ *   stopPoint?: number,
+ *   tool?: string,
+ *   detail?: string,
+ *   tokensIn?: number,
+ *   tokensOut?: number,
  * }} input
  */
 export function harnessLog(input) {
@@ -133,6 +139,24 @@ export function harnessLog(input) {
   }
   if (typeof input.attempt === "number" && Number.isFinite(input.attempt)) {
     payload.attempt = input.attempt;
+  }
+  if (typeof input.phase === "string" && input.phase.length > 0) {
+    payload.phase = input.phase;
+  }
+  if (typeof input.stopPoint === "number" && Number.isFinite(input.stopPoint)) {
+    payload.stopPoint = Math.min(10, Math.max(1, Math.round(input.stopPoint)));
+  }
+  if (typeof input.tool === "string" && input.tool.length > 0) {
+    payload.tool = input.tool;
+  }
+  if (typeof input.detail === "string" && input.detail.length > 0) {
+    payload.detail = redactHarnessError(input.detail);
+  }
+  if (typeof input.tokensIn === "number" && Number.isFinite(input.tokensIn)) {
+    payload.tokensIn = input.tokensIn;
+  }
+  if (typeof input.tokensOut === "number" && Number.isFinite(input.tokensOut)) {
+    payload.tokensOut = input.tokensOut;
   }
   console.error(JSON.stringify(payload));
 }

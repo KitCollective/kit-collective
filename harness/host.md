@@ -55,7 +55,9 @@ Prometheus + Grafana + Loki overlay on the same CX33. **Metrics:** host (`node_e
 | `yellow` | Loop debt / waiting — monitor | `retry` (CI, format, write-scope under cap), `wait` (capacity), `exit` still Implementing |
 | `red` | Do not merge / stuck | `fail` (idle timeout, retry cap, Pi exit, queue throw), checker-fail `exit` |
 
-Promtail keeps only the `webhook` compose service, parses JSON lines with `source=harness`, and labels `role`, `kit` (KIT identifier), `event`, `gate`.
+Promtail keeps only the `webhook` compose service, parses JSON lines with `source=harness`, and labels `role`, `kit` (KIT identifier), `event`, `gate`, `phase`.
+
+**Session progress (Pi stdout):** while implement or factory-checker runs, `pi-session-log.mjs` emits structured `phase`, `tool`, and `tokens` events (Scout/Gate/helpers, bash/read, live token snapshots every **15s**). Stop-points 1–10: session=1, scout=2, helper=3, gate=4, implement=6, checker=8. Full JSON stays in Grafana log details (click row). Grafana dashboard auto-refresh defaults to **5s**; the stat **Session events (last 1m)** is a rolling count — not the poll interval.
 
 | Item | Value |
 | --- | --- |
@@ -106,6 +108,9 @@ sum(rate({compose_service="webhook", role="implement", event="fail"}[5m]))
 
 # Recent structured tail (all roles)
 {compose_service="webhook"} | json | source="harness"
+
+# Readable one-liner (Grafana log panels — click row for full JSON accordion)
+{compose_service="webhook"} | json | source="harness" | line_format "{{.identifier}} · {{.role}} · {{.event}} · gate={{.gate}} · risk={{.loopRisk}}{{ if .attempt }} · try={{.attempt}}{{ end }}{{ if .reason }} · {{.reason}}{{ end }}{{ if .error }} · {{.error}}{{ end }}"
 
 # Raw Pi stdout noise (unstructured docker wrapper)
 {compose_service="webhook"} != `source":"harness"`
