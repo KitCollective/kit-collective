@@ -1,0 +1,99 @@
+# Optional observability overlay for kit-harness (KIT-113 follow-on).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+# Inventory: harness/host.md § Observability. No secrets in git — set GRAFANA_ADMIN_PASSWORD in .env on the box.
+# Metrics: Prometheus + node_exporter + json_exporter (/health). Logs: Loki + Promtail (webhook stderr JSON).
+
+services:
+  node_exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    expose:
+      - "9100"
+
+  json_exporter:
+    image: prometheuscommunity/json-exporter:v0.6.0
+    restart: unless-stopped
+    command:
+      - "--config.file=/config/config.yml"
+    volumes:
+      - ./monitoring/json_exporter.yml:/config/config.yml:ro
+    expose:
+      - "7979"
+    depends_on:
+      webhook:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+      - "--storage.tsdb.retention.size=256MB"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    expose:
+      - "9090"
+    mem_limit: 384m
+    depends_on:
+      - node_exporter
+      - json_exporter
+
+  loki:
+    image: grafana/loki:3.0.0
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./monitoring/loki.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    expose:
+      - "3100"
+    mem_limit: 256m
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    restart: unless-stopped
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./monitoring/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    mem_limit: 128m
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://grafana.eskobar.dev/}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    expose:
+      - "3000"
+    mem_limit: 256m
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
