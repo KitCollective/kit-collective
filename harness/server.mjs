@@ -80,7 +80,10 @@ export async function startWorkerServer({
   await assertPiPackagesReady({ root: workspace, listPackages });
   const linearClient = linear ?? createLinearCliClient({ env, runCommand });
   const ghClient = createGhClient({ env, runCommand });
-  const trees = createWorktreeAdapter({ env });
+  const trees = createWorktreeAdapter({
+    env,
+    findOpenIssuePr: (identifier) => ghClient.findOpenIssuePr({ identifier }),
+  });
   const capacitySnapshot =
     typeof readCapacity === "function"
       ? readCapacity
@@ -155,6 +158,7 @@ export async function startWorkerServer({
   });
   return new Promise((resolve) => {
     server.listen(listenPort, listenHost, () => {
+      console.error(`[worker] listen pollMs=${pollMs} intakeMs=${intakeMs}`);
       if (pollMs > 0) {
         stopPoller = startPlannerPoller({ enqueue: slots, intervalMs: pollMs });
         stopResumePoller = startResumePoller({ enqueue: slots, intervalMs: pollMs });

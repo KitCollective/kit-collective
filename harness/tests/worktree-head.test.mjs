@@ -209,3 +209,67 @@ test("stale kit-n worktree checks out the open PR head", async () => {
     ),
   );
 });
+
+test("reuse checkout of a dirty worktree force-resets onto the PR head", async () => {
+  const gitCalls = [];
+  const adapter = createWorktreeAdapter({
+    mirrorDir: "/var/lib/kit-pi/mirror.git",
+    worktreesDir: "/var/lib/kit-pi/worktrees",
+    existsSync: (path) =>
+      path === "/var/lib/kit-pi/mirror.git" || path === "/var/lib/kit-pi/worktrees/KIT-126",
+    mkdirSync() {},
+    async findOpenIssuePr() {
+      return { head: "kit-126", url: "https://github.com/KitCollective/kit-collective/pull/105" };
+    },
+    async runGit(args) {
+      gitCalls.push(args);
+      return { stdout: "ok\n", status: 0 };
+    },
+  });
+
+  await adapter.checkout({ identifier: "KIT-126", mode: "reuse" });
+  assert.ok(
+    gitCalls.some(
+      (args) =>
+        args.includes("-C") &&
+        args.includes("/var/lib/kit-pi/worktrees/KIT-126") &&
+        args.includes("reset") &&
+        args.includes("--hard"),
+    ),
+  );
+  assert.ok(
+    gitCalls.some(
+      (args) =>
+        args.includes("checkout") &&
+        args.includes("-f") &&
+        args.includes("-B") &&
+        args.includes("kit-126") &&
+        args.includes("origin/kit-126"),
+    ),
+  );
+});
+
+test("fetch of an issue branch writes refs/remotes/origin so reuse can see a missing kit-n", async () => {
+  const gitCalls = [];
+  const adapter = createWorktreeAdapter({
+    mirrorDir: "/var/lib/kit-pi/mirror.git",
+    worktreesDir: "/var/lib/kit-pi/worktrees",
+    existsSync: (path) => path === "/var/lib/kit-pi/mirror.git",
+    mkdirSync() {},
+    async findOpenIssuePr() {
+      return { head: "kit-126", url: "https://github.com/KitCollective/kit-collective/pull/105" };
+    },
+    async runGit(args) {
+      gitCalls.push(args);
+      return { stdout: "ok\n", status: 0 };
+    },
+  });
+
+  await adapter.checkout({ identifier: "KIT-126", mode: "reuse" });
+  assert.ok(
+    gitCalls.some((args) =>
+      args.includes("kit-126:refs/remotes/origin/kit-126"),
+    ),
+    "expected fetch refspec that updates refs/remotes/origin/kit-126",
+  );
+});

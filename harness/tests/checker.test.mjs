@@ -220,6 +220,14 @@ test("status change to In Review enqueues factory-checker and no ADW file", asyn
   assert.equal(enqueue.jobs[0].adwFile, undefined);
 });
 
+test("Issue update without updatedFrom still enqueues checker when status is In Review", async () => {
+  const payload = issueUpdatePayload();
+  delete payload.updatedFrom;
+  const { result, enqueue } = await routeIssue(snapshot({ delegate: null }), { payload });
+  assert.deepEqual(result, { kind: "enqueue", role: "factory-checker" });
+  assert.equal(enqueue.jobs[0].role, "factory-checker");
+});
+
 test("reviewFeedbackHasFindings treats - (none) as pass and bullets as fail", () => {
   assert.equal(
     reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),

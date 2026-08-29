@@ -318,7 +318,9 @@ test("worktree adapter creates from origin/issue-branch when implement has pushe
   const result = await adapter.checkout({ identifier: "KIT-99" });
   assert.equal(result.path, "/var/lib/kit-pi/worktrees/KIT-99");
   assert.equal(result.branch, "kit-99");
-  assert.ok(gitCalls.some((args) => args.includes("fetch") && args.includes("kit-99")));
+  assert.ok(
+    gitCalls.some((args) => args.includes("fetch") && args.includes("kit-99:refs/remotes/origin/kit-99")),
+  );
   assert.ok(
     gitCalls.some(
       (args) =>

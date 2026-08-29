@@ -66,6 +66,7 @@ export async function runResume({
   const gate = delegateGateConfig ?? createDelegateGateConfig(env);
   const queued = new Set(queuedIdentifiers);
   const issues = await client.listOrphans({ teamKey: PLANNER_TEAM_KEY });
+  console.error(`[resume] orphans ${issues.length}`);
   const enqueued = [];
   const skipped = [];
 
@@ -127,11 +128,16 @@ export async function runResume({
     }
   }
 
+  const enqueuedSummary =
+    enqueued.map((row) => `${row.role}:${row.identifier}`).join(",") || "none";
+  const skippedSummary =
+    skipped.map((row) => `${row.identifier}:${row.reason}`).join(",") || "none";
+  console.error(`[resume] enqueued ${enqueuedSummary} skipped ${skippedSummary}`);
   return { enqueued, skipped };
 }
 
 /**
- * Immediate enqueue plus the planner interval. Planner mutex, not the coding slot.
+ * Immediate enqueue plus the planner interval. Resume mutex, not the coding slot.
  *
  * @param {{
  *   enqueue: { enqueue: (job: object) => unknown },
@@ -146,12 +152,10 @@ export function startResumePoller({
   setIntervalFn = setInterval,
   clearIntervalFn = clearInterval,
 }) {
+  console.error(`[resume] poller start intervalMs=${intervalMs}`);
   enqueue.enqueue({ role: "resume" });
   const timer = setIntervalFn(() => {
     enqueue.enqueue({ role: "resume" });
   }, intervalMs);
-  if (typeof timer === "object" && timer !== null && typeof timer.unref === "function") {
-    timer.unref();
-  }
   return () => clearIntervalFn(timer);
 }

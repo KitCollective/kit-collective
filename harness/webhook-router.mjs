@@ -62,6 +62,21 @@ function statusChangedIn(updatedFrom) {
 }
 
 /**
+ * Linear MCP / some HMAC deliveries omit `updatedFrom` on a real status
+ * change. Fetch the issue and dispatch; `dispatchIssue` still skips
+ * non-factory statuses. Title-only updates keep `updatedFrom` without state
+ * and stay skipped.
+ *
+ * @param {object} payload
+ */
+function shouldDispatchIssueUpdate(payload) {
+  if (statusChangedIn(payload?.updatedFrom)) {
+    return true;
+  }
+  return payload?.updatedFrom === undefined || payload?.updatedFrom === null;
+}
+
+/**
  * @param {Array<{ status?: string, statusType?: string }> | undefined} blockedBy
  * @returns {boolean}
  */
@@ -207,7 +222,7 @@ export async function routeWebhook(input) {
     return { kind: "skip", reason: "not an Issue webhook" };
   }
 
-  if (payload?.action !== "update" || !statusChangedIn(payload.updatedFrom)) {
+  if (payload?.action !== "update" || !shouldDispatchIssueUpdate(payload)) {
     return { kind: "skip", reason: "not a status change" };
   }
 

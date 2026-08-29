@@ -135,8 +135,9 @@ export function resolveIssueGitHead({
  */
 async function fetchIssueBranch(git, dir, branch, opts = {}) {
   const prefix = opts.worktree ? ["-C", dir] : ["--git-dir", dir];
+  const refspec = `${branch}:refs/remotes/origin/${branch}`;
   try {
-    await git([...prefix, "fetch", "origin", branch]);
+    await git([...prefix, "fetch", "origin", refspec]);
   } catch {
     return false;
   }
@@ -243,12 +244,17 @@ export function createWorktreeAdapter({
       if (resolved.startPoint !== `origin/${lane}`) {
         await fetchIssueBranch(git, path, resolved.branch, { worktree: true });
       }
-      await git(["-C", path, "checkout", "-B", resolved.branch, resolved.startPoint]);
-      if (resolved.startPoint !== `origin/${lane}`) {
-        try {
-          await git(["-C", path, "merge", "--ff-only", `origin/${resolved.branch}`]);
-        } catch {
-          // Local implement commits stay; diverged remote is a later signal-up.
+      if (mode === "reuse") {
+        await git(["-C", path, "reset", "--hard"]);
+        await git(["-C", path, "checkout", "-f", "-B", resolved.branch, resolved.startPoint]);
+      } else {
+        await git(["-C", path, "checkout", "-B", resolved.branch, resolved.startPoint]);
+        if (resolved.startPoint !== `origin/${lane}`) {
+          try {
+            await git(["-C", path, "merge", "--ff-only", `origin/${resolved.branch}`]);
+          } catch {
+            // Local implement commits stay; diverged remote is a later signal-up.
+          }
         }
       }
 
