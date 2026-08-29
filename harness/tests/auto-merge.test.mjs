@@ -359,7 +359,7 @@ test("land still performs gh pr merge onto development only after Merging", asyn
   assert.equal(landed.nextStatus, "Done");
   const merge = gh.calls.find((call) => call[0] === "merge");
   assert.ok(merge);
-  assert.deepEqual(merge[1], ["pr", "merge", "90"]);
+  assert.deepEqual(merge[1], ["pr", "merge", "90", "--merge"]);
   assert.equal(merge[1].includes("--force"), false);
 });
 
@@ -619,7 +619,7 @@ test("Nicklas can still move Merging when delegate is null and land merges onto 
   assert.equal(landed.nextStatus, "Done");
   const merge = gh.calls.find((call) => call[0] === "merge");
   assert.ok(merge);
-  assert.deepEqual(merge[1], ["pr", "merge", "90"]);
+  assert.deepEqual(merge[1], ["pr", "merge", "90", "--merge"]);
 });
 
 test("Done and Canceled clear leftover Pi delegate on the webhook seam", async () => {
