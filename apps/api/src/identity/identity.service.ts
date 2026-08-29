@@ -299,11 +299,11 @@ export class IdentityService {
   }
 
   private parseHandleQuery(rawQuery: unknown): string {
-    if (typeof rawQuery !== "object" || rawQuery === null || !("handle" in rawQuery)) {
+    if (typeof rawQuery !== "object" || rawQuery === null) {
       throw new BadRequestException("handle query parameter is required");
     }
 
-    const handleValue = (rawQuery as { handle: unknown }).handle;
+    const handleValue = Object.getOwnPropertyDescriptor(rawQuery, "handle")?.value;
     if (typeof handleValue !== "string") {
       throw new BadRequestException("handle query parameter is required");
     }
