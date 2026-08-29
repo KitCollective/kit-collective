@@ -9,6 +9,7 @@
 import { statfs } from "node:fs/promises";
 import os from "node:os";
 import { dirname } from "node:path";
+import { harnessLog } from "./harness-log.mjs";
 
 export const DEFAULT_RAM_FLOOR_MB = 2048;
 export const DEFAULT_DISK_FLOOR_MB = 5120;
@@ -202,6 +203,7 @@ export async function upsertCapacityComment({ linear, issueId, body }) {
  *   },
  *   issueId?: string,
  *   identifier?: string,
+ *   role?: string,
  *   sleep?: (ms: number) => Promise<unknown>,
  *   pollMs?: number,
  * }} input
@@ -212,9 +214,11 @@ export async function waitForCapacity({
   linear,
   issueId,
   identifier,
+  role = "implement",
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   pollMs = DEFAULT_CAPACITY_POLL_MS,
 }) {
+  let loggedWait = false;
   while (true) {
     const raw = await readCapacity();
     const capacity = evaluateCapacity({
@@ -224,6 +228,17 @@ export async function waitForCapacity({
     });
     if (capacity.ready) {
       return capacity;
+    }
+    if (!loggedWait) {
+      harnessLog({
+        role,
+        identifier,
+        event: "wait",
+        gate: "yellow",
+        reason: "capacity",
+        loopRisk: 4,
+      });
+      loggedWait = true;
     }
     if (linear && typeof linear.commentIssue === "function" && typeof issueId === "string") {
       await upsertCapacityComment({

@@ -1,0 +1,44 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: harness_webhook
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        regex: webhook
+        action: keep
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: compose_service
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+    pipeline_stages:
+      - docker: {}
+      - json:
+          expressions:
+            log_line: log
+      - json:
+          expressions:
+            source: source
+            role: role
+            identifier: identifier
+            event: event
+            gate: gate
+            loopRisk: loopRisk
+            error: error
+          source: log_line
+      - labels:
+          role:
+          kit: identifier
+          event:
+          gate:
