@@ -119,11 +119,24 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!checkerExit.includes("REVIEW_PASS_FEEDBACK_LINES")) {
     failures.push("harness/checker-exit.mjs must declare REVIEW_PASS_FEEDBACK_LINES");
   }
+  if (!checkerExit.includes("REVIEW_FEEDBACK_HARNESS_INCOMPLETE")) {
+    failures.push(
+      "harness/checker-exit.mjs must declare REVIEW_FEEDBACK_HARNESS_INCOMPLETE for fail fallback",
+    );
+  }
   if (!allowedTools.includes("subagent")) {
     failures.push("factory-checker allowlist must include subagent for /code-review fan-out");
   }
   if (!checkerSpawn.includes("SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
     failures.push("harness/checker-spawn.mjs must declare SLOP_AGENT_MEMORY_EXCLUDED_TOOLS");
+  }
+  if (!checkerSpawn.includes("slopAgentToolArgs")) {
+    failures.push("harness/checker-spawn.mjs must declare slopAgentToolArgs for Slop sub-agent spawn");
+  }
+  if (!piJob.includes("SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
+    failures.push(
+      "harness/pi-job.mjs must wire SLOP_AGENT_MEMORY_EXCLUDED_TOOLS at factory-checker spawn",
+    );
   }
   const slopAgentPath = join(ROOT, ".pi/agents/slop.md");
   try {
@@ -131,9 +144,18 @@ export function missingFactoryCheckerSpawnCoverage(files) {
     if (!slopAgent.includes("memory_add")) {
       failures.push(".pi/agents/slop.md must document that Slop child has no memory_add");
     }
-    for (const tool of ["memory_add", "memory_replace", "memory_remove"]) {
-      if (new RegExp(`^tools:.*\\b${tool}\\b`, "m").test(slopAgent)) {
+    const slopToolsMatch = slopAgent.match(/^tools:\s*(.+)$/m);
+    const slopTools = slopToolsMatch
+      ? slopToolsMatch[1].split(",").map((tool) => tool.trim())
+      : [];
+    for (const tool of stringArrayConst(checkerSpawn, "SLOP_AGENT_MEMORY_EXCLUDED_TOOLS")) {
+      if (slopTools.includes(tool)) {
         failures.push(`.pi/agents/slop.md must not grant Slop child tool ${tool}`);
+      }
+    }
+    for (const tool of stringArrayConst(checkerSpawn, "SLOP_AGENT_ALLOWED_TOOLS")) {
+      if (!slopTools.includes(tool)) {
+        failures.push(`.pi/agents/slop.md must grant Slop child tool ${tool}`);
       }
     }
   } catch {

@@ -28,6 +28,9 @@ export const REVIEW_PASS_FEEDBACK_LINES = [
   "- Standards: (none)",
   "- Slop: (none)",
 ];
+
+/** Fail-path fallback when harness has no axis lines — never the legacy single `- (none)`. */
+export const REVIEW_FEEDBACK_HARNESS_INCOMPLETE = "- Review feedback incomplete (harness)";
 export const NOTES_HEADING = "### Notes";
 export const CHECKER_PASS_STATUS = "All good — checker pass. MERGEABLE, required checks green.";
 export const RATCHET_NUDGE_TEXT =
@@ -195,8 +198,10 @@ export function applyCheckerFailWorkpad(current, { feedbackLines }) {
     typeof current === "string" && current.includes(WORKPAD_HEADING)
       ? current.trimEnd()
       : WORKPAD_HEADING;
-  const lines = Array.isArray(feedbackLines) ? feedbackLines.filter(Boolean) : ["- (none)"];
-  const content = lines.length > 0 ? lines.join("\n") : "- (none)";
+  const lines = Array.isArray(feedbackLines)
+    ? feedbackLines.filter(Boolean)
+    : [REVIEW_FEEDBACK_HARNESS_INCOMPLETE];
+  const content = lines.length > 0 ? lines.join("\n") : REVIEW_FEEDBACK_HARNESS_INCOMPLETE;
   if (base.includes(REVIEW_FEEDBACK_HEADING)) {
     return `${base.replace(/### Review feedback\n[\s\S]*?(?=\n### |\s*$)/, `${REVIEW_FEEDBACK_HEADING}\n\n${content}\n`)}\n`;
   }

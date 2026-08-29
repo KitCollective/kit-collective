@@ -34,6 +34,7 @@ import {
   factoryCheckerPiArgs,
   factoryCheckerToolArgs,
   SLOP_AGENT_MEMORY_EXCLUDED_TOOLS,
+  slopAgentToolArgs,
 } from "../checker-spawn.mjs";
 import { IN_REVIEW } from "../implement-exit.mjs";
 import { pullRequestFromAttachments } from "../land.mjs";
@@ -805,6 +806,31 @@ test("factory-checker allowlist includes subagent and Slop child excludes memory
   for (const tool of SLOP_AGENT_MEMORY_EXCLUDED_TOOLS) {
     assert.equal(new RegExp(`^tools:.*\\b${tool}\\b`, "m").test(slopAgent), false);
   }
+});
+
+test("slopAgentToolArgs excludes memory writes and mirrors slop.md tools", () => {
+  const args = slopAgentToolArgs();
+  assert.equal(args.includes("--exclude-tools"), true);
+  const excludeIdx = args.indexOf("--exclude-tools");
+  const excluded = args[excludeIdx + 1].split(",");
+  for (const tool of SLOP_AGENT_MEMORY_EXCLUDED_TOOLS) {
+    assert.equal(excluded.includes(tool), true);
+  }
+  const toolsIdx = args.indexOf("--tools");
+  const allowed = args[toolsIdx + 1].split(",");
+  const slopAgent = readFileSync(join(ROOT, ".pi/agents/slop.md"), "utf8");
+  const toolsMatch = slopAgent.match(/^tools:\s*(.+)$/m);
+  assert.ok(toolsMatch);
+  const frontmatterTools = toolsMatch[1].split(",").map((tool) => tool.trim());
+  assert.deepEqual(allowed.sort(), frontmatterTools.sort());
+});
+
+test("applyCheckerFailWorkpad never falls back to legacy single - (none)", () => {
+  const updated = applyCheckerFailWorkpad(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- old\n`, {
+    feedbackLines: [],
+  });
+  assert.doesNotMatch(updated, /^- \(none\)$/m);
+  assert.match(updated, /Review feedback incomplete \(harness\)/);
 });
 
 test("implementPrompt names Standards + Spec + Slop for factory-checker", () => {

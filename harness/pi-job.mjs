@@ -15,7 +15,7 @@ import {
   waitForCapacity,
 } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
-import { factoryCheckerPiArgs } from "./checker-spawn.mjs";
+import { factoryCheckerPiArgs, SLOP_AGENT_MEMORY_EXCLUDED_TOOLS } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { completeImplementAdw, createTypecheckTouched } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
@@ -910,6 +910,7 @@ export function createPiJobRunner({
       delete spawnEnv.DATABASE_URL;
       if (job.role === "factory-checker") {
         spawnEnv.LINEAR_ISSUE_ID = job.issueId ?? identifier;
+        spawnEnv.SLOP_AGENT_MEMORY_EXCLUDED_TOOLS = SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(",");
       }
       let browserSkill;
       if (job.role === "implement") {

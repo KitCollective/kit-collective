@@ -227,7 +227,18 @@ Prevents repeating the KIT-105 silent pass (status flip only, no durable note or
 
 ### Factory checker spawn ratchet (KIT-56)
 
-`scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit three-axis pass verdict guard (`reviewFeedbackIsClean`), missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.
+`scripts/check-factory-checker-spawn.mjs` (CI via `pnpm check:factory-checker-spawn`) fails when factory-checker loses mechanical spawn allowlist (`harness/checker-spawn.mjs` + `harness/factory-checker-tools.ts`), `linear_cli` host-tool wiring, explicit three-axis pass verdict guard (`reviewFeedbackIsClean`), missing Slop axis guard (`reviewFeedbackMissingSlopAxis`), three-axis pass lines (`REVIEW_PASS_FEEDBACK_LINES`), read-only Slop sub-agent (`.pi/agents/slop.md` + `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS`), `subagent` on parent allowlist, missing-PR fail-move, or GitHub wait timeout fail-move. Prevents repeating the KIT-56 checker fail (prompt-only tool deny and silent pass on missing/empty `### Review feedback`). Tighten only.
+
+### Factory checker Slop axis ratchet (KIT-126)
+
+`harness/tests/checker.test.mjs` (`missing Slop axis fails`, `three-axis pass`, `Slop findings preserved with Spec and Standards`, `factory-checker allowlist includes subagent and Slop child excludes memory writes`, `slopAgentToolArgs excludes memory writes`) and `scripts/tests/check-factory-checker-spawn.test.mjs` keep these locks:
+
+- `/code-review` runs Spec, Standards, and Slop in one pass — not as a pre-gate.
+- `reviewFeedbackIsClean` requires exactly `- Spec: (none)`, `- Standards: (none)`, `- Slop: (none)`; bare `- (none)` is rejected.
+- `applyCheckerFailWorkpad` never falls back to legacy `- (none)` — use `REVIEW_FEEDBACK_HARNESS_INCOMPLETE` instead.
+- Read-only Slop child: `slopAgentToolArgs()` + `.pi/agents/slop.md` frontmatter deny `memory_add`, `memory_replace`, `memory_remove`; `harness/pi-job.mjs` wires `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` at factory-checker spawn.
+
+Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` export, stale `- (none)` fail fallback, incomplete spawn-ratchet doc). Tighten only.
 
 ### Issue PR head checkout ratchet (KIT-105)
 

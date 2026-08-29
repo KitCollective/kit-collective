@@ -23,6 +23,25 @@ export const FACTORY_CHECKER_MEMORY_TOOLS = [
 /** Read-only Slop sub-agent — no memory writes (KIT-126). */
 export const SLOP_AGENT_MEMORY_EXCLUDED_TOOLS = ["memory_add", "memory_replace", "memory_remove"];
 
+/** Mirrors `.pi/agents/slop.md` frontmatter `tools:` — keep in sync. */
+export const SLOP_AGENT_ALLOWED_TOOLS = ["read", "grep", "find", "ls"];
+
+/**
+ * Pi CLI tool gate for the read-only Slop sub-agent (`.pi/agents/slop.md`).
+ * pi-subagents honors agent frontmatter; this is the harness source of truth.
+ *
+ * @returns {string[]}
+ */
+export function slopAgentToolArgs() {
+  return [
+    "--no-builtin-tools",
+    "--tools",
+    SLOP_AGENT_ALLOWED_TOOLS.join(","),
+    "--exclude-tools",
+    SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(","),
+  ];
+}
+
 /** @readonly */
 export const FACTORY_CHECKER_ALLOWED_TOOLS = [
   "read",
