@@ -74,7 +74,7 @@ test("factory.config.json lists Merging as started so bootstrap can record its i
   assert.equal(merging.type, "started");
 });
 
-test("Merging + MERGEABLE + green required checks allows merge without --force", () => {
+test("Merging + MERGEABLE + green required checks allows a non-interactive merge commit without --force", () => {
   const gh = fakeGh();
   const result = landAtMergeGate({
     issueStatus: "Merging",
@@ -87,7 +87,10 @@ test("Merging + MERGEABLE + green required checks allows merge without --force",
   assert.equal(result.nextStatus, "Done");
   assert.equal(result.ghCalled, true);
   assert.equal(gh.calls.length, 1);
+  assert.deepEqual(gh.calls[0], ["pr", "merge", "99", "--merge"]);
   assert.ok(!gh.calls[0].includes("--force"));
+  assert.ok(!gh.calls[0].includes("--squash"));
+  assert.ok(!gh.calls[0].includes("--rebase"));
   assert.ok(!result.ghArgs.includes("--force"));
 });
 

@@ -101,7 +101,9 @@ function evaluateMergeGate({ issueStatus, pr, lanes }) {
   return {
     allowMerge: true,
     reason: "Merging + MERGEABLE + green required checks",
-    ghArgs: ["pr", "merge", String(pr.number)],
+    // `--merge` after the number: land.mjs reads args[2] as the PR. gh without a TTY
+    // requires an explicit method; this is a merge commit onto the integration lane.
+    ghArgs: ["pr", "merge", String(pr.number), "--merge"],
   };
 }
 
