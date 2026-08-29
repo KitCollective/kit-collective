@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { composerFieldBorder } from "@/components/message-composer-field-border";
 import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -30,6 +32,8 @@ export function MessageComposer({
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
+  const [focused, setFocused] = useState(false);
+  const fieldBorder = composerFieldBorder(theme, focused);
 
   return (
     <View
@@ -61,6 +65,8 @@ export function MessageComposer({
           placeholderTextColor={theme.contentMuted}
           value={value}
           onChangeText={onChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           multiline
           style={[
             typography.body,
@@ -68,7 +74,8 @@ export function MessageComposer({
             {
               backgroundColor: theme.fillSecondary,
               color: theme.contentPrimary,
-              borderColor: theme.borderSubtle,
+              borderColor: fieldBorder.borderColor,
+              borderWidth: fieldBorder.borderWidth,
               borderRadius: radius.sm,
             },
           ]}
@@ -128,7 +135,6 @@ const styles = StyleSheet.create({
     maxHeight: 120,
     paddingHorizontal: space.insetMd,
     paddingVertical: space.insetSm,
-    borderWidth: 1,
   },
   send: {
     width: 44,

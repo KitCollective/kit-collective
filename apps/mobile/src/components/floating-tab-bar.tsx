@@ -3,6 +3,7 @@ import { BlurView } from "expo-blur";
 import { useRouter, useSegments } from "expo-router";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useInboxChromeOptional } from "@/inbox/inbox-chrome";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space, withAlpha } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -69,11 +70,18 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
 
   const activeRoute = state.routes[state.index]?.name ?? "collection";
 
+  const inboxChrome = useInboxChromeOptional();
   const hideForProfileDrill = segments.length > 2 && segments.at(1) === "profile";
-  const hideForConversation =
+  const hideForConversationRoute =
     segments.length > 2 && segments.at(1) === "inbox" && segments.at(2) !== undefined;
+  const hideForWideConversation = inboxChrome?.conversationVisible ?? false;
 
-  if (activeRoute === "add" || hideForProfileDrill || hideForConversation) {
+  if (
+    activeRoute === "add" ||
+    hideForProfileDrill ||
+    hideForConversationRoute ||
+    hideForWideConversation
+  ) {
     return null;
   }
 

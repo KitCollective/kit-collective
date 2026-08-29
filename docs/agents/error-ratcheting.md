@@ -201,6 +201,10 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-mobile-capture-dead-exports.mjs` (CI via `pnpm check:mobile-capture-dead-exports`) fails when `apps/mobile/src/capture/captureFlow.ts` keeps dead `createPersistedCaptureSessionFromPhotos` after the persistence refactor or places re-exports between import blocks instead of grouping imports at the top. Prevents repeating the KIT-48 checker round-1/round-6 fail (leftover dead code after capture refactors). Tighten only.
 
+### Mobile inbox conversation chrome ratchet (KIT-118)
+
+`scripts/check-mobile-inbox-conversation-chrome.mjs` (CI via `pnpm check:mobile-inbox-conversation-chrome`) fails when wide inbox Samtale on `apps/mobile/app/(tabs)/inbox/index.tsx` auto-selects `conversations[0]`, races `loadConversations()` in parallel with GET detail on open, omits `setConversationVisible` / `refreshUnreadCount` wiring, when `apps/mobile/src/components/floating-tab-bar.tsx` does not hide on `conversationVisible`, when `apps/mobile/src/components/conversation-view.tsx` omits `onConversationOpened`, when `apps/mobile/src/components/message-composer.tsx` omits locked focus tokens via `composerFieldBorder`, or when `apps/mobile/tests/inbox-conversation-chrome.test.ts` / `apps/mobile/tests/message-composer-field-border.test.ts` drop the regression cases. `scripts/tests/check-mobile-inbox-conversation-chrome.test.mjs` (CI via `node --test`) mutation-tests the ratchet. Prevents repeating the KIT-118 checker fail (wide Samtale kept the Tab bar, auto-marked read, stale unread badge, composer focus tokens). Tighten only.
+
 ### Implement ADW production gh ratchet (KIT-54)
 
 `harness/tests/implement-adw.test.mjs` drives `createGhClient` / `createTypecheckTouched` with fake `runCommand` only (not injected `fakeGh`). Coverage that must stay:

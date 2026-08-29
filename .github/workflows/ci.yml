@@ -181,6 +181,9 @@ jobs:
       - name: Check mobile capture dead-export ratchet
         run: pnpm check:mobile-capture-dead-exports
 
+      - name: Check mobile inbox conversation chrome
+        run: pnpm check:mobile-inbox-conversation-chrome
+
       - name: Test harness node tests
         run: pnpm test:harness
 

@@ -31,6 +31,7 @@ type ConversationViewProps = {
   conversationId: string;
   onBack: () => void;
   onOpenDetails?: () => void;
+  onConversationOpened?: () => void;
 };
 
 function formatDateLabel(iso: string): string {
@@ -66,7 +67,12 @@ function buildTimeline(messages: CollectionConversationDetail["messages"]): Time
   return items;
 }
 
-export function ConversationView({ conversationId, onBack, onOpenDetails }: ConversationViewProps) {
+export function ConversationView({
+  conversationId,
+  onBack,
+  onOpenDetails,
+  onConversationOpened,
+}: ConversationViewProps) {
   const { accessToken } = useAuth();
   const theme = useTheme();
   const typography = useTypography();
@@ -94,12 +100,13 @@ export function ConversationView({ conversationId, onBack, onOpenDetails }: Conv
     try {
       const response = await fetchConversation(accessToken, conversationId);
       setDetail(response);
+      onConversationOpened?.();
     } catch {
       setError("Samtalen kunne ikke hentes.");
     } finally {
       setLoading(false);
     }
-  }, [accessToken, conversationId]);
+  }, [accessToken, conversationId, onConversationOpened]);
 
   useEffect(() => {
     void loadConversation();

@@ -1,9 +1,16 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback } from "react";
 import { ConversationView } from "@/components/conversation-view";
+import { useInboxChrome } from "@/inbox/inbox-chrome";
 
 export default function ConversationScreen() {
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
   const router = useRouter();
+  const { refreshUnreadCount } = useInboxChrome();
+
+  const handleConversationOpened = useCallback(async () => {
+    await refreshUnreadCount();
+  }, [refreshUnreadCount]);
 
   if (!conversationId) {
     router.back();
@@ -15,6 +22,7 @@ export default function ConversationScreen() {
       conversationId={conversationId}
       onBack={() => router.back()}
       onOpenDetails={() => undefined}
+      onConversationOpened={() => void handleConversationOpened()}
     />
   );
 }

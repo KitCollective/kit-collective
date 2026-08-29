@@ -10,6 +10,7 @@ import { ScreenHeader } from "@/components/screen-header";
 import { formatThreadTime, ThreadRow } from "@/components/thread-row";
 import { TopTabs } from "@/components/top-tabs";
 import { EmptyState } from "@/components/ui";
+import { useInboxChrome } from "@/inbox/inbox-chrome";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -24,6 +25,7 @@ export default function InboxScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { setConversationVisible, refreshUnreadCount } = useInboxChrome();
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_BREAKPOINT;
   const tabBarPadding =
@@ -47,25 +49,38 @@ export default function InboxScreen() {
     try {
       const response = await fetchConversations(accessToken);
       setConversations(response.conversations);
-      if (isWide && response.conversations.length > 0 && !selectedConversationId) {
-        const firstId = response.conversations[0]?.id;
-        if (firstId) {
-          setSelectedConversationId(firstId);
-        }
-      }
     } finally {
       setLoading(false);
     }
-  }, [accessToken, isWide, selectedConversationId]);
+  }, [accessToken]);
 
   useEffect(() => {
     void loadConversations();
   }, [loadConversations]);
 
+  useEffect(() => {
+    if (!isWide) {
+      setConversationVisible(false);
+      return;
+    }
+
+    setConversationVisible(Boolean(selectedConversationId));
+    return () => setConversationVisible(false);
+  }, [isWide, selectedConversationId, setConversationVisible]);
+
+  const handleConversationOpened = useCallback(async () => {
+    if (!accessToken) {
+      return;
+    }
+
+    const response = await fetchConversations(accessToken);
+    setConversations(response.conversations);
+    await refreshUnreadCount();
+  }, [accessToken, refreshUnreadCount]);
+
   const openConversation = (conversationId: string) => {
     if (isWide) {
       setSelectedConversationId(conversationId);
-      void loadConversations();
       return;
     }
     router.push(`/(tabs)/inbox/${conversationId}`);
@@ -142,6 +157,7 @@ export default function InboxScreen() {
               conversationId={selectedConversationId}
               onBack={() => setSelectedConversationId(null)}
               onOpenDetails={() => undefined}
+              onConversationOpened={() => void handleConversationOpened()}
             />
           ) : (
             <EmptyState
