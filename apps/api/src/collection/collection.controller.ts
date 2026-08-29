@@ -56,6 +56,47 @@ export class CollectionController {
     return this.collectionService.listConversations(user.sub);
   }
 
+  @Get("collection/discover/jerseys")
+  @UseGuards(JwtAuthGuard)
+  discoverJerseys(
+    @CurrentUser() user: JwtPayload,
+    @Query("q") query?: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.discoverJerseys(user.sub, query, resolveLocale(acceptLanguage));
+  }
+
+  @Get("collection/jerseys/:jerseyId/peer")
+  @UseGuards(JwtAuthGuard)
+  getPeerJersey(
+    @CurrentUser() user: JwtPayload,
+    @Param("jerseyId") jerseyId: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.getPeerJersey(user.sub, jerseyId, resolveLocale(acceptLanguage));
+  }
+
+  @Patch("collection/jerseys/:jerseyId/bidding")
+  @UseGuards(JwtAuthGuard)
+  patchBidding(
+    @CurrentUser() user: JwtPayload,
+    @Param("jerseyId") jerseyId: string,
+    @Body() body: unknown,
+  ) {
+    return this.collectionService.patchBidding(user.sub, jerseyId, body);
+  }
+
+  @Post("collection/jerseys/:jerseyId/bids")
+  @HttpCode(201)
+  @UseGuards(JwtAuthGuard)
+  sendBid(
+    @CurrentUser() user: JwtPayload,
+    @Param("jerseyId") jerseyId: string,
+    @Body() body: unknown,
+  ) {
+    return this.collectionService.sendBid(user.sub, jerseyId, body);
+  }
+
   @Get("collection/shortcuts")
   @UseGuards(JwtAuthGuard)
   listShortcuts(
