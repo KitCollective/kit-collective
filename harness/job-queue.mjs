@@ -1,5 +1,6 @@
 /**
- * Worker job mutexes: Planner mutex, Resume mutex, plus an Implement pool and a Finisher slot.
+ * Worker job mutexes: Planner mutex, Resume mutex, plus a coding pool (implement + checker)
+ * and a Finisher slot (auto-merge + land).
  * Compose replicas stay at 1; these mutexes are the in-process seam.
  */
 import {
@@ -109,9 +110,9 @@ export async function runImplementWithRetries(run, job) {
   return result;
 }
 
-export const DEFAULT_IMPLEMENT_SLOTS = 3;
+export const DEFAULT_IMPLEMENT_SLOTS = 4;
 export const MIN_IMPLEMENT_SLOTS = 1;
-export const MAX_IMPLEMENT_SLOTS = 3;
+export const MAX_IMPLEMENT_SLOTS = 4;
 
 /**
  * @param {NodeJS.ProcessEnv | Record<string, string | undefined> | undefined} [env]
@@ -163,12 +164,13 @@ export function createSerialQueue(deps) {
 const PLANNER_MUTEX_ROLES = new Set(["planner", "intake"]);
 const RESUME_MUTEX_ROLES = new Set(["resume"]);
 const IMPLEMENT_ROLES = new Set(["implement"]);
-const FINISHER_ROLES = new Set(["factory-checker", "auto-merge", "land"]);
-const CODING_ROLES = new Set([...IMPLEMENT_ROLES, ...FINISHER_ROLES]);
+const CODING_POOL_ROLES = new Set(["implement", "factory-checker"]);
+const FINISHER_ROLES = new Set(["auto-merge", "land"]);
+const CODING_ROLES = new Set([...CODING_POOL_ROLES, ...FINISHER_ROLES]);
 
 /**
- * Planner mutex plus a Resume mutex, an Implement pool (default 3) and one reserved Finisher slot
- * (factory-checker / auto-merge / land). Resume must not wait behind a hung planner or Intake.
+ * Planner mutex plus a Resume mutex, a coding pool (default 4: implement + factory-checker)
+ * and one reserved Finisher slot (auto-merge / land). Resume must not wait behind a hung planner or Intake.
  *
  * @param {{
  *   run: (job: object) => Promise<unknown>,
@@ -304,7 +306,7 @@ export function createWorkerSlots(deps) {
    * @param {object} job
    */
   async function capacityBlocksSecondImplement(job) {
-    if (!IMPLEMENT_ROLES.has(job.role) || implementActive < 1) {
+    if (!CODING_POOL_ROLES.has(job.role) || implementActive < 1) {
       return false;
     }
     if (typeof deps.readCapacity !== "function") {
@@ -351,21 +353,21 @@ export function createWorkerSlots(deps) {
       }
     }
     while (implementActive < maxImplementSlots) {
-      const implementIdx = pendingCoding.findIndex((row) => IMPLEMENT_ROLES.has(row.role));
-      if (implementIdx < 0) {
+      const codingIdx = pendingCoding.findIndex((row) => CODING_POOL_ROLES.has(row.role));
+      if (codingIdx < 0) {
         break;
       }
-      const job = pendingCoding[implementIdx];
+      const job = pendingCoding[codingIdx];
       if (await capacityBlocksSecondImplement(job)) {
         break;
       }
-      pendingCoding.splice(implementIdx, 1);
+      pendingCoding.splice(codingIdx, 1);
       startJob(job, "implement");
     }
   }
 
   function canStartNow(job) {
-    if (IMPLEMENT_ROLES.has(job.role)) {
+    if (CODING_POOL_ROLES.has(job.role)) {
       return implementActive < maxImplementSlots;
     }
     if (FINISHER_ROLES.has(job.role)) {
@@ -375,7 +377,7 @@ export function createWorkerSlots(deps) {
   }
 
   function slotFor(job) {
-    if (IMPLEMENT_ROLES.has(job.role)) {
+    if (CODING_POOL_ROLES.has(job.role)) {
       return "implement";
     }
     if (FINISHER_ROLES.has(job.role)) {
@@ -409,12 +411,12 @@ export function createWorkerSlots(deps) {
         throw new Error(`no coding slot for role ${job.role}`);
       }
 
-      if (IMPLEMENT_ROLES.has(job.role)) {
+      if (CODING_POOL_ROLES.has(job.role)) {
         const id = job.identifier;
         if (typeof id === "string" && id.length > 0) {
           const occupied =
-            runningJobs.some((row) => row.identifier === id && IMPLEMENT_ROLES.has(row.role)) ||
-            pendingCoding.some((row) => row.identifier === id && IMPLEMENT_ROLES.has(row.role));
+            runningJobs.some((row) => row.identifier === id && row.role === job.role) ||
+            pendingCoding.some((row) => row.identifier === id && row.role === job.role);
           if (occupied) {
             harnessLog({
               role: job.role,
@@ -437,7 +439,7 @@ export function createWorkerSlots(deps) {
       const entry = { ...job, _deferred: deferred };
 
       const needsCapacityDispatch =
-        IMPLEMENT_ROLES.has(entry.role) &&
+        CODING_POOL_ROLES.has(entry.role) &&
         implementActive >= 1 &&
         typeof deps.readCapacity === "function";
 
