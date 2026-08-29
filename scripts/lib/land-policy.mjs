@@ -16,6 +16,23 @@ export const LAND_UNKNOWN_RETRY_MS = 15_000;
 
 const ALLOWED_CHECK_CONCLUSIONS = new Set(["success", "skipped", "neutral"]);
 
+/** Non-interactive `gh pr merge` requires one of these after the PR number (KIT-129). */
+export const GH_PR_MERGE_STRATEGY_FLAGS = ["--merge", "--squash", "--rebase"];
+
+/** Land uses a merge commit onto the integration lane — not squash or rebase. */
+export const LAND_GH_MERGE_STRATEGY = "--merge";
+
+/**
+ * @param {unknown} args
+ * @returns {boolean}
+ */
+export function ghMergeArgsIncludeStrategy(args) {
+  if (!Array.isArray(args) || args[0] !== "pr" || args[1] !== "merge") {
+    return false;
+  }
+  return GH_PR_MERGE_STRATEGY_FLAGS.some((flag) => args.includes(flag));
+}
+
 /**
  * @param {unknown} setup
  * @returns {boolean}
@@ -105,9 +122,9 @@ function evaluateMergeGate({ issueStatus, pr, lanes }) {
   return {
     allowMerge: true,
     reason: "Merging + MERGEABLE + green required checks",
-    // `--merge` after the number: land.mjs reads args[2] as the PR. gh without a TTY
+    // Strategy after the number: land.mjs reads args[2] as the PR. gh without a TTY
     // requires an explicit method; this is a merge commit onto the integration lane.
-    ghArgs: ["pr", "merge", String(pr.number), "--merge"],
+    ghArgs: ["pr", "merge", String(pr.number), LAND_GH_MERGE_STRATEGY],
   };
 }
 
