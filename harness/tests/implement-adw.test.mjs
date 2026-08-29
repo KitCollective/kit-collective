@@ -7,6 +7,7 @@ import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createGhClient } from "../gh-cli.mjs";
 import {
   completeImplementAdw,
+  createListChangedFiles,
   createTypecheckTouched,
   evaluateWriteScopeExit,
   formatWriteScopeViolationFeedback,
@@ -151,6 +152,7 @@ function implementRunner({
   sleep,
   waitTimeoutMs,
   waitIntervalMs,
+  spawnStatus = 0,
 }) {
   return createPiJobRunner({
     env: validWorkerEnv(),
@@ -165,7 +167,7 @@ function implementRunner({
       }),
     spawnProcess(command, args, options) {
       spawned.push({ command, args, options });
-      return Promise.resolve({ status: 0 });
+      return Promise.resolve({ status: spawnStatus });
     },
     now,
     sleep,
@@ -318,7 +320,11 @@ test("worktree adapter creates from origin/issue-branch when implement has pushe
   const result = await adapter.checkout({ identifier: "KIT-99" });
   assert.equal(result.path, "/var/lib/kit-pi/worktrees/KIT-99");
   assert.equal(result.branch, "kit-99");
-  assert.ok(gitCalls.some((args) => args.includes("fetch") && args.includes("kit-99")));
+  assert.ok(
+    gitCalls.some(
+      (args) => args.includes("fetch") && args.includes("kit-99:refs/remotes/origin/kit-99"),
+    ),
+  );
   assert.ok(
     gitCalls.some(
       (args) =>
@@ -404,6 +410,158 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
     false,
   );
   assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
+});
+
+test("implement Pi non-zero still runs implement-exit and moves In Review when checks are green", async () => {
+  const gh = fakeGh();
+  gh.viewPr = async () => ({
+    url: "https://github.com/KitCollective/kit-collective/pull/52",
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  const spawned = [];
+  const result = await implementRunner({ gh, linear, spawned, spawnStatus: 1 }).run({
+    role: "implement",
+    identifier: "KIT-126",
+    issueId: "issue-126",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 1);
+  assert.equal(result.status, IN_REVIEW);
+  assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
+    issueId: "issue-126",
+    status: IN_REVIEW,
+  });
+});
+
+test("completeImplementAdw skips rebase when the open PR is already MERGEABLE", async () => {
+  const calls = [];
+  const gh = {
+    calls,
+    async rebase(input) {
+      calls.push(["rebase", input]);
+    },
+    async syncToRemoteBranch(input) {
+      calls.push(["syncToRemoteBranch", input]);
+    },
+    async findOpenIssuePr(input) {
+      calls.push(["findOpenIssuePr", input]);
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/105",
+        head: "kit-126",
+      };
+    },
+    async viewPr(input) {
+      calls.push(["viewPr", input]);
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/105",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "success", isRequired: true }],
+      };
+    },
+    async createPr() {
+      calls.push(["createPr"]);
+      throw new Error("must not create a second PR");
+    },
+    merge() {
+      throw new Error("implement never merges");
+    },
+  };
+  const linear = fakeLinear();
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-126", issueId: "issue-126", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-126", branch: "kit-126" },
+    gh,
+    linear,
+    typecheckTouched: async () => {},
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    now: (() => {
+      let t = 0;
+      return () => {
+        t += 1;
+        return t;
+      };
+    })(),
+    sleep: async () => {},
+    waitTimeoutMs: 2,
+    waitIntervalMs: 1,
+  });
+
+  assert.equal(
+    calls.some((call) => call[0] === "rebase"),
+    false,
+  );
+  assert.equal(
+    calls.some(
+      (call) =>
+        call[0] === "syncToRemoteBranch" &&
+        call[1].branch === "kit-126" &&
+        call[1].cwd === "/var/lib/kit-pi/worktrees/KIT-126",
+    ),
+    true,
+  );
+  assert.equal(result.status, IN_REVIEW);
+});
+
+test("production gh.rebase aborts a conflicted rebase instead of leaving the tree wedged", async () => {
+  const calls = [];
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      if (command === "git" && args.includes("rebase") && !args.includes("--abort")) {
+        throw new Error("CONFLICT (content): Merge conflict in harness/pi-job.mjs");
+      }
+      return "";
+    },
+  });
+
+  await assert.rejects(
+    () => gh.rebase({ cwd: "/tmp/KIT-126", onto: "origin/development", branch: "kit-126" }),
+    /Merge conflict/,
+  );
+  assert.equal(
+    calls.some(
+      (call) =>
+        call.command === "git" && call.args.includes("rebase") && call.args.includes("--abort"),
+    ),
+    true,
+  );
+  assert.equal(
+    calls.some((call) => call.command === "git" && call.args.includes("push")),
+    false,
+  );
+});
+
+test("production gh.syncToRemoteBranch fetches the issue refspec and resets hard", async () => {
+  const calls = [];
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      return "";
+    },
+  });
+  await gh.syncToRemoteBranch({ cwd: "/tmp/KIT-126", branch: "kit-126" });
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.command === "git" &&
+        call.args.includes("fetch") &&
+        call.args.includes("kit-126:refs/remotes/origin/kit-126"),
+    ),
+  );
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.command === "git" &&
+        call.args.includes("reset") &&
+        call.args.includes("--hard") &&
+        call.args.includes("origin/kit-126"),
+    ),
+  );
 });
 
 test("implement ADW reuses the open issue PR and does not create a second", async () => {
@@ -980,6 +1138,7 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
     assert.doesNotMatch(agent.frontmatter, /memory_add|memory_replace|memory_remove|skill_manage/);
   }
   assert.match(scout.frontmatter, /^tools:\s+read,\s*grep,\s*find,\s*ls\s*$/m);
+  assert.doesNotMatch(scout.frontmatter, /memory_search/);
   assert.doesNotMatch(scout.frontmatter, /^tools:.*\b(edit|write|bash)\b/m);
   assert.doesNotMatch(gate.frontmatter, /^tools:.*\blinear/i);
   assert.match(gate.text, /rebase/i);
@@ -1014,8 +1173,14 @@ test("implement role requires Scout then helpers then Gate; parent owns In Revie
   assert.match(implement, /this job's identifier|this job’s identifier/i);
   assert.match(implement, /Do not mention sibling KIT issues/i);
   assert.match(implement, /this PR only/i);
+  assert.match(implement, /memory_search/);
+  assert.match(implement, /Scout stays without `memory_search`|Scout stays without memory_search/i);
+  assert.match(implement, /before writing code/i);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   const checker = readFileSync(join(ROOT, ".pi/roles/factory-checker.md"), "utf8");
+  assert.match(checker, /class → lesson|class -> lesson/);
+  assert.match(checker, /memory_remove/);
+  assert.match(checker, /Do not.*memory_add.*Spec|not.*memory_add.*Spec/i);
   const land = readFileSync(join(ROOT, ".pi/roles/land.md"), "utf8");
   const planner = readFileSync(join(ROOT, ".pi/roles/planner.md"), "utf8");
   for (const role of [checker, land, planner]) {
@@ -1137,6 +1302,32 @@ test("implement-exit without write-scope does not fail on out-of-glob paths", as
 
   assert.equal(result.status, IN_REVIEW);
   assert.equal(result.writeScopeRetry, false);
+});
+
+test("createListChangedFiles uses gh pr diff when a PR URL is present", async () => {
+  const calls = [];
+  const listChangedFiles = createListChangedFiles({
+    async runCommand(command, args) {
+      calls.push([command, ...args]);
+      if (command === "gh") {
+        return "harness/checker-exit.mjs\n.pi/agents/slop.md\n";
+      }
+      throw new Error("git three-dot must not run when the PR URL is known");
+    },
+  });
+  const files = await listChangedFiles({
+    cwd: "/var/lib/kit-pi/worktrees/KIT-126",
+    prUrl: "https://github.com/KitCollective/kit-collective/pull/105",
+  });
+  assert.deepEqual(files, ["harness/checker-exit.mjs", ".pi/agents/slop.md"]);
+  assert.equal(
+    calls.some((call) => call[0] === "gh" && call.includes("diff") && call.includes("--name-only")),
+    true,
+  );
+  assert.equal(
+    calls.some((call) => call[0] === "git"),
+    false,
+  );
 });
 
 test("Compose persists kit-pi worktrees and copies implement-exit adapters", () => {

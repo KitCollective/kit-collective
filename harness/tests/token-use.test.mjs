@@ -27,6 +27,7 @@ function validWorkerEnv() {
     CURSOR_API_KEY: API_KEY,
     LINEAR_CLI_API_KEY: "lin_cli_test",
     LINEAR_WEBHOOK_SECRET: SECRET,
+    LINEAR_PI_WEBHOOK_SECRET: "session-secret",
     GH_TOKEN: "ghp_test",
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     LINEAR_PI_CLIENT_ID: "client-id",
@@ -73,7 +74,9 @@ const PI_CHECKER_USAGE_FIXTURE = [
   '{"type":"agent_end","messages":[]}',
 ].join("\n");
 
-function workpadStore(initial = `${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`) {
+function workpadStore(
+  initial = `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop: (none)\n`,
+) {
   const comments = [{ id: "c1", body: initial }];
   const updates = [];
   return {
@@ -443,7 +446,7 @@ test("/health includes the last coding job token totals after implement; HTTP st
           labels: ["Feature"],
           linearType: "Feature",
           blockedBy: [],
-          delegate: null,
+          delegate: { name: "Pi" },
         };
       },
     },

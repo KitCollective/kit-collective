@@ -1,5 +1,5 @@
 /**
- * Worker job mutexes: Planner mutex plus an Implement pool and a Finisher slot.
+ * Worker job mutexes: Planner mutex, Resume mutex, plus an Implement pool and a Finisher slot.
  * Compose replicas stay at 1; these mutexes are the in-process seam.
  */
 import {
@@ -89,14 +89,15 @@ export function createSerialQueue(deps) {
   };
 }
 
-const PLANNER_MUTEX_ROLES = new Set(["planner", "intake", "resume"]);
+const PLANNER_MUTEX_ROLES = new Set(["planner", "intake"]);
+const RESUME_MUTEX_ROLES = new Set(["resume"]);
 const IMPLEMENT_ROLES = new Set(["implement"]);
 const FINISHER_ROLES = new Set(["factory-checker", "auto-merge", "land"]);
 const CODING_ROLES = new Set([...IMPLEMENT_ROLES, ...FINISHER_ROLES]);
 
 /**
- * Planner mutex plus an Implement pool (default 3) and one reserved Finisher slot
- * (factory-checker / auto-merge / land).
+ * Planner mutex plus a Resume mutex, an Implement pool (default 3) and one reserved Finisher slot
+ * (factory-checker / auto-merge / land). Resume must not wait behind a hung planner or Intake.
  *
  * @param {{
  *   run: (job: object) => Promise<unknown>,
@@ -126,6 +127,11 @@ export function createWorkerSlots(deps) {
   let capacityRetryTimer = null;
 
   const plannerQueue = createSerialQueue({
+    run(job) {
+      return deps.run(job);
+    },
+  });
+  const resumeQueue = createSerialQueue({
     run(job) {
       return deps.run(job);
     },
@@ -165,6 +171,9 @@ export function createWorkerSlots(deps) {
       return result;
     } catch (error) {
       job._deferred?.reject(error);
+      console.error(
+        `${job.role} ${identifier} failed: ${error instanceof Error ? error.message : error}`,
+      );
       throw error;
     } finally {
       const index = runningJobs.indexOf(entry);
@@ -287,9 +296,20 @@ export function createWorkerSlots(deps) {
      * @param {object} job
      */
     enqueue(job) {
+      if (RESUME_MUTEX_ROLES.has(job.role)) {
+        const resumed = resumeQueue.enqueue(job);
+        resumed.catch((error) => {
+          console.error(`resume job failed: ${error instanceof Error ? error.message : error}`);
+        });
+        return resumed;
+      }
       if (PLANNER_MUTEX_ROLES.has(job.role)) {
         const planned = plannerQueue.enqueue(job);
-        planned.catch(() => undefined);
+        planned.catch((error) => {
+          console.error(
+            `${job.role} job failed: ${error instanceof Error ? error.message : error}`,
+          );
+        });
         return planned;
       }
       if (!CODING_ROLES.has(job.role)) {

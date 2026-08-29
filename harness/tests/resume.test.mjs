@@ -248,6 +248,68 @@ test("resume poller enqueues immediately and on the planner interval", async () 
   stop();
 });
 
+test("resume enqueues factory-checker while planner is still in flight", async () => {
+  let releasePlanner;
+  const holdPlanner = new Promise((resolve) => {
+    releasePlanner = resolve;
+  });
+  let plannerStarted;
+  const plannerStartedPromise = new Promise((resolve) => {
+    plannerStarted = resolve;
+  });
+  let releaseChecker;
+  const holdChecker = new Promise((resolve) => {
+    releaseChecker = resolve;
+  });
+  const ran = [];
+  const slots = createWorkerSlots({
+    async run(job) {
+      ran.push(job.role);
+      if (job.role === "planner") {
+        plannerStarted();
+        await holdPlanner;
+        return job;
+      }
+      if (job.role === "resume") {
+        return runResume({
+          linear: fakeLinear([
+            orphan({
+              id: "issue-126",
+              identifier: "KIT-126",
+              status: "In Review",
+              description: "",
+            }),
+          ]),
+          enqueue: slots,
+          delegateGateConfig: DELEGATE_GATE,
+        });
+      }
+      if (job.role === "factory-checker") {
+        await holdChecker;
+      }
+      return job;
+    },
+  });
+
+  slots.enqueue({ role: "planner" });
+  await plannerStartedPromise;
+  await Promise.race([
+    slots.enqueue({ role: "resume" }),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("resume blocked behind hung planner")), 500);
+    }),
+  ]);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  assert.equal(ran.includes("resume"), true);
+  assert.deepEqual(
+    slots.health().jobs.find((job) => job.role === "factory-checker"),
+    { role: "factory-checker", identifier: "KIT-126" },
+  );
+  releaseChecker();
+  releasePlanner();
+});
+
 test("resume enqueue does not occupy the coding slot", async () => {
   const planner = [];
   let codingStarted;
@@ -359,6 +421,7 @@ test("server starts resume on listen and image copies resume.mjs", () => {
   const server = readFileSync(join(ROOT, "harness/server.mjs"), "utf8");
   assert.match(server, /startResumePoller/);
   assert.match(server, /role === "resume"/);
+  assert.match(server, /findOpenIssuePr/);
   assert.match(readFileSync(join(ROOT, "harness/Dockerfile"), "utf8"), /resume\.mjs/);
   assert.match(readFileSync(join(ROOT, "WORKFLOW.md"), "utf8"), /boot and on the resume poller/);
   assert.match(readFileSync(join(ROOT, "docs/agents/automations.md"), "utf8"), /resume poller/);

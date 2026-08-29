@@ -528,6 +528,7 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
   assert.match(dockerfile, /pr-write-scope\.mjs/);
+  assert.match(dockerfile, /role-comments\.mjs/);
   assert.match(dockerfile, /COPY \.pi /);
   assert.match(dockerfile, /pi install/);
   assert.match(dockerfile, /PI_WORKSPACE=\/workspace/);
@@ -733,6 +734,11 @@ test("compose and host name Worker memory on kit_pi at /var/lib/kit-pi/hermes", 
   assert.match(host, /factory-checker.*Memory writer|Memory writer.*factory-checker/i);
   assert.match(host, /Memory readers?/i);
   assert.equal(WORKER_MEMORY_DIR, "/var/lib/kit-pi/hermes");
+});
+
+test("compose does not set PI_CODING_AGENT_DIR so boot pi list sees global packages", () => {
+  const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
+  assert.doesNotMatch(compose, /PI_CODING_AGENT_DIR:/);
 });
 
 test("committed Hermes config is policy-only with review and flush off for readers", () => {
