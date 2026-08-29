@@ -21,10 +21,12 @@ import {
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  boolean,
   date,
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -33,6 +35,8 @@ import {
 
 const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
 const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
+const MESSAGE_KINDS = ["text", "image", "bid"] as const;
+const BID_STATUSES = ["pending", "accepted", "declined"] as const;
 
 export const catalogEntityTypeEnum = pgEnum("catalog_entity_type", CATALOG_ENTITY_TYPES);
 export const externalIdEntityTypeEnum = pgEnum("external_id_entity_type", EXTERNAL_ID_ENTITY_TYPES);
@@ -54,6 +58,8 @@ export const ocrStatusEnum = pgEnum("ocr_status", OCR_STATUSES);
 export const authenticityEnum = pgEnum("authenticity", AUTHENTICITY_VALUES);
 export const visionJobStatusEnum = pgEnum("vision_job_status", VISION_JOB_STATUSES);
 export const visionUserActionEnum = pgEnum("vision_user_action", VISION_USER_ACTIONS);
+export const messageKindEnum = pgEnum("message_kind", MESSAGE_KINDS);
+export const bidStatusEnum = pgEnum("bid_status", BID_STATUSES);
 
 export const country = pgTable("country", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -249,8 +255,64 @@ export const userJersey = pgTable("user_jersey", {
   authenticity: authenticityEnum("authenticity").notNull().default("unknown"),
   notes: text("notes"),
   draftId: uuid("draft_id"),
+  biddingEnabled: boolean("bidding_enabled").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const conversation = pgTable(
+  "conversation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userJerseyId: uuid("user_jersey_id")
+      .notNull()
+      .references(() => userJersey.id),
+    lowerCollectorId: uuid("lower_collector_id")
+      .notNull()
+      .references(() => user.id),
+    upperCollectorId: uuid("upper_collector_id")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("conversation_jersey_pair_unique").on(
+      table.userJerseyId,
+      table.lowerCollectorId,
+      table.upperCollectorId,
+    ),
+  ],
+);
+
+export const conversationParticipant = pgTable(
+  "conversation_participant",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversation.id),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }),
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  },
+  (table) => [primaryKey({ columns: [table.conversationId, table.userId] })],
+);
+
+export const conversationMessage = pgTable("conversation_message", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  conversationId: uuid("conversation_id")
+    .notNull()
+    .references(() => conversation.id),
+  senderId: uuid("sender_id")
+    .notNull()
+    .references(() => user.id),
+  kind: messageKindEnum("kind").notNull(),
+  body: text("body"),
+  bidAmountDkk: integer("bid_amount_dkk"),
+  bidStatus: bidStatusEnum("bid_status"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const userJerseyPhoto = pgTable("user_jersey_photo", {

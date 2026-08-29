@@ -62,6 +62,7 @@ const baseJersey = {
       ocrStatus: "none" as const,
     },
   ],
+  biddingEnabled: false,
 } satisfies CollectionJersey;
 
 describe("resolveGenvejeSheetTitle", () => {

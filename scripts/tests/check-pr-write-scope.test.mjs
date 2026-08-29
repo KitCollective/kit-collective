@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  changedFilesDiffArgs,
   findWriteScopeViolations,
   isRatchetException,
   matchesGlob,
   parseWriteScopeGlobs,
   shouldEnforceWriteScope,
 } from "../lib/pr-write-scope.mjs";
+
+test("changedFilesDiffArgs uses two-dot range so merge-commits from base are excluded", () => {
+  assert.deepEqual(changedFilesDiffArgs("origin/development"), [
+    "diff",
+    "--name-only",
+    "origin/development..HEAD",
+  ]);
+  assert.notEqual(changedFilesDiffArgs("origin/development")[2], "origin/development...HEAD");
+});
 
 test("parseWriteScopeGlobs extracts comma-separated globs", () => {
   const text = `Some intro
