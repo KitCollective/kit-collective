@@ -241,7 +241,7 @@ test("Merging + MERGEABLE + green checks merges into development without --force
   assert.equal(result.sha, SHA);
   const merge = gh.calls.find((call) => call[0] === "merge");
   assert.ok(merge);
-  assert.deepEqual(merge[1], ["pr", "merge", "57"]);
+  assert.deepEqual(merge[1], ["pr", "merge", "57", "--merge"]);
   assert.equal(merge[1].includes("--force"), false);
   assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
     issueId: ISSUE_ID,
@@ -356,7 +356,7 @@ test("fail loop then success loop run on the same branch/PR", async () => {
   const merges = gh.calls.filter((call) => call[0] === "merge");
   assert.equal(merges.length, 2);
   assert.deepEqual(merges[0][1], merges[1][1]);
-  assert.deepEqual(merges[0][1], ["pr", "merge", "57"]);
+  assert.deepEqual(merges[0][1], ["pr", "merge", "57", "--merge"]);
   assert.match(linear.comments[0].body, /abc1234def567890/);
 });
 
@@ -441,7 +441,7 @@ test("production createLandGh calls gh pr merge without --force and reads the me
   assert.equal(pr.number, 57);
   assert.equal(pr.baseRef, "development");
   assert.equal(pr.mergeable, "MERGEABLE");
-  const merged = gh.merge(["pr", "merge", "57"]);
+  const merged = gh.merge(["pr", "merge", "57", "--merge"]);
   assert.equal(merged.ok, true);
   assert.equal(merged.sha, SHA);
   assert.equal(
