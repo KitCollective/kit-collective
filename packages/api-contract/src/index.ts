@@ -83,12 +83,6 @@ export {
   catalogStatsSchema,
 } from "./catalog/stats.js";
 export {
-  type CollectionConversation,
-  type CollectionConversations,
-  collectionConversationSchema,
-  collectionConversationsSchema,
-} from "./collection/conversations.js";
-export {
   type CollectionBiddingPatch,
   type CollectionDiscoverJersey,
   type CollectionDiscoverJerseys,
@@ -102,6 +96,12 @@ export {
   collectionSendBidRequestSchema,
   collectionSendBidResponseSchema,
 } from "./collection/bidding.js";
+export {
+  type CollectionConversation,
+  type CollectionConversations,
+  collectionConversationSchema,
+  collectionConversationsSchema,
+} from "./collection/conversations.js";
 export {
   type CollectionJersey,
   type CollectionJerseyPhoto,
