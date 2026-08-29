@@ -220,6 +220,42 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!role.includes("linear_cli")) {
     failures.push(".pi/roles/factory-checker.md must document linear_cli host tool");
   }
+  if (!role.includes("gh_cli")) {
+    failures.push(".pi/roles/factory-checker.md must document gh_cli comment-only host tool");
+  }
+  if (!checkerSpawn.includes('"gh_cli"')) {
+    failures.push("harness/checker-spawn.mjs must allow gh_cli on factory-checker");
+  }
+  if (!dockerfile.includes("slop-review.mjs")) {
+    failures.push("harness/Dockerfile must copy slop-review.mjs");
+  }
+  if (checkerExit.includes("parseSlopFindings(workpadBody).length > 0")) {
+    failures.push(
+      "harness/checker-exit.mjs must sync Slop threads on every checker fail with linked PR",
+    );
+  }
+  if (!checkerExit.includes("syncSlopReviewThreadsSafely")) {
+    failures.push(
+      "harness/checker-exit.mjs must isolate GitHub Slop sync errors from Linear status moves",
+    );
+  }
+  const slopReview = read("harness/slop-review.mjs");
+  if (!slopReview.includes("isPostableSlopFinding")) {
+    failures.push(
+      "harness/slop-review.mjs must skip Slop inline POST when path/line cannot be resolved",
+    );
+  }
+  if (!slopReview.includes("resolveReviewThread refused")) {
+    failures.push(
+      "harness/slop-review.mjs must refuse resolveReviewThread for non-factory-checker Slop threads",
+    );
+  }
+  const factoryCheckerTools = read("harness/factory-checker-tools.ts");
+  if (!factoryCheckerTools.includes("resolve_thread refused")) {
+    failures.push(
+      "harness/factory-checker-tools.ts must refuse gh_cli resolve_thread for non-marker threads",
+    );
+  }
   if (!role.includes("class → lesson") && !role.includes("class -> lesson")) {
     failures.push(".pi/roles/factory-checker.md must document Worker memory class → lesson schema");
   }

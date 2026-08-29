@@ -12,9 +12,9 @@ Update the existing workpad via the **`linear_cli` host tool** only (pinned Line
 - Slop: (none) | Slop/<finding>
 ```
 
-Hard Slop findings use a `Slop/` prefix. Missing any axis line (including Slop) is a harness fail.
+Hard Slop findings use a `Slop/` prefix. Post each Slop hunk on the linked PR via the comment-only **`gh_cli` host tool** (`comment` action with `path`, `line`, `message`). That tool cannot merge or approve. Missing any axis line (including Slop) is a harness fail.
 
-Do not move Linear status yourself. The harness reads your workpad verdict plus GitHub gates after you exit and moves pass/fail.
+Do not move Linear status yourself. The harness reads your workpad verdict plus GitHub gates after you exit and moves pass/fail. The harness resolves stale Slop review threads on the next checker pass when findings no longer apply.
 
 Pass: Standards + Spec + Slop clean, required GitHub checks green, PR MERGEABLE → harness moves to `Ready for merge`. Fail: complete `### Review feedback` → harness returns to `Implementing` on the same branch/PR. Never merge. Never set Linear Agent to Cursor. Never move to `Merging` or `Done`.
 

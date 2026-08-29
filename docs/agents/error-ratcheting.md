@@ -241,6 +241,17 @@ Prevents repeating the KIT-105 silent pass (status flip only, no durable note or
 
 Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` export, stale `- (none)` fail fallback, incomplete spawn-ratchet doc). Tighten only.
 
+### Factory checker Slop GitHub threads ratchet (KIT-127)
+
+`scripts/check-factory-checker-spawn.mjs` and `scripts/tests/check-factory-checker-spawn.test.mjs` keep these locks:
+
+- `completeChecker` fail with a linked PR always calls `syncSlopReviewThreadsSafely` (empty Slop findings still resolve stale `[factory-checker/slop]` threads).
+- `syncSlopReviewThreadsSafely` isolates GitHub sync errors so Linear still moves to Implementing or Ready for merge.
+- `harness/slop-review.mjs` posts inline comments only for postable Slop hunks (`isPostableSlopFinding`); pathless `Slop/` lines still trigger stale-thread resolve.
+- `resolveReviewThread` / `gh_cli resolve_thread` refuse non-marker review threads.
+
+`harness/tests/checker.test.mjs` and `harness/tests/slop-review.test.mjs` cover fail sync with clean Slop axis, sync throw isolation, pathless findings, and non-marker resolve refusal. Prevents repeating the KIT-127 checker fail (empty-findings skip, unisolated GitHub throws, pathless Slop gating, resolve without marker check). Tighten only.
+
 ### Issue PR head checkout ratchet (KIT-105)
 
 `harness/tests/worktree-head.test.mjs` plus `implement ADW reuses the open issue PR and does not create a second` in `harness/tests/implement-adw.test.mjs` keep these locks:
