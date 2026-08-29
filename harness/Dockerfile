@@ -26,6 +26,12 @@ RUN pi install npm:pi-subagents \
   && pi install npm:pi-cursor-sdk \
   && pi install npm:pi-hermes-memory
 
+# KIT-96: Playwright Chromium headless-shell for implement UI evidence (not Desktop Chrome).
+# Binary + system deps at image build; kit-implement-browser loads via --skill on UI implement only.
+RUN npm install -g playwright@1.51.0 \
+  && playwright install --with-deps chromium-headless-shell \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY harness/boot-env.mjs harness/capacity.mjs harness/job-queue.mjs harness/linear-cli.mjs harness/linear-actor-token.mjs harness/delegate-gate.mjs harness/pi-job.mjs harness/pi-event-stream.mjs harness/planner.mjs harness/intake.mjs harness/resume.mjs harness/server.mjs harness/webhook-router.mjs harness/worktree.mjs harness/gh-cli.mjs harness/implement-exit.mjs harness/checker-exit.mjs harness/checker-spawn.mjs harness/factory-checker-tools.ts harness/session-adapter.mjs harness/land.mjs harness/auto-merge.mjs ./
 COPY scripts/lib/land-policy.mjs scripts/lib/pr-write-scope.mjs /scripts/lib/
