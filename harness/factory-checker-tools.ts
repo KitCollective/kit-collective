@@ -1,11 +1,17 @@
 /**
- * Factory checker Pi extension (KIT-56).
- * Blocks write/edit/general bash; registers pinned Linear CLI as linear_cli host tool.
+ * Factory checker Pi extension (KIT-56, KIT-127).
+ * Blocks write/edit/general bash; registers pinned Linear CLI and comment-only gh_cli host tools.
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import {
+  assertGhCliActionAllowed,
+  slopCommentBody,
+  splitRepo,
+  SLOP_REVIEW_MARKER,
+} from "./slop-review.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -13,6 +19,29 @@ const BLOCKED_TOOLS = new Set(["write", "edit"]);
 const READONLY_SHELL = [/^git\s+(rev-parse|diff|log)\b/i, /^gh\s+(pr\s+(view|checks|diff)|api)\b/i];
 const SLOP_AGENT_MEMORY_EXCLUDED_TOOLS_ENV = "SLOP_AGENT_MEMORY_EXCLUDED_TOOLS";
 const SLOP_AGENT_PI_ARGS_ENV = "SLOP_AGENT_PI_ARGS";
+
+const REVIEW_THREADS_QUERY = `query SlopReviewThreads($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      headRefOid
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes { body path line originalLine }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+const RESOLVE_THREAD_MUTATION = `mutation ResolveSlopThread($threadId: ID!) {
+  resolveReviewThread(input: { threadId: $threadId }) {
+    thread { id isResolved }
+  }
+}`;
 
 const COMMENT_UPDATE_MUTATION = `mutation CommentUpdate($id: String!, $body: String!) {
   commentUpdate(id: $id, input: { body: $body }) { success }
@@ -81,6 +110,50 @@ function subagentTargetAgent(input: Record<string, unknown>): string {
   return "";
 }
 
+function requireGithubPr(): { repo: string; number: number } {
+  // biome-ignore lint/suspicious/noUndeclaredEnvVars: harness sets GitHub PR env for factory-checker.
+  const repo = process.env.GITHUB_PR_REPO ?? "";
+  const numberRaw = process.env.GITHUB_PR_NUMBER ?? "";
+  const number = Number(numberRaw);
+  if (typeof repo !== "string" || repo.length === 0 || !Number.isFinite(number) || number <= 0) {
+    throw new Error("GITHUB_PR_REPO and GITHUB_PR_NUMBER are required for gh_cli");
+  }
+  return { repo, number };
+}
+
+async function ghApi(args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync("gh", args, {
+    encoding: "utf8",
+    timeout: 120_000,
+    maxBuffer: 2_000_000,
+  });
+  return stdout;
+}
+
+async function loadHeadRefOid(repo: string, number: number): Promise<string> {
+  const { owner, name } = splitRepo(repo);
+  const stdout = await ghApi([
+    "api",
+    "graphql",
+    "-f",
+    `query=${REVIEW_THREADS_QUERY}`,
+    "-f",
+    `owner=${owner}`,
+    "-f",
+    `name=${name}`,
+    "-F",
+    `number=${number}`,
+  ]);
+  const parsed = JSON.parse(stdout) as {
+    data?: { repository?: { pullRequest?: { headRefOid?: string } } };
+  };
+  const headRefOid = parsed.data?.repository?.pullRequest?.headRefOid;
+  if (typeof headRefOid !== "string" || headRefOid.length === 0) {
+    throw new Error("gh_cli could not resolve PR headRefOid");
+  }
+  return headRefOid;
+}
+
 export default function factoryCheckerTools(pi: ExtensionAPI) {
   pi.on("tool_call", async (event) => {
     const name = event.toolName.toLowerCase();
@@ -138,6 +211,127 @@ export default function factoryCheckerTools(pi: ExtensionAPI) {
       }
       await linearApi(COMMENT_CREATE_MUTATION, { issueId, body });
       return { content: [{ type: "text", text: "Created workpad comment" }] };
+    },
+  });
+
+  pi.registerTool({
+    name: "gh_cli",
+    label: "GitHub CLI (comment-only)",
+    description:
+      "Post inline Slop review comments or resolve factory-checker Slop threads on the linked PR. Cannot merge or approve.",
+    parameters: Type.Object({
+      action: Type.Union([
+        Type.Literal("comment"),
+        Type.Literal("resolve_thread"),
+        Type.Literal("list_threads"),
+      ]),
+      path: Type.Optional(Type.String({ description: "File path for inline comment" })),
+      line: Type.Optional(Type.Number({ description: "Line number for inline comment" })),
+      message: Type.Optional(Type.String({ description: "Slop finding message (comment action)" })),
+      threadId: Type.Optional(Type.String({ description: "Review thread id (resolve_thread)" })),
+    }),
+    async execute(_toolCallId, params) {
+      // SAFETY: TypeBox parameters schema constrains action and optional fields.
+      const action = params.action as string;
+      assertGhCliActionAllowed(action);
+      const { repo, number } = requireGithubPr();
+      const { owner, name } = splitRepo(repo);
+
+      if (action === "list_threads") {
+        const stdout = await ghApi([
+          "api",
+          "graphql",
+          "-f",
+          `query=${REVIEW_THREADS_QUERY}`,
+          "-f",
+          `owner=${owner}`,
+          "-f",
+          `name=${name}`,
+          "-F",
+          `number=${number}`,
+        ]);
+        const parsed = JSON.parse(stdout) as {
+          data?: {
+            repository?: {
+              pullRequest?: {
+                reviewThreads?: {
+                  nodes?: Array<{
+                    id?: string;
+                    isResolved?: boolean;
+                    comments?: { nodes?: Array<{ body?: string; path?: string; line?: number }> };
+                  }>;
+                };
+              };
+            };
+          };
+        };
+        const nodes = parsed.data?.repository?.pullRequest?.reviewThreads?.nodes ?? [];
+        const threads = nodes
+          .map((node) => {
+            const comment = node.comments?.nodes?.[0];
+            if (!comment?.body?.includes(SLOP_REVIEW_MARKER)) {
+              return null;
+            }
+            return {
+              id: node.id,
+              isResolved: node.isResolved === true,
+              path: comment.path,
+              line: comment.line,
+              body: comment.body,
+            };
+          })
+          .filter(Boolean);
+        return { content: [{ type: "text", text: JSON.stringify(threads, null, 2) }] };
+      }
+
+      if (action === "resolve_thread") {
+        const threadId = params.threadId as string | undefined;
+        if (typeof threadId !== "string" || threadId.length === 0) {
+          throw new Error("resolve_thread requires threadId");
+        }
+        const stdout = await ghApi([
+          "api",
+          "graphql",
+          "-f",
+          `query=${RESOLVE_THREAD_MUTATION}`,
+          "-f",
+          `threadId=${threadId}`,
+        ]);
+        return { content: [{ type: "text", text: stdout.trim() }] };
+      }
+
+      const path = params.path as string | undefined;
+      const line = params.line as number | undefined;
+      const message = params.message as string | undefined;
+      if (typeof path !== "string" || path.length === 0) {
+        throw new Error("comment requires path");
+      }
+      if (typeof line !== "number" || !Number.isFinite(line) || line <= 0) {
+        throw new Error("comment requires line");
+      }
+      if (typeof message !== "string" || message.length === 0) {
+        throw new Error("comment requires message");
+      }
+      const commitId = await loadHeadRefOid(repo, number);
+      const body = slopCommentBody({ path, lineNumber: line, message });
+      const apiPath = `/repos/${owner}/${name}/pulls/${number}/comments`;
+      const stdout = await ghApi([
+        "api",
+        "--method",
+        "POST",
+        apiPath,
+        "-f",
+        `body=${body}`,
+        "-f",
+        `commit_id=${commitId}`,
+        "-f",
+        `path=${path}`,
+        "-F",
+        `line=${line}`,
+        "-f",
+        "side=RIGHT",
+      ]);
+      return { content: [{ type: "text", text: stdout.trim() }] };
     },
   });
 }

@@ -140,7 +140,7 @@ async function routeIssue(issue, extras = {}) {
   return { result, enqueue };
 }
 
-function fakeGh({ pr = greenPr() } = {}) {
+function fakeGh({ pr = greenPr(), slopSync } = {}) {
   const calls = [];
   return {
     calls,
@@ -148,9 +148,20 @@ function fakeGh({ pr = greenPr() } = {}) {
       calls.push(["viewPr", input]);
       return pr;
     },
+    async syncSlopReviewThreads(input) {
+      calls.push(["syncSlopReviewThreads", input]);
+      if (typeof slopSync === "function") {
+        return slopSync(input);
+      }
+      return { posted: [], resolved: [] };
+    },
     merge() {
       calls.push(["merge"]);
       throw new Error("checker never merges");
+    },
+    approve() {
+      calls.push(["approve"]);
+      throw new Error("checker never approves");
     },
   };
 }
@@ -352,7 +363,7 @@ test("clean workpad + MERGEABLE + green checks moves to Ready for merge and neve
   assert.match(descriptionUpdate.description, /- \[x\] Standards are clean/);
 });
 
-test("applyCheckerPassWorkpad keeps Review feedback as three-axis (none)", () => {
+test("applyCheckerPassWorkpad keeps Review feedback as three-axis pass lines", () => {
   const next = applyCheckerPassWorkpad(
     `${WORKPAD_HEADING}\n\n### Status\nIn Review\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop: (none)\n`,
   );
@@ -898,4 +909,68 @@ test("applyRatchetNudge ignores high ciFailCycles when reviewLoops stays below 2
   const next = applyRatchetNudge(body);
   assert.equal(hasRatchetNudge(next), false);
   assert.deepEqual(parseLoopCounters(next), { ciFailCycles: 5, reviewLoops: 1 });
+});
+
+test("checker fail with Slop findings syncs inline GitHub review comments", async () => {
+  const gh = fakeGh({
+    slopSync(input) {
+      assert.equal(input.repo, "KitCollective/kit-collective");
+      assert.equal(input.number, 56);
+      assert.match(input.workpadBody, /Slop\/ narrating comment in harness\/bar.mjs:12/);
+      return { posted: ["harness/bar.mjs:12"], resolved: [] };
+    },
+  });
+  const linear = fakeLinear(
+    snapshot(),
+    `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop/ narrating comment in harness/bar.mjs:12\n`,
+  );
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-127" },
+    linear,
+    gh,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "syncSlopReviewThreads"),
+    true,
+  );
+});
+
+test("checker pass resolves stale Slop review threads", async () => {
+  const gh = fakeGh({
+    slopSync(input) {
+      assert.deepEqual(input.findings, []);
+      return { posted: [], resolved: ["harness/old.mjs:4"] };
+    },
+  });
+  const linear = fakeLinear(
+    snapshot(),
+    `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop: (none)\n`,
+  );
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-127" },
+    linear,
+    gh,
+  });
+  assert.equal(result.passed, true);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "syncSlopReviewThreads"),
+    true,
+  );
+});
+
+test("factory-checker allowlist includes gh_cli comment-only host tool", () => {
+  assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("gh_cli"), true);
+});
+
+test("implementPrompt names gh_cli for factory-checker Slop threads", () => {
+  const prompt = implementPrompt("factory-checker", "KIT-127");
+  assert.match(prompt, /gh_cli/);
+  assert.match(prompt, /Slop/);
+  assert.match(prompt, /cannot merge or approve/);
+});
+
+test("createCheckerGh exposes approve that throws", () => {
+  const gh = createCheckerGh();
+  assert.throws(() => gh.approve(), /never approves/);
 });
