@@ -1,6 +1,6 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useTypography } from "@/theme/brand-fonts";
-import { radius, space } from "@/theme/tokens";
+import { radius } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 export type AvatarSize = "lg" | "md";
