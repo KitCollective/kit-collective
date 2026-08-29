@@ -10,6 +10,10 @@ export const MERGE_PERMISSION_STATUS = "Merging";
 export const MERGED_STATUS = "Done";
 export const MERGE_FAILURE_STATUS = "Implementing";
 
+/** Short backoff while GitHub computes mergeability during concurrent land (KIT-119). */
+export const LAND_UNKNOWN_MERGEABLE_RETRIES = 3;
+export const LAND_UNKNOWN_RETRY_MS = 15_000;
+
 const ALLOWED_CHECK_CONCLUSIONS = new Set(["success", "skipped", "neutral"]);
 
 /**

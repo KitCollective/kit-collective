@@ -370,7 +370,12 @@ test("Feature ADW job opens a PR, updates the workpad, moves to In Review, and n
   assert.equal(spawned[0].options.cwd, "/var/lib/kit-pi/worktrees/KIT-99");
   assert.equal(spawned[0].args.includes("-a"), true);
   assert.equal(
-    spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/implement.md")),
+    spawned[0].args.some(
+      (arg) =>
+        String(arg).endsWith(".pi/roles/implement.md") ||
+        String(arg).includes(".pi/generated/implement-append.md") ||
+        String(arg).includes(".pi/generated/implement-context.md"),
+    ),
     true,
   );
   assert.equal(
@@ -503,6 +508,141 @@ test("completeImplementAdw skips rebase when the open PR is already MERGEABLE", 
     true,
   );
   assert.equal(result.status, IN_REVIEW);
+});
+
+test("completeImplementAdw skips worker typecheck when the open PR is MERGEABLE and required checks are already green", async () => {
+  const calls = [];
+  const gh = {
+    calls,
+    async rebase() {
+      throw new Error("must not rebase");
+    },
+    async syncToRemoteBranch() {
+      calls.push(["syncToRemoteBranch"]);
+    },
+    async findOpenIssuePr() {
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/115",
+        head: "kit-116",
+      };
+    },
+    async viewPr() {
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/115",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "SUCCESS", isRequired: true }],
+      };
+    },
+    async createPr() {
+      throw new Error("must not create a second PR");
+    },
+    merge() {
+      throw new Error("implement never merges");
+    },
+  };
+  const linear = fakeLinear();
+  let typecheckCalls = 0;
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-116", issueId: "issue-116", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-116", branch: "kit-116" },
+    gh,
+    linear,
+    typecheckTouched: async () => {
+      typecheckCalls += 1;
+      throw new Error("Command failed: pnpm --filter ./apps/api typecheck");
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    now: (() => {
+      let t = 0;
+      return () => {
+        t += 1;
+        return t;
+      };
+    })(),
+    sleep: async () => {},
+    waitTimeoutMs: 2,
+    waitIntervalMs: 1,
+  });
+
+  assert.equal(typecheckCalls, 0);
+  assert.equal(result.status, IN_REVIEW);
+  assert.deepEqual(linear.calls.find((call) => call[0] === "setStatus")[1], {
+    issueId: "issue-116",
+    status: IN_REVIEW,
+  });
+});
+
+test("completeImplementAdw still moves to In Review when worker typecheck fails and GitHub required checks are green", async () => {
+  const gh = fakeGh({
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  let typecheckCalls = 0;
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-116", issueId: "issue-116", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-116", branch: "kit-116" },
+    gh,
+    linear,
+    typecheckTouched: async () => {
+      typecheckCalls += 1;
+      throw new Error("Command failed: pnpm --filter ./apps/api typecheck");
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    now: (() => {
+      let t = 0;
+      return () => {
+        t += 1;
+        return t;
+      };
+    })(),
+    sleep: async () => {},
+    waitTimeoutMs: 2,
+    waitIntervalMs: 1,
+  });
+
+  assert.equal(typecheckCalls, 1);
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "createPr"),
+    true,
+  );
+});
+
+test("completeImplementAdw stays Implementing when format-check fails even if GitHub checks are green", async () => {
+  const gh = fakeGh({
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-116", issueId: "issue-116", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-116", branch: "kit-116" },
+    gh,
+    linear,
+    typecheckTouched: async () => {
+      throw new Error("typecheck is yellow and must not hide format-check");
+    },
+    formatCheck: async () => {
+      throw new Error("Checked 2 files in 4ms. Found 1 error.\nbiome ci .");
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.formatRetry, true);
+  assert.equal(result.ciRetry, false);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    false,
+  );
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /### Review feedback/);
+  assert.match(workpad.body, /format/i);
+  assert.match(workpad.body, /biome ci/i);
 });
 
 test("production gh.rebase aborts a conflicted rebase instead of leaving the tree wedged", async () => {
@@ -1143,18 +1283,22 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
   assert.doesNotMatch(gate.frontmatter, /^tools:.*\blinear/i);
   assert.match(gate.text, /rebase/i);
   assert.match(gate.text, /typecheck/i);
+  assert.match(gate.text, /format:check|biome ci/i);
   assert.match(gate.text, /GitHub checks/i);
   assert.match(gate.text, /conflict/i);
   assert.match(gate.text, /never calls Linear/i);
   assert.match(gate.text, /never .*In Review/i);
   assert.match(gate.text, /this worktree's PR only|this worktree’s PR only/i);
   assert.match(gate.text, /Do not mention sibling/i);
+  assert.match(gate.text, /yellow/i);
+  assert.match(gate.text, /not .*typecheck|must not .*typecheck|do not treat format/i);
   assert.doesNotMatch(gate.text, /KIT-99/);
   for (const relative of [
     ".pi/agents/nest.md",
     ".pi/agents/expo.md",
     ".pi/agents/drizzle.md",
     ".pi/agents/ui-ux.md",
+    ".pi/agents/devops.md",
   ]) {
     const helper = agentFrontmatter(relative);
     assert.doesNotMatch(helper.frontmatter, /^model:/m);
@@ -1162,21 +1306,28 @@ test("Scout and Gate pin Hy3 no-think; helpers omit a model pin", () => {
   }
 });
 
-test("implement role requires Scout then helpers then Gate; parent owns In Review from a green Gate report", () => {
+test("implement role stays thin; harness pi-job owns hard first-run and checker-fail prompts", () => {
   const implement = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
+  const piJob = readFileSync(join(ROOT, "harness/pi-job.mjs"), "utf8");
+  assert.match(implement, /selectImplementContext/);
   assert.match(implement, /Scout/i);
   assert.match(implement, /Gate/);
-  assert.match(implement, /### Validation/);
-  assert.match(implement, /In Review/);
-  assert.match(implement, /only when Gate is green|Gate is green/i);
-  assert.match(implement, /Implementing/);
-  assert.match(implement, /this job's identifier|this job’s identifier/i);
-  assert.match(implement, /Do not mention sibling KIT issues/i);
-  assert.match(implement, /this PR only/i);
+  assert.match(implement, /Skip Scout/i);
+  assert.match(implement, /Skip helpers/i);
   assert.match(implement, /memory_search/);
   assert.match(implement, /Scout stays without `memory_search`|Scout stays without memory_search/i);
-  assert.match(implement, /before writing code/i);
+  assert.match(implement, /never call `memory_add`|never call memory_add/i);
+  assert.match(implement, /In Review/);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
+  assert.match(piJob, /format vs Zod vs unique-email/i);
+  assert.match(piJob, /Checker-fail resume/i);
+  assert.match(piJob, /\[factory-checker\/slop\]/);
+  assert.match(piJob, /Required helpers:/);
+  assert.match(piJob, /First run/i);
+  assert.match(piJob, /Merge-fail resume/);
+  assert.match(piJob, /Do not Skip Scout/);
+  assert.match(piJob, /Do not Skip helpers/);
+  assert.match(piJob, /selectImplementContext/);
   const checker = readFileSync(join(ROOT, ".pi/roles/factory-checker.md"), "utf8");
   assert.match(checker, /class → lesson|class -> lesson/);
   assert.match(checker, /memory_remove/);
@@ -1338,6 +1489,7 @@ test("Compose persists kit-pi worktrees and copies implement-exit adapters", () 
   assert.match(dockerfile, /delegate-gate\.mjs/);
   assert.match(dockerfile, /worktree\.mjs/);
   assert.match(dockerfile, /corepack prepare pnpm@9\.15\.4/);
+  assert.match(dockerfile, /@biomejs\/biome@2\.5\.10/);
   const compose = readFileSync(join(ROOT, "harness/docker-compose.yml"), "utf8");
   assert.match(compose, /kit_pi:\/var\/lib\/kit-pi/);
 });

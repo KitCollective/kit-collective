@@ -20,6 +20,9 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/check-factory-checker-spawn.mjs",
   "scripts/check-import-boundaries.mjs",
   "scripts/check-implement-adw-production-gh.mjs",
+  "scripts/check-implement-cheap-retry.mjs",
+  "scripts/check-implement-checker-fail-resume.mjs",
+  "scripts/check-implement-first-run-loop.mjs",
   "scripts/check-mobile-add-confirm-redirect.mjs",
   "scripts/check-mobile-add-form-wiring.mjs",
   "scripts/check-mobile-add-upload-files.mjs",
@@ -48,6 +51,9 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/tests/check-factory-ci-tests.test.mjs",
   "scripts/tests/check-factory-checker-spawn.test.mjs",
   "scripts/tests/check-implement-adw-production-gh.test.mjs",
+  "scripts/tests/check-implement-cheap-retry.test.mjs",
+  "scripts/tests/check-implement-checker-fail-resume.test.mjs",
+  "scripts/tests/check-implement-first-run-loop.test.mjs",
 ]);
 
 export function matchesGlob(filePath, glob) {

@@ -178,3 +178,13 @@ test("implement role documents memory_search at resume and forbids memory writes
   assert.match(implement, /Scout stays without `memory_search`|Scout stays without memory_search/i);
   assert.match(implement, /never call `memory_add`|never call memory_add/i);
 });
+
+test("ratchet fails when SLOP_AGENT_PI_ARGS joins with NUL", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerSpawn: files.checkerSpawn.replace('join("\\n")', 'join("\\0")'),
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("NUL")));
+});

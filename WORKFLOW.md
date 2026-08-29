@@ -94,7 +94,7 @@ Each factory role writes **one new top-level issue comment** at its status trans
 | --- | --- |
 | Planner claim | Issue claimed (eligible, unblocked, write-scope clear) |
 | Implement → In Review | PR URL + what was built |
-| Checker fail | Short return to Implementing; findings stay in workpad `### Review feedback` |
+| Checker fail | Returned to Implementing; role comment includes findings under Spec / Standards / … (workpad holds the same set) |
 | Checker pass | Verdict per Acceptance criterion; ticks description AC |
 | Auto-merge flip / refuse | Moved to Merging, or refused with reason |
 | Land success / fail | Merge SHA on Done, or merge error on return to Implementing |
@@ -108,7 +108,7 @@ Every pass is a **complete** review of the current diff, not a delta against las
 1. `/code-review` (Standards + Spec) against the attached PR. Sub-agents list **every** hard finding; do not stop at the first three. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis.
 2. GitHub CI/CD on that PR: read **all** required check runs (not only `test` — image/deploy smokes count). `gh pr view --json mergeable` must be `MERGEABLE`. Pending required checks → wait; stay in `In Review`. Do **not** fail early on Standards while checks are still running. Red or failed required checks, or `CONFLICTING` → fail, and still include every Spec/Standards hard miss in the same feedback.
 3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Ready for merge`. Write **one role comment** with a verdict per Acceptance criterion. Tick those criteria `[x]` in the issue **description**. Optional workpad `### Description AC rewrites` (`- old → new | reason`) rewrites **one** criterion line in that section and comments why on that verdict only — never silently tick unmet or stale text, and never attach the rewrite reason to other criteria.
-4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). Write **one short role comment** that the issue returned to Implementing. Do **not** tick description Acceptance criteria. If the miss is a new required env, “done” includes every workflow that boots that process. That status change wakes implement. Do not start implement yourself.
+4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). Write **one role comment** that includes those findings (axis headings). Do **not** tick description Acceptance criteria. If the miss is a new required env, “done” includes every workflow that boots that process. That status change wakes implement. Do not start implement yourself.
 
 ## Land run (status became `Merging`)
 

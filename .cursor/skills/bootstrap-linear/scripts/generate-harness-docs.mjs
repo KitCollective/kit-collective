@@ -282,3 +282,9 @@ if (!existsSync(contextPath)) {
   writeFileSync(contextPath, next.endsWith("\n") ? next : `${next}\n`);
   console.log(`Updated generated section in ${contextPath}`);
 }
+
+const piContextGenerator = join(ROOT, "scripts/generate-pi-implement-context.mjs");
+if (existsSync(piContextGenerator)) {
+  const { generatePiImplementContext } = await import(piContextGenerator);
+  generatePiImplementContext();
+}

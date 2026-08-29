@@ -52,7 +52,8 @@ export const SLOP_AGENT_PI_ARGS_ENV = "SLOP_AGENT_PI_ARGS";
  */
 export function applySlopAgentSpawnEnv(spawnEnv) {
   spawnEnv.SLOP_AGENT_MEMORY_EXCLUDED_TOOLS = SLOP_AGENT_MEMORY_EXCLUDED_TOOLS.join(",");
-  spawnEnv[SLOP_AGENT_PI_ARGS_ENV] = slopAgentToolArgs().join("\0");
+  // Newline, not NUL: Node spawn rejects env values that contain \0 (KIT-116 checker).
+  spawnEnv[SLOP_AGENT_PI_ARGS_ENV] = slopAgentToolArgs().join("\n");
 }
 
 /** @readonly */

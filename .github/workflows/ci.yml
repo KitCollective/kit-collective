@@ -211,6 +211,36 @@ jobs:
       - name: Test implement ADW production gh ratchet logic
         run: node --test scripts/tests/check-implement-adw-production-gh.test.mjs
 
+      - name: Check implement cheap-retry ratchet
+        run: node scripts/check-implement-cheap-retry.mjs
+
+      - name: Test implement cheap-retry ratchet logic
+        run: node --test scripts/tests/check-implement-cheap-retry.test.mjs
+
+      - name: Check implement checker-fail resume ratchet
+        run: node scripts/check-implement-checker-fail-resume.mjs
+
+      - name: Test implement checker-fail resume ratchet logic
+        run: node --test scripts/tests/check-implement-checker-fail-resume.test.mjs
+
+      - name: Check implement first-run loop ratchet
+        run: node scripts/check-implement-first-run-loop.mjs
+
+      - name: Test implement first-run loop ratchet logic
+        run: node --test scripts/tests/check-implement-first-run-loop.test.mjs
+
+      - name: Check implement merge-fail resume ratchet
+        run: node scripts/check-implement-merge-fail-resume.mjs
+
+      - name: Test implement merge-fail resume ratchet logic
+        run: node --test scripts/tests/check-implement-merge-fail-resume.test.mjs
+
+      - name: Check PI implement context generated from .cursor sources
+        run: node scripts/check-pi-implement-context-generated.mjs
+
+      - name: Test PI implement context generator
+        run: node --test scripts/tests/check-pi-implement-context-generated.test.mjs
+
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs
         env:

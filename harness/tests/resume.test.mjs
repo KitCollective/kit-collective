@@ -10,10 +10,11 @@ import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createDelegateGateConfig } from "../delegate-gate.mjs";
 import { createWorkerSlots } from "../job-queue.mjs";
-import { RESUME_ORPHANS_QUERY } from "../linear-cli.mjs";
+import { RESUME_ORPHANS_QUERY, WORKPAD_HEADING } from "../linear-cli.mjs";
 import { REQUIRED_PI_PACKAGES } from "../pi-job.mjs";
 import { DEFAULT_PLANNER_POLL_MS } from "../planner.mjs";
 import { runResume, startResumePoller } from "../resume.mjs";
+import { implementRetryCapComment } from "../role-comments.mjs";
 import { startWorkerServer } from "../server.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -78,6 +79,9 @@ function fakeLinear(issues) {
     async clearDelegate() {
       throw new Error("resume must not clear delegate");
     },
+    async listComments() {
+      return [];
+    },
   };
 }
 
@@ -106,6 +110,122 @@ test("runResume enqueues implement for Implementing with empty Agent without mov
   assert.equal(enqueue.jobs[0].issueId, "issue-94");
   assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/feature.yaml");
   assert.deepEqual(result.enqueued, [{ identifier: "KIT-94", role: "implement" }]);
+});
+
+test("runResume enqueues full implement after checker fail, not a cheap CI retry", async () => {
+  const enqueue = fakeEnqueue();
+  const result = await runResume({
+    linear: fakeLinear([
+      orphan({
+        identifier: "KIT-116",
+        description: "write-scope: apps/mobile/**",
+      }),
+    ]),
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].identifier, "KIT-116");
+  assert.equal(enqueue.jobs[0].ciRetryAttempt, undefined);
+  assert.equal(enqueue.jobs[0].writeScopeRetryAttempt, undefined);
+  assert.equal(enqueue.jobs[0].formatRetryAttempt, undefined);
+  assert.deepEqual(result.enqueued, [{ identifier: "KIT-116", role: "implement" }]);
+});
+
+test("runResume skips Implementing after implement retry cap without a new Composer", async () => {
+  const enqueue = fakeEnqueue();
+  const linear = fakeLinear([orphan()]);
+  linear.listComments = async () => [{ id: "c-cap", body: implementRetryCapComment("KIT-94") }];
+  const result = await runResume({
+    linear,
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 0);
+  assert.ok(
+    result.skipped.some(
+      (row) => row.identifier === "KIT-94" && row.reason === "implement retry cap",
+    ),
+  );
+});
+
+test("runResume enqueues implement for land-fail even when retry cap is posted", async () => {
+  const enqueue = fakeEnqueue();
+  const linear = fakeLinear([
+    orphan({
+      id: "issue-119",
+      identifier: "KIT-119",
+      status: "Implementing",
+      labels: ["Feature"],
+      linearType: "Feature",
+      delegate: { name: "Pi" },
+    }),
+  ]);
+  linear.listComments = async () => [
+    { id: "c-cap", body: implementRetryCapComment("KIT-119") },
+    {
+      id: "c1",
+      body: `${WORKPAD_HEADING}\n\n### Review feedback\n\n- PR is UNKNOWN\n`,
+    },
+  ];
+  const result = await runResume({
+    linear,
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].identifier, "KIT-119");
+  assert.deepEqual(result.enqueued, [{ identifier: "KIT-119", role: "implement" }]);
+});
+
+test("runResume re-enqueues merge-fail Implementing after slot freed with no status change", async () => {
+  const enqueue = fakeEnqueue();
+  const linear = fakeLinear([
+    orphan({
+      id: "issue-119",
+      identifier: "KIT-119",
+      status: "Implementing",
+      labels: ["Feature"],
+      linearType: "Feature",
+      delegate: { name: "Pi" },
+    }),
+  ]);
+  linear.listComments = async () => [
+    { id: "c-cap", body: implementRetryCapComment("KIT-119") },
+    {
+      id: "c1",
+      body: `${WORKPAD_HEADING}\n\n### Review feedback\n\n- PR is CONFLICTING\n`,
+    },
+  ];
+
+  const whileQueued = await runResume({
+    linear,
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+    queuedIdentifiers: ["KIT-119"],
+  });
+  assert.equal(enqueue.jobs.length, 0);
+  assert.ok(
+    whileQueued.skipped.some(
+      (row) => row.identifier === "KIT-119" && row.reason === "already queued",
+    ),
+  );
+
+  const afterSlotFreed = await runResume({
+    linear,
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+    queuedIdentifiers: [],
+  });
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].identifier, "KIT-119");
+  assert.deepEqual(afterSlotFreed.enqueued, [{ identifier: "KIT-119", role: "implement" }]);
 });
 
 test("runResume enqueues checker, auto-merge, and land for started factory states", async () => {

@@ -514,6 +514,8 @@ test("docker-compose runs webhook + one replica, no Coolify, no DATABASE_URL", (
   assert.doesNotMatch(compose, /coolify/i);
   assert.doesNotMatch(compose, /DATABASE_URL/);
   assert.match(compose, /@schpet\/linear-cli@2\.5\.0|LINEAR_CLI_VERSION:\s*"2\.5\.0"/);
+  assert.match(compose, /mem_limit:\s*5g/);
+  assert.doesNotMatch(compose, /mem_limit:\s*768m/);
 });
 
 test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onboard", () => {
@@ -565,6 +567,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
     ".pi/agents/expo.md",
     ".pi/agents/drizzle.md",
     ".pi/agents/ui-ux.md",
+    ".pi/agents/devops.md",
     ".pi/mcp.json",
     ".pi/damage-control.yaml",
     ".pi/extensions.json",
@@ -625,6 +628,11 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /Implement pool/);
   assert.match(host, /Finisher/);
   assert.match(host, /PI_IMPLEMENT_SLOTS/);
+  assert.match(host, /mem_limit 5g/);
+  assert.match(host, /re-runs implement in the same slot/);
+  assert.match(host, /format:check/);
+  assert.match(host, /Skip Scout/);
+  assert.match(host, /implement retry cap/);
   assert.match(host, /ramFreeMb/);
   assert.match(host, /diskFreeMb/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);
@@ -820,7 +828,14 @@ test("Pi job runner starts one non-interactive Pi process with the role file", a
   assert.equal(spawned[0].command, "pi");
   assert.ok(spawned[0].args.includes("-p"));
   assert.ok(spawned[0].args.includes("cursor/composer-2.5"));
-  assert.ok(spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/implement.md")));
+  assert.ok(
+    spawned[0].args.some(
+      (arg) =>
+        String(arg).endsWith(".pi/roles/implement.md") ||
+        String(arg).includes(".pi/generated/implement-append.md") ||
+        String(arg).includes(".pi/generated/implement-context.md"),
+    ),
+  );
   assert.equal(spawned[0].options.env.CURSOR_API_KEY, "cursor_test");
   assert.equal(spawned[0].options.env.GH_TOKEN, "ghp_test");
   assert.equal(spawned[0].options.env.LINEAR_API_KEY, "lin_cli_test");
