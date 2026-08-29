@@ -362,6 +362,26 @@ export const jerseyDraft = pgTable(
   (table) => [uniqueIndex("jersey_draft_user_id_unique").on(table.userId, table.id)],
 );
 
+export const userJerseyFavorite = pgTable(
+  "user_jersey_favorite",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    collectorId: uuid("collector_id")
+      .notNull()
+      .references(() => user.id),
+    userJerseyId: uuid("user_jersey_id")
+      .notNull()
+      .references(() => userJersey.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("user_jersey_favorite_collector_jersey_unique").on(
+      table.collectorId,
+      table.userJerseyId,
+    ),
+  ],
+);
+
 export const collectionShortcut = pgTable("collection_shortcut", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
@@ -422,6 +442,18 @@ export const kitRelations = relations(kit, ({ one, many }) => ({
 export const userRelations = relations(user, ({ many }) => ({
   jerseys: many(userJersey),
   shortcuts: many(collectionShortcut),
+  jerseyFavorites: many(userJerseyFavorite),
+}));
+
+export const userJerseyFavoriteRelations = relations(userJerseyFavorite, ({ one }) => ({
+  collector: one(user, {
+    fields: [userJerseyFavorite.collectorId],
+    references: [user.id],
+  }),
+  userJersey: one(userJersey, {
+    fields: [userJerseyFavorite.userJerseyId],
+    references: [userJersey.id],
+  }),
 }));
 
 export const collectionShortcutRelations = relations(collectionShortcut, ({ one }) => ({

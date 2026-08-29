@@ -76,6 +76,34 @@ export class CollectionController {
     return this.collectionService.getPeerJersey(user.sub, jerseyId, resolveLocale(acceptLanguage));
   }
 
+  @Get("collection/favorites")
+  @UseGuards(JwtAuthGuard)
+  listFavorites(
+    @CurrentUser() user: JwtPayload,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.listFavorites(user.sub, resolveLocale(acceptLanguage));
+  }
+
+  @Post("collection/favorites")
+  @HttpCode(201)
+  @UseGuards(JwtAuthGuard)
+  addFavorite(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.collectionService.addFavorite(user.sub, body);
+  }
+
+  @Delete("collection/favorites/:userJerseyId")
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  async removeFavorite(
+    @CurrentUser() user: JwtPayload,
+    @Param("userJerseyId") userJerseyId: string,
+    @Res() reply: FastifyReply,
+  ) {
+    await this.collectionService.removeFavorite(user.sub, userJerseyId);
+    return reply.status(204).send();
+  }
+
   @Patch("collection/jerseys/:jerseyId/bidding")
   @UseGuards(JwtAuthGuard)
   patchBidding(
