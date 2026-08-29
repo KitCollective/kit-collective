@@ -101,6 +101,16 @@ test("ratchet fails when pi-job loses Slop spawn wiring", () => {
   assert.ok(missing.some((item) => item.includes("applySlopAgentSpawnEnv")));
 });
 
+test("ratchet fails when checker-exit reintroduces legacy bare - (none) pass line", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    checkerExit: `${files.checkerExit}\nconst LEGACY_PASS_LINE = /^-\\s*\\(none\\)\\s*$/i;\n`,
+  };
+  const missing = missingFactoryCheckerSpawnCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("legacy bare - (none)")));
+});
+
 test("ratchet fails when checker-exit loses harness incomplete fallback", () => {
   const files = currentFiles();
   const mutated = {

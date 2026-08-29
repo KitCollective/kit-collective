@@ -36,7 +36,6 @@ export const CHECKER_PASS_STATUS = "All good — checker pass. MERGEABLE, requir
 export const RATCHET_NUDGE_TEXT =
   "next implement pass must land a ratchet per docs/agents/error-ratcheting.md";
 
-const LEGACY_PASS_LINE = /^-\s*\(none\)\s*$/i;
 const REVIEW_FEEDBACK_HEADING_AT = /(?:^|\n)### Review feedback(?:\n|$)/;
 const REVIEW_FEEDBACK_BLOCK = /(^|\n)### Review feedback\n([\s\S]*?)(?=\n### |$)/;
 const NOTES_HEADING_AT = /(?:^|\n)### Notes(?:\n|$)/;
@@ -127,17 +126,13 @@ export function reviewFeedbackMissingSlopAxis(body) {
 }
 
 /**
- * Pass is the legacy single `- (none)` token or the three labeled axes.
- * Empty / missing feedback is still a fail.
+ * Pass is exactly the three labeled axes. Bare `- (none)` and empty feedback fail.
  *
  * @param {string | undefined} body
  * @returns {boolean}
  */
 export function reviewFeedbackIsClean(body) {
   const lines = reviewFeedbackLines(body);
-  if (lines.length === 1 && LEGACY_PASS_LINE.test(lines[0])) {
-    return true;
-  }
   if (lines.length !== REVIEW_PASS_FEEDBACK_LINES.length) {
     return false;
   }

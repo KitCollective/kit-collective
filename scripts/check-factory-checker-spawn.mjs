@@ -113,6 +113,9 @@ export function missingFactoryCheckerSpawnCoverage(files) {
       "harness/checker-exit.mjs must require explicit three-axis pass via reviewFeedbackIsClean",
     );
   }
+  if (checkerExit.includes("LEGACY_PASS_LINE")) {
+    failures.push("harness/checker-exit.mjs must reject legacy bare - (none) pass line");
+  }
   if (!checkerExit.includes("reviewFeedbackMissingSlopAxis")) {
     failures.push("harness/checker-exit.mjs must detect missing Slop axis");
   }

@@ -93,6 +93,7 @@ function snapshot(overrides = {}) {
     blockedBy: [],
     delegate: { name: "Pi" },
     attachments: [{ url: PR_URL, title: "KIT-56: Factory checker" }],
+    description: `## Acceptance criteria\n\n- [ ] Spec is met\n- [ ] Standards are clean\n`,
     ...overrides,
   };
 }
@@ -178,6 +179,13 @@ function fakeLinear(issue = snapshot(), workpadBody) {
       calls.push(["updateWorkpad", input]);
       comments[0].body = input.body;
     },
+    async commentIssue(input) {
+      calls.push(["commentIssue", input]);
+    },
+    async updateIssueDescription(input) {
+      calls.push(["updateIssueDescription", input]);
+      this.issue = { ...this.issue, description: input.description };
+    },
     async setStatus(input) {
       calls.push(["setStatus", input]);
       this.issue = { ...this.issue, status: input.status };
@@ -222,16 +230,24 @@ test("status change to In Review enqueues factory-checker and no ADW file", asyn
   assert.equal(enqueue.jobs[0].adwFile, undefined);
 });
 
+test("Issue update without updatedFrom still enqueues checker when status is In Review", async () => {
+  const payload = issueUpdatePayload();
+  delete payload.updatedFrom;
+  const { result, enqueue } = await routeIssue(snapshot({ delegate: null }), { payload });
+  assert.deepEqual(result, { kind: "enqueue", role: "factory-checker" });
+  assert.equal(enqueue.jobs[0].role, "factory-checker");
+});
+
 test("reviewFeedbackHasFindings treats three-axis (none) as pass and bullets as fail", () => {
   assert.equal(reviewFeedbackIsClean(cleanWorkpad()), true);
   assert.equal(reviewFeedbackHasFindings(cleanWorkpad()), false);
   assert.equal(
     reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
-    true,
+    false,
   );
   assert.equal(
     reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`),
-    false,
+    true,
   );
   assert.equal(reviewFeedbackIsClean(`${WORKPAD_HEADING}\n\n### Review feedback\n\n`), false);
   assert.equal(reviewFeedbackHasFindings(`${WORKPAD_HEADING}\n\n### Review feedback\n\n`), true);
@@ -250,6 +266,58 @@ test("reviewFeedbackHasFindings treats three-axis (none) as pass and bullets as 
   );
   assert.equal(reviewFeedbackMissingSlopAxis(cleanWorkpad()), false);
   assert.equal(reviewFeedbackSection("### Review feedback\n\n- Spec miss\n"), "- Spec miss");
+});
+
+test("applyRatchetNudge does not rewrite an inline ### Review feedback mention", () => {
+  const body = `${WORKPAD_HEADING}
+
+### Plan
+
+- [x] Hard findings use a prefix in \`### Review feedback\`
+
+${LOOP_COUNTERS_HEADING}
+
+- ciFailCycles: 0
+- reviewLoops: 2
+
+### Review feedback
+
+- Spec: missing evidence
+`;
+  const next = applyRatchetNudge(body);
+  assert.match(next, /prefix in `### Review feedback`/);
+  assert.match(next, /### Notes/);
+  assert.equal(reviewFeedbackSection(next), "- Spec: missing evidence");
+  assert.equal(hasRatchetNudge(next), true);
+});
+
+test("clean workpad with Description AC rewrites ticks the renamed line and comments why on that verdict only", async () => {
+  const gh = fakeGh();
+  const workpad = `${WORKPAD_HEADING}
+
+### Review feedback
+
+${CLEAN_REVIEW_FEEDBACK}
+
+### Description AC rewrites
+
+- Spec is met → Spec AC is met | contract renamed in PR
+`;
+  const linear = fakeLinear(snapshot(), workpad);
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-56" },
+    linear,
+    gh,
+  });
+
+  assert.equal(result.passed, true);
+  const passComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(passComment.body, /✓ Spec AC is met \(rewrote: contract renamed in PR\)/);
+  assert.doesNotMatch(passComment.body, /Standards are clean \(rewrote/);
+  const descriptionUpdate = linear.calls.find((call) => call[0] === "updateIssueDescription")[1];
+  assert.match(descriptionUpdate.description, /- \[x\] Spec AC is met/);
+  assert.match(descriptionUpdate.description, /- \[x\] Standards are clean/);
+  assert.doesNotMatch(descriptionUpdate.description, /- \[x\] Spec is met/);
 });
 
 test("clean workpad + MERGEABLE + green checks moves to Ready for merge and never merges", async () => {
@@ -276,6 +344,12 @@ test("clean workpad + MERGEABLE + green checks moves to Ready for merge and neve
   assert.match(workpad.body, /### Status\nAll good — checker pass/);
   assert.equal(reviewFeedbackIsClean(workpad.body), true);
   assert.equal(linear.calls.filter((call) => call[0] === "updateWorkpad").length, 1);
+  const passComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(passComment.body, /checker pass/);
+  assert.match(passComment.body, /✓ Spec is met/);
+  const descriptionUpdate = linear.calls.find((call) => call[0] === "updateIssueDescription")[1];
+  assert.match(descriptionUpdate.description, /- \[x\] Spec is met/);
+  assert.match(descriptionUpdate.description, /- \[x\] Standards are clean/);
 });
 
 test("applyCheckerPassWorkpad keeps Review feedback as three-axis (none)", () => {
@@ -314,6 +388,12 @@ test("Pi review findings move to Implementing with complete Review feedback pres
   assert.match(workpad.body, /Standards: smell/);
   assert.equal(
     gh.calls.some((call) => call[0] === "merge"),
+    false,
+  );
+  const failComment = linear.calls.find((call) => call[0] === "commentIssue")[1];
+  assert.match(failComment.body, /returned to Implementing/);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "updateIssueDescription"),
     false,
   );
 });
