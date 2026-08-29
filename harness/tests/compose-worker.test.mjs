@@ -514,6 +514,8 @@ test("docker-compose runs webhook + one replica, no Coolify, no DATABASE_URL", (
   assert.doesNotMatch(compose, /coolify/i);
   assert.doesNotMatch(compose, /DATABASE_URL/);
   assert.match(compose, /@schpet\/linear-cli@2\.5\.0|LINEAR_CLI_VERSION:\s*"2\.5\.0"/);
+  assert.match(compose, /mem_limit:\s*5g/);
+  assert.doesNotMatch(compose, /mem_limit:\s*768m/);
 });
 
 test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onboard", () => {
@@ -625,6 +627,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /Implement pool/);
   assert.match(host, /Finisher/);
   assert.match(host, /PI_IMPLEMENT_SLOTS/);
+  assert.match(host, /mem_limit 5g/);
   assert.match(host, /ramFreeMb/);
   assert.match(host, /diskFreeMb/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);

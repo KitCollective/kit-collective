@@ -244,6 +244,10 @@ Prevents repeating the KIT-105 silent pass (status flip only, no durable note or
 
 Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TOOLS` export, stale `- (none)` fail fallback, incomplete spawn-ratchet doc). Tighten only.
 
+### Webhook mem_limit (KIT-116 OOM)
+
+`harness/tests/compose-worker.test.mjs` (`docker-compose runs webhook + one replica`) requires `mem_limit: 5g` and forbids `768m`. `harness/host.md` names **mem_limit 5g**. Prevents repeating the KIT-116 factory-checker `pi exited null` (cgroup OOM while implement KIT-119 was live). Tighten only.
+
 ### Factory checker Slop GitHub threads ratchet (KIT-127)
 
 `scripts/check-factory-checker-spawn.mjs` and `scripts/tests/check-factory-checker-spawn.test.mjs` keep these locks:
