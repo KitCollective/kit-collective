@@ -191,6 +191,22 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
     },
 
     /**
+     * Land the worktree on origin/<branch> so write-scope sees the PR, not a leftover rebase.
+     *
+     * @param {{ cwd: string, branch: string }} input
+     */
+    async syncToRemoteBranch({ cwd, branch }) {
+      if (typeof branch !== "string" || branch.length === 0) {
+        throw new Error("syncToRemoteBranch requires branch");
+      }
+      await run("git", ["fetch", "origin", `${branch}:refs/remotes/origin/${branch}`], {
+        cwd,
+        env,
+      });
+      await run("git", ["reset", "--hard", `origin/${branch}`], { cwd, env });
+    },
+
+    /**
      * Exactly one open development PR for the identifier, or null.
      * Two matches fail closed — do not guess which PR to extend.
      *

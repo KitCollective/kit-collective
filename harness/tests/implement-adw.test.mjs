@@ -442,6 +442,9 @@ test("completeImplementAdw skips rebase when the open PR is already MERGEABLE", 
     async rebase(input) {
       calls.push(["rebase", input]);
     },
+    async syncToRemoteBranch(input) {
+      calls.push(["syncToRemoteBranch", input]);
+    },
     async findOpenIssuePr(input) {
       calls.push(["findOpenIssuePr", input]);
       return {
@@ -489,6 +492,15 @@ test("completeImplementAdw skips rebase when the open PR is already MERGEABLE", 
     calls.some((call) => call[0] === "rebase"),
     false,
   );
+  assert.equal(
+    calls.some(
+      (call) =>
+        call[0] === "syncToRemoteBranch" &&
+        call[1].branch === "kit-126" &&
+        call[1].cwd === "/var/lib/kit-pi/worktrees/KIT-126",
+    ),
+    true,
+  );
   assert.equal(result.status, IN_REVIEW);
 });
 
@@ -519,6 +531,35 @@ test("production gh.rebase aborts a conflicted rebase instead of leaving the tre
   assert.equal(
     calls.some((call) => call.command === "git" && call.args.includes("push")),
     false,
+  );
+});
+
+test("production gh.syncToRemoteBranch fetches the issue refspec and resets hard", async () => {
+  const calls = [];
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      return "";
+    },
+  });
+  await gh.syncToRemoteBranch({ cwd: "/tmp/KIT-126", branch: "kit-126" });
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.command === "git" &&
+        call.args.includes("fetch") &&
+        call.args.includes("kit-126:refs/remotes/origin/kit-126"),
+    ),
+  );
+  assert.ok(
+    calls.some(
+      (call) =>
+        call.command === "git" &&
+        call.args.includes("reset") &&
+        call.args.includes("--hard") &&
+        call.args.includes("origin/kit-126"),
+    ),
   );
 });
 

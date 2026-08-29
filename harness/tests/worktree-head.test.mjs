@@ -267,6 +267,31 @@ test("implement checkout of a leftover rebase aborts and force-resets onto the P
   );
 });
 
+test("implement checkout of a dirty index without rebase-merge still force-resets onto the PR head", async () => {
+  const gitCalls = [];
+  const adapter = createWorktreeAdapter({
+    mirrorDir: "/var/lib/kit-pi/mirror.git",
+    worktreesDir: "/var/lib/kit-pi/worktrees",
+    existsSync: (path) =>
+      path === "/var/lib/kit-pi/mirror.git" || path === "/var/lib/kit-pi/worktrees/KIT-126",
+    mkdirSync() {},
+    async findOpenIssuePr() {
+      return { head: "kit-126", url: "https://github.com/KitCollective/kit-collective/pull/105" };
+    },
+    async runGit(args) {
+      gitCalls.push(args);
+      return { stdout: "ok\n", status: 0 };
+    },
+  });
+
+  await adapter.checkout({ identifier: "KIT-126", mode: "implement" });
+  assert.ok(
+    gitCalls.some(
+      (args) => args.includes("checkout") && args.includes("-f") && args.includes("origin/kit-126"),
+    ),
+  );
+});
+
 test("reuse checkout of a dirty worktree force-resets onto the PR head", async () => {
   const gitCalls = [];
   const adapter = createWorktreeAdapter({

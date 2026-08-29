@@ -508,7 +508,11 @@ export async function completeImplementAdw(input) {
     (typeof listed?.url === "string" && listed.url) ||
     "";
   const alreadyMergeable = pr?.mergeable === "MERGEABLE" && existingPrUrl.length > 0;
-  if (!alreadyMergeable) {
+  if (alreadyMergeable) {
+    if (typeof gh.syncToRemoteBranch === "function") {
+      await gh.syncToRemoteBranch({ cwd: checkout.path, branch: checkout.branch });
+    }
+  } else {
     await gh.rebase({ cwd: checkout.path, onto: "origin/development", branch: checkout.branch });
     if (existingPrUrl.length > 0) {
       pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
