@@ -249,16 +249,16 @@
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
-        "prettifyLogMessage": true,
+        "prettifyLogMessage": false,
         "showCommonLabels": false,
-        "showLabels": true,
+        "showLabels": false,
         "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": true
+        "wrapLogMessage": false
       },
       "targets": [
         {
-          "expr": "{compose_service=\"webhook\", gate=\"red\"} | json",
+          "expr": "{compose_service=\"webhook\", gate=\"red\"} | json | source=\"harness\" | line_format \"{{.identifier}} · {{.role}} · {{.event}} · gate={{.gate}} · risk={{.loopRisk}}{{ if .attempt }} · try={{.attempt}}{{ end }}{{ if .reason }} · {{.reason}}{{ end }}{{ if .error }} · {{.error}}{{ end }}\"",
           "refId": "A"
         }
       ],
@@ -272,16 +272,16 @@
       "options": {
         "dedupStrategy": "none",
         "enableLogDetails": true,
-        "prettifyLogMessage": true,
+        "prettifyLogMessage": false,
         "showCommonLabels": false,
-        "showLabels": true,
+        "showLabels": false,
         "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": true
+        "wrapLogMessage": false
       },
       "targets": [
         {
-          "expr": "{compose_service=\"webhook\"} | json | source=\"harness\"",
+          "expr": "{compose_service=\"webhook\"} | json | source=\"harness\" | line_format \"{{.identifier}} · {{.role}} · {{.event}} · gate={{.gate}} · risk={{.loopRisk}}{{ if .attempt }} · try={{.attempt}}{{ end }}{{ if .reason }} · {{.reason}}{{ end }}{{ if .error }} · {{.error}}{{ end }}\"",
           "refId": "A"
         }
       ],
@@ -298,5 +298,5 @@
   "timezone": "browser",
   "title": "Kit harness agent logs",
   "uid": "kit-harness-agent-logs",
-  "version": 2
+  "version": 3
 }
