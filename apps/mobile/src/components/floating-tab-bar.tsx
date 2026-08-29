@@ -60,7 +60,7 @@ export function FloatingTabBar({ state, navigation }: FloatingTabBarProps) {
   const activeRoute = state.routes[state.index]?.name ?? "collection";
 
   const hideForProfileDrill =
-    segments[0] === "(tabs)" && segments[1] === "profile" && segments.length > 2;
+    segments.length > 2 && segments[0] === "(tabs)" && segments[1] === "profile";
 
   if (activeRoute === "add" || hideForProfileDrill) {
     return null;
