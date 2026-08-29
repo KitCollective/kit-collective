@@ -26,7 +26,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="collection" options={{ title: "Samling" }} />
       <Tabs.Screen name="search" options={{ title: "Søg" }} />
-      <Tabs.Screen name="wishlist" options={{ title: "Ønske" }} />
+      <Tabs.Screen name="inbox" options={{ title: "Indbakke" }} />
       <Tabs.Screen name="profile" options={{ title: "Profil" }} />
       <Tabs.Screen name="add" options={{ href: null }} />
     </Tabs>

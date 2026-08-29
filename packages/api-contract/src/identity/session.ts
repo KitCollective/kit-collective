@@ -8,6 +8,7 @@ export const identityUserSchema = z
   .object({
     id: z.string().uuid(),
     email: z.string().email(),
+    handle: z.string().min(1).max(64),
     role: identityRoleSchema,
   })
   .strict();

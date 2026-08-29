@@ -1,8 +1,10 @@
 import {
   type CollectionJersey,
   type CollectionJerseys,
+  type CollectionConversations,
   type CollectionSavePhoto,
   type CollectionSaveResponse,
+  collectionConversationsSchema,
   collectionJerseysSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
@@ -169,6 +171,10 @@ export class CollectionService {
     });
 
     return collectionJerseysSchema.parse({ jerseys });
+  }
+
+  listConversations(_userId: string): CollectionConversations {
+    return collectionConversationsSchema.parse({ conversations: [] });
   }
 
   async saveJersey(

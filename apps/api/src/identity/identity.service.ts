@@ -12,6 +12,7 @@ import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { DB, type DbToken } from "../db/db.module.js";
+import { assignUniqueHandle } from "./handle.js";
 
 const { hash, compare } = bcrypt;
 
@@ -43,16 +44,19 @@ export class IdentityService {
     }
 
     const passwordHash = await hash(credentials.password, 12);
+    const handle = await assignUniqueHandle(this.db, normalizedEmail);
 
     const [created] = await this.db
       .insert(user)
       .values({
         email: normalizedEmail,
+        handle,
         passwordHash,
       })
       .returning({
         id: user.id,
         email: user.email,
+        handle: user.handle,
         role: user.role,
       });
 
@@ -69,6 +73,7 @@ export class IdentityService {
       .select({
         id: user.id,
         email: user.email,
+        handle: user.handle,
         role: user.role,
         passwordHash: user.passwordHash,
       })
@@ -88,6 +93,7 @@ export class IdentityService {
     return this.buildSession({
       id: found.id,
       email: found.email,
+      handle: found.handle,
       role: found.role,
     });
   }
@@ -97,6 +103,7 @@ export class IdentityService {
       .select({
         id: user.id,
         email: user.email,
+        handle: user.handle,
         role: user.role,
       })
       .from(user)
@@ -110,7 +117,12 @@ export class IdentityService {
     return identityMeSchema.parse(found);
   }
 
-  private buildSession(row: { id: string; email: string; role: IdentityRole }): IdentitySession {
+  private buildSession(row: {
+    id: string;
+    email: string;
+    handle: string;
+    role: IdentityRole;
+  }): IdentitySession {
     const payload: JwtPayload = {
       sub: row.id,
       email: row.email,
@@ -122,6 +134,7 @@ export class IdentityService {
       user: {
         id: row.id,
         email: row.email,
+        handle: row.handle,
         role: row.role,
       },
     });
