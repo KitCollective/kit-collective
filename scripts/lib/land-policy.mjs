@@ -22,6 +22,17 @@ export const GH_PR_MERGE_STRATEGY_FLAGS = ["--merge", "--squash", "--rebase"];
 /** Land uses a merge commit onto the integration lane — not squash or rebase. */
 export const LAND_GH_MERGE_STRATEGY = "--merge";
 
+/** GitHub may report mergeable MERGEABLE while the head branch is still behind base (KIT-118). */
+export const PR_MERGE_STATE_BEHIND = "BEHIND";
+
+/**
+ * @param {{ mergeStateStatus?: string } | null | undefined} pr
+ * @returns {boolean}
+ */
+export function isPrMergeStateBehind(pr) {
+  return pr?.mergeStateStatus === PR_MERGE_STATE_BEHIND;
+}
+
 /**
  * @param {unknown} args
  * @returns {boolean}
@@ -86,7 +97,7 @@ function requiredChecksGreen(checks) {
 /**
  * @param {{
  *   issueStatus: string,
- *   pr: { number: number, mergeable: string, baseRef: string, requiredChecks?: Array<{ name?: string, conclusion?: string }> } | null,
+ *   pr: { number: number, mergeable: string, mergeStateStatus?: string, baseRef: string, requiredChecks?: Array<{ name?: string, conclusion?: string }> } | null,
  *   lanes: { integration: string, staging?: string, production?: string },
  * }} input
  * @returns {{ allowMerge: boolean, reason: string, ghArgs: string[] | null }}
@@ -115,6 +126,13 @@ function evaluateMergeGate({ issueStatus, pr, lanes }) {
   if (pr.mergeable !== "MERGEABLE") {
     return { allowMerge: false, reason: `PR is ${pr.mergeable}`, ghArgs: null };
   }
+  if (isPrMergeStateBehind(pr)) {
+    return {
+      allowMerge: false,
+      reason: "PR head branch is not up to date with base (mergeStateStatus BEHIND)",
+      ghArgs: null,
+    };
+  }
   if (!requiredChecksGreen(pr.requiredChecks)) {
     return { allowMerge: false, reason: "required checks are not green", ghArgs: null };
   }
@@ -131,7 +149,7 @@ function evaluateMergeGate({ issueStatus, pr, lanes }) {
 /**
  * @param {{
  *   issueStatus: string,
- *   pr: { number: number, mergeable: string, baseRef: string, requiredChecks?: Array<{ name?: string, conclusion?: string }> } | null,
+ *   pr: { number: number, mergeable: string, mergeStateStatus?: string, baseRef: string, requiredChecks?: Array<{ name?: string, conclusion?: string }> } | null,
  *   lanes: { integration: string, staging?: string, production?: string },
  *   gh: { merge: (args: string[]) => { ok: boolean, sha?: string, error?: string } },
  * }} input

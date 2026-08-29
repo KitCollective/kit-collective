@@ -437,6 +437,17 @@ test("CONFLICTING or missing ### Loop counters stays Ready for merge (fail close
     true,
   );
 
+  const behindLinear = fakeLinear();
+  const behind = await completeAutoMerge({
+    job: { issueId: ISSUE_ID, identifier: "KIT-90" },
+    linear: behindLinear,
+    gh: fakeGh({ pr: greenPr({ mergeStateStatus: "BEHIND" }) }),
+  });
+  assert.equal(behind.flipped, false);
+  assert.equal(behind.nextStatus, "Ready for merge");
+  assert.equal(behindLinear.issue.status, "Ready for merge");
+  assert.match(behindLinear.comments[0].body, /BEHIND/);
+
   const missingLinear = fakeLinear(snapshot(), {
     body: `${WORKPAD_HEADING}\n\n### Review feedback\n\n- (none)\n`,
   });
