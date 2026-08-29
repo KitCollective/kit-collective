@@ -15,11 +15,13 @@ const root = join(import.meta.dirname, "..");
 
 export const REQUIRED_FILES = {
   implementRole: ".pi/roles/implement.md",
+  implementContext: "harness/implement-context.mjs",
   piJob: "harness/pi-job.mjs",
   implementExit: "harness/implement-exit.mjs",
   roleComments: "harness/role-comments.mjs",
   checkerExit: "harness/checker-exit.mjs",
   ciRetryTest: "harness/tests/implement-ci-retry.test.mjs",
+  contextTest: "harness/tests/implement-context.test.mjs",
   roleCommentsTest: "harness/tests/role-comments.test.mjs",
   checkerTest: "harness/tests/checker.test.mjs",
 };
@@ -31,20 +33,19 @@ export const REQUIRED_FILES = {
 export function missingImplementCheckerFailResumeCoverage(sources) {
   const missing = [];
   const role = sources.implementRole ?? "";
-  if (!/factory-checker\/slop/.test(role)) {
-    missing.push("implement.md factory-checker/slop subset");
+  if (!/selectImplementContext/.test(role)) {
+    missing.push("implement.md selectImplementContext injection reference");
   }
-  if (!/Do not Skip Scout/.test(role)) {
-    missing.push("implement.md Do not Skip Scout on checker-fail resume");
+  if (!/Skip Scout/.test(role) || !/Skip helpers/.test(role)) {
+    missing.push("implement.md cheap retry Skip Scout / Skip helpers");
   }
-  if (!/ui-ux/.test(role)) {
-    missing.push("implement.md spawn ui-ux");
+
+  const implementContext = sources.implementContext ?? "";
+  if (!/selectImplementContext/.test(implementContext)) {
+    missing.push("implement-context.mjs selectImplementContext");
   }
-  if (!/tokens|typograph|layout/i.test(role)) {
-    missing.push("implement.md ui-ux when tokens/typography/layout");
-  }
-  if (!/every axis line/.test(role)) {
-    missing.push("implement.md fix every axis line");
+  if (!/detectRequiredHelpers/.test(implementContext)) {
+    missing.push("implement-context.mjs detectRequiredHelpers for full helper list");
   }
 
   const piJob = sources.piJob ?? "";
@@ -54,8 +55,8 @@ export function missingImplementCheckerFailResumeCoverage(sources) {
   if (!/reviewFeedbackIsActionable/.test(piJob)) {
     missing.push("pi-job.mjs reviewFeedbackIsActionable");
   }
-  if (!/cheapRetry:\s*isCheapImplementRetry/.test(piJob)) {
-    missing.push("pi-job.mjs always pass cheapRetry from isCheapImplementRetry");
+  if (!/const cheapRetry = isCheapImplementRetry/.test(piJob)) {
+    missing.push("pi-job.mjs derive cheapRetry from isCheapImplementRetry");
   }
   if (!/Checker-fail resume/.test(piJob)) {
     missing.push("pi-job.mjs Checker-fail resume prompt");
@@ -66,8 +67,8 @@ export function missingImplementCheckerFailResumeCoverage(sources) {
   if (!/Do not Skip Scout/.test(piJob)) {
     missing.push("pi-job.mjs Do not Skip Scout on checker-fail resume");
   }
-  if (!/Spawn ui-ux/.test(piJob)) {
-    missing.push("pi-job.mjs Spawn ui-ux on checker-fail resume");
+  if (!/Required helpers:/.test(piJob)) {
+    missing.push("pi-job.mjs Required helpers from selector on checker-fail resume");
   }
 
   const implementExit = sources.implementExit ?? "";
@@ -104,6 +105,14 @@ export function missingImplementCheckerFailResumeCoverage(sources) {
   if (!/Skip Scout/.test(ciRetryTest) || !/Skip helpers/.test(ciRetryTest)) {
     missing.push("implement-ci-retry cheap retry still Skip Scout / Skip helpers");
   }
+  if (!/Required helpers:/.test(ciRetryTest)) {
+    missing.push("implement-ci-retry Required helpers on checker-fail resume");
+  }
+
+  const contextTest = sources.contextTest ?? "";
+  if (!/checker-fail uses full selector/.test(contextTest)) {
+    missing.push("implement-context.test.mjs checker-fail full selector");
+  }
 
   const roleCommentsTest = sources.roleCommentsTest ?? "";
   if (!/### Spec/.test(roleCommentsTest)) {
@@ -131,11 +140,13 @@ function isCli() {
 if (isCli()) {
   const sources = {
     implementRole: readFileSync(join(root, REQUIRED_FILES.implementRole), "utf8"),
+    implementContext: readFileSync(join(root, REQUIRED_FILES.implementContext), "utf8"),
     piJob: readFileSync(join(root, REQUIRED_FILES.piJob), "utf8"),
     implementExit: readFileSync(join(root, REQUIRED_FILES.implementExit), "utf8"),
     roleComments: readFileSync(join(root, REQUIRED_FILES.roleComments), "utf8"),
     checkerExit: readFileSync(join(root, REQUIRED_FILES.checkerExit), "utf8"),
     ciRetryTest: readFileSync(join(root, REQUIRED_FILES.ciRetryTest), "utf8"),
+    contextTest: readFileSync(join(root, REQUIRED_FILES.contextTest), "utf8"),
     roleCommentsTest: readFileSync(join(root, REQUIRED_FILES.roleCommentsTest), "utf8"),
     checkerTest: readFileSync(join(root, REQUIRED_FILES.checkerTest), "utf8"),
   };

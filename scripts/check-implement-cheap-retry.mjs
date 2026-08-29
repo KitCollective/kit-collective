@@ -39,10 +39,13 @@ export function missingImplementCheapRetryCoverage(sources) {
   if (!/Skip Scout/i.test(role) || !/Skip helpers/i.test(role)) {
     missing.push("implement.md Skip Scout / Skip helpers on cheap retry");
   }
-  if (!/format vs Zod vs unique-email/i.test(role)) {
-    missing.push("implement.md format vs Zod vs unique-email class");
+  if (!/selectImplementContext/.test(role)) {
+    missing.push("implement.md selectImplementContext injection reference");
   }
   const piJob = sources.piJob ?? "";
+  if (!/format vs Zod vs unique-email/i.test(piJob)) {
+    missing.push("pi-job.mjs format vs Zod vs unique-email class on cheap retry");
+  }
   if (!/cheapRetry/.test(piJob)) {
     missing.push("pi-job.mjs cheapRetry prompt");
   }

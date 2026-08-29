@@ -26,14 +26,11 @@ test("implement checker-fail resume coverage fails when the prompt drops extract
   assert.ok(missing.some((item) => item.includes("extractReviewFeedback")));
 });
 
-test("implement checker-fail resume coverage fails when implement.md drops the slop subset", () => {
+test("implement checker-fail resume coverage fails when pi-job drops the slop subset", () => {
   const sources = loadSources();
-  sources.implementRole = sources.implementRole.replace(
-    /factory-checker\/slop/g,
-    "github comments",
-  );
+  sources.piJob = sources.piJob.replace(/\[factory-checker\/slop\]/g, "[github comments]");
   const missing = missingImplementCheckerFailResumeCoverage(sources);
-  assert.ok(missing.some((item) => item.includes("factory-checker/slop")));
+  assert.ok(missing.some((item) => item.includes("Slop threads")));
 });
 
 test("implement checker-fail resume coverage fails when the Linear comment no longer takes findings", () => {

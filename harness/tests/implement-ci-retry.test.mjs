@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { completeChecker } from "../checker-exit.mjs";
+import { selectImplementContext } from "../implement-context.mjs";
 import {
   completeImplementAdw,
   IMPLEMENTING,
@@ -313,8 +314,9 @@ test("job-queue re-enqueues the same implement job on red CI and never calls che
   assert.equal(worktree.calls.length, IMPLEMENT_CI_RETRY_CAP);
   assert.equal(spawned.length, IMPLEMENT_CI_RETRY_CAP);
   const firstPrompt = promptFromSpawn(spawned[0]);
-  assert.equal(/skip scout/i.test(firstPrompt), false);
-  assert.equal(/skip helpers/i.test(firstPrompt), false);
+  assert.match(firstPrompt, /Do not Skip Scout/i);
+  assert.match(firstPrompt, /Do not Skip helpers/i);
+  assert.equal(/\bSkip Scout\. Skip helpers\b/i.test(firstPrompt), false);
   for (const spawn of spawned.slice(1)) {
     const prompt = promptFromSpawn(spawn);
     assert.match(prompt, /Skip Scout/i);
@@ -330,7 +332,11 @@ test("job-queue re-enqueues the same implement job on red CI and never calls che
   assert.equal(/Cursor Cloud Agent/i.test(capComment[1].body), true);
   assert.equal(
     spawned.every((spawn) =>
-      spawn.args.some((arg) => String(arg).endsWith(".pi/roles/implement.md")),
+      spawn.args.some(
+        (arg) =>
+          String(arg).endsWith(".pi/roles/implement.md") ||
+          String(arg).includes(".pi/generated/implement-context.md"),
+      ),
     ),
     true,
   );
@@ -447,13 +453,27 @@ test("job-queue fail-closes when the implement write-scope retry cap is already 
 });
 
 test("implement prompt and role/ADW text leave In Review to the harness", () => {
-  const prompt = implementPrompt("implement", "KIT-99", ".pi/adw/feature.yaml");
+  const mobileCtx = selectImplementContext({
+    writeScope: "apps/mobile/**",
+    labels: ["mobile"],
+    cheapRetry: false,
+  });
+  const prompt = implementPrompt("implement", "KIT-99", ".pi/adw/feature.yaml", {
+    writeScope: "apps/mobile/**",
+    implementContext: mobileCtx,
+  });
   assert.equal(/move the issue to In Review/i.test(prompt), false);
   assert.match(prompt, /harness/i);
   assert.match(prompt, /Never merge/);
   assert.match(prompt, /Never spawn factory-checker/);
-  assert.match(prompt, /Review feedback/);
-  assert.equal(/Skip Scout/i.test(prompt), false);
+  assert.match(prompt, /First run/i);
+  assert.match(prompt, /Spawn Scout/i);
+  assert.match(prompt, /Required helpers: expo, ui-ux/);
+  assert.match(prompt, /TDD:/i);
+  assert.match(prompt, /not `pnpm test`/i);
+  assert.match(prompt, /Do not Skip Scout/i);
+  assert.match(prompt, /Do not Skip helpers/i);
+  assert.equal(/\bSkip Scout\. Skip helpers\b/i.test(prompt), false);
 
   const cheap = implementPrompt("implement", "KIT-99", ".pi/adw/feature.yaml", {
     cheapRetry: true,
@@ -466,9 +486,15 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(cheap, /### Review feedback/);
   assert.equal(/move the issue to In Review/i.test(cheap), false);
 
+  const checkerCtx = selectImplementContext({
+    writeScope: "apps/mobile/**",
+    labels: ["mobile"],
+    cheapRetry: false,
+  });
   const checkerFail = implementPrompt("implement", "KIT-116", ".pi/adw/feature.yaml", {
     reviewFeedback: KIT116_REVIEW_FEEDBACK,
     writeScope: "apps/mobile/**",
+    implementContext: checkerCtx,
   });
   assert.match(checkerFail, /### Review feedback/);
   assert.match(checkerFail, /Collection tab missing badge count/);
@@ -481,10 +507,8 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(checkerFail, /\[factory-checker\/slop\]/);
   assert.match(checkerFail, /Do not Skip Scout/i);
   assert.match(checkerFail, /Do not Skip helpers/i);
+  assert.match(checkerFail, /Required helpers: expo, ui-ux/);
   assert.equal(/Skip Scout\. Skip helpers/i.test(checkerFail), false);
-  assert.match(checkerFail, /ui-ux/i);
-  assert.match(checkerFail, /apps\/mobile/);
-  assert.match(checkerFail, /tokens|typograph|layout/i);
   assert.equal(isCheapImplementRetry({ role: "implement" }), false);
   assert.equal(isCheapImplementRetry({ role: "implement", ciRetryAttempt: 2 }), true);
   assert.equal(isCheapImplementRetry({ role: "implement", writeScopeRetryAttempt: 2 }), true);
@@ -493,6 +517,7 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   const role = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
   assert.equal(/move the issue to In Review/i.test(role), false);
   assert.match(role, /harness/i);
+  assert.match(role, /selectImplementContext/);
 
   for (const file of [".pi/adw/feature.yaml", ".pi/adw/bug.yaml", ".pi/adw/improvement.yaml"]) {
     const text = readFileSync(join(ROOT, file), "utf8");
@@ -532,7 +557,7 @@ test("checker-fail resume inlines workpad findings and does not Skip Scout or he
   assert.match(prompt, /Do not Skip Scout/i);
   assert.match(prompt, /Do not Skip helpers/i);
   assert.equal(/Skip Scout\. Skip helpers/i.test(prompt), false);
-  assert.match(prompt, /ui-ux/i);
+  assert.match(prompt, /Required helpers: expo, ui-ux/);
 });
 
 test("implement does not spawn Pi when comments already hold the retry cap", async () => {
