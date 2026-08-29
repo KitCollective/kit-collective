@@ -18,6 +18,11 @@ function currentFiles() {
       new URL("../../.pi/agent-checker/hermes-memory-config.json", import.meta.url),
       "utf8",
     ),
+    implementRole: readFileSync(new URL("../../.pi/roles/implement.md", import.meta.url), "utf8"),
+    codeReviewSkill: readFileSync(
+      new URL("../../.cursor/skills/code-review/SKILL.md", import.meta.url),
+      "utf8",
+    ),
   };
 }
 
@@ -79,4 +84,11 @@ test("exported memory tools match spec allowlist", () => {
     "memory_replace",
     "memory_remove",
   ]);
+});
+
+test("code-review skill documents Worker memory class schema for Standards and Slop", () => {
+  const skill = currentFiles().codeReviewSkill;
+  assert.match(skill, /class → lesson|class -> lesson/);
+  assert.match(skill, /Never.*memory_add.*Spec|never.*memory_add.*Spec/i);
+  assert.match(skill, /memory_remove/);
 });

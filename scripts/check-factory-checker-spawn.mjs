@@ -128,6 +128,15 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!role.includes("linear_cli")) {
     failures.push(".pi/roles/factory-checker.md must document linear_cli host tool");
   }
+  if (!role.includes("class → lesson") && !role.includes("class -> lesson")) {
+    failures.push(".pi/roles/factory-checker.md must document Worker memory class → lesson schema");
+  }
+  if (!role.includes("memory_remove")) {
+    failures.push(".pi/roles/factory-checker.md must document memory_remove when a ratchet lands");
+  }
+  if (!role.match(/do not.*memory_add.*Spec|not.*memory_add.*Spec/i)) {
+    failures.push(".pi/roles/factory-checker.md must forbid memory_add on Spec misses");
+  }
   if (!host.match(/factory-checker.*Memory writer|Memory writer.*factory-checker/i)) {
     failures.push("harness/host.md must name factory-checker as the Memory writer");
   }

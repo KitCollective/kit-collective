@@ -1,18 +1,19 @@
 ---
 name: code-review
-description: Two-axis Standards vs Spec review of the diff since the integration-lane merge-base. Spec source is the Linear issue. Use for implement sanity checks and the checker agent.
+description: Three-axis Standards, Spec, and Slop review of the diff since the integration-lane merge-base. Spec source is the Linear issue. Use for implement sanity checks and the checker agent.
 ---
 
 # Code review
 
 Load `factory.config.json` then `WORKFLOW.md`. Resolve names from [../_shared/factory.md](../_shared/factory.md).
 
-Two-axis review of the diff between `HEAD` and a fixed point:
+Three-axis review of the diff between `HEAD` and a fixed point:
 
 - **Standards** — does the code conform to this repo's documented coding standards?
 - **Spec** — does the code faithfully implement the originating issue / spec?
+- **Slop** — prose filler, code slop, and narrating comments the diff introduces?
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
+All three axes run as **parallel sub-agents** in the **same pass** so they do not pollute each other's context, then this skill aggregates their findings. Slop is not a gate before Spec or Standards.
 
 This skill does not merge. The checker agent uses the result to choose `Ready for merge` vs `Implementing`.
 
@@ -24,14 +25,14 @@ Default: merge-base with `origin/<lanes.integration>` (not `main`). If the user 
 
 Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
+Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside parallel sub-agents.
 
 ### 2. Identify the spec source
 
 Look for the originating spec, in this order:
 
 1. Linear `<teamKey>-n` via `get_issue` **and** `list_comments` (workpad + `### Review feedback`).
-2. The project spec document on that issue’s Linear project.
+2. The project spec document on that issue's Linear project.
 3. `{paths.specs}/<slug>/spec.md`.
 4. A path the user passed as an argument.
 5. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will skip and report "no spec available".
@@ -62,7 +63,9 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
-### 4. Spawn both sub-agents in parallel
+### 4. Spawn all three sub-agents in parallel
+
+Run **Standards**, **Spec**, and **Slop** in one parallel fan-out — not sequentially and not as a pre-gate.
 
 **Standards sub-agent prompt** — include:
 
@@ -76,21 +79,43 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - The path or fetched contents of the spec (issue + comments + spec document).
 - The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. List every hard miss; do not stop at the first three. Compact bullets. No word cap that would hide a hard miss."
 
+**Slop sub-agent prompt** — include:
+
+- The full diff command and commit list.
+- The brief: "Apply the three Slop lenses (prose, code slop, narrating comments). List every **hard** finding; quote the hunk. When clean, report `- Slop: (none)`. Hard findings use a `Slop/` prefix on the workpad line."
+
 If the spec is missing, skip the Spec sub-agent and note this in the final report.
 
 ### 5. Aggregate
 
-Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
+Present the three reports under `## Standards`, `## Spec`, and `## Slop` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings across axes — the three axes are deliberately separate (see _Why three axes_).
 
 End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
 
-When the caller is the checker agent: write **every** hard finding into `### Review feedback` in one fail — do not drip-feed. Spec source is the whole Linear issue body (What to build + AC), not AC alone. A red required check is not a Spec-clean license — finish both axes before the verdict. Hard Spec miss, hard Standards violation, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `Implementing`. Pending required checks → wait; stay in `In Review` (do not fail early on Standards while checks are still running). Otherwise → `Ready for merge` only when required GitHub checks are green **and** the PR is mergeable.
+When the caller is the checker agent: write **every** hard finding into `### Review feedback` in one fail — do not drip-feed. Use this shape:
 
-## Why two axes
+```markdown
+### Review feedback
 
-A change can pass one axis and fail the other:
+- Spec: (none) | Spec: <finding>
+- Standards: (none) | Standards: <finding>
+- Slop: (none) | Slop/<finding>
+```
+
+Every axis must appear on pass and fail. Hard Slop findings use the `Slop/` prefix (not `Slop:`). A clean axis is `- Spec: (none)`, `- Standards: (none)`, or `- Slop: (none)`.
+
+Spec source is the whole Linear issue body (What to build + AC), not AC alone. A red required check is not a Spec-clean license — finish all three axes before the verdict. Hard Spec miss, hard Standards violation, hard Slop finding, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `Implementing`. Pending required checks → wait; stay in `In Review` (do not fail early on one axis while checks are still running). Otherwise → `Ready for merge` only when required GitHub checks are green **and** the PR is mergeable.
+
+### Worker memory (checker parent only)
+
+When the checker parent records a recurring **Standards** or **Slop** lesson via `memory_add`, use one schema: **`class → lesson`** with target `failure`. The **class** names the recurring mistake (e.g. `inline imports in Nest modules`, `narrating comments in harness tests`). The **lesson** states what to do differently — never a hunk, never a KIT identifier. **Never** `memory_add` Spec misses; Spec feedback stays on the workpad only. Sub-agents are read-only and must not call `memory_add`, `memory_replace`, or `memory_remove`. When this PR lands a git ratchet (`.cursor/hooks/`, `.cursor/rules/`, `scripts/check-*`) for a class you previously staged in Hermes, call `memory_remove` for that staging lesson so git wins.
+
+## Why three axes
+
+A change can pass one axis and fail another:
 
 - Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
 - Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
+- Code that is correct and conventional but full of filler prose or narrating comments → **Slop fail.**
 
-Reporting them separately stops one axis from masking the other.
+Reporting them separately stops one axis from masking another.
