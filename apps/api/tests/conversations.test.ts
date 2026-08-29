@@ -304,6 +304,14 @@ describe("Collection conversations /v1", () => {
     expect(textResponse.statusCode).toBe(201);
     collectionSendMessageResponseSchema.parse(JSON.parse(textResponse.body));
 
+    const textInboxResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/conversations",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    const textInboxBody = collectionConversationsSchema.parse(JSON.parse(textInboxResponse.body));
+    expect(textInboxBody.conversations[0]?.snippet).toBe("Tak for buddet");
+
     const imageResponse = await app.inject({
       method: "POST",
       url: `/v1/collection/conversations/${conversationId}/messages`,
@@ -345,7 +353,7 @@ describe("Collection conversations /v1", () => {
       headers: { authorization: `Bearer ${owner.accessToken}` },
     });
     const inboxBody = collectionConversationsSchema.parse(JSON.parse(inboxResponse.body));
-    expect(inboxBody.conversations[0]?.snippet).toBe("Tak for buddet");
+    expect(inboxBody.conversations[0]?.snippet).toBe("Billede");
   });
 
   it("rejects message post from non-participant with 404", async () => {
