@@ -84,6 +84,12 @@ export {
   offerSchema,
 } from "./billing/offer.js";
 export {
+  BILLING_PAYWALL_ERROR_CODES,
+  type BillingPaywallError,
+  type BillingPaywallErrorCode,
+  billingPaywallErrorSchema,
+} from "./billing/paywall.js";
+export {
   type CatalogClubSearchResponse,
   type CatalogClubSeasonsResponse,
   type CatalogFacetSearchResponse,
@@ -286,3 +292,13 @@ export {
   identitySessionSchema,
   identityUserSchema,
 } from "./identity/session.js";
+export {
+  type WishlistEntries,
+  type WishlistEntry,
+  type WishlistEntryIdParam,
+  type WishlistEntryWrite,
+  wishlistEntriesSchema,
+  wishlistEntryIdParamSchema,
+  wishlistEntrySchema,
+  wishlistEntryWriteSchema,
+} from "./wishlist/entries.js";

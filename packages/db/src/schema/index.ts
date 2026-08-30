@@ -477,6 +477,19 @@ export const collectionShortcut = pgTable("collection_shortcut", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const wishlistEntry = pgTable("wishlist_entry", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => user.id),
+  clubId: uuid("club_id").references(() => club.id),
+  seasonId: uuid("season_id").references(() => season.id),
+  type: kitTypeEnum("type"),
+  size: jerseySizeEnum("size"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const entitlement = pgTable(
   "entitlement",
   {
@@ -547,6 +560,7 @@ export const kitRelations = relations(kit, ({ one, many }) => ({
 export const userRelations = relations(user, ({ many }) => ({
   jerseys: many(userJersey),
   shortcuts: many(collectionShortcut),
+  wishlistEntries: many(wishlistEntry),
   jerseyFavorites: many(userJerseyFavorite),
 }));
 
@@ -567,6 +581,12 @@ export const collectionShortcutRelations = relations(collectionShortcut, ({ one 
   league: one(league, { fields: [collectionShortcut.leagueId], references: [league.id] }),
   club: one(club, { fields: [collectionShortcut.clubId], references: [club.id] }),
   player: one(player, { fields: [collectionShortcut.playerId], references: [player.id] }),
+}));
+
+export const wishlistEntryRelations = relations(wishlistEntry, ({ one }) => ({
+  user: one(user, { fields: [wishlistEntry.userId], references: [user.id] }),
+  club: one(club, { fields: [wishlistEntry.clubId], references: [club.id] }),
+  season: one(season, { fields: [wishlistEntry.seasonId], references: [season.id] }),
 }));
 
 export const userJerseyRelations = relations(userJersey, ({ one, many }) => ({
