@@ -106,9 +106,77 @@ _Avoid_: blocking save on inference
 One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects.
 _Avoid_: environment as a synonym without saying which object
 
+**Football Data Seed**:
+The Linear project for vendor ingest: Transfermarkt hierarchy, then Football Kit Archive hierarchy, then Join workflow, then Cross MCP. Successor to KitCollective Seed. Still the one seed board beside the KitCollective product project.
+_Avoid_: a third Linear project; filing fetch tickets on the product board; keeping KitCollective Seed alive beside this one
+
+**Hierarchy grain**:
+One addressable unit of the football tree: League, League season, Club, Club season, NationalTeam, NationalTeam season, Player, or Player season. Each grain is fetch → normalize (our fields + ExternalId) → map, with a Seed reference. Club and NationalTeam are siblings — not a kind on one row. The first public interface of Football Data Seed — not the one-sentence walk.
+_Avoid_: one nested dump as the first accept; calling a grain a Seed run; stuffing a national side into Club; exposing Fetch steps as the chat protocol
+
+**NationalTeam**:
+Catalog side for a country team (Denmark, Sweden). Own table, UUID + CatalogLabel + ExternalId. Not a Club. Kits hang off `nationalTeamId`.
+_Avoid_: a Club row with `kind: national` as the product model; treating Club search as the only name for a national side
+
+**Hierarchy proof**:
+The first live accept of Transfermarkt Hierarchy grains in the development lane: Superliga 2010/11 for every Club grain that season, and Denmark men at World Cup 2010 for NationalTeam grains. Women’s national sides use the same loop — not the first accept. Not a fifth milestone.
+_Avoid_: treating the full 1995/96–2025/26 range as the first accept; treating Superliga as the only team kind; requiring a women’s side before the men’s World Cup 2010 proof
+
+**Seed reference**:
+Documented seed-module interface for a Hierarchy grain (inputs, output fields, ExternalId, forbidden fields). Not a Nest `/v1` seed endpoint.
+_Avoid_: product `/v1` seed; scrapers on the Nest request path; treating Catalog peek as the reference
+
+**Join workflow**:
+The composed walk that fills a named competition season (Club sides or NationalTeam sides, then FK kits on those sides) and proves stamdata plus image bytes in the lane. Third Football Data Seed milestone. Not MCP.
+_Avoid_: treating the walk as the first accept; fusing TM and FK into one MCP tool before the walk is proven; a club-only walk as the product ceiling
+
+**Seed MCP**:
+The Football Data Seed MCP server. Own URL on a unique hostname. Coolify may host the container; ingest chat talks only to this URL. Long jobs run in that service. Cross MCP milestone. Speaks Hierarchy grains and the Join workflow. Coolify MCP stays Docker and host only.
+_Avoid_: Coolify `control` for ingest; sharing the Coolify MCP URL; calling Coolify MCP the seed interface; treating `kc_seed_mcp` stdio as the Cross MCP accept; a laptop-only stdio server as the accept
+
+**Seed MCP token**:
+Bearer token required on every Seed MCP request. Fail closed if missing. The env **name** is documented; the value is never in git.
+_Avoid_: anonymous public MCP; putting the token in the repo or in client bundles; treating Coolify’s API token as this token
+
+**Cross MCP**:
+The last Football Data Seed milestone: a human sentence over Hierarchy grains and the Join workflow, served by Seed MCP on its own URL. Not the first accept.
+_Avoid_: MCP as milestone 1; routing ingest through Coolify MCP
+
+**Vendor research**:
+The first Football Data Seed issue, and the opening slice of later milestones. Maps what Transfermarkt and Football Kit Archive can yield, what we keep as stamdata, and what UI or backend flows can use. Blocks every other issue on this project until the field catalog is accepted.
+_Avoid_: implementing grains before the field catalog; researching by scraping every league; treating ADR-0002 as name-and-number only
+
+**Rich grain**:
+When a Hierarchy grain is fetched, take every usable fact for that entity so a later UI or backend flow does not need a second vendor hop. Club depth, player honours and registration, kit sponsor and colours are in scope once Vendor research names them. Still drop market value, agent PII, and vendor branding.
+_Avoid_: a thin id+name+number fetch as the ceiling; a second Seed run just to backfill facts that were on the page the first time; storing market value or agent PII because they were on the page
+
+**Club facts**:
+Transfermarkt club profile / `datenfakten` depth kept as later leverage: official name, founded date, stadium, capacity, club colour swatches, website. Not kit colours. Not contact address or phone.
+_Avoid_: treating club colour swatches as Kit colours; storing Tel/Fax/address as stamdata; requiring Club facts before a Club season squad accept
+
+**Player registration**:
+Parent club vs loan (club kader) or call-up club (NationalTeam kader). Later leverage until season-true markers are confirmed on the proof pages. Not agent PII.
+_Avoid_: trusting Joined / Signed-from columns that show present-day dates on historical kader pages; inventing loan flags when the HTML has none
+
+**Player honours**:
+Titles and trophies from Transfermarkt `/erfolge/spieler/{id}`. Later leverage for Rich Player grain. Not required for Hierarchy proof squad accept.
+_Avoid_: scraping market-value charts as honours; blocking Club season map on a profile hop for titles
+
+**Kit colours**:
+Primary and secondary colour name + hex from Football Kit Archive / FKApi. Later leverage until normalize and schema land. Not Transfermarkt club colour swatches.
+_Avoid_: inventing colour columns before the field catalog keeps them; treating manufacturer brand logos as colours
+
+**Tournament squad**:
+A competition-specific NationalTeam roster (e.g. World Cup 2010 final 23) as distinct from the calendar-year NationalTeam kader on Transfermarkt. Hierarchy proof still uses the NT season grain; the WC-only cut stays open until a clean vendor page is confirmed.
+_Avoid_: treating every calendar-2010 Denmark kader row as a WC starter; inventing FIWC participants from empty HTML
+
+**Human-only ingest**:
+Football Data Seed issues stay `ready-for-human` only. Not `ready-for-agent`. Planner does not claim. Humans implement so hierarchy, join, and writes are done carefully.
+_Avoid_: `ready-for-agent` on this project's slices; PI dispatch on Football Data Seed; treating this label here as a missing-info wait
+
 **Seed run**:
-One chat sentence that starts the full ingest for a Seed scope into a lane’s Postgres. The operator does not chain hops. Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
-_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad
+One sentence that starts the full ingest for a Seed scope into a lane’s Postgres. Composes Hierarchy grains. Lives in the Join workflow milestone (Cross MCP wraps it). Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
+_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad; treating the Seed run as the first Football Data Seed accept
 
 **Competition query**:
 The operator names a league in natural language (`Premier League`, `La Liga i Spanien`, `tyrkiske Superliga`). The Seed job resolves that to a Transfermarkt competition (id + slug + country): catalog alias first, otherwise a Transfermarkt search. Country words disambiguate. Then the existing walk: Competition season page → clubs → kader → numbers.
@@ -119,8 +187,8 @@ What one Seed sentence covers: a club + one season (squad and numbers), or a nam
 _Avoid_: Superliga-only as the product ceiling; treating a club-season ask as a different product
 
 **Fetch step**:
-Internal unit the job uses: resolve club, resolve season, fetch that club-season’s squad, or (only if needed) fetch a player profile. Not what the operator types. Not one nested dump of a club plus the whole roster in a product API.
-_Avoid_: exposing Fetch steps as the human chat protocol; product `/v1` seed endpoints
+Internal hop inside a Hierarchy grain or Join workflow: resolve club, resolve season, fetch that club-season’s squad, or (only if needed) fetch a player profile. Not the documented grain. Not one nested dump of a club plus the whole roster in a product API.
+_Avoid_: calling a Fetch step the Hierarchy grain; exposing Fetch steps as the MCP chat protocol before Join workflow; product `/v1` seed endpoints
 
 **Player profile fetch**:
 An extra Transfermarkt hop for one player. Used only when the squad list row is missing identity or jersey number.
@@ -159,16 +227,16 @@ The existing Store-actor FetchAdapter. The operator must explicitly choose it. I
 _Avoid_: retrying HTML 202s on Apify by default; treating Apify as the primary Coolify path
 
 **FK after facts**:
-Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club and Season rows from Transfermarkt. Writes Kit identity and admin_only KitPhoto bytes onto those seasons (ExternalId join). Not before Kader fetch is green for that path. The operator still runs two Seed MCP tools (`seed_apify` then `seed_fk`) for that scope — not one fused tool.
-_Avoid_: scraping FK with no TM clubs; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool in this slice
+Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity and admin_only KitPhoto bytes onto those seasons (ExternalId join). Club kits and NationalTeam kits are sibling grains in the FK milestone. Not before that path’s facts exist. Join workflow composes the two vendors; Cross MCP wraps that later.
+_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row
 
 **kc_seed_mcp**:
-The Cursor Seed MCP server id. Standalone stdio process — not Coolify MCP. Exposes `seed_apify` (Kader fetch / Transfermarkt facts) and `seed_fk` (Football Kit Archive kits + admin_only archive bytes) only. Gets Seed env (lane database, Seed proxy, FK origin, lane R2) — never Coolify API tokens. Coolify MCP stays the host catalog for long one-shot jobs; Seed scope args (`fromSeason` / `toSeason` / `club` + `season`) go through `kc_seed_mcp`, not Coolify `control`. Wired on Desktop or Cloud Agent sessions. Not default PI-worker MCP (kit-harness `.pi/mcp.json` is empty).
-_Avoid_: naming the server `seed` in Cursor config; mixing Coolify tokens into the Seed MCP process; using Coolify `control` for ingest scope; fusing `seed_apify` and `seed_fk` into one tool; installing Seed MCP on the PI worker as factory dispatch
+The predecessor Cursor Seed MCP server id. Standalone stdio process. Exposes `seed_apify` and `seed_fk` only. Not the Cross MCP accept — that is Seed MCP on its own URL. Not Coolify MCP. Not default PI-worker MCP.
+_Avoid_: naming the server `seed` in Cursor config; mixing Coolify tokens into the Seed MCP process; using Coolify `control` for ingest scope; treating this stdio wrapper as Football Data Seed done
 
 **Coolify MCP**:
-Cursor MCP server for the Coolify host catalog. Desktop or Cloud Agent wiring. Not installed on the PI worker.
-_Avoid_: treating Coolify MCP as factory dispatch; mixing Coolify tokens into `kc_seed_mcp`
+Cursor MCP server for the Coolify host catalog — Docker and host management only. Desktop or Cloud Agent wiring. Not installed on the PI worker. Not ingest.
+_Avoid_: treating Coolify MCP as factory dispatch; mixing Coolify tokens into Seed MCP; using Coolify `control` as the seed interface; sharing Coolify’s MCP URL with Seed MCP
 
 **Catalog peek**:
 An unstyled HTML page on Nest (`GET /v1/catalog/peek`) so Nicklas can open a URL and see Seed run results: season, club names, squad counts, kit identity and photo counts. Not `apps/admin`, not the design system, not archive JPEGs on a public URL.
@@ -191,12 +259,48 @@ The collector's unique public name on Profil and in Indbakke thread rows. Assign
 _Avoid_: raw email as the thread-row name; a second login identifier; success-green availability chrome
 
 **Favorit**:
-A saved foreign UserJersey — another collector's shirt on the Profil favorites grid. Not own Samling tiles.
-_Avoid_: marketplace listing chrome; owner handle on the favorite tile
+A saved foreign UserJersey — another collector's shirt on the Profil favorites grid. Not own Samling tiles. Not a Wishlist row.
+_Avoid_: marketplace listing chrome; owner handle on the favorite tile; treating Favorit as Ønske
+
+**Wishlist**:
+A collector's structured want: catalog facets combined with AND. V1 facets are club, season, type (at least one set) and optional size. Not a saved UserJersey and not a Kit row. This increment's Entitlement gate is Wishlist CRUD plus match-job and match-push — not Søg or Send bud.
+_Avoid_: Favorit as the want list; free-text wish; a Kit as the only shape; paywalling Indbakke in this increment; player or country facets in v1
+
+**Ønske**:
+The Wishlist place in Expo. This increment enters from the Samling header trailing Icon button, replacing the notification bell. The empty notification Sheet on that slot is gone. Not a tab. Not Indbakke. Favorit stays under Profil.
+_Avoid_: a sixth tab; heart in slot 4; treating the header slot as Favoritter; keeping the empty notification Sheet as the header action
+
+**Match**:
+A hit when another collector's bidding-enabled UserJersey satisfies a Wishlist row's AND facets. OS push deep-links to that UserJersey. In-app the Wishlist row shows the hit. Aktivitet stays Bud. Own copies never match.
+_Avoid_: matching a closed copy; matching a seed Kit with no UserJersey; matching the owner's own Save; a Match card on Aktivitet
+
+**Offer**:
+Admin-owned Billing catalog: which month and year IAP product ids are live, whether Nest-trial is on, and trial days. This increment includes a minimal Staff page for those fields. Display price comes from the store SDK. Admin does not set the kroner Apple or Google charge.
+_Avoid_: a DKK price column as IAP truth; hardcoded SKUs in Nest; calling Offer a User.role
+
+**Nest-trial**:
+An Entitlement Nest writes with source `trial` for N days when Offer says trial is on and the collector has not used trial. Starts the first time they open Ønske or tap Tilføj without a live Entitlement. Otherwise that moment is the paywall (month/year + Restore). Not an App Store or Play introductory offer. Restore remains IAP.
+_Avoid_: treating trial days as App Store Connect metadata; a second User.role for trial; requiring a UserJersey before trial; a separate “Prøv N dage” step as the only start
+
+**Lapse**:
+When Entitlement expires, Wishlist rows remain. Match-job and match-push stop. The collector can view and delete rows. Create and edit require a live Entitlement. Collection, Søg, and Send bud stay as they are.
+_Avoid_: deleting Wishlist rows on expiry; locking view/delete behind the paywall; paywalling Samling
+
+**Comp**:
+An Entitlement Staff writes from Admin with source `comp` and an expires date. Support and demo accounts. Not Staff access and not an IAP receipt.
+_Avoid_: granting paid Expo features via `User.role`; requiring sandbox IAP for every operator demo
+
+**Match-push prompt**:
+The OS push permission is asked when the collector saves their first Wishlist row. Not at register, not at first Ønske open, not after the first Match. Profil Notify prefs remain the in-app switches.
+_Avoid_: a launch push wall; asking only after a Match was already missed
 
 **Indbakke**:
-The collector messages place in tab slot 4 (envelope). Beskeder and Aktivitet are two views of one conversation model. Not Ønske, not marketplace checkout.
-_Avoid_: heart / wishlist chrome in slot 4; a second unread model on the Samling bell
+The collector messages place in tab slot 4 (envelope). Beskeder and Aktivitet are two views of one conversation model. Not Ønske, not a general notification tray.
+_Avoid_: heart / wishlist chrome in slot 4; a Match card on Aktivitet; using the Samling header for inbox unread
+
+**Entitlement**:
+Nest-owned Billing fact on a User: paid collector plan yes/no, expires, source (`iap_apple` / `iap_google` / `trial` / `comp`, later `stripe`). Orthogonal to Staff access. Absence is the free Collector. Not a `User.role` and not a plan column on User.
+_Avoid_: stuffing the plan into `User.role`; treating `role=admin` as paid; Tier one/two/three before a second SKU; Expo or JWT as billing truth; calling the store chrome "Premium" a schema name; Admin DKK as the charge amount
 
 **Conversation**:
 One thread between two collectors about a UserJersey. Shared unread across Beskeder and Aktivitet. Created when a bud is sent or a reply is posted (later slices).

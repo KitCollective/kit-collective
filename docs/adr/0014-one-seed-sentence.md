@@ -4,4 +4,4 @@ The operator writes one natural-language sentence. The job then fills that Seed 
 
 This supersedes the operator-facing hop sequence in ADR-0013 and the implication in ADR-0006 that every Seed run is only a competition + range.
 
-Status: accepted
+Status: accepted. Football Data Seed sequences this after Hierarchy grains (ADR-0032): the sentence is the Join workflow accept, not milestone 1.
