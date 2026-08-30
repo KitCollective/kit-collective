@@ -6,6 +6,7 @@ const inboxIndexPath = join(__dirname, "../app/(tabs)/inbox/index.tsx");
 const conversationIndexPath = join(__dirname, "../app/(tabs)/inbox/[conversationId]/index.tsx");
 const detailsPath = join(__dirname, "../app/(tabs)/inbox/[conversationId]/details.tsx");
 const detailsViewPath = join(__dirname, "../src/components/conversation-details-view.tsx");
+const profileUiPath = join(__dirname, "../src/components/profile-ui.tsx");
 
 describe("conversation Detaljer navigation", () => {
   it("routes wide inbox onOpenDetails to the details screen", () => {
@@ -30,5 +31,12 @@ describe("conversation Detaljer navigation", () => {
     expect(viewSource).toMatch(/Slet samtale/);
     expect(viewSource).toMatch(/Blokering skjuler samtalen for jer begge/);
     expect(viewSource).toMatch(/fillSecondary/);
+  });
+
+  it("renders Detaljer peer stub handle with locked heading-sm role", () => {
+    const source = readFileSync(profileUiPath, "utf8");
+    expect(source).toMatch(
+      /<Text style=\{\[typography\.headingSm, \{ color: theme\.contentPrimary \}\]\}>\{handle\}<\/Text>/,
+    );
   });
 });
