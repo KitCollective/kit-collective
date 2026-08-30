@@ -1541,7 +1541,6 @@ test("implement spawn excludes memory-write tools and skill_manage", async () =>
   assert.equal(spawned[0].options.env.KIT_PI_HERMES, WORKER_MEMORY_DIR);
 });
 
-
 test("Draft pins free OpenRouter coding models with Hy3 then Composer fallbacks", () => {
   const draft = agentFrontmatter(".pi/agents/draft.md");
   assert.match(draft.frontmatter, /^model:\s+openrouter\/poolside\/laguna-s-2\.1:free\s*$/m);

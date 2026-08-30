@@ -79,7 +79,12 @@ export function modelPriceLookupKeys(model) {
   if (lower.includes("mimo")) {
     keys.push("openrouter/xiaomi/mimo-v2.5-pro", "MiMo");
   }
-  if (lower.includes(":free") || lower.includes("laguna") || lower.includes("minimax-m3") || lower.includes("glm-5.2")) {
+  if (
+    lower.includes(":free") ||
+    lower.includes("laguna") ||
+    lower.includes("minimax-m3") ||
+    lower.includes("glm-5.2")
+  ) {
     if (lower.includes("laguna")) {
       keys.push("openrouter/poolside/laguna-s-2.1:free", "Laguna", "Draft");
     }

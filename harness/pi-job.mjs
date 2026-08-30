@@ -1319,7 +1319,11 @@ export function createPiJobRunner({
         if (typeof openRouterKey !== "string" || openRouterKey.length === 0) {
           throw new Error("missing OPENROUTER_API_KEY");
         }
-        for (const relative of [".pi/agents/scout.md", ".pi/agents/draft.md", ".pi/agents/gate.md"]) {
+        for (const relative of [
+          ".pi/agents/scout.md",
+          ".pi/agents/draft.md",
+          ".pi/agents/gate.md",
+        ]) {
           try {
             readFileSync(join(workspace, relative), "utf8");
           } catch {
