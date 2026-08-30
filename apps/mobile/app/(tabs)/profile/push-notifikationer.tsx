@@ -37,7 +37,7 @@ export default function PushNotifikationerScreen() {
         <ActivityIndicator style={styles.loader} color={theme.fillPrimary} />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          <View style={[styles.section, masterOff && styles.dimmed]}>
+          <View style={styles.section}>
             <ProfileSurfaceGroup>
               <ListSwitchRow
                 title="Høj prioritet"
@@ -83,9 +83,6 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: space.gapSm,
-  },
-  dimmed: {
-    opacity: 0.4,
   },
   loader: {
     marginTop: space.insetLg,

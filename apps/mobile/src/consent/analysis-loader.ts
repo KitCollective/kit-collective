@@ -5,16 +5,11 @@ export function shouldLoadAnalysis(consent: { analysis: boolean } | null): boole
   return consent?.analysis === true;
 }
 
-/** Loads analysis SDK only when consent grants analysis. */
+/** Marks analysis as allowed for this session when consent grants analysis. */
 export function loadAnalysisIfConsented(consent: { analysis: boolean } | null): void {
   if (!shouldLoadAnalysis(consent) || analysisLoaded) {
     return;
   }
 
   analysisLoaded = true;
-}
-
-/** Test seam — reset loaded state between tests. */
-export function resetAnalysisLoaderForTests(): void {
-  analysisLoaded = false;
 }

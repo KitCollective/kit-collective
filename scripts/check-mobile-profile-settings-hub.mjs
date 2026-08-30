@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Ratchet (KIT-125): fail CI when own-Profil Indstillinger hub drifts from
- * docs/design-system.md §5 (four mono section labels, account Skift wiring).
+ * docs/design-system.md §5 (four mono section labels, account Skift wiring,
+ * Danish prefs drills — not factory jargon).
  */
 import { readFileSync } from "node:fs";
 
@@ -13,6 +14,23 @@ const REQUIRED_SECTION_LABELS = [
   "Push-notifikationer / E-mail-notifikationer",
   "Sprog / Mørk tilstand",
   "Privatlivsindstillinger",
+];
+
+const PREFS_SCREENS = [
+  "apps/mobile/app/(tabs)/profile/push-notifikationer.tsx",
+  "apps/mobile/app/(tabs)/profile/email-notifikationer.tsx",
+  "apps/mobile/app/(tabs)/profile/sprog.tsx",
+  "apps/mobile/app/(tabs)/profile/moerk-tilstand.tsx",
+  "apps/mobile/app/(tabs)/profile/privatlivsindstillinger.tsx",
+];
+
+const FACTORY_JARGON = [
+  /\bshell\b/i,
+  /\bplaceholder\b/i,
+  /\bstub\b/i,
+  /\bgap slice\b/i,
+  /\bmilestone\b/i,
+  /\bprefs slice\b/i,
 ];
 
 /**
@@ -48,6 +66,15 @@ export function checkMobileProfileSettingsHub(overrides = {}) {
 
   if (/lock-speak|private account field|design lock/i.test(konto)) {
     violations.push(`${kontoPath}: fullName helper must not use lock-speak or factory jargon`);
+  }
+
+  for (const screenPath of PREFS_SCREENS) {
+    const source = overrides[`prefs:${screenPath}`] ?? readFileSync(screenPath, "utf8");
+    for (const pattern of FACTORY_JARGON) {
+      if (pattern.test(source)) {
+        violations.push(`${screenPath}: prefs drill must not use factory jargon (${pattern})`);
+      }
+    }
   }
 
   return violations;

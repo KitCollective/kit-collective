@@ -370,7 +370,7 @@ export function SwitchControl({
         styles.switchTrack,
         {
           backgroundColor: value ? theme.fillPrimary : theme.borderSubtle,
-          opacity: disabled ? 0.4 : pressed ? 0.9 : 1,
+          opacity: pressed && !disabled ? 0.9 : 1,
         },
       ]}
     >

@@ -19,3 +19,11 @@ test("checkMobileProfileSettingsHub fails when a section label is removed", () =
   const violations = checkMobileProfileSettingsHub({ indstillingerSource: mutated });
   assert.ok(violations.some((v) => v.includes("Privatlivsindstillinger")));
 });
+
+test("checkMobileProfileSettingsHub fails when a prefs drill uses factory jargon", () => {
+  const pushPath = "apps/mobile/app/(tabs)/profile/push-notifikationer.tsx";
+  const pushSource = readFileSync(pushPath, "utf8");
+  const mutated = `${pushSource}\n// shell placeholder`;
+  const violations = checkMobileProfileSettingsHub({ [`prefs:${pushPath}`]: mutated });
+  assert.ok(violations.some((v) => v.includes("factory jargon")));
+});
