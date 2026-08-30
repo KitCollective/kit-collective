@@ -34,11 +34,11 @@ import {
   GENVEJE_AND_HELPER_COPY,
   type GenvejeFacetKind,
   type GenvejeFacets,
-  type GenvejeSheetMode,
   manageRowAccessibilityLabel,
   reorderShortcutIds,
   resolveFacetFieldLabel,
   resolveGenvejeSheetTitle,
+  type ShortcutsSheetMode,
   seedFacetsForEdit,
   shouldResetShortcutAfterDelete,
   shouldResetToAlleAfterGem,
@@ -51,7 +51,7 @@ import { useTheme } from "@/theme/use-theme";
 const FACET_FIELDS: GenvejeFacetKind[] = ["country", "league", "club", "player"];
 const MANAGE_ROW_HEIGHT = 52;
 
-type GenvejeSheetProps = {
+type ShortcutsSheetProps = {
   visible: boolean;
   accessToken: string;
   activeShortcutId: string | null;
@@ -62,7 +62,7 @@ type GenvejeSheetProps = {
   onShortcutDeleted: (shortcutId: string) => void;
 };
 
-export function GenvejeSheet({
+export function ShortcutsSheet({
   visible,
   accessToken,
   activeShortcutId,
@@ -71,10 +71,10 @@ export function GenvejeSheet({
   onShortcutsChanged,
   onShortcutSaved,
   onShortcutDeleted,
-}: GenvejeSheetProps) {
+}: ShortcutsSheetProps) {
   const theme = useTheme();
   const typography = useTypography();
-  const [mode, setMode] = useState<GenvejeSheetMode>("list");
+  const [mode, setMode] = useState<ShortcutsSheetMode>("list");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reordering, setReordering] = useState(false);
