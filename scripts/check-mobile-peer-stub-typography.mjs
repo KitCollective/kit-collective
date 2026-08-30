@@ -8,8 +8,7 @@ import { readFileSync } from "node:fs";
 
 const profileUiPath = "apps/mobile/src/components/profile-ui.tsx";
 
-const listPeerStubRowPattern =
-  /export function ListPeerStubRow\([\s\S]*?\n\}/;
+const listPeerStubRowPattern = /export function ListPeerStubRow\([\s\S]*?\n\}/;
 
 const headingSmInitialPattern =
   /<Text style=\{\[typography\.headingSm, \{ color: theme\.contentPrimary \}\]\}>\{initial\}<\/Text>/;
@@ -48,9 +47,7 @@ export function checkMobilePeerStubTypography(overrides = {}) {
   }
 
   if (!headingSmHandlePattern.test(rowSource)) {
-    violations.push(
-      `${profileUiPath}: ListPeerStubRow handle must use typography.headingSm`,
-    );
+    violations.push(`${profileUiPath}: ListPeerStubRow handle must use typography.headingSm`);
   }
 
   return violations;

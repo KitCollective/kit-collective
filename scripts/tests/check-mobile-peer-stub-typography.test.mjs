@@ -15,11 +15,13 @@ test("checkMobilePeerStubTypography fails when handle uses typography.body", () 
   const source = readFileSync(profileUiPath, "utf8");
   const mutated = source.replace(
     /<Text style=\{\[typography\.headingSm, \{ color: theme\.contentPrimary \}\]\}>\{handle\}<\/Text>/,
-    '<Text style={[typography.body, { color: theme.contentPrimary }]}>{handle}</Text>',
+    "<Text style={[typography.body, { color: theme.contentPrimary }]}>{handle}</Text>",
   );
   const violations = checkMobilePeerStubTypography({ profileUiSource: mutated });
   assert.ok(
-    violations.some((violation) => violation.includes("ListPeerStubRow handle must use typography.headingSm")),
+    violations.some((violation) =>
+      violation.includes("ListPeerStubRow handle must use typography.headingSm"),
+    ),
   );
 });
 
@@ -27,10 +29,12 @@ test("checkMobilePeerStubTypography fails when initial uses typography.body", ()
   const source = readFileSync(profileUiPath, "utf8");
   const mutated = source.replace(
     /<Text style=\{\[typography\.headingSm, \{ color: theme\.contentPrimary \}\]\}>\{initial\}<\/Text>/,
-    '<Text style={[typography.body, { color: theme.contentPrimary }]}>{initial}</Text>',
+    "<Text style={[typography.body, { color: theme.contentPrimary }]}>{initial}</Text>",
   );
   const violations = checkMobilePeerStubTypography({ profileUiSource: mutated });
   assert.ok(
-    violations.some((violation) => violation.includes("ListPeerStubRow initial badge must use typography.headingSm")),
+    violations.some((violation) =>
+      violation.includes("ListPeerStubRow initial badge must use typography.headingSm"),
+    ),
   );
 });
