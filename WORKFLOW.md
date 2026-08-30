@@ -31,7 +31,7 @@ If any eligibility check fails: **do not modify the issue**. Stop.
 
 Never claim from Linear **Triage** or **Duplicate**. The Intake job (hourly, planner mutex, no Pi) may shape, consolidate, or promote Triage → Backlog. Planner still never claims Triage and never claims `signal-up`. A human may still accept onto `Backlog`/`Parked`.
 
-The worker writes **Parked** after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. Planner still never claims Parked. A human Park is not Idle timeout and keeps the Issue worktree.
+The worker writes **Parked** after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. Planner still never claims Parked. A human Park is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not Park.
 
 An issue may **start** implement when status is `Implementing` and it has no branch/PR yet.
 

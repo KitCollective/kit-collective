@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { pipeReadableJsonLines, STREAMING_ROLES } from "../pi-event-stream.mjs";
+import { isPiAgentEndLine, pipeReadableJsonLines, STREAMING_ROLES } from "../pi-event-stream.mjs";
 import { createPiJobRunner } from "../pi-job.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -23,6 +23,12 @@ export const PI_IMPLEMENT_FIXTURE = [
   '{"type":"tool_execution_end","toolCallId":"t1","toolName":"read","result":{},"isError":false}',
   '{"type":"agent_end","messages":[]}',
 ].join("\n");
+
+test("isPiAgentEndLine is true only for agent_end JSON", () => {
+  assert.equal(isPiAgentEndLine('{"type":"agent_end","messages":[]}'), true);
+  assert.equal(isPiAgentEndLine('{"type":"agent_start"}'), false);
+  assert.equal(isPiAgentEndLine("not json"), false);
+});
 
 test("STREAMING_ROLES includes implement and factory-checker", () => {
   assert.equal(STREAMING_ROLES.has("implement"), true);

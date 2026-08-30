@@ -39,7 +39,7 @@ import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { createAgentSessionBridge } from "./linear-agent-session.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
-import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
+import { isPiAgentEndLine, pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { createSessionLogCollector } from "./pi-session-log.mjs";
 import { runPlanner } from "./planner.mjs";
 import { commentsHoldImplementRetryCap, implementRetryCapComment } from "./role-comments.mjs";
@@ -97,6 +97,7 @@ const FAST_ROLES = new Set(["planner", "factory-checker", "land"]);
 const CAPACITY_GATED_ROLES = new Set(["implement", "factory-checker"]);
 
 export const DEFAULT_JOB_IDLE_MS = 45 * 60 * 1000;
+export const DEFAULT_AGENT_END_GRACE_MS = 8_000;
 export const TIMEOUT_PARK_STATUS = "Parked";
 export const TOKEN_USE_HEADING = "### Token use";
 export const UNKNOWN_TOKEN_COUNT = "unknown";
@@ -423,6 +424,24 @@ export function jobIdleMs(env = {}) {
     }
   }
   return DEFAULT_JOB_IDLE_MS;
+}
+
+/**
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} env
+ * @returns {number}
+ */
+export function jobAgentEndGraceMs(env = {}) {
+  const raw = env.PI_AGENT_END_GRACE_MS;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return raw;
+  }
+  if (typeof raw === "string" && raw.length > 0) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_AGENT_END_GRACE_MS;
 }
 
 /**
@@ -788,10 +807,19 @@ export function createPiJobRunner({
       role: job.role,
       identifier: jobIdentifier,
     });
+    let agentEnded = false;
+    let settleAgentEnd = () => {};
+    const agentEndSeen = new Promise((resolve) => {
+      settleAgentEnd = resolve;
+    });
     let streamDone = Promise.resolve();
     if (collectStdout && spawned.stdout) {
       streamDone = pipeReadableJsonLines(spawned.stdout, {
         async consumeLine(line) {
+          if (isPiAgentEndLine(line)) {
+            agentEnded = true;
+            settleAgentEnd();
+          }
           await tokenCollector.consumeLine(line);
           await sessionLogger.consumeLine(line);
           await sessionBridge.consumeLine(line);
@@ -823,12 +851,13 @@ export function createPiJobRunner({
 
     let timedOut = false;
     let finished = false;
+    let agentEndKilled = false;
     const closed = waitClose.then((closeResult) => {
       finished = true;
       return closeResult;
     });
     const idleWatch = (async () => {
-      while (!finished) {
+      while (!finished && !agentEnded) {
         const elapsed = clock() - lastStdoutAt;
         if (elapsed >= idleMs) {
           timedOut = true;
@@ -839,10 +868,29 @@ export function createPiJobRunner({
         const remaining = idleMs - elapsed;
         await snooze(Math.max(1, Math.min(pollMs, remaining)));
       }
+      if (!finished) {
+        await closed;
+      }
     })();
-    await Promise.race([closed, idleWatch]);
+    const agentEndWatch = (async () => {
+      await Promise.race([agentEndSeen, closed.then(() => undefined)]);
+      if (finished) {
+        return;
+      }
+      await snooze(Math.max(1, jobAgentEndGraceMs(env)));
+      if (finished) {
+        return;
+      }
+      agentEndKilled = true;
+      finished = true;
+      await killGroup(spawned);
+    })();
+    await Promise.race([closed, idleWatch, agentEndWatch]);
     if (timedOut) {
       return closeSession(null, { idleTimeout: true });
+    }
+    if (agentEndKilled) {
+      return closeSession(0);
     }
     await streamDone;
     const closeResult = await closed;
