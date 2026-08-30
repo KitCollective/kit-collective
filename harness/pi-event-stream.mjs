@@ -1,6 +1,7 @@
 /**
  * Pi JSON stdout line reader for token-use collection (KIT-79, KIT-113).
- * AgentSession activity streaming was removed in KIT-113.
+ * Outbound Agent Session activities are mapped in linear-agent-session.mjs.
+ * Inbound AgentSession webhooks stay skipped (KIT-113).
  */
 
 /**

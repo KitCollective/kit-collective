@@ -1,6 +1,7 @@
 /**
  * KIT-79/KIT-113 — Pi JSON stdout pipe for token-use collection.
- * AgentSession activity streaming was removed in KIT-113.
+ * Outbound Agent Session timeline is display-only (linear-agent-session.mjs).
+ * Inbound AgentSession webhooks stay skipped (KIT-113).
  */
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
@@ -183,4 +184,100 @@ test("factory-checker spawn also pipes Pi json stdout", async () => {
 
   assert.equal(spawned.length, 1);
   assert.deepEqual(spawned[0].options.stdio, ["inherit", "pipe", "inherit"]);
+});
+
+test("implement streams a thought then a file-read action, never raw CLI", async () => {
+  const posts = [];
+  let resolveClose;
+  const closePromise = new Promise((resolve) => {
+    resolveClose = (status) => resolve({ status });
+  });
+  const runner = createPiJobRunner({
+    env: {
+      PI_MODEL: "cursor/composer-2.5",
+      PI_MODEL_FAST: "cursor/grok-4.6",
+      LINEAR_CLI_API_KEY: "lin_test",
+      LINEAR_PI_ACCESS_TOKEN: "actor-token",
+      OPENROUTER_API_KEY: "or_test",
+    },
+    workspace: ROOT,
+    worktree: {
+      async checkout() {
+        return { path: ROOT, branch: "kit-79", lane: "development" };
+      },
+    },
+    gh: {
+      async rebase() {},
+      async viewPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/60",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+      async createPr() {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/60",
+          mergeable: "MERGEABLE",
+          checks: [{ conclusion: "success" }],
+        };
+      },
+    },
+    linear: {
+      async listComments() {
+        return [{ id: "c1", body: "## Agent Workpad\n" }];
+      },
+      async updateWorkpad() {},
+      async setStatus() {},
+    },
+    typecheckTouched: async () => undefined,
+    async fetchImpl(_url, init) {
+      const body = JSON.parse(String(init.body));
+      posts.push(body);
+      if (String(body.query).includes("agentSessionCreateOnIssue")) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              data: {
+                agentSessionCreateOnIssue: {
+                  success: true,
+                  agentSession: { id: "session-kit-79" },
+                },
+              },
+            };
+          },
+        };
+      }
+      return {
+        ok: true,
+        async json() {
+          return { data: { agentActivityCreate: { success: true } } };
+        },
+      };
+    },
+    spawnProcess(_command, args, options) {
+      const stdout = Readable.from(`${PI_IMPLEMENT_FIXTURE}\n`);
+      setImmediate(() => resolveClose(0));
+      return Promise.resolve({ stdout, closePromise, options });
+    },
+  });
+
+  await runner.run({
+    role: "implement",
+    identifier: "KIT-79",
+    issueId: ISSUE_ID,
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  const contents = posts
+    .map((row) => row.variables?.input?.content)
+    .filter((content) => content && typeof content === "object");
+  assert.equal(contents[0]?.type, "thought");
+  assert.match(contents[0]?.body ?? "", /Starting implement on KIT-79/);
+  assert.ok(contents.some((content) => content.action === "Reading a file"));
+  assert.ok(contents.some((content) => content.parameter === "pi-job.mjs"));
+  assert.ok(contents.some((content) => content.type === "response"));
+  assert.doesNotMatch(JSON.stringify(posts), /actor-token/);
+  assert.doesNotMatch(JSON.stringify(posts), /grep |pnpm |Authorization/);
 });

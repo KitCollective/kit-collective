@@ -37,6 +37,7 @@ import {
 import { runIntake } from "./intake.mjs";
 import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
+import { createAgentSessionBridge } from "./linear-agent-session.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { createSessionLogCollector } from "./pi-session-log.mjs";
@@ -675,6 +676,8 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
  *   waitTimeoutMs?: number,
  *   waitIntervalMs?: number,
  *   killProcessGroup?: (spawned: object, signal?: string) => void | Promise<void>,
+ *   agentSession?: { start: () => Promise<void>, consumeLine: (line: string) => Promise<void>, finish: (outcome?: { ok?: boolean, idleTimeout?: boolean }) => Promise<void> },
+ *   fetchImpl?: typeof fetch,
  * }} [deps]
  */
 export function createPiJobRunner({
@@ -696,6 +699,8 @@ export function createPiJobRunner({
   waitTimeoutMs,
   waitIntervalMs,
   killProcessGroup,
+  agentSession,
+  fetchImpl,
 } = {}) {
   const trees =
     worktree ??
@@ -737,7 +742,28 @@ export function createPiJobRunner({
    */
   async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, piOptions = {}) {
     const args = piArgsForRole(job.role, workspace, roleFile, model, prompt, piOptions);
-    const _streamIssueId = typeof job.issueId === "string" ? job.issueId : undefined;
+    const jobIdentifier =
+      typeof job.identifier === "string" && job.identifier.length > 0
+        ? job.identifier
+        : typeof job.issueId === "string"
+          ? job.issueId
+          : "unknown";
+    const streamIssueId =
+      typeof job.issueId === "string" && job.issueId.length > 0
+        ? job.issueId
+        : typeof job.identifier === "string" && job.identifier.length > 0
+          ? job.identifier
+          : undefined;
+    const sessionBridge =
+      agentSession ??
+      createAgentSessionBridge({
+        env,
+        issueId: streamIssueId,
+        identifier: jobIdentifier,
+        role: job.role,
+        fetchImpl,
+      });
+    await sessionBridge.start();
     const collectStdout = STREAMING_ROLES.has(job.role);
     const stdio = collectStdout ? ["inherit", "pipe", "inherit"] : "inherit";
     const spawned = await spawnJob("pi", args, { cwd, env: spawnEnv, stdio });
@@ -758,12 +784,6 @@ export function createPiJobRunner({
       });
     }
     const tokenCollector = createTokenUseCollector();
-    const jobIdentifier =
-      typeof job.identifier === "string" && job.identifier.length > 0
-        ? job.identifier
-        : typeof job.issueId === "string"
-          ? job.issueId
-          : "unknown";
     const sessionLogger = createSessionLogCollector({
       role: job.role,
       identifier: jobIdentifier,
@@ -774,12 +794,31 @@ export function createPiJobRunner({
         async consumeLine(line) {
           await tokenCollector.consumeLine(line);
           await sessionLogger.consumeLine(line);
+          await sessionBridge.consumeLine(line);
         },
       });
     }
+
+    /**
+     * @param {number | null | undefined} status
+     * @param {{ idleTimeout?: boolean }} [extras]
+     */
+    async function closeSession(status, extras = {}) {
+      await sessionBridge.finish({
+        ok: extras.idleTimeout === true ? false : status === 0,
+        idleTimeout: extras.idleTimeout === true,
+      });
+      return {
+        status,
+        stdout: spawned.stdout,
+        tokenUse: tokenCollector.snapshot(),
+        ...extras,
+      };
+    }
+
     if (!liveChild) {
       const [{ status }] = await Promise.all([waitClose, streamDone]);
-      return { status, stdout: spawned.stdout, tokenUse: tokenCollector.snapshot() };
+      return closeSession(status);
     }
 
     let timedOut = false;
@@ -803,20 +842,11 @@ export function createPiJobRunner({
     })();
     await Promise.race([closed, idleWatch]);
     if (timedOut) {
-      return {
-        status: null,
-        idleTimeout: true,
-        stdout: spawned.stdout,
-        tokenUse: tokenCollector.snapshot(),
-      };
+      return closeSession(null, { idleTimeout: true });
     }
     await streamDone;
     const closeResult = await closed;
-    return {
-      status: closeResult.status,
-      stdout: spawned.stdout,
-      tokenUse: tokenCollector.snapshot(),
-    };
+    return closeSession(closeResult.status);
   }
 
   /**
