@@ -5,7 +5,6 @@ import {
   canSaveWishlistEntry,
   emptyWishlistCriteria,
   hasWishlistCriterion,
-  isPremiumRequiredError,
   manageRowAccessibilityLabel,
   resolveWishlistEmptyBody,
   resolveWishlistEmptyTitle,
@@ -137,14 +136,5 @@ describe("resolveWishlistEmptyBody", () => {
     const body = resolveWishlistEmptyBody();
     expect(body.length).toBeGreaterThan(0);
     expect(body).toMatch(/Tilføj/i);
-  });
-});
-
-describe("isPremiumRequiredError", () => {
-  it("detects contract paywall code from API error body", () => {
-    expect(
-      isPremiumRequiredError({ code: "PREMIUM_REQUIRED", message: "Premium is required" }),
-    ).toBe(true);
-    expect(isPremiumRequiredError({ code: "OTHER" })).toBe(false);
   });
 });

@@ -1,8 +1,4 @@
-import {
-  billingPaywallErrorSchema,
-  type CatalogPickerItem,
-  type WishlistEntry,
-} from "@kit/api-contract";
+import { type CatalogPickerItem, type WishlistEntry } from "@kit/api-contract";
 import type { JerseySize, KitType } from "@kit/domain";
 import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 
@@ -93,11 +89,6 @@ export function resolveWishlistEmptyTitle(): string {
 
 export function resolveWishlistEmptyBody(): string {
   return "Tilføj en ønskerække med klub, sæson eller type.";
-}
-
-export function isPremiumRequiredError(body: unknown): boolean {
-  const parsed = billingPaywallErrorSchema.safeParse(body);
-  return parsed.success && parsed.data.code === "PREMIUM_REQUIRED";
 }
 
 export const WISHLIST_TYPE_OPTIONS = KIT_TYPE_LABELS_DA;
