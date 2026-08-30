@@ -194,6 +194,7 @@ test("first-run prompt asks for ### Composition and serial helpers without Gate"
   });
   assert.match(prompt, /### Composition/);
   assert.match(prompt, /Spawn Scout/i);
+  assert.match(prompt, /spawn Draft once|agent name: draft/i);
   assert.match(prompt, /one at a time/i);
   assert.match(prompt, /Do not spawn Gate/i);
   assert.equal(/Then spawn Gate/i.test(prompt), false);

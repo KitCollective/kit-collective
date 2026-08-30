@@ -37,8 +37,8 @@ export function missingImplementCheapRetryCoverage(sources) {
     missing.push("gate.md typecheck / yellow owned by harness");
   }
   const role = sources.implementRole ?? "";
-  if (!/Skip Scout/i.test(role) || !/Skip helpers/i.test(role)) {
-    missing.push("implement.md Skip Scout / Skip helpers on cheap retry");
+  if (!/Skip Scout/i.test(role) || !/Skip Draft/i.test(role) || !/Skip helpers/i.test(role)) {
+    missing.push("implement.md Skip Scout / Skip Draft / Skip helpers on cheap retry");
   }
   if (!/selectImplementContext/.test(role)) {
     missing.push("implement.md selectImplementContext injection reference");

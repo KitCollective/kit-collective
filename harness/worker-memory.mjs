@@ -19,6 +19,7 @@ export const HUNK_LIKE_PATTERN = /(?:^|\n)(?:@@|\+\+\+|---)|(?:^|\s)\d+:\d+|(?:^
 export const WORKER_MEMORY_NON_WRITER_ROLES = [
   "implement",
   "scout",
+  "draft",
   "gate",
   "land",
   "planner",

@@ -8,14 +8,16 @@ import { harnessLog, redactHarnessError } from "./harness-log.mjs";
 export const PHASE_STOP = {
   session: 1,
   scout: 2,
-  helper: 3,
-  gate: 4,
+  draft: 3,
+  helper: 4,
+  gate: 5,
   implement: 6,
   checker: 8,
 };
 
 const SUBAGENT_PHASE = {
   scout: { phase: "scout", stopPoint: PHASE_STOP.scout },
+  draft: { phase: "draft", stopPoint: PHASE_STOP.draft },
   gate: { phase: "gate", stopPoint: PHASE_STOP.gate },
 };
 

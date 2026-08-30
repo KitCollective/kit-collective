@@ -32,6 +32,17 @@ test("session collector logs agent_start and read tool", () => {
   assert.ok(entries.some((row) => row.event === "tool" && row.tool === "read"));
 });
 
+test("session collector logs draft subagent between scout and helpers", () => {
+  const lines = [
+    '{"type":"tool_execution_start","toolName":"subagent","args":{"agent":"draft"}}',
+    '{"type":"tool_execution_end","toolName":"subagent","args":{"agent":"draft"},"isError":false}',
+  ];
+  const entries = collectSessionLogs({ role: "implement", identifier: "KIT-99", lines });
+  const draftStart = entries.find((row) => row.phase === "draft" && row.detail === "draft started");
+  assert.equal(draftStart?.stopPoint, PHASE_STOP.draft);
+  assert.equal(draftStart?.gate, "yellow");
+});
+
 test("session collector logs scout and gate subagent lifecycle", () => {
   const lines = [
     '{"type":"tool_execution_start","toolName":"subagent","args":{"agent":"scout"}}',

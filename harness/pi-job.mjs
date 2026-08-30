@@ -122,6 +122,7 @@ const TOKEN_ROLE_MODELS = {
   implement: "Composer",
   "factory-checker": "Grok",
   scout: "Hy3",
+  draft: "Draft",
   gate: "MiMo",
 };
 
@@ -129,6 +130,7 @@ const TOKEN_ROLE_MODEL_IDS = {
   implement: "cursor/composer-2.5",
   "factory-checker": "cursor/grok-4.6",
   scout: "openrouter/tencent/hy3",
+  draft: "openrouter/poolside/laguna-s-2.1:free",
   gate: "openrouter/xiaomi/mimo-v2.5-pro",
 };
 
@@ -136,12 +138,13 @@ const TOKEN_ROLE_LABELS = {
   implement: "Implement",
   "factory-checker": "Factory-checker",
   scout: "Scout",
+  draft: "Draft",
   gate: "Gate",
 };
 
 const TOKEN_HELPER_MODEL = "Composer";
 const TOKEN_HELPER_MODEL_ID = "cursor/composer-2.5";
-const TOKEN_NAMED_SUBAGENTS = new Set(["scout", "gate"]);
+const TOKEN_NAMED_SUBAGENTS = new Set(["scout", "draft", "gate"]);
 
 /**
  * @param {string | undefined} description
@@ -767,7 +770,7 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
-      return `Factory role implement retry for ${identifier}.${adw} Same Implementing stay — this is not a new try. Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix vs first-pass registry tag — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Do not spawn Gate — harness Mechanical close owns format/typecheck. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
+      return `Factory role implement retry for ${identifier}.${adw} Same Implementing stay — this is not a new try. Skip Scout. Skip Draft. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix vs first-pass registry tag — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Do not spawn Gate — harness Mechanical close owns format/typecheck. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -778,7 +781,7 @@ ${feedback}`;
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: verify PR MERGEABLE and required checks green)";
-      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. ${noSleep} Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. Do not spawn Gate. ${codeEnglish} ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip Draft. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. ${noSleep} Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. Do not spawn Gate. ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -794,7 +797,7 @@ ${feedback}`;
       reviewFeedbackIsFirstPassOnly(options.reviewFeedback, firstPassClasses)
     ) {
       const feedback = String(options.reviewFeedback).trim();
-      return `Factory role implement for ${identifier}.${adw} First-pass resume.${writeScopeSuffix} Same Implementing stay — not a full Scout/helpers tree. Skip Scout. Skip helpers. Fix only the first-pass / registry-tagged class in ### Review feedback. Do not re-map the repo. Do not spawn Gate — harness Mechanical close owns format/typecheck. ${noSleep} ${codeEnglish} ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} First-pass resume.${writeScopeSuffix} Same Implementing stay — not a full Scout/Draft/helpers tree. Skip Scout. Skip Draft. Skip helpers. Fix only the first-pass / registry-tagged class in ### Review feedback. Do not re-map the repo. Do not spawn Gate — harness Mechanical close owns format/typecheck. ${noSleep} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -805,7 +808,7 @@ ${feedback}`;
       reviewFeedbackIsSpecOnly(options.reviewFeedback)
     ) {
       const feedback = String(options.reviewFeedback).trim();
-      return `Factory role implement for ${identifier}.${adw} Spec-only resume.${writeScopeSuffix} Same Implementing stay — not a full Scout/helpers tree. Skip Scout. Skip helpers. Fix only the Spec findings in ### Review feedback (use ### Composition paths when present). Do not re-map the repo. Do not read full CONTEXT.md. Do not spawn Gate — harness Mechanical close owns format/typecheck. ${noSleep} ${codeEnglish} ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Spec-only resume.${writeScopeSuffix} Same Implementing stay — not a full Scout/Draft/helpers tree. Skip Scout. Skip Draft. Skip helpers. Fix only the Spec findings in ### Review feedback (use ### Composition paths when present). Do not re-map the repo. Do not read full CONTEXT.md. Do not spawn Gate — harness Mechanical close owns format/typecheck. ${noSleep} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -813,15 +816,17 @@ ${feedback}`;
     }
     const compositionNote =
       "After Scout, write workpad ### Composition with repo-relative files to mirror before inventing UI (paths only). Prefer the injected slice brief — do not read full CONTEXT.md unless a domain term is missing.";
+    const draftNote =
+      "After ### Composition, spawn Draft once (agent name: draft) to scaffold boilerplate under write-scope. Draft uses free OpenRouter models — parent and Composer helpers review and harden. Skip Draft when the slice is auth/IAP/Vision-only. Do not Skip Draft on a full Scout run unless that auth/IAP/Vision-only exception applies.";
     if (reviewFeedbackIsActionable(options.reviewFeedback)) {
       const feedback = String(options.reviewFeedback).trim();
-      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${compositionNote} Do not spawn Gate. ${noSleep} ${codeEnglish} ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. ${draftNote} Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${compositionNote} Do not spawn Gate. ${noSleep} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
 ${feedback}`;
     }
-    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Same Implementing stay — this is one try, ending at In Review. Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${compositionNote} Do not spawn Gate — harness Mechanical close owns format/typecheck/rebase/GitHub wait. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}`;
+    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Same Implementing stay — this is one try, ending at In Review. Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. ${draftNote} Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${compositionNote} Do not spawn Gate — harness Mechanical close owns format/typecheck/rebase/GitHub wait. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}`;
   }
   if (role === "factory-checker") {
     return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass) against the harness-injected review snapshot in the append (issue description + three-dot diff). Prefer that snapshot — do not re-run a full git discovery loop, do not read full CONTEXT.md, do not poll gh pr checks (harness owns gates). Readonly git bash only to fill gaps. Before exit, ### Review feedback MUST include all three axis lines (- Spec: …, - Standards: …, - Slop: … or Slop/…). Empty or partial Review feedback is a harness miss — the worker re-runs you in-slot, then parks for human; it does not bounce to implement. When a Standards or Slop finding matches the injected First-pass registry, write [first-pass:<id>] on that workpad line. Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit. Never spawn Gate. ${codeEnglish}`;
@@ -1314,7 +1319,11 @@ export function createPiJobRunner({
         if (typeof openRouterKey !== "string" || openRouterKey.length === 0) {
           throw new Error("missing OPENROUTER_API_KEY");
         }
-        for (const relative of [".pi/agents/scout.md", ".pi/agents/gate.md"]) {
+        for (const relative of [
+          ".pi/agents/scout.md",
+          ".pi/agents/draft.md",
+          ".pi/agents/gate.md",
+        ]) {
           try {
             readFileSync(join(workspace, relative), "utf8");
           } catch {
