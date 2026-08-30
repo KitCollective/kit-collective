@@ -49,6 +49,7 @@ import {
 import {
   BadRequestException,
   ConflictException,
+  forwardRef,
   Inject,
   Injectable,
   NotFoundException,
@@ -57,6 +58,7 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
 import { and, eq, inArray, or } from "drizzle-orm";
+import { BillingService } from "../billing/billing.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { DB, type DbToken } from "../db/db.module.js";
@@ -133,6 +135,8 @@ export class IdentityService {
   constructor(
     @Inject(DB) private readonly db: DbToken,
     private readonly jwtService: JwtService,
+    @Inject(forwardRef(() => BillingService))
+    private readonly billingService: BillingService,
   ) {
     this.objectStore = hasR2Config() ? createR2ObjectStore() : createMemoryObjectStore();
   }
@@ -740,6 +744,7 @@ export class IdentityService {
   ): Promise<IdentityMe> {
     const birthday = formatBirthday(row.birthday);
     const countryLabel = await this.resolveCountryLabel(row.countryId);
+    const entitlement = await this.billingService.getEntitlementForUser(row.id);
 
     return identityMeSchema.parse({
       id: row.id,
@@ -762,6 +767,7 @@ export class IdentityService {
       countryLabel,
       city: row.city,
       showCity: row.showCity,
+      entitlement,
     });
   }
 

@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AdminModule } from "./admin/admin.module.js";
+import { BillingModule } from "./billing/billing.module.js";
 import { CatalogModule } from "./catalog/catalog.module.js";
 import { CollectionModule } from "./collection/collection.module.js";
 import { DbModule } from "./db/db.module.js";
@@ -14,6 +15,7 @@ import { VisionModule } from "./vision/vision.module.js";
     CatalogModule,
     HealthModule,
     IdentityModule,
+    BillingModule,
     VisionModule,
     CollectionModule,
     ModerationModule,

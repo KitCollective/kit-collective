@@ -1,4 +1,4 @@
-import type { IdentityMe, IdentitySession } from "@kit/api-contract";
+import type { Entitlement, IdentityMe, IdentitySession } from "@kit/api-contract";
 import {
   createContext,
   type ReactNode,
@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { startNestTrial } from "@/api/billing";
 import {
   fetchCookieConsent,
   fetchCurrentUser,
@@ -16,18 +17,23 @@ import {
   registerCollector,
 } from "@/api/identity";
 import { clearSession, loadSession, saveSession } from "@/auth/session";
+import { PaywallSheet } from "@/components/paywall-sheet";
 import { loadAnalysisIfConsented } from "@/consent/analysis-loader";
+import { resolvePremiumAccessIntent } from "@/premium/premium-access";
 import { resetAddSession } from "@/session/addSession";
 import { useAppearanceOptional } from "@/theme/appearance";
 
 type AuthContextValue = {
   user: IdentityMe | null;
   accessToken: string | null;
+  entitlement: Entitlement | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  requestPremiumAccess: () => Promise<boolean>;
+  closePaywall: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -48,6 +54,7 @@ async function hydrateConsent(accessToken: string): Promise<void> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<IdentitySession | null>(null);
   const [user, setUser] = useState<IdentityMe | null>(null);
+  const [paywallOpen, setPaywallOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const appearance = useAppearanceOptional();
 
@@ -143,20 +150,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(profile);
   }, [session]);
 
+  const closePaywall = useCallback(() => {
+    setPaywallOpen(false);
+  }, []);
+
+  const requestPremiumAccess = useCallback(async (): Promise<boolean> => {
+    if (!session || !user) {
+      setPaywallOpen(true);
+      return false;
+    }
+
+    const intent = resolvePremiumAccessIntent(user.entitlement);
+    if (intent === "live") {
+      return true;
+    }
+
+    if (intent === "trial_eligible") {
+      try {
+        await startNestTrial(session.accessToken);
+        const profile = await fetchCurrentUser(session.accessToken);
+        setUser(profile);
+        return profile.entitlement.live;
+      } catch {
+        setPaywallOpen(true);
+        return false;
+      }
+    }
+
+    setPaywallOpen(true);
+    return false;
+  }, [session, user]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       accessToken: session?.accessToken ?? null,
+      entitlement: user?.entitlement ?? null,
       isLoading,
       signIn,
       signUp,
       signOut,
       refreshUser,
+      requestPremiumAccess,
+      closePaywall,
     }),
-    [user, session, isLoading, signIn, signUp, signOut, refreshUser],
+    [
+      user,
+      session,
+      isLoading,
+      signIn,
+      signUp,
+      signOut,
+      refreshUser,
+      requestPremiumAccess,
+      closePaywall,
+    ],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <PaywallSheet visible={paywallOpen} onDismiss={closePaywall} />
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

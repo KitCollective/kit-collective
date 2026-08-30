@@ -50,6 +50,12 @@ describe("identityMeSchema location fields", () => {
       countryLabel: "Danmark",
       city: "København",
       showCity: true,
+      entitlement: {
+        live: false,
+        source: null,
+        expires: null,
+        trialUsed: false,
+      },
     };
 
     expect(identityMeSchema.parse(me)).toEqual(me);

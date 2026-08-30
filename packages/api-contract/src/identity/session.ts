@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { entitlementSchema } from "../billing/entitlement.js";
 import { identityAccountFieldsSchema } from "./account.js";
 import { handleSchema } from "./profile.js";
 
@@ -30,6 +31,7 @@ export const identityMeSchema = identityUserSchema
   .extend({
     aboutMe: z.string().nullable(),
     avatarUrl: z.string().min(1).nullable(),
+    entitlement: entitlementSchema,
   })
   .merge(identityAccountFieldsSchema);
 
