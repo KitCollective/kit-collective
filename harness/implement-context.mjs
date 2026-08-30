@@ -12,6 +12,7 @@ import {
   formatSliceBrief,
 } from "./first-pass.mjs";
 import { formatHermesLessonsBrief, selectHermesLessons } from "./hermes-lessons.mjs";
+import { buildModelRoute, formatModelRouteBrief } from "./model-router.mjs";
 
 export const UI_SURFACE_LABELS = ["mobile", "web", "admin"];
 export const UI_WRITE_SCOPE_PREFIXES = ["apps/mobile", "apps/web", "apps/admin"];
@@ -296,6 +297,8 @@ export function selectImplementContext(input = {}) {
       compositionHints: [],
       sliceBrief: "",
       hermesBrief: "",
+      modelRoute: null,
+      modelRouteBrief: "",
       slimOnly: false,
     };
   }
@@ -328,6 +331,17 @@ export function selectImplementContext(input = {}) {
       query: `${input.reviewFeedback ?? ""}\n${slice.body}`,
     }),
   );
+  const modelRoute = slimOnly
+    ? null
+    : buildModelRoute({
+        title: typeof input.title === "string" ? input.title : "",
+        body: slice.body,
+        writeScope: typeof input.writeScope === "string" ? input.writeScope : "",
+        requiredHelpers,
+        paths,
+        rotationIndex: typeof input.rotationIndex === "number" ? input.rotationIndex : Date.now(),
+      });
+  const modelRouteBrief = modelRoute && !slimOnly ? formatModelRouteBrief(modelRoute) : "";
 
   return {
     requiredHelpers,
@@ -338,6 +352,8 @@ export function selectImplementContext(input = {}) {
     compositionHints: [],
     sliceBrief,
     hermesBrief,
+    modelRoute,
+    modelRouteBrief,
     slimOnly,
   };
 }
@@ -372,6 +388,7 @@ export function dynamicAppendRules(selectedRules = []) {
  *   designLockHeadings?: string[],
  *   sliceBrief?: string,
  *   hermesBrief?: string,
+ *   modelRouteBrief?: string,
  *   slimOnly?: boolean,
  * }} context
  */
@@ -418,6 +435,10 @@ export function buildImplementAppendPath(workspace, roleFile, context) {
   }
   if (typeof context.hermesBrief === "string" && context.hermesBrief.length > 0) {
     parts.push(context.hermesBrief);
+  }
+  if (typeof context.modelRouteBrief === "string" && context.modelRouteBrief.length > 0) {
+    parts.push("\n");
+    parts.push(context.modelRouteBrief);
   }
   const outPath = join(workspace, GENERATED_APPEND_REL);
   mkdirSync(dirname(outPath), { recursive: true });

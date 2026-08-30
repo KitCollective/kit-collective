@@ -53,6 +53,26 @@ function migrate(db) {
     CREATE INDEX IF NOT EXISTS idx_token_runs_identifier ON token_runs(identifier);
     CREATE INDEX IF NOT EXISTS idx_token_runs_ended_at ON token_runs(ended_at);
     CREATE INDEX IF NOT EXISTS idx_token_runs_session ON token_runs(session_id);
+
+    CREATE TABLE IF NOT EXISTS route_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ended_at TEXT NOT NULL,
+      identifier TEXT NOT NULL,
+      issue_id TEXT,
+      role TEXT NOT NULL,
+      session_id TEXT,
+      complexity TEXT,
+      skip_draft INTEGER NOT NULL DEFAULT 0,
+      scaffold_model TEXT,
+      implement_model TEXT,
+      verify_model TEXT,
+      success INTEGER,
+      review_loops INTEGER,
+      cost_usd REAL,
+      reasons_json TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_route_runs_identifier ON route_runs(identifier);
+    CREATE INDEX IF NOT EXISTS idx_route_runs_complexity ON route_runs(complexity);
   `);
 }
 
@@ -100,6 +120,38 @@ export function createTokenStore(options = {}) {
       SUM(tokens_out) AS tokens_out
     FROM token_runs
     WHERE identifier = ?
+  `);
+
+  const insertRoute = db.prepare(`
+    INSERT INTO route_runs (
+      ended_at, identifier, issue_id, role, session_id,
+      complexity, skip_draft, scaffold_model, implement_model, verify_model,
+      success, review_loops, cost_usd, reasons_json
+    ) VALUES (
+      @ended_at, @identifier, @issue_id, @role, @session_id,
+      @complexity, @skip_draft, @scaffold_model, @implement_model, @verify_model,
+      @success, @review_loops, @cost_usd, @reasons_json
+    )
+  `);
+
+  const selectRoutesByIdentifier = db.prepare(`
+    SELECT * FROM route_runs
+    WHERE identifier = ?
+    ORDER BY id DESC
+    LIMIT ?
+  `);
+
+  const summarizeRoutesSql = db.prepare(`
+    SELECT
+      complexity,
+      COUNT(*) AS run_count,
+      SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) AS success_count,
+      AVG(review_loops) AS avg_review_loops,
+      SUM(cost_usd) AS cost_usd
+    FROM route_runs
+    WHERE identifier = ? OR ? = ''
+    GROUP BY complexity
+    ORDER BY complexity
   `);
 
   return {
@@ -170,11 +222,110 @@ export function createTokenStore(options = {}) {
     },
 
     /**
+     * Retro metric: one row per implement stay model-route decision + outcome.
+     *
+     * @param {{
+     *   identifier: string,
+     *   role?: string,
+     *   issueId?: string,
+     *   sessionId?: string,
+     *   endedAt?: string,
+     *   complexity?: string,
+     *   skipDraft?: boolean,
+     *   scaffoldModel?: string,
+     *   implementModel?: string,
+     *   verifyModel?: string,
+     *   success?: boolean | null,
+     *   reviewLoops?: number | null,
+     *   costUsd?: number | null,
+     *   reasons?: string[],
+     * }} route
+     * @returns {{ id: number } | null}
+     */
+    recordRouteRun(route) {
+      if (!route || typeof route !== "object") {
+        return null;
+      }
+      if (typeof route.identifier !== "string" || route.identifier.length === 0) {
+        return null;
+      }
+      try {
+        const result = insertRoute.run({
+          ended_at: route.endedAt ?? new Date().toISOString(),
+          identifier: route.identifier,
+          issue_id: typeof route.issueId === "string" ? route.issueId : null,
+          role: typeof route.role === "string" ? route.role : "implement",
+          session_id: typeof route.sessionId === "string" ? route.sessionId : null,
+          complexity: typeof route.complexity === "string" ? route.complexity : null,
+          skip_draft: route.skipDraft === true ? 1 : 0,
+          scaffold_model: typeof route.scaffoldModel === "string" ? route.scaffoldModel : null,
+          implement_model: typeof route.implementModel === "string" ? route.implementModel : null,
+          verify_model: typeof route.verifyModel === "string" ? route.verifyModel : null,
+          success: typeof route.success === "boolean" ? (route.success ? 1 : 0) : null,
+          review_loops: typeof route.reviewLoops === "number" ? route.reviewLoops : null,
+          cost_usd: typeof route.costUsd === "number" ? route.costUsd : null,
+          reasons_json: JSON.stringify(Array.isArray(route.reasons) ? route.reasons : []),
+        });
+        return { id: Number(result.lastInsertRowid) };
+      } catch {
+        return null;
+      }
+    },
+
+    /**
      * @param {string} identifier
      * @param {number} [limit]
      */
     listByIdentifier(identifier, limit = 50) {
       return selectByIdentifier.all(identifier, Math.max(1, Math.min(limit, 500))).map(mapRow);
+    },
+
+    /**
+     * @param {string} identifier
+     * @param {number} [limit]
+     */
+    listRouteRuns(identifier, limit = 50) {
+      return selectRoutesByIdentifier
+        .all(identifier, Math.max(1, Math.min(limit, 500)))
+        .map((row) => ({
+          id: row.id,
+          endedAt: row.ended_at,
+          identifier: row.identifier,
+          issueId: row.issue_id ?? undefined,
+          role: row.role,
+          sessionId: row.session_id ?? undefined,
+          complexity: row.complexity ?? undefined,
+          skipDraft: row.skip_draft === 1,
+          scaffoldModel: row.scaffold_model ?? undefined,
+          implementModel: row.implement_model ?? undefined,
+          verifyModel: row.verify_model ?? undefined,
+          success: row.success === null || row.success === undefined ? null : row.success === 1,
+          reviewLoops: row.review_loops ?? null,
+          costUsd: row.cost_usd ?? null,
+          reasons: (() => {
+            try {
+              return JSON.parse(row.reasons_json ?? "[]");
+            } catch {
+              return [];
+            }
+          })(),
+        }));
+    },
+
+    /**
+     * @param {string} [identifier] empty = all identifiers
+     */
+    summarizeRoutes(identifier = "") {
+      return summarizeRoutesSql.all(identifier, identifier).map((row) => ({
+        complexity: row.complexity ?? "unknown",
+        runCount: Number(row.run_count ?? 0),
+        successCount: Number(row.success_count ?? 0),
+        avgReviewLoops:
+          row.avg_review_loops === null || row.avg_review_loops === undefined
+            ? null
+            : Number(row.avg_review_loops),
+        costUsd: row.cost_usd ?? null,
+      }));
     },
 
     /**

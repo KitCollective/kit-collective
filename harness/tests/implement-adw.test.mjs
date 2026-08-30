@@ -1511,10 +1511,7 @@ test("implement parent spawn stays Composer and is not Hy3", async () => {
   });
   const modelIdx = spawned[0].args.indexOf("--model");
   assert.equal(spawned[0].args[modelIdx + 1], "cursor/composer-2.5");
-  assert.equal(
-    spawned[0].args.some((arg) => /tencent\/hy|mimo-v2/.test(String(arg))),
-    false,
-  );
+  // Prompt may name Hy3 for Scout/Draft/verify routes — parent --model stays Composer.
   assert.equal(spawned[0].options.env.OPENROUTER_API_KEY, "or_test");
   assert.equal(String(spawned[0].args.join(" ")).includes("or_test"), false);
 });
@@ -1543,10 +1540,10 @@ test("implement spawn excludes memory-write tools and skill_manage", async () =>
 
 test("Draft pins free OpenRouter coding models with Hy3 then Composer fallbacks", () => {
   const draft = agentFrontmatter(".pi/agents/draft.md");
-  assert.match(draft.frontmatter, /^model:\s+openrouter\/poolside\/laguna-s-2\.1:free\s*$/m);
+  assert.match(draft.frontmatter, /^model:\s+openrouter\/minimax\/minimax-m3:free\s*$/m);
   assert.match(
     draft.frontmatter,
-    /^fallbackModels:\s+openrouter\/minimax\/minimax-m3:free,\s*openrouter\/z-ai\/glm-5\.2:free,\s*openrouter\/tencent\/hy3,\s*cursor\/composer-2\.5\s*$/m,
+    /^fallbackModels:\s+openrouter\/z-ai\/glm-5\.2:free,\s*openrouter\/poolside\/laguna-s-2\.1:free,\s*openrouter\/tencent\/hy3,\s*cursor\/composer-2\.5\s*$/m,
   );
   assert.match(draft.frontmatter, /^thinking:\s+off\s*$/m);
   assert.match(draft.frontmatter, /edit|write/);
