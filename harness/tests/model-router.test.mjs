@@ -9,6 +9,7 @@ import {
   classifySliceComplexity,
   FREE_MODEL_ROTATION,
   formatModelRouteBrief,
+  resolveImplementParentModel,
   rotateFreeChain,
   routeForGate,
 } from "../model-router.mjs";
@@ -83,5 +84,43 @@ test("buildModelRoute + brief mention complexity and fallback on 429", () => {
   const brief = formatModelRouteBrief(route);
   assert.match(brief, /Complexity:/);
   assert.match(brief, /429/);
-  assert.match(brief, /Scaffold \(Draft\)/);
+  assert.match(brief, /Scaffold \(Draft\)|Draft/);
+  assert.match(brief, /parent `--model`/);
+});
+
+test("empty slice defaults to standard — not free parent", () => {
+  const result = classifySliceComplexity({});
+  assert.equal(result.tier, "standard");
+  assert.ok(result.reasons.some((reason) => /no slice signal/i.test(reason)));
+  const route = buildModelRoute({});
+  assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), COMPOSER_MODEL);
+});
+
+test("resolveImplementParentModel picks free primary for simple", () => {
+  const route = buildModelRoute({
+    title: "Add padding to empty state",
+    body: "Simple CSS/padding tweak on empty state scaffold",
+    writeScope: "apps/mobile/**",
+    requiredHelpers: ["expo", "ui-ux"],
+    paths: ["apps/mobile/src/empty-state.tsx"],
+    rotationIndex: 0,
+  });
+  assert.equal(route.complexity.tier, "simple");
+  assert.equal(route.gates.implement.useFree, true);
+  assert.equal(
+    resolveImplementParentModel(route, COMPOSER_MODEL),
+    FREE_MODEL_ROTATION[0],
+  );
+});
+
+test("resolveImplementParentModel keeps Composer for critical", () => {
+  const route = buildModelRoute({
+    title: "Fix IAP restore",
+    body: "Touch StoreKit entitlement refresh",
+    writeScope: "apps/api/**",
+    requiredHelpers: ["nest"],
+    rotationIndex: 0,
+  });
+  assert.equal(route.complexity.tier, "critical");
+  assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), COMPOSER_MODEL);
 });

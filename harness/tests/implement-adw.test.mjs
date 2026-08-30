@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { FREE_MODEL_ROTATION } from "../model-router.mjs";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -1511,9 +1512,37 @@ test("implement parent spawn stays Composer and is not Hy3", async () => {
   });
   const modelIdx = spawned[0].args.indexOf("--model");
   assert.equal(spawned[0].args[modelIdx + 1], "cursor/composer-2.5");
-  // Prompt may name Hy3 for Scout/Draft/verify routes — parent --model stays Composer.
+  // Missing issue signal defaults standard — parent --model stays Composer (prompt may still name Hy3 for Scout/Draft).
   assert.equal(spawned[0].options.env.OPENROUTER_API_KEY, "or_test");
   assert.equal(String(spawned[0].args.join(" ")).includes("or_test"), false);
+});
+
+test("implement parent --model follows free route on simple slices", async () => {
+  const spawned = [];
+  const linear = fakeLinear();
+  linear.getIssue = async () => ({
+    title: "Add padding to empty state",
+    description:
+      "write-scope: apps/mobile/**\n\nSimple CSS/padding tweak on empty state scaffold",
+    labels: ["expo"],
+  });
+  await implementRunner({
+    gh: fakeGh(),
+    linear,
+    spawned,
+  }).run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  const modelIdx = spawned[0].args.indexOf("--model");
+  const parentModel = spawned[0].args[modelIdx + 1];
+  assert.ok(
+    FREE_MODEL_ROTATION.includes(parentModel),
+    `expected free/cheap parent, got ${parentModel}`,
+  );
+  assert.notEqual(parentModel, "cursor/composer-2.5");
 });
 
 test("implement spawn excludes memory-write tools and skill_manage", async () => {
