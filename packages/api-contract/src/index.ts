@@ -215,6 +215,24 @@ export {
   identityPasswordChangeSchema,
 } from "./identity/account.js";
 export {
+  acceptAllCookieConsent,
+  type CookieConsent,
+  type CookieConsentUpdate,
+  cookieConsentSchema,
+  cookieConsentUpdateSchema,
+  essentialOnlyCookieConsent,
+} from "./identity/cookie-consent.js";
+export {
+  type IdentityExport,
+  identityExportSchema,
+} from "./identity/export.js";
+export {
+  type IdentityPrefs,
+  type IdentityPrefsUpdate,
+  identityPrefsSchema,
+  identityPrefsUpdateSchema,
+} from "./identity/prefs.js";
+export {
   type Handle,
   type HandleAvailabilityQuery,
   type HandleAvailabilityResponse,

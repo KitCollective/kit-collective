@@ -5,8 +5,11 @@ import {
   collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionSaveResponseSchema,
+  cookieConsentSchema,
   handleAvailabilityResponseSchema,
+  identityExportSchema,
   identityMeSchema,
+  identityPrefsSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
@@ -595,5 +598,98 @@ describe("Identity /v1", () => {
     expect(collectionFavoritesSchema.parse(JSON.parse(emptyFavorites.body)).favorites).toHaveLength(
       0,
     );
+  });
+
+  it("returns 401 for export without session", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/identity/export",
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("round-trips notification and privacy prefs", async () => {
+    const session = await registerSession(app, "prefs-roundtrip@example.com");
+
+    const initial = await app.inject({
+      method: "GET",
+      url: "/v1/identity/prefs",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(initial.statusCode).toBe(200);
+    const defaults = identityPrefsSchema.parse(JSON.parse(initial.body));
+    expect(defaults.emailNews).toBe(false);
+    expect(defaults.emailHighPriority).toBe(true);
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/v1/identity/prefs",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: {
+        pushEnabled: true,
+        pushHighPriority: false,
+        locale: "en",
+        appearance: "dark",
+        privacyPersonalised: false,
+      },
+    });
+    expect(patch.statusCode).toBe(200);
+    const updated = identityPrefsSchema.parse(JSON.parse(patch.body));
+    expect(updated).toMatchObject({
+      pushEnabled: true,
+      pushHighPriority: false,
+      locale: "en",
+      appearance: "dark",
+      privacyPersonalised: false,
+    });
+
+    const again = await app.inject({
+      method: "GET",
+      url: "/v1/identity/prefs",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(identityPrefsSchema.parse(JSON.parse(again.body))).toEqual(updated);
+  });
+
+  it("persists essential-only cookie consent with analysis false", async () => {
+    const session = await registerSession(app, "cookie-essential@example.com");
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/v1/identity/cookie-consent",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { analysis: false, marketing: false },
+    });
+    expect(patch.statusCode).toBe(200);
+    expect(cookieConsentSchema.parse(JSON.parse(patch.body))).toEqual({
+      analysis: false,
+      marketing: false,
+    });
+
+    const get = await app.inject({
+      method: "GET",
+      url: "/v1/identity/cookie-consent",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(cookieConsentSchema.parse(JSON.parse(get.body))).toEqual({
+      analysis: false,
+      marketing: false,
+    });
+  });
+
+  it("returns authenticated export with profile fields and jersey ids", async () => {
+    const session = await registerSession(app, "export-owner@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const jersey = await saveJerseyForUser(app, session, fixture);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/identity/export",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const payload = identityExportSchema.parse(JSON.parse(response.body));
+    expect(payload.email).toBe("export-owner@example.com");
+    expect(payload.userJerseyIds).toContain(jersey.id);
   });
 });

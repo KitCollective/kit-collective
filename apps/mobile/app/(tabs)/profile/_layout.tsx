@@ -26,6 +26,7 @@ export default function ProfileLayout() {
       <Stack.Screen name="sprog" />
       <Stack.Screen name="moerk-tilstand" />
       <Stack.Screen name="privatlivsindstillinger" />
+      <Stack.Screen name="administrer-kontodata" />
       <Stack.Screen name="cookie-indstillinger" />
     </Stack>
   );

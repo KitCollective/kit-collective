@@ -344,6 +344,151 @@ export function ListPeerStubRow({ handle, meta, onPress }: ListPeerStubRowProps)
   );
 }
 
+type SwitchControlProps = {
+  value: boolean;
+  disabled?: boolean;
+  onValueChange: (value: boolean) => void;
+  accessibilityLabel: string;
+};
+
+export function SwitchControl({
+  value,
+  disabled = false,
+  onValueChange,
+  accessibilityLabel,
+}: SwitchControlProps) {
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ checked: value, disabled }}
+      disabled={disabled}
+      onPress={() => onValueChange(!value)}
+      style={({ pressed }) => [
+        styles.switchTrack,
+        {
+          backgroundColor: value ? theme.fillPrimary : theme.borderSubtle,
+          opacity: disabled ? 0.4 : pressed ? 0.9 : 1,
+        },
+      ]}
+    >
+      <View
+        style={[
+          styles.switchThumb,
+          {
+            backgroundColor: value ? theme.contentInverse : theme.surface,
+            alignSelf: value ? "flex-end" : "flex-start",
+          },
+        ]}
+      />
+    </Pressable>
+  );
+}
+
+type ListSwitchRowProps = {
+  title: string;
+  helper?: string;
+  value: boolean;
+  disabled?: boolean;
+  onValueChange: (value: boolean) => void;
+};
+
+export function ListSwitchRow({
+  title,
+  helper,
+  value,
+  disabled = false,
+  onValueChange,
+}: ListSwitchRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={() => onValueChange(!value)}
+      style={({ pressed }) => [
+        styles.row,
+        { opacity: disabled ? 0.4 : 1 },
+        pressed && !disabled && styles.pressed,
+      ]}
+    >
+      <View style={styles.rowBody}>
+        <Text style={[typography.body, { color: theme.contentPrimary }]}>{title}</Text>
+        {helper ? (
+          <Text style={[typography.caption, { color: theme.contentSecondary }]}>{helper}</Text>
+        ) : null}
+      </View>
+      <SwitchControl
+        value={value}
+        disabled={disabled}
+        onValueChange={onValueChange}
+        accessibilityLabel={title}
+      />
+    </Pressable>
+  );
+}
+
+type ListSelectRowProps = {
+  title: string;
+  selected: boolean;
+  onPress: () => void;
+};
+
+export function ListSelectRow({ title, selected, onPress }: ListSelectRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+    >
+      <Text style={[typography.body, styles.selectTitle, { color: theme.contentPrimary }]}>
+        {title}
+      </Text>
+      {selected ? (
+        <Ionicons
+          name="checkmark"
+          size={22}
+          color={theme.fillPrimary}
+          accessibilityElementsHidden
+        />
+      ) : (
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={theme.contentMuted}
+          accessibilityElementsHidden
+        />
+      )}
+    </Pressable>
+  );
+}
+
+type ListMetaRowProps = {
+  title: string;
+  meta: string;
+};
+
+export function ListMetaRow({ title, meta }: ListMetaRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  return (
+    <View style={styles.row}>
+      <Text style={[typography.body, styles.selectTitle, { color: theme.contentPrimary }]}>
+        {title}
+      </Text>
+      <Text style={[typography.mono, { color: theme.contentMuted }]}>{meta}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   drillHeader: {
     flexDirection: "row",
@@ -430,6 +575,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dangerLabel: {
+    flex: 1,
+  },
+  switchTrack: {
+    width: 52,
+    height: 32,
+    borderRadius: radius.pill,
+    padding: 2,
+    justifyContent: "center",
+  },
+  switchThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  selectTitle: {
     flex: 1,
   },
 });
