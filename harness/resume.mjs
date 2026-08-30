@@ -6,9 +6,10 @@
  * Stale retry-cap comments do not skip enqueue (KIT-125).
  * Implement and factory-checker require ready-for-agent.
  */
+
+import { workpadCheckerIncompleteParked } from "./checker-exit.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
-import { workpadCheckerIncompleteParked } from "./checker-exit.mjs";
 import { findWriteScopeOverlap, PLANNER_PRIORITY_ORDER, PLANNER_TEAM_KEY } from "./planner.mjs";
 import { dispatchIssue } from "./webhook-router.mjs";
 

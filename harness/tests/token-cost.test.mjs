@@ -2,14 +2,11 @@
  * Token cost estimates and Spec-only / token-run logging.
  */
 import assert from "node:assert/strict";
+import { dirname, join } from "node:path";
 import test from "node:test";
-import {
-  estimateLineCostUsd,
-  formatCostUsd,
-  MODEL_PRICING_USD_PER_MTOK,
-  sumCostUsd,
-} from "../token-cost.mjs";
+import { fileURLToPath } from "node:url";
 import { reviewFeedbackIsSpecOnly } from "../first-pass.mjs";
+import { WORKPAD_HEADING } from "../linear-cli.mjs";
 import {
   applyTokenUseWorkpad,
   createTokenUseCollector,
@@ -18,12 +15,15 @@ import {
   MAX_TOKEN_USE_RUNS_ON_WORKPAD,
   piArgsForRole,
   publicTokenSnapshot,
-  tokenSnapshotFromCollected,
   TOKEN_USE_HEADING,
+  tokenSnapshotFromCollected,
 } from "../pi-job.mjs";
-import { WORKPAD_HEADING } from "../linear-cli.mjs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  estimateLineCostUsd,
+  formatCostUsd,
+  MODEL_PRICING_USD_PER_MTOK,
+  sumCostUsd,
+} from "../token-cost.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -45,15 +45,11 @@ test("sumCostUsd ignores unknown lines", () => {
 
 test("reviewFeedbackIsSpecOnly when only Spec has findings", () => {
   assert.equal(
-    reviewFeedbackIsSpecOnly(
-      "- Spec: missing badge\n- Standards: (none)\n- Slop: (none)\n",
-    ),
+    reviewFeedbackIsSpecOnly("- Spec: missing badge\n- Standards: (none)\n- Slop: (none)\n"),
     true,
   );
   assert.equal(
-    reviewFeedbackIsSpecOnly(
-      "- Spec: missing badge\n- Standards: lint\n- Slop: (none)\n",
-    ),
+    reviewFeedbackIsSpecOnly("- Spec: missing badge\n- Standards: lint\n- Slop: (none)\n"),
     false,
   );
   assert.equal(reviewFeedbackIsSpecOnly("- Standards: lint\n- Slop: (none)\n"), false);
@@ -70,9 +66,16 @@ test("implementPrompt Spec-only resume skips Scout and helpers", () => {
 });
 
 test("piArgsForRole sets --no-context-files for implement and checker", () => {
-  const implement = piArgsForRole("implement", ROOT, ".pi/roles/implement.md", "cursor/composer-2.5", "hi", {
-    implementContext: { requiredHelpers: [], skills: [], rules: [], slimOnly: true },
-  });
+  const implement = piArgsForRole(
+    "implement",
+    ROOT,
+    ".pi/roles/implement.md",
+    "cursor/composer-2.5",
+    "hi",
+    {
+      implementContext: { requiredHelpers: [], skills: [], rules: [], slimOnly: true },
+    },
+  );
   assert.equal(implement.includes("--no-context-files"), true);
   const checker = piArgsForRole(
     "factory-checker",

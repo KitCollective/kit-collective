@@ -6,6 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { logTokenRun, publicTokenSnapshot } from "../pi-job.mjs";
 import {
   estimateLineCostUsd,
   formatCostUsd,
@@ -14,7 +15,6 @@ import {
   sumCostUsd,
 } from "../token-cost.mjs";
 import { createTokenStore, setDefaultTokenStoreForTests } from "../token-store.mjs";
-import { logTokenRun, publicTokenSnapshot } from "../pi-job.mjs";
 
 test("Cursor Composer slug variants resolve to the same list rate", () => {
   const a = estimateLineCostUsd({

@@ -2,18 +2,18 @@
  * Checker review snapshot — capped diff + issue Spec body for token save.
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   captureCheckerReviewDiff,
   formatCheckerReviewBundle,
   MAX_CHECKER_DIFF_CHARS,
   truncateForChecker,
 } from "../checker-diff.mjs";
+import { FACTORY_CHECKER_ALLOWED_TOOLS, factoryCheckerPiArgs } from "../checker-spawn.mjs";
 import { buildCheckerAppendPath } from "../implement-context.mjs";
-import { factoryCheckerPiArgs, FACTORY_CHECKER_ALLOWED_TOOLS } from "../checker-spawn.mjs";
-import { dirname, join } from "node:path";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
