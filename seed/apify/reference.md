@@ -110,8 +110,8 @@ Already seeded: skip fetch when that club+season already has a squad with jersey
 | **Inputs** | TM player id (from kader row; profile hop when id, `#`, body facts, or portrait missing) |
 | **Fetch** | Kader row first; `…/profil/spieler/{id}` as Player profile fetch when needed |
 | **ExternalId** | TM player id |
-| **Stamdata now** | player id, display name; **date of birth**; nationality/citizenship; height; preferred foot; position; place of birth; name in home country; **Player photo** (portrait bytes → lane object store, `rights: unresolved`, `admin_only` — same rights model as KitPhoto; schema may land with the grain ticket) |
-| **Later leverage** | youth clubs; **Player honours** (`/erfolge`); jersey history (`/rueckennummern`) |
+| **Stamdata now** | player id, display name; **date of birth**; nationality/citizenship; height; preferred foot; position; place of birth; name in home country; **Player photo** (portrait bytes → lane object store, `rights: unresolved`, `admin_only` — same rights model as KitPhoto; schema may land with the grain ticket); **jersey number history** from `/rueckennummern` (season + club/NT + `#`) |
+| **Later leverage** | youth clubs; **Player honours** (`/erfolge`) |
 | **Drop** | agent/agency, market value, contract as historical stamdata, boot outfitter, TM logo/URL as product asset, current profile shirt as historical `#` |
 
 ---
@@ -122,7 +122,7 @@ Already seeded: skip fetch when that club+season already has a squad with jersey
 | --- | --- |
 | **Inputs** | Player + Club **or** NationalTeam + Season from kader |
 | **Fetch** | Same kader as Club season / NationalTeam season (no separate hop for `#` or body facts) |
-| **Stamdata now** | player id, side id, season, jersey `#`, position → `player_club_season` on club path |
+| **Stamdata now** | player id, side id, season, jersey `#`, position → `player_club_season` on club path; career jersey rows inform / cross-check via **jersey number history** on the Player grain |
 | **Drop** | market value |
 | **Open** | appearances/goals; loan registration; NT season sibling row shape |
 
