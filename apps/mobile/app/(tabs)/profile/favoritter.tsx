@@ -13,7 +13,7 @@ import { EmptyState } from "@/components/ui";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-export default function FavoritterScreen() {
+export default function FavoritesScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();

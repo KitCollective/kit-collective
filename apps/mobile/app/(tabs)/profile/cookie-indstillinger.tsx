@@ -22,7 +22,7 @@ import { loadAnalysisIfConsented } from "@/consent/analysis-loader";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-export default function CookieIndstillingerScreen() {
+export default function CookieSettingsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
