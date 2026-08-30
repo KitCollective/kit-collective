@@ -327,9 +327,7 @@ export function formatModelRouteBrief(route) {
  */
 export function resolveImplementParentModel(route, fallbackModel) {
   const fallback =
-    typeof fallbackModel === "string" && fallbackModel.length > 0
-      ? fallbackModel
-      : COMPOSER_MODEL;
+    typeof fallbackModel === "string" && fallbackModel.length > 0 ? fallbackModel : COMPOSER_MODEL;
   const gate = route?.gates?.implement;
   if (!gate || typeof gate.primary !== "string" || gate.primary.length === 0) {
     return fallback;

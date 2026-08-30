@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { FREE_MODEL_ROTATION } from "../model-router.mjs";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -29,6 +28,7 @@ import {
   createLinearCliClient,
   ISSUE_UPDATE_STATE_MUTATION,
 } from "../linear-cli.mjs";
+import { FREE_MODEL_ROTATION } from "../model-router.mjs";
 import {
   createPiJobRunner,
   IMPLEMENT_MEMORY_EXCLUDED_TOOLS,
@@ -1522,8 +1522,7 @@ test("implement parent --model follows free route on simple slices", async () =>
   const linear = fakeLinear();
   linear.getIssue = async () => ({
     title: "Add padding to empty state",
-    description:
-      "write-scope: apps/mobile/**\n\nSimple CSS/padding tweak on empty state scaffold",
+    description: "write-scope: apps/mobile/**\n\nSimple CSS/padding tweak on empty state scaffold",
     labels: ["expo"],
   });
   await implementRunner({

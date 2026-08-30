@@ -45,6 +45,7 @@ import { isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { createAgentSessionBridge } from "./linear-agent-session.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
+import { labelForModelId, resolveImplementParentModel } from "./model-router.mjs";
 import { isPiAgentEndLine, pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { createSessionLogCollector } from "./pi-session-log.mjs";
 import { runPlanner } from "./planner.mjs";
@@ -54,10 +55,6 @@ import {
   readReportedCostUsd,
   sumCostUsd,
 } from "./token-cost.mjs";
-import {
-  labelForModelId,
-  resolveImplementParentModel,
-} from "./model-router.mjs";
 import { getDefaultTokenStore } from "./token-store.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 

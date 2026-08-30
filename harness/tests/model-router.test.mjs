@@ -107,10 +107,7 @@ test("resolveImplementParentModel picks free primary for simple", () => {
   });
   assert.equal(route.complexity.tier, "simple");
   assert.equal(route.gates.implement.useFree, true);
-  assert.equal(
-    resolveImplementParentModel(route, COMPOSER_MODEL),
-    FREE_MODEL_ROTATION[0],
-  );
+  assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), FREE_MODEL_ROTATION[0]);
 });
 
 test("resolveImplementParentModel keeps Composer for critical", () => {
