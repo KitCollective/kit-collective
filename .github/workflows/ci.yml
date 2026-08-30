@@ -285,6 +285,9 @@ jobs:
       - name: Test migration-prefix collision hook
         run: node --test .cursor/hooks/tests/block-migration-prefix-collision.test.mjs
 
+      - name: Test Danish code-identifier hook
+        run: node --test .cursor/hooks/tests/block-danish-code-identifiers.test.mjs
+
       - name: Check admin stamdata navigation
         run: node scripts/check-admin-stamdata-navigation.mjs
 

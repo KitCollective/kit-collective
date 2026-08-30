@@ -49,6 +49,7 @@ test("mobile write-scope selects ui-ux and expo helpers with tdd skills and desi
   assert.ok(ctx.skills.includes(".cursor/skills/expo/expo-overview/SKILL.md"));
   assert.ok(ctx.rules.includes(".cursor/rules/write-scope.mdc"));
   assert.ok(ctx.rules.includes(".cursor/rules/design-system.mdc"));
+  assert.ok(ALWAYS_RULES.includes(".cursor/rules/code-english.mdc"));
   for (const rule of ALWAYS_RULES) {
     assert.ok(ctx.rules.includes(rule), rule);
   }
@@ -127,6 +128,7 @@ test("first-run implementPrompt includes Scout, helpers, tdd, write-scope; not S
   assert.match(prompt, /TDD:/i);
   assert.match(prompt, /not `pnpm test`/i);
   assert.match(prompt, /Write-scope: apps\/mobile/);
+  assert.match(prompt, /Code identifiers, comments, and technical names are English/);
   assert.equal(/Skip helpers/i.test(prompt) && !/Do not Skip helpers/i.test(prompt), false);
 });
 

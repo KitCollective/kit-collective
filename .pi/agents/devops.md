@@ -18,3 +18,5 @@ Constraints:
 - For EAS channels, Update, Workflows, or store builds, read the matching skill under `.cursor/skills/expo/` after `expo-overview`. Product lane/secret rules still win.
 
 Return workflow/env changes to the parent. Never force-push protected branches. Do not change Linear status unless the parent asked you only to report a CI blocker.
+
+Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.

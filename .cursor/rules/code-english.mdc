@@ -1,0 +1,16 @@
+---
+description: English for code identifiers, comments, and technical names
+alwaysApply: true
+---
+
+# Code language (English)
+
+Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.
+
+This is a factory rule for Pi implement, helpers, and checker — not Desktop-only. Recurring leak: Danish stems in symbols (`IndstillingerScreen`, `fødselsdag`, `adgangskode`) while collector chrome is correctly Danish.
+
+**English:** variable, function, class, type, file, and test names; comments in source; log/event names; GraphQL and HTTP field names we own; commit-facing identifiers.
+
+**May stay Danish:** collector-facing labels, empty states, and accessibility names when `docs/design-system.md` or `CONTEXT.md` lock Danish-first copy. Shipped Expo route slugs (`indstillinger`, `kontoindstillinger`) are product URLs — do not mass-rename them. Admin chrome stays English (ADR-0019).
+
+Do not translate customer-visible strings to English to satisfy this rule. Do not add new symbols whose names include Danish stems such as `indstillinger`, `fødselsdag`, `adgangskode`, or `kontoindstillinger`.
