@@ -19,6 +19,7 @@ export const HUNK_LIKE_PATTERN = /(?:^|\n)(?:@@|\+\+\+|---)|(?:^|\s)\d+:\d+|(?:^
 export const WORKER_MEMORY_NON_WRITER_ROLES = [
   "implement",
   "scout",
+  "draft",
   "gate",
   "land",
   "planner",
@@ -27,7 +28,12 @@ export const WORKER_MEMORY_NON_WRITER_ROLES = [
 ];
 
 /** Paths whose landing promotes a class from Hermes staging into git law. */
-export const RATCHET_PATH_MARKERS = [".cursor/hooks/", ".cursor/rules/", "scripts/check-"];
+export const RATCHET_PATH_MARKERS = [
+  ".cursor/hooks/",
+  ".cursor/rules/",
+  "scripts/check-",
+  ".pi/first-pass-classes.json",
+];
 
 /**
  * @param {unknown} axis

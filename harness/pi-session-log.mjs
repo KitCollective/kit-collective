@@ -8,14 +8,16 @@ import { harnessLog, redactHarnessError } from "./harness-log.mjs";
 export const PHASE_STOP = {
   session: 1,
   scout: 2,
-  helper: 3,
-  gate: 4,
+  draft: 3,
+  helper: 4,
+  gate: 5,
   implement: 6,
   checker: 8,
 };
 
 const SUBAGENT_PHASE = {
   scout: { phase: "scout", stopPoint: PHASE_STOP.scout },
+  draft: { phase: "draft", stopPoint: PHASE_STOP.draft },
   gate: { phase: "gate", stopPoint: PHASE_STOP.gate },
 };
 
@@ -110,12 +112,36 @@ export function createSessionLogCollector({
   let lastTokenLogAt = 0;
   let scoutDone = false;
   let gateDone = false;
+  /** @type {Map<string, { kind: "subagent" | "bash", agent?: string, command?: string }>} */
+  const openTools = new Map();
 
   /**
    * @param {Parameters<typeof harnessLog>[0]} input
    */
   function emit(input) {
     log({ role, identifier, ...input });
+  }
+
+  /**
+   * @param {unknown} toolCallId
+   * @param {{ kind: "subagent" | "bash", agent?: string, command?: string }} meta
+   */
+  function rememberTool(toolCallId, meta) {
+    if (typeof toolCallId === "string" && toolCallId.length > 0) {
+      openTools.set(toolCallId, meta);
+    }
+  }
+
+  /**
+   * @param {unknown} toolCallId
+   */
+  function takeTool(toolCallId) {
+    if (typeof toolCallId !== "string" || toolCallId.length === 0) {
+      return undefined;
+    }
+    const meta = openTools.get(toolCallId);
+    openTools.delete(toolCallId);
+    return meta;
   }
 
   /**
@@ -177,6 +203,10 @@ export function createSessionLogCollector({
           typeof mapped.detail === "string" && mapped.detail.length > 0
             ? mapped.detail
             : mapped.phase;
+        rememberTool(row.toolCallId, {
+          kind: "subagent",
+          agent: typeof agent === "string" ? agent : label,
+        });
         emit({
           event: "phase",
           gate: "yellow",
@@ -188,6 +218,10 @@ export function createSessionLogCollector({
 
       if (toolName === "bash") {
         const command = args.command ?? args.cmd;
+        rememberTool(row.toolCallId, {
+          kind: "bash",
+          command: typeof command === "string" ? command : undefined,
+        });
         emit({
           event: "tool",
           gate: "yellow",
@@ -247,9 +281,13 @@ export function createSessionLogCollector({
         row.result && typeof row.result === "object"
           ? /** @type {Record<string, unknown>} */ (row.result)
           : {};
+      const remembered = takeTool(row.toolCallId);
 
       if (toolName === "subagent") {
-        const agent = args.agent ?? result.agent;
+        const agent =
+          (typeof args.agent === "string" && args.agent) ||
+          (typeof result.agent === "string" && result.agent) ||
+          remembered?.agent;
         const mapped =
           typeof agent === "string" && agent in SUBAGENT_PHASE
             ? SUBAGENT_PHASE[/** @type {keyof typeof SUBAGENT_PHASE} */ (agent)]
@@ -264,23 +302,31 @@ export function createSessionLogCollector({
           typeof mapped.detail === "string" && mapped.detail.length > 0
             ? mapped.detail
             : mapped.phase;
+        // Gate is superseded — a Gate spawn is yellow noise, not a red loop.
+        const gateTone = agent === "gate" ? "yellow" : isError ? "red" : "green";
         emit({
           event: "phase",
-          gate: isError ? "red" : "green",
+          gate: gateTone,
           ...mapped,
-          detail: isError ? `${label} failed` : `${label} done`,
+          detail: isError
+            ? agent === "gate"
+              ? "gate failed (superseded — do not spawn)"
+              : `${label} failed`
+            : `${label} done`,
         });
         return;
       }
 
       if (toolName === "bash" && isError) {
+        const command = remembered?.command ?? args.command ?? args.cmd;
+        // Non-zero bash is common (format:check red, tests) — yellow, not loopRisk red.
         emit({
           event: "tool",
-          gate: "red",
+          gate: "yellow",
           stopPoint: PHASE_STOP.implement,
           tool: "bash",
-          detail: "bash failed",
-          error: "tool error",
+          detail: bashDetail(command),
+          error: "bash non-zero",
         });
       }
       if ((MEMORY_SEARCH_TOOLS.has(toolName) || MEMORY_WRITE_TOOLS.has(toolName)) && isError) {

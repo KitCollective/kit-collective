@@ -24,6 +24,7 @@ import {
   shouldEnforceWriteScope,
 } from "../scripts/lib/pr-write-scope.mjs";
 import { ensureLoopCounters } from "./auto-merge.mjs";
+import { collectFirstPassViolations, formatFirstPassFeedback } from "./first-pass.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 import { implementInReviewComment, implementSummaryFromWorkpad } from "./role-comments.mjs";
 
@@ -36,6 +37,8 @@ export const IMPLEMENTING = "Implementing";
 export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
 export const CI_LOG_EXCERPT_MAX = 1500;
 export const FORMAT_CHECK_MAX_BUFFER = 2_000_000;
+export const MAX_CONFLICT_REBASES = 3;
+export const MAX_MECHANICAL_FORMAT_APPLIES = 2;
 
 /**
  * Worker format-check infra (ENOBUFS / maxBuffer) is not a format-red.
@@ -163,8 +166,32 @@ export function excerptLog(text, max = CI_LOG_EXCERPT_MAX) {
 }
 
 /**
+ * Classify a required-check failure so the harness can apply biome format
+ * without spawning Pi. Logic (anti-slop, typecheck, assertions) still retries Pi.
+ *
  * @param {Array<{ name?: string, conclusion?: string, status?: string, isRequired?: boolean, state?: string, log?: string }> | undefined} checks
+ * @returns {"format" | "logic" | "unknown"}
  */
+export function classifyCiFailure(checks) {
+  const failed = failedRequiredChecks(checks);
+  if (failed.length === 0) {
+    return "unknown";
+  }
+  const blob = failed.map((check) => `${check.name ?? ""}\n${check.log ?? ""}`).join("\n");
+  const formatHit = /format:check|biome ci\.|pnpm format\b/i.test(blob);
+  const logicHit =
+    /lint:anti-slop|AssertionError|error TS\d+|FAIL\s+|TypeError|ZodError|unique.?email/i.test(
+      blob,
+    );
+  if (formatHit && !logicHit) {
+    return "format";
+  }
+  if (logicHit) {
+    return "logic";
+  }
+  return formatHit ? "format" : "logic";
+}
+
 export function failedRequiredChecks(checks) {
   return selectRequiredChecks(checks).filter((check) =>
     FAILED_CONCLUSIONS.has(check?.conclusion ?? check?.state ?? ""),
@@ -386,6 +413,43 @@ async function writeFormatRetryWorkpad(input) {
   const body = applyReviewFeedback(withEvidence, feedbackLines);
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
   return { pr, status: IMPLEMENTING, formatRetry: true, ciRetry: false, writeScopeRetry: false };
+}
+
+/**
+ * Stay Implementing — first-pass class caught before In Review (cheap, not Grok).
+ *
+ * @param {{
+ *   job: { identifier: string, issueId: string },
+ *   linear: {
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *   },
+ *   pr: { url?: string },
+ *   violations: string[],
+ * }} input
+ */
+async function writeFirstPassRetryWorkpad(input) {
+  const { job, linear, pr, violations } = input;
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
+  const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  const withEvidence =
+    typeof pr?.url === "string" && pr.url.length > 0
+      ? upsertWorkpadEvidence(existing?.body, {
+          prUrl: pr.url,
+          identifier: job.identifier,
+        })
+      : (existing?.body ?? `${WORKPAD_HEADING}\n`);
+  const body = applyReviewFeedback(withEvidence, formatFirstPassFeedback(violations));
+  await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  return {
+    pr,
+    status: IMPLEMENTING,
+    firstPassRetry: true,
+    formatRetry: false,
+    ciRetry: false,
+    writeScopeRetry: false,
+  };
 }
 
 /**
@@ -730,6 +794,45 @@ export function createFormatCheck({ runCommand } = {}) {
 }
 
 /**
+ * Apply biome format in-process. Prefer worktree `pnpm format`, then image-global
+ * `biome check --write`. Does not spawn Pi.
+ *
+ * @param {{
+ *   runCommand?: (command: string, args: string[], options: { cwd?: string, maxBuffer?: number }) => Promise<string>,
+ * }} [deps]
+ */
+export function createFormatApply({ runCommand } = {}) {
+  const run =
+    runCommand ??
+    (async (command, args, options = {}) => {
+      const { stdout } = await execFile(command, args, {
+        encoding: "utf8",
+        timeout: 120_000,
+        cwd: options.cwd,
+        maxBuffer: FORMAT_CHECK_MAX_BUFFER,
+      });
+      return stdout;
+    });
+  return async ({ cwd }) => {
+    try {
+      await run("pnpm", ["format"], { cwd, maxBuffer: FORMAT_CHECK_MAX_BUFFER });
+    } catch (error) {
+      if (isFormatInfraError(error)) {
+        return;
+      }
+      try {
+        await run("biome", ["check", "--write", "."], { cwd, maxBuffer: FORMAT_CHECK_MAX_BUFFER });
+      } catch (fallback) {
+        if (isFormatInfraError(fallback)) {
+          return;
+        }
+        throw fallback;
+      }
+    }
+  };
+}
+
+/**
  * @param {string | undefined} current
  * @param {{ prUrl: string, identifier: string }} evidence
  */
@@ -769,6 +872,32 @@ function applyListedPr(pr, listed, identifier) {
 
 /**
  * @param {{
+ *   formatApply?: (input: { cwd: string }) => Promise<unknown>,
+ *   gh: { commitFormatFix?: (input: { cwd: string, branch: string }) => Promise<unknown> },
+ *   checkout: { path: string, branch: string },
+ * }} input
+ * @returns {Promise<{ ok: boolean, error?: unknown }>}
+ */
+async function applyMechanicalFormat({ formatApply, gh, checkout }) {
+  if (typeof formatApply !== "function") {
+    return { ok: false };
+  }
+  try {
+    await formatApply({ cwd: checkout.path });
+    if (typeof gh.commitFormatFix === "function") {
+      await gh.commitFormatFix({ cwd: checkout.path, branch: checkout.branch });
+    }
+    return { ok: true };
+  } catch (error) {
+    if (isFormatInfraError(error)) {
+      return { ok: true };
+    }
+    return { ok: false, error };
+  }
+}
+
+/**
+ * @param {{
  *   job: { identifier: string, issueId: string, adwFile?: string },
  *   checkout: { path: string, branch: string },
  *   gh: {
@@ -785,6 +914,7 @@ function applyListedPr(pr, listed, identifier) {
  *   },
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
  *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
+ *   formatApply?: (input: { cwd: string }) => Promise<unknown>,
  *   listChangedFiles?: (input: { cwd: string }) => Promise<string[]>,
  *   listWorktreeMigrations?: (input: { cwd: string }) => Promise<string[]>,
  *   listBaseMigrations?: (input: { cwd: string }) => Promise<string[]>,
@@ -807,6 +937,7 @@ export async function completeImplementAdw(input) {
     linear,
     typecheckTouched,
     formatCheck,
+    formatApply,
     listChangedFiles: listChangedFilesInput,
     listWorktreeMigrations: listWorktreeMigrationsInput,
     listBaseMigrations: listBaseMigrationsInput,
@@ -878,12 +1009,51 @@ export async function completeImplementAdw(input) {
       await formatCheck({ cwd: checkout.path });
     } catch (error) {
       if (!isFormatInfraError(error)) {
-        return writeFormatRetryWorkpad({ job, linear, pr, error });
+        const applied = await applyMechanicalFormat({
+          formatApply,
+          gh,
+          checkout,
+        });
+        if (!applied.ok) {
+          return writeFormatRetryWorkpad({ job, linear, pr, error: applied.error ?? error });
+        }
+        try {
+          await formatCheck({ cwd: checkout.path });
+        } catch (stillRed) {
+          if (!isFormatInfraError(stillRed)) {
+            return writeFormatRetryWorkpad({ job, linear, pr, error: stillRed });
+          }
+        }
       }
     }
   }
   if (typeof runPnpmTest === "function") {
     throw new Error("full pnpm test stays on GitHub Actions, not on this worker");
+  }
+
+  try {
+    const changedForScan =
+      typeof listChangedFiles === "function"
+        ? await listChangedFiles({ cwd: checkout.path, prUrl: pr?.url ?? existingPrUrl })
+        : await createListChangedFiles()({
+            cwd: checkout.path,
+            prUrl: pr?.url ?? existingPrUrl,
+          });
+    const firstPassHits = collectFirstPassViolations({
+      cwd: checkout.path,
+      workspace: checkout.path,
+      files: changedForScan,
+    });
+    if (firstPassHits.length > 0) {
+      return writeFirstPassRetryWorkpad({
+        job,
+        linear,
+        pr: pr ?? { url: existingPrUrl },
+        violations: firstPassHits,
+      });
+    }
+  } catch {
+    // Diff unavailable — GitHub + checker still catch; do not block In Review.
   }
 
   if (typeof pr?.url !== "string" || pr.url.length === 0) {
@@ -897,18 +1067,48 @@ export async function completeImplementAdw(input) {
   }
 
   const deadline = now() + waitTimeoutMs;
+  let conflictRebase = 0;
+  let mechanicalFormatApplies = 0;
   while (true) {
     const next = await gh.viewPr({ cwd: checkout.path });
     if (typeof next?.url === "string" && next.url.length > 0) {
       pr = next;
     }
+    if (pr?.mergeable === "CONFLICTING" && conflictRebase < MAX_CONFLICT_REBASES) {
+      try {
+        await gh.rebase({
+          cwd: checkout.path,
+          onto: "origin/development",
+          branch: checkout.branch,
+        });
+        conflictRebase += 1;
+        continue;
+      } catch {
+        // Real conflict — wait out or cheap-retry Pi with the log.
+      }
+    }
     if (requiredChecksFailed(pr?.checks)) {
+      const withLogs = await attachFailedCheckLogs(pr?.checks, gh, checkout.path);
+      if (
+        classifyCiFailure(withLogs) === "format" &&
+        mechanicalFormatApplies < MAX_MECHANICAL_FORMAT_APPLIES
+      ) {
+        const applied = await applyMechanicalFormat({
+          formatApply,
+          gh,
+          checkout,
+        });
+        if (applied.ok) {
+          mechanicalFormatApplies += 1;
+          continue;
+        }
+      }
       return writeCiRetryWorkpad({
         job,
         checkout,
         gh,
         linear,
-        pr,
+        pr: { ...pr, checks: withLogs },
         timedOut: false,
       });
     }
@@ -990,6 +1190,7 @@ export async function completeImplementAdw(input) {
     writeScopeRetry: false,
     formatRetry: false,
     migrationRetry: false,
+    firstPassRetry: false,
   };
 }
 

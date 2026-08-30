@@ -19,11 +19,23 @@ test("implement cheap-retry coverage is present", () => {
   assert.deepEqual(missingImplementCheapRetryCoverage(loadSources()), []);
 });
 
-test("implement cheap-retry coverage fails when Gate drops format:check", () => {
+test("implement cheap-retry coverage fails when Gate drops Mechanical close ownership", () => {
   const sources = loadSources();
-  sources.gate = sources.gate.replace(/format:check/g, "lint-only").replace(/biome ci/g, "skipped");
+  sources.gate = "# empty gate\n";
   const missing = missingImplementCheapRetryCoverage(sources);
-  assert.ok(missing.some((item) => item.includes("format:check")));
+  assert.ok(
+    missing.some((item) => /Mechanical close|format:check|superseded|do not spawn/i.test(item)),
+  );
+});
+
+test("implement cheap-retry coverage fails when Mechanical close drops classifyCiFailure", () => {
+  const sources = loadSources();
+  sources.implementExit = sources.implementExit.replace(
+    /export function classifyCiFailure/g,
+    "function droppedClassify",
+  );
+  const missing = missingImplementCheapRetryCoverage(sources);
+  assert.ok(missing.some((item) => item.includes("classifyCiFailure")));
 });
 
 test("implement cheap-retry coverage fails when Pi posts a retry-cap hold", () => {

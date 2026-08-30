@@ -58,12 +58,14 @@ export function logFactoryGatePoll({ role, identifier, phase, attempt, pr, check
  * }} input
  */
 export function logFactoryExitDone({ role, identifier, phase, passed, nextStatus, reason }) {
+  const incomplete =
+    reason === "workpad-incomplete-retry" || reason === "workpad-incomplete-parked";
   harnessLog({
     role,
     identifier,
     event: "phase",
     phase: `${phase}-done`,
-    gate: passed ? "green" : "red",
+    gate: passed ? "green" : incomplete ? "yellow" : "red",
     stopPoint: 8,
     detail: reason ?? nextStatus,
   });

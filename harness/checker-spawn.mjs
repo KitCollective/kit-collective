@@ -1,15 +1,17 @@
 /**
  * Factory checker Pi spawn allowlist (KIT-56).
- * Mechanical deny for write/edit/general bash; Linear CLI is a registered host tool.
+ * Mechanical deny for write/edit/general bash; readonly git bash + Linear/gh host tools.
  */
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { formatRegistryForChecker, loadFirstPassRegistry } from "./first-pass.mjs";
+import { buildCheckerAppendPath } from "./implement-context.mjs";
 
 const HARNESS_DIR = dirname(fileURLToPath(import.meta.url));
 const FACTORY_CHECKER_TOOLS = join(HARNESS_DIR, "factory-checker-tools.ts");
 
-/** @readonly */
-export const FACTORY_CHECKER_EXCLUDED_TOOLS = ["write", "edit", "bash"];
+/** Write tools stay excluded. Bash is allowlisted; extension enforces readonly git only. */
+export const FACTORY_CHECKER_EXCLUDED_TOOLS = ["write", "edit"];
 
 /** @readonly */
 export const FACTORY_CHECKER_MEMORY_TOOLS = [
@@ -56,12 +58,18 @@ export function applySlopAgentSpawnEnv(spawnEnv) {
   spawnEnv[SLOP_AGENT_PI_ARGS_ENV] = slopAgentToolArgs().join("\n");
 }
 
-/** @readonly */
+/**
+ * Bash is allowlisted for readonly `git` only (extension gate). Prefer harness-injected
+ * diff; bash fills gaps. No general shell / no `gh pr checks` poll.
+ *
+ * @readonly
+ */
 export const FACTORY_CHECKER_ALLOWED_TOOLS = [
   "read",
   "grep",
   "find",
   "ls",
+  "bash",
   "subagent",
   "linear_cli",
   "gh_cli",
@@ -92,10 +100,15 @@ export function factoryCheckerToolArgs() {
  *   roleFile: string,
  *   model: string,
  *   prompt: string,
+ *   reviewBundle?: string,
  * }} input
  * @returns {string[]}
  */
-export function factoryCheckerPiArgs({ workspace, roleFile, model, prompt }) {
+export function factoryCheckerPiArgs({ workspace, roleFile, model, prompt, reviewBundle }) {
+  const registryMarkdown = formatRegistryForChecker(loadFirstPassRegistry(workspace).classes);
+  const appendPath = buildCheckerAppendPath(workspace, roleFile, registryMarkdown, {
+    reviewBundle,
+  });
   return [
     "-p",
     "-a",
@@ -103,7 +116,7 @@ export function factoryCheckerPiArgs({ workspace, roleFile, model, prompt }) {
     model,
     ...factoryCheckerToolArgs(),
     "--append-system-prompt",
-    join(workspace, roleFile),
+    appendPath,
     "--",
     prompt,
   ];

@@ -62,6 +62,9 @@ export function resolveExitGate(result, job = {}) {
     return "green";
   }
   const row = /** @type {Record<string, unknown>} */ (result);
+  if (row.checkerWorkpadRetry === true || row.checkerWorkpadParked === true) {
+    return "yellow";
+  }
   if (row.passed === false && row.skipped !== true) {
     return "red";
   }
@@ -72,7 +75,8 @@ export function resolveExitGate(result, job = {}) {
     row.ciRetry === true ||
     row.writeScopeRetry === true ||
     row.formatRetry === true ||
-    row.migrationRetry === true
+    row.migrationRetry === true ||
+    row.firstPassRetry === true
   ) {
     return "yellow";
   }
@@ -112,6 +116,8 @@ export function loopRiskForGate(gate) {
  *   detail?: string,
  *   tokensIn?: number,
  *   tokensOut?: number,
+ *   costUsd?: number,
+ *   models?: unknown,
  * }} input
  */
 export function harnessLog(input) {
@@ -162,6 +168,12 @@ export function harnessLog(input) {
   }
   if (typeof input.tokensOut === "number" && Number.isFinite(input.tokensOut)) {
     payload.tokensOut = input.tokensOut;
+  }
+  if (typeof input.costUsd === "number" && Number.isFinite(input.costUsd)) {
+    payload.costUsd = input.costUsd;
+  }
+  if (Array.isArray(input.models)) {
+    payload.models = input.models;
   }
   console.error(JSON.stringify(payload));
 }

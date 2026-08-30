@@ -186,18 +186,22 @@ test("after implement, the workpad records token counts per role and model (inpu
 
   const body = pad.comments[0].body;
   assert.match(body, new RegExp(TOKEN_USE_HEADING));
+  assert.match(body, /#### Run /);
   assert.match(body, /Implement \(Composer\): input 1200, output 400/);
+  assert.match(body, /Total ~/);
   assert.equal(body.includes(API_KEY), false);
   assert.equal(result.tokens.role, "implement");
   assert.equal(result.tokens.identifier, "KIT-93");
-  assert.deepEqual(result.tokens.lines, [
-    { role: "implement", model: "Composer", input: 1200, output: 400 },
-    { role: "scout", model: "Hy3", input: 100, output: 20 },
-    { role: "gate", model: "Hy3", input: 80, output: 15 },
-  ]);
+  assert.equal(typeof result.tokens.costUsd, "number");
+  assert.equal(result.tokens.lines[0].role, "implement");
+  assert.equal(result.tokens.lines[0].input, 1200);
+  assert.equal(result.tokens.lines[0].output, 400);
+  assert.equal(result.tokens.lines[0].modelId, "cursor/composer-2.5");
+  assert.ok(result.tokens.lines.some((line) => line.role === "scout" && line.model === "Hy3"));
+  assert.ok(result.tokens.lines.some((line) => line.role === "gate" && line.model === "MiMo"));
 });
 
-test("Scout and Gate (Hy3) are separate lines from the Implement parent (Composer) when those counts exist", async () => {
+test("Scout (Hy3) and Gate (MiMo) are separate lines from the Implement parent when those counts exist", async () => {
   const pad = workpadStore();
   const runner = createPiJobRunner({
     env: validWorkerEnv(),
@@ -224,14 +228,9 @@ test("Scout and Gate (Hy3) are separate lines from the Implement parent (Compose
   });
 
   const body = pad.comments[0].body;
-  const implementLine = body.match(/^- Implement \(Composer\):.+$/m)?.[0];
-  const scoutLine = body.match(/^- Scout \(Hy3\):.+$/m)?.[0];
-  const gateLine = body.match(/^- Gate \(Hy3\):.+$/m)?.[0];
-  assert.equal(implementLine, "- Implement (Composer): input 1200, output 400");
-  assert.equal(scoutLine, "- Scout (Hy3): input 100, output 20");
-  assert.equal(gateLine, "- Gate (Hy3): input 80, output 15");
-  assert.notEqual(implementLine, scoutLine);
-  assert.notEqual(implementLine, gateLine);
+  assert.match(body, /- Implement \(Composer\): input 1200, output 400/);
+  assert.match(body, /- Scout \(Hy3\): input 100, output 20/);
+  assert.match(body, /- Gate \(MiMo\): input 80, output 15/);
 });
 
 test("factory-checker workpad records Grok token counts for the checker role", async () => {
@@ -281,9 +280,11 @@ test("factory-checker workpad records Grok token counts for the checker role", a
   assert.match(body, /All good — checker pass/);
   assert.match(body, /Factory-checker \(Grok\): input 500, output 80/);
   assert.equal(body.includes("Scout (Hy3)"), false);
-  assert.deepEqual(result.tokens.lines, [
-    { role: "factory-checker", model: "Grok", input: 500, output: 80 },
-  ]);
+  assert.equal(result.tokens.lines.length, 1);
+  assert.equal(result.tokens.lines[0].role, "factory-checker");
+  assert.equal(result.tokens.lines[0].input, 500);
+  assert.equal(result.tokens.lines[0].modelId, "cursor/grok-4.6");
+  assert.equal(typeof result.tokens.costUsd, "number");
 });
 
 test("unknown counts are written as unknown — the job still completes; numbers are not invented", async () => {
@@ -316,9 +317,9 @@ test("unknown counts are written as unknown — the job still completes; numbers
   assert.match(body, /Implement \(Composer\): input unknown, output unknown/);
   assert.equal(body.includes("input 0"), false);
   assert.equal(result.status, "In Review");
-  assert.deepEqual(result.tokens.lines, [
-    { role: "implement", model: "Composer", input: "unknown", output: "unknown" },
-  ]);
+  assert.equal(result.tokens.lines[0].input, "unknown");
+  assert.equal(result.tokens.lines[0].output, "unknown");
+  assert.equal(result.tokens.costUsd, null);
 });
 
 test("tokens and secrets never appear as raw API keys in the workpad or health JSON", async () => {
@@ -503,11 +504,13 @@ test("/health includes the last coding job token totals after implement; HTTP st
     }
     assert.equal(body.ok, true);
     assert.equal(body.job, null);
-    assert.deepEqual(body.tokens, {
-      role: "implement",
-      identifier: "KIT-93",
-      lines: [{ role: "implement", model: "Composer", input: 1200, output: 400 }],
-    });
+    assert.equal(body.tokens.role, "implement");
+    assert.equal(body.tokens.identifier, "KIT-93");
+    assert.equal(body.tokens.lines[0].input, 1200);
+    assert.equal(body.tokens.lines[0].output, 400);
+    assert.equal(typeof body.tokens.costUsd, "number");
+    assert.ok(Array.isArray(body.tokenRuns));
+    assert.ok(body.tokenRuns.length >= 1);
     assert.equal(JSON.stringify(body).includes(API_KEY), false);
   } finally {
     await new Promise((resolve) => server.close(resolve));

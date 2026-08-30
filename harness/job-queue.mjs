@@ -27,14 +27,20 @@ export const ALWAYS_READY_CAPACITY = Object.freeze({
  * One Pi job at a time per slot. Compose replicas stay at 1; these mutexes are the in-process seam.
  *
  * One Implementing stay is one try: it ends at In Review. Cheap in-slot re-spawns
- * (`ciRetry` / `writeScopeRetry` / `formatRetry` / `migrationRetry`) are not tries —
+ * (`ciRetry` / `writeScopeRetry` / `formatRetry` / `migrationRetry` /
+ * `firstPassRetry`) are not tries —
  * they do not increment reviewLoops / ciFailCycles, do not post a retry-cap comment,
  * and do not make resume skip. They re-run the same implement job until GitHub is
  * green or the cheap-retry bound yields the slot (stay Implementing; resume may
  * continue). Never enqueue factory-checker. Write-scope retry keeps the slot so an
  * out-of-glob path cannot drop the issue behind a resume overlap skip (KIT-119).
+ *
+ * Incomplete checker workpad (`checkerWorkpadRetry`) re-runs factory-checker in-slot
+ * (cap 2) while staying In Review — never a full implement tree (KIT-136 spiral).
  */
 export const IMPLEMENT_CI_RETRY_CAP = 5;
+/** In-slot factory-checker re-runs for incomplete Spec/Standards/Slop axes. */
+export const CHECKER_WORKPAD_RETRY_CAP = 2;
 
 /**
  * Cheap in-slot retry: Scout+helpers already ran on attempt 1.
@@ -49,7 +55,8 @@ export function isCheapImplementRetry(job) {
     Number(job.ciRetryAttempt ?? 1) > 1 ||
     Number(job.writeScopeRetryAttempt ?? 1) > 1 ||
     Number(job.formatRetryAttempt ?? 1) > 1 ||
-    Number(job.migrationRetryAttempt ?? 1) > 1
+    Number(job.migrationRetryAttempt ?? 1) > 1 ||
+    Number(job.firstPassRetryAttempt ?? 1) > 1
   );
 }
 
@@ -160,6 +167,47 @@ export async function runImplementWithRetries(run, job) {
       loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
     });
     return runImplementWithRetries(run, { ...job, migrationRetryAttempt: attempt + 1 });
+  }
+  if (result?.firstPassRetry === true) {
+    const attempt = Number(job.firstPassRetryAttempt ?? 1);
+    if (job.role !== "implement") {
+      return result;
+    }
+    if (attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      return yieldCheapRetry(job, result, attempt, "first-pass");
+    }
+    harnessLog({
+      role: job.role,
+      identifier: job.identifier,
+      event: "retry",
+      gate: "yellow",
+      reason: "first-pass",
+      attempt: attempt + 1,
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
+    });
+    return runImplementWithRetries(run, { ...job, firstPassRetryAttempt: attempt + 1 });
+  }
+  if (result?.checkerWorkpadRetry === true) {
+    const attempt = Number(job.checkerWorkpadRetryAttempt ?? 1);
+    if (job.role !== "factory-checker") {
+      return result;
+    }
+    if (attempt >= CHECKER_WORKPAD_RETRY_CAP) {
+      return yieldCheapRetry(job, result, attempt, "checker-workpad");
+    }
+    harnessLog({
+      role: job.role,
+      identifier: job.identifier,
+      event: "retry",
+      gate: "yellow",
+      reason: "checker-workpad",
+      attempt: attempt + 1,
+      loopRisk: loopRiskForRetry(attempt + 1, CHECKER_WORKPAD_RETRY_CAP),
+    });
+    return runImplementWithRetries(run, {
+      ...job,
+      checkerWorkpadRetryAttempt: attempt + 1,
+    });
   }
   return result;
 }

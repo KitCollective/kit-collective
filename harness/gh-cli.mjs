@@ -210,6 +210,29 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
     },
 
     /**
+     * Commit biome --write / pnpm format and push. No-op when the tree is clean.
+     *
+     * @param {{ cwd: string, branch: string }} input
+     */
+    async commitFormatFix({ cwd, branch }) {
+      await run("git", ["add", "-u"], { cwd, env });
+      try {
+        await run("git", ["diff", "--cached", "--quiet"], { cwd, env });
+        return;
+      } catch {
+        // git diff --quiet exits 1 when there is a staged diff
+      }
+      await run("git", ["commit", "-m", "style: biome format (harness)"], { cwd, env });
+      if (typeof branch === "string" && branch.length > 0) {
+        await run(
+          "git",
+          ["push", "--force-with-lease", "-u", "origin", `HEAD:refs/heads/${branch}`],
+          { cwd, env },
+        );
+      }
+    },
+
+    /**
      * Exactly one open development PR for the identifier, or null.
      * Two matches fail closed — do not guess which PR to extend.
      *

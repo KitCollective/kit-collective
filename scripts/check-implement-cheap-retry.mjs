@@ -27,24 +27,27 @@ export const REQUIRED_FILES = {
 export function missingImplementCheapRetryCoverage(sources) {
   const missing = [];
   const gate = sources.gate ?? "";
-  if (!/format:check|biome ci/.test(gate)) {
-    missing.push("gate.md format:check / biome ci");
+  if (!/Mechanical close|format:check|biome/i.test(gate)) {
+    missing.push("gate.md Mechanical close / format:check ownership");
   }
-  if (!/do not treat format/i.test(gate)) {
-    missing.push("gate.md do not treat format as typecheck");
+  if (!/do not spawn|superseded/i.test(gate)) {
+    missing.push("gate.md superseded — do not spawn");
   }
-  if (!/yellow/i.test(gate)) {
-    missing.push("gate.md typecheck may be yellow");
+  if (!/typecheck|yellow/i.test(gate)) {
+    missing.push("gate.md typecheck / yellow owned by harness");
   }
   const role = sources.implementRole ?? "";
-  if (!/Skip Scout/i.test(role) || !/Skip helpers/i.test(role)) {
-    missing.push("implement.md Skip Scout / Skip helpers on cheap retry");
+  if (!/Skip Scout/i.test(role) || !/Skip Draft/i.test(role) || !/Skip helpers/i.test(role)) {
+    missing.push("implement.md Skip Scout / Skip Draft / Skip helpers on cheap retry");
   }
   if (!/selectImplementContext/.test(role)) {
     missing.push("implement.md selectImplementContext injection reference");
   }
   if (!/not a new try|same Implementing stay/i.test(role)) {
     missing.push("implement.md cheap retry is the same Implementing stay");
+  }
+  if (!/one at a time|Mechanical close|Do not spawn Gate/i.test(role)) {
+    missing.push("implement.md serial helpers / Mechanical close / no Gate spawn");
   }
   const piJob = sources.piJob ?? "";
   if (!/format vs Zod vs unique-email vs migration prefix/i.test(piJob)) {
@@ -64,6 +67,12 @@ export function missingImplementCheapRetryCoverage(sources) {
   if (!/harness waits/.test(piJob)) {
     missing.push("pi-job.mjs harness waits for GitHub");
   }
+  if (!/First-pass resume|reviewFeedbackIsFirstPassOnly/.test(piJob)) {
+    missing.push("pi-job.mjs First-pass resume Skip Scout when findings are known classes");
+  }
+  if (!/Never spawn Gate|Do not spawn Gate|one at a time/i.test(piJob)) {
+    missing.push("pi-job.mjs Do not spawn Gate / serial helpers");
+  }
   if (/retry-cap-hold/.test(piJob) || /implementRetryCapComment/.test(piJob)) {
     missing.push("pi-job.mjs must not hold Implementing on retry cap");
   }
@@ -77,6 +86,21 @@ export function missingImplementCheapRetryCoverage(sources) {
   }
   if (!/FORMAT_CHECK_MAX_BUFFER/.test(implementExit)) {
     missing.push("implement-exit.mjs FORMAT_CHECK_MAX_BUFFER");
+  }
+  if (!/export function classifyCiFailure/.test(implementExit)) {
+    missing.push("implement-exit.mjs classifyCiFailure");
+  }
+  if (!/export function createFormatApply/.test(implementExit)) {
+    missing.push("implement-exit.mjs createFormatApply");
+  }
+  if (!/formatApply/.test(implementExit)) {
+    missing.push("implement-exit.mjs formatApply before formatRetry");
+  }
+  if (!/CONFLICTING/.test(implementExit) || !/conflictRebase/.test(implementExit)) {
+    missing.push("implement-exit.mjs rebase CONFLICTING during GitHub wait");
+  }
+  if (!/firstPassRetry|collectFirstPassViolations/.test(implementExit)) {
+    missing.push("implement-exit.mjs first-pass scan before In Review");
   }
   const dockerfile = sources.dockerfile ?? "";
   if (!/@biomejs\/biome@2\.5\.10/.test(dockerfile)) {
