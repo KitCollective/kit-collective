@@ -157,6 +157,10 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-mobile-tab-bar.mjs` also fails when `apps/mobile/src/components/floating-tab-bar.tsx` does not have exactly five icon render sites: four `renderSlot(` calls plus one center-plus `<Ionicons name="add"`. `scripts/tests/check-mobile-tab-bar.test.mjs` (CI via `node --test` in `.github/workflows/ci.yml`) imports `countIconRenderSites` and `checkMobileTabBar` from the real script (mirroring `check-pr-write-scope.test.mjs` → `scripts/lib/pr-write-scope.mjs`) and mutation-tests that removing a `renderSlot` call drops the count below five and fails `checkMobileTabBar({ barSource })`. Prevents repeating the KIT-42 checker round 3 fail (ratchet weakened to accessible-name substring match only) and round 6 fail (hand-duplicated counting logic in the self-test). Tighten only.
 
+### Mobile peer stub typography ratchet (KIT-121)
+
+`scripts/check-mobile-peer-stub-typography.mjs` (CI via `pnpm check:mobile-peer-stub-typography`) fails when `ListPeerStubRow` in `apps/mobile/src/components/profile-ui.tsx` uses `typography.body` instead of locked `typography.headingSm` for the collector handle or initial badge (docs/design-system.md Type table — Thread row, conversation header, Detaljer stub parity). `scripts/tests/check-mobile-peer-stub-typography.test.mjs` imports `checkMobilePeerStubTypography` from the real script and mutation-tests that swapping either `{handle}` or `{initial}` to `typography.body` fails. Prevents repeating the KIT-121 checker fail (Detaljer stub handle on `type.body` while Thread row uses `headingSm`). Tighten only.
+
 ### Mobile semantic color key ratchet (KIT-42)
 
 `scripts/check-mobile-design-tokens.mjs` also fails when `apps/mobile/src/theme/tokens.ts` `lightColor` or `darkColor` defines a semantic color key outside the closed allow-list matching `docs/design-system.md` Tokens (e.g. invented `tabBarFill` / `tabBarBorder` roles). Prevents repeating the KIT-42 checker round 6 fail (undocumented tab-bar color tokens in the semantic layer). Tighten only — extend the allow-list only when `/to-design` amends the locked Tokens table.
