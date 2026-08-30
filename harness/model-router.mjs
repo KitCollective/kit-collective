@@ -116,9 +116,19 @@ export function classifySliceComplexity(input = {}) {
     reasons.push("simple CRUD/scaffold wording");
   }
 
+  const hasSignal =
+    title.trim().length > 0 ||
+    body.trim().length > 0 ||
+    writeScope.trim().length > 0 ||
+    helpers.length > 0 ||
+    paths.length > 0;
+
   /** @type {ComplexityTier} */
   let tier = "standard";
-  if (score >= 4 || criticalHit) {
+  if (!hasSignal) {
+    tier = "standard";
+    reasons.push("no slice signal — default standard (Composer parent)");
+  } else if (score >= 4 || criticalHit) {
     tier = "critical";
   } else if (score <= 1) {
     tier = "simple";
@@ -299,10 +309,49 @@ export function formatModelRouteBrief(route) {
     `- Cheap rotation: ${freeRotation.join(" → ")}`,
     `- Plan (Scout): \`${gates.plan.primary}\``,
     `- Scaffold (Draft): ${skipDraft ? "**Skip Draft** (critical seam)" : `\`${gates.scaffold.primary}\` → ${gates.scaffold.fallbacks.slice(0, 3).join(" → ")}`}`,
-    `- Implement (parent/helpers): \`${gates.implement.primary}\`${gates.implement.useFree ? " (free-capable simple slice — still harden with Composer helpers when listed)" : " (Composer owns complex/critical logic)"}`,
+    `- Implement (parent/helpers): \`${gates.implement.primary}\`${gates.implement.useFree ? " (harness sets parent `--model` to this free/cheap primary — Composer helpers still harden when listed)" : " (Composer parent `--model`; owns complex/critical logic)"}`,
     `- Verify (criteria-only): \`${gates.verify.primary}\` then free rotation; Mechanical close stays harness-owned (no Pi Gate)`,
     "",
     "Override: if a free model 429s, continue the fallback chain — do not stall the stay.",
   ];
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Parent Pi `--model` for an implement stay.
+ * Simple + useFree → route primary (free/Laguna chain). Otherwise Composer / env fallback.
+ *
+ * @param {ReturnType<typeof buildModelRoute> | null | undefined} route
+ * @param {string} fallbackModel
+ * @returns {string}
+ */
+export function resolveImplementParentModel(route, fallbackModel) {
+  const fallback =
+    typeof fallbackModel === "string" && fallbackModel.length > 0 ? fallbackModel : COMPOSER_MODEL;
+  const gate = route?.gates?.implement;
+  if (!gate || typeof gate.primary !== "string" || gate.primary.length === 0) {
+    return fallback;
+  }
+  if (gate.useFree === true && route?.complexity?.tier === "simple") {
+    return gate.primary;
+  }
+  return fallback;
+}
+
+/**
+ * Short label for token lines / health.
+ *
+ * @param {string | undefined} modelId
+ * @returns {string}
+ */
+export function labelForModelId(modelId) {
+  const id = String(modelId ?? "").toLowerCase();
+  if (id.includes("composer")) return "Composer";
+  if (id.includes("grok")) return "Grok";
+  if (id.includes("laguna")) return "Laguna";
+  if (id.includes("minimax")) return "MiniMax";
+  if (id.includes("glm")) return "GLM";
+  if (id.includes("hy3") || id.includes("hy-3")) return "Hy3";
+  if (id.includes("mimo")) return "MiMo";
+  return typeof modelId === "string" && modelId.length > 0 ? modelId : "unknown";
 }

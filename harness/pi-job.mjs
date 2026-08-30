@@ -45,6 +45,7 @@ import { isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { createAgentSessionBridge } from "./linear-agent-session.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
+import { labelForModelId, resolveImplementParentModel } from "./model-router.mjs";
 import { isPiAgentEndLine, pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { createSessionLogCollector } from "./pi-session-log.mjs";
 import { runPlanner } from "./planner.mjs";
@@ -426,12 +427,21 @@ export function publicTokenSnapshot(input) {
  * @param {{ startedAt?: string, endedAt?: string, env?: object }} [extras]
  */
 export function tokenSnapshotFromCollected(jobRole, collected, identifier, extras = {}) {
-  const parentModel = TOKEN_ROLE_MODELS[jobRole] ?? UNKNOWN_TOKEN_COUNT;
+  const parentModelId =
+    typeof extras.parentModelId === "string" && extras.parentModelId.length > 0
+      ? extras.parentModelId
+      : TOKEN_ROLE_MODEL_IDS[jobRole];
+  const parentModel =
+    typeof extras.parentModel === "string" && extras.parentModel.length > 0
+      ? extras.parentModel
+      : jobRole === "implement" && parentModelId
+        ? labelForModelId(parentModelId)
+        : (TOKEN_ROLE_MODELS[jobRole] ?? UNKNOWN_TOKEN_COUNT);
   const lines = [
     {
       role: jobRole,
       model: parentModel,
-      modelId: TOKEN_ROLE_MODEL_IDS[jobRole],
+      modelId: parentModelId,
       ...readUsageCounts(collected?.parentUsage),
     },
   ];
@@ -1336,7 +1346,7 @@ export function createPiJobRunner({
       if (typeof roleFile !== "string") {
         throw new Error(`no Pi role file for ${job.role}`);
       }
-      const model = FAST_ROLES.has(job.role) ? env.PI_MODEL_FAST : env.PI_MODEL;
+      let model = FAST_ROLES.has(job.role) ? env.PI_MODEL_FAST : env.PI_MODEL;
       if (typeof model !== "string" || model.length === 0) {
         throw new Error(`missing Pi model env for role ${job.role}`);
       }
@@ -1474,6 +1484,9 @@ export function createPiJobRunner({
             hermesDir: hermesDirForContext,
             slimOnly: true,
           });
+        }
+        if (implementContext?.modelRoute) {
+          model = resolveImplementParentModel(implementContext.modelRoute, model);
         }
         prompt = implementPrompt(job.role, identifier, job.adwFile, {
           cheapRetry,
@@ -1624,6 +1637,8 @@ export function createPiJobRunner({
           env,
           issueId: typeof job.issueId === "string" ? job.issueId : undefined,
           sessionId: typeof result.sessionId === "string" ? result.sessionId : undefined,
+          parentModelId: model,
+          parentModel: labelForModelId(model),
         });
         logTokenRun(tokens, {
           modelRoute: implementContext?.modelRoute ?? undefined,
