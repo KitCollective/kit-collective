@@ -147,24 +147,24 @@ The first Football Data Seed issue, and the opening slice of later milestones. M
 _Avoid_: implementing grains before the field catalog; researching by scraping every league; treating ADR-0002 as name-and-number only
 
 **Rich grain**:
-When a Hierarchy grain is fetched, take every usable fact for that entity so a later UI or backend flow does not need a second vendor hop. Club depth, player honours and registration, kit sponsor and colours are in scope once Vendor research names them. Still drop market value, agent PII, and vendor branding.
-_Avoid_: a thin id+name+number fetch as the ceiling; a second Seed run just to backfill facts that were on the page the first time; storing market value or agent PII because they were on the page
+When a Hierarchy grain is fetched, take every usable fact for that entity so a later UI or backend flow does not need a second vendor hop. Club facts, kader body facts (position, DOB, nationality, height, foot), player identity depth from that page, kit sponsor and Kit colours are **stamdata now** once Vendor research named them. Still drop market value, agent PII, and vendor branding. Human-only ingest is the reason depth is not deferred.
+_Avoid_: a thin id+name+number fetch as the ceiling; a second Seed run just to backfill facts that were on the page the first time; storing market value or agent PII because they were on the page; labelling Club facts or Kit colours as “later” after the catalog keeps them
 
 **Club facts**:
-Transfermarkt club profile / `datenfakten` depth kept as later leverage: official name, founded date, stadium, capacity, club colour swatches, website. Not kit colours. Not contact address or phone.
-_Avoid_: treating club colour swatches as Kit colours; storing Tel/Fax/address as stamdata; requiring Club facts before a Club season squad accept
+Transfermarkt club profile / `datenfakten` depth kept as stamdata now on the Club grain: official name, founded date, stadium, capacity, club colour swatches, website. Not kit colours. Not contact address or phone. Human-only Rich grain — take them while on the page.
+_Avoid_: treating club colour swatches as Kit colours; storing Tel/Fax/address as stamdata; deferring Club facts to a second Transfermarkt hop
 
 **Player registration**:
-Parent club vs loan (club kader) or call-up club (NationalTeam kader). Later leverage until season-true markers are confirmed on the proof pages. Not agent PII.
+Parent club vs loan (club kader) or call-up club (NationalTeam kader). Call-up club on NT `plus/1` is stamdata now; loan markers stay open until season-true HTML is confirmed. Not agent PII.
 _Avoid_: trusting Joined / Signed-from columns that show present-day dates on historical kader pages; inventing loan flags when the HTML has none
 
 **Player honours**:
-Titles and trophies from Transfermarkt `/erfolge/spieler/{id}`. Later leverage for Rich Player grain. Not required for Hierarchy proof squad accept.
+Titles and trophies from Transfermarkt `/erfolge/spieler/{id}`. Later leverage — an extra hop, not on every kader row. Not required for Hierarchy proof squad accept.
 _Avoid_: scraping market-value charts as honours; blocking Club season map on a profile hop for titles
 
 **Kit colours**:
-Primary and secondary colour name + hex from Football Kit Archive / FKApi. Later leverage until normalize and schema land. Not Transfermarkt club colour swatches.
-_Avoid_: inventing colour columns before the field catalog keeps them; treating manufacturer brand logos as colours
+Primary and secondary colour name + hex from Football Kit Archive / FKApi. Stamdata now on the Kit grain (extend normalize + schema with the grain). Not Transfermarkt club colour swatches.
+_Avoid_: deferring colours because the fixture type is still thin; treating manufacturer brand logos as colours; fetching FKA through Decodo to “unlock” colours
 
 **Tournament squad**:
 A competition-specific NationalTeam roster (e.g. World Cup 2010 final 23) as distinct from the calendar-year NationalTeam kader on Transfermarkt. Hierarchy proof still uses the NT season grain; the WC-only cut stays open until a clean vendor page is confirmed.
@@ -219,16 +219,16 @@ The live Transfermarkt path: HTTP GET of the Competition season page and each cl
 _Avoid_: calling this a Nest scraper; treating Cheerio as anti-bot; fetching a player profile page when the kader row already has id and number
 
 **Seed proxy**:
-Outbound HTTP(S) proxy used only for Transfermarkt (and Football Kit Archive when that fetch is live) from Coolify jobs and from `kc_seed_mcp`. Vendors: Decodo residential (per GB) or Decodo Site Unblocker (`unblock.decodo.com` as HTTP proxy). Coolify stores the secret and injects it into the job; `kc_seed_mcp` reads the same **names** from its own env. Kader fetch on Coolify does not run until that secret is present (fail closed).
-_Avoid_: Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
+Outbound HTTP(S) proxy used **only for Transfermarkt** from Coolify jobs and from `kc_seed_mcp`. Vendors: Decodo residential (per GB) or Decodo Site Unblocker (`unblock.decodo.com` as HTTP proxy). Coolify stores the secret and injects it into the TM job; `kc_seed_mcp` reads the same **names** from its own env. Kader fetch on Coolify does not run until that secret is present (fail closed). Football Kit Archive / FKApi must **not** use Decodo.
+_Avoid_: pointing Decodo at Football Kit Archive; Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
 
 **Opt-in Apify**:
 The existing Store-actor FetchAdapter. The operator must explicitly choose it. It is not an automatic fallback when Kader fetch fails or is slow. Quota is spent only when Nicklas opts in.
 _Avoid_: retrying HTML 202s on Apify by default; treating Apify as the primary Coolify path
 
 **FK after facts**:
-Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity and admin_only KitPhoto bytes onto those seasons (ExternalId join). Club kits and NationalTeam kits are sibling grains in the FK milestone. Not before that path’s facts exist. Join workflow composes the two vendors; Cross MCP wraps that later.
-_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row
+Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity (including Kit colours when present) and admin_only KitPhoto bytes onto those seasons (ExternalId join). Club kits and NationalTeam kits are sibling grains in the FK milestone. Not before that path’s facts exist. Join workflow composes the two vendors; Cross MCP wraps that later. Does not use Seed proxy / Decodo.
+_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row; routing FK through Decodo
 
 **kc_seed_mcp**:
 The predecessor Cursor Seed MCP server id. Standalone stdio process. Exposes `seed_apify` and `seed_fk` only. Not the Cross MCP accept — that is Seed MCP on its own URL. Not Coolify MCP. Not default PI-worker MCP.
