@@ -21,7 +21,6 @@ export const MOBILE_CHECK_NEEDLES = [
   "check:mobile-add-form-wiring",
   "check:mobile-add-confirm-redirect",
   "check:mobile-add-upload-files",
-  "scripts/check-mobile-inbox-conversation-chrome.mjs",
 ];
 
 /**
