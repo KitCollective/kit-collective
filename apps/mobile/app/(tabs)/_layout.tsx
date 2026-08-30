@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { fetchConversations } from "@/api/conversations";
 import { useAuth } from "@/auth/AuthProvider";
 import { FloatingTabBar } from "@/components/floating-tab-bar";
+import { InboxChromeProvider } from "@/inbox/inbox-chrome";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
@@ -33,27 +34,29 @@ export default function TabsLayout() {
   );
 
   return (
-    <Tabs
-      tabBar={(props) => <FloatingTabBar {...props} unreadCount={unreadCount} />}
-      screenOptions={{
-        headerShown: false,
-        animation: reduceMotion ? "none" : "fade",
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: "transparent",
-          borderTopWidth: 0,
-          elevation: 0,
-        },
-        sceneStyle: {
-          backgroundColor: theme.canvas,
-        },
-      }}
-    >
-      <Tabs.Screen name="collection" options={{ title: "Samling" }} />
-      <Tabs.Screen name="search" options={{ title: "Søg" }} />
-      <Tabs.Screen name="inbox" options={{ title: "Indbakke" }} />
-      <Tabs.Screen name="profile" options={{ title: "Profil" }} />
-      <Tabs.Screen name="add" options={{ href: null }} />
-    </Tabs>
+    <InboxChromeProvider refreshUnreadCount={refreshUnreadCount}>
+      <Tabs
+        tabBar={(props) => <FloatingTabBar {...props} unreadCount={unreadCount} />}
+        screenOptions={{
+          headerShown: false,
+          animation: reduceMotion ? "none" : "fade",
+          tabBarStyle: {
+            position: "absolute",
+            backgroundColor: "transparent",
+            borderTopWidth: 0,
+            elevation: 0,
+          },
+          sceneStyle: {
+            backgroundColor: theme.canvas,
+          },
+        }}
+      >
+        <Tabs.Screen name="collection" options={{ title: "Samling" }} />
+        <Tabs.Screen name="search" options={{ title: "Søg" }} />
+        <Tabs.Screen name="inbox" options={{ title: "Indbakke" }} />
+        <Tabs.Screen name="profile" options={{ title: "Profil" }} />
+        <Tabs.Screen name="add" options={{ href: null }} />
+      </Tabs>
+    </InboxChromeProvider>
   );
 }
