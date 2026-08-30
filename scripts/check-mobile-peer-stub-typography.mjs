@@ -47,9 +47,7 @@ export function checkMobilePeerStubTypography(overrides = {}) {
   }
 
   if (!headingSmHandlePattern.test(rowSource)) {
-    violations.push(
-      `${profileUiPath}: ListPeerStubRow handle must use typography.headingSm`,
-    );
+    violations.push(`${profileUiPath}: ListPeerStubRow handle must use typography.headingSm`);
   }
 
   return violations;
