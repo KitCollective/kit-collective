@@ -3,6 +3,7 @@ import { BlurView } from "expo-blur";
 import { useRouter, useSegments } from "expo-router";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/auth/AuthProvider";
 import { useInboxChromeOptional } from "@/inbox/inbox-chrome";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space, withAlpha } from "@/theme/tokens";
@@ -67,6 +68,7 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const typography = useTypography();
+  const { requestPremiumAccess } = useAuth();
 
   const activeRoute = state.routes[state.index]?.name ?? "collection";
 
@@ -92,7 +94,12 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
   };
 
   const startCapture = () => {
-    router.push("/(tabs)/add");
+    void (async () => {
+      const granted = await requestPremiumAccess();
+      if (granted) {
+        router.push("/(tabs)/add");
+      }
+    })();
   };
 
   const renderSlot = (place: TabPlace) => {

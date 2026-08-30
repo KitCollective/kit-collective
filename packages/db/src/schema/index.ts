@@ -4,6 +4,7 @@ import {
   CALENDAR_KINDS,
   CATALOG_ENTITY_TYPES,
   CLUB_KINDS,
+  ENTITLEMENT_SOURCES,
   EXTERNAL_ID_ENTITY_TYPES,
   JERSEY_CONDITIONS,
   JERSEY_SIZES,
@@ -40,6 +41,8 @@ const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
 const MESSAGE_KINDS = ["text", "image", "bid"] as const;
 const BID_STATUSES = ["pending", "accepted", "declined"] as const;
 const IDENTITY_LINKED_PROVIDERS = ["google", "facebook"] as const;
+
+export const entitlementSourceEnum = pgEnum("entitlement_source", ENTITLEMENT_SOURCES);
 
 export const catalogEntityTypeEnum = pgEnum("catalog_entity_type", CATALOG_ENTITY_TYPES);
 export const externalIdEntityTypeEnum = pgEnum("external_id_entity_type", EXTERNAL_ID_ENTITY_TYPES);
@@ -472,6 +475,31 @@ export const collectionShortcut = pgTable("collection_shortcut", {
   playerId: uuid("player_id").references(() => player.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const entitlement = pgTable(
+  "entitlement",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    source: entitlementSourceEnum("source"),
+    expires: timestamp("expires", { withTimezone: true }),
+    trialUsed: boolean("trial_used").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("entitlement_user_id_unique").on(table.userId)],
+);
+
+export const offer = pgTable("offer", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  monthProductId: text("month_product_id").notNull(),
+  yearProductId: text("year_product_id").notNull(),
+  trialEnabled: boolean("trial_enabled").notNull().default(false),
+  trialDays: integer("trial_days").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const countryRelations = relations(country, ({ many }) => ({

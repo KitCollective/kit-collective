@@ -106,6 +106,7 @@ export const JERSEY_CONDITION_LABELS_DA: Record<JerseyCondition, string> = {
   worn: "Slidt",
 };
 
+export { ENTITLEMENT_SOURCES, type EntitlementSource } from "./billing.js";
 export {
   HANDLE_MAX_LENGTH,
   HANDLE_MIN_LENGTH,

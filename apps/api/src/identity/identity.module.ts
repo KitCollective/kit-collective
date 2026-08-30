@@ -1,6 +1,7 @@
-import { Module } from "@nestjs/common";
+import { forwardRef, Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
+import { BillingModule } from "../billing/billing.module.js";
 import { requireJwtSecret } from "../config/jwt-secret.js";
 import { IdentityController } from "./identity.controller.js";
 import { IdentityService } from "./identity.service.js";
@@ -9,6 +10,7 @@ import { JwtAuthGuard } from "./jwt-auth.guard.js";
 
 @Module({
   imports: [
+    forwardRef(() => BillingModule),
     PassportModule.register({ defaultStrategy: "jwt" }),
     JwtModule.registerAsync({
       useFactory: () => ({

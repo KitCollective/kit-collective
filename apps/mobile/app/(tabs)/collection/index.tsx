@@ -2,35 +2,26 @@ import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { ActivityIndicator, FlatList, StyleSheet, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CollectionFetchError, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { fetchCollectionShortcuts } from "@/api/shortcuts";
 import { useAuth } from "@/auth/AuthProvider";
-import { Sheet } from "@/components/catalog-ui";
 import { CollectionHeader } from "@/components/collection-header";
 import { ShortcutsSheet } from "@/components/genveje-sheet";
 import { shouldFallbackToAlleOnFetchError } from "@/components/genveje-sheet-logic";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
 import { Button, ButtonDock, EmptyState } from "@/components/ui";
-import { useTypography } from "@/theme/brand-fonts";
+import { WishlistSheet } from "@/components/wishlist-sheet";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 export default function CollectionScreen() {
   const router = useRouter();
-  const { accessToken } = useAuth();
+  const { accessToken, requestPremiumAccess } = useAuth();
   const { width } = useWindowDimensions();
   const theme = useTheme();
-  const typography = useTypography();
   const insets = useSafeAreaInsets();
   const tabBarPadding =
     space.insetLg * 2 +
@@ -45,7 +36,7 @@ export default function CollectionScreen() {
   const [totalJerseyCount, setTotalJerseyCount] = useState(0);
   const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
   const [selectedShortcutId, setSelectedShortcutId] = useState<string | null>(null);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [wishlistOpen, setWishlistOpen] = useState(false);
   const [genvejeOpen, setGenvejeOpen] = useState(false);
   const hasInitialLoadRef = useRef(false);
 
@@ -136,8 +127,18 @@ export default function CollectionScreen() {
     router.push(`/(tabs)/collection/${jerseyId}`);
   };
 
-  const startCapture = () => {
-    router.push("/(tabs)/add/capture");
+  const startCapture = async () => {
+    const granted = await requestPremiumAccess();
+    if (granted) {
+      router.push("/(tabs)/add/capture");
+    }
+  };
+
+  const openWishlist = async () => {
+    const granted = await requestPremiumAccess();
+    if (granted) {
+      setWishlistOpen(true);
+    }
   };
 
   if (loading) {
@@ -151,20 +152,17 @@ export default function CollectionScreen() {
   if (totalJerseyCount === 0) {
     return (
       <View style={[styles.emptyContainer, { backgroundColor: theme.canvas }]}>
-        <CollectionHeader count={0} onNotificationsPress={() => setNotificationsOpen(true)} />
+        <CollectionHeader count={0} onWishlistPress={() => void openWishlist()} />
         <EmptyState title="Ingen trøjer endnu" body="Tilføj den første fra galleriet." />
         <ButtonDock>
-          <Button label="Tilføj trøje" variant="primary" width="fill" onPress={startCapture} />
+          <Button
+            label="Tilføj trøje"
+            variant="primary"
+            width="fill"
+            onPress={() => void startCapture()}
+          />
         </ButtonDock>
-        <Sheet
-          visible={notificationsOpen}
-          title="Notifikationer"
-          onDismiss={() => setNotificationsOpen(false)}
-        >
-          <Text style={[typography.body, { color: theme.contentSecondary }]}>
-            Ingen notifikationer
-          </Text>
-        </Sheet>
+        <WishlistSheet visible={wishlistOpen} onDismiss={() => setWishlistOpen(false)} />
       </View>
     );
   }
@@ -175,10 +173,7 @@ export default function CollectionScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <CollectionHeader
-        count={totalJerseyCount}
-        onNotificationsPress={() => setNotificationsOpen(true)}
-      />
+      <CollectionHeader count={totalJerseyCount} onWishlistPress={() => void openWishlist()} />
       <ShortcutChipRow
         shortcuts={shortcuts}
         selectedShortcutId={selectedShortcutId}
@@ -214,15 +209,7 @@ export default function CollectionScreen() {
           );
         }}
       />
-      <Sheet
-        visible={notificationsOpen}
-        title="Notifikationer"
-        onDismiss={() => setNotificationsOpen(false)}
-      >
-        <Text style={[typography.body, { color: theme.contentSecondary }]}>
-          Ingen notifikationer
-        </Text>
-      </Sheet>
+      <WishlistSheet visible={wishlistOpen} onDismiss={() => setWishlistOpen(false)} />
       <ShortcutsSheet
         visible={genvejeOpen}
         accessToken={accessToken ?? ""}

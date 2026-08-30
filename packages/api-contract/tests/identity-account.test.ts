@@ -105,6 +105,12 @@ describe("identityMeSchema account fields", () => {
       countryLabel: null,
       city: null,
       showCity: false,
+      entitlement: {
+        live: false,
+        source: null,
+        expires: null,
+        trialUsed: false,
+      },
     };
 
     expect(identityMeSchema.parse(me)).toEqual(me);

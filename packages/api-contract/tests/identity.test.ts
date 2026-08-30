@@ -51,6 +51,12 @@ describe("identitySessionSchema", () => {
         countryLabel: null,
         city: null,
         showCity: false,
+        entitlement: {
+          live: false,
+          source: null,
+          expires: null,
+          trialUsed: false,
+        },
       },
     };
     expect(identitySessionSchema.parse(session)).toEqual(session);

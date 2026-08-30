@@ -64,6 +64,14 @@ export {
   adminCollectorUserSchema,
 } from "./admin/collectors.js";
 export {
+  type BillingStartTrialResponse,
+  billingStartTrialResponseSchema,
+  type Entitlement,
+  type EntitlementSource,
+  entitlementSchema,
+  entitlementSourceSchema,
+} from "./billing/entitlement.js";
+export {
   type CatalogClubSearchResponse,
   type CatalogClubSeasonsResponse,
   type CatalogFacetSearchResponse,
