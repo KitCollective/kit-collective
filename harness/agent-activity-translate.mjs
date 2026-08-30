@@ -119,7 +119,11 @@ export function translatePiToolStart(input = {}) {
       return { type: "action", action: "Scouting the codebase", parameter: "read-only recon" };
     }
     if (agent === "gate") {
-      return { type: "action", action: "Running pre-review checks", parameter: "rebase and checks" };
+      return {
+        type: "action",
+        action: "Running pre-review checks",
+        parameter: "rebase and checks",
+      };
     }
     return { type: "action", action: "Asking a helper", parameter: agent };
   }

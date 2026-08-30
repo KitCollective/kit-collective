@@ -23,7 +23,9 @@ test("bash grep becomes Searching the codebase without the raw command", () => {
 test("bash test suite becomes Running tests", () => {
   const activity = translatePiToolStart({
     toolName: "bash",
-    args: { command: "cd /var/lib/kit-pi/worktrees/KIT-125 && pnpm test apps/api/tests/identity.test.ts" },
+    args: {
+      command: "cd /var/lib/kit-pi/worktrees/KIT-125 && pnpm test apps/api/tests/identity.test.ts",
+    },
   });
   assert.equal(activity.action, "Running tests");
   assert.match(activity.parameter, /identity\.test\.ts|apps\/api/);
@@ -85,7 +87,11 @@ test("tool end result is a short facit, not stdout", () => {
   });
   assert.equal(done.result, "Done");
   assert.doesNotMatch(done.result, /PASS 42/);
-  const failed = translatePiToolEnd({ toolName: "bash", isError: true, result: { stderr: "boom" } });
+  const failed = translatePiToolEnd({
+    toolName: "bash",
+    isError: true,
+    result: { stderr: "boom" },
+  });
   assert.equal(failed.result, "Failed");
 });
 
