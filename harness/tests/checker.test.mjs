@@ -89,7 +89,7 @@ function snapshot(overrides = {}) {
     id: ISSUE_ID,
     identifier: "KIT-56",
     status: IN_REVIEW,
-    labels: ["Feature"],
+    labels: ["ready-for-agent", "Feature"],
     linearType: "Feature",
     blockedBy: [],
     delegate: { name: "Pi" },
@@ -543,7 +543,7 @@ for (const [status, role] of notChecker) {
   test(`status ${status} does not enqueue factory-checker`, async () => {
     const issue = snapshot({
       status,
-      labels: status === "Backlog" ? ["ready-for-agent", "Feature"] : ["Feature"],
+      labels: ["ready-for-agent", "Feature"],
       delegate: status === "Implementing" ? { name: "Pi" } : null,
       attachments: status === "Implementing" ? [] : snapshot().attachments,
     });

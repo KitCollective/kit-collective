@@ -4,6 +4,7 @@
  * the same roles as the Issue HMAC path. Does not claim, move status, or
  * set delegate. Worktree reuse stays in checkout.
  * Stale retry-cap comments do not skip enqueue (KIT-125).
+ * Implement and factory-checker require ready-for-agent.
  */
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";

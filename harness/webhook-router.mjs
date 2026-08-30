@@ -3,6 +3,8 @@
  *
  * Issue HMAC on POST /webhooks/linear → enqueue exactly one factory role
  * (planner | implement | factory-checker | auto-merge | land) or skip.
+ * Implement and factory-checker require ready-for-agent and skip other
+ * who-acts labels (ready-for-human, needs-info, wontfix, signal-up).
  * POST /webhooks/linear/agent-session is not registered (404). AgentSession
  * payloads on the issue channel are skipped without enqueue or activity ack.
  * Pi argv, worktree paths, and ADW yaml stay behind this interface.
@@ -16,6 +18,7 @@ const HMAC_REJECT = "invalid hmac";
 const REPLAY_WINDOW_MS = 60_000;
 const READY_FOR_AGENT = "ready-for-agent";
 const SIGNAL_UP = "signal-up";
+const WHO_ACTS_BLOCKERS = ["ready-for-human", "needs-info", "wontfix"];
 const AGENT_SESSION_PATH = "/webhooks/linear/agent-session";
 
 const ADW_BY_TYPE = {
@@ -114,6 +117,28 @@ function adwFileFor(issue) {
 }
 
 /**
+ * Coding jobs (implement, factory-checker) require ready-for-agent and skip
+ * other who-acts labels. Planner already requires ready-for-agent on Backlog.
+ *
+ * @param {string[]} labels
+ * @returns {string | null}
+ */
+function codingJobSkipReason(labels) {
+  if (labels.includes(SIGNAL_UP)) {
+    return "signal-up";
+  }
+  for (const name of WHO_ACTS_BLOCKERS) {
+    if (labels.includes(name)) {
+      return name;
+    }
+  }
+  if (!labels.includes(READY_FOR_AGENT)) {
+    return "missing ready-for-agent";
+  }
+  return null;
+}
+
+/**
  * @param {object} issue
  * @param {{ names: string[], appUserId?: string }} delegateGateConfig
  * @returns {{ kind: "skip", reason: string } | { kind: "enqueue", role: string, adwFile?: string }}
@@ -140,14 +165,23 @@ export function dispatchIssue(issue, delegateGateConfig) {
       return { kind: "enqueue", role: "planner" };
     }
     case "Implementing": {
+      const whoActs = codingJobSkipReason(labels);
+      if (whoActs) {
+        return { kind: "skip", reason: whoActs };
+      }
       const adwFile = adwFileFor(issue);
       if (!adwFile) {
         return { kind: "skip", reason: "missing Linear Type for ADW" };
       }
       return { kind: "enqueue", role: "implement", adwFile };
     }
-    case "In Review":
+    case "In Review": {
+      const whoActs = codingJobSkipReason(labels);
+      if (whoActs) {
+        return { kind: "skip", reason: whoActs };
+      }
       return { kind: "enqueue", role: "factory-checker" };
+    }
     case "Ready for merge":
       return { kind: "enqueue", role: "auto-merge" };
     case "Merging":
@@ -250,6 +284,7 @@ export async function routeWebhook(input) {
 
   const decision = dispatchIssue(issue, gateConfig);
   if (decision.kind !== "enqueue") {
+    console.error(`[webhook] skip ${issue.identifier} ${decision.reason}`);
     return decision;
   }
 

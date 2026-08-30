@@ -442,7 +442,7 @@ test("/health includes the last coding job token totals after implement; HTTP st
           id: ISSUE_ID,
           identifier: "KIT-93",
           status: "Implementing",
-          labels: ["Feature"],
+          labels: ["ready-for-agent", "Feature"],
           linearType: "Feature",
           blockedBy: [],
           delegate: { name: "Pi" },
