@@ -147,8 +147,8 @@ The first Football Data Seed issue, and the opening slice of later milestones. M
 _Avoid_: implementing grains before the field catalog; researching by scraping every league; treating ADR-0002 as name-and-number only
 
 **Rich grain**:
-When a Hierarchy grain is fetched, take every usable fact for that entity so a later UI or backend flow does not need a second vendor hop. Club facts, kader body facts (position, DOB, nationality, height, foot), player identity depth from that page, kit sponsor and Kit colours are **stamdata now** once Vendor research named them. Still drop market value, agent PII, and vendor branding. Human-only ingest is the reason depth is not deferred.
-_Avoid_: a thin id+name+number fetch as the ceiling; a second Seed run just to backfill facts that were on the page the first time; storing market value or agent PII because they were on the page; labelling Club facts or Kit colours as “later” after the catalog keeps them
+When a Hierarchy grain is fetched, take every usable fact for that entity so a later UI or backend flow does not need a second vendor hop. Club facts, kader body facts (position, DOB, nationality, height, foot), player identity depth (including place of birth, home-country name, and Player photo), kit sponsor and Kit colours are **stamdata now** once Vendor research named them. Still drop market value, agent PII, and vendor branding logos. Human-only ingest is the reason depth is not deferred.
+_Avoid_: a thin id+name+number fetch as the ceiling; a second Seed run just to backfill facts that were on the page the first time; storing market value or agent PII because they were on the page; labelling Club facts, Kit colours, or Player photo as “later” after the catalog keeps them
 
 **Club facts**:
 Transfermarkt club profile / `datenfakten` depth kept as stamdata now on the Club grain: official name, founded date, stadium, capacity, club colour swatches, website. Not kit colours. Not contact address or phone. Human-only Rich grain — take them while on the page.
@@ -161,6 +161,10 @@ _Avoid_: trusting Joined / Signed-from columns that show present-day dates on hi
 **Player honours**:
 Titles and trophies from Transfermarkt `/erfolge/spieler/{id}`. Later leverage — an extra hop, not on every kader row. Not required for Hierarchy proof squad accept.
 _Avoid_: scraping market-value charts as honours; blocking Club season map on a profile hop for titles
+
+**Player photo**:
+Archive portrait of a Player from Transfermarkt (kader or profile). Stamdata now on the Player grain: bytes in the lane object store, `rights: unresolved`, operator-only visibility until cleared — same rights pattern as KitPhoto. Not a Transfermarkt logo. Not a hot-linked CDN URL on Expo, Astro, or OG.
+_Avoid_: treating the face image as ADR-0002 “TM branding” drop; serving unresolved player bytes on collector surfaces; fetching player images through Football Kit Archive or Decodo-on-FKA
 
 **Kit colours**:
 Primary and secondary colour name + hex from Football Kit Archive / FKApi. Stamdata now on the Kit grain (extend normalize + schema with the grain). Not Transfermarkt club colour swatches.
