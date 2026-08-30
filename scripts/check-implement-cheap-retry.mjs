@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * CI ratchet: Gate format:check, cheap implement retry (skip Scout/helpers),
- * and resume hold after the in-slot retry cap. Prevents the first-fail-is-GitHub
- * loop that respawned a full Scout→helpers→Gate Composer 4–9 times per issue.
+ * same Implementing stay (not a new try), no retry-cap hold. Prevents KIT-125
+ * (five false format cheap-retries → hold, never In Review while GitHub was green).
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,6 +14,7 @@ export const REQUIRED_FILES = {
   implementRole: ".pi/roles/implement.md",
   piJob: "harness/pi-job.mjs",
   resume: "harness/resume.mjs",
+  implementExit: "harness/implement-exit.mjs",
   dockerfile: "harness/Dockerfile",
   ciRetryTest: "harness/tests/implement-ci-retry.test.mjs",
   resumeTest: "harness/tests/resume.test.mjs",
@@ -42,6 +43,9 @@ export function missingImplementCheapRetryCoverage(sources) {
   if (!/selectImplementContext/.test(role)) {
     missing.push("implement.md selectImplementContext injection reference");
   }
+  if (!/not a new try|same Implementing stay/i.test(role)) {
+    missing.push("implement.md cheap retry is the same Implementing stay");
+  }
   const piJob = sources.piJob ?? "";
   if (!/format vs Zod vs unique-email vs migration prefix/i.test(piJob)) {
     missing.push(
@@ -54,9 +58,25 @@ export function missingImplementCheapRetryCoverage(sources) {
   if (!/isCheapImplementRetry/.test(piJob)) {
     missing.push("pi-job.mjs isCheapImplementRetry");
   }
+  if (!/not a new try/.test(piJob)) {
+    missing.push("pi-job.mjs cheap retry is not a new try");
+  }
+  if (!/harness waits/.test(piJob)) {
+    missing.push("pi-job.mjs harness waits for GitHub");
+  }
+  if (/retry-cap-hold/.test(piJob) || /implementRetryCapComment/.test(piJob)) {
+    missing.push("pi-job.mjs must not hold Implementing on retry cap");
+  }
   const resume = sources.resume ?? "";
-  if (!/implement retry cap/.test(resume)) {
-    missing.push("resume.mjs implement retry cap skip");
+  if (/commentsHoldImplementRetryCap/.test(resume) || /implement retry cap/.test(resume)) {
+    missing.push("resume.mjs must not skip Implementing on retry-cap comments");
+  }
+  const implementExit = sources.implementExit ?? "";
+  if (!/export function isFormatInfraError/.test(implementExit)) {
+    missing.push("implement-exit.mjs isFormatInfraError");
+  }
+  if (!/FORMAT_CHECK_MAX_BUFFER/.test(implementExit)) {
+    missing.push("implement-exit.mjs FORMAT_CHECK_MAX_BUFFER");
   }
   const dockerfile = sources.dockerfile ?? "";
   if (!/@biomejs\/biome@2\.5\.10/.test(dockerfile)) {
@@ -69,12 +89,15 @@ export function missingImplementCheapRetryCoverage(sources) {
   ) {
     missing.push("implement-ci-retry cheap retry prompt coverage");
   }
-  if (!/does not spawn Pi when comments already hold the retry cap/.test(ciRetryTest)) {
-    missing.push("implement-ci-retry retry-cap hold coverage");
+  if (!/stale retry-cap comment does not skip Pi spawn/.test(ciRetryTest)) {
+    missing.push("implement-ci-retry stale retry-cap does not skip Pi");
+  }
+  if (!/not a new try|same Implementing stay/i.test(ciRetryTest)) {
+    missing.push("implement-ci-retry same Implementing stay / not a new try");
   }
   const resumeTest = sources.resumeTest ?? "";
-  if (!/skips Implementing after implement retry cap/.test(resumeTest)) {
-    missing.push("resume.test.mjs implement retry cap skip coverage");
+  if (!/enqueues Implementing even when a stale retry-cap comment/.test(resumeTest)) {
+    missing.push("resume.test.mjs stale retry-cap still enqueues");
   }
   return missing;
 }
@@ -84,6 +107,7 @@ const sources = {
   implementRole: readFileSync(join(root, REQUIRED_FILES.implementRole), "utf8"),
   piJob: readFileSync(join(root, REQUIRED_FILES.piJob), "utf8"),
   resume: readFileSync(join(root, REQUIRED_FILES.resume), "utf8"),
+  implementExit: readFileSync(join(root, REQUIRED_FILES.implementExit), "utf8"),
   dockerfile: readFileSync(join(root, REQUIRED_FILES.dockerfile), "utf8"),
   ciRetryTest: readFileSync(join(root, REQUIRED_FILES.ciRetryTest), "utf8"),
   resumeTest: readFileSync(join(root, REQUIRED_FILES.resumeTest), "utf8"),

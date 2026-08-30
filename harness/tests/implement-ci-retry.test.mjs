@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { parseLoopCounters } from "../auto-merge.mjs";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { completeChecker } from "../checker-exit.mjs";
 import { selectImplementContext } from "../implement-context.mjs";
@@ -276,8 +277,43 @@ test("timed-out required checks stay Implementing and write workpad failure", as
   assert.match(workpad.body, /timed out waiting for required GitHub checks/);
 });
 
-test("job-queue re-enqueues the same implement job on red CI and never calls checker", async () => {
-  const gh = fakeGh({ mergeable: "MERGEABLE", checks: redChecks() });
+test("job-queue cheap-retries red CI until GitHub is green, then In Review — not a new try", async () => {
+  let opened = false;
+  let viewsAfterOpen = 0;
+  const gh = {
+    calls: [],
+    async rebase(input) {
+      gh.calls.push(["rebase", input]);
+    },
+    async viewPr() {
+      if (!opened) {
+        return { url: undefined, mergeable: "UNKNOWN", checks: [] };
+      }
+      viewsAfterOpen += 1;
+      const green = viewsAfterOpen >= 2;
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/71",
+        mergeable: "MERGEABLE",
+        checks: green
+          ? [{ name: "test", conclusion: "success", isRequired: true }]
+          : redChecks(),
+      };
+    },
+    async createPr() {
+      opened = true;
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/71",
+        mergeable: "MERGEABLE",
+        checks: redChecks(),
+      };
+    },
+    async fetchCheckLog() {
+      return SECRET_LOG;
+    },
+    merge() {
+      throw new Error("implement never merges");
+    },
+  };
   const linear = fakeLinear();
   const worktree = fakeWorktree();
   const spawned = [];
@@ -290,69 +326,50 @@ test("job-queue re-enqueues the same implement job on red CI and never calls che
     },
   });
 
-  await assert.rejects(
-    () =>
-      queue.enqueue({
-        role: "implement",
-        identifier: "KIT-99",
-        issueId: "issue-1",
-        adwFile: ".pi/adw/feature.yaml",
-      }),
-    /implement CI retry cap hit/,
-  );
+  const result = await queue.enqueue({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
 
-  assert.equal(runs.length, IMPLEMENT_CI_RETRY_CAP);
-  assert.equal(
-    runs.every(
-      (job) =>
-        job.role === "implement" &&
-        job.identifier === "KIT-99" &&
-        job.issueId === "issue-1" &&
-        job.adwFile === ".pi/adw/feature.yaml",
-    ),
-    true,
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.ciRetry, false);
+  assert.ok(runs.length >= 2, "cheap CI re-spawn must run after the first red GitHub wait");
+  assert.ok(
+    runs.length < IMPLEMENT_CI_RETRY_CAP,
+    "must reach In Review without burning the old retry cap",
   );
-  assert.equal(worktree.calls.length, IMPLEMENT_CI_RETRY_CAP);
-  assert.equal(spawned.length, IMPLEMENT_CI_RETRY_CAP);
+  assert.equal(runs[0].ciRetryAttempt, undefined);
+  assert.equal(runs[1].ciRetryAttempt, 2);
   const firstPrompt = promptFromSpawn(spawned[0]);
   assert.match(firstPrompt, /Do not Skip Scout/i);
   assert.match(firstPrompt, /Do not Skip helpers/i);
+  assert.match(firstPrompt, /not a new try|same Implementing stay/i);
+  assert.match(firstPrompt, /harness waits/i);
   assert.equal(/\bSkip Scout\. Skip helpers\b/i.test(firstPrompt), false);
-  for (const spawn of spawned.slice(1)) {
-    const prompt = promptFromSpawn(spawn);
-    assert.match(prompt, /Skip Scout/i);
-    assert.match(prompt, /Skip helpers/i);
-    assert.match(prompt, /format vs Zod vs unique-email vs migration prefix/i);
-    assert.match(prompt, /AssertionError/);
-    assert.match(prompt, /### Review feedback/);
-  }
-  const capComment = linear.calls.find((call) => call[0] === "commentIssue");
-  assert.ok(capComment, "retry cap must post a Linear comment");
-  assert.match(capComment[1].body, /implement retry cap/i);
-  assert.match(capComment[1].body, /Linear Agent left empty/i);
-  assert.equal(/Cursor Cloud Agent/i.test(capComment[1].body), true);
+  const cheapPrompt = promptFromSpawn(spawned[1]);
+  assert.match(cheapPrompt, /Skip Scout/i);
+  assert.match(cheapPrompt, /Skip helpers/i);
+  assert.match(cheapPrompt, /not a new try|same Implementing stay/i);
+  assert.match(cheapPrompt, /harness waits/i);
+  assert.match(cheapPrompt, /AssertionError/);
   assert.equal(
-    spawned.every((spawn) =>
-      spawn.args.some(
-        (arg) =>
-          String(arg).endsWith(".pi/roles/implement.md") ||
-          String(arg).includes(".pi/generated/implement-append.md") ||
-          String(arg).includes(".pi/generated/implement-context.md"),
-      ),
+    linear.calls.some(
+      (call) => call[0] === "commentIssue" && /implement retry cap/i.test(call[1].body),
     ),
-    true,
+    false,
   );
+  assert.deepEqual(parseLoopCounters(linear.comments[0].body), {
+    ciFailCycles: 0,
+    reviewLoops: 0,
+  });
   assert.equal(
     spawned.some((spawn) =>
       spawn.args.some((arg) => String(arg).endsWith(".pi/roles/factory-checker.md")),
     ),
     false,
   );
-  assert.equal(
-    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
-    false,
-  );
-  assert.match(linear.comments[0].body, /required check `test` failed/);
 });
 
 test("job-queue moves to In Review once when required checks are green", async () => {
@@ -384,7 +401,7 @@ test("job-queue moves to In Review once when required checks are green", async (
   assert.equal(statusCalls[0][1].status, IN_REVIEW);
 });
 
-test("job-queue fail-closes when the implement CI retry cap is already exhausted", async () => {
+test("job-queue yields the slot after the cheap-retry bound without a retry-cap hold", async () => {
   const runs = [];
   const queue = createSerialQueue({
     async run(job) {
@@ -393,17 +410,15 @@ test("job-queue fail-closes when the implement CI retry cap is already exhausted
     },
   });
 
-  await assert.rejects(
-    () =>
-      queue.enqueue({
-        role: "implement",
-        identifier: "KIT-99",
-        issueId: "issue-1",
-        adwFile: ".pi/adw/feature.yaml",
-        ciRetryAttempt: IMPLEMENT_CI_RETRY_CAP,
-      }),
-    /implement CI retry cap hit/,
-  );
+  const result = await queue.enqueue({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+    ciRetryAttempt: IMPLEMENT_CI_RETRY_CAP,
+  });
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.ciRetry, true);
   assert.deepEqual(runs, [IMPLEMENT_CI_RETRY_CAP]);
 });
 
@@ -455,7 +470,7 @@ test("job-queue re-runs implement on migration retry until In Review", async () 
   assert.equal(result.migrationRetry, false);
 });
 
-test("job-queue fail-closes when the implement migration retry cap is already exhausted", async () => {
+test("job-queue yields the slot after the cheap-retry bound on migration retry without a hold", async () => {
   const runs = [];
   const queue = createSerialQueue({
     async run(job) {
@@ -464,21 +479,19 @@ test("job-queue fail-closes when the implement migration retry cap is already ex
     },
   });
 
-  await assert.rejects(
-    () =>
-      queue.enqueue({
-        role: "implement",
-        identifier: "KIT-125",
-        issueId: "issue-125",
-        adwFile: ".pi/adw/feature.yaml",
-        migrationRetryAttempt: IMPLEMENT_CI_RETRY_CAP,
-      }),
-    /implement migration retry cap hit/,
-  );
+  const result = await queue.enqueue({
+    role: "implement",
+    identifier: "KIT-125",
+    issueId: "issue-125",
+    adwFile: ".pi/adw/feature.yaml",
+    migrationRetryAttempt: IMPLEMENT_CI_RETRY_CAP,
+  });
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.migrationRetry, true);
   assert.deepEqual(runs, [IMPLEMENT_CI_RETRY_CAP]);
 });
 
-test("job-queue fail-closes when the implement write-scope retry cap is already exhausted", async () => {
+test("job-queue yields the slot after the cheap-retry bound on write-scope retry without a hold", async () => {
   const runs = [];
   const queue = createSerialQueue({
     async run(job) {
@@ -487,17 +500,15 @@ test("job-queue fail-closes when the implement write-scope retry cap is already 
     },
   });
 
-  await assert.rejects(
-    () =>
-      queue.enqueue({
-        role: "implement",
-        identifier: "KIT-119",
-        issueId: "issue-119",
-        adwFile: ".pi/adw/feature.yaml",
-        writeScopeRetryAttempt: IMPLEMENT_CI_RETRY_CAP,
-      }),
-    /implement write-scope retry cap hit/,
-  );
+  const result = await queue.enqueue({
+    role: "implement",
+    identifier: "KIT-119",
+    issueId: "issue-119",
+    adwFile: ".pi/adw/feature.yaml",
+    writeScopeRetryAttempt: IMPLEMENT_CI_RETRY_CAP,
+  });
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.writeScopeRetry, true);
   assert.deepEqual(runs, [IMPLEMENT_CI_RETRY_CAP]);
 });
 
@@ -522,6 +533,8 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(prompt, /not `pnpm test`/i);
   assert.match(prompt, /Do not Skip Scout/i);
   assert.match(prompt, /Do not Skip helpers/i);
+  assert.match(prompt, /not a new try|same Implementing stay/i);
+  assert.match(prompt, /harness waits/i);
   assert.equal(/\bSkip Scout\. Skip helpers\b/i.test(prompt), false);
 
   const cheap = implementPrompt("implement", "KIT-99", ".pi/adw/feature.yaml", {
@@ -533,6 +546,8 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(cheap, /format vs Zod vs unique-email vs migration prefix/i);
   assert.match(cheap, /AssertionError/);
   assert.match(cheap, /### Review feedback/);
+  assert.match(cheap, /not a new try|same Implementing stay/i);
+  assert.match(cheap, /harness waits/i);
   assert.equal(/move the issue to In Review/i.test(cheap), false);
 
   const checkerCtx = selectImplementContext({
@@ -610,7 +625,7 @@ test("checker-fail resume inlines workpad findings and does not Skip Scout or he
   assert.match(prompt, /Required helpers: expo, ui-ux/);
 });
 
-test("implement does not spawn Pi when comments already hold the retry cap", async () => {
+test("stale retry-cap comment does not skip Pi spawn — same Implementing stay can still reach In Review", async () => {
   const gh = fakeGh();
   const linear = fakeLinear();
   linear.comments.push({
@@ -626,14 +641,13 @@ test("implement does not spawn Pi when comments already hold the retry cap", asy
     adwFile: ".pi/adw/feature.yaml",
   });
 
-  assert.equal(spawned.length, 0);
-  assert.equal(result.ciRetry, false);
-  assert.equal(result.retryCapHold, true);
-  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(spawned.length, 1);
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.retryCapHold, undefined);
   assert.equal(commentsHoldImplementRetryCap(linear.comments), true);
   assert.equal(
-    linear.calls.some((call) => call[0] === "setStatus"),
-    false,
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    true,
   );
 });
 

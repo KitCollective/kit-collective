@@ -29,20 +29,18 @@ import {
   completeImplementAdw,
   createTypecheckTouched,
   extractReviewFeedback,
-  IMPLEMENTING,
   requiredChecksGreen,
   reviewFeedbackIsActionable,
   reviewFeedbackIsLandFail,
 } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
-import { IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "./job-queue.mjs";
+import { isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { createAgentSessionBridge } from "./linear-agent-session.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { isPiAgentEndLine, pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { createSessionLogCollector } from "./pi-session-log.mjs";
 import { runPlanner } from "./planner.mjs";
-import { commentsHoldImplementRetryCap, implementRetryCapComment } from "./role-comments.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
@@ -522,7 +520,8 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
         : "(none)";
     const loopTail = `Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
     const noSleep =
-      "Do not sleep. Do not poll GitHub with sleep. Exit when rebase is done — the harness waits for checks.";
+      "Do not sleep. Do not poll GitHub with sleep. Do not `gh pr checks --watch`. Exit the Pi session only when the PR is pushed and Gate is clean — the harness waits for required GitHub checks, then moves In Review. Fix the class from the CI excerpt.";
+    const notANewTry = "Do not open a new try.";
     const helperNames =
       "Spawn Pi agents by these names only: nest, expo, drizzle, ui-ux, devops. react-expo is expo. If a helper exits immediately, retry that same name once.";
     const tddBlock =
@@ -532,7 +531,7 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
-      return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). ${noSleep} ${loopTail}
+      return `Factory role implement retry for ${identifier}.${adw} Same Implementing stay — this is not a new try. Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -543,7 +542,7 @@ ${feedback}`;
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: verify PR MERGEABLE and required checks green)";
-      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. ${noSleep} Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. ${noSleep} Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -557,7 +556,7 @@ ${feedback}`;
 
 ${feedback}`;
     }
-    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${noSleep} ${codeEnglish} ${loopTail}`;
+    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Same Implementing stay — this is one try, ending at In Review. Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}`;
   }
   if (role === "factory-checker") {
     return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit. ${codeEnglish}`;
@@ -1069,25 +1068,6 @@ export function createPiJobRunner({
         const holdLinear = linear ?? job.linear;
         if (holdLinear && typeof holdLinear.listComments === "function") {
           implementComments = await holdLinear.listComments(job.issueId ?? identifier);
-          if (commentsHoldImplementRetryCap(implementComments)) {
-            harnessLog({
-              role: job.role,
-              identifier,
-              event: "fail",
-              gate: "red",
-              reason: "retry-cap-hold",
-              error: "implement retry cap hold",
-              loopRisk: 10,
-            });
-            return {
-              ...job,
-              status: IMPLEMENTING,
-              ciRetry: false,
-              writeScopeRetry: false,
-              formatRetry: false,
-              retryCapHold: true,
-            };
-          }
         }
       }
       let cwd = workspace;
@@ -1286,20 +1266,6 @@ export function createPiJobRunner({
           waitTimeoutMs,
           waitIntervalMs,
         });
-        const atCap =
-          (exit.ciRetry === true && Number(job.ciRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
-          (exit.writeScopeRetry === true &&
-            Number(job.writeScopeRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
-          (exit.formatRetry === true &&
-            Number(job.formatRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
-          (exit.migrationRetry === true &&
-            Number(job.migrationRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP);
-        if (atCap && typeof linearClient.commentIssue === "function") {
-          await linearClient.commentIssue({
-            issueId: job.issueId ?? identifier,
-            body: implementRetryCapComment(identifier, { cap: IMPLEMENT_CI_RETRY_CAP }),
-          });
-        }
         return { ...job, ...exit, tokens };
       }
       if (job.role === "factory-checker") {

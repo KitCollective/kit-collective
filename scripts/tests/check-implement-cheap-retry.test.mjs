@@ -26,9 +26,9 @@ test("implement cheap-retry coverage fails when Gate drops format:check", () => 
   assert.ok(missing.some((item) => item.includes("format:check")));
 });
 
-test("implement cheap-retry coverage fails when resume drop the cap skip", () => {
+test("implement cheap-retry coverage fails when Pi posts a retry-cap hold", () => {
   const sources = loadSources();
-  sources.resume = sources.resume.replace(/implement retry cap/g, "busy");
+  sources.piJob = `${sources.piJob}\nretry-cap-hold implementRetryCapComment\n`;
   const missing = missingImplementCheapRetryCoverage(sources);
-  assert.ok(missing.some((item) => item.includes("resume.mjs")));
+  assert.ok(missing.some((item) => item.includes("pi-job.mjs must not hold")));
 });

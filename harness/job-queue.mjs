@@ -26,12 +26,13 @@ export const ALWAYS_READY_CAPACITY = Object.freeze({
 /**
  * One Pi job at a time per slot. Compose replicas stay at 1; these mutexes are the in-process seam.
  *
- * Implement retry: when `run` returns `{ ciRetry: true }`, `{ writeScopeRetry: true }`,
- * `{ formatRetry: true }`, or `{ migrationRetry: true }`, re-run the same implement job
- * (same issue / worktree / PR) until the gate is clear or the cap is hit. Fail closed
- * at the cap. Never enqueue factory-checker. Write-scope retry keeps the slot so an
+ * One Implementing stay is one try: it ends at In Review. Cheap in-slot re-spawns
+ * (`ciRetry` / `writeScopeRetry` / `formatRetry` / `migrationRetry`) are not tries —
+ * they do not increment reviewLoops / ciFailCycles, do not post a retry-cap comment,
+ * and do not make resume skip. They re-run the same implement job until GitHub is
+ * green or the cheap-retry bound yields the slot (stay Implementing; resume may
+ * continue). Never enqueue factory-checker. Write-scope retry keeps the slot so an
  * out-of-glob path cannot drop the issue behind a resume overlap skip (KIT-119).
- * Format and migration retries are cheap like CI retry.
  */
 export const IMPLEMENT_CI_RETRY_CAP = 5;
 
@@ -53,7 +54,30 @@ export function isCheapImplementRetry(job) {
 }
 
 /**
- * Re-run implement in the same slot on CI, write-scope, or format retry.
+ * Re-run implement in the same slot on CI, write-scope, format, or migration retry.
+ * At the cheap-retry bound, yield the slot (return the last result) instead of
+ * throwing a retry-cap hold.
+ *
+ * @param {object} job
+ * @param {unknown} result
+ * @param {number} attempt
+ * @param {string} reason
+ */
+function yieldCheapRetry(job, result, attempt, reason) {
+  harnessLog({
+    role: job.role,
+    identifier: job.identifier,
+    event: "retry",
+    gate: "yellow",
+    reason: `${reason}-yield`,
+    attempt,
+    loopRisk: loopRiskForRetry(attempt, IMPLEMENT_CI_RETRY_CAP),
+  });
+  return result;
+}
+
+/**
+ * Re-run implement in the same slot on CI, write-scope, format, or migration retry.
  *
  * @param {(job: object) => Promise<unknown>} run
  * @param {object} job
@@ -63,8 +87,11 @@ export async function runImplementWithRetries(run, job) {
   const result = await run(job);
   if (result?.ciRetry === true) {
     const attempt = Number(job.ciRetryAttempt ?? 1);
-    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
-      throw new Error("implement CI retry cap hit");
+    if (job.role !== "implement") {
+      return result;
+    }
+    if (attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      return yieldCheapRetry(job, result, attempt, "ci");
     }
     harnessLog({
       role: job.role,
@@ -79,8 +106,11 @@ export async function runImplementWithRetries(run, job) {
   }
   if (result?.writeScopeRetry === true) {
     const attempt = Number(job.writeScopeRetryAttempt ?? 1);
-    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
-      throw new Error("implement write-scope retry cap hit");
+    if (job.role !== "implement") {
+      return result;
+    }
+    if (attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      return yieldCheapRetry(job, result, attempt, "write-scope");
     }
     harnessLog({
       role: job.role,
@@ -95,8 +125,11 @@ export async function runImplementWithRetries(run, job) {
   }
   if (result?.formatRetry === true) {
     const attempt = Number(job.formatRetryAttempt ?? 1);
-    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
-      throw new Error("implement format retry cap hit");
+    if (job.role !== "implement") {
+      return result;
+    }
+    if (attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      return yieldCheapRetry(job, result, attempt, "format");
     }
     harnessLog({
       role: job.role,
@@ -111,8 +144,11 @@ export async function runImplementWithRetries(run, job) {
   }
   if (result?.migrationRetry === true) {
     const attempt = Number(job.migrationRetryAttempt ?? 1);
-    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
-      throw new Error("implement migration retry cap hit");
+    if (job.role !== "implement") {
+      return result;
+    }
+    if (attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      return yieldCheapRetry(job, result, attempt, "migration");
     }
     harnessLog({
       role: job.role,

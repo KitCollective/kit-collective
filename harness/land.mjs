@@ -21,6 +21,7 @@ import {
   logFactoryExitStart,
   logFactoryGatePoll,
 } from "./factory-exit-log.mjs";
+import { incrementReviewLoops } from "./auto-merge.mjs";
 import { mapStatusChecks } from "./gh-cli.mjs";
 import { requiredChecksGreen, selectRequiredChecks } from "./implement-exit.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
@@ -228,7 +229,7 @@ export function applyLandWorkpad(current, { sha, error } = {}) {
     return `${replaceReviewFeedback(withEvidence, "- (none)")}\n`;
   }
   if (typeof error === "string" && error.length > 0) {
-    return `${replaceReviewFeedback(base, formatLandFailFeedback(error))}\n`;
+    return incrementReviewLoops(`${replaceReviewFeedback(base, formatLandFailFeedback(error))}\n`);
   }
   return `${base}\n`;
 }

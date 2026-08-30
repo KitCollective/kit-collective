@@ -471,7 +471,7 @@ test("missing ### Loop counters does not invent a synthetic loopCounters field",
   assert.match(linear.comments[0].body, /missing ### Loop counters/);
 });
 
-test("Implement CI retry increments ciFailCycles on ### Loop counters", async () => {
+test("Implement CI retry does not increment ciFailCycles — cheap retry is not a try", async () => {
   const linear = {
     calls: [],
     comments: [{ id: "c1", body: loopCountersBody() }],
@@ -523,7 +523,7 @@ test("Implement CI retry increments ciFailCycles on ### Loop counters", async ()
   assert.equal(result.status, IMPLEMENTING);
   assert.equal(result.ciRetry, true);
   assert.deepEqual(parseLoopCounters(linear.comments[0].body), {
-    ciFailCycles: 1,
+    ciFailCycles: 0,
     reviewLoops: 0,
   });
   assert.match(linear.comments[0].body, /### Loop counters/);
@@ -568,6 +568,23 @@ ${LOOP_COUNTERS_HEADING}
     reviewLoops: 1,
   });
   assert.match(linear.comments[0].body, /### Loop counters/);
+});
+
+test("Land fail increments reviewLoops on ### Loop counters — return to Implementing is a try", async () => {
+  const linear = fakeLinear(snapshot({ status: "Merging" }), { body: loopCountersBody() });
+  const gh = fakeGh({ mergeOk: false });
+  const landed = await completeLand({
+    job: { issueId: ISSUE_ID, identifier: "KIT-90" },
+    linear,
+    gh,
+    lanes: LAND_LANES,
+  });
+  assert.equal(landed.merged, false);
+  assert.equal(landed.nextStatus, "Implementing");
+  assert.deepEqual(parseLoopCounters(linear.comments[0].body), {
+    ciFailCycles: 0,
+    reviewLoops: 1,
+  });
 });
 
 test("Missing Linear Type on Implementing still skips implement (no ADW)", async () => {

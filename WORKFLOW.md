@@ -33,9 +33,9 @@ Never claim from Linear **Triage** or **Duplicate**. The Intake job (hourly, pla
 
 The worker writes **Parked** after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. Planner still never claims Parked. A human Park is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not Park.
 
-An issue may **start** implement when status is `Implementing` and it has no branch/PR yet.
+An issue may **start** implement when status is `Implementing` and it has no branch/PR yet. One Implementing stay is one try: it ends when Gate is clean, required GitHub checks are green, the PR is open, and the harness moves **In Review**. Cheap in-slot format/CI re-spawns (Skip Scout) are not tries — they do not increment `reviewLoops` / `ciFailCycles`, do not post a retry-cap hold, and do not make resume skip.
 
-An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session.
+An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). That return increments `reviewLoops`. Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session. Stale "implement retry cap" comments do not skip enqueue.
 
 The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. Parked is never resumed. Empty Linear Agent is the Implementing happy path (Cursor is skipped; leftover Pi still enqueues). Write-scope overlap among Implementing issues still enqueues only the first in `dispatch.priorityOrder`.
 
@@ -112,7 +112,7 @@ Every pass is a **complete** review of the current diff, not a delta against las
 
 ## Land run (status became `Merging`)
 
-**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Ready for merge`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land merges into the integration lane only, then moves the issue to `Done` and writes **one role comment** with the merge SHA. Merge fail → `Implementing`, merge error under `### Review feedback`, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
+**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Ready for merge`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land merges into the integration lane only, then moves the issue to `Done` and writes **one role comment** with the merge SHA. Merge fail → `Implementing`, merge error under `### Review feedback`, `reviewLoops` incremented, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
 
 ## Guardrails
 
