@@ -21,17 +21,6 @@ export type StoreBillingClient = {
 
 export const PAYWALL_PRODUCT_IDS = [OFFER_PRODUCT_IDS.month, OFFER_PRODUCT_IDS.year] as const;
 
-export function resolvePaywallPriceLabel(
-  baseLabel: string,
-  localizedPrice: string | null | undefined,
-): string {
-  if (!localizedPrice) {
-    return baseLabel;
-  }
-
-  return `${baseLabel} · ${localizedPrice}`;
-}
-
 export function mapProductPricesById(prices: readonly StoreProductPrice[]): Record<string, string> {
   return Object.fromEntries(prices.map((price) => [price.productId, price.localizedPrice]));
 }

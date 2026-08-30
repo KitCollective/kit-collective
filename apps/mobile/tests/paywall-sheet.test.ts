@@ -3,11 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { OFFER_PRODUCT_IDS } from "@kit/domain";
 import { describe, expect, it } from "vitest";
-import {
-  mapProductPricesById,
-  PAYWALL_PRODUCT_IDS,
-  resolvePaywallPriceLabel,
-} from "../src/premium/store-billing";
+import { mapProductPricesById, PAYWALL_PRODUCT_IDS } from "../src/premium/store-billing";
 
 const paywallPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -30,10 +26,6 @@ describe("store billing helpers", () => {
   it("tracks paywall skus from Offer product ids", () => {
     expect(PAYWALL_PRODUCT_IDS).toEqual([OFFER_PRODUCT_IDS.month, OFFER_PRODUCT_IDS.year]);
   });
-
-  it("keeps button labels when store price is missing", () => {
-    expect(resolvePaywallPriceLabel("Månedlig", null)).toBe("Månedlig");
-  });
 });
 
 describe("PaywallSheet", () => {
@@ -42,8 +34,11 @@ describe("PaywallSheet", () => {
     expect(source).toContain("typography.mono");
     expect(source).toContain("ButtonDock");
     expect(source).toContain('label="Månedlig"');
+    expect(source).toMatch(/label="Månedlig"[\s\S]*variant="primary"/);
     expect(source).toContain('label="Årlig"');
+    expect(source).toMatch(/label="Årlig"[\s\S]*variant="secondary"/);
     expect(source).toContain('label="Gendan køb"');
+    expect(source).toMatch(/label="Gendan køb"[\s\S]*variant="tertiary"/);
     expect(source).toContain("webUnavailableMessage");
     expect(source).not.toContain("29 kr");
   });
