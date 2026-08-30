@@ -228,6 +228,8 @@ export const user = pgTable(
     handle: text("handle").notNull(),
     aboutMe: text("about_me"),
     avatarObjectKey: text("avatar_object_key"),
+    city: text("city"),
+    showCity: boolean("show_city").notNull().default(false),
     role: userRoleEnum("role").notNull().default("user"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -299,6 +301,34 @@ export const conversationParticipant = pgTable(
   },
   (table) => [primaryKey({ columns: [table.conversationId, table.userId] })],
 );
+
+export const moderationBlock = pgTable(
+  "moderation_block",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    blockerId: uuid("blocker_id")
+      .notNull()
+      .references(() => user.id),
+    blockedId: uuid("blocked_id")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("moderation_block_pair_unique").on(table.blockerId, table.blockedId)],
+);
+
+export const moderationReport = pgTable("moderation_report", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  reporterId: uuid("reporter_id")
+    .notNull()
+    .references(() => user.id),
+  peerId: uuid("peer_id")
+    .notNull()
+    .references(() => user.id),
+  conversationId: uuid("conversation_id").references(() => conversation.id),
+  reason: text("reason"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const conversationMessage = pgTable("conversation_message", {
   id: uuid("id").primaryKey().defaultRandom(),

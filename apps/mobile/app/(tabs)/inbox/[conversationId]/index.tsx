@@ -21,7 +21,7 @@ export default function ConversationScreen() {
     <ConversationView
       conversationId={conversationId}
       onBack={() => router.back()}
-      onOpenDetails={() => undefined}
+      onOpenDetails={() => router.push(`/(tabs)/inbox/${conversationId}/details`)}
       onConversationOpened={() => void handleConversationOpened()}
     />
   );
