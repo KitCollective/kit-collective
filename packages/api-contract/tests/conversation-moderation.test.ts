@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vitest";
+import {
+  collectionBlockConversationResponseSchema,
+  collectionConversationPeerSchema,
+  collectionReportConversationRequestSchema,
+  collectionReportConversationResponseSchema,
+} from "../src/collection/conversation-moderation.js";
+
+describe("collection conversation moderation contract", () => {
+  it("parses peer stub with optional city", () => {
+    expect(
+      collectionConversationPeerSchema.parse({
+        handle: "collector_a",
+        jerseyCount: 3,
+        city: "København",
+      }),
+    ).toEqual({
+      handle: "collector_a",
+      jerseyCount: 3,
+      city: "København",
+    });
+
+    expect(
+      collectionConversationPeerSchema.parse({
+        handle: "collector_b",
+        jerseyCount: 0,
+      }),
+    ).toEqual({
+      handle: "collector_b",
+      jerseyCount: 0,
+    });
+  });
+
+  it("rejects peer stub with unknown fields", () => {
+    expect(() =>
+      collectionConversationPeerSchema.parse({
+        handle: "collector_a",
+        jerseyCount: 1,
+        email: "secret@example.com",
+      }),
+    ).toThrow();
+  });
+
+  it("parses report request and response", () => {
+    expect(collectionReportConversationRequestSchema.parse({})).toEqual({});
+    expect(
+      collectionReportConversationResponseSchema.parse({
+        reportId: "00000000-0000-0000-0000-000000000001",
+      }),
+    ).toEqual({
+      reportId: "00000000-0000-0000-0000-000000000001",
+    });
+  });
+
+  it("parses block response", () => {
+    expect(
+      collectionBlockConversationResponseSchema.parse({
+        blockId: "00000000-0000-0000-0000-000000000002",
+      }),
+    ).toEqual({
+      blockId: "00000000-0000-0000-0000-000000000002",
+    });
+  });
+});

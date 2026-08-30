@@ -54,6 +54,8 @@ describe("stamdata schema", () => {
         "catalog_label",
         "external_id",
         "user",
+        "moderation_block",
+        "moderation_report",
       ]),
     );
   });

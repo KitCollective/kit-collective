@@ -204,6 +204,72 @@ export function ProfileSurfaceGroup({ children }: { children: ReactNode }) {
   );
 }
 
+type ListPeerStubRowProps = {
+  handle: string;
+  meta: string;
+  onPress?: () => void;
+};
+
+export function ListPeerStubRow({ handle, meta, onPress }: ListPeerStubRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+  const initial = handle.trim().charAt(0).toUpperCase() || "?";
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [styles.row, pressed && onPress ? styles.pressed : null]}
+    >
+      <View style={[styles.peerInitial, { backgroundColor: theme.fillSecondary }]}>
+        <Text style={[typography.headingSm, { color: theme.contentPrimary }]}>{initial}</Text>
+      </View>
+      <View style={styles.rowBody}>
+        <Text style={[typography.headingSm, { color: theme.contentPrimary }]}>{handle}</Text>
+        <Text style={[typography.mono, { color: theme.contentMuted }]}>{meta}</Text>
+      </View>
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={theme.contentMuted}
+        accessibilityElementsHidden
+      />
+    </Pressable>
+  );
+}
+
+type ListDangerRowProps = {
+  title: string;
+  icon: IoniconName;
+  onPress: () => void;
+  showHairline?: boolean;
+};
+
+export function ListDangerRow({ title, icon, onPress, showHairline = false }: ListDangerRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        showHairline && {
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.borderSubtle,
+        },
+        pressed && styles.pressed,
+      ]}
+    >
+      <Ionicons name={icon} size={22} color={theme.danger} accessibilityElementsHidden />
+      <Text style={[typography.body, styles.dangerLabel, { color: theme.danger }]}>{title}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   drillHeader: {
     flexDirection: "row",
@@ -271,5 +337,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.md,
     overflow: "hidden",
+  },
+  peerInitial: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dangerLabel: {
+    flex: 1,
   },
 });
