@@ -27,13 +27,10 @@ export class LiveEntitlementGuard implements CanActivate {
     }
 
     throw new HttpException(
-      {
-        statusCode: HttpStatus.PAYMENT_REQUIRED,
-        ...billingPaywallErrorSchema.parse({
-          code: "PREMIUM_REQUIRED",
-          message: "Premium is required",
-        }),
-      },
+      billingPaywallErrorSchema.parse({
+        code: "PREMIUM_REQUIRED",
+        message: "Premium is required",
+      }),
       HttpStatus.PAYMENT_REQUIRED,
     );
   }
