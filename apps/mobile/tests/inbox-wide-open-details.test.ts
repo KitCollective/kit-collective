@@ -33,8 +33,11 @@ describe("conversation Detaljer navigation", () => {
     expect(viewSource).toMatch(/fillSecondary/);
   });
 
-  it("renders Detaljer peer stub handle with locked heading-sm role", () => {
+  it("renders Detaljer peer stub with locked heading-sm roles matching Thread row", () => {
     const source = readFileSync(profileUiPath, "utf8");
+    expect(source).toMatch(
+      /<Text style=\{\[typography\.headingSm, \{ color: theme\.contentPrimary \}\]\}>\{initial\}<\/Text>/,
+    );
     expect(source).toMatch(
       /<Text style=\{\[typography\.headingSm, \{ color: theme\.contentPrimary \}\]\}>\{handle\}<\/Text>/,
     );
