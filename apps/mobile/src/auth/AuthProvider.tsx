@@ -1,4 +1,5 @@
 import type { Entitlement, IdentityMe, IdentitySession } from "@kit/api-contract";
+import { OFFER_PRODUCT_IDS } from "@kit/domain";
 import {
   createContext,
   type ReactNode,
@@ -19,6 +20,12 @@ import {
 import { clearSession, loadSession, saveSession } from "@/auth/session";
 import { PaywallSheet } from "@/components/paywall-sheet";
 import { loadAnalysisIfConsented } from "@/consent/analysis-loader";
+import {
+  loadPaywallOfferState,
+  type PaywallOfferState,
+  purchasePaywallProduct,
+  restorePaywallPurchases,
+} from "@/premium/paywall-offer";
 import { resolvePremiumAccessIntent } from "@/premium/premium-access";
 import { resetAddSession } from "@/session/addSession";
 import { useAppearanceOptional } from "@/theme/appearance";
@@ -55,6 +62,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<IdentitySession | null>(null);
   const [user, setUser] = useState<IdentityMe | null>(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallBusy, setPaywallBusy] = useState(false);
+  const [paywallOffer, setPaywallOffer] = useState<PaywallOfferState>({
+    iapAvailable: false,
+    webUnavailableMessage: null,
+    monthPrice: null,
+    yearPrice: null,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const appearance = useAppearanceOptional();
 
@@ -154,9 +168,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPaywallOpen(false);
   }, []);
 
+  const openPaywall = useCallback(async () => {
+    setPaywallOpen(true);
+    try {
+      const offer = await loadPaywallOfferState();
+      setPaywallOffer(offer);
+    } catch {
+      setPaywallOffer({
+        iapAvailable: false,
+        webUnavailableMessage: null,
+        monthPrice: null,
+        yearPrice: null,
+      });
+    }
+  }, []);
+
+  const refreshEntitlementAfterPurchase = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    const profile = await fetchCurrentUser(session.accessToken);
+    setUser(profile);
+    if (profile.entitlement.live) {
+      setPaywallOpen(false);
+    }
+  }, [session]);
+
+  const handleBuyMonth = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    setPaywallBusy(true);
+    try {
+      await purchasePaywallProduct(session.accessToken, OFFER_PRODUCT_IDS.month);
+      await refreshEntitlementAfterPurchase();
+    } finally {
+      setPaywallBusy(false);
+    }
+  }, [session, refreshEntitlementAfterPurchase]);
+
+  const handleBuyYear = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    setPaywallBusy(true);
+    try {
+      await purchasePaywallProduct(session.accessToken, OFFER_PRODUCT_IDS.year);
+      await refreshEntitlementAfterPurchase();
+    } finally {
+      setPaywallBusy(false);
+    }
+  }, [session, refreshEntitlementAfterPurchase]);
+
+  const handleRestorePurchases = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+
+    setPaywallBusy(true);
+    try {
+      await restorePaywallPurchases(session.accessToken);
+      await refreshEntitlementAfterPurchase();
+    } finally {
+      setPaywallBusy(false);
+    }
+  }, [session, refreshEntitlementAfterPurchase]);
+
   const requestPremiumAccess = useCallback(async (): Promise<boolean> => {
     if (!session || !user) {
-      setPaywallOpen(true);
+      await openPaywall();
       return false;
     }
 
@@ -172,14 +255,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(profile);
         return profile.entitlement.live;
       } catch {
-        setPaywallOpen(true);
+        await openPaywall();
         return false;
       }
     }
 
-    setPaywallOpen(true);
+    await openPaywall();
     return false;
-  }, [session, user]);
+  }, [session, user, openPaywall]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -210,7 +293,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
-      <PaywallSheet visible={paywallOpen} onDismiss={closePaywall} />
+      <PaywallSheet
+        visible={paywallOpen}
+        onDismiss={closePaywall}
+        iapAvailable={paywallOffer.iapAvailable}
+        webUnavailableMessage={paywallOffer.webUnavailableMessage}
+        monthPrice={paywallOffer.monthPrice}
+        yearPrice={paywallOffer.yearPrice}
+        onBuyMonth={() => {
+          void handleBuyMonth();
+        }}
+        onBuyYear={() => {
+          void handleBuyYear();
+        }}
+        onRestore={() => {
+          void handleRestorePurchases();
+        }}
+        busy={paywallBusy}
+      />
     </AuthContext.Provider>
   );
 }
