@@ -41,10 +41,10 @@ test("extractIssuePaths and constraints are ticket-derived", () => {
   );
   assert.ok(paths.includes("apps/mobile/src/components/facet-picker-overlay.tsx"));
   assert.ok(paths.includes("packages/domain/src/foo.ts"));
-  assert.deepEqual(
-    extractIssueConstraints("- Do not invent a sixth tab\n- Do not nest Sheets"),
-    ["Do not invent a sixth tab", "Do not nest Sheets"],
-  );
+  assert.deepEqual(extractIssueConstraints("- Do not invent a sixth tab\n- Do not nest Sheets"), [
+    "Do not invent a sixth tab",
+    "Do not nest Sheets",
+  ]);
 });
 
 test("formatSliceBrief includes paths, Do not lines, and prior fails", () => {
@@ -153,9 +153,10 @@ test("reviewFeedbackIsFirstPassOnly requires First-pass or registered tags", () 
   );
   assert.equal(
     reviewFeedbackIsFirstPassOnly(
-      ["- Spec: Missing react-native-iap in package.json.", '- Standards: EmptyState body="".'].join(
-        "\n",
-      ),
+      [
+        "- Spec: Missing react-native-iap in package.json.",
+        '- Standards: EmptyState body="".',
+      ].join("\n"),
       [SAMPLE_CLASS],
     ),
     false,
@@ -234,10 +235,7 @@ test("selectHermesLessons ranks failures and formats brief", () => {
 
 test("formatRegistryForChecker lists ids for checker append", () => {
   assert.match(formatRegistryForChecker([]), /empty/);
-  assert.match(
-    formatRegistryForChecker([SAMPLE_CLASS]),
-    /first-pass:empty-state-body/,
-  );
+  assert.match(formatRegistryForChecker([SAMPLE_CLASS]), /first-pass:empty-state-body/);
 });
 
 test("isCheapImplementRetry includes firstPassRetryAttempt", () => {

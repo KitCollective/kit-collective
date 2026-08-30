@@ -147,7 +147,12 @@ export function formatCheckerReviewBundle({ identifier, issueDescription, review
     parts.push("```");
     parts.push("");
   } else {
-    parts.push("## Diff", "", "(snapshot unavailable — use readonly `git diff origin/development...HEAD`)", "");
+    parts.push(
+      "## Diff",
+      "",
+      "(snapshot unavailable — use readonly `git diff origin/development...HEAD`)",
+      "",
+    );
   }
   return parts.join("\n");
 }

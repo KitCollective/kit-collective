@@ -247,7 +247,8 @@ test("mobile first-run context includes design lock headings and slice brief", (
       "Mirror apps/mobile/src/components/facet-picker-overlay.tsx",
     ].join("\n"),
     reviewFeedback: "- Spec: Nested Sheet for season pick",
-    workpadBody: "## Agent Workpad\n\n### Composition\n\n- apps/mobile/src/components/genveje-sheet.tsx\n",
+    workpadBody:
+      "## Agent Workpad\n\n### Composition\n\n- apps/mobile/src/components/genveje-sheet.tsx\n",
     cheapRetry: false,
   });
   assert.ok(ctx.designLockHeadings.includes("Sheet"));

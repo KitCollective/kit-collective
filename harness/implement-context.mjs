@@ -286,10 +286,7 @@ export function buildImplementAppendOverlay() {
  */
 export function selectImplementContext(input = {}) {
   const slimOnly = input.slimOnly === true;
-  if (
-    (input.cheapRetry === true || input.mergeFailResume === true) &&
-    !slimOnly
-  ) {
+  if ((input.cheapRetry === true || input.mergeFailResume === true) && !slimOnly) {
     return {
       requiredHelpers: [],
       skills: [],
@@ -318,10 +315,7 @@ export function selectImplementContext(input = {}) {
   const sliceText = `${slice.body}\n${input.reviewFeedback ?? ""}\n${workpadBody}`;
   const designLockHeadings = ui && !slimOnly ? selectDesignLockHeadings(sliceText) : [];
   const paths = [
-    ...new Set([
-      ...extractIssuePaths(sliceText),
-      ...extractWorkpadCompositionPaths(workpadBody),
-    ]),
+    ...new Set([...extractIssuePaths(sliceText), ...extractWorkpadCompositionPaths(workpadBody)]),
   ].sort();
   const sliceBrief = formatSliceBrief({
     paths,

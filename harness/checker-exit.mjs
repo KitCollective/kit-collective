@@ -408,7 +408,9 @@ async function checkerFailMove(input) {
     }
   }
   const body = applyRatchetNudge(
-    incrementReviewLoops(applyCheckerFailWorkpad(withCandidates, { feedbackLines: mergedFeedback })),
+    incrementReviewLoops(
+      applyCheckerFailWorkpad(withCandidates, { feedbackLines: mergedFeedback }),
+    ),
   );
   await linear.updateWorkpad({
     issueId: job.issueId,

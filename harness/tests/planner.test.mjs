@@ -267,7 +267,10 @@ test("planner skips later same-poll claim when write-scope overlaps a just-claim
     claims.map((claim) => claim.id),
     ["issue-first"],
   );
-  assert.equal(result.skipped.some((row) => row.reason === "write-scope overlap"), true);
+  assert.equal(
+    result.skipped.some((row) => row.reason === "write-scope overlap"),
+    true,
+  );
   assert.match(
     comments.find((row) => /KIT-202: skipped/.test(row.body))?.body ?? "",
     /KIT-202: skipped — write-scope overlaps KIT-201/,
@@ -288,10 +291,9 @@ test("findOpenPrPathOverlap skips when open kit PR files hit write-scope", () =>
   assert.equal(hit?.identifier, "kit-209");
   assert.equal(hit?.kind, "open-pr");
   assert.equal(
-    findOpenPrPathOverlap(
-      { identifier: "KIT-209", description: "write-scope: apps/mobile/**" },
-      [{ headRefName: "kit-209", files: ["apps/mobile/src/a.tsx"] }],
-    ),
+    findOpenPrPathOverlap({ identifier: "KIT-209", description: "write-scope: apps/mobile/**" }, [
+      { headRefName: "kit-209", files: ["apps/mobile/src/a.tsx"] },
+    ]),
     null,
   );
 });

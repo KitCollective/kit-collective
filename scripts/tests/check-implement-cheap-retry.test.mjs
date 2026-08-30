@@ -23,7 +23,9 @@ test("implement cheap-retry coverage fails when Gate drops Mechanical close owne
   const sources = loadSources();
   sources.gate = "# empty gate\n";
   const missing = missingImplementCheapRetryCoverage(sources);
-  assert.ok(missing.some((item) => /Mechanical close|format:check|superseded|do not spawn/i.test(item)));
+  assert.ok(
+    missing.some((item) => /Mechanical close|format:check|superseded|do not spawn/i.test(item)),
+  );
 });
 
 test("implement cheap-retry coverage fails when Mechanical close drops classifyCiFailure", () => {

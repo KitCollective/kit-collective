@@ -120,10 +120,7 @@ export function extractPriorFailLines(feedback = "") {
     .split("\n")
     .map((line) => line.trim())
     .filter(
-      (line) =>
-        /^-/.test(line) &&
-        !/\(none\)/i.test(line) &&
-        !/^-\s*First-pass\b/i.test(line),
+      (line) => /^-/.test(line) && !/\(none\)/i.test(line) && !/^-\s*First-pass\b/i.test(line),
     )
     .map((line) => line.replace(/^-\s*/, "").replace(/\s+/g, " ").trim())
     .filter((line) => line.length > 0 && line.length < 280)
@@ -158,9 +155,7 @@ export function formatSliceBrief({ paths = [], constraints = [], priorFails = []
     lines.push("");
   }
   if (priorFails.length > 0) {
-    lines.push(
-      "Prior checker findings on this issue (fix the class, not only the cited file):",
-    );
+    lines.push("Prior checker findings on this issue (fix the class, not only the cited file):");
     for (const line of priorFails) {
       lines.push(`- ${line}`);
     }
@@ -261,13 +256,9 @@ export function scanFirstPassFile(rel, source, classes = []) {
  * }} input
  * @returns {string[]}
  */
-export function collectFirstPassViolations({
-  cwd,
-  files = [],
-  readFile,
-  registry,
-  workspace,
-} = { cwd: "" }) {
+export function collectFirstPassViolations(
+  { cwd, files = [], readFile, registry, workspace } = { cwd: "" },
+) {
   const classes =
     registry?.classes ??
     loadFirstPassRegistry(typeof workspace === "string" && workspace.length > 0 ? workspace : cwd)
@@ -473,9 +464,9 @@ export function parseFirstPassCandidates(workpad = "") {
     return map;
   }
   for (const line of (match[1] ?? "").split("\n")) {
-    const row = line.trim().match(
-      /^-\s*`([^`]+)`\s+count=(\d+)\s+tag=`([^`]+)`\s+fingerprint=`([^`]*)`/i,
-    );
+    const row = line
+      .trim()
+      .match(/^-\s*`([^`]+)`\s+count=(\d+)\s+tag=`([^`]+)`\s+fingerprint=`([^`]*)`/i);
     if (!row) {
       continue;
     }
@@ -528,15 +519,9 @@ export function bumpFirstPassCandidates(workpad, feedbackLines = []) {
   const section = `${sectionLines.join("\n")}\n`;
   let next = String(workpad);
   if (/###\s*First-pass candidates\b/i.test(next)) {
-    next = next.replace(
-      /###\s*First-pass candidates\b[\s\S]*?(?=\n###\s|\n##\s|$)/i,
-      section,
-    );
+    next = next.replace(/###\s*First-pass candidates\b[\s\S]*?(?=\n###\s|\n##\s|$)/i, section);
   } else if (/###\s*Review feedback\b/i.test(next)) {
-    next = next.replace(
-      /(###\s*Review feedback\b)/i,
-      `${section}$1`,
-    );
+    next = next.replace(/(###\s*Review feedback\b)/i, `${section}$1`);
   } else {
     next = `${next.trimEnd()}\n\n${section}`;
   }
