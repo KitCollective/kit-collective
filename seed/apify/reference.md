@@ -55,9 +55,9 @@ This file is the seed-module interface for Transfermarkt grains. Not Nest OpenAP
 | | |
 | --- | --- |
 | **Inputs** | TM club id (from competition season club list or named club scope) |
-| **Fetch** | Club profile + facts (`datenfakten`) as part of the Club grain — not a deferred second run |
+| **Fetch** | Club profile + facts (`datenfakten`) + **Honours** (`/erfolge/verein/{id}`) as part of the Club grain — not a deferred second run |
 | **ExternalId** | TM club id (e.g. `190`) |
-| **Stamdata now** | club id, display name, country, kind=`club`; **Club facts**: official name, founded, stadium, capacity, club colour swatches, website |
+| **Stamdata now** | club id, display name, country, kind=`club`; **Club facts**: official name, founded, stadium, capacity, club colour swatches, website; **Honours** (season + title rows) |
 | **Drop** | address/tel/fax, TM crest/URLs, current-season transfer records / table position as historical truth |
 
 ---
@@ -82,9 +82,9 @@ Already seeded: skip fetch when that club+season already has a squad with jersey
 | | |
 | --- | --- |
 | **Inputs** | TM national side id (proof: Denmark `3436`) + gender (ours) |
-| **Fetch** | National side profile (`…/verein/{id}`) — TM uses `verein` URLs for NT |
+| **Fetch** | National side profile (`…/verein/{id}`) + **Honours** (`/erfolge/verein/{id}`) — TM uses `verein` URLs for NT |
 | **ExternalId** | TM id on **`national_team`**, never `club` |
-| **Stamdata now** | id, display name, country, gender; association official name, founded, confederation |
+| **Stamdata now** | id, display name, country, gender; association official name, founded, confederation; **Honours** (season + title rows) |
 | **Drop** | address/tel/fax, TM crest, current FIFA rank as frozen 2010 truth |
 
 ---
@@ -108,10 +108,10 @@ Already seeded: skip fetch when that club+season already has a squad with jersey
 | | |
 | --- | --- |
 | **Inputs** | TM player id (from kader row; profile hop when id, `#`, body facts, or portrait missing) |
-| **Fetch** | Kader row first; `…/profil/spieler/{id}` as Player profile fetch when needed |
+| **Fetch** | Kader row first; profile + `/rueckennummern` + `/erfolge` as needed for Rich Player grain |
 | **ExternalId** | TM player id |
-| **Stamdata now** | player id, display name; **date of birth**; nationality/citizenship; height; preferred foot; position; place of birth; name in home country; **Player photo** (portrait bytes → lane object store, `rights: unresolved`, `admin_only` — same rights model as KitPhoto; schema may land with the grain ticket); **jersey number history** from `/rueckennummern` (season + club/NT + `#`) |
-| **Later leverage** | youth clubs; **Player honours** (`/erfolge`) |
+| **Stamdata now** | player id, display name; **date of birth**; nationality/citizenship; height; preferred foot; position; place of birth; name in home country; **Player photo** (portrait bytes → lane object store, `rights: unresolved`, `admin_only` — same rights model as KitPhoto; schema may land with the grain ticket); **jersey number history** from `/rueckennummern` (season + club/NT + `#`); **Honours** from `/erfolge/spieler/{id}` |
+| **Later leverage** | youth clubs |
 | **Drop** | agent/agency, market value, contract as historical stamdata, boot outfitter, TM logo/URL as product asset, current profile shirt as historical `#` |
 
 ---

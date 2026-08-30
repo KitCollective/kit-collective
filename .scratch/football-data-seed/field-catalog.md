@@ -5,7 +5,7 @@
 **Breadth:** Hierarchy proof only — Superliga **2010/11** (`DK1`, `saison_id=2010`) and Denmark men **World Cup 2010** (TM national side `verein/3436`, calendar `saison_id=2010`). Not every league.  
 **Classifications:** `stamdata now` | `later leverage` | `drop`  
 **Hard drops (ADR-0002):** market value, agent PII, Transfermarkt / FKA branding (logos, profile URLs as product assets).  
-**HITL (2026-08-30):** Human-only ingest — take Rich grain facts while on the page (Club facts, kader DOB/nat/height/foot/position, Kit colours, Player photo + place of birth / home-country name, **jersey number history**) as **stamdata now**, not deferred “later”. Marketing and collector contests need that depth. **Seed proxy (Decodo) is Transfermarkt-only** — never route Football Kit Archive through it.
+**HITL (2026-08-30):** Human-only ingest — take Rich grain facts while on the page (Club facts, kader DOB/nat/height/foot/position, Kit colours, Player photo + place of birth / home-country name, jersey number history, **Honours** on Club / NationalTeam / Player) as **stamdata now**, not deferred “later”. Marketing and collector contests need that depth. **Seed proxy (Decodo) is Transfermarkt-only** — never route Football Kit Archive through it.
 
 Seed-module interfaces live beside the trees:
 
@@ -31,9 +31,9 @@ Seed-module interfaces live beside the trees:
 | --- | --- |
 | League season | `…/superligaen/startseite/wettbewerb/DK1/saison_id/2010` |
 | Club season | `…/kader/verein/{id}/saison_id/2010/plus/1` |
-| Club | `…/startseite/verein/{id}`, `…/datenfakten/verein/{id}` |
-| Player (hop) | `…/profil/spieler/{id}` (+ `/rueckennummern`, `/erfolge` when that hop runs) |
-| NationalTeam | `…/daenemark/startseite/verein/3436` |
+| Club | `…/startseite/verein/{id}`, `…/datenfakten/verein/{id}`, `…/erfolge/verein/{id}` |
+| Player (hop) | `…/profil/spieler/{id}` (+ `/rueckennummern`, `/erfolge` on Player grain) |
+| NationalTeam | `…/daenemark/startseite/verein/3436`, `…/erfolge/verein/3436` |
 | NationalTeam season | `…/daenemark/kader/verein/3436/saison_id/2010` (+ `/plus/1`) |
 | Kit | FKApi / FKA after Club or NationalTeam + Season exist — **no Decodo** |
 
@@ -71,6 +71,7 @@ Hermetic fixtures still use Brøndby `191` — not the live 2010 id.
 | --- | --- | --- |
 | TM club id, display name, country | stamdata now | ExternalId + CatalogLabel |
 | Official name, founded, stadium, capacity, club colour swatches, website | **stamdata now** | **Club facts** — take while on the club/facts page (Rich grain; marketing depth) |
+| **Honours** (titles / achievements) | **stamdata now** | TM `/erfolge/verein/{id}` — season + title rows (e.g. Danish champion). Same pattern for Club and NationalTeam |
 | Address / Tel / Fax | drop | Contact / PII-adjacent |
 | Current squad stats, transfer record, table position (homepage = current season) | drop | Not 2010/11-frozen |
 | TM crest / `tmLogoUrl` / profile URL | drop | ADR-0002 |
@@ -98,6 +99,7 @@ Hermetic fixtures still use Brøndby `191` — not the live 2010 id.
 | TM id (`3436`), name, country | stamdata now | Map to **`national_team`**, never `club` |
 | Gender | stamdata now | Ours (men first proof) |
 | Official association name, founded, confederation | **stamdata now** | Same Rich grain rule as Club facts |
+| **Honours** (titles / achievements) | **stamdata now** | TM `/erfolge/verein/{id}` — e.g. World Cup, European Championship (same page family as Club) |
 | FIFA ranking on live page | drop | Current framing, not WC-2010 frozen |
 | Address / Tel / Fax; TM crest | drop | Same rules as Club |
 
@@ -123,7 +125,7 @@ Hermetic fixtures still use Brøndby `191` — not the live 2010 id.
 | Name in home country | **stamdata now** | Profile — CatalogLabel / alias |
 | **Player photo** (portrait bytes) | **stamdata now** | Face image from kader/profile; store like KitPhoto — lane object store, `rights: unresolved`, `admin_only` until cleared. **Not** TM crest/logo branding. Fetch only via TM path (Decodo ok). Never hot-link TM CDN in Expo/Astro/OG |
 | Youth clubs | later leverage | Profile section — nice depth, extra parse |
-| Honours (`/erfolge`) | later leverage | Extra hop — titles for Rich Player / contests later |
+| **Honours** (`/erfolge/spieler/{id}`) | **stamdata now** | Titles/trophies — same **Honours** noun as Club/NationalTeam; Rich Player grain |
 | **Jersey number history** (`/rueckennummern`) | **stamdata now** | Season + club/NT + `#` career table — take while on Player grain (Rich grain; cross-check kader `#`, contests) |
 | Agent / agency; market value; contract; boot outfitter | drop | ADR-0002 / not kit |
 | TM logo / profile URL as product asset | drop | Branding (distinct from Player photo bytes) |
@@ -157,11 +159,11 @@ Hermetic fixtures still use Brøndby `191` — not the live 2010 id.
 
 ## Stamdata now (proof accept)
 
-TM competition id/slug/name/country · season id+label · club id+name+country + **Club facts** · club-season squad (player id, name, `#`, **position, DOB, nationality, height, foot**, portrait when on row) · NationalTeam id+name+gender+country + association depth · NT-season squad (`#`, call-up club, DOB, height, foot, position when present) · Player id+name + **DOB, nat, height, foot, position, place of birth, home-country name, Player photo, jersey number history** · FK kit id, type, manufacturer, season join, TM-side club join ids, archive bytes, **Kit colours**.
+TM competition id/slug/name/country · season id+label · club id+name+country + **Club facts** + **Honours** · club-season squad (player id, name, `#`, **position, DOB, nationality, height, foot**, portrait when on row) · NationalTeam id+name+gender+country + association depth + **Honours** · NT-season squad (`#`, call-up club, DOB, height, foot, position when present) · Player id+name + **DOB, nat, height, foot, position, place of birth, home-country name, Player photo, jersey number history, Honours** · FK kit id, type, manufacturer, season join, TM-side club join ids, archive bytes, **Kit colours**.
 
 ## Later leverage
 
-League chrome trivia · competition-table aggregates · youth clubs · honours hop · NT caps/goals/debut until scoped · kit design/competition tags · English kit label · sponsor **if** confirmed without Decodo.
+League chrome trivia · competition-table aggregates · youth clubs · NT caps/goals/debut until scoped · kit design/competition tags · English kit label · sponsor **if** confirmed without Decodo.
 
 ## Drop
 
@@ -185,3 +187,4 @@ All market value · agent/agency · TM and FKA **logos** & bare profile URLs as 
 - [x] Rich depth (Club facts, kader body facts, Kit colours) is **stamdata now** (HITL 2026-08-30).
 - [x] Seed proxy (Decodo) is **Transfermarkt-only** (HITL 2026-08-30).
 - [x] Player DOB + **Player photo** (+ place of birth / home-country name) + **jersey number history** are **stamdata now** (HITL 2026-08-30).
+- [x] **Honours** on Club, NationalTeam, and Player are **stamdata now** (HITL 2026-08-30).
