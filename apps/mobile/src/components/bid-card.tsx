@@ -1,6 +1,7 @@
 import type { CollectionConversationMessage } from "@kit/api-contract";
 import { StyleSheet, Text, View } from "react-native";
 import { bidCardAmountTypography } from "@/components/bid-card-amount";
+import { Button } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -13,6 +14,10 @@ type BidCardProps = {
     seasonLabel: string;
     typeLabel: string;
   };
+  incomingPending?: boolean;
+  onAccept?: () => void;
+  onDecline?: () => void;
+  responding?: boolean;
 };
 
 function bidStatusLabel(status: NonNullable<CollectionConversationMessage["bidStatus"]>): string {
@@ -30,7 +35,15 @@ function bidStatusLabel(status: NonNullable<CollectionConversationMessage["bidSt
   }
 }
 
-export function BidCard({ message, peerHandle, jerseyContext }: BidCardProps) {
+export function BidCard({
+  message,
+  peerHandle,
+  jerseyContext,
+  incomingPending = false,
+  onAccept,
+  onDecline,
+  responding = false,
+}: BidCardProps) {
   const theme = useTheme();
   const typography = useTypography();
 
@@ -66,6 +79,26 @@ export function BidCard({ message, peerHandle, jerseyContext }: BidCardProps) {
           {bidStatusLabel(message.bidStatus)}
         </Text>
       ) : null}
+      {incomingPending && message.bidStatus === "pending" ? (
+        <View style={styles.actions}>
+          <Button
+            label="Accepter"
+            variant="primary"
+            width="fill"
+            loading={responding}
+            disabled={responding}
+            onPress={onAccept}
+          />
+          <Button
+            label="Afvis"
+            variant="secondary"
+            width="fill"
+            loading={responding}
+            disabled={responding}
+            onPress={onDecline}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -81,4 +114,10 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   amount: bidCardAmountTypography(),
+  actions: {
+    flexDirection: "row",
+    gap: space.gapSm,
+    marginTop: space.gapSm,
+    minHeight: 44,
+  },
 });

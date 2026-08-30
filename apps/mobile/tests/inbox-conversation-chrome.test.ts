@@ -33,7 +33,7 @@ describe("inbox conversation chrome (KIT-118)", () => {
       /onConversationOpened=\{\(\) => void handleConversationOpened\(\)\}/,
     );
     expect(inboxSource).toMatch(/await refreshUnreadCount\(\)/);
-    expect(inboxSource).not.toMatch(/openConversation[\s\S]*void loadConversations\(\)/);
+    expect(inboxSource).not.toMatch(/openConversation[\s\S]*void loadInbox\(\)/);
   });
 
   it("applies composer focus border tokens from the design lock", () => {
@@ -42,5 +42,13 @@ describe("inbox conversation chrome (KIT-118)", () => {
     expect(composerSource).toMatch(/composerFieldBorder/);
     expect(composerSource).toMatch(/onFocus=\{\(\) => setFocused\(true\)\}/);
     expect(composerSource).toMatch(/onBlur=\{\(\) => setFocused\(false\)\}/);
+  });
+
+  it("loads activity projection on the Aktivitet tab (KIT-120)", () => {
+    const inboxSource = readFileSync(inboxIndexPath, "utf8");
+
+    expect(inboxSource).toMatch(/fetchActivity/);
+    expect(inboxSource).toMatch(/ActivityCard/);
+    expect(inboxSource).toMatch(/activityItems/);
   });
 });

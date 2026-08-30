@@ -2,8 +2,10 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  collectionActivitySchema,
   collectionConversationDetailSchema,
   collectionConversationsSchema,
+  collectionRespondBidResponseSchema,
   collectionSaveResponseSchema,
   collectionSendBidResponseSchema,
   collectionSendMessageResponseSchema,
@@ -371,5 +373,145 @@ describe("Collection conversations /v1", () => {
       payload: { text: "Hej" },
     });
     expect(response.statusCode).toBe(404);
+  });
+
+  it("lists bid events as activity projection without a separate table", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-activity@example.com");
+    const bidder = await registerSession(app, "bidder-activity@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    const { conversationId, messageId } = await createBidConversation(
+      app,
+      owner,
+      bidder,
+      jersey.id,
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/collection/activity",
+      headers: {
+        authorization: `Bearer ${owner.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = collectionActivitySchema.parse(JSON.parse(response.body));
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]?.conversationId).toBe(conversationId);
+    expect(body.items[0]?.id).toBe(messageId);
+    expect(body.items[0]?.amountDkk).toBe(350);
+    expect(body.items[0]?.status).toBe("pending");
+    expect(body.items[0]?.fromHandle).toBe(bidder.user.handle);
+    expect(body.items[0]?.unread).toBe(true);
+  });
+
+  it("lets the jersey owner accept a pending bid and blocks the sender", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-accept@example.com");
+    const bidder = await registerSession(app, "bidder-accept@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    const { conversationId, messageId } = await createBidConversation(
+      app,
+      owner,
+      bidder,
+      jersey.id,
+    );
+
+    const forbidden = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+      headers: { authorization: `Bearer ${bidder.accessToken}` },
+      payload: { decision: "accept" },
+    });
+    expect(forbidden.statusCode).toBe(403);
+
+    const acceptResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { decision: "accept" },
+    });
+    expect(acceptResponse.statusCode).toBe(200);
+    const acceptBody = collectionRespondBidResponseSchema.parse(JSON.parse(acceptResponse.body));
+    expect(acceptBody.bidStatus).toBe("accepted");
+
+    const peerDetail = await app.inject({
+      method: "GET",
+      url: `/v1/collection/conversations/${conversationId}`,
+      headers: {
+        authorization: `Bearer ${bidder.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    const peerBody = collectionConversationDetailSchema.parse(JSON.parse(peerDetail.body));
+    expect(peerBody.messages[0]?.bidStatus).toBe("accepted");
+
+    const activityResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/activity",
+      headers: {
+        authorization: `Bearer ${owner.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    const activityBody = collectionActivitySchema.parse(JSON.parse(activityResponse.body));
+    expect(activityBody.items[0]?.status).toBe("accepted");
+  });
+
+  it("marks conversation read when opening from activity flow via detail", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-actread@example.com");
+    const bidder = await registerSession(app, "bidder-actread@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+    const { conversationId } = await createBidConversation(app, owner, bidder, jersey.id);
+
+    const activityBefore = await app.inject({
+      method: "GET",
+      url: "/v1/collection/activity",
+      headers: {
+        authorization: `Bearer ${owner.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    const activityBeforeBody = collectionActivitySchema.parse(JSON.parse(activityBefore.body));
+    expect(activityBeforeBody.items[0]?.unread).toBe(true);
+
+    await app.inject({
+      method: "GET",
+      url: `/v1/collection/conversations/${conversationId}`,
+      headers: {
+        authorization: `Bearer ${owner.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+
+    const inboxAfter = await app.inject({
+      method: "GET",
+      url: "/v1/collection/conversations",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    const inboxBody = collectionConversationsSchema.parse(JSON.parse(inboxAfter.body));
+    expect(inboxBody.unreadCount).toBe(0);
+
+    const activityAfter = await app.inject({
+      method: "GET",
+      url: "/v1/collection/activity",
+      headers: {
+        authorization: `Bearer ${owner.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    const activityAfterBody = collectionActivitySchema.parse(JSON.parse(activityAfter.body));
+    expect(activityAfterBody.items[0]?.unread).toBe(false);
+  });
+
+  it("rejects unauthenticated activity list with 401", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/collection/activity",
+    });
+    expect(response.statusCode).toBe(401);
   });
 });

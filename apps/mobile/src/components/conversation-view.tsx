@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { respondBid } from "@/api/bidding";
 import {
   fetchConversation,
   resolveConversationPhotoUrl,
@@ -83,6 +84,7 @@ export function ConversationView({
   const [draft, setDraft] = useState("");
   const [pendingImageBase64, setPendingImageBase64] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; text: string } | null>(null);
+  const [respondingBidId, setRespondingBidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const imageHeaders = useMemo(
@@ -170,6 +172,23 @@ export function ConversationView({
     }
   };
 
+  const handleRespondBid = async (messageId: string, decision: "accept" | "decline") => {
+    if (!accessToken) {
+      return;
+    }
+
+    setRespondingBidId(messageId);
+    setError(null);
+    try {
+      await respondBid(accessToken, conversationId, messageId, decision);
+      await loadConversation();
+    } catch {
+      setError("Buddet kunne ikke opdateres.");
+    } finally {
+      setRespondingBidId(null);
+    }
+  };
+
   if (loading && !detail) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.canvas }]}>
@@ -241,11 +260,20 @@ export function ConversationView({
           };
 
           if (message.kind === "bid") {
+            const incomingPending = message.role === "incoming" && message.bidStatus === "pending";
             return (
               <BidCard
                 message={message}
                 peerHandle={detail.peerHandle}
                 jerseyContext={jerseyContext}
+                incomingPending={incomingPending}
+                responding={respondingBidId === message.id}
+                onAccept={
+                  incomingPending ? () => void handleRespondBid(message.id, "accept") : undefined
+                }
+                onDecline={
+                  incomingPending ? () => void handleRespondBid(message.id, "decline") : undefined
+                }
               />
             );
           }

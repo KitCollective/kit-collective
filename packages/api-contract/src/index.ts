@@ -83,6 +83,16 @@ export {
   catalogStatsSchema,
 } from "./catalog/stats.js";
 export {
+  type CollectionActivity,
+  type CollectionActivityItem,
+  type CollectionRespondBidRequest,
+  type CollectionRespondBidResponse,
+  collectionActivityItemSchema,
+  collectionActivitySchema,
+  collectionRespondBidRequestSchema,
+  collectionRespondBidResponseSchema,
+} from "./collection/activity.js";
+export {
   type CollectionBiddingPatch,
   type CollectionDiscoverJersey,
   type CollectionDiscoverJerseys,
