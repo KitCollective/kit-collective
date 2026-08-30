@@ -317,6 +317,10 @@ Unpinned `.pi/agents` (nest/expo/drizzle/ui-ux/devops/slop) made Pi bill OpenRou
 
 OpenRouter workspace guardrail allows only `tencent/hy4-preview` on every workspace key. Scout and Gate pin `openrouter/tencent/hy4-preview` (`thinking: off`, `fallbackModels: cursor/composer-2.5`). `tencent/hy3` is ineligible and Composer-fallbacks. `harness/tests/implement-adw.test.mjs` locks the slug. Tighten only.
 
+### Pi Scout/Gate Hy3 with MiMo-Pro crossed fallback
+
+`KIT-Pi-harness` key allowlist includes Hy3 and MiMo-V2.5-Pro. Scout pins `openrouter/tencent/hy3` (`thinking: off`) with `fallbackModels: openrouter/xiaomi/mimo-v2.5-pro, cursor/composer-2.5`. Gate pins `openrouter/xiaomi/mimo-v2.5-pro` with `fallbackModels: openrouter/tencent/hy3, cursor/composer-2.5`. Hy4 stays off the pin. `harness/tests/implement-adw.test.mjs` locks both slugs and fallback order. Tighten only.
+
 ### Drizzle migration prefix collision (KIT-125)
 
 `scripts/lib/migration-prefix.mjs` (`findMigrationPrefixCollisions`, `nextMigrationPrefix`) plus `scripts/check-migration-prefixes.mjs` (CI via `node` in `.github/workflows/ci.yml`) fail when a PR adds `packages/db/migrations/NNNN_*.sql` whose prefix already exists on `origin/development` under a different filename. CI fetches `origin/development` and fails closed when added SQL has no lane listing. `harness/implement-exit.mjs` checks the **worktree** (`git ls-files`) before rebase/CI wait — not `gh pr diff` — so a local rename is not a false collision against a stale remote PR. Cheap-retry (`migrationRetry`) names the next prefix and requires a commit; rebase then force-with-lease pushes. `.cursor/hooks/block-migration-prefix-collision.sh` denies a colliding `git add`/`commit`, including `git add packages/db/migrations`. `.cursor/agents/db-drizzle.md` requires `git ls-tree origin/development` and a commit. Prevents repeating KIT-125 sitting CONFLICTING after KIT-123 landed `0009_user_jersey_favorite.sql` while the open PR still had `0009_user_account_fields.sql`, and the loop where implement renamed locally to `0011_` but exit kept reading the remote 0009. Tighten only.
