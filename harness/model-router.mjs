@@ -10,7 +10,7 @@
 export const FREE_MODEL_ROTATION = Object.freeze([
   "openrouter/minimax/minimax-m3:free",
   "openrouter/z-ai/glm-5.2:free",
-  "openrouter/poolside/laguna-s-2.1:free",
+  "openrouter/poolside/laguna-s-2.1",
 ]);
 
 export const PAID_FALLBACK_CHAIN = Object.freeze(["openrouter/tencent/hy3", "cursor/composer-2.5"]);
@@ -276,7 +276,10 @@ export function buildModelRoute(input = {}) {
     complexity,
     skipDraft: complexity.skipDraft,
     gates: { plan, scaffold, implement, verify },
-    freeRotation: rotateFreeChain(rotationIndex).filter((id) => id.includes(":free")),
+    // Include Laguna (paid list, not `:free`) with the free OpenRouter scaffolds.
+    freeRotation: rotateFreeChain(rotationIndex).filter(
+      (id) => id.includes(":free") || id.includes("laguna-s-2.1"),
+    ),
   };
 }
 
@@ -293,7 +296,7 @@ export function formatModelRouteBrief(route) {
     "",
     `- Complexity: **${complexity.tier}** (score ${complexity.score})`,
     `- Reasons: ${complexity.reasons.length > 0 ? complexity.reasons.join("; ") : "(none)"}`,
-    `- Free rotation: ${freeRotation.join(" → ")}`,
+    `- Cheap rotation: ${freeRotation.join(" → ")}`,
     `- Plan (Scout): \`${gates.plan.primary}\``,
     `- Scaffold (Draft): ${skipDraft ? "**Skip Draft** (critical seam)" : `\`${gates.scaffold.primary}\` → ${gates.scaffold.fallbacks.slice(0, 3).join(" → ")}`}`,
     `- Implement (parent/helpers): \`${gates.implement.primary}\`${gates.implement.useFree ? " (free-capable simple slice — still harden with Composer helpers when listed)" : " (Composer owns complex/critical logic)"}`,

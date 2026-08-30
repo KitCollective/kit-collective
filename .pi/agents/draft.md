@@ -3,7 +3,7 @@ name: draft
 description: Free-model scaffold pass after Scout Composition — boilerplate only; parent and Composer helpers own correctness.
 tools: read, grep, find, ls, edit, write
 model: openrouter/minimax/minimax-m3:free
-fallbackModels: openrouter/z-ai/glm-5.2:free, openrouter/poolside/laguna-s-2.1:free, openrouter/tencent/hy3, cursor/composer-2.5
+fallbackModels: openrouter/z-ai/glm-5.2:free, openrouter/poolside/laguna-s-2.1, openrouter/tencent/hy3, cursor/composer-2.5
 thinking: off
 inheritProjectContext: false
 ---
@@ -23,4 +23,4 @@ You are the **Draft** scaffold subagent inside one implement stay. Spawn once af
 - Replace Scout, nest, drizzle, expo, ui-ux, devops, or Slop. You are not the pass verdict.
 - Fan out parallel helpers. You run once, then stop.
 
-Free OpenRouter rotation: MiniMax M3 free → GLM 5.2 free → Laguna S 2.1 free → Hy3 → Composer. On 429, continue the chain — do not stall. Rate limits and provider churn are expected — fallbacks must hold. Missing `OPENROUTER_API_KEY` fails closed with other OpenRouter agents.
+Cheap rotation: MiniMax M3 free → GLM 5.2 free → Laguna S 2.1 (`poolside/laguna-s-2.1`, paid list) → Hy3 → Composer. On 429, continue the chain — do not stall. Rate limits and provider churn are expected — fallbacks must hold. Missing `OPENROUTER_API_KEY` fails closed with other OpenRouter agents.

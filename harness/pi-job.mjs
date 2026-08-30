@@ -130,7 +130,7 @@ const TOKEN_ROLE_MODEL_IDS = {
   implement: "cursor/composer-2.5",
   "factory-checker": "cursor/grok-4.6",
   scout: "openrouter/tencent/hy3",
-  draft: "openrouter/poolside/laguna-s-2.1:free",
+  draft: "openrouter/poolside/laguna-s-2.1",
   gate: "openrouter/xiaomi/mimo-v2.5-pro",
 };
 

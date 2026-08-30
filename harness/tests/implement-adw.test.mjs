@@ -1543,7 +1543,7 @@ test("Draft pins free OpenRouter coding models with Hy3 then Composer fallbacks"
   assert.match(draft.frontmatter, /^model:\s+openrouter\/minimax\/minimax-m3:free\s*$/m);
   assert.match(
     draft.frontmatter,
-    /^fallbackModels:\s+openrouter\/z-ai\/glm-5\.2:free,\s*openrouter\/poolside\/laguna-s-2\.1:free,\s*openrouter\/tencent\/hy3,\s*cursor\/composer-2\.5\s*$/m,
+    /^fallbackModels:\s+openrouter\/z-ai\/glm-5\.2:free,\s*openrouter\/poolside\/laguna-s-2\.1,\s*openrouter\/tencent\/hy3,\s*cursor\/composer-2\.5\s*$/m,
   );
   assert.match(draft.frontmatter, /^thinking:\s+off\s*$/m);
   assert.match(draft.frontmatter, /edit|write/);

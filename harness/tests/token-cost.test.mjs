@@ -66,13 +66,14 @@ test("implementPrompt Spec-only resume skips Scout, Draft, and helpers", () => {
   assert.match(prompt, /Skip helpers/);
 });
 
-test("estimateLineCostUsd prices OpenRouter free Draft models at zero", () => {
+test("estimateLineCostUsd prices Laguna list rate and free Draft models at zero", () => {
   const { costUsd, estimate } = estimateLineCostUsd({
-    model: "openrouter/poolside/laguna-s-2.1:free",
+    model: "openrouter/poolside/laguna-s-2.1",
     input: 2_000_000,
     output: 500_000,
   });
-  assert.equal(costUsd, 0);
+  // 2M * $0.09 + 0.5M * $0.18 = $0.18 + $0.09 = $0.27
+  assert.equal(costUsd, 0.27);
   assert.equal(estimate, true);
   assert.equal(MODEL_PRICING_USD_PER_MTOK["minimax/minimax-m3:free"].input, 0);
   assert.equal(MODEL_PRICING_USD_PER_MTOK["z-ai/glm-5.2:free"].output, 0);

@@ -38,11 +38,12 @@ export const MODEL_PRICING_USD_PER_MTOK = Object.freeze({
   "mimo-v2.5-pro": { input: 0.4, output: 1.6, label: "MiMo" },
   mimo: { input: 0.4, output: 1.6, label: "MiMo" },
   MiMo: { input: 0.4, output: 1.6, label: "MiMo" },
-  // OpenRouter free Draft scaffolds ($0 list; rate-limited)
-  "openrouter/poolside/laguna-s-2.1:free": { input: 0, output: 0, label: "Laguna" },
-  "poolside/laguna-s-2.1:free": { input: 0, output: 0, label: "Laguna" },
-  "laguna-s-2.1:free": { input: 0, output: 0, label: "Laguna" },
-  Laguna: { input: 0, output: 0, label: "Laguna" },
+  // Laguna S 2.1 OpenRouter list ($0.09 / $0.18 per MTok; not the `:free` endpoint)
+  "openrouter/poolside/laguna-s-2.1": { input: 0.09, output: 0.18, label: "Laguna" },
+  "poolside/laguna-s-2.1": { input: 0.09, output: 0.18, label: "Laguna" },
+  "laguna-s-2.1": { input: 0.09, output: 0.18, label: "Laguna" },
+  Laguna: { input: 0.09, output: 0.18, label: "Laguna" },
+  // Draft role aggregate — free MiniMax/GLM primary; Laguna is paid when used
   Draft: { input: 0, output: 0, label: "Draft" },
   "openrouter/minimax/minimax-m3:free": { input: 0, output: 0, label: "MiniMax" },
   "minimax/minimax-m3:free": { input: 0, output: 0, label: "MiniMax" },
@@ -86,7 +87,7 @@ export function modelPriceLookupKeys(model) {
     lower.includes("glm-5.2")
   ) {
     if (lower.includes("laguna")) {
-      keys.push("openrouter/poolside/laguna-s-2.1:free", "Laguna", "Draft");
+      keys.push("openrouter/poolside/laguna-s-2.1", "Laguna", "Draft");
     }
     if (lower.includes("minimax")) {
       keys.push("openrouter/minimax/minimax-m3:free", "MiniMax");
@@ -95,7 +96,7 @@ export function modelPriceLookupKeys(model) {
       keys.push("openrouter/z-ai/glm-5.2:free", "GLM");
     }
     if (lower === "draft") {
-      keys.push("Draft", "openrouter/poolside/laguna-s-2.1:free");
+      keys.push("Draft", "openrouter/poolside/laguna-s-2.1");
     }
   }
   return [...new Set(keys.filter((key) => key.length > 0))];
