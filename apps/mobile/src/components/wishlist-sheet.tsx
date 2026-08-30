@@ -14,6 +14,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { SelectField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { FacetPickerOverlay } from "@/components/facet-picker-overlay";
+import { SeasonPickerOverlay } from "@/components/season-picker-overlay";
 import { Button, EmptyState, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -23,6 +24,7 @@ import {
   canSaveWishlistEntry,
   emptyWishlistCriteria,
   manageRowAccessibilityLabel,
+  resolveWishlistEmptyBody,
   resolveWishlistEmptyTitle,
   resolveWishlistSheetTitle,
   seedCriteriaForEdit,
@@ -69,6 +71,36 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
     }
   }, [accessToken]);
 
+  const loadSeasonOptions = useCallback(
+    async (clubId: string) => {
+      if (!accessToken) {
+        return;
+      }
+
+      setLoadingSeasons(true);
+      try {
+        const response = await fetchClubSeasons(accessToken, clubId);
+        setSeasonOptions(response.seasons);
+      } catch {
+        setSeasonOptions([]);
+      } finally {
+        setLoadingSeasons(false);
+      }
+    },
+    [accessToken],
+  );
+
+  const openSeasonPicker = async () => {
+    if (!criteria.club) {
+      return;
+    }
+
+    setSeasonPickerOpen(true);
+    if (seasonOptions.length === 0) {
+      await loadSeasonOptions(criteria.club.id);
+    }
+  };
+
   useEffect(() => {
     if (visible) {
       void loadEntries();
@@ -114,20 +146,7 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
     }));
     setClubPickerOpen(false);
     setSeasonPickerOpen(true);
-
-    if (!accessToken) {
-      return;
-    }
-
-    setLoadingSeasons(true);
-    try {
-      const response = await fetchClubSeasons(accessToken, club.id);
-      setSeasonOptions(response.seasons);
-    } catch {
-      setSeasonOptions([]);
-    } finally {
-      setLoadingSeasons(false);
-    }
+    await loadSeasonOptions(club.id);
   };
 
   const handleSave = async () => {
@@ -185,7 +204,7 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
             ) : entries.length === 0 ? (
               <EmptyState
                 title={resolveWishlistEmptyTitle()}
-                body=""
+                body={resolveWishlistEmptyBody()}
                 action={
                   <Button
                     label="Tilføj"
@@ -198,8 +217,17 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
             ) : (
               <>
                 <ScrollView>
-                  {entries.map((entry) => (
-                    <View key={entry.id} style={styles.manageRow}>
+                  {entries.map((entry, index) => (
+                    <View
+                      key={entry.id}
+                      style={[
+                        styles.manageRow,
+                        index < entries.length - 1 && {
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                          borderBottomColor: theme.borderSubtle,
+                        },
+                      ]}
+                    >
                       <View
                         style={styles.manageMain}
                         accessible
@@ -261,7 +289,7 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
                 <SelectField
                   value={criteria.season?.label ?? null}
                   placeholder="Vælg sæson"
-                  onPress={() => setSeasonPickerOpen(true)}
+                  onPress={() => void openSeasonPicker()}
                 />
               </View>
             ) : null}
@@ -330,36 +358,20 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
         />
       ) : null}
 
-      {seasonPickerOpen && accessToken ? (
-        <Sheet
+      {seasonPickerOpen && accessToken && criteria.club ? (
+        <SeasonPickerOverlay
           visible={visible && seasonPickerOpen}
-          title="Vælg sæson"
+          seasons={seasonOptions}
+          selectedId={criteria.season?.id ?? null}
+          loading={loadingSeasons}
+          onSelect={(season) => {
+            setCriteria((current) => ({
+              ...current,
+              season: { id: season.id, label: season.label },
+            }));
+          }}
           onDismiss={() => setSeasonPickerOpen(false)}
-        >
-          <View style={styles.seasonBody}>
-            {loadingSeasons ? (
-              <ActivityIndicator color={theme.fillPrimary} />
-            ) : (
-              <ScrollView>
-                {seasonOptions.map((season) => (
-                  <Button
-                    key={season.id}
-                    label={season.label}
-                    variant="secondary"
-                    width="fill"
-                    onPress={() => {
-                      setCriteria((current) => ({
-                        ...current,
-                        season: { id: season.id, label: season.label },
-                      }));
-                      setSeasonPickerOpen(false);
-                    }}
-                  />
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </Sheet>
+        />
       ) : null}
     </>
   );
@@ -389,8 +401,5 @@ const styles = StyleSheet.create({
   manageMain: {
     flex: 1,
     gap: space.gapSm,
-  },
-  seasonBody: {
-    gap: space.insetSm,
   },
 });

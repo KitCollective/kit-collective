@@ -7,6 +7,7 @@ import {
   hasWishlistCriterion,
   isPremiumRequiredError,
   manageRowAccessibilityLabel,
+  resolveWishlistEmptyBody,
   resolveWishlistEmptyTitle,
   resolveWishlistSheetTitle,
   seedCriteriaForEdit,
@@ -128,6 +129,14 @@ describe("manageRowAccessibilityLabel", () => {
 describe("resolveWishlistEmptyTitle", () => {
   it("uses Danish empty collection copy", () => {
     expect(resolveWishlistEmptyTitle()).toBe("Ingen ønsker endnu");
+  });
+});
+
+describe("resolveWishlistEmptyBody", () => {
+  it("uses one-sentence empty collection body copy", () => {
+    const body = resolveWishlistEmptyBody();
+    expect(body.length).toBeGreaterThan(0);
+    expect(body).toMatch(/Tilføj/i);
   });
 });
 

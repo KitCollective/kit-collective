@@ -91,6 +91,10 @@ export function resolveWishlistEmptyTitle(): string {
   return "Ingen ønsker endnu";
 }
 
+export function resolveWishlistEmptyBody(): string {
+  return "Tilføj en ønskerække med klub, sæson eller type.";
+}
+
 export function isPremiumRequiredError(body: unknown): boolean {
   const parsed = billingPaywallErrorSchema.safeParse(body);
   return parsed.success && parsed.data.code === "PREMIUM_REQUIRED";

@@ -36,6 +36,11 @@ type WishlistRow = {
   size: JerseySize | null;
 };
 
+type WishlistCriteriaValues = Pick<
+  WishlistRow,
+  "clubId" | "seasonId" | "type" | "size"
+>;
+
 @Injectable()
 export class WishlistService {
   constructor(@Inject(DB) private readonly db: Db) {}
@@ -151,10 +156,8 @@ export class WishlistService {
     return result.data;
   }
 
-  private writeToValues(body: WishlistEntryWrite): WishlistRow {
+  private writeToValues(body: WishlistEntryWrite): WishlistCriteriaValues {
     return {
-      id: "",
-      userId: "",
       clubId: body.clubId ?? null,
       seasonId: body.seasonId ?? null,
       type: body.type ?? null,
