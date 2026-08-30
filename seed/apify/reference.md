@@ -69,8 +69,8 @@ This file is the seed-module interface for Transfermarkt grains. Not Nest OpenAP
 | **Inputs** | Club ExternalId + season label / `saison_id` |
 | **Fetch** | Kader HTML `…/kader/verein/{id}/saison_id/{year}/plus/1` |
 | **ExternalId** | Club+season pair via `team_season` + Already seeded rule |
-| **Stamdata now** | club id, season id; each player id + name + jersey `#` + **position, DOB, nationality, height, foot** |
-| **Drop** | market value; Joined / Signed from / Current club until proven season-true; portraits |
+| **Stamdata now** | club id, season id; each player id + name + jersey `#` + **position, DOB, nationality, height, foot** + portrait when on the row (**Player photo**) |
+| **Drop** | market value; Joined / Signed from / Current club until proven season-true; bare TM hrefs as product assets |
 | **Open** | loan / parent-club (**Player registration**) markers |
 
 Already seeded: skip fetch when that club+season already has a squad with jersey numbers (and Rich grain body fields once those land).
@@ -107,12 +107,12 @@ Already seeded: skip fetch when that club+season already has a squad with jersey
 
 | | |
 | --- | --- |
-| **Inputs** | TM player id (from kader row; profile hop only when id, `#`, or body facts missing) |
-| **Fetch** | Kader row first; `…/profil/spieler/{id}` only as Player profile fetch |
+| **Inputs** | TM player id (from kader row; profile hop when id, `#`, body facts, or portrait missing) |
+| **Fetch** | Kader row first; `…/profil/spieler/{id}` as Player profile fetch when needed |
 | **ExternalId** | TM player id |
-| **Stamdata now** | player id, display name; DOB, nationality/citizenship, height, foot, position (from kader when present) |
-| **Later leverage** | home-country name, place of birth, youth clubs, **Player honours** (`/erfolge`), jersey history (`/rueckennummern`) |
-| **Drop** | agent/agency, market value, contract as historical stamdata, portraits, boot outfitter, current profile shirt as historical `#` |
+| **Stamdata now** | player id, display name; **date of birth**; nationality/citizenship; height; preferred foot; position; place of birth; name in home country; **Player photo** (portrait bytes → lane object store, `rights: unresolved`, `admin_only` — same rights model as KitPhoto; schema may land with the grain ticket) |
+| **Later leverage** | youth clubs; **Player honours** (`/erfolge`); jersey history (`/rueckennummern`) |
+| **Drop** | agent/agency, market value, contract as historical stamdata, boot outfitter, TM logo/URL as product asset, current profile shirt as historical `#` |
 
 ---
 
