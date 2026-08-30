@@ -8,9 +8,17 @@ import {
   useMemo,
   useState,
 } from "react";
-import { fetchCurrentUser, loginCollector, registerCollector } from "@/api/identity";
+import {
+  fetchCookieConsent,
+  fetchCurrentUser,
+  fetchPrefs,
+  loginCollector,
+  registerCollector,
+} from "@/api/identity";
 import { clearSession, loadSession, saveSession } from "@/auth/session";
+import { loadAnalysisIfConsented } from "@/consent/analysis-loader";
 import { resetAddSession } from "@/session/addSession";
+import { useAppearanceOptional } from "@/theme/appearance";
 
 type AuthContextValue = {
   user: IdentityMe | null;
@@ -28,10 +36,20 @@ async function hydrateUser(session: IdentitySession): Promise<IdentityMe> {
   return fetchCurrentUser(session.accessToken);
 }
 
+async function hydrateConsent(accessToken: string): Promise<void> {
+  try {
+    const consent = await fetchCookieConsent(accessToken);
+    loadAnalysisIfConsented(consent);
+  } catch {
+    loadAnalysisIfConsented(null);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<IdentitySession | null>(null);
   const [user, setUser] = useState<IdentityMe | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const appearance = useAppearanceOptional();
 
   useEffect(() => {
     let active = true;
@@ -51,6 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(stored);
           setUser(profile);
         }
+        await hydrateConsent(stored.accessToken);
+        if (appearance) {
+          const prefs = await fetchPrefs(stored.accessToken);
+          if (active) {
+            appearance.setAppearance(prefs.appearance);
+          }
+        }
       } catch {
         await clearSession();
         if (active) {
@@ -69,14 +94,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [appearance]);
 
-  const applySession = useCallback(async (next: IdentitySession) => {
-    const profile = await hydrateUser(next);
-    await saveSession(next);
-    setSession(next);
-    setUser(profile);
-  }, []);
+  const applySession = useCallback(
+    async (next: IdentitySession) => {
+      const profile = await hydrateUser(next);
+      await saveSession(next);
+      setSession(next);
+      setUser(profile);
+      await hydrateConsent(next.accessToken);
+      if (appearance) {
+        const prefs = await fetchPrefs(next.accessToken);
+        appearance.setAppearance(prefs.appearance);
+      }
+    },
+    [appearance],
+  );
 
   const signIn = useCallback(
     async (email: string, password: string) => {

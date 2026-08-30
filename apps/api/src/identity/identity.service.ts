@@ -1,4 +1,8 @@
 import {
+  type CookieConsent,
+  type CookieConsentUpdate,
+  cookieConsentSchema,
+  cookieConsentUpdateSchema,
   type HandleAvailabilityResponse,
   handleAvailabilityResponseSchema,
   handleSchema,
@@ -6,9 +10,12 @@ import {
   type IdentityAccountUpdate,
   type IdentityAvatarUpload,
   type IdentityEmailChange,
+  type IdentityExport,
   type IdentityLinkedAccount,
   type IdentityMe,
   type IdentityPasswordChange,
+  type IdentityPrefs,
+  type IdentityPrefsUpdate,
   type IdentityProfileUpdate,
   type IdentityRole,
   type IdentitySession,
@@ -16,8 +23,11 @@ import {
   identityAvatarUploadSchema,
   identityCredentialsSchema,
   identityEmailChangeSchema,
+  identityExportSchema,
   identityMeSchema,
   identityPasswordChangeSchema,
+  identityPrefsSchema,
+  identityPrefsUpdateSchema,
   identityProfileUpdateSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
@@ -71,11 +81,36 @@ const USER_ME_SELECT = {
   emailVerified: user.emailVerified,
 } as const;
 
+const USER_PREFS_SELECT = {
+  pushEnabled: user.pushEnabled,
+  pushHighPriority: user.pushHighPriority,
+  pushOther: user.pushOther,
+  emailNews: user.emailNews,
+  emailHighPriority: user.emailHighPriority,
+  privacyPersonalised: user.privacyPersonalised,
+  privacyRecentlySeen: user.privacyRecentlySeen,
+  privacyFavoriteNotifications: user.privacyFavoriteNotifications,
+  locale: user.locale,
+  appearance: user.appearance,
+} as const;
+
+const USER_COOKIE_SELECT = {
+  cookieAnalysis: user.cookieAnalysis,
+  cookieMarketing: user.cookieMarketing,
+} as const;
+
 export type JwtPayload = {
   sub: string;
   email: string;
   role: IdentityRole;
 };
+
+function formatBirthday(birthday: string | Date | null): string | null {
+  if (birthday instanceof Date) {
+    return birthday.toISOString().slice(0, 10);
+  }
+  return birthday;
+}
 
 function hasR2Config(): boolean {
   return Boolean(
@@ -167,6 +202,132 @@ export class IdentityService {
 
     const linkedAccounts = await this.loadLinkedAccounts(userId);
     return this.toIdentityMe(found, linkedAccounts);
+  }
+
+  async getPrefs(userId: string): Promise<IdentityPrefs> {
+    const [found] = await this.db
+      .select(USER_PREFS_SELECT)
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!found) {
+      throw new UnauthorizedException();
+    }
+
+    return identityPrefsSchema.parse(found);
+  }
+
+  async updatePrefs(userId: string, rawBody: unknown): Promise<IdentityPrefs> {
+    const body: IdentityPrefsUpdate = identityPrefsUpdateSchema.parse(rawBody);
+
+    const [updated] = await this.db
+      .update(user)
+      .set({
+        ...(body.pushEnabled !== undefined ? { pushEnabled: body.pushEnabled } : {}),
+        ...(body.pushHighPriority !== undefined ? { pushHighPriority: body.pushHighPriority } : {}),
+        ...(body.pushOther !== undefined ? { pushOther: body.pushOther } : {}),
+        ...(body.emailNews !== undefined ? { emailNews: body.emailNews } : {}),
+        ...(body.emailHighPriority !== undefined
+          ? { emailHighPriority: body.emailHighPriority }
+          : {}),
+        ...(body.privacyPersonalised !== undefined
+          ? { privacyPersonalised: body.privacyPersonalised }
+          : {}),
+        ...(body.privacyRecentlySeen !== undefined
+          ? { privacyRecentlySeen: body.privacyRecentlySeen }
+          : {}),
+        ...(body.privacyFavoriteNotifications !== undefined
+          ? { privacyFavoriteNotifications: body.privacyFavoriteNotifications }
+          : {}),
+        ...(body.locale !== undefined ? { locale: body.locale } : {}),
+        ...(body.appearance !== undefined ? { appearance: body.appearance } : {}),
+      })
+      .where(eq(user.id, userId))
+      .returning(USER_PREFS_SELECT);
+
+    if (!updated) {
+      throw new UnauthorizedException();
+    }
+
+    return identityPrefsSchema.parse(updated);
+  }
+
+  async getCookieConsent(userId: string): Promise<CookieConsent> {
+    const [found] = await this.db
+      .select(USER_COOKIE_SELECT)
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!found) {
+      throw new UnauthorizedException();
+    }
+
+    return cookieConsentSchema.parse({
+      analysis: found.cookieAnalysis,
+      marketing: found.cookieMarketing,
+    });
+  }
+
+  async updateCookieConsent(userId: string, rawBody: unknown): Promise<CookieConsent> {
+    const body: CookieConsentUpdate = cookieConsentUpdateSchema.parse(rawBody);
+
+    const [updated] = await this.db
+      .update(user)
+      .set({
+        cookieAnalysis: body.analysis,
+        cookieMarketing: body.marketing,
+      })
+      .where(eq(user.id, userId))
+      .returning(USER_COOKIE_SELECT);
+
+    if (!updated) {
+      throw new UnauthorizedException();
+    }
+
+    return cookieConsentSchema.parse({
+      analysis: updated.cookieAnalysis,
+      marketing: updated.cookieMarketing,
+    });
+  }
+
+  async exportAccountData(userId: string): Promise<IdentityExport> {
+    const [found] = await this.db
+      .select({
+        id: user.id,
+        email: user.email,
+        handle: user.handle,
+        aboutMe: user.aboutMe,
+        fullName: user.fullName,
+        phone: user.phone,
+        birthday: user.birthday,
+      })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!found) {
+      throw new UnauthorizedException();
+    }
+
+    const jerseys = await this.db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(eq(userJersey.userId, userId));
+
+    const birthday = formatBirthday(found.birthday);
+
+    return identityExportSchema.parse({
+      id: found.id,
+      email: found.email,
+      handle: found.handle,
+      aboutMe: found.aboutMe,
+      fullName: found.fullName,
+      phone: found.phone,
+      birthday,
+      userJerseyIds: jerseys.map((row) => row.id),
+    });
   }
 
   async updateAccount(userId: string, rawBody: unknown): Promise<IdentityMe> {
@@ -531,8 +692,7 @@ export class IdentityService {
     linkedAccounts: IdentityLinkedAccount[],
     avatarUrlOverride?: string | null,
   ): IdentityMe {
-    const birthday =
-      row.birthday instanceof Date ? row.birthday.toISOString().slice(0, 10) : row.birthday;
+    const birthday = formatBirthday(row.birthday);
 
     return identityMeSchema.parse({
       id: row.id,

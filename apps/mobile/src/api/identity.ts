@@ -1,15 +1,25 @@
 import {
+  acceptAllCookieConsent,
+  type CookieConsent,
+  type CookieConsentUpdate,
+  cookieConsentSchema,
+  essentialOnlyCookieConsent,
   type HandleAvailabilityResponse,
   handleAvailabilityResponseSchema,
   type IdentityAccountUpdate,
   type IdentityCredentials,
   type IdentityEmailChange,
+  type IdentityExport,
   type IdentityMe,
   type IdentityPasswordChange,
+  type IdentityPrefs,
+  type IdentityPrefsUpdate,
   type IdentityProfileUpdate,
   type IdentitySession,
   identityCredentialsSchema,
+  identityExportSchema,
   identityMeSchema,
+  identityPrefsSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
@@ -232,3 +242,75 @@ export async function logoutSession(accessToken: string): Promise<void> {
     },
   });
 }
+
+export async function fetchPrefs(accessToken: string): Promise<IdentityPrefs> {
+  const response = await requestJson("/v1/identity/prefs", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke hente indstillinger");
+  }
+
+  return identityPrefsSchema.parse(await response.json());
+}
+
+export async function updatePrefs(
+  accessToken: string,
+  update: IdentityPrefsUpdate,
+): Promise<IdentityPrefs> {
+  const response = await requestJson("/v1/identity/prefs", {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(update),
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke gemme indstillinger");
+  }
+
+  return identityPrefsSchema.parse(await response.json());
+}
+
+export async function fetchCookieConsent(accessToken: string): Promise<CookieConsent> {
+  const response = await requestJson("/v1/identity/cookie-consent", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke hente cookie-valg");
+  }
+
+  return cookieConsentSchema.parse(await response.json());
+}
+
+export async function updateCookieConsent(
+  accessToken: string,
+  update: CookieConsentUpdate,
+): Promise<CookieConsent> {
+  const response = await requestJson("/v1/identity/cookie-consent", {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(update),
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke gemme cookie-valg");
+  }
+
+  return cookieConsentSchema.parse(await response.json());
+}
+
+export async function fetchAccountExport(accessToken: string): Promise<IdentityExport> {
+  const response = await requestJson("/v1/identity/export", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke hente kontodata");
+  }
+
+  return identityExportSchema.parse(await response.json());
+}
+
+export { acceptAllCookieConsent, essentialOnlyCookieConsent };

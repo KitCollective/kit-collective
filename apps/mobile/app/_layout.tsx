@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "@/auth/AuthProvider";
+import { AppearanceProvider } from "@/theme/appearance";
 import { BrandFontsProvider } from "@/theme/brand-fonts";
 import { useTheme } from "@/theme/use-theme";
 
@@ -45,13 +46,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <BrandFontsProvider enabled={brandFontsEnabled}>
-        <AuthProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-        </AuthProvider>
+        <AppearanceProvider>
+          <AuthProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(tabs)" />
+            </Stack>
+          </AuthProvider>
+        </AppearanceProvider>
       </BrandFontsProvider>
     </GestureHandlerRootView>
   );

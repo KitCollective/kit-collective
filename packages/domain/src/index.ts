@@ -113,3 +113,9 @@ export {
   HANDLE_STATUSES,
   type HandleStatus,
 } from "./identity.js";
+export {
+  APPEARANCE_MODES,
+  type AppearanceMode,
+  USER_LOCALES,
+  type UserLocale,
+} from "./prefs.js";

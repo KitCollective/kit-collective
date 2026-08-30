@@ -1,4 +1,5 @@
 import {
+  APPEARANCE_MODES,
   AUTHENTICITY_VALUES,
   CALENDAR_KINDS,
   CATALOG_ENTITY_TYPES,
@@ -16,6 +17,7 @@ import {
   OCR_STATUSES,
   PHOTO_ROLES,
   PHOTO_SOURCES,
+  USER_LOCALES,
   USER_ROLES,
 } from "@kit/domain";
 import { relations, sql } from "drizzle-orm";
@@ -55,6 +57,8 @@ export const identityLinkedProviderEnum = pgEnum(
   "identity_linked_provider",
   IDENTITY_LINKED_PROVIDERS,
 );
+export const userLocaleEnum = pgEnum("user_locale", USER_LOCALES);
+export const appearanceModeEnum = pgEnum("appearance_mode", APPEARANCE_MODES);
 export const jerseySizeEnum = pgEnum("jersey_size", JERSEY_SIZES);
 export const jerseyConditionEnum = pgEnum("jersey_condition", JERSEY_CONDITIONS);
 export const photoRoleEnum = pgEnum("photo_role", PHOTO_ROLES);
@@ -239,6 +243,18 @@ export const user = pgTable(
     emailVerified: boolean("email_verified").notNull().default(true),
     city: text("city"),
     showCity: boolean("show_city").notNull().default(false),
+    locale: userLocaleEnum("locale").notNull().default("da"),
+    appearance: appearanceModeEnum("appearance").notNull().default("system"),
+    pushEnabled: boolean("push_enabled").notNull().default(false),
+    pushHighPriority: boolean("push_high_priority").notNull().default(true),
+    pushOther: boolean("push_other").notNull().default(true),
+    emailNews: boolean("email_news").notNull().default(false),
+    emailHighPriority: boolean("email_high_priority").notNull().default(true),
+    privacyPersonalised: boolean("privacy_personalised").notNull().default(true),
+    privacyRecentlySeen: boolean("privacy_recently_seen").notNull().default(true),
+    privacyFavoriteNotifications: boolean("privacy_favorite_notifications").notNull().default(true),
+    cookieAnalysis: boolean("cookie_analysis").notNull().default(false),
+    cookieMarketing: boolean("cookie_marketing").notNull().default(false),
     role: userRoleEnum("role").notNull().default("user"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

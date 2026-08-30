@@ -5,8 +5,11 @@ import {
   collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionSaveResponseSchema,
+  cookieConsentSchema,
   handleAvailabilityResponseSchema,
+  identityExportSchema,
   identityMeSchema,
+  identityPrefsSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
@@ -55,37 +58,49 @@ async function insertClubSeasonFixture() {
     .insert(country)
     .values({ iso3166: "DK" })
     .returning({ id: country.id });
+  if (!insertedCountry) {
+    throw new Error("Expected country insert to return a row");
+  }
 
   const [insertedLeague] = await db
     .insert(league)
-    .values({ countryId: insertedCountry!.id })
+    .values({ countryId: insertedCountry.id })
     .returning({ id: league.id });
+  if (!insertedLeague) {
+    throw new Error("Expected league insert to return a row");
+  }
 
   const [insertedClub] = await db
     .insert(club)
-    .values({ countryId: insertedCountry!.id, kind: "club" })
+    .values({ countryId: insertedCountry.id, kind: "club" })
     .returning({ id: club.id });
+  if (!insertedClub) {
+    throw new Error("Expected club insert to return a row");
+  }
 
   const [insertedSeason] = await db
     .insert(season)
     .values({
-      leagueId: insertedLeague!.id,
+      leagueId: insertedLeague.id,
       label: "2023/24",
       startsOn: "2023-07-01",
       endsOn: "2024-06-30",
       calendarKind: "split_year",
     })
     .returning({ id: season.id });
+  if (!insertedSeason) {
+    throw new Error("Expected season insert to return a row");
+  }
 
   await db.insert(teamSeason).values({
-    clubId: insertedClub!.id,
-    seasonId: insertedSeason!.id,
+    clubId: insertedClub.id,
+    seasonId: insertedSeason.id,
   });
 
   await db.insert(catalogLabel).values([
     {
       entityType: "country",
-      entityId: insertedCountry!.id,
+      entityId: insertedCountry.id,
       locale: "da",
       kind: "label",
       text: "Danmark",
@@ -93,7 +108,7 @@ async function insertClubSeasonFixture() {
     },
     {
       entityType: "league",
-      entityId: insertedLeague!.id,
+      entityId: insertedLeague.id,
       locale: "da",
       kind: "label",
       text: "Superligaen",
@@ -101,7 +116,7 @@ async function insertClubSeasonFixture() {
     },
     {
       entityType: "club",
-      entityId: insertedClub!.id,
+      entityId: insertedClub.id,
       locale: "da",
       kind: "label",
       text: "F.C. København",
@@ -112,8 +127,8 @@ async function insertClubSeasonFixture() {
   await pool.end();
 
   return {
-    clubId: insertedClub!.id,
-    seasonId: insertedSeason!.id,
+    clubId: insertedClub.id,
+    seasonId: insertedSeason.id,
   };
 }
 
@@ -595,5 +610,98 @@ describe("Identity /v1", () => {
     expect(collectionFavoritesSchema.parse(JSON.parse(emptyFavorites.body)).favorites).toHaveLength(
       0,
     );
+  });
+
+  it("returns 401 for export without session", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/identity/export",
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("round-trips notification and privacy prefs", async () => {
+    const session = await registerSession(app, "prefs-roundtrip@example.com");
+
+    const initial = await app.inject({
+      method: "GET",
+      url: "/v1/identity/prefs",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(initial.statusCode).toBe(200);
+    const defaults = identityPrefsSchema.parse(JSON.parse(initial.body));
+    expect(defaults.emailNews).toBe(false);
+    expect(defaults.emailHighPriority).toBe(true);
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/v1/identity/prefs",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: {
+        pushEnabled: true,
+        pushHighPriority: false,
+        locale: "en",
+        appearance: "dark",
+        privacyPersonalised: false,
+      },
+    });
+    expect(patch.statusCode).toBe(200);
+    const updated = identityPrefsSchema.parse(JSON.parse(patch.body));
+    expect(updated).toMatchObject({
+      pushEnabled: true,
+      pushHighPriority: false,
+      locale: "en",
+      appearance: "dark",
+      privacyPersonalised: false,
+    });
+
+    const again = await app.inject({
+      method: "GET",
+      url: "/v1/identity/prefs",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(identityPrefsSchema.parse(JSON.parse(again.body))).toEqual(updated);
+  });
+
+  it("persists essential-only cookie consent with analysis false", async () => {
+    const session = await registerSession(app, "cookie-essential@example.com");
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/v1/identity/cookie-consent",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { analysis: false, marketing: false },
+    });
+    expect(patch.statusCode).toBe(200);
+    expect(cookieConsentSchema.parse(JSON.parse(patch.body))).toEqual({
+      analysis: false,
+      marketing: false,
+    });
+
+    const get = await app.inject({
+      method: "GET",
+      url: "/v1/identity/cookie-consent",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(cookieConsentSchema.parse(JSON.parse(get.body))).toEqual({
+      analysis: false,
+      marketing: false,
+    });
+  });
+
+  it("returns authenticated export with profile fields and jersey ids", async () => {
+    const session = await registerSession(app, "export-owner@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const jersey = await saveJerseyForUser(app, session, fixture);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/identity/export",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const payload = identityExportSchema.parse(JSON.parse(response.body));
+    expect(payload.email).toBe("export-owner@example.com");
+    expect(payload.userJerseyIds).toContain(jersey.id);
   });
 });

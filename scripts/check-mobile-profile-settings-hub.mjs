@@ -2,7 +2,7 @@
 /**
  * Ratchet (KIT-125): fail CI when own-Profil Indstillinger hub drifts from
  * docs/design-system.md §5 (four mono section labels, account Skift wiring,
- * Danish shell EmptyState copy — not factory jargon).
+ * Danish prefs drills — not factory jargon).
  */
 import { readFileSync } from "node:fs";
 
@@ -16,7 +16,7 @@ const REQUIRED_SECTION_LABELS = [
   "Privatlivsindstillinger",
 ];
 
-const SHELL_SCREENS = [
+const PREFS_SCREENS = [
   "apps/mobile/app/(tabs)/profile/push-notifikationer.tsx",
   "apps/mobile/app/(tabs)/profile/email-notifikationer.tsx",
   "apps/mobile/app/(tabs)/profile/sprog.tsx",
@@ -68,14 +68,11 @@ export function checkMobileProfileSettingsHub(overrides = {}) {
     violations.push(`${kontoPath}: fullName helper must not use lock-speak or factory jargon`);
   }
 
-  for (const screenPath of SHELL_SCREENS) {
-    const source = overrides[`shell:${screenPath}`] ?? readFileSync(screenPath, "utf8");
-    if (!/title="Kommer snart"/.test(source)) {
-      violations.push(`${screenPath}: shell EmptyState title must be "Kommer snart"`);
-    }
+  for (const screenPath of PREFS_SCREENS) {
+    const source = overrides[`prefs:${screenPath}`] ?? readFileSync(screenPath, "utf8");
     for (const pattern of FACTORY_JARGON) {
       if (pattern.test(source)) {
-        violations.push(`${screenPath}: shell EmptyState must not use factory jargon (${pattern})`);
+        violations.push(`${screenPath}: prefs drill must not use factory jargon (${pattern})`);
       }
     }
   }
