@@ -7,8 +7,12 @@ alwaysApply: false
 # Design system
 
 `docs/design-system.md` is the visual and interaction lock for the `mobile` and `web`
-surfaces. Read it before composing or changing any screen, component, or UI copy there.
-`admin` and `api` are outside the lock.
+surfaces. `admin` and `api` are outside the lock.
+
+When the implement append includes a **Slice design lock (excerpt)**, that excerpt is
+the lock for this job. Do not read the full file unless a named AC pattern is missing
+from the excerpt. When no excerpt is present, read only the Components inventory and
+the specific `###` sections named in the issue — not the entire file.
 
 Apply the lock; do not invent taste:
 

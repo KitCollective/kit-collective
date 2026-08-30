@@ -16,8 +16,20 @@ import {
 } from "./capacity.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
+import {
+  captureCheckerReviewDiff,
+  formatCheckerReviewBundle,
+} from "./checker-diff.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
+import { loadFirstPassRegistry, reviewFeedbackIsFirstPassOnly, reviewFeedbackIsSpecOnly } from "./first-pass.mjs";
 import { harnessLog } from "./harness-log.mjs";
+import {
+  estimateLineCostUsd,
+  formatCostUsd,
+  readReportedCostUsd,
+  sumCostUsd,
+} from "./token-cost.mjs";
+import { getDefaultTokenStore } from "./token-store.mjs";
 import {
   buildImplementAppendPath,
   resolveImplementSkillPaths,
@@ -27,6 +39,7 @@ import {
 } from "./implement-context.mjs";
 import {
   completeImplementAdw,
+  createFormatApply,
   createTypecheckTouched,
   extractReviewFeedback,
   requiredChecksGreen,
@@ -99,12 +112,23 @@ export const DEFAULT_AGENT_END_GRACE_MS = 8_000;
 export const TIMEOUT_PARK_STATUS = "Parked";
 export const TOKEN_USE_HEADING = "### Token use";
 export const UNKNOWN_TOKEN_COUNT = "unknown";
+/** Keep the last N token runs on the workpad (ring). */
+export const MAX_TOKEN_USE_RUNS_ON_WORKPAD = 5;
+/** Keep the last N coding-job token runs on `/health`. */
+export const MAX_HEALTH_TOKEN_RUNS = 20;
 
 const TOKEN_ROLE_MODELS = {
   implement: "Composer",
   "factory-checker": "Grok",
   scout: "Hy3",
-  gate: "Hy3",
+  gate: "MiMo",
+};
+
+const TOKEN_ROLE_MODEL_IDS = {
+  implement: "cursor/composer-2.5",
+  "factory-checker": "cursor/grok-4.6",
+  scout: "openrouter/tencent/hy3",
+  gate: "openrouter/xiaomi/mimo-v2.5-pro",
 };
 
 const TOKEN_ROLE_LABELS = {
@@ -114,7 +138,9 @@ const TOKEN_ROLE_LABELS = {
   gate: "Gate",
 };
 
-const TOKEN_SUBAGENT_ROLES = new Set(["scout", "gate"]);
+const TOKEN_HELPER_MODEL = "Composer";
+const TOKEN_HELPER_MODEL_ID = "cursor/composer-2.5";
+const TOKEN_NAMED_SUBAGENTS = new Set(["scout", "gate"]);
 
 /**
  * @param {string | undefined} description
@@ -275,42 +301,117 @@ export function isTokenCount(value) {
  */
 export function readUsageCounts(usage) {
   if (usage === null || typeof usage !== "object") {
-    return { input: UNKNOWN_TOKEN_COUNT, output: UNKNOWN_TOKEN_COUNT };
+    return {
+      input: UNKNOWN_TOKEN_COUNT,
+      output: UNKNOWN_TOKEN_COUNT,
+      reportedCostUsd: null,
+    };
   }
   const record = /** @type {Record<string, unknown>} */ (usage);
   return {
     input: isTokenCount(record.input) ? record.input : UNKNOWN_TOKEN_COUNT,
     output: isTokenCount(record.output) ? record.output : UNKNOWN_TOKEN_COUNT,
+    reportedCostUsd: readReportedCostUsd(record),
   };
 }
 
 /**
- * @param {{ role: string, model: string, input: number | "unknown", output: number | "unknown" }} line
+ * @param {{
+ *   role: string,
+ *   model: string,
+ *   modelId?: string,
+ *   input: number | "unknown",
+ *   output: number | "unknown",
+ *   costUsd?: number | null,
+ * }} line
  */
 export function formatTokenUseLine(line) {
   const label = TOKEN_ROLE_LABELS[line.role] ?? line.role;
-  return `- ${label} (${line.model}): input ${line.input}, output ${line.output}`;
+  const cost = typeof line.costUsd === "number" ? ` · ${formatCostUsd(line.costUsd)}` : "";
+  return `- ${label} (${line.model}): input ${line.input}, output ${line.output}${cost}`;
 }
 
 /**
- * Public token snapshot for the workpad and `/health`. Numbers or unknown only.
+ * @param {{
+ *   role: string,
+ *   model: string,
+ *   modelId?: string,
+ *   input: number | "unknown",
+ *   output: number | "unknown",
+ * }} line
+ * @param {NodeJS.ProcessEnv | Record<string, string | undefined>} [env]
+ */
+export function enrichTokenLineCost(line, env = process.env) {
+  const modelKey = line.modelId ?? line.model;
+  const { costUsd, estimate } = estimateLineCostUsd({
+    model: modelKey,
+    input: line.input,
+    output: line.output,
+    reportedCostUsd: line.reportedCostUsd ?? null,
+    env,
+  });
+  return { ...line, costUsd, costEstimate: estimate };
+}
+
+/**
+ * Public token snapshot for the workpad, `/health`, and harness logs.
  *
  * @param {{
  *   role: string,
  *   identifier: string,
- *   lines: Array<{ role: string, model: string, input: number | "unknown", output: number | "unknown" }>,
+ *   lines: Array<{
+ *     role: string,
+ *     model: string,
+ *     modelId?: string,
+ *     input: number | "unknown",
+ *     output: number | "unknown",
+ *     costUsd?: number | null,
+ *     reportedCostUsd?: number | null,
+ *     costEstimate?: boolean,
+ *   }>,
+ *   startedAt?: string,
+ *   endedAt?: string,
+ *   issueId?: string,
+ *   sessionId?: string,
+ *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  * }} input
  */
 export function publicTokenSnapshot(input) {
+  const env = input.env ?? process.env;
+  const lines = input.lines.map((line) => {
+    const enriched = enrichTokenLineCost(
+      {
+        role: line.role,
+        model: line.model,
+        modelId: line.modelId,
+        input: isTokenCount(line.input) ? line.input : UNKNOWN_TOKEN_COUNT,
+        output: isTokenCount(line.output) ? line.output : UNKNOWN_TOKEN_COUNT,
+        reportedCostUsd: line.reportedCostUsd ?? null,
+      },
+      env,
+    );
+    return {
+      role: enriched.role,
+      model: enriched.model,
+      modelId: enriched.modelId ?? TOKEN_ROLE_MODEL_IDS[enriched.role] ?? enriched.model,
+      input: enriched.input,
+      output: enriched.output,
+      costUsd: enriched.costUsd,
+      costEstimate: enriched.costEstimate !== false,
+    };
+  });
+  const costUsd = sumCostUsd(lines);
+  const costEstimate = lines.some((line) => line.costEstimate === false) ? false : true;
   return {
     role: input.role,
     identifier: input.identifier,
-    lines: input.lines.map((line) => ({
-      role: line.role,
-      model: line.model,
-      input: isTokenCount(line.input) ? line.input : UNKNOWN_TOKEN_COUNT,
-      output: isTokenCount(line.output) ? line.output : UNKNOWN_TOKEN_COUNT,
-    })),
+    issueId: typeof input.issueId === "string" ? input.issueId : undefined,
+    sessionId: typeof input.sessionId === "string" ? input.sessionId : undefined,
+    startedAt: input.startedAt,
+    endedAt: input.endedAt ?? new Date().toISOString(),
+    lines,
+    costUsd,
+    costEstimate,
   };
 }
 
@@ -318,38 +419,93 @@ export function publicTokenSnapshot(input) {
  * @param {string} jobRole
  * @param {{ parentUsage?: object | null, subagents?: Record<string, object> }} collected
  * @param {string} identifier
+ * @param {{ startedAt?: string, endedAt?: string, env?: object }} [extras]
  */
-export function tokenSnapshotFromCollected(jobRole, collected, identifier) {
+export function tokenSnapshotFromCollected(jobRole, collected, identifier, extras = {}) {
   const parentModel = TOKEN_ROLE_MODELS[jobRole] ?? UNKNOWN_TOKEN_COUNT;
   const lines = [
     {
       role: jobRole,
       model: parentModel,
+      modelId: TOKEN_ROLE_MODEL_IDS[jobRole],
       ...readUsageCounts(collected?.parentUsage),
     },
   ];
   const subagents = collected?.subagents ?? {};
-  for (const role of ["scout", "gate"]) {
-    if (subagents[role] && typeof subagents[role] === "object") {
+  for (const role of Object.keys(subagents).sort()) {
+    const usage = subagents[role];
+    if (!usage || typeof usage !== "object") {
+      continue;
+    }
+    if (TOKEN_NAMED_SUBAGENTS.has(role)) {
       lines.push({
         role,
         model: TOKEN_ROLE_MODELS[role],
-        ...readUsageCounts(subagents[role]),
+        modelId: TOKEN_ROLE_MODEL_IDS[role],
+        ...readUsageCounts(usage),
       });
+      continue;
     }
+    lines.push({
+      role,
+      model: TOKEN_HELPER_MODEL,
+      modelId: TOKEN_HELPER_MODEL_ID,
+      ...readUsageCounts(usage),
+    });
   }
-  return publicTokenSnapshot({ role: jobRole, identifier, lines });
+  return publicTokenSnapshot({
+    role: jobRole,
+    identifier,
+    lines,
+    startedAt: extras.startedAt,
+    endedAt: extras.endedAt,
+    issueId: extras.issueId,
+    sessionId: extras.sessionId,
+    env: extras.env,
+  });
 }
 
 /**
  * Collect Pi JSON usage. Parent message_update.usage is cumulative.
- * Scout/Gate counts come from subagent tool results — not invented.
+ * Scout/Gate/helper counts come from subagent tool results — not invented.
  */
 export function createTokenUseCollector() {
   /** @type {object | null} */
   let parentUsage = null;
-  /** @type {Record<string, object>} */
+  /** @type {Record<string, { input: number, output: number, costUsd?: number }>} */
   const subagents = {};
+
+  /**
+   * @param {string} agent
+   * @param {object} usage
+   */
+  function addSubagentUsage(agent, usage) {
+    const counts = readUsageCounts(usage);
+    if (
+      counts.input === UNKNOWN_TOKEN_COUNT &&
+      counts.output === UNKNOWN_TOKEN_COUNT &&
+      counts.reportedCostUsd == null
+    ) {
+      return;
+    }
+    const prev = subagents[agent];
+    const nextIn =
+      counts.input === UNKNOWN_TOKEN_COUNT
+        ? (prev?.input ?? 0)
+        : (prev?.input ?? 0) + /** @type {number} */ (counts.input);
+    const nextOut =
+      counts.output === UNKNOWN_TOKEN_COUNT
+        ? (prev?.output ?? 0)
+        : (prev?.output ?? 0) + /** @type {number} */ (counts.output);
+    /** @type {{ input: number, output: number, costUsd?: number }} */
+    const next = { input: nextIn, output: nextOut };
+    if (typeof counts.reportedCostUsd === "number") {
+      next.costUsd = (prev?.costUsd ?? 0) + counts.reportedCostUsd;
+    } else if (typeof prev?.costUsd === "number") {
+      next.costUsd = prev.costUsd;
+    }
+    subagents[agent] = next;
+  }
 
   return {
     /**
@@ -373,10 +529,14 @@ export function createTokenUseCollector() {
         parentUsage = event.usage;
       }
       if (event.type === "tool_execution_end") {
+        const toolName = typeof event.toolName === "string" ? event.toolName : "";
+        if (toolName !== "subagent") {
+          return;
+        }
         const agent = event.result?.agent ?? event.args?.agent;
         const usage = event.result?.usage;
-        if (TOKEN_SUBAGENT_ROLES.has(agent) && usage && typeof usage === "object") {
-          subagents[agent] = usage;
+        if (typeof agent === "string" && agent.length > 0 && usage && typeof usage === "object") {
+          addSubagentUsage(agent, usage);
         }
       }
     },
@@ -387,16 +547,89 @@ export function createTokenUseCollector() {
 }
 
 /**
+ * @param {ReturnType<typeof publicTokenSnapshot>} tokens
+ */
+export function formatTokenUseRun(tokens) {
+  const ended = tokens.endedAt ?? new Date().toISOString();
+  const header = `#### Run ${ended} · ${tokens.identifier} · ${tokens.role}`;
+  const lines = (tokens.lines ?? []).map((line) => formatTokenUseLine(line));
+  const total =
+    typeof tokens.costUsd === "number"
+      ? `Total ${formatCostUsd(tokens.costUsd)} (list-rate estimate)`
+      : "Total cost unknown";
+  return [header, ...lines, total].join("\n");
+}
+
+/**
+ * Emit one structured harness log line per coding-job token run (Grafana/Loki).
+ *
+ * @param {ReturnType<typeof publicTokenSnapshot>} tokens
+ */
+export function logTokenRun(tokens, options = {}) {
+  if (!tokens || typeof tokens !== "object") {
+    return;
+  }
+  const tokensIn = (tokens.lines ?? []).reduce(
+    (sum, line) => sum + (isTokenCount(line.input) ? line.input : 0),
+    0,
+  );
+  const tokensOut = (tokens.lines ?? []).reduce(
+    (sum, line) => sum + (isTokenCount(line.output) ? line.output : 0),
+    0,
+  );
+  harnessLog({
+    role: tokens.role,
+    identifier: tokens.identifier,
+    event: "tokens",
+    gate: "green",
+    phase: "token-run",
+    detail: `${tokens.role} ${tokens.identifier} ${formatCostUsd(tokens.costUsd)}`,
+    tokensIn,
+    tokensOut,
+    costUsd: typeof tokens.costUsd === "number" ? tokens.costUsd : undefined,
+    sessionId: typeof tokens.sessionId === "string" ? tokens.sessionId : undefined,
+    issueId: typeof tokens.issueId === "string" ? tokens.issueId : undefined,
+    models: (tokens.lines ?? []).map((line) => ({
+      role: line.role,
+      model: line.model,
+      modelId: line.modelId,
+      input: line.input,
+      output: line.output,
+      costUsd: line.costUsd ?? null,
+      costEstimate: line.costEstimate !== false,
+    })),
+  });
+  try {
+    const store = options.store === undefined ? getDefaultTokenStore() : options.store;
+    store?.recordTokenRun(tokens);
+  } catch {
+    // Fail open — logging must never block the coding job.
+  }
+}
+
+/**
+ * Durable token run history on the workpad (last N runs). Never secrets.
+ *
  * @param {string | undefined} current
- * @param {{ lines: Array<{ role: string, model: string, input: number | "unknown", output: number | "unknown" }> }} tokens
+ * @param {ReturnType<typeof publicTokenSnapshot>} tokens
  */
 export function applyTokenUseWorkpad(current, tokens) {
   const base =
     typeof current === "string" && current.includes(WORKPAD_HEADING)
       ? current.trimEnd()
       : WORKPAD_HEADING;
-  const lines = Array.isArray(tokens?.lines) ? tokens.lines : [];
-  const content = `${lines.map((line) => formatTokenUseLine(line)).join("\n")}\n`;
+  const runBlock = formatTokenUseRun(tokens);
+  const existingMatch = base.match(/### Token use\n([\s\S]*?)(?=\n### |\s*$)/);
+  /** @type {string[]} */
+  let runs = [runBlock];
+  if (existingMatch) {
+    const prior = existingMatch[1]
+      .split(/\n(?=#### Run )/)
+      .map((chunk) => chunk.trim())
+      .filter((chunk) => chunk.startsWith("#### Run "));
+    runs = [runBlock, ...prior].slice(0, MAX_TOKEN_USE_RUNS_ON_WORKPAD);
+  }
+  const content = `${runs.join("\n\n")}\n`;
   if (base.includes(TOKEN_USE_HEADING)) {
     return `${base.replace(/### Token use\n[\s\S]*?(?=\n### |\s*$)/, `${TOKEN_USE_HEADING}\n\n${content}`)}\n`;
   }
@@ -518,20 +751,22 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
       options.implementContext.requiredHelpers.length > 0
         ? options.implementContext.requiredHelpers.join(", ")
         : "(none)";
-    const loopTail = `Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
+    const loopTail = `Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker. FORBIDDEN: never spawn agent gate (Gate is superseded) — harness Mechanical close owns format/typecheck/rebase/GitHub wait.`;
     const noSleep =
-      "Do not sleep. Do not poll GitHub with sleep. Do not `gh pr checks --watch`. Exit the Pi session only when the PR is pushed and Gate is clean — the harness waits for required GitHub checks, then moves In Review. Fix the class from the CI excerpt.";
+      "Do not sleep. Do not poll GitHub with sleep. Do not `gh pr checks --watch`. Exit the Pi session only when the PR is pushed — the harness waits for required GitHub checks, then moves In Review. Fix the class from the CI excerpt.";
     const notANewTry = "Do not open a new try.";
     const helperNames =
       "Spawn Pi agents by these names only: nest, expo, drizzle, ui-ux, devops. react-expo is expo. If a helper exits immediately, retry that same name once.";
+    const serialHelpers =
+      "Spawn required helpers one at a time; wait for each return before the next. Order: nest → drizzle → expo → ui-ux → devops. Do not fan helpers out in parallel.";
     const tddBlock =
-      "TDD: each required helper writes the failing test at its seam (red), then minimal green. Run the helper's targeted test command — not `pnpm test` (full graph is GitHub Actions only on this worker).";
+      "TDD: each required helper writes the failing test at its seam (red), then minimal green. Run the helper's targeted test command — not `pnpm test` (full graph is GitHub Actions only on this worker). Shared TDD/implement skills stay on the parent.";
     if (options.cheapRetry === true) {
       const feedback =
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
-      return `Factory role implement retry for ${identifier}.${adw} Same Implementing stay — this is not a new try. Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
+      return `Factory role implement retry for ${identifier}.${adw} Same Implementing stay — this is not a new try. Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix vs first-pass registry tag — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Do not spawn Gate — harness Mechanical close owns format/typecheck. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -542,24 +777,53 @@ ${feedback}`;
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: verify PR MERGEABLE and required checks green)";
-      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. ${noSleep} Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. ${codeEnglish} ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. ${noSleep} Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. Do not spawn Gate. ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
 ${feedback}`;
     }
+    const firstPassClasses = Array.isArray(options.firstPassClasses)
+      ? options.firstPassClasses
+      : typeof options.workspace === "string" && options.workspace.length > 0
+        ? loadFirstPassRegistry(options.workspace).classes
+        : [];
+    if (
+      reviewFeedbackIsActionable(options.reviewFeedback) &&
+      reviewFeedbackIsFirstPassOnly(options.reviewFeedback, firstPassClasses)
+    ) {
+      const feedback = String(options.reviewFeedback).trim();
+      return `Factory role implement for ${identifier}.${adw} First-pass resume.${writeScopeSuffix} Same Implementing stay — not a full Scout/helpers tree. Skip Scout. Skip helpers. Fix only the first-pass / registry-tagged class in ### Review feedback. Do not re-map the repo. Do not spawn Gate — harness Mechanical close owns format/typecheck. ${noSleep} ${codeEnglish} ${loopTail}
+
+### Review feedback
+
+${feedback}`;
+    }
+    if (
+      reviewFeedbackIsActionable(options.reviewFeedback) &&
+      reviewFeedbackIsSpecOnly(options.reviewFeedback)
+    ) {
+      const feedback = String(options.reviewFeedback).trim();
+      return `Factory role implement for ${identifier}.${adw} Spec-only resume.${writeScopeSuffix} Same Implementing stay — not a full Scout/helpers tree. Skip Scout. Skip helpers. Fix only the Spec findings in ### Review feedback (use ### Composition paths when present). Do not re-map the repo. Do not read full CONTEXT.md. Do not spawn Gate — harness Mechanical close owns format/typecheck. ${noSleep} ${codeEnglish} ${loopTail}
+
+### Review feedback
+
+${feedback}`;
+    }
+    const compositionNote =
+      "After Scout, write workpad ### Composition with repo-relative files to mirror before inventing UI (paths only). Prefer the injected slice brief — do not read full CONTEXT.md unless a domain term is missing.";
     if (reviewFeedbackIsActionable(options.reviewFeedback)) {
       const feedback = String(options.reviewFeedback).trim();
-      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${noSleep} ${codeEnglish} ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${compositionNote} Do not spawn Gate. ${noSleep} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
 ${feedback}`;
     }
-    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Same Implementing stay — this is one try, ending at In Review. Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}`;
+    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Same Implementing stay — this is one try, ending at In Review. Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${compositionNote} Do not spawn Gate — harness Mechanical close owns format/typecheck/rebase/GitHub wait. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}`;
   }
   if (role === "factory-checker") {
-    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit. ${codeEnglish}`;
+    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass) against the harness-injected review snapshot in the append (issue description + three-dot diff). Prefer that snapshot — do not re-run a full git discovery loop, do not read full CONTEXT.md, do not poll gh pr checks (harness owns gates). Readonly git bash only to fill gaps. Before exit, ### Review feedback MUST include all three axis lines (- Spec: …, - Standards: …, - Slop: … or Slop/…). Empty or partial Review feedback is a harness miss — the worker re-runs you in-slot, then parks for human; it does not bounce to implement. When a Standards or Slop finding matches the injected First-pass registry, write [first-pass:<id>] on that workpad line. Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit. Never spawn Gate. ${codeEnglish}`;
   }
   return typeof adwFile === "string"
     ? `Factory role ${role} for ${identifier}. ADW ${adwFile}.`
@@ -629,19 +893,25 @@ export async function assertPiPackagesReady({ root, listPackages } = {}) {
  * @param {{
  *   browserSkill?: string,
  *   implementContext?: { requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string },
+ *   reviewBundle?: string,
  * }} [options]
  * @returns {string[]}
  */
 export function piArgsForRole(role, workspace, roleFile, model, prompt, options = {}) {
   if (role === "factory-checker") {
-    const args = factoryCheckerPiArgs({ workspace, roleFile, model, prompt });
+    const args = factoryCheckerPiArgs({
+      workspace,
+      roleFile,
+      model,
+      prompt,
+      reviewBundle: options.reviewBundle,
+    });
+    // Skip AGENTS.md / CLAUDE.md auto-discovery — append already has the role + snapshot.
+    const withNoContext = insertAfterFlag(args, "-a", ["--no-context-files"]);
     if (STREAMING_ROLES.has(role)) {
-      const anchor = args.indexOf("-a");
-      if (anchor >= 0) {
-        return [...args.slice(0, anchor + 1), "--mode", "json", ...args.slice(anchor + 1)];
-      }
+      return insertAfterFlag(withNoContext, "-a", ["--mode", "json"]);
     }
-    return args;
+    return withNoContext;
   }
   /** @type {string[]} */
   const skillPaths = [];
@@ -655,15 +925,17 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
   const memoryReaderArgs =
     role === "implement" ? ["--exclude-tools", IMPLEMENT_MEMORY_EXCLUDED_TOOLS.join(",")] : [];
   const appendPrompt =
-    role === "implement" &&
-    options.implementContext &&
-    Array.isArray(options.implementContext.rules) &&
-    options.implementContext.rules.length > 0
-      ? buildImplementAppendPath(workspace, roleFile, options.implementContext)
+    role === "implement" && options.implementContext
+      ? options.implementContext.slimOnly === true ||
+          (Array.isArray(options.implementContext.rules) &&
+            options.implementContext.rules.length > 0)
+        ? buildImplementAppendPath(workspace, roleFile, options.implementContext)
+        : join(workspace, roleFile)
       : join(workspace, roleFile);
   return [
     "-p",
     "-a",
+    "--no-context-files",
     ...(STREAMING_ROLES.has(role) ? ["--mode", "json"] : []),
     "--model",
     model,
@@ -677,6 +949,19 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
 }
 
 /**
+ * @param {string[]} args
+ * @param {string} flag
+ * @param {string[]} insert
+ */
+function insertAfterFlag(args, flag, insert) {
+  const idx = args.indexOf(flag);
+  if (idx < 0) {
+    return [...insert, ...args];
+  }
+  return [...args.slice(0, idx + 1), ...insert, ...args.slice(idx + 1)];
+}
+
+/**
  * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
  *   workspace?: string,
@@ -687,6 +972,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
  *   linear?: object,
  *   typecheckTouched?: (input: { cwd: string }) => Promise<unknown>,
  *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
+ *   formatApply?: (input: { cwd: string }) => Promise<unknown>,
  *   spawnProcess?: (command: string, args: string[], options: object) => Promise<{ status?: number | null, stdout?: import("node:stream").Readable, closePromise?: Promise<{ status: number | null }> }>,
  *   runCommand?: (command: string, args: string[], options: object) => Promise<string>,
  *   now?: () => number,
@@ -710,6 +996,7 @@ export function createPiJobRunner({
   linear,
   typecheckTouched,
   formatCheck,
+  formatApply,
   spawnProcess,
   runCommand,
   now,
@@ -731,6 +1018,7 @@ export function createPiJobRunner({
           ? (identifier) => gh.findOpenIssuePr({ identifier })
           : undefined,
     });
+  const applyFormat = formatApply ?? createFormatApply({ runCommand });
   const killGroup = killProcessGroup ?? killProcessGroupDefault;
   const spawnJob =
     spawnProcess ??
@@ -758,7 +1046,7 @@ export function createPiJobRunner({
    * @param {string} roleFile
    * @param {string} prompt
    * @param {NodeJS.ProcessEnv} spawnEnv
-   * @param {{ browserSkill?: string }} [piOptions]
+   * @param {{ browserSkill?: string, implementContext?: object, reviewBundle?: string }} [piOptions]
    */
   async function runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, piOptions = {}) {
     const args = piArgsForRole(job.role, workspace, roleFile, model, prompt, piOptions);
@@ -841,6 +1129,10 @@ export function createPiJobRunner({
         status,
         stdout: spawned.stdout,
         tokenUse: tokenCollector.snapshot(),
+        sessionId:
+          typeof sessionBridge.getSessionId === "function"
+            ? sessionBridge.getSessionId()
+            : undefined,
         ...extras,
       };
     }
@@ -951,38 +1243,6 @@ export function createPiJobRunner({
         });
       },
     };
-  }
-
-  /**
-   * Write ### Token use onto the existing workpad. Fail open if Linear is missing.
-   *
-   * @param {{ role: string, identifier?: string, issueId?: string }} job
-   * @param {string} identifier
-   * @param {{ parentUsage?: object | null, subagents?: Record<string, object> } | undefined} collected
-   */
-  async function recordTokenUse(job, identifier, collected) {
-    if (job.role !== "implement" && job.role !== "factory-checker") {
-      return null;
-    }
-    const tokens = tokenSnapshotFromCollected(job.role, collected ?? {}, identifier);
-    const linearClient = linear ?? job.linear;
-    if (
-      !linearClient ||
-      typeof linearClient.listComments !== "function" ||
-      typeof linearClient.updateWorkpad !== "function"
-    ) {
-      return tokens;
-    }
-    const issueId = job.issueId ?? identifier;
-    const comments = await linearClient.listComments(issueId);
-    const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
-    const body = applyTokenUseWorkpad(existing?.body, tokens);
-    await linearClient.updateWorkpad({
-      issueId,
-      body,
-      commentId: existing?.id,
-    });
-    return tokens;
   }
 
   return {
@@ -1096,6 +1356,18 @@ export function createPiJobRunner({
         const reviewFeedback = extractReviewFeedback(workpad?.body);
         mergeFailResume = reviewFeedbackIsLandFail(reviewFeedback);
         const cheapRetry = isCheapImplementRetry(job);
+        const firstPassClasses = loadFirstPassRegistry(workspace).classes;
+        const firstPassOnly =
+          !cheapRetry &&
+          !mergeFailResume &&
+          reviewFeedbackIsActionable(reviewFeedback) &&
+          reviewFeedbackIsFirstPassOnly(reviewFeedback, firstPassClasses);
+        const specOnly =
+          !cheapRetry &&
+          !mergeFailResume &&
+          !firstPassOnly &&
+          reviewFeedbackIsActionable(reviewFeedback) &&
+          reviewFeedbackIsSpecOnly(reviewFeedback);
         const ghClient = gh ?? job.gh;
         const linearClient = linear ?? job.linear;
         const adwFile = job.adwFile;
@@ -1115,7 +1387,11 @@ export function createPiJobRunner({
             }
           }
           if (pr?.mergeable === "MERGEABLE" && requiredChecksGreen(pr.checks)) {
-            const tokens = tokenSnapshotFromCollected(job.role, {}, identifier);
+            const tokens = tokenSnapshotFromCollected(job.role, {}, identifier, {
+              env,
+              issueId: typeof job.issueId === "string" ? job.issueId : undefined,
+            });
+            logTokenRun(tokens);
             const exit = await completeImplementAdw({
               job: { ...job, identifier, issueId: job.issueId ?? identifier },
               checkout,
@@ -1123,6 +1399,7 @@ export function createPiJobRunner({
               linear: withTokenUse(linearClient, tokens),
               typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
               formatCheck,
+              formatApply: applyFormat,
               adwText: readFileSync(join(workspace, adwFile), "utf8"),
               now,
               sleep,
@@ -1135,14 +1412,30 @@ export function createPiJobRunner({
         const writeScope = parseWriteScopeLine(
           implementIssue?.description ?? job.description ?? "",
         );
-        if (!cheapRetry && !mergeFailResume) {
+        const hermesDirForContext =
+          typeof env.KIT_PI_HERMES === "string" && env.KIT_PI_HERMES.length > 0
+            ? env.KIT_PI_HERMES
+            : WORKER_MEMORY_DIR;
+        if (!cheapRetry && !mergeFailResume && !firstPassOnly && !specOnly) {
           implementContext = selectImplementContext({
             writeScope,
             labels: implementIssue?.labels ?? job.labels ?? [],
             body: implementIssue?.description ?? job.description ?? "",
             reviewFeedback,
+            workpadBody: workpad?.body ?? "",
+            hermesDir: hermesDirForContext,
             cheapRetry,
             mergeFailResume,
+          });
+        } else if ((cheapRetry || firstPassOnly || specOnly) && !mergeFailResume) {
+          implementContext = selectImplementContext({
+            writeScope,
+            labels: implementIssue?.labels ?? job.labels ?? [],
+            body: implementIssue?.description ?? job.description ?? "",
+            reviewFeedback,
+            workpadBody: workpad?.body ?? "",
+            hermesDir: hermesDirForContext,
+            slimOnly: true,
           });
         }
         prompt = implementPrompt(job.role, identifier, job.adwFile, {
@@ -1151,6 +1444,8 @@ export function createPiJobRunner({
           reviewFeedback,
           writeScope,
           implementContext,
+          workspace,
+          firstPassClasses,
         });
       }
       const hermesDir =
@@ -1214,9 +1509,45 @@ export function createPiJobRunner({
           }
         }
       }
+      /** @type {string | undefined} */
+      let reviewBundle;
+      if (job.role === "factory-checker" && checkout) {
+        const linearClient = linear ?? job.linear;
+        const issue =
+          typeof linearClient?.getIssue === "function"
+            ? await linearClient.getIssue(job.issueId ?? identifier)
+            : null;
+        let review = null;
+        try {
+          review = await captureCheckerReviewDiff({
+            cwd: checkout.path,
+            lane: checkout.lane ?? "development",
+          });
+        } catch (error) {
+          harnessLog({
+            role: job.role,
+            identifier,
+            event: "phase",
+            gate: "yellow",
+            phase: "checker-diff",
+            detail: `diff snapshot failed: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+        reviewBundle = formatCheckerReviewBundle({
+          identifier,
+          issueDescription:
+            typeof issue?.description === "string"
+              ? issue.description
+              : typeof job.description === "string"
+                ? job.description
+                : "",
+          review,
+        });
+      }
       const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, {
         browserSkill,
         implementContext,
+        reviewBundle,
       });
       if (result.idleTimeout) {
         harnessLog({
@@ -1252,7 +1583,12 @@ export function createPiJobRunner({
         if (!ghClient || !linearClient) {
           throw new Error("implement requires gh and Linear adapters");
         }
-        const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier);
+        const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier, {
+          env,
+          issueId: typeof job.issueId === "string" ? job.issueId : undefined,
+          sessionId: typeof result.sessionId === "string" ? result.sessionId : undefined,
+        });
+        logTokenRun(tokens);
         const exit = await completeImplementAdw({
           job: { ...job, identifier, issueId: job.issueId ?? identifier },
           checkout,
@@ -1260,6 +1596,7 @@ export function createPiJobRunner({
           linear: withTokenUse(linearClient, tokens),
           typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
           formatCheck,
+          formatApply: applyFormat,
           adwText: readFileSync(join(workspace, adwFile), "utf8"),
           now,
           sleep,
@@ -1269,10 +1606,15 @@ export function createPiJobRunner({
         return { ...job, ...exit, tokens };
       }
       if (job.role === "factory-checker") {
-        const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier);
+        const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier, {
+          env,
+          issueId: typeof job.issueId === "string" ? job.issueId : undefined,
+          sessionId: typeof result.sessionId === "string" ? result.sessionId : undefined,
+        });
+        logTokenRun(tokens);
         const linearClient = linear ?? createLinearCliClient({ env, runCommand });
         const checkerGhClient = checkerGh ?? createCheckerGh({ env, runCommand });
-        await completeChecker({
+        const exit = await completeChecker({
           job: { ...job, identifier, issueId: job.issueId ?? identifier },
           linear: withTokenUse(linearClient, tokens),
           gh: checkerGhClient,
@@ -1281,8 +1623,7 @@ export function createPiJobRunner({
           waitTimeoutMs,
           waitIntervalMs,
         });
-        await recordTokenUse(job, identifier, result.tokenUse);
-        return { ...job, tokens };
+        return { ...job, ...exit, tokens };
       }
       return job;
     },

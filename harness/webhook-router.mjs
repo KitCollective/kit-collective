@@ -13,6 +13,8 @@
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { createDelegateGateConfig, delegateGate } from "./delegate-gate.mjs";
+import { workpadCheckerIncompleteParked } from "./checker-exit.mjs";
+import { WORKPAD_HEADING } from "./linear-cli.mjs";
 
 const HMAC_REJECT = "invalid hmac";
 const REPLAY_WINDOW_MS = 60_000;
@@ -286,6 +288,15 @@ export async function routeWebhook(input) {
   if (decision.kind !== "enqueue") {
     console.error(`[webhook] skip ${issue.identifier} ${decision.reason}`);
     return decision;
+  }
+
+  if (decision.role === "factory-checker" && typeof linear.listComments === "function") {
+    const comments = await linear.listComments(issue.id);
+    const workpad = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+    if (workpadCheckerIncompleteParked(workpad?.body)) {
+      console.error(`[webhook] skip ${issue.identifier} workpad-incomplete-parked`);
+      return { kind: "skip", reason: "workpad-incomplete-parked" };
+    }
   }
 
   enqueue.enqueue({

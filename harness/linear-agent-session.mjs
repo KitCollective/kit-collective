@@ -110,6 +110,9 @@ function noopBridge() {
     async start() {},
     async consumeLine() {},
     async finish() {},
+    getSessionId() {
+      return undefined;
+    },
   };
 }
 
@@ -346,6 +349,10 @@ export function createAgentSessionBridge({
         type: "error",
         body: `${roleLabel(role)} stopped on ${identifier}.`,
       });
+    },
+
+    getSessionId() {
+      return sessionId;
     },
   };
 }

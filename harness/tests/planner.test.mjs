@@ -17,6 +17,7 @@ import {
 import { createPiJobRunner } from "../pi-job.mjs";
 import {
   DEFAULT_PLANNER_POLL_MS,
+  findOpenPrPathOverlap,
   findWriteScopeOverlap,
   globsOverlap,
   runPlanner,
@@ -141,7 +142,11 @@ function fakeLinearCli({
 async function claimWith(backlog, env = validWorkerEnv(), implementing = [], extras = {}) {
   const fake = fakeLinearCli({ backlog, implementing, ...extras });
   const linear = extras.linear ?? fake.client;
-  const result = await runPlanner({ env, linear });
+  const result = await runPlanner({
+    env,
+    linear,
+    listOpenPrs: extras.listOpenPrs ?? (async () => []),
+  });
   return { ...fake, result, linear };
 }
 
@@ -239,6 +244,85 @@ test("planner continues claiming after a write-scope overlap skip", async () => 
   assert.match(comments[1].body, /KIT-94: claimed/);
 });
 
+test("planner skips later same-poll claim when write-scope overlaps a just-claimed issue", async () => {
+  const { claims, comments, result } = await claimWith(
+    [
+      gqlNode({
+        id: "issue-first",
+        identifier: "KIT-201",
+        priority: 1,
+        description: "write-scope: apps/mobile/**",
+      }),
+      gqlNode({
+        id: "issue-second",
+        identifier: "KIT-202",
+        priority: 2,
+        description: "write-scope: apps/mobile/src/**",
+      }),
+    ],
+    validWorkerEnv(),
+    [],
+  );
+  assert.deepEqual(
+    claims.map((claim) => claim.id),
+    ["issue-first"],
+  );
+  assert.equal(result.skipped.some((row) => row.reason === "write-scope overlap"), true);
+  assert.match(
+    comments.find((row) => /KIT-202: skipped/.test(row.body))?.body ?? "",
+    /KIT-202: skipped — write-scope overlaps KIT-201/,
+  );
+});
+
+test("findOpenPrPathOverlap skips when open kit PR files hit write-scope", () => {
+  const hit = findOpenPrPathOverlap(
+    { identifier: "KIT-210", description: "write-scope: apps/mobile/**" },
+    [
+      {
+        headRefName: "kit-209",
+        number: 99,
+        files: ["apps/mobile/src/components/foo.tsx"],
+      },
+    ],
+  );
+  assert.equal(hit?.identifier, "kit-209");
+  assert.equal(hit?.kind, "open-pr");
+  assert.equal(
+    findOpenPrPathOverlap(
+      { identifier: "KIT-209", description: "write-scope: apps/mobile/**" },
+      [{ headRefName: "kit-209", files: ["apps/mobile/src/a.tsx"] }],
+    ),
+    null,
+  );
+});
+
+test("planner skips when open PR path overlaps write-scope", async () => {
+  const env = validWorkerEnv();
+  const fake = fakeLinearCli({
+    backlog: [
+      gqlNode({
+        id: "issue-new",
+        identifier: "KIT-220",
+        description: "write-scope: packages/domain/**",
+      }),
+    ],
+  });
+  const result = await runPlanner({
+    env,
+    linear: fake.client,
+    listOpenPrs: async () => [
+      {
+        headRefName: "kit-219",
+        number: 88,
+        files: ["packages/domain/src/wishlist.ts"],
+      },
+    ],
+  });
+  assert.equal(fake.claims.length, 0);
+  assert.equal(result.skipped[0].reason, "open-pr path overlap");
+  assert.match(fake.comments[0].body, /open PR kit-219/);
+});
+
 test("findWriteScopeOverlap ignores Implementing issues without write-scope", () => {
   const overlap = findWriteScopeOverlap({ description: "write-scope: harness/planner.mjs" }, [
     { identifier: "KIT-89", description: "No scope declared." },
@@ -253,24 +337,28 @@ test("planner claims Backlog + ready-for-agent + unblocked issues in Linear prio
       identifier: "KIT-1",
       priority: 0,
       createdAt: "2026-08-20T00:00:00.000Z",
+      description: "write-scope: apps/web/**",
     }),
     gqlNode({
       id: "issue-urgent-old",
       identifier: "KIT-2",
       priority: 1,
       createdAt: "2026-08-21T00:00:00.000Z",
+      description: "write-scope: apps/mobile/**",
     }),
     gqlNode({
       id: "issue-urgent-new",
       identifier: "KIT-3",
       priority: 1,
       createdAt: "2026-08-22T00:00:00.000Z",
+      description: "write-scope: apps/api/**",
     }),
     gqlNode({
       id: "issue-high",
       identifier: "KIT-4",
       priority: 2,
       createdAt: "2026-08-19T00:00:00.000Z",
+      description: "write-scope: packages/domain/**",
     }),
   ]);
 

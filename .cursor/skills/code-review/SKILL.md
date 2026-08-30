@@ -31,11 +31,14 @@ Before going further, confirm the fixed point resolves (`git rev-parse <fixed-po
 
 Look for the originating spec, in this order:
 
-1. Linear `<teamKey>-n` via `get_issue` **and** `list_comments` (workpad + `### Review feedback`).
-2. The project spec document on that issue's Linear project.
-3. `{paths.specs}/<slug>/spec.md`.
-4. A path the user passed as an argument.
-5. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will skip and report "no spec available".
+1. **PI factory-checker:** prefer the harness-injected review snapshot in the append (`## Spec source` + three-dot diff). Do not call Linear MCP `get_issue` / `list_comments` — they are not on the worker. Use `linear_cli` only to write `### Review feedback`. Do not read full `CONTEXT.md`. Do not poll `gh pr checks`.
+2. Linear `<teamKey>-n` via `get_issue` **and** `list_comments` (workpad + `### Review feedback`) — Desktop / Cloud Agent only.
+3. The project spec document on that issue's Linear project.
+4. `{paths.specs}/<slug>/spec.md`.
+5. A path the user passed as an argument.
+6. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will skip and report "no spec available".
+
+When the injected snapshot is present, pin the fixed point from its Merge-base / Range lines instead of rediscovering via bash (readonly `git` only to fill gaps).
 
 ### 3. Identify the standards sources
 
@@ -105,6 +108,8 @@ When the caller is the checker agent: write **every** hard finding into `### Rev
 ```
 
 Every axis must appear on pass and fail. Hard Slop findings use the `Slop/` prefix (not `Slop:`). A clean axis is `- Spec: (none)`, `- Standards: (none)`, or `- Slop: (none)`.
+
+**First-pass tags (factory checker):** When a Standards or Slop finding matches a registered class in `.pi/first-pass-classes.json`, write `[first-pass:<id>]` on that workpad line (keep the axis prefix). Example: `- Standards: [first-pass:empty-state-body] EmptyState body must not be empty`. Untagged findings keep a full Scout+helpers resume. Do not invent harness product regexes — only tag registered ids.
 
 Spec source is the whole Linear issue body (What to build + AC), not AC alone. A red required check is not a Spec-clean license — finish all three axes before the verdict. Hard Spec miss, hard Standards violation, hard Slop finding, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `Implementing`. Pending required checks → wait; stay in `In Review` (do not fail early on one axis while checks are still running). Otherwise → `Ready for merge` only when required GitHub checks are green **and** the PR is mergeable.
 

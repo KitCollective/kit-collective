@@ -59,6 +59,7 @@ test("isRatchetException allows named ratchet scripts, not arbitrary scripts/lib
   assert.equal(isRatchetException("scripts/lib/pr-write-scope.mjs"), true);
   assert.equal(isRatchetException("scripts/tests/check-pr-write-scope.test.mjs"), true);
   assert.equal(isRatchetException(".cursor/rules/write-scope.mdc"), true);
+  assert.equal(isRatchetException(".pi/first-pass-classes.json"), true);
   assert.equal(isRatchetException(".github/workflows/ci.yml"), true);
   assert.equal(isRatchetException("scripts/lib/unrelated-helper.mjs"), false);
   assert.equal(isRatchetException("scripts/check-something-else.mjs"), false);

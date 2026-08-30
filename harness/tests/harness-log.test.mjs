@@ -104,4 +104,18 @@ test("resolveExitGate maps factory outcomes", () => {
     "yellow",
   );
   assert.equal(resolveExitGate({ status: "Implementing" }, { role: "implement" }), "yellow");
+  assert.equal(
+    resolveExitGate(
+      { passed: false, checkerWorkpadRetry: true, nextStatus: "In Review" },
+      { role: "factory-checker" },
+    ),
+    "yellow",
+  );
+  assert.equal(
+    resolveExitGate(
+      { passed: false, checkerWorkpadParked: true, nextStatus: "In Review" },
+      { role: "factory-checker" },
+    ),
+    "yellow",
+  );
 });

@@ -16,7 +16,8 @@ import {
 const execFileAsync = promisify(execFile);
 
 const BLOCKED_TOOLS = new Set(["write", "edit"]);
-const READONLY_SHELL = [/^git\s+(rev-parse|diff|log)\b/i, /^gh\s+(pr\s+(view|checks|diff)|api)\b/i];
+/** Readonly git only — no `gh` via bash (use gh_cli host tool; harness owns check waits). */
+const READONLY_SHELL = [/^git\s+(rev-parse|diff|log|show|status)\b/i];
 const SLOP_AGENT_MEMORY_EXCLUDED_TOOLS_ENV = "SLOP_AGENT_MEMORY_EXCLUDED_TOOLS";
 const SLOP_AGENT_PI_ARGS_ENV = "SLOP_AGENT_PI_ARGS";
 

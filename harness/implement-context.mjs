@@ -4,12 +4,22 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import {
+  extractIssueConstraints,
+  extractIssuePaths,
+  extractPriorFailLines,
+  extractWorkpadCompositionPaths,
+  formatSliceBrief,
+} from "./first-pass.mjs";
+import { formatHermesLessonsBrief, selectHermesLessons } from "./hermes-lessons.mjs";
 
 export const UI_SURFACE_LABELS = ["mobile", "web", "admin"];
 export const UI_WRITE_SCOPE_PREFIXES = ["apps/mobile", "apps/web", "apps/admin"];
 
 export const GENERATED_CONTEXT_REL = ".pi/generated/implement-context.md";
 export const GENERATED_APPEND_REL = ".pi/generated/implement-append.md";
+export const GENERATED_SLIM_APPEND_REL = ".pi/generated/implement-slim-append.md";
+export const GENERATED_CHECKER_APPEND_REL = ".pi/generated/checker-append.md";
 
 export const ALWAYS_RULES = [
   ".cursor/rules/write-scope.mdc",
@@ -26,6 +36,48 @@ export const ALWAYS_SKILLS = [
   ".cursor/skills/implement/SKILL.md",
   ".cursor/skills/signal-up/SKILL.md",
 ];
+
+/** Component / pattern headings that may be excerpted from docs/design-system.md */
+export const DESIGN_LOCK_HEADINGS = [
+  "Button",
+  "Button dock",
+  "Icon button",
+  "Search field",
+  "Text field",
+  "Select field",
+  "Chip",
+  "Jersey tile",
+  "Mark",
+  "Avatar",
+  "Switch",
+  "List row",
+  "Photo slot",
+  "Empty state",
+  "Sheet",
+  "Tab bar",
+  "Thread row",
+  "Activity card",
+  "Chat bubble",
+  "Bid card",
+  "Message composer",
+  "Banner",
+  "Data table",
+  "Top tabs",
+  "Collection grid",
+  "Collection shortcuts (genveje)",
+  "Inbox",
+  "Conversation",
+  "Conversation details",
+  "Own Profil",
+  "Send bid",
+  "Confirm and Save",
+  "Capture session",
+  "Admin shell",
+  "Admin drill",
+  "Typography",
+];
+
+export const MAX_DESIGN_LOCK_EXCERPT_CHARS = 14_000;
 
 export const PI_SECRETS_OVERLAY = `# PI worker overlay (secrets)
 
@@ -86,11 +138,17 @@ export function detectRequiredHelpers({ writeScopeGlobs = [], labels = [], body 
     helpers.add("expo");
   }
 
-  if (scope.includes("apps/api") || /\bnest\b|\/v1\b|\bauth\b/i.test(bodyText)) {
+  const nestByScope = scope.includes("apps/api");
+  const nestByPath = /(?:^|[\s`"'(])apps\/api\//m.test(bodyText);
+  if (nestByScope || nestByPath) {
     helpers.add("nest");
   }
 
-  if (scope.includes("packages/db") || /\bschema\b|\bdrizzle\b|\bmigration/i.test(bodyText)) {
+  const drizzleByScope = scope.includes("packages/db");
+  const drizzleByPath =
+    /(?:^|[\s`"'(])packages\/db\//m.test(bodyText) ||
+    /(?:^|[\s`"'(])packages\/db\/migrations\//m.test(bodyText);
+  if (drizzleByScope || drizzleByPath) {
     helpers.add("drizzle");
   }
 
@@ -99,6 +157,66 @@ export function detectRequiredHelpers({ writeScopeGlobs = [], labels = [], body 
   }
 
   return [...helpers].sort();
+}
+
+/**
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function selectDesignLockHeadings(text = "") {
+  const source = String(text);
+  const lower = source.toLowerCase();
+  /** @type {Set<string>} */
+  const selected = new Set();
+  for (const name of DESIGN_LOCK_HEADINGS) {
+    if (lower.includes(name.toLowerCase())) {
+      selected.add(name);
+    }
+  }
+  return [...selected];
+}
+
+/**
+ * @param {string} markdown
+ * @param {string[]} headings
+ * @param {number} [maxChars]
+ */
+export function excerptDesignLock(markdown, headings, maxChars = MAX_DESIGN_LOCK_EXCERPT_CHARS) {
+  if (typeof markdown !== "string" || markdown.length === 0) {
+    return "";
+  }
+  if (!Array.isArray(headings) || headings.length === 0) {
+    return "";
+  }
+  const wanted = new Set(headings.map((heading) => heading.toLowerCase()));
+  /** @type {string[]} */
+  const parts = [];
+  const lines = markdown.split("\n");
+  let index = 0;
+  while (index < lines.length) {
+    const match = lines[index].match(/^### (.+)$/);
+    if (!match) {
+      index += 1;
+      continue;
+    }
+    const title = match[1].trim();
+    if (!wanted.has(title.toLowerCase())) {
+      index += 1;
+      continue;
+    }
+    const block = [lines[index]];
+    index += 1;
+    while (index < lines.length && !/^#{2,3} /.test(lines[index])) {
+      block.push(lines[index]);
+      index += 1;
+    }
+    parts.push(block.join("\n").trim());
+  }
+  let out = parts.join("\n\n");
+  if (out.length > maxChars) {
+    out = `${out.slice(0, maxChars).trimEnd()}\n…`;
+  }
+  return out;
 }
 
 /**
@@ -158,18 +276,30 @@ export function buildImplementAppendOverlay() {
  *   labels?: string[],
  *   body?: string,
  *   reviewFeedback?: string,
+ *   workpadBody?: string,
+ *   hermesDir?: string,
  *   cheapRetry?: boolean,
  *   mergeFailResume?: boolean,
+ *   slimOnly?: boolean,
  * }} input
- * @returns {{ requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string }}
+ * @returns {{ requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string, designLockHeadings: string[], compositionHints: [], sliceBrief: string, hermesBrief: string, slimOnly: boolean }}
  */
 export function selectImplementContext(input = {}) {
-  if (input.cheapRetry === true || input.mergeFailResume === true) {
+  const slimOnly = input.slimOnly === true;
+  if (
+    (input.cheapRetry === true || input.mergeFailResume === true) &&
+    !slimOnly
+  ) {
     return {
       requiredHelpers: [],
       skills: [],
       rules: [],
       appendOverlay: "",
+      designLockHeadings: [],
+      compositionHints: [],
+      sliceBrief: "",
+      hermesBrief: "",
+      slimOnly: false,
     };
   }
 
@@ -179,12 +309,43 @@ export function selectImplementContext(input = {}) {
     writeScopeGlobs,
     body: input.body ?? "",
   };
-  const requiredHelpers = detectRequiredHelpers(slice);
-  const skills = selectImplementSkills(requiredHelpers, slice);
-  const rules = selectImplementRules(requiredHelpers, slice);
-  const appendOverlay = buildImplementAppendOverlay();
+  const requiredHelpers = slimOnly ? [] : detectRequiredHelpers(slice);
+  const skills = slimOnly ? [] : selectImplementSkills(requiredHelpers, slice);
+  const rules = slimOnly ? [] : selectImplementRules(requiredHelpers, slice);
+  const appendOverlay = slimOnly ? "" : buildImplementAppendOverlay();
+  const ui = rules.includes(".cursor/rules/design-system.mdc");
+  const workpadBody = typeof input.workpadBody === "string" ? input.workpadBody : "";
+  const sliceText = `${slice.body}\n${input.reviewFeedback ?? ""}\n${workpadBody}`;
+  const designLockHeadings = ui && !slimOnly ? selectDesignLockHeadings(sliceText) : [];
+  const paths = [
+    ...new Set([
+      ...extractIssuePaths(sliceText),
+      ...extractWorkpadCompositionPaths(workpadBody),
+    ]),
+  ].sort();
+  const sliceBrief = formatSliceBrief({
+    paths,
+    constraints: slimOnly ? [] : extractIssueConstraints(slice.body ?? ""),
+    priorFails: extractPriorFailLines(input.reviewFeedback ?? ""),
+  });
+  const hermesBrief = formatHermesLessonsBrief(
+    selectHermesLessons({
+      hermesDir: typeof input.hermesDir === "string" ? input.hermesDir : "",
+      query: `${input.reviewFeedback ?? ""}\n${slice.body}`,
+    }),
+  );
 
-  return { requiredHelpers, skills, rules, appendOverlay };
+  return {
+    requiredHelpers,
+    skills,
+    rules,
+    appendOverlay,
+    designLockHeadings,
+    compositionHints: [],
+    sliceBrief,
+    hermesBrief,
+    slimOnly,
+  };
 }
 
 /**
@@ -211,9 +372,19 @@ export function dynamicAppendRules(selectedRules = []) {
 /**
  * @param {string} workspace
  * @param {string} roleFile
- * @param {{ rules: string[], appendOverlay: string }} context
+ * @param {{
+ *   rules?: string[],
+ *   appendOverlay?: string,
+ *   designLockHeadings?: string[],
+ *   sliceBrief?: string,
+ *   hermesBrief?: string,
+ *   slimOnly?: boolean,
+ * }} context
  */
 export function buildImplementAppendPath(workspace, roleFile, context) {
+  if (context.slimOnly === true) {
+    return buildImplementSlimAppendPath(workspace, roleFile, context);
+  }
   const generatedPath = join(workspace, GENERATED_CONTEXT_REL);
   if (!existsSync(generatedPath)) {
     throw new Error(
@@ -226,12 +397,86 @@ export function buildImplementAppendPath(workspace, roleFile, context) {
     readFileSync(generatedPath, "utf8"),
     "\n",
   ];
-  for (const ruleRel of dynamicAppendRules(context.rules)) {
+  for (const ruleRel of dynamicAppendRules(context.rules ?? [])) {
     parts.push(`## ${ruleRel}\n\n`);
     parts.push(readFileSync(join(workspace, ruleRel), "utf8"));
     parts.push("\n\n");
   }
+  const headings = Array.isArray(context.designLockHeadings) ? context.designLockHeadings : [];
+  const lockPath = join(workspace, "docs/design-system.md");
+  if (headings.length > 0 && existsSync(lockPath)) {
+    const excerpt = excerptDesignLock(readFileSync(lockPath, "utf8"), headings);
+    if (excerpt.length > 0) {
+      parts.push("## Slice design lock (excerpt)\n\n");
+      parts.push(
+        "Do not read the full `docs/design-system.md` unless a named AC pattern is missing from this excerpt.\n\n",
+      );
+      parts.push(excerpt);
+      parts.push("\n");
+    }
+  }
+  const hintMarkdown =
+    typeof context.sliceBrief === "string" && context.sliceBrief.length > 0
+      ? context.sliceBrief
+      : "";
+  if (hintMarkdown.length > 0) {
+    parts.push(hintMarkdown);
+  }
+  if (typeof context.hermesBrief === "string" && context.hermesBrief.length > 0) {
+    parts.push(context.hermesBrief);
+  }
   const outPath = join(workspace, GENERATED_APPEND_REL);
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, parts.join(""));
+  return outPath;
+}
+
+/**
+ * Cheap / first-pass resume: role + prior fails + Hermes only (no full factory dump).
+ *
+ * @param {string} workspace
+ * @param {string} roleFile
+ * @param {{ sliceBrief?: string, hermesBrief?: string }} context
+ */
+export function buildImplementSlimAppendPath(workspace, roleFile, context) {
+  const parts = [
+    readFileSync(join(workspace, roleFile), "utf8"),
+    "\n\n---\n\n# Slim resume context\n\n",
+    "Fix the class in ### Review feedback. Do not re-map the repo.\n",
+    "Do not read full `CONTEXT.md` — use the slice brief and Review feedback only.\n\n",
+  ];
+  if (typeof context.sliceBrief === "string" && context.sliceBrief.length > 0) {
+    parts.push(context.sliceBrief);
+  }
+  if (typeof context.hermesBrief === "string" && context.hermesBrief.length > 0) {
+    parts.push(context.hermesBrief);
+  }
+  const outPath = join(workspace, GENERATED_SLIM_APPEND_REL);
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, parts.join(""));
+  return outPath;
+}
+
+/**
+ * @param {string} workspace
+ * @param {string} roleFile
+ * @param {string} registryMarkdown
+ * @param {{ reviewBundle?: string }} [extras]
+ */
+export function buildCheckerAppendPath(workspace, roleFile, registryMarkdown = "", extras = {}) {
+  const parts = [
+    readFileSync(join(workspace, roleFile), "utf8"),
+    "\n\n---\n\n# Injected first-pass registry\n\n",
+    typeof registryMarkdown === "string" && registryMarkdown.length > 0
+      ? registryMarkdown
+      : "(empty registry)\n",
+  ];
+  if (typeof extras.reviewBundle === "string" && extras.reviewBundle.trim().length > 0) {
+    parts.push("\n---\n\n");
+    parts.push(extras.reviewBundle.trimEnd());
+    parts.push("\n");
+  }
+  const outPath = join(workspace, GENERATED_CHECKER_APPEND_REL);
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, parts.join(""));
   return outPath;

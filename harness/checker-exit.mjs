@@ -2,8 +2,10 @@
  * Factory checker exit (KIT-56).
  *
  * After the review Pi session: read workpad verdict + PR gates (MERGEABLE,
- * required GitHub checks). Pass → Ready for merge. Fail → Implementing with
- * complete ### Review feedback. Never merge. Fake `gh` + Linear at this seam.
+ * required GitHub checks). Pass → Ready for merge. Fail with complete axes →
+ * Implementing. Incomplete Spec/Standards/Slop axes while PR is green → stay
+ * In Review and re-run checker in-slot (cap 2), then park for human. Never merge.
+ * Fake `gh` + Linear at this seam.
  */
 import { ensureLoopCounters, incrementReviewLoops, parseLoopCounters } from "./auto-merge.mjs";
 import {
@@ -11,6 +13,7 @@ import {
   logFactoryExitStart,
   logFactoryGatePoll,
 } from "./factory-exit-log.mjs";
+import { bumpFirstPassCandidates } from "./first-pass.mjs";
 import {
   extractReviewFeedback,
   IN_REVIEW,
@@ -42,6 +45,11 @@ export const REVIEW_PASS_FEEDBACK_LINES = [
 
 /** Fail-path fallback when harness has no axis lines — never the legacy single `- (none)`. */
 export const REVIEW_FEEDBACK_HARNESS_INCOMPLETE = "- Review feedback incomplete (harness)";
+export const REVIEW_FEEDBACK_AXES_REQUIRED =
+  "- Review feedback must include Spec, Standards, and Slop axis lines";
+export const CHECKER_HARNESS_HEADING = "### Checker harness";
+export const CHECKER_WORKPAD_PARKED_LINE = "- workpad-incomplete-parked";
+export const MAX_CHECKER_WORKPAD_RETRIES = 2;
 export const NOTES_HEADING = "### Notes";
 export const CHECKER_PASS_STATUS = "All good — checker pass. MERGEABLE, required checks green.";
 export const RATCHET_NUDGE_TEXT =
@@ -134,6 +142,100 @@ export function reviewFeedbackMissingSlopAxis(body) {
     return true;
   }
   return !lines.some((line) => /^-\s*Slop:/i.test(line) || /^-\s*Slop\//i.test(line));
+}
+
+/**
+ * True when Spec / Standards / Slop axis lines are all missing (empty or garbage section),
+ * or when only clean/partial axes exist without a complete three-axis dump.
+ * Real Spec/Standards/Slop findings are not "incomplete" — they are product fails
+ * (even if one axis line is missing from the dump).
+ *
+ * @param {string | undefined} body
+ */
+export function reviewFeedbackAxesIncomplete(body) {
+  const lines = reviewFeedbackLines(body);
+  if (lines.length === 0) {
+    return true;
+  }
+  const hasProductFinding = lines.some((line) => {
+    if (/^-\s*Slop\//i.test(line)) {
+      return true;
+    }
+    if (/^-\s*Spec:/i.test(line) && !REVIEW_AXIS_SPEC_CLEAN.test(line)) {
+      return true;
+    }
+    if (/^-\s*Standards:/i.test(line) && !REVIEW_AXIS_STANDARDS_CLEAN.test(line)) {
+      return true;
+    }
+    if (/^-\s*Slop:/i.test(line) && !REVIEW_AXIS_SLOP_CLEAN.test(line)) {
+      return true;
+    }
+    return false;
+  });
+  if (hasProductFinding) {
+    return false;
+  }
+  const hasSpec = lines.some((line) => /^-\s*Spec:/i.test(line));
+  const hasStandards = lines.some((line) => /^-\s*Standards:/i.test(line));
+  const hasSlop = lines.some((line) => /^-\s*Slop:/i.test(line) || /^-\s*Slop\//i.test(line));
+  return !(hasSpec && hasStandards && hasSlop);
+}
+
+/**
+ * @param {string | undefined} body
+ */
+export function workpadCheckerIncompleteParked(body) {
+  return (
+    typeof body === "string" &&
+    body.includes(CHECKER_HARNESS_HEADING) &&
+    body.includes(CHECKER_WORKPAD_PARKED_LINE)
+  );
+}
+
+/**
+ * @param {string | undefined} body
+ * @returns {number}
+ */
+export function parseCheckerWorkpadIncompleteCount(body) {
+  if (typeof body !== "string") {
+    return 0;
+  }
+  const match = body.match(/incomplete-count:\s*(\d+)/i);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+/**
+ * @param {string} current
+ * @param {{ count: number, parked?: boolean }} input
+ */
+export function applyCheckerIncompleteWorkpad(current, { count, parked = false }) {
+  const base =
+    typeof current === "string" && current.includes(WORKPAD_HEADING)
+      ? current.trimEnd()
+      : WORKPAD_HEADING;
+  const lines = [
+    CHECKER_HARNESS_HEADING,
+    "",
+    `- incomplete-count: ${count}`,
+    parked ? CHECKER_WORKPAD_PARKED_LINE : "- incomplete-retry",
+    "",
+  ];
+  const section = `${lines.join("\n")}\n`;
+  let next = base;
+  if (/###\s*Checker harness\b/i.test(next)) {
+    next = next.replace(/###\s*Checker harness\b[\s\S]*?(?=\n###\s|\n##\s|$)/i, section);
+  } else {
+    next = `${next}\n\n${section}`;
+  }
+  if (REVIEW_FEEDBACK_HEADING_AT.test(next)) {
+    next = next.replace(
+      REVIEW_FEEDBACK_BLOCK,
+      `$1${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_FEEDBACK_AXES_REQUIRED}\n`,
+    );
+  } else {
+    next = `${next}\n\n${REVIEW_FEEDBACK_HEADING}\n\n${REVIEW_FEEDBACK_AXES_REQUIRED}\n`;
+  }
+  return `${next.trimEnd()}\n`;
 }
 
 /**
@@ -295,8 +397,18 @@ async function checkerFailMove(input) {
     gh = null,
     linked = null,
   } = input;
+  const { workpad: withCandidates, ratchetLines } = bumpFirstPassCandidates(
+    workpadBody,
+    feedbackLines,
+  );
+  const mergedFeedback = [...feedbackLines];
+  for (const line of ratchetLines) {
+    if (!mergedFeedback.includes(line)) {
+      mergedFeedback.push(line);
+    }
+  }
   const body = applyRatchetNudge(
-    incrementReviewLoops(applyCheckerFailWorkpad(workpadBody, { feedbackLines })),
+    incrementReviewLoops(applyCheckerFailWorkpad(withCandidates, { feedbackLines: mergedFeedback })),
   );
   await linear.updateWorkpad({
     issueId: job.issueId,
@@ -379,6 +491,24 @@ export async function completeChecker(input) {
       ? job.identifier
       : issue.identifier;
 
+  if (workpadCheckerIncompleteParked(workpadBody)) {
+    logFactoryExitDone({
+      role: "factory-checker",
+      identifier,
+      phase: "checker-exit",
+      passed: false,
+      nextStatus: IN_REVIEW,
+      reason: "workpad-incomplete-parked",
+    });
+    return {
+      skipped: true,
+      passed: false,
+      nextStatus: IN_REVIEW,
+      checkerWorkpadParked: true,
+      reason: "workpad-incomplete-parked",
+    };
+  }
+
   const linkedResolution = await resolveLinkedPullRequest({
     attachments: issue.attachments,
     identifier,
@@ -438,6 +568,7 @@ export async function completeChecker(input) {
 
   const piFindings = reviewFeedbackHasFindings(workpadBody);
   const missingSlopAxis = reviewFeedbackMissingSlopAxis(workpadBody);
+  const axesIncomplete = reviewFeedbackAxesIncomplete(workpadBody);
   const gateFailures = ghGateFailures(pr);
   if (timedOut) {
     gateFailures.push("- Required GitHub checks timed out before turning green");
@@ -483,11 +614,46 @@ export async function completeChecker(input) {
     return { passed: true, nextStatus: READY_FOR_MERGE, pr };
   }
 
+  // Incomplete three-axis workpad while PR is green: re-run checker in-slot — do not
+  // bounce to a full implement tree (KIT-136 death spiral).
+  if (axesIncomplete && gateFailures.length === 0) {
+    const prior = parseCheckerWorkpadIncompleteCount(workpadBody);
+    const count = prior + 1;
+    const parked = count >= MAX_CHECKER_WORKPAD_RETRIES;
+    const body = applyCheckerIncompleteWorkpad(workpadBody, { count, parked });
+    await linear.updateWorkpad({
+      issueId: job.issueId,
+      body,
+      commentId: existing?.id,
+    });
+    if (parked && typeof linear.commentIssue === "function") {
+      await linear.commentIssue({
+        issueId: job.issueId,
+        body: `${identifier}: checker parked — Review feedback still missing Spec/Standards/Slop after ${count} tries. Needs human (ready-for-human). Staying In Review; resume will not re-enqueue.`,
+      });
+    }
+    logFactoryExitDone({
+      role: "factory-checker",
+      identifier,
+      phase: "checker-exit",
+      passed: false,
+      nextStatus: IN_REVIEW,
+      reason: parked ? "workpad-incomplete-parked" : "workpad-incomplete-retry",
+    });
+    return {
+      passed: false,
+      nextStatus: IN_REVIEW,
+      checkerWorkpadRetry: !parked,
+      checkerWorkpadParked: parked,
+      pr,
+    };
+  }
+
   const feedbackLines = [];
   if (piFindings || missingSlopAxis) {
     const section = reviewFeedbackSection(workpadBody);
-    if (section.length === 0) {
-      feedbackLines.push("- Review feedback must include Spec, Standards, and Slop axis lines");
+    if (section.length === 0 || axesIncomplete) {
+      feedbackLines.push(REVIEW_FEEDBACK_AXES_REQUIRED);
     } else {
       feedbackLines.push(
         ...section

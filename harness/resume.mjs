@@ -7,7 +7,8 @@
  * Implement and factory-checker require ready-for-agent.
  */
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
-import { createLinearCliClient } from "./linear-cli.mjs";
+import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
+import { workpadCheckerIncompleteParked } from "./checker-exit.mjs";
 import { findWriteScopeOverlap, PLANNER_PRIORITY_ORDER, PLANNER_TEAM_KEY } from "./planner.mjs";
 import { dispatchIssue } from "./webhook-router.mjs";
 
@@ -46,9 +47,24 @@ function enqueueRole({ enqueue, issue, decision }) {
 }
 
 /**
+ * Incomplete-workpad park: stay In Review but do not re-enqueue checker.
+ *
+ * @param {object} issue
+ * @param {{ listComments?: (issueId: string) => Promise<Array<{ body?: string }>> }} client
+ */
+async function isCheckerWorkpadParked(issue, client) {
+  if (issue.status !== "In Review" || typeof client.listComments !== "function") {
+    return false;
+  }
+  const comments = await client.listComments(issue.id);
+  const workpad = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  return workpadCheckerIncompleteParked(workpad?.body);
+}
+
+/**
  * @param {{
  *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
- *   linear?: { listOrphans: (input?: { teamKey?: string }) => Promise<object[]> },
+ *   linear?: { listOrphans: (input?: { teamKey?: string }) => Promise<object[]>, listComments?: Function },
  *   enqueue: { enqueue: (job: object) => unknown },
  *   delegateGateConfig?: { names: string[], appUserId?: string },
  *   queuedIdentifiers?: string[],
@@ -74,9 +90,9 @@ export async function runResume({
 
   /**
    * @param {object} issue
-   * @returns {boolean}
+   * @returns {Promise<boolean>}
    */
-  function tryEnqueue(issue) {
+  async function tryEnqueue(issue) {
     if (queued.has(issue.identifier)) {
       skipped.push({ identifier: issue.identifier, reason: "already queued" });
       return false;
@@ -84,6 +100,10 @@ export async function runResume({
     const decision = dispatchIssue(issue, gate);
     if (decision.kind !== "enqueue") {
       skipped.push({ identifier: issue.identifier, reason: decision.reason });
+      return false;
+    }
+    if (decision.role === "factory-checker" && (await isCheckerWorkpadParked(issue, client))) {
+      skipped.push({ identifier: issue.identifier, reason: "workpad-incomplete-parked" });
       return false;
     }
     enqueueRole({ enqueue, issue, decision });
@@ -94,7 +114,7 @@ export async function runResume({
 
   for (const status of RESUME_STATUS_ORDER) {
     for (const issue of sortByPriority(issues.filter((row) => row.status === status))) {
-      tryEnqueue(issue);
+      await tryEnqueue(issue);
     }
   }
 
@@ -111,7 +131,7 @@ export async function runResume({
       skipped.push({ identifier: issue.identifier, reason: "write-scope overlap" });
       continue;
     }
-    tryEnqueue(issue);
+    await tryEnqueue(issue);
     selected.push(issue);
   }
 

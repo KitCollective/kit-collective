@@ -19,6 +19,7 @@ This is not a memory store. Wrong lessons are reverted with git.
 | `.cursor/rules/*.mdc` | Always-applied agent rules |
 | `.pi/generated/implement-context.md` | Generated PI implement overlay from `.cursor` — edit sources, run `node scripts/generate-pi-implement-context.mjs`; never hand-edit |
 | `biome.json` / `oxlint.config.ts` | Format, lint, and anti-slop gates run in CI |
+| `.pi/first-pass-classes.json` | Optional first-pass scanners (tighten only; empty `{ "classes": [] }` is the default) |
 | `docs/agents/error-ratcheting.md` | This contract |
 
 ## Default factory ratchet
@@ -273,7 +274,9 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 
 - Gate (`.pi/agents/gate.md`) runs `pnpm format:check` or `biome ci .`. Format-fail is red. Do not treat format as typecheck. Typecheck may be yellow.
 - Worker image installs global `@biomejs/biome@2.5.10` so Gate does not need worktree `node_modules`.
-- `completeImplementAdw` format-check is a safety net after Pi: a throwing `formatCheck` stays Implementing (`formatRetry: true`) even when GitHub required checks are green, **except** maxBuffer / ENOBUFS (`isFormatInfraError`) which is infra — not format-red — and still reaches In Review when GitHub is green (KIT-125 / KIT-130).
+- `completeImplementAdw` format-check is a safety net after Pi: a throwing `formatCheck` runs Mechanical close (`formatApply` / `biome check --write`) first. Apply success + re-check green reaches In Review without `formatRetry`. Apply missing or still-red stays Implementing (`formatRetry: true`) even when GitHub required checks are green, **except** maxBuffer / ENOBUFS (`isFormatInfraError`) which is infra — not format-red — and still reaches In Review when GitHub is green (KIT-125 / KIT-130).
+- A CONFLICTING PR during the GitHub wait is rebased in-process (`conflictRebase`, cap 3). A required-check log that is biome/`format:check` only is applied in-process (`classifyCiFailure` → `format`). Logic CI still cheap-retries Pi.
+- First-pass pack (`harness/first-pass.mjs` + `.pi/first-pass-classes.json`): ticket/workpad slice brief + Hermes top-3 in implement append (slim append on cheap/first-pass resume); `collectFirstPassViolations` before In Review uses **registry scanners only** → `firstPassRetry`. Checker tags `[first-pass:<id>]` when registry matches; 2× same Standards/Slop class bumps `### First-pass candidates` and requires a JSON ratchet land. Checker-fail that is only tagged first-pass uses First-pass resume (Skip Scout/helpers). Do not spawn Gate — Mechanical close owns format/typecheck. Helpers spawn one at a time (nest → drizzle → expo → ui-ux).
 - First implement run still Scout → helpers → Gate. `{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }` retries **Skip Scout** and skip helpers. Prompt includes workpad `### Review feedback` and requires the CI excerpt, pointing at the class (format vs Zod vs unique-email). Cheap retry is the **same Implementing stay**, not a new try.
 - Cheap retries do **not** increment `reviewLoops` / `ciFailCycles`, do **not** post `implementRetryCapComment`, and do **not** make resume skip. After the cheap-retry bound the slot yields; resume may enqueue again. Stale retry-cap comments do not hold Implementing.
 

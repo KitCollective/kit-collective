@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createGhClient } from "../gh-cli.mjs";
 import {
+  classifyCiFailure,
   completeImplementAdw,
+  createFormatApply,
   createFormatCheck,
   createListChangedFiles,
   createListWorktreeMigrations,
@@ -705,6 +707,201 @@ test("completeImplementAdw treats format maxBuffer as infra and still moves In R
   );
 });
 
+test("classifyCiFailure treats biome/format logs as format and anti-slop as logic", () => {
+  assert.equal(
+    classifyCiFailure([
+      {
+        name: "test",
+        conclusion: "failure",
+        isRequired: true,
+        log: "pnpm format:check\nbiome ci .\nFound 1 error.",
+      },
+    ]),
+    "format",
+  );
+  assert.equal(
+    classifyCiFailure([
+      {
+        name: "test",
+        conclusion: "failure",
+        isRequired: true,
+        log: "##[error]apps/mobile/src/x.ts: This type assertion has no SAFETY justification.\nlint:anti-slop",
+      },
+    ]),
+    "logic",
+  );
+  assert.equal(classifyCiFailure([]), "unknown");
+});
+
+test("completeImplementAdw applies format in-process and reaches In Review without formatRetry", async () => {
+  const gh = fakeGh({
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  let checks = 0;
+  const applied = [];
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-133", issueId: "issue-133", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-133", branch: "kit-133" },
+    gh,
+    linear,
+    typecheckTouched: async () => undefined,
+    formatCheck: async () => {
+      checks += 1;
+      if (checks === 1) {
+        throw new Error("Checked 2 files in 4ms. Found 1 error.\nbiome ci .");
+      }
+    },
+    formatApply: async (input) => {
+      applied.push(input);
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.formatRetry, false);
+  assert.equal(applied.length, 1);
+  assert.equal(checks, 2);
+});
+
+test("completeImplementAdw rebases a CONFLICTING PR during GitHub wait instead of ciRetry", async () => {
+  let views = 0;
+  const gh = {
+    calls: [],
+    async rebase(input) {
+      this.calls.push(["rebase", input]);
+    },
+    async viewPr() {
+      views += 1;
+      this.calls.push(["viewPr"]);
+      if (views === 1) {
+        return { url: undefined, mergeable: "UNKNOWN", checks: [] };
+      }
+      if (views <= 3) {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/153",
+          mergeable: "CONFLICTING",
+          checks: [],
+        };
+      }
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/153",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "success", isRequired: true }],
+      };
+    },
+    async findOpenIssuePr() {
+      return null;
+    },
+    async createPr() {
+      this.calls.push(["createPr"]);
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/153",
+        mergeable: "CONFLICTING",
+        checks: [],
+      };
+    },
+  };
+  const linear = fakeLinear();
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-133", issueId: "issue-133", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-133", branch: "kit-133" },
+    gh,
+    linear,
+    typecheckTouched: async () => undefined,
+    formatCheck: async () => undefined,
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.ciRetry, false);
+  assert.ok(gh.calls.filter((call) => call[0] === "rebase").length >= 2);
+});
+
+test("completeImplementAdw applies format when required check log is biome-only", async () => {
+  const formatLog = "pnpm format:check\nbiome ci .\nFound 1 error.";
+  let views = 0;
+  const applied = [];
+  const gh = {
+    calls: [],
+    async rebase() {},
+    async viewPr() {
+      views += 1;
+      if (views === 1) {
+        return { url: undefined, mergeable: "UNKNOWN", checks: [] };
+      }
+      if (views <= 3) {
+        return {
+          url: "https://github.com/KitCollective/kit-collective/pull/52",
+          mergeable: "MERGEABLE",
+          checks: [{ name: "test", conclusion: "failure", isRequired: true, log: formatLog }],
+        };
+      }
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/52",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "success", isRequired: true }],
+      };
+    },
+    async findOpenIssuePr() {
+      return null;
+    },
+    async createPr() {
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/52",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "failure", isRequired: true, log: formatLog }],
+      };
+    },
+    async fetchCheckLog() {
+      return formatLog;
+    },
+    async commitFormatFix(input) {
+      applied.push(["commit", input]);
+    },
+  };
+  const linear = fakeLinear();
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-133", issueId: "issue-133", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-133", branch: "kit-133" },
+    gh,
+    linear,
+    typecheckTouched: async () => undefined,
+    formatCheck: async () => undefined,
+    formatApply: async (input) => {
+      applied.push(["apply", input]);
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.ciRetry, false);
+  assert.ok(applied.some((entry) => entry[0] === "apply"));
+});
+
+test("createFormatApply prefers pnpm format then biome --write", async () => {
+  const calls = [];
+  const formatApply = createFormatApply({
+    async runCommand(command, args, options) {
+      calls.push({ command, args, options });
+      return "";
+    },
+  });
+  await formatApply({ cwd: "/tmp/worktree" });
+  assert.equal(calls[0].command, "pnpm");
+  assert.deepEqual(calls[0].args, ["format"]);
+});
+
 test("production gh.rebase aborts a conflicted rebase instead of leaving the tree wedged", async () => {
   const calls = [];
   const gh = createGhClient({
@@ -1344,7 +1541,7 @@ test("implement spawn excludes memory-write tools and skill_manage", async () =>
   assert.equal(spawned[0].options.env.KIT_PI_HERMES, WORKER_MEMORY_DIR);
 });
 
-test("Scout pins Hy3 and Gate pins MiMo-Pro with crossed fallback then Composer; helpers pin Composer", () => {
+test("Scout pins Hy3; Gate is superseded by Mechanical close but keeps MiMo frontmatter", () => {
   const scout = agentFrontmatter(".pi/agents/scout.md");
   const gate = agentFrontmatter(".pi/agents/gate.md");
   assert.match(scout.frontmatter, /^model:\s+openrouter\/tencent\/hy3\s*$/m);
@@ -1369,17 +1566,11 @@ test("Scout pins Hy3 and Gate pins MiMo-Pro with crossed fallback then Composer;
   assert.doesNotMatch(scout.frontmatter, /memory_search/);
   assert.doesNotMatch(scout.frontmatter, /^tools:.*\b(edit|write|bash)\b/m);
   assert.doesNotMatch(gate.frontmatter, /^tools:.*\blinear/i);
-  assert.match(gate.text, /rebase/i);
+  assert.match(gate.text, /Superseded|Do \*\*not\*\* spawn Gate|do not spawn/i);
+  assert.match(gate.text, /Mechanical close/i);
+  assert.match(gate.text, /format:check|biome/i);
   assert.match(gate.text, /typecheck/i);
-  assert.match(gate.text, /format:check|biome ci/i);
-  assert.match(gate.text, /GitHub checks/i);
-  assert.match(gate.text, /do not sleep/i);
-  assert.doesNotMatch(gate.text, /Wait for required GitHub checks/);
-  assert.match(gate.text, /conflict/i);
-  assert.match(gate.text, /never calls Linear/i);
-  assert.match(gate.text, /never .*In Review/i);
-  assert.match(gate.text, /this worktree's PR only|this worktree’s PR only/i);
-  assert.match(gate.text, /Do not mention sibling/i);
+  assert.match(gate.text, /Never call Linear|never call Linear/i);
   assert.match(gate.text, /yellow/i);
   assert.match(gate.text, /not .*typecheck|must not .*typecheck|do not treat format/i);
   assert.doesNotMatch(gate.text, /KIT-99/);
@@ -1413,7 +1604,9 @@ test("implement role stays thin; harness pi-job owns hard first-run and checker-
   assert.match(implement, /never call `memory_add`|never call memory_add/i);
   assert.match(implement, /In Review/);
   assert.match(implement, /Do not sleep/);
-  assert.match(implement, /Exit the Pi session when the PR is pushed and Gate is clean/);
+  assert.match(implement, /Mechanical close|Do \*\*not\*\* spawn Gate|Do not spawn Gate/i);
+  assert.match(implement, /one at a time/i);
+  assert.match(implement, /Exit the Pi session when the PR is pushed/);
   assert.match(implement, /linear CLI --help/);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   assert.match(piJob, /format vs Zod vs unique-email/i);
@@ -1424,10 +1617,13 @@ test("implement role stays thin; harness pi-job owns hard first-run and checker-
   assert.match(piJob, /Merge-fail resume/);
   assert.match(piJob, /Do not Skip Scout/);
   assert.match(piJob, /Do not Skip helpers/);
+  assert.match(piJob, /Do not spawn Gate|Never spawn Gate/i);
+  assert.match(piJob, /one at a time/i);
   assert.match(piJob, /selectImplementContext/);
   const checker = readFileSync(join(ROOT, ".pi/roles/factory-checker.md"), "utf8");
   assert.match(checker, /class → lesson|class -> lesson/);
   assert.match(checker, /memory_remove/);
+  assert.match(checker, /first-pass:/i);
   assert.match(checker, /Do not.*memory_add.*Spec|not.*memory_add.*Spec/i);
   const land = readFileSync(join(ROOT, ".pi/roles/land.md"), "utf8");
   const planner = readFileSync(join(ROOT, ".pi/roles/planner.md"), "utf8");
