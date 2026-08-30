@@ -5,7 +5,7 @@
 **Breadth:** Hierarchy proof only — Superliga **2010/11** (`DK1`, `saison_id=2010`) and Denmark men **World Cup 2010** (TM national side `verein/3436`, calendar `saison_id=2010`). Not every league.  
 **Classifications:** `stamdata now` | `later leverage` | `drop`  
 **Hard drops (ADR-0002):** market value, agent PII, Transfermarkt / FKA branding (logos, profile URLs as product assets).  
-**HITL (2026-08-30):** Human-only ingest — take Rich grain facts while on the page (Club facts, kader DOB/nat/height/foot/position, Kit colours, Player photo + place of birth / home-country name) as **stamdata now**, not deferred “later”. Marketing and collector contests need that depth. **Seed proxy (Decodo) is Transfermarkt-only** — never route Football Kit Archive through it.
+**HITL (2026-08-30):** Human-only ingest — take Rich grain facts while on the page (Club facts, kader DOB/nat/height/foot/position, Kit colours, Player photo + place of birth / home-country name, **jersey number history**) as **stamdata now**, not deferred “later”. Marketing and collector contests need that depth. **Seed proxy (Decodo) is Transfermarkt-only** — never route Football Kit Archive through it.
 
 Seed-module interfaces live beside the trees:
 
@@ -124,7 +124,7 @@ Hermetic fixtures still use Brøndby `191` — not the live 2010 id.
 | **Player photo** (portrait bytes) | **stamdata now** | Face image from kader/profile; store like KitPhoto — lane object store, `rights: unresolved`, `admin_only` until cleared. **Not** TM crest/logo branding. Fetch only via TM path (Decodo ok). Never hot-link TM CDN in Expo/Astro/OG |
 | Youth clubs | later leverage | Profile section — nice depth, extra parse |
 | Honours (`/erfolge`) | later leverage | Extra hop — titles for Rich Player / contests later |
-| Jersey number history (`/rueckennummern`) | later leverage | Extra hop — cross-check career `#` |
+| **Jersey number history** (`/rueckennummern`) | **stamdata now** | Season + club/NT + `#` career table — take while on Player grain (Rich grain; cross-check kader `#`, contests) |
 | Agent / agency; market value; contract; boot outfitter | drop | ADR-0002 / not kit |
 | TM logo / profile URL as product asset | drop | Branding (distinct from Player photo bytes) |
 | Current shirt number on profile | drop as historical | **Current** club `#`, not proof-season `#` |
@@ -157,11 +157,11 @@ Hermetic fixtures still use Brøndby `191` — not the live 2010 id.
 
 ## Stamdata now (proof accept)
 
-TM competition id/slug/name/country · season id+label · club id+name+country + **Club facts** · club-season squad (player id, name, `#`, **position, DOB, nationality, height, foot**, portrait when on row) · NationalTeam id+name+gender+country + association depth · NT-season squad (`#`, call-up club, DOB, height, foot, position when present) · Player id+name + **DOB, nat, height, foot, position, place of birth, home-country name, Player photo** · FK kit id, type, manufacturer, season join, TM-side club join ids, archive bytes, **Kit colours**.
+TM competition id/slug/name/country · season id+label · club id+name+country + **Club facts** · club-season squad (player id, name, `#`, **position, DOB, nationality, height, foot**, portrait when on row) · NationalTeam id+name+gender+country + association depth · NT-season squad (`#`, call-up club, DOB, height, foot, position when present) · Player id+name + **DOB, nat, height, foot, position, place of birth, home-country name, Player photo, jersey number history** · FK kit id, type, manufacturer, season join, TM-side club join ids, archive bytes, **Kit colours**.
 
 ## Later leverage
 
-League chrome trivia · competition-table aggregates · youth clubs · honours / jersey-history hops · NT caps/goals/debut until scoped · kit design/competition tags · English kit label · sponsor **if** confirmed without Decodo.
+League chrome trivia · competition-table aggregates · youth clubs · honours hop · NT caps/goals/debut until scoped · kit design/competition tags · English kit label · sponsor **if** confirmed without Decodo.
 
 ## Drop
 
@@ -184,4 +184,4 @@ All market value · agent/agency · TM and FKA **logos** & bare profile URLs as 
 - [ ] Open confirms stay open — they do not block Hierarchy grain tickets from using **stamdata now**.
 - [x] Rich depth (Club facts, kader body facts, Kit colours) is **stamdata now** (HITL 2026-08-30).
 - [x] Seed proxy (Decodo) is **Transfermarkt-only** (HITL 2026-08-30).
-- [x] Player DOB + **Player photo** (+ place of birth / home-country name) are **stamdata now** (HITL 2026-08-30).
+- [x] Player DOB + **Player photo** (+ place of birth / home-country name) + **jersey number history** are **stamdata now** (HITL 2026-08-30).

@@ -162,6 +162,10 @@ _Avoid_: trusting Joined / Signed-from columns that show present-day dates on hi
 Titles and trophies from Transfermarkt `/erfolge/spieler/{id}`. Later leverage — an extra hop, not on every kader row. Not required for Hierarchy proof squad accept.
 _Avoid_: scraping market-value charts as honours; blocking Club season map on a profile hop for titles
 
+**Jersey number history**:
+Transfermarkt `/rueckennummern/spieler/{id}` — season + club or NationalTeam + jersey `#` over a career. Stamdata now on the Player grain (Rich grain). Cross-checks kader `#` and supports collector contests (“who wore 10 that season”).
+_Avoid_: treating current profile shirt number as history; inventing rows Transfermarkt did not list; blocking Club season map only because history fetch failed when kader `#` is already present
+
 **Player photo**:
 Archive portrait of a Player from Transfermarkt (kader or profile). Stamdata now on the Player grain: bytes in the lane object store, `rights: unresolved`, operator-only visibility until cleared — same rights pattern as KitPhoto. Not a Transfermarkt logo. Not a hot-linked CDN URL on Expo, Astro, or OG.
 _Avoid_: treating the face image as ADR-0002 “TM branding” drop; serving unresolved player bytes on collector surfaces; fetching player images through Football Kit Archive or Decodo-on-FKA
