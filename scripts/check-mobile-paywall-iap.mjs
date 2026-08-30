@@ -1,16 +1,20 @@
 #!/usr/bin/env node
 /**
  * Ratchet (KIT-134): fail CI when paywall IAP wiring regresses — missing store SDK
- * dependency, wrong Button dock variants, or hardcoded display prices.
+ * seam, wrong Button dock variants, or hardcoded display prices.
  */
 import { existsSync, readFileSync } from "node:fs";
 
 const PAYWALL_SHEET_PATH = "apps/mobile/src/components/paywall-sheet.tsx";
-const MOBILE_PACKAGE_PATH = "apps/mobile/package.json";
+const NATIVE_STORE_BILLING_PATH = "apps/mobile/src/premium/native-store-billing.ts";
 const STORE_BILLING_CLIENT_PATH = "apps/mobile/src/premium/store-billing-client.ts";
 
 /**
- * @param {{ paywallSource?: string, mobilePackageSource?: string, storeBillingClientSource?: string }} overrides
+ * @param {{
+ *   paywallSource?: string,
+ *   nativeStoreBillingSource?: string,
+ *   storeBillingClientSource?: string,
+ * }} overrides
  * @returns {string[]}
  */
 export function checkMobilePaywallIap(overrides = {}) {
@@ -21,15 +25,19 @@ export function checkMobilePaywallIap(overrides = {}) {
   }
 
   const paywallSource = overrides.paywallSource ?? readFileSync(PAYWALL_SHEET_PATH, "utf8");
-  const mobilePackageSource =
-    overrides.mobilePackageSource ?? readFileSync(MOBILE_PACKAGE_PATH, "utf8");
+  const nativeStoreBillingSource =
+    overrides.nativeStoreBillingSource ??
+    (existsSync(NATIVE_STORE_BILLING_PATH) ? readFileSync(NATIVE_STORE_BILLING_PATH, "utf8") : "");
   const storeBillingClientSource =
     overrides.storeBillingClientSource ??
     (existsSync(STORE_BILLING_CLIENT_PATH) ? readFileSync(STORE_BILLING_CLIENT_PATH, "utf8") : "");
 
-  if (!/"react-native-iap"\s*:/.test(mobilePackageSource)) {
+  if (
+    !nativeStoreBillingSource.includes('require("react-native-iap")') ||
+    !/SAFETY:/.test(nativeStoreBillingSource)
+  ) {
     violations.push(
-      `${MOBILE_PACKAGE_PATH}: paywall slice must declare react-native-iap — store SDK prices cannot load without it`,
+      `${NATIVE_STORE_BILLING_PATH}: native store billing must load react-native-iap with a SAFETY: justification`,
     );
   }
 

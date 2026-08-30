@@ -197,7 +197,7 @@ jobs:
         run: pnpm check:mobile-capture-dead-exports
 
       - name: Check mobile paywall IAP ratchet
-        run: pnpm check:mobile-paywall-iap
+        run: node scripts/check-mobile-paywall-iap.mjs
 
       - name: Test mobile paywall IAP ratchet logic
         run: node --test scripts/tests/check-mobile-paywall-iap.test.mjs

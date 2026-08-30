@@ -10,7 +10,10 @@ typography.mono
 webUnavailableMessage
 `;
 
-const compliantPackage = `"react-native-iap": "^12.16.2"`;
+const compliantNativeStoreBilling = `
+// SAFETY: createStoreBillingClient only loads this module on iOS/Android.
+return require("react-native-iap") as IapModule;
+`;
 
 const compliantStoreClient = `
 // SAFETY: only called when Platform.OS is ios/android.
@@ -22,17 +25,17 @@ describe("checkMobilePaywallIap", () => {
     assert.deepEqual(
       checkMobilePaywallIap({
         paywallSource: compliantPaywall,
-        mobilePackageSource: compliantPackage,
+        nativeStoreBillingSource: compliantNativeStoreBilling,
         storeBillingClientSource: compliantStoreClient,
       }),
       [],
     );
   });
 
-  it("fails when react-native-iap is missing from package.json", () => {
+  it("fails when native store billing omits react-native-iap require", () => {
     const violations = checkMobilePaywallIap({
       paywallSource: compliantPaywall,
-      mobilePackageSource: "{}",
+      nativeStoreBillingSource: "// SAFETY: stub without IAP module",
       storeBillingClientSource: compliantStoreClient,
     });
     assert.ok(violations.some((line) => line.includes("react-native-iap")));
@@ -41,7 +44,7 @@ describe("checkMobilePaywallIap", () => {
   it("fails when Restore uses secondary instead of tertiary", () => {
     const violations = checkMobilePaywallIap({
       paywallSource: compliantPaywall.replace('variant="tertiary"', 'variant="secondary"'),
-      mobilePackageSource: compliantPackage,
+      nativeStoreBillingSource: compliantNativeStoreBilling,
       storeBillingClientSource: compliantStoreClient,
     });
     assert.ok(violations.some((line) => line.includes("Gendan køb")));
@@ -50,7 +53,7 @@ describe("checkMobilePaywallIap", () => {
   it("fails when hardcoded kroner appears in paywall", () => {
     const violations = checkMobilePaywallIap({
       paywallSource: `${compliantPaywall}\n29 kr`,
-      mobilePackageSource: compliantPackage,
+      nativeStoreBillingSource: compliantNativeStoreBilling,
       storeBillingClientSource: compliantStoreClient,
     });
     assert.ok(violations.some((line) => line.includes("hardcoded")));
@@ -59,7 +62,7 @@ describe("checkMobilePaywallIap", () => {
   it("fails when native require lacks SAFETY justification", () => {
     const violations = checkMobilePaywallIap({
       paywallSource: compliantPaywall,
-      mobilePackageSource: compliantPackage,
+      nativeStoreBillingSource: compliantNativeStoreBilling,
       storeBillingClientSource: 'require("./native-store-billing")',
     });
     assert.ok(violations.some((line) => line.includes("SAFETY")));
