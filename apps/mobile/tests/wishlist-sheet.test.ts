@@ -5,9 +5,12 @@ import {
   canSaveWishlistEntry,
   emptyWishlistCriteria,
   hasWishlistCriterion,
+  hasWishlistHit,
+  hitRowAccessibilityLabel,
   manageRowAccessibilityLabel,
   resolveWishlistEmptyBody,
   resolveWishlistEmptyTitle,
+  resolveWishlistHitRoute,
   resolveWishlistSheetTitle,
   seedCriteriaForEdit,
   WISHLIST_AND_HELPER_COPY,
@@ -28,6 +31,7 @@ const baseEntry = {
   typeLabel: "Hjemme",
   size: "m" as const,
   sizeLabel: "M",
+  matchedJerseyId: null,
 } satisfies WishlistEntry;
 
 describe("resolveWishlistSheetTitle", () => {
@@ -136,5 +140,24 @@ describe("resolveWishlistEmptyBody", () => {
     const body = resolveWishlistEmptyBody();
     expect(body.length).toBeGreaterThan(0);
     expect(body).toMatch(/Tilføj/i);
+  });
+});
+
+describe("hasWishlistHit", () => {
+  it("detects fillSecondary hit rows from matchedJerseyId", () => {
+    expect(hasWishlistHit({ ...baseEntry, matchedJerseyId: UUID_B })).toBe(true);
+    expect(hasWishlistHit(baseEntry)).toBe(false);
+  });
+});
+
+describe("hitRowAccessibilityLabel", () => {
+  it("uses Danish Match copy for hit rows", () => {
+    expect(hitRowAccessibilityLabel(baseEntry.name, baseEntry.meta)).toMatch(/Match/i);
+  });
+});
+
+describe("resolveWishlistHitRoute", () => {
+  it("opens foreign UserJersey detail via send-bid route", () => {
+    expect(resolveWishlistHitRoute(UUID_B)).toBe(`/search/send-bid/${UUID_B}`);
   });
 });

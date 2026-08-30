@@ -1,7 +1,8 @@
 import type { WishlistEntry } from "@kit/api-contract";
 import { JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { fetchClubSeasons } from "@/api/catalog";
 import {
   createWishlistEntry,
@@ -23,9 +24,12 @@ import {
   buildWishlistWritePayload,
   canSaveWishlistEntry,
   emptyWishlistCriteria,
+  hasWishlistHit,
+  hitRowAccessibilityLabel,
   manageRowAccessibilityLabel,
   resolveWishlistEmptyBody,
   resolveWishlistEmptyTitle,
+  resolveWishlistHitRoute,
   resolveWishlistSheetTitle,
   seedCriteriaForEdit,
   WISHLIST_AND_HELPER_COPY,
@@ -43,6 +47,7 @@ type WishlistSheetProps = {
 export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
   const theme = useTheme();
   const typography = useTypography();
+  const router = useRouter();
   const { accessToken, requestPremiumAccess, closePaywall } = useAuth();
 
   const [mode, setMode] = useState<WishlistSheetMode>("list");
@@ -181,6 +186,14 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
     await loadEntries();
   };
 
+  const handleHitPress = (entry: WishlistEntry) => {
+    if (!hasWishlistHit(entry) || !entry.matchedJerseyId) {
+      return;
+    }
+    onDismiss();
+    router.push(resolveWishlistHitRoute(entry.matchedJerseyId));
+  };
+
   const sheetTitle = resolveWishlistSheetTitle(mode);
   const canSave = canSaveWishlistEntry(criteria, saving);
 
@@ -217,47 +230,58 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
             ) : (
               <>
                 <ScrollView>
-                  {entries.map((entry, index) => (
-                    <View
-                      key={entry.id}
-                      style={[
-                        styles.manageRow,
-                        index < entries.length - 1 && {
-                          borderBottomWidth: StyleSheet.hairlineWidth,
-                          borderBottomColor: theme.borderSubtle,
-                        },
-                      ]}
-                    >
+                  {entries.map((entry, index) => {
+                    const isHit = hasWishlistHit(entry);
+                    const rowLabel = isHit
+                      ? hitRowAccessibilityLabel(entry.name, entry.meta)
+                      : manageRowAccessibilityLabel(entry.name, entry.meta);
+
+                    return (
                       <View
-                        style={styles.manageMain}
-                        accessible
-                        accessibilityLabel={manageRowAccessibilityLabel(entry.name, entry.meta)}
+                        key={entry.id}
+                        style={[
+                          styles.manageRow,
+                          isHit && { backgroundColor: theme.fillSecondary },
+                          index < entries.length - 1 && {
+                            borderBottomWidth: StyleSheet.hairlineWidth,
+                            borderBottomColor: theme.borderSubtle,
+                          },
+                        ]}
                       >
-                        <Text
-                          style={[typography.body, { color: theme.contentPrimary }]}
-                          importantForAccessibility="no-hide-descendants"
+                        <Pressable
+                          style={styles.manageMain}
+                          accessible
+                          accessibilityRole="button"
+                          accessibilityLabel={rowLabel}
+                          disabled={!isHit}
+                          onPress={() => handleHitPress(entry)}
                         >
-                          {entry.name}
-                        </Text>
-                        <Text
-                          style={[typography.mono, { color: theme.contentMuted }]}
-                          importantForAccessibility="no-hide-descendants"
-                        >
-                          {entry.meta}
-                        </Text>
+                          <Text
+                            style={[typography.body, { color: theme.contentPrimary }]}
+                            importantForAccessibility="no-hide-descendants"
+                          >
+                            {entry.name}
+                          </Text>
+                          <Text
+                            style={[typography.mono, { color: theme.contentMuted }]}
+                            importantForAccessibility="no-hide-descendants"
+                          >
+                            {entry.meta}
+                          </Text>
+                        </Pressable>
+                        <IconButton
+                          name="Rediger"
+                          icon="create-outline"
+                          onPress={() => void openEditForm(entry)}
+                        />
+                        <IconButton
+                          name="Slet"
+                          icon="trash-outline"
+                          onPress={() => void handleDelete(entry.id)}
+                        />
                       </View>
-                      <IconButton
-                        name="Rediger"
-                        icon="create-outline"
-                        onPress={() => void openEditForm(entry)}
-                      />
-                      <IconButton
-                        name="Slet"
-                        icon="trash-outline"
-                        onPress={() => void handleDelete(entry.id)}
-                      />
-                    </View>
-                  ))}
+                    );
+                  })}
                 </ScrollView>
                 <Button
                   label="Tilføj"
