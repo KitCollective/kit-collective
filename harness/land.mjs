@@ -16,12 +16,12 @@ import {
   MERGE_PERMISSION_STATUS,
   MERGED_STATUS,
 } from "../scripts/lib/land-policy.mjs";
+import { incrementReviewLoops } from "./auto-merge.mjs";
 import {
   logFactoryExitDone,
   logFactoryExitStart,
   logFactoryGatePoll,
 } from "./factory-exit-log.mjs";
-import { incrementReviewLoops } from "./auto-merge.mjs";
 import { mapStatusChecks } from "./gh-cli.mjs";
 import { requiredChecksGreen, selectRequiredChecks } from "./implement-exit.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
