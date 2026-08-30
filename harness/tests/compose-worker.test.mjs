@@ -39,7 +39,6 @@ function validWorkerEnv() {
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     LINEAR_PI_CLIENT_ID: "client-id",
     LINEAR_PI_CLIENT_SECRET: "client-secret",
-    LINEAR_PI_ACCESS_TOKEN: "actor-token",
     LINEAR_CLI_VERSION: LINEAR_CLI_PIN.version,
     PI_MODEL: "cursor/composer-2.5",
     PI_MODEL_FAST: "cursor/grok-4.6",
@@ -601,6 +600,8 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.match(dockerfile, /implement-context\.mjs/);
   assert.match(dockerfile, /pi-job\.mjs/);
   assert.match(dockerfile, /pi-event-stream\.mjs/);
+  assert.match(dockerfile, /agent-activity-translate\.mjs/);
+  assert.match(dockerfile, /linear-agent-session\.mjs/);
   assert.match(dockerfile, /delegate-gate\.mjs/);
   assert.match(dockerfile, /worktree\.mjs/);
   assert.doesNotMatch(dockerfile, /session-adapter\.mjs/);
@@ -724,7 +725,8 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /416348660/);
   assert.match(host, /62\.238\.125\.114/);
   assert.match(host, /\/opt\/kit-collective\/harness\/\.env/);
-  assert.match(host, /AgentSession HMAC and actor=app activity tokens are not used \(KIT-113\)/);
+  assert.match(host, /Inbound AgentSession HMAC is unused \(KIT-113\)/);
+  assert.match(host, /Outbound Agent Session timeline uses `LINEAR_PI_ACCESS_TOKEN`/);
   assert.match(host, /OPENROUTER_API_KEY/);
   assert.match(host, /"job"/);
   assert.match(host, /"jobs"/);

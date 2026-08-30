@@ -259,8 +259,8 @@ Either five required-check failure cycles (`ciFailCycles`) or five checker-fail 
 _Avoid_: requiring both counters at 5; scraping GitHub as the only source; a synthetic Linear field
 
 **Idle timeout**:
-A spawned Pi child with no close and no stdout for 45 minutes (env `PI_JOB_IDLE_MS`) is hung. The harness kills it and frees that coding slot.
-_Avoid_: wall-clock as the only hang signal; leaving the mutex held after kill
+A spawned Pi child with no close and no stdout for 45 minutes (env `PI_JOB_IDLE_MS`) is hung. The harness kills it and frees that coding slot. After Pi emits `agent_end`, the worker kills within `PI_AGENT_END_GRACE_MS` (default 8 seconds) if the child has not closed — that is not Idle timeout and does not Park.
+_Avoid_: wall-clock as the only hang signal; leaving the mutex held after kill; waiting out Idle timeout after `agent_end`
 
 **Timeout park**:
 The worker moving that hung coding job to Parked after Idle timeout, with `### Review feedback` on the existing workpad. Planner still never claims Parked. Resume is a human status change.

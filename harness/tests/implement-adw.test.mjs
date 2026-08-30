@@ -1354,6 +1354,8 @@ test("implement role stays thin; harness pi-job owns hard first-run and checker-
   assert.match(implement, /never call `memory_add`|never call memory_add/i);
   assert.match(implement, /In Review/);
   assert.match(implement, /Do not sleep/);
+  assert.match(implement, /Exit the Pi session when the PR is pushed/);
+  assert.match(implement, /linear CLI --help/);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   assert.match(piJob, /format vs Zod vs unique-email/i);
   assert.match(piJob, /Checker-fail resume/i);

@@ -13,7 +13,7 @@ import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createSerialQueue, createWorkerSlots } from "../job-queue.mjs";
 import { completeLand, LAND_LANES } from "../land.mjs";
 import { FORBIDDEN_PLANNER_STATES, WORKPAD_HEADING } from "../linear-cli.mjs";
-import { createPiJobRunner, DEFAULT_JOB_IDLE_MS } from "../pi-job.mjs";
+import { createPiJobRunner, DEFAULT_AGENT_END_GRACE_MS, DEFAULT_JOB_IDLE_MS } from "../pi-job.mjs";
 import { routeWebhook } from "../webhook-router.mjs";
 import { createWorktreeAdapter } from "../worktree.mjs";
 
@@ -50,6 +50,7 @@ function fakeClock(start = 0) {
     },
     async sleep(ms) {
       current += ms;
+      await new Promise((resolve) => setImmediate(resolve));
     },
   };
 }
@@ -83,10 +84,12 @@ function fakeLinear({ identifier = IDENTIFIER, issueId = ISSUE_ID, status = "Imp
   return {
     calls,
     comments,
-    issue,
+    get issue() {
+      return issue;
+    },
     async getIssue(id) {
       calls.push(["getIssue", id]);
-      return this.issue;
+      return issue;
     },
     async listComments() {
       calls.push(["listComments"]);
@@ -98,7 +101,7 @@ function fakeLinear({ identifier = IDENTIFIER, issueId = ISSUE_ID, status = "Imp
     },
     async setStatus(input) {
       calls.push(["setStatus", input]);
-      this.issue = { ...this.issue, status: input.status };
+      issue.status = input.status;
     },
   };
 }
@@ -237,6 +240,43 @@ async function routeStatus(issue, extras = {}) {
 
 test("DEFAULT_JOB_IDLE_MS is 45 minutes and reads PI_JOB_IDLE_MS", () => {
   assert.equal(DEFAULT_JOB_IDLE_MS, 45 * 60 * 1000);
+});
+
+test("DEFAULT_AGENT_END_GRACE_MS is 8 seconds", () => {
+  assert.equal(DEFAULT_AGENT_END_GRACE_MS, 8_000);
+});
+
+test("agent_end on an open Pi child kills after grace and does not Park", async () => {
+  const clock = fakeClock();
+  const linear = fakeLinear();
+  const worktree = trackingWorktree();
+  const kills = [];
+  const hung = hungSpawn();
+  const runner = idleRunner({
+    linear,
+    worktree,
+    clock,
+    kills,
+    spawnImpl() {
+      setImmediate(() => {
+        hung.stdout.write('{"type":"agent_end","messages":[]}\n');
+      });
+      return Promise.resolve(hung);
+    },
+  });
+
+  const result = await runner.run(implementJob());
+
+  assert.equal(result.idleTimeout, undefined);
+  assert.equal(kills.length, 1);
+  assert.equal(linear.issue.status, "In Review");
+  assert.equal(worktree.trees.has(WORKTREE_PATH), true);
+  assert.equal(
+    worktree.calls.some((call) => call[0] === "reap"),
+    false,
+  );
+  assert.ok(clock.now() >= DEFAULT_AGENT_END_GRACE_MS);
+  assert.ok(clock.now() < DEFAULT_JOB_IDLE_MS);
 });
 
 test("idle timeout with no close and no stdout kills the process group, Parks, writes Review feedback, and reaps the Issue worktree", async () => {
@@ -467,4 +507,6 @@ test("WORKFLOW and host inventory say the worker writes Parked on Idle timeout",
   assert.match(host, /Idle timeout/i);
   assert.match(host, /Parked/);
   assert.match(host, /PI_JOB_IDLE_MS/);
+  assert.match(host, /agent_end/);
+  assert.match(host, /8s|8 seconds|PI_AGENT_END_GRACE_MS/);
 });

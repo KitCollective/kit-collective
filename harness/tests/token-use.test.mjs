@@ -32,7 +32,6 @@ function validWorkerEnv() {
     LINEAR_PI_APP_USER_ID: "pi-app-user-1",
     LINEAR_PI_CLIENT_ID: "client-id",
     LINEAR_PI_CLIENT_SECRET: "client-secret",
-    LINEAR_PI_ACCESS_TOKEN: "actor-token",
     LINEAR_CLI_VERSION: LINEAR_CLI_PIN.version,
     PI_MODEL: "cursor/composer-2.5",
     PI_MODEL_FAST: "cursor/grok-4.6",

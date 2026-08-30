@@ -14,7 +14,7 @@ const SECRET_PATTERNS = [
   /\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}\b/g,
   /\b(lin_api|lin_oauth)_[A-Za-z0-9]{20,}\b/g,
   /\b(sk-[A-Za-z0-9-]{20,})\b/g,
-  /\b(CURSOR_API_KEY|LINEAR_CLI_API_KEY|GH_TOKEN|OPENROUTER_API_KEY|LINEAR_WEBHOOK_SECRET)\s*[:=]\s*\S+/gi,
+  /\b(CURSOR_API_KEY|LINEAR_CLI_API_KEY|LINEAR_PI_ACCESS_TOKEN|GH_TOKEN|OPENROUTER_API_KEY|LINEAR_WEBHOOK_SECRET)\s*[:=]\s*\S+/gi,
   /\b[A-Za-z0-9+/]{40,}={0,2}\b/g,
 ];
 

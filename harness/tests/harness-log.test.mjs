@@ -24,6 +24,12 @@ test("redactHarnessError strips gh and linear token prefixes", () => {
   assert.equal(redacted, "[redacted]");
 });
 
+test("redactHarnessError strips LINEAR_PI_ACCESS_TOKEN assignments", () => {
+  const redacted = redactHarnessError("LINEAR_PI_ACCESS_TOKEN=lin_oauth_should_not_leak_value");
+  assert.match(redacted ?? "", /\[redacted\]/);
+  assert.doesNotMatch(redacted ?? "", /lin_oauth_should_not_leak_value/);
+});
+
 test("harnessLog emits one JSON object on stderr with gate and loopRisk", () => {
   const lines = [];
   const original = console.error;

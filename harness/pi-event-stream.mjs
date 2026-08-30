@@ -1,7 +1,27 @@
 /**
  * Pi JSON stdout line reader for token-use collection (KIT-79, KIT-113).
- * AgentSession activity streaming was removed in KIT-113.
+ * Outbound Agent Session activities are mapped in linear-agent-session.mjs.
+ * Inbound AgentSession webhooks stay skipped (KIT-113).
  */
+
+/**
+ * True when a Pi `--mode json` line is the session-finished event.
+ * After this, a hung child must not hold the coding slot until Idle timeout.
+ *
+ * @param {string} line
+ * @returns {boolean}
+ */
+export function isPiAgentEndLine(line) {
+  if (typeof line !== "string" || line.length === 0) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(line);
+    return parsed !== null && typeof parsed === "object" && parsed.type === "agent_end";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * @param {import("node:stream").Readable} readable
