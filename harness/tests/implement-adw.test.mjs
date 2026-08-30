@@ -56,7 +56,7 @@ function validWorkerEnv() {
 
 function agentFrontmatter(relative) {
   const text = readFileSync(join(ROOT, relative), "utf8");
-  const match = text.match(/^---\n([\s\S]*?)\n---/);
+  const match = text.match(/^---\n([\s\S]*?)\n---/m);
   return { text, frontmatter: match ? match[1] : "" };
 }
 
@@ -1285,7 +1285,7 @@ test("implement spawn excludes memory-write tools and skill_manage", async () =>
   assert.equal(spawned[0].options.env.KIT_PI_HERMES, WORKER_MEMORY_DIR);
 });
 
-test("Scout and Gate pin Hy3 no-think with Composer fallback; helpers omit a model pin", () => {
+test("Scout and Gate pin Hy3 no-think with Composer fallback; helpers pin Composer", () => {
   const scout = agentFrontmatter(".pi/agents/scout.md");
   const gate = agentFrontmatter(".pi/agents/gate.md");
   for (const agent of [scout, gate]) {
@@ -1324,9 +1324,13 @@ test("Scout and Gate pin Hy3 no-think with Composer fallback; helpers omit a mod
     ".pi/agents/devops.md",
   ]) {
     const helper = agentFrontmatter(relative);
-    assert.doesNotMatch(helper.frontmatter, /^model:/m);
+    assert.match(helper.frontmatter, /^model:\s+cursor\/composer-2\.5\s*$/m);
+    assert.doesNotMatch(helper.frontmatter, /openrouter|kimi|moonshot/i);
     assert.doesNotMatch(helper.text, /tencent\/hy3|stealth|ox-alpha/i);
   }
+  const slop = agentFrontmatter(".pi/agents/slop.md");
+  assert.match(slop.frontmatter, /^model:\s+cursor\/composer-2\.5\s*$/m);
+  assert.doesNotMatch(slop.frontmatter, /openrouter|kimi|moonshot/i);
 });
 
 test("implement role stays thin; harness pi-job owns hard first-run and checker-fail prompts", () => {

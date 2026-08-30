@@ -140,7 +140,7 @@ Use a Cursor SDK key + the Pi extension `pi-cursor-sdk`:
 
 1. Mint a **user or service-account** key at [cursor.com/dashboard](https://cursor.com/dashboard) → Integrations / API Keys. Team Admin keys are rejected by the SDK.
 2. Put it in `CURSOR_API_KEY` on this host (wizard or `/opt/kit-collective/harness/.env`).
-3. Jobs: `pi --model cursor/composer-2.5` (implement parent) or `pi --model cursor/grok-4.6` (factory-checker / land). Planner is the Linear CLI wrapper, not a Pi session. Defaults: `PI_MODEL` / `PI_MODEL_FAST`. Implement Scout and Gate pin OpenRouter `tencent/hy3` (no-think) via `.pi/agents` frontmatter with `fallbackModels: cursor/composer-2.5` when Hy3 or OpenRouter is unavailable — not the OpenRouter provider default (Kimi). Helpers omit a model pin. Put `OPENROUTER_API_KEY` in this host `.env` (wizard or `/opt/kit-collective/harness/.env`).
+3. Jobs: `pi --model cursor/composer-2.5` (implement parent) or `pi --model cursor/grok-4.6` (factory-checker / land). Planner is the Linear CLI wrapper, not a Pi session. Defaults: `PI_MODEL` / `PI_MODEL_FAST`. Implement Scout and Gate pin OpenRouter `tencent/hy3` (no-think) via `.pi/agents` frontmatter with `fallbackModels: cursor/composer-2.5` when Hy3 or OpenRouter is unavailable — not the OpenRouter provider default (Kimi). Helpers and Slop pin `cursor/composer-2.5` (Pi does not inherit the parent `--model` when the agent omits `model:`). Put `OPENROUTER_API_KEY` in this host `.env` (wizard or `/opt/kit-collective/harness/.env`).
 
 ## PI implement context (single source)
 

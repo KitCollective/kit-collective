@@ -36,13 +36,15 @@ test("buildImplementContextMarkdown includes always rules, skills, and PI overla
   assert.match(md, /LINEAR_CLI_API_KEY/);
 });
 
-test("PI agent wrappers include Desktop body without duplicating model pin", () => {
+test("PI agent wrappers pin Composer so Pi does not use the OpenRouter default", () => {
   const nest = buildPiAgentMarkdown(PI_AGENT_MAP.find((item) => item.pi === "nest"));
   assert.match(nest, /Modular monolith in `apps\/api`/);
   assert.match(nest, /inheritProjectContext: false/);
-  assert.doesNotMatch(nest, /^model:/m);
+  assert.match(nest, /^model:\s+cursor\/composer-2\.5\s*$/m);
+  assert.doesNotMatch(nest, /openrouter|kimi|moonshot|tencent\/hy3/i);
   const devops = buildPiAgentMarkdown(PI_AGENT_MAP.find((item) => item.pi === "devops"));
   assert.match(devops, /GitHub Actions/);
+  assert.match(devops, /^model:\s+cursor\/composer-2\.5\s*$/m);
 });
 
 test("mobile selector still includes ui-ux, expo, and tdd after generated base split", () => {

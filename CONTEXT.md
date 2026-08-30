@@ -227,8 +227,8 @@ Pi subagent that runs the mechanical half of pre-review (rebase, typecheck, requ
 _Avoid_: factory-checker; treating Gate as the pass verdict; inheriting Composer; resolving merge conflicts; Linear CLI from Hy3
 
 **Hy3**:
-OpenRouter model `tencent/hy3` for Scout and Gate only, no-think. Not product Vision. Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. When Hy3 or OpenRouter is unavailable, Scout and Gate fall back to `cursor/composer-2.5` via agent frontmatter — not the OpenRouter provider default (Kimi).
-_Avoid_: stealth/ox-alpha; Kimi as Scout/Gate fallback; Hy3 for nest/expo/drizzle/ui-ux; Hy3 for planner, factory-checker, or land; blocking the slice on Exacto
+OpenRouter model `tencent/hy3` for Scout and Gate only, no-think. Not product Vision. Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. When Hy3 or OpenRouter is unavailable, Scout and Gate fall back to `cursor/composer-2.5` via agent frontmatter — not the OpenRouter provider default (Kimi). Domain helpers and Slop pin `cursor/composer-2.5`; an omitted `model:` makes Pi use Kimi.
+_Avoid_: stealth/ox-alpha; Kimi as Scout/Gate fallback; omitting helper `model:`; Hy3 for nest/expo/drizzle/ui-ux; Hy3 for planner, factory-checker, or land; blocking the slice on Exacto
 
 **Coding job**:
 A factory role on the coding slot: implement, factory-checker, auto-merge, or land. Not planner. Auto-merge and land do not spawn Pi.
