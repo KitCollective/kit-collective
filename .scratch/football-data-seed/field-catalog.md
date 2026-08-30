@@ -11,6 +11,7 @@ Seed-module interfaces live beside the trees:
 
 - Transfermarkt grains → [`seed/apify/reference.md`](../../seed/apify/reference.md)
 - Football Kit Archive grains → [`seed/fkapi/reference.md`](../../seed/fkapi/reference.md)
+- Postgres landing plan → [`schema-gap.md`](./schema-gap.md) (**given** for grain migrations)
 
 ---
 
@@ -177,6 +178,8 @@ All market value · agent/agency · TM and FKA **logos** & bare profile URLs as 
 4. Whether historical Joined / Signed from / Current club can be trusted for 2010/11.
 5. Loan / registration markers on other Superliga 2010/11 clubs.
 6. NationalTeam kit ExternalId join key (TM `3436` vs FKA team slug).
+
+Schema shape for **stamdata now** fields is not open — see [schema-gap.md](./schema-gap.md).
 
 ---
 

@@ -2,6 +2,7 @@
 
 **Vendor:** Football Kit Archive via FKApi (`FKAPI_BASE_URL` / `FKAPI_TOKEN`) or fixtures  
 **Field catalog (accept):** [`.scratch/football-data-seed/field-catalog.md`](../../.scratch/football-data-seed/field-catalog.md)  
+**Postgres landing:** [`.scratch/football-data-seed/schema-gap.md`](../../.scratch/football-data-seed/schema-gap.md)  
 **Forbidden (ADR-0002):** market value, agent PII, vendor branding (brand/club logos, FKA page URLs as product assets).  
 **Rule:** FK after facts — Club or NationalTeam + Season rows must exist before kit map.  
 **Transport lock:** **No Seed proxy / Decodo** on Football Kit Archive or FKApi. Decodo is Transfermarkt-only. Live FK uses `FKAPI_BASE_URL` (+ token) or another non-Decodo path.  

@@ -2,6 +2,7 @@
 
 **Vendor:** Transfermarkt (Kader fetch / Opt-in Apify / fixtures)  
 **Field catalog (accept):** [`.scratch/football-data-seed/field-catalog.md`](../../.scratch/football-data-seed/field-catalog.md)  
+**Postgres landing:** [`.scratch/football-data-seed/schema-gap.md`](../../.scratch/football-data-seed/schema-gap.md)  
 **Forbidden (ADR-0002):** market value, agent PII, TM branding (`tmLogoUrl`, crests, profile URLs as product assets).  
 **Seed proxy (Decodo):** required for live Transfermarkt from Coolify / `kc_seed_mcp` — **TM only**. Never point Decodo at Football Kit Archive.  
 **Breadth for first proof:** Superliga 2010/11 (`DK1`, `saison_id=2010`); Denmark men World Cup 2010 path (`verein/3436`, `saison_id=2010`).
