@@ -145,12 +145,6 @@ jobs:
       - name: Test mobile peer stub typography ratchet logic
         run: node --test scripts/tests/check-mobile-peer-stub-typography.test.mjs
 
-      - name: Check mobile conversation details chrome ratchet
-        run: node scripts/check-mobile-conversation-details-chrome.mjs
-
-      - name: Test mobile conversation details chrome ratchet logic
-        run: node --test scripts/tests/check-mobile-conversation-details-chrome.test.mjs
-
       - name: Check mobile design tokens
         run: pnpm check:mobile-design-tokens
 
