@@ -225,12 +225,19 @@ export function ProfileRowDivider() {
 
 type IdentityCardProps = {
   handle: string;
+  locationCaption?: string | null;
   avatarUri?: string | null;
   avatarHeaders?: Record<string, string>;
   onEditPress: () => void;
 };
 
-export function IdentityCard({ handle, avatarUri, avatarHeaders, onEditPress }: IdentityCardProps) {
+export function IdentityCard({
+  handle,
+  locationCaption,
+  avatarUri,
+  avatarHeaders,
+  onEditPress,
+}: IdentityCardProps) {
   const theme = useTheme();
   const typography = useTypography();
 
@@ -243,9 +250,12 @@ export function IdentityCard({ handle, avatarUri, avatarHeaders, onEditPress }: 
     >
       <View style={styles.identityRow}>
         <Avatar handle={handle} uri={avatarUri} uriHeaders={avatarHeaders} size="lg" />
-        <Text style={[typography.headingSm, { color: theme.contentPrimary, flex: 1 }]}>
-          {handle}
-        </Text>
+        <View style={styles.identityTextColumn}>
+          <Text style={[typography.headingSm, { color: theme.contentPrimary }]}>{handle}</Text>
+          {locationCaption ? (
+            <Text style={[typography.mono, { color: theme.contentMuted }]}>{locationCaption}</Text>
+          ) : null}
+        </View>
       </View>
       <Button label="Rediger profil" variant="secondary" width="fill" onPress={onEditPress} />
     </View>
@@ -551,6 +561,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.gapMd,
+  },
+  identityTextColumn: {
+    flex: 1,
+    gap: 2,
   },
   group: {
     borderWidth: 1,

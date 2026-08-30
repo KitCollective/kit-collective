@@ -34,11 +34,20 @@ export const identityProfileUpdateSchema = z
   .object({
     handle: handleSchema.optional(),
     aboutMe: z.string().max(500).nullable().optional(),
+    countryId: z.string().uuid().nullable().optional(),
+    city: z.string().max(120).nullable().optional(),
+    showCity: z.boolean().optional(),
   })
   .strict()
-  .refine((value) => value.handle !== undefined || value.aboutMe !== undefined, {
-    message: "At least one field is required",
-  });
+  .refine(
+    (value) =>
+      value.handle !== undefined ||
+      value.aboutMe !== undefined ||
+      value.countryId !== undefined ||
+      value.city !== undefined ||
+      value.showCity !== undefined,
+    { message: "At least one field is required" },
+  );
 
 export type IdentityProfileUpdate = z.infer<typeof identityProfileUpdateSchema>;
 

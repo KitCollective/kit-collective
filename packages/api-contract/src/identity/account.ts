@@ -22,6 +22,10 @@ export const identityAccountFieldsSchema = z
     phone: z.string().nullable(),
     birthday: z.string().date().nullable(),
     linkedAccounts: z.array(identityLinkedAccountSchema),
+    countryId: z.string().uuid().nullable(),
+    countryLabel: z.string().nullable(),
+    city: z.string().nullable(),
+    showCity: z.boolean(),
   })
   .strict();
 

@@ -114,6 +114,14 @@ export {
   type HandleStatus,
 } from "./identity.js";
 export {
+  COUNTRY_LABEL_TO_ISO3166,
+  formatProfileLocationCaption,
+  formatProfileLocationMeta,
+  POPULAR_CITIES_BY_ISO3166,
+  popularCitiesForCountry,
+  popularCitiesForCountryLabel,
+} from "./location.js";
+export {
   APPEARANCE_MODES,
   type AppearanceMode,
   USER_LOCALES,

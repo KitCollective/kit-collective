@@ -1,5 +1,6 @@
+import { formatProfileLocationCaption } from "@kit/domain";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchFavorites } from "@/api/favorites";
@@ -15,8 +16,13 @@ export default function ProfileHomeScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, refreshUser } = useAuth();
   const [favoriteCount, setFavoriteCount] = useState(0);
+
+  const locationCaption = useMemo(
+    () => (user ? formatProfileLocationCaption(user.city, user.countryLabel, user.showCity) : null),
+    [user],
+  );
 
   const tabBarPadding =
     space.insetLg * 2 +
@@ -46,7 +52,8 @@ export default function ProfileHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       void refreshFavoriteCount();
-    }, [refreshFavoriteCount]),
+      void refreshUser();
+    }, [refreshFavoriteCount, refreshUser]),
   );
 
   return (
@@ -61,6 +68,7 @@ export default function ProfileHomeScreen() {
         {user ? (
           <IdentityCard
             handle={user.handle}
+            locationCaption={locationCaption}
             avatarUri={resolveAvatarUrl(user.avatarUrl ?? null)}
             avatarHeaders={avatarHeaders}
             onEditPress={() => router.push("/(tabs)/profile/edit")}

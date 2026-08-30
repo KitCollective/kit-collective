@@ -127,6 +127,7 @@ async function insertClubSeasonFixture() {
   await pool.end();
 
   return {
+    countryId: insertedCountry.id,
     clubId: insertedClub.id,
     seasonId: insertedSeason.id,
   };
@@ -258,6 +259,63 @@ describe("Identity /v1", () => {
     expect(body.handle).toBe("alpha");
     expect(body.aboutMe).toBeNull();
     expect(body.avatarUrl).toBeNull();
+    expect(body.countryId).toBeNull();
+    expect(body.countryLabel).toBeNull();
+    expect(body.city).toBeNull();
+    expect(body.showCity).toBe(false);
+  });
+
+  it("round-trips country, city, and showCity on PATCH identity/me", async () => {
+    const session = await registerSession(app, "location@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/v1/identity/me",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        countryId: fixture.countryId,
+        city: "København",
+        showCity: true,
+      },
+    });
+
+    expect(patch.statusCode).toBe(200);
+    const patched = identityMeSchema.parse(JSON.parse(patch.body));
+    expect(patched.countryId).toBe(fixture.countryId);
+    expect(patched.countryLabel).toBe("Danmark");
+    expect(patched.city).toBe("København");
+    expect(patched.showCity).toBe(true);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(me.statusCode).toBe(200);
+    const body = identityMeSchema.parse(JSON.parse(me.body));
+    expect(body.countryId).toBe(fixture.countryId);
+    expect(body.countryLabel).toBe("Danmark");
+    expect(body.city).toBe("København");
+    expect(body.showCity).toBe(true);
+  });
+
+  it("rejects unauthenticated location PATCH with 401", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/identity/me",
+      payload: {
+        city: "København",
+        showCity: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
   });
 
   it("rejects unauthenticated identity requests with 401", async () => {

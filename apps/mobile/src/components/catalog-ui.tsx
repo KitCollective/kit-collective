@@ -55,7 +55,7 @@ export function Mark({ label, size = "md" }: MarkProps) {
   );
 }
 
-type SearchFieldVariant = "collection" | "catalog" | "admin";
+type SearchFieldVariant = "collection" | "catalog" | "city" | "admin";
 
 type SearchFieldProps = TextInputProps & {
   variant: SearchFieldVariant;
