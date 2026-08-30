@@ -1,5 +1,12 @@
 import type { IapPlatform } from "@kit/api-contract";
 
+export class IapVerificationFailedError extends Error {
+  constructor(message = "Invalid purchase token") {
+    super(message);
+    this.name = "IapVerificationFailedError";
+  }
+}
+
 export type IapVerificationResult = {
   expires: Date;
 };

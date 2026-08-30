@@ -28,9 +28,9 @@ import {
 } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { DB, type DbToken } from "../db/db.module.js";
-import { IapVerificationFailedError } from "./fake-iap.adapter.js";
 import {
   IAP_VERIFIER,
+  IapVerificationFailedError,
   type IapVerificationResult,
   type IapVerifierAdapter,
 } from "./iap-verifier.adapter.js";

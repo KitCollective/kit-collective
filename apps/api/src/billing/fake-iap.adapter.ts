@@ -1,12 +1,9 @@
 import type { IapPlatform } from "@kit/api-contract";
-import type { IapVerificationResult, IapVerifierAdapter } from "./iap-verifier.adapter.js";
-
-export class IapVerificationFailedError extends Error {
-  constructor(message = "Invalid purchase token") {
-    super(message);
-    this.name = "IapVerificationFailedError";
-  }
-}
+import {
+  IapVerificationFailedError,
+  type IapVerificationResult,
+  type IapVerifierAdapter,
+} from "./iap-verifier.adapter.js";
 
 /** Deterministic fake verifier for contract tests. */
 export class FakeIapVerifierAdapter implements IapVerifierAdapter {

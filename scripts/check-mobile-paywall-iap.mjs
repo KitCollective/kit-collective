@@ -6,12 +6,15 @@
 import { existsSync, readFileSync } from "node:fs";
 
 const PAYWALL_SHEET_PATH = "apps/mobile/src/components/paywall-sheet.tsx";
+const MOBILE_PACKAGE_PATH = "apps/mobile/package.json";
 const NATIVE_STORE_BILLING_PATH = "apps/mobile/src/premium/native-store-billing.ts";
 const STORE_BILLING_CLIENT_PATH = "apps/mobile/src/premium/store-billing-client.ts";
+const AMBIENT_IAP_STUB_PATH = "apps/mobile/src/premium/react-native-iap.d.ts";
 
 /**
  * @param {{
  *   paywallSource?: string,
+ *   mobilePackageJson?: string,
  *   nativeStoreBillingSource?: string,
  *   storeBillingClientSource?: string,
  * }} overrides
@@ -25,12 +28,35 @@ export function checkMobilePaywallIap(overrides = {}) {
   }
 
   const paywallSource = overrides.paywallSource ?? readFileSync(PAYWALL_SHEET_PATH, "utf8");
+  const mobilePackageJson =
+    overrides.mobilePackageJson ??
+    (existsSync(MOBILE_PACKAGE_PATH) ? readFileSync(MOBILE_PACKAGE_PATH, "utf8") : "");
   const nativeStoreBillingSource =
     overrides.nativeStoreBillingSource ??
     (existsSync(NATIVE_STORE_BILLING_PATH) ? readFileSync(NATIVE_STORE_BILLING_PATH, "utf8") : "");
   const storeBillingClientSource =
     overrides.storeBillingClientSource ??
     (existsSync(STORE_BILLING_CLIENT_PATH) ? readFileSync(STORE_BILLING_CLIENT_PATH, "utf8") : "");
+
+  if (existsSync(AMBIENT_IAP_STUB_PATH)) {
+    violations.push(
+      `${AMBIENT_IAP_STUB_PATH}: delete hand-rolled declare module stub; declare react-native-iap in apps/mobile/package.json`,
+    );
+  }
+
+  /** @type {{ dependencies?: Record<string, string> }} */
+  let mobilePackage = {};
+  try {
+    mobilePackage = JSON.parse(mobilePackageJson);
+  } catch {
+    violations.push(`${MOBILE_PACKAGE_PATH}: invalid package.json`);
+  }
+
+  if (!mobilePackage.dependencies?.["react-native-iap"]) {
+    violations.push(
+      `${MOBILE_PACKAGE_PATH}: must declare react-native-iap so native store billing can load the store SDK`,
+    );
+  }
 
   if (
     !nativeStoreBillingSource.includes('require("react-native-iap")') ||

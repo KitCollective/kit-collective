@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -20,7 +20,24 @@ const nativeClientPath = path.join(
   "../src/premium/native-store-billing.ts",
 );
 
+const mobilePackagePath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../package.json",
+);
+
+const ambientIapStubPath = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../src/premium/react-native-iap.d.ts",
+);
+
 describe("store-billing-client source guards", () => {
+  it("declares react-native-iap in package.json instead of an ambient stub", () => {
+    const mobilePackage = JSON.parse(readFileSync(mobilePackagePath, "utf8")) as {
+      dependencies?: Record<string, string>;
+    };
+    expect(mobilePackage.dependencies?.["react-native-iap"]).toBeTruthy();
+    expect(existsSync(ambientIapStubPath)).toBe(false);
+  });
   it("documents SAFETY on native module require", () => {
     const source = readFileSync(clientPath, "utf8");
     expect(source).toMatch(/SAFETY:.*Platform\.OS is ios\/android/s);
