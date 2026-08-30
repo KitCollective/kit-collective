@@ -1,11 +1,35 @@
-import type { Entitlement } from "@kit/api-contract";
+import type { Entitlement, IapRestoreRequest, IapVerifyRequest } from "@kit/api-contract";
 import { OFFER_PRODUCT_IDS } from "@kit/domain";
-import { restoreIapPurchases, verifyIapPurchase } from "@/api/billing";
 import { mapProductPricesById, PAYWALL_PRODUCT_IDS } from "@/premium/store-billing";
 import {
   createStoreBillingClient,
   getWebIapUnavailableMessage,
 } from "@/premium/store-billing-client";
+
+type PaywallBillingApi = {
+  verifyIapPurchase(accessToken: string, body: IapVerifyRequest): Promise<Entitlement>;
+  restoreIapPurchases(accessToken: string, body: IapRestoreRequest): Promise<Entitlement>;
+};
+
+let billingApiOverride: PaywallBillingApi | null = null;
+let defaultBillingApi: PaywallBillingApi | null = null;
+
+export function setPaywallBillingApiForTests(api: PaywallBillingApi | null): void {
+  billingApiOverride = api;
+}
+
+function billingApi(): PaywallBillingApi {
+  if (billingApiOverride) {
+    return billingApiOverride;
+  }
+
+  if (!defaultBillingApi) {
+    // SAFETY: production paywall flows call billing only after store purchase; tests inject billingApiOverride.
+    defaultBillingApi = require("@/api/billing") as PaywallBillingApi;
+  }
+
+  return defaultBillingApi;
+}
 
 export type PaywallOfferState = {
   iapAvailable: boolean;
@@ -41,7 +65,7 @@ export async function purchasePaywallProduct(
 ): Promise<Entitlement> {
   const client = createStoreBillingClient();
   const purchase = await client.purchaseProduct(productId);
-  return verifyIapPurchase(accessToken, {
+  return billingApi().verifyIapPurchase(accessToken, {
     platform: purchase.platform,
     productId: purchase.productId,
     token: purchase.token,
@@ -55,7 +79,7 @@ export async function restorePaywallPurchases(accessToken: string): Promise<Enti
     throw new Error("Ingen tidligere køb fundet");
   }
 
-  return restoreIapPurchases(accessToken, {
+  return billingApi().restoreIapPurchases(accessToken, {
     platform: restored.platform,
     token: restored.token,
   });

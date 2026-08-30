@@ -1,5 +1,6 @@
-import { Platform } from "react-native";
 import type { StoreBillingClient } from "./store-billing.js";
+
+type PlatformOs = "ios" | "android" | "web" | "windows" | "macos";
 
 const WEB_UNAVAILABLE_MESSAGE = "Køb er kun tilgængelig i iOS- og Android-appen.";
 
@@ -20,9 +21,24 @@ class WebStoreBillingClient implements StoreBillingClient {
 }
 
 let testOverride: StoreBillingClient | null = null;
+let testPlatformOs: PlatformOs | null = null;
 
 export function setStoreBillingClientForTests(client: StoreBillingClient | null): void {
   testOverride = client;
+}
+
+export function setPlatformOsForTests(os: PlatformOs | null): void {
+  testPlatformOs = os;
+}
+
+function resolvePlatformOs(): PlatformOs {
+  if (testPlatformOs !== null) {
+    return testPlatformOs;
+  }
+
+  // SAFETY: createStoreBillingClient only reads Platform.OS when no test override is active.
+  const { Platform } = require("react-native") as typeof import("react-native");
+  return Platform.OS;
 }
 
 export function getWebIapUnavailableMessage(): string {
@@ -34,7 +50,7 @@ export function createStoreBillingClient(): StoreBillingClient {
     return testOverride;
   }
 
-  if (Platform.OS === "web") {
+  if (resolvePlatformOs() === "web") {
     return new WebStoreBillingClient();
   }
 

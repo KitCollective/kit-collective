@@ -1,24 +1,14 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("react-native", () => ({
-  Platform: { OS: "ios" },
-}));
-
 import type { Entitlement } from "@kit/api-contract";
 import { OFFER_PRODUCT_IDS } from "@kit/domain";
-import { restoreIapPurchases, verifyIapPurchase } from "@/api/billing";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   loadPaywallOfferState,
   purchasePaywallProduct,
   restorePaywallPurchases,
+  setPaywallBillingApiForTests,
 } from "../src/premium/paywall-offer";
 import type { StoreBillingClient } from "../src/premium/store-billing";
 import { setStoreBillingClientForTests } from "../src/premium/store-billing-client";
-
-vi.mock("@/api/billing", () => ({
-  verifyIapPurchase: vi.fn(),
-  restoreIapPurchases: vi.fn(),
-}));
 
 const entitlement: Entitlement = {
   live: true,
@@ -26,6 +16,9 @@ const entitlement: Entitlement = {
   expires: "2026-09-02T12:00:00.000Z",
   trialUsed: true,
 };
+
+const verifyIapPurchase = vi.fn();
+const restoreIapPurchases = vi.fn();
 
 function mockClient(overrides: Partial<StoreBillingClient> = {}): StoreBillingClient {
   return {
@@ -51,6 +44,7 @@ function mockClient(overrides: Partial<StoreBillingClient> = {}): StoreBillingCl
 describe("loadPaywallOfferState", () => {
   afterEach(() => {
     setStoreBillingClientForTests(null);
+    setPaywallBillingApiForTests(null);
     vi.clearAllMocks();
   });
 
@@ -84,13 +78,15 @@ describe("loadPaywallOfferState", () => {
 describe("paywall purchase flow", () => {
   afterEach(() => {
     setStoreBillingClientForTests(null);
+    setPaywallBillingApiForTests(null);
     vi.clearAllMocks();
   });
 
   it("verifies IAP purchase through billing API", async () => {
     const client = mockClient();
     setStoreBillingClientForTests(client);
-    vi.mocked(verifyIapPurchase).mockResolvedValue(entitlement);
+    verifyIapPurchase.mockResolvedValue(entitlement);
+    setPaywallBillingApiForTests({ verifyIapPurchase, restoreIapPurchases });
 
     const result = await purchasePaywallProduct("token", OFFER_PRODUCT_IDS.month);
 
@@ -106,7 +102,8 @@ describe("paywall purchase flow", () => {
   it("restores purchases through billing API", async () => {
     const client = mockClient();
     setStoreBillingClientForTests(client);
-    vi.mocked(restoreIapPurchases).mockResolvedValue(entitlement);
+    restoreIapPurchases.mockResolvedValue(entitlement);
+    setPaywallBillingApiForTests({ verifyIapPurchase, restoreIapPurchases });
 
     const result = await restorePaywallPurchases("token");
 

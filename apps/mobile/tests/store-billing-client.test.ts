@@ -1,17 +1,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const platformOs = vi.hoisted(() => ({ current: "web" as "web" | "ios" | "android" }));
-
-vi.mock("react-native", () => ({
-  Platform: {
-    get OS() {
-      return platformOs.current;
-    },
-  },
-}));
+import {
+  createStoreBillingClient,
+  getWebIapUnavailableMessage,
+  setPlatformOsForTests,
+  setStoreBillingClientForTests,
+} from "../src/premium/store-billing-client";
 
 const clientPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -32,8 +29,8 @@ describe("store-billing-client source guards", () => {
 
   it("guards web before native require", () => {
     const source = readFileSync(clientPath, "utf8");
-    expect(source).toContain('Platform.OS === "web"');
-    const webGuardIndex = source.indexOf('Platform.OS === "web"');
+    expect(source).toContain('=== "web"');
+    const webGuardIndex = source.indexOf('=== "web"');
     const nativeRequireIndex = source.indexOf('require("./native-store-billing")');
     expect(webGuardIndex).toBeGreaterThan(-1);
     expect(nativeRequireIndex).toBeGreaterThan(webGuardIndex);
@@ -49,22 +46,17 @@ describe("store-billing-client source guards", () => {
 });
 
 describe("createStoreBillingClient web guard", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    platformOs.current = "web";
-    const mod = await import("../src/premium/store-billing-client");
-    mod.setStoreBillingClientForTests(null);
+  beforeEach(() => {
+    setPlatformOsForTests("web");
+    setStoreBillingClientForTests(null);
   });
 
-  afterEach(async () => {
-    const mod = await import("../src/premium/store-billing-client");
-    mod.setStoreBillingClientForTests(null);
+  afterEach(() => {
+    setPlatformOsForTests(null);
+    setStoreBillingClientForTests(null);
   });
 
   it("returns unavailable client on web without loading native IAP", async () => {
-    const { createStoreBillingClient, getWebIapUnavailableMessage } = await import(
-      "../src/premium/store-billing-client"
-    );
     const client = createStoreBillingClient();
     expect(client.iapAvailable).toBe(false);
     await expect(client.purchaseProduct("sku")).rejects.toThrow(getWebIapUnavailableMessage());
