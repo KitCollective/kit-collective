@@ -1,4 +1,8 @@
-import type { CatalogPickerItem, WishlistEntry } from "@kit/api-contract";
+import {
+  billingPaywallErrorSchema,
+  type CatalogPickerItem,
+  type WishlistEntry,
+} from "@kit/api-contract";
 import type { JerseySize, KitType } from "@kit/domain";
 import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 
@@ -88,12 +92,8 @@ export function resolveWishlistEmptyTitle(): string {
 }
 
 export function isPremiumRequiredError(body: unknown): boolean {
-  if (!body || typeof body !== "object") {
-    return false;
-  }
-
-  const code = (body as { code?: unknown }).code;
-  return code === "PREMIUM_REQUIRED";
+  const parsed = billingPaywallErrorSchema.safeParse(body);
+  return parsed.success && parsed.data.code === "PREMIUM_REQUIRED";
 }
 
 export const WISHLIST_TYPE_OPTIONS = KIT_TYPE_LABELS_DA;
