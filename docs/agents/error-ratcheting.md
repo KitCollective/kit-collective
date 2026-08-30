@@ -29,6 +29,7 @@ Command hooks on `beforeShellExecution` (fail closed). Scripts must print `{"per
 2. `block-reward-hacks.sh` — no shell deletion of tests or `.github/workflows`
 3. `protect-ratchet.sh` — no shell removal/emptying of `.cursor/hooks*`
 4. `block-pi-ci-sleep.sh` — no `sleep` ≥ 10s, no `gh pr checks --watch`, no for/while poll of `gh pr checks`
+5. `block-migration-prefix-collision.sh` — no `git add`/`commit` of `packages/db/migrations/NNNN_*.sql` when `origin/development` already has that prefix under another name
 
 Do **not** put factory learning in `sessionStart` context injection or in Cursor Automations **Memories** (`MEMORIES.md`). Cloud Agents may never see sessionStart; Memories is an unreviewed second source of truth. Prefer `beforeShellExecution` denials and always-applied rules / `AGENTS.md`. The planner comments on Linear; it does not keep a memory file of ratchets.
 
@@ -303,6 +304,10 @@ Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `d
 ### PR lane ratchet (KIT-102)
 
 `.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review). Tighten only.
+
+### Drizzle migration prefix collision (KIT-125)
+
+`scripts/lib/migration-prefix.mjs` (`findMigrationPrefixCollisions`, `nextMigrationPrefix`) plus `scripts/check-migration-prefixes.mjs` (CI via `node` in `.github/workflows/ci.yml`) fail when a PR adds `packages/db/migrations/NNNN_*.sql` whose prefix already exists on `origin/development` under a different filename. `harness/implement-exit.mjs` checks the same collision **before** rebase/CI wait and cheap-retries (`migrationRetry`) with the next prefix. `.cursor/hooks/block-migration-prefix-collision.sh` denies the colliding `git add`/`commit`. `.cursor/agents/db-drizzle.md` requires `git ls-tree origin/development`. Prevents repeating KIT-125 sitting CONFLICTING after KIT-123 landed `0009_user_jersey_favorite.sql` while the open PR still had `0009_user_account_fields.sql`. Tighten only.
 
 ### Implement write-scope worktree allowlist
 

@@ -1536,6 +1536,44 @@ test("loadWriteScopeEvaluator returns the worktree finder and ignores a broken m
   assert.equal(broken, null);
 });
 
+test("implement-exit cheap-retries a colliding migration prefix before rebase wait", async () => {
+  const description = "write-scope: packages/db/**, apps/api/**";
+  const linear = fakeLinearWithIssue(description);
+  const gh = fakeGh({ mergeable: "CONFLICTING" });
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-125", issueId: "issue-125", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-125", branch: "kit-125" },
+    gh,
+    linear,
+    typecheckTouched: async () => {
+      throw new Error("must not typecheck before migration retry");
+    },
+    listChangedFiles: async () => ["packages/db/migrations/0009_user_account_fields.sql"],
+    listBaseMigrations: async () => [
+      "packages/db/migrations/0008_bidding_conversations.sql",
+      "packages/db/migrations/0009_user_jersey_favorite.sql",
+    ],
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.migrationRetry, true);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    false,
+  );
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /0009_user_jersey_favorite/);
+  assert.match(workpad.body, /0010_/);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "rebase"),
+    false,
+  );
+});
+
 test("implement-exit without write-scope does not fail on out-of-glob paths", async () => {
   const linear = fakeLinearWithIssue("What to build\n\nNo write-scope line.");
   const result = await completeImplementWithChangedFiles({

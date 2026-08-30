@@ -53,6 +53,10 @@
       {
         "command": "bash .cursor/hooks/block-pi-ci-sleep.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-migration-prefix-collision.sh",
+        "failClosed": true
       }
     ]
   }

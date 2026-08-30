@@ -510,7 +510,7 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
-      return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). ${noSleep} ${loopTail}
+      return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). ${noSleep} ${loopTail}
 
 ### Review feedback
 
@@ -1211,7 +1211,9 @@ export function createPiJobRunner({
           (exit.writeScopeRetry === true &&
             Number(job.writeScopeRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
           (exit.formatRetry === true &&
-            Number(job.formatRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP);
+            Number(job.formatRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
+          (exit.migrationRetry === true &&
+            Number(job.migrationRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP);
         if (atCap && typeof linearClient.commentIssue === "function") {
           await linearClient.commentIssue({
             issueId: job.issueId ?? identifier,

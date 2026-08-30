@@ -27,10 +27,11 @@ export const ALWAYS_READY_CAPACITY = Object.freeze({
  * One Pi job at a time per slot. Compose replicas stay at 1; these mutexes are the in-process seam.
  *
  * Implement retry: when `run` returns `{ ciRetry: true }`, `{ writeScopeRetry: true }`,
- * or `{ formatRetry: true }`, re-run the same implement job (same issue / worktree / PR)
- * until the gate is clear or the cap is hit. Fail closed at the cap. Never enqueue
- * factory-checker. Write-scope retry keeps the slot so an out-of-glob path cannot drop
- * the issue behind a resume overlap skip (KIT-119). Format retry is cheap like CI retry.
+ * `{ formatRetry: true }`, or `{ migrationRetry: true }`, re-run the same implement job
+ * (same issue / worktree / PR) until the gate is clear or the cap is hit. Fail closed
+ * at the cap. Never enqueue factory-checker. Write-scope retry keeps the slot so an
+ * out-of-glob path cannot drop the issue behind a resume overlap skip (KIT-119).
+ * Format and migration retries are cheap like CI retry.
  */
 export const IMPLEMENT_CI_RETRY_CAP = 5;
 
@@ -46,7 +47,8 @@ export function isCheapImplementRetry(job) {
   return (
     Number(job.ciRetryAttempt ?? 1) > 1 ||
     Number(job.writeScopeRetryAttempt ?? 1) > 1 ||
-    Number(job.formatRetryAttempt ?? 1) > 1
+    Number(job.formatRetryAttempt ?? 1) > 1 ||
+    Number(job.migrationRetryAttempt ?? 1) > 1
   );
 }
 
@@ -107,6 +109,22 @@ export async function runImplementWithRetries(run, job) {
     });
     return runImplementWithRetries(run, { ...job, formatRetryAttempt: attempt + 1 });
   }
+  if (result?.migrationRetry === true) {
+    const attempt = Number(job.migrationRetryAttempt ?? 1);
+    if (job.role !== "implement" || attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      throw new Error("implement migration retry cap hit");
+    }
+    harnessLog({
+      role: job.role,
+      identifier: job.identifier,
+      event: "retry",
+      gate: "yellow",
+      reason: "migration",
+      attempt: attempt + 1,
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
+    });
+    return runImplementWithRetries(run, { ...job, migrationRetryAttempt: attempt + 1 });
+  }
   return result;
 }
 
@@ -163,7 +181,6 @@ export function createSerialQueue(deps) {
 
 const PLANNER_MUTEX_ROLES = new Set(["planner", "intake"]);
 const RESUME_MUTEX_ROLES = new Set(["resume"]);
-const IMPLEMENT_ROLES = new Set(["implement"]);
 const CODING_POOL_ROLES = new Set(["implement", "factory-checker"]);
 const FINISHER_ROLES = new Set(["auto-merge", "land"]);
 const CODING_ROLES = new Set([...CODING_POOL_ROLES, ...FINISHER_ROLES]);

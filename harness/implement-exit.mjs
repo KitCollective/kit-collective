@@ -14,6 +14,11 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
+  findMigrationPrefixCollisions,
+  formatMigrationCollisionFeedback,
+  nextMigrationPrefix,
+} from "../scripts/lib/migration-prefix.mjs";
+import {
   parseWriteScopeGlobs,
   resolveWriteScopeViolations,
   shouldEnforceWriteScope,
@@ -329,6 +334,74 @@ async function writeFormatRetryWorkpad(input) {
   const body = applyReviewFeedback(withEvidence, feedbackLines);
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
   return { pr, status: IMPLEMENTING, formatRetry: true, ciRetry: false, writeScopeRetry: false };
+}
+
+/**
+ * Stay Implementing and cheap-retry when a new migration reuses a lane prefix.
+ *
+ * @param {{
+ *   job: { identifier: string, issueId: string },
+ *   linear: {
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *   },
+ *   pr: { url?: string },
+ *   feedbackLines: string[],
+ * }} input
+ */
+async function writeMigrationRetryWorkpad(input) {
+  const { job, linear, pr, feedbackLines } = input;
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
+  const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  const withEvidence =
+    typeof pr?.url === "string" && pr.url.length > 0
+      ? upsertWorkpadEvidence(existing?.body, {
+          prUrl: pr.url,
+          identifier: job.identifier,
+        })
+      : (existing?.body ?? `${WORKPAD_HEADING}\n`);
+  const body = applyReviewFeedback(withEvidence, feedbackLines);
+  await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  return {
+    pr,
+    status: IMPLEMENTING,
+    migrationRetry: true,
+    ciRetry: false,
+    writeScopeRetry: false,
+    formatRetry: false,
+  };
+}
+
+/**
+ * List `packages/db/migrations/*.sql` on the integration lane.
+ *
+ * @param {{
+ *   runCommand?: (command: string, args: string[], options: { cwd?: string }) => Promise<string>,
+ * }} [deps]
+ */
+export function createListBaseMigrations({ runCommand } = {}) {
+  const run =
+    runCommand ??
+    (async (command, args, options = {}) => {
+      const { stdout } = await execFile(command, args, {
+        encoding: "utf8",
+        timeout: 120_000,
+        cwd: options.cwd,
+      });
+      return stdout;
+    });
+  return async ({ cwd } = {}) => {
+    const stdout = await run(
+      "git",
+      ["ls-tree", "-r", "--name-only", "origin/development", "--", "packages/db/migrations"],
+      { cwd },
+    );
+    return String(stdout)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  };
 }
 
 /**
@@ -650,6 +723,7 @@ function applyListedPr(pr, listed, identifier) {
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
  *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
  *   listChangedFiles?: (input: { cwd: string }) => Promise<string[]>,
+ *   listBaseMigrations?: (input: { cwd: string }) => Promise<string[]>,
  *   findWriteScopeViolationsWorktree?: (files: string[], globs: string[]) => string[],
  *   importWriteScopeModule?: (specifier: string) => Promise<{ findWriteScopeViolations?: unknown }>,
  *   issueDescription?: string,
@@ -670,6 +744,7 @@ export async function completeImplementAdw(input) {
     typecheckTouched,
     formatCheck,
     listChangedFiles: listChangedFilesInput,
+    listBaseMigrations: listBaseMigrationsInput,
     findWriteScopeViolationsWorktree,
     importWriteScopeModule,
     issueDescription,
@@ -692,6 +767,29 @@ export async function completeImplementAdw(input) {
     (typeof listed?.url === "string" && listed.url) ||
     "";
   const alreadyMergeable = pr?.mergeable === "MERGEABLE" && existingPrUrl.length > 0;
+  const listChangedFiles = listChangedFilesInput ?? createListChangedFiles();
+  try {
+    const changedForMigrations = await listChangedFiles({
+      cwd: checkout.path,
+      prUrl: existingPrUrl || pr?.url,
+    });
+    const listBase = listBaseMigrationsInput ?? createListBaseMigrations();
+    const baseMigrations = await listBase({ cwd: checkout.path });
+    const collisions = findMigrationPrefixCollisions(changedForMigrations, baseMigrations);
+    if (collisions.length > 0) {
+      return writeMigrationRetryWorkpad({
+        job,
+        linear,
+        pr: pr ?? { url: existingPrUrl },
+        feedbackLines: formatMigrationCollisionFeedback(
+          collisions,
+          nextMigrationPrefix(baseMigrations),
+        ),
+      });
+    }
+  } catch {
+    // rebase / write-scope still run; CI check-migration-prefixes is the floor
+  }
   if (alreadyMergeable) {
     if (typeof gh.syncToRemoteBranch === "function") {
       await gh.syncToRemoteBranch({ cwd: checkout.path, branch: checkout.branch });
@@ -768,7 +866,6 @@ export async function completeImplementAdw(input) {
   const description = await resolveIssueDescription(issueDescription, { linear, job });
   const globs = parseWriteScopeGlobs(description);
   if (shouldEnforceWriteScope(globs)) {
-    const listChangedFiles = listChangedFilesInput ?? createListChangedFiles();
     let changedFiles;
     try {
       changedFiles = await listChangedFiles({ cwd: checkout.path, prUrl: pr?.url });
@@ -821,7 +918,14 @@ export async function completeImplementAdw(input) {
   }
   await linear.setStatus({ issueId: job.issueId, status: IN_REVIEW });
 
-  return { pr, status: IN_REVIEW, ciRetry: false, writeScopeRetry: false, formatRetry: false };
+  return {
+    pr,
+    status: IN_REVIEW,
+    ciRetry: false,
+    writeScopeRetry: false,
+    formatRetry: false,
+    migrationRetry: false,
+  };
 }
 
 /**

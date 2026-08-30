@@ -14,7 +14,7 @@ function currentFiles() {
   };
 }
 
-test("required GitHub test job runs harness, webhook-router, and land-policy tests", () => {
+test("required GitHub test job runs harness, webhook-router, land-policy, and migration-prefix tests", () => {
   assert.deepEqual(missingFactoryCiCoverage(currentFiles()), []);
 });
 
@@ -38,6 +38,17 @@ test("coverage fails when the test job omits webhook-router", () => {
   };
   const missing = missingFactoryCiCoverage(mutated);
   assert.ok(missing.some((item) => item.includes("webhook-router")));
+});
+
+test("coverage fails when the test job omits migration-prefix", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    workflowSource: files.workflowSource.replaceAll("migration-prefix", "omitted-prefix"),
+    packageSource: files.packageSource.replaceAll("migration-prefix", "omitted-prefix"),
+  };
+  const missing = missingFactoryCiCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("migration-prefix")));
 });
 
 test("coverage fails when the test job omits land-policy", () => {

@@ -322,10 +322,13 @@ test("Finisher is never stolen for a fifth coding-pool job", async () => {
 
   const land = slots.enqueue({ role: "land", identifier: "KIT-51" });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.deepEqual(slots.health().jobs.find((row) => row.role === "land"), {
-    role: "land",
-    identifier: "KIT-51",
-  });
+  assert.deepEqual(
+    slots.health().jobs.find((row) => row.role === "land"),
+    {
+      role: "land",
+      identifier: "KIT-51",
+    },
+  );
   assert.deepEqual(slots.health().queued, ["KIT-5"]);
 
   slots.enqueue({ role: "factory-checker", identifier: "KIT-47" });
@@ -361,10 +364,7 @@ test("two checkers run concurrently in the coding pool", async () => {
 
   const health = slots.health();
   assert.equal(health.jobs.length, 2);
-  assert.deepEqual(
-    health.jobs.map((row) => row.identifier).sort(),
-    ["KIT-47", "KIT-48"],
-  );
+  assert.deepEqual(health.jobs.map((row) => row.identifier).sort(), ["KIT-47", "KIT-48"]);
   assert.deepEqual(health.queued, []);
 
   releaseChecker();
@@ -609,6 +609,7 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
   assert.match(dockerfile, /pr-write-scope\.mjs/);
+  assert.match(dockerfile, /migration-prefix\.mjs/);
   assert.match(dockerfile, /role-comments\.mjs/);
   assert.match(dockerfile, /COPY \.pi /);
   assert.match(dockerfile, /COPY \.cursor\/rules /);
