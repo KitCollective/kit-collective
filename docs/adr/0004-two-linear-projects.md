@@ -4,4 +4,4 @@ The product git repo is one remote (`kit-collective`) with `seed/` inside it (AD
 
 Seed maintenance is unknown and is not a vertical slice of the Expo/Nest app. One seed board keeps Apify and FK jobs together without putting fetch tickets on the product board. `/to-spec` creates two projects, not three and not one.
 
-Status: accepted. Settles the Linear-project count left open when ADR-0001 was superseded.
+Status: accepted. The two-project count stands. The seed board’s name is succeeded by ADR-0031 (Football Data Seed); do not keep KitCollective Seed beside it.
