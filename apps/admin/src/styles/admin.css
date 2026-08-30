@@ -130,6 +130,13 @@ a {
   transform: translateY(-50%);
 }
 
+.header-search .search-field {
+  width: 100%;
+  max-width: none;
+  min-height: 48px;
+  padding-left: 44px;
+}
+
 .header-actions {
   display: flex;
   justify-self: end;
@@ -404,13 +411,6 @@ a {
   border-color: var(--border-focus);
   background: var(--surface);
   outline: none;
-}
-
-.header-search .search-field {
-  width: 100%;
-  max-width: none;
-  min-height: 48px;
-  padding-left: 44px;
 }
 
 .btn {
