@@ -43,8 +43,10 @@ test("session collector logs scout and gate subagent lifecycle", () => {
   const scoutStart = entries.find((row) => row.phase === "scout" && row.detail === "scout started");
   assert.equal(scoutStart?.stopPoint, PHASE_STOP.scout);
   assert.equal(scoutStart?.gate, "yellow");
-  const gateFail = entries.find((row) => row.phase === "gate" && row.detail === "gate failed");
-  assert.equal(gateFail?.gate, "red");
+  const gateFail = entries.find(
+    (row) => row.phase === "gate" && String(row.detail).includes("gate failed"),
+  );
+  assert.equal(gateFail?.gate, "yellow");
 });
 
 test("session collector keeps helper agent name on start and fail", () => {
@@ -57,6 +59,37 @@ test("session collector keeps helper agent name on start and fail", () => {
   assert.equal(start?.gate, "yellow");
   const fail = entries.find((row) => row.phase === "helper" && row.detail === "expo failed");
   assert.equal(fail?.gate, "red");
+});
+
+test("session collector keeps helper name when end omits args.agent", () => {
+  const lines = [
+    '{"type":"tool_execution_start","toolCallId":"t1","toolName":"subagent","args":{"agent":"ui-ux"}}',
+    '{"type":"tool_execution_end","toolCallId":"t1","toolName":"subagent","isError":true}',
+  ];
+  const entries = collectSessionLogs({ role: "implement", identifier: "KIT-99", lines });
+  const fail = entries.find((row) => row.phase === "helper" && row.detail === "ui-ux failed");
+  assert.equal(fail?.gate, "red");
+});
+
+test("session collector marks bash non-zero yellow and keeps the command", () => {
+  const lines = [
+    JSON.stringify({
+      type: "tool_execution_start",
+      toolCallId: "b1",
+      toolName: "bash",
+      args: { command: "pnpm format:check" },
+    }),
+    JSON.stringify({
+      type: "tool_execution_end",
+      toolCallId: "b1",
+      toolName: "bash",
+      isError: true,
+    }),
+  ];
+  const entries = collectSessionLogs({ role: "implement", identifier: "KIT-99", lines });
+  const fail = entries.find((row) => row.tool === "bash" && row.error === "bash non-zero");
+  assert.equal(fail?.gate, "yellow");
+  assert.match(String(fail?.detail), /pnpm format:check/);
 });
 
 test("session collector throttles token snapshots from message_update", () => {

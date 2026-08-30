@@ -11,9 +11,11 @@ import {
   ALWAYS_SKILLS,
   buildImplementAppendOverlay,
   detectRequiredHelpers,
+  excerptDesignLock,
   GENERATED_APPEND_REL,
   GENERATED_CONTEXT_REL,
   parseWriteScopeGlobs,
+  selectDesignLockHeadings,
   selectImplementContext,
   shouldInjectImplementContext,
 } from "../implement-context.mjs";
@@ -195,6 +197,88 @@ test("piArgsForRole passes multiple --skill paths and generated append on first 
   assert.match(generated, /## Unattended run/);
   const base = readFileSync(join(ROOT, GENERATED_CONTEXT_REL), "utf8");
   assert.match(base, /sources-sha256:/);
+});
+
+test("selectDesignLockHeadings matches headings named in the slice only", () => {
+  const headings = selectDesignLockHeadings(
+    "Empty list uses Empty state collection anatomy. List row manage. Pattern Ønske Sheet. Chip single-select.",
+  );
+  assert.ok(headings.includes("Empty state"));
+  assert.ok(headings.includes("List row"));
+  assert.ok(headings.includes("Sheet"));
+  assert.ok(headings.includes("Chip"));
+  assert.deepEqual(selectDesignLockHeadings("wishlist only, no component names"), []);
+});
+
+test("excerptDesignLock pulls only named ### sections and stays under the cap", () => {
+  const markdown = [
+    "# Design system",
+    "",
+    "### Button",
+    "Primary fill only.",
+    "",
+    "### Empty state",
+    "One-sentence body.",
+    "",
+    "### Sheet",
+    "No nested Sheets.",
+    "",
+    "## Tokens",
+    "Do not dump this.",
+  ].join("\n");
+  const excerpt = excerptDesignLock(markdown, ["Empty state", "Sheet"]);
+  assert.match(excerpt, /### Empty state/);
+  assert.match(excerpt, /One-sentence body/);
+  assert.match(excerpt, /### Sheet/);
+  assert.equal(excerpt.includes("### Button"), false);
+  assert.equal(excerpt.includes("Do not dump this"), false);
+  const capped = excerptDesignLock(markdown, ["Empty state", "Sheet"], 40);
+  assert.ok(capped.length <= 42);
+  assert.match(capped, /…$/);
+});
+
+test("mobile first-run context includes design lock headings and slice brief", () => {
+  const ctx = selectImplementContext({
+    writeScope: "apps/mobile/**",
+    labels: ["mobile"],
+    body: [
+      "Wishlist Sheet Empty state List row.",
+      "- Do not invent a wishlist-row primitive",
+      "Mirror apps/mobile/src/components/facet-picker-overlay.tsx",
+    ].join("\n"),
+    reviewFeedback: "- Spec: Nested Sheet for season pick",
+    workpadBody:
+      "## Agent Workpad\n\n### Composition\n\n- apps/mobile/src/components/genveje-sheet.tsx\n",
+    cheapRetry: false,
+  });
+  assert.ok(ctx.designLockHeadings.includes("Sheet"));
+  assert.ok(ctx.designLockHeadings.includes("Empty state"));
+  assert.ok(ctx.designLockHeadings.includes("List row"));
+  assert.match(ctx.sliceBrief, /facet-picker-overlay/);
+  assert.match(ctx.sliceBrief, /genveje-sheet/);
+  assert.match(ctx.sliceBrief, /Do not invent a wishlist-row/);
+  assert.match(ctx.sliceBrief, /Prior checker findings/);
+  assert.match(ctx.sliceBrief, /Nested Sheet/);
+});
+
+test("mobile write-scope with auth prose does not select nest", () => {
+  assert.deepEqual(
+    detectRequiredHelpers({
+      writeScopeGlobs: parseWriteScopeGlobs("apps/mobile/**"),
+      labels: ["mobile"],
+      body: "Collector auth session and Nest wording without apps/api paths.",
+    }),
+    ["expo", "ui-ux"],
+  );
+});
+
+test("apps/api path in body selects nest without api write-scope", () => {
+  assert.ok(
+    detectRequiredHelpers({
+      writeScopeGlobs: parseWriteScopeGlobs("apps/mobile/**"),
+      body: "Also touch `apps/api/src/auth/auth.module.ts`.",
+    }).includes("nest"),
+  );
 });
 
 test("detectRequiredHelpers is exported for ratchet tests", () => {

@@ -502,7 +502,7 @@ test("missing linked PR moves to Implementing with feedback", async () => {
   );
 });
 
-test("missing Review feedback section fails even when GitHub gates are green", async () => {
+test("missing Review feedback section stays In Review for in-slot checker retry when GitHub is green", async () => {
   const gh = fakeGh();
   const linear = fakeLinear(
     snapshot(),
@@ -514,11 +514,50 @@ test("missing Review feedback section fails even when GitHub gates are green", a
     gh,
   });
   assert.equal(result.passed, false);
-  assert.equal(result.nextStatus, IMPLEMENTING);
+  assert.equal(result.nextStatus, IN_REVIEW);
+  assert.equal(result.checkerWorkpadRetry, true);
+  assert.equal(linear.issue.status, IN_REVIEW);
   assert.match(
     linear.calls.find((call) => call[0] === "updateWorkpad")[1].body,
     /Spec, Standards, and Slop axis lines/,
   );
+  assert.match(
+    linear.calls.find((call) => call[0] === "updateWorkpad")[1].body,
+    /incomplete-count:\s*1/,
+  );
+});
+
+test("incomplete workpad parks after MAX retries and resume skips", async () => {
+  const gh = fakeGh();
+  const prior = `${WORKPAD_HEADING}\n\n### Checker harness\n\n- incomplete-count: 1\n- incomplete-retry\n\n### Evidence\n\n- still empty\n`;
+  const linear = fakeLinear(snapshot(), prior);
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-136" },
+    linear,
+    gh,
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.nextStatus, IN_REVIEW);
+  assert.equal(result.checkerWorkpadRetry, false);
+  assert.equal(result.checkerWorkpadParked, true);
+  const body = linear.calls.find((call) => call[0] === "updateWorkpad")[1].body;
+  assert.match(body, /workpad-incomplete-parked/);
+  assert.match(body, /incomplete-count:\s*2/);
+  assert.ok(linear.calls.some((call) => call[0] === "commentIssue"));
+});
+
+test("already parked incomplete workpad skips without GitHub wait", async () => {
+  const gh = fakeGh();
+  const parked = `${WORKPAD_HEADING}\n\n### Checker harness\n\n- incomplete-count: 2\n- workpad-incomplete-parked\n`;
+  const linear = fakeLinear(snapshot(), parked);
+  const result = await completeChecker({
+    job: { issueId: ISSUE_ID, identifier: "KIT-136" },
+    linear,
+    gh,
+  });
+  assert.equal(result.skipped, true);
+  assert.equal(result.checkerWorkpadParked, true);
+  assert.equal(gh.calls.filter((call) => call[0] === "viewPr").length, 0);
 });
 
 test("checker never moves to Merging or Done", async () => {
@@ -574,7 +613,7 @@ test("factory-checker job spawns Pi in the issue worktree then applies harness p
   assert.equal(spawned.length, 1);
   assert.equal(spawned[0].options.cwd, "/var/lib/kit-pi/worktrees/KIT-56");
   assert.equal(
-    spawned[0].args.some((arg) => String(arg).endsWith(".pi/roles/factory-checker.md")),
+    spawned[0].args.some((arg) => String(arg).includes("checker-append.md")),
     true,
   );
   assert.equal(
@@ -643,7 +682,7 @@ test("factory-checker allowlist includes memory tools and excludes skill_manage"
   assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("skill_manage"), false);
   assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("write"), false);
   assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("edit"), false);
-  assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("bash"), false);
+  assert.equal(FACTORY_CHECKER_ALLOWED_TOOLS.includes("bash"), true);
 });
 
 test("factory-checker spawn uses Memory writer Hermes config", async () => {
@@ -668,7 +707,7 @@ test("factory-checker spawn uses Memory writer Hermes config", async () => {
   assert.equal(config.memoryMode, "policy-only");
 });
 
-test("factoryCheckerPiArgs pins role file and prompt", () => {
+test("factoryCheckerPiArgs pins checker append with registry and prompt", () => {
   const args = factoryCheckerPiArgs({
     workspace: ROOT,
     roleFile: ".pi/roles/factory-checker.md",
@@ -681,7 +720,7 @@ test("factoryCheckerPiArgs pins role file and prompt", () => {
     true,
   );
   assert.equal(
-    args.some((arg) => String(arg).endsWith(".pi/roles/factory-checker.md")),
+    args.some((arg) => String(arg).includes("checker-append.md")),
     true,
   );
   assert.equal(args.at(-1), "Factory role factory-checker for KIT-56.");
@@ -761,6 +800,9 @@ test("Dockerfile copies checker-exit for the factory-checker job", () => {
   const dockerfile = readFileSync(join(ROOT, "harness/Dockerfile"), "utf8");
   assert.match(dockerfile, /checker-exit\.mjs/);
   assert.match(dockerfile, /checker-spawn\.mjs/);
+  assert.match(dockerfile, /checker-diff\.mjs/);
+  assert.match(dockerfile, /first-pass\.mjs/);
+  assert.match(dockerfile, /hermes-lessons\.mjs/);
   assert.match(dockerfile, /factory-checker-tools\.ts/);
 });
 
@@ -835,7 +877,7 @@ test("checker fail incrementing reviewLoops from 0 to 1 does not write ratchet n
   assert.equal(hasRatchetNudge(workpad.body), false);
 });
 
-test("missing Slop axis fails even when Spec and Standards are clean and GitHub gates are green", async () => {
+test("missing Slop axis stays In Review for in-slot retry when Spec and Standards are present and GitHub is green", async () => {
   const gh = fakeGh();
   const linear = fakeLinear(
     snapshot(),
@@ -847,9 +889,10 @@ test("missing Slop axis fails even when Spec and Standards are clean and GitHub 
     gh,
   });
   assert.equal(result.passed, false);
-  assert.equal(result.nextStatus, IMPLEMENTING);
+  assert.equal(result.nextStatus, IN_REVIEW);
+  assert.equal(result.checkerWorkpadRetry, true);
   const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
-  assert.match(workpad.body, /Slop axis missing/);
+  assert.match(workpad.body, /Spec, Standards, and Slop axis lines/);
 });
 
 test("Slop findings are preserved alongside Spec and Standards in one fail dump", async () => {
@@ -1059,6 +1102,9 @@ test("implementPrompt names gh_cli for factory-checker Slop threads", () => {
   assert.match(prompt, /gh_cli/);
   assert.match(prompt, /Slop/);
   assert.match(prompt, /cannot merge or approve/);
+  assert.match(prompt, /harness-injected review snapshot|injected review snapshot/i);
+  assert.match(prompt, /CONTEXT\.md/);
+  assert.match(prompt, /gh pr checks/i);
 });
 
 test("createCheckerGh exposes approve that throws", () => {

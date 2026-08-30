@@ -86,10 +86,112 @@ export function findWriteScopeOverlap(issue, implementingIssues) {
         identifier: active.identifier,
         candidateGlobs,
         activeGlobs,
+        kind: "implementing",
       };
     }
   }
   return null;
+}
+
+/**
+ * Open kit-* PRs into development whose changed files hit the candidate write-scope.
+ *
+ * @param {object} issue
+ * @param {Array<{ headRefName?: string, head?: string, number?: number, files?: Array<string | { path?: string }> }>} openPrs
+ */
+export function findOpenPrPathOverlap(issue, openPrs = []) {
+  const candidateGlobs = parseIssueWriteScope(issue.description);
+  if (!candidateGlobs || candidateGlobs.length === 0 || !Array.isArray(openPrs)) {
+    return null;
+  }
+  for (const pr of openPrs) {
+    const head = String(pr.headRefName ?? pr.head ?? "");
+    if (!/^kit-\d+$/i.test(head)) {
+      continue;
+    }
+    const issueNum = String(issue.identifier ?? "").replace(/^KIT-/i, "");
+    if (issueNum.length > 0 && head.toLowerCase() === `kit-${issueNum}`.toLowerCase()) {
+      continue;
+    }
+    const files = Array.isArray(pr.files) ? pr.files : [];
+    for (const file of files) {
+      const path = typeof file === "string" ? file : file?.path;
+      if (typeof path !== "string" || path.length === 0) {
+        continue;
+      }
+      for (const glob of candidateGlobs) {
+        if (matchesGlob(path, glob)) {
+          return {
+            identifier: head,
+            candidateGlobs,
+            path,
+            kind: "open-pr",
+            number: pr.number,
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {{
+ *   env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
+ *   runCommand?: (command: string, args: string[], options?: object) => Promise<string>,
+ * }} [deps]
+ * @returns {Promise<Array<{ headRefName: string, number: number, files: string[] }>>}
+ */
+export async function listOpenKitDevelopmentPrs(deps = {}) {
+  const env = deps.env ?? process.env;
+  const run =
+    deps.runCommand ??
+    (async (command, args, options = {}) => {
+      const { execFile } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execFileAsync = promisify(execFile);
+      const result = await execFileAsync(command, args, {
+        encoding: "utf8",
+        maxBuffer: 4 * 1024 * 1024,
+        env: { ...process.env, ...env, ...options.env },
+      });
+      return result.stdout;
+    });
+  try {
+    const stdout = await run(
+      "gh",
+      [
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--base",
+        "development",
+        "--limit",
+        "50",
+        "--json",
+        "number,headRefName,files",
+      ],
+      { env },
+    );
+    const parsed = JSON.parse(stdout);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((row) => /^kit-\d+$/i.test(String(row?.headRefName ?? "")))
+      .map((row) => ({
+        headRefName: row.headRefName,
+        number: row.number,
+        files: Array.isArray(row.files)
+          ? row.files
+              .map((file) => (typeof file === "string" ? file : file?.path))
+              .filter((path) => typeof path === "string")
+          : [],
+      }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -207,9 +309,10 @@ export async function nudgeImplementingRatchets(client, implementingIssues) {
  *     commentIssue: (input: { issueId: string, body: string }) => Promise<unknown>,
  *     listComments?: (issueId: string) => Promise<Array<{ body?: string }>>,
  *   },
+ *   listOpenPrs?: () => Promise<Array<{ headRefName?: string, number?: number, files?: string[] }>>,
  * }} [input]
  */
-export async function runPlanner({ env = process.env, linear } = {}) {
+export async function runPlanner({ env = process.env, linear, listOpenPrs } = {}) {
   const client = linear ?? createLinearCliClient({ env });
 
   const {
@@ -222,6 +325,13 @@ export async function runPlanner({ env = process.env, linear } = {}) {
   if (implementingState?.name !== "Implementing" || typeof implementingState.id !== "string") {
     throw new Error("Implementing workflow state not found");
   }
+
+  /** Mutable so same-poll claims block later overlapping candidates. */
+  const activeImplementing = [...implementingIssues];
+  const openPrs =
+    typeof listOpenPrs === "function"
+      ? await listOpenPrs()
+      : await listOpenKitDevelopmentPrs({ env });
 
   const claimed = [];
   const skipped = [];
@@ -237,12 +347,21 @@ export async function runPlanner({ env = process.env, linear } = {}) {
       }
       continue;
     }
-    const overlap = findWriteScopeOverlap(issue, implementingIssues);
+    const overlap = findWriteScopeOverlap(issue, activeImplementing);
     if (overlap) {
       skipped.push({ identifier: issue.identifier, reason: "write-scope overlap" });
       await client.commentIssue({
         issueId: issue.id,
         body: `${issue.identifier}: skipped — write-scope overlaps ${overlap.identifier} (${overlap.candidateGlobs.filter((glob) => overlap.activeGlobs.some((activeGlob) => globsOverlap(glob, activeGlob))).join(", ")}).`,
+      });
+      continue;
+    }
+    const prOverlap = findOpenPrPathOverlap(issue, openPrs);
+    if (prOverlap) {
+      skipped.push({ identifier: issue.identifier, reason: "open-pr path overlap" });
+      await client.commentIssue({
+        issueId: issue.id,
+        body: `${issue.identifier}: skipped — write-scope overlaps open PR ${prOverlap.identifier} (${prOverlap.path}).`,
       });
       continue;
     }
@@ -254,6 +373,7 @@ export async function runPlanner({ env = process.env, linear } = {}) {
       issueId: issue.id,
       body: plannerClaimComment(issue.identifier),
     });
+    activeImplementing.push(issue);
     claimed.push({
       identifier: issue.identifier,
       assignee: updated?.assignee ?? issue.assignee,

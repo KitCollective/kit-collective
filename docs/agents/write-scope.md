@@ -21,6 +21,7 @@ When `### Review feedback` or a planner comment on **this** issue requires a rat
 - `.cursor/hooks/**`, `.cursor/hooks.json`, `.cursor/rules/**`
 - `docs/agents/error-ratcheting.md`
 - `scripts/` check scripts that implement the ratchet
+- `.pi/first-pass-classes.json` when feedback requires a first-pass registry class
 - `.github/workflows/**` only to add a CI step that runs the new check, or when feedback named a specific workflow (missing boot env, etc.)
 
 Do not use this exception to expand product features. Checker must not treat these ratchet files as a write-scope miss.

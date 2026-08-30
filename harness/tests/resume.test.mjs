@@ -65,7 +65,7 @@ function orphan({
   };
 }
 
-function fakeLinear(issues) {
+function fakeLinear(issues, { commentsById = {} } = {}) {
   return {
     async listOrphans() {
       return issues;
@@ -79,8 +79,8 @@ function fakeLinear(issues) {
     async clearDelegate() {
       throw new Error("resume must not clear delegate");
     },
-    async listComments() {
-      return [];
+    async listComments(issueId) {
+      return commentsById[issueId] ?? [];
     },
   };
 }
@@ -268,6 +268,42 @@ test("runResume enqueues checker, auto-merge, and land for started factory state
       ["auto-merge", "KIT-90"],
       ["factory-checker", "KIT-47"],
     ],
+  );
+});
+
+test("runResume skips In Review when workpad is incomplete-parked", async () => {
+  const enqueue = fakeEnqueue();
+  const result = await runResume({
+    linear: fakeLinear(
+      [
+        orphan({
+          id: "issue-136",
+          identifier: "KIT-136",
+          status: "In Review",
+          description: "",
+          createdAt: "2026-08-20T00:00:00.000Z",
+        }),
+      ],
+      {
+        commentsById: {
+          "issue-136": [
+            {
+              id: "c1",
+              body: `${WORKPAD_HEADING}\n\n### Checker harness\n\n- incomplete-count: 2\n- workpad-incomplete-parked\n`,
+            },
+          ],
+        },
+      },
+    ),
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 0);
+  assert.ok(
+    result.skipped.some(
+      (row) => row.identifier === "KIT-136" && row.reason === "workpad-incomplete-parked",
+    ),
   );
 });
 

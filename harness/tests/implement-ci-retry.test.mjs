@@ -510,6 +510,40 @@ test("job-queue yields the slot after the cheap-retry bound on write-scope retry
   assert.deepEqual(runs, [IMPLEMENT_CI_RETRY_CAP]);
 });
 
+test("job-queue re-runs factory-checker on incomplete workpad then yields when parked", async () => {
+  const runs = [];
+  const queue = createSerialQueue({
+    async run(job) {
+      const attempt = job.checkerWorkpadRetryAttempt ?? 1;
+      runs.push(attempt);
+      if (attempt < 2) {
+        return {
+          ...job,
+          passed: false,
+          nextStatus: "In Review",
+          checkerWorkpadRetry: true,
+        };
+      }
+      return {
+        ...job,
+        passed: false,
+        nextStatus: "In Review",
+        checkerWorkpadRetry: false,
+        checkerWorkpadParked: true,
+      };
+    },
+  });
+
+  const result = await queue.enqueue({
+    role: "factory-checker",
+    identifier: "KIT-136",
+    issueId: "issue-136",
+  });
+  assert.equal(result.checkerWorkpadParked, true);
+  assert.equal(result.checkerWorkpadRetry, false);
+  assert.deepEqual(runs, [1, 2]);
+});
+
 test("implement prompt and role/ADW text leave In Review to the harness", () => {
   const mobileCtx = selectImplementContext({
     writeScope: "apps/mobile/**",

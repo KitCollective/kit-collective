@@ -339,8 +339,16 @@ Read-only Pi subagent before implement writes. Required on every implement job. 
 _Avoid_: editing; opening a PR; moving Linear status; dumping whole files or the workpad to OpenRouter; inheriting Composer; skipping when `OPENROUTER_API_KEY` is missing
 
 **Gate**:
-Pi subagent that runs the mechanical half of pre-review (rebase, typecheck, required GitHub checks) and returns a green or red report to the Implement parent. Attempts rebase; a conflict is red — the parent resolves it. Never calls Linear, never writes the workpad, never moves In Review.
-_Avoid_: factory-checker; treating Gate as the pass verdict; inheriting Composer; resolving merge conflicts; Linear CLI from Hy3
+Superseded by **Mechanical close**. Implement must not spawn the Gate Pi agent. Harness owns rebase, format apply, typecheck touched (yellow), and required GitHub wait after implement exits.
+_Avoid_: spawning Gate; treating a Pi Gate report as the pass verdict; Linear CLI from Hy3 for pre-review
+
+**Mechanical close**:
+Harness-owned format apply, rebase-on-conflict, and GitHub wait after implement Pi exits. `pnpm format` / `biome check --write` runs in-process; a CONFLICTING PR during the wait is rebased in the same slot. Logic CI (anti-slop, typecheck, assertions) still cheap-retries Pi. UI implement appends a slice excerpt of `docs/design-system.md`, not the whole lock.
+_Avoid_: a 30-minute wait on a dirty PR then a new try; dumping the full design lock into every helper; treating format CI as a Composer job
+
+**First-pass pack**:
+Ticket-derived slice brief (paths + Do not + prior fails + top Hermes lessons) and Scout `### Composition` paths. Checker tags registered classes `[first-pass:<id>]`. Same Standards/Slop class 2× → workpad requires land in `.pi/first-pass-classes.json`. Worker scan uses registry only. Helpers spawn one at a time; no Pi Gate. Incomplete checker `### Review feedback` (missing Spec/Standards/Slop axes) while the PR is green re-runs factory-checker in-slot (cap 2), then parks for human — never a full implement tree. Factory-checker gets a harness-injected review snapshot (capped issue description + three-dot diff); readonly `git` bash fills gaps only — no full `CONTEXT.md` dump, no `gh pr checks` poll in Pi. Spec-only checker fails use slim resume (Skip Scout/helpers). Pi spawns use `--no-context-files` (no AGENTS.md dump). Token runs log model/input/output/costUsd to harness JSON + workpad ring + `/health.tokenRuns` + durable SQLite (`KIT_TOKEN_DB_PATH`) keyed by identifier/issueId/sessionId (Cursor Composer/Grok list rates or reported usage cost).
+_Avoid_: inventing product scanners in `first-pass.mjs`; treating every checker fail as a full Scout+helpers tree; bouncing incomplete workpads to Implementing; parallel helper fan-out; spawning Gate; checker rediscovering the whole diff via bash; reading full CONTEXT on every spawn; treating list-rate costUsd as invoice truth
 
 **Hy3**:
 OpenRouter model `tencent/hy3` for Scout (primary), no-think. Gate uses `xiaomi/mimo-v2.5-pro` as primary and Hy3 as first fallback. Scout falls back to MiMo-V2.5-Pro then Composer. Not product Vision. Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. Last fallback is `cursor/composer-2.5` — not Kimi, not Hy4. Domain helpers and Slop pin `cursor/composer-2.5`; an omitted `model:` makes Pi use Kimi.

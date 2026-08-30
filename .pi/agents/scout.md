@@ -12,4 +12,6 @@ Map relevant files, entry points, seams, and risks. Do not edit. Return a short 
 
 Send paths and grep snippets only — not whole worktree files, not the workpad, not collector photos.
 
+Prefer listing existing files the parent should mirror (composition references) as repo-relative paths so the parent can write workpad `### Composition`.
+
 Prefer OpenRouter Exacto (`tencent/hy3:exacto`) when the client can set provider sort. Exacto is not a hard fail: default routing to `tencent/hy3` is enough. Do not fall back to stealth/ox-alpha.

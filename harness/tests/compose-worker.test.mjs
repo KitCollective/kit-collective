@@ -599,6 +599,9 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.match(dockerfile, /@schpet\/linear-cli@2\.5\.0/);
   assert.match(dockerfile, /implement-context\.mjs/);
   assert.match(dockerfile, /pi-job\.mjs/);
+  assert.match(dockerfile, /token-cost\.mjs/);
+  assert.match(dockerfile, /token-store\.mjs/);
+  assert.match(dockerfile, /token-report\.mjs/);
   assert.match(dockerfile, /pi-event-stream\.mjs/);
   assert.match(dockerfile, /agent-activity-translate\.mjs/);
   assert.match(dockerfile, /linear-agent-session\.mjs/);
@@ -1424,6 +1427,7 @@ test("GET /health reports capacity numbers, ready false, and stays HTTP 200", as
       job: null,
       capacity: { ramFreeMb: 100, diskFreeMb: 200, ready: false },
       tokens: null,
+      tokenRuns: [],
     });
     assert.equal(enqueue.jobs.length, 0);
   } finally {

@@ -10,6 +10,7 @@ import { statfs } from "node:fs/promises";
 import os from "node:os";
 import { dirname } from "node:path";
 import { harnessLog } from "./harness-log.mjs";
+import { estimateLineCostUsd, sumCostUsd } from "./token-cost.mjs";
 
 export const DEFAULT_RAM_FLOOR_MB = 2048;
 export const DEFAULT_DISK_FLOOR_MB = 5120;
@@ -268,7 +269,17 @@ function isHealthTokenCount(value) {
  * @returns {{
  *   role: string,
  *   identifier: string,
- *   lines: Array<{ role: string, model: string, input: number | "unknown", output: number | "unknown" }>,
+ *   endedAt?: string,
+ *   costUsd?: number | null,
+ *   costEstimate?: boolean,
+ *   lines: Array<{
+ *     role: string,
+ *     model: string,
+ *     modelId?: string,
+ *     input: number | "unknown",
+ *     output: number | "unknown",
+ *     costUsd?: number | null,
+ *   }>,
  * } | null}
  */
 export function publicHealthTokens(tokens) {
@@ -282,19 +293,39 @@ export function publicHealthTokens(tokens) {
   if (!Array.isArray(record.lines)) {
     return null;
   }
+  const lines = record.lines.map((line) => {
+    const row =
+      line && typeof line === "object" ? /** @type {Record<string, unknown>} */ (line) : {};
+    const model = typeof row.model === "string" ? row.model : UNKNOWN_TOKEN_COUNT;
+    const modelId = typeof row.modelId === "string" ? row.modelId : undefined;
+    const input = isHealthTokenCount(row.input) ? row.input : UNKNOWN_TOKEN_COUNT;
+    const output = isHealthTokenCount(row.output) ? row.output : UNKNOWN_TOKEN_COUNT;
+    const existingCost =
+      typeof row.costUsd === "number" && Number.isFinite(row.costUsd) ? row.costUsd : null;
+    const { costUsd } =
+      existingCost === null
+        ? estimateLineCostUsd({ model: modelId ?? model, input, output })
+        : { costUsd: existingCost };
+    return {
+      role: typeof row.role === "string" ? row.role : UNKNOWN_TOKEN_COUNT,
+      model,
+      modelId,
+      input,
+      output,
+      costUsd,
+    };
+  });
+  const topCost =
+    typeof record.costUsd === "number" && Number.isFinite(record.costUsd)
+      ? record.costUsd
+      : sumCostUsd(lines);
   return {
     role: record.role,
     identifier: record.identifier,
-    lines: record.lines.map((line) => {
-      const row =
-        line && typeof line === "object" ? /** @type {Record<string, unknown>} */ (line) : {};
-      return {
-        role: typeof row.role === "string" ? row.role : UNKNOWN_TOKEN_COUNT,
-        model: typeof row.model === "string" ? row.model : UNKNOWN_TOKEN_COUNT,
-        input: isHealthTokenCount(row.input) ? row.input : UNKNOWN_TOKEN_COUNT,
-        output: isHealthTokenCount(row.output) ? row.output : UNKNOWN_TOKEN_COUNT,
-      };
-    }),
+    endedAt: typeof record.endedAt === "string" ? record.endedAt : undefined,
+    costEstimate: true,
+    lines,
+    costUsd: topCost,
   };
 }
 
@@ -302,6 +333,7 @@ export function publicHealthTokens(tokens) {
  * Spec health body. `jobs` and `queued` are the occupancy source of truth.
  * `job` is derived (first occupant or null) for backward-compatible readers.
  * `tokens` is the last implement / factory-checker totals, or null.
+ * `tokenRuns` is a ring of recent coding-job token snapshots (newest first).
  *
  * @param {{
  *   planner?: string,
@@ -310,6 +342,7 @@ export function publicHealthTokens(tokens) {
  *   queued?: string[],
  *   capacity: { ramFreeMb: number, diskFreeMb: number, ready: boolean },
  *   tokens?: unknown,
+ *   tokenRuns?: unknown[],
  * }} input
  */
 export function workerHealthBody({
@@ -319,10 +352,14 @@ export function workerHealthBody({
   queued,
   capacity,
   tokens = null,
+  tokenRuns = [],
 }) {
   const occupants = Array.isArray(jobs) ? jobs : job ? [job] : [];
   const waiting = Array.isArray(queued) ? queued : [];
   const derivedJob = job ?? occupants[0] ?? null;
+  const runs = Array.isArray(tokenRuns)
+    ? tokenRuns.map((row) => publicHealthTokens(row)).filter(Boolean)
+    : [];
   return {
     ok: true,
     planner,
@@ -333,5 +370,6 @@ export function workerHealthBody({
     job: derivedJob,
     capacity,
     tokens: publicHealthTokens(tokens),
+    tokenRuns: runs,
   };
 }

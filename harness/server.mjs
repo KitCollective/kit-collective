@@ -14,7 +14,7 @@ import {
 } from "./capacity.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
 import { createGhClient } from "./gh-cli.mjs";
-import { createFormatCheck, createTypecheckTouched } from "./implement-exit.mjs";
+import { createFormatApply, createFormatCheck, createTypecheckTouched } from "./implement-exit.mjs";
 import { DEFAULT_INTAKE_POLL_MS, startIntakePoller } from "./intake.mjs";
 import { ALWAYS_READY_CAPACITY, createWorkerSlots } from "./job-queue.mjs";
 import { createLinearCliClient } from "./linear-cli.mjs";
@@ -52,6 +52,7 @@ export function createWorkerHandler(deps) {
             queued: snapshot.queued,
             capacity,
             tokens: snapshot.tokens === undefined ? null : snapshot.tokens,
+            tokenRuns: Array.isArray(snapshot.tokenRuns) ? snapshot.tokenRuns : [],
           }),
         ),
       );
@@ -101,9 +102,12 @@ export async function startWorkerServer({
           linear: linearClient,
           typecheckTouched: createTypecheckTouched({ runCommand }),
           formatCheck: createFormatCheck({ runCommand }),
+          formatApply: createFormatApply({ runCommand }),
           readCapacity: capacitySnapshot,
         });
   let lastTokens = null;
+  /** @type {unknown[]} */
+  let tokenRuns = [];
   const delegateGateConfig = createDelegateGateConfig(env);
   let slots;
   slots = createWorkerSlots({
@@ -122,8 +126,10 @@ export async function startWorkerServer({
       }
       const result = await runner.run(job);
       if (job.role === "implement" || job.role === "factory-checker") {
-        lastTokens =
-          result && typeof result === "object" && result.tokens ? result.tokens : lastTokens;
+        if (result && typeof result === "object" && result.tokens) {
+          lastTokens = result.tokens;
+          tokenRuns = [result.tokens, ...tokenRuns].slice(0, 20);
+        }
       }
       return result;
     },
@@ -143,7 +149,7 @@ export async function startWorkerServer({
     linear: linearClient,
     gh: { tokenName: "GH_TOKEN" },
     enqueue: slots,
-    health: () => ({ ...slots.health(), tokens: lastTokens }),
+    health: () => ({ ...slots.health(), tokens: lastTokens, tokenRuns }),
     worktree: trees,
     delegateGateConfig,
     readCapacity: capacitySnapshot,
