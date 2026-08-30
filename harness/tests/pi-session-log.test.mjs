@@ -83,3 +83,68 @@ test("session collector throttles token snapshots from message_update", () => {
   assert.equal(entries[0]?.tokensIn, 100);
   assert.equal(entries[1]?.tokensIn, 200);
 });
+
+test("session collector logs memory_search query and omits lesson bodies", () => {
+  const lines = [
+    JSON.stringify({
+      type: "tool_execution_start",
+      toolName: "memory_search",
+      args: {
+        query: "raw fontSize in Expo chrome",
+        text: "class → lesson dump must not appear",
+      },
+    }),
+    JSON.stringify({
+      type: "tool_execution_end",
+      toolName: "memory_search",
+      isError: false,
+      result: { hits: "[correction] raw fontSize → use locked type roles" },
+    }),
+  ];
+  const entries = collectSessionLogs({ role: "implement", identifier: "KIT-99", lines });
+  const search = entries.find((row) => row.tool === "memory_search");
+  assert.equal(search?.event, "tool");
+  assert.equal(search?.gate, "green");
+  assert.match(String(search?.detail), /raw fontSize in Expo chrome/);
+  assert.equal(
+    entries.some((row) => JSON.stringify(row).includes("class → lesson dump")),
+    false,
+  );
+  assert.equal(
+    entries.some((row) => JSON.stringify(row).includes("use locked type roles")),
+    false,
+  );
+});
+
+test("session collector logs memory writes as tool name and target only", () => {
+  const lesson = "account delete must clear every user-scoped FK before user rows";
+  const lines = [
+    JSON.stringify({
+      type: "tool_execution_start",
+      toolName: "memory_add",
+      args: { target: "failure", text: lesson, content: lesson },
+    }),
+    JSON.stringify({
+      type: "tool_execution_start",
+      toolName: "memory_remove",
+      args: { target: "failure", text: lesson },
+    }),
+    JSON.stringify({
+      type: "tool_execution_end",
+      toolName: "memory_add",
+      isError: true,
+      result: { error: lesson },
+    }),
+  ];
+  const entries = collectSessionLogs({ role: "factory-checker", identifier: "KIT-99", lines });
+  const add = entries.find((row) => row.tool === "memory_add" && row.gate === "green");
+  assert.equal(add?.detail, "failure");
+  const remove = entries.find((row) => row.tool === "memory_remove");
+  assert.equal(remove?.detail, "failure");
+  const failed = entries.find((row) => row.tool === "memory_add" && row.gate === "red");
+  assert.equal(failed?.error, "tool error");
+  assert.equal(
+    entries.some((row) => JSON.stringify(row).includes(lesson)),
+    false,
+  );
+});

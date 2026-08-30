@@ -48,6 +48,37 @@ function bashDetail(command) {
   return oneLine.length > 120 ? `${oneLine.slice(0, 117)}…` : oneLine;
 }
 
+const MEMORY_SEARCH_TOOLS = new Set(["memory_search", "session_search"]);
+const MEMORY_WRITE_TOOLS = new Set(["memory_add", "memory_replace", "memory_remove"]);
+
+/**
+ * Query only — never `text` / result hits (those can be lesson bodies).
+ *
+ * @param {Record<string, unknown>} args
+ * @param {string} fallback
+ */
+function memorySearchDetail(args, fallback) {
+  const query = args.query ?? args.q ?? args.search;
+  if (typeof query !== "string" || query.trim().length === 0) {
+    return fallback;
+  }
+  return bashDetail(query);
+}
+
+/**
+ * Target name only — never `text` / `content` / `lesson`.
+ *
+ * @param {Record<string, unknown>} args
+ * @param {string} fallback
+ */
+function memoryWriteDetail(args, fallback) {
+  const target = args.target;
+  if (typeof target === "string" && target.trim().length > 0 && target.length <= 40) {
+    return target.trim();
+  }
+  return fallback;
+}
+
 /**
  * @param {Record<string, unknown>} usage
  */
@@ -181,6 +212,28 @@ export function createSessionLogCollector({
         }
         return;
       }
+
+      if (MEMORY_SEARCH_TOOLS.has(toolName)) {
+        emit({
+          event: "tool",
+          gate: "green",
+          stopPoint: role === "factory-checker" ? PHASE_STOP.checker : PHASE_STOP.implement,
+          tool: toolName,
+          detail: memorySearchDetail(args, toolName),
+        });
+        return;
+      }
+
+      if (MEMORY_WRITE_TOOLS.has(toolName)) {
+        emit({
+          event: "tool",
+          gate: "green",
+          stopPoint: PHASE_STOP.checker,
+          tool: toolName,
+          detail: memoryWriteDetail(args, toolName),
+        });
+        return;
+      }
     }
 
     if (type === "tool_execution_end") {
@@ -227,6 +280,18 @@ export function createSessionLogCollector({
           stopPoint: PHASE_STOP.implement,
           tool: "bash",
           detail: "bash failed",
+          error: "tool error",
+        });
+      }
+      if ((MEMORY_SEARCH_TOOLS.has(toolName) || MEMORY_WRITE_TOOLS.has(toolName)) && isError) {
+        emit({
+          event: "tool",
+          gate: "red",
+          stopPoint: role === "factory-checker" ? PHASE_STOP.checker : PHASE_STOP.implement,
+          tool: toolName,
+          detail: MEMORY_WRITE_TOOLS.has(toolName)
+            ? memoryWriteDetail(args, toolName)
+            : memorySearchDetail(args, toolName),
           error: "tool error",
         });
       }
