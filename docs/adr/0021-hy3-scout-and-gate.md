@@ -4,4 +4,6 @@ KIT-53 locked factory jobs to Cursor SDK models (`PI_MODEL` Composer, `PI_MODEL_
 
 Status: accepted
 
-Note (2026-08-30): Pi does not inherit the parent `--model` when a subagent omits `model:`. Unpinned helpers and Slop were billed as OpenRouter `moonshotai/kimi-k2.6` (`KIT-Pi-harness`). Pin those agents to `cursor/composer-2.5`. Scout and Gate stay `openrouter/tencent/hy3`. Do not rewrite the decision above.
+Note (2026-08-30): Pi does not inherit the parent `--model` when a subagent omits `model:`. Unpinned helpers and Slop were billed as OpenRouter `moonshotai/kimi-k2.6` (`KIT-Pi-harness`). Pin those agents to `cursor/composer-2.5`. Do not rewrite the decision above.
+
+Note (2026-08-30, later): OpenRouter workspace guardrail allows only `tencent/hy4-preview`. Scout and Gate pin `openrouter/tencent/hy4-preview` (thinking off, Composer fallback). `tencent/hy3` is ineligible and would Composer-fallback. Do not rewrite the decision above.

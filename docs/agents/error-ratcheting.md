@@ -311,7 +311,11 @@ Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `d
 
 ### Pi helper model pin (Kimi default)
 
-Unpinned `.pi/agents` (nest/expo/drizzle/ui-ux/devops/slop) made Pi bill OpenRouter `moonshotai/kimi-k2.6` via `KIT-Pi-harness`. `scripts/generate-pi-implement-context.mjs` and `.pi/agents/slop.md` pin `model: cursor/composer-2.5`. Scout and Gate stay `openrouter/tencent/hy3`. `harness/tests/implement-adw.test.mjs` and `scripts/tests/check-pi-implement-context-generated.test.mjs` lock the pin. Prevents repeating 89 Kimi generations after the Hy3 Scout/Gate pin already shipped. Tighten only.
+Unpinned `.pi/agents` (nest/expo/drizzle/ui-ux/devops/slop) made Pi bill OpenRouter `moonshotai/kimi-k2.6` via `KIT-Pi-harness`. `scripts/generate-pi-implement-context.mjs` and `.pi/agents/slop.md` pin `model: cursor/composer-2.5`. `harness/tests/implement-adw.test.mjs` and `scripts/tests/check-pi-implement-context-generated.test.mjs` lock the pin. Prevents repeating 89 Kimi generations after the Hy3 Scout/Gate pin already shipped. Tighten only.
+
+### Pi Scout/Gate Hy4 (workspace guardrail)
+
+OpenRouter workspace guardrail allows only `tencent/hy4-preview` on every workspace key. Scout and Gate pin `openrouter/tencent/hy4-preview` (`thinking: off`, `fallbackModels: cursor/composer-2.5`). `tencent/hy3` is ineligible and Composer-fallbacks. `harness/tests/implement-adw.test.mjs` locks the slug. Tighten only.
 
 ### Drizzle migration prefix collision (KIT-125)
 

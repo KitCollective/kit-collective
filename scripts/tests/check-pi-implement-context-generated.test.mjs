@@ -41,7 +41,7 @@ test("PI agent wrappers pin Composer so Pi does not use the OpenRouter default",
   assert.match(nest, /Modular monolith in `apps\/api`/);
   assert.match(nest, /inheritProjectContext: false/);
   assert.match(nest, /^model:\s+cursor\/composer-2\.5\s*$/m);
-  assert.doesNotMatch(nest, /openrouter|kimi|moonshot|tencent\/hy3/i);
+  assert.doesNotMatch(nest, /openrouter|kimi|moonshot|tencent\/hy[34]/i);
   const devops = buildPiAgentMarkdown(PI_AGENT_MAP.find((item) => item.pi === "devops"));
   assert.match(devops, /GitHub Actions/);
   assert.match(devops, /^model:\s+cursor\/composer-2\.5\s*$/m);
