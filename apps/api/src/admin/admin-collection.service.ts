@@ -449,6 +449,7 @@ export class AdminCollectionService {
       .where(eq(userJersey.userId, targetUserId));
 
     const adminCount = await this.countAdmins();
+    const entitlement = await this.billingService.getEntitlementForUser(targetUserId);
 
     return adminCollectorUserSchema.parse({
       id: updated.id,
@@ -458,6 +459,7 @@ export class AdminCollectionService {
       adminCount,
       createdAt: updated.createdAt.toISOString(),
       monogram: monogramFromEmail(updated.email),
+      entitlement,
     });
   }
 
