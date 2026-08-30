@@ -340,6 +340,7 @@ describe("Wishlist /v1", () => {
     const owner = await registerSession(app, "wishlist-owner@example.com");
     const other = await registerSession(app, "wishlist-other@example.com");
     await startTrial(app, owner.accessToken);
+    await startTrial(app, other.accessToken);
 
     const createResponse = await app.inject({
       method: "POST",
