@@ -1,5 +1,5 @@
 import type { CollectionConversationPeer } from "@kit/api-contract";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -24,6 +24,9 @@ type ConversationDetailsViewProps = {
   onBack: () => void;
   onConversationHidden: () => void;
 };
+
+const CONVERSATION_DETAILS_HELPER_COPY =
+  "Blokering skjuler samtalen for jer begge. Slet samtale fjerner den kun for dig — den anden kan stadig se tråden.";
 
 function peerMeta(peer: CollectionConversationPeer): string {
   const jerseyLabel = peer.jerseyCount === 1 ? "1 trøje" : `${peer.jerseyCount} trøjer`;
@@ -64,12 +67,6 @@ export function ConversationDetailsView({
   useEffect(() => {
     void loadPeer();
   }, [loadPeer]);
-
-  const helperCopy = useMemo(
-    () =>
-      "Blokering skjuler samtalen for jer begge. Slet samtale fjerner den kun for dig — den anden kan stadig se tråden.",
-    [],
-  );
 
   const runAction = useCallback(
     async (label: string, action: (token: string) => Promise<void>) => {
@@ -113,6 +110,7 @@ export function ConversationDetailsView({
             <ListDangerRow
               title="Rapportér"
               icon="flag-outline"
+              showHairline
               onPress={() =>
                 void runAction("Rapportér", (token) => reportConversation(token, conversationId))
               }
@@ -137,7 +135,7 @@ export function ConversationDetailsView({
           </ProfileSurfaceGroup>
 
           <Text style={[typography.caption, styles.helper, { color: theme.contentSecondary }]}>
-            {helperCopy}
+            {CONVERSATION_DETAILS_HELPER_COPY}
           </Text>
         </ScrollView>
       )}

@@ -30,7 +30,21 @@ describe("conversation Detaljer navigation", () => {
     expect(viewSource).toMatch(/Blokér/);
     expect(viewSource).toMatch(/Slet samtale/);
     expect(viewSource).toMatch(/Blokering skjuler samtalen for jer begge/);
+    expect(viewSource).toMatch(/CONVERSATION_DETAILS_HELPER_COPY/);
+    expect(viewSource).not.toMatch(/useMemo/);
     expect(viewSource).toMatch(/fillSecondary/);
+  });
+
+  it("renders Detaljer grouped lists with navigate chevron and row hairlines", () => {
+    const profileSource = readFileSync(profileUiPath, "utf8");
+    expect(profileSource).toMatch(
+      /export function ListPeerStubRow[\s\S]*chevron-forward[\s\S]*<\/Pressable>/,
+    );
+    expect(profileSource).not.toMatch(/\{onPress \? \([\s\S]*chevron-forward/);
+    expect(profileSource).toMatch(/showHairline/);
+    expect(profileSource).toMatch(
+      /export function ListDangerRow[\s\S]*StyleSheet\.hairlineWidth[\s\S]*borderBottomColor: theme\.borderSubtle/,
+    );
   });
 
   it("renders Detaljer peer stub with locked heading-sm roles matching Thread row", () => {

@@ -439,14 +439,20 @@ export class CollectionService {
       )
       .orderBy(desc(conversationMessage.createdAt));
 
-    if (bidRows.length === 0) {
+    const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
+    const visibleBidRows = bidRows.filter((row) => {
+      const peerId = row.ownerId === userId ? row.senderId : row.ownerId;
+      return !blockedPeerIds.has(peerId);
+    });
+
+    if (visibleBidRows.length === 0) {
       return collectionActivitySchema.parse({ items: [] });
     }
 
-    const clubIds = [...new Set(bidRows.map((row) => row.clubId))];
+    const clubIds = [...new Set(visibleBidRows.map((row) => row.clubId))];
     const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
 
-    const senderIds = [...new Set(bidRows.map((row) => row.senderId))];
+    const senderIds = [...new Set(visibleBidRows.map((row) => row.senderId))];
     const senderRows =
       senderIds.length === 0
         ? []
@@ -456,7 +462,7 @@ export class CollectionService {
             .where(inArray(user.id, senderIds));
     const senderById = new Map(senderRows.map((row) => [row.id, row.handle]));
 
-    const items = bidRows.map((row) => {
+    const items = visibleBidRows.map((row) => {
       if (!row.bidAmountDkk || !row.bidStatus) {
         throw new NotFoundException("Bid message missing amount or status");
       }
@@ -642,6 +648,7 @@ export class CollectionService {
     rawBody: unknown,
   ): Promise<CollectionSendMessageResponse> {
     await this.assertConversationParticipant(userId, conversationId);
+    await this.assertConversationNotBlocked(userId, conversationId);
     const body = collectionSendMessageRequestSchema.parse(rawBody);
 
     const hasText = Boolean(body.text?.trim());
@@ -758,6 +765,33 @@ export class CollectionService {
       .limit(1);
 
     if (!participant) {
+      throw new NotFoundException("Conversation not found");
+    }
+  }
+
+  private async assertConversationNotBlocked(
+    userId: string,
+    conversationId: string,
+  ): Promise<void> {
+    const [conversationRow] = await this.db
+      .select({
+        lowerCollectorId: conversation.lowerCollectorId,
+        upperCollectorId: conversation.upperCollectorId,
+      })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+
+    if (!conversationRow) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    const peerId =
+      conversationRow.lowerCollectorId === userId
+        ? conversationRow.upperCollectorId
+        : conversationRow.lowerCollectorId;
+
+    if (await this.moderationService.isBlocked(userId, peerId)) {
       throw new NotFoundException("Conversation not found");
     }
   }
@@ -1180,6 +1214,7 @@ export class CollectionService {
     rawBody: unknown,
   ): Promise<CollectionRespondBidResponse> {
     await this.assertConversationParticipant(userId, conversationId);
+    await this.assertConversationNotBlocked(userId, conversationId);
     const body = collectionRespondBidRequestSchema.parse(rawBody);
 
     const [context] = await this.db

@@ -229,14 +229,12 @@ export function ListPeerStubRow({ handle, meta, onPress }: ListPeerStubRowProps)
         <Text style={[typography.headingSm, { color: theme.contentPrimary }]}>{handle}</Text>
         <Text style={[typography.mono, { color: theme.contentMuted }]}>{meta}</Text>
       </View>
-      {onPress ? (
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={theme.contentMuted}
-          accessibilityElementsHidden
-        />
-      ) : null}
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={theme.contentMuted}
+        accessibilityElementsHidden
+      />
     </Pressable>
   );
 }
@@ -245,9 +243,10 @@ type ListDangerRowProps = {
   title: string;
   icon: IoniconName;
   onPress: () => void;
+  showHairline?: boolean;
 };
 
-export function ListDangerRow({ title, icon, onPress }: ListDangerRowProps) {
+export function ListDangerRow({ title, icon, onPress, showHairline = false }: ListDangerRowProps) {
   const theme = useTheme();
   const typography = useTypography();
 
@@ -256,7 +255,14 @@ export function ListDangerRow({ title, icon, onPress }: ListDangerRowProps) {
       accessibilityRole="button"
       accessibilityLabel={title}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        showHairline && {
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.borderSubtle,
+        },
+        pressed && styles.pressed,
+      ]}
     >
       <Ionicons name={icon} size={22} color={theme.danger} accessibilityElementsHidden />
       <Text style={[typography.body, styles.dangerLabel, { color: theme.danger }]}>{title}</Text>

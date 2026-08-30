@@ -2,6 +2,7 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  collectionActivitySchema,
   collectionBlockConversationResponseSchema,
   collectionConversationPeerSchema,
   collectionConversationsSchema,
@@ -272,7 +273,25 @@ describe("Conversation moderation /v1", () => {
     const owner = await registerSession(app, "owner-block@example.com");
     const bidder = await registerSession(app, "bidder-block@example.com");
     const jersey = await saveJerseyForUser(app, owner, fixture);
-    const { conversationId } = await createBidConversation(app, owner, bidder, jersey.id);
+    const { conversationId, messageId } = await createBidConversation(
+      app,
+      owner,
+      bidder,
+      jersey.id,
+    );
+
+    for (const session of [owner, bidder]) {
+      const activityBefore = await app.inject({
+        method: "GET",
+        url: "/v1/collection/activity",
+        headers: {
+          authorization: `Bearer ${session.accessToken}`,
+          "accept-language": "da",
+        },
+      });
+      const activityBeforeBody = collectionActivitySchema.parse(JSON.parse(activityBefore.body));
+      expect(activityBeforeBody.items.length).toBeGreaterThan(0);
+    }
 
     const blockResponse = await app.inject({
       method: "POST",
@@ -290,7 +309,34 @@ describe("Conversation moderation /v1", () => {
       });
       const body = collectionConversationsSchema.parse(JSON.parse(inbox.body));
       expect(body.conversations).toHaveLength(0);
+
+      const activity = await app.inject({
+        method: "GET",
+        url: "/v1/collection/activity",
+        headers: {
+          authorization: `Bearer ${session.accessToken}`,
+          "accept-language": "da",
+        },
+      });
+      const activityBody = collectionActivitySchema.parse(JSON.parse(activity.body));
+      expect(activityBody.items).toHaveLength(0);
+
+      const messageResponse = await app.inject({
+        method: "POST",
+        url: `/v1/collection/conversations/${conversationId}/messages`,
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        payload: { text: "Hej" },
+      });
+      expect(messageResponse.statusCode).toBe(404);
     }
+
+    const respondBidResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { decision: "accept" },
+    });
+    expect(respondBidResponse.statusCode).toBe(404);
   });
 
   it("returns peer stub with jersey count and optional city", async () => {
