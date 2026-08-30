@@ -28,6 +28,7 @@ Command hooks on `beforeShellExecution` (fail closed). Scripts must print `{"per
 1. `block-dangerous-git.sh` — no force-push, hard reset, `clean -f`, branch `-D`
 2. `block-reward-hacks.sh` — no shell deletion of tests or `.github/workflows`
 3. `protect-ratchet.sh` — no shell removal/emptying of `.cursor/hooks*`
+4. `block-pi-ci-sleep.sh` — no `sleep` ≥ 10s, no `gh pr checks --watch`, no for/while poll of `gh pr checks`
 
 Do **not** put factory learning in `sessionStart` context injection or in Cursor Automations **Memories** (`MEMORIES.md`). Cloud Agents may never see sessionStart; Memories is an unreviewed second source of truth. Prefer `beforeShellExecution` denials and always-applied rules / `AGENTS.md`. The planner comments on Linear; it does not keep a memory file of ratchets.
 
@@ -302,6 +303,14 @@ Prevents repeating the KIT-47 checker that reviewed a local `kit-47` cut from `d
 ### PR lane ratchet (KIT-102)
 
 `.cursor/hooks/block-pr-lane.sh` denies `gh pr create` without `--base development`, and denies `--base production` / `--base staging` except the promotion pairs (`--head development` → staging, `--head staging` → production). Prevents repeating the KIT-101/KIT-100 land onto `production` when that was the repo default. GitHub default branch is `development`; rulesets `lane-development` / `lane-staging` / `lane-production` require a PR (production also requires one approving review). Tighten only.
+
+### Implement write-scope worktree allowlist
+
+`scripts/lib/pr-write-scope.mjs` (`resolveWriteScopeViolations`, `isRatchetShapedPath`) plus `harness/implement-exit.mjs` (`loadWriteScopeEvaluator`) keep this lock: the webhook image allowlist is the floor; a worktree copy of `pr-write-scope.mjs` may waive only `scripts/check-*.mjs` and `scripts/tests/check-*.test.mjs`. `package.json`, `harness/**`, and other product paths stay violations even if the worktree finder returns `[]`. `harness/tests/implement-adw.test.mjs` and `scripts/tests/check-pr-write-scope.test.mjs` cover the waiver and the non-waiver. Prevents repeating the KIT-118 write-scope retry loop (branch added a new inbox-chrome ratchet to `RATCHET_SCRIPT_PATHS`; GitHub CI used the branch copy and passed; implement-exit used the stale image copy and retried). Tighten only.
+
+### Pi CI-sleep hook
+
+`.cursor/hooks/block-pi-ci-sleep.sh` (wired in `.cursor/hooks.json`, tests in `.cursor/hooks/tests/block-pi-ci-sleep.test.mjs`, CI via `node --test` in `.github/workflows/ci.yml`) denies `sleep` of 10 seconds or more, any `sleep` chained with `gh pr checks`, `gh pr checks --watch`, and `for`/`while` loops that call `gh pr checks`. A single `gh pr checks` snapshot stays allowed. Prevents repeating KIT-118 implement sessions that `sleep 30/60/90` and poll checks instead of exiting so the harness can wait. Tighten only.
 
 ### PR write-scope ratchet (KIT-39)
 

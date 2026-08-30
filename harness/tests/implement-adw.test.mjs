@@ -13,6 +13,7 @@ import {
   formatWriteScopeViolationFeedback,
   IMPLEMENTING,
   IN_REVIEW,
+  loadWriteScopeEvaluator,
   requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
@@ -1463,6 +1464,76 @@ test("implement-exit with only in-glob and ratchet-exception paths may move to I
     issueId: "issue-108",
     status: IN_REVIEW,
   });
+});
+
+test("implement-exit waives a new check-script when the worktree allowlist accepts it", async () => {
+  const description = "write-scope: apps/mobile/**, apps/api/**";
+  const linear = fakeLinearWithIssue(description);
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-108", issueId: "issue-108", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-108", branch: "kit-108" },
+    gh: fakeGh(),
+    linear,
+    typecheckTouched: async () => undefined,
+    listChangedFiles: async () => [
+      "apps/mobile/app/(tabs)/inbox/index.tsx",
+      "scripts/check-mobile-inbox-conversation-chrome.mjs",
+      "scripts/tests/check-mobile-inbox-conversation-chrome.test.mjs",
+    ],
+    findWriteScopeViolationsWorktree: () => [],
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.writeScopeRetry, false);
+});
+
+test("implement-exit still retries when worktree allowlist tries to waive package.json", async () => {
+  const description = "write-scope: apps/mobile/**";
+  const linear = fakeLinearWithIssue(description);
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-108", issueId: "issue-108", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-108", branch: "kit-108" },
+    gh: fakeGh(),
+    linear,
+    typecheckTouched: async () => undefined,
+    listChangedFiles: async () => ["apps/mobile/app/index.tsx", "package.json"],
+    findWriteScopeViolationsWorktree: () => [],
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.writeScopeRetry, true);
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /package\.json/);
+});
+
+test("loadWriteScopeEvaluator returns the worktree finder and ignores a broken module", async () => {
+  const allowed = await loadWriteScopeEvaluator({
+    cwd: "/worktree",
+    importModule: async () => ({
+      findWriteScopeViolations: () => ["kept"],
+    }),
+  });
+  assert.equal(typeof allowed, "function");
+  assert.deepEqual(allowed(["x"], ["apps/mobile/**"]), ["kept"]);
+
+  const missing = await loadWriteScopeEvaluator({ cwd: "" });
+  assert.equal(missing, null);
+
+  const broken = await loadWriteScopeEvaluator({
+    cwd: "/worktree",
+    importModule: async () => {
+      throw new Error("syntax");
+    },
+  });
+  assert.equal(broken, null);
 });
 
 test("implement-exit without write-scope does not fail on out-of-glob paths", async () => {

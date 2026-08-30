@@ -9,10 +9,13 @@
  * Fake `gh` + Linear at this seam. Do not spawn Pi TUI.
  */
 import { execFile as execFileCb } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
-  findWriteScopeViolations,
   parseWriteScopeGlobs,
+  resolveWriteScopeViolations,
   shouldEnforceWriteScope,
 } from "../scripts/lib/pr-write-scope.mjs";
 import { ensureLoopCounters, incrementCiFailCycles } from "./auto-merge.mjs";
@@ -172,8 +175,39 @@ export function evaluateWriteScopeExit(description, changedFiles) {
     return { enforce: false, violations: [] };
   }
   const files = Array.isArray(changedFiles) ? changedFiles : [];
-  const violations = findWriteScopeViolations(files, globs);
+  const violations = resolveWriteScopeViolations(files, globs);
   return { enforce: true, violations };
+}
+
+/**
+ * Load `findWriteScopeViolations` from the issue worktree so a PR that added
+ * itself to `RATCHET_SCRIPT_PATHS` is not retried against a stale image copy.
+ *
+ * @param {{
+ *   cwd?: string,
+ *   importModule?: (specifier: string) => Promise<{ findWriteScopeViolations?: unknown }>,
+ * }} [input]
+ * @returns {Promise<((files: string[], globs: string[]) => string[]) | null>}
+ */
+export async function loadWriteScopeEvaluator({ cwd, importModule } = {}) {
+  if (typeof cwd !== "string" || cwd.length === 0) {
+    return null;
+  }
+  const modulePath = join(cwd, "scripts/lib/pr-write-scope.mjs");
+  if (typeof importModule !== "function" && !existsSync(modulePath)) {
+    return null;
+  }
+  try {
+    const load = importModule ?? ((specifier) => import(specifier));
+    const spec = typeof importModule === "function" ? modulePath : pathToFileURL(modulePath).href;
+    const mod = await load(spec);
+    if (typeof mod?.findWriteScopeViolations !== "function") {
+      return null;
+    }
+    return mod.findWriteScopeViolations;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -616,6 +650,8 @@ function applyListedPr(pr, listed, identifier) {
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
  *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
  *   listChangedFiles?: (input: { cwd: string }) => Promise<string[]>,
+ *   findWriteScopeViolationsWorktree?: (files: string[], globs: string[]) => string[],
+ *   importWriteScopeModule?: (specifier: string) => Promise<{ findWriteScopeViolations?: unknown }>,
  *   issueDescription?: string,
  *   runPnpmTest?: (input: { cwd: string }) => Promise<unknown>,
  *   adwText: string,
@@ -634,6 +670,8 @@ export async function completeImplementAdw(input) {
     typecheckTouched,
     formatCheck,
     listChangedFiles: listChangedFilesInput,
+    findWriteScopeViolationsWorktree,
+    importWriteScopeModule,
     issueDescription,
     runPnpmTest,
     adwText,
@@ -743,7 +781,14 @@ export async function completeImplementAdw(input) {
       });
       return { pr, ...retry, ciRetry: false };
     }
-    const violations = findWriteScopeViolations(changedFiles, globs);
+    const worktreeFind =
+      typeof findWriteScopeViolationsWorktree === "function"
+        ? findWriteScopeViolationsWorktree
+        : await loadWriteScopeEvaluator({
+            cwd: checkout.path,
+            importModule: importWriteScopeModule,
+          });
+    const violations = resolveWriteScopeViolations(changedFiles, globs, worktreeFind ?? undefined);
     if (violations.length > 0) {
       const retry = await writeWriteScopeRetryWorkpad({
         job,

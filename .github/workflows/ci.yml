@@ -259,6 +259,9 @@ jobs:
       - name: Test PR write-scope ratchet logic
         run: node --test scripts/tests/check-pr-write-scope.test.mjs
 
+      - name: Test PI CI-sleep hook
+        run: node --test .cursor/hooks/tests/block-pi-ci-sleep.test.mjs
+
       - name: Check admin stamdata navigation
         run: node scripts/check-admin-stamdata-navigation.mjs
 

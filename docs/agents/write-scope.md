@@ -28,7 +28,7 @@ Do not use this exception to expand product features. Checker must not treat the
 ## What the factory does
 
 1. **Dispatch** — no concurrency cap. Planner claims every eligible issue (`dispatch.state` + `ready-for-agent` + unblocked, Agent field empty) in Linear priority order. When the next-in-priority issue’s globs overlap an `Implementing` issue, skip it and try the next; leave it in `Backlog` with `ready-for-agent` and comment why. Do not preempt.
-2. **Implement** — treat the globs as a hard path boundary. Out of scope → `/signal-up`, not a wider PR. Ratchet exception above applies when checker/planner required it.
+2. **Implement** — treat the globs as a hard path boundary. Out of scope → `/signal-up`, not a wider PR. Ratchet exception above applies when checker/planner required it. `implement-exit` uses the image allowlist as the floor; a worktree `scripts/lib/pr-write-scope.mjs` may waive only new `scripts/check-*.mjs` / `scripts/tests/check-*.test.mjs` paths so a ratchet added on that PR is not retried against a stale image copy. Product and harness paths stay violations.
 3. **Checker** — files outside the declared globs are a Spec/Standards finding unless the issue said the scope was unset, or the file is a required ratchet (exception above).
 
 Until an issue declares scope, planner does not skip for path overlap — only `blockedBy` and priority apply.

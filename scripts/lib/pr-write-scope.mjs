@@ -116,3 +116,43 @@ export function findWriteScopeViolations(changedFiles, globs) {
   }
   return violations;
 }
+
+/**
+ * New committed ratchets look like this. The image allowlist lags the worktree;
+ * only these paths may be waived by the worktree copy of this module.
+ *
+ * @param {string} filePath
+ */
+export function isRatchetShapedPath(filePath) {
+  return (
+    /^scripts\/check-[^/]+\.mjs$/.test(filePath) ||
+    /^scripts\/tests\/check-[^/]+\.test\.mjs$/.test(filePath)
+  );
+}
+
+/**
+ * Image allowlist is the floor. A worktree `findWriteScopeViolations` may waive
+ * only ratchet-shaped check scripts (so a new ratchet can land). Product and
+ * harness paths stay violations even if the worktree module returns [].
+ *
+ * @param {string[]} changedFiles
+ * @param {string[]} globs
+ * @param {(files: string[], scope: string[]) => unknown} [worktreeFind]
+ */
+export function resolveWriteScopeViolations(changedFiles, globs, worktreeFind) {
+  const bundled = findWriteScopeViolations(changedFiles, globs);
+  if (typeof worktreeFind !== "function") {
+    return bundled;
+  }
+  let worktree;
+  try {
+    worktree = worktreeFind(changedFiles, globs);
+  } catch {
+    return bundled;
+  }
+  if (!Array.isArray(worktree)) {
+    return bundled;
+  }
+  const worktreeSet = new Set(worktree);
+  return bundled.filter((file) => !isRatchetShapedPath(file) || worktreeSet.has(file));
+}
