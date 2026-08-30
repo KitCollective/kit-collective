@@ -294,9 +294,7 @@ test("job-queue cheap-retries red CI until GitHub is green, then In Review — n
       return {
         url: "https://github.com/KitCollective/kit-collective/pull/71",
         mergeable: "MERGEABLE",
-        checks: green
-          ? [{ name: "test", conclusion: "success", isRequired: true }]
-          : redChecks(),
+        checks: green ? [{ name: "test", conclusion: "success", isRequired: true }] : redChecks(),
       };
     },
     async createPr() {
