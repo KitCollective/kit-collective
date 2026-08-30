@@ -1,15 +1,13 @@
-#!/usr/bin/env node
-/**
- * Ratchet (KIT-133): fail CI when Wishlist Sheet UI ships without locked mechanical
- * evidence (empty-state body, season overlay + ListRow, manage-row hairlines, API slop).
- */
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const wishlistSheetPath = "apps/mobile/src/components/wishlist-sheet.tsx";
-const wishlistLogicPath = "apps/mobile/src/components/wishlist-sheet-logic.ts";
-const wishlistTestPath = "apps/mobile/tests/wishlist-sheet.test.ts";
-const wishlistServicePath = "apps/api/src/wishlist/wishlist.service.ts";
-const domainWishlistPath = "packages/domain/src/wishlist.ts";
+const repoRoot = join(__dirname, "../../..");
+const wishlistSheetPath = join(repoRoot, "apps/mobile/src/components/wishlist-sheet.tsx");
+const wishlistLogicPath = join(repoRoot, "apps/mobile/src/components/wishlist-sheet-logic.ts");
+const wishlistTestPath = join(repoRoot, "apps/mobile/tests/wishlist-sheet.test.ts");
+const wishlistServicePath = join(repoRoot, "apps/api/src/wishlist/wishlist.service.ts");
+const domainWishlistPath = join(repoRoot, "packages/domain/src/wishlist.ts");
 
 const REQUIRED_LOGIC_EXPORTS = [
   "resolveWishlistEmptyBody",
@@ -32,14 +30,25 @@ const REQUIRED_TEST_MARKERS = [
   "Ny ønskerække",
 ];
 
-export function checkMobileWishlistUiEvidence(overrides = {}) {
-  const violations = [];
+type WishlistUiEvidenceOverrides = {
+  sheetSource?: string;
+  logicExists?: boolean;
+  testExists?: boolean;
+  logicSource?: string;
+  testSource?: string;
+  serviceSource?: string;
+  domainSource?: string;
+};
+
+export function checkMobileWishlistUiEvidence(overrides: WishlistUiEvidenceOverrides = {}) {
+  const violations: string[] = [];
 
   if (!existsSync(wishlistSheetPath)) {
     return violations;
   }
 
-  const sheetSource = overrides.sheetSource ?? readFileSync(wishlistSheetPath, "utf8");
+  const sheetSource =
+    overrides.sheetSource ?? readFileSync(wishlistSheetPath, "utf8");
   const logicExists = overrides.logicExists ?? existsSync(wishlistLogicPath);
   const testExists = overrides.testExists ?? existsSync(wishlistTestPath);
 
@@ -91,7 +100,8 @@ export function checkMobileWishlistUiEvidence(overrides = {}) {
   }
 
   if (logicExists) {
-    const logicSource = overrides.logicSource ?? readFileSync(wishlistLogicPath, "utf8");
+    const logicSource =
+      overrides.logicSource ?? readFileSync(wishlistLogicPath, "utf8");
     for (const exportName of REQUIRED_LOGIC_EXPORTS) {
       if (!logicSource.includes(`export function ${exportName}`)) {
         violations.push(`${wishlistLogicPath}: missing export ${exportName}`);
@@ -121,7 +131,8 @@ export function checkMobileWishlistUiEvidence(overrides = {}) {
   }
 
   if (existsSync(wishlistServicePath)) {
-    const serviceSource = overrides.serviceSource ?? readFileSync(wishlistServicePath, "utf8");
+    const serviceSource =
+      overrides.serviceSource ?? readFileSync(wishlistServicePath, "utf8");
     const writeToValuesBlock = serviceSource.match(
       /writeToValues\([^)]*\)[^{]*\{([\s\S]*?)\n\s*\}/,
     );
@@ -141,7 +152,8 @@ export function checkMobileWishlistUiEvidence(overrides = {}) {
   }
 
   if (existsSync(domainWishlistPath)) {
-    const domainSource = overrides.domainSource ?? readFileSync(domainWishlistPath, "utf8");
+    const domainSource =
+      overrides.domainSource ?? readFileSync(domainWishlistPath, "utf8");
     const narratingJsdoc =
       /\/\*\*[\s\S]*?(hasWishlistCriterion|buildWishlistAndMeta|buildWishlistAutoName)[\s\S]*?\*\//.test(
         domainSource,
@@ -156,14 +168,57 @@ export function checkMobileWishlistUiEvidence(overrides = {}) {
   return violations;
 }
 
-const violations = checkMobileWishlistUiEvidence();
+const logicFixture = `
+  export function resolveWishlistEmptyBody() { return "Tilføj en ønskerække med klub, sæson eller type."; }
+  export function resolveWishlistEmptyTitle() {}
+  export function resolveWishlistSheetTitle() {}
+  export function canSaveWishlistEntry() {}
+  export function hasWishlistCriterion() {}
+  export function buildWishlistWritePayload() {}
+  export function seedCriteriaForEdit() {}
+  export function manageRowAccessibilityLabel() {}
+`;
 
-if (violations.length > 0) {
-  console.error("Mobile wishlist UI evidence ratchet failed:\n");
-  for (const violation of violations) {
-    console.error(`  - ${violation}`);
-  }
-  process.exit(1);
-}
+const testFixture = `
+  import { resolveWishlistEmptyBody, resolveWishlistSheetTitle, canSaveWishlistEntry,
+    hasWishlistCriterion, manageRowAccessibilityLabel } from "../src/components/wishlist-sheet-logic";
+  Ønske Ny ønskerække resolveWishlistEmptyBody
+`;
 
-console.log("Mobile wishlist UI evidence check passed.");
+describe("checkMobileWishlistUiEvidence", () => {
+  it("passes on the shipped wishlist sheet, logic, tests, and service", () => {
+    const violations = checkMobileWishlistUiEvidence();
+    expect(violations).toEqual([]);
+  });
+
+  it("fails when EmptyState body is empty", () => {
+    const violations = checkMobileWishlistUiEvidence({
+      sheetSource:
+        'body="" SeasonPickerOverlay FacetPickerOverlay borderSubtle wishlist-sheet-logic',
+      logicExists: true,
+      testExists: true,
+      logicSource: logicFixture,
+      testSource: testFixture,
+    });
+
+    expect(violations.some((v) => v.includes("resolveWishlistEmptyBody"))).toBe(true);
+  });
+
+  it("fails when writeToValues mints dummy identity fields", () => {
+    const violations = checkMobileWishlistUiEvidence({
+      sheetSource:
+        "resolveWishlistEmptyBody() SeasonPickerOverlay FacetPickerOverlay borderSubtle wishlist-sheet-logic",
+      logicExists: true,
+      testExists: true,
+      logicSource: logicFixture,
+      testSource: testFixture,
+      serviceSource: `
+        private writeToValues(body: WishlistEntryWrite): WishlistRow {
+          return { id: "", userId: "", clubId: null, seasonId: null, type: null, size: null };
+        }
+      `,
+    });
+
+    expect(violations.some((v) => v.includes("dummy id/userId"))).toBe(true);
+  });
+});
