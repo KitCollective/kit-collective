@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import { test } from "node:test";
+import { createDelegateGateConfig } from "../../harness/delegate-gate.mjs";
 import {
   createHttpHandler,
   createMemoryAdapter,
+  dispatchIssue,
   routeWebhook,
 } from "../../harness/webhook-router.mjs";
+
+const GATE = createDelegateGateConfig();
 
 const SECRET = "test-linear-webhook-secret";
 const NOW = 1_700_000_000_000;
@@ -297,7 +301,7 @@ test("Implementing + Pi + Bug names bug ADW, not a Linear status", async () => {
     snapshot({
       status: "Implementing",
       delegate: { name: "Pi" },
-      labels: ["Bug"],
+      labels: ["ready-for-agent", "Bug"],
       linearType: "Bug",
     }),
   );
@@ -314,7 +318,7 @@ test("Implementing + Pi + Improvement names improvement ADW", async () => {
     snapshot({
       status: "Implementing",
       delegate: { name: "Pi" },
-      labels: ["Improvement"],
+      labels: ["ready-for-agent", "Improvement"],
       linearType: "Improvement",
     }),
   );
@@ -330,7 +334,7 @@ test("In Review enqueues factory-checker and does not pick an ADW from Type", as
     snapshot({
       status: "In Review",
       delegate: { name: "Pi" },
-      labels: ["Feature"],
+      labels: ["ready-for-agent", "Feature"],
       linearType: "Feature",
     }),
   );
@@ -379,6 +383,90 @@ test("signal-up skips", async () => {
 
   assert.equal(result.kind, "skip");
   assert.equal(enqueue.jobs.length, 0);
+});
+
+test("Implementing without ready-for-agent skips implement", () => {
+  const decision = dispatchIssue(
+    snapshot({
+      status: "Implementing",
+      labels: ["Feature"],
+      linearType: "Feature",
+    }),
+    GATE,
+  );
+  assert.equal(decision.kind, "skip");
+  assert.equal(decision.reason, "missing ready-for-agent");
+});
+
+test("Implementing with ready-for-human skips implement and does not enqueue", async () => {
+  const { result, enqueue, linear } = await dispatch(
+    issueUpdatePayload(),
+    snapshot({
+      status: "Implementing",
+      labels: ["ready-for-human", "Feature"],
+      linearType: "Feature",
+      delegate: null,
+    }),
+  );
+
+  assert.equal(result.kind, "skip");
+  assert.equal(result.reason, "ready-for-human");
+  assert.equal(enqueue.jobs.length, 0);
+  assert.equal(typeof linear.clearDelegate, "undefined");
+});
+
+for (const label of ["needs-info", "wontfix"]) {
+  test(`Implementing with ${label} skips implement`, () => {
+    const decision = dispatchIssue(
+      snapshot({
+        status: "Implementing",
+        labels: [label, "Feature"],
+        linearType: "Feature",
+      }),
+      GATE,
+    );
+    assert.equal(decision.kind, "skip");
+    assert.equal(decision.reason, label);
+  });
+}
+
+test("In Review without ready-for-agent skips factory-checker", () => {
+  const decision = dispatchIssue(
+    snapshot({
+      status: "In Review",
+      labels: ["Feature"],
+      linearType: "Feature",
+    }),
+    GATE,
+  );
+  assert.equal(decision.kind, "skip");
+  assert.equal(decision.reason, "missing ready-for-agent");
+});
+
+test("In Review with ready-for-human skips factory-checker", () => {
+  const decision = dispatchIssue(
+    snapshot({
+      status: "In Review",
+      labels: ["ready-for-human", "Feature"],
+      linearType: "Feature",
+    }),
+    GATE,
+  );
+  assert.equal(decision.kind, "skip");
+  assert.equal(decision.reason, "ready-for-human");
+});
+
+test("Merging without ready-for-agent still enqueues land", () => {
+  const decision = dispatchIssue(
+    snapshot({
+      status: "Merging",
+      labels: ["Feature"],
+      linearType: "Feature",
+    }),
+    GATE,
+  );
+  assert.equal(decision.kind, "enqueue");
+  assert.equal(decision.role, "land");
 });
 
 test("HTTP adapter rejects forgery with 401 and accepts a planner enqueue with 200", async () => {

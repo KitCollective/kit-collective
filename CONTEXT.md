@@ -8,7 +8,7 @@ Nordic football-shirt collector product. Use these terms in specs, tickets, comm
 Generated from `factory.config.json`. Do not put product nouns here.
 
 **Control plane**:
-Linear. Status + `ready-for-agent` + blockers decide what runs.
+Linear. Status + `ready-for-agent` + blockers decide what runs. Implement and factory-checker enqueue only with `ready-for-agent`.
 _Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:

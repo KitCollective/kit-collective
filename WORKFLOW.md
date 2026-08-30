@@ -33,11 +33,11 @@ Never claim from Linear **Triage** or **Duplicate**. The Intake job (hourly, pla
 
 The worker writes **Parked** after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. Planner still never claims Parked. A human Park is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not Park.
 
-An issue may **start** implement when status is `Implementing` and it has no branch/PR yet. One Implementing stay is one try: it ends when Gate is clean, required GitHub checks are green, the PR is open, and the harness moves **In Review**. Cheap in-slot format/CI re-spawns (Skip Scout) are not tries — they do not increment `reviewLoops` / `ciFailCycles`, do not post a retry-cap hold, and do not make resume skip.
+An issue may **start** implement when status is `Implementing`, it is labelled `ready-for-agent`, and it has no branch/PR yet. One Implementing stay is one try: it ends when Gate is clean, required GitHub checks are green, the PR is open, and the harness moves **In Review**. Cheap in-slot format/CI re-spawns (Skip Scout) are not tries — they do not increment `reviewLoops` / `ciFailCycles`, do not post a retry-cap hold, and do not make resume skip.
 
-An issue may **resume** implement when status is `Implementing` **and** it already has a branch/PR (checker or land sent it back). That return increments `reviewLoops`. Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session. Stale "implement retry cap" comments do not skip enqueue.
+An issue may **resume** implement when status is `Implementing`, it is labelled `ready-for-agent`, **and** it already has a branch/PR (checker or land sent it back). That return increments `reviewLoops`. Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session. Stale "implement retry cap" comments do not skip enqueue.
 
-The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. Parked is never resumed. Empty Linear Agent is the Implementing happy path (Cursor is skipped; leftover Pi still enqueues). Write-scope overlap among Implementing issues still enqueues only the first in `dispatch.priorityOrder`.
+The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. Parked is never resumed. Implement and factory-checker also require `ready-for-agent` and skip `ready-for-human`, `needs-info`, `wontfix`, and `signal-up`. Empty Linear Agent is the Implementing happy path (Cursor is skipped; leftover Pi still enqueues). Write-scope overlap among Implementing issues still enqueues only the first in `dispatch.priorityOrder`.
 
 ## Status map
 
@@ -74,7 +74,7 @@ Lanes come from `lanes` in factory config.
 
 ## Issue run (implement)
 
-1. Status must already be `Implementing`. If it is `dispatch.state`, stop — planner has not claimed.
+1. Status must already be `Implementing` and labelled `ready-for-agent`. If it is `dispatch.state`, stop — planner has not claimed. If `ready-for-agent` is missing or `ready-for-human` / `needs-info` / `wontfix` / `signal-up` is present, stop — do not spawn Pi.
 2. Fetch context: Linear `get_issue` **and** `list_comments`. `get_issue` does not include comments. The workpad is one comment (`agent.workpadHeading`). If a PR is linked, also read GitHub PR review comments.
 3. On resume, the latest `### Review feedback` plus other issue/PR comments **are** the change request. Fix the **class**, not only the cited file. Same branch/PR.
 4. Open or reuse the single workpad comment.

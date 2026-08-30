@@ -197,7 +197,7 @@ for (const [status, role] of notLand) {
   test(`status ${status} does not enqueue land`, async () => {
     const issue = snapshot({
       status,
-      labels: status === "Backlog" ? ["ready-for-agent", "Feature"] : ["Feature"],
+      labels: ["ready-for-agent", "Feature"],
       delegate: status === "Implementing" ? { name: "Pi" } : null,
     });
     const { result, enqueue } = await routeIssue(issue);

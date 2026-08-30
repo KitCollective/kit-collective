@@ -149,7 +149,7 @@ test("Issue status webhook enqueues implement when Linear Agent is empty", async
     snapshot({
       status: "Implementing",
       delegate: null,
-      labels: ["Feature"],
+      labels: ["ready-for-agent", "Feature"],
       linearType: "Feature",
     }),
   );
@@ -166,7 +166,7 @@ test("implement skips when Linear Agent is Cursor", async () => {
     snapshot({
       status: "Implementing",
       delegate: { name: "Cursor" },
-      labels: ["Feature"],
+      labels: ["ready-for-agent", "Feature"],
       linearType: "Feature",
     }),
   );
@@ -182,7 +182,7 @@ test("implement enqueues leftover Pi delegate (empty Agent is not required)", as
     snapshot({
       status: "Implementing",
       delegate: { id: PI_APP_USER_ID, name: PI_BOT_AGENT_NAME },
-      labels: ["Bug"],
+      labels: ["ready-for-agent", "Bug"],
       linearType: "Bug",
     }),
   );
@@ -197,7 +197,7 @@ test("Issue status webhook still enqueues; AgentSession payload on issue channel
   const claimed = snapshot({
     status: "Implementing",
     delegate: null,
-    labels: ["Feature"],
+    labels: ["ready-for-agent", "Feature"],
     linearType: "Feature",
   });
 
@@ -230,7 +230,7 @@ test("Ready for merge enqueues auto-merge without clearing delegate", async () =
     snapshot({
       status: "Ready for merge",
       delegate: { name: "Pi" },
-      labels: ["Feature"],
+      labels: ["ready-for-agent", "Feature"],
       linearType: "Feature",
     }),
   );
@@ -248,7 +248,7 @@ test("HTTP adapter returns 404 for agent-session path without enqueue or activit
   const claimed = snapshot({
     status: "Implementing",
     delegate: null,
-    labels: ["Feature"],
+    labels: ["ready-for-agent", "Feature"],
     linearType: "Feature",
   });
   const linear = fakeLinear(claimed);
@@ -320,7 +320,7 @@ test("Done and Canceled clear leftover Pi delegate on the webhook seam", async (
           identifier: "KIT-99",
           status,
           delegate: { name: "Pi" },
-          labels: ["Feature"],
+          labels: ["ready-for-agent", "Feature"],
         };
       },
       async clearDelegate(input) {

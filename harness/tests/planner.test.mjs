@@ -292,7 +292,7 @@ test("planner claims Backlog + ready-for-agent + unblocked issues in Linear prio
   );
 });
 
-test("planner skips missing ready-for-agent, signal-up, unresolved blockedBy, and Cursor agent", async () => {
+test("planner skips missing ready-for-agent, who-acts blockers, unresolved blockedBy, and Cursor agent", async () => {
   const { claims, comments } = await claimWith([
     gqlNode({
       id: "issue-ok",
@@ -325,6 +325,21 @@ test("planner skips missing ready-for-agent, signal-up, unresolved blockedBy, an
       id: "issue-cursor",
       identifier: "KIT-14",
       delegate: { id: CURSOR_USER_ID, name: "Cursor" },
+    }),
+    gqlNode({
+      id: "issue-human",
+      identifier: "KIT-15",
+      labels: { nodes: [{ name: "ready-for-agent" }, { name: "ready-for-human" }] },
+    }),
+    gqlNode({
+      id: "issue-info",
+      identifier: "KIT-16",
+      labels: { nodes: [{ name: "needs-info" }] },
+    }),
+    gqlNode({
+      id: "issue-wontfix",
+      identifier: "KIT-17",
+      labels: { nodes: [{ name: "ready-for-agent" }, { name: "wontfix" }] },
     }),
   ]);
 

@@ -42,7 +42,7 @@ function orphan({
   id = "issue-94",
   identifier = "KIT-94",
   status = "Implementing",
-  labels = ["Feature"],
+  labels = ["ready-for-agent", "Feature"],
   linearType = "Feature",
   delegate = null,
   description = "write-scope: harness/**",
@@ -161,7 +161,7 @@ test("runResume enqueues implement for land-fail even when retry cap is posted",
       id: "issue-119",
       identifier: "KIT-119",
       status: "Implementing",
-      labels: ["Feature"],
+      labels: ["ready-for-agent", "Feature"],
       linearType: "Feature",
       delegate: { name: "Pi" },
     }),
@@ -192,7 +192,7 @@ test("runResume re-enqueues merge-fail Implementing after slot freed with no sta
       id: "issue-119",
       identifier: "KIT-119",
       status: "Implementing",
-      labels: ["Feature"],
+      labels: ["ready-for-agent", "Feature"],
       linearType: "Feature",
       delegate: { name: "Pi" },
     }),
@@ -268,6 +268,47 @@ test("runResume enqueues checker, auto-merge, and land for started factory state
       ["auto-merge", "KIT-90"],
       ["factory-checker", "KIT-47"],
     ],
+  );
+});
+
+test("runResume skips Implementing without ready-for-agent and does not move status", async () => {
+  const enqueue = fakeEnqueue();
+  const result = await runResume({
+    linear: fakeLinear([
+      orphan({
+        identifier: "KIT-122",
+        labels: ["Feature"],
+      }),
+    ]),
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 0);
+  assert.ok(
+    result.skipped.some(
+      (row) => row.identifier === "KIT-122" && row.reason === "missing ready-for-agent",
+    ),
+  );
+  assert.deepEqual(result.enqueued, []);
+});
+
+test("runResume skips Implementing with ready-for-human without spawning", async () => {
+  const enqueue = fakeEnqueue();
+  const result = await runResume({
+    linear: fakeLinear([
+      orphan({
+        identifier: "KIT-122",
+        labels: ["ready-for-human", "Feature"],
+      }),
+    ]),
+    enqueue,
+    delegateGateConfig: DELEGATE_GATE,
+  });
+
+  assert.equal(enqueue.jobs.length, 0);
+  assert.ok(
+    result.skipped.some((row) => row.identifier === "KIT-122" && row.reason === "ready-for-human"),
   );
 });
 

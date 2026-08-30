@@ -17,6 +17,7 @@ export const PLANNER_TEAM_KEY = "KIT";
 
 const READY_FOR_AGENT = "ready-for-agent";
 const SIGNAL_UP = "signal-up";
+const WHO_ACTS_BLOCKERS = ["ready-for-human", "needs-info", "wontfix"];
 const CURSOR_NAME = "cursor";
 
 /**
@@ -122,6 +123,11 @@ function eligibility(issue) {
   }
   if (labels.includes(SIGNAL_UP)) {
     return { ok: false, reason: "signal-up" };
+  }
+  for (const name of WHO_ACTS_BLOCKERS) {
+    if (labels.includes(name)) {
+      return { ok: false, reason: name };
+    }
   }
   if (hasUnresolvedBlocker(issue.blockedBy)) {
     return { ok: false, reason: "blockedBy unresolved" };
