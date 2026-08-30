@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { logoutSession } from "@/api/identity";
+import { fetchPrefs, logoutSession } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
 import { ConfirmSheet, SettingsSectionLabel } from "@/components/account-ui";
 import {
@@ -12,6 +12,7 @@ import {
   ProfileRowDivider,
   ProfileSurfaceGroup,
 } from "@/components/profile-ui";
+import { appearanceLabel, localeLabel } from "@/prefs/labels";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -22,6 +23,34 @@ export default function IndstillingerScreen() {
   const { accessToken, signOut } = useAuth();
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [localeMeta, setLocaleMeta] = useState("Dansk");
+  const [appearanceMeta, setAppearanceMeta] = useState("Systemindstilling");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMeta() {
+      if (!accessToken) {
+        return;
+      }
+
+      try {
+        const prefs = await fetchPrefs(accessToken);
+        if (active) {
+          setLocaleMeta(localeLabel(prefs.locale));
+          setAppearanceMeta(appearanceLabel(prefs.appearance));
+        }
+      } catch {
+        // Hub keeps default meta when prefs cannot load.
+      }
+    }
+
+    void loadMeta();
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
 
   const confirmLogout = async () => {
     if (!accessToken) {
@@ -84,14 +113,14 @@ export default function IndstillingerScreen() {
           <ProfileSurfaceGroup>
             <ListNavigateRow
               title="Sprog"
-              meta="Dansk"
+              meta={localeMeta}
               icon="language-outline"
               onPress={() => router.push("/(tabs)/profile/sprog")}
             />
             <ProfileRowDivider />
             <ListNavigateRow
               title="Mørk tilstand"
-              meta="Systemindstilling"
+              meta={appearanceMeta}
               icon="moon-outline"
               onPress={() => router.push("/(tabs)/profile/moerk-tilstand")}
             />

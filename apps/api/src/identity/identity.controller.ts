@@ -36,6 +36,36 @@ export class IdentityController {
     return this.identityService.getMe(user.sub);
   }
 
+  @Get("identity/prefs")
+  @UseGuards(JwtAuthGuard)
+  getPrefs(@CurrentUser() user: JwtPayload) {
+    return this.identityService.getPrefs(user.sub);
+  }
+
+  @Patch("identity/prefs")
+  @UseGuards(JwtAuthGuard)
+  updatePrefs(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.identityService.updatePrefs(user.sub, body);
+  }
+
+  @Get("identity/cookie-consent")
+  @UseGuards(JwtAuthGuard)
+  getCookieConsent(@CurrentUser() user: JwtPayload) {
+    return this.identityService.getCookieConsent(user.sub);
+  }
+
+  @Patch("identity/cookie-consent")
+  @UseGuards(JwtAuthGuard)
+  updateCookieConsent(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.identityService.updateCookieConsent(user.sub, body);
+  }
+
+  @Get("identity/export")
+  @UseGuards(JwtAuthGuard)
+  exportAccount(@CurrentUser() user: JwtPayload) {
+    return this.identityService.exportAccountData(user.sub);
+  }
+
   @Get("identity/handle-availability")
   @UseGuards(JwtAuthGuard)
   handleAvailability(@CurrentUser() user: JwtPayload, @Query() query: unknown) {
