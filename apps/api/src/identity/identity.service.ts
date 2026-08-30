@@ -32,10 +32,12 @@ import {
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
+  catalogLabel,
   collectionShortcut,
   conversation,
   conversationMessage,
   conversationParticipant,
+  country,
   identityProvider,
   jerseyDraft,
   user,
@@ -54,7 +56,7 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
-import { eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { DB, type DbToken } from "../db/db.module.js";
@@ -79,6 +81,9 @@ const USER_ME_SELECT = {
   phone: user.phone,
   birthday: user.birthday,
   emailVerified: user.emailVerified,
+  countryId: user.countryId,
+  city: user.city,
+  showCity: user.showCity,
 } as const;
 
 const USER_PREFS_SELECT = {
@@ -162,7 +167,7 @@ export class IdentityService {
       throw new ConflictException("Email already registered");
     }
 
-    return this.buildSession(created);
+    return await this.buildSession(created);
   }
 
   async login(rawBody: unknown): Promise<IdentitySession> {
@@ -186,7 +191,7 @@ export class IdentityService {
     }
 
     const { passwordHash: _passwordHash, ...sessionRow } = found;
-    return this.buildSession(sessionRow);
+    return await this.buildSession(sessionRow);
   }
 
   async getMe(userId: string): Promise<IdentityMe> {
@@ -520,11 +525,26 @@ export class IdentityService {
       }
     }
 
+    if (body.countryId !== undefined && body.countryId !== null) {
+      const [countryRow] = await this.db
+        .select({ id: country.id })
+        .from(country)
+        .where(eq(country.id, body.countryId))
+        .limit(1);
+
+      if (!countryRow) {
+        throw new BadRequestException("Unknown country");
+      }
+    }
+
     const [updated] = await this.db
       .update(user)
       .set({
         ...(body.handle !== undefined ? { handle: body.handle } : {}),
         ...(body.aboutMe !== undefined ? { aboutMe: body.aboutMe } : {}),
+        ...(body.countryId !== undefined ? { countryId: body.countryId } : {}),
+        ...(body.city !== undefined ? { city: body.city } : {}),
+        ...(body.showCity !== undefined ? { showCity: body.showCity } : {}),
       })
       .where(eq(user.id, userId))
       .returning(USER_ME_SELECT);
@@ -676,7 +696,30 @@ export class IdentityService {
     }));
   }
 
-  private toIdentityMe(
+  private async resolveCountryLabel(countryId: string | null): Promise<string | null> {
+    if (!countryId) {
+      return null;
+    }
+
+    const rows = await this.db
+      .select({
+        label: catalogLabel.text,
+        locale: catalogLabel.locale,
+        kind: catalogLabel.kind,
+      })
+      .from(catalogLabel)
+      .where(and(eq(catalogLabel.entityType, "country"), eq(catalogLabel.entityId, countryId)));
+
+    const preferred = rows.find((row) => row.locale === "da" && row.kind === "label");
+    if (preferred) {
+      return preferred.label;
+    }
+
+    const fallback = rows.find((row) => row.kind === "label");
+    return fallback?.label ?? null;
+  }
+
+  private async toIdentityMe(
     row: {
       id: string;
       email: string;
@@ -688,11 +731,15 @@ export class IdentityService {
       phone: string | null;
       birthday: string | Date | null;
       emailVerified: boolean;
+      countryId: string | null;
+      city: string | null;
+      showCity: boolean;
     },
     linkedAccounts: IdentityLinkedAccount[],
     avatarUrlOverride?: string | null,
-  ): IdentityMe {
+  ): Promise<IdentityMe> {
     const birthday = formatBirthday(row.birthday);
+    const countryLabel = await this.resolveCountryLabel(row.countryId);
 
     return identityMeSchema.parse({
       id: row.id,
@@ -711,10 +758,14 @@ export class IdentityService {
       phone: row.phone,
       birthday,
       linkedAccounts,
+      countryId: row.countryId,
+      countryLabel,
+      city: row.city,
+      showCity: row.showCity,
     });
   }
 
-  private buildSession(row: {
+  private async buildSession(row: {
     id: string;
     email: string;
     role: IdentityRole;
@@ -725,7 +776,10 @@ export class IdentityService {
     phone: string | null;
     birthday: string | Date | null;
     emailVerified: boolean;
-  }): IdentitySession {
+    countryId: string | null;
+    city: string | null;
+    showCity: boolean;
+  }): Promise<IdentitySession> {
     const payload: JwtPayload = {
       sub: row.id,
       email: row.email,
@@ -739,7 +793,7 @@ export class IdentityService {
 
     return identitySessionSchema.parse({
       accessToken: this.jwtService.sign(payload),
-      user: this.toIdentityMe(row, linkedAccounts),
+      user: await this.toIdentityMe(row, linkedAccounts),
     });
   }
 }

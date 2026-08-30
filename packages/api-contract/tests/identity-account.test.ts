@@ -101,6 +101,10 @@ describe("identityMeSchema account fields", () => {
         { provider: "google" as const, linked: false },
         { provider: "facebook" as const, linked: false },
       ],
+      countryId: null,
+      countryLabel: null,
+      city: null,
+      showCity: false,
     };
 
     expect(identityMeSchema.parse(me)).toEqual(me);

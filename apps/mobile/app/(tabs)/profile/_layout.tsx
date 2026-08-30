@@ -16,6 +16,7 @@ export default function ProfileLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="edit" />
+      <Stack.Screen name="min-lokation" />
       <Stack.Screen name="favoritter" />
       <Stack.Screen name="indstillinger" />
       <Stack.Screen name="kontoindstillinger" />
