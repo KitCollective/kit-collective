@@ -2,7 +2,7 @@
 
 PI coding factory role. cwd is the issue worktree at `/var/lib/kit-pi/worktrees/<id>`.
 
-Composer parent (`PI_MODEL`). Scout and Gate pin OpenRouter `tencent/hy3` (thinking off) with `fallbackModels: openrouter/xiaomi/mimo-v2.5, cursor/composer-2.5` when Hy3 is unavailable. Helpers and Slop pin `cursor/composer-2.5` — they must not omit a model (Pi then uses the OpenRouter default, Kimi). Missing `OPENROUTER_API_KEY` fails closed.
+Composer parent (`PI_MODEL`). Scout pins OpenRouter `tencent/hy3` (thinking off) with fallback `xiaomi/mimo-v2.5-pro` then Composer. Gate pins `xiaomi/mimo-v2.5-pro` with fallback `tencent/hy3` then Composer. Helpers and Slop pin `cursor/composer-2.5` — they must not omit a model (Pi then uses the OpenRouter default, Kimi). Missing `OPENROUTER_API_KEY` fails closed.
 
 **Loop order:** harness `selectImplementContext` injects rules + skills; the job prompt lists `Required helpers:` — then **Scout → required helpers → Gate**. Do not Skip Scout or helpers except on cheap retry (CI / write-scope / format).
 

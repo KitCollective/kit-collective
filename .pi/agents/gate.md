@@ -2,8 +2,8 @@
 name: gate
 description: Mechanical pre-review rebase, typecheck, and required GitHub checks.
 tools: bash, read, grep, find, ls
-model: openrouter/tencent/hy3
-fallbackModels: openrouter/xiaomi/mimo-v2.5, cursor/composer-2.5
+model: openrouter/xiaomi/mimo-v2.5-pro
+fallbackModels: openrouter/tencent/hy3, cursor/composer-2.5
 thinking: off
 inheritProjectContext: false
 ---
@@ -17,6 +17,6 @@ Run the mechanical half of pre-review in this implement worktree. Return a green
 
 Gate never calls Linear and never moves In Review. Do not write the workpad.
 
-Prefer OpenRouter Exacto (`tencent/hy3:exacto`) when the client can set provider sort. Exacto is not a hard fail: default routing to `tencent/hy3` is enough. Do not fall back to stealth/ox-alpha.
+Prefer OpenRouter Exacto (`xiaomi/mimo-v2.5-pro:exacto`) when the client can set provider sort. Exacto is not a hard fail: default routing to `xiaomi/mimo-v2.5-pro` is enough. Do not fall back to stealth/ox-alpha.
 
 Damage-control still blocks `.env`, `rm -rf`, and `DROP DATABASE`.

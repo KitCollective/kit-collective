@@ -8,4 +8,4 @@ Note (2026-08-30): Pi does not inherit the parent `--model` when a subagent omit
 
 Note (2026-08-30, later): OpenRouter workspace guardrail allows only `tencent/hy4-preview`. Scout and Gate pin `openrouter/tencent/hy4-preview` (thinking off, Composer fallback). `tencent/hy3` is ineligible and would Composer-fallback. Do not rewrite the decision above.
 
-Note (2026-08-30, key guardrail): `KIT-Pi-harness` allowlist includes Hy3, MiMo-V2.5, Hy4 preview, and others. Scout and Gate pin `openrouter/tencent/hy3` (thinking off) with `fallbackModels: openrouter/xiaomi/mimo-v2.5, cursor/composer-2.5`. Hy4 stays on the key as reserve, not the pin. Do not rewrite the decision above.
+Note (2026-08-30, key guardrail): `KIT-Pi-harness` allowlist includes Hy3, MiMo-V2.5-Pro, Hy4 preview, and others. Scout pins `openrouter/tencent/hy3` with fallback `xiaomi/mimo-v2.5-pro` then Composer. Gate pins `openrouter/xiaomi/mimo-v2.5-pro` with fallback `tencent/hy3` then Composer. Hy4 stays on the key as reserve, not the pin. Do not rewrite the decision above.

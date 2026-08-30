@@ -227,8 +227,8 @@ Pi subagent that runs the mechanical half of pre-review (rebase, typecheck, requ
 _Avoid_: factory-checker; treating Gate as the pass verdict; inheriting Composer; resolving merge conflicts; Linear CLI from Hy3
 
 **Hy3**:
-OpenRouter model `tencent/hy3` for Scout and Gate only, no-think. Not product Vision. Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. When Hy3 is unavailable, Scout and Gate fall back to `openrouter/xiaomi/mimo-v2.5` then `cursor/composer-2.5` — not the OpenRouter provider default (Kimi), not Hy4. Domain helpers and Slop pin `cursor/composer-2.5`; an omitted `model:` makes Pi use Kimi.
-_Avoid_: stealth/ox-alpha; Kimi as Scout/Gate fallback; omitting helper `model:`; Hy3 for nest/expo/drizzle/ui-ux; Hy3 for planner, factory-checker, or land; blocking the slice on Exacto; pinning Scout/Gate to Hy4 as the default
+OpenRouter model `tencent/hy3` for Scout (primary), no-think. Gate uses `xiaomi/mimo-v2.5-pro` as primary and Hy3 as first fallback. Scout falls back to MiMo-V2.5-Pro then Composer. Not product Vision. Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. Last fallback is `cursor/composer-2.5` — not Kimi, not Hy4. Domain helpers and Slop pin `cursor/composer-2.5`; an omitted `model:` makes Pi use Kimi.
+_Avoid_: stealth/ox-alpha; Kimi as Scout/Gate fallback; omitting helper `model:`; Hy3 or MiMo for nest/expo/drizzle/ui-ux; Hy3 for planner, factory-checker, or land; blocking the slice on Exacto; pinning Scout/Gate to Hy4 as the default
 
 **Coding job**:
 A factory role on the coding slot: implement, factory-checker, auto-merge, or land. Not planner. Auto-merge and land do not spawn Pi.
@@ -283,7 +283,7 @@ GET /health on the PI worker. HTTP 200 if the process is up. JSON includes plann
 _Avoid_: 503 because a job is running, hung, or waiting on capacity; treating planner: active as “a Pi session is running”; inventing token numbers; logging secrets in health JSON
 
 **Token use**:
-After an implement or factory-checker Pi job exits, the worker writes input/output counts per role and model onto the existing workpad (`### Token use`). Implement parent is Composer; Scout and Gate are separate Hy3 lines when those counts exist; factory-checker is Grok. Planner and Intake do not write model token lines (they do not spawn Pi). Unknown counts stay unknown — the job still completes.
+After an implement or factory-checker Pi job exits, the worker writes input/output counts per role and model onto the existing workpad (`### Token use`). Implement parent is Composer; Scout and Gate are separate OpenRouter lines when those counts exist; factory-checker is Grok. Planner and Intake do not write model token lines (they do not spawn Pi). Unknown counts stay unknown — the job still completes.
 _Avoid_: inventing 0; putting API keys on the workpad; logging planner/intake model tokens
 
 **Implement browser**:

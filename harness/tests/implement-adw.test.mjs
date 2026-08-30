@@ -1256,7 +1256,7 @@ test("implement parent spawn stays Composer and is not Hy3", async () => {
   const modelIdx = spawned[0].args.indexOf("--model");
   assert.equal(spawned[0].args[modelIdx + 1], "cursor/composer-2.5");
   assert.equal(
-    spawned[0].args.some((arg) => String(arg).includes("tencent/hy")),
+    spawned[0].args.some((arg) => /tencent\/hy|mimo-v2/.test(String(arg))),
     false,
   );
   assert.equal(spawned[0].options.env.OPENROUTER_API_KEY, "or_test");
@@ -1285,15 +1285,20 @@ test("implement spawn excludes memory-write tools and skill_manage", async () =>
   assert.equal(spawned[0].options.env.KIT_PI_HERMES, WORKER_MEMORY_DIR);
 });
 
-test("Scout and Gate pin Hy3 no-think with MiMo then Composer fallback; helpers pin Composer", () => {
+test("Scout pins Hy3 and Gate pins MiMo-Pro with crossed fallback then Composer; helpers pin Composer", () => {
   const scout = agentFrontmatter(".pi/agents/scout.md");
   const gate = agentFrontmatter(".pi/agents/gate.md");
+  assert.match(scout.frontmatter, /^model:\s+openrouter\/tencent\/hy3\s*$/m);
+  assert.match(
+    scout.frontmatter,
+    /^fallbackModels:\s+openrouter\/xiaomi\/mimo-v2\.5-pro,\s*cursor\/composer-2\.5\s*$/m,
+  );
+  assert.match(gate.frontmatter, /^model:\s+openrouter\/xiaomi\/mimo-v2\.5-pro\s*$/m);
+  assert.match(
+    gate.frontmatter,
+    /^fallbackModels:\s+openrouter\/tencent\/hy3,\s*cursor\/composer-2\.5\s*$/m,
+  );
   for (const agent of [scout, gate]) {
-    assert.match(agent.frontmatter, /^model:\s+openrouter\/tencent\/hy3\s*$/m);
-    assert.match(
-      agent.frontmatter,
-      /^fallbackModels:\s+openrouter\/xiaomi\/mimo-v2\.5,\s*cursor\/composer-2\.5\s*$/m,
-    );
     assert.match(agent.frontmatter, /^thinking:\s+off\s*$/m);
     assert.doesNotMatch(agent.frontmatter, /stealth|ox-alpha|kimi|moonshot/i);
     assert.match(agent.text, /Exacto/);
@@ -1329,7 +1334,7 @@ test("Scout and Gate pin Hy3 no-think with MiMo then Composer fallback; helpers 
     const helper = agentFrontmatter(relative);
     assert.match(helper.frontmatter, /^model:\s+cursor\/composer-2\.5\s*$/m);
     assert.doesNotMatch(helper.frontmatter, /openrouter|kimi|moonshot/i);
-    assert.doesNotMatch(helper.text, /tencent\/hy[34]|stealth|ox-alpha/i);
+    assert.doesNotMatch(helper.text, /tencent\/hy[34]|mimo|stealth|ox-alpha/i);
   }
   const slop = agentFrontmatter(".pi/agents/slop.md");
   assert.match(slop.frontmatter, /^model:\s+cursor\/composer-2\.5\s*$/m);

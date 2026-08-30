@@ -317,9 +317,9 @@ Unpinned `.pi/agents` (nest/expo/drizzle/ui-ux/devops/slop) made Pi bill OpenRou
 
 OpenRouter workspace guardrail allows only `tencent/hy4-preview` on every workspace key. Scout and Gate pin `openrouter/tencent/hy4-preview` (`thinking: off`, `fallbackModels: cursor/composer-2.5`). `tencent/hy3` is ineligible and Composer-fallbacks. `harness/tests/implement-adw.test.mjs` locks the slug. Tighten only.
 
-### Pi Scout/Gate Hy3 with MiMo fallback
+### Pi Scout/Gate Hy3 with MiMo-Pro crossed fallback
 
-`KIT-Pi-harness` key allowlist includes Hy3 and MiMo-V2.5. Scout and Gate pin `openrouter/tencent/hy3` (`thinking: off`) with `fallbackModels: openrouter/xiaomi/mimo-v2.5, cursor/composer-2.5`. Hy4 stays off the pin. `harness/tests/implement-adw.test.mjs` locks the slug and fallback order. Tighten only.
+`KIT-Pi-harness` key allowlist includes Hy3 and MiMo-V2.5-Pro. Scout pins `openrouter/tencent/hy3` (`thinking: off`) with `fallbackModels: openrouter/xiaomi/mimo-v2.5-pro, cursor/composer-2.5`. Gate pins `openrouter/xiaomi/mimo-v2.5-pro` with `fallbackModels: openrouter/tencent/hy3, cursor/composer-2.5`. Hy4 stays off the pin. `harness/tests/implement-adw.test.mjs` locks both slugs and fallback order. Tighten only.
 
 ### Drizzle migration prefix collision (KIT-125)
 
