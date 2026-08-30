@@ -293,6 +293,16 @@ Prevents repeating KIT-125 (five false format cheap-retries → retry-cap hold, 
 
 Prevents repeating KIT-116 loop 2 (resume prompt was only «fix the class»; GitHub Slop showed unused; Nicklas could not read Standards on Linear). Tighten only.
 
+### Implement workpad three-axis Review feedback (KIT-136)
+
+`.cursor/rules/implement-workpad-three-axis.mdc` plus `scripts/check-implement-workpad-three-axis.mjs` (CI via `node` in `.github/workflows/ci.yml`; logic in `scripts/tests/check-implement-workpad-three-axis.test.mjs`) keep these locks:
+
+- Before exiting implement, the Linear workpad must include `### Review feedback` with exactly `- Spec: …`, `- Standards: …`, and `- Slop: …` (use `(none)` on a clean self-review pass).
+- Bare `- (none)`, a meta-only line, or a missing Slop axis fail `reviewFeedbackMissingSlopAxis` in `harness/checker-exit.mjs` even when GitHub gates are green.
+- Factory-checker replaces the block after `/code-review`; implement must seed the three axes so the mechanical gate is not stuck on an empty section.
+
+Prevents repeating the KIT-136 checker park (workpad never carried Spec/Standards/Slop; factory-checker incomplete-count 2). Tighten only.
+
 ### Factory checker Slop GitHub threads ratchet (KIT-127)
 
 `scripts/check-factory-checker-spawn.mjs` and `scripts/tests/check-factory-checker-spawn.test.mjs` keep these locks:

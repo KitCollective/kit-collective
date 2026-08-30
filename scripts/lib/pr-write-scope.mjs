@@ -26,6 +26,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/check-implement-adw-production-gh.mjs",
   "scripts/check-implement-cheap-retry.mjs",
   "scripts/check-implement-checker-fail-resume.mjs",
+  "scripts/check-implement-workpad-three-axis.mjs",
   "scripts/check-implement-first-run-loop.mjs",
   "scripts/check-migration-prefixes.mjs",
   "scripts/lib/migration-prefix.mjs",
@@ -64,6 +65,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/tests/check-implement-adw-production-gh.test.mjs",
   "scripts/tests/check-implement-cheap-retry.test.mjs",
   "scripts/tests/check-implement-checker-fail-resume.test.mjs",
+  "scripts/tests/check-implement-workpad-three-axis.test.mjs",
   "scripts/tests/check-implement-first-run-loop.test.mjs",
 ]);
 
