@@ -12,7 +12,7 @@ import { useIdentityPrefs } from "@/prefs/use-identity-prefs";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-export default function EmailNotifikationerScreen() {
+export default function EmailNotificationsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();

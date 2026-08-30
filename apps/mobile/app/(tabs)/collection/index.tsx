@@ -16,7 +16,7 @@ import { fetchCollectionShortcuts } from "@/api/shortcuts";
 import { useAuth } from "@/auth/AuthProvider";
 import { Sheet } from "@/components/catalog-ui";
 import { CollectionHeader } from "@/components/collection-header";
-import { GenvejeSheet } from "@/components/genveje-sheet";
+import { ShortcutsSheet } from "@/components/genveje-sheet";
 import { shouldFallbackToAlleOnFetchError } from "@/components/genveje-sheet-logic";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
@@ -223,7 +223,7 @@ export default function CollectionScreen() {
           Ingen notifikationer
         </Text>
       </Sheet>
-      <GenvejeSheet
+      <ShortcutsSheet
         visible={genvejeOpen}
         accessToken={accessToken ?? ""}
         activeShortcutId={selectedShortcutId}

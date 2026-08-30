@@ -1,6 +1,6 @@
 import type { CatalogPickerItem, CollectionJersey, CollectionShortcut } from "@kit/api-contract";
 
-export type GenvejeSheetMode = "list" | "form";
+export type ShortcutsSheetMode = "list" | "form";
 export type GenvejeFacetKind = "country" | "league" | "club" | "player";
 
 export type GenvejeFacets = {
@@ -18,7 +18,7 @@ const EMPTY_FACETS: GenvejeFacets = {
 };
 
 /** Locked Sheet titles from docs/design-system.md Collection shortcuts. */
-export function resolveGenvejeSheetTitle(mode: GenvejeSheetMode): string {
+export function resolveGenvejeSheetTitle(mode: ShortcutsSheetMode): string {
   return mode === "list" ? "Genveje" : "Ny genvej";
 }
 
