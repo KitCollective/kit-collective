@@ -88,3 +88,15 @@ test("allows adding the next prefix", () => {
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("denies git add of the migrations directory when the worktree has a colliding file", () => {
+  const cwd = makeLaneWith0009();
+  try {
+    writeFileSync(join(cwd, "packages/db/migrations/0009_user_account_fields.sql"), "-- collide\n");
+    const result = runHook(cwd, "git add packages/db/migrations");
+    assert.equal(result.permission, "deny");
+    assert.match(result.message, /0009/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

@@ -49,6 +49,26 @@ export function findMigrationPrefixCollisions(addedFiles, baseFiles) {
  * @param {string[]} baseFiles
  * @returns {string}
  */
+/**
+ * Added migrations with an empty lane listing — origin/development was not readable.
+ *
+ * @param {string[]} addedFiles
+ * @param {string[]} baseFiles
+ * @returns {boolean}
+ */
+export function missingBaseMigrations(addedFiles, baseFiles) {
+  const added = (Array.isArray(addedFiles) ? addedFiles : []).filter((file) =>
+    Boolean(migrationPrefix(file)),
+  );
+  if (added.length === 0) {
+    return false;
+  }
+  const base = (Array.isArray(baseFiles) ? baseFiles : []).filter((file) =>
+    Boolean(migrationPrefix(file)),
+  );
+  return base.length === 0;
+}
+
 export function nextMigrationPrefix(baseFiles) {
   let max = -1;
   for (const file of Array.isArray(baseFiles) ? baseFiles : []) {
@@ -68,6 +88,6 @@ export function nextMigrationPrefix(baseFiles) {
 export function formatMigrationCollisionFeedback(collisions, nextPrefix) {
   return (Array.isArray(collisions) ? collisions : []).map(
     (row) =>
-      `- Migration: prefix ${row.prefix} collides with origin/development \`${row.base}\`. Rename \`${row.added}\` to \`${nextPrefix}_…\` and update \`packages/db/migrations/meta/_journal.json\`.`,
+      `- Migration: prefix ${row.prefix} collides with origin/development \`${row.base}\`. Rename \`${row.added}\` to \`${nextPrefix}_…\`, update \`packages/db/migrations/meta/_journal.json\`, and commit. implement-exit pushes the worktree — do not wait for the harness to push an uncommitted rename.`,
   );
 }

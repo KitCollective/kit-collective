@@ -13,7 +13,7 @@ Constraints from `.scratch/Architecture/data-model.md` and tech-stack:
 - Postgres. No pgvector in MVP. No Neon.
 - No free-text club/league/season as catalog truth. Use `CatalogLabel`.
 - Migrations must be reversible or documented.
-- Take the next `NNNN` prefix from `git ls-tree -r --name-only origin/development -- packages/db/migrations`. Never reuse a prefix that already exists on the lane under a different filename. Update `packages/db/migrations/meta/_journal.json` with the new tag.
+- Take the next `NNNN` prefix from `git ls-tree -r --name-only origin/development -- packages/db/migrations`. Never reuse a prefix that already exists on the lane under a different filename. Update `packages/db/migrations/meta/_journal.json` with the new tag. Commit the rename — implement-exit pushes the worktree. Do not leave the old `NNNN_` on the remote PR.
 - Do not serve `rights: unresolved` kit images.
 
 Return schema + migration decisions to the parent. Do not change Linear status.

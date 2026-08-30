@@ -8,6 +8,7 @@ import { createGhClient } from "../gh-cli.mjs";
 import {
   completeImplementAdw,
   createListChangedFiles,
+  createListWorktreeMigrations,
   createTypecheckTouched,
   evaluateWriteScopeExit,
   formatWriteScopeViolationFeedback,
@@ -1548,7 +1549,10 @@ test("implement-exit cheap-retries a colliding migration prefix before rebase wa
     typecheckTouched: async () => {
       throw new Error("must not typecheck before migration retry");
     },
-    listChangedFiles: async () => ["packages/db/migrations/0009_user_account_fields.sql"],
+    listWorktreeMigrations: async () => ["packages/db/migrations/0009_user_account_fields.sql"],
+    listChangedFiles: async () => {
+      throw new Error("migration collision must not use the remote PR diff");
+    },
     listBaseMigrations: async () => [
       "packages/db/migrations/0008_bidding_conversations.sql",
       "packages/db/migrations/0009_user_jersey_favorite.sql",
@@ -1571,6 +1575,43 @@ test("implement-exit cheap-retries a colliding migration prefix before rebase wa
   assert.equal(
     gh.calls.some((call) => call[0] === "rebase"),
     false,
+  );
+});
+
+test("implement-exit rebases a local prefix rename even when the remote PR still lists the old file", async () => {
+  const description = "write-scope: packages/db/**, apps/api/**";
+  const linear = fakeLinearWithIssue(description);
+  const gh = fakeGh({ mergeable: "CONFLICTING" });
+  gh.findOpenIssuePr = async (input) => {
+    gh.calls.push(["findOpenIssuePr", input]);
+    return {
+      url: "https://github.com/KitCollective/kit-collective/pull/133",
+      mergeable: "CONFLICTING",
+      checks: [{ name: "test", conclusion: "success", isRequired: true }],
+    };
+  };
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-125", issueId: "issue-125", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-125", branch: "kit-125" },
+    gh,
+    linear,
+    typecheckTouched: async () => undefined,
+    listChangedFiles: async () => ["packages/db/migrations/0009_user_account_fields.sql"],
+    listWorktreeMigrations: async () => ["packages/db/migrations/0011_user_account_fields.sql"],
+    listBaseMigrations: async () => [
+      "packages/db/migrations/0009_user_jersey_favorite.sql",
+      "packages/db/migrations/0010_conversation_message_media.sql",
+    ],
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 0,
+  });
+
+  assert.notEqual(result.migrationRetry, true);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "rebase"),
+    true,
   );
 });
 
@@ -1610,6 +1651,29 @@ test("createListChangedFiles uses gh pr diff when a PR URL is present", async ()
     calls.some((call) => call[0] === "git"),
     false,
   );
+});
+
+test("createListWorktreeMigrations lists cached and untracked SQL via git ls-files", async () => {
+  const calls = [];
+  const listWorktreeMigrations = createListWorktreeMigrations({
+    async runCommand(command, args) {
+      calls.push([command, ...args]);
+      if (command === "git") {
+        return "packages/db/migrations/0011_user_account_fields.sql\npackages/db/migrations/meta/_journal.json\n";
+      }
+      throw new Error("worktree migrations must not use gh pr diff");
+    },
+  });
+  const files = await listWorktreeMigrations({ cwd: "/var/lib/kit-pi/worktrees/KIT-125" });
+  assert.deepEqual(files, ["packages/db/migrations/0011_user_account_fields.sql"]);
+  assert.deepEqual(calls[0], [
+    "git",
+    "ls-files",
+    "-co",
+    "--exclude-standard",
+    "--",
+    "packages/db/migrations",
+  ]);
 });
 
 test("Compose persists kit-pi worktrees and copies implement-exit adapters", () => {

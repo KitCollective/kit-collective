@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Factory ratchet (KIT-125): deny git add/commit of packages/db/migrations/NNNN_*.sql
 # when origin/development already has a different file with that prefix.
+# Also scans the worktree when the command only names the migrations directory.
 # Stdin: Cursor hook JSON. Stdout: {"permission":"allow"|"deny"}. Exit 2 = deny.
 
 set -u
@@ -31,23 +32,34 @@ if ! printf '%s' "$COMMAND" | grep -qE 'git[[:space:]]+(add|commit)\b'; then
   allow
 fi
 
-if ! printf '%s' "$COMMAND" | grep -qE 'packages/db/migrations/[0-9]{4}_'; then
+if ! printf '%s' "$COMMAND" | grep -qE 'packages/db/migrations'; then
   allow
 fi
-
-PREFIX=$(printf '%s' "$COMMAND" | grep -oE 'packages/db/migrations/[0-9]{4}_' | head -1 | grep -oE '[0-9]{4}' || true)
-[ -z "${PREFIX}" ] && allow
 
 if ! git rev-parse --verify origin/development >/dev/null 2>&1; then
   allow
 fi
 
-BASE=$(git ls-tree -r --name-only origin/development -- packages/db/migrations 2>/dev/null | grep -E "^packages/db/migrations/${PREFIX}_" || true)
-[ -z "${BASE}" ] && allow
-
-ADDED=$(printf '%s' "$COMMAND" | grep -oE "packages/db/migrations/${PREFIX}_[^[:space:]]+\.sql" | head -1 || true)
-if [ -n "${ADDED}" ] && [ "${ADDED}" = "${BASE}" ]; then
-  allow
+CANDIDATES=$(printf '%s' "$COMMAND" | grep -oE 'packages/db/migrations/[0-9]{4}_[^[:space:]]+\.sql' || true)
+if [ -z "${CANDIDATES}" ]; then
+  CANDIDATES=$(git ls-files -co --exclude-standard -- packages/db/migrations 2>/dev/null | grep -E '^packages/db/migrations/[0-9]{4}_.+\.sql$' || true)
 fi
+[ -z "${CANDIDATES}" ] && allow
 
-deny "BLOCKED: migration prefix ${PREFIX} already exists on origin/development (${BASE}). Take the next prefix from git ls-tree origin/development -- packages/db/migrations and update _journal.json."
+BASE_LIST=$(git ls-tree -r --name-only origin/development -- packages/db/migrations 2>/dev/null || true)
+
+while IFS= read -r ADDED; do
+  [ -z "${ADDED}" ] && continue
+  PREFIX=$(printf '%s' "$ADDED" | grep -oE '[0-9]{4}' | head -1 || true)
+  [ -z "${PREFIX}" ] && continue
+  BASE=$(printf '%s' "$BASE_LIST" | grep -E "^packages/db/migrations/${PREFIX}_" | head -1 || true)
+  [ -z "${BASE}" ] && continue
+  if [ "${ADDED}" = "${BASE}" ]; then
+    continue
+  fi
+  deny "BLOCKED: migration prefix ${PREFIX} already exists on origin/development (${BASE}). Take the next prefix from git ls-tree origin/development -- packages/db/migrations, update _journal.json, and commit."
+done <<EOF
+${CANDIDATES}
+EOF
+
+allow

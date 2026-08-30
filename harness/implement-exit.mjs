@@ -220,6 +220,38 @@ export async function loadWriteScopeEvaluator({ cwd, importModule } = {}) {
  *   runCommand?: (command: string, args: string[], options: { cwd?: string }) => Promise<string>,
  * }} [deps]
  */
+/**
+ * Worktree `packages/db/migrations/*.sql` (cached + untracked). Used for
+ * prefix collision so a local rename is visible before the remote PR updates.
+ *
+ * @param {{
+ *   runCommand?: (command: string, args: string[], options: { cwd?: string }) => Promise<string>,
+ * }} [deps]
+ */
+export function createListWorktreeMigrations({ runCommand } = {}) {
+  const run =
+    runCommand ??
+    (async (command, args, options = {}) => {
+      const { stdout } = await execFile(command, args, {
+        encoding: "utf8",
+        timeout: 120_000,
+        cwd: options.cwd,
+      });
+      return stdout;
+    });
+  return async ({ cwd } = {}) => {
+    const stdout = await run(
+      "git",
+      ["ls-files", "-co", "--exclude-standard", "--", "packages/db/migrations"],
+      { cwd },
+    );
+    return String(stdout)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => /^packages\/db\/migrations\/\d{4}_[^/]+\.sql$/.test(line));
+  };
+}
+
 export function createListChangedFiles({ runCommand } = {}) {
   const run =
     runCommand ??
@@ -723,6 +755,7 @@ function applyListedPr(pr, listed, identifier) {
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
  *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
  *   listChangedFiles?: (input: { cwd: string }) => Promise<string[]>,
+ *   listWorktreeMigrations?: (input: { cwd: string }) => Promise<string[]>,
  *   listBaseMigrations?: (input: { cwd: string }) => Promise<string[]>,
  *   findWriteScopeViolationsWorktree?: (files: string[], globs: string[]) => string[],
  *   importWriteScopeModule?: (specifier: string) => Promise<{ findWriteScopeViolations?: unknown }>,
@@ -744,6 +777,7 @@ export async function completeImplementAdw(input) {
     typecheckTouched,
     formatCheck,
     listChangedFiles: listChangedFilesInput,
+    listWorktreeMigrations: listWorktreeMigrationsInput,
     listBaseMigrations: listBaseMigrationsInput,
     findWriteScopeViolationsWorktree,
     importWriteScopeModule,
@@ -769,13 +803,11 @@ export async function completeImplementAdw(input) {
   const alreadyMergeable = pr?.mergeable === "MERGEABLE" && existingPrUrl.length > 0;
   const listChangedFiles = listChangedFilesInput ?? createListChangedFiles();
   try {
-    const changedForMigrations = await listChangedFiles({
-      cwd: checkout.path,
-      prUrl: existingPrUrl || pr?.url,
-    });
+    const listWorktree = listWorktreeMigrationsInput ?? createListWorktreeMigrations();
+    const worktreeMigrations = await listWorktree({ cwd: checkout.path });
     const listBase = listBaseMigrationsInput ?? createListBaseMigrations();
     const baseMigrations = await listBase({ cwd: checkout.path });
-    const collisions = findMigrationPrefixCollisions(changedForMigrations, baseMigrations);
+    const collisions = findMigrationPrefixCollisions(worktreeMigrations, baseMigrations);
     if (collisions.length > 0) {
       return writeMigrationRetryWorkpad({
         job,

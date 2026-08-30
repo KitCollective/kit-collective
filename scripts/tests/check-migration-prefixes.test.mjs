@@ -4,6 +4,7 @@ import {
   findMigrationPrefixCollisions,
   formatMigrationCollisionFeedback,
   migrationPrefix,
+  missingBaseMigrations,
   nextMigrationPrefix,
 } from "../lib/migration-prefix.mjs";
 
@@ -62,4 +63,20 @@ test("formatMigrationCollisionFeedback names the next prefix", () => {
   assert.match(lines.join("\n"), /0009_user_jersey_favorite/);
   assert.match(lines.join("\n"), /0010_/);
   assert.match(lines.join("\n"), /_journal\.json/);
+  assert.match(lines.join("\n"), /commit/i);
+});
+
+test("missingBaseMigrations is true when added SQL has no lane listing", () => {
+  assert.equal(
+    missingBaseMigrations(["packages/db/migrations/0009_user_account_fields.sql"], []),
+    true,
+  );
+  assert.equal(
+    missingBaseMigrations(
+      ["packages/db/migrations/0009_user_account_fields.sql"],
+      ["packages/db/migrations/0008_bidding_conversations.sql"],
+    ),
+    false,
+  );
+  assert.equal(missingBaseMigrations([], []), false);
 });
