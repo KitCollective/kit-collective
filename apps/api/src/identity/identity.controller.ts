@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Patch,
@@ -45,6 +46,40 @@ export class IdentityController {
   @UseGuards(JwtAuthGuard)
   updateProfile(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
     return this.identityService.updateProfile(user.sub, body);
+  }
+
+  @Patch("identity/account")
+  @UseGuards(JwtAuthGuard)
+  updateAccount(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.identityService.updateAccount(user.sub, body);
+  }
+
+  @Post("identity/password")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  changePassword(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.identityService.changePassword(user.sub, body);
+  }
+
+  @Post("identity/email")
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  changeEmail(@CurrentUser() user: JwtPayload, @Body() body: unknown) {
+    return this.identityService.changeEmail(user.sub, body);
+  }
+
+  @Post("identity/logout")
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  logout() {
+    return;
+  }
+
+  @Delete("identity/me")
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  deleteAccount(@CurrentUser() user: JwtPayload) {
+    return this.identityService.deleteAccount(user.sub);
   }
 
   @Post("identity/avatar")

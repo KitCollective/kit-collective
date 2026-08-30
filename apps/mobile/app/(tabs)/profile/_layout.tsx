@@ -18,6 +18,14 @@ export default function ProfileLayout() {
       <Stack.Screen name="edit" />
       <Stack.Screen name="favoritter" />
       <Stack.Screen name="indstillinger" />
+      <Stack.Screen name="kontoindstillinger" />
+      <Stack.Screen name="skift-adgangskode" />
+      <Stack.Screen name="skift-email" />
+      <Stack.Screen name="push-notifikationer" />
+      <Stack.Screen name="email-notifikationer" />
+      <Stack.Screen name="sprog" />
+      <Stack.Screen name="moerk-tilstand" />
+      <Stack.Screen name="privatlivsindstillinger" />
       <Stack.Screen name="cookie-indstillinger" />
     </Stack>
   );

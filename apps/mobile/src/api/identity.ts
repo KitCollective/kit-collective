@@ -1,8 +1,11 @@
 import {
   type HandleAvailabilityResponse,
   handleAvailabilityResponseSchema,
+  type IdentityAccountUpdate,
   type IdentityCredentials,
+  type IdentityEmailChange,
   type IdentityMe,
+  type IdentityPasswordChange,
   type IdentityProfileUpdate,
   type IdentitySession,
   identityCredentialsSchema,
@@ -139,4 +142,93 @@ export function resolveAvatarUrl(avatarUrl: string | null): string | null {
   }
 
   return `${getApiBaseUrl()}${avatarUrl}`;
+}
+
+export async function updateAccount(
+  accessToken: string,
+  update: IdentityAccountUpdate,
+): Promise<IdentityMe> {
+  const response = await requestJson("/v1/identity/account", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(update),
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke gemme kontooplysninger");
+  }
+
+  return identityMeSchema.parse(await response.json());
+}
+
+export async function changePassword(
+  accessToken: string,
+  payload: IdentityPasswordChange,
+): Promise<void> {
+  const response = await requestJson("/v1/identity/password", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (response.status === 401) {
+    throw new Error("Nuværende adgangskode er forkert");
+  }
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke skifte adgangskode");
+  }
+}
+
+export async function changeEmail(
+  accessToken: string,
+  payload: IdentityEmailChange,
+): Promise<IdentityMe> {
+  const response = await requestJson("/v1/identity/email", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (response.status === 401) {
+    throw new Error("Adgangskoden er forkert");
+  }
+
+  if (response.status === 409) {
+    throw new Error("E-mailen er allerede i brug");
+  }
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke skifte e-mail");
+  }
+
+  return identityMeSchema.parse(await response.json());
+}
+
+export async function deleteAccount(accessToken: string): Promise<void> {
+  const response = await requestJson("/v1/identity/me", {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke slette konto");
+  }
+}
+
+export async function logoutSession(accessToken: string): Promise<void> {
+  await requestJson("/v1/identity/logout", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
 }

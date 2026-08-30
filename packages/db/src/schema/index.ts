@@ -37,6 +37,7 @@ const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
 const VISION_USER_ACTIONS = ["accepted", "edited", "ignored"] as const;
 const MESSAGE_KINDS = ["text", "image", "bid"] as const;
 const BID_STATUSES = ["pending", "accepted", "declined"] as const;
+const IDENTITY_LINKED_PROVIDERS = ["google", "facebook"] as const;
 
 export const catalogEntityTypeEnum = pgEnum("catalog_entity_type", CATALOG_ENTITY_TYPES);
 export const externalIdEntityTypeEnum = pgEnum("external_id_entity_type", EXTERNAL_ID_ENTITY_TYPES);
@@ -50,6 +51,10 @@ export const nationalTeamGenderEnum = pgEnum("national_team_gender", NATIONAL_TE
 export const kitPhotoRightsEnum = pgEnum("kit_photo_rights", KIT_PHOTO_RIGHTS);
 export const kitPhotoVisibilityEnum = pgEnum("kit_photo_visibility", KIT_PHOTO_VISIBILITY);
 export const userRoleEnum = pgEnum("user_role", USER_ROLES);
+export const identityLinkedProviderEnum = pgEnum(
+  "identity_linked_provider",
+  IDENTITY_LINKED_PROVIDERS,
+);
 export const jerseySizeEnum = pgEnum("jersey_size", JERSEY_SIZES);
 export const jerseyConditionEnum = pgEnum("jersey_condition", JERSEY_CONDITIONS);
 export const photoRoleEnum = pgEnum("photo_role", PHOTO_ROLES);
@@ -228,6 +233,10 @@ export const user = pgTable(
     handle: text("handle").notNull(),
     aboutMe: text("about_me"),
     avatarObjectKey: text("avatar_object_key"),
+    fullName: text("full_name"),
+    phone: text("phone"),
+    birthday: date("birthday"),
+    emailVerified: boolean("email_verified").notNull().default(true),
     city: text("city"),
     showCity: boolean("show_city").notNull().default(false),
     role: userRoleEnum("role").notNull().default("user"),
@@ -236,6 +245,23 @@ export const user = pgTable(
   (table) => [
     uniqueIndex("user_email_unique").on(table.email),
     uniqueIndex("user_handle_unique").on(table.handle),
+  ],
+);
+
+export const identityProvider = pgTable(
+  "identity_provider",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    provider: identityLinkedProviderEnum("provider").notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("identity_provider_user_provider_unique").on(table.userId, table.provider),
+    uniqueIndex("identity_provider_provider_user_unique").on(table.provider, table.providerUserId),
   ],
 );
 

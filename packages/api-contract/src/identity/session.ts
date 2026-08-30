@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { identityAccountFieldsSchema } from "./account.js";
 import { handleSchema } from "./profile.js";
 
 export const identityRoleSchema = z.enum(["user", "admin"]);
@@ -25,10 +26,12 @@ export const identityCredentialsSchema = z
 
 export type IdentityCredentials = z.infer<typeof identityCredentialsSchema>;
 
-export const identityMeSchema = identityUserSchema.extend({
-  aboutMe: z.string().nullable(),
-  avatarUrl: z.string().min(1).nullable(),
-});
+export const identityMeSchema = identityUserSchema
+  .extend({
+    aboutMe: z.string().nullable(),
+    avatarUrl: z.string().min(1).nullable(),
+  })
+  .merge(identityAccountFieldsSchema);
 
 export type IdentityMe = z.infer<typeof identityMeSchema>;
 

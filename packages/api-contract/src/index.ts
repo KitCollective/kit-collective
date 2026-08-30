@@ -200,6 +200,21 @@ export {
   type VisionSaveActionResult,
 } from "./collection/vision-save-action.js";
 export {
+  IDENTITY_LINKED_PROVIDERS,
+  type IdentityAccountFields,
+  type IdentityAccountUpdate,
+  type IdentityEmailChange,
+  type IdentityLinkedAccount,
+  type IdentityLinkedProvider,
+  type IdentityPasswordChange,
+  identityAccountFieldsSchema,
+  identityAccountUpdateSchema,
+  identityEmailChangeSchema,
+  identityLinkedAccountSchema,
+  identityLinkedProviderSchema,
+  identityPasswordChangeSchema,
+} from "./identity/account.js";
+export {
   type Handle,
   type HandleAvailabilityQuery,
   type HandleAvailabilityResponse,

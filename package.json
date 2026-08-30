@@ -21,6 +21,7 @@
     "check:seed-scope-isolation-test": "node scripts/check-seed-scope-isolation-test.mjs",
     "check:seed-apify-test-database-isolation": "node scripts/check-seed-apify-test-database-isolation.mjs",
     "check:mobile-tab-bar": "node scripts/check-mobile-tab-bar.mjs",
+    "check:mobile-profile-settings-hub": "node scripts/check-mobile-profile-settings-hub.mjs",
     "check:mobile-design-tokens": "node scripts/check-mobile-design-tokens.mjs",
     "check:mobile-collection-ui-evidence": "node scripts/check-mobile-collection-ui-evidence.mjs",
     "check:mobile-drag-reorder": "node scripts/check-mobile-drag-reorder.mjs",
