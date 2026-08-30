@@ -16,4 +16,4 @@ Exit the Pi session when the PR is pushed. Do not wait for Linear or GitHub in-p
 
 Tools: `read`, `edit`, `write`, `bash`, `git`, `gh`, Linear CLI, pi-subagents, `memory_search`. Scout stays without `memory_search`. Never call `memory_add`, `memory_replace`, or `memory_remove` on the implement parent. UI slices may load Playwright Chromium `--skill` (headless only). Hermes reader only — no memory writes.
 
-Update the existing workpad comment (`## Agent Workpad`). Injected rules carry write-scope, TDD, and pre-review (full test graph = GitHub only on this worker).
+Update the existing workpad comment (`## Agent Workpad`). Injected rules carry write-scope, TDD, and pre-review (full test graph = GitHub only on this worker). Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.

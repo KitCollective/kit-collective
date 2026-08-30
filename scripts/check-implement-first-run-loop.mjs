@@ -42,6 +42,9 @@ export function missingImplementFirstRunLoopCoverage(sources) {
   if (!/ALWAYS_SKILLS/.test(ctx) || !/tdd\/SKILL\.md/.test(ctx)) {
     missing.push("implement-context.mjs always tdd skill");
   }
+  if (!/code-english\.mdc/.test(ctx)) {
+    missing.push("implement-context.mjs always code-english rule");
+  }
 
   const piJob = sources.piJob ?? "";
   if (!/selectImplementContext/.test(piJob)) {
@@ -62,6 +65,9 @@ export function missingImplementFirstRunLoopCoverage(sources) {
   if (!/not `pnpm test`/.test(piJob)) {
     missing.push("pi-job.mjs TDD not pnpm test on worker");
   }
+  if (!/Code identifiers, comments, and technical names are English/.test(piJob)) {
+    missing.push("pi-job.mjs English code identifiers in implementPrompt");
+  }
   if (!/resolveImplementSkillPaths/.test(piJob)) {
     missing.push("pi-job.mjs multiple --skill paths");
   }
@@ -72,6 +78,9 @@ export function missingImplementFirstRunLoopCoverage(sources) {
   }
   if (!/Skip Scout/.test(role) || !/Skip helpers/.test(role)) {
     missing.push("implement.md cheap retry Skip Scout / Skip helpers");
+  }
+  if (!/Code identifiers, comments, and technical names are English/.test(role)) {
+    missing.push("implement.md English code identifiers");
   }
 
   const contextTest = sources.contextTest ?? "";
@@ -95,6 +104,12 @@ export function missingImplementFirstRunLoopCoverage(sources) {
   }
   if (!/checker-fail uses full selector/.test(contextTest)) {
     missing.push("implement-context.test.mjs checker-fail full selector");
+  }
+  if (!/code-english\.mdc/.test(contextTest)) {
+    missing.push("implement-context.test.mjs always code-english rule");
+  }
+  if (!/Code identifiers, comments, and technical names are English/.test(contextTest)) {
+    missing.push("implement-context.test.mjs first-run English identifiers prompt");
   }
 
   const ciRetryTest = sources.ciRetryTest ?? "";

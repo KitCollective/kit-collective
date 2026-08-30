@@ -35,3 +35,13 @@ test("implement first-run loop coverage fails when First run prompt is removed",
   const missing = missingImplementFirstRunLoopCoverage(sources);
   assert.ok(missing.some((item) => item.includes("First run")));
 });
+
+test("implement first-run loop coverage fails when English identifier prompt is removed", () => {
+  const sources = loadSources();
+  sources.piJob = sources.piJob.replace(
+    /Code identifiers, comments, and technical names are English/g,
+    "Identifiers may be local language",
+  );
+  const missing = missingImplementFirstRunLoopCoverage(sources);
+  assert.ok(missing.some((item) => item.includes("English code identifiers")));
+});

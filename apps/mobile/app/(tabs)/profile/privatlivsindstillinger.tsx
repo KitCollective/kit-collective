@@ -13,7 +13,7 @@ import { useIdentityPrefs } from "@/prefs/use-identity-prefs";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-export default function PrivatlivsindstillingerScreen() {
+export default function PrivacySettingsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();

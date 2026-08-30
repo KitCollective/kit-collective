@@ -15,7 +15,7 @@ import { useIdentityPrefs } from "@/prefs/use-identity-prefs";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-export default function SprogScreen() {
+export default function LanguageScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();

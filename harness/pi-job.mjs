@@ -506,6 +506,8 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
  * }} [options]
  */
 export function implementPrompt(role, identifier, adwFile, options = {}) {
+  const codeEnglish =
+    "Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.";
   if (role === "implement") {
     const adw = typeof adwFile === "string" ? ` ADW ${adwFile}.` : "";
     const writeScopeLine =
@@ -549,16 +551,16 @@ ${feedback}`;
     }
     if (reviewFeedbackIsActionable(options.reviewFeedback)) {
       const feedback = String(options.reviewFeedback).trim();
-      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${noSleep} ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${noSleep} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
 ${feedback}`;
     }
-    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${noSleep} ${loopTail}`;
+    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${noSleep} ${codeEnglish} ${loopTail}`;
   }
   if (role === "factory-checker") {
-    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
+    return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit. ${codeEnglish}`;
   }
   return typeof adwFile === "string"
     ? `Factory role ${role} for ${identifier}. ADW ${adwFile}.`

@@ -189,6 +189,8 @@ model: cursor/composer-2.5
 ${inherit}---
 
 ${body}
+
+Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.
 `.trimEnd();
 }
 

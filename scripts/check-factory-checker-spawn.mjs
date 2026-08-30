@@ -209,6 +209,14 @@ export function missingFactoryCheckerSpawnCoverage(files) {
   if (!role.includes("Slop")) {
     failures.push(".pi/roles/factory-checker.md must document the Slop axis");
   }
+  if (!role.includes("Code identifiers, comments, and technical names are English")) {
+    failures.push(".pi/roles/factory-checker.md must require English code identifiers");
+  }
+  if (!codeReviewSkill.includes("Code identifiers, comments, and technical names are English")) {
+    failures.push(
+      ".cursor/skills/code-review/SKILL.md must treat Danish code identifiers as a Standards finding",
+    );
+  }
   if (!read("harness/factory-checker-tools.ts").includes("SLOP_AGENT_PI_ARGS")) {
     failures.push("harness/factory-checker-tools.ts must guard Slop subagent spawn env");
   }

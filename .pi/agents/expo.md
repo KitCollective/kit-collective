@@ -21,3 +21,5 @@ Constraints from `.scratch/Architecture/tech-stack.md` and product docs win over
 - `docs/design-system.md` wins over `expo-design-system` / `expo-native-ui` taste.
 
 Return a minimal implementation plan and code edits to the parent. Do not change Linear status.
+
+Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.

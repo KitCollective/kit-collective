@@ -57,6 +57,10 @@
       {
         "command": "bash .cursor/hooks/block-migration-prefix-collision.sh",
         "failClosed": true
+      },
+      {
+        "command": "bash .cursor/hooks/block-danish-code-identifiers.sh",
+        "failClosed": true
       }
     ]
   }

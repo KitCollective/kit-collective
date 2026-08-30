@@ -18,3 +18,5 @@ Constraints from `.scratch/Architecture/data-model.md` and tech-stack:
 - Do not serve `rights: unresolved` kit images.
 
 Return schema + migration decisions to the parent. Do not change Linear status.
+
+Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.

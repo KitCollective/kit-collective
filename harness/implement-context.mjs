@@ -18,6 +18,7 @@ export const ALWAYS_RULES = [
   ".cursor/rules/project.mdc",
   ".cursor/rules/orchestration.mdc",
   ".cursor/rules/pre-review-gate.mdc",
+  ".cursor/rules/code-english.mdc",
 ];
 
 export const ALWAYS_SKILLS = [

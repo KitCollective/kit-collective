@@ -19,3 +19,5 @@ Constraints from `.scratch/Architecture/tech-stack.md`:
 - Vision output is a suggestion. Persist catalog UUIDs, never raw model names as FK.
 
 Return module/interface changes to the parent. Do not change Linear status.
+
+Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.

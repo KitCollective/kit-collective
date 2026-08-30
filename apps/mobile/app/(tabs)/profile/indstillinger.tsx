@@ -16,7 +16,7 @@ import { appearanceLabel, localeLabel } from "@/prefs/labels";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-export default function IndstillingerScreen() {
+export default function SettingsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
