@@ -1,6 +1,7 @@
 import type { HandleAvailabilityResponse } from "@kit/api-contract";
+import { formatProfileLocationMeta } from "@kit/domain";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,6 +25,9 @@ import { useAuth } from "@/auth/AuthProvider";
 import {
   AvatarChangeRow,
   DrillHeader,
+  ListNavigateRow,
+  ListSwitchRow,
+  ProfileRowDivider,
   ProfileSurfaceGroup,
   TextField,
 } from "@/components/profile-ui";
@@ -68,8 +72,16 @@ export default function EditProfileScreen() {
   const [aboutMe, setAboutMe] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [initialHandle, setInitialHandle] = useState("");
+  const [countryLabel, setCountryLabel] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(null);
+  const [showCity, setShowCity] = useState(false);
   const [availability, setAvailability] = useState<HandleAvailabilityResponse["status"] | null>(
     null,
+  );
+
+  const locationMeta = useMemo(
+    () => formatProfileLocationMeta(city, countryLabel),
+    [city, countryLabel],
   );
 
   const avatarHeaders = useMemo(
@@ -87,6 +99,9 @@ export default function EditProfileScreen() {
     setInitialHandle(profile.handle);
     setAboutMe(profile.aboutMe ?? "");
     setAvatarUrl(profile.avatarUrl);
+    setCountryLabel(profile.countryLabel);
+    setCity(profile.city);
+    setShowCity(profile.showCity);
     setAvailability("yours");
   }, [accessToken]);
 
@@ -109,6 +124,12 @@ export default function EditProfileScreen() {
       active = false;
     };
   }, [loadProfile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadProfile().catch(() => undefined);
+    }, [loadProfile]),
+  );
 
   useEffect(() => {
     if (!accessToken || !handle || handle === initialHandle) {
@@ -159,6 +180,21 @@ export default function EditProfileScreen() {
     const updated = await uploadAvatar(accessToken, result.assets[0].base64);
     setAvatarUrl(updated.avatarUrl);
     await refreshUser();
+  }
+
+  async function handleShowCityChange(nextValue: boolean) {
+    if (!accessToken) {
+      return;
+    }
+
+    setShowCity(nextValue);
+    try {
+      const updated = await updateProfile(accessToken, { showCity: nextValue });
+      setShowCity(updated.showCity);
+      await refreshUser();
+    } catch {
+      setShowCity((current) => !current);
+    }
   }
 
   async function handleSave() {
@@ -248,6 +284,22 @@ export default function EditProfileScreen() {
             multiline
             autoCapitalize="sentences"
           />
+
+          <ProfileSurfaceGroup>
+            <ListNavigateRow
+              title="Min lokation"
+              meta={locationMeta ?? undefined}
+              icon="location-outline"
+              onPress={() => router.push("/(tabs)/profile/min-lokation")}
+            />
+            <ProfileRowDivider />
+            <ListSwitchRow
+              title="Vis by på profil"
+              helper="Slået fra vises kun landet på din profil."
+              value={showCity}
+              onValueChange={(value) => void handleShowCityChange(value)}
+            />
+          </ProfileSurfaceGroup>
 
           {error ? (
             <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text>

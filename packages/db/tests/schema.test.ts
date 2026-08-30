@@ -136,4 +136,20 @@ describe("stamdata schema", () => {
       ),
     ).rejects.toThrow();
   });
+
+  it("stores optional country_id on user", async () => {
+    const country = await pool.query<{ id: string }>(
+      `INSERT INTO country (iso3166) VALUES ('DK') RETURNING id`,
+    );
+    const countryId = country.rows[0]!.id;
+
+    const inserted = await pool.query<{ country_id: string | null }>(
+      `INSERT INTO "user" (email, password_hash, handle, country_id)
+       VALUES ('loc@example.com', 'hash', 'loc_user', $1)
+       RETURNING country_id`,
+      [countryId],
+    );
+
+    expect(inserted.rows[0]?.country_id).toBe(countryId);
+  });
 });

@@ -47,6 +47,10 @@ describe("identitySessionSchema", () => {
           { provider: "google" as const, linked: false },
           { provider: "facebook" as const, linked: false },
         ],
+        countryId: null,
+        countryLabel: null,
+        city: null,
+        showCity: false,
       },
     };
     expect(identitySessionSchema.parse(session)).toEqual(session);
