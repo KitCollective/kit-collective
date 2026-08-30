@@ -2,18 +2,38 @@ import {
   type HandleAvailabilityResponse,
   handleAvailabilityResponseSchema,
   handleSchema,
+  IDENTITY_LINKED_PROVIDERS,
+  type IdentityAccountUpdate,
   type IdentityAvatarUpload,
+  type IdentityEmailChange,
+  type IdentityLinkedAccount,
   type IdentityMe,
+  type IdentityPasswordChange,
   type IdentityProfileUpdate,
   type IdentityRole,
   type IdentitySession,
+  identityAccountUpdateSchema,
   identityAvatarUploadSchema,
   identityCredentialsSchema,
+  identityEmailChangeSchema,
   identityMeSchema,
+  identityPasswordChangeSchema,
   identityProfileUpdateSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
-import { user } from "@kit/db";
+import {
+  collectionShortcut,
+  conversation,
+  conversationMessage,
+  conversationParticipant,
+  identityProvider,
+  jerseyDraft,
+  user,
+  userJersey,
+  userJerseyFavorite,
+  userJerseyPhoto,
+  visionLog,
+} from "@kit/db";
 import {
   BadRequestException,
   ConflictException,
@@ -24,7 +44,7 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { DB, type DbToken } from "../db/db.module.js";
@@ -37,6 +57,19 @@ import {
 } from "./identity.helpers.js";
 
 const { hash, compare } = bcrypt;
+
+const USER_ME_SELECT = {
+  id: user.id,
+  email: user.email,
+  role: user.role,
+  handle: user.handle,
+  aboutMe: user.aboutMe,
+  avatarObjectKey: user.avatarObjectKey,
+  fullName: user.fullName,
+  phone: user.phone,
+  birthday: user.birthday,
+  emailVerified: user.emailVerified,
+} as const;
 
 export type JwtPayload = {
   sub: string;
@@ -88,14 +121,7 @@ export class IdentityService {
         passwordHash,
         handle: assignedHandle,
       })
-      .returning({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        handle: user.handle,
-        aboutMe: user.aboutMe,
-        avatarObjectKey: user.avatarObjectKey,
-      });
+      .returning(USER_ME_SELECT);
 
     if (!created) {
       throw new ConflictException("Email already registered");
@@ -108,12 +134,7 @@ export class IdentityService {
     const credentials = identityCredentialsSchema.parse(rawBody);
     const [found] = await this.db
       .select({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        handle: user.handle,
-        aboutMe: user.aboutMe,
-        avatarObjectKey: user.avatarObjectKey,
+        ...USER_ME_SELECT,
         passwordHash: user.passwordHash,
       })
       .from(user)
@@ -129,18 +150,76 @@ export class IdentityService {
       throw new UnauthorizedException("Invalid email or password");
     }
 
-    return this.buildSession(found);
+    const { passwordHash: _passwordHash, ...sessionRow } = found;
+    return this.buildSession(sessionRow);
   }
 
   async getMe(userId: string): Promise<IdentityMe> {
     const [found] = await this.db
+      .select(USER_ME_SELECT)
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!found) {
+      throw new UnauthorizedException();
+    }
+
+    const linkedAccounts = await this.loadLinkedAccounts(userId);
+    return this.toIdentityMe(found, linkedAccounts);
+  }
+
+  async updateAccount(userId: string, rawBody: unknown): Promise<IdentityMe> {
+    const body: IdentityAccountUpdate = identityAccountUpdateSchema.parse(rawBody);
+
+    const [updated] = await this.db
+      .update(user)
+      .set({
+        ...(body.fullName !== undefined ? { fullName: body.fullName } : {}),
+        ...(body.phone !== undefined ? { phone: body.phone } : {}),
+        ...(body.birthday !== undefined ? { birthday: body.birthday } : {}),
+      })
+      .where(eq(user.id, userId))
+      .returning(USER_ME_SELECT);
+
+    if (!updated) {
+      throw new UnauthorizedException();
+    }
+
+    const linkedAccounts = await this.loadLinkedAccounts(userId);
+    return this.toIdentityMe(updated, linkedAccounts);
+  }
+
+  async changePassword(userId: string, rawBody: unknown): Promise<void> {
+    const body: IdentityPasswordChange = identityPasswordChangeSchema.parse(rawBody);
+
+    const [found] = await this.db
+      .select({ passwordHash: user.passwordHash })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+
+    if (!found) {
+      throw new UnauthorizedException();
+    }
+
+    const valid = await compare(body.currentPassword, found.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException("Current password is incorrect");
+    }
+
+    const passwordHash = await hash(body.newPassword, 12);
+    await this.db.update(user).set({ passwordHash }).where(eq(user.id, userId));
+  }
+
+  async changeEmail(userId: string, rawBody: unknown): Promise<IdentityMe> {
+    const body: IdentityEmailChange = identityEmailChangeSchema.parse(rawBody);
+    const normalizedEmail = body.email.toLowerCase();
+
+    const [found] = await this.db
       .select({
-        id: user.id,
         email: user.email,
-        role: user.role,
-        handle: user.handle,
-        aboutMe: user.aboutMe,
-        avatarObjectKey: user.avatarObjectKey,
+        passwordHash: user.passwordHash,
       })
       .from(user)
       .where(eq(user.id, userId))
@@ -150,13 +229,97 @@ export class IdentityService {
       throw new UnauthorizedException();
     }
 
-    return identityMeSchema.parse({
-      id: found.id,
-      email: found.email,
-      role: found.role,
-      handle: found.handle,
-      aboutMe: found.aboutMe,
-      avatarUrl: found.avatarObjectKey ? avatarUrlForUser() : null,
+    const valid = await compare(body.password, found.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException("Current password is incorrect");
+    }
+
+    if (normalizedEmail !== found.email) {
+      const [existing] = await this.db
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.email, normalizedEmail))
+        .limit(1);
+
+      if (existing) {
+        throw new ConflictException("Email already registered");
+      }
+    }
+
+    const [updated] = await this.db
+      .update(user)
+      .set({ email: normalizedEmail, emailVerified: true })
+      .where(eq(user.id, userId))
+      .returning(USER_ME_SELECT);
+
+    if (!updated) {
+      throw new UnauthorizedException();
+    }
+
+    const linkedAccounts = await this.loadLinkedAccounts(userId);
+    return this.toIdentityMe(updated, linkedAccounts);
+  }
+
+  async deleteAccount(userId: string): Promise<void> {
+    const ownedJerseys = await this.db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(eq(userJersey.userId, userId));
+
+    const ownedJerseyIds = ownedJerseys.map((row) => row.id);
+
+    const participantConversations = await this.db
+      .select({ id: conversation.id })
+      .from(conversation)
+      .where(
+        or(eq(conversation.lowerCollectorId, userId), eq(conversation.upperCollectorId, userId)),
+      );
+
+    const jerseyConversations =
+      ownedJerseyIds.length > 0
+        ? await this.db
+            .select({ id: conversation.id })
+            .from(conversation)
+            .where(inArray(conversation.userJerseyId, ownedJerseyIds))
+        : [];
+
+    const conversationIds = [
+      ...new Set([
+        ...participantConversations.map((row) => row.id),
+        ...jerseyConversations.map((row) => row.id),
+      ]),
+    ];
+
+    await this.db.transaction(async (tx) => {
+      if (conversationIds.length > 0) {
+        await tx
+          .delete(conversationMessage)
+          .where(inArray(conversationMessage.conversationId, conversationIds));
+        await tx
+          .delete(conversationParticipant)
+          .where(inArray(conversationParticipant.conversationId, conversationIds));
+        await tx.delete(conversation).where(inArray(conversation.id, conversationIds));
+      }
+
+      await tx.delete(userJerseyFavorite).where(eq(userJerseyFavorite.collectorId, userId));
+
+      // visionLog and jerseyDraft reference user_jersey — delete before owned jerseys.
+      await tx.delete(visionLog).where(eq(visionLog.userId, userId));
+      await tx.delete(jerseyDraft).where(eq(jerseyDraft.userId, userId));
+
+      if (ownedJerseyIds.length > 0) {
+        await tx
+          .delete(userJerseyFavorite)
+          .where(inArray(userJerseyFavorite.userJerseyId, ownedJerseyIds));
+        await tx
+          .delete(userJerseyPhoto)
+          .where(inArray(userJerseyPhoto.userJerseyId, ownedJerseyIds));
+        await tx.delete(userJersey).where(eq(userJersey.userId, userId));
+      }
+
+      await tx.delete(collectionShortcut).where(eq(collectionShortcut.userId, userId));
+      await tx.delete(identityProvider).where(eq(identityProvider.userId, userId));
+      await tx.delete(user).where(eq(user.id, userId));
     });
   }
 
@@ -203,27 +366,14 @@ export class IdentityService {
         ...(body.aboutMe !== undefined ? { aboutMe: body.aboutMe } : {}),
       })
       .where(eq(user.id, userId))
-      .returning({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        handle: user.handle,
-        aboutMe: user.aboutMe,
-        avatarObjectKey: user.avatarObjectKey,
-      });
+      .returning(USER_ME_SELECT);
 
     if (!updated) {
       throw new UnauthorizedException();
     }
 
-    return identityMeSchema.parse({
-      id: updated.id,
-      email: updated.email,
-      role: updated.role,
-      handle: updated.handle,
-      aboutMe: updated.aboutMe,
-      avatarUrl: updated.avatarObjectKey ? avatarUrlForUser() : null,
-    });
+    const linkedAccounts = await this.loadLinkedAccounts(userId);
+    return this.toIdentityMe(updated, linkedAccounts);
   }
 
   async uploadAvatar(userId: string, rawBody: unknown): Promise<IdentityMe> {
@@ -245,27 +395,14 @@ export class IdentityService {
       .update(user)
       .set({ avatarObjectKey: objectKey })
       .where(eq(user.id, userId))
-      .returning({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        handle: user.handle,
-        aboutMe: user.aboutMe,
-        avatarObjectKey: user.avatarObjectKey,
-      });
+      .returning(USER_ME_SELECT);
 
     if (!updated) {
       throw new UnauthorizedException();
     }
 
-    return identityMeSchema.parse({
-      id: updated.id,
-      email: updated.email,
-      role: updated.role,
-      handle: updated.handle,
-      aboutMe: updated.aboutMe,
-      avatarUrl: avatarUrlForUser(),
-    });
+    const linkedAccounts = await this.loadLinkedAccounts(userId);
+    return this.toIdentityMe(updated, linkedAccounts, avatarUrlForUser());
   }
 
   async getAvatarBytes(userId: string): Promise<Uint8Array> {
@@ -364,6 +501,59 @@ export class IdentityService {
     throw new ConflictException("Could not assign a unique handle");
   }
 
+  private async loadLinkedAccounts(userId: string): Promise<IdentityLinkedAccount[]> {
+    const rows = await this.db
+      .select({ provider: identityProvider.provider })
+      .from(identityProvider)
+      .where(eq(identityProvider.userId, userId));
+
+    const linked = new Set(rows.map((row) => row.provider));
+
+    return IDENTITY_LINKED_PROVIDERS.map((provider) => ({
+      provider,
+      linked: linked.has(provider),
+    }));
+  }
+
+  private toIdentityMe(
+    row: {
+      id: string;
+      email: string;
+      role: IdentityRole;
+      handle: string;
+      aboutMe: string | null;
+      avatarObjectKey: string | null;
+      fullName: string | null;
+      phone: string | null;
+      birthday: string | Date | null;
+      emailVerified: boolean;
+    },
+    linkedAccounts: IdentityLinkedAccount[],
+    avatarUrlOverride?: string | null,
+  ): IdentityMe {
+    const birthday =
+      row.birthday instanceof Date ? row.birthday.toISOString().slice(0, 10) : row.birthday;
+
+    return identityMeSchema.parse({
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      handle: row.handle,
+      aboutMe: row.aboutMe,
+      avatarUrl:
+        avatarUrlOverride !== undefined
+          ? avatarUrlOverride
+          : row.avatarObjectKey
+            ? avatarUrlForUser()
+            : null,
+      emailVerified: row.emailVerified,
+      fullName: row.fullName,
+      phone: row.phone,
+      birthday,
+      linkedAccounts,
+    });
+  }
+
   private buildSession(row: {
     id: string;
     email: string;
@@ -371,6 +561,10 @@ export class IdentityService {
     handle: string;
     aboutMe: string | null;
     avatarObjectKey: string | null;
+    fullName: string | null;
+    phone: string | null;
+    birthday: string | Date | null;
+    emailVerified: boolean;
   }): IdentitySession {
     const payload: JwtPayload = {
       sub: row.id,
@@ -378,16 +572,14 @@ export class IdentityService {
       role: row.role,
     };
 
+    const linkedAccounts = IDENTITY_LINKED_PROVIDERS.map((provider) => ({
+      provider,
+      linked: false,
+    }));
+
     return identitySessionSchema.parse({
       accessToken: this.jwtService.sign(payload),
-      user: {
-        id: row.id,
-        email: row.email,
-        role: row.role,
-        handle: row.handle,
-        aboutMe: row.aboutMe,
-        avatarUrl: row.avatarObjectKey ? avatarUrlForUser() : null,
-      },
+      user: this.toIdentityMe(row, linkedAccounts),
     });
   }
 }

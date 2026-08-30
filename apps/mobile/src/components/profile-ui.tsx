@@ -38,6 +38,7 @@ type TextFieldProps = {
   helperTone?: "secondary" | "danger";
   multiline?: boolean;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  secureTextEntry?: boolean;
 };
 
 export function TextField({
@@ -48,6 +49,7 @@ export function TextField({
   helperTone = "secondary",
   multiline = false,
   autoCapitalize = "none",
+  secureTextEntry = false,
 }: TextFieldProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -58,6 +60,7 @@ export function TextField({
       <TextInput
         autoCapitalize={autoCapitalize}
         multiline={multiline}
+        secureTextEntry={secureTextEntry}
         value={value}
         onChangeText={onChangeText}
         style={[
@@ -116,6 +119,108 @@ export function ListNavigateRow({ title, meta, icon, onPress }: ListNavigateRowP
       />
     </Pressable>
   );
+}
+
+type ListDangerRowProps = {
+  title: string;
+  icon: IoniconName;
+  onPress: () => void;
+  showHairline?: boolean;
+};
+
+export function ListDangerRow({ title, icon, onPress, showHairline = false }: ListDangerRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        showHairline && {
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.borderSubtle,
+        },
+        pressed && styles.pressed,
+      ]}
+    >
+      <Ionicons name={icon} size={22} color={theme.danger} accessibilityElementsHidden />
+      <Text style={[typography.body, styles.dangerLabel, { color: theme.danger }]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+type ListValueRowProps = {
+  title: string;
+  value?: string | null;
+  meta?: string;
+  helper?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  onPress?: () => void;
+  chevron?: boolean;
+};
+
+export function ListValueRow({
+  title,
+  value,
+  meta,
+  helper,
+  actionLabel,
+  onAction,
+  onPress,
+  chevron = false,
+}: ListValueRowProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  const body = (
+    <>
+      <View style={styles.rowBody}>
+        <Text style={[typography.body, { color: theme.contentPrimary }]}>{title}</Text>
+        {value ? (
+          <Text style={[typography.body, { color: theme.contentSecondary }]}>{value}</Text>
+        ) : null}
+        {meta ? <Text style={[typography.mono, { color: theme.contentMuted }]}>{meta}</Text> : null}
+        {helper ? (
+          <Text style={[typography.caption, { color: theme.contentSecondary }]}>{helper}</Text>
+        ) : null}
+      </View>
+      {actionLabel && onAction ? (
+        <Pressable accessibilityRole="button" onPress={onAction} style={styles.actionTarget}>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>{actionLabel}</Text>
+        </Pressable>
+      ) : onPress || chevron ? (
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={theme.contentMuted}
+          accessibilityElementsHidden
+        />
+      ) : null}
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      >
+        {body}
+      </Pressable>
+    );
+  }
+
+  return <View style={styles.row}>{body}</View>;
+}
+
+export function ProfileRowDivider() {
+  const theme = useTheme();
+  return <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />;
 }
 
 type IdentityCardProps = {
@@ -239,37 +344,6 @@ export function ListPeerStubRow({ handle, meta, onPress }: ListPeerStubRowProps)
   );
 }
 
-type ListDangerRowProps = {
-  title: string;
-  icon: IoniconName;
-  onPress: () => void;
-  showHairline?: boolean;
-};
-
-export function ListDangerRow({ title, icon, onPress, showHairline = false }: ListDangerRowProps) {
-  const theme = useTheme();
-  const typography = useTypography();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.row,
-        showHairline && {
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: theme.borderSubtle,
-        },
-        pressed && styles.pressed,
-      ]}
-    >
-      <Ionicons name={icon} size={22} color={theme.danger} accessibilityElementsHidden />
-      <Text style={[typography.body, styles.dangerLabel, { color: theme.danger }]}>{title}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   drillHeader: {
     flexDirection: "row",
@@ -337,6 +411,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.md,
     overflow: "hidden",
+  },
+  divider: {
+    height: 1,
+    marginHorizontal: space.insetMd,
+  },
+  actionTarget: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   peerInitial: {
     width: 44,

@@ -2,12 +2,23 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  collectionFavoritesSchema,
   collectionJerseysSchema,
+  collectionSaveResponseSchema,
   handleAvailabilityResponseSchema,
   identityMeSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
-import { resetDatabase } from "@kit/db";
+import {
+  catalogLabel,
+  club,
+  country,
+  createDb,
+  league,
+  resetDatabase,
+  season,
+  teamSeason,
+} from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -35,6 +46,101 @@ async function registerSession(app: NestFastifyApplication, email: string) {
   });
 
   return identitySessionSchema.parse(JSON.parse(response.body));
+}
+
+async function insertClubSeasonFixture() {
+  const { db, pool } = createDb(DATABASE_URL);
+
+  const [insertedCountry] = await db
+    .insert(country)
+    .values({ iso3166: "DK" })
+    .returning({ id: country.id });
+
+  const [insertedLeague] = await db
+    .insert(league)
+    .values({ countryId: insertedCountry!.id })
+    .returning({ id: league.id });
+
+  const [insertedClub] = await db
+    .insert(club)
+    .values({ countryId: insertedCountry!.id, kind: "club" })
+    .returning({ id: club.id });
+
+  const [insertedSeason] = await db
+    .insert(season)
+    .values({
+      leagueId: insertedLeague!.id,
+      label: "2023/24",
+      startsOn: "2023-07-01",
+      endsOn: "2024-06-30",
+      calendarKind: "split_year",
+    })
+    .returning({ id: season.id });
+
+  await db.insert(teamSeason).values({
+    clubId: insertedClub!.id,
+    seasonId: insertedSeason!.id,
+  });
+
+  await db.insert(catalogLabel).values([
+    {
+      entityType: "country",
+      entityId: insertedCountry!.id,
+      locale: "da",
+      kind: "label",
+      text: "Danmark",
+      source: "seed",
+    },
+    {
+      entityType: "league",
+      entityId: insertedLeague!.id,
+      locale: "da",
+      kind: "label",
+      text: "Superligaen",
+      source: "seed",
+    },
+    {
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "da",
+      kind: "label",
+      text: "F.C. København",
+      source: "seed",
+    },
+  ]);
+
+  await pool.end();
+
+  return {
+    clubId: insertedClub!.id,
+    seasonId: insertedSeason!.id,
+  };
+}
+
+async function saveJerseyForUser(
+  app: NestFastifyApplication,
+  session: Awaited<ReturnType<typeof registerSession>>,
+  fixture: Awaited<ReturnType<typeof insertClubSeasonFixture>>,
+) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/collection/jerseys/save",
+    headers: {
+      authorization: `Bearer ${session.accessToken}`,
+      "accept-language": "da",
+    },
+    payload: {
+      clubId: fixture.clubId,
+      seasonId: fixture.seasonId,
+      type: "home",
+      size: "m",
+      condition: "used",
+      photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+    },
+  });
+
+  expect(response.statusCode).toBe(201);
+  return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
 }
 
 describe("Identity /v1", () => {
@@ -277,5 +383,217 @@ describe("Identity /v1", () => {
     expect(response.statusCode).toBe(200);
     const body = collectionJerseysSchema.parse(JSON.parse(response.body));
     expect(body).toEqual({ jerseys: [] });
+  });
+
+  it("changes password on the email+password path", async () => {
+    const session = await registerSession(app, "password-change@example.com");
+
+    const change = await app.inject({
+      method: "POST",
+      url: "/v1/identity/password",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: {
+        currentPassword: "password123",
+        newPassword: "newpassword456",
+      },
+    });
+
+    expect(change.statusCode).toBe(200);
+
+    const oldLogin = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "password-change@example.com",
+        password: "password123",
+      },
+    });
+    expect(oldLogin.statusCode).toBe(401);
+
+    const newLogin = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "password-change@example.com",
+        password: "newpassword456",
+      },
+    });
+    expect(newLogin.statusCode).toBe(200);
+  });
+
+  it("returns account fields on GET me", async () => {
+    const session = await registerSession(app, "account@example.com");
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: "/v1/identity/account",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: {
+        fullName: "Ada Lovelace",
+        phone: "+4512345678",
+        birthday: "1990-05-15",
+      },
+    });
+    expect(patch.statusCode).toBe(200);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(me.statusCode).toBe(200);
+    const body = identityMeSchema.parse(JSON.parse(me.body));
+    expect(body.emailVerified).toBe(true);
+    expect(body.fullName).toBe("Ada Lovelace");
+    expect(body.phone).toBe("+4512345678");
+    expect(body.birthday).toBe("1990-05-15");
+    expect(body.linkedAccounts).toEqual([
+      { provider: "google", linked: false },
+      { provider: "facebook", linked: false },
+    ]);
+  });
+
+  it("changes email on the email+password path", async () => {
+    const session = await registerSession(app, "email-change@example.com");
+
+    const change = await app.inject({
+      method: "POST",
+      url: "/v1/identity/email",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: {
+        email: "new-email@example.com",
+        password: "password123",
+      },
+    });
+
+    expect(change.statusCode).toBe(200);
+    const body = identityMeSchema.parse(JSON.parse(change.body));
+    expect(body.email).toBe("new-email@example.com");
+
+    const oldLogin = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "email-change@example.com",
+        password: "password123",
+      },
+    });
+    expect(oldLogin.statusCode).toBe(401);
+
+    const newLogin = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "new-email@example.com",
+        password: "password123",
+      },
+    });
+    expect(newLogin.statusCode).toBe(200);
+  });
+
+  it("accepts logout and rejects GET me without a session token", async () => {
+    const session = await registerSession(app, "logout@example.com");
+
+    const logout = await app.inject({
+      method: "POST",
+      url: "/v1/identity/logout",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(logout.statusCode).toBe(204);
+    expect(logout.body).toBe("");
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+    });
+    expect(me.statusCode).toBe(401);
+  });
+
+  it("deletes the account so subsequent GET me is 401", async () => {
+    const session = await registerSession(app, "delete-me@example.com");
+
+    const del = await app.inject({
+      method: "DELETE",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(del.statusCode).toBe(204);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(me.statusCode).toBe(401);
+  });
+
+  it("deletes account, owned jerseys, and favorites so GET me is 401 and foreign favorites empty", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "delete-owner@example.com");
+    const favoriter = await registerSession(app, "delete-favoriter@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const addFavorite = await app.inject({
+      method: "POST",
+      url: "/v1/collection/favorites",
+      headers: { authorization: `Bearer ${favoriter.accessToken}` },
+      payload: { userJerseyId: ownerJersey.id },
+    });
+    expect(addFavorite.statusCode).toBe(201);
+
+    const listBefore = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${favoriter.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(collectionFavoritesSchema.parse(JSON.parse(listBefore.body)).favorites).toHaveLength(1);
+
+    const ownerCollection = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(collectionJerseysSchema.parse(JSON.parse(ownerCollection.body)).jerseys).toHaveLength(1);
+
+    const del = await app.inject({
+      method: "DELETE",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(del.statusCode).toBe(204);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(me.statusCode).toBe(401);
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "delete-owner@example.com",
+        password: "password123",
+      },
+    });
+    expect(login.statusCode).toBe(401);
+
+    const emptyFavorites = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${favoriter.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(emptyFavorites.statusCode).toBe(200);
+    expect(collectionFavoritesSchema.parse(JSON.parse(emptyFavorites.body)).favorites).toHaveLength(
+      0,
+    );
   });
 });

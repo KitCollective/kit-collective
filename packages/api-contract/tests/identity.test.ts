@@ -39,6 +39,14 @@ describe("identitySessionSchema", () => {
         handle: "collector",
         aboutMe: null,
         avatarUrl: null,
+        emailVerified: true,
+        fullName: null,
+        phone: null,
+        birthday: null,
+        linkedAccounts: [
+          { provider: "google" as const, linked: false },
+          { provider: "facebook" as const, linked: false },
+        ],
       },
     };
     expect(identitySessionSchema.parse(session)).toEqual(session);
