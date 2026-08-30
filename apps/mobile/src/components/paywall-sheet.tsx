@@ -23,9 +23,6 @@ export function PaywallSheet({ visible, onDismiss }: PaywallSheetProps) {
         <Button label="Månedlig" variant="primary" width="fill" disabled onPress={() => {}} />
         <Button label="Årlig" variant="secondary" width="fill" disabled onPress={() => {}} />
         <Button label="Gendan køb" variant="secondary" width="fill" disabled onPress={() => {}} />
-        <Text style={[typography.caption, styles.helper, { color: theme.contentMuted }]}>
-          Køb og gendan køb aktiveres, når App Store-køb er klar.
-        </Text>
       </View>
     </Sheet>
   );
@@ -34,8 +31,5 @@ export function PaywallSheet({ visible, onDismiss }: PaywallSheetProps) {
 const styles = StyleSheet.create({
   body: {
     gap: space.gapMd,
-  },
-  helper: {
-    textAlign: "center",
   },
 });
