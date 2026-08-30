@@ -226,7 +226,7 @@ export function ListPeerStubRow({ handle, meta, onPress }: ListPeerStubRowProps)
         <Text style={[typography.body, { color: theme.contentPrimary }]}>{initial}</Text>
       </View>
       <View style={styles.rowBody}>
-        <Text style={[typography.body, { color: theme.contentPrimary }]}>{handle}</Text>
+        <Text style={[typography.headingSm, { color: theme.contentPrimary }]}>{handle}</Text>
         <Text style={[typography.mono, { color: theme.contentMuted }]}>{meta}</Text>
       </View>
       {onPress ? (
