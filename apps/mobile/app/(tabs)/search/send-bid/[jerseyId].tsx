@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BiddingFetchError, fetchPeerJersey, sendBid } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
+import { addFavorite, fetchFavorites, removeFavorite } from "@/api/favorites";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
@@ -40,14 +41,20 @@ export default function SendBidScreen() {
   const [peerJersey, setPeerJersey] = useState<Awaited<ReturnType<typeof fetchPeerJersey>> | null>(
     null,
   );
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
 
   const loadPeerJersey = useCallback(async () => {
     if (!accessToken || !jerseyId) {
       return;
     }
 
-    const response = await fetchPeerJersey(accessToken, jerseyId);
+    const [response, favorites] = await Promise.all([
+      fetchPeerJersey(accessToken, jerseyId),
+      fetchFavorites(accessToken),
+    ]);
     setPeerJersey(response);
+    setIsFavorite(favorites.favorites.some((item) => item.userJerseyId === jerseyId));
   }, [accessToken, jerseyId]);
 
   useEffect(() => {
@@ -72,6 +79,28 @@ export default function SendBidScreen() {
 
   const parsedAmount = Number.parseInt(amount, 10);
   const canSubmit = Number.isInteger(parsedAmount) && parsedAmount >= 1 && !submitting;
+
+  const handleToggleFavorite = async () => {
+    if (!accessToken || !jerseyId || favoriteBusy) {
+      return;
+    }
+
+    setFavoriteBusy(true);
+    setError(null);
+    try {
+      if (isFavorite) {
+        await removeFavorite(accessToken, jerseyId);
+        setIsFavorite(false);
+      } else {
+        await addFavorite(accessToken, { userJerseyId: jerseyId });
+        setIsFavorite(true);
+      }
+    } catch {
+      setError("Favoritten kunne ikke opdateres.");
+    } finally {
+      setFavoriteBusy(false);
+    }
+  };
 
   const handleSendBid = async () => {
     if (!accessToken || !jerseyId || !canSubmit) {
@@ -125,6 +154,13 @@ export default function SendBidScreen() {
       <View style={{ paddingTop: insets.top + space.insetSm, paddingHorizontal: space.insetMd }}>
         <View style={styles.headerRow}>
           <IconButton name="Tilbage" icon="arrow-back" onPress={() => router.back()} />
+          <View style={styles.headerSpacer} />
+          <IconButton
+            name={isFavorite ? "Fjern favorit" : "Gem favorit"}
+            icon={isFavorite ? "heart" : "heart-outline"}
+            disabled={favoriteBusy}
+            onPress={() => void handleToggleFavorite()}
+          />
         </View>
         <Text
           style={[typography.title, { color: theme.contentPrimary, marginBottom: space.insetMd }]}
@@ -220,6 +256,9 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  headerSpacer: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: space.insetMd,

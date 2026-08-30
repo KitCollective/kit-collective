@@ -103,6 +103,14 @@ export {
   collectionConversationsSchema,
 } from "./collection/conversations.js";
 export {
+  type CollectionAddFavoriteRequest,
+  type CollectionFavoriteItem,
+  type CollectionFavorites,
+  collectionAddFavoriteRequestSchema,
+  collectionFavoriteItemSchema,
+  collectionFavoritesSchema,
+} from "./collection/favorites.js";
+export {
   type CollectionJersey,
   type CollectionJerseyPhoto,
   type CollectionJerseys,
