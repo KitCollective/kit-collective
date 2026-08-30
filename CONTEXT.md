@@ -159,19 +159,23 @@ Parent club vs loan (club kader) or call-up club (NationalTeam kader). Call-up c
 _Avoid_: trusting Joined / Signed-from columns that show present-day dates on historical kader pages; inventing loan flags when the HTML has none
 
 **Honours**:
-Titles and trophies from Transfermarkt `/erfolge/…` for **Club** and **NationalTeam** (`/erfolge/verein/{id}`) and **Player** (`/erfolge/spieler/{id}`). Stamdata now on those grains (Rich grain) — season + title text as listed. Same noun across side and player.
+Titles and trophies from Transfermarkt `/erfolge/…` for **Club** and **NationalTeam** (`/erfolge/verein/{id}`) and **Player** (`/erfolge/spieler/{id}`). Stamdata now on those grains (Rich grain) — season + title text as listed. Same noun across side and player. Postgres: **`honour`** table — see `.scratch/football-data-seed/schema-gap.md`.
 _Avoid_: scraping market-value charts as honours; inventing titles not on the page; treating “Teilnehmer” participation rows as wins without keeping the vendor wording; blocking a Club season squad map only because the club Honours page failed when identity facts already landed
 
-**Jersey number history**:
-Transfermarkt `/rueckennummern/spieler/{id}` — season + club or NationalTeam + jersey `#` over a career. Stamdata now on the Player grain (Rich grain). Cross-checks kader `#` and supports collector contests (“who wore 10 that season”).
-_Avoid_: treating current profile shirt number as history; inventing rows Transfermarkt did not list; blocking Club season map only because history fetch failed when kader `#` is already present
+**NationalTeam season**:
+Catalog row that a **NationalTeam** fielded a squad in a **Season** — sibling of `TeamSeason` (club path). Stamdata now for Denmark WC 2010 proof. Postgres: **`national_team_season`** + **`player_national_team_season`** — not a Club row.
+_Avoid_: stuffing NT squad into `player_club_season`; skipping NT season because `team_season` exists for clubs only
 
 **Player photo**:
-Archive portrait of a Player from Transfermarkt (kader or profile). Stamdata now on the Player grain: bytes in the lane object store, `rights: unresolved`, operator-only visibility until cleared — same rights pattern as KitPhoto. Not a Transfermarkt logo. Not a hot-linked CDN URL on Expo, Astro, or OG.
+Archive portrait of a Player from Transfermarkt (kader or profile). Stamdata now on the Player grain: bytes in the lane object store, `rights: unresolved`, operator-only visibility until cleared — same rights pattern as KitPhoto. Postgres: **`player_photo`** table — see schema-gap.
 _Avoid_: treating the face image as ADR-0002 “TM branding” drop; serving unresolved player bytes on collector surfaces; fetching player images through Football Kit Archive or Decodo-on-FKA
 
+**Jersey number history**:
+Transfermarkt `/rueckennummern/spieler/{id}` — season + club or NationalTeam + jersey `#` over a career. Stamdata now on the Player grain (Rich grain). Cross-checks kader `#` and supports collector contests (“who wore 10 that season”). Postgres: **`player_jersey_number`** table — see schema-gap.
+_Avoid_: treating current profile shirt number as history; inventing rows Transfermarkt did not list; blocking Club season map only because history fetch failed when kader `#` is already present
+
 **Kit colours**:
-Primary and secondary colour name + hex from Football Kit Archive / FKApi. Stamdata now on the Kit grain (extend normalize + schema with the grain). Not Transfermarkt club colour swatches.
+Primary and secondary colour name + hex from Football Kit Archive / FKApi. Stamdata now on the Kit grain (extend normalize + schema with the grain). Not Transfermarkt club colour swatches. Postgres: `kit.primary_color_hex`, `kit.secondary_color_hex` — see schema-gap.
 _Avoid_: deferring colours because the fixture type is still thin; treating manufacturer brand logos as colours; fetching FKA through Decodo to “unlock” colours
 
 **Tournament squad**:
