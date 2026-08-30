@@ -163,6 +163,9 @@ jobs:
       - name: Test mobile collection UI evidence ratchet logic
         run: node --test scripts/tests/check-mobile-collection-ui-evidence.test.mjs
 
+      - name: Check mobile wishlist UI evidence
+        run: pnpm --filter @kit/mobile test -- wishlist-ui-evidence
+
       - name: Check mobile drag-reorder ratchet
         run: pnpm check:mobile-drag-reorder
 

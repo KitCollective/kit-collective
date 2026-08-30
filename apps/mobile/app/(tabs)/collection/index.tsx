@@ -134,11 +134,8 @@ export default function CollectionScreen() {
     }
   };
 
-  const openWishlist = async () => {
-    const granted = await requestPremiumAccess();
-    if (granted) {
-      setWishlistOpen(true);
-    }
+  const openWishlist = () => {
+    setWishlistOpen(true);
   };
 
   if (loading) {

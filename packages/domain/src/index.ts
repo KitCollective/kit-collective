@@ -135,3 +135,11 @@ export {
   USER_LOCALES,
   type UserLocale,
 } from "./prefs.js";
+export {
+  buildWishlistAndMeta,
+  buildWishlistAutoName,
+  hasWishlistCriterion,
+  resolveWishlistSizeLabel,
+  resolveWishlistTypeLabel,
+  type WishlistCriteriaLabels,
+} from "./wishlist.js";
