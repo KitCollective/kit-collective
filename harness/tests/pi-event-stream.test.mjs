@@ -256,7 +256,7 @@ test("implement streams a thought then a file-read action, never raw CLI", async
         },
       };
     },
-    spawnProcess(_command, args, options) {
+    spawnProcess(_command, _args, options) {
       const stdout = Readable.from(`${PI_IMPLEMENT_FIXTURE}\n`);
       setImmediate(() => resolveClose(0));
       return Promise.resolve({ stdout, closePromise, options });
