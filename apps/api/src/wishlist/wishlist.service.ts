@@ -36,10 +36,7 @@ type WishlistRow = {
   size: JerseySize | null;
 };
 
-type WishlistCriteriaValues = Pick<
-  WishlistRow,
-  "clubId" | "seasonId" | "type" | "size"
->;
+type WishlistCriteriaValues = Pick<WishlistRow, "clubId" | "seasonId" | "type" | "size">;
 
 @Injectable()
 export class WishlistService {
