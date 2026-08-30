@@ -1241,7 +1241,7 @@ test("implement job fails closed when OPENROUTER_API_KEY is missing and does not
   assert.equal(spawned.length, 0);
 });
 
-test("implement parent spawn stays Composer and is not Hy4", async () => {
+test("implement parent spawn stays Composer and is not Hy3", async () => {
   const spawned = [];
   await implementRunner({
     gh: fakeGh(),
@@ -1285,12 +1285,15 @@ test("implement spawn excludes memory-write tools and skill_manage", async () =>
   assert.equal(spawned[0].options.env.KIT_PI_HERMES, WORKER_MEMORY_DIR);
 });
 
-test("Scout and Gate pin Hy4 preview no-think with Composer fallback; helpers pin Composer", () => {
+test("Scout and Gate pin Hy3 no-think with MiMo then Composer fallback; helpers pin Composer", () => {
   const scout = agentFrontmatter(".pi/agents/scout.md");
   const gate = agentFrontmatter(".pi/agents/gate.md");
   for (const agent of [scout, gate]) {
-    assert.match(agent.frontmatter, /^model:\s+openrouter\/tencent\/hy4-preview\s*$/m);
-    assert.match(agent.frontmatter, /^fallbackModels:\s+cursor\/composer-2\.5\s*$/m);
+    assert.match(agent.frontmatter, /^model:\s+openrouter\/tencent\/hy3\s*$/m);
+    assert.match(
+      agent.frontmatter,
+      /^fallbackModels:\s+openrouter\/xiaomi\/mimo-v2\.5,\s*cursor\/composer-2\.5\s*$/m,
+    );
     assert.match(agent.frontmatter, /^thinking:\s+off\s*$/m);
     assert.doesNotMatch(agent.frontmatter, /stealth|ox-alpha|kimi|moonshot/i);
     assert.match(agent.text, /Exacto/);
