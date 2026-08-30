@@ -142,11 +142,15 @@ export function createSessionLogCollector({
           typeof agent === "string" && agent in SUBAGENT_PHASE
             ? SUBAGENT_PHASE[/** @type {keyof typeof SUBAGENT_PHASE} */ (agent)]
             : helperPhase(agent);
+        const label =
+          typeof mapped.detail === "string" && mapped.detail.length > 0
+            ? mapped.detail
+            : mapped.phase;
         emit({
           event: "phase",
           gate: "yellow",
           ...mapped,
-          detail: `${mapped.phase} started`,
+          detail: `${label} started`,
         });
         return;
       }
@@ -203,11 +207,15 @@ export function createSessionLogCollector({
         if (agent === "gate") {
           gateDone = !isError;
         }
+        const label =
+          typeof mapped.detail === "string" && mapped.detail.length > 0
+            ? mapped.detail
+            : mapped.phase;
         emit({
           event: "phase",
           gate: isError ? "red" : "green",
           ...mapped,
-          detail: isError ? `${mapped.phase} failed` : `${mapped.phase} done`,
+          detail: isError ? `${label} failed` : `${label} done`,
         });
         return;
       }

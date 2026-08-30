@@ -37,7 +37,7 @@ export const PI_PRE_REVIEW_OVERLAY = `# PI worker overlay (pre-review)
 
 - Full \`pnpm test\` graph runs on **GitHub Actions only** — not on this 4 GB / 8 GB worker.
 - Gate typecheck of touched packages may be yellow; \`pnpm format:check\` / \`biome ci .\` is red.
-- Wait for **all** required GitHub checks before the harness moves to In Review.
+- Do not sleep or poll GitHub. The harness waits for required checks before In Review.
 `;
 
 export const PI_ORCHESTRATION_OVERLAY = `# PI worker overlay (orchestration)

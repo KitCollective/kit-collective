@@ -499,6 +499,10 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
         ? options.implementContext.requiredHelpers.join(", ")
         : "(none)";
     const loopTail = `Open a PR into development. Do not move Linear to In Review — the harness does that after required GitHub checks are green and MERGEABLE. Never merge. Never spawn factory-checker.`;
+    const noSleep =
+      "Do not sleep. Do not poll GitHub with sleep. Exit when rebase is done — the harness waits for checks.";
+    const helperNames =
+      "Spawn Pi agents by these names only: nest, expo, drizzle, ui-ux, devops. react-expo is expo. If a helper exits immediately, retry that same name once.";
     const tddBlock =
       "TDD: each required helper writes the failing test at its seam (red), then minimal green. Run the helper's targeted test command — not `pnpm test` (full graph is GitHub Actions only on this worker).";
     if (options.cheapRetry === true) {
@@ -506,7 +510,7 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
-      return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). ${loopTail}
+      return `Factory role implement retry for ${identifier}.${adw} Skip Scout. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Then spawn Gate (format:check is red; typecheck may be yellow). ${noSleep} ${loopTail}
 
 ### Review feedback
 
@@ -517,7 +521,7 @@ ${feedback}`;
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: verify PR MERGEABLE and required checks green)";
-      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Merge-fail resume. Skip Scout. Skip helpers. Do not re-implement the feature. Rebase or merge origin/development onto the existing branch. ${noSleep} Verify the linked PR is MERGEABLE and required GitHub checks are green. Update the workpad and clear addressed land feedback. ${loopTail}
 
 ### Review feedback
 
@@ -525,13 +529,13 @@ ${feedback}`;
     }
     if (reviewFeedbackIsActionable(options.reviewFeedback)) {
       const feedback = String(options.reviewFeedback).trim();
-      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper. Do not Skip helpers. ${tddBlock} ${loopTail}
+      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${noSleep} ${loopTail}
 
 ### Review feedback
 
 ${feedback}`;
     }
-    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper before green implementation. Do not Skip helpers. ${tddBlock} ${loopTail}`;
+    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. Required helpers: ${helpers}. Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${noSleep} ${loopTail}`;
   }
   if (role === "factory-checker") {
     return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass). Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit.`;
@@ -1207,7 +1211,9 @@ export function createPiJobRunner({
           (exit.writeScopeRetry === true &&
             Number(job.writeScopeRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
           (exit.formatRetry === true &&
-            Number(job.formatRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP);
+            Number(job.formatRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP) ||
+          (exit.migrationRetry === true &&
+            Number(job.migrationRetryAttempt ?? 1) >= IMPLEMENT_CI_RETRY_CAP);
         if (atCap && typeof linearClient.commentIssue === "function") {
           await linearClient.commentIssue({
             issueId: job.issueId ?? identifier,

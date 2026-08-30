@@ -259,6 +259,20 @@ jobs:
       - name: Test PR write-scope ratchet logic
         run: node --test scripts/tests/check-pr-write-scope.test.mjs
 
+      - name: Test PI CI-sleep hook
+        run: node --test .cursor/hooks/tests/block-pi-ci-sleep.test.mjs
+
+      - name: Check Drizzle migration prefixes
+        run: node scripts/check-migration-prefixes.mjs
+        env:
+          BASE_REF: origin/development
+
+      - name: Test Drizzle migration prefix ratchet
+        run: node --test scripts/tests/check-migration-prefixes.test.mjs
+
+      - name: Test migration-prefix collision hook
+        run: node --test .cursor/hooks/tests/block-migration-prefix-collision.test.mjs
+
       - name: Check admin stamdata navigation
         run: node scripts/check-admin-stamdata-navigation.mjs
 

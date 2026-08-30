@@ -93,5 +93,9 @@ test("resolveExitGate maps factory outcomes", () => {
     resolveExitGate({ status: "Implementing", ciRetry: true }, { role: "implement" }),
     "yellow",
   );
+  assert.equal(
+    resolveExitGate({ status: "Implementing", migrationRetry: true }, { role: "implement" }),
+    "yellow",
+  );
   assert.equal(resolveExitGate({ status: "Implementing" }, { role: "implement" }), "yellow");
 });

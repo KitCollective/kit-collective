@@ -68,7 +68,12 @@ export function resolveExitGate(result, job = {}) {
   if (row.passed === true || row.status === IN_REVIEW) {
     return "green";
   }
-  if (row.ciRetry === true || row.writeScopeRetry === true || row.formatRetry === true) {
+  if (
+    row.ciRetry === true ||
+    row.writeScopeRetry === true ||
+    row.formatRetry === true ||
+    row.migrationRetry === true
+  ) {
     return "yellow";
   }
   if (row.status === IMPLEMENTING && job.role === "implement") {

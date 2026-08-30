@@ -352,8 +352,8 @@ test("implement checkout fetches the lane into refs/remotes/origin/development",
 
   await adapter.checkout({ identifier: "KIT-116", mode: "implement" });
   assert.ok(
-    gitCalls.some((args) => args.includes("development:refs/remotes/origin/development")),
-    "expected fetch refspec that updates refs/remotes/origin/development",
+    gitCalls.some((args) => args.includes("+development:refs/remotes/origin/development")),
+    "expected force-update fetch refspec for refs/remotes/origin/development",
   );
   assert.ok(
     gitCalls.some(
@@ -381,7 +381,7 @@ test("fetch of an issue branch writes refs/remotes/origin so reuse can see a mis
 
   await adapter.checkout({ identifier: "KIT-126", mode: "reuse" });
   assert.ok(
-    gitCalls.some((args) => args.includes("kit-126:refs/remotes/origin/kit-126")),
-    "expected fetch refspec that updates refs/remotes/origin/kit-126",
+    gitCalls.some((args) => args.includes("+kit-126:refs/remotes/origin/kit-126")),
+    "expected force-update fetch refspec so a stale origin/kit-n does not fail closed",
   );
 });
