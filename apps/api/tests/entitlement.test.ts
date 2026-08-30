@@ -42,6 +42,7 @@ describe("entitlement and Nest-trial", () => {
   let app: NestFastifyApplication;
 
   beforeAll(async () => {
+    process.env.DATABASE_URL = DATABASE_URL;
     await resetDatabase(DATABASE_URL, migrationsFolder);
 
     const moduleRef = await Test.createTestingModule({
