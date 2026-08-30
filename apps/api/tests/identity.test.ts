@@ -61,18 +61,18 @@ async function insertClubSeasonFixture() {
 
   const [insertedLeague] = await db
     .insert(league)
-    .values({ countryId: insertedCountry!.id })
+    .values({ countryId: insertedCountry?.id })
     .returning({ id: league.id });
 
   const [insertedClub] = await db
     .insert(club)
-    .values({ countryId: insertedCountry!.id, kind: "club" })
+    .values({ countryId: insertedCountry?.id, kind: "club" })
     .returning({ id: club.id });
 
   const [insertedSeason] = await db
     .insert(season)
     .values({
-      leagueId: insertedLeague!.id,
+      leagueId: insertedLeague?.id,
       label: "2023/24",
       startsOn: "2023-07-01",
       endsOn: "2024-06-30",
@@ -81,14 +81,14 @@ async function insertClubSeasonFixture() {
     .returning({ id: season.id });
 
   await db.insert(teamSeason).values({
-    clubId: insertedClub!.id,
-    seasonId: insertedSeason!.id,
+    clubId: insertedClub?.id,
+    seasonId: insertedSeason?.id,
   });
 
   await db.insert(catalogLabel).values([
     {
       entityType: "country",
-      entityId: insertedCountry!.id,
+      entityId: insertedCountry?.id,
       locale: "da",
       kind: "label",
       text: "Danmark",
@@ -96,7 +96,7 @@ async function insertClubSeasonFixture() {
     },
     {
       entityType: "league",
-      entityId: insertedLeague!.id,
+      entityId: insertedLeague?.id,
       locale: "da",
       kind: "label",
       text: "Superligaen",
@@ -104,7 +104,7 @@ async function insertClubSeasonFixture() {
     },
     {
       entityType: "club",
-      entityId: insertedClub!.id,
+      entityId: insertedClub?.id,
       locale: "da",
       kind: "label",
       text: "F.C. København",
@@ -115,8 +115,8 @@ async function insertClubSeasonFixture() {
   await pool.end();
 
   return {
-    clubId: insertedClub!.id,
-    seasonId: insertedSeason!.id,
+    clubId: insertedClub?.id,
+    seasonId: insertedSeason?.id,
   };
 }
 
