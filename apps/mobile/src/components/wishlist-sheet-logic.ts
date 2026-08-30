@@ -1,4 +1,4 @@
-import { type CatalogPickerItem, type WishlistEntry } from "@kit/api-contract";
+import type { CatalogPickerItem, WishlistEntry } from "@kit/api-contract";
 import type { JerseySize, KitType } from "@kit/domain";
 import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 
