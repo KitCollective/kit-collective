@@ -14,22 +14,16 @@ import {
   floorsFromEnv,
   waitForCapacity,
 } from "./capacity.mjs";
+import { captureCheckerReviewDiff, formatCheckerReviewBundle } from "./checker-diff.mjs";
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
-import {
-  captureCheckerReviewDiff,
-  formatCheckerReviewBundle,
-} from "./checker-diff.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
-import { loadFirstPassRegistry, reviewFeedbackIsFirstPassOnly, reviewFeedbackIsSpecOnly } from "./first-pass.mjs";
-import { harnessLog } from "./harness-log.mjs";
 import {
-  estimateLineCostUsd,
-  formatCostUsd,
-  readReportedCostUsd,
-  sumCostUsd,
-} from "./token-cost.mjs";
-import { getDefaultTokenStore } from "./token-store.mjs";
+  loadFirstPassRegistry,
+  reviewFeedbackIsFirstPassOnly,
+  reviewFeedbackIsSpecOnly,
+} from "./first-pass.mjs";
+import { harnessLog } from "./harness-log.mjs";
 import {
   buildImplementAppendPath,
   resolveImplementSkillPaths,
@@ -54,6 +48,13 @@ import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
 import { isPiAgentEndLine, pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { createSessionLogCollector } from "./pi-session-log.mjs";
 import { runPlanner } from "./planner.mjs";
+import {
+  estimateLineCostUsd,
+  formatCostUsd,
+  readReportedCostUsd,
+  sumCostUsd,
+} from "./token-cost.mjs";
+import { getDefaultTokenStore } from "./token-store.mjs";
 import { createWorktreeAdapter } from "./worktree.mjs";
 
 const execFile = promisify(execFileCb);
@@ -401,7 +402,7 @@ export function publicTokenSnapshot(input) {
     };
   });
   const costUsd = sumCostUsd(lines);
-  const costEstimate = lines.some((line) => line.costEstimate === false) ? false : true;
+  const costEstimate = !lines.some((line) => line.costEstimate === false);
   return {
     role: input.role,
     identifier: input.identifier,
@@ -927,8 +928,7 @@ export function piArgsForRole(role, workspace, roleFile, model, prompt, options 
   const appendPrompt =
     role === "implement" && options.implementContext
       ? options.implementContext.slimOnly === true ||
-          (Array.isArray(options.implementContext.rules) &&
-            options.implementContext.rules.length > 0)
+        (Array.isArray(options.implementContext.rules) && options.implementContext.rules.length > 0)
         ? buildImplementAppendPath(workspace, roleFile, options.implementContext)
         : join(workspace, roleFile)
       : join(workspace, roleFile);

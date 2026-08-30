@@ -12,8 +12,8 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { createDelegateGateConfig, delegateGate } from "./delegate-gate.mjs";
 import { workpadCheckerIncompleteParked } from "./checker-exit.mjs";
+import { createDelegateGateConfig, delegateGate } from "./delegate-gate.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 
 const HMAC_REJECT = "invalid hmac";

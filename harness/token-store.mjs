@@ -148,9 +148,7 @@ export function createTokenStore(options = {}) {
       );
       const anyReported = lines.some((line) => line.costEstimate === false);
       const costEstimate =
-        typeof tokens.costEstimate === "boolean"
-          ? tokens.costEstimate
-          : !anyReported;
+        typeof tokens.costEstimate === "boolean" ? tokens.costEstimate : !anyReported;
       try {
         const result = insert.run({
           ended_at: tokens.endedAt ?? new Date().toISOString(),
