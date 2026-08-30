@@ -23,6 +23,7 @@
     "check:mobile-tab-bar": "node scripts/check-mobile-tab-bar.mjs",
     "check:mobile-design-tokens": "node scripts/check-mobile-design-tokens.mjs",
     "check:mobile-collection-ui-evidence": "node scripts/check-mobile-collection-ui-evidence.mjs",
+    "check:mobile-wishlist-ui-evidence": "node scripts/check-mobile-wishlist-ui-evidence.mjs",
     "check:mobile-drag-reorder": "node scripts/check-mobile-drag-reorder.mjs",
     "check:mobile-add-form-wiring": "node scripts/check-mobile-add-form-wiring.mjs",
     "check:mobile-add-confirm-redirect": "node scripts/check-mobile-add-confirm-redirect.mjs",

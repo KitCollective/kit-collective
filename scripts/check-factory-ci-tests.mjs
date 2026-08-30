@@ -23,6 +23,7 @@ export const MOBILE_CHECK_NEEDLES = [
   "scripts/check-mobile-profile-settings-hub.mjs",
   "check:mobile-design-tokens",
   "check:mobile-collection-ui-evidence",
+  "check:mobile-wishlist-ui-evidence",
   "check:mobile-drag-reorder",
   "check:mobile-add-form-wiring",
   "check:mobile-add-confirm-redirect",
