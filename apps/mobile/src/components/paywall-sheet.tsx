@@ -81,7 +81,7 @@ export function PaywallSheet({
         />
         <Button
           label="Gendan køb"
-          variant="secondary"
+          variant="tertiary"
           width="fill"
           disabled={purchaseDisabled}
           loading={busy}

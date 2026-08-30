@@ -1,11 +1,7 @@
 import type { Entitlement } from "@kit/api-contract";
 import { OFFER_PRODUCT_IDS } from "@kit/domain";
 import { restoreIapPurchases, verifyIapPurchase } from "@/api/billing";
-import {
-  mapProductPricesById,
-  PAYWALL_PRODUCT_IDS,
-  type StoreProductPrice,
-} from "@/premium/store-billing";
+import { mapProductPricesById, PAYWALL_PRODUCT_IDS } from "@/premium/store-billing";
 import {
   createStoreBillingClient,
   getWebIapUnavailableMessage,
@@ -63,14 +59,4 @@ export async function restorePaywallPurchases(accessToken: string): Promise<Enti
     platform: restored.platform,
     token: restored.token,
   });
-}
-
-export function formatPaywallPrices(prices: readonly StoreProductPrice[]): PaywallOfferState {
-  const byId = mapProductPricesById(prices);
-  return {
-    iapAvailable: true,
-    webUnavailableMessage: null,
-    monthPrice: byId[OFFER_PRODUCT_IDS.month] ?? null,
-    yearPrice: byId[OFFER_PRODUCT_IDS.year] ?? null,
-  };
 }
