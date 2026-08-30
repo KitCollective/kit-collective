@@ -432,11 +432,7 @@ export function createLandGh({
      */
     async updateBranch({ number, repo: repoOverride }) {
       const targetRepo = repoOverride ?? repo;
-      await guarded(
-        "gh",
-        ["pr", "update-branch", String(number), "--repo", targetRepo],
-        "async",
-      );
+      await guarded("gh", ["pr", "update-branch", String(number), "--repo", targetRepo], "async");
     },
   };
 }

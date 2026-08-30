@@ -581,7 +581,8 @@ test("applyLandWorkpad records SHA on success and the merge error under Review f
 
 test("applyLandWorkpad prefixes gh pr merge errors so implement-exit treats them as land-fail", () => {
   const failure = applyLandWorkpad(`${WORKPAD_HEADING}\n`, {
-    error: "Command failed: gh pr merge 118 --merge\nGraphQL: Head branch is not up to date with the base branch",
+    error:
+      "Command failed: gh pr merge 118 --merge\nGraphQL: Head branch is not up to date with the base branch",
   });
   assert.match(failure, /^- merge failed — /m);
   assert.match(failure, /not up to date with the base branch/);
