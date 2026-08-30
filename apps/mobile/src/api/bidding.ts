@@ -2,10 +2,12 @@ import {
   type CollectionBiddingPatch,
   type CollectionDiscoverJerseys,
   type CollectionPeerJersey,
+  type CollectionRespondBidResponse,
   type CollectionSendBidRequest,
   type CollectionSendBidResponse,
   collectionDiscoverJerseysSchema,
   collectionPeerJerseySchema,
+  collectionRespondBidResponseSchema,
   collectionSendBidRequestSchema,
   collectionSendBidResponseSchema,
 } from "@kit/api-contract";
@@ -107,4 +109,28 @@ export async function sendBid(
   }
 
   return collectionSendBidResponseSchema.parse(await response.json());
+}
+
+export async function respondBid(
+  accessToken: string,
+  conversationId: string,
+  messageId: string,
+  decision: "accept" | "decline",
+): Promise<CollectionRespondBidResponse> {
+  const response = await requestJson(
+    `/v1/collection/conversations/${conversationId}/messages/${messageId}/bid`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ decision }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new BiddingFetchError("Kunne ikke opdatere bud", response.status);
+  }
+
+  return collectionRespondBidResponseSchema.parse(await response.json());
 }

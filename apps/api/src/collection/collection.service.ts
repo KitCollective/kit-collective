@@ -1,4 +1,5 @@
 import {
+  type CollectionActivity,
   type CollectionConversationDetail,
   type CollectionConversations,
   type CollectionDiscoverJerseys,
@@ -6,10 +7,12 @@ import {
   type CollectionJersey,
   type CollectionJerseys,
   type CollectionPeerJersey,
+  type CollectionRespondBidResponse,
   type CollectionSavePhoto,
   type CollectionSaveResponse,
   type CollectionSendBidResponse,
   type CollectionSendMessageResponse,
+  collectionActivitySchema,
   collectionAddFavoriteRequestSchema,
   collectionBiddingPatchSchema,
   collectionConversationDetailSchema,
@@ -18,6 +21,8 @@ import {
   collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionPeerJerseySchema,
+  collectionRespondBidRequestSchema,
+  collectionRespondBidResponseSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
   collectionSendBidRequestSchema,
@@ -42,6 +47,7 @@ import {
   userJerseyPhoto,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
+import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import {
   BadRequestException,
   ForbiddenException,
@@ -73,6 +79,39 @@ function handleInitial(handle: string): string {
 
 function bidSnippet(amountDkk: number): string {
   return `Bud på ${amountDkk} kr`;
+}
+
+function activityTitle(
+  viewerIsOwner: boolean,
+  status: "pending" | "accepted" | "declined",
+): string {
+  if (viewerIsOwner) {
+    switch (status) {
+      case "pending":
+        return "Nyt bud på din trøje";
+      case "accepted":
+        return "Bud accepteret";
+      case "declined":
+        return "Bud afvist";
+      default: {
+        const _exhaustive: never = status;
+        return _exhaustive;
+      }
+    }
+  }
+
+  switch (status) {
+    case "pending":
+      return "Dit bud afventer";
+    case "accepted":
+      return "Dit bud blev accepteret";
+    case "declined":
+      return "Dit bud blev afvist";
+    default: {
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
+  }
 }
 
 function hasR2Config(): boolean {
@@ -321,6 +360,129 @@ export class CollectionService {
     const unreadCount = conversations.filter((item) => item.unread).length;
 
     return collectionConversationsSchema.parse({ conversations, unreadCount });
+  }
+
+  async listActivity(userId: string, locale: LabelLocale = "da"): Promise<CollectionActivity> {
+    const participantRows = await this.db
+      .select({
+        conversationId: conversationParticipant.conversationId,
+        lastReadAt: conversationParticipant.lastReadAt,
+      })
+      .from(conversationParticipant)
+      .where(
+        and(
+          eq(conversationParticipant.userId, userId),
+          sql`${conversationParticipant.hiddenAt} IS NULL`,
+        ),
+      );
+
+    if (participantRows.length === 0) {
+      return collectionActivitySchema.parse({ items: [] });
+    }
+
+    const conversationIds = participantRows.map((row) => row.conversationId);
+    const lastReadByConversation = new Map(
+      participantRows.map((row) => [row.conversationId, row.lastReadAt]),
+    );
+
+    const latestMessages = await this.db
+      .select({
+        conversationId: conversationMessage.conversationId,
+        senderId: conversationMessage.senderId,
+        createdAt: conversationMessage.createdAt,
+      })
+      .from(conversationMessage)
+      .where(inArray(conversationMessage.conversationId, conversationIds))
+      .orderBy(desc(conversationMessage.createdAt));
+
+    const latestByConversation = new Map<string, (typeof latestMessages)[number]>();
+    for (const message of latestMessages) {
+      if (!latestByConversation.has(message.conversationId)) {
+        latestByConversation.set(message.conversationId, message);
+      }
+    }
+
+    const bidRows = await this.db
+      .select({
+        id: conversationMessage.id,
+        conversationId: conversationMessage.conversationId,
+        senderId: conversationMessage.senderId,
+        bidAmountDkk: conversationMessage.bidAmountDkk,
+        bidStatus: conversationMessage.bidStatus,
+        createdAt: conversationMessage.createdAt,
+        ownerId: userJersey.userId,
+        clubId: userJersey.clubId,
+        type: userJersey.type,
+        seasonLabel: season.label,
+      })
+      .from(conversationMessage)
+      .innerJoin(conversation, eq(conversationMessage.conversationId, conversation.id))
+      .innerJoin(userJersey, eq(conversation.userJerseyId, userJersey.id))
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .where(
+        and(
+          inArray(conversationMessage.conversationId, conversationIds),
+          eq(conversationMessage.kind, "bid"),
+        ),
+      )
+      .orderBy(desc(conversationMessage.createdAt));
+
+    if (bidRows.length === 0) {
+      return collectionActivitySchema.parse({ items: [] });
+    }
+
+    const clubIds = [...new Set(bidRows.map((row) => row.clubId))];
+    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+
+    const senderIds = [...new Set(bidRows.map((row) => row.senderId))];
+    const senderRows =
+      senderIds.length === 0
+        ? []
+        : await this.db
+            .select({ id: user.id, handle: user.handle })
+            .from(user)
+            .where(inArray(user.id, senderIds));
+    const senderById = new Map(senderRows.map((row) => [row.id, row.handle]));
+
+    const items = bidRows.map((row) => {
+      if (!row.bidAmountDkk || !row.bidStatus) {
+        throw new NotFoundException("Bid message missing amount or status");
+      }
+
+      const clubLabel = clubLabels.get(row.clubId);
+      if (!clubLabel) {
+        throw new NotFoundException("Club label missing for activity");
+      }
+
+      const fromHandle = senderById.get(row.senderId);
+      if (!fromHandle) {
+        throw new NotFoundException("Sender handle missing for activity");
+      }
+
+      const viewerIsOwner = row.ownerId === userId;
+      const kitLine = `${clubLabel} · ${row.seasonLabel} · ${KIT_TYPE_LABELS_DA[row.type]}`;
+
+      const latest = latestByConversation.get(row.conversationId);
+      const lastReadAt = lastReadByConversation.get(row.conversationId);
+      const unread =
+        Boolean(latest) &&
+        latest!.senderId !== userId &&
+        (!lastReadAt || latest!.createdAt > lastReadAt);
+
+      return {
+        id: row.id,
+        conversationId: row.conversationId,
+        title: activityTitle(viewerIsOwner, row.bidStatus),
+        kitLine,
+        amountDkk: row.bidAmountDkk,
+        status: row.bidStatus,
+        fromHandle,
+        unread,
+        updatedAt: row.createdAt.toISOString(),
+      };
+    });
+
+    return collectionActivitySchema.parse({ items });
   }
 
   async getConversationDetail(
@@ -921,6 +1083,74 @@ export class CollectionService {
       conversationId,
       messageId: insertedMessage.id,
     });
+  }
+
+  async respondBid(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    rawBody: unknown,
+  ): Promise<CollectionRespondBidResponse> {
+    await this.assertConversationParticipant(userId, conversationId);
+    const body = collectionRespondBidRequestSchema.parse(rawBody);
+
+    const [context] = await this.db
+      .select({
+        ownerId: userJersey.userId,
+      })
+      .from(conversation)
+      .innerJoin(userJersey, eq(conversation.userJerseyId, userJersey.id))
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+
+    if (!context) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    if (context.ownerId !== userId) {
+      throw new ForbiddenException("Only the UserJersey owner can accept or decline bids");
+    }
+
+    const [messageRow] = await this.db
+      .select({
+        kind: conversationMessage.kind,
+        bidStatus: conversationMessage.bidStatus,
+        senderId: conversationMessage.senderId,
+      })
+      .from(conversationMessage)
+      .where(
+        and(
+          eq(conversationMessage.id, messageId),
+          eq(conversationMessage.conversationId, conversationId),
+        ),
+      )
+      .limit(1);
+
+    if (!messageRow || messageRow.kind !== "bid") {
+      throw new NotFoundException("Bid message not found");
+    }
+
+    if (messageRow.senderId === userId) {
+      throw new ForbiddenException("Cannot respond to your own bid");
+    }
+
+    if (messageRow.bidStatus !== "pending") {
+      throw new BadRequestException("Bid is not pending");
+    }
+
+    const bidStatus = body.decision === "accept" ? "accepted" : "declined";
+
+    await this.db
+      .update(conversationMessage)
+      .set({ bidStatus })
+      .where(eq(conversationMessage.id, messageId));
+
+    await this.db
+      .update(conversation)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversation.id, conversationId));
+
+    return collectionRespondBidResponseSchema.parse({ bidStatus });
   }
 
   async saveJersey(

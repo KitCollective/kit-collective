@@ -56,6 +56,15 @@ export class CollectionController {
     return this.collectionService.listConversations(user.sub);
   }
 
+  @Get("collection/activity")
+  @UseGuards(JwtAuthGuard)
+  listActivity(
+    @CurrentUser() user: JwtPayload,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.listActivity(user.sub, resolveLocale(acceptLanguage));
+  }
+
   @Get("collection/conversations/:conversationId")
   @UseGuards(JwtAuthGuard)
   getConversation(
@@ -79,6 +88,17 @@ export class CollectionController {
     @Body() body: unknown,
   ) {
     return this.collectionService.sendConversationMessage(user.sub, conversationId, body);
+  }
+
+  @Patch("collection/conversations/:conversationId/messages/:messageId/bid")
+  @UseGuards(JwtAuthGuard)
+  respondBid(
+    @CurrentUser() user: JwtPayload,
+    @Param("conversationId") conversationId: string,
+    @Param("messageId") messageId: string,
+    @Body() body: unknown,
+  ) {
+    return this.collectionService.respondBid(user.sub, conversationId, messageId, body);
   }
 
   @Get("collection/conversations/:conversationId/messages/:messageId/photo")

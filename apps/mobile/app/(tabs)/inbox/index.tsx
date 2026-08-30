@@ -1,10 +1,12 @@
-import type { CollectionConversation } from "@kit/api-contract";
+import type { CollectionActivityItem, CollectionConversation } from "@kit/api-contract";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fetchActivity } from "@/api/activity";
 import { fetchConversations } from "@/api/conversations";
 import { useAuth } from "@/auth/AuthProvider";
+import { ActivityCard } from "@/components/activity-card";
 import { ConversationView } from "@/components/conversation-view";
 import { ScreenHeader } from "@/components/screen-header";
 import { formatThreadTime, ThreadRow } from "@/components/thread-row";
@@ -38,25 +40,30 @@ export default function InboxScreen() {
   const [activeTab, setActiveTab] = useState<InboxTab>("Beskeder");
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<CollectionConversation[]>([]);
+  const [activityItems, setActivityItems] = useState<CollectionActivityItem[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
 
-  const loadConversations = useCallback(async () => {
+  const loadInbox = useCallback(async () => {
     if (!accessToken) {
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetchConversations(accessToken);
-      setConversations(response.conversations);
+      const [conversationResponse, activityResponse] = await Promise.all([
+        fetchConversations(accessToken),
+        fetchActivity(accessToken),
+      ]);
+      setConversations(conversationResponse.conversations);
+      setActivityItems(activityResponse.items);
     } finally {
       setLoading(false);
     }
   }, [accessToken]);
 
   useEffect(() => {
-    void loadConversations();
-  }, [loadConversations]);
+    void loadInbox();
+  }, [loadInbox]);
 
   useEffect(() => {
     if (!isWide) {
@@ -73,8 +80,12 @@ export default function InboxScreen() {
       return;
     }
 
-    const response = await fetchConversations(accessToken);
-    setConversations(response.conversations);
+    const [conversationResponse, activityResponse] = await Promise.all([
+      fetchConversations(accessToken),
+      fetchActivity(accessToken),
+    ]);
+    setConversations(conversationResponse.conversations);
+    setActivityItems(activityResponse.items);
     await refreshUnreadCount();
   }, [accessToken, refreshUnreadCount]);
 
@@ -105,10 +116,21 @@ export default function InboxScreen() {
           <ActivityIndicator color={theme.contentPrimary} />
         </View>
       ) : activeTab === "Aktivitet" ? (
-        <EmptyState
-          title="Ingen aktivitet endnu"
-          body="Bud og svar vises her, når samtaler kommer i gang."
-        />
+        activityItems.length === 0 ? (
+          <EmptyState
+            title="Ingen aktivitet endnu"
+            body="Bud og svar vises her, når samtaler kommer i gang."
+          />
+        ) : (
+          <FlatList
+            data={activityItems}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingBottom: tabBarPadding }}
+            renderItem={({ item }) => (
+              <ActivityCard item={item} onPress={() => openConversation(item.conversationId)} />
+            )}
+          />
+        )
       ) : conversations.length === 0 ? (
         <EmptyState
           title="Ingen beskeder endnu"
