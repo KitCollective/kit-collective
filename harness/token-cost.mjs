@@ -38,6 +38,18 @@ export const MODEL_PRICING_USD_PER_MTOK = Object.freeze({
   "mimo-v2.5-pro": { input: 0.4, output: 1.6, label: "MiMo" },
   mimo: { input: 0.4, output: 1.6, label: "MiMo" },
   MiMo: { input: 0.4, output: 1.6, label: "MiMo" },
+  // OpenRouter free Draft scaffolds ($0 list; rate-limited)
+  "openrouter/poolside/laguna-s-2.1:free": { input: 0, output: 0, label: "Laguna" },
+  "poolside/laguna-s-2.1:free": { input: 0, output: 0, label: "Laguna" },
+  "laguna-s-2.1:free": { input: 0, output: 0, label: "Laguna" },
+  Laguna: { input: 0, output: 0, label: "Laguna" },
+  Draft: { input: 0, output: 0, label: "Draft" },
+  "openrouter/minimax/minimax-m3:free": { input: 0, output: 0, label: "MiniMax" },
+  "minimax/minimax-m3:free": { input: 0, output: 0, label: "MiniMax" },
+  "minimax-m3:free": { input: 0, output: 0, label: "MiniMax" },
+  "openrouter/z-ai/glm-5.2:free": { input: 0, output: 0, label: "GLM" },
+  "z-ai/glm-5.2:free": { input: 0, output: 0, label: "GLM" },
+  "glm-5.2:free": { input: 0, output: 0, label: "GLM" },
 });
 
 /**
@@ -66,6 +78,20 @@ export function modelPriceLookupKeys(model) {
   }
   if (lower.includes("mimo")) {
     keys.push("openrouter/xiaomi/mimo-v2.5-pro", "MiMo");
+  }
+  if (lower.includes(":free") || lower.includes("laguna") || lower.includes("minimax-m3") || lower.includes("glm-5.2")) {
+    if (lower.includes("laguna")) {
+      keys.push("openrouter/poolside/laguna-s-2.1:free", "Laguna", "Draft");
+    }
+    if (lower.includes("minimax")) {
+      keys.push("openrouter/minimax/minimax-m3:free", "MiniMax");
+    }
+    if (lower.includes("glm")) {
+      keys.push("openrouter/z-ai/glm-5.2:free", "GLM");
+    }
+    if (lower === "draft") {
+      keys.push("Draft", "openrouter/poolside/laguna-s-2.1:free");
+    }
   }
   return [...new Set(keys.filter((key) => key.length > 0))];
 }

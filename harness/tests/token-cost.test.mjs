@@ -55,14 +55,27 @@ test("reviewFeedbackIsSpecOnly when only Spec has findings", () => {
   assert.equal(reviewFeedbackIsSpecOnly("- Standards: lint\n- Slop: (none)\n"), false);
 });
 
-test("implementPrompt Spec-only resume skips Scout and helpers", () => {
+test("implementPrompt Spec-only resume skips Scout, Draft, and helpers", () => {
   const prompt = implementPrompt("implement", "KIT-200", ".pi/adw/feature.yaml", {
     reviewFeedback: "- Spec: AC evidence missing\n- Standards: (none)\n- Slop: (none)\n",
     writeScope: "harness/**",
   });
   assert.match(prompt, /Spec-only resume/i);
   assert.match(prompt, /Skip Scout/);
+  assert.match(prompt, /Skip Draft/);
   assert.match(prompt, /Skip helpers/);
+});
+
+test("estimateLineCostUsd prices OpenRouter free Draft models at zero", () => {
+  const { costUsd, estimate } = estimateLineCostUsd({
+    model: "openrouter/poolside/laguna-s-2.1:free",
+    input: 2_000_000,
+    output: 500_000,
+  });
+  assert.equal(costUsd, 0);
+  assert.equal(estimate, true);
+  assert.equal(MODEL_PRICING_USD_PER_MTOK["minimax/minimax-m3:free"].input, 0);
+  assert.equal(MODEL_PRICING_USD_PER_MTOK["z-ai/glm-5.2:free"].output, 0);
 });
 
 test("piArgsForRole sets --no-context-files for implement and checker", () => {

@@ -1541,6 +1541,21 @@ test("implement spawn excludes memory-write tools and skill_manage", async () =>
   assert.equal(spawned[0].options.env.KIT_PI_HERMES, WORKER_MEMORY_DIR);
 });
 
+
+test("Draft pins free OpenRouter coding models with Hy3 then Composer fallbacks", () => {
+  const draft = agentFrontmatter(".pi/agents/draft.md");
+  assert.match(draft.frontmatter, /^model:\s+openrouter\/poolside\/laguna-s-2\.1:free\s*$/m);
+  assert.match(
+    draft.frontmatter,
+    /^fallbackModels:\s+openrouter\/minimax\/minimax-m3:free,\s*openrouter\/z-ai\/glm-5\.2:free,\s*openrouter\/tencent\/hy3,\s*cursor\/composer-2\.5\s*$/m,
+  );
+  assert.match(draft.frontmatter, /^thinking:\s+off\s*$/m);
+  assert.match(draft.frontmatter, /edit|write/);
+  assert.match(draft.text, /Composition/i);
+  assert.match(draft.text, /auth|IAP|Vision/i);
+  assert.doesNotMatch(draft.frontmatter, /stealth|ox-alpha|kimi|moonshot/i);
+});
+
 test("Scout pins Hy3; Gate is superseded by Mechanical close but keeps MiMo frontmatter", () => {
   const scout = agentFrontmatter(".pi/agents/scout.md");
   const gate = agentFrontmatter(".pi/agents/gate.md");

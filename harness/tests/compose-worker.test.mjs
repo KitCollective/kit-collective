@@ -670,6 +670,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
     ".pi/adw/bug.yaml",
     ".pi/adw/improvement.yaml",
     ".pi/agents/scout.md",
+    ".pi/agents/draft.md",
     ".pi/agents/gate.md",
     ".pi/agents/nest.md",
     ".pi/agents/expo.md",
