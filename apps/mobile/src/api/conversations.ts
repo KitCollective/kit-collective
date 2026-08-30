@@ -1,9 +1,13 @@
 import {
   type CollectionConversationDetail,
+  type CollectionConversationPeer,
   type CollectionConversations,
   type CollectionSendMessageRequest,
+  collectionBlockConversationResponseSchema,
   collectionConversationDetailSchema,
+  collectionConversationPeerSchema,
   collectionConversationsSchema,
+  collectionReportConversationResponseSchema,
   collectionSendMessageResponseSchema,
 } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
@@ -89,4 +93,76 @@ export function resolveConversationPhotoUrl(relativePath: string): string {
     return relativePath;
   }
   return `${getApiBaseUrl()}${relativePath}`;
+}
+
+export async function fetchConversationPeer(
+  accessToken: string,
+  conversationId: string,
+): Promise<CollectionConversationPeer> {
+  const response = await requestJson(`/v1/collection/conversations/${conversationId}/peer`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+  });
+
+  if (!response.ok) {
+    throw new ConversationsFetchError("Kunne ikke hente profil", response.status);
+  }
+
+  return collectionConversationPeerSchema.parse(await response.json());
+}
+
+export async function reportConversation(
+  accessToken: string,
+  conversationId: string,
+  reason?: string,
+): Promise<void> {
+  const response = await requestJson(`/v1/moderation/conversations/${conversationId}/report`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+
+  if (!response.ok) {
+    throw new ConversationsFetchError("Kunne ikke rapportere", response.status);
+  }
+
+  collectionReportConversationResponseSchema.parse(await response.json());
+}
+
+export async function blockConversation(
+  accessToken: string,
+  conversationId: string,
+): Promise<void> {
+  const response = await requestJson(`/v1/moderation/conversations/${conversationId}/block`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+  });
+
+  if (!response.ok) {
+    throw new ConversationsFetchError("Kunne ikke blokere", response.status);
+  }
+
+  collectionBlockConversationResponseSchema.parse(await response.json());
+}
+
+export async function hideConversation(accessToken: string, conversationId: string): Promise<void> {
+  const response = await requestJson(`/v1/collection/conversations/${conversationId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+  });
+
+  if (!response.ok) {
+    throw new ConversationsFetchError("Kunne ikke slette samtale", response.status);
+  }
 }
