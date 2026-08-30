@@ -140,7 +140,7 @@ jobs:
         run: node --test scripts/tests/check-mobile-tab-bar.test.mjs
 
       - name: Check mobile peer stub typography ratchet
-        run: pnpm check:mobile-peer-stub-typography
+        run: node scripts/check-mobile-peer-stub-typography.mjs
 
       - name: Test mobile peer stub typography ratchet logic
         run: node --test scripts/tests/check-mobile-peer-stub-typography.test.mjs
