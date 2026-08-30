@@ -111,6 +111,16 @@ export {
   collectionSendMessageResponseSchema,
 } from "./collection/conversation-detail.js";
 export {
+  type CollectionBlockConversationResponse,
+  type CollectionConversationPeer,
+  type CollectionReportConversationRequest,
+  type CollectionReportConversationResponse,
+  collectionBlockConversationResponseSchema,
+  collectionConversationPeerSchema,
+  collectionReportConversationRequestSchema,
+  collectionReportConversationResponseSchema,
+} from "./collection/conversation-moderation.js";
+export {
   type CollectionConversation,
   type CollectionConversations,
   collectionConversationSchema,

@@ -70,6 +70,27 @@ export class CollectionController {
     );
   }
 
+  @Get("collection/conversations/:conversationId/peer")
+  @UseGuards(JwtAuthGuard)
+  getConversationPeer(
+    @CurrentUser() user: JwtPayload,
+    @Param("conversationId") conversationId: string,
+  ) {
+    return this.collectionService.getConversationPeer(user.sub, conversationId);
+  }
+
+  @Delete("collection/conversations/:conversationId")
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  async hideConversation(
+    @CurrentUser() user: JwtPayload,
+    @Param("conversationId") conversationId: string,
+    @Res() reply: FastifyReply,
+  ) {
+    await this.collectionService.hideConversation(user.sub, conversationId);
+    return reply.status(204).send();
+  }
+
   @Post("collection/conversations/:conversationId/messages")
   @HttpCode(201)
   @UseGuards(JwtAuthGuard)

@@ -1,5 +1,6 @@
 import {
   type CollectionConversationDetail,
+  type CollectionConversationPeer,
   type CollectionConversations,
   type CollectionDiscoverJerseys,
   type CollectionFavorites,
@@ -13,6 +14,7 @@ import {
   collectionAddFavoriteRequestSchema,
   collectionBiddingPatchSchema,
   collectionConversationDetailSchema,
+  collectionConversationPeerSchema,
   collectionConversationsSchema,
   collectionDiscoverJerseysSchema,
   collectionFavoritesSchema,
@@ -49,8 +51,9 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
+import { ModerationService } from "../moderation/moderation.service.js";
 import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
@@ -102,6 +105,7 @@ export class CollectionService {
     private readonly visionQueueService: VisionQueueService,
     private readonly visionService: VisionService,
     private readonly shortcutsService: CollectionShortcutsService,
+    private readonly moderationService: ModerationService,
   ) {}
 
   static objectStoreFactory(): ObjectStoreAdapter {
@@ -252,7 +256,13 @@ export class CollectionService {
       .where(inArray(conversation.id, conversationIds))
       .orderBy(desc(conversation.updatedAt));
 
-    const peerIds = conversationRows.map((row) =>
+    const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
+    const visibleConversationRows = conversationRows.filter((row) => {
+      const peerId = row.lowerCollectorId === userId ? row.upperCollectorId : row.lowerCollectorId;
+      return !blockedPeerIds.has(peerId);
+    });
+
+    const peerIds = visibleConversationRows.map((row) =>
       row.lowerCollectorId === userId ? row.upperCollectorId : row.lowerCollectorId,
     );
     const uniquePeerIds = [...new Set(peerIds)];
@@ -267,6 +277,8 @@ export class CollectionService {
 
     const peerById = new Map(peerRows.map((row) => [row.id, row.handle]));
 
+    const visibleConversationIds = visibleConversationRows.map((row) => row.id);
+
     const latestMessages = await this.db
       .select({
         conversationId: conversationMessage.conversationId,
@@ -277,7 +289,7 @@ export class CollectionService {
         createdAt: conversationMessage.createdAt,
       })
       .from(conversationMessage)
-      .where(inArray(conversationMessage.conversationId, conversationIds))
+      .where(inArray(conversationMessage.conversationId, visibleConversationIds))
       .orderBy(desc(conversationMessage.createdAt));
 
     const latestByConversation = new Map<string, (typeof latestMessages)[number]>();
@@ -287,7 +299,7 @@ export class CollectionService {
       }
     }
 
-    const conversations = conversationRows.map((row) => {
+    const conversations = visibleConversationRows.map((row) => {
       const peerId = row.lowerCollectorId === userId ? row.upperCollectorId : row.lowerCollectorId;
       const peerHandle = peerById.get(peerId);
       if (!peerHandle) {
@@ -349,6 +361,10 @@ export class CollectionService {
       conversationRow.lowerCollectorId === userId
         ? conversationRow.upperCollectorId
         : conversationRow.lowerCollectorId;
+
+    if (await this.moderationService.isBlocked(userId, peerId)) {
+      throw new NotFoundException("Conversation not found");
+    }
 
     const [peerRow] = await this.db
       .select({ handle: user.handle })
@@ -582,6 +598,74 @@ export class CollectionService {
     if (!participant) {
       throw new NotFoundException("Conversation not found");
     }
+  }
+
+  async getConversationPeer(
+    userId: string,
+    conversationId: string,
+  ): Promise<CollectionConversationPeer> {
+    await this.assertConversationParticipant(userId, conversationId);
+
+    const [conversationRow] = await this.db
+      .select({
+        lowerCollectorId: conversation.lowerCollectorId,
+        upperCollectorId: conversation.upperCollectorId,
+      })
+      .from(conversation)
+      .where(eq(conversation.id, conversationId))
+      .limit(1);
+
+    if (!conversationRow) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    const peerId =
+      conversationRow.lowerCollectorId === userId
+        ? conversationRow.upperCollectorId
+        : conversationRow.lowerCollectorId;
+
+    if (await this.moderationService.isBlocked(userId, peerId)) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    const [peerRow] = await this.db
+      .select({
+        handle: user.handle,
+        city: user.city,
+        showCity: user.showCity,
+      })
+      .from(user)
+      .where(eq(user.id, peerId))
+      .limit(1);
+
+    if (!peerRow) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    const [jerseyCountRow] = await this.db
+      .select({ count: count() })
+      .from(userJersey)
+      .where(eq(userJersey.userId, peerId));
+
+    return collectionConversationPeerSchema.parse({
+      handle: peerRow.handle,
+      jerseyCount: Number(jerseyCountRow?.count ?? 0),
+      ...(peerRow.showCity && peerRow.city ? { city: peerRow.city } : {}),
+    });
+  }
+
+  async hideConversation(userId: string, conversationId: string): Promise<void> {
+    await this.assertConversationParticipant(userId, conversationId);
+
+    await this.db
+      .update(conversationParticipant)
+      .set({ hiddenAt: new Date() })
+      .where(
+        and(
+          eq(conversationParticipant.conversationId, conversationId),
+          eq(conversationParticipant.userId, userId),
+        ),
+      );
   }
 
   async patchBidding(userId: string, jerseyId: string, rawBody: unknown) {
@@ -856,6 +940,10 @@ export class CollectionService {
 
     if (!jerseyRow.biddingEnabled) {
       throw new BadRequestException("Bidding is not enabled for this UserJersey");
+    }
+
+    if (await this.moderationService.isBlocked(userId, jerseyRow.ownerId)) {
+      throw new ForbiddenException("Cannot start a conversation with this collector");
     }
 
     const [lowerCollectorId, upperCollectorId] = canonicalCollectorPair(userId, jerseyRow.ownerId);
