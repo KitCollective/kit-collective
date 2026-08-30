@@ -63,6 +63,19 @@ function main(argv) {
   const dbPath = resolveTokenDbPath(process.env);
   const store = createTokenStore({ dbPath });
   try {
+    const routesIdx = args.indexOf("--routes");
+    if (routesIdx >= 0) {
+      const routeId = args[routesIdx + 1];
+      writeOut(`db=${dbPath}`);
+      const key = typeof routeId === "string" && !routeId.startsWith("--") ? routeId : "";
+      for (const row of store.summarizeRoutes(key)) {
+        const avg = typeof row.avgReviewLoops === "number" ? row.avgReviewLoops.toFixed(2) : "n/a";
+        writeOut(
+          `${row.complexity}: runs=${row.runCount} success=${row.successCount} avgReviewLoops=${avg} ${formatCostUsd(row.costUsd)}`,
+        );
+      }
+      return;
+    }
     if (typeof recent === "number" && Number.isFinite(recent)) {
       writeOut(`db=${dbPath}`);
       for (const run of store.listRecent(recent)) {
@@ -71,7 +84,7 @@ function main(argv) {
       return;
     }
     if (typeof identifier !== "string" || identifier.length === 0) {
-      writeErr("Usage: node harness/token-report.mjs <KIT-n> | --recent <n>");
+      writeErr("Usage: node harness/token-report.mjs <KIT-n> | --recent <n> | --routes [KIT-n]");
       process.exitCode = 1;
       return;
     }

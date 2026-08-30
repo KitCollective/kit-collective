@@ -339,8 +339,12 @@ Read-only Pi subagent before implement writes. Required on every implement job. 
 _Avoid_: editing; opening a PR; moving Linear status; dumping whole files or the workpad to OpenRouter; inheriting Composer; skipping when `OPENROUTER_API_KEY` is missing
 
 **Draft**:
-One Pi scaffold subagent after workpad `### Composition` and before Composer domain helpers. Pins free OpenRouter coding models (`poolside/laguna-s-2.1:free`, then `minimax/minimax-m3:free`, then `z-ai/glm-5.2:free`) with Hy3 then Composer fallbacks. Writes boilerplate under write-scope only (stubs, types, rote shells, Composition mirrors). Parent and nest/drizzle/expo/ui-ux/devops still own correctness, TDD green, and sensitive seams. Skip Draft on cheap/Spec/first-pass resume (with Skip Scout) and when the slice is auth/IAP/Vision-only.
+One Pi scaffold subagent after workpad `### Composition` and before Composer domain helpers. Pins free OpenRouter coding models (`minimax/minimax-m3:free`, then `z-ai/glm-5.2:free`, then `poolside/laguna-s-2.1`) with Hy3 then Composer fallbacks. Writes boilerplate under write-scope only (stubs, types, rote shells, Composition mirrors). Parent and nest/drizzle/expo/ui-ux/devops still own correctness, TDD green, and sensitive seams. Skip Draft on cheap/Spec/first-pass resume (with Skip Scout), when Model route says Skip Draft (critical), and when the slice is auth/IAP/Vision-only.
 _Avoid_: Draft as `PI_MODEL`; Draft owning auth/IAP/Vision/secrets; replacing nest/expo/drizzle/ui-ux; skipping Composer helpers after Draft; treating free primary as hard-fail when rate-limited; omitting Hy3/Composer fallbacks
+
+**Model route**:
+Cheapest-capable routing across implement gates. Before spawn, a rule heuristic scores slice complexity (`simple` | `standard` | `critical`) from write-scope, helpers, path count, and critical keywords (auth/IAP/Vision/secrets/billing). Gates: plan (Scout/Hy3) → scaffold (Draft free rotation) → implement (Composer for standard/critical; free-capable for simple) → verify (Hy3 then free rotation; Mechanical close stays harness-owned). Cheap rotation on 429: MiniMax M3 free → GLM 5.2 free → Laguna S 2.1 (`poolside/laguna-s-2.1`) → Hy3 → Composer. Domain helpers stay Composer. Route decisions + outcomes persist in SQLite `route_runs` for retro tuning (`token-report --routes`).
+_Avoid_: one model for every gate; free models owning nest/expo/drizzle/ui-ux; stalling the stay on a single free 429; Draft as `PI_MODEL`; treating heuristic score as invoice truth
 
 **Gate**:
 Superseded by **Mechanical close**. Implement must not spawn the Gate Pi agent. Harness owns rebase, format apply, typecheck touched (yellow), and required GitHub wait after implement exits.
