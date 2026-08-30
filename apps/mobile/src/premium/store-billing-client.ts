@@ -42,6 +42,7 @@ export function createStoreBillingClient(): StoreBillingClient {
 }
 
 function createNativeStoreBillingClient(): StoreBillingClient {
+  // SAFETY: only called when Platform.OS is ios/android; sibling module exports NativeStoreBillingClient.
   const { NativeStoreBillingClient } =
     require("./native-store-billing") as typeof import("./native-store-billing");
   return new NativeStoreBillingClient();
