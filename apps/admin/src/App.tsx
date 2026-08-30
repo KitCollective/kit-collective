@@ -9,6 +9,7 @@ import { CollectorsPage } from "./pages/CollectorsPage.js";
 import { CollectorUserDrillPage } from "./pages/CollectorUserDrillPage.js";
 import { KitDrillPage } from "./pages/KitDrillPage.js";
 import { LoginPage } from "./pages/LoginPage.js";
+import { OfferDrillPage } from "./pages/OfferDrillPage.js";
 import { SeasonDrillPage } from "./pages/SeasonDrillPage.js";
 import { StamdataPage } from "./pages/StamdataPage.js";
 import "./styles/admin.css";
@@ -31,6 +32,7 @@ export function App() {
                 element={<ClubSeasonDrillPage />}
               />
               <Route path="/collectors" element={<CollectorsPage />} />
+              <Route path="/collectors/offers" element={<OfferDrillPage />} />
               <Route path="/collectors/:userId" element={<CollectorUserDrillPage />} />
               <Route
                 path="/collectors/:userId/jerseys/:jerseyId"

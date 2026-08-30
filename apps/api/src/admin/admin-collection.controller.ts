@@ -4,6 +4,7 @@ import {
   adminCollectorQuerySchema,
   adminCollectorUserIdParamSchema,
   adminRoleUpdateRequestSchema,
+  grantCompRequestSchema,
 } from "@kit/api-contract";
 import {
   BadRequestException,
@@ -131,5 +132,19 @@ export class AdminCollectionController {
       parsedUser.data.userId,
       parsedBody.data,
     );
+  }
+
+  @Patch(":userId/entitlement/comp")
+  @HttpCode(200)
+  grantComp(@Param() params: Record<string, string>, @Body() body: unknown) {
+    const parsedUser = adminCollectorUserIdParamSchema.safeParse({ userId: params.userId });
+    if (!parsedUser.success) {
+      throw new BadRequestException("Invalid user id");
+    }
+    const parsedBody = grantCompRequestSchema.safeParse(body);
+    if (!parsedBody.success) {
+      throw new BadRequestException("Invalid grant comp request");
+    }
+    return this.adminCollectionService.grantComp(parsedUser.data.userId, parsedBody.data);
   }
 }

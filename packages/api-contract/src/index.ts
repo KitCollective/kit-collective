@@ -1,4 +1,10 @@
 export {
+  type GrantCompRequest,
+  type GrantCompResponse,
+  grantCompRequestSchema,
+  grantCompResponseSchema,
+} from "./admin/billing.js";
+export {
   ADMIN_STAMDATA_LIST_ENTITY_TYPES,
   type AdminClubDrill,
   type AdminClubIdParam,
@@ -71,6 +77,12 @@ export {
   entitlementSchema,
   entitlementSourceSchema,
 } from "./billing/entitlement.js";
+export {
+  type Offer,
+  type OfferPatchRequest,
+  offerPatchRequestSchema,
+  offerSchema,
+} from "./billing/offer.js";
 export {
   type CatalogClubSearchResponse,
   type CatalogClubSeasonsResponse,

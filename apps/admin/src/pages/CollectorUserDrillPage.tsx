@@ -3,6 +3,8 @@ import {
   type AdminCollectorUser,
   adminCollectorJerseyListSchema,
   adminCollectorUserSchema,
+  type Entitlement,
+  grantCompResponseSchema,
 } from "@kit/api-contract";
 import { type KeyboardEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -11,6 +13,33 @@ import { useAuth } from "../auth/AuthProvider.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
 import { BackLink } from "../components/BackLink.js";
 import { ConfirmSheet } from "../components/ConfirmSheet.js";
+import { GrantCompSheet } from "../components/GrantCompSheet.js";
+
+function formatEntitlementSource(source: Entitlement["source"]): string {
+  return source ?? "none";
+}
+
+function formatEntitlementExpires(expires: Entitlement["expires"]): string {
+  if (!expires) {
+    return "—";
+  }
+  return new Date(expires).toLocaleDateString("en-GB", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function defaultGrantCompExpiresLocal(): string {
+  const date = new Date();
+  date.setMonth(date.getMonth() + 1);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localDatetimeToIso(value: string): string {
+  return new Date(value).toISOString();
+}
 
 function parseRoleUpdateError(message: string): string {
   try {
@@ -46,6 +75,10 @@ export function CollectorUserDrillPage() {
   const [roleSheetOpen, setRoleSheetOpen] = useState(false);
   const [pendingRole, setPendingRole] = useState<"user" | "admin" | null>(null);
   const [roleUpdating, setRoleUpdating] = useState(false);
+  const [grantCompOpen, setGrantCompOpen] = useState(false);
+  const [grantCompExpires, setGrantCompExpires] = useState(defaultGrantCompExpiresLocal);
+  const [grantCompSaving, setGrantCompSaving] = useState(false);
+  const [grantCompError, setGrantCompError] = useState<string | null>(null);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
 
   useEffect(() => {
@@ -156,6 +189,37 @@ export function CollectorUserDrillPage() {
     }
   }
 
+  async function saveGrantComp() {
+    if (!token || !userId || !collector) {
+      return;
+    }
+    setGrantCompSaving(true);
+    setGrantCompError(null);
+    try {
+      const entitlement = await apiFetch<Entitlement>(
+        `/admin/collectors/${userId}/entitlement/comp`,
+        {
+          token,
+          method: "PATCH",
+          body: JSON.stringify({ expires: localDatetimeToIso(grantCompExpires) }),
+        },
+      );
+      const parsedEntitlement = grantCompResponseSchema.parse(entitlement);
+      setCollector(
+        adminCollectorUserSchema.parse({
+          ...collector,
+          entitlement: parsedEntitlement,
+        }),
+      );
+      setGrantCompOpen(false);
+    } catch (updateError) {
+      const message = updateError instanceof Error ? updateError.message : "Failed to grant comp";
+      setGrantCompError(parseRoleUpdateError(message));
+    } finally {
+      setGrantCompSaving(false);
+    }
+  }
+
   const roleSheetTitle = pendingRole === "admin" ? "Grant Staff access?" : "Remove Staff access?";
   const roleSheetDescription =
     pendingRole === "admin"
@@ -193,9 +257,29 @@ export function CollectorUserDrillPage() {
                 })}
               </dd>
             </div>
+            <div>
+              <dt>Entitlement</dt>
+              <dd className="type-mono">
+                {formatEntitlementSource(collector.entitlement.source)}
+                {collector.entitlement.source
+                  ? ` · ${formatEntitlementExpires(collector.entitlement.expires)}`
+                  : null}
+              </dd>
+            </div>
           </dl>
 
           <div className="toolbar toolbar--actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setGrantCompError(null);
+                setGrantCompExpires(defaultGrantCompExpiresLocal());
+                setGrantCompOpen(true);
+              }}
+            >
+              Grant comp
+            </button>
             {collector.role === "user" ? (
               <button
                 type="button"
@@ -288,6 +372,21 @@ export function CollectorUserDrillPage() {
         }}
         onConfirm={confirmRoleChange}
         confirming={roleUpdating}
+      />
+
+      <GrantCompSheet
+        open={grantCompOpen}
+        expires={grantCompExpires}
+        onExpiresChange={setGrantCompExpires}
+        onClose={() => {
+          if (!grantCompSaving) {
+            setGrantCompOpen(false);
+            setGrantCompError(null);
+          }
+        }}
+        onSave={saveGrantComp}
+        saving={grantCompSaving}
+        error={grantCompError}
       />
     </div>
   );

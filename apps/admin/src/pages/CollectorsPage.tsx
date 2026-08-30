@@ -228,11 +228,20 @@ export function CollectorsPage() {
               onClick={() => {
                 setTable(entityType);
                 setFocusedRowIndex(0);
+                navigate("/collectors");
               }}
             >
               {tableLabel(entityType)}
             </button>
           ))}
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={false}
+            onClick={() => navigate("/collectors/offers")}
+          >
+            Offers
+          </button>
         </fieldset>
         <span className="record-count">{recordCount}</span>
       </div>
