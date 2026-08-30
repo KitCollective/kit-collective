@@ -38,7 +38,7 @@ test("plannerClaimComment names the claim transition", () => {
   assert.match(plannerClaimComment("KIT-114"), /Linear Agent left empty/);
 });
 
-test("implementRetryCapComment holds Implementing with empty Linear Agent", () => {
+test("implementRetryCapComment still matches stale KIT-125 hold comments", () => {
   const body = implementRetryCapComment("KIT-99");
   assert.match(body, /KIT-99: implement retry cap/);
   assert.match(body, /after 5 in-slot retries/);

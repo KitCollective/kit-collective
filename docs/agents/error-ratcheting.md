@@ -261,7 +261,7 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 
 ### Implement write-scope retry (KIT-119)
 
-`harness/tests/implement-ci-retry.test.mjs` (`job-queue re-runs implement on write-scope retry until In Review`, `job-queue fail-closes when the implement write-scope retry cap is already exhausted`) keeps the slot on `{ writeScopeRetry: true }` the same way as CI retry, with `IMPLEMENT_CI_RETRY_CAP`. Prevents repeating KIT-119 sitting Implementing with an empty slot after an out-of-glob path (`apps/admin/...`) while resume skipped it for write-scope overlap. Tighten only.
+`harness/tests/implement-ci-retry.test.mjs` (`job-queue re-runs implement on write-scope retry until In Review`) keeps the slot on `{ writeScopeRetry: true }` the same way as CI retry. The cheap-retry bound **yields** the slot instead of a retry-cap hold. Prevents repeating KIT-119 sitting Implementing with an empty slot after an out-of-glob path (`apps/admin/...`) while resume skipped it for write-scope overlap. Tighten only.
 
 ### Implement Gate format-check and cheap retry
 
@@ -269,11 +269,11 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 
 - Gate (`.pi/agents/gate.md`) runs `pnpm format:check` or `biome ci .`. Format-fail is red. Do not treat format as typecheck. Typecheck may be yellow.
 - Worker image installs global `@biomejs/biome@2.5.10` so Gate does not need worktree `node_modules`.
-- `completeImplementAdw` format-check is a safety net after Pi: a throwing `formatCheck` stays Implementing (`formatRetry: true`) even when GitHub required checks are green. Worker typecheck throw still may move In Review.
-- First implement run still Scout → helpers → Gate. `{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }` retries **Skip Scout** and skip helpers. Prompt includes workpad `### Review feedback` and requires the CI excerpt, pointing at the class (format vs Zod vs unique-email).
-- After `IMPLEMENT_CI_RETRY_CAP` in-slot retries, the worker posts `implementRetryCapComment` (Linear Agent left empty; no Cursor Cloud Agent) and **resume skips** that Implementing issue. A later enqueue no-ops without spawning Pi.
+- `completeImplementAdw` format-check is a safety net after Pi: a throwing `formatCheck` stays Implementing (`formatRetry: true`) even when GitHub required checks are green, **except** maxBuffer / ENOBUFS (`isFormatInfraError`) which is infra — not format-red — and still reaches In Review when GitHub is green (KIT-125 / KIT-130).
+- First implement run still Scout → helpers → Gate. `{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }` retries **Skip Scout** and skip helpers. Prompt includes workpad `### Review feedback` and requires the CI excerpt, pointing at the class (format vs Zod vs unique-email). Cheap retry is the **same Implementing stay**, not a new try.
+- Cheap retries do **not** increment `reviewLoops` / `ciFailCycles`, do **not** post `implementRetryCapComment`, and do **not** make resume skip. After the cheap-retry bound the slot yields; resume may enqueue again. Stale retry-cap comments do not hold Implementing.
 
-Prevents repeating 4–9 full Composer sessions per issue (first fail is GitHub, then Scout→helpers→Gate from scratch; resume poller re-enqueues after the in-slot cap). Tighten only.
+Prevents repeating KIT-125 (five false format cheap-retries → retry-cap hold, never In Review while GitHub was green). Tighten only.
 
 ### Implement checker-fail resume findings (KIT-116)
 

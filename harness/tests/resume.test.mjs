@@ -134,7 +134,7 @@ test("runResume enqueues full implement after checker fail, not a cheap CI retry
   assert.deepEqual(result.enqueued, [{ identifier: "KIT-116", role: "implement" }]);
 });
 
-test("runResume skips Implementing after implement retry cap without a new Composer", async () => {
+test("runResume enqueues Implementing even when a stale retry-cap comment is present", async () => {
   const enqueue = fakeEnqueue();
   const linear = fakeLinear([orphan()]);
   linear.listComments = async () => [{ id: "c-cap", body: implementRetryCapComment("KIT-94") }];
@@ -144,12 +144,14 @@ test("runResume skips Implementing after implement retry cap without a new Compo
     delegateGateConfig: DELEGATE_GATE,
   });
 
-  assert.equal(enqueue.jobs.length, 0);
-  assert.ok(
-    result.skipped.some(
-      (row) => row.identifier === "KIT-94" && row.reason === "implement retry cap",
-    ),
+  assert.equal(enqueue.jobs.length, 1);
+  assert.equal(enqueue.jobs[0].role, "implement");
+  assert.equal(enqueue.jobs[0].identifier, "KIT-94");
+  assert.equal(
+    result.skipped.some((row) => row.reason === "implement retry cap"),
+    false,
   );
+  assert.deepEqual(result.enqueued, [{ identifier: "KIT-94", role: "implement" }]);
 });
 
 test("runResume enqueues implement for land-fail even when retry cap is posted", async () => {

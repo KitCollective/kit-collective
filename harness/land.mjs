@@ -16,6 +16,7 @@ import {
   MERGE_PERMISSION_STATUS,
   MERGED_STATUS,
 } from "../scripts/lib/land-policy.mjs";
+import { incrementReviewLoops } from "./auto-merge.mjs";
 import {
   logFactoryExitDone,
   logFactoryExitStart,
@@ -228,7 +229,7 @@ export function applyLandWorkpad(current, { sha, error } = {}) {
     return `${replaceReviewFeedback(withEvidence, "- (none)")}\n`;
   }
   if (typeof error === "string" && error.length > 0) {
-    return `${replaceReviewFeedback(base, formatLandFailFeedback(error))}\n`;
+    return incrementReviewLoops(`${replaceReviewFeedback(base, formatLandFailFeedback(error))}\n`);
   }
   return `${base}\n`;
 }

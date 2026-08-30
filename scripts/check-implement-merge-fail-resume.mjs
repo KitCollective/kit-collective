@@ -65,8 +65,8 @@ export function missingImplementMergeFailResumeCoverage(sources) {
   }
 
   const resume = sources.resume ?? "";
-  if (!/reviewFeedbackIsLandFail/.test(resume)) {
-    missing.push("resume.mjs land-fail bypasses implement retry cap");
+  if (!/stale retry-cap/i.test(resume)) {
+    missing.push("resume.mjs stale retry-cap still enqueues Implementing");
   }
 
   const landTest = sources.landTest ?? "";

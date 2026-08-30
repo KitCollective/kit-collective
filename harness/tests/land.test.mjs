@@ -577,6 +577,7 @@ test("applyLandWorkpad records SHA on success and the merge error under Review f
   assert.match(failure, /protected branch hook declined/);
   assert.match(failure, /^- merge failed — /m);
   assert.equal(failure.includes("Done"), false);
+  assert.match(failure, /reviewLoops: 1/);
 });
 
 test("applyLandWorkpad prefixes gh pr merge errors so implement-exit treats them as land-fail", () => {

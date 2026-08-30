@@ -7,6 +7,7 @@ import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createGhClient } from "../gh-cli.mjs";
 import {
   completeImplementAdw,
+  createFormatCheck,
   createListChangedFiles,
   createListWorktreeMigrations,
   createTypecheckTouched,
@@ -14,6 +15,7 @@ import {
   formatWriteScopeViolationFeedback,
   IMPLEMENTING,
   IN_REVIEW,
+  isFormatInfraError,
   loadWriteScopeEvaluator,
   requiredChecksGreen,
   WORKPAD_HEADING,
@@ -644,6 +646,63 @@ test("completeImplementAdw stays Implementing when format-check fails even if Gi
   assert.match(workpad.body, /### Review feedback/);
   assert.match(workpad.body, /format/i);
   assert.match(workpad.body, /biome ci/i);
+});
+
+test("isFormatInfraError treats maxBuffer and ENOBUFS as infra, not format-red", () => {
+  const maxBuffer = new Error("stdout maxBuffer length exceeded");
+  maxBuffer.code = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+  const enobufs = new Error("ENOBUFS: buffer overflow");
+  enobufs.code = "ENOBUFS";
+  assert.equal(isFormatInfraError(maxBuffer), true);
+  assert.equal(isFormatInfraError(enobufs), true);
+  assert.equal(isFormatInfraError("stderr maxBuffer length exceeded"), true);
+  assert.equal(isFormatInfraError(new Error("Checked 2 files. Found 1 error.")), false);
+});
+
+test("createFormatCheck sets maxBuffer and does not throw on maxBuffer infra", async () => {
+  const calls = [];
+  const formatCheck = createFormatCheck({
+    async runCommand(command, args, options) {
+      calls.push({ command, args, options });
+      const err = new Error("stdout maxBuffer length exceeded");
+      err.code = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+      throw err;
+    },
+  });
+  await formatCheck({ cwd: "/tmp/worktree" });
+  assert.ok(calls.length >= 1);
+  assert.ok(Number(calls[0].options?.maxBuffer) >= 2_000_000);
+});
+
+test("completeImplementAdw treats format maxBuffer as infra and still moves In Review when GitHub is green", async () => {
+  const gh = fakeGh({
+    mergeable: "MERGEABLE",
+    checks: [{ name: "test", conclusion: "success", isRequired: true }],
+  });
+  const linear = fakeLinear();
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-116", issueId: "issue-116", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-116", branch: "kit-116" },
+    gh,
+    linear,
+    typecheckTouched: async () => undefined,
+    formatCheck: async () => {
+      const err = new Error("stderr maxBuffer length exceeded");
+      err.code = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+      throw err;
+    },
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.formatRetry, false);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    true,
+  );
 });
 
 test("production gh.rebase aborts a conflicted rebase instead of leaving the tree wedged", async () => {
@@ -1354,7 +1413,7 @@ test("implement role stays thin; harness pi-job owns hard first-run and checker-
   assert.match(implement, /never call `memory_add`|never call memory_add/i);
   assert.match(implement, /In Review/);
   assert.match(implement, /Do not sleep/);
-  assert.match(implement, /Exit the Pi session when the PR is pushed/);
+  assert.match(implement, /Exit the Pi session when the PR is pushed and Gate is clean/);
   assert.match(implement, /linear CLI --help/);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   assert.match(piJob, /format vs Zod vs unique-email/i);

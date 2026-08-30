@@ -23,7 +23,7 @@ import {
   resolveWriteScopeViolations,
   shouldEnforceWriteScope,
 } from "../scripts/lib/pr-write-scope.mjs";
-import { ensureLoopCounters, incrementCiFailCycles } from "./auto-merge.mjs";
+import { ensureLoopCounters } from "./auto-merge.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
 import { implementInReviewComment, implementSummaryFromWorkpad } from "./role-comments.mjs";
 
@@ -35,6 +35,26 @@ export const IN_REVIEW = "In Review";
 export const IMPLEMENTING = "Implementing";
 export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
 export const CI_LOG_EXCERPT_MAX = 1500;
+export const FORMAT_CHECK_MAX_BUFFER = 2_000_000;
+
+/**
+ * Worker format-check infra (ENOBUFS / maxBuffer) is not a format-red.
+ * KIT-130: treating stderr maxBuffer as formatRetry burned the cheap-retry
+ * bound and blocked In Review while GitHub was already green (KIT-125).
+ *
+ * @param {unknown} error
+ */
+export function isFormatInfraError(error) {
+  const err = error && typeof error === "object" ? error : {};
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const code = typeof err.code === "string" ? err.code : "";
+  return (
+    code === "ENOBUFS" ||
+    code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" ||
+    /maxBuffer/i.test(message) ||
+    /ENOBUFS/i.test(message)
+  );
+}
 
 const GREEN_CONCLUSIONS = new Set([
   "success",
@@ -686,14 +706,25 @@ export function createFormatCheck({ runCommand } = {}) {
         encoding: "utf8",
         timeout: 120_000,
         cwd: options.cwd,
+        maxBuffer: FORMAT_CHECK_MAX_BUFFER,
       });
       return stdout;
     });
   return async ({ cwd }) => {
     try {
-      await run("pnpm", ["format:check"], { cwd });
-    } catch {
-      await run("biome", ["ci", "."], { cwd });
+      await run("pnpm", ["format:check"], { cwd, maxBuffer: FORMAT_CHECK_MAX_BUFFER });
+    } catch (error) {
+      if (isFormatInfraError(error)) {
+        return;
+      }
+      try {
+        await run("biome", ["ci", "."], { cwd, maxBuffer: FORMAT_CHECK_MAX_BUFFER });
+      } catch (fallback) {
+        if (isFormatInfraError(fallback)) {
+          return;
+        }
+        throw fallback;
+      }
     }
   };
 }
@@ -846,7 +877,9 @@ export async function completeImplementAdw(input) {
     try {
       await formatCheck({ cwd: checkout.path });
     } catch (error) {
-      return writeFormatRetryWorkpad({ job, linear, pr, error });
+      if (!isFormatInfraError(error)) {
+        return writeFormatRetryWorkpad({ job, linear, pr, error });
+      }
     }
   }
   if (typeof runPnpmTest === "function") {
@@ -990,9 +1023,7 @@ async function writeCiRetryWorkpad(input) {
           identifier: job.identifier,
         })
       : (existing?.body ?? `${WORKPAD_HEADING}\n`);
-  const body = incrementCiFailCycles(
-    applyReviewFeedback(withEvidence, formatCiFailureFeedback(checks, { timedOut })),
-  );
+  const body = applyReviewFeedback(withEvidence, formatCiFailureFeedback(checks, { timedOut }));
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
   return { pr, status: IMPLEMENTING, ciRetry: true };
 }

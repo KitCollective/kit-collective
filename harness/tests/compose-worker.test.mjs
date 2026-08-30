@@ -738,7 +738,9 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /re-runs implement in the same slot/);
   assert.match(host, /format:check/);
   assert.match(host, /Skip Scout/);
-  assert.match(host, /implement retry cap/);
+  assert.match(host, /Cheap retries are not tries/);
+  assert.match(host, /maxBuffer/);
+  assert.match(host, /Stale \*\*implement retry cap\*\* comments do not skip enqueue/);
   assert.match(host, /ramFreeMb/);
   assert.match(host, /diskFreeMb/);
   assert.doesNotMatch(host, /\/opt\/kit-collective\/\.env/);

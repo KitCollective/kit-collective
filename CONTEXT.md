@@ -255,8 +255,8 @@ Checker pass ticks `[x]` on Acceptance criteria in the issue description and wri
 _Avoid_: implement ticking description AC; checker pass without updating description when criteria are met
 
 **Loop cap**:
-Either five required-check failure cycles (`ciFailCycles`) or five checker-fail returns (`reviewLoops`) blocks Auto-merge. Counters live under workpad `### Loop counters`. Missing counters fail closed.
-_Avoid_: requiring both counters at 5; scraping GitHub as the only source; a synthetic Linear field
+A try is one Implementing stay that reaches In Review (local Gate clean, required GitHub checks green, PR open). Cheap in-slot format/CI re-spawns are not tries. `reviewLoops` increments when checker or land sends the issue **back** to Implementing. `ciFailCycles` is not incremented on in-slot CI retry. Either counter at five blocks Auto-merge. Counters live under workpad `### Loop counters`. Missing counters fail closed.
+_Avoid_: counting cheap format/CI Pi re-spawns as tries; a retry-cap hold that skips resume; treating maxBuffer as format-red
 
 **Idle timeout**:
 A spawned Pi child with no close and no stdout for 45 minutes (env `PI_JOB_IDLE_MS`) is hung. The harness kills it and frees that coding slot. After Pi emits `agent_end`, the worker kills within `PI_AGENT_END_GRACE_MS` (default 8 seconds) if the child has not closed — that is not Idle timeout and does not Park.
