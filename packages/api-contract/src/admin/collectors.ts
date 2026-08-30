@@ -1,5 +1,6 @@
 import { JERSEY_CONDITIONS, JERSEY_SIZES, KIT_TYPES, PHOTO_ROLES } from "@kit/domain";
 import { z } from "zod";
+import { entitlementSchema } from "../billing/entitlement.js";
 import { identityRoleSchema } from "../identity/session.js";
 
 export const adminCollectorQuerySchema = z
@@ -49,6 +50,7 @@ export const adminCollectorUserSchema = z
     adminCount: z.number().int().nonnegative(),
     createdAt: z.string().datetime(),
     monogram: z.string().min(1).max(3),
+    entitlement: entitlementSchema,
   })
   .strict();
 

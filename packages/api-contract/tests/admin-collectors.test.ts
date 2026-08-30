@@ -113,6 +113,12 @@ describe("adminCollectorUserSchema", () => {
       adminCount: 1,
       createdAt: "2026-08-23T00:00:00.000Z",
       monogram: "CO",
+      entitlement: {
+        live: false,
+        source: null,
+        expires: null,
+        trialUsed: false,
+      },
     };
     expect(adminCollectorUserSchema.parse(user)).toEqual(user);
   });

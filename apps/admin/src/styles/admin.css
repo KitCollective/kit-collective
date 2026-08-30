@@ -806,6 +806,30 @@ a {
   border-radius: var(--radius-sm);
 }
 
+.offer-form,
+.sheet-panel form {
+  max-width: 480px;
+}
+
+.offer-form .field input,
+.sheet-panel .field input {
+  min-height: 44px;
+  padding: 0 var(--space-inset-md);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.field-switch {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field-switch input[type="checkbox"] {
+  width: 44px;
+  height: 24px;
+}
+
 .banner-error,
 .banner-error {
   padding: var(--space-inset-sm) var(--space-inset-md);

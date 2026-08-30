@@ -11,6 +11,8 @@ import {
   adminCollectorJerseyListSchema,
   adminCollectorListSchema,
   adminCollectorUserSchema,
+  type Entitlement,
+  type GrantCompRequest,
   type IdentityRoleErrorCode,
   identityRoleErrorSchema,
 } from "@kit/api-contract";
@@ -25,6 +27,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { and, asc, count, desc, eq, exists, ilike, inArray, or } from "drizzle-orm";
+import { BillingService } from "../billing/billing.service.js";
 import { OBJECT_STORE } from "../collection/collection.service.js";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { DB } from "../db/db.module.js";
@@ -56,6 +59,7 @@ export class AdminCollectionService {
   constructor(
     @Inject(DB) private readonly db: Db,
     @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
+    private readonly billingService: BillingService,
   ) {}
 
   async listCollectors(query: AdminCollectorQuery): Promise<AdminCollectorList> {
@@ -126,6 +130,7 @@ export class AdminCollectionService {
     }
 
     const adminCount = await this.countAdmins();
+    const entitlement = await this.billingService.getEntitlementForUser(userId);
 
     return adminCollectorUserSchema.parse({
       id: row.id,
@@ -135,7 +140,13 @@ export class AdminCollectionService {
       adminCount,
       createdAt: row.createdAt.toISOString(),
       monogram: monogramFromEmail(row.email),
+      entitlement,
     });
+  }
+
+  async grantComp(userId: string, body: GrantCompRequest): Promise<Entitlement> {
+    await this.assertUserExists(userId);
+    return this.billingService.grantComp(userId, body);
   }
 
   async listCollectorJerseys(userId: string): Promise<AdminCollectorJerseyList> {
