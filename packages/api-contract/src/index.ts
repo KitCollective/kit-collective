@@ -64,12 +64,20 @@ export {
   adminCollectorUserSchema,
 } from "./admin/collectors.js";
 export {
+  type BillingIapResponse,
   type BillingStartTrialResponse,
+  billingIapResponseSchema,
   billingStartTrialResponseSchema,
   type Entitlement,
   type EntitlementSource,
   entitlementSchema,
   entitlementSourceSchema,
+  type IapPlatform,
+  type IapRestoreRequest,
+  type IapVerifyRequest,
+  iapPlatformSchema,
+  iapRestoreRequestSchema,
+  iapVerifyRequestSchema,
 } from "./billing/entitlement.js";
 export {
   type CatalogClubSearchResponse,

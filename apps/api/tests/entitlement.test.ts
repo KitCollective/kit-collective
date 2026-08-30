@@ -2,6 +2,7 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  billingIapResponseSchema,
   billingStartTrialResponseSchema,
   entitlementSchema,
   identityMeSchema,
@@ -13,6 +14,8 @@ import { Test } from "@nestjs/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
+import { FakeIapVerifierAdapter } from "../dist/billing/fake-iap.adapter.js";
+import { IAP_VERIFIER } from "../dist/billing/iap-verifier.adapter.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -43,7 +46,10 @@ describe("entitlement and Nest-trial", () => {
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(IAP_VERIFIER)
+      .useValue(new FakeIapVerifierAdapter())
+      .compile();
 
     app = moduleRef.createNestApplication(new FastifyAdapter());
     app.setGlobalPrefix("v1");
@@ -153,5 +159,95 @@ describe("entitlement and Nest-trial", () => {
     expect(me.role).toBe("admin");
     expect(me.entitlement.live).toBe(false);
     expect(me.entitlement.source).toBeNull();
+  });
+
+  it("verifies IAP purchase with fake adapter and returns live entitlement", async () => {
+    const session = await registerSession(app, "iap-verify@example.com");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/billing/verify",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        platform: "apple",
+        productId: "com.kitcollective.premium.month",
+        token: "valid-store-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const entitlement = billingIapResponseSchema.parse(JSON.parse(response.body));
+    expect(entitlement.live).toBe(true);
+    expect(entitlement.source).toBe("iap_apple");
+    expect(entitlement.expires).not.toBeNull();
+  });
+
+  it("rejects invalid IAP token", async () => {
+    const session = await registerSession(app, "iap-invalid@example.com");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/billing/verify",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        platform: "google",
+        productId: "com.kitcollective.premium.year",
+        token: "invalid-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(422);
+  });
+
+  it("restores IAP purchase and upserts entitlement", async () => {
+    const session = await registerSession(app, "iap-restore@example.com");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/billing/restore",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        platform: "apple",
+        token: "restore-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const entitlement = billingIapResponseSchema.parse(JSON.parse(response.body));
+    expect(entitlement.live).toBe(true);
+    expect(entitlement.source).toBe("iap_apple");
+  });
+
+  it("returns 401 for IAP verify without session", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/billing/verify",
+      payload: {
+        platform: "apple",
+        productId: "com.kitcollective.premium.month",
+        token: "valid-store-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("returns 401 for IAP restore without session", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/billing/restore",
+      payload: {
+        platform: "apple",
+        token: "restore-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
   });
 });
