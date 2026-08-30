@@ -3,6 +3,7 @@ name: slop
 description: Read-only Slop axis for /code-review — prose, code slop, narrating comments.
 tools: read, grep, find, ls
 subagentOnlyExtensions: harness/slop-agent-tools.ts
+model: cursor/composer-2.5
 inheritProjectContext: false
 ---
 

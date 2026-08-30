@@ -2,6 +2,7 @@
 ---
 name: nest
 description: Use as a helper from /tdd during /implement when the slice touches Nest modules, /v1 HTTP, IAP, Vision jobs, or auth. Never owns a Linear issue.
+model: cursor/composer-2.5
 inheritProjectContext: false
 ---
 

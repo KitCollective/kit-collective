@@ -2,6 +2,7 @@
 ---
 name: devops
 description: Use as a helper from /tdd during /implement when the slice touches GitHub Actions, Environments, Coolify, EAS channels, or lane secrets. Never owns a Linear issue.
+model: cursor/composer-2.5
 inheritProjectContext: false
 ---
 

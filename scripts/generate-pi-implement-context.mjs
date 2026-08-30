@@ -185,6 +185,7 @@ export function buildPiAgentMarkdown(mapping) {
 ---
 name: ${mapping.pi}
 description: ${description}
+model: cursor/composer-2.5
 ${inherit}---
 
 ${body}

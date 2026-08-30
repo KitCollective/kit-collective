@@ -2,6 +2,7 @@
 ---
 name: drizzle
 description: Use as a helper from /tdd during /implement when the slice needs Drizzle schema, migrations, or CatalogLabel/stamdata. Never owns a Linear issue.
+model: cursor/composer-2.5
 inheritProjectContext: false
 ---
 
