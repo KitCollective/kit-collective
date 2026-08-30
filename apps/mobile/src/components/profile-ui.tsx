@@ -160,6 +160,7 @@ type ListValueRowProps = {
   actionLabel?: string;
   onAction?: () => void;
   onPress?: () => void;
+  chevron?: boolean;
 };
 
 export function ListValueRow({
@@ -170,6 +171,7 @@ export function ListValueRow({
   actionLabel,
   onAction,
   onPress,
+  chevron = false,
 }: ListValueRowProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -190,7 +192,7 @@ export function ListValueRow({
         <Pressable accessibilityRole="button" onPress={onAction} style={styles.actionTarget}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>{actionLabel}</Text>
         </Pressable>
-      ) : onPress ? (
+      ) : onPress || chevron ? (
         <Ionicons
           name="chevron-forward"
           size={18}

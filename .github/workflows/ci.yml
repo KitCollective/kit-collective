@@ -140,7 +140,7 @@ jobs:
         run: node --test scripts/tests/check-mobile-tab-bar.test.mjs
 
       - name: Check mobile profile settings hub
-        run: pnpm check:mobile-profile-settings-hub
+        run: node scripts/check-mobile-profile-settings-hub.mjs
 
       - name: Test mobile profile settings hub ratchet logic
         run: node --test scripts/tests/check-mobile-profile-settings-hub.test.mjs

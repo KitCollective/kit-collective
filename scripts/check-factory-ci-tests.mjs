@@ -20,7 +20,7 @@ export const FACTORY_NODE_TEST_NEEDLES = [
 
 export const MOBILE_CHECK_NEEDLES = [
   "check:mobile-tab-bar",
-  "check:mobile-profile-settings-hub",
+  "scripts/check-mobile-profile-settings-hub.mjs",
   "check:mobile-design-tokens",
   "check:mobile-collection-ui-evidence",
   "check:mobile-drag-reorder",

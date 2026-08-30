@@ -40,7 +40,6 @@ export default function KontoindstillingerScreen() {
     { provider: "google" | "facebook"; linked: boolean }[]
   >([]);
   const [editingPhone, setEditingPhone] = useState(false);
-  const [editingBirthday, setEditingBirthday] = useState(false);
   const [deleteVisible, setDeleteVisible] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -82,7 +81,6 @@ export default function KontoindstillingerScreen() {
       });
       await refreshUser();
       setEditingPhone(false);
-      setEditingBirthday(false);
     } catch {
       setError("Kunne ikke gemme kontooplysninger");
     } finally {
@@ -168,22 +166,11 @@ export default function KontoindstillingerScreen() {
             />
           </View>
           <ProfileRowDivider />
-          {editingBirthday ? (
-            <View style={styles.fieldBlock}>
-              <TextField
-                label="Fødselsdag"
-                value={birthday}
-                onChangeText={setBirthday}
-                helper="Format: ÅÅÅÅ-MM-DD"
-              />
-            </View>
-          ) : (
-            <ListValueRow
-              title="Fødselsdag"
-              value={formatBirthday(birthday) ?? "Ikke angivet"}
-              onPress={() => setEditingBirthday(true)}
-            />
-          )}
+          <ListValueRow
+            title="Fødselsdag"
+            value={formatBirthday(birthday) ?? "Ikke angivet"}
+            chevron
+          />
         </ProfileSurfaceGroup>
 
         <ProfileSurfaceGroup>
