@@ -8,6 +8,7 @@ import { HealthModule } from "./health/health.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
 import { ModerationModule } from "./moderation/moderation.module.js";
 import { VisionModule } from "./vision/vision.module.js";
+import { WishlistModule } from "./wishlist/wishlist.module.js";
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { VisionModule } from "./vision/vision.module.js";
     BillingModule,
     VisionModule,
     CollectionModule,
+    WishlistModule,
     ModerationModule,
     AdminModule,
   ],
