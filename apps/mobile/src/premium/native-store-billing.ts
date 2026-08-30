@@ -1,29 +1,24 @@
 import type { IapPlatform } from "@kit/api-contract";
 import { Platform } from "react-native";
-import {
-  endConnection,
-  finishTransaction,
-  getAvailablePurchases,
-  getProducts,
-  initConnection,
-  type ProductPurchase,
-  type Purchase,
-  purchaseErrorListener,
-  purchaseUpdatedListener,
-  requestPurchase,
-  type SubscriptionPurchase,
-} from "react-native-iap";
+import type { ProductPurchase, Purchase, SubscriptionPurchase } from "react-native-iap";
 import type {
   StoreBillingClient,
   StoreProductPrice,
   StorePurchaseResult,
 } from "./store-billing.js";
 
+type IapModule = typeof import("react-native-iap");
+
 type PendingPurchase = {
   resolve: (value: StorePurchaseResult) => void;
   reject: (error: Error) => void;
   productId: string;
 };
+
+function loadIapModule(): IapModule {
+  // SAFETY: createStoreBillingClient only loads this module on iOS/Android.
+  return require("react-native-iap") as IapModule;
+}
 
 function platformForStore(): IapPlatform {
   return Platform.OS === "ios" ? "apple" : "google";
@@ -45,25 +40,26 @@ export class NativeStoreBillingClient implements StoreBillingClient {
   readonly iapAvailable = true;
   private connected = false;
   private pending: PendingPurchase | null = null;
-  private purchaseSub: ReturnType<typeof purchaseUpdatedListener> | null = null;
-  private errorSub: ReturnType<typeof purchaseErrorListener> | null = null;
+  private purchaseSub: ReturnType<IapModule["purchaseUpdatedListener"]> | null = null;
+  private errorSub: ReturnType<IapModule["purchaseErrorListener"]> | null = null;
 
   private async ensureConnected(): Promise<void> {
     if (this.connected) {
       return;
     }
 
-    await initConnection();
+    const iap = loadIapModule();
+    await iap.initConnection();
     this.connected = true;
 
-    this.purchaseSub = purchaseUpdatedListener(async (purchase) => {
+    this.purchaseSub = iap.purchaseUpdatedListener(async (purchase) => {
       const pending = this.pending;
       if (!pending) {
         return;
       }
 
       try {
-        await finishTransaction({ purchase, isConsumable: false });
+        await iap.finishTransaction({ purchase, isConsumable: false });
         pending.resolve({
           token: purchaseToken(purchase),
           platform: platformForStore(),
@@ -76,7 +72,7 @@ export class NativeStoreBillingClient implements StoreBillingClient {
       }
     });
 
-    this.errorSub = purchaseErrorListener((error) => {
+    this.errorSub = iap.purchaseErrorListener((error) => {
       const pending = this.pending;
       if (!pending) {
         return;
@@ -88,8 +84,9 @@ export class NativeStoreBillingClient implements StoreBillingClient {
   }
 
   async fetchProductPrices(productIds: readonly string[]): Promise<StoreProductPrice[]> {
+    const iap = loadIapModule();
     await this.ensureConnected();
-    const products = await getProducts({ skus: [...productIds] });
+    const products = await iap.getProducts({ skus: [...productIds] });
     return products.map((product) => ({
       productId: product.productId,
       localizedPrice: product.localizedPrice,
@@ -97,11 +94,12 @@ export class NativeStoreBillingClient implements StoreBillingClient {
   }
 
   async purchaseProduct(productId: string): Promise<StorePurchaseResult> {
+    const iap = loadIapModule();
     await this.ensureConnected();
 
     return new Promise<StorePurchaseResult>((resolve, reject) => {
       this.pending = { resolve, reject, productId };
-      void requestPurchase({ sku: productId }).catch((error: unknown) => {
+      void iap.requestPurchase({ sku: productId }).catch((error: unknown) => {
         this.pending = null;
         reject(error instanceof Error ? error : new Error("Purchase failed"));
       });
@@ -109,8 +107,9 @@ export class NativeStoreBillingClient implements StoreBillingClient {
   }
 
   async restorePurchases(): Promise<StorePurchaseResult | null> {
+    const iap = loadIapModule();
     await this.ensureConnected();
-    const purchases = await getAvailablePurchases();
+    const purchases = await iap.getAvailablePurchases();
     const latest = purchases[0];
     if (!latest) {
       return null;
@@ -124,10 +123,11 @@ export class NativeStoreBillingClient implements StoreBillingClient {
   }
 
   async dispose(): Promise<void> {
+    const iap = loadIapModule();
     this.purchaseSub?.remove();
     this.errorSub?.remove();
     if (this.connected) {
-      await endConnection();
+      await iap.endConnection();
       this.connected = false;
     }
   }
