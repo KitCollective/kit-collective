@@ -8,7 +8,7 @@ Composer parent (`PI_MODEL`). Scout and Gate pin OpenRouter `tencent/hy3` (think
 
 **Cheap retry:** job prompt says Skip Scout and Skip helpers — fix the class in `### Review feedback`, then Gate only.
 
-**Gate:** rebase onto `origin/development`, typecheck touched (yellow), `pnpm format:check` (red), wait for required GitHub checks. Never Linear, never In Review.
+**Gate:** rebase onto `origin/development`, typecheck touched (yellow), `pnpm format:check` (red), report required GitHub check state. Do not sleep. Never Linear, never In Review.
 
 **In Review:** harness moves status when Gate is green, checks green, PR MERGEABLE — never set Linear status yourself. Never merge. Never spawn factory-checker. Never set Linear Agent to Cursor.
 

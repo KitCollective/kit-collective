@@ -322,7 +322,7 @@ test("job-queue re-enqueues the same implement job on red CI and never calls che
     const prompt = promptFromSpawn(spawn);
     assert.match(prompt, /Skip Scout/i);
     assert.match(prompt, /Skip helpers/i);
-    assert.match(prompt, /format vs Zod vs unique-email/i);
+    assert.match(prompt, /format vs Zod vs unique-email vs migration prefix/i);
     assert.match(prompt, /AssertionError/);
     assert.match(prompt, /### Review feedback/);
   }
@@ -431,6 +431,53 @@ test("job-queue re-runs implement on write-scope retry until In Review", async (
   assert.equal(result.writeScopeRetry, false);
 });
 
+test("job-queue re-runs implement on migration retry until In Review", async () => {
+  const runs = [];
+  const queue = createSerialQueue({
+    async run(job) {
+      runs.push(job.migrationRetryAttempt ?? 1);
+      if ((job.migrationRetryAttempt ?? 1) < 2) {
+        return { status: IMPLEMENTING, migrationRetry: true, ciRetry: false };
+      }
+      return { status: IN_REVIEW, migrationRetry: false, ciRetry: false };
+    },
+  });
+
+  const result = await queue.enqueue({
+    role: "implement",
+    identifier: "KIT-125",
+    issueId: "issue-125",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.deepEqual(runs, [1, 2]);
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.migrationRetry, false);
+});
+
+test("job-queue fail-closes when the implement migration retry cap is already exhausted", async () => {
+  const runs = [];
+  const queue = createSerialQueue({
+    async run(job) {
+      runs.push(job.migrationRetryAttempt ?? 1);
+      return { ...job, migrationRetry: true, ciRetry: false, status: IMPLEMENTING };
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      queue.enqueue({
+        role: "implement",
+        identifier: "KIT-125",
+        issueId: "issue-125",
+        adwFile: ".pi/adw/feature.yaml",
+        migrationRetryAttempt: IMPLEMENT_CI_RETRY_CAP,
+      }),
+    /implement migration retry cap hit/,
+  );
+  assert.deepEqual(runs, [IMPLEMENT_CI_RETRY_CAP]);
+});
+
 test("job-queue fail-closes when the implement write-scope retry cap is already exhausted", async () => {
   const runs = [];
   const queue = createSerialQueue({
@@ -483,7 +530,7 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   });
   assert.match(cheap, /Skip Scout/i);
   assert.match(cheap, /Skip helpers/i);
-  assert.match(cheap, /format vs Zod vs unique-email/i);
+  assert.match(cheap, /format vs Zod vs unique-email vs migration prefix/i);
   assert.match(cheap, /AssertionError/);
   assert.match(cheap, /### Review feedback/);
   assert.equal(/move the issue to In Review/i.test(cheap), false);
@@ -515,6 +562,7 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.equal(isCheapImplementRetry({ role: "implement", ciRetryAttempt: 2 }), true);
   assert.equal(isCheapImplementRetry({ role: "implement", writeScopeRetryAttempt: 2 }), true);
   assert.equal(isCheapImplementRetry({ role: "implement", formatRetryAttempt: 2 }), true);
+  assert.equal(isCheapImplementRetry({ role: "implement", migrationRetryAttempt: 2 }), true);
 
   const role = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
   assert.equal(/move the issue to In Review/i.test(role), false);
@@ -674,6 +722,7 @@ test("merge-fail resume uses dedicated prompt and skips Scout and helpers", asyn
   assert.match(prompt, /Skip Scout/);
   assert.match(prompt, /Skip helpers/);
   assert.match(prompt, /Do not re-implement the feature/);
+  assert.match(prompt, /Do not sleep/i);
   assert.equal(/Checker-fail resume/i.test(prompt), false);
   assert.equal(/Required helpers:/i.test(prompt), false);
 });
@@ -753,6 +802,31 @@ test("reviewFeedbackIsLandFail distinguishes merge gate from checker Spec/Standa
   assert.equal(reviewFeedbackIsLandFail(checkerFail), false);
   assert.equal(reviewFeedbackIsLandFail("- required checks are not green"), true);
   assert.equal(reviewFeedbackIsLandFail("- CI: required check `test` failed"), false);
+  assert.equal(reviewFeedbackIsLandFail("- Command failed: gh pr merge 118 --merge"), true);
+  assert.equal(
+    reviewFeedbackIsLandFail(
+      "- merge failed — GraphQL: Head branch is not up to date with the base branch",
+    ),
+    true,
+  );
+});
+
+test("merge-fail and cheap-retry prompts forbid Pi sleep on GitHub", () => {
+  const merge = implementPrompt("implement", "KIT-118", ".pi/adw/feature.yaml", {
+    mergeFailResume: true,
+    reviewFeedback: "- merge failed — not up to date",
+  });
+  const cheap = implementPrompt("implement", "KIT-118", ".pi/adw/feature.yaml", {
+    cheapRetry: true,
+    reviewFeedback: "- Format: biome ci failed",
+  });
+  const first = implementPrompt("implement", "KIT-118", ".pi/adw/feature.yaml", {
+    implementContext: { requiredHelpers: ["expo"] },
+  });
+  for (const prompt of [merge, cheap, first]) {
+    assert.match(prompt, /Do not sleep/i);
+  }
+  assert.match(first, /react-expo is expo/);
 });
 
 test("merge-fail fast path does not skip Pi when PR is not MERGEABLE", async () => {

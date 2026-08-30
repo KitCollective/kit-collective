@@ -4,8 +4,10 @@ import {
   changedFilesDiffArgs,
   findWriteScopeViolations,
   isRatchetException,
+  isRatchetShapedPath,
   matchesGlob,
   parseWriteScopeGlobs,
+  resolveWriteScopeViolations,
   shouldEnforceWriteScope,
 } from "../lib/pr-write-scope.mjs";
 
@@ -44,6 +46,9 @@ test("matchesGlob supports single-segment and recursive globs", () => {
 
 test("isRatchetException allows named ratchet scripts, not arbitrary scripts/lib paths", () => {
   assert.equal(isRatchetException("scripts/check-pr-write-scope.mjs"), true);
+  assert.equal(isRatchetException("scripts/check-migration-prefixes.mjs"), true);
+  assert.equal(isRatchetException("scripts/lib/migration-prefix.mjs"), true);
+  assert.equal(isRatchetException("scripts/tests/check-migration-prefixes.test.mjs"), true);
   assert.equal(isRatchetException("scripts/check-factory-checker-spawn.mjs"), true);
   assert.equal(isRatchetException("scripts/check-implement-checker-fail-resume.mjs"), true);
   assert.equal(
@@ -98,4 +103,44 @@ test("check script exits non-zero on synthetic out-of-scope diff", () => {
   const violations = findWriteScopeViolations(["root/package.json"], globs);
   assert.equal(violations.length, 1);
   assert.equal(violations[0], "root/package.json");
+});
+
+test("isRatchetShapedPath is only check-scripts and their tests", () => {
+  assert.equal(isRatchetShapedPath("scripts/check-mobile-inbox-conversation-chrome.mjs"), true);
+  assert.equal(
+    isRatchetShapedPath("scripts/tests/check-mobile-inbox-conversation-chrome.test.mjs"),
+    true,
+  );
+  assert.equal(isRatchetShapedPath("scripts/lib/pr-write-scope.mjs"), false);
+  assert.equal(isRatchetShapedPath("package.json"), false);
+  assert.equal(isRatchetShapedPath("harness/land.mjs"), false);
+});
+
+test("resolveWriteScopeViolations waives a new check-script the worktree allowlist accepts", () => {
+  const globs = ["apps/mobile/**"];
+  const changedFiles = [
+    "apps/mobile/app/(tabs)/inbox/index.tsx",
+    "scripts/check-mobile-inbox-conversation-chrome.mjs",
+    "scripts/tests/check-mobile-inbox-conversation-chrome.test.mjs",
+  ];
+  const bundled = findWriteScopeViolations(changedFiles, globs);
+  assert.deepEqual(bundled, [
+    "scripts/check-mobile-inbox-conversation-chrome.mjs",
+    "scripts/tests/check-mobile-inbox-conversation-chrome.test.mjs",
+  ]);
+  const worktreeFind = (files, scope) =>
+    findWriteScopeViolations(files, scope).filter(
+      (file) => !file.includes("inbox-conversation-chrome"),
+    );
+  assert.deepEqual(resolveWriteScopeViolations(changedFiles, globs, worktreeFind), []);
+});
+
+test("resolveWriteScopeViolations does not waive product or harness paths even if worktree allowlists them", () => {
+  const globs = ["apps/mobile/**"];
+  const changedFiles = ["apps/mobile/app/index.tsx", "package.json", "harness/land.mjs"];
+  const worktreeFind = () => [];
+  assert.deepEqual(resolveWriteScopeViolations(changedFiles, globs, worktreeFind), [
+    "package.json",
+    "harness/land.mjs",
+  ]);
 });

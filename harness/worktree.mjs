@@ -135,7 +135,7 @@ export function resolveIssueGitHead({
  */
 async function fetchIssueBranch(git, dir, branch, opts = {}) {
   const prefix = opts.worktree ? ["-C", dir] : ["--git-dir", dir];
-  const refspec = `${branch}:refs/remotes/origin/${branch}`;
+  const refspec = `+${branch}:refs/remotes/origin/${branch}`;
   try {
     await git([...prefix, "fetch", "origin", refspec]);
   } catch {
@@ -207,7 +207,13 @@ export function createWorktreeAdapter({
       if (!existsSync(mirrorDir)) {
         await git(["clone", "--bare", remoteUrl, mirrorDir]);
       }
-      await git(["--git-dir", mirrorDir, "fetch", "origin", `${lane}:refs/remotes/origin/${lane}`]);
+      await git([
+        "--git-dir",
+        mirrorDir,
+        "fetch",
+        "origin",
+        `+${lane}:refs/remotes/origin/${lane}`,
+      ]);
       const canonicalOnRemote = await fetchIssueBranch(git, mirrorDir, canonicalBranch);
       let openPrHeads = [];
       if (typeof findOpenIssuePr === "function") {

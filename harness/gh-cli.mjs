@@ -167,7 +167,7 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
      * @param {{ cwd: string, onto: string, branch?: string }} input
      */
     async rebase({ cwd, onto, branch }) {
-      await run("git", ["fetch", "origin", "development:refs/remotes/origin/development"], {
+      await run("git", ["fetch", "origin", "+development:refs/remotes/origin/development"], {
         cwd,
         env,
       });
@@ -202,7 +202,7 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
       if (typeof branch !== "string" || branch.length === 0) {
         throw new Error("syncToRemoteBranch requires branch");
       }
-      await run("git", ["fetch", "origin", `${branch}:refs/remotes/origin/${branch}`], {
+      await run("git", ["fetch", "origin", `+${branch}:refs/remotes/origin/${branch}`], {
         cwd,
         env,
       });

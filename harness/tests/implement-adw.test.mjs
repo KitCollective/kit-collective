@@ -8,11 +8,13 @@ import { createGhClient } from "../gh-cli.mjs";
 import {
   completeImplementAdw,
   createListChangedFiles,
+  createListWorktreeMigrations,
   createTypecheckTouched,
   evaluateWriteScopeExit,
   formatWriteScopeViolationFeedback,
   IMPLEMENTING,
   IN_REVIEW,
+  loadWriteScopeEvaluator,
   requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
@@ -205,8 +207,8 @@ test("worktree adapter checks out origin/development under /var/lib/kit-pi/workt
   assert.equal(worktreeBranch("KIT-99"), "kit-99");
   assert.ok(gitCalls.some((args) => args.includes("clone") && args.includes("--bare")));
   assert.ok(
-    gitCalls.some((args) => args.includes("development:refs/remotes/origin/development")),
-    "expected fetch refspec that updates refs/remotes/origin/development",
+    gitCalls.some((args) => args.includes("+development:refs/remotes/origin/development")),
+    "expected force-update fetch refspec for refs/remotes/origin/development",
   );
   assert.ok(
     gitCalls.some(
@@ -321,7 +323,7 @@ test("worktree adapter creates from origin/issue-branch when implement has pushe
   assert.equal(result.branch, "kit-99");
   assert.ok(
     gitCalls.some(
-      (args) => args.includes("fetch") && args.includes("kit-99:refs/remotes/origin/kit-99"),
+      (args) => args.includes("fetch") && args.includes("+kit-99:refs/remotes/origin/kit-99"),
     ),
   );
   assert.ok(
@@ -689,7 +691,7 @@ test("production gh.syncToRemoteBranch fetches the issue refspec and resets hard
       (call) =>
         call.command === "git" &&
         call.args.includes("fetch") &&
-        call.args.includes("kit-126:refs/remotes/origin/kit-126"),
+        call.args.includes("+kit-126:refs/remotes/origin/kit-126"),
     ),
   );
   assert.ok(
@@ -718,7 +720,7 @@ test("production gh.rebase fetches the lane into refs/remotes/origin/development
       (call) =>
         call.command === "git" &&
         call.args.includes("fetch") &&
-        call.args.includes("development:refs/remotes/origin/development"),
+        call.args.includes("+development:refs/remotes/origin/development"),
     ),
     "expected rebase fetch to update refs/remotes/origin/development",
   );
@@ -1304,6 +1306,8 @@ test("Scout and Gate pin Hy3 no-think with Composer fallback; helpers omit a mod
   assert.match(gate.text, /typecheck/i);
   assert.match(gate.text, /format:check|biome ci/i);
   assert.match(gate.text, /GitHub checks/i);
+  assert.match(gate.text, /do not sleep/i);
+  assert.doesNotMatch(gate.text, /Wait for required GitHub checks/);
   assert.match(gate.text, /conflict/i);
   assert.match(gate.text, /never calls Linear/i);
   assert.match(gate.text, /never .*In Review/i);
@@ -1337,6 +1341,7 @@ test("implement role stays thin; harness pi-job owns hard first-run and checker-
   assert.match(implement, /Scout stays without `memory_search`|Scout stays without memory_search/i);
   assert.match(implement, /never call `memory_add`|never call memory_add/i);
   assert.match(implement, /In Review/);
+  assert.match(implement, /Do not sleep/);
   assert.doesNotMatch(implement, /^model:.*stealth|^fallbackModels:.*stealth/m);
   assert.match(piJob, /format vs Zod vs unique-email/i);
   assert.match(piJob, /Checker-fail resume/i);
@@ -1462,6 +1467,154 @@ test("implement-exit with only in-glob and ratchet-exception paths may move to I
   });
 });
 
+test("implement-exit waives a new check-script when the worktree allowlist accepts it", async () => {
+  const description = "write-scope: apps/mobile/**, apps/api/**";
+  const linear = fakeLinearWithIssue(description);
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-108", issueId: "issue-108", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-108", branch: "kit-108" },
+    gh: fakeGh(),
+    linear,
+    typecheckTouched: async () => undefined,
+    listChangedFiles: async () => [
+      "apps/mobile/app/(tabs)/inbox/index.tsx",
+      "scripts/check-mobile-inbox-conversation-chrome.mjs",
+      "scripts/tests/check-mobile-inbox-conversation-chrome.test.mjs",
+    ],
+    findWriteScopeViolationsWorktree: () => [],
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IN_REVIEW);
+  assert.equal(result.writeScopeRetry, false);
+});
+
+test("implement-exit still retries when worktree allowlist tries to waive package.json", async () => {
+  const description = "write-scope: apps/mobile/**";
+  const linear = fakeLinearWithIssue(description);
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-108", issueId: "issue-108", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-108", branch: "kit-108" },
+    gh: fakeGh(),
+    linear,
+    typecheckTouched: async () => undefined,
+    listChangedFiles: async () => ["apps/mobile/app/index.tsx", "package.json"],
+    findWriteScopeViolationsWorktree: () => [],
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.writeScopeRetry, true);
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /package\.json/);
+});
+
+test("loadWriteScopeEvaluator returns the worktree finder and ignores a broken module", async () => {
+  const allowed = await loadWriteScopeEvaluator({
+    cwd: "/worktree",
+    importModule: async () => ({
+      findWriteScopeViolations: () => ["kept"],
+    }),
+  });
+  assert.equal(typeof allowed, "function");
+  assert.deepEqual(allowed(["x"], ["apps/mobile/**"]), ["kept"]);
+
+  const missing = await loadWriteScopeEvaluator({ cwd: "" });
+  assert.equal(missing, null);
+
+  const broken = await loadWriteScopeEvaluator({
+    cwd: "/worktree",
+    importModule: async () => {
+      throw new Error("syntax");
+    },
+  });
+  assert.equal(broken, null);
+});
+
+test("implement-exit cheap-retries a colliding migration prefix before rebase wait", async () => {
+  const description = "write-scope: packages/db/**, apps/api/**";
+  const linear = fakeLinearWithIssue(description);
+  const gh = fakeGh({ mergeable: "CONFLICTING" });
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-125", issueId: "issue-125", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-125", branch: "kit-125" },
+    gh,
+    linear,
+    typecheckTouched: async () => {
+      throw new Error("must not typecheck before migration retry");
+    },
+    listWorktreeMigrations: async () => ["packages/db/migrations/0009_user_account_fields.sql"],
+    listChangedFiles: async () => {
+      throw new Error("migration collision must not use the remote PR diff");
+    },
+    listBaseMigrations: async () => [
+      "packages/db/migrations/0008_bidding_conversations.sql",
+      "packages/db/migrations/0009_user_jersey_favorite.sql",
+    ],
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.migrationRetry, true);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
+    false,
+  );
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /0009_user_jersey_favorite/);
+  assert.match(workpad.body, /0010_/);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "rebase"),
+    false,
+  );
+});
+
+test("implement-exit rebases a local prefix rename even when the remote PR still lists the old file", async () => {
+  const description = "write-scope: packages/db/**, apps/api/**";
+  const linear = fakeLinearWithIssue(description);
+  const gh = fakeGh({ mergeable: "CONFLICTING" });
+  gh.findOpenIssuePr = async (input) => {
+    gh.calls.push(["findOpenIssuePr", input]);
+    return {
+      url: "https://github.com/KitCollective/kit-collective/pull/133",
+      mergeable: "CONFLICTING",
+      checks: [{ name: "test", conclusion: "success", isRequired: true }],
+    };
+  };
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-125", issueId: "issue-125", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/var/lib/kit-pi/worktrees/KIT-125", branch: "kit-125" },
+    gh,
+    linear,
+    typecheckTouched: async () => undefined,
+    listChangedFiles: async () => ["packages/db/migrations/0009_user_account_fields.sql"],
+    listWorktreeMigrations: async () => ["packages/db/migrations/0011_user_account_fields.sql"],
+    listBaseMigrations: async () => [
+      "packages/db/migrations/0009_user_jersey_favorite.sql",
+      "packages/db/migrations/0010_conversation_message_media.sql",
+    ],
+    adwText: readFileSync(join(ROOT, ".pi/adw/feature.yaml"), "utf8"),
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 0,
+  });
+
+  assert.notEqual(result.migrationRetry, true);
+  assert.equal(
+    gh.calls.some((call) => call[0] === "rebase"),
+    true,
+  );
+});
+
 test("implement-exit without write-scope does not fail on out-of-glob paths", async () => {
   const linear = fakeLinearWithIssue("What to build\n\nNo write-scope line.");
   const result = await completeImplementWithChangedFiles({
@@ -1498,6 +1651,29 @@ test("createListChangedFiles uses gh pr diff when a PR URL is present", async ()
     calls.some((call) => call[0] === "git"),
     false,
   );
+});
+
+test("createListWorktreeMigrations lists cached and untracked SQL via git ls-files", async () => {
+  const calls = [];
+  const listWorktreeMigrations = createListWorktreeMigrations({
+    async runCommand(command, args) {
+      calls.push([command, ...args]);
+      if (command === "git") {
+        return "packages/db/migrations/0011_user_account_fields.sql\npackages/db/migrations/meta/_journal.json\n";
+      }
+      throw new Error("worktree migrations must not use gh pr diff");
+    },
+  });
+  const files = await listWorktreeMigrations({ cwd: "/var/lib/kit-pi/worktrees/KIT-125" });
+  assert.deepEqual(files, ["packages/db/migrations/0011_user_account_fields.sql"]);
+  assert.deepEqual(calls[0], [
+    "git",
+    "ls-files",
+    "-co",
+    "--exclude-standard",
+    "--",
+    "packages/db/migrations",
+  ]);
 });
 
 test("Compose persists kit-pi worktrees and copies implement-exit adapters", () => {

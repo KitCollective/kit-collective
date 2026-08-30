@@ -11,7 +11,12 @@ import { fileURLToPath } from "node:url";
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 export const PACKAGE_JSON_PATH = "package.json";
 
-export const FACTORY_NODE_TEST_NEEDLES = ["harness/tests", "webhook-router", "land-policy"];
+export const FACTORY_NODE_TEST_NEEDLES = [
+  "harness/tests",
+  "webhook-router",
+  "land-policy",
+  "migration-prefix",
+];
 
 export const MOBILE_CHECK_NEEDLES = [
   "check:mobile-tab-bar",

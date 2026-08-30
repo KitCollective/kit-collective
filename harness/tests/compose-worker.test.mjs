@@ -146,7 +146,7 @@ test("planner job runs on its own mutex while a Coding job occupies the slot", a
   assert.equal(slots.health().job, null);
 });
 
-test("three implement jobs run concurrently; a fourth waits in queued", async () => {
+test("four coding-pool jobs run concurrently; a fifth waits in queued", async () => {
   const running = [];
   const maxSeen = [];
   let releaseAll;
@@ -163,16 +163,21 @@ test("three implement jobs run concurrently; a fourth waits in queued", async ()
     },
   });
 
-  const jobs = ["KIT-1", "KIT-2", "KIT-3", "KIT-4"].map((identifier) =>
+  const jobs = ["KIT-1", "KIT-2", "KIT-3", "KIT-4", "KIT-5"].map((identifier) =>
     slots.enqueue({ role: "implement", identifier }),
   );
   await new Promise((resolve) => setTimeout(resolve, 20));
 
   const health = slots.health();
-  assert.equal(health.jobs.length, 3);
-  assert.deepEqual(health.jobs.map((row) => row.identifier).sort(), ["KIT-1", "KIT-2", "KIT-3"]);
-  assert.deepEqual(health.queued, ["KIT-4"]);
-  assert.equal(Math.max(...maxSeen), 3);
+  assert.equal(health.jobs.length, 4);
+  assert.deepEqual(health.jobs.map((row) => row.identifier).sort(), [
+    "KIT-1",
+    "KIT-2",
+    "KIT-3",
+    "KIT-4",
+  ]);
+  assert.deepEqual(health.queued, ["KIT-5"]);
+  assert.equal(Math.max(...maxSeen), 4);
 
   releaseAll();
   await Promise.all(jobs);
@@ -180,14 +185,14 @@ test("three implement jobs run concurrently; a fourth waits in queued", async ()
   assert.deepEqual(slots.health().queued, []);
 });
 
-test("factory-checker uses the Finisher slot while three implements stay live", async () => {
+test("factory-checker shares the coding pool with implement; four live, fifth waits", async () => {
   let releaseImplements;
   const holdImplements = new Promise((resolve) => {
     releaseImplements = resolve;
   });
-  let releaseFinisher;
-  const holdFinisher = new Promise((resolve) => {
-    releaseFinisher = resolve;
+  let releaseChecker;
+  const holdChecker = new Promise((resolve) => {
+    releaseChecker = resolve;
   });
   const slots = createWorkerSlots({
     async run(job) {
@@ -195,7 +200,7 @@ test("factory-checker uses the Finisher slot while three implements stay live", 
         await holdImplements;
       }
       if (job.role === "factory-checker") {
-        await holdFinisher;
+        await holdChecker;
       }
       return job;
     },
@@ -220,12 +225,16 @@ test("factory-checker uses the Finisher slot while three implements stay live", 
   );
   assert.deepEqual(health.queued, []);
 
-  releaseFinisher();
+  slots.enqueue({ role: "implement", identifier: "KIT-5" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(slots.health().queued, ["KIT-5"]);
+
+  releaseChecker();
   await checker;
   releaseImplements();
 });
 
-test("auto-merge and land use the Finisher slot and jump a queued fourth implement", async () => {
+test("auto-merge and land use the Finisher slot and jump a queued fifth implement", async () => {
   let releaseImplements;
   const holdImplements = new Promise((resolve) => {
     releaseImplements = resolve;
@@ -252,11 +261,11 @@ test("auto-merge and land use the Finisher slot and jump a queued fourth impleme
     },
   });
 
-  for (const identifier of ["KIT-1", "KIT-2", "KIT-3", "KIT-4"]) {
+  for (const identifier of ["KIT-1", "KIT-2", "KIT-3", "KIT-4", "KIT-5"]) {
     slots.enqueue({ role: "implement", identifier });
   }
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+  assert.deepEqual(slots.health().queued, ["KIT-5"]);
 
   const autoMerge = slots.enqueue({ role: "auto-merge", identifier: "KIT-90" });
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -264,7 +273,7 @@ test("auto-merge and land use the Finisher slot and jump a queued fourth impleme
     slots.health().jobs.find((row) => row.role === "auto-merge"),
     { role: "auto-merge", identifier: "KIT-90" },
   );
-  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+  assert.deepEqual(slots.health().queued, ["KIT-5"]);
 
   finisherGate.release?.();
   await autoMerge;
@@ -276,55 +285,66 @@ test("auto-merge and land use the Finisher slot and jump a queued fourth impleme
     slots.health().jobs.find((row) => row.role === "land"),
     { role: "land", identifier: "KIT-51" },
   );
-  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+  assert.deepEqual(slots.health().queued, ["KIT-5"]);
 
   finisherGate.release?.();
   await land;
   releaseImplements();
 });
 
-test("Finisher is never stolen for a fourth implement", async () => {
+test("Finisher is never stolen for a fifth coding-pool job", async () => {
   let releaseImplements;
   const holdImplements = new Promise((resolve) => {
     releaseImplements = resolve;
   });
-  let releaseFinisher;
-  const holdFinisher = new Promise((resolve) => {
-    releaseFinisher = resolve;
+  let releaseLand;
+  const holdLand = new Promise((resolve) => {
+    releaseLand = resolve;
   });
   const slots = createWorkerSlots({
     async run(job) {
       if (job.role === "implement") {
         await holdImplements;
       }
-      if (job.role === "factory-checker") {
-        await holdFinisher;
+      if (job.role === "land") {
+        await holdLand;
       }
       return job;
     },
   });
 
-  for (const identifier of ["KIT-1", "KIT-2", "KIT-3"]) {
+  for (const identifier of ["KIT-1", "KIT-2", "KIT-3", "KIT-4"]) {
     slots.enqueue({ role: "implement", identifier });
   }
-  slots.enqueue({ role: "implement", identifier: "KIT-4" });
+  slots.enqueue({ role: "implement", identifier: "KIT-5" });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+  assert.deepEqual(slots.health().queued, ["KIT-5"]);
 
-  const checker = slots.enqueue({ role: "factory-checker", identifier: "KIT-47" });
+  const land = slots.enqueue({ role: "land", identifier: "KIT-51" });
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.deepEqual(
-    slots.health().jobs.find((row) => row.role === "factory-checker"),
-    { role: "factory-checker", identifier: "KIT-47" },
+    slots.health().jobs.find((row) => row.role === "land"),
+    {
+      role: "land",
+      identifier: "KIT-51",
+    },
   );
-  assert.deepEqual(slots.health().queued, ["KIT-4"]);
+  assert.deepEqual(slots.health().queued, ["KIT-5"]);
 
-  releaseFinisher();
-  await checker;
+  slots.enqueue({ role: "factory-checker", identifier: "KIT-47" });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(
+    slots.health().jobs.some((row) => row.role === "factory-checker"),
+    false,
+  );
+  assert.deepEqual(slots.health().queued, ["KIT-5", "KIT-47"]);
+
+  releaseLand();
+  await land;
   releaseImplements();
 });
 
-test("a second checker waits in queued while the Finisher slot is busy", async () => {
+test("two checkers run concurrently in the coding pool", async () => {
   let releaseChecker;
   const holdChecker = new Promise((resolve) => {
     releaseChecker = resolve;
@@ -338,18 +358,43 @@ test("a second checker waits in queued while the Finisher slot is busy", async (
     },
   });
 
-  const first = slots.enqueue({ role: "factory-checker", identifier: "KIT-47" });
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  slots.enqueue({ role: "factory-checker", identifier: "KIT-47" });
   slots.enqueue({ role: "factory-checker", identifier: "KIT-48" });
   await new Promise((resolve) => setTimeout(resolve, 10));
 
   const health = slots.health();
-  assert.equal(health.jobs.length, 1);
-  assert.deepEqual(health.jobs[0], { role: "factory-checker", identifier: "KIT-47" });
-  assert.deepEqual(health.queued, ["KIT-48"]);
+  assert.equal(health.jobs.length, 2);
+  assert.deepEqual(health.jobs.map((row) => row.identifier).sort(), ["KIT-47", "KIT-48"]);
+  assert.deepEqual(health.queued, []);
 
   releaseChecker();
-  await first;
+});
+
+test("a fifth checker waits in queued when the coding pool is full", async () => {
+  let releaseChecker;
+  const holdChecker = new Promise((resolve) => {
+    releaseChecker = resolve;
+  });
+  const slots = createWorkerSlots({
+    async run(job) {
+      if (job.role === "factory-checker") {
+        await holdChecker;
+      }
+      return job;
+    },
+  });
+
+  for (const identifier of ["KIT-47", "KIT-48", "KIT-49", "KIT-50"]) {
+    slots.enqueue({ role: "factory-checker", identifier });
+  }
+  slots.enqueue({ role: "factory-checker", identifier: "KIT-51" });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  const health = slots.health();
+  assert.equal(health.jobs.length, 4);
+  assert.deepEqual(health.queued, ["KIT-51"]);
+
+  releaseChecker();
 });
 
 test("each implement checkout uses its own Issue worktree path", async () => {
@@ -376,12 +421,43 @@ test("each implement checkout uses its own Issue worktree path", async () => {
   ]);
 });
 
-test("parseImplementSlots defaults to 3 and clamps 1–3", () => {
-  assert.equal(parseImplementSlots({}), 3);
+test("parseImplementSlots defaults to 4 and clamps 1–4", () => {
+  assert.equal(parseImplementSlots({}), 4);
   assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "2" }), 2);
   assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "0" }), 1);
-  assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "9" }), 3);
-  assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "bad" }), 3);
+  assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "9" }), 4);
+  assert.equal(parseImplementSlots({ PI_IMPLEMENT_SLOTS: "bad" }), 4);
+});
+
+test("enqueue skips a second implement for an identifier that is already running", async () => {
+  let release;
+  const hold = new Promise((resolve) => {
+    release = resolve;
+  });
+  let runs = 0;
+  const slots = createWorkerSlots({
+    async run(job) {
+      runs += 1;
+      await hold;
+      return job;
+    },
+  });
+  const first = slots.enqueue({
+    role: "implement",
+    identifier: "KIT-118",
+    issueId: "issue-118",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const second = await slots.enqueue({
+    role: "implement",
+    identifier: "KIT-118",
+    issueId: "issue-118",
+  });
+  assert.deepEqual(second, { skipped: true, reason: "already running" });
+  assert.equal(runs, 1);
+  release();
+  await first;
+  assert.equal(runs, 1);
 });
 
 test("rejected coding job stays on the queue and does not become unhandled", async () => {
@@ -533,6 +609,7 @@ test("Dockerfile pins Linear CLI 2.5.0 and does not apply @piagent/platform onbo
   assert.doesNotMatch(dockerfile, /\/onboard/);
   assert.doesNotMatch(dockerfile, /DATABASE_URL/);
   assert.match(dockerfile, /pr-write-scope\.mjs/);
+  assert.match(dockerfile, /migration-prefix\.mjs/);
   assert.match(dockerfile, /role-comments\.mjs/);
   assert.match(dockerfile, /COPY \.pi /);
   assert.match(dockerfile, /COPY \.cursor\/rules /);
@@ -632,7 +709,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(envExample, /PI_MODEL_FAST=cursor\/grok-4\.6/);
   assert.match(envExample, /^OPENROUTER_API_KEY=$/m);
   assert.match(envExample, /PI_MODEL=cursor\/composer-2\.5/);
-  assert.match(envExample, /PI_IMPLEMENT_SLOTS=3/);
+  assert.match(envExample, /PI_IMPLEMENT_SLOTS=4/);
   assert.doesNotMatch(envExample, /stealth|ox-alpha/i);
   const bootstrapKeyIndex = envExample.indexOf(
     "# Linear admin key for scripts/bootstrap-linear.mjs only.",
@@ -652,7 +729,7 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(host, /"job"/);
   assert.match(host, /"jobs"/);
   assert.match(host, /"queued"/);
-  assert.match(host, /Implement pool/);
+  assert.match(host, /Coding pool/);
   assert.match(host, /Finisher/);
   assert.match(host, /PI_IMPLEMENT_SLOTS/);
   assert.match(host, /mem_limit 5g/);
@@ -1201,8 +1278,8 @@ test("AgentSession payload on issue channel skips without ack; implement enqueue
   const checkout = await worktree.checkout({ identifier: "KIT-99" });
   assert.equal(checkout.lane, "development");
   assert.ok(
-    gitCalls.some((args) => args.includes("development:refs/remotes/origin/development")),
-    "expected fetch refspec that updates refs/remotes/origin/development",
+    gitCalls.some((args) => args.includes("+development:refs/remotes/origin/development")),
+    "expected force-update fetch refspec for refs/remotes/origin/development",
   );
   assert.equal(enqueue.jobs[0].adwFile, ".pi/adw/bug.yaml");
 });
