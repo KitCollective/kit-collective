@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
 import { BackLink } from "../components/BackLink.js";
+import { Switch } from "../components/Switch.js";
 
 export function OfferDrillPage() {
   const { token } = useAuth();
@@ -103,13 +104,12 @@ export function OfferDrillPage() {
             />
           </div>
           <div className="field field-switch">
-            <label htmlFor="trial-enabled">Trial on</label>
-            <input
-              id="trial-enabled"
-              type="checkbox"
+            <span id="trial-enabled-label">Trial on</span>
+            <Switch
               checked={trialEnabled}
-              onChange={(event) => setTrialEnabled(event.target.checked)}
               disabled={saving}
+              label="Trial on"
+              onCheckedChange={setTrialEnabled}
             />
           </div>
           <div className="field">

@@ -823,11 +823,53 @@ a {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+  min-height: 44px;
 }
 
-.field-switch input[type="checkbox"] {
-  width: 44px;
-  height: 24px;
+.switch {
+  flex-shrink: 0;
+  width: 52px;
+  height: 32px;
+  padding: 2px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.switch[aria-checked="true"] {
+  background: var(--fill-primary);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+.switch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.switch__thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 160ms var(--ease-out);
+}
+
+.switch[aria-checked="true"] .switch__thumb {
+  transform: translateX(20px);
+  background: var(--content-inverse);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch__thumb {
+    transition: none;
+  }
 }
 
 .banner-error,
