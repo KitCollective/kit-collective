@@ -88,7 +88,6 @@ export class BillingService {
     @Inject(DB) private readonly db: DbToken,
     @Inject(IAP_VERIFIER) private readonly iapVerifier: IapVerifierAdapter,
   ) {}
-<<<<<<< HEAD
 
   async getOffer(): Promise<Offer> {
     const [activeOffer] = await this.db.select().from(offer).limit(1);
@@ -122,8 +121,6 @@ export class BillingService {
 
     return toOfferView(updated);
   }
-=======
->>>>>>> origin/kit-134
 
   async getEntitlementForUser(userId: string): Promise<Entitlement> {
     const [row] = await this.db
