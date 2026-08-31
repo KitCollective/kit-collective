@@ -72,8 +72,20 @@ test("implement critical is Composer; simple may start free", () => {
   assert.equal(simple.useFree, true);
 });
 
-test("economy implement uses Hy3 primary on all tiers including critical — no Composer", () => {
-  for (const tier of /** @type {const} */ (["simple", "standard", "critical"])) {
+test("economy implement: simple → DeepSeek Flash; standard/critical → Hy3 — no Composer", () => {
+  const simple = routeForGate("implement", "simple", {
+    rotationIndex: 0,
+    profile: "economy",
+  });
+  assert.match(simple.primary, /deepseek-v4-flash/);
+  assert.equal(simple.useFree, true);
+  assert.equal(
+    simple.chain.some((id) => id.includes("composer")),
+    false,
+    "simple chain must not include Composer",
+  );
+
+  for (const tier of /** @type {const} */ (["standard", "critical"])) {
     const routed = routeForGate("implement", tier, {
       rotationIndex: 0,
       profile: "economy",
@@ -205,7 +217,15 @@ test("resolveFastRoleModel swaps Grok for Hy3 in economy", () => {
 });
 
 test("economy agent pins never name Composer", () => {
-  for (const name of ["nest.md", "scout.md", "gate.md", "draft.md", "optimizer.md", "slop.md"]) {
+  for (const name of [
+    "nest.md",
+    "scout.md",
+    "gate.md",
+    "draft.md",
+    "optimizer.md",
+    "slop.md",
+    "ui-ux.md",
+  ]) {
     const pins = economyAgentModelSpec(name, 0);
     assert.equal(/composer/i.test(pins.model), false, name);
     assert.equal(
@@ -215,6 +235,9 @@ test("economy agent pins never name Composer", () => {
     );
   }
   assert.match(economyAgentModelSpec("nest.md", 0).model, /tencent\/hy3/);
+  assert.match(economyAgentModelSpec("optimizer.md", 0).model, /deepseek-v4-flash/);
+  assert.match(economyAgentModelSpec("ui-ux.md", 0).model, /glm-5\.3-flash/);
+  assert.match(economyAgentModelSpec("draft.md", 0).model, /minimax-m3:free/);
   assert.equal(
     rotateEconomyChain(0).some((id) => /composer/i.test(id)),
     false,
@@ -227,4 +250,18 @@ test("economy agent pins never name Composer", () => {
   assert.doesNotMatch(rewritten, /^<!--/m);
   assert.match(rewritten, /^model:\s+openrouter\/tencent\/hy3/m);
   assert.doesNotMatch(rewritten, /composer/i);
+});
+
+test("economy simple parent resolves to DeepSeek Flash", () => {
+  const route = buildModelRoute({
+    title: "Add padding to empty state",
+    body: "Simple CSS/padding tweak on empty state scaffold",
+    writeScope: "apps/mobile/**",
+    requiredHelpers: ["expo", "ui-ux"],
+    paths: ["apps/mobile/src/empty-state.tsx"],
+    rotationIndex: 0,
+    profile: "economy",
+  });
+  assert.equal(route.complexity.tier, "simple");
+  assert.match(resolveImplementParentModel(route, COMPOSER_MODEL), /deepseek-v4-flash/);
 });

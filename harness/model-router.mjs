@@ -15,12 +15,20 @@ export const FREE_MODEL_ROTATION = Object.freeze([
   "openrouter/poolside/laguna-s-2.1",
 ]);
 
+/** Cheap paid OpenRouter coding — preferred over Laguna in economy chains. */
+export const DEEPSEEK_FLASH_MODEL = "openrouter/deepseek/deepseek-v4-flash-0731";
+/** Native multimodal OpenRouter — ui-ux economy primary (design PNG cross-check). */
+export const GLM_FLASH_MODEL = "openrouter/z-ai/glm-5.3-flash";
+export const MIMO_MODEL = "openrouter/xiaomi/mimo-v2.5-pro";
+
 export const PAID_FALLBACK_CHAIN = Object.freeze(["openrouter/tencent/hy3", "cursor/composer-2.5"]);
 
 /** OpenRouter-only fallback after free rotation — no Cursor Composer. */
 export const ECONOMY_PAID_FALLBACK_CHAIN = Object.freeze([
+  DEEPSEEK_FLASH_MODEL,
+  GLM_FLASH_MODEL,
   "openrouter/tencent/hy3",
-  "openrouter/xiaomi/mimo-v2.5-pro",
+  MIMO_MODEL,
 ]);
 
 export const COMPOSER_MODEL = "cursor/composer-2.5";
@@ -261,10 +269,11 @@ export function routeForGate(gate, tier, options = {}) {
         gate,
         tier,
         primary: SCOUT_MODEL,
-        fallbacks: withoutComposer(["openrouter/xiaomi/mimo-v2.5-pro", ...FREE_MODEL_ROTATION]),
+        fallbacks: withoutComposer([MIMO_MODEL, DEEPSEEK_FLASH_MODEL, ...FREE_MODEL_ROTATION]),
         chain: withoutComposer([
           SCOUT_MODEL,
-          "openrouter/xiaomi/mimo-v2.5-pro",
+          MIMO_MODEL,
+          DEEPSEEK_FLASH_MODEL,
           ...FREE_MODEL_ROTATION,
         ]),
         useFree: false,
@@ -274,8 +283,8 @@ export function routeForGate(gate, tier, options = {}) {
       gate,
       tier,
       primary: SCOUT_MODEL,
-      fallbacks: ["openrouter/xiaomi/mimo-v2.5-pro", COMPOSER_MODEL],
-      chain: [SCOUT_MODEL, "openrouter/xiaomi/mimo-v2.5-pro", COMPOSER_MODEL],
+      fallbacks: [MIMO_MODEL, COMPOSER_MODEL],
+      chain: [SCOUT_MODEL, MIMO_MODEL, COMPOSER_MODEL],
       useFree: false,
     };
   }
@@ -345,11 +354,14 @@ export function routeForGate(gate, tier, options = {}) {
   }
 
   if (profile === "economy") {
-    // Allowlisted cheap OpenRouter only. Free MiniMax as parent/helper primary fails
-    // closed on KIT-Pi-harness and sends the session into harness meta-debug.
-    const mimo = "openrouter/xiaomi/mimo-v2.5-pro";
-    const economyPrimary = SCOUT_MODEL;
-    const economyFallbacks = withoutComposer([mimo, ...FREE_MODEL_ROTATION]);
+    // Free MiniMax as parent/helper primary fails closed on KIT-Pi-harness.
+    // simple → DeepSeek Flash; standard/critical → Hy3 (helpers still Hy3 via pins).
+    const economyPrimary = tier === "simple" ? DEEPSEEK_FLASH_MODEL : SCOUT_MODEL;
+    const economyFallbacks = withoutComposer(
+      tier === "simple"
+        ? [SCOUT_MODEL, MIMO_MODEL, GLM_FLASH_MODEL, ...FREE_MODEL_ROTATION]
+        : [MIMO_MODEL, GLM_FLASH_MODEL, DEEPSEEK_FLASH_MODEL, ...FREE_MODEL_ROTATION],
+    );
     return {
       gate,
       tier,
@@ -424,7 +436,13 @@ export function buildModelRoute(input = {}) {
     freeRotation: (profile === "economy"
       ? rotateEconomyChain(rotationIndex)
       : rotateFreeChain(rotationIndex)
-    ).filter((id) => id.includes(":free") || id.includes("laguna-s-2.1")),
+    ).filter(
+      (id) =>
+        id.includes(":free") ||
+        id.includes("laguna-s-2.1") ||
+        id.includes("deepseek-v4-flash") ||
+        id.includes("glm-5.3-flash"),
+    ),
   };
 }
 
@@ -456,7 +474,7 @@ export function formatModelRouteBrief(route) {
     `- Verify (criteria-only): \`${gates.verify.primary}\` then free rotation; Mechanical close stays harness-owned (no Pi Gate)`,
     "",
     economy
-      ? "Economy: OpenRouter only (Hy3 primary for parent/helpers/optimizer — free models are fallbacks). Never edit `.pi/agents` or `.cursor/agents`; harness owns those pins. On 429, continue the OpenRouter fallback chain. Profile does not weaken Green light, honesty, or Composition fail-close."
+      ? "Economy: OpenRouter only — no Composer. Scout/helpers/Slop → Hy3; Builder simple → DeepSeek Flash, else Hy3; Optimizer → DeepSeek Flash; ui-ux → GLM 5.3 Flash (multimodal). Never edit `.pi/agents` or `.cursor/agents`; harness owns those pins. On 429, continue the OpenRouter fallback chain. Profile does not weaken Green light, honesty, or Composition fail-close."
       : "Override: if a free model 429s, continue the fallback chain — do not stall the stay. Profile switches models only — honesty and Composition gates stay fail-close.",
   ];
   return `${lines.join("\n")}\n`;
@@ -516,8 +534,8 @@ export function resolveFastRoleModel(profile, fallbackFastModel) {
 
 /**
  * Per-agent OpenRouter pins for an economy stay (no Composer in model or fallbacks).
- * Helpers/Slop/Draft use Hy3 (KIT-Pi-harness allowlist) — free MiniMax as helper primary
- * fails closed instantly and sends the parent into harness meta-debug.
+ * Free MiniMax as nest/expo/… primary fails closed on KIT-Pi-harness — keep Hy3 there.
+ * Draft keeps free primary; Optimizer → DeepSeek Flash; ui-ux → GLM Flash (vision).
  *
  * @param {string} agentFileName e.g. `nest.md`
  * @param {number} [rotationIndex]
@@ -525,25 +543,77 @@ export function resolveFastRoleModel(profile, fallbackFastModel) {
  */
 export function economyAgentModelSpec(agentFileName, rotationIndex = 0) {
   const name = String(agentFileName ?? "").replace(/^.*\//, "");
-  const mimo = "openrouter/xiaomi/mimo-v2.5-pro";
-  const allowlistedFallbacks = withoutComposer([mimo, ...FREE_MODEL_ROTATION]);
+  const freeRotated = (() => {
+    const n = FREE_MODEL_ROTATION.length;
+    const start = ((Number(rotationIndex) % n) + n) % n;
+    /** @type {string[]} */
+    const out = [];
+    for (let i = 0; i < n; i += 1) {
+      out.push(FREE_MODEL_ROTATION[(start + i) % n]);
+    }
+    return out;
+  })();
+  const scoutFallbacks = withoutComposer([
+    MIMO_MODEL,
+    DEEPSEEK_FLASH_MODEL,
+    GLM_FLASH_MODEL,
+    ...FREE_MODEL_ROTATION,
+  ]);
   if (name === "scout.md") {
     return {
       model: SCOUT_MODEL,
-      fallbackModels: allowlistedFallbacks,
+      fallbackModels: scoutFallbacks,
     };
   }
   if (name === "gate.md") {
     return {
-      model: mimo,
-      fallbackModels: withoutComposer([SCOUT_MODEL, ...FREE_MODEL_ROTATION]),
+      model: MIMO_MODEL,
+      fallbackModels: withoutComposer([
+        SCOUT_MODEL,
+        DEEPSEEK_FLASH_MODEL,
+        GLM_FLASH_MODEL,
+        ...FREE_MODEL_ROTATION,
+      ]),
     };
   }
-  // draft, nest, expo, drizzle, ui-ux, devops, optimizer, slop — Hy3 primary (same allowlist as Scout)
-  void rotationIndex;
+  if (name === "draft.md") {
+    return {
+      model: freeRotated[0],
+      fallbackModels: withoutComposer([
+        ...freeRotated.slice(1),
+        DEEPSEEK_FLASH_MODEL,
+        GLM_FLASH_MODEL,
+        SCOUT_MODEL,
+      ]),
+    };
+  }
+  if (name === "optimizer.md") {
+    return {
+      model: DEEPSEEK_FLASH_MODEL,
+      fallbackModels: withoutComposer([
+        GLM_FLASH_MODEL,
+        SCOUT_MODEL,
+        MIMO_MODEL,
+        ...FREE_MODEL_ROTATION,
+      ]),
+    };
+  }
+  if (name === "ui-ux.md") {
+    // Multimodal primary so design Evidence PNGs can be Read when AC cites them.
+    return {
+      model: GLM_FLASH_MODEL,
+      fallbackModels: withoutComposer([
+        MIMO_MODEL,
+        SCOUT_MODEL,
+        DEEPSEEK_FLASH_MODEL,
+        ...FREE_MODEL_ROTATION,
+      ]),
+    };
+  }
+  // nest, expo, drizzle, devops, slop — Hy3 primary
   return {
     model: SCOUT_MODEL,
-    fallbackModels: allowlistedFallbacks,
+    fallbackModels: scoutFallbacks,
   };
 }
 
@@ -599,6 +669,8 @@ export function labelForModelId(modelId) {
   if (id.includes("grok")) return "Grok";
   if (id.includes("laguna")) return "Laguna";
   if (id.includes("minimax")) return "MiniMax";
+  if (id.includes("deepseek")) return "DeepSeek";
+  if (id.includes("glm-5.3") || id.includes("glm-5-3")) return "GLM Flash";
   if (id.includes("glm")) return "GLM";
   if (id.includes("hy3") || id.includes("hy-3")) return "Hy3";
   if (id.includes("mimo")) return "MiMo";

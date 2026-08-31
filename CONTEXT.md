@@ -263,12 +263,32 @@ A User in Expo. The same row can later hold Staff access. Not a separate account
 _Avoid_: a dedicated admin user table; locking `role=admin` out of Expo
 
 **Profil**:
-Own collector place in Expo tab slot 5 — identity card, favorites drill, and settings under one person tab. Not the other-collector Detaljer stub.
-_Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar
+Own collector place in Expo tab slot 5 — identity card, favorites drill, and settings under one person tab. Not Peer Profil.
+_Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar; treating Detaljer stub as the product peer profile
+
+**Peer Profil**:
+Another collector's public place: Avatar, Handle, About me, location per Vis by, and a 4:5 grid of that collector's non-private UserJerseys. No settings, no Favoritter-of-theirs. Entries include Søg Handle hit, foreign UserJersey detail owner, and Indbakke Detaljer. Overflow can Rapportér / Blokér (same Moderation as Indbakke). A blocked peer is not shown — no grid, no profile, both directions.
+_Avoid_: mirroring own Profil settings; showing private copies; a second Detaljer stub as the only peer surface; browse that ignores block
 
 **Handle**:
 The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision. Never the email. Availability is `yours`, `available`, or `taken`.
 _Avoid_: raw email as the thread-row name; a second login identifier; success-green availability chrome
+
+**Private UserJersey**:
+Owner-set hide on one UserJersey. Default after Save is visible (not private). Setting private clears åben for bud — the two never stay on together. When private, other collectors must not see it on Søg, on a Peer Profil grid, via foreign detail GET, or as a Match target. The owner still sees it on own Samling.
+_Avoid_: using biddingEnabled as privacy; soft-hide without a column; treating Take-down as privacy; private-by-default Save; private + åben for bud at once
+
+**Søg**:
+Compass tab (slot 2). Home is a magazine of shelves (clubs, åbne for bud, collectors, and more jerseys) over non-private foreign UserJerseys — not a single flat grid as the only chrome, and not Trøjer|Katalog|Samlere home tabs. Typeahead replaces or covers that magazine with hits for stamdata and Handles; choosing a hit opens a drill. Own-collection find stays on Samling and genveje. Browse, catalog drills, Peer Profil, and Send bud stay free of Entitlement in this feature. Blocked peers' copies and profiles are omitted. Product name is Søg — not Discovery.
+_Avoid_: Discovery as the place name; find-in-own-collection as Søg's primary job; limiting Søg to åben-for-bud rows only; Trøjer|Katalog|Samlere as three equal home tabs; paywalling Søg browse in this feature; showing a blocked peer in results; treating prototype A (grid-only) or B (mode tabs) as the locked home
+
+**Søg catalog drill**:
+A stamdata landing under Søg for Club, Kit, or Player only in this feature: identity chrome plus a grid of non-private UserJersey copies that match that grain. Kit means catalog shirt design (club · season · type), not one UserJersey. Kit drill lists only copies with `catalogKitId`. League, Season, and NationalTeam are not own landings yet — typeahead may filter the jersey home. Not Admin. Not Astro. Not own Samling.
+_Avoid_: League/Season/NationalTeam landings in this feature; treating the drill as a KitPhoto gallery; serving archive bytes on the drill; conflating Kit drill with UserJersey detail; inventing an "unknown Kit" bucket for null catalogKitId
+
+**UserJersey detail**:
+Full-screen view of one UserJersey. Immersive photo stage (pager) with meta and actions in a bottom sheet — not hero+strip as the primary layout. **Own**: Privat and åben for bud switches, edit via Confirm UI (patch), delete. **Foreign**: owner → Peer Profil, Favorit, Send bud CTA when åben for bud (separate stack screen). Overflow Rapportér / Blokér. Not the Send bud form itself. Not a Søg catalog drill.
+_Avoid_: Send bud as the only foreign view; price overlay on the photo; editing someone else's copy; a second edit form language beside Confirm; requiring an Indbakke thread before report/block; locking hero+strip after prototype B won
 
 **Favorit**:
 A saved foreign UserJersey — another collector's shirt on the Profil favorites grid. Not own Samling tiles. Not a Wishlist row.
@@ -283,8 +303,8 @@ The Wishlist place in Expo. This increment enters from the Samling header traili
 _Avoid_: a sixth tab; heart in slot 4; treating the header slot as Favoritter; keeping the empty notification Sheet as the header action
 
 **Match**:
-A hit when another collector's bidding-enabled UserJersey satisfies a Wishlist row's AND facets. OS push deep-links to that UserJersey. In-app the Wishlist row shows the hit. Aktivitet stays Bud. Own copies never match.
-_Avoid_: matching a closed copy; matching a seed Kit with no UserJersey; matching the owner's own Save; a Match card on Aktivitet
+A hit when another collector's bidding-enabled, non-private UserJersey satisfies a Wishlist row's AND facets. OS push deep-links to that UserJersey. In-app the Wishlist row shows the hit. Aktivitet stays Bud. Own copies never match. Private copies never match.
+_Avoid_: matching a closed copy; matching a private copy; matching a seed Kit with no UserJersey; matching the owner's own Save; a Match card on Aktivitet
 
 **Offer**:
 Admin-owned Billing catalog: which month and year IAP product ids are live, whether Nest-trial is on, and trial days. This increment includes a minimal Staff page for those fields. Display price comes from the store SDK. Admin does not set the kroner Apple or Google charge.
@@ -339,11 +359,11 @@ Read-only Pi subagent before implement writes. Required on every implement job. 
 _Avoid_: editing; opening a PR; moving Linear status; dumping whole files or the workpad to OpenRouter; inheriting Composer; skipping when `OPENROUTER_API_KEY` is missing
 
 **Draft**:
-One Pi scaffold subagent after workpad `### Composition` and before Composer domain helpers. Pins free OpenRouter coding models (`minimax/minimax-m3:free`, then `z-ai/glm-5.2:free`, then `poolside/laguna-s-2.1`) with Hy3 then Composer fallbacks. Writes boilerplate under write-scope only (stubs, types, rote shells, Composition mirrors). Parent and nest/drizzle/expo/ui-ux/devops still own correctness, TDD green, and sensitive seams. Skip Draft on cheap/Spec/first-pass resume (with Skip Scout), when Model route says Skip Draft (critical), and when the slice is auth/IAP/Vision-only.
+One Pi scaffold subagent after workpad `### Composition` and before Composer domain helpers. Pins free OpenRouter coding models (`minimax/minimax-m3:free`, then `z-ai/glm-5.2:free`, then paid Flash `deepseek/deepseek-v4-flash-0731` → `z-ai/glm-5.3-flash`) with Hy3 then Composer fallbacks (Laguna remains in the balanced free rotation as a paid free-chain step). Writes boilerplate under write-scope only (stubs, types, rote shells, Composition mirrors). Parent and nest/drizzle/expo/ui-ux/devops still own correctness, TDD green, and sensitive seams. Skip Draft on cheap/Spec/first-pass resume (with Skip Scout), when Model route says Skip Draft (critical), and when the slice is auth/IAP/Vision-only.
 _Avoid_: Draft as `PI_MODEL`; Draft owning auth/IAP/Vision/secrets; replacing nest/expo/drizzle/ui-ux; skipping Composer helpers after Draft; treating free primary as hard-fail when rate-limited; omitting Hy3/Composer fallbacks
 
 **Model route**:
-Cheapest-capable routing across implement gates. Before spawn, a rule heuristic scores slice complexity (`simple` | `standard` | `critical`) from write-scope, helpers, path count, and critical keywords (auth/IAP/Vision/secrets/billing). Optional host env `HARNESS_MODEL_PROFILE` (`economy` | `balanced` | `premium`, default `balanced`) shifts aggressiveness: **balanced** sets parent `--model` to free/cheap rotation for simple only (critical + helpers stay Composer); **economy** is OpenRouter-only for every tier — parent, Scout/Draft/helpers/Slop (temporary frontmatter pins restored after Pi), and factory-checker/land on Hy3 — never `cursor/composer-*`; **premium** keeps Composer parent even on simple. Gates: plan (Scout/Hy3) → scaffold (Draft free rotation) → implement (profile + tier) → verify (Hy3 then free rotation; Mechanical close stays harness-owned). Cheap rotation on 429: MiniMax M3 free → GLM 5.2 free → Laguna S 2.1 (`poolside/laguna-s-2.1`) → Hy3 → (balanced/premium: Composer; economy: MiMo). Route decisions + outcomes persist in SQLite `route_runs` for retro tuning (`token-report --routes`).
+Cheapest-capable routing across implement gates. Before spawn, a rule heuristic scores slice complexity (`simple` | `standard` | `critical`) from write-scope, helpers, path count, and critical keywords (auth/IAP/Vision/secrets/billing). Optional host env `HARNESS_MODEL_PROFILE` (`economy` | `balanced` | `premium`, default `balanced`) shifts aggressiveness: **balanced** sets parent `--model` to free/cheap rotation for simple only (critical + helpers stay Composer); **economy** is OpenRouter-only for every tier — never `cursor/composer-*` — with role pins: Scout/helpers/Slop → Hy3; Builder **simple** → DeepSeek Flash else Hy3; Optimizer → DeepSeek Flash; ui-ux → GLM 5.3 Flash (multimodal for optional design PNG spot-check); Draft keeps free primary with Flash then Hy3 fallbacks; factory-checker/land → Hy3. Temporary frontmatter pins restore after Pi. Gates: plan (Scout/Hy3) → scaffold (Draft free rotation) → implement (profile + tier) → verify (Hy3 then free/Flash rotation; Mechanical close stays harness-owned). Cheap rotation on 429: MiniMax M3 free → GLM 5.2 free → Laguna S 2.1 (`poolside/laguna-s-2.1`) → DeepSeek Flash → GLM 5.3 Flash → Hy3 → (balanced/premium: Composer; economy: MiMo). Route decisions + outcomes persist in SQLite `route_runs` for retro tuning (`token-report --routes`).
 _Avoid_: prompt-only routing while parent stays Composer on simple; one model for every gate; stalling the stay on a single free 429; Draft as `PI_MODEL`; treating heuristic score as invoice truth; leaving Composer in an economy chain or helper pin
 
 **Gate**:
@@ -359,8 +379,8 @@ Ticket-derived slice brief (paths + Do not + prior fails + top Hermes lessons) a
 _Avoid_: inventing product scanners in `first-pass.mjs`; treating every checker fail as a full Scout+Draft+helpers tree; bouncing incomplete workpads to Implementing; parallel helper fan-out; spawning Gate; checker rediscovering the whole diff via bash; reading full CONTEXT on every spawn; treating list-rate costUsd as invoice truth
 
 **Hy3**:
-OpenRouter model `tencent/hy3` for Scout (primary), no-think. Gate uses `xiaomi/mimo-v2.5-pro` as primary and Hy3 as first fallback. Scout falls back to MiMo-V2.5-Pro then Composer. Draft uses free OpenRouter coding models first, then Hy3, then Composer — not Hy3 as Draft primary. Not product Vision. Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. Last fallback is `cursor/composer-2.5` — not Kimi, not Hy4. Domain helpers and Slop pin `cursor/composer-2.5`; an omitted `model:` makes Pi use Kimi.
-_Avoid_: stealth/ox-alpha; Kimi as Scout/Gate/Draft fallback; omitting helper `model:`; Hy3 or MiMo for nest/expo/drizzle/ui-ux; free Draft models for nest/expo/drizzle/ui-ux ownership; Hy3 for planner; blocking the slice on Exacto; pinning Scout/Gate to Hy4 as the default; pinning Draft to a free model without Hy3/Composer fallback; economy factory-checker on Hy3 without `OPENROUTER_API_KEY`
+OpenRouter model `tencent/hy3` for Scout (primary), no-think. Economy Builder (standard/critical), nest/expo/drizzle/devops/Slop, and factory-checker/land also pin Hy3. Gate (legacy pin) uses `xiaomi/mimo-v2.5-pro` as primary and Hy3 as first fallback. Scout falls back to MiMo-V2.5-Pro then DeepSeek Flash / Composer. Draft uses free OpenRouter coding models first, then DeepSeek Flash → GLM 5.3 Flash → Hy3, then Composer — not Hy3 as Draft primary. Economy Optimizer pins DeepSeek Flash; economy ui-ux pins GLM 5.3 Flash (native multimodal) for optional Read of at most two cited design PNGs — not a whole-app visual audit, not product Vision (jersey CV). Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. Last fallback is `cursor/composer-2.5` — not Kimi, not Hy4. Domain helpers and Slop pin `cursor/composer-2.5` on disk; an omitted `model:` makes Pi use Kimi; economy rewrites pins for the stay.
+_Avoid_: stealth/ox-alpha; Kimi as Scout/Gate/Draft fallback; omitting helper `model:`; free Draft models for nest/expo/drizzle ownership; Hy3 for planner; blocking the slice on Exacto; pinning Scout/Gate to Hy4 as the default; pinning Draft to a free model without Hy3/Composer fallback; economy factory-checker on Hy3 without `OPENROUTER_API_KEY`; ui-ux touring unrelated screens for “consistency”
 
 **Coding job**:
 A factory role on the coding slot: implement, factory-checker, auto-merge, or land. Not planner. Auto-merge and land do not spawn Pi.
