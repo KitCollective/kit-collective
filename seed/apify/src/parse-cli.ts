@@ -72,9 +72,6 @@ function parseGrainArgv(argv: string[]): ParsedGrainCli {
   throw new Error("Expected grain kind: league | league-season");
 }
 
-/**
- * CLI entry for seed-apify: walk scopes (shared) or Hierarchy grains (league / league-season).
- */
 export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {
   const cleaned = argv.filter((arg) => arg !== "--");
   if (cleaned[0] === "grain") {

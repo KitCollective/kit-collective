@@ -1,10 +1,5 @@
 import { createDb } from "@kit/db";
-import {
-  type ParsedSeedScope,
-  parseSeedScopeArgv,
-  resolveSeasonRef,
-  type SeedScope,
-} from "@kit/seed-shared";
+import { resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
 import { mapFacts } from "./map/index.js";
@@ -115,10 +110,6 @@ async function expandScope(
   });
 }
 
-/**
- * Hierarchy grain run (highest public interface for League / League season).
- * Injected FetchAdapter; refuses production via parseLane.
- */
 export async function runHierarchyGrain(
   options: RunHierarchyGrainOptions,
 ): Promise<RunHierarchyGrainResult> {
@@ -245,13 +236,4 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
 
 export function parseCliArgs(argv: string[]): ParsedSeedCli {
   return parseSeedApifyCli(argv.slice(2));
-}
-
-/** @deprecated Prefer parseCliArgs; kept for callers that need walk-only ParsedSeedScope. */
-export function parseWalkCliArgs(argv: string[]): ParsedSeedScope {
-  const result = parseSeedScopeArgv(argv.slice(2));
-  if (!result.ok) {
-    throw new Error(result.error);
-  }
-  return result.parsed;
 }
