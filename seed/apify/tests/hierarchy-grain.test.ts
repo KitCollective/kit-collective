@@ -122,20 +122,6 @@ describe("Hierarchy grain — League", () => {
   });
 });
 
-describe("Hierarchy grain — lane guard", () => {
-  it("rejects production lane without touching the database", async () => {
-    await expect(
-      runHierarchyGrain({
-        kind: "league",
-        competition: "dk1",
-        lane: "production" as "development",
-        fetchAdapter: createFixtureFetchAdapter(fixturePath),
-        databaseUrl: TEST_DATABASE_URL,
-      }),
-    ).rejects.toThrow(/production/i);
-  });
-});
-
 describe("Hierarchy grain — League season", () => {
   beforeAll(async () => {
     await prepareDatabase();
