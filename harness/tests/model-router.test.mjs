@@ -205,7 +205,7 @@ test("resolveFastRoleModel swaps Grok for Hy3 in economy", () => {
 });
 
 test("economy agent pins never name Composer", () => {
-  for (const name of ["nest.md", "scout.md", "gate.md", "draft.md", "slop.md"]) {
+  for (const name of ["nest.md", "scout.md", "gate.md", "draft.md", "optimizer.md", "slop.md"]) {
     const pins = economyAgentModelSpec(name, 0);
     assert.equal(/composer/i.test(pins.model), false, name);
     assert.equal(

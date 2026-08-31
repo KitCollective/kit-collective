@@ -7,6 +7,7 @@ import { LINEAR_CLI_PIN } from "../boot-env.mjs";
 import { createGhClient } from "../gh-cli.mjs";
 import {
   classifyCiFailure,
+  collectWorkpadHonestyViolations,
   completeImplementAdw,
   createFormatApply,
   createFormatCheck,
@@ -19,6 +20,7 @@ import {
   IN_REVIEW,
   isFormatInfraError,
   loadWriteScopeEvaluator,
+  MAX_CONFLICT_REBASES,
   requiredChecksGreen,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
@@ -735,6 +737,87 @@ test("classifyCiFailure treats biome/format logs as format and anti-slop as logi
   assert.equal(classifyCiFailure([]), "unknown");
 });
 
+test("classifyCiFailure returns lockfile, migration, and unknown", () => {
+  assert.equal(
+    classifyCiFailure([
+      {
+        name: "test",
+        conclusion: "failure",
+        isRequired: true,
+        log: "ERR_PNPM_OUTDATED_LOCKFILE: Cannot install with frozen-lockfile",
+      },
+    ]),
+    "lockfile",
+  );
+  assert.equal(
+    classifyCiFailure([
+      {
+        name: "test",
+        conclusion: "failure",
+        isRequired: true,
+        log: "check-migration-prefixes: duplicate migration prefix 0042_",
+      },
+    ]),
+    "migration",
+  );
+  assert.equal(
+    classifyCiFailure([
+      {
+        name: "test",
+        conclusion: "failure",
+        isRequired: true,
+        log: "something opaque went wrong in the runner",
+      },
+    ]),
+    "unknown",
+  );
+});
+
+test("classifyCiFailure prefers logic when format and anti-slop overlap", () => {
+  assert.equal(
+    classifyCiFailure([
+      {
+        name: "test",
+        conclusion: "failure",
+        isRequired: true,
+        log: "pnpm format:check\nlint:anti-slop\nAssertionError",
+      },
+    ]),
+    "logic",
+  );
+});
+
+test("collectWorkpadHonestyViolations flags lockfile and checks claims", () => {
+  assert.deepEqual(
+    collectWorkpadHonestyViolations("lockfile restored in Evidence", {
+      lockfileDirty: true,
+      checksGreen: true,
+      formatClean: true,
+    }),
+    ["- Honesty: workpad claims lockfile fixed but pnpm-lock.yaml is still dirty"],
+  );
+  assert.deepEqual(
+    collectWorkpadHonestyViolations("GitHub checks are green", {
+      lockfileDirty: false,
+      checksGreen: false,
+      formatClean: true,
+    }),
+    ["- Honesty: workpad claims checks green but required GitHub checks are not"],
+  );
+  assert.deepEqual(
+    collectWorkpadHonestyViolations("all good", {
+      lockfileDirty: false,
+      checksGreen: true,
+      formatClean: true,
+    }),
+    [],
+  );
+});
+
+test("MAX_CONFLICT_REBASES is 3", () => {
+  assert.equal(MAX_CONFLICT_REBASES, 3);
+});
+
 test("completeImplementAdw applies format in-process and reaches In Review without formatRetry", async () => {
   const gh = fakeGh({
     mergeable: "MERGEABLE",
@@ -767,7 +850,8 @@ test("completeImplementAdw applies format in-process and reaches In Review witho
   assert.equal(result.status, IN_REVIEW);
   assert.equal(result.formatRetry, false);
   assert.equal(applied.length, 1);
-  assert.equal(checks, 2);
+  // Green light: fail + recheck after apply; honesty gate: one more check before In Review.
+  assert.equal(checks, 3);
 });
 
 test("completeImplementAdw rebases a CONFLICTING PR during GitHub wait instead of ciRetry", async () => {
@@ -1641,6 +1725,7 @@ test("Scout pins Hy3; Gate is superseded by Mechanical close but keeps MiMo fron
     ".pi/agents/drizzle.md",
     ".pi/agents/ui-ux.md",
     ".pi/agents/devops.md",
+    ".pi/agents/optimizer.md",
   ]) {
     const helper = agentFrontmatter(relative);
     assert.match(helper.frontmatter, /^model:\s+cursor\/composer-2\.5\s*$/m);

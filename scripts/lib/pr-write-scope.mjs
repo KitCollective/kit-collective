@@ -117,9 +117,18 @@ export function parseWriteScopeGlobs(text) {
 }
 
 export function findWriteScopeViolations(changedFiles, globs) {
+  const files = Array.isArray(changedFiles) ? changedFiles : [];
+  const packageJsonInScope = files.some(
+    (file) =>
+      (file === "package.json" || /(^|\/)package\.json$/.test(file)) &&
+      (isRatchetException(file) || globs.some((glob) => matchesGlob(file, glob))),
+  );
   const violations = [];
-  for (const file of changedFiles) {
+  for (const file of files) {
     if (isRatchetException(file)) {
+      continue;
+    }
+    if (packageJsonInScope && file === "pnpm-lock.yaml") {
       continue;
     }
     const inScope = globs.some((glob) => matchesGlob(file, glob));

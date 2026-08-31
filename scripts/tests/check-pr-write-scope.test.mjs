@@ -136,6 +136,33 @@ test("resolveWriteScopeViolations waives a new check-script the worktree allowli
   assert.deepEqual(resolveWriteScopeViolations(changedFiles, globs, worktreeFind), []);
 });
 
+test("findWriteScopeViolations allows pnpm-lock.yaml when package.json is in scope", () => {
+  const globs = ["apps/api/**"];
+  assert.deepEqual(
+    findWriteScopeViolations(
+      ["apps/api/package.json", "apps/api/src/main.ts", "pnpm-lock.yaml"],
+      globs,
+    ),
+    [],
+  );
+});
+
+test("findWriteScopeViolations still flags package.json outside write-scope", () => {
+  const globs = ["apps/mobile/**"];
+  assert.deepEqual(findWriteScopeViolations(["package.json", "pnpm-lock.yaml"], globs), [
+    "package.json",
+    "pnpm-lock.yaml",
+  ]);
+});
+
+test("findWriteScopeViolations allows root package.json companion lockfile when package.json matches glob", () => {
+  const globs = ["package.json", "apps/api/**"];
+  assert.deepEqual(
+    findWriteScopeViolations(["package.json", "pnpm-lock.yaml", "apps/api/src/x.ts"], globs),
+    [],
+  );
+});
+
 test("resolveWriteScopeViolations does not waive product or harness paths even if worktree allowlists them", () => {
   const globs = ["apps/mobile/**"];
   const changedFiles = ["apps/mobile/app/index.tsx", "package.json", "harness/land.mjs"];

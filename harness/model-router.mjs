@@ -39,6 +39,7 @@ export const ECONOMY_PINNED_AGENTS = Object.freeze([
   "drizzle.md",
   "ui-ux.md",
   "devops.md",
+  "optimizer.md",
   "slop.md",
 ]);
 
@@ -445,18 +446,18 @@ export function formatModelRouteBrief(route) {
   const lines = [
     "### Model route (cheapest capable)",
     "",
-    `- Profile: **${profileLabel}** (\`HARNESS_MODEL_PROFILE\`)`,
+    `- Profile: **${profileLabel}** (\`HARNESS_MODEL_PROFILE\`) — switches models, not honesty/composition/scaffold gates`,
     `- Complexity: **${complexity.tier}** (score ${complexity.score})`,
     `- Reasons: ${complexity.reasons.length > 0 ? complexity.reasons.join("; ") : "(none)"}`,
     `- Cheap rotation: ${freeRotation.join(" → ")}`,
     `- Plan (Scout): \`${gates.plan.primary}\``,
     `- Scaffold (Draft): ${skipDraft ? "**Skip Draft** (critical seam)" : `\`${gates.scaffold.primary}\` → ${gates.scaffold.fallbacks.slice(0, 3).join(" → ")}`}`,
-    `- Implement (parent/helpers): \`${gates.implement.primary}\`${implementNote}`,
+    `- Implement (parent/helpers/optimizer): \`${gates.implement.primary}\`${implementNote}`,
     `- Verify (criteria-only): \`${gates.verify.primary}\` then free rotation; Mechanical close stays harness-owned (no Pi Gate)`,
     "",
     economy
-      ? "Economy: OpenRouter only (Hy3 primary for parent/helpers — free models are fallbacks). Never edit `.pi/agents` or `.cursor/agents`; harness owns those pins. On 429, continue the OpenRouter fallback chain."
-      : "Override: if a free model 429s, continue the fallback chain — do not stall the stay.",
+      ? "Economy: OpenRouter only (Hy3 primary for parent/helpers/optimizer — free models are fallbacks). Never edit `.pi/agents` or `.cursor/agents`; harness owns those pins. On 429, continue the OpenRouter fallback chain. Profile does not weaken Green light, honesty, or Composition fail-close."
+      : "Override: if a free model 429s, continue the fallback chain — do not stall the stay. Profile switches models only — honesty and Composition gates stay fail-close.",
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -538,7 +539,7 @@ export function economyAgentModelSpec(agentFileName, rotationIndex = 0) {
       fallbackModels: withoutComposer([SCOUT_MODEL, ...FREE_MODEL_ROTATION]),
     };
   }
-  // draft, nest, expo, drizzle, ui-ux, devops, slop — Hy3 primary (same allowlist as Scout)
+  // draft, nest, expo, drizzle, ui-ux, devops, optimizer, slop — Hy3 primary (same allowlist as Scout)
   void rotationIndex;
   return {
     model: SCOUT_MODEL,

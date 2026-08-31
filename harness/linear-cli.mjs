@@ -257,6 +257,18 @@ export const ISSUE_UPDATE_STATE_MUTATION = `mutation IssueUpdateState($id: Strin
   issueUpdate(id: $id, input: { stateId: $stateId }) { success }
 }`;
 
+export const ISSUE_ADD_LABELS_MUTATION = `mutation IssueAddLabels($id: String!, $addedLabelIds: [String!]!) {
+  issueUpdate(id: $id, input: { addedLabelIds: $addedLabelIds }) { success }
+}`;
+
+export const ISSUE_LABELS_LOOKUP_QUERY = `query IssueLabelsLookup($id: String!) {
+  issue(id: $id) {
+    team {
+      labels(first: 100) { nodes { id name } }
+    }
+  }
+}`;
+
 export const ISSUE_UPDATE_DESCRIPTION_MUTATION = `mutation IssueUpdateDescription($id: String!, $description: String!) {
   issueUpdate(id: $id, input: { description: $description }) { success }
 }`;
@@ -677,6 +689,46 @@ export function createLinearCliClient({ env = process.env, runCommand } = {}) {
       }
       await cli(ISSUE_UPDATE_STATE_MUTATION, { id: issueId, stateId: match.id });
       return { issueId, status };
+    },
+
+    /**
+     * Add who-acts / triage labels by name when the team has them.
+     * Missing names are skipped (fail-open for optional labels).
+     *
+     * @param {{ issueId: string, labelNames: string[] }} input
+     */
+    async addLabels({ issueId, labelNames }) {
+      const names = Array.isArray(labelNames)
+        ? labelNames.filter((name) => typeof name === "string" && name.length > 0)
+        : [];
+      if (names.length === 0) {
+        return { issueId, added: [] };
+      }
+      const stdout = await cli(ISSUE_LABELS_LOOKUP_QUERY, { id: issueId });
+      const parsed = parseJson(stdout);
+      const nodes = parsed?.data?.issue?.team?.labels?.nodes;
+      const byName = new Map();
+      if (Array.isArray(nodes)) {
+        for (const node of nodes) {
+          if (typeof node?.id === "string" && typeof node?.name === "string") {
+            byName.set(node.name, node.id);
+          }
+        }
+      }
+      const addedLabelIds = [];
+      const added = [];
+      for (const name of names) {
+        const id = byName.get(name);
+        if (typeof id === "string") {
+          addedLabelIds.push(id);
+          added.push(name);
+        }
+      }
+      if (addedLabelIds.length === 0) {
+        return { issueId, added: [] };
+      }
+      await cli(ISSUE_ADD_LABELS_MUTATION, { id: issueId, addedLabelIds });
+      return { issueId, added };
     },
 
     /**
