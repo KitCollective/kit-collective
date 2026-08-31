@@ -17,7 +17,23 @@ export interface ListClubSeasonPairsParams {
   toSeason: string;
 }
 
+export interface FetchLeagueParams {
+  competition: string;
+}
+
+export interface FetchLeagueSeasonParams {
+  competition: string;
+  season: string;
+}
+
 export interface FetchAdapter {
+  /** League Hierarchy grain — competition identity only (no seasons/clubs). */
+  fetchLeague(params: FetchLeagueParams): Promise<TransfermarktRawPayload>;
+  /**
+   * League season Hierarchy grain — competition season page club/side list.
+   * Clubs carry empty player arrays (kader is Club season grain).
+   */
+  fetchLeagueSeason(params: FetchLeagueSeasonParams): Promise<TransfermarktRawPayload>;
   fetchClubSeason(params: FetchClubSeasonParams): Promise<TransfermarktRawPayload>;
   listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]>;
 }

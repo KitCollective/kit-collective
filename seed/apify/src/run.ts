@@ -9,6 +9,7 @@ import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
 import { mapFacts } from "./map/index.js";
 import { normalize } from "./normalize/index.js";
+import { type HierarchyGrain, type ParsedSeedCli, parseSeedApifyCli } from "./parse-cli.js";
 import { filterFactsToClubSeason } from "./scope/club-season.js";
 import {
   assertOutOfScopeSeasonsUnchanged,
@@ -43,6 +44,19 @@ export interface RunSeedSummary {
 
 export interface RunSeedResult {
   summary: RunSeedSummary;
+}
+
+export interface RunHierarchyGrainOptions {
+  kind: HierarchyGrain["kind"];
+  competition: string;
+  season?: string;
+  lane: Lane;
+  fetchAdapter: FetchAdapter;
+  databaseUrl?: string;
+}
+
+export interface RunHierarchyGrainResult {
+  summary: MapResult;
 }
 
 function emptyMapResult(): MapResult {
@@ -99,6 +113,51 @@ async function expandScope(
     fromSeason: scope.fromSeason,
     toSeason: scope.toSeason,
   });
+}
+
+/**
+ * Hierarchy grain run (highest public interface for League / League season).
+ * Injected FetchAdapter; refuses production via parseLane.
+ */
+export async function runHierarchyGrain(
+  options: RunHierarchyGrainOptions,
+): Promise<RunHierarchyGrainResult> {
+  const lane = parseLane(options.lane);
+  const databaseUrl = options.databaseUrl ?? resolveDatabaseUrl(lane);
+  const { db, pool } = createDb(databaseUrl);
+
+  try {
+    if (options.kind === "league") {
+      const raw = await options.fetchAdapter.fetchLeague({
+        competition: options.competition,
+      });
+      const facts = normalize(raw);
+      const summary = await mapFacts(db, facts, { depth: "league" });
+      return { summary };
+    }
+
+    if (options.kind === "league_season") {
+      if (!options.season?.trim()) {
+        throw new Error("league_season grain requires season");
+      }
+      const seasonLabel = resolveSeasonRef(options.competition, options.season);
+      const raw = await options.fetchAdapter.fetchLeagueSeason({
+        competition: options.competition,
+        season: seasonLabel,
+      });
+      const facts = normalize(raw);
+      const summary = await mapFacts(db, facts, {
+        depth: "league_season",
+        allowedSeasonLabels: new Set([seasonLabel]),
+      });
+      return { summary };
+    }
+
+    const _exhaustive: never = options.kind;
+    return _exhaustive;
+  } finally {
+    await pool.end();
+  }
 }
 
 export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
@@ -184,7 +243,12 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
   }
 }
 
-export function parseCliArgs(argv: string[]): ParsedSeedScope {
+export function parseCliArgs(argv: string[]): ParsedSeedCli {
+  return parseSeedApifyCli(argv.slice(2));
+}
+
+/** @deprecated Prefer parseCliArgs; kept for callers that need walk-only ParsedSeedScope. */
+export function parseWalkCliArgs(argv: string[]): ParsedSeedScope {
   const result = parseSeedScopeArgv(argv.slice(2));
   if (!result.ok) {
     throw new Error(result.error);

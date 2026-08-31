@@ -114,6 +114,10 @@ describe("lane guard", () => {
 describe("CLI args", () => {
   it("parses competition, season range, and lane", () => {
     const parsed = parseCliArgs(["node", "seed-apify", "dk1", "0001", "today", "development"]);
+    expect(parsed.mode).toBe("walk");
+    if (parsed.mode !== "walk") {
+      throw new Error("expected walk mode");
+    }
     expect(parsed.scope).toEqual({
       kind: "competition",
       competition: "dk1",
@@ -125,6 +129,10 @@ describe("CLI args", () => {
 
   it("parses club + season scope", () => {
     const parsed = parseCliArgs(["node", "seed-apify", "club", "dk1", "club-190", "23/24"]);
+    expect(parsed.mode).toBe("walk");
+    if (parsed.mode !== "walk") {
+      throw new Error("expected walk mode");
+    }
     expect(parsed.scope).toEqual({
       kind: "club",
       competition: "dk1",
@@ -258,6 +266,8 @@ describe("runSeed scope walk", () => {
     await prepareDatabase();
     const inner = createFixtureFetchAdapter(fixturePath);
     const failingAdapter: FetchAdapter = {
+      fetchLeague: inner.fetchLeague.bind(inner),
+      fetchLeagueSeason: inner.fetchLeagueSeason.bind(inner),
       async listClubSeasonPairs(params) {
         return inner.listClubSeasonPairs(params);
       },
@@ -278,6 +288,8 @@ describe("runSeed scope walk", () => {
       },
       lane: "development",
       fetchAdapter: {
+        fetchLeague: failingAdapter.fetchLeague.bind(failingAdapter),
+        fetchLeagueSeason: failingAdapter.fetchLeagueSeason.bind(failingAdapter),
         async listClubSeasonPairs() {
           return [
             { clubExternalId: "club-missing", seasonLabel: "23/24" },

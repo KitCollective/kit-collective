@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
-import { parseCliArgs, runSeed } from "./run.js";
+import { parseCliArgs, runHierarchyGrain, runSeed } from "./run.js";
 
 async function main() {
   const parsed = parseCliArgs(process.argv);
@@ -14,6 +14,24 @@ async function main() {
   }
 
   try {
+    if (parsed.mode === "grain") {
+      const { summary } = await runHierarchyGrain({
+        kind: parsed.grain.kind,
+        competition: parsed.grain.competition,
+        season: parsed.grain.kind === "league_season" ? parsed.grain.season : undefined,
+        lane: parsed.lane,
+        fetchAdapter: resolved.adapter,
+      });
+      console.log(
+        JSON.stringify(
+          { ok: true, mode: "grain", grain: parsed.grain, lane: parsed.lane, summary },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
     const { summary } = await runSeed({
       scope: parsed.scope,
       lane: parsed.lane,

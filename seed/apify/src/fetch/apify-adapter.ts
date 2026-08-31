@@ -1,4 +1,4 @@
-import { resolveCompetition } from "@kit/seed-shared";
+import { resolveCompetition, resolveSeasonRef } from "@kit/seed-shared";
 import { ApifyClient } from "apify-client";
 import {
   CLUBS_DATASET,
@@ -10,6 +10,8 @@ import {
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
+  mapLeagueSeasonToPayload,
+  mapLeagueToPayload,
   seasonClubRowsToPairs,
   startYearToLabel,
 } from "./actor-mapper.js";
@@ -192,6 +194,21 @@ function createRecordingsAdapter(
   onProfileFetch?: (playerId: string) => void,
 ): FetchAdapter {
   return {
+    async fetchLeague(params) {
+      return mapLeagueToPayload(params.competition);
+    },
+
+    async fetchLeagueSeason(params) {
+      const seasonLabel = resolveSeasonRef(params.competition, params.season);
+      const startYear = labelToStartYear(seasonLabel);
+      const recording = await store.loadCompetitionSeason(params.competition, startYear);
+      return mapLeagueSeasonToPayload({
+        competitionSlug: params.competition,
+        seasonLabel,
+        clubs: recording.clubs,
+      });
+    },
+
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
       const available = await store.listAvailableSeasons(params.competition);
       const seasons = expandSeasonStartYears(
@@ -244,6 +261,22 @@ function createLiveAdapter(
   onProfileFetch?: (playerId: string) => void,
 ): FetchAdapter {
   return {
+    async fetchLeague(params) {
+      return mapLeagueToPayload(params.competition);
+    },
+
+    async fetchLeagueSeason(params) {
+      const seasonLabel = resolveSeasonRef(params.competition, params.season);
+      const tmCode = competitionCode(params.competition);
+      const startYear = labelToStartYear(seasonLabel);
+      const clubs = await runCompetitionSeason(client, actorId, tmCode, startYear);
+      return mapLeagueSeasonToPayload({
+        competitionSlug: params.competition,
+        seasonLabel,
+        clubs,
+      });
+    },
+
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
       const tmCode = competitionCode(params.competition);
       const fromLabel = params.fromSeason === "today" ? "today" : params.fromSeason;

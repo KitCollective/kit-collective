@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveSeasonRef } from "../src/season-ref.js";
-import { parseSeedScopeArgv } from "../src/seed-scope.js";
+import { formatSeedScopeUsage, parseSeedScopeArgv } from "../src/seed-scope.js";
 
 describe("resolveSeasonRef", () => {
   it("maps 0001 to Superliga first Transfermarkt season", () => {
@@ -68,6 +68,12 @@ describe("parseSeedScopeArgv", () => {
   it("rejects production lane", () => {
     const result = parseSeedScopeArgv(["dk1", "0001", "today", "production"]);
     expect(result.ok).toBe(false);
+  });
+
+  it("documents Hierarchy grain CLI in usage text", () => {
+    const usage = formatSeedScopeUsage("seed-apify");
+    expect(usage).toContain("grain league");
+    expect(usage).toContain("grain league-season");
   });
 
   it("strips a leading -- from pnpm-filter argv forwarding", () => {
