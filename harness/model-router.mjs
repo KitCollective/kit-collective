@@ -347,13 +347,17 @@ export function routeForGate(gate, tier, options = {}) {
   }
 
   if (profile === "economy") {
-    // All tiers — including critical — stay OpenRouter-only. No Composer.
+    // Allowlisted cheap OpenRouter only. Free MiniMax as parent/helper primary fails
+    // closed on KIT-Pi-harness and sends the session into harness meta-debug.
+    const mimo = "openrouter/xiaomi/mimo-v2.5-pro";
+    const economyPrimary = SCOUT_MODEL;
+    const economyFallbacks = withoutComposer([mimo, ...FREE_MODEL_ROTATION]);
     return {
       gate,
       tier,
-      primary: freeChain[0],
-      fallbacks: freeChain.slice(1),
-      chain: freeChain,
+      primary: economyPrimary,
+      fallbacks: economyFallbacks,
+      chain: [economyPrimary, ...economyFallbacks],
       useFree: true,
     };
   }
@@ -453,7 +457,7 @@ export function formatModelRouteBrief(route) {
     `- Verify (criteria-only): \`${gates.verify.primary}\` then free rotation; Mechanical close stays harness-owned (no Pi Gate)`,
     "",
     economy
-      ? "Economy: OpenRouter only — never `cursor/composer-*`. On 429, continue the OpenRouter fallback chain."
+      ? "Economy: OpenRouter only (Hy3 primary for parent/helpers — free models are fallbacks). Never edit `.pi/agents` or `.cursor/agents`; harness owns those pins. On 429, continue the OpenRouter fallback chain."
       : "Override: if a free model 429s, continue the fallback chain — do not stall the stay.",
   ];
   return `${lines.join("\n")}\n`;
@@ -513,33 +517,52 @@ export function resolveFastRoleModel(profile, fallbackFastModel) {
 
 /**
  * Per-agent OpenRouter pins for an economy stay (no Composer in model or fallbacks).
+ * Helpers/Slop/Draft use Hy3 (KIT-Pi-harness allowlist) — free MiniMax as helper primary
+ * fails closed instantly and sends the parent into harness meta-debug.
  *
  * @param {string} agentFileName e.g. `nest.md`
  * @param {number} [rotationIndex]
  * @returns {{ model: string, fallbackModels: string[] }}
  */
 export function economyAgentModelSpec(agentFileName, rotationIndex = 0) {
-  const chain = rotateEconomyChain(rotationIndex);
   const name = String(agentFileName ?? "").replace(/^.*\//, "");
+  const mimo = "openrouter/xiaomi/mimo-v2.5-pro";
+  const allowlistedFallbacks = withoutComposer([mimo, ...FREE_MODEL_ROTATION]);
   if (name === "scout.md") {
     return {
       model: SCOUT_MODEL,
-      fallbackModels: withoutComposer([
-        "openrouter/xiaomi/mimo-v2.5-pro",
-        ...FREE_MODEL_ROTATION,
-      ]),
+      fallbackModels: allowlistedFallbacks,
     };
   }
   if (name === "gate.md") {
     return {
-      model: "openrouter/xiaomi/mimo-v2.5-pro",
+      model: mimo,
       fallbackModels: withoutComposer([SCOUT_MODEL, ...FREE_MODEL_ROTATION]),
     };
   }
+  // draft, nest, expo, drizzle, ui-ux, devops, slop — Hy3 primary (same allowlist as Scout)
+  void rotationIndex;
   return {
-    model: chain[0],
-    fallbackModels: chain.slice(1),
+    model: SCOUT_MODEL,
+    fallbackModels: allowlistedFallbacks,
   };
+}
+
+/**
+ * Ensure agent markdown starts at YAML frontmatter (`---`). Leading HTML comments
+ * on generated helpers break pi-subagents discovery for some model paths.
+ *
+ * @param {string} markdown
+ * @returns {string}
+ */
+export function stripLeadingNoiseBeforeFrontmatter(markdown) {
+  let out = String(markdown ?? "");
+  // Drop any preamble before the first frontmatter fence.
+  const fence = out.search(/^---\s*$/m);
+  if (fence > 0) {
+    out = out.slice(fence);
+  }
+  return out;
 }
 
 /**
@@ -553,7 +576,7 @@ export function rewriteAgentModelFrontmatter(markdown, pins) {
   const model = typeof pins.model === "string" ? pins.model : "";
   const fallbacks = Array.isArray(pins.fallbackModels) ? pins.fallbackModels.filter(Boolean) : [];
   const fbLine = fallbacks.join(", ");
-  let out = String(markdown ?? "");
+  let out = stripLeadingNoiseBeforeFrontmatter(markdown);
   if (/^model:\s*.+$/m.test(out)) {
     out = out.replace(/^model:\s*.+$/m, `model: ${model}`);
   }

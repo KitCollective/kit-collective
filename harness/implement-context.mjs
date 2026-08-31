@@ -99,6 +99,7 @@ export const PI_ORCHESTRATION_OVERLAY = `# PI worker overlay (orchestration)
 - Runtime is the PI worker: Compose + \`gh\` + Linear CLI. Linear MCP is not on the box (\`.pi/mcp.json\` empty).
 - Do not treat Cursor Cloud Agents as dispatch. Never set Linear Agent to Cursor.
 - Factory checker is a separate Pi process on \`In Review\` — never spawn it from implement.
+- Never edit \`.pi/agents/**\` or \`.cursor/agents/**\`. Those files are harness-owned. If a helper spawn fails, do not rewrite agent frontmatter — continue the slice under write-scope or exit for harness retry.
 `;
 
 /**

@@ -1545,7 +1545,7 @@ test("implement parent --model follows free route on simple slices", async () =>
   assert.notEqual(parentModel, "cursor/composer-2.5");
 });
 
-test("economy profile uses free parent on standard (empty-signal) slices", async () => {
+test("economy profile uses Hy3 parent on standard (empty-signal) slices", async () => {
   const spawned = [];
   const env = validWorkerEnv();
   env.HARNESS_MODEL_PROFILE = "economy";
@@ -1562,10 +1562,7 @@ test("economy profile uses free parent on standard (empty-signal) slices", async
   });
   const modelIdx = spawned[0].args.indexOf("--model");
   const parentModel = spawned[0].args[modelIdx + 1];
-  assert.ok(
-    FREE_MODEL_ROTATION.includes(parentModel),
-    `expected free/cheap parent under economy, got ${parentModel}`,
-  );
+  assert.match(parentModel, /openrouter\/tencent\/hy3/);
   assert.notEqual(parentModel, "cursor/composer-2.5");
 });
 

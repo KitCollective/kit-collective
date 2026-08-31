@@ -1612,7 +1612,9 @@ export function createPiJobRunner({
         checkout &&
         (job.role === "implement" || job.role === "factory-checker")
       ) {
-        restoreEconomyPins = applyEconomyAgentPins(join(checkout.path, ".pi/agents"));
+        restoreEconomyPins = applyEconomyAgentPins(join(checkout.path, ".pi/agents"), 0, {
+          gitCwd: checkout.path,
+        });
       }
       try {
         const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, {

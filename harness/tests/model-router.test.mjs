@@ -72,13 +72,13 @@ test("implement critical is Composer; simple may start free", () => {
   assert.equal(simple.useFree, true);
 });
 
-test("economy implement uses free primary on all tiers including critical — no Composer", () => {
+test("economy implement uses Hy3 primary on all tiers including critical — no Composer", () => {
   for (const tier of /** @type {const} */ (["simple", "standard", "critical"])) {
     const routed = routeForGate("implement", tier, {
       rotationIndex: 0,
       profile: "economy",
     });
-    assert.equal(routed.primary, FREE_MODEL_ROTATION[0]);
+    assert.match(routed.primary, /tencent\/hy3/);
     assert.equal(routed.useFree, true);
     assert.equal(
       routed.chain.some((id) => id.includes("composer")),
@@ -140,11 +140,11 @@ test("empty slice defaults to standard — not free parent (balanced)", () => {
   assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), COMPOSER_MODEL);
 });
 
-test("economy empty/standard slice uses free parent", () => {
+test("economy empty/standard slice uses Hy3 parent", () => {
   const route = buildModelRoute({ profile: "economy", rotationIndex: 0 });
   assert.equal(route.complexity.tier, "standard");
   assert.equal(route.gates.implement.useFree, true);
-  assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), FREE_MODEL_ROTATION[0]);
+  assert.match(resolveImplementParentModel(route, COMPOSER_MODEL), /tencent\/hy3/);
 });
 
 test("resolveImplementParentModel picks free primary for simple", () => {
@@ -161,7 +161,7 @@ test("resolveImplementParentModel picks free primary for simple", () => {
   assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), FREE_MODEL_ROTATION[0]);
 });
 
-test("resolveImplementParentModel uses OpenRouter for critical under economy", () => {
+test("resolveImplementParentModel uses OpenRouter Hy3 for critical under economy", () => {
   const route = buildModelRoute({
     title: "Fix IAP restore",
     body: "Touch StoreKit entitlement refresh",
@@ -171,7 +171,7 @@ test("resolveImplementParentModel uses OpenRouter for critical under economy", (
     profile: "economy",
   });
   assert.equal(route.complexity.tier, "critical");
-  assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), FREE_MODEL_ROTATION[0]);
+  assert.match(resolveImplementParentModel(route, COMPOSER_MODEL), /tencent\/hy3/);
   assert.equal(route.gates.implement.chain.some((id) => /composer/i.test(id)), false);
 });
 
@@ -207,11 +207,14 @@ test("economy agent pins never name Composer", () => {
     assert.equal(/composer/i.test(pins.model), false, name);
     assert.equal(pins.fallbackModels.some((id) => /composer/i.test(id)), false, name);
   }
+  assert.match(economyAgentModelSpec("nest.md", 0).model, /tencent\/hy3/);
   assert.equal(rotateEconomyChain(0).some((id) => /composer/i.test(id)), false);
   const rewritten = rewriteAgentModelFrontmatter(
-    "---\nname: nest\nmodel: cursor/composer-2.5\n---\n\nBody\n",
+    "<!-- Generated -->\n---\nname: nest\nmodel: cursor/composer-2.5\n---\n\nBody\n",
     economyAgentModelSpec("nest.md", 0),
   );
-  assert.match(rewritten, /^model:\s+openrouter\//m);
+  assert.match(rewritten, /^---/m);
+  assert.doesNotMatch(rewritten, /^<!--/m);
+  assert.match(rewritten, /^model:\s+openrouter\/tencent\/hy3/m);
   assert.doesNotMatch(rewritten, /composer/i);
 });

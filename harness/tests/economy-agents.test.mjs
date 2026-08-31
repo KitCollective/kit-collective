@@ -16,11 +16,13 @@ test("applyEconomyAgentPins rewrites helpers to OpenRouter and restores", () => 
   try {
     const nestPath = join(dir, "nest.md");
     const original =
-      "---\nname: nest\nmodel: cursor/composer-2.5\ninheritProjectContext: false\n---\n\nBody\n";
+      "<!-- Generated -->\n---\nname: nest\nmodel: cursor/composer-2.5\ninheritProjectContext: false\n---\n\nBody\n";
     writeFileSync(nestPath, original, "utf8");
     const restore = applyEconomyAgentPins(dir, 0);
     const pinned = readFileSync(nestPath, "utf8");
-    assert.match(pinned, /^model:\s+openrouter\//m);
+    assert.match(pinned, /^---/m);
+    assert.doesNotMatch(pinned, /^<!--/m);
+    assert.match(pinned, /^model:\s+openrouter\/tencent\/hy3/m);
     assert.doesNotMatch(pinned, /composer/i);
     assert.match(pinned, /^fallbackModels:\s+openrouter\//m);
     restore();
