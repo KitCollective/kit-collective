@@ -22,6 +22,7 @@ This file is the seed-module interface for Transfermarkt grains. Not Nest OpenAP
 | Fetch | Injected `FetchAdapter` (live kader via Seed proxy, Opt-in Apify, fixture) |
 | Forbidden | Strip before map (`normalize` / `stripForbiddenFields`) |
 | Rich grain | While on a page, persist every **stamdata now** field — human-only ingest does not defer Club facts or kader body depth |
+| CLI (Hierarchy grains) | `seed-apify grain league <competition> [lane]` · `seed-apify grain league-season <competition> <season> [lane]` |
 
 ---
 

@@ -25,7 +25,9 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { BillingService } from "../billing/billing.service.js";
 import { DB } from "../db/db.module.js";
+import { MatchService } from "../match/match.service.js";
 
 type WishlistRow = {
   id: string;
@@ -40,9 +42,15 @@ type WishlistCriteriaValues = Pick<WishlistRow, "clubId" | "seasonId" | "type" |
 
 @Injectable()
 export class WishlistService {
-  constructor(@Inject(DB) private readonly db: Db) {}
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    private readonly billingService: BillingService,
+    private readonly matchService: MatchService,
+  ) {}
 
   async listEntries(userId: string, locale: LabelLocale = "da"): Promise<WishlistEntries> {
+    const entitlement = await this.billingService.getEntitlementForUser(userId);
+
     const rows = await this.db
       .select({
         id: wishlistEntry.id,
@@ -57,7 +65,7 @@ export class WishlistService {
       .orderBy(asc(wishlistEntry.createdAt));
 
     const entries: WishlistEntry[] = await Promise.all(
-      rows.map((row) => this.toEntryResponse(row, locale)),
+      rows.map((row) => this.toEntryResponse(row, locale, entitlement.live)),
     );
 
     return wishlistEntriesSchema.parse({ entries });
@@ -91,7 +99,7 @@ export class WishlistService {
       throw new BadRequestException("Could not create wishlist entry");
     }
 
-    return this.toEntryResponse(inserted, locale);
+    return this.toEntryResponse(inserted, locale, true);
   }
 
   async updateEntry(
@@ -129,7 +137,7 @@ export class WishlistService {
       throw new NotFoundException("Wishlist entry not found");
     }
 
-    return this.toEntryResponse(updated, locale);
+    return this.toEntryResponse(updated, locale, true);
   }
 
   async deleteEntry(userId: string, entryId: string): Promise<void> {
@@ -211,7 +219,11 @@ export class WishlistService {
     }
   }
 
-  private async toEntryResponse(row: WishlistRow, locale: LabelLocale): Promise<WishlistEntry> {
+  private async toEntryResponse(
+    row: WishlistRow,
+    locale: LabelLocale,
+    entitlementLive: boolean,
+  ): Promise<WishlistEntry> {
     const clubLabel = row.clubId ? await this.resolveEntityLabel("club", row.clubId, locale) : null;
     const seasonLabel = row.seasonId ? await this.resolveSeasonLabel(row.seasonId) : null;
     const typeLabel = resolveWishlistTypeLabel(row.type);
@@ -231,6 +243,17 @@ export class WishlistService {
       throw new BadRequestException("Wishlist entry has no criteria");
     }
 
+    const matchedJerseyId = await this.matchService.resolveMatchedJerseyId(
+      row.userId,
+      {
+        clubId: row.clubId,
+        seasonId: row.seasonId,
+        type: row.type,
+        size: row.size,
+      },
+      entitlementLive,
+    );
+
     return wishlistEntrySchema.parse({
       id: row.id,
       name,
@@ -243,6 +266,7 @@ export class WishlistService {
       typeLabel,
       size: row.size,
       sizeLabel,
+      matchedJerseyId,
     });
   }
 

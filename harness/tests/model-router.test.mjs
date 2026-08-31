@@ -1,5 +1,5 @@
 /**
- * Model router: gate + complexity + free rotation.
+ * Model router: gate + complexity + free rotation + profile.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -7,9 +7,15 @@ import {
   buildModelRoute,
   COMPOSER_MODEL,
   classifySliceComplexity,
+  ECONOMY_FAST_MODEL,
+  economyAgentModelSpec,
   FREE_MODEL_ROTATION,
   formatModelRouteBrief,
+  parseModelProfile,
+  resolveFastRoleModel,
   resolveImplementParentModel,
+  rewriteAgentModelFrontmatter,
+  rotateEconomyChain,
   rotateFreeChain,
   routeForGate,
 } from "../model-router.mjs";
@@ -38,7 +44,7 @@ test("classifySliceComplexity treats small UI CRUD as simple", () => {
   assert.equal(result.skipDraft, false);
 });
 
-test("scaffold gate uses free rotation; critical scaffold uses Composer", () => {
+test("scaffold gate uses free rotation; critical scaffold uses Composer (balanced)", () => {
   const simple = routeForGate("scaffold", "simple", { rotationIndex: 0 });
   assert.equal(simple.primary, FREE_MODEL_ROTATION[0]);
   assert.equal(simple.useFree, true);
@@ -49,12 +55,46 @@ test("scaffold gate uses free rotation; critical scaffold uses Composer", () => 
   assert.equal(critical.useFree, false);
 });
 
+test("economy scaffold uses free rotation even on critical tier", () => {
+  const critical = routeForGate("scaffold", "critical", {
+    rotationIndex: 0,
+    profile: "economy",
+  });
+  assert.equal(critical.primary, FREE_MODEL_ROTATION[0]);
+  assert.equal(critical.useFree, true);
+});
+
 test("implement critical is Composer; simple may start free", () => {
   const critical = routeForGate("implement", "critical");
   assert.equal(critical.primary, COMPOSER_MODEL);
   const simple = routeForGate("implement", "simple", { rotationIndex: 1 });
   assert.equal(simple.primary, FREE_MODEL_ROTATION[1]);
   assert.equal(simple.useFree, true);
+});
+
+test("economy implement uses Hy3 primary on all tiers including critical — no Composer", () => {
+  for (const tier of /** @type {const} */ (["simple", "standard", "critical"])) {
+    const routed = routeForGate("implement", tier, {
+      rotationIndex: 0,
+      profile: "economy",
+    });
+    assert.match(routed.primary, /tencent\/hy3/);
+    assert.equal(routed.useFree, true);
+    assert.equal(
+      routed.chain.some((id) => id.includes("composer")),
+      false,
+      `${tier} chain must not include Composer`,
+    );
+  }
+});
+
+test("premium implement never starts free", () => {
+  const simple = routeForGate("implement", "simple", {
+    rotationIndex: 0,
+    profile: "premium",
+  });
+  assert.equal(simple.primary, COMPOSER_MODEL);
+  assert.equal(simple.useFree, false);
 });
 
 test("verify prefers Hy3 then free rotation", () => {
@@ -72,7 +112,7 @@ test("rotateFreeChain cycles MiniMax → GLM → Laguna before paid", () => {
   ]);
 });
 
-test("buildModelRoute + brief mention complexity and fallback on 429", () => {
+test("buildModelRoute + brief mention complexity, profile, and fallback on 429", () => {
   const route = buildModelRoute({
     title: "Rename label",
     body: "typo rename scaffold",
@@ -80,20 +120,31 @@ test("buildModelRoute + brief mention complexity and fallback on 429", () => {
     requiredHelpers: ["expo"],
     paths: ["apps/mobile/src/label.tsx"],
     rotationIndex: 0,
+    profile: "economy",
   });
+  assert.equal(route.profile, "economy");
   const brief = formatModelRouteBrief(route);
+  assert.match(brief, /Profile: \*\*economy\*\*/);
   assert.match(brief, /Complexity:/);
   assert.match(brief, /429/);
   assert.match(brief, /Scaffold \(Draft\)|Draft/);
   assert.match(brief, /parent `--model`/);
 });
 
-test("empty slice defaults to standard — not free parent", () => {
+test("empty slice defaults to standard — not free parent (balanced)", () => {
   const result = classifySliceComplexity({});
   assert.equal(result.tier, "standard");
   assert.ok(result.reasons.some((reason) => /no slice signal/i.test(reason)));
   const route = buildModelRoute({});
+  assert.equal(route.profile, "balanced");
   assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), COMPOSER_MODEL);
+});
+
+test("economy empty/standard slice uses Hy3 parent", () => {
+  const route = buildModelRoute({ profile: "economy", rotationIndex: 0 });
+  assert.equal(route.complexity.tier, "standard");
+  assert.equal(route.gates.implement.useFree, true);
+  assert.match(resolveImplementParentModel(route, COMPOSER_MODEL), /tencent\/hy3/);
 });
 
 test("resolveImplementParentModel picks free primary for simple", () => {
@@ -110,14 +161,70 @@ test("resolveImplementParentModel picks free primary for simple", () => {
   assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), FREE_MODEL_ROTATION[0]);
 });
 
-test("resolveImplementParentModel keeps Composer for critical", () => {
+test("resolveImplementParentModel uses OpenRouter Hy3 for critical under economy", () => {
   const route = buildModelRoute({
     title: "Fix IAP restore",
     body: "Touch StoreKit entitlement refresh",
     writeScope: "apps/api/**",
     requiredHelpers: ["nest"],
     rotationIndex: 0,
+    profile: "economy",
   });
   assert.equal(route.complexity.tier, "critical");
+  assert.match(resolveImplementParentModel(route, COMPOSER_MODEL), /tencent\/hy3/);
+  assert.equal(
+    route.gates.implement.chain.some((id) => /composer/i.test(id)),
+    false,
+  );
+});
+
+test("premium resolveImplementParentModel ignores free route", () => {
+  const route = buildModelRoute({
+    title: "Add padding to empty state",
+    body: "Simple CSS/padding tweak on empty state scaffold",
+    writeScope: "apps/mobile/**",
+    requiredHelpers: ["expo", "ui-ux"],
+    paths: ["apps/mobile/src/empty-state.tsx"],
+    rotationIndex: 0,
+    profile: "premium",
+  });
   assert.equal(resolveImplementParentModel(route, COMPOSER_MODEL), COMPOSER_MODEL);
+});
+
+test("parseModelProfile defaults unknown to balanced", () => {
+  assert.equal(parseModelProfile(undefined), "balanced");
+  assert.equal(parseModelProfile(""), "balanced");
+  assert.equal(parseModelProfile("ECONOMY"), "economy");
+  assert.equal(parseModelProfile("nope"), "balanced");
+});
+
+test("resolveFastRoleModel swaps Grok for Hy3 in economy", () => {
+  assert.equal(resolveFastRoleModel("balanced", "cursor/grok-4.6"), "cursor/grok-4.6");
+  assert.equal(resolveFastRoleModel("economy", "cursor/grok-4.6"), ECONOMY_FAST_MODEL);
+  assert.match(ECONOMY_FAST_MODEL, /openrouter\/tencent\/hy3/);
+});
+
+test("economy agent pins never name Composer", () => {
+  for (const name of ["nest.md", "scout.md", "gate.md", "draft.md", "slop.md"]) {
+    const pins = economyAgentModelSpec(name, 0);
+    assert.equal(/composer/i.test(pins.model), false, name);
+    assert.equal(
+      pins.fallbackModels.some((id) => /composer/i.test(id)),
+      false,
+      name,
+    );
+  }
+  assert.match(economyAgentModelSpec("nest.md", 0).model, /tencent\/hy3/);
+  assert.equal(
+    rotateEconomyChain(0).some((id) => /composer/i.test(id)),
+    false,
+  );
+  const rewritten = rewriteAgentModelFrontmatter(
+    "<!-- Generated -->\n---\nname: nest\nmodel: cursor/composer-2.5\n---\n\nBody\n",
+    economyAgentModelSpec("nest.md", 0),
+  );
+  assert.match(rewritten, /^---/m);
+  assert.doesNotMatch(rewritten, /^<!--/m);
+  assert.match(rewritten, /^model:\s+openrouter\/tencent\/hy3/m);
+  assert.doesNotMatch(rewritten, /composer/i);
 });

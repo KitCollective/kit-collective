@@ -59,6 +59,7 @@ import {
 } from "@nestjs/common";
 import { and, asc, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
+import { MatchQueueService } from "../match/match-queue.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
 import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
@@ -143,6 +144,7 @@ export class CollectionService {
     @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
     private readonly visionQueueService: VisionQueueService,
     private readonly visionService: VisionService,
+    private readonly matchQueueService: MatchQueueService,
     private readonly shortcutsService: CollectionShortcutsService,
     private readonly moderationService: ModerationService,
   ) {}
@@ -1403,6 +1405,8 @@ export class CollectionService {
           },
         });
     }
+
+    this.matchQueueService.enqueueFromSave(insertedJersey.id, userId);
 
     let leagueLabel: string | null = null;
     if (seasonRow.leagueId) {

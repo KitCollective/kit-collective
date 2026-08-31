@@ -38,6 +38,9 @@ function parseLaneArg(
 /**
  * Competition range: `<competition> <from-season> <to-season> [lane]`
  * Club + season: `club <competition> <club-external-id> <season> [lane]`
+ *
+ * Hierarchy grains (`grain league` / `grain league-season`) are parsed by
+ * `@kit/seed-apify` — they are not SeedScope walk modes.
  */
 export function parseSeedScopeArgv(argv: string[]): ParseSeedScopeResult {
   const cleaned = argv.filter((arg) => arg !== "--");
@@ -113,6 +116,8 @@ export function formatSeedScopeUsage(command: string): string {
   return [
     `Usage (competition range): ${command} <competition> <from-season> <to-season> [lane]`,
     `Usage (club + season):       ${command} club <competition> <club-external-id> <season> [lane]`,
+    `Usage (League grain):        ${command} grain league <competition> [lane]`,
+    `Usage (League season grain): ${command} grain league-season <competition> <season> [lane]`,
     "",
     "  0001 = that competition's first Transfermarkt season (e.g. Superliga 1991/92).",
     "  Season labels like 1995/96 are passed through unchanged.",

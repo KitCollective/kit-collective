@@ -143,3 +143,10 @@ export {
   resolveWishlistTypeLabel,
   type WishlistCriteriaLabels,
 } from "./wishlist.js";
+export {
+  findFirstWishlistMatch,
+  isWishlistMatchCandidate,
+  matchesWishlistFacets,
+  type WishlistMatchCriteria,
+  type WishlistMatchJersey,
+} from "./wishlist-match.js";

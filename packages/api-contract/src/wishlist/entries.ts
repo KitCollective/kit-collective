@@ -16,6 +16,7 @@ export const wishlistEntrySchema = z
     typeLabel: z.string().min(1).nullable(),
     size: z.enum(JERSEY_SIZES).nullable(),
     sizeLabel: z.string().min(1).nullable(),
+    matchedJerseyId: z.string().uuid().nullable(),
   })
   .strict();
 

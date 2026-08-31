@@ -712,6 +712,8 @@ test("Pi roles, ADW files, pi-subagents, empty MCP, and reviewed damage-control 
   assert.match(envExample, /# LINEAR_PI_ACCESS_TOKEN=/);
   assert.match(envExample, /Not required for worker boot \(KIT-113\)/);
   assert.match(envExample, /PI_MODEL_FAST=cursor\/grok-4\.6/);
+  assert.match(envExample, /HARNESS_MODEL_PROFILE/);
+  assert.match(envExample, /economy \| balanced \| premium/);
   assert.match(envExample, /^OPENROUTER_API_KEY=$/m);
   assert.match(envExample, /PI_MODEL=cursor\/composer-2\.5/);
   assert.match(envExample, /PI_IMPLEMENT_SLOTS=4/);

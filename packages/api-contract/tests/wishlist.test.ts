@@ -42,6 +42,7 @@ describe("wishlistEntrySchema", () => {
       typeLabel: "Hjemme",
       size: "m" as const,
       sizeLabel: "M",
+      matchedJerseyId: null,
     };
     expect(wishlistEntrySchema.parse(payload)).toEqual(payload);
   });
@@ -63,6 +64,7 @@ describe("wishlistEntriesSchema", () => {
           typeLabel: null,
           size: null,
           sizeLabel: null,
+          matchedJerseyId: null,
         },
       ],
     };
