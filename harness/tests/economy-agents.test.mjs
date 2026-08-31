@@ -30,7 +30,7 @@ test("applyEconomyAgentPins rewrites helpers to OpenRouter and restores", () => 
     assert.doesNotMatch(pinned, /composer/i);
     assert.match(pinned, /^fallbackModels:\s+openrouter\//m);
     const pinnedOpt = readFileSync(optimizerPath, "utf8");
-    assert.match(pinnedOpt, /^model:\s+openrouter\/tencent\/hy3/m);
+    assert.match(pinnedOpt, /^model:\s+openrouter\/deepseek\/deepseek-v4-flash/m);
     assert.doesNotMatch(pinnedOpt, /composer/i);
     restore();
     assert.equal(readFileSync(nestPath, "utf8"), original);

@@ -38,6 +38,15 @@ export const MODEL_PRICING_USD_PER_MTOK = Object.freeze({
   "mimo-v2.5-pro": { input: 0.4, output: 1.6, label: "MiMo" },
   mimo: { input: 0.4, output: 1.6, label: "MiMo" },
   MiMo: { input: 0.4, output: 1.6, label: "MiMo" },
+  // Economy Flash tier (OpenRouter list approx.)
+  "openrouter/deepseek/deepseek-v4-flash-0731": { input: 0.03, output: 0.16, label: "DeepSeek" },
+  "deepseek/deepseek-v4-flash-0731": { input: 0.03, output: 0.16, label: "DeepSeek" },
+  "deepseek-v4-flash-0731": { input: 0.03, output: 0.16, label: "DeepSeek" },
+  DeepSeek: { input: 0.03, output: 0.16, label: "DeepSeek" },
+  "openrouter/z-ai/glm-5.3-flash": { input: 0.075, output: 0.25, label: "GLM Flash" },
+  "z-ai/glm-5.3-flash": { input: 0.075, output: 0.25, label: "GLM Flash" },
+  "glm-5.3-flash": { input: 0.075, output: 0.25, label: "GLM Flash" },
+  "GLM Flash": { input: 0.075, output: 0.25, label: "GLM Flash" },
   // Laguna S 2.1 OpenRouter list ($0.09 / $0.18 per MTok; not the `:free` endpoint)
   "openrouter/poolside/laguna-s-2.1": { input: 0.09, output: 0.18, label: "Laguna" },
   "poolside/laguna-s-2.1": { input: 0.09, output: 0.18, label: "Laguna" },
@@ -80,6 +89,12 @@ export function modelPriceLookupKeys(model) {
   if (lower.includes("mimo")) {
     keys.push("openrouter/xiaomi/mimo-v2.5-pro", "MiMo");
   }
+  if (lower.includes("deepseek")) {
+    keys.push("openrouter/deepseek/deepseek-v4-flash-0731", "DeepSeek");
+  }
+  if (lower.includes("glm-5.3") || lower.includes("glm-5-3")) {
+    keys.push("openrouter/z-ai/glm-5.3-flash", "GLM Flash");
+  }
   if (
     lower.includes(":free") ||
     lower.includes("laguna") ||
@@ -92,7 +107,7 @@ export function modelPriceLookupKeys(model) {
     if (lower.includes("minimax")) {
       keys.push("openrouter/minimax/minimax-m3:free", "MiniMax");
     }
-    if (lower.includes("glm")) {
+    if (lower.includes("glm") && !lower.includes("glm-5.3") && !lower.includes("glm-5-3")) {
       keys.push("openrouter/z-ai/glm-5.2:free", "GLM");
     }
     if (lower === "draft") {

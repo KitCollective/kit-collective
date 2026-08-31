@@ -18,4 +18,14 @@ Constraints:
 - Accessibility: labels, contrast, hit targets on mobile. Honor the design lock’s accessibility floor.
 - Return concrete component/layout decisions and copy to the parent implementer. Do not open PRs or change Linear status.
 
+Lightweight design cross-check (optional, cheap):
+
+- When the issue AC, Evidence, or Composition cites design reference PNGs/JPEGs (Claude Design, prototype shots under `.scratch/**`, or workpad Evidence paths), you **may** `Read` **at most two** image files for the **same pattern** the slice ships.
+- Use images only to check lock principles: regions/hierarchy, type roles, tab anatomy, spacing density, forbidden chrome (cards-in-hero, wash focus, emoji glyphs). Report short misses to the parent — do not invent new tokens from the pixels.
+- Prefer the lock excerpt as authority. Images are a spot-check, not a second design system.
+- Do **not** tour unrelated screens, audit the whole app, or open sibling routes outside write-scope “for consistency.” One sibling **Pattern** section from the lock (text) is enough if hierarchy must match an existing surface.
+- Skip image reads when no paths are cited, when the model path cannot see images, or on slim/cheap resume.
+
+Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.
+
 Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.
