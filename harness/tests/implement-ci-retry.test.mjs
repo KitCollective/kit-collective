@@ -16,6 +16,7 @@ import {
   IMPLEMENTING,
   IN_REVIEW,
   reviewFeedbackIsLandFail,
+  reviewFeedbackIsMechanicalExitFail,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
 import {
@@ -890,6 +891,100 @@ test("merge-fail fast path skips Pi when PR is MERGEABLE and checks are green", 
     linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
     true,
   );
+});
+
+test("mechanical-exit fast path skips Pi when workpad says PR create failed", async () => {
+  const calls = [];
+  let created = false;
+  const gh = {
+    calls,
+    async rebase() {
+      calls.push(["rebase"]);
+    },
+    async viewPr() {
+      calls.push(["viewPr"]);
+      if (!created) {
+        return { url: undefined, mergeable: "UNKNOWN", checks: [] };
+      }
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/166",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "success", isRequired: true }],
+      };
+    },
+    async findOpenIssuePr() {
+      return null;
+    },
+    async createPr(input) {
+      calls.push(["createPr", input]);
+      created = true;
+      return {
+        url: "https://github.com/KitCollective/kit-collective/pull/166",
+        mergeable: "MERGEABLE",
+        checks: [{ name: "test", conclusion: "success", isRequired: true }],
+      };
+    },
+    merge() {
+      throw new Error("implement never merges");
+    },
+  };
+  const linear = fakeLinear();
+  linear.comments[0].body = `${WORKPAD_HEADING}\n\n### Review feedback\n\n- PR create: must provide --title and --body\n`;
+  linear.getIssue = async () => ({
+    status: IMPLEMENTING,
+    attachments: [],
+    description: "write-scope: harness/**",
+    labels: ["Feature"],
+  });
+  const spawned = [];
+  const runner = implementRunner({ gh, linear, spawned, waitTimeoutMs: 0, waitIntervalMs: 0 });
+  const result = await runner.run({
+    role: "implement",
+    identifier: "KIT-150",
+    issueId: "issue-150",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+
+  assert.equal(spawned.length, 0, "must not re-enter Scout/helpers after PR-create fail");
+  assert.equal(result.mechanicalExitFastPath, true);
+  assert.equal(
+    calls.some((call) => call[0] === "createPr"),
+    true,
+  );
+});
+
+test("reviewFeedbackIsMechanicalExitFail matches PR create, not checker axes", () => {
+  assert.equal(
+    reviewFeedbackIsMechanicalExitFail(
+      "- PR create: must provide `--title` and `--body` when not running interactively",
+    ),
+    true,
+  );
+  assert.equal(
+    reviewFeedbackIsMechanicalExitFail("- Command failed: gh pr create --base development"),
+    true,
+  );
+  assert.equal(reviewFeedbackIsMechanicalExitFail("- no linked PR"), true);
+  assert.equal(
+    reviewFeedbackIsMechanicalExitFail("- Green light: worktree dirty before rebase"),
+    false,
+  );
+  assert.equal(
+    reviewFeedbackIsMechanicalExitFail("- Spec: missing AC\n- Standards: (none)\n- Slop: (none)"),
+    false,
+  );
+});
+
+test("mechanical-exit prompt skips Scout when Pi still runs", () => {
+  const prompt = implementPrompt("implement", "KIT-150", ".pi/adw/feature.yaml", {
+    mechanicalExitResume: true,
+    reviewFeedback: "- PR create: must provide --body",
+  });
+  assert.match(prompt, /Mechanical-exit resume/);
+  assert.match(prompt, /Skip Scout/);
+  assert.match(prompt, /Skip helpers/);
+  assert.equal(/Do not Skip Scout/i.test(prompt), false);
+  assert.equal(/First run/i.test(prompt), false);
 });
 
 test("reviewFeedbackIsLandFail distinguishes merge gate from checker Spec/Standards/Slop", () => {

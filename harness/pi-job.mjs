@@ -40,6 +40,7 @@ import {
   requiredChecksGreen,
   reviewFeedbackIsActionable,
   reviewFeedbackIsLandFail,
+  reviewFeedbackIsMechanicalExitFail,
 } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
 import { isCheapImplementRetry, shouldSlimCheapRetry } from "./job-queue.mjs";
@@ -770,6 +771,7 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
  * @param {{
  *   cheapRetry?: boolean,
  *   mergeFailResume?: boolean,
+ *   mechanicalExitResume?: boolean,
  *   reviewFeedback?: string,
  *   writeScope?: string,
  *   implementContext?: { requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string },
@@ -812,6 +814,17 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
       return `Factory role implement retry for ${identifier}.${adw} Same Implementing stay — this is not a new try. Skip Scout. Skip Draft. Skip helpers. Skip optimizer. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix vs first-pass registry tag — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Do not spawn Gate — harness Mechanical close owns format/typecheck. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
+
+### Review feedback
+
+${feedback}`;
+    }
+    if (options.mechanicalExitResume === true) {
+      const feedback =
+        typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
+          ? options.reviewFeedback.trim()
+          : "(missing — fail closed: commit dirty write-scope work if needed, then exit so harness can open the PR)";
+      return `Factory role implement for ${identifier}.${adw} Mechanical-exit resume. Skip Scout. Skip Draft. Skip helpers. Skip optimizer. Do not re-implement the feature. Do not re-map the repo. Commit any dirty write-scope product changes if present, then exit — harness Mechanical close owns format/typecheck/rebase/PR create/GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -1417,22 +1430,56 @@ export function createPiJobRunner({
             : null;
         const reviewFeedback = extractReviewFeedback(workpad?.body);
         mergeFailResume = reviewFeedbackIsLandFail(reviewFeedback);
+        const mechanicalExitResume =
+          Number(job.prCreateRetryAttempt ?? 1) > 1 ||
+          reviewFeedbackIsMechanicalExitFail(reviewFeedback);
         const cheapRetry = isCheapImplementRetry(job);
         const firstPassClasses = loadFirstPassRegistry(workspace).classes;
         const firstPassOnly =
           !cheapRetry &&
           !mergeFailResume &&
+          !mechanicalExitResume &&
           reviewFeedbackIsActionable(reviewFeedback) &&
           reviewFeedbackIsFirstPassOnly(reviewFeedback, firstPassClasses);
         const specOnly =
           !cheapRetry &&
           !mergeFailResume &&
+          !mechanicalExitResume &&
           !firstPassOnly &&
           reviewFeedbackIsActionable(reviewFeedback) &&
           reviewFeedbackIsSpecOnly(reviewFeedback);
         const ghClient = gh ?? job.gh;
         const linearClient = linear ?? job.linear;
         const adwFile = job.adwFile;
+        // Mechanical exit owns PR create / green-light — never re-enter Scout/helpers.
+        if (
+          mechanicalExitResume &&
+          typeof adwFile === "string" &&
+          ghClient &&
+          linearClient &&
+          checkout
+        ) {
+          const tokens = tokenSnapshotFromCollected(job.role, {}, identifier, {
+            env,
+            issueId: typeof job.issueId === "string" ? job.issueId : undefined,
+          });
+          logTokenRun(tokens);
+          const exit = await completeImplementAdw({
+            job: { ...job, identifier, issueId: job.issueId ?? identifier },
+            checkout,
+            gh: ghClient,
+            linear: withTokenUse(linearClient, tokens),
+            typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
+            formatCheck,
+            formatApply: applyFormat,
+            adwText: readFileSync(join(workspace, adwFile), "utf8"),
+            now,
+            sleep,
+            waitTimeoutMs,
+            waitIntervalMs,
+          });
+          return { ...job, ...exit, tokens, mechanicalExitFastPath: true };
+        }
         if (
           mergeFailResume &&
           !cheapRetry &&
@@ -1478,7 +1525,13 @@ export function createPiJobRunner({
           typeof env.KIT_PI_HERMES === "string" && env.KIT_PI_HERMES.length > 0
             ? env.KIT_PI_HERMES
             : WORKER_MEMORY_DIR;
-        if (!cheapRetry && !mergeFailResume && !firstPassOnly && !specOnly) {
+        if (
+          !cheapRetry &&
+          !mergeFailResume &&
+          !mechanicalExitResume &&
+          !firstPassOnly &&
+          !specOnly
+        ) {
           implementContext = selectImplementContext({
             title: implementIssue?.title ?? job.title ?? "",
             writeScope,
@@ -1491,7 +1544,11 @@ export function createPiJobRunner({
             mergeFailResume,
             profile: modelProfile,
           });
-        } else if ((cheapRetry || firstPassOnly || specOnly) && !mergeFailResume) {
+        } else if (
+          (cheapRetry || firstPassOnly || specOnly) &&
+          !mergeFailResume &&
+          !mechanicalExitResume
+        ) {
           implementContext = selectImplementContext({
             title: implementIssue?.title ?? job.title ?? "",
             writeScope,
@@ -1511,6 +1568,7 @@ export function createPiJobRunner({
         prompt = implementPrompt(job.role, identifier, job.adwFile, {
           cheapRetry,
           mergeFailResume,
+          mechanicalExitResume,
           reviewFeedback,
           writeScope,
           implementContext,

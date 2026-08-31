@@ -1588,7 +1588,8 @@ test("resolvePrCreateBody and createPr always send non-empty --body (non-interac
 
 test("completeImplementAdw createPr body includes write-scope from the issue description", async () => {
   const gh = fakeGh();
-  const description = "write-scope: apps/api/**, packages/db/**\n\n## What to build\nPrivate jersey";
+  const description =
+    "write-scope: apps/api/**, packages/db/**\n\n## What to build\nPrivate jersey";
   const linear = fakeLinearWithIssue(description);
   const result = await completeImplementAdw({
     job: { identifier: "KIT-150", issueId: "issue-150", adwFile: ".pi/adw/feature.yaml" },
@@ -1609,6 +1610,36 @@ test("completeImplementAdw createPr body includes write-scope from the issue des
   assert.ok(create);
   assert.match(create[1].body, /write-scope: apps\/api\/\*\*, packages\/db\/\*\*/);
   assert.match(create[1].body, /Harness implement for KIT-150/);
+});
+
+test("completeImplementAdw createPr failure stays Implementing with prCreateRetry (no throw)", async () => {
+  const gh = fakeGh();
+  gh.createPr = async () => {
+    throw new Error("must provide `--title` and `--body` when not running interactively");
+  };
+  const linear = fakeLinear();
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-150", issueId: "issue-150", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/tmp/KIT-150", branch: "kit-150" },
+    gh,
+    linear,
+    typecheckTouched: async () => undefined,
+    formatCheck: async () => undefined,
+    listChangedFiles: async () => [],
+    adwText: "steps:\n  - pr\n  - in-review\nnever:\n  - merge\n",
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+  assert.equal(result.status, IMPLEMENTING);
+  assert.equal(result.prCreateRetry, true);
+  assert.equal(
+    linear.calls.some((call) => call[0] === "setStatus"),
+    false,
+  );
+  const workpad = linear.calls.find((call) => call[0] === "updateWorkpad")[1];
+  assert.match(workpad.body, /PR create:/);
+  assert.match(workpad.body, /must provide/);
 });
 
 test("completeImplementAdw refuses to run full pnpm test on the worker", async () => {

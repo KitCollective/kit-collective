@@ -380,9 +380,7 @@ async function resolveIssueDescription(description, { linear, job }) {
  */
 export function buildImplementPrBody({ identifier, description }) {
   const id =
-    typeof identifier === "string" && identifier.trim().length > 0
-      ? identifier.trim()
-      : "issue";
+    typeof identifier === "string" && identifier.trim().length > 0 ? identifier.trim() : "issue";
   const lines = [`Harness implement for ${id}.`];
   const scope = String(description ?? "").match(/^write-scope:\s*\S.*$/m);
   if (scope) {
@@ -532,6 +530,56 @@ async function writeMigrationRetryWorkpad(input) {
     ciRetry: false,
     writeScopeRetry: false,
     formatRetry: false,
+  };
+}
+
+/**
+ * Stay Implementing after `gh pr create` fails. Resume / in-slot must Skip Scout
+ * and re-run Mechanical close only (KIT-150 burned a full Scout tree on this).
+ *
+ * @param {{
+ *   job: { identifier: string, issueId: string },
+ *   linear: {
+ *     updateWorkpad: (input: { issueId: string, body: string, commentId?: string }) => Promise<unknown>,
+ *     listComments?: (issueId: string) => Promise<Array<{ id: string, body?: string }>>,
+ *   },
+ *   pr?: { url?: string },
+ *   error?: unknown,
+ * }} input
+ */
+async function writePrCreateRetryWorkpad(input) {
+  const { job, linear, pr, error } = input;
+  const message = error instanceof Error ? error.message : String(error ?? "gh pr create failed");
+  const excerpt = excerptLog(message);
+  const feedbackLines = [
+    "- PR create: Mechanical exit failed opening the development PR. Skip Scout/Draft/helpers — do not re-implement. Commit dirty write-scope work if needed, then let harness reopen the PR.",
+  ];
+  for (const line of excerpt.split("\n")) {
+    if (line.length > 0) {
+      feedbackLines.push(`  ${line}`);
+    }
+  }
+  const comments =
+    typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
+  const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  const withEvidence =
+    typeof pr?.url === "string" && pr.url.length > 0
+      ? upsertWorkpadEvidence(existing?.body, {
+          prUrl: pr.url,
+          identifier: job.identifier,
+        })
+      : (existing?.body ?? `${WORKPAD_HEADING}\n`);
+  const body = applyReviewFeedback(withEvidence, feedbackLines);
+  await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+  return {
+    pr: pr ?? {},
+    status: IMPLEMENTING,
+    prCreateRetry: true,
+    ciRetry: false,
+    writeScopeRetry: false,
+    formatRetry: false,
+    migrationRetry: false,
+    firstPassRetry: false,
   };
 }
 
@@ -689,6 +737,33 @@ export function reviewFeedbackIsLandFail(feedback) {
       /^-\s*merge (?:failed|succeeded but)/i.test(line) ||
       /^-\s*Command failed: gh pr merge/i.test(line) ||
       /not up to date with the base branch/i.test(line),
+  );
+}
+
+/**
+ * Mechanical implement-exit failed (PR create / green-light) — not a product miss.
+ * Resume must Skip Scout/helpers (or skip Pi) instead of First-run.
+ *
+ * @param {string | undefined} feedback
+ */
+export function reviewFeedbackIsMechanicalExitFail(feedback) {
+  const text = typeof feedback === "string" ? feedback.trim() : "";
+  if (text.length === 0) {
+    return false;
+  }
+  if (/^-\s*(?:Spec|Standards|Slop|Tests):/im.test(text)) {
+    return false;
+  }
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.some(
+    (line) =>
+      /^-\s*PR create:/i.test(line) ||
+      /^-\s*Command failed: gh pr create/i.test(line) ||
+      /^-\s*Mechanical exit:/i.test(line) ||
+      /^-\s*no linked PR/i.test(line),
   );
 }
 
@@ -1336,17 +1411,26 @@ export async function completeImplementAdw(input) {
 
   if (typeof pr?.url !== "string" || pr.url.length === 0) {
     const descriptionForPr = await resolveIssueDescription(issueDescription, { linear, job });
-    pr = await gh.createPr({
-      cwd: checkout.path,
-      base: IMPLEMENT_PR_BASE,
-      head: checkout.branch,
-      title: `${job.identifier}: implement`,
-      body: buildImplementPrBody({
+    try {
+      pr = await gh.createPr({
+        cwd: checkout.path,
+        base: IMPLEMENT_PR_BASE,
+        head: checkout.branch,
+        title: `${job.identifier}: implement`,
+        body: buildImplementPrBody({
+          identifier: job.identifier,
+          description: descriptionForPr,
+        }),
         identifier: job.identifier,
-        description: descriptionForPr,
-      }),
-      identifier: job.identifier,
-    });
+      });
+    } catch (error) {
+      return writePrCreateRetryWorkpad({
+        job,
+        linear,
+        pr: pr ?? { url: existingPrUrl },
+        error,
+      });
+    }
   }
 
   const deadline = now() + waitTimeoutMs;
