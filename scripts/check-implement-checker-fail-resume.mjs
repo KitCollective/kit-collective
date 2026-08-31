@@ -3,7 +3,8 @@
  * CI ratchet: checker-fail implement resume inlines workpad ### Review feedback
  * (same extractReviewFeedback as cheap CI retry) and the Linear fail comment
  * carries the finding lines. Cheap retry still Skip Scout/helpers; checker-fail
- * resume must not. Prevents repeating KIT-116 loop 2 (Composer saw only
+ * resume starts at Builder (Skip Scout; helpers only when findings need a
+ * domain seam). Prevents repeating KIT-116 loop 2 (Composer saw only
  * «fix the class»; GitHub Slop was a subset; Nicklas could not read the loop
  * on Linear).
  */
@@ -58,17 +59,20 @@ export function missingImplementCheckerFailResumeCoverage(sources) {
   if (!/const cheapRetry = isCheapImplementRetry/.test(piJob)) {
     missing.push("pi-job.mjs derive cheapRetry from isCheapImplementRetry");
   }
-  if (!/Checker-fail resume/.test(piJob)) {
-    missing.push("pi-job.mjs Checker-fail resume prompt");
+  if (!/Builder resume from Review/.test(piJob)) {
+    missing.push("pi-job.mjs Builder resume from Review prompt");
+  }
+  if (!/Start from Builder/.test(piJob)) {
+    missing.push("pi-job.mjs Start from Builder on Review bounce");
   }
   if (!/\[factory-checker\/slop\]/.test(piJob)) {
     missing.push("pi-job.mjs GitHub Slop threads are a subset");
   }
-  if (!/Do not Skip Scout/.test(piJob)) {
-    missing.push("pi-job.mjs Do not Skip Scout on checker-fail resume");
+  if (!/Builder resume from Review[\s\S]*?Skip Scout/.test(piJob)) {
+    missing.push("pi-job.mjs Skip Scout on Builder resume from Review");
   }
-  if (!/Required helpers:/.test(piJob)) {
-    missing.push("pi-job.mjs Required helpers from selector on checker-fail resume");
+  if (!/Required helpers when an axis needs a domain seam:/.test(piJob)) {
+    missing.push("pi-job.mjs Required helpers from selector on Review bounce");
   }
 
   const implementExit = sources.implementExit ?? "";
@@ -99,14 +103,14 @@ export function missingImplementCheckerFailResumeCoverage(sources) {
   if (!/Collection tab missing badge count/.test(ciRetryTest)) {
     missing.push("implement-ci-retry KIT-116 findings inline coverage");
   }
-  if (!/Do not Skip Scout/.test(ciRetryTest)) {
-    missing.push("implement-ci-retry Do not Skip Scout on checker-fail resume");
+  if (!/Builder resume from Review/.test(ciRetryTest)) {
+    missing.push("implement-ci-retry Builder resume from Review");
   }
   if (!/Skip Scout/.test(ciRetryTest) || !/Skip helpers/.test(ciRetryTest)) {
     missing.push("implement-ci-retry cheap retry still Skip Scout / Skip helpers");
   }
-  if (!/Required helpers:/.test(ciRetryTest)) {
-    missing.push("implement-ci-retry Required helpers on checker-fail resume");
+  if (!/Required helpers/.test(ciRetryTest)) {
+    missing.push("implement-ci-retry Required helpers on Review bounce");
   }
 
   const contextTest = sources.contextTest ?? "";

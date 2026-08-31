@@ -50,10 +50,8 @@ export function missingImplementCheapRetryCoverage(sources) {
     missing.push("implement.md serial helpers / Mechanical close / no Gate spawn");
   }
   const piJob = sources.piJob ?? "";
-  if (!/format vs Zod vs unique-email vs migration prefix/i.test(piJob)) {
-    missing.push(
-      "pi-job.mjs format vs Zod vs unique-email vs migration prefix class on cheap retry",
-    );
+  if (!/format vs lockfile vs migration prefix/i.test(piJob)) {
+    missing.push("pi-job.mjs format vs lockfile vs migration prefix class on cheap retry");
   }
   if (!/cheapRetry/.test(piJob)) {
     missing.push("pi-job.mjs cheapRetry prompt");
@@ -109,7 +107,7 @@ export function missingImplementCheapRetryCoverage(sources) {
   const ciRetryTest = sources.ciRetryTest ?? "";
   if (
     !/Skip Scout/i.test(ciRetryTest) ||
-    !/format vs Zod vs unique-email vs migration prefix/i.test(ciRetryTest)
+    !/format vs lockfile vs migration prefix/i.test(ciRetryTest)
   ) {
     missing.push("implement-ci-retry cheap retry prompt coverage");
   }

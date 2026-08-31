@@ -224,14 +224,15 @@ catches it in the API tests and the container smoke test.
 
 `harness/tests/implement-adw.test.mjs` drives `createGhClient` / `createTypecheckTouched` with fake `runCommand` only (not injected `fakeGh`). Coverage that must stay:
 
-- **"production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending"** — rebase is followed by a push of the issue branch, `gh pr create` has `--head`, a first pending required-check snapshot never becomes green before Linear `setStatus`, optional pending checks must not block.
+- **"production createGhClient pushes the rebased head, waits through pending required checks, and ignores optional pending"** — rebase is followed by a push of the issue branch, `gh pr create` has `--head` and non-empty `--body` (non-interactive `gh` requires both `--title` and `--body`), a first pending required-check snapshot never becomes green before Linear `setStatus`, optional pending checks must not block.
+- **"resolvePrCreateBody and createPr always send non-empty --body (non-interactive gh)"** — omitting `body` still passes `--body` with a default; blank body is rejected in favor of the default (KIT-150: `must provide --title and --body`).
 - **"production createGhClient does not move to In Review on MERGEABLE empty rollup when required checks are pending"** — `MERGEABLE` + empty `statusCheckRollup` + `gh pr checks --required` throw (exit 8) must **not** call `setStatus`.
 - **"typecheckTouched skips pnpm when the diff has no workspace packages"** — empty touched set does not spawn `pnpm`.
 - **"typecheckTouched fails closed when pnpm is missing and workspace packages are touched"** — missing `pnpm` (ENOENT) fails closed when packages are in the diff.
 - **"completeImplementAdw skips worker typecheck when the open PR is MERGEABLE and required checks are already green"** — do not spawn worker `pnpm typecheck` when GitHub `test` is already SUCCESS (KIT-116 parked on local typecheck despite green CI).
 - **"completeImplementAdw still moves to In Review when worker typecheck fails and GitHub required checks are green"** — a throwing worker typecheck does not abort implement-exit; GitHub required checks remain the gate.
 
-`scripts/check-implement-adw-production-gh.mjs` (CI via `node` in `.github/workflows/ci.yml`) fails when that coverage is deleted. `scripts/tests/check-implement-adw-production-gh.test.mjs` mutation-tests the ratchet. Prevents repeating KIT-54 checker fail #2 (job-seam fakes skipped production push/wait) and fail #3 (empty rollup / exit 8 fail-open; pnpm spawned on harness-only diffs). Tighten only.
+`scripts/check-implement-adw-production-gh.mjs` (CI via `node` in `.github/workflows/ci.yml`) fails when that coverage is deleted. `scripts/tests/check-implement-adw-production-gh.test.mjs` mutation-tests the ratchet. Prevents repeating KIT-54 checker fail #2 (job-seam fakes skipped production push/wait) and fail #3 (empty rollup / exit 8 fail-open; pnpm spawned on harness-only diffs), and KIT-150 (PR create without `--body` in non-interactive `gh`). Tighten only.
 
 ### Factory CI test-job ratchet (KIT-75)
 
@@ -283,7 +284,7 @@ Prevents repeating the KIT-126 checker fail (dead `SLOP_AGENT_MEMORY_EXCLUDED_TO
 - Green light (pre-Gh-wait): format mechanical + lockfile mechanical + clean-tree before rebase; workpad honesty claims are verified against git/CI before In Review.
 - Stuck Review feedback (same fingerprint ≥ `STUCK_FEEDBACK_CAP`) parks the issue (`Parked` + `ready-for-human`). Checker Spec-green requires Evidence/Validation/AC ticks (`evaluateSpecEvidenceFloor`).
 - First-pass pack (`harness/first-pass.mjs` + `.pi/first-pass-classes.json`): ticket/workpad slice brief + Hermes top-3 in implement append (slim append on cheap/first-pass resume); `collectFirstPassViolations` before In Review uses **registry scanners only** → `firstPassRetry`. Checker tags `[first-pass:<id>]` when registry matches; 2× same Standards/Slop class bumps `### First-pass candidates` and requires a JSON ratchet land. Checker-fail that is only tagged first-pass uses First-pass resume (Skip Scout/helpers). Do not spawn Gate — Mechanical close owns format/typecheck. Helpers spawn one at a time (nest → drizzle → expo → ui-ux).
-- First implement run still Scout → helpers → Gate. `{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }` retries **Skip Scout** and skip helpers. Prompt includes workpad `### Review feedback` and requires the CI excerpt, pointing at the class (format vs Zod vs unique-email). Cheap retry is the **same Implementing stay**, not a new try.
+- First implement run still Scout → helpers → Gate. `{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }` retries **Skip Scout** and skip helpers. Prompt includes workpad `### Review feedback` and requires the CI excerpt, pointing at the class (format vs lockfile vs migration prefix). Cheap retry is the **same Implementing stay**, not a new try.
 - Cheap retries do **not** increment `reviewLoops` / `ciFailCycles`, do **not** post `implementRetryCapComment`, and do **not** make resume skip. After the cheap-retry bound the slot yields; resume may enqueue again. Stale retry-cap comments do not hold Implementing.
 
 Prevents repeating KIT-125 (five false format cheap-retries → retry-cap hold, never In Review while GitHub was green). Tighten only.
@@ -293,7 +294,7 @@ Prevents repeating KIT-125 (five false format cheap-retries → retry-cap hold, 
 `scripts/check-implement-checker-fail-resume.mjs` (CI via `node` in `.github/workflows/ci.yml`) plus `harness/tests/implement-ci-retry.test.mjs` / `harness/tests/role-comments.test.mjs` / `harness/tests/checker.test.mjs` keep these locks:
 
 - Checker-fail implement resume uses the same `extractReviewFeedback` as cheap CI retry and **inlines** `### Review feedback` in the Composer prompt. Fix **every** workpad axis (Spec / Standards / Tests / Slop). GitHub `[factory-checker/slop]` threads are a subset.
-- Checker-fail resume does **not** Skip Scout or Skip helpers. Cheap retry (`{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }`) still does.
+- Bounce from Review is **Builder resume from Review**: Skip Scout; Skip Draft unless a new write-scope scaffold is required; spawn only helpers the findings need. Cheap retry (`{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }`) still Skip Scout/helpers entirely.
 - Spawn `ui-ux` when write-scope touches `apps/mobile` / `apps/web` / `apps/admin`, or when findings mention tokens, typography, or layout. The box reads `.pi/roles/implement.md` — not Cursor skills.
 - `checkerFailComment` includes the finding lines under Spec / Standards / … headings (KIT-116-class 2–5 findings verbatim; huge dumps truncate with a workpad pointer). One role comment per transition. Linear Agent stays empty.
 

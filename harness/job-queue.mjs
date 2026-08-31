@@ -28,7 +28,7 @@ export const ALWAYS_READY_CAPACITY = Object.freeze({
  *
  * One Implementing stay is one try: it ends at In Review. Cheap in-slot re-spawns
  * (`ciRetry` / `writeScopeRetry` / `formatRetry` / `migrationRetry` /
- * `firstPassRetry`) are not tries —
+ * `firstPassRetry` / `prCreateRetry`) are not tries —
  * they do not increment reviewLoops / ciFailCycles, do not post a retry-cap comment,
  * and do not make resume skip. They re-run the same implement job until GitHub is
  * green or the cheap-retry bound yields the slot (stay Implementing; resume may
@@ -56,18 +56,22 @@ export function isCheapImplementRetry(job) {
     Number(job.writeScopeRetryAttempt ?? 1) > 1 ||
     Number(job.formatRetryAttempt ?? 1) > 1 ||
     Number(job.migrationRetryAttempt ?? 1) > 1 ||
-    Number(job.firstPassRetryAttempt ?? 1) > 1
+    Number(job.firstPassRetryAttempt ?? 1) > 1 ||
+    Number(job.prCreateRetryAttempt ?? 1) > 1
   );
 }
 
 /**
  * Slim (0-token-ish) Pi context only for mechanical / scoped retries.
- * Logic and unknown CI failures need a full Builder + helpers.
+ * Logic/unknown CI and PR-create (after one exit-only try) use Optimizer — not slim Skip-all.
  *
  * @param {object | undefined} job
  */
 export function shouldSlimCheapRetry(job) {
   if (!isCheapImplementRetry(job)) {
+    return false;
+  }
+  if (Number(job.prCreateRetryAttempt ?? 1) > 1) {
     return false;
   }
   if (Number(job.writeScopeRetryAttempt ?? 1) > 1) {
@@ -85,6 +89,25 @@ export function shouldSlimCheapRetry(job) {
   if (Number(job.ciRetryAttempt ?? 1) > 1) {
     const klass = job.ciFailureClass;
     return klass === "format" || klass === "lockfile" || klass === "migration";
+  }
+  return false;
+}
+
+/**
+ * Red CI (logic/unknown) or PR-create after the exit-only try → Optimizer, then harness wait.
+ *
+ * @param {object | undefined} job
+ */
+export function isOptimizerImplementRetry(job) {
+  if (job?.role !== "implement") {
+    return false;
+  }
+  if (Number(job.prCreateRetryAttempt ?? 1) > 2) {
+    return true;
+  }
+  if (Number(job.ciRetryAttempt ?? 1) > 1) {
+    const klass = job.ciFailureClass;
+    return klass === "logic" || klass === "unknown" || typeof klass !== "string";
   }
   return false;
 }
@@ -219,6 +242,25 @@ export async function runImplementWithRetries(run, job) {
       loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
     });
     return runImplementWithRetries(run, { ...job, firstPassRetryAttempt: attempt + 1 });
+  }
+  if (result?.prCreateRetry === true) {
+    const attempt = Number(job.prCreateRetryAttempt ?? 1);
+    if (job.role !== "implement") {
+      return result;
+    }
+    if (attempt >= IMPLEMENT_CI_RETRY_CAP) {
+      return yieldCheapRetry(job, result, attempt, "pr-create");
+    }
+    harnessLog({
+      role: job.role,
+      identifier: job.identifier,
+      event: "retry",
+      gate: "yellow",
+      reason: "pr-create",
+      attempt: attempt + 1,
+      loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
+    });
+    return runImplementWithRetries(run, { ...job, prCreateRetryAttempt: attempt + 1 });
   }
   if (result?.checkerWorkpadRetry === true) {
     const attempt = Number(job.checkerWorkpadRetryAttempt ?? 1);
