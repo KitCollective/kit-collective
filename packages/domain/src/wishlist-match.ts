@@ -14,6 +14,7 @@ export type WishlistMatchJersey = {
   type: KitType;
   size: JerseySize;
   biddingEnabled: boolean;
+  private: boolean;
   catalogKitId: string | null;
 };
 
@@ -46,6 +47,9 @@ export function isWishlistMatchCandidate(
     return false;
   }
   if (!jersey.biddingEnabled) {
+    return false;
+  }
+  if (jersey.private) {
     return false;
   }
   if (jersey.catalogKitId != null) {

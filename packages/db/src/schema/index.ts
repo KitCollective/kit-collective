@@ -304,6 +304,7 @@ export const userJersey = pgTable("user_jersey", {
   notes: text("notes"),
   draftId: uuid("draft_id"),
   biddingEnabled: boolean("bidding_enabled").notNull().default(false),
+  private: boolean("private").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

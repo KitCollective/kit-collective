@@ -66,6 +66,7 @@ export const collectionJerseySchema = z
     squadPlayers: z.array(collectionJerseySquadPlayerSchema),
     photos: z.array(collectionJerseyPhotoSchema).min(1),
     biddingEnabled: z.boolean(),
+    private: z.boolean(),
   })
   .strict();
 
