@@ -6,21 +6,34 @@ import {
   type GrantCompRequest,
   grantCompRequestSchema,
   grantCompResponseSchema,
+  type IapRestoreRequest,
+  type IapVerifyRequest,
+  iapRestoreRequestSchema,
+  iapVerifyRequestSchema,
   type Offer,
   type OfferPatchRequest,
   offerPatchRequestSchema,
   offerSchema,
 } from "@kit/api-contract";
 import { entitlement, offer } from "@kit/db";
+import { entitlementSourceForIapPlatform } from "@kit/domain";
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  UnprocessableEntityException,
 } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import { DB, type DbToken } from "../db/db.module.js";
+import {
+  IAP_VERIFIER,
+  IapVerificationFailedError,
+  type IapVerificationResult,
+  type IapVerifierAdapter,
+} from "./iap-verifier.adapter.js";
 
 function isEntitlementLive(source: string | null, expires: Date | null): boolean {
   if (!source) {
@@ -71,7 +84,10 @@ function toOfferView(row: {
 
 @Injectable()
 export class BillingService {
-  constructor(@Inject(DB) private readonly db: DbToken) {}
+  constructor(
+    @Inject(DB) private readonly db: DbToken,
+    @Inject(IAP_VERIFIER) private readonly iapVerifier: IapVerifierAdapter,
+  ) {}
 
   async getOffer(): Promise<Offer> {
     const [activeOffer] = await this.db.select().from(offer).limit(1);
@@ -221,5 +237,99 @@ export class BillingService {
     }
 
     return billingStartTrialResponseSchema.parse(toEntitlementView(created));
+  }
+
+  async verifyPurchase(userId: string, rawBody: unknown): Promise<Entitlement> {
+    const body: IapVerifyRequest = iapVerifyRequestSchema.parse(rawBody);
+    const [activeOffer] = await this.db.select().from(offer).limit(1);
+    if (!activeOffer) {
+      throw new ServiceUnavailableException("Offer is not configured");
+    }
+
+    if (
+      body.productId !== activeOffer.monthProductId &&
+      body.productId !== activeOffer.yearProductId
+    ) {
+      throw new BadRequestException("Unknown product id");
+    }
+
+    let verification: IapVerificationResult;
+    try {
+      verification = await this.iapVerifier.verify(body.token, body.platform, body.productId);
+    } catch (error) {
+      if (error instanceof IapVerificationFailedError) {
+        throw new UnprocessableEntityException("Invalid purchase token");
+      }
+      throw error;
+    }
+
+    const source = entitlementSourceForIapPlatform(body.platform);
+    return this.upsertIapEntitlement(userId, source, verification.expires);
+  }
+
+  async restorePurchases(userId: string, rawBody: unknown): Promise<Entitlement> {
+    const body: IapRestoreRequest = iapRestoreRequestSchema.parse(rawBody);
+    let verification: IapVerificationResult | null;
+    try {
+      verification = await this.iapVerifier.restore(body.token, body.platform);
+    } catch (error) {
+      if (error instanceof IapVerificationFailedError) {
+        throw new UnprocessableEntityException("Invalid purchase token");
+      }
+      throw error;
+    }
+
+    if (!verification) {
+      return this.getEntitlementForUser(userId);
+    }
+
+    const source = entitlementSourceForIapPlatform(body.platform);
+    return this.upsertIapEntitlement(userId, source, verification.expires);
+  }
+
+  private async upsertIapEntitlement(
+    userId: string,
+    source: "iap_apple" | "iap_google",
+    expires: Date,
+  ): Promise<Entitlement> {
+    const [existing] = await this.db
+      .select()
+      .from(entitlement)
+      .where(eq(entitlement.userId, userId))
+      .limit(1);
+
+    if (existing) {
+      const [updated] = await this.db
+        .update(entitlement)
+        .set({
+          source,
+          expires,
+          updatedAt: new Date(),
+        })
+        .where(eq(entitlement.userId, userId))
+        .returning();
+
+      if (!updated) {
+        throw new NotFoundException("Entitlement not found");
+      }
+
+      return toEntitlementView(updated);
+    }
+
+    const [created] = await this.db
+      .insert(entitlement)
+      .values({
+        userId,
+        source,
+        expires,
+        trialUsed: false,
+      })
+      .returning();
+
+    if (!created) {
+      throw new ServiceUnavailableException("Could not persist entitlement");
+    }
+
+    return toEntitlementView(created);
   }
 }

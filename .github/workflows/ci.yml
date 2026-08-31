@@ -196,6 +196,12 @@ jobs:
       - name: Check mobile capture dead-export ratchet
         run: pnpm check:mobile-capture-dead-exports
 
+      - name: Check mobile paywall IAP ratchet
+        run: node scripts/check-mobile-paywall-iap.mjs
+
+      - name: Test mobile paywall IAP ratchet logic
+        run: node --test scripts/tests/check-mobile-paywall-iap.test.mjs
+
       - name: Test harness node tests
         run: pnpm test:harness
 
