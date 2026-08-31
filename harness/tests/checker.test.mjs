@@ -316,6 +316,10 @@ test("clean workpad with Description AC rewrites ticks the renamed line and comm
   const gh = fakeGh();
   const workpad = `${WORKPAD_HEADING}
 
+### Evidence
+
+- KIT-56 PR: ${PR_URL}
+
 ### Review feedback
 
 ${CLEAN_REVIEW_FEEDBACK}
@@ -1106,7 +1110,7 @@ test("checker pass resolves stale Slop review threads", async () => {
   });
   const linear = fakeLinear(
     snapshot(),
-    `${WORKPAD_HEADING}\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop: (none)\n`,
+    `${WORKPAD_HEADING}\n\n### Evidence\n\n- KIT-127 PR: ${PR_URL}\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop: (none)\n`,
   );
   const result = await completeChecker({
     job: { issueId: ISSUE_ID, identifier: "KIT-127" },

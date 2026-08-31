@@ -18,7 +18,12 @@ import {
   reviewFeedbackIsLandFail,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
-import { createSerialQueue, IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry } from "../job-queue.mjs";
+import {
+  createSerialQueue,
+  IMPLEMENT_CI_RETRY_CAP,
+  isCheapImplementRetry,
+  shouldSlimCheapRetry,
+} from "../job-queue.mjs";
 import { createPiJobRunner, implementPrompt } from "../pi-job.mjs";
 import { commentsHoldImplementRetryCap, implementRetryCapComment } from "../role-comments.mjs";
 
@@ -575,6 +580,7 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   });
   assert.match(cheap, /Skip Scout/i);
   assert.match(cheap, /Skip helpers/i);
+  assert.match(cheap, /Skip optimizer/i);
   assert.match(cheap, /format vs Zod vs unique-email vs migration prefix/i);
   assert.match(cheap, /AssertionError/);
   assert.match(cheap, /### Review feedback/);
@@ -610,7 +616,56 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.equal(isCheapImplementRetry({ role: "implement", writeScopeRetryAttempt: 2 }), true);
   assert.equal(isCheapImplementRetry({ role: "implement", formatRetryAttempt: 2 }), true);
   assert.equal(isCheapImplementRetry({ role: "implement", migrationRetryAttempt: 2 }), true);
+});
 
+test("shouldSlimCheapRetry is true for mechanical CI classes and scoped retries", () => {
+  assert.equal(shouldSlimCheapRetry({ role: "implement" }), false);
+  assert.equal(shouldSlimCheapRetry({ role: "implement", formatRetryAttempt: 2 }), true);
+  assert.equal(shouldSlimCheapRetry({ role: "implement", writeScopeRetryAttempt: 2 }), true);
+  assert.equal(shouldSlimCheapRetry({ role: "implement", migrationRetryAttempt: 2 }), true);
+  assert.equal(
+    shouldSlimCheapRetry({
+      role: "implement",
+      ciRetryAttempt: 2,
+      ciFailureClass: "format",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSlimCheapRetry({
+      role: "implement",
+      ciRetryAttempt: 2,
+      ciFailureClass: "lockfile",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSlimCheapRetry({
+      role: "implement",
+      ciRetryAttempt: 2,
+      ciFailureClass: "migration",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldSlimCheapRetry({
+      role: "implement",
+      ciRetryAttempt: 2,
+      ciFailureClass: "logic",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSlimCheapRetry({
+      role: "implement",
+      ciRetryAttempt: 2,
+      ciFailureClass: "unknown",
+    }),
+    false,
+  );
+});
+
+test("implement role documents selectImplementContext and cheap retry", () => {
   const role = readFileSync(join(ROOT, ".pi/roles/implement.md"), "utf8");
   assert.equal(/move the issue to In Review/i.test(role), false);
   assert.match(role, /harness/i);

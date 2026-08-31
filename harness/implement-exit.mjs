@@ -39,6 +39,11 @@ export const CI_LOG_EXCERPT_MAX = 1500;
 export const FORMAT_CHECK_MAX_BUFFER = 2_000_000;
 export const MAX_CONFLICT_REBASES = 3;
 export const MAX_MECHANICAL_FORMAT_APPLIES = 2;
+export const MAX_MECHANICAL_LOCKFILE_APPLIES = 2;
+export const MIN_HELPER_DURATION_MS = 500;
+export const STUCK_FEEDBACK_CAP = 3;
+
+/** @typedef {"format" | "lockfile" | "migration" | "logic" | "unknown"} CiFailureClass */
 
 /**
  * Worker format-check infra (ENOBUFS / maxBuffer) is not a format-red.
@@ -166,11 +171,12 @@ export function excerptLog(text, max = CI_LOG_EXCERPT_MAX) {
 }
 
 /**
- * Classify a required-check failure so the harness can apply biome format
- * without spawning Pi. Logic (anti-slop, typecheck, assertions) still retries Pi.
+ * Classify a required-check failure so the harness can apply biome format /
+ * lockfile fixes without spawning Pi. Logic (anti-slop, typecheck, assertions)
+ * still retries Pi with a full Builder context.
  *
  * @param {Array<{ name?: string, conclusion?: string, status?: string, isRequired?: boolean, state?: string, log?: string }> | undefined} checks
- * @returns {"format" | "logic" | "unknown"}
+ * @returns {CiFailureClass}
  */
 export function classifyCiFailure(checks) {
   const failed = failedRequiredChecks(checks);
@@ -179,17 +185,37 @@ export function classifyCiFailure(checks) {
   }
   const blob = failed.map((check) => `${check.name ?? ""}\n${check.log ?? ""}`).join("\n");
   const formatHit = /format:check|biome ci\.|pnpm format\b/i.test(blob);
+  const lockfileHit =
+    /ERR_PNPM_OUTDATED_LOCKFILE|outdated lockfile|frozen-lockfile|pnpm-lock\.yaml.*(out of date|outdated|not up to date)/i.test(
+      blob,
+    );
+  const migrationHit =
+    /check-migration-prefixes|migration prefix|duplicate migration prefix|colliding migration/i.test(
+      blob,
+    );
   const logicHit =
     /lint:anti-slop|AssertionError|error TS\d+|FAIL\s+|TypeError|ZodError|unique.?email/i.test(
       blob,
     );
-  if (formatHit && !logicHit) {
-    return "format";
-  }
   if (logicHit) {
     return "logic";
   }
-  return formatHit ? "format" : "logic";
+  if (lockfileHit && !formatHit) {
+    return "lockfile";
+  }
+  if (migrationHit && !formatHit && !lockfileHit) {
+    return "migration";
+  }
+  if (formatHit) {
+    return "format";
+  }
+  if (lockfileHit) {
+    return "lockfile";
+  }
+  if (migrationHit) {
+    return "migration";
+  }
+  return "unknown";
 }
 
 export function failedRequiredChecks(checks) {
@@ -871,6 +897,30 @@ function applyListedPr(pr, listed, identifier) {
 }
 
 /**
+ * Apply `pnpm install --lockfile-only` in-process. Does not spawn Pi.
+ *
+ * @param {{
+ *   runCommand?: (command: string, args: string[], options: { cwd?: string, maxBuffer?: number }) => Promise<string>,
+ * }} [deps]
+ */
+export function createLockfileApply({ runCommand } = {}) {
+  const run =
+    runCommand ??
+    (async (command, args, options = {}) => {
+      const { stdout } = await execFile(command, args, {
+        encoding: "utf8",
+        timeout: 180_000,
+        cwd: options.cwd,
+        maxBuffer: FORMAT_CHECK_MAX_BUFFER,
+      });
+      return stdout;
+    });
+  return async ({ cwd }) => {
+    await run("pnpm", ["install", "--lockfile-only"], { cwd, maxBuffer: FORMAT_CHECK_MAX_BUFFER });
+  };
+}
+
+/**
  * @param {{
  *   formatApply?: (input: { cwd: string }) => Promise<unknown>,
  *   gh: { commitFormatFix?: (input: { cwd: string, branch: string }) => Promise<unknown> },
@@ -898,6 +948,124 @@ async function applyMechanicalFormat({ formatApply, gh, checkout }) {
 
 /**
  * @param {{
+ *   lockfileApply?: (input: { cwd: string }) => Promise<unknown>,
+ *   gh: { commitLockfileFix?: (input: { cwd: string, branch: string }) => Promise<unknown> },
+ *   checkout: { path: string, branch: string },
+ * }} input
+ * @returns {Promise<{ ok: boolean, error?: unknown }>}
+ */
+async function applyMechanicalLockfile({ lockfileApply, gh, checkout }) {
+  if (typeof lockfileApply !== "function") {
+    return { ok: false };
+  }
+  try {
+    await lockfileApply({ cwd: checkout.path });
+    if (typeof gh.commitLockfileFix === "function") {
+      await gh.commitLockfileFix({ cwd: checkout.path, branch: checkout.branch });
+    } else if (typeof gh.commitFormatFix === "function") {
+      // Fallback for older gh fakes in tests.
+      await gh.commitFormatFix({ cwd: checkout.path, branch: checkout.branch });
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+/**
+ * Detect workpad claims that contradict git/CI signals.
+ *
+ * @param {string | undefined} workpadBody
+ * @param {{
+ *   lockfileDirty?: boolean,
+ *   checksGreen?: boolean,
+ *   formatClean?: boolean,
+ * }} signals
+ * @returns {string[]}
+ */
+export function collectWorkpadHonestyViolations(workpadBody, signals = {}) {
+  const body = typeof workpadBody === "string" ? workpadBody : "";
+  const violations = [];
+  if (/lockfile\s+(restored|fixed|updated|synced)/i.test(body) && signals.lockfileDirty === true) {
+    violations.push("- Honesty: workpad claims lockfile fixed but pnpm-lock.yaml is still dirty");
+  }
+  if (
+    /(?:format|biome)\s+(fixed|applied|clean|passing)/i.test(body) &&
+    signals.formatClean === false
+  ) {
+    violations.push("- Honesty: workpad claims format fixed but format check is still red");
+  }
+  if (
+    /(?:checks?|CI|GitHub)\s+(?:are\s+)?(?:green|passing|passed)/i.test(body) &&
+    signals.checksGreen === false
+  ) {
+    violations.push("- Honesty: workpad claims checks green but required GitHub checks are not");
+  }
+  return violations;
+}
+
+/**
+ * Normalize review-feedback bullets for stuck-loop detection.
+ *
+ * @param {string | undefined} workpadBody
+ * @returns {string}
+ */
+export function normalizeReviewFeedbackFingerprint(workpadBody) {
+  const body = typeof workpadBody === "string" ? workpadBody : "";
+  const match = body.match(/### Review feedback\n([\s\S]*?)(?=\n### |\s*$)/);
+  if (!match) {
+    return "";
+  }
+  return match[1]
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/^\s*[-*]\s*/, "")
+        .trim()
+        .toLowerCase(),
+    )
+    .filter((line) => line.length > 0 && line !== "(none)")
+    .sort()
+    .join("\n");
+}
+
+/**
+ * @param {string | undefined} previous
+ * @param {string | undefined} current
+ * @param {number} [streak]
+ * @returns {{ stuck: boolean, streak: number, fingerprint: string }}
+ */
+export function evaluateStuckFeedback(previous, current, streak = 0) {
+  const fingerprint = normalizeReviewFeedbackFingerprint(current);
+  if (!fingerprint) {
+    return { stuck: false, streak: 0, fingerprint: "" };
+  }
+  const prev = normalizeReviewFeedbackFingerprint(previous);
+  const nextStreak = prev.length > 0 && prev === fingerprint ? Number(streak) + 1 : 1;
+  return {
+    stuck: nextStreak >= STUCK_FEEDBACK_CAP,
+    streak: nextStreak,
+    fingerprint,
+  };
+}
+
+/**
+ * Assert the worktree has no uncommitted product changes before rebase.
+ *
+ * @param {string} statusPorcelain
+ * @returns {string[]} dirty paths (empty = clean)
+ */
+export function dirtyPathsFromStatus(statusPorcelain) {
+  return String(statusPorcelain ?? "")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean);
+}
+
+/**
+ * @param {{
  *   job: { identifier: string, issueId: string, adwFile?: string },
  *   checkout: { path: string, branch: string },
  *   gh: {
@@ -915,6 +1083,8 @@ async function applyMechanicalFormat({ formatApply, gh, checkout }) {
  *   typecheckTouched: (input: { cwd: string }) => Promise<unknown>,
  *   formatCheck?: (input: { cwd: string }) => Promise<unknown>,
  *   formatApply?: (input: { cwd: string }) => Promise<unknown>,
+ *   lockfileApply?: (input: { cwd: string }) => Promise<unknown>,
+ *   runCommand?: (command: string, args: string[], options: { cwd?: string }) => Promise<string>,
  *   listChangedFiles?: (input: { cwd: string }) => Promise<string[]>,
  *   listWorktreeMigrations?: (input: { cwd: string }) => Promise<string[]>,
  *   listBaseMigrations?: (input: { cwd: string }) => Promise<string[]>,
@@ -938,6 +1108,8 @@ export async function completeImplementAdw(input) {
     typecheckTouched,
     formatCheck,
     formatApply,
+    lockfileApply,
+    runCommand: runCommandInput,
     listChangedFiles: listChangedFilesInput,
     listWorktreeMigrations: listWorktreeMigrationsInput,
     listBaseMigrations: listBaseMigrationsInput,
@@ -951,6 +1123,16 @@ export async function completeImplementAdw(input) {
     waitTimeoutMs = 30 * 60 * 1000,
     waitIntervalMs = 15_000,
   } = input;
+  const runCmd =
+    runCommandInput ??
+    (async (command, args, options = {}) => {
+      const { stdout } = await execFile(command, args, {
+        encoding: "utf8",
+        timeout: 120_000,
+        cwd: options.cwd,
+      });
+      return stdout;
+    });
   assertAdwOpensPr(adwText);
 
   let listed = null;
@@ -989,6 +1171,28 @@ export async function completeImplementAdw(input) {
       await gh.syncToRemoteBranch({ cwd: checkout.path, branch: checkout.branch });
     }
   } else {
+    let statusOut = "";
+    try {
+      statusOut = await runCmd("git", ["status", "--porcelain"], { cwd: checkout.path });
+    } catch {
+      statusOut = "";
+    }
+    const dirty = dirtyPathsFromStatus(statusOut);
+    if (dirty.length > 0) {
+      return writeCiRetryWorkpad({
+        job,
+        checkout,
+        gh,
+        linear,
+        pr: pr ?? { url: existingPrUrl },
+        timedOut: false,
+        extraFeedback: [
+          "- Green light: worktree dirty before rebase — clean or restore pins first:",
+          ...dirty.slice(0, 20).map((path) => `  - \`${path}\``),
+        ],
+        ciFailureClass: "logic",
+      });
+    }
     await gh.rebase({ cwd: checkout.path, onto: "origin/development", branch: checkout.branch });
     if (existingPrUrl.length > 0) {
       pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
@@ -1027,6 +1231,60 @@ export async function completeImplementAdw(input) {
       }
     }
   }
+
+  // Green light: mechanical lockfile before Gh-wait (0-token when apply works).
+  {
+    const applyLock =
+      typeof lockfileApply === "function"
+        ? lockfileApply
+        : createLockfileApply({ runCommand: runCmd });
+    let lockNeedsFix = false;
+    try {
+      const statusOut = await runCmd("git", ["status", "--porcelain", "--", "pnpm-lock.yaml"], {
+        cwd: checkout.path,
+      });
+      lockNeedsFix = dirtyPathsFromStatus(statusOut).length > 0;
+    } catch {
+      lockNeedsFix = false;
+    }
+    if (lockNeedsFix) {
+      const applied = await applyMechanicalLockfile({
+        lockfileApply: applyLock,
+        gh,
+        checkout,
+      });
+      if (!applied.ok) {
+        return writeCiRetryWorkpad({
+          job,
+          checkout,
+          gh,
+          linear,
+          pr: pr ?? { url: existingPrUrl },
+          timedOut: false,
+          extraFeedback: ["- Green light: lockfile apply failed before GitHub wait"],
+          ciFailureClass: "lockfile",
+        });
+      }
+    }
+  }
+
+  // Mid-stay sync: one clean-tree rebase onto development before Gh-wait when PR exists.
+  if (existingPrUrl.length > 0 && !alreadyMergeable) {
+    try {
+      const statusOut = await runCmd("git", ["status", "--porcelain"], { cwd: checkout.path });
+      if (dirtyPathsFromStatus(statusOut).length === 0) {
+        await gh.rebase({
+          cwd: checkout.path,
+          onto: "origin/development",
+          branch: checkout.branch,
+        });
+        pr = applyListedPr(await gh.viewPr({ cwd: checkout.path }), listed, job.identifier);
+      }
+    } catch {
+      // Gh-wait + conflict cap still own hard conflicts.
+    }
+  }
+
   if (typeof runPnpmTest === "function") {
     throw new Error("full pnpm test stays on GitHub Actions, not on this worker");
   }
@@ -1069,12 +1327,27 @@ export async function completeImplementAdw(input) {
   const deadline = now() + waitTimeoutMs;
   let conflictRebase = 0;
   let mechanicalFormatApplies = 0;
+  let mechanicalLockfileApplies = 0;
   while (true) {
     const next = await gh.viewPr({ cwd: checkout.path });
     if (typeof next?.url === "string" && next.url.length > 0) {
       pr = next;
     }
-    if (pr?.mergeable === "CONFLICTING" && conflictRebase < MAX_CONFLICT_REBASES) {
+    if (pr?.mergeable === "CONFLICTING") {
+      if (conflictRebase >= MAX_CONFLICT_REBASES) {
+        return writeCiRetryWorkpad({
+          job,
+          checkout,
+          gh,
+          linear,
+          pr,
+          timedOut: false,
+          extraFeedback: [
+            `- Rebase: CONFLICTING after ${MAX_CONFLICT_REBASES} attempts — resolve conflict files with full Builder (not slim)`,
+          ],
+          ciFailureClass: "logic",
+        });
+      }
       try {
         await gh.rebase({
           cwd: checkout.path,
@@ -1084,15 +1357,24 @@ export async function completeImplementAdw(input) {
         conflictRebase += 1;
         continue;
       } catch {
-        // Real conflict — wait out or cheap-retry Pi with the log.
+        return writeCiRetryWorkpad({
+          job,
+          checkout,
+          gh,
+          linear,
+          pr,
+          timedOut: false,
+          extraFeedback: [
+            "- Rebase: real conflict — abort and fix conflicted paths with full Builder",
+          ],
+          ciFailureClass: "logic",
+        });
       }
     }
     if (requiredChecksFailed(pr?.checks)) {
       const withLogs = await attachFailedCheckLogs(pr?.checks, gh, checkout.path);
-      if (
-        classifyCiFailure(withLogs) === "format" &&
-        mechanicalFormatApplies < MAX_MECHANICAL_FORMAT_APPLIES
-      ) {
+      const failureClass = classifyCiFailure(withLogs);
+      if (failureClass === "format" && mechanicalFormatApplies < MAX_MECHANICAL_FORMAT_APPLIES) {
         const applied = await applyMechanicalFormat({
           formatApply,
           gh,
@@ -1103,6 +1385,20 @@ export async function completeImplementAdw(input) {
           continue;
         }
       }
+      if (
+        failureClass === "lockfile" &&
+        mechanicalLockfileApplies < MAX_MECHANICAL_LOCKFILE_APPLIES
+      ) {
+        const applied = await applyMechanicalLockfile({
+          lockfileApply: lockfileApply ?? createLockfileApply({ runCommand: runCmd }),
+          gh,
+          checkout,
+        });
+        if (applied.ok) {
+          mechanicalLockfileApplies += 1;
+          continue;
+        }
+      }
       return writeCiRetryWorkpad({
         job,
         checkout,
@@ -1110,6 +1406,7 @@ export async function completeImplementAdw(input) {
         linear,
         pr: { ...pr, checks: withLogs },
         timedOut: false,
+        ciFailureClass: failureClass,
       });
     }
     if (pr?.mergeable === "MERGEABLE" && requiredChecksGreen(pr.checks)) {
@@ -1123,6 +1420,7 @@ export async function completeImplementAdw(input) {
         linear,
         pr,
         timedOut: true,
+        ciFailureClass: "unknown",
       });
     }
     await sleep(waitIntervalMs);
@@ -1165,6 +1463,45 @@ export async function completeImplementAdw(input) {
   const comments =
     typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
   const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
+  let formatClean = true;
+  if (typeof formatCheck === "function") {
+    try {
+      await formatCheck({ cwd: checkout.path });
+    } catch (error) {
+      if (!isFormatInfraError(error)) {
+        formatClean = false;
+      }
+    }
+  }
+  let lockfileDirty = false;
+  try {
+    const statusOut = await runCmd("git", ["status", "--porcelain", "--", "pnpm-lock.yaml"], {
+      cwd: checkout.path,
+    });
+    lockfileDirty = dirtyPathsFromStatus(statusOut).length > 0;
+  } catch {
+    lockfileDirty = false;
+  }
+  const honestyHits = collectWorkpadHonestyViolations(existing?.body, {
+    lockfileDirty,
+    formatClean,
+    checksGreen: requiredChecksGreen(pr?.checks),
+  });
+  if (honestyHits.length > 0) {
+    const withEvidence = upsertWorkpadEvidence(existing?.body, {
+      prUrl: pr.url,
+      identifier: job.identifier,
+    });
+    const body = applyReviewFeedback(withEvidence, honestyHits);
+    await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
+    return {
+      pr,
+      status: IMPLEMENTING,
+      ciRetry: true,
+      ciFailureClass: "logic",
+      honestyRetry: true,
+    };
+  }
   const body = ensureLoopCounters(
     upsertWorkpadEvidence(existing?.body, {
       prUrl: pr.url,
@@ -1212,8 +1549,10 @@ export async function completeImplementAdw(input) {
  * }} input
  */
 async function writeCiRetryWorkpad(input) {
-  const { job, checkout, gh, linear, pr, timedOut } = input;
+  const { job, checkout, gh, linear, pr, timedOut, extraFeedback, ciFailureClass } = input;
   const checks = await attachFailedCheckLogs(pr?.checks, gh, checkout.path);
+  const failureClass =
+    typeof ciFailureClass === "string" ? ciFailureClass : classifyCiFailure(checks);
   const comments =
     typeof linear.listComments === "function" ? await linear.listComments(job.issueId) : [];
   const existing = comments.find((comment) => comment.body?.includes(WORKPAD_HEADING));
@@ -1224,7 +1563,16 @@ async function writeCiRetryWorkpad(input) {
           identifier: job.identifier,
         })
       : (existing?.body ?? `${WORKPAD_HEADING}\n`);
-  const body = applyReviewFeedback(withEvidence, formatCiFailureFeedback(checks, { timedOut }));
+  const feedback = [
+    ...formatCiFailureFeedback(checks, { timedOut }),
+    ...(Array.isArray(extraFeedback) ? extraFeedback : []),
+  ];
+  const body = applyReviewFeedback(withEvidence, feedback);
   await linear.updateWorkpad({ issueId: job.issueId, body, commentId: existing?.id });
-  return { pr, status: IMPLEMENTING, ciRetry: true };
+  return {
+    pr,
+    status: IMPLEMENTING,
+    ciRetry: true,
+    ciFailureClass: failureClass,
+  };
 }

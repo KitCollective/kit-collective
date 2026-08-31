@@ -15,10 +15,12 @@ import {
 } from "./factory-exit-log.mjs";
 import { bumpFirstPassCandidates } from "./first-pass.mjs";
 import {
+  evaluateStuckFeedback,
   extractReviewFeedback,
   IN_REVIEW,
   requiredChecksFailed,
   requiredChecksGreen,
+  STUCK_FEEDBACK_CAP,
 } from "./implement-exit.mjs";
 import { createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { WORKPAD_HEADING } from "./linear-cli.mjs";
@@ -33,7 +35,11 @@ import { createSlopReviewGh } from "./slop-review.mjs";
 
 export const READY_FOR_MERGE = "Ready for merge";
 export const IMPLEMENTING = "Implementing";
+export const PARKED = "Parked";
+export const READY_FOR_HUMAN_LABEL = "ready-for-human";
+export { STUCK_FEEDBACK_CAP };
 export const REVIEW_FEEDBACK_HEADING = "### Review feedback";
+export const STUCK_LOOP_HEADING = "### Stuck loop";
 export const REVIEW_AXIS_SPEC_CLEAN = /^-\s*Spec:\s*\(none\)\s*$/i;
 export const REVIEW_AXIS_STANDARDS_CLEAN = /^-\s*Standards:\s*\(none\)\s*$/i;
 export const REVIEW_AXIS_SLOP_CLEAN = /^-\s*Slop:\s*\(none\)\s*$/i;
@@ -59,12 +65,100 @@ const REVIEW_FEEDBACK_HEADING_AT = /(?:^|\n)### Review feedback(?:\n|$)/;
 const REVIEW_FEEDBACK_BLOCK = /(^|\n)### Review feedback\n([\s\S]*?)(?=\n### |$)/;
 const NOTES_HEADING_AT = /(?:^|\n)### Notes(?:\n|$)/;
 const NOTES_BLOCK = /(^|\n)### Notes\n([\s\S]*?)(?=\n### |$)/;
+const STUCK_LOOP_BLOCK = /(^|\n)### Stuck loop\n([\s\S]*?)(?=\n### |$)/;
 
 /**
  * @returns {string}
  */
 export function ratchetNudgeWorkpadLine() {
   return `- Ratchet: ${RATCHET_NUDGE_TEXT}`;
+}
+
+/**
+ * Read stuck-loop streak from workpad `### Stuck loop`.
+ *
+ * @param {string | undefined} body
+ * @returns {number}
+ */
+export function parseStuckLoopStreak(body) {
+  if (typeof body !== "string" || !body.includes(STUCK_LOOP_HEADING)) {
+    return 0;
+  }
+  const match = body.match(STUCK_LOOP_BLOCK);
+  if (!match) {
+    return 0;
+  }
+  const streak = match[2].match(/streak:\s*(\d+)/i);
+  return streak ? Number(streak[1]) || 0 : 0;
+}
+
+/**
+ * Persist stuck streak + fingerprint on the workpad.
+ *
+ * @param {string | undefined} current
+ * @param {{ streak: number, fingerprint: string }} input
+ */
+export function applyStuckLoopWorkpad(current, { streak, fingerprint }) {
+  const base =
+    typeof current === "string" && current.includes(WORKPAD_HEADING)
+      ? current.trimEnd()
+      : WORKPAD_HEADING;
+  const content = `- streak: ${streak}\n- fingerprint: ${String(fingerprint ?? "").slice(0, 200)}\n`;
+  const section = `${STUCK_LOOP_HEADING}\n\n${content}`;
+  if (STUCK_LOOP_BLOCK.test(base)) {
+    return `${base.replace(STUCK_LOOP_BLOCK, `$1${section}`)}\n`;
+  }
+  if (REVIEW_FEEDBACK_HEADING_AT.test(base)) {
+    return `${base.replace(/(^|\n)### Review feedback(\n|$)/, `$1${section}\n\n${REVIEW_FEEDBACK_HEADING}$2`)}\n`;
+  }
+  return `${base}\n\n${section}\n`;
+}
+
+/**
+ * Spec axis cannot pass on prose alone — require AC ticks, Validation, or ### Evidence.
+ *
+ * @param {string | undefined} workpadBody
+ * @returns {{ ok: boolean, feedback: string[] }}
+ */
+export function evaluateSpecEvidenceFloor(workpadBody) {
+  const body = typeof workpadBody === "string" ? workpadBody : "";
+  const lines = reviewFeedbackLines(body);
+  const specClean = lines.some((line) => REVIEW_AXIS_SPEC_CLEAN.test(line));
+  const specFinding = lines.some(
+    (line) => /^-\s*Spec:/i.test(line) && !REVIEW_AXIS_SPEC_CLEAN.test(line),
+  );
+  if (!specClean || specFinding) {
+    // Spec not marked green — evidence floor does not apply.
+    return { ok: true, feedback: [] };
+  }
+
+  const hasAcTick = /(?:^|\n)\s*[-*]\s*\[[xX]\]/.test(body);
+  const validationMatch = body.match(/###\s*Validation\b([\s\S]*?)(?=\n###\s|\n##\s|$)/i);
+  const validationBody = validationMatch ? String(validationMatch[1] ?? "").trim() : "";
+  const hasValidation =
+    validationBody.length > 0 &&
+    !/^\(none\)$/i.test(validationBody) &&
+    !/^-\s*\(none\)\s*$/im.test(validationBody);
+
+  const evidenceMatch = body.match(/###\s*Evidence\b([\s\S]*?)(?=\n###\s|\n##\s|$)/i);
+  const evidenceBody = evidenceMatch ? String(evidenceMatch[1] ?? "").trim() : "";
+  const evidenceLines = evidenceBody
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(
+      (line) => line.length > 0 && !/^\(none\)$/i.test(line) && !/^-\s*\(none\)\s*$/i.test(line),
+    );
+  const hasEvidence = evidenceLines.length > 0;
+
+  if (hasAcTick || hasValidation || hasEvidence) {
+    return { ok: true, feedback: [] };
+  }
+  return {
+    ok: false,
+    feedback: [
+      "- Spec: evidence floor — Spec cannot pass on prose alone; tick AC checkboxes, fill ### Validation, or add non-empty ### Evidence",
+    ],
+  };
 }
 
 /**
@@ -407,11 +501,19 @@ async function checkerFailMove(input) {
       mergedFeedback.push(line);
     }
   }
-  const body = applyRatchetNudge(
+  let body = applyRatchetNudge(
     incrementReviewLoops(
       applyCheckerFailWorkpad(withCandidates, { feedbackLines: mergedFeedback }),
     ),
   );
+
+  const priorStreak = parseStuckLoopStreak(workpadBody);
+  const stuck = evaluateStuckFeedback(workpadBody, body, priorStreak);
+  body = applyStuckLoopWorkpad(body, {
+    streak: stuck.streak,
+    fingerprint: stuck.fingerprint,
+  });
+
   await linear.updateWorkpad({
     issueId: job.issueId,
     body,
@@ -426,6 +528,31 @@ async function checkerFailMove(input) {
   }
   const identifier =
     typeof job.identifier === "string" && job.identifier.length > 0 ? job.identifier : job.issueId;
+
+  if (stuck.stuck) {
+    if (typeof linear.commentIssue === "function") {
+      await linear.commentIssue({
+        issueId: job.issueId,
+        body: `${identifier}: stuck loop — same Review feedback fingerprint ≥ ${STUCK_FEEDBACK_CAP} times. Parked for human (${READY_FOR_HUMAN_LABEL}).`,
+      });
+    }
+    await linear.setStatus({ issueId: job.issueId, status: PARKED });
+    if (typeof linear.addLabels === "function") {
+      await linear.addLabels({
+        issueId: job.issueId,
+        labelNames: [READY_FOR_HUMAN_LABEL],
+      });
+    }
+    return {
+      passed: false,
+      nextStatus: PARKED,
+      stuckParked: true,
+      stuckStreak: stuck.streak,
+      pr,
+      feedbackLines,
+    };
+  }
+
   if (typeof linear.commentIssue === "function") {
     await linear.commentIssue({
       issueId: job.issueId,
@@ -436,6 +563,7 @@ async function checkerFailMove(input) {
   return {
     passed: false,
     nextStatus: IMPLEMENTING,
+    stuckStreak: stuck.streak,
     pr,
     feedbackLines,
   };
@@ -575,7 +703,8 @@ export async function completeChecker(input) {
   if (timedOut) {
     gateFailures.push("- Required GitHub checks timed out before turning green");
   }
-  const passed = !piFindings && !missingSlopAxis && gateFailures.length === 0;
+  const evidenceFloor = evaluateSpecEvidenceFloor(workpadBody);
+  const passed = !piFindings && !missingSlopAxis && gateFailures.length === 0 && evidenceFloor.ok;
 
   if (passed) {
     await syncSlopReviewThreadsSafely(gh, {
@@ -652,6 +781,9 @@ export async function completeChecker(input) {
   }
 
   const feedbackLines = [];
+  if (!evidenceFloor.ok) {
+    feedbackLines.push(...evidenceFloor.feedback);
+  }
   if (piFindings || missingSlopAxis) {
     const section = reviewFeedbackSection(workpadBody);
     if (section.length === 0 || axesIncomplete) {

@@ -15,9 +15,13 @@ test("applyEconomyAgentPins rewrites helpers to OpenRouter and restores", () => 
   const dir = mkdtempSync(join(tmpdir(), "kc-economy-agents-"));
   try {
     const nestPath = join(dir, "nest.md");
+    const optimizerPath = join(dir, "optimizer.md");
     const original =
       "<!-- Generated -->\n---\nname: nest\nmodel: cursor/composer-2.5\ninheritProjectContext: false\n---\n\nBody\n";
+    const optimizerOriginal =
+      "---\nname: optimizer\nmodel: cursor/composer-2.5\ninheritProjectContext: false\n---\n\nBody\n";
     writeFileSync(nestPath, original, "utf8");
+    writeFileSync(optimizerPath, optimizerOriginal, "utf8");
     const restore = applyEconomyAgentPins(dir, 0);
     const pinned = readFileSync(nestPath, "utf8");
     assert.match(pinned, /^---/m);
@@ -25,8 +29,12 @@ test("applyEconomyAgentPins rewrites helpers to OpenRouter and restores", () => 
     assert.match(pinned, /^model:\s+openrouter\/tencent\/hy3/m);
     assert.doesNotMatch(pinned, /composer/i);
     assert.match(pinned, /^fallbackModels:\s+openrouter\//m);
+    const pinnedOpt = readFileSync(optimizerPath, "utf8");
+    assert.match(pinnedOpt, /^model:\s+openrouter\/tencent\/hy3/m);
+    assert.doesNotMatch(pinnedOpt, /composer/i);
     restore();
     assert.equal(readFileSync(nestPath, "utf8"), original);
+    assert.equal(readFileSync(optimizerPath, "utf8"), optimizerOriginal);
     restore(); // idempotent
     assert.equal(readFileSync(nestPath, "utf8"), original);
   } finally {

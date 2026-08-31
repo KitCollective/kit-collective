@@ -42,7 +42,7 @@ import {
   reviewFeedbackIsLandFail,
 } from "./implement-exit.mjs";
 import { runIntake } from "./intake.mjs";
-import { isCheapImplementRetry } from "./job-queue.mjs";
+import { isCheapImplementRetry, shouldSlimCheapRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { createAgentSessionBridge } from "./linear-agent-session.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
@@ -776,6 +776,8 @@ export function killProcessGroupDefault(spawned, signal = "SIGTERM") {
  * }} [options]
  */
 export function implementPrompt(role, identifier, adwFile, options = {}) {
+  // Helper/optimizer quality (duration/diff) is documented in-prompt until spawn
+  // metrics land — see harness/helper-quality.mjs evaluateHelperQuality.
   const codeEnglish =
     "Code identifiers, comments, and technical names are English. User-facing UI copy may stay Danish when the design lock says so.";
   if (role === "implement") {
@@ -795,9 +797,13 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
       "Do not sleep. Do not poll GitHub with sleep. Do not `gh pr checks --watch`. Exit the Pi session only when the PR is pushed — the harness waits for required GitHub checks, then moves In Review. Fix the class from the CI excerpt.";
     const notANewTry = "Do not open a new try.";
     const helperNames =
-      "Spawn Pi agents by these names only: nest, expo, drizzle, ui-ux, devops. react-expo is expo. If a helper exits immediately, retry that same name once.";
+      "Spawn Pi agents by these names only: nest, expo, drizzle, ui-ux, devops, optimizer. react-expo is expo. If a helper exits immediately, retry that same name once.";
     const serialHelpers =
       "Spawn required helpers one at a time; wait for each return before the next. Order: nest → drizzle → expo → ui-ux → devops. Do not fan helpers out in parallel.";
+    const optimizerNote =
+      "After required helpers return, spawn optimizer once (agent name: optimizer) for a production-ready pass (structure, seams, tests, anti-slop). Do not spawn Gate — harness Green light / Mechanical close owns format.";
+    const helperQualityNote =
+      "Helper quality: when ### Review feedback is open, a helper/optimizer that exits under ~500ms with no write-scope diff is rejected — re-spawn that name once.";
     const tddBlock =
       "TDD: each required helper writes the failing test at its seam (red), then minimal green. Run the helper's targeted test command — not `pnpm test` (full graph is GitHub Actions only on this worker). Shared TDD/implement skills stay on the parent.";
     if (options.cheapRetry === true) {
@@ -805,7 +811,7 @@ export function implementPrompt(role, identifier, adwFile, options = {}) {
         typeof options.reviewFeedback === "string" && options.reviewFeedback.trim().length > 0
           ? options.reviewFeedback.trim()
           : "(missing — fail closed: do not invent a fix without the excerpt)";
-      return `Factory role implement retry for ${identifier}.${adw} Same Implementing stay — this is not a new try. Skip Scout. Skip Draft. Skip helpers. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix vs first-pass registry tag — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Do not spawn Gate — harness Mechanical close owns format/typecheck. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
+      return `Factory role implement retry for ${identifier}.${adw} Same Implementing stay — this is not a new try. Skip Scout. Skip Draft. Skip helpers. Skip optimizer. Do not map the repo from scratch. Fix the class in ### Review feedback (format vs Zod vs unique-email vs migration prefix vs first-pass registry tag — not only the file a checker named). You MUST use the CI log excerpt in ### Review feedback; do not guess. Do not spawn Gate — harness Mechanical close owns format/typecheck. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}
 
 ### Review feedback
 
@@ -850,7 +856,9 @@ ${feedback}`;
 ${feedback}`;
     }
     const compositionNote =
-      "After Scout, write workpad ### Composition with repo-relative files to mirror before inventing UI (paths only). Prefer the injected slice brief — do not read full CONTEXT.md unless a domain term is missing.";
+      "After Scout, write workpad ### Composition with repo-relative files to mirror before inventing UI. Composition is fail-close before Draft: at least one path line, explicit Skip Draft yes/no (or Skip Draft allowed for auth/IAP/Vision), and Lockfile need yes/no when package.json is listed. Prefer the injected slice brief — do not read full CONTEXT.md unless a domain term is missing.";
+    const scaffoldNote =
+      "Scaffold diff-gate: Draft without write-scope file touches must re-draft once; still empty → stay Implementing with feedback (do not continue to helpers).";
     const skipDraft = options.implementContext?.modelRoute?.skipDraft === true;
     const routeBrief =
       typeof options.implementContext?.modelRouteBrief === "string"
@@ -859,16 +867,16 @@ ${feedback}`;
     const routeSuffix = routeBrief.length > 0 ? `\n\n${routeBrief}` : "";
     const draftNote = skipDraft
       ? "Skip Draft — model route marked critical seam (auth/IAP/Vision/secrets). Composer helpers own the write."
-      : "After ### Composition, spawn Draft once (agent name: draft) to scaffold boilerplate under write-scope. Draft rotates free OpenRouter models (MiniMax → GLM → Laguna → Hy3 → Composer) on 429. Parent and Composer helpers review and harden. Skip Draft when the slice is auth/IAP/Vision-only. Do not Skip Draft on a full Scout run unless that auth/IAP/Vision-only exception or Skip Draft route applies.";
+      : "After ### Composition passes fail-close, spawn Draft once (agent name: draft) to scaffold boilerplate under write-scope. Draft rotates free OpenRouter models (MiniMax → GLM → Laguna → Hy3 → Composer) on 429. Parent and Composer helpers review and harden. Skip Draft when the slice is auth/IAP/Vision-only. Do not Skip Draft on a full Scout run unless that auth/IAP/Vision-only exception or Skip Draft route applies.";
     if (reviewFeedbackIsActionable(options.reviewFeedback)) {
       const feedback = String(options.reviewFeedback).trim();
-      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. ${draftNote} Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${compositionNote} Do not spawn Gate. ${noSleep} ${codeEnglish} ${loopTail}${routeSuffix}
+      return `Factory role implement for ${identifier}.${adw} Checker-fail resume.${writeScopeSuffix} Update the existing workpad. Fix every workpad axis in ### Review feedback (Spec / Standards / Tests / Slop) — GitHub [factory-checker/slop] threads are a subset, not the whole request. Spawn Scout first. Do not Skip Scout. ${draftNote} ${scaffoldNote} Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper. Do not Skip helpers. ${helperNames} ${tddBlock} ${optimizerNote} ${helperQualityNote} ${compositionNote} Do not spawn Gate. ${noSleep} ${codeEnglish} ${loopTail}${routeSuffix}
 
 ### Review feedback
 
 ${feedback}`;
     }
-    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Same Implementing stay — this is one try, ending at In Review. Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. ${draftNote} Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${compositionNote} Do not spawn Gate — harness Mechanical close owns format/typecheck/rebase/GitHub wait. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}${routeSuffix}`;
+    return `Factory role implement for ${identifier}.${adw} First run.${writeScopeSuffix} Same Implementing stay — this is one try, ending at In Review. Update the existing workpad. When ### Review feedback has findings, fix the class on the same branch and PR. Spawn Scout first. Do not Skip Scout. ${draftNote} ${scaffoldNote} Required helpers: ${helpers}. ${serialHelpers} Spawn every listed helper before green implementation. Do not Skip helpers. ${helperNames} ${tddBlock} ${optimizerNote} ${helperQualityNote} ${compositionNote} Do not spawn Gate — harness Mechanical close owns format/typecheck/rebase/GitHub wait. Wait for the harness GitHub wait. ${noSleep} ${notANewTry} ${codeEnglish} ${loopTail}${routeSuffix}`;
   }
   if (role === "factory-checker") {
     return `Factory role factory-checker for ${identifier}. Run /code-review (Standards + Spec + Slop in one pass) against the harness-injected review snapshot in the append (issue description + three-dot diff). Prefer that snapshot — do not re-run a full git discovery loop, do not read full CONTEXT.md, do not poll gh pr checks (harness owns gates). Readonly git bash only to fill gaps. Before exit, ### Review feedback MUST include all three axis lines (- Spec: …, - Standards: …, - Slop: … or Slop/…). Empty or partial Review feedback is a harness miss — the worker re-runs you in-slot, then parks for human; it does not bounce to implement. When a Standards or Slop finding matches the injected First-pass registry, write [first-pass:<id>] on that workpad line. Update the existing workpad via the linear_cli host tool only — replace ### Review feedback with the complete three-axis finding set (- Spec: (none), - Standards: (none), - Slop: (none) on pass; Slop/ prefix on hard Slop findings). Post each Slop hunk on the linked PR via gh_cli (comment-only — cannot merge or approve). Never merge. Never move Linear status — the harness applies pass/fail after you exit. Never spawn Gate. ${codeEnglish}`;
@@ -1492,7 +1500,8 @@ export function createPiJobRunner({
             reviewFeedback,
             workpadBody: workpad?.body ?? "",
             hermesDir: hermesDirForContext,
-            slimOnly: true,
+            slimOnly: firstPassOnly || specOnly ? true : shouldSlimCheapRetry(job),
+            cheapRetry,
             profile: modelProfile,
           });
         }

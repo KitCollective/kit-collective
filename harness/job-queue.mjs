@@ -61,6 +61,35 @@ export function isCheapImplementRetry(job) {
 }
 
 /**
+ * Slim (0-token-ish) Pi context only for mechanical / scoped retries.
+ * Logic and unknown CI failures need a full Builder + helpers.
+ *
+ * @param {object | undefined} job
+ */
+export function shouldSlimCheapRetry(job) {
+  if (!isCheapImplementRetry(job)) {
+    return false;
+  }
+  if (Number(job.writeScopeRetryAttempt ?? 1) > 1) {
+    return true;
+  }
+  if (Number(job.formatRetryAttempt ?? 1) > 1) {
+    return true;
+  }
+  if (Number(job.migrationRetryAttempt ?? 1) > 1) {
+    return true;
+  }
+  if (Number(job.firstPassRetryAttempt ?? 1) > 1) {
+    return true;
+  }
+  if (Number(job.ciRetryAttempt ?? 1) > 1) {
+    const klass = job.ciFailureClass;
+    return klass === "format" || klass === "lockfile" || klass === "migration";
+  }
+  return false;
+}
+
+/**
  * Re-run implement in the same slot on CI, write-scope, format, or migration retry.
  * At the cheap-retry bound, yield the slot (return the last result) instead of
  * throwing a retry-cap hold.
@@ -109,7 +138,11 @@ export async function runImplementWithRetries(run, job) {
       attempt: attempt + 1,
       loopRisk: loopRiskForRetry(attempt + 1, IMPLEMENT_CI_RETRY_CAP),
     });
-    return runImplementWithRetries(run, { ...job, ciRetryAttempt: attempt + 1 });
+    return runImplementWithRetries(run, {
+      ...job,
+      ciRetryAttempt: attempt + 1,
+      ciFailureClass: result.ciFailureClass ?? job.ciFailureClass,
+    });
   }
   if (result?.writeScopeRetry === true) {
     const attempt = Number(job.writeScopeRetryAttempt ?? 1);

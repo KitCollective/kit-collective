@@ -233,6 +233,29 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
     },
 
     /**
+     * Commit pnpm-lock.yaml from `pnpm install --lockfile-only` and push.
+     *
+     * @param {{ cwd: string, branch: string }} input
+     */
+    async commitLockfileFix({ cwd, branch }) {
+      await run("git", ["add", "--", "pnpm-lock.yaml"], { cwd, env });
+      try {
+        await run("git", ["diff", "--cached", "--quiet"], { cwd, env });
+        return;
+      } catch {
+        // staged diff present
+      }
+      await run("git", ["commit", "-m", "chore: refresh pnpm-lock.yaml (harness)"], { cwd, env });
+      if (typeof branch === "string" && branch.length > 0) {
+        await run(
+          "git",
+          ["push", "--force-with-lease", "-u", "origin", `HEAD:refs/heads/${branch}`],
+          { cwd, env },
+        );
+      }
+    },
+
+    /**
      * Exactly one open development PR for the identifier, or null.
      * Two matches fail closed — do not guess which PR to extend.
      *
