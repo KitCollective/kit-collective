@@ -45,7 +45,13 @@ import { isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { createAgentSessionBridge } from "./linear-agent-session.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
-import { labelForModelId, resolveImplementParentModel } from "./model-router.mjs";
+import { applyEconomyAgentPins } from "./economy-agents.mjs";
+import {
+  labelForModelId,
+  parseModelProfile,
+  resolveFastRoleModel,
+  resolveImplementParentModel,
+} from "./model-router.mjs";
 import { isPiAgentEndLine, pipeReadableJsonLines, STREAMING_ROLES } from "./pi-event-stream.mjs";
 import { createSessionLogCollector } from "./pi-session-log.mjs";
 import { runPlanner } from "./planner.mjs";
@@ -1346,7 +1352,10 @@ export function createPiJobRunner({
       if (typeof roleFile !== "string") {
         throw new Error(`no Pi role file for ${job.role}`);
       }
-      let model = FAST_ROLES.has(job.role) ? env.PI_MODEL_FAST : env.PI_MODEL;
+      const modelProfile = parseModelProfile(env.HARNESS_MODEL_PROFILE);
+      let model = FAST_ROLES.has(job.role)
+        ? resolveFastRoleModel(modelProfile, env.PI_MODEL_FAST)
+        : env.PI_MODEL;
       if (typeof model !== "string" || model.length === 0) {
         throw new Error(`missing Pi model env for role ${job.role}`);
       }
@@ -1472,6 +1481,7 @@ export function createPiJobRunner({
             hermesDir: hermesDirForContext,
             cheapRetry,
             mergeFailResume,
+            profile: modelProfile,
           });
         } else if ((cheapRetry || firstPassOnly || specOnly) && !mergeFailResume) {
           implementContext = selectImplementContext({
@@ -1483,6 +1493,7 @@ export function createPiJobRunner({
             workpadBody: workpad?.body ?? "",
             hermesDir: hermesDirForContext,
             slimOnly: true,
+            profile: modelProfile,
           });
         }
         if (implementContext?.modelRoute) {
@@ -1594,93 +1605,106 @@ export function createPiJobRunner({
           review,
         });
       }
-      const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, {
-        browserSkill,
-        implementContext,
-        reviewBundle,
-      });
-      if (result.idleTimeout) {
-        harnessLog({
-          role: job.role,
-          identifier,
-          event: "fail",
-          gate: "red",
-          reason: "idle-timeout",
-          error: `idle timeout after ${jobIdleMs(env)}ms`,
-          loopRisk: 10,
-        });
-        return timeoutPark(job, identifier, jobIdleMs(env));
+      /** @type {() => void} */
+      let restoreEconomyPins = () => {};
+      if (
+        modelProfile === "economy" &&
+        checkout &&
+        (job.role === "implement" || job.role === "factory-checker")
+      ) {
+        restoreEconomyPins = applyEconomyAgentPins(join(checkout.path, ".pi/agents"));
       }
-      if (result.status !== 0 && job.role !== "implement") {
-        harnessLog({
-          role: job.role,
-          identifier,
-          event: "fail",
-          gate: "red",
-          reason: "pi-exit",
-          error: `pi exited ${result.status}`,
-          loopRisk: 8,
+      try {
+        const result = await runPiJob(job, cwd, model, roleFile, prompt, spawnEnv, {
+          browserSkill,
+          implementContext,
+          reviewBundle,
         });
-        throw new Error(`pi exited ${result.status} for ${identifier}`);
-      }
-      if (job.role === "implement") {
-        const adwFile = job.adwFile;
-        if (typeof adwFile !== "string") {
-          throw new Error("implement requires an ADW file");
+        if (result.idleTimeout) {
+          harnessLog({
+            role: job.role,
+            identifier,
+            event: "fail",
+            gate: "red",
+            reason: "idle-timeout",
+            error: `idle timeout after ${jobIdleMs(env)}ms`,
+            loopRisk: 10,
+          });
+          return timeoutPark(job, identifier, jobIdleMs(env));
         }
-        const ghClient = gh ?? job.gh;
-        const linearClient = linear ?? job.linear;
-        if (!ghClient || !linearClient) {
-          throw new Error("implement requires gh and Linear adapters");
+        if (result.status !== 0 && job.role !== "implement") {
+          harnessLog({
+            role: job.role,
+            identifier,
+            event: "fail",
+            gate: "red",
+            reason: "pi-exit",
+            error: `pi exited ${result.status}`,
+            loopRisk: 8,
+          });
+          throw new Error(`pi exited ${result.status} for ${identifier}`);
         }
-        const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier, {
-          env,
-          issueId: typeof job.issueId === "string" ? job.issueId : undefined,
-          sessionId: typeof result.sessionId === "string" ? result.sessionId : undefined,
-          parentModelId: model,
-          parentModel: labelForModelId(model),
-        });
-        logTokenRun(tokens, {
-          modelRoute: implementContext?.modelRoute ?? undefined,
-          routeSuccess: true,
-        });
-        const exit = await completeImplementAdw({
-          job: { ...job, identifier, issueId: job.issueId ?? identifier },
-          checkout,
-          gh: ghClient,
-          linear: withTokenUse(linearClient, tokens),
-          typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
-          formatCheck,
-          formatApply: applyFormat,
-          adwText: readFileSync(join(workspace, adwFile), "utf8"),
-          now,
-          sleep,
-          waitTimeoutMs,
-          waitIntervalMs,
-        });
-        return { ...job, ...exit, tokens };
+        if (job.role === "implement") {
+          const adwFile = job.adwFile;
+          if (typeof adwFile !== "string") {
+            throw new Error("implement requires an ADW file");
+          }
+          const ghClient = gh ?? job.gh;
+          const linearClient = linear ?? job.linear;
+          if (!ghClient || !linearClient) {
+            throw new Error("implement requires gh and Linear adapters");
+          }
+          const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier, {
+            env,
+            issueId: typeof job.issueId === "string" ? job.issueId : undefined,
+            sessionId: typeof result.sessionId === "string" ? result.sessionId : undefined,
+            parentModelId: model,
+            parentModel: labelForModelId(model),
+          });
+          logTokenRun(tokens, {
+            modelRoute: implementContext?.modelRoute ?? undefined,
+            routeSuccess: true,
+          });
+          const exit = await completeImplementAdw({
+            job: { ...job, identifier, issueId: job.issueId ?? identifier },
+            checkout,
+            gh: ghClient,
+            linear: withTokenUse(linearClient, tokens),
+            typecheckTouched: typecheckTouched ?? createTypecheckTouched(),
+            formatCheck,
+            formatApply: applyFormat,
+            adwText: readFileSync(join(workspace, adwFile), "utf8"),
+            now,
+            sleep,
+            waitTimeoutMs,
+            waitIntervalMs,
+          });
+          return { ...job, ...exit, tokens };
+        }
+        if (job.role === "factory-checker") {
+          const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier, {
+            env,
+            issueId: typeof job.issueId === "string" ? job.issueId : undefined,
+            sessionId: typeof result.sessionId === "string" ? result.sessionId : undefined,
+          });
+          logTokenRun(tokens);
+          const linearClient = linear ?? createLinearCliClient({ env, runCommand });
+          const checkerGhClient = checkerGh ?? createCheckerGh({ env, runCommand });
+          const exit = await completeChecker({
+            job: { ...job, identifier, issueId: job.issueId ?? identifier },
+            linear: withTokenUse(linearClient, tokens),
+            gh: checkerGhClient,
+            now,
+            sleep,
+            waitTimeoutMs,
+            waitIntervalMs,
+          });
+          return { ...job, ...exit, tokens };
+        }
+        return job;
+      } finally {
+        restoreEconomyPins();
       }
-      if (job.role === "factory-checker") {
-        const tokens = tokenSnapshotFromCollected(job.role, result.tokenUse ?? {}, identifier, {
-          env,
-          issueId: typeof job.issueId === "string" ? job.issueId : undefined,
-          sessionId: typeof result.sessionId === "string" ? result.sessionId : undefined,
-        });
-        logTokenRun(tokens);
-        const linearClient = linear ?? createLinearCliClient({ env, runCommand });
-        const checkerGhClient = checkerGh ?? createCheckerGh({ env, runCommand });
-        const exit = await completeChecker({
-          job: { ...job, identifier, issueId: job.issueId ?? identifier },
-          linear: withTokenUse(linearClient, tokens),
-          gh: checkerGhClient,
-          now,
-          sleep,
-          waitTimeoutMs,
-          waitIntervalMs,
-        });
-        return { ...job, ...exit, tokens };
-      }
-      return job;
     },
   };
 }

@@ -282,6 +282,7 @@ export function buildImplementAppendOverlay() {
  *   cheapRetry?: boolean,
  *   mergeFailResume?: boolean,
  *   slimOnly?: boolean,
+ *   profile?: string,
  * }} input
  * @returns {{ requiredHelpers: string[], skills: string[], rules: string[], appendOverlay: string, designLockHeadings: string[], compositionHints: [], sliceBrief: string, hermesBrief: string, slimOnly: boolean }}
  */
@@ -340,6 +341,7 @@ export function selectImplementContext(input = {}) {
         requiredHelpers,
         paths,
         rotationIndex: typeof input.rotationIndex === "number" ? input.rotationIndex : Date.now(),
+        profile: input.profile,
       });
   const modelRouteBrief = modelRoute && !slimOnly ? formatModelRouteBrief(modelRoute) : "";
 

@@ -160,9 +160,10 @@ function implementRunner({
   waitTimeoutMs,
   waitIntervalMs,
   spawnStatus = 0,
+  env,
 }) {
   return createPiJobRunner({
-    env: validWorkerEnv(),
+    env: env ?? validWorkerEnv(),
     workspace: ROOT,
     worktree: worktree ?? fakeWorktree(),
     gh,
@@ -1540,6 +1541,30 @@ test("implement parent --model follows free route on simple slices", async () =>
   assert.ok(
     FREE_MODEL_ROTATION.includes(parentModel),
     `expected free/cheap parent, got ${parentModel}`,
+  );
+  assert.notEqual(parentModel, "cursor/composer-2.5");
+});
+
+test("economy profile uses free parent on standard (empty-signal) slices", async () => {
+  const spawned = [];
+  const env = validWorkerEnv();
+  env.HARNESS_MODEL_PROFILE = "economy";
+  await implementRunner({
+    env,
+    gh: fakeGh(),
+    linear: fakeLinear(),
+    spawned,
+  }).run({
+    role: "implement",
+    identifier: "KIT-99",
+    issueId: "issue-1",
+    adwFile: ".pi/adw/feature.yaml",
+  });
+  const modelIdx = spawned[0].args.indexOf("--model");
+  const parentModel = spawned[0].args[modelIdx + 1];
+  assert.ok(
+    FREE_MODEL_ROTATION.includes(parentModel),
+    `expected free/cheap parent under economy, got ${parentModel}`,
   );
   assert.notEqual(parentModel, "cursor/composer-2.5");
 });

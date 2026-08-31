@@ -1,11 +1,13 @@
 /**
  * Cheapest-capable model routing for implement gates.
  * Rule-based complexity → gate → free rotation → paid fallback.
+ * Profile (`HARNESS_MODEL_PROFILE`) shifts how aggressive free/cheap OpenRouter is.
  * Pi agent frontmatter still pins defaults; this module drives prompts + metrics.
  */
 
 /** @typedef {"plan" | "scaffold" | "implement" | "verify"} ModelGate */
 /** @typedef {"simple" | "standard" | "critical"} ComplexityTier */
+/** @typedef {"economy" | "balanced" | "premium"} ModelProfile */
 
 export const FREE_MODEL_ROTATION = Object.freeze([
   "openrouter/minimax/minimax-m3:free",
@@ -15,9 +17,55 @@ export const FREE_MODEL_ROTATION = Object.freeze([
 
 export const PAID_FALLBACK_CHAIN = Object.freeze(["openrouter/tencent/hy3", "cursor/composer-2.5"]);
 
+/** OpenRouter-only fallback after free rotation — no Cursor Composer. */
+export const ECONOMY_PAID_FALLBACK_CHAIN = Object.freeze([
+  "openrouter/tencent/hy3",
+  "openrouter/xiaomi/mimo-v2.5-pro",
+]);
+
 export const COMPOSER_MODEL = "cursor/composer-2.5";
 export const SCOUT_MODEL = "openrouter/tencent/hy3";
 export const VERIFY_PRIMARY = "openrouter/tencent/hy3";
+/** Cheap OpenRouter for factory-checker / land when profile is economy (not Grok). */
+export const ECONOMY_FAST_MODEL = SCOUT_MODEL;
+
+/** Agent files whose frontmatter `model:` is rewritten for an economy stay. */
+export const ECONOMY_PINNED_AGENTS = Object.freeze([
+  "draft.md",
+  "scout.md",
+  "gate.md",
+  "nest.md",
+  "expo.md",
+  "drizzle.md",
+  "ui-ux.md",
+  "devops.md",
+  "slop.md",
+]);
+
+export const MODEL_PROFILES = Object.freeze(["economy", "balanced", "premium"]);
+export const DEFAULT_MODEL_PROFILE = "balanced";
+
+/**
+ * @param {unknown} value
+ * @returns {ModelProfile}
+ */
+export function parseModelProfile(value) {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (raw === "economy" || raw === "balanced" || raw === "premium") {
+    return raw;
+  }
+  return DEFAULT_MODEL_PROFILE;
+}
+
+/**
+ * @param {string[]} chain
+ * @returns {string[]}
+ */
+export function withoutComposer(chain) {
+  return chain.filter((id) => !String(id).toLowerCase().includes("composer"));
+}
 
 /** Paths / keywords that force critical (Composer) ownership. */
 export const CRITICAL_PATH_MARKERS = Object.freeze([
@@ -168,9 +216,26 @@ export function rotateFreeChain(startIndex = 0) {
 }
 
 /**
+ * Economy chain: free/Laguna → Hy3 → MiMo. Never Cursor Composer.
+ *
+ * @param {number} [startIndex]
+ * @returns {string[]}
+ */
+export function rotateEconomyChain(startIndex = 0) {
+  const n = FREE_MODEL_ROTATION.length;
+  const start = ((Number(startIndex) % n) + n) % n;
+  /** @type {string[]} */
+  const rotated = [];
+  for (let i = 0; i < n; i += 1) {
+    rotated.push(FREE_MODEL_ROTATION[(start + i) % n]);
+  }
+  return withoutComposer([...rotated, ...ECONOMY_PAID_FALLBACK_CHAIN]);
+}
+
+/**
  * @param {ModelGate} gate
  * @param {ComplexityTier} tier
- * @param {{ rotationIndex?: number }} [options]
+ * @param {{ rotationIndex?: number, profile?: ModelProfile | string }} [options]
  * @returns {{
  *   gate: ModelGate,
  *   tier: ComplexityTier,
@@ -181,13 +246,32 @@ export function rotateFreeChain(startIndex = 0) {
  * }}
  */
 export function routeForGate(gate, tier, options = {}) {
+  const profile = parseModelProfile(options.profile);
   const rotationIndex =
     typeof options.rotationIndex === "number" && Number.isFinite(options.rotationIndex)
       ? options.rotationIndex
       : 0;
-  const freeChain = rotateFreeChain(rotationIndex);
+  const freeChain =
+    profile === "economy" ? rotateEconomyChain(rotationIndex) : rotateFreeChain(rotationIndex);
 
   if (gate === "plan") {
+    if (profile === "economy") {
+      return {
+        gate,
+        tier,
+        primary: SCOUT_MODEL,
+        fallbacks: withoutComposer([
+          "openrouter/xiaomi/mimo-v2.5-pro",
+          ...FREE_MODEL_ROTATION,
+        ]),
+        chain: withoutComposer([
+          SCOUT_MODEL,
+          "openrouter/xiaomi/mimo-v2.5-pro",
+          ...FREE_MODEL_ROTATION,
+        ]),
+        useFree: false,
+      };
+    }
     return {
       gate,
       tier,
@@ -199,13 +283,23 @@ export function routeForGate(gate, tier, options = {}) {
   }
 
   if (gate === "scaffold") {
-    if (tier === "critical") {
+    if (tier === "critical" && profile !== "economy") {
       return {
         gate,
         tier,
         primary: COMPOSER_MODEL,
         fallbacks: [],
         chain: [COMPOSER_MODEL],
+        useFree: false,
+      };
+    }
+    if (profile === "premium") {
+      return {
+        gate,
+        tier,
+        primary: COMPOSER_MODEL,
+        fallbacks: freeChain,
+        chain: [COMPOSER_MODEL, ...freeChain],
         useFree: false,
       };
     }
@@ -220,7 +314,16 @@ export function routeForGate(gate, tier, options = {}) {
   }
 
   if (gate === "verify") {
-    // Criteria-only: cheap OpenRouter first; Composer last.
+    if (profile === "economy") {
+      return {
+        gate,
+        tier,
+        primary: VERIFY_PRIMARY,
+        fallbacks: freeChain,
+        chain: [VERIFY_PRIMARY, ...freeChain.filter((id) => id !== VERIFY_PRIMARY)],
+        useFree: true,
+      };
+    }
     return {
       gate,
       tier,
@@ -232,7 +335,19 @@ export function routeForGate(gate, tier, options = {}) {
   }
 
   // implement gate
-  if (tier === "simple") {
+  if (profile === "premium") {
+    return {
+      gate,
+      tier,
+      primary: COMPOSER_MODEL,
+      fallbacks: freeChain,
+      chain: [COMPOSER_MODEL, ...freeChain],
+      useFree: false,
+    };
+  }
+
+  if (profile === "economy") {
+    // All tiers — including critical — stay OpenRouter-only. No Composer.
     return {
       gate,
       tier,
@@ -242,6 +357,7 @@ export function routeForGate(gate, tier, options = {}) {
       useFree: true,
     };
   }
+
   if (tier === "critical") {
     return {
       gate,
@@ -252,6 +368,19 @@ export function routeForGate(gate, tier, options = {}) {
       useFree: false,
     };
   }
+
+  if (tier === "simple") {
+    return {
+      gate,
+      tier,
+      primary: freeChain[0],
+      fallbacks: freeChain.slice(1),
+      chain: freeChain,
+      useFree: true,
+    };
+  }
+
+  // balanced standard
   return {
     gate,
     tier,
@@ -272,22 +401,25 @@ export function routeForGate(gate, tier, options = {}) {
  *   requiredHelpers?: string[],
  *   paths?: string[],
  *   rotationIndex?: number,
+ *   profile?: ModelProfile | string,
  * }} input
  */
 export function buildModelRoute(input = {}) {
   const complexity = classifySliceComplexity(input);
+  const profile = parseModelProfile(input.profile);
   const rotationIndex = input.rotationIndex ?? Date.now();
-  const plan = routeForGate("plan", complexity.tier, { rotationIndex });
-  const scaffold = routeForGate("scaffold", complexity.tier, { rotationIndex });
-  const implement = routeForGate("implement", complexity.tier, { rotationIndex });
-  const verify = routeForGate("verify", complexity.tier, { rotationIndex });
+  const gateOpts = { rotationIndex, profile };
+  const plan = routeForGate("plan", complexity.tier, gateOpts);
+  const scaffold = routeForGate("scaffold", complexity.tier, gateOpts);
+  const implement = routeForGate("implement", complexity.tier, gateOpts);
+  const verify = routeForGate("verify", complexity.tier, gateOpts);
 
   return {
+    profile,
     complexity,
     skipDraft: complexity.skipDraft,
     gates: { plan, scaffold, implement, verify },
-    // Include Laguna (paid list, not `:free`) with the free OpenRouter scaffolds.
-    freeRotation: rotateFreeChain(rotationIndex).filter(
+    freeRotation: (profile === "economy" ? rotateEconomyChain(rotationIndex) : rotateFreeChain(rotationIndex)).filter(
       (id) => id.includes(":free") || id.includes("laguna-s-2.1"),
     ),
   };
@@ -300,42 +432,137 @@ export function buildModelRoute(input = {}) {
  * @returns {string}
  */
 export function formatModelRouteBrief(route) {
-  const { complexity, gates, skipDraft, freeRotation } = route;
+  const { complexity, gates, skipDraft, freeRotation, profile } = route;
+  const profileLabel = parseModelProfile(profile);
+  const economy = profileLabel === "economy";
+  const implementNote = gates.implement.useFree
+    ? economy
+      ? " (harness sets parent `--model` + pins Scout/Draft/helpers/Slop to OpenRouter — no Composer)"
+      : " (harness sets parent `--model` to this free/cheap primary — Composer helpers still harden when listed)"
+    : " (Composer parent `--model`; owns complex/critical logic)";
   const lines = [
     "### Model route (cheapest capable)",
     "",
+    `- Profile: **${profileLabel}** (\`HARNESS_MODEL_PROFILE\`)`,
     `- Complexity: **${complexity.tier}** (score ${complexity.score})`,
     `- Reasons: ${complexity.reasons.length > 0 ? complexity.reasons.join("; ") : "(none)"}`,
     `- Cheap rotation: ${freeRotation.join(" → ")}`,
     `- Plan (Scout): \`${gates.plan.primary}\``,
     `- Scaffold (Draft): ${skipDraft ? "**Skip Draft** (critical seam)" : `\`${gates.scaffold.primary}\` → ${gates.scaffold.fallbacks.slice(0, 3).join(" → ")}`}`,
-    `- Implement (parent/helpers): \`${gates.implement.primary}\`${gates.implement.useFree ? " (harness sets parent `--model` to this free/cheap primary — Composer helpers still harden when listed)" : " (Composer parent `--model`; owns complex/critical logic)"}`,
+    `- Implement (parent/helpers): \`${gates.implement.primary}\`${implementNote}`,
     `- Verify (criteria-only): \`${gates.verify.primary}\` then free rotation; Mechanical close stays harness-owned (no Pi Gate)`,
     "",
-    "Override: if a free model 429s, continue the fallback chain — do not stall the stay.",
+    economy
+      ? "Economy: OpenRouter only — never `cursor/composer-*`. On 429, continue the OpenRouter fallback chain."
+      : "Override: if a free model 429s, continue the fallback chain — do not stall the stay.",
   ];
   return `${lines.join("\n")}\n`;
 }
 
 /**
  * Parent Pi `--model` for an implement stay.
- * Simple + useFree → route primary (free/Laguna chain). Otherwise Composer / env fallback.
+ * useFree → route primary (free/Laguna chain). Premium never overrides to free.
+ * Economy never returns Composer even if `fallbackModel` is Composer.
  *
  * @param {ReturnType<typeof buildModelRoute> | null | undefined} route
  * @param {string} fallbackModel
  * @returns {string}
  */
 export function resolveImplementParentModel(route, fallbackModel) {
+  const profile = parseModelProfile(route?.profile);
+  const gate = route?.gates?.implement;
+  if (profile === "premium") {
+    return typeof fallbackModel === "string" && fallbackModel.length > 0
+      ? fallbackModel
+      : COMPOSER_MODEL;
+  }
+  if (profile === "economy") {
+    if (gate && typeof gate.primary === "string" && gate.primary.length > 0) {
+      return gate.primary;
+    }
+    return rotateEconomyChain(0)[0];
+  }
   const fallback =
     typeof fallbackModel === "string" && fallbackModel.length > 0 ? fallbackModel : COMPOSER_MODEL;
-  const gate = route?.gates?.implement;
   if (!gate || typeof gate.primary !== "string" || gate.primary.length === 0) {
     return fallback;
   }
-  if (gate.useFree === true && route?.complexity?.tier === "simple") {
+  if (gate.useFree === true) {
     return gate.primary;
   }
   return fallback;
+}
+
+/**
+ * factory-checker / land `--model`. Economy swaps Grok for cheap OpenRouter Hy3.
+ *
+ * @param {ModelProfile | string | undefined} profile
+ * @param {string} fallbackFastModel
+ * @returns {string}
+ */
+export function resolveFastRoleModel(profile, fallbackFastModel) {
+  const fallback =
+    typeof fallbackFastModel === "string" && fallbackFastModel.length > 0
+      ? fallbackFastModel
+      : "cursor/grok-4.6";
+  if (parseModelProfile(profile) === "economy") {
+    return ECONOMY_FAST_MODEL;
+  }
+  return fallback;
+}
+
+/**
+ * Per-agent OpenRouter pins for an economy stay (no Composer in model or fallbacks).
+ *
+ * @param {string} agentFileName e.g. `nest.md`
+ * @param {number} [rotationIndex]
+ * @returns {{ model: string, fallbackModels: string[] }}
+ */
+export function economyAgentModelSpec(agentFileName, rotationIndex = 0) {
+  const chain = rotateEconomyChain(rotationIndex);
+  const name = String(agentFileName ?? "").replace(/^.*\//, "");
+  if (name === "scout.md") {
+    return {
+      model: SCOUT_MODEL,
+      fallbackModels: withoutComposer([
+        "openrouter/xiaomi/mimo-v2.5-pro",
+        ...FREE_MODEL_ROTATION,
+      ]),
+    };
+  }
+  if (name === "gate.md") {
+    return {
+      model: "openrouter/xiaomi/mimo-v2.5-pro",
+      fallbackModels: withoutComposer([SCOUT_MODEL, ...FREE_MODEL_ROTATION]),
+    };
+  }
+  return {
+    model: chain[0],
+    fallbackModels: chain.slice(1),
+  };
+}
+
+/**
+ * Rewrite YAML frontmatter `model` / `fallbackModels` (keeps body intact).
+ *
+ * @param {string} markdown
+ * @param {{ model: string, fallbackModels: string[] }} pins
+ * @returns {string}
+ */
+export function rewriteAgentModelFrontmatter(markdown, pins) {
+  const model = typeof pins.model === "string" ? pins.model : "";
+  const fallbacks = Array.isArray(pins.fallbackModels) ? pins.fallbackModels.filter(Boolean) : [];
+  const fbLine = fallbacks.join(", ");
+  let out = String(markdown ?? "");
+  if (/^model:\s*.+$/m.test(out)) {
+    out = out.replace(/^model:\s*.+$/m, `model: ${model}`);
+  }
+  if (/^fallbackModels:\s*.+$/m.test(out)) {
+    out = out.replace(/^fallbackModels:\s*.+$/m, `fallbackModels: ${fbLine}`);
+  } else if (fbLine.length > 0 && /^model:\s*.+$/m.test(out)) {
+    out = out.replace(/^(model:\s*.+)$/m, `$1\nfallbackModels: ${fbLine}`);
+  }
+  return out;
 }
 
 /**
