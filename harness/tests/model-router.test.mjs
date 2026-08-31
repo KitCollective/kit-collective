@@ -172,7 +172,10 @@ test("resolveImplementParentModel uses OpenRouter Hy3 for critical under economy
   });
   assert.equal(route.complexity.tier, "critical");
   assert.match(resolveImplementParentModel(route, COMPOSER_MODEL), /tencent\/hy3/);
-  assert.equal(route.gates.implement.chain.some((id) => /composer/i.test(id)), false);
+  assert.equal(
+    route.gates.implement.chain.some((id) => /composer/i.test(id)),
+    false,
+  );
 });
 
 test("premium resolveImplementParentModel ignores free route", () => {
@@ -205,10 +208,17 @@ test("economy agent pins never name Composer", () => {
   for (const name of ["nest.md", "scout.md", "gate.md", "draft.md", "slop.md"]) {
     const pins = economyAgentModelSpec(name, 0);
     assert.equal(/composer/i.test(pins.model), false, name);
-    assert.equal(pins.fallbackModels.some((id) => /composer/i.test(id)), false, name);
+    assert.equal(
+      pins.fallbackModels.some((id) => /composer/i.test(id)),
+      false,
+      name,
+    );
   }
   assert.match(economyAgentModelSpec("nest.md", 0).model, /tencent\/hy3/);
-  assert.equal(rotateEconomyChain(0).some((id) => /composer/i.test(id)), false);
+  assert.equal(
+    rotateEconomyChain(0).some((id) => /composer/i.test(id)),
+    false,
+  );
   const rewritten = rewriteAgentModelFrontmatter(
     "<!-- Generated -->\n---\nname: nest\nmodel: cursor/composer-2.5\n---\n\nBody\n",
     economyAgentModelSpec("nest.md", 0),

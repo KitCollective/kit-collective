@@ -18,6 +18,7 @@ import { captureCheckerReviewDiff, formatCheckerReviewBundle } from "./checker-d
 import { completeChecker, createCheckerGh } from "./checker-exit.mjs";
 import { applySlopAgentSpawnEnv, factoryCheckerPiArgs } from "./checker-spawn.mjs";
 import { createDelegateGateConfig } from "./delegate-gate.mjs";
+import { applyEconomyAgentPins } from "./economy-agents.mjs";
 import {
   loadFirstPassRegistry,
   reviewFeedbackIsFirstPassOnly,
@@ -45,7 +46,6 @@ import { isCheapImplementRetry } from "./job-queue.mjs";
 import { completeLand, createLandGh, resolveLinkedPullRequest } from "./land.mjs";
 import { createAgentSessionBridge } from "./linear-agent-session.mjs";
 import { createLinearCliClient, WORKPAD_HEADING } from "./linear-cli.mjs";
-import { applyEconomyAgentPins } from "./economy-agents.mjs";
 import {
   labelForModelId,
   parseModelProfile,

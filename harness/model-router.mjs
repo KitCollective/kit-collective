@@ -260,10 +260,7 @@ export function routeForGate(gate, tier, options = {}) {
         gate,
         tier,
         primary: SCOUT_MODEL,
-        fallbacks: withoutComposer([
-          "openrouter/xiaomi/mimo-v2.5-pro",
-          ...FREE_MODEL_ROTATION,
-        ]),
+        fallbacks: withoutComposer(["openrouter/xiaomi/mimo-v2.5-pro", ...FREE_MODEL_ROTATION]),
         chain: withoutComposer([
           SCOUT_MODEL,
           "openrouter/xiaomi/mimo-v2.5-pro",
@@ -423,9 +420,10 @@ export function buildModelRoute(input = {}) {
     complexity,
     skipDraft: complexity.skipDraft,
     gates: { plan, scaffold, implement, verify },
-    freeRotation: (profile === "economy" ? rotateEconomyChain(rotationIndex) : rotateFreeChain(rotationIndex)).filter(
-      (id) => id.includes(":free") || id.includes("laguna-s-2.1"),
-    ),
+    freeRotation: (profile === "economy"
+      ? rotateEconomyChain(rotationIndex)
+      : rotateFreeChain(rotationIndex)
+    ).filter((id) => id.includes(":free") || id.includes("laguna-s-2.1")),
   };
 }
 
