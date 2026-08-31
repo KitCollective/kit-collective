@@ -1620,6 +1620,9 @@ export function createPiJobRunner({
           implementContext,
           reviewBundle,
         });
+        // Restore before implement-exit / checker git (rebase fails on dirty .pi/agents pins).
+        restoreEconomyPins();
+        restoreEconomyPins = () => {};
         if (result.idleTimeout) {
           harnessLog({
             role: job.role,

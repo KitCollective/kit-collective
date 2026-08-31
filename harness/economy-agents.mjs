@@ -1,6 +1,6 @@
 /**
  * Temporary OpenRouter model pins on `.pi/agents/*.md` for an economy stay.
- * Restores originals after Pi exits so write-scope / git stay clean.
+ * Caller must restore before any worktree git (rebase/commit) — dirty pins block rebase.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -13,7 +13,7 @@ import {
 /**
  * @param {string} agentsDir absolute path to `.pi/agents`
  * @param {number} [rotationIndex]
- * @returns {() => void} restore originals
+ * @returns {() => void} restore originals (safe to call more than once)
  */
 export function applyEconomyAgentPins(agentsDir, rotationIndex = 0) {
   /** @type {Map<string, string>} */
@@ -32,7 +32,12 @@ export function applyEconomyAgentPins(agentsDir, rotationIndex = 0) {
       // Missing agent in this worktree — skip.
     }
   }
+  let restored = false;
   return () => {
+    if (restored) {
+      return;
+    }
+    restored = true;
     for (const [path, original] of backups) {
       try {
         writeFileSync(path, original, "utf8");
