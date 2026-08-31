@@ -70,3 +70,13 @@ test("implement ADW production gh coverage fails when the typecheck-throw In Rev
   const missing = missingImplementAdwProductionGhCoverage(mutated);
   assert.ok(missing.some((item) => item.includes("worker typecheck fails")));
 });
+
+test("implement ADW production gh coverage fails when the non-interactive --body test is removed", () => {
+  const source = readFileSync(IMPLEMENT_ADW_TEST, "utf8");
+  const mutated = source.replace(
+    'test("resolvePrCreateBody and createPr always send non-empty --body (non-interactive gh)"',
+    'test("removed pr create body coverage"',
+  );
+  const missing = missingImplementAdwProductionGhCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("non-empty --body")));
+});

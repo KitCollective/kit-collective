@@ -4,8 +4,9 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { LINEAR_CLI_PIN } from "../boot-env.mjs";
-import { createGhClient } from "../gh-cli.mjs";
+import { createGhClient, resolvePrCreateBody } from "../gh-cli.mjs";
 import {
+  buildImplementPrBody,
   classifyCiFailure,
   collectWorkpadHonestyViolations,
   completeImplementAdw,
@@ -1422,6 +1423,10 @@ test("production createGhClient pushes the rebased head, waits through pending r
   assert.equal(create.args.includes("kit-99"), true);
   assert.equal(create.args.includes("--base"), true);
   assert.equal(create.args.includes("development"), true);
+  assert.equal(create.args.includes("--body"), true);
+  const bodyIdx = create.args.indexOf("--body");
+  assert.equal(bodyIdx >= 0, true);
+  assert.equal(String(create.args[bodyIdx + 1] ?? "").trim().length > 0, true);
   assert.equal(viewCount >= 3, true, "must poll viewPr until required checks are green");
   assert.equal(
     linear.calls.some((call) => call[0] === "setStatus" && call[1].status === IN_REVIEW),
@@ -1516,6 +1521,12 @@ test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and
     head: "kit-99",
     title: "KIT-99: implement",
   });
+  const create = calls.find(
+    (call) => call.command === "gh" && call.args[0] === "pr" && call.args[1] === "create",
+  );
+  assert.ok(create);
+  assert.equal(create.args.includes("--body"), true);
+  assert.match(String(create.args[create.args.indexOf("--body") + 1]), /Harness implement/);
   for (const call of calls) {
     assert.equal(call.args.join(" ").includes("harness_git_auth_test_token"), false);
     assert.equal(JSON.stringify(call.args).includes("Authorization"), false);
@@ -1530,6 +1541,74 @@ test("production gh client keeps GH_TOKEN in env, exposes merge that throws, and
     calls.some((call) => call.command === "gh" && call.args.includes("merge")),
     false,
   );
+});
+
+test("resolvePrCreateBody and createPr always send non-empty --body (non-interactive gh)", async () => {
+  assert.equal(resolvePrCreateBody({ identifier: "KIT-150" }), "Harness implement for KIT-150.");
+  assert.equal(resolvePrCreateBody({ body: "  " }), "Harness implement for issue.");
+  assert.equal(resolvePrCreateBody({ body: "Custom body\n" }), "Custom body");
+  assert.match(buildImplementPrBody({ identifier: "KIT-150" }), /Harness implement for KIT-150/);
+  assert.match(
+    buildImplementPrBody({
+      identifier: "KIT-150",
+      description: "Type: Feature\nwrite-scope: apps/api/**, packages/db/**\n\n## What to build\n",
+    }),
+    /write-scope: apps\/api\/\*\*, packages\/db\/\*\*/,
+  );
+
+  const calls = [];
+  const gh = createGhClient({
+    env: { GH_TOKEN: "ghp_secret_token" },
+    async runCommand(command, args) {
+      calls.push({ command, args });
+      if (command === "gh" && args[0] === "pr" && args[1] === "list") {
+        return "[]";
+      }
+      if (command === "gh" && args[0] === "pr" && args[1] === "create") {
+        return "https://github.com/KitCollective/kit-collective/pull/166\n";
+      }
+      return "";
+    },
+  });
+  await gh.createPr({
+    cwd: "/tmp/KIT-150",
+    base: "development",
+    head: "kit-150",
+    title: "KIT-150: implement",
+    identifier: "KIT-150",
+  });
+  const create = calls.find(
+    (call) => call.command === "gh" && call.args[0] === "pr" && call.args[1] === "create",
+  );
+  assert.ok(create);
+  assert.equal(create.args.includes("--title"), true);
+  assert.equal(create.args.includes("--body"), true);
+  assert.equal(String(create.args[create.args.indexOf("--body") + 1]).trim().length > 0, true);
+});
+
+test("completeImplementAdw createPr body includes write-scope from the issue description", async () => {
+  const gh = fakeGh();
+  const description = "write-scope: apps/api/**, packages/db/**\n\n## What to build\nPrivate jersey";
+  const linear = fakeLinearWithIssue(description);
+  const result = await completeImplementAdw({
+    job: { identifier: "KIT-150", issueId: "issue-150", adwFile: ".pi/adw/feature.yaml" },
+    checkout: { path: "/tmp/KIT-150", branch: "kit-150" },
+    gh,
+    linear,
+    typecheckTouched: async () => undefined,
+    formatCheck: async () => undefined,
+    listChangedFiles: async () => ["apps/api/src/collection/collection.service.ts"],
+    issueDescription: description,
+    adwText: "steps:\n  - pr\n  - in-review\nnever:\n  - merge\n",
+    sleep: async () => undefined,
+    waitIntervalMs: 0,
+    waitTimeoutMs: 60_000,
+  });
+  assert.equal(result.status, IN_REVIEW);
+  const create = gh.calls.find((call) => call[0] === "createPr");
+  assert.ok(create);
+  assert.match(create[1].body, /write-scope: apps\/api\/\*\*, packages\/db\/\*\*/);
+  assert.match(create[1].body, /Harness implement for KIT-150/);
 });
 
 test("completeImplementAdw refuses to run full pnpm test on the worker", async () => {

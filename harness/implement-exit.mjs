@@ -372,6 +372,26 @@ async function resolveIssueDescription(description, { linear, job }) {
 }
 
 /**
+ * PR body for non-interactive `gh pr create`. Always non-empty; copies the
+ * issue `write-scope:` line so GitHub CI write-scope ratchet can see it.
+ *
+ * @param {{ identifier: string, description?: string }} input
+ * @returns {string}
+ */
+export function buildImplementPrBody({ identifier, description }) {
+  const id =
+    typeof identifier === "string" && identifier.trim().length > 0
+      ? identifier.trim()
+      : "issue";
+  const lines = [`Harness implement for ${id}.`];
+  const scope = String(description ?? "").match(/^write-scope:\s*\S.*$/m);
+  if (scope) {
+    lines.push("", scope[0].trim());
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+/**
  * @param {{
  *   job: { identifier: string, issueId: string },
  *   checkout: { path: string },
@@ -1315,11 +1335,16 @@ export async function completeImplementAdw(input) {
   }
 
   if (typeof pr?.url !== "string" || pr.url.length === 0) {
+    const descriptionForPr = await resolveIssueDescription(issueDescription, { linear, job });
     pr = await gh.createPr({
       cwd: checkout.path,
       base: IMPLEMENT_PR_BASE,
       head: checkout.branch,
       title: `${job.identifier}: implement`,
+      body: buildImplementPrBody({
+        identifier: job.identifier,
+        description: descriptionForPr,
+      }),
       identifier: job.identifier,
     });
   }

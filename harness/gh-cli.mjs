@@ -11,6 +11,26 @@ const execFile = promisify(execFileCb);
 export const DEFAULT_GH_REPO = "KitCollective/kit-collective";
 
 /**
+ * Non-interactive `gh pr create` requires `--body` (or `--fill`). Empty / missing
+ * body fails closed on the worker — KIT-150 burned a full implement stay on this.
+ *
+ * @param {{ title?: string, identifier?: string, body?: string }} [input]
+ * @returns {string}
+ */
+export function resolvePrCreateBody({ title, identifier, body } = {}) {
+  if (typeof body === "string" && body.trim().length > 0) {
+    return body.trimEnd();
+  }
+  const id =
+    typeof identifier === "string" && identifier.trim().length > 0
+      ? identifier.trim()
+      : typeof title === "string" && title.trim().length > 0
+        ? title.trim().replace(/:.*$/, "").trim()
+        : "issue";
+  return `Harness implement for ${id}.`;
+}
+
+/**
  * Open PRs whose title starts with the issue id. KIT-47 does not match KIT-470.
  *
  * @param {Array<{ title?: string }> | undefined} rows
@@ -315,7 +335,14 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
     },
 
     /**
-     * @param {{ cwd: string, base: string, head?: string, title: string, body?: string }} input
+     * @param {{
+     *   cwd: string,
+     *   base: string,
+     *   head?: string,
+     *   title: string,
+     *   body?: string,
+     *   identifier?: string,
+     * }} input
      */
     async createPr({ cwd, base, head, title, body, identifier }) {
       if (typeof head !== "string" || head.length === 0) {
@@ -328,10 +355,19 @@ export function createGhClient({ env = process.env, runCommand } = {}) {
         }
       }
       await run("git", ["push", "-u", "origin", `HEAD:refs/heads/${head}`], { cwd, env });
-      const args = ["pr", "create", "--base", base, "--head", head, "--title", title];
-      if (typeof body === "string") {
-        args.push("--body", body);
-      }
+      const resolvedBody = resolvePrCreateBody({ title, identifier, body });
+      const args = [
+        "pr",
+        "create",
+        "--base",
+        base,
+        "--head",
+        head,
+        "--title",
+        title,
+        "--body",
+        resolvedBody,
+      ];
       const stdout = await run("gh", args, { cwd, env });
       const url = stdout.trim().split("\n").filter(Boolean).at(-1);
       return { url, mergeable: "UNKNOWN", checks: [] };
