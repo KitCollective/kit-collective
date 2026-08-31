@@ -51,9 +51,7 @@ export function missingImplementCheapRetryCoverage(sources) {
   }
   const piJob = sources.piJob ?? "";
   if (!/format vs lockfile vs migration prefix/i.test(piJob)) {
-    missing.push(
-      "pi-job.mjs format vs lockfile vs migration prefix class on cheap retry",
-    );
+    missing.push("pi-job.mjs format vs lockfile vs migration prefix class on cheap retry");
   }
   if (!/cheapRetry/.test(piJob)) {
     missing.push("pi-job.mjs cheapRetry prompt");
