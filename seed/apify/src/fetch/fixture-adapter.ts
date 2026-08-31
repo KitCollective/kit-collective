@@ -6,6 +6,8 @@ import type {
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,
+  FetchLeagueParams,
+  FetchLeagueSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
 
@@ -28,6 +30,26 @@ function scopeClubSeason(
   };
 }
 
+function scopeLeagueSeason(
+  payload: TransfermarktRawPayload,
+  seasonLabel: string,
+): TransfermarktRawPayload {
+  const seasons = payload.seasons
+    .filter((season) => season.label === seasonLabel)
+    .map((season) => ({
+      ...season,
+      clubs: season.clubs.map((club) => ({
+        ...club,
+        players: [],
+      })),
+    }));
+
+  return {
+    competition: payload.competition,
+    seasons,
+  };
+}
+
 export function createFixtureFetchAdapter(fixturePath: string): FetchAdapter {
   let cached: TransfermarktRawPayload | undefined;
 
@@ -42,6 +64,23 @@ export function createFixtureFetchAdapter(fixturePath: string): FetchAdapter {
   }
 
   return {
+    async fetchLeague(_params: FetchLeagueParams): Promise<TransfermarktRawPayload> {
+      const payload = await loadFixture();
+      return {
+        competition: payload.competition,
+        seasons: [],
+      };
+    },
+
+    async fetchLeagueSeason(params: FetchLeagueSeasonParams): Promise<TransfermarktRawPayload> {
+      const payload = await loadFixture();
+      const scoped = scopeLeagueSeason(payload, params.season);
+      if (scoped.seasons.length === 0) {
+        throw new Error(`Missing competition season ${params.season} for ${params.competition}`);
+      }
+      return scoped;
+    },
+
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
       const payload = await loadFixture();
       const facts = normalize(payload);

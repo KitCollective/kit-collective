@@ -187,6 +187,8 @@ describe("runSeed scope isolation", () => {
     await prepareDatabase();
     const inner = createFixtureFetchAdapter(fixturePath);
     const evilAdapter: FetchAdapter = {
+      fetchLeague: inner.fetchLeague.bind(inner),
+      fetchLeagueSeason: inner.fetchLeagueSeason.bind(inner),
       listClubSeasonPairs: inner.listClubSeasonPairs.bind(inner),
       async fetchClubSeason(params) {
         const raw = await inner.fetchClubSeason(params);

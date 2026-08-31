@@ -31,6 +31,60 @@ function resolveCompetitionOrThrow(
   return catalog;
 }
 
+function competitionPayload(identity: CompetitionIdentity): TransfermarktRawPayload["competition"] {
+  const tmCode = identity.leagueTransfermarktId;
+  return {
+    id: tmCode.toLowerCase(),
+    name: identity.name,
+    country: {
+      id: `country-${identity.iso3166.toLowerCase()}`,
+      name: identity.countryName,
+      iso3166: identity.iso3166,
+    },
+  };
+}
+
+export function mapLeagueToPayload(
+  competitionSlug: string,
+  identity?: CompetitionIdentity,
+): TransfermarktRawPayload {
+  const resolved = resolveCompetitionOrThrow(competitionSlug, identity);
+  return {
+    competition: competitionPayload(resolved),
+    seasons: [],
+  };
+}
+
+export function mapLeagueSeasonToPayload(params: {
+  competitionSlug: string;
+  seasonLabel: string;
+  clubs: ActorSeasonClubRow[];
+  identity?: CompetitionIdentity;
+}): TransfermarktRawPayload {
+  const identity = resolveCompetitionOrThrow(params.competitionSlug, params.identity);
+  const startYear = labelToStartYear(params.seasonLabel);
+  const { startDate, endDate } = seasonCalendarBounds(startYear);
+
+  return {
+    competition: competitionPayload(identity),
+    seasons: [
+      {
+        id: String(startYear),
+        label: params.seasonLabel,
+        startDate,
+        endDate,
+        calendarKind: "split_year",
+        clubs: params.clubs.map((club) => ({
+          id: club.clubId,
+          name: club.clubName,
+          country: { iso3166: identity.iso3166 },
+          players: [],
+        })),
+      },
+    ],
+  };
+}
+
 type ResolvedPlayer = { id: string; name: string; jerseyNumber?: number };
 
 function resolvePlayer(
@@ -72,7 +126,6 @@ function resolvePlayer(
 
 export function mapClubSeasonToPayload(params: MapClubSeasonParams): TransfermarktRawPayload {
   const identity = resolveCompetitionOrThrow(params.competitionSlug, params.identity);
-  const tmCode = identity.leagueTransfermarktId;
   const startYear = labelToStartYear(params.seasonLabel);
   const { startDate, endDate } = seasonCalendarBounds(startYear);
 
@@ -81,15 +134,7 @@ export function mapClubSeasonToPayload(params: MapClubSeasonParams): Transfermar
     .filter((player): player is ResolvedPlayer => player !== null);
 
   return {
-    competition: {
-      id: tmCode.toLowerCase(),
-      name: identity.name,
-      country: {
-        id: `country-${identity.iso3166.toLowerCase()}`,
-        name: identity.countryName,
-        iso3166: identity.iso3166,
-      },
-    },
+    competition: competitionPayload(identity),
     seasons: [
       {
         id: String(startYear),

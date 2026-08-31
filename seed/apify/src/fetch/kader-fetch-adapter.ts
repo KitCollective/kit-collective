@@ -8,6 +8,8 @@ import {
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
+  mapLeagueSeasonToPayload,
+  mapLeagueToPayload,
   seasonClubRowsToPairs,
   startYearToLabel,
 } from "./actor-mapper.js";
@@ -232,6 +234,21 @@ function createAdapterFromClient(
   onProfileHole?: (playerId: string, error: unknown) => void,
 ): FetchAdapter {
   return {
+    async fetchLeague(params) {
+      return mapLeagueToPayload(params.competition);
+    },
+
+    async fetchLeagueSeason(params) {
+      const seasonLabel = resolveSeasonRef(params.competition, params.season);
+      const startYear = labelToStartYear(seasonLabel);
+      const clubs = await client.fetchCompetitionSeason(params.competition, startYear);
+      return mapLeagueSeasonToPayload({
+        competitionSlug: params.competition,
+        seasonLabel,
+        clubs,
+      });
+    },
+
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
       const available = await listSeasons(params.competition);
       const seasons = expandSeasonStartYears(
@@ -326,6 +343,24 @@ function createLiveAdapter(
   );
 
   return {
+    async fetchLeague(params) {
+      const identity = await identityFor(params.competition);
+      return mapLeagueToPayload(params.competition, identity);
+    },
+
+    async fetchLeagueSeason(params) {
+      const identity = await identityFor(params.competition);
+      const seasonLabel = resolveSeasonRef(params.competition, params.season);
+      const startYear = labelToStartYear(seasonLabel);
+      const clubs = await client.fetchCompetitionSeason(params.competition, startYear);
+      return mapLeagueSeasonToPayload({
+        competitionSlug: params.competition,
+        seasonLabel,
+        clubs,
+        identity,
+      });
+    },
+
     async listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]> {
       await identityFor(params.competition);
       const { fromYear, toYear } = resolveSeasonYearRange(

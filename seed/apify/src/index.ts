@@ -2,6 +2,8 @@ export type {
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,
+  FetchLeagueParams,
+  FetchLeagueSeasonParams,
   ListClubSeasonPairsParams,
 } from "./fetch/adapter.js";
 export {
@@ -32,6 +34,15 @@ export {
 export { parseLane, resolveDatabaseUrl } from "./lane.js";
 export { mapFacts } from "./map/index.js";
 export { normalize, stripForbiddenFields } from "./normalize/index.js";
+export type {
+  HierarchyGrain,
+  LeagueGrain,
+  LeagueSeasonGrain,
+  ParsedGrainCli,
+  ParsedSeedCli,
+  ParsedWalkCli,
+} from "./parse-cli.js";
+export { parseSeedApifyCli } from "./parse-cli.js";
 export {
   assertSeedProxyAvailable,
   createProxyFetchHtml,
@@ -44,9 +55,12 @@ export { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-
 export {
   type ClubSeasonFailure,
   parseCliArgs,
+  type RunHierarchyGrainOptions,
+  type RunHierarchyGrainResult,
   type RunSeedOptions,
   type RunSeedResult,
   type RunSeedSummary,
+  runHierarchyGrain,
   runSeed,
 } from "./run.js";
 export {

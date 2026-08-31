@@ -16,8 +16,12 @@ import { assertFactsSeasonScope } from "../scope-isolation.js";
 import type { MapResult, NormalizedFacts, NormalizedSeason } from "../types.js";
 import { TM_SYSTEM } from "../types.js";
 
+export type MapDepth = "league" | "league_season" | "full";
+
 export interface MapFactsOptions {
   allowedSeasonLabels?: ReadonlySet<string>;
+  /** league = country+league only; league_season skips players; full = default walk. */
+  depth?: MapDepth;
 }
 
 async function findEntityId(db: Db, value: string): Promise<string | undefined> {
@@ -268,6 +272,8 @@ export async function mapFacts(
   facts: NormalizedFacts,
   options?: MapFactsOptions,
 ): Promise<MapResult> {
+  const depth: MapDepth = options?.depth ?? "full";
+
   if (options?.allowedSeasonLabels) {
     assertFactsSeasonScope(
       facts.seasons.map((seasonData) => seasonData.label),
@@ -307,6 +313,10 @@ export async function mapFacts(
   result.catalogLabels += leagueResult.labels;
   result.externalIds += leagueResult.externalIds;
 
+  if (depth === "league") {
+    return result;
+  }
+
   for (const seasonData of facts.seasons) {
     const seasonResult = await upsertSeasonRow(db, leagueResult.id, seasonData);
     if (seasonResult.created) result.seasons += 1;
@@ -326,6 +336,10 @@ export async function mapFacts(
 
       const teamSeasonResult = await upsertTeamSeasonRow(db, clubResult.id, seasonResult.id);
       if (teamSeasonResult.created) result.teamSeasons += 1;
+
+      if (depth === "league_season") {
+        continue;
+      }
 
       for (const playerData of clubData.players) {
         const playerResult = await upsertPlayerRow(
