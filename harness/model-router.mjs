@@ -590,7 +590,12 @@ export function economyAgentModelSpec(agentFileName, rotationIndex = 0) {
   if (name === "optimizer.md") {
     return {
       model: DEEPSEEK_FLASH_MODEL,
-      fallbackModels: withoutComposer([GLM_FLASH_MODEL, SCOUT_MODEL, MIMO_MODEL, ...FREE_MODEL_ROTATION]),
+      fallbackModels: withoutComposer([
+        GLM_FLASH_MODEL,
+        SCOUT_MODEL,
+        MIMO_MODEL,
+        ...FREE_MODEL_ROTATION,
+      ]),
     };
   }
   if (name === "ui-ux.md") {
