@@ -294,7 +294,7 @@ Prevents repeating KIT-125 (five false format cheap-retries → retry-cap hold, 
 `scripts/check-implement-checker-fail-resume.mjs` (CI via `node` in `.github/workflows/ci.yml`) plus `harness/tests/implement-ci-retry.test.mjs` / `harness/tests/role-comments.test.mjs` / `harness/tests/checker.test.mjs` keep these locks:
 
 - Checker-fail implement resume uses the same `extractReviewFeedback` as cheap CI retry and **inlines** `### Review feedback` in the Composer prompt. Fix **every** workpad axis (Spec / Standards / Tests / Slop). GitHub `[factory-checker/slop]` threads are a subset.
-- Checker-fail resume does **not** Skip Scout or Skip helpers. Cheap retry (`{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }`) still does.
+- Bounce from Review is **Builder resume from Review**: Skip Scout; Skip Draft unless a new write-scope scaffold is required; spawn only helpers the findings need. Cheap retry (`{ ciRetry: true }` / `{ writeScopeRetry: true }` / `{ formatRetry: true }`) still Skip Scout/helpers entirely.
 - Spawn `ui-ux` when write-scope touches `apps/mobile` / `apps/web` / `apps/admin`, or when findings mention tokens, typography, or layout. The box reads `.pi/roles/implement.md` — not Cursor skills.
 - `checkerFailComment` includes the finding lines under Spec / Standards / … headings (KIT-116-class 2–5 findings verbatim; huge dumps truncate with a workpad pointer). One role comment per transition. Linear Agent stays empty.
 
