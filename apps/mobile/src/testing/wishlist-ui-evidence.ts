@@ -17,6 +17,9 @@ const REQUIRED_LOGIC_EXPORTS = [
   "buildWishlistWritePayload",
   "seedCriteriaForEdit",
   "manageRowAccessibilityLabel",
+  "hasWishlistHit",
+  "hitRowAccessibilityLabel",
+  "resolveWishlistHitRoute",
 ];
 
 const REQUIRED_TEST_MARKERS = [
@@ -25,6 +28,9 @@ const REQUIRED_TEST_MARKERS = [
   "canSaveWishlistEntry",
   "hasWishlistCriterion",
   "manageRowAccessibilityLabel",
+  "hasWishlistHit",
+  "hitRowAccessibilityLabel",
+  "fillSecondary",
   "Ønske",
   "Ny ønskerække",
 ];
@@ -91,6 +97,16 @@ export function checkMobileWishlistUiEvidence(overrides: WishlistUiEvidenceOverr
     violations.push(
       `${wishlistSheetPath}: grouped manage rows must use borderSubtle hairlines between rows`,
     );
+  }
+
+  if (!sheetSource.includes("fillSecondary")) {
+    violations.push(
+      `${wishlistSheetPath}: Match hit rows must use fillSecondary background per design lock`,
+    );
+  }
+
+  if (!sheetSource.includes("hasWishlistHit")) {
+    violations.push(`${wishlistSheetPath}: Match hit rows must use hasWishlistHit from logic`);
   }
 
   if (!sheetSource.includes("FacetPickerOverlay")) {
