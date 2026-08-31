@@ -22,6 +22,7 @@ const baseJersey = {
   size: "m" as const,
   biddingEnabled: true,
   catalogKitId: null,
+  private: false,
 };
 
 describe("matchesWishlistFacets", () => {
@@ -45,6 +46,10 @@ describe("isWishlistMatchCandidate", () => {
 
   it("excludes closed copies (bidding disabled)", () => {
     expect(isWishlistMatchCandidate({ ...baseJersey, biddingEnabled: false }, OWNER)).toBe(false);
+  });
+
+  it("excludes private copies", () => {
+    expect(isWishlistMatchCandidate({ ...baseJersey, private: true }, OWNER)).toBe(false);
   });
 
   it("excludes seed Kits linked on UserJersey", () => {

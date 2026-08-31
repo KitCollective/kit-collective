@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { patchJerseyBidding } from "@/api/bidding";
+import { patchJerseyBidding, patchJerseyPrivate } from "@/api/bidding";
 import { fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { IconButton } from "@/components/ui";
@@ -31,6 +31,8 @@ export default function JerseyDetailScreen() {
   const [jersey, setJersey] = useState<CollectionJersey | null>(null);
   const [biddingEnabled, setBiddingEnabled] = useState(false);
   const [savingBidding, setSavingBidding] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [savingPrivate, setSavingPrivate] = useState(false);
 
   const loadJersey = useCallback(async () => {
     if (!accessToken || !jerseyId) {
@@ -41,6 +43,7 @@ export default function JerseyDetailScreen() {
     const found = response.jerseys.find((item) => item.id === jerseyId) ?? null;
     setJersey(found);
     setBiddingEnabled(found?.biddingEnabled ?? false);
+    setIsPrivate(found?.private ?? false);
   }, [accessToken, jerseyId]);
 
   useEffect(() => {
@@ -90,11 +93,32 @@ export default function JerseyDetailScreen() {
     setBiddingEnabled(nextValue);
     setSavingBidding(true);
     try {
-      await patchJerseyBidding(accessToken, jerseyId, { biddingEnabled: nextValue });
+      const updated = await patchJerseyBidding(accessToken, jerseyId, {
+        biddingEnabled: nextValue,
+      });
+      setBiddingEnabled(updated.biddingEnabled);
     } catch {
       setBiddingEnabled(!nextValue);
     } finally {
       setSavingBidding(false);
+    }
+  };
+
+  const togglePrivate = async (nextValue: boolean) => {
+    if (!accessToken || !jerseyId) {
+      return;
+    }
+
+    setIsPrivate(nextValue);
+    setSavingPrivate(true);
+    try {
+      const updated = await patchJerseyPrivate(accessToken, jerseyId, { private: nextValue });
+      setIsPrivate(updated.private);
+      setBiddingEnabled(updated.biddingEnabled);
+    } catch {
+      setIsPrivate(!nextValue);
+    } finally {
+      setSavingPrivate(false);
     }
   };
 
@@ -118,7 +142,11 @@ export default function JerseyDetailScreen() {
       <View
         style={[
           styles.biddingRow,
-          { backgroundColor: theme.surface, borderColor: theme.borderSubtle },
+          {
+            backgroundColor: theme.surface,
+            borderColor: theme.borderSubtle,
+            opacity: isPrivate ? 0.4 : 1,
+          },
         ]}
       >
         <View style={styles.biddingCopy}>
@@ -129,9 +157,34 @@ export default function JerseyDetailScreen() {
         </View>
         <Switch
           accessibilityLabel="Åben for bud"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: biddingEnabled, disabled: savingBidding || isPrivate }}
           value={biddingEnabled}
-          disabled={savingBidding}
+          disabled={savingBidding || isPrivate}
           onValueChange={(value) => void toggleBidding(value)}
+          trackColor={{ false: theme.borderSubtle, true: theme.fillPrimary }}
+          thumbColor={theme.contentInverse}
+        />
+      </View>
+      <View
+        style={[
+          styles.biddingRow,
+          { backgroundColor: theme.surface, borderColor: theme.borderSubtle },
+        ]}
+      >
+        <View style={styles.biddingCopy}>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>Privat</Text>
+          <Text style={[typography.caption, { color: theme.contentSecondary }]}>
+            Skjuler trøjen fra søgning og andre samlere.
+          </Text>
+        </View>
+        <Switch
+          accessibilityLabel="Privat"
+          accessibilityRole="switch"
+          accessibilityState={{ checked: isPrivate, disabled: savingPrivate }}
+          value={isPrivate}
+          disabled={savingPrivate}
+          onValueChange={(value) => void togglePrivate(value)}
           trackColor={{ false: theme.borderSubtle, true: theme.fillPrimary }}
           thumbColor={theme.contentInverse}
         />

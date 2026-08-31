@@ -48,6 +48,7 @@ export class MatchService {
         type: userJersey.type,
         size: userJersey.size,
         biddingEnabled: userJersey.biddingEnabled,
+        private: userJersey.private,
         catalogKitId: userJersey.catalogKitId,
       })
       .from(userJersey)
@@ -65,6 +66,7 @@ export class MatchService {
       type: savedJersey.type,
       size: savedJersey.size,
       biddingEnabled: savedJersey.biddingEnabled,
+      private: savedJersey.private,
       catalogKitId: savedJersey.catalogKitId,
     };
 
@@ -119,6 +121,7 @@ export class MatchService {
         type: userJersey.type,
         size: userJersey.size,
         biddingEnabled: userJersey.biddingEnabled,
+        private: userJersey.private,
         catalogKitId: userJersey.catalogKitId,
       })
       .from(userJersey)
@@ -126,6 +129,7 @@ export class MatchService {
         and(
           ne(userJersey.userId, wishlistOwnerUserId),
           eq(userJersey.biddingEnabled, true),
+          eq(userJersey.private, false),
           isNull(userJersey.catalogKitId),
         ),
       );
@@ -138,6 +142,7 @@ export class MatchService {
       type: row.type,
       size: row.size,
       biddingEnabled: row.biddingEnabled,
+      private: row.private,
       catalogKitId: row.catalogKitId,
     }));
   }

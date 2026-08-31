@@ -10,6 +10,14 @@ export const collectionBiddingPatchSchema = z
 
 export type CollectionBiddingPatch = z.infer<typeof collectionBiddingPatchSchema>;
 
+export const collectionPrivatePatchSchema = z
+  .object({
+    private: z.boolean(),
+  })
+  .strict();
+
+export type CollectionPrivatePatch = z.infer<typeof collectionPrivatePatchSchema>;
+
 export const collectionDiscoverJerseySchema = z
   .object({
     id: z.string().uuid(),
