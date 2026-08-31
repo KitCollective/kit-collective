@@ -32,6 +32,7 @@ const ambientIapStubPath = path.join(
 
 describe("store-billing-client source guards", () => {
   it("declares react-native-iap in package.json instead of an ambient stub", () => {
+    // SAFETY: package.json is committed JSON; the assertion only reads dependency names.
     const mobilePackage = JSON.parse(readFileSync(mobilePackagePath, "utf8")) as {
       dependencies?: Record<string, string>;
     };
