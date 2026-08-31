@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE — Peer Profil (throwaway)</title>
+  <!--
+    Question: What should Peer Profil look like (identity + jersey listing)?
+    Variants via ?variant=A|B|C. Throwaway. Not product UI.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --canvas: #f4f4f4;
+      --surface: #fff;
+      --content: #000;
+      --secondary: #5e5e5e;
+      --muted: #6b6b6b;
+      --border: #e8e8e8;
+      --radius: 12px;
+      --phone-w: 390px;
+      --phone-h: 844px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background: #d4d4d4;
+      color: var(--content);
+      padding: 20px 16px 110px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .banner, .state {
+      max-width: 420px;
+      width: 100%;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .banner { background: #111; color: #fff; }
+    .banner strong { font-family: Archivo, sans-serif; }
+    .banner code { font-family: "IBM Plex Mono", monospace; font-size: 12px; }
+    .state {
+      background: #fff;
+      border: 1px solid var(--border);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--secondary);
+    }
+    .phone {
+      width: var(--phone-w);
+      height: var(--phone-h);
+      background: var(--canvas);
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 12px 10px;
+      background: var(--canvas);
+      z-index: 3;
+    }
+    .top.sticky {
+      position: sticky;
+      top: 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .top button {
+      border: 0;
+      background: transparent;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .top h1 {
+      flex: 1;
+      margin: 0;
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+    .scroll { flex: 1; overflow: auto; }
+    .card {
+      margin: 0 16px 16px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .id-row { display: flex; gap: 14px; align-items: flex-start; }
+    .av {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #e8e8e8;
+      display: grid;
+      place-items: center;
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .av.sm { width: 36px; height: 36px; font-size: 12px; }
+    .handle { font-family: Archivo, sans-serif; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
+    .mono { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); }
+    .about { margin: 12px 0 0; font-size: 15px; line-height: 1.4; color: var(--secondary); }
+    .section {
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 4px 16px 10px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 0 16px 24px;
+    }
+    .tile {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    .tile .photo {
+      aspect-ratio: 4/5;
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, #c5cad1, #7a828c);
+    }
+    .tile .club { font-family: Archivo, sans-serif; font-weight: 600; font-size: 14px; margin: 8px 0 2px; }
+    .menu {
+      position: absolute;
+      right: 12px;
+      top: 56px;
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+      min-width: 180px;
+      z-index: 5;
+      overflow: hidden;
+    }
+    .menu button {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: #fff;
+      padding: 14px 16px;
+      font: 400 15px/1.2 "IBM Plex Sans", sans-serif;
+      cursor: pointer;
+      color: #b42318;
+      border-bottom: 1px solid var(--border);
+    }
+    .menu button:last-child { border-bottom: 0; }
+
+    /* B compact */
+    .mini {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+    .bleed-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+    }
+    .bleed-grid .photo {
+      aspect-ratio: 4/5;
+      background: linear-gradient(145deg, #c5cad1, #7a828c);
+      border-radius: 0;
+    }
+    .expand {
+      margin: 0 16px 12px;
+      padding: 12px 14px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 0;
+      width: calc(100% - 32px);
+      text-align: left;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    /* C feed */
+    .hero-band {
+      background: var(--surface);
+      padding: 20px 16px 24px;
+      text-align: center;
+    }
+    .hero-band .av {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 12px;
+      font-size: 22px;
+    }
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px;
+    }
+    .feed-card {
+      border: 0;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      padding: 0;
+    }
+    .feed-card .photo {
+      aspect-ratio: 4/5;
+      background: linear-gradient(160deg, #b8bec6, #5f666f);
+    }
+    .feed-card .pad { padding: 12px 14px 14px; }
+
+    .switcher {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #111;
+      color: #fff;
+      border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+    }
+    .switcher button {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 0; background: #333; color: #fff; cursor: pointer; font-size: 16px;
+    }
+    .switcher .label { min-width: 220px; text-align: center; }
+    .hidden { display: none !important; }
+    body.shot .banner,
+    body.shot .state,
+    body.shot .switcher { display: none !important; }
+    body.shot { padding: 24px; background: #e8e8e8; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>PROTOTYPE — Peer Profil</strong><br />
+    Identity + jersey listing. Flip with bar / <code>?variant=A|B|C</code>. Overflow = Rapportér / Blokér. Throwaway.
+  </div>
+  <div class="state" id="state"></div>
+  <div id="host"></div>
+
+  <div class="switcher">
+    <button type="button" id="prev">←</button>
+    <div class="label" id="label">A — Card + grid</div>
+    <button type="button" id="next">→</button>
+  </div>
+
+  <script>
+    const VARIANTS = [
+      { key: "A", name: "Card + 2-col grid (lock lean)" },
+      { key: "B", name: "Compact sticky + bleed grid" },
+      { key: "C", name: "Hero band + single feed" },
+    ];
+
+    const JERSEYS = [
+      { club: "F.C. København", meta: "2023/24 · Hjemme" },
+      { club: "Brøndby IF", meta: "1998/99 · Ude" },
+      { club: "Danmark", meta: "WM 2018 · Hjemme" },
+      { club: "AaB", meta: "2013/14 · Hjemme" },
+      { club: "FCK", meta: "2000/01 · Hjemme" },
+      { club: "Silkeborg", meta: "2021/22 · Hjemme" },
+    ];
+
+    const state = {
+      variant: "A",
+      menuOpen: false,
+      aboutOpen: false,
+      lastHit: null,
+    };
+
+    function paintState() {
+      document.getElementById("state").textContent =
+        `variant=${state.variant} · menu=${state.menuOpen} · aboutOpen=${state.aboutOpen}` +
+        (state.lastHit ? ` · lastHit=${state.lastHit}` : "");
+      const meta = VARIANTS.find((v) => v.key === state.variant);
+      document.getElementById("label").textContent = `${meta.key} — ${meta.name}`;
+      const url = new URL(location.href);
+      url.searchParams.set("variant", state.variant);
+      history.replaceState(null, "", url);
+      render();
+    }
+
+    function tiles() {
+      return JERSEYS.map((j, i) => `
+        <button type="button" class="tile" data-act="jersey:${i}">
+          <div class="photo"></div>
+          <div class="club">${j.club}</div>
+          <div class="mono">${j.meta}</div>
+        </button>`).join("");
+    }
+
+    function menu() {
+      if (!state.menuOpen) return "";
+      return `<div class="menu">
+        <button type="button" data-act="report">Rapportér</button>
+        <button type="button" data-act="block">Blokér</button>
+      </div>`;
+    }
+
+    function renderA() {
+      return `
+        <div class="phone">
+          <div class="top">
+            <button type="button" data-act="back">←</button>
+            <h1>Profil</h1>
+            <button type="button" data-act="menu">⋯</button>
+          </div>
+          ${menu()}
+          <div class="scroll">
+            <div class="card">
+              <div class="id-row">
+                <div class="av">NF</div>
+                <div>
+                  <p class="handle">nick_fck</p>
+                  <p class="mono">København · Danmark</p>
+                </div>
+              </div>
+              <p class="about">Samler mest Superliga 90’erne–nu. Bytter gerne.</p>
+            </div>
+            <div class="section">Trøjer · ${JERSEYS.length}</div>
+            <div class="grid">${tiles()}</div>
+          </div>
+        </div>`;
+    }
+
+    function renderB() {
+      return `
+        <div class="phone">
+          <div class="top sticky">
+            <button type="button" data-act="back">←</button>
+            <div class="mini">
+              <div class="av sm">NF</div>
+              <div>
+                <div class="handle" style="font-size:14px;margin:0">nick_fck</div>
+                <div class="mono">${JERSEYS.length} trøjer</div>
+              </div>
+            </div>
+            <button type="button" data-act="menu">⋯</button>
+          </div>
+          ${menu()}
+          <div class="scroll">
+            <button type="button" class="expand" data-act="about">
+              ${state.aboutOpen
+                ? `<span class="about" style="margin:0">Samler mest Superliga 90’erne–nu. Bytter gerne.<br/><span class="mono">København · Danmark · luk</span></span>`
+                : `<span class="mono">Om · København · Danmark · mere</span>`}
+            </button>
+            <div class="bleed-grid">
+              ${JERSEYS.map((_, i) => `<button type="button" class="tile" style="padding:0" data-act="jersey:${i}"><div class="photo"></div></button>`).join("")}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderC() {
+      return `
+        <div class="phone">
+          <div class="top">
+            <button type="button" data-act="back">←</button>
+            <h1>nick_fck</h1>
+            <button type="button" data-act="menu">⋯</button>
+          </div>
+          ${menu()}
+          <div class="scroll">
+            <div class="hero-band">
+              <div class="av">NF</div>
+              <p class="handle" style="font-size:18px">nick_fck</p>
+              <p class="mono">København · Danmark · ${JERSEYS.length} trøjer</p>
+              <p class="about" style="max-width:280px;margin:12px auto 0">Samler mest Superliga 90’erne–nu. Bytter gerne.</p>
+            </div>
+            <div class="feed">
+              ${JERSEYS.map((j, i) => `
+                <button type="button" class="feed-card" data-act="jersey:${i}">
+                  <div class="photo"></div>
+                  <div class="pad">
+                    <div class="club" style="font-family:Archivo,sans-serif;font-weight:600;font-size:15px">${j.club}</div>
+                    <div class="mono">${j.meta}</div>
+                  </div>
+                </button>`).join("")}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function render() {
+      const html = state.variant === "A" ? renderA() : state.variant === "B" ? renderB() : renderC();
+      document.getElementById("host").innerHTML = html;
+    }
+
+    document.getElementById("host").addEventListener("click", (e) => {
+      const el = e.target.closest("[data-act]");
+      if (!el) {
+        if (state.menuOpen) {
+          state.menuOpen = false;
+          paintState();
+        }
+        return;
+      }
+      const act = el.getAttribute("data-act");
+      if (act === "menu") {
+        state.menuOpen = !state.menuOpen;
+      } else if (act === "about") {
+        state.aboutOpen = !state.aboutOpen;
+      } else if (act.startsWith("jersey:")) {
+        state.lastHit = act;
+        state.menuOpen = false;
+      } else if (act === "report" || act === "block") {
+        state.lastHit = act;
+        state.menuOpen = false;
+      } else if (act === "back") {
+        state.lastHit = "back";
+      }
+      paintState();
+    });
+
+    function cycle(d) {
+      const i = VARIANTS.findIndex((v) => v.key === state.variant);
+      state.variant = VARIANTS[(i + d + VARIANTS.length) % VARIANTS.length].key;
+      state.menuOpen = false;
+      state.lastHit = null;
+      paintState();
+    }
+    document.getElementById("prev").onclick = () => cycle(-1);
+    document.getElementById("next").onclick = () => cycle(1);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") cycle(-1);
+      if (e.key === "ArrowRight") cycle(1);
+    });
+
+    const params = new URL(location.href).searchParams;
+    if (params.get("shot") === "1") document.body.classList.add("shot");
+    const initial = params.get("variant");
+    if (initial && VARIANTS.some((v) => v.key === initial)) state.variant = initial;
+    paintState();
+  </script>
+</body>
+</html>

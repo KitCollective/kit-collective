@@ -33,7 +33,10 @@
     "check:vision-log-save-action": "node scripts/check-vision-log-save-action.mjs",
     "check:pi-implement-context": "node scripts/check-pi-implement-context-generated.mjs",
     "generate:pi-implement-context": "node scripts/generate-pi-implement-context.mjs",
-    "check:workflows": "bash scripts/lint-workflows.sh"
+    "check:workflows": "bash scripts/lint-workflows.sh",
+    "prototype:soeg": "open .scratch/soeg-browse/prototype/KitCollective-soeg-home.html",
+    "prototype:jersey-detail": "open .scratch/soeg-browse/prototype/KitCollective-jersey-detail.html",
+    "prototype:peer-profil": "open .scratch/soeg-browse/prototype/KitCollective-peer-profil.html"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.10",

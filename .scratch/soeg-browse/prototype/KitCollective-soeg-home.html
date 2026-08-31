@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE — Søg home (throwaway)</title>
+  <!--
+    Question: What should Søg (compass) look like for browse + typeahead → Club/Kit/Player/Handle?
+    Three structurally different variants via ?variant=A|B|C and the floating bar.
+    Throwaway. Not product UI. Do not copy into apps/mobile.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --canvas: #fff;
+      --surface: #fff;
+      --fill-secondary: #f4f4f4;
+      --content: #000;
+      --content-secondary: #5e5e5e;
+      --content-muted: #6b6b6b;
+      --border: #e8e8e8;
+      --fill-primary: #000;
+      --inverse: #fff;
+      --radius-md: 12px;
+      --radius-pill: 999px;
+      --phone-w: 390px;
+      --phone-h: 844px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background: #d8d8d8;
+      color: var(--content);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 24px 16px 120px;
+    }
+    .banner {
+      max-width: 420px;
+      width: 100%;
+      background: #1a1a1a;
+      color: #fff;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .banner strong { font-family: Archivo, sans-serif; }
+    .banner code { font-family: "IBM Plex Mono", monospace; font-size: 12px; }
+    .state {
+      max-width: 420px;
+      width: 100%;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--content-secondary);
+      white-space: pre-wrap;
+    }
+    .phone {
+      width: var(--phone-w);
+      height: var(--phone-h);
+      background: var(--canvas);
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.25);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .safe-top { height: 12px; }
+    .header {
+      padding: 8px 16px 12px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .title {
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 24px;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+    .mono-meta {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--content-muted);
+    }
+    .search-wrap { padding: 0 16px 12px; }
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 48px;
+      padding: 0 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      background: var(--surface);
+    }
+    .search:focus-within { border-color: #000; }
+    .search input {
+      flex: 1;
+      border: 0;
+      outline: 0;
+      font: 400 15px/20px "IBM Plex Sans", sans-serif;
+      background: transparent;
+    }
+    .search .icon { width: 18px; height: 18px; opacity: .55; flex-shrink: 0; }
+    .clear {
+      border: 0;
+      background: var(--fill-secondary);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      display: none;
+    }
+    .clear.show { display: grid; place-items: center; }
+    .body { flex: 1; overflow: auto; position: relative; padding-bottom: 88px; }
+    .tabbar {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,.82);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      z-index: 5;
+    }
+    .tabbar span {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      color: var(--content-muted);
+    }
+    .tabbar span.active {
+      background: var(--fill-primary);
+      color: var(--inverse);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 0 16px 16px;
+    }
+    .tile {
+      cursor: pointer;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      font: inherit;
+    }
+    .tile .photo {
+      aspect-ratio: 4 / 5;
+      border-radius: var(--radius-md);
+      background: linear-gradient(145deg, #cfd3d8, #8b9199);
+      position: relative;
+      overflow: hidden;
+    }
+    .tile .photo.bid::after {
+      content: "Bud";
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 10px;
+      padding: 3px 6px;
+      border-radius: 6px;
+      background: rgba(0,0,0,.72);
+      color: #fff;
+    }
+    .tile .club {
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      margin: 8px 0 2px;
+    }
+    .tile .meta { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--content-muted); }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,.94);
+      z-index: 4;
+      display: none;
+      flex-direction: column;
+      overflow: auto;
+      padding: 0 0 88px;
+    }
+    .overlay.open { display: flex; }
+    .section-label {
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--content-muted);
+      padding: 14px 16px 6px;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      min-height: 52px;
+      border: 0;
+      width: 100%;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+      border-bottom: 1px solid var(--border);
+    }
+    .row:active { background: var(--fill-secondary); }
+    .mark {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--fill-secondary);
+      display: grid;
+      place-items: center;
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .mark.round { border-radius: 50%; }
+    .row .label { font-family: Archivo, sans-serif; font-weight: 600; font-size: 15px; }
+    .row .sub { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--content-muted); margin-top: 2px; }
+    .chev { margin-left: auto; color: var(--content-muted); }
+    .empty {
+      padding: 48px 24px;
+      text-align: center;
+    }
+    .empty h2 {
+      font-family: Archivo, sans-serif;
+      font-size: 20px;
+      margin: 0 0 8px;
+    }
+    .empty p { margin: 0; color: var(--content-secondary); font-size: 15px; line-height: 1.4; }
+
+    /* Variant B — modes */
+    .modes {
+      display: flex;
+      gap: 0;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .mode {
+      flex: 1;
+      border: 0;
+      background: transparent;
+      padding: 12px 4px;
+      font-family: IBM Plex Sans, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--content-muted);
+      cursor: pointer;
+      position: relative;
+    }
+    .mode.active { color: var(--content); }
+    .mode.active::after {
+      content: "";
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 0;
+      height: 2px;
+      background: var(--fill-primary);
+    }
+
+    /* Variant C — magazine */
+    .rail-title {
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 8px 16px 10px;
+    }
+    .hscroll {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 0 16px 16px;
+      scrollbar-width: none;
+    }
+    .hscroll::-webkit-scrollbar { display: none; }
+    .club-card {
+      flex: 0 0 72px;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      text-align: center;
+      font: inherit;
+    }
+    .club-card .mark { width: 64px; height: 64px; margin: 0 auto 6px; font-size: 16px; }
+    .club-card .name {
+      font-size: 11px;
+      color: var(--content-secondary);
+      line-height: 1.2;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .h-jersey {
+      flex: 0 0 140px;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    .h-jersey .photo {
+      aspect-ratio: 4/5;
+      border-radius: var(--radius-md);
+      background: linear-gradient(160deg, #b8bec6, #6f7680);
+    }
+    .h-jersey .club { font-family: Archivo, sans-serif; font-weight: 600; font-size: 13px; margin-top: 6px; }
+    .person {
+      flex: 0 0 64px;
+      border: 0;
+      background: transparent;
+      text-align: center;
+      cursor: pointer;
+      font: inherit;
+      padding: 0;
+    }
+    .person .av {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--fill-secondary);
+      display: grid;
+      place-items: center;
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      margin: 0 auto 6px;
+    }
+    .person .h { font-size: 11px; color: var(--content-secondary); }
+
+    .variant-root { display: none; flex: 1; flex-direction: column; min-height: 0; }
+    .variant-root.active { display: flex; }
+
+    .switcher {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #111;
+      color: #fff;
+      border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 13px;
+      user-select: none;
+    }
+    .switcher button {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 0;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .switcher .label { min-width: 200px; text-align: center; }
+    body.shot .banner,
+    body.shot .state,
+    body.shot .switcher { display: none !important; }
+    body.shot { padding: 24px; background: #e8e8e8; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>PROTOTYPE — Søg home</strong><br />
+    Question: layout for browse of others’ jerseys + typeahead to Club / Kit / Player / Handle.<br />
+    Throwaway. Flip with bar or <code>?variant=A|B|C</code>. ← → keys when not typing.
+  </div>
+  <div class="state" id="state">variant=A · query="" · mode=— · focus=home</div>
+
+  <div class="phone" id="phone">
+    <div class="safe-top"></div>
+
+    <!-- A: Grid + overlay typeahead -->
+    <div class="variant-root active" data-variant="A" id="variant-A">
+      <div class="header">
+        <h1 class="title">Søg</h1>
+        <span class="mono-meta" id="a-count">12 trøjer</span>
+      </div>
+      <div class="search-wrap">
+        <label class="search">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="a-q" type="search" placeholder="Klub, trøje, spiller eller samler" autocomplete="off" />
+          <button type="button" class="clear" id="a-clear" aria-label="Ryd">×</button>
+        </label>
+      </div>
+      <div class="body">
+        <div class="grid" id="a-grid"></div>
+        <div class="overlay" id="a-overlay"></div>
+      </div>
+    </div>
+
+    <!-- B: Mode segments — no default mixed grid -->
+    <div class="variant-root" data-variant="B" id="variant-B">
+      <div class="header">
+        <h1 class="title">Søg</h1>
+      </div>
+      <div class="search-wrap">
+        <label class="search">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="b-q" type="search" placeholder="Filtrer aktiv fane" autocomplete="off" />
+          <button type="button" class="clear" id="b-clear" aria-label="Ryd">×</button>
+        </label>
+      </div>
+      <div class="modes" role="tablist">
+        <button type="button" class="mode active" data-mode="jerseys">Trøjer</button>
+        <button type="button" class="mode" data-mode="catalog">Katalog</button>
+        <button type="button" class="mode" data-mode="people">Samlere</button>
+      </div>
+      <div class="body" id="b-body"></div>
+    </div>
+
+    <!-- C: Magazine rails — discovery shelves -->
+    <div class="variant-root" data-variant="C" id="variant-C">
+      <div class="header">
+        <h1 class="title">Søg</h1>
+      </div>
+      <div class="search-wrap">
+        <label class="search">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="c-q" type="search" placeholder="Søg i katalog og samlinger" autocomplete="off" />
+          <button type="button" class="clear" id="c-clear" aria-label="Ryd">×</button>
+        </label>
+      </div>
+      <div class="body" id="c-body"></div>
+    </div>
+
+    <nav class="tabbar" aria-label="Prototype tab bar (fake)">
+      <span aria-hidden="true">⌂</span>
+      <span class="active" aria-hidden="true">◎</span>
+      <span aria-hidden="true">＋</span>
+      <span aria-hidden="true">✉</span>
+      <span aria-hidden="true">☺</span>
+    </nav>
+  </div>
+
+  <div class="switcher" id="switcher" role="group" aria-label="Prototype variant switcher">
+    <button type="button" id="prev" aria-label="Previous variant">←</button>
+    <div class="label" id="switcher-label">A — Grid + overlay</div>
+    <button type="button" id="next" aria-label="Next variant">→</button>
+  </div>
+
+  <script>
+    const VARIANTS = [
+      { key: "A", name: "Grid + overlay" },
+      { key: "B", name: "Mode segments" },
+      { key: "C", name: "Magazine rails" },
+    ];
+
+    const JERSEYS = [
+      { id: "j1", club: "F.C. København", meta: "2023/24 · Hjemme", bid: true, owner: "nick_fck" },
+      { id: "j2", club: "Brøndby IF", meta: "1998/99 · Ude", bid: false, owner: "byensgule" },
+      { id: "j3", club: "Danmark", meta: "WM 2018 · Hjemme", bid: true, owner: "landsholdet" },
+      { id: "j4", club: "AaB", meta: "2013/14 · Hjemme", bid: false, owner: "nordjysk" },
+      { id: "j5", club: "F.C. København", meta: "2000/01 · Hjemme", bid: true, owner: "parkensamler" },
+      { id: "j6", club: "Silkeborg", meta: "2021/22 · Hjemme", bid: false, owner: "midtjylland" },
+    ];
+
+    const CLUBS = [
+      { id: "c1", mono: "FCK", name: "F.C. København", sub: "48 synlige trøjer" },
+      { id: "c2", mono: "BIF", name: "Brøndby IF", sub: "31 synlige trøjer" },
+      { id: "c3", mono: "AAB", name: "AaB", sub: "12 synlige trøjer" },
+    ];
+
+    const KITS = [
+      { id: "k1", mono: "H", name: "FCK 2023/24 Hjemme", sub: "Kit · 7 copies" },
+      { id: "k2", mono: "U", name: "BIF 1998/99 Ude", sub: "Kit · 3 copies" },
+    ];
+
+    const PLAYERS = [
+      { id: "p1", mono: "CN", name: "Christian Nørgaard", sub: "14 trøjer med ham på sæsonen" },
+      { id: "p2", mono: "JL", name: "Jesper Lindstrøm", sub: "6 trøjer" },
+    ];
+
+    const PEOPLE = [
+      { id: "u1", mono: "NF", name: "nick_fck", sub: "22 trøjer · København" },
+      { id: "u2", mono: "BG", name: "byensgule", sub: "9 trøjer · Brøndby" },
+      { id: "u3", mono: "LH", name: "landsholdet", sub: "40 trøjer · Danmark" },
+    ];
+
+    const state = {
+      variant: "A",
+      query: "",
+      mode: "jerseys",
+      focus: "home",
+      lastHit: null,
+    };
+
+    function syncUrl() {
+      const url = new URL(location.href);
+      url.searchParams.set("variant", state.variant);
+      history.replaceState(null, "", url);
+    }
+
+    function paintState() {
+      document.getElementById("state").textContent =
+        `variant=${state.variant} · query=${JSON.stringify(state.query)} · mode=${state.mode} · focus=${state.focus}` +
+        (state.lastHit ? ` · lastHit=${state.lastHit}` : "");
+      const meta = VARIANTS.find((v) => v.key === state.variant);
+      document.getElementById("switcher-label").textContent = `${meta.key} — ${meta.name}`;
+      document.querySelectorAll(".variant-root").forEach((el) => {
+        el.classList.toggle("active", el.dataset.variant === state.variant);
+      });
+      syncUrl();
+      renderActive();
+    }
+
+    function filterByQuery(items, fields) {
+      const q = state.query.trim().toLowerCase();
+      if (!q) return items;
+      return items.filter((item) => fields.some((f) => String(item[f]).toLowerCase().includes(q)));
+    }
+
+    function jerseyTile(j, { showBid = true } = {}) {
+      const bidClass = showBid && j.bid ? " bid" : "";
+      return `<button type="button" class="tile" data-hit="jersey:${j.id}">
+        <div class="photo${bidClass}"></div>
+        <div class="club">${j.club}</div>
+        <div class="meta">${j.meta}</div>
+      </button>`;
+    }
+
+    function listRow({ mono, name, sub, hit, round }) {
+      return `<button type="button" class="row" data-hit="${hit}">
+        <div class="mark${round ? " round" : ""}">${mono}</div>
+        <div><div class="label">${name}</div><div class="sub">${sub}</div></div>
+        <span class="chev">›</span>
+      </button>`;
+    }
+
+    function renderA() {
+      const jerseys = filterByQuery(JERSEYS, ["club", "meta", "owner"]);
+      document.getElementById("a-count").textContent = `${jerseys.length} trøjer`;
+      document.getElementById("a-grid").innerHTML = jerseys.map((j) => jerseyTile(j)).join("") ||
+        `<div class="empty" style="grid-column:1/-1"><h2>Ingen trøjer</h2><p>Prøv et andet søgeord.</p></div>`;
+
+      const q = state.query.trim();
+      const overlay = document.getElementById("a-overlay");
+      const input = document.getElementById("a-q");
+      input.value = state.query;
+      document.getElementById("a-clear").classList.toggle("show", q.length > 0);
+
+      if (!q) {
+        overlay.classList.remove("open");
+        state.focus = "home";
+        return;
+      }
+
+      state.focus = "typeahead";
+      const clubs = filterByQuery(CLUBS, ["name", "mono"]);
+      const kits = filterByQuery(KITS, ["name"]);
+      const players = filterByQuery(PLAYERS, ["name"]);
+      const people = filterByQuery(PEOPLE, ["name"]);
+      overlay.classList.add("open");
+      overlay.innerHTML = [
+        clubs.length ? `<div class="section-label">Klubber</div>${clubs.map((c) => listRow({ ...c, hit: `club:${c.id}` })).join("")}` : "",
+        kits.length ? `<div class="section-label">Kits</div>${kits.map((k) => listRow({ ...k, hit: `kit:${k.id}` })).join("")}` : "",
+        players.length ? `<div class="section-label">Spillere</div>${players.map((p) => listRow({ ...p, hit: `player:${p.id}` })).join("")}` : "",
+        people.length ? `<div class="section-label">Samlere</div>${people.map((u) => listRow({ ...u, hit: `user:${u.id}`, round: true })).join("")}` : "",
+        !clubs.length && !kits.length && !players.length && !people.length
+          ? `<div class="empty"><h2>Ingen hits</h2><p>Grid bagved viser stadig trøjer der matcher teksten.</p></div>`
+          : "",
+      ].join("");
+    }
+
+    function renderB() {
+      const input = document.getElementById("b-q");
+      input.value = state.query;
+      document.getElementById("b-clear").classList.toggle("show", state.query.length > 0);
+      document.querySelectorAll("#variant-B .mode").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.mode === state.mode);
+      });
+      const body = document.getElementById("b-body");
+      state.focus = `mode:${state.mode}`;
+
+      if (state.mode === "jerseys") {
+        const jerseys = filterByQuery(JERSEYS, ["club", "meta", "owner"]);
+        body.innerHTML = jerseys.length
+          ? `<div class="grid">${jerseys.map((j) => jerseyTile(j)).join("")}</div>`
+          : `<div class="empty"><h2>Ingen trøjer</h2><p>Skift fane eller ryd søgning.</p></div>`;
+        return;
+      }
+      if (state.mode === "catalog") {
+        const clubs = filterByQuery(CLUBS, ["name"]);
+        const kits = filterByQuery(KITS, ["name"]);
+        const players = filterByQuery(PLAYERS, ["name"]);
+        body.innerHTML = [
+          `<div class="section-label">Klubber</div>${clubs.map((c) => listRow({ ...c, hit: `club:${c.id}` })).join("") || "<div class='empty'><p>Ingen klubber</p></div>"}`,
+          `<div class="section-label">Kits</div>${kits.map((k) => listRow({ ...k, hit: `kit:${k.id}` })).join("")}`,
+          `<div class="section-label">Spillere</div>${players.map((p) => listRow({ ...p, hit: `player:${p.id}` })).join("")}`,
+        ].join("");
+        return;
+      }
+      const people = filterByQuery(PEOPLE, ["name", "sub"]);
+      body.innerHTML = people.map((u) => listRow({ ...u, hit: `user:${u.id}`, round: true })).join("") ||
+        `<div class="empty"><h2>Ingen samlere</h2><p>Prøv et andet handle.</p></div>`;
+    }
+
+    function renderC() {
+      const input = document.getElementById("c-q");
+      input.value = state.query;
+      document.getElementById("c-clear").classList.toggle("show", state.query.length > 0);
+      const body = document.getElementById("c-body");
+      const q = state.query.trim();
+
+      if (q) {
+        state.focus = "typeahead";
+        const clubs = filterByQuery(CLUBS, ["name"]);
+        const kits = filterByQuery(KITS, ["name"]);
+        const players = filterByQuery(PLAYERS, ["name"]);
+        const people = filterByQuery(PEOPLE, ["name"]);
+        const jerseys = filterByQuery(JERSEYS, ["club", "meta"]);
+        body.innerHTML = [
+          clubs.length ? `<div class="section-label">Klubber</div>${clubs.map((c) => listRow({ ...c, hit: `club:${c.id}` })).join("")}` : "",
+          kits.length ? `<div class="section-label">Kits</div>${kits.map((k) => listRow({ ...k, hit: `kit:${k.id}` })).join("")}` : "",
+          players.length ? `<div class="section-label">Spillere</div>${players.map((p) => listRow({ ...p, hit: `player:${p.id}` })).join("")}` : "",
+          people.length ? `<div class="section-label">Samlere</div>${people.map((u) => listRow({ ...u, hit: `user:${u.id}`, round: true })).join("")}` : "",
+          jerseys.length ? `<div class="section-label">Trøjer</div><div class="grid">${jerseys.map((j) => jerseyTile(j)).join("")}</div>` : "",
+        ].join("") || `<div class="empty"><h2>Ingen hits</h2><p>Prøv FCK, Nørgaard eller nick_fck.</p></div>`;
+        return;
+      }
+
+      state.focus = "magazine";
+      body.innerHTML = `
+        <div class="rail-title">Klubber</div>
+        <div class="hscroll">
+          ${CLUBS.map((c) => `<button type="button" class="club-card" data-hit="club:${c.id}"><div class="mark">${c.mono}</div><div class="name">${c.name}</div></button>`).join("")}
+        </div>
+        <div class="rail-title">Åbne for bud</div>
+        <div class="hscroll">
+          ${JERSEYS.filter((j) => j.bid).map((j) => `<button type="button" class="h-jersey" data-hit="jersey:${j.id}"><div class="photo"></div><div class="club">${j.club}</div><div class="meta">${j.meta}</div></button>`).join("")}
+        </div>
+        <div class="rail-title">Samlere</div>
+        <div class="hscroll">
+          ${PEOPLE.map((u) => `<button type="button" class="person" data-hit="user:${u.id}"><div class="av">${u.mono}</div><div class="h">${u.name}</div></button>`).join("")}
+        </div>
+        <div class="rail-title">Flere trøjer</div>
+        <div class="grid">
+          ${JERSEYS.map((j) => jerseyTile(j)).join("")}
+        </div>
+      `;
+    }
+
+    function renderActive() {
+      if (state.variant === "A") renderA();
+      else if (state.variant === "B") renderB();
+      else renderC();
+    }
+
+    function setVariant(key) {
+      state.variant = key;
+      state.lastHit = null;
+      paintState();
+    }
+
+    function cycle(delta) {
+      const i = VARIANTS.findIndex((v) => v.key === state.variant);
+      const next = VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length];
+      setVariant(next.key);
+    }
+
+    document.getElementById("prev").addEventListener("click", () => cycle(-1));
+    document.getElementById("next").addEventListener("click", () => cycle(1));
+
+    document.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.key === "ArrowLeft") cycle(-1);
+      if (e.key === "ArrowRight") cycle(1);
+    });
+
+    function wireQuery(inputId, clearId) {
+      const input = document.getElementById(inputId);
+      const clear = document.getElementById(clearId);
+      input.addEventListener("input", () => {
+        state.query = input.value;
+        paintState();
+        input.focus();
+      });
+      clear.addEventListener("click", () => {
+        state.query = "";
+        paintState();
+        input.focus();
+      });
+    }
+    wireQuery("a-q", "a-clear");
+    wireQuery("b-q", "b-clear");
+    wireQuery("c-q", "c-clear");
+
+    document.querySelectorAll("#variant-B .mode").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.mode = btn.dataset.mode;
+        paintState();
+      });
+    });
+
+    document.getElementById("phone").addEventListener("click", (e) => {
+      const hit = e.target.closest("[data-hit]");
+      if (!hit) return;
+      state.lastHit = hit.getAttribute("data-hit");
+      paintState();
+    });
+
+    const params = new URL(location.href).searchParams;
+    if (params.get("shot") === "1") document.body.classList.add("shot");
+    const initial = params.get("variant");
+    if (initial && VARIANTS.some((v) => v.key === initial)) state.variant = initial;
+    paintState();
+  </script>
+</body>
+</html>

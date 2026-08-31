@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PROTOTYPE — UserJersey detail (throwaway)</title>
+  <!--
+    Question: What should UserJersey detail look like (own vs foreign side by side)?
+    Variants via ?variant=A|B|C. Own | Foreign always shown as two phones.
+    Throwaway. Not product UI.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --canvas: #fff;
+      --fill-secondary: #f4f4f4;
+      --content: #000;
+      --secondary: #5e5e5e;
+      --muted: #6b6b6b;
+      --border: #e8e8e8;
+      --radius: 12px;
+      --phone-w: 320px;
+      --phone-h: 700px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background: #d4d4d4;
+      color: var(--content);
+      padding: 20px 16px 110px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .banner, .state {
+      max-width: 720px;
+      width: 100%;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .banner { background: #111; color: #fff; }
+    .banner strong { font-family: Archivo, sans-serif; }
+    .banner code { font-family: "IBM Plex Mono", monospace; font-size: 12px; }
+    .state {
+      background: #fff;
+      border: 1px solid var(--border);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--secondary);
+      white-space: pre-wrap;
+    }
+    .pair {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    .col { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+    .col-label {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #333;
+    }
+    .phone {
+      width: var(--phone-w);
+      height: var(--phone-h);
+      background: var(--canvas);
+      border-radius: 24px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.22);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .phone.foreign-canvas { background: var(--fill-secondary); }
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 12px 10px;
+      min-height: 48px;
+    }
+    .top button, .icon-btn {
+      border: 0;
+      background: transparent;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+      display: grid;
+      place-items: center;
+    }
+    .top h1 {
+      flex: 1;
+      margin: 0;
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+    .scroll { flex: 1; overflow: auto; padding-bottom: 16px; }
+    .hero {
+      aspect-ratio: 4/5;
+      margin: 0 12px;
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, #c5cad1, #7a828c);
+    }
+    .strip {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      overflow-x: auto;
+    }
+    .strip .thumb {
+      flex: 0 0 56px;
+      aspect-ratio: 4/5;
+      border-radius: 8px;
+      background: linear-gradient(160deg, #b0b6be, #6a717a);
+      border: 2px solid transparent;
+    }
+    .strip .thumb.on { border-color: #000; }
+    .meta { padding: 4px 16px 12px; }
+    .club { font-family: Archivo, sans-serif; font-weight: 600; font-size: 15px; margin: 0 0 4px; }
+    .mono { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--muted); }
+    .group {
+      margin: 0 12px 12px;
+      background: #fff;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      min-height: 52px;
+      border-bottom: 1px solid var(--border);
+      font-size: 15px;
+    }
+    .row:last-child { border-bottom: 0; }
+    .row .grow { flex: 1; }
+    .helper { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .sw {
+      width: 44px;
+      height: 28px;
+      border-radius: 999px;
+      background: #ccc;
+      position: relative;
+      border: 0;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .sw.on { background: #000; }
+    .sw::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .15s;
+    }
+    .sw.on::after { transform: translateX(16px); }
+    .actions { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
+    .btn {
+      border: 0;
+      border-radius: 999px;
+      min-height: 48px;
+      padding: 0 18px;
+      font: 500 15px/1 "IBM Plex Sans", sans-serif;
+      cursor: pointer;
+    }
+    .btn.primary { background: #000; color: #fff; }
+    .btn.secondary { background: var(--fill-secondary); color: #000; }
+    .btn.danger { background: transparent; color: #b42318; text-align: left; padding-left: 4px; }
+    .owner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 12px 12px;
+      padding: 12px;
+      background: #fff;
+      border-radius: var(--radius);
+      cursor: pointer;
+      border: 0;
+      width: calc(100% - 24px);
+      text-align: left;
+      font: inherit;
+    }
+    .av {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--fill-secondary);
+      display: grid;
+      place-items: center;
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .fav { margin-left: auto; font-size: 20px; }
+
+    /* B immersive */
+    .immersive { position: relative; flex: 1; background: #1a1a1a; }
+    .immersive .stage {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(160deg, #9aa1aa, #4a5159);
+    }
+    .immersive .chrome {
+      position: absolute;
+      left: 0; right: 0; top: 0;
+      display: flex;
+      padding: 12px;
+      color: #fff;
+      z-index: 2;
+    }
+    .immersive .chrome button { color: #fff; background: rgba(0,0,0,.35); }
+    .immersive .sheet {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      background: #fff;
+      border-radius: 16px 16px 0 0;
+      padding: 16px 16px 20px;
+      max-height: 48%;
+      overflow: auto;
+      z-index: 2;
+    }
+    .dots {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      position: absolute;
+      left: 0; right: 0;
+      bottom: calc(48% + 10px);
+      z-index: 2;
+    }
+    .dots i {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: rgba(255,255,255,.4);
+    }
+    .dots i.on { background: #fff; }
+
+    /* C meta-first */
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+    .chip {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--fill-secondary);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .gallery-label {
+      font-family: Archivo, sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      padding: 8px 16px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .gallery {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 0 12px 16px;
+    }
+    .gallery .cell {
+      aspect-ratio: 4/5;
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, #c5cad1, #7a828c);
+    }
+
+    .switcher {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #111;
+      color: #fff;
+      border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+    }
+    .switcher button {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 0; background: #333; color: #fff; cursor: pointer; font-size: 16px;
+    }
+    .switcher .label { min-width: 220px; text-align: center; }
+    .hidden { display: none !important; }
+    body.shot .banner,
+    body.shot .state,
+    body.shot .switcher { display: none !important; }
+    body.shot { padding: 24px; background: #e8e8e8; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>PROTOTYPE — UserJersey detail</strong><br />
+    Own (left) + Foreign (right). Flip structure with the bar / <code>?variant=A|B|C</code>. Toggles update state strip. Throwaway.
+  </div>
+  <div class="state" id="state"></div>
+  <div class="pair" id="pair"></div>
+
+  <div class="switcher">
+    <button type="button" id="prev" aria-label="Previous">←</button>
+    <div class="label" id="label">A — Hero + strip</div>
+    <button type="button" id="next" aria-label="Next">→</button>
+  </div>
+
+  <script>
+    const VARIANTS = [
+      { key: "A", name: "Hero + strip (lock lean)" },
+      { key: "B", name: "Immersive pager + sheet" },
+      { key: "C", name: "Meta-first + gallery" },
+    ];
+
+    const state = {
+      variant: "A",
+      privateOn: false,
+      bidOn: true,
+      favOn: false,
+      lastAction: null,
+    };
+
+    function paintState() {
+      document.getElementById("state").textContent =
+        `variant=${state.variant} · private=${state.privateOn} · bid=${state.bidOn} · fav=${state.favOn}` +
+        (state.lastAction ? ` · last=${state.lastAction}` : "");
+      const meta = VARIANTS.find((v) => v.key === state.variant);
+      document.getElementById("label").textContent = `${meta.key} — ${meta.name}`;
+      const url = new URL(location.href);
+      url.searchParams.set("variant", state.variant);
+      history.replaceState(null, "", url);
+      render();
+    }
+
+    function sw(on, id) {
+      return `<button type="button" class="sw${on ? " on" : ""}" data-act="${id}" aria-pressed="${on}"></button>`;
+    }
+
+    function ownA() {
+      const bidDisabled = state.privateOn;
+      return `
+        <div class="phone">
+          <div class="top"><button type="button" data-act="back">←</button><h1>F.C. København</h1><span style="width:40px"></span></div>
+          <div class="scroll">
+            <div class="hero"></div>
+            <div class="strip"><div class="thumb on"></div><div class="thumb"></div><div class="thumb"></div></div>
+            <div class="meta"><p class="club">F.C. København</p><p class="mono">2023/24 · Hjemme · L · Brugt</p></div>
+            <div class="group">
+              <div class="row"><div class="grow">Privat<div class="helper">Skjult på Søg og Peer Profil</div></div>${sw(state.privateOn, "toggle-private")}</div>
+              <div class="row"><div class="grow">Åben for bud<div class="helper">${bidDisabled ? "Slået fra mens privat" : "Andre kan sende bud"}</div></div>${sw(state.bidOn && !bidDisabled, "toggle-bid")}</div>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn secondary" data-act="edit">Rediger</button>
+              <button type="button" class="btn danger" data-act="delete">Slet trøje</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function foreignA() {
+      return `
+        <div class="phone foreign-canvas">
+          <div class="top"><button type="button" data-act="back">←</button><h1>F.C. København</h1>
+            <button type="button" class="icon-btn" data-act="overflow">⋯</button></div>
+          <div class="scroll">
+            <div class="hero"></div>
+            <div class="strip"><div class="thumb on"></div><div class="thumb"></div><div class="thumb"></div></div>
+            <div class="meta"><p class="club">F.C. København</p><p class="mono">2023/24 · Hjemme · L · Brugt</p></div>
+            <button type="button" class="owner" data-act="peer"><div class="av">NF</div><div class="grow"><div class="club" style="font-size:15px">nick_fck</div><div class="mono">København · Danmark</div></div><span class="fav" data-act="toggle-fav">${state.favOn ? "♥" : "♡"}</span></button>
+            <div class="actions">
+              ${state.bidOn && !state.privateOn
+                ? `<button type="button" class="btn primary" data-act="send-bid">Send bud</button>`
+                : `<p class="mono" style="padding:0 4px">Ikke åben for bud</p>`}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function ownB() {
+      return `
+        <div class="phone">
+          <div class="immersive">
+            <div class="stage"></div>
+            <div class="chrome"><button type="button" data-act="back">←</button><span style="flex:1"></span></div>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+            <div class="sheet">
+              <p class="club">F.C. København</p>
+              <p class="mono" style="margin:0 0 12px">2023/24 · Hjemme · L · Brugt</p>
+              <div class="row" style="padding-left:0;padding-right:0"><div class="grow">Privat</div>${sw(state.privateOn, "toggle-private")}</div>
+              <div class="row" style="padding-left:0;padding-right:0"><div class="grow">Åben for bud</div>${sw(state.bidOn && !state.privateOn, "toggle-bid")}</div>
+              <div class="actions" style="padding:8px 0 0">
+                <button type="button" class="btn secondary" data-act="edit">Rediger</button>
+                <button type="button" class="btn danger" data-act="delete">Slet</button>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function foreignB() {
+      return `
+        <div class="phone">
+          <div class="immersive">
+            <div class="stage"></div>
+            <div class="chrome">
+              <button type="button" data-act="back">←</button>
+              <span style="flex:1"></span>
+              <button type="button" data-act="toggle-fav">${state.favOn ? "♥" : "♡"}</button>
+              <button type="button" data-act="overflow">⋯</button>
+            </div>
+            <div class="dots"><i class="on"></i><i></i><i></i></div>
+            <div class="sheet">
+              <p class="club">F.C. København</p>
+              <p class="mono" style="margin:0 0 12px">2023/24 · Hjemme · L · Brugt</p>
+              <button type="button" class="owner" style="width:100%;margin:0 0 12px" data-act="peer"><div class="av">NF</div><div class="grow"><div class="club" style="font-size:15px">nick_fck</div></div></button>
+              ${state.bidOn && !state.privateOn
+                ? `<button type="button" class="btn primary" style="width:100%" data-act="send-bid">Send bud</button>`
+                : `<p class="mono">Ikke åben for bud</p>`}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function ownC() {
+      return `
+        <div class="phone">
+          <div class="top"><button type="button" data-act="back">←</button><h1>Trøje</h1><span style="width:40px"></span></div>
+          <div class="scroll">
+            <div class="meta"><p class="club">F.C. København</p><p class="mono">2023/24 · Hjemme</p></div>
+            <div class="chips"><span class="chip">L</span><span class="chip">Brugt</span></div>
+            <div class="group">
+              <div class="row"><div class="grow">Privat</div>${sw(state.privateOn, "toggle-private")}</div>
+              <div class="row"><div class="grow">Åben for bud</div>${sw(state.bidOn && !state.privateOn, "toggle-bid")}</div>
+            </div>
+            <div class="actions" style="margin-bottom:12px">
+              <button type="button" class="btn secondary" data-act="edit">Rediger</button>
+              <button type="button" class="btn danger" data-act="delete">Slet trøje</button>
+            </div>
+            <div class="gallery-label">Fotos</div>
+            <div class="gallery"><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
+          </div>
+        </div>`;
+    }
+
+    function foreignC() {
+      return `
+        <div class="phone foreign-canvas">
+          <div class="top"><button type="button" data-act="back">←</button><h1>Trøje</h1>
+            <button type="button" data-act="toggle-fav">${state.favOn ? "♥" : "♡"}</button>
+            <button type="button" data-act="overflow">⋯</button></div>
+          <div class="scroll">
+            <div class="meta"><p class="club">F.C. København</p><p class="mono">2023/24 · Hjemme</p></div>
+            <div class="chips"><span class="chip">L</span><span class="chip">Brugt</span></div>
+            <button type="button" class="owner" data-act="peer"><div class="av">NF</div><div class="grow"><div class="club" style="font-size:15px">nick_fck</div><div class="mono">22 trøjer</div></div></button>
+            <div class="actions" style="margin-bottom:12px">
+              ${state.bidOn && !state.privateOn
+                ? `<button type="button" class="btn primary" data-act="send-bid">Send bud</button>`
+                : `<p class="mono" style="padding:0 4px">Ikke åben for bud</p>`}
+            </div>
+            <div class="gallery-label">Fotos</div>
+            <div class="gallery"><div class="cell"></div><div class="cell"></div><div class="cell"></div></div>
+          </div>
+        </div>`;
+    }
+
+    function render() {
+      const own = state.variant === "A" ? ownA() : state.variant === "B" ? ownB() : ownC();
+      const foreign = state.variant === "A" ? foreignA() : state.variant === "B" ? foreignB() : foreignC();
+      document.getElementById("pair").innerHTML = `
+        <div class="col"><div class="col-label">Own</div>${own}</div>
+        <div class="col"><div class="col-label">Foreign</div>${foreign}</div>`;
+    }
+
+    document.getElementById("pair").addEventListener("click", (e) => {
+      const el = e.target.closest("[data-act]");
+      if (!el) return;
+      const act = el.getAttribute("data-act");
+      state.lastAction = act;
+      if (act === "toggle-private") {
+        state.privateOn = !state.privateOn;
+        if (state.privateOn) state.bidOn = false;
+      } else if (act === "toggle-bid") {
+        if (!state.privateOn) state.bidOn = !state.bidOn;
+      } else if (act === "toggle-fav") {
+        state.favOn = !state.favOn;
+      }
+      paintState();
+    });
+
+    function cycle(d) {
+      const i = VARIANTS.findIndex((v) => v.key === state.variant);
+      state.variant = VARIANTS[(i + d + VARIANTS.length) % VARIANTS.length].key;
+      state.lastAction = null;
+      paintState();
+    }
+    document.getElementById("prev").onclick = () => cycle(-1);
+    document.getElementById("next").onclick = () => cycle(1);
+    document.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT") return;
+      if (e.key === "ArrowLeft") cycle(-1);
+      if (e.key === "ArrowRight") cycle(1);
+    });
+
+    const params = new URL(location.href).searchParams;
+    if (params.get("shot") === "1") document.body.classList.add("shot");
+    const initial = params.get("variant");
+    if (initial && VARIANTS.some((v) => v.key === initial)) state.variant = initial;
+    paintState();
+  </script>
+</body>
+</html>
