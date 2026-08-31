@@ -157,10 +157,10 @@ test("checker-fail uses full selector helper list in prompt", () => {
     writeScope: "apps/api/**, apps/mobile/**",
     implementContext: ctx,
   });
-  assert.match(prompt, /Checker-fail resume/i);
-  assert.match(prompt, /Required helpers: expo, nest, ui-ux/);
-  assert.match(prompt, /Do not Skip Scout/i);
-  assert.match(prompt, /Do not Skip helpers/i);
+  assert.match(prompt, /Builder resume from Review/i);
+  assert.match(prompt, /Required helpers.*expo, nest, ui-ux/);
+  assert.match(prompt, /Start from Builder|Skip Scout/i);
+  assert.equal(/Spawn Scout first|Do not Skip Scout/i.test(prompt), false);
   assert.match(prompt, /### Review feedback/);
 });
 

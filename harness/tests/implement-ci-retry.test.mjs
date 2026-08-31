@@ -582,7 +582,7 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(cheap, /Skip Scout/i);
   assert.match(cheap, /Skip helpers/i);
   assert.match(cheap, /Skip optimizer/i);
-  assert.match(cheap, /format vs Zod vs unique-email vs migration prefix/i);
+  assert.match(cheap, /format vs lockfile vs migration prefix|format vs Zod/i);
   assert.match(cheap, /AssertionError/);
   assert.match(cheap, /### Review feedback/);
   assert.match(cheap, /not a new try|same Implementing stay/i);
@@ -608,10 +608,14 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
   assert.match(checkerFail, /Standards/);
   assert.match(checkerFail, /subset/i);
   assert.match(checkerFail, /\[factory-checker\/slop\]/);
-  assert.match(checkerFail, /Do not Skip Scout/i);
-  assert.match(checkerFail, /Do not Skip helpers/i);
-  assert.match(checkerFail, /Required helpers: expo, ui-ux/);
-  assert.equal(/Skip Scout\. Skip helpers/i.test(checkerFail), false);
+  assert.match(checkerFail, /Builder resume from Review/i);
+  assert.match(checkerFail, /Start from Builder/i);
+  assert.match(checkerFail, /Skip Scout/i);
+  assert.match(checkerFail, /Builder resume from Review/i);
+  assert.match(checkerFail, /Start from Builder/i);
+  assert.match(checkerFail, /Skip Scout/i);
+  assert.equal(/Spawn Scout first|Do not Skip Scout/i.test(checkerFail), false);
+  assert.match(checkerFail, /Required helpers.*expo, ui-ux/);
   assert.equal(isCheapImplementRetry({ role: "implement" }), false);
   assert.equal(isCheapImplementRetry({ role: "implement", ciRetryAttempt: 2 }), true);
   assert.equal(isCheapImplementRetry({ role: "implement", writeScopeRetryAttempt: 2 }), true);
@@ -707,10 +711,11 @@ test("checker-fail resume inlines workpad findings and does not Skip Scout or he
   assert.match(prompt, /unused import/);
   assert.match(prompt, /every workpad axis|every axis/i);
   assert.match(prompt, /subset/i);
-  assert.match(prompt, /Do not Skip Scout/i);
-  assert.match(prompt, /Do not Skip helpers/i);
-  assert.equal(/Skip Scout\. Skip helpers/i.test(prompt), false);
-  assert.match(prompt, /Required helpers: expo, ui-ux/);
+  assert.match(prompt, /Builder resume from Review/i);
+  assert.match(prompt, /Start from Builder/i);
+  assert.match(prompt, /Skip Scout/i);
+  assert.equal(/Spawn Scout first|Do not Skip Scout/i.test(prompt), false);
+  assert.match(prompt, /Required helpers.*expo, ui-ux/);
 });
 
 test("stale retry-cap comment does not skip Pi spawn — same Implementing stay can still reach In Review", async () => {
@@ -945,12 +950,38 @@ test("mechanical-exit fast path skips Pi when workpad says PR create failed", as
     adwFile: ".pi/adw/feature.yaml",
   });
 
-  assert.equal(spawned.length, 0, "must not re-enter Scout/helpers after PR-create fail");
+  assert.equal(spawned.length, 0, "first PR-create retry is exit-only (0 tokens)");
   assert.equal(result.mechanicalExitFastPath, true);
   assert.equal(
     calls.some((call) => call[0] === "createPr"),
     true,
   );
+});
+
+test("optimizer resume prompt for CI red / PR missing; Builder from Review", () => {
+  const opt = implementPrompt("implement", "KIT-150", ".pi/adw/feature.yaml", {
+    optimizerRetry: true,
+    reviewFeedback: "- CI: required check `test` failed\n  AssertionError",
+  });
+  assert.match(opt, /Optimizer resume/);
+  assert.match(opt, /Spawn optimizer once/);
+  assert.match(opt, /Skip Scout/);
+  assert.match(opt, /until required GitHub checks are green/i);
+  assert.equal(/First run/i.test(opt), false);
+
+  const fromReview = implementPrompt("implement", "KIT-150", ".pi/adw/feature.yaml", {
+    reviewFeedback: [
+      "- Spec: missing badge",
+      "- Standards: unused export",
+      "- Slop: unused import",
+    ].join("\n"),
+    implementContext: { requiredHelpers: ["expo", "nest"] },
+  });
+  assert.match(fromReview, /Builder resume from Review/);
+  assert.match(fromReview, /Start from Builder/);
+  assert.match(fromReview, /Skip Scout/);
+  assert.equal(/Spawn Scout first/i.test(fromReview), false);
+  assert.match(fromReview, /optimizer once/i);
 });
 
 test("reviewFeedbackIsMechanicalExitFail matches PR create, not checker axes", () => {
@@ -980,9 +1011,9 @@ test("mechanical-exit prompt skips Scout when Pi still runs", () => {
     mechanicalExitResume: true,
     reviewFeedback: "- PR create: must provide --body",
   });
-  assert.match(prompt, /Mechanical-exit resume/);
+  assert.match(prompt, /Optimizer resume/);
   assert.match(prompt, /Skip Scout/);
-  assert.match(prompt, /Skip helpers/);
+  assert.match(prompt, /Spawn optimizer once/);
   assert.equal(/Do not Skip Scout/i.test(prompt), false);
   assert.equal(/First run/i.test(prompt), false);
 });

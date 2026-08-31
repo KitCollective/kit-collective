@@ -63,7 +63,7 @@ export function isCheapImplementRetry(job) {
 
 /**
  * Slim (0-token-ish) Pi context only for mechanical / scoped retries.
- * Logic and unknown CI failures need a full Builder + helpers.
+ * Logic/unknown CI and PR-create (after one exit-only try) use Optimizer — not slim Skip-all.
  *
  * @param {object | undefined} job
  */
@@ -72,7 +72,7 @@ export function shouldSlimCheapRetry(job) {
     return false;
   }
   if (Number(job.prCreateRetryAttempt ?? 1) > 1) {
-    return true;
+    return false;
   }
   if (Number(job.writeScopeRetryAttempt ?? 1) > 1) {
     return true;
@@ -89,6 +89,25 @@ export function shouldSlimCheapRetry(job) {
   if (Number(job.ciRetryAttempt ?? 1) > 1) {
     const klass = job.ciFailureClass;
     return klass === "format" || klass === "lockfile" || klass === "migration";
+  }
+  return false;
+}
+
+/**
+ * Red CI (logic/unknown) or PR-create after the exit-only try → Optimizer, then harness wait.
+ *
+ * @param {object | undefined} job
+ */
+export function isOptimizerImplementRetry(job) {
+  if (job?.role !== "implement") {
+    return false;
+  }
+  if (Number(job.prCreateRetryAttempt ?? 1) > 2) {
+    return true;
+  }
+  if (Number(job.ciRetryAttempt ?? 1) > 1) {
+    const klass = job.ciFailureClass;
+    return klass === "logic" || klass === "unknown" || typeof klass !== "string";
   }
   return false;
 }
