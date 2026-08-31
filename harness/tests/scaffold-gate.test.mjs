@@ -43,10 +43,7 @@ test("scaffoldDiffOk treats any touch as ok when write-scope is empty", () => {
 });
 
 test("scaffoldTouchedFiles includes removals", () => {
-  assert.deepEqual(
-    scaffoldTouchedFiles(["a.ts", "b.ts"], ["a.ts"]),
-    ["b.ts"],
-  );
+  assert.deepEqual(scaffoldTouchedFiles(["a.ts", "b.ts"], ["a.ts"]), ["b.ts"]);
 });
 
 test("formatScaffoldEmptyFeedback distinguishes re-draft", () => {

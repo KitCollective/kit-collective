@@ -13,8 +13,8 @@ import {
   STUCK_FEEDBACK_CAP,
 } from "../checker-exit.mjs";
 import {
-  evaluateStuckFeedback,
   STUCK_FEEDBACK_CAP as EXIT_CAP,
+  evaluateStuckFeedback,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
 import { ECONOMY_PINNED_AGENTS } from "../model-router.mjs";
@@ -195,8 +195,7 @@ ${findings}
   assert.ok(linear.calls.some((call) => call[0] === "setStatus" && call[1].status === PARKED));
   assert.ok(
     linear.calls.some(
-      (call) =>
-        call[0] === "addLabels" && call[1].labelNames.includes(READY_FOR_HUMAN_LABEL),
+      (call) => call[0] === "addLabels" && call[1].labelNames.includes(READY_FOR_HUMAN_LABEL),
     ),
   );
 });

@@ -18,7 +18,12 @@ import {
   reviewFeedbackIsLandFail,
   WORKPAD_HEADING,
 } from "../implement-exit.mjs";
-import { createSerialQueue, IMPLEMENT_CI_RETRY_CAP, isCheapImplementRetry, shouldSlimCheapRetry } from "../job-queue.mjs";
+import {
+  createSerialQueue,
+  IMPLEMENT_CI_RETRY_CAP,
+  isCheapImplementRetry,
+  shouldSlimCheapRetry,
+} from "../job-queue.mjs";
 import { createPiJobRunner, implementPrompt } from "../pi-job.mjs";
 import { commentsHoldImplementRetryCap, implementRetryCapComment } from "../role-comments.mjs";
 
@@ -615,18 +620,9 @@ test("implement prompt and role/ADW text leave In Review to the harness", () => 
 
 test("shouldSlimCheapRetry is true for mechanical CI classes and scoped retries", () => {
   assert.equal(shouldSlimCheapRetry({ role: "implement" }), false);
-  assert.equal(
-    shouldSlimCheapRetry({ role: "implement", formatRetryAttempt: 2 }),
-    true,
-  );
-  assert.equal(
-    shouldSlimCheapRetry({ role: "implement", writeScopeRetryAttempt: 2 }),
-    true,
-  );
-  assert.equal(
-    shouldSlimCheapRetry({ role: "implement", migrationRetryAttempt: 2 }),
-    true,
-  );
+  assert.equal(shouldSlimCheapRetry({ role: "implement", formatRetryAttempt: 2 }), true);
+  assert.equal(shouldSlimCheapRetry({ role: "implement", writeScopeRetryAttempt: 2 }), true);
+  assert.equal(shouldSlimCheapRetry({ role: "implement", migrationRetryAttempt: 2 }), true);
   assert.equal(
     shouldSlimCheapRetry({
       role: "implement",

@@ -3,10 +3,7 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  evaluateCompositionGate,
-  parseCompositionSection,
-} from "../composition-gate.mjs";
+import { evaluateCompositionGate, parseCompositionSection } from "../composition-gate.mjs";
 
 const BASE = `## Agent Workpad
 

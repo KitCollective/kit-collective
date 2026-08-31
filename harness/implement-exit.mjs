@@ -986,10 +986,7 @@ async function applyMechanicalLockfile({ lockfileApply, gh, checkout }) {
 export function collectWorkpadHonestyViolations(workpadBody, signals = {}) {
   const body = typeof workpadBody === "string" ? workpadBody : "";
   const violations = [];
-  if (
-    /lockfile\s+(restored|fixed|updated|synced)/i.test(body) &&
-    signals.lockfileDirty === true
-  ) {
+  if (/lockfile\s+(restored|fixed|updated|synced)/i.test(body) && signals.lockfileDirty === true) {
     violations.push("- Honesty: workpad claims lockfile fixed but pnpm-lock.yaml is still dirty");
   }
   if (
@@ -1021,7 +1018,12 @@ export function normalizeReviewFeedbackFingerprint(workpadBody) {
   }
   return match[1]
     .split("\n")
-    .map((line) => line.replace(/^\s*[-*]\s*/, "").trim().toLowerCase())
+    .map((line) =>
+      line
+        .replace(/^\s*[-*]\s*/, "")
+        .trim()
+        .toLowerCase(),
+    )
     .filter((line) => line.length > 0 && line !== "(none)")
     .sort()
     .join("\n");
@@ -1372,10 +1374,7 @@ export async function completeImplementAdw(input) {
     if (requiredChecksFailed(pr?.checks)) {
       const withLogs = await attachFailedCheckLogs(pr?.checks, gh, checkout.path);
       const failureClass = classifyCiFailure(withLogs);
-      if (
-        failureClass === "format" &&
-        mechanicalFormatApplies < MAX_MECHANICAL_FORMAT_APPLIES
-      ) {
+      if (failureClass === "format" && mechanicalFormatApplies < MAX_MECHANICAL_FORMAT_APPLIES) {
         const applied = await applyMechanicalFormat({
           formatApply,
           gh,

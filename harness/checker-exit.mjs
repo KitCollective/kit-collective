@@ -145,7 +145,9 @@ export function evaluateSpecEvidenceFloor(workpadBody) {
   const evidenceLines = evidenceBody
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !/^\(none\)$/i.test(line) && !/^-\s*\(none\)\s*$/i.test(line));
+    .filter(
+      (line) => line.length > 0 && !/^\(none\)$/i.test(line) && !/^-\s*\(none\)\s*$/i.test(line),
+    );
   const hasEvidence = evidenceLines.length > 0;
 
   if (hasAcTick || hasValidation || hasEvidence) {
@@ -702,11 +704,7 @@ export async function completeChecker(input) {
     gateFailures.push("- Required GitHub checks timed out before turning green");
   }
   const evidenceFloor = evaluateSpecEvidenceFloor(workpadBody);
-  const passed =
-    !piFindings &&
-    !missingSlopAxis &&
-    gateFailures.length === 0 &&
-    evidenceFloor.ok;
+  const passed = !piFindings && !missingSlopAxis && gateFailures.length === 0 && evidenceFloor.ok;
 
   if (passed) {
     await syncSlopReviewThreadsSafely(gh, {

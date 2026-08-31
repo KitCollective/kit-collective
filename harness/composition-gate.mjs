@@ -115,9 +115,7 @@ export function evaluateCompositionGate({ workpadBody, skipDraftAllowed = false 
     return { ok: false, feedback, parsed };
   }
   if (parsed.paths.length === 0) {
-    feedback.push(
-      "- Composition: list at least one repo-relative path to mirror before Draft",
-    );
+    feedback.push("- Composition: list at least one repo-relative path to mirror before Draft");
   }
   if (parsed.skipDraft === null && skipDraftAllowed !== true) {
     feedback.push(

@@ -11,7 +11,9 @@ import { matchesGlob } from "../scripts/lib/pr-write-scope.mjs";
  * @returns {Set<string>}
  */
 export function fileSet(files) {
-  return new Set((Array.isArray(files) ? files : []).filter((f) => typeof f === "string" && f.length > 0));
+  return new Set(
+    (Array.isArray(files) ? files : []).filter((f) => typeof f === "string" && f.length > 0),
+  );
 }
 
 /**
@@ -92,7 +94,5 @@ export function formatScaffoldEmptyFeedback({ reDraftAttempted = false } = {}) {
       "- Scaffold: Draft produced no write-scope file touches after one re-draft — stay Implementing; fix Composition paths or scaffold under write-scope",
     ];
   }
-  return [
-    "- Scaffold: Draft produced no write-scope file touches — re-draft once before helpers",
-  ];
+  return ["- Scaffold: Draft produced no write-scope file touches — re-draft once before helpers"];
 }
