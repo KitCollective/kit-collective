@@ -216,9 +216,18 @@ function fakeWorktree({ path = "/var/lib/kit-pi/worktrees/KIT-56", branch = "kit
   };
 }
 
-function checkerRunner({ gh, linear, worktree, spawned, sleep, waitTimeoutMs, waitIntervalMs }) {
+function checkerRunner({
+  gh,
+  linear,
+  worktree,
+  spawned,
+  sleep,
+  waitTimeoutMs,
+  waitIntervalMs,
+  env,
+}) {
   return createPiJobRunner({
-    env: validWorkerEnv(),
+    env: env ?? validWorkerEnv(),
     workspace: ROOT,
     worktree: worktree ?? fakeWorktree(),
     checkerGh: gh,
@@ -739,6 +748,24 @@ test("factory-checker uses the fast Pi model, not implement Composer", async () 
   });
   const modelIdx = spawned[0].args.indexOf("--model");
   assert.equal(spawned[0].args[modelIdx + 1], "cursor/grok-4.6");
+});
+
+test("economy profile runs factory-checker on cheap OpenRouter Hy3", async () => {
+  const spawned = [];
+  const env = validWorkerEnv();
+  env.HARNESS_MODEL_PROFILE = "economy";
+  await checkerRunner({
+    env,
+    gh: fakeGh(),
+    linear: fakeLinear(),
+    spawned,
+  }).run({
+    role: "factory-checker",
+    identifier: "KIT-56",
+    issueId: ISSUE_ID,
+  });
+  const modelIdx = spawned[0].args.indexOf("--model");
+  assert.equal(spawned[0].args[modelIdx + 1], "openrouter/tencent/hy3");
 });
 
 test("applyCheckerFailWorkpad replaces Review feedback in one pass", () => {
