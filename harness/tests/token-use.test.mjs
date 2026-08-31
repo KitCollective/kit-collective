@@ -234,7 +234,9 @@ test("Scout (Hy3) and Gate (MiMo) are separate lines from the Implement parent w
 });
 
 test("factory-checker workpad records Grok token counts for the checker role", async () => {
-  const pad = workpadStore();
+  const pad = workpadStore(
+    `${WORKPAD_HEADING}\n\n### Evidence\n\n- KIT-93 PR: ${PR_URL}\n\n### Review feedback\n\n- Spec: (none)\n- Standards: (none)\n- Slop: (none)\n`,
+  );
   const runner = createPiJobRunner({
     env: validWorkerEnv(),
     workspace: ROOT,
