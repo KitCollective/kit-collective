@@ -1,4 +1,3 @@
-import { type Db } from "@kit/db";
 import { forwardRef, Global, Module } from "@nestjs/common";
 import { BillingModule } from "../billing/billing.module.js";
 import { DB, type DbToken } from "../db/db.module.js";
@@ -16,7 +15,7 @@ import { JwtAuthGuard } from "./jwt-auth.guard.js";
     {
       provide: AUTH,
       inject: [DB],
-      useFactory: (db: DbToken) => createAuth(db as Db),
+      useFactory: (db: DbToken) => createAuth(db),
     },
     IdentityService,
     JwtAuthGuard,
