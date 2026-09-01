@@ -4,9 +4,12 @@ import { fileURLToPath } from "node:url";
 import {
   collectionActivitySchema,
   collectionBlockConversationResponseSchema,
+  collectionBlockPeerResponseSchema,
   collectionConversationPeerSchema,
   collectionConversationsSchema,
+  collectionPeerJerseySchema,
   collectionReportConversationResponseSchema,
+  collectionReportPeerResponseSchema,
   collectionSaveResponseSchema,
   collectionSendBidResponseSchema,
   identitySessionSchema,
@@ -364,5 +367,60 @@ describe("Conversation moderation /v1", () => {
     expect(peer.handle).toBeTruthy();
     expect(peer.jerseyCount).toBe(0);
     expect(peer.city).toBe("Aarhus");
+  });
+
+  it("reports a peer without a conversation thread", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-peer-report@example.com");
+    const viewer = await registerSession(app, "viewer-peer-report@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+
+    const peerResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/jerseys/${jersey.id}/peer`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(peerResponse.statusCode).toBe(200);
+    const peerBody = collectionPeerJerseySchema.parse(JSON.parse(peerResponse.body));
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${peerBody.ownerId}/report`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+      payload: { reason: "Upassende profil" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    collectionReportPeerResponseSchema.parse(JSON.parse(response.body));
+  });
+
+  it("blocks a peer without a conversation thread", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "owner-peer-block@example.com");
+    const viewer = await registerSession(app, "viewer-peer-block@example.com");
+    const jersey = await saveJerseyForUser(app, owner, fixture);
+
+    const peerResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/jerseys/${jersey.id}/peer`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(peerResponse.statusCode).toBe(200);
+    const peerBody = collectionPeerJerseySchema.parse(JSON.parse(peerResponse.body));
+
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${peerBody.ownerId}/block`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+    collectionBlockPeerResponseSchema.parse(JSON.parse(blockResponse.body));
+
+    const hiddenPeerGet = await app.inject({
+      method: "GET",
+      url: `/v1/collection/jerseys/${jersey.id}/peer`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(hiddenPeerGet.statusCode).toBe(404);
   });
 });

@@ -158,13 +158,19 @@ export {
 } from "./collection/conversation-detail.js";
 export {
   type CollectionBlockConversationResponse,
+  type CollectionBlockPeerResponse,
   type CollectionConversationPeer,
   type CollectionReportConversationRequest,
   type CollectionReportConversationResponse,
+  type CollectionReportPeerRequest,
+  type CollectionReportPeerResponse,
   collectionBlockConversationResponseSchema,
+  collectionBlockPeerResponseSchema,
   collectionConversationPeerSchema,
   collectionReportConversationRequestSchema,
   collectionReportConversationResponseSchema,
+  collectionReportPeerRequestSchema,
+  collectionReportPeerResponseSchema,
 } from "./collection/conversation-moderation.js";
 export {
   type CollectionConversation,

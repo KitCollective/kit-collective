@@ -39,3 +39,15 @@ export const collectionBlockConversationResponseSchema = z
 export type CollectionBlockConversationResponse = z.infer<
   typeof collectionBlockConversationResponseSchema
 >;
+
+export const collectionReportPeerRequestSchema = collectionReportConversationRequestSchema;
+
+export type CollectionReportPeerRequest = z.infer<typeof collectionReportPeerRequestSchema>;
+
+export const collectionReportPeerResponseSchema = collectionReportConversationResponseSchema;
+
+export type CollectionReportPeerResponse = z.infer<typeof collectionReportPeerResponseSchema>;
+
+export const collectionBlockPeerResponseSchema = collectionBlockConversationResponseSchema;
+
+export type CollectionBlockPeerResponse = z.infer<typeof collectionBlockPeerResponseSchema>;

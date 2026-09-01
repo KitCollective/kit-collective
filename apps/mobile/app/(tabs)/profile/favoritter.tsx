@@ -60,7 +60,7 @@ export default function FavoritesScreen() {
   const tileWidth = (width - horizontalPadding - columnGap) / 2;
 
   const openPeerDetail = (userJerseyId: string) => {
-    router.push(`/(tabs)/search/send-bid/${userJerseyId}`);
+    router.push(`/(tabs)/search/${userJerseyId}`);
   };
 
   return (

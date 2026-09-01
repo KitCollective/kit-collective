@@ -1164,8 +1164,12 @@ export class CollectionService {
       .where(eq(userJersey.id, jerseyId))
       .limit(1);
 
-    // Own copies, private copies, and unknown ids are indistinguishable — no existence leak.
+    // Own copies, private copies, blocked peers, and unknown ids are indistinguishable.
     if (!row || row.userId === userId || row.private) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    if (await this.moderationService.isBlocked(userId, row.userId)) {
       throw new NotFoundException("UserJersey not found");
     }
 
@@ -1197,6 +1201,7 @@ export class CollectionService {
       clubLabel,
       seasonLabel: row.seasonLabel,
       ownerHandle: row.ownerHandle,
+      ownerId: row.userId,
       ownerInitial: handleInitial(row.ownerHandle),
       biddingEnabled: row.biddingEnabled,
       latestBidAmountDkk: latestBid?.amount ?? null,
