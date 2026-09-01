@@ -1,7 +1,7 @@
 import {
   type CollectionPeerJerseys,
-  type IdentityPeerProfile,
   collectionPeerJerseysSchema,
+  type IdentityPeerProfile,
   identityPeerProfileSchema,
 } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
@@ -32,15 +32,12 @@ export async function fetchPeerProfileByHandle(
   accessToken: string,
   handle: string,
 ): Promise<IdentityPeerProfile> {
-  const response = await requestJson(
-    `/v1/identity/peers/by-handle/${encodeURIComponent(handle)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Accept-Language": "da",
-      },
+  const response = await requestJson(`/v1/identity/peers/by-handle/${encodeURIComponent(handle)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
     },
-  );
+  });
 
   if (!response.ok) {
     throw new PeerProfileFetchError("Peer profil ikke fundet", response.status);
