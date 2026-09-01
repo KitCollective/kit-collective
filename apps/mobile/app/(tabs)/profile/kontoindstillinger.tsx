@@ -131,10 +131,8 @@ export default function AccountSettingsScreen() {
             title="E-mail"
             value={email}
             meta={emailVerified ? "Bekræftet" : "Ikke bekræftet"}
-            actionLabel={emailVerified ? "Skift" : "Bekræft"}
-            onAction={() =>
-              router.push(emailVerified ? "/(tabs)/profile/skift-email" : "/(auth)/verify")
-            }
+            actionLabel="Skift"
+            onAction={() => router.push("/(tabs)/profile/skift-email")}
           />
           <ProfileRowDivider />
           {editingPhone ? (
