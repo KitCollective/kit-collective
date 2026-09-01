@@ -19,8 +19,10 @@ import {
   identityCredentialsSchema,
   identityExportSchema,
   identityMeSchema,
+  identityPasswordResetAcceptedSchema,
   identityPrefsSchema,
   identitySessionSchema,
+  identityVerifyResponseSchema,
 } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
 
@@ -311,6 +313,45 @@ export async function fetchAccountExport(accessToken: string): Promise<IdentityE
   }
 
   return identityExportSchema.parse(await response.json());
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  const response = await requestJson("/v1/identity/verify", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Linket er ugyldigt eller udløbet");
+  }
+
+  identityVerifyResponseSchema.parse(await response.json());
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  const response = await requestJson("/v1/identity/password-reset", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke sende nulstilling");
+  }
+
+  identityPasswordResetAcceptedSchema.parse(await response.json());
+}
+
+export async function completePasswordReset(token: string, password: string): Promise<void> {
+  const response = await requestJson("/v1/identity/password-reset/complete", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Linket er ugyldigt eller udløbet");
+  }
+
+  identityPasswordResetAcceptedSchema.parse(await response.json());
 }
 
 export { acceptAllCookieConsent, essentialOnlyCookieConsent };

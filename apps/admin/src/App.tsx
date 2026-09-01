@@ -10,8 +10,11 @@ import { CollectorUserDrillPage } from "./pages/CollectorUserDrillPage.js";
 import { KitDrillPage } from "./pages/KitDrillPage.js";
 import { LoginPage } from "./pages/LoginPage.js";
 import { OfferDrillPage } from "./pages/OfferDrillPage.js";
+import { ResetCompletePage } from "./pages/ResetCompletePage.js";
+import { ResetRequestPage } from "./pages/ResetRequestPage.js";
 import { SeasonDrillPage } from "./pages/SeasonDrillPage.js";
 import { StamdataPage } from "./pages/StamdataPage.js";
+import { VerifyPage } from "./pages/VerifyPage.js";
 import "./styles/admin.css";
 
 export function App() {
@@ -20,6 +23,9 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/verify" element={<VerifyPage />} />
+          <Route path="/reset" element={<ResetRequestPage />} />
+          <Route path="/reset/complete" element={<ResetCompletePage />} />
           <Route element={<RequireAdmin />}>
             <Route element={<AdminShell />}>
               <Route path="/" element={<Navigate to="/stamdata" replace />} />

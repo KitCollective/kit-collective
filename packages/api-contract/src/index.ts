@@ -291,6 +291,18 @@ export {
   essentialOnlyCookieConsent,
 } from "./identity/cookie-consent.js";
 export {
+  type IdentityPasswordResetAccepted,
+  type IdentityPasswordResetComplete,
+  type IdentityPasswordResetRequest,
+  type IdentityVerifyRequest,
+  type IdentityVerifyResponse,
+  identityPasswordResetAcceptedSchema,
+  identityPasswordResetCompleteSchema,
+  identityPasswordResetRequestSchema,
+  identityVerifyRequestSchema,
+  identityVerifyResponseSchema,
+} from "./identity/email-verification.js";
+export {
   type IdentityExport,
   identityExportSchema,
 } from "./identity/export.js";

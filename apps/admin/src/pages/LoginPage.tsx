@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider.js";
 import { BrandLogo } from "../brand/BrandLogo.js";
 
@@ -66,6 +66,11 @@ export function LoginPage() {
         <button type="submit" className="btn btn-primary" disabled={submitting}>
           {submitting ? "Signing in…" : "Sign in"}
         </button>
+        <p>
+          <Link to="/reset">Forgot password</Link>
+          {" · "}
+          <Link to="/verify">Verify email</Link>
+        </p>
       </form>
     </div>
   );
