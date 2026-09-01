@@ -1,5 +1,6 @@
 import {
   type CollectionBiddingPatch,
+  type CollectionDiscoverHome,
   type CollectionDiscoverJerseys,
   type CollectionJersey,
   type CollectionPeerJersey,
@@ -7,6 +8,7 @@ import {
   type CollectionRespondBidResponse,
   type CollectionSendBidRequest,
   type CollectionSendBidResponse,
+  collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
   collectionJerseySchema,
   collectionPeerJerseySchema,
@@ -36,6 +38,21 @@ export class BiddingFetchError extends Error {
     super(message);
     this.name = "BiddingFetchError";
   }
+}
+
+export async function fetchDiscoverHome(accessToken: string): Promise<CollectionDiscoverHome> {
+  const response = await requestJson("/v1/collection/discover/home", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+  });
+
+  if (!response.ok) {
+    throw new BiddingFetchError("Kunne ikke hente Søg", response.status);
+  }
+
+  return collectionDiscoverHomeSchema.parse(await response.json());
 }
 
 export async function fetchDiscoverJerseys(

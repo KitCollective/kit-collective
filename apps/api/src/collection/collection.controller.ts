@@ -140,6 +140,15 @@ export class CollectionController {
     return reply.send(Buffer.from(bytes));
   }
 
+  @Get("collection/discover/home")
+  @UseGuards(JwtAuthGuard)
+  discoverHome(
+    @CurrentUser() user: JwtPayload,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.discoverHome(user.sub, resolveLocale(acceptLanguage));
+  }
+
   @Get("collection/discover/jerseys")
   @UseGuards(JwtAuthGuard)
   discoverJerseys(

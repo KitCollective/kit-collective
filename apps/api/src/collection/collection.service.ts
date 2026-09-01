@@ -3,6 +3,9 @@ import {
   type CollectionConversationDetail,
   type CollectionConversationPeer,
   type CollectionConversations,
+  type CollectionDiscoverHome,
+  type CollectionDiscoverHomeClub,
+  type CollectionDiscoverHomeCollector,
   type CollectionDiscoverJerseys,
   type CollectionFavorites,
   type CollectionJersey,
@@ -20,6 +23,7 @@ import {
   collectionConversationDetailSchema,
   collectionConversationPeerSchema,
   collectionConversationsSchema,
+  collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
   collectionFavoritesSchema,
   collectionJerseysSchema,
@@ -1143,9 +1147,11 @@ export class CollectionService {
     query: string | undefined,
     locale: LabelLocale = "da",
   ): Promise<CollectionDiscoverJerseys> {
+    const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
     const rows = await this.db
       .select({
         id: userJersey.id,
+        ownerId: userJersey.userId,
         clubId: userJersey.clubId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
@@ -1164,15 +1170,17 @@ export class CollectionService {
       )
       .orderBy(desc(userJersey.updatedAt));
 
-    if (rows.length === 0) {
+    const visibleRows = rows.filter((row) => !blockedPeerIds.has(row.ownerId));
+
+    if (visibleRows.length === 0) {
       return collectionDiscoverJerseysSchema.parse({ jerseys: [] });
     }
 
-    const clubIds = [...new Set(rows.map((row) => row.clubId))];
+    const clubIds = [...new Set(visibleRows.map((row) => row.clubId))];
     const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
     const normalizedQuery = query?.trim().toLowerCase() ?? "";
 
-    const filteredRows = rows.filter((row) => {
+    const filteredRows = visibleRows.filter((row) => {
       const clubLabel = clubLabels.get(row.clubId);
       if (!clubLabel) {
         return false;
@@ -1212,6 +1220,93 @@ export class CollectionService {
     });
 
     return collectionDiscoverJerseysSchema.parse({ jerseys });
+  }
+
+  async discoverHome(userId: string, locale: LabelLocale = "da"): Promise<CollectionDiscoverHome> {
+    const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
+    const rows = await this.db
+      .select({
+        id: userJersey.id,
+        ownerId: userJersey.userId,
+        clubId: userJersey.clubId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        biddingEnabled: userJersey.biddingEnabled,
+        seasonLabel: season.label,
+        ownerHandle: user.handle,
+        ownerAvatarObjectKey: user.avatarObjectKey,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(user, eq(userJersey.userId, user.id))
+      .where(and(ne(userJersey.userId, userId), eq(userJersey.private, false)))
+      .orderBy(desc(userJersey.updatedAt));
+
+    const visibleRows = rows.filter((row) => !blockedPeerIds.has(row.ownerId));
+    if (visibleRows.length === 0) {
+      return collectionDiscoverHomeSchema.parse({});
+    }
+
+    const clubIds = [...new Set(visibleRows.map((row) => row.clubId))];
+    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const photosByJersey = await this.loadPhotosForJerseys(visibleRows.map((row) => row.id));
+
+    const moreJerseys = visibleRows.flatMap((row) => {
+      const clubLabel = clubLabels.get(row.clubId);
+      const photos = photosByJersey.get(row.id);
+      if (!clubLabel || !photos || photos.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          id: row.id,
+          clubId: row.clubId,
+          seasonId: row.seasonId,
+          type: row.type,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          ownerHandle: row.ownerHandle,
+          photos,
+        },
+      ];
+    });
+
+    const clubs: CollectionDiscoverHomeClub[] = [];
+    const seenClubs = new Set<string>();
+    for (const jersey of moreJerseys) {
+      if (seenClubs.has(jersey.clubId)) {
+        continue;
+      }
+      seenClubs.add(jersey.clubId);
+      clubs.push({ clubId: jersey.clubId, clubLabel: jersey.clubLabel });
+    }
+
+    const openForBid = moreJerseys.filter((jersey) => {
+      const row = visibleRows.find((item) => item.id === jersey.id);
+      return row?.biddingEnabled === true;
+    });
+
+    const collectors: CollectionDiscoverHomeCollector[] = [];
+    const seenCollectors = new Set<string>();
+    for (const row of visibleRows) {
+      if (seenCollectors.has(row.ownerId) || !moreJerseys.some((jersey) => jersey.id === row.id)) {
+        continue;
+      }
+      seenCollectors.add(row.ownerId);
+      collectors.push({
+        handle: row.ownerHandle,
+        initial: handleInitial(row.ownerHandle),
+        avatarUrl: row.ownerAvatarObjectKey ? `/v1/identity/peers/${row.ownerId}/avatar` : null,
+      });
+    }
+
+    return collectionDiscoverHomeSchema.parse({
+      ...(clubs.length > 0 ? { clubs } : {}),
+      ...(openForBid.length > 0 ? { openForBid } : {}),
+      ...(collectors.length > 0 ? { collectors } : {}),
+      ...(moreJerseys.length > 0 ? { moreJerseys } : {}),
+    });
   }
 
   async getPeerJersey(
