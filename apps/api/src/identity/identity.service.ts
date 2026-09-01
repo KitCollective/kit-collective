@@ -1,4 +1,6 @@
 import {
+  type AuthEvents,
+  authEventsSchema,
   type CookieConsent,
   type CookieConsentUpdate,
   cookieConsentSchema,
@@ -34,6 +36,7 @@ import {
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
+  authEvent,
   catalogLabel,
   collectionShortcut,
   conversation,
@@ -48,6 +51,7 @@ import {
   userJerseyPhoto,
   visionLog,
 } from "@kit/db";
+import type { AuthEventKind } from "@kit/domain";
 import {
   BadRequestException,
   ConflictException,
@@ -57,14 +61,14 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
 import bcrypt from "bcryptjs";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { BillingService } from "../billing/billing.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { AUTH, type AuthInstance } from "./auth.js";
 import {
   avatarObjectKeyForUser,
   avatarUrlForPeer,
@@ -73,6 +77,7 @@ import {
   isHandleEmail,
   nextHandleCandidate,
 } from "./identity.helpers.js";
+import { bearerTokenFromAuthorization } from "./request-headers.js";
 
 const { hash, compare } = bcrypt;
 
@@ -138,7 +143,7 @@ export class IdentityService {
 
   constructor(
     @Inject(DB) private readonly db: DbToken,
-    private readonly jwtService: JwtService,
+    @Inject(AUTH) private readonly auth: AuthInstance,
     @Inject(forwardRef(() => BillingService))
     private readonly billingService: BillingService,
     private readonly moderationService: ModerationService,
@@ -168,6 +173,7 @@ export class IdentityService {
       .values({
         email: normalizedEmail,
         passwordHash,
+        name: assignedHandle,
         handle: assignedHandle,
       })
       .returning(USER_ME_SELECT);
@@ -176,7 +182,8 @@ export class IdentityService {
       throw new ConflictException("Email already registered");
     }
 
-    return await this.buildSession(created);
+    const accessToken = await this.createSessionToken(created.id);
+    return await this.buildSession(created, accessToken);
   }
 
   async login(rawBody: unknown): Promise<IdentitySession> {
@@ -191,16 +198,53 @@ export class IdentityService {
       .limit(1);
 
     if (!found) {
+      await this.recordAuthEvent({ kind: "failure", userId: null });
       throw new UnauthorizedException("Invalid email or password");
     }
 
     const valid = await compare(credentials.password, found.passwordHash);
     if (!valid) {
+      await this.recordAuthEvent({ kind: "failure", userId: found.id });
       throw new UnauthorizedException("Invalid email or password");
     }
 
     const { passwordHash: _passwordHash, ...sessionRow } = found;
-    return await this.buildSession(sessionRow);
+    const accessToken = await this.createSessionToken(found.id);
+    await this.recordAuthEvent({ kind: "login", userId: found.id });
+    return await this.buildSession(sessionRow, accessToken);
+  }
+
+  async logout(userId: string, authorization: string | undefined): Promise<void> {
+    const token = bearerTokenFromAuthorization(authorization);
+    if (!token) {
+      throw new UnauthorizedException();
+    }
+
+    const ctx = await this.auth.$context;
+    await ctx.internalAdapter.deleteSession(token);
+    await this.recordAuthEvent({ kind: "logout", userId });
+  }
+
+  async listOwnAuthEvents(userId: string): Promise<AuthEvents> {
+    const rows = await this.db
+      .select({
+        id: authEvent.id,
+        kind: authEvent.kind,
+        provider: authEvent.provider,
+        createdAt: authEvent.createdAt,
+      })
+      .from(authEvent)
+      .where(eq(authEvent.userId, userId))
+      .orderBy(desc(authEvent.createdAt));
+
+    return authEventsSchema.parse({
+      events: rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        provider: row.provider,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    });
   }
 
   async getMe(userId: string): Promise<IdentityMe> {
@@ -858,34 +902,50 @@ export class IdentityService {
     });
   }
 
-  private async buildSession(row: {
-    id: string;
-    email: string;
-    role: IdentityRole;
-    handle: string;
-    aboutMe: string | null;
-    avatarObjectKey: string | null;
-    fullName: string | null;
-    phone: string | null;
-    birthday: string | Date | null;
-    emailVerified: boolean;
-    countryId: string | null;
-    city: string | null;
-    showCity: boolean;
-  }): Promise<IdentitySession> {
-    const payload: JwtPayload = {
-      sub: row.id,
-      email: row.email,
-      role: row.role,
-    };
+  private async createSessionToken(userId: string): Promise<string> {
+    const ctx = await this.auth.$context;
+    const created = await ctx.internalAdapter.createSession(userId);
+    if (!created?.token) {
+      throw new UnauthorizedException();
+    }
+    return created.token;
+  }
 
+  private async recordAuthEvent(input: {
+    kind: AuthEventKind;
+    userId: string | null;
+  }): Promise<void> {
+    await this.db.insert(authEvent).values({
+      kind: input.kind,
+      userId: input.userId,
+    });
+  }
+
+  private async buildSession(
+    row: {
+      id: string;
+      email: string;
+      role: IdentityRole;
+      handle: string;
+      aboutMe: string | null;
+      avatarObjectKey: string | null;
+      fullName: string | null;
+      phone: string | null;
+      birthday: string | Date | null;
+      emailVerified: boolean;
+      countryId: string | null;
+      city: string | null;
+      showCity: boolean;
+    },
+    accessToken: string,
+  ): Promise<IdentitySession> {
     const linkedAccounts = IDENTITY_LINKED_PROVIDERS.map((provider) => ({
       provider,
       linked: false,
     }));
 
     return identitySessionSchema.parse({
-      accessToken: this.jwtService.sign(payload),
+      accessToken,
       user: await this.toIdentityMe(row, linkedAccounts),
     });
   }

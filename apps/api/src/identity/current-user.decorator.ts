@@ -8,7 +8,7 @@ export const CurrentUser = createParamDecorator(
   (_data: unknown, context: ExecutionContext): JwtPayload => {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     if (!request.user) {
-      throw new Error("CurrentUser used without JwtAuthGuard");
+      throw new Error("CurrentUser used without Auth session guard");
     }
     return request.user;
   },
