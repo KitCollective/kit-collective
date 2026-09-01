@@ -23,6 +23,7 @@ import {
   collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionPeerJerseySchema,
+  collectionPrivatePatchSchema,
   collectionRespondBidRequestSchema,
   collectionRespondBidResponseSchema,
   collectionSaveRequestSchema,
@@ -181,6 +182,7 @@ export class CollectionService {
         condition: userJersey.condition,
         seasonLabel: season.label,
         biddingEnabled: userJersey.biddingEnabled,
+        private: userJersey.private,
       })
       .from(userJersey)
       .innerJoin(season, eq(userJersey.seasonId, season.id))
@@ -257,6 +259,7 @@ export class CollectionService {
         squadPlayers: squadPlayersByScope.get(`${row.clubId}:${row.seasonId}`) ?? [],
         photos,
         biddingEnabled: row.biddingEnabled,
+        private: row.private,
       };
     });
 
@@ -881,16 +884,49 @@ export class CollectionService {
 
     await this.db
       .update(userJersey)
-      .set({ biddingEnabled: body.biddingEnabled, updatedAt: new Date() })
+      .set({
+        // The DB re-checks `private` in the same statement, so a concurrent private
+        // toggle cannot leave `private: true` with `biddingEnabled: true` persisted.
+        biddingEnabled: sql`case when ${userJersey.private} then false else ${body.biddingEnabled} end`,
+        updatedAt: new Date(),
+      })
       .where(eq(userJersey.id, jerseyId));
 
+    return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
+  }
+
+  async patchPrivate(userId: string, jerseyId: string, rawBody: unknown) {
+    const body = collectionPrivatePatchSchema.parse(rawBody);
+
+    const [row] = await this.db
+      .select({ id: userJersey.id, biddingEnabled: userJersey.biddingEnabled })
+      .from(userJersey)
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    // Private jerseys never bid: setting private true forces biddingEnabled false
+    // in the same UPDATE; clearing it keeps whatever the row's value was.
+    const biddingEnabled = body.private ? false : row.biddingEnabled;
+
+    await this.db
+      .update(userJersey)
+      .set({ private: body.private, biddingEnabled, updatedAt: new Date() })
+      .where(eq(userJersey.id, jerseyId));
+
+    return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
+  }
+
+  private async loadOwnJerseyOrThrow(userId: string, jerseyId: string): Promise<CollectionJersey> {
     const jerseys = await this.listJerseys(userId);
     const jersey = jerseys.jerseys.find((item) => item.id === jerseyId);
     if (!jersey) {
       throw new NotFoundException("UserJersey not found after update");
     }
-
-    return { jersey };
+    return jersey;
   }
 
   async discoverJerseys(
@@ -910,7 +946,13 @@ export class CollectionService {
       .from(userJersey)
       .innerJoin(season, eq(userJersey.seasonId, season.id))
       .innerJoin(user, eq(userJersey.userId, user.id))
-      .where(and(ne(userJersey.userId, userId), eq(userJersey.biddingEnabled, true)))
+      .where(
+        and(
+          ne(userJersey.userId, userId),
+          eq(userJersey.biddingEnabled, true),
+          eq(userJersey.private, false),
+        ),
+      )
       .orderBy(desc(userJersey.updatedAt));
 
     if (rows.length === 0) {
@@ -978,6 +1020,7 @@ export class CollectionService {
         seasonLabel: season.label,
         ownerHandle: user.handle,
         biddingEnabled: userJersey.biddingEnabled,
+        private: userJersey.private,
       })
       .from(userJersey)
       .innerJoin(season, eq(userJersey.seasonId, season.id))
@@ -985,7 +1028,8 @@ export class CollectionService {
       .where(eq(userJersey.id, jerseyId))
       .limit(1);
 
-    if (!row || row.userId === userId) {
+    // Own copies, private copies, and unknown ids are indistinguishable — no existence leak.
+    if (!row || row.userId === userId || row.private) {
       throw new NotFoundException("UserJersey not found");
     }
 
@@ -1035,7 +1079,7 @@ export class CollectionService {
       .from(userJerseyFavorite)
       .innerJoin(userJersey, eq(userJerseyFavorite.userJerseyId, userJersey.id))
       .innerJoin(season, eq(userJersey.seasonId, season.id))
-      .where(eq(userJerseyFavorite.collectorId, userId))
+      .where(and(eq(userJerseyFavorite.collectorId, userId), eq(userJersey.private, false)))
       .orderBy(desc(userJerseyFavorite.createdAt));
 
     if (rows.length === 0) {
@@ -1439,6 +1483,7 @@ export class CollectionService {
       squadPlayers: squadPlayersByScope.get(`${body.clubId}:${body.seasonId}`) ?? [],
       photos,
       biddingEnabled: false,
+      private: false,
     };
 
     return collectionSaveResponseSchema.parse({
@@ -1454,6 +1499,7 @@ export class CollectionService {
         jerseyUserId: userJersey.userId,
         jerseyId: userJersey.id,
         biddingEnabled: userJersey.biddingEnabled,
+        private: userJersey.private,
       })
       .from(userJerseyPhoto)
       .innerJoin(userJersey, eq(userJerseyPhoto.userJerseyId, userJersey.id))
@@ -1465,6 +1511,10 @@ export class CollectionService {
     }
 
     const isOwner = row.jerseyUserId === userId;
+    if (!isOwner && row.private) {
+      throw new NotFoundException("Photo not found");
+    }
+
     const isPeerBidTarget = !isOwner && row.biddingEnabled;
     let isFavoriteCollector = false;
 

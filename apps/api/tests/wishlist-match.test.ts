@@ -20,6 +20,7 @@ import {
   teamSeason,
   userJersey,
 } from "@kit/db";
+import { isWishlistMatchCandidate, type WishlistMatchJersey } from "@kit/domain";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { eq } from "drizzle-orm";
@@ -198,6 +199,21 @@ async function saveJersey(
 
   expect(response.statusCode).toBe(201);
   return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
+}
+
+async function patchPrivate(
+  app: NestFastifyApplication,
+  accessToken: string,
+  jerseyId: string,
+  value: boolean,
+) {
+  const response = await app.inject({
+    method: "PATCH",
+    url: `/v1/collection/jerseys/${jerseyId}/private`,
+    headers: { authorization: `Bearer ${accessToken}` },
+    payload: { private: value },
+  });
+  expect(response.statusCode).toBe(200);
 }
 
 describe("Wishlist Match /v1", () => {
@@ -443,5 +459,68 @@ describe("Wishlist Match /v1", () => {
     await pool.end();
 
     expect(row?.id).toBeDefined();
+  });
+
+  it("drops a peer jersey as a match hit once it is set private", async () => {
+    const fixture = await insertFixture();
+    const watcher = await registerSession(app, "match-private-watcher@example.com");
+    const peer = await registerSession(app, "match-private-peer@example.com");
+    await startTrial(app, watcher.accessToken);
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/wishlist/entries",
+      headers: { authorization: `Bearer ${watcher.accessToken}` },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+      },
+    });
+
+    const peerJersey = await saveJersey(app, peer.accessToken, fixture);
+    const enableResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${peerJersey.id}/bidding`,
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+      payload: { biddingEnabled: true },
+    });
+    expect(enableResponse.statusCode).toBe(200);
+
+    const beforeResponse = await app.inject({
+      method: "GET",
+      url: "/v1/wishlist/entries",
+      headers: { authorization: `Bearer ${watcher.accessToken}` },
+    });
+    const before = wishlistEntriesSchema.parse(JSON.parse(beforeResponse.body));
+    expect(before.entries[0]?.matchedJerseyId).toBe(peerJersey.id);
+
+    await patchPrivate(app, peer.accessToken, peerJersey.id, true);
+
+    const afterResponse = await app.inject({
+      method: "GET",
+      url: "/v1/wishlist/entries",
+      headers: { authorization: `Bearer ${watcher.accessToken}` },
+    });
+    const after = wishlistEntriesSchema.parse(JSON.parse(afterResponse.body));
+    expect(after.entries[0]?.matchedJerseyId).toBeNull();
+  });
+
+  it("isWishlistMatchCandidate rejects private: true", () => {
+    const base: WishlistMatchJersey = {
+      ownerUserId: "owner-1",
+      clubId: "00000000-0000-0000-0000-000000000001",
+      seasonId: "00000000-0000-0000-0000-000000000002",
+      type: "home",
+      size: "m",
+      biddingEnabled: true,
+      private: false,
+      catalogKitId: null,
+    };
+
+    expect(isWishlistMatchCandidate(base, "watcher-1")).toBe(true);
+    expect(isWishlistMatchCandidate({ ...base, private: true }, "watcher-1")).toBe(false);
+    expect(isWishlistMatchCandidate(base, base.ownerUserId)).toBe(false);
   });
 });

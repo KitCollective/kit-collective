@@ -1,11 +1,14 @@
 import {
   type CollectionBiddingPatch,
   type CollectionDiscoverJerseys,
+  type CollectionJersey,
   type CollectionPeerJersey,
+  type CollectionPrivatePatch,
   type CollectionRespondBidResponse,
   type CollectionSendBidRequest,
   type CollectionSendBidResponse,
   collectionDiscoverJerseysSchema,
+  collectionJerseySchema,
   collectionPeerJerseySchema,
   collectionRespondBidResponseSchema,
   collectionSendBidRequestSchema,
@@ -76,7 +79,7 @@ export async function patchJerseyBidding(
   accessToken: string,
   jerseyId: string,
   payload: CollectionBiddingPatch,
-): Promise<void> {
+): Promise<CollectionJersey> {
   const response = await requestJson(`/v1/collection/jerseys/${jerseyId}/bidding`, {
     method: "PATCH",
     headers: {
@@ -88,6 +91,34 @@ export async function patchJerseyBidding(
   if (!response.ok) {
     throw new BiddingFetchError("Kunne ikke opdatere bud-indstilling", response.status);
   }
+
+  // SAFETY: the /v1 collection PATCH returns an envelope { jersey: CollectionJersey };
+  // collectionJerseySchema.parse validates the payload at this seam.
+  const body = (await response.json()) as { jersey: CollectionJersey };
+  return collectionJerseySchema.parse(body.jersey);
+}
+
+export async function patchJerseyPrivate(
+  accessToken: string,
+  jerseyId: string,
+  payload: CollectionPrivatePatch,
+): Promise<CollectionJersey> {
+  const response = await requestJson(`/v1/collection/jerseys/${jerseyId}/private`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new BiddingFetchError("Kunne ikke opdatere privathed", response.status);
+  }
+
+  // SAFETY: the /v1 collection PATCH returns an envelope { jersey: CollectionJersey };
+  // collectionJerseySchema.parse validates the payload at this seam.
+  const body = (await response.json()) as { jersey: CollectionJersey };
+  return collectionJerseySchema.parse(body.jersey);
 }
 
 export async function sendBid(

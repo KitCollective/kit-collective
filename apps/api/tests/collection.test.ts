@@ -2,6 +2,7 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type CollectionJersey,
   collectionConversationsSchema,
   collectionDiscoverJerseysSchema,
   collectionFavoritesSchema,
@@ -151,6 +152,70 @@ async function saveJerseyForUser(
 
   expect(response.statusCode).toBe(201);
   return collectionSaveResponseSchema.parse(JSON.parse(response.body)).jersey;
+}
+
+type Session = Awaited<ReturnType<typeof registerSession>>;
+
+async function patchJerseyPrivate(
+  app: NestFastifyApplication,
+  session: Session,
+  jerseyId: string,
+  value: boolean,
+) {
+  return app.inject({
+    method: "PATCH",
+    url: `/v1/collection/jerseys/${jerseyId}/private`,
+    headers: { authorization: `Bearer ${session.accessToken}` },
+    payload: { private: value },
+  });
+}
+
+async function patchJerseyBidding(
+  app: NestFastifyApplication,
+  session: Session,
+  jerseyId: string,
+  value: boolean,
+) {
+  return app.inject({
+    method: "PATCH",
+    url: `/v1/collection/jerseys/${jerseyId}/bidding`,
+    headers: { authorization: `Bearer ${session.accessToken}` },
+    payload: { biddingEnabled: value },
+  });
+}
+
+async function findOwnJersey(
+  app: NestFastifyApplication,
+  session: Session,
+  jerseyId: string,
+): Promise<CollectionJersey | undefined> {
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/collection/jerseys",
+    headers: { authorization: `Bearer ${session.accessToken}`, "accept-language": "da" },
+  });
+  expect(response.statusCode).toBe(200);
+  const body = collectionJerseysSchema.parse(JSON.parse(response.body));
+  return body.jerseys.find((item) => item.id === jerseyId);
+}
+
+async function getPeerJerseyRaw(app: NestFastifyApplication, session: Session, jerseyId: string) {
+  return app.inject({
+    method: "GET",
+    url: `/v1/collection/jerseys/${jerseyId}/peer`,
+    headers: { authorization: `Bearer ${session.accessToken}`, "accept-language": "da" },
+  });
+}
+
+async function discoverJerseyIds(app: NestFastifyApplication, session: Session): Promise<string[]> {
+  const response = await app.inject({
+    method: "GET",
+    url: "/v1/collection/discover/jerseys",
+    headers: { authorization: `Bearer ${session.accessToken}`, "accept-language": "da" },
+  });
+  expect(response.statusCode).toBe(200);
+  const body = collectionDiscoverJerseysSchema.parse(JSON.parse(response.body));
+  return body.jerseys.map((jersey) => jersey.id);
 }
 
 describe("Collection /v1", () => {
@@ -667,5 +732,256 @@ describe("Collection /v1", () => {
     });
     const emptyBody = collectionFavoritesSchema.parse(JSON.parse(emptyList.body));
     expect(emptyBody.favorites).toHaveLength(0);
+  });
+
+  it("defaults private to false and is visible to a peer on discover + peer detail (owner/peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-default-owner@example.com");
+    const peer = await registerSession(app, "private-default-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const enableResponse = await patchJerseyBidding(app, owner, ownerJersey.id, true);
+    expect(enableResponse.statusCode).toBe(200);
+
+    const ownListJersey = await findOwnJersey(app, owner, ownerJersey.id);
+    expect(ownListJersey?.private).toBe(false);
+
+    const discoverIds = await discoverJerseyIds(app, peer);
+    expect(discoverIds).toContain(ownerJersey.id);
+
+    const peerResponse = await getPeerJerseyRaw(app, peer, ownerJersey.id);
+    expect(peerResponse.statusCode).toBe(200);
+    const peerBody = collectionPeerJerseySchema.parse(JSON.parse(peerResponse.body));
+    expect(peerBody.id).toBe(ownerJersey.id);
+  });
+
+  it("PATCH private true forces biddingEnabled false in the same write, reflected in owner list (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-set-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const enableResponse = await patchJerseyBidding(app, owner, ownerJersey.id, true);
+    expect(enableResponse.statusCode).toBe(200);
+    expect((await findOwnJersey(app, owner, ownerJersey.id))?.biddingEnabled).toBe(true);
+
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+
+    const jersey = await findOwnJersey(app, owner, ownerJersey.id);
+    expect(jersey?.private).toBe(true);
+    expect(jersey?.biddingEnabled).toBe(false);
+  });
+
+  it("while private, biddingEnabled cannot become or stay true (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-bidding-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    await patchJerseyBidding(app, owner, ownerJersey.id, true);
+    expect((await findOwnJersey(app, owner, ownerJersey.id))?.biddingEnabled).toBe(true);
+
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+    expect((await findOwnJersey(app, owner, ownerJersey.id))?.biddingEnabled).toBe(false);
+
+    const biddingResponse = await patchJerseyBidding(app, owner, ownerJersey.id, true);
+    expect(biddingResponse.statusCode).toBe(200);
+
+    const jersey = await findOwnJersey(app, owner, ownerJersey.id);
+    expect(jersey?.private).toBe(true);
+    expect(jersey?.biddingEnabled).toBe(false);
+  });
+
+  it("foreign GET of a private jersey 404s with the same shape as a nonexistent id (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-leak-owner@example.com");
+    const peer = await registerSession(app, "private-leak-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    await patchJerseyBidding(app, owner, ownerJersey.id, true);
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+
+    const privatePeerResponse = await getPeerJerseyRaw(app, peer, ownerJersey.id);
+    expect(privatePeerResponse.statusCode).toBe(404);
+
+    const nonexistentResponse = await getPeerJerseyRaw(
+      app,
+      peer,
+      "00000000-0000-0000-0000-0000000000aa",
+    );
+    expect(nonexistentResponse.statusCode).toBe(404);
+
+    const privateBody = JSON.parse(privatePeerResponse.body);
+    const nonexistentBody = JSON.parse(nonexistentResponse.body);
+    expect(privateBody.statusCode).toBe(nonexistentBody.statusCode);
+    expect(privateBody.message).toBe(nonexistentBody.message);
+    expect(privateBody.error).toBe(nonexistentBody.error);
+  });
+
+  it("excludes private jerseys from discover results (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-discover-owner@example.com");
+    const peer = await registerSession(app, "private-discover-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    await patchJerseyBidding(app, owner, ownerJersey.id, true);
+    expect(await discoverJerseyIds(app, peer)).toContain(ownerJersey.id);
+
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+
+    const discoverIdsAfter = await discoverJerseyIds(app, peer);
+    expect(discoverIdsAfter).not.toContain(ownerJersey.id);
+
+    const peerDetailAfter = await getPeerJerseyRaw(app, peer, ownerJersey.id);
+    expect(peerDetailAfter.statusCode).toBe(404);
+  });
+
+  it("clearing private restores peer detail visibility with no second publish verb (owner/peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-clear-owner@example.com");
+    const peer = await registerSession(app, "private-clear-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    expect((await getPeerJerseyRaw(app, peer, ownerJersey.id)).statusCode).toBe(200);
+
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+    expect((await getPeerJerseyRaw(app, peer, ownerJersey.id)).statusCode).toBe(404);
+
+    const clearResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, false);
+    expect(clearResponse.statusCode).toBe(200);
+
+    expect((await findOwnJersey(app, owner, ownerJersey.id))?.private).toBe(false);
+    expect((await getPeerJerseyRaw(app, peer, ownerJersey.id)).statusCode).toBe(200);
+  });
+
+  it("owner still sees private jerseys in listJerseys with the private flag (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-ownlist-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+    });
+    expect(listResponse.statusCode).toBe(200);
+    const body = collectionJerseysSchema.parse(JSON.parse(listResponse.body));
+    expect(body.jerseys.some((item) => item.id === ownerJersey.id)).toBe(true);
+    expect(body.jerseys.find((item) => item.id === ownerJersey.id)?.private).toBe(true);
+  });
+
+  it("peer-facing schemas (discover + peer detail) do not expose private (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-schema-owner@example.com");
+    const peer = await registerSession(app, "private-schema-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    await patchJerseyBidding(app, owner, ownerJersey.id, true);
+
+    const discoverIds = await discoverJerseyIds(app, peer);
+    expect(discoverIds).toContain(ownerJersey.id);
+
+    const discoverResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/jerseys",
+      headers: { authorization: `Bearer ${peer.accessToken}`, "accept-language": "da" },
+    });
+    const discoverBody = collectionDiscoverJerseysSchema.parse(JSON.parse(discoverResponse.body));
+    const discoverJersey = discoverBody.jerseys.find((item) => item.id === ownerJersey.id);
+    expect(discoverJersey).toBeDefined();
+    expect("private" in discoverJersey!).toBe(false);
+
+    const peerResponse = await getPeerJerseyRaw(app, peer, ownerJersey.id);
+    const peerBody = collectionPeerJerseySchema.parse(JSON.parse(peerResponse.body));
+    expect("private" in peerBody).toBe(false);
+  });
+
+  it("omits a favorited jersey from peer favorites after the owner marks it private (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-fav-owner@example.com");
+    const peer = await registerSession(app, "private-fav-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const addFavorite = await app.inject({
+      method: "POST",
+      url: "/v1/collection/favorites",
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+      payload: { userJerseyId: ownerJersey.id },
+    });
+    expect(addFavorite.statusCode).toBe(201);
+
+    const listBefore = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${peer.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(collectionFavoritesSchema.parse(JSON.parse(listBefore.body)).favorites).toHaveLength(1);
+
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+
+    const listAfter = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${peer.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(listAfter.statusCode).toBe(200);
+    const listBody = collectionFavoritesSchema.parse(JSON.parse(listAfter.body));
+    expect(listBody.favorites).toHaveLength(0);
+  });
+
+  it("returns 404 for peer photo bytes on a favorited jersey after private toggle (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-fav-photo-owner@example.com");
+    const peer = await registerSession(app, "private-fav-photo-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const addFavorite = await app.inject({
+      method: "POST",
+      url: "/v1/collection/favorites",
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+      payload: { userJerseyId: ownerJersey.id },
+    });
+    expect(addFavorite.statusCode).toBe(201);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${peer.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    const listBody = collectionFavoritesSchema.parse(JSON.parse(listResponse.body));
+    const photoUrl = listBody.favorites[0]?.photoUrl;
+    expect(photoUrl).toBeDefined();
+
+    const photoBefore = await app.inject({
+      method: "GET",
+      url: photoUrl!,
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+    });
+    expect(photoBefore.statusCode).toBe(200);
+
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+
+    const photoAfter = await app.inject({
+      method: "GET",
+      url: photoUrl!,
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+    });
+    expect(photoAfter.statusCode).toBe(404);
   });
 });

@@ -198,6 +198,16 @@ export class CollectionController {
     return this.collectionService.patchBidding(user.sub, jerseyId, body);
   }
 
+  @Patch("collection/jerseys/:jerseyId/private")
+  @UseGuards(JwtAuthGuard)
+  patchPrivate(
+    @CurrentUser() user: JwtPayload,
+    @Param("jerseyId") jerseyId: string,
+    @Body() body: unknown,
+  ) {
+    return this.collectionService.patchPrivate(user.sub, jerseyId, body);
+  }
+
   @Post("collection/jerseys/:jerseyId/bids")
   @HttpCode(201)
   @UseGuards(JwtAuthGuard)
