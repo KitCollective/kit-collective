@@ -21,23 +21,29 @@ import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-type CatalogDrillKind = CollectionDiscoverCatalogDrill["kind"];
-
 export function CatalogDrillScreen({
   kind,
   contentPaddingBottom,
 }: {
-  kind: CatalogDrillKind;
+  kind: CollectionDiscoverCatalogDrill["kind"];
   contentPaddingBottom: number;
 }) {
-  const params = useLocalSearchParams<{ clubId?: string; playerId?: string; label?: string }>();
-  const entityId = kind === "club" ? params.clubId : params.playerId;
+  const params = useLocalSearchParams<{
+    clubId?: string;
+    playerId?: string;
+    kitId?: string;
+    label?: string;
+  }>();
+  const entityId =
+    kind === "club" ? params.clubId : kind === "player" ? params.playerId : params.kitId;
   const fallbackTitle =
     typeof params.label === "string" && params.label.trim()
       ? params.label
       : kind === "club"
         ? "Klub"
-        : "Spiller";
+        : kind === "player"
+          ? "Spiller"
+          : "Kit";
   const router = useRouter();
   const { accessToken } = useAuth();
   const { width } = useWindowDimensions();
@@ -86,6 +92,7 @@ export function CatalogDrillScreen({
   }, [loadDrill]);
 
   const title = drill?.title ?? fallbackTitle;
+  const markLabel = kind === "kit" ? (drill?.jerseys[0]?.clubLabel ?? title) : title;
   const columnGap = space.gapMd;
   const horizontalPadding = space.insetMd * 2;
   const tileWidth = (width - horizontalPadding - columnGap) / 2;
@@ -112,7 +119,7 @@ export function CatalogDrillScreen({
           contentContainerStyle={[styles.content, { paddingBottom: contentPaddingBottom }]}
         >
           <View testID={`catalog-drill-${kind}`} style={styles.identity}>
-            <Mark label={title} size="md" />
+            <Mark label={markLabel} size="md" />
             <Text style={[typography.mono, { color: theme.contentSecondary }]}>
               {drill?.count ?? 0} trøjer
             </Text>

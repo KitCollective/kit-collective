@@ -141,6 +141,7 @@ async function saveJerseyForUser(
   app: NestFastifyApplication,
   session: Awaited<ReturnType<typeof registerSession>>,
   fixture: Awaited<ReturnType<typeof insertClubSeasonFixture>>,
+  options: { catalogKitId?: string | null } = {},
 ) {
   const response = await app.inject({
     method: "POST",
@@ -155,6 +156,7 @@ async function saveJerseyForUser(
       type: "home",
       size: "m",
       condition: "used",
+      ...(options.catalogKitId !== undefined ? { catalogKitId: options.catalogKitId } : {}),
       photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
     },
   });
@@ -1200,8 +1202,13 @@ describe("Collection /v1", () => {
       method: "GET",
       url: "/v1/collection/discover/players/11111111-1111-4111-8111-111111111111",
     });
+    const kitResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/kits/11111111-1111-4111-8111-111111111111",
+    });
     expect(clubResponse.statusCode).toBe(401);
     expect(playerResponse.statusCode).toBe(401);
+    expect(kitResponse.statusCode).toBe(401);
   });
 
   it("composes Club and Player catalog drills with locale labels and omitted rows", async () => {
@@ -1365,6 +1372,115 @@ describe("Collection /v1", () => {
     });
     const enPlayer = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(enPlayerResponse.body));
     expect(enPlayer.title).toBe("Jonas Wind EN");
+  });
+
+  it("composes Kit catalog drills with locale labels and omitted rows", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const { db, pool } = createDb(DATABASE_URL);
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: fixture.clubId,
+      locale: "en",
+      kind: "label",
+      text: "FC Copenhagen",
+      source: "seed",
+    });
+    const [insertedKit] = await db
+      .insert(kit)
+      .values({ clubId: fixture.clubId, seasonId: fixture.seasonId, type: "home" })
+      .returning({ id: kit.id });
+    const [emptyKit] = await db
+      .insert(kit)
+      .values({ clubId: fixture.clubId, seasonId: fixture.seasonId, type: "away" })
+      .returning({ id: kit.id });
+    await pool.end();
+
+    const owner = await registerSession(app, "kit-drill-owner@example.com");
+    const viewer = await registerSession(app, "kit-drill-viewer@example.com");
+    const blockedOwner = await registerSession(app, "kit-drill-blocked@example.com");
+
+    const visibleJersey = await saveJerseyForUser(app, owner, fixture, {
+      catalogKitId: insertedKit!.id,
+    });
+    const nullKitJersey = await saveJerseyForUser(app, owner, fixture);
+    const privateJersey = await saveJerseyForUser(app, owner, fixture, {
+      catalogKitId: insertedKit!.id,
+    });
+    await patchJerseyPrivate(app, owner, privateJersey.id, true);
+    const blockedJersey = await saveJerseyForUser(app, blockedOwner, fixture, {
+      catalogKitId: insertedKit!.id,
+    });
+
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${blockedOwner.user.id}/block`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+
+    const unknownKit = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/kits/11111111-1111-4111-8111-111111111111",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(unknownKit.statusCode).toBe(404);
+
+    const daKitResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/kits/${insertedKit!.id}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(daKitResponse.statusCode).toBe(200);
+    const daKit = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(daKitResponse.body));
+    expect(daKit).toMatchObject({
+      kind: "kit",
+      id: insertedKit!.id,
+      title: "F.C. København 2023/24 Hjemme",
+    });
+    expect(daKit.jerseys.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
+    expect(daKit.jerseys.some((jersey) => jersey.id === nullKitJersey.id)).toBe(false);
+    expect(daKit.jerseys.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
+    expect(daKit.jerseys.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
+    expect(
+      daKit.jerseys.some(
+        (jersey) => jersey.id === visibleJersey.id && jersey.ownerHandle === owner.user.handle,
+      ),
+    ).toBe(true);
+    expect(daKit.count).toBe(daKit.jerseys.length);
+    expect(JSON.parse(daKitResponse.body)).not.toHaveProperty("entitlement");
+
+    const ownKitResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/kits/${insertedKit!.id}`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+    });
+    const ownKit = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(ownKitResponse.body));
+    expect(ownKit.jerseys.some((jersey) => jersey.id === visibleJersey.id)).toBe(false);
+
+    const enKitResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/kits/${insertedKit!.id}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "en" },
+    });
+    const enKit = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(enKitResponse.body));
+    expect(enKit.title).toBe("FC Copenhagen 2023/24 Hjemme");
+
+    const emptyKitResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/kits/${emptyKit!.id}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(emptyKitResponse.statusCode).toBe(200);
+    const emptyDrill = collectionDiscoverCatalogDrillSchema.parse(
+      JSON.parse(emptyKitResponse.body),
+    );
+    expect(emptyDrill).toMatchObject({
+      kind: "kit",
+      id: emptyKit!.id,
+      title: "F.C. København 2023/24 Ude",
+      count: 0,
+      jerseys: [],
+    });
   });
 
   it("rejects unauthenticated Søg typeahead with 401 and empty query with 400", async () => {

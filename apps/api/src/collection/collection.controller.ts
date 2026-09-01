@@ -179,6 +179,21 @@ export class CollectionController {
     );
   }
 
+  @Get("collection/discover/kits/:kitId")
+  @UseGuards(JwtAuthGuard)
+  discoverKitDrill(
+    @CurrentUser() user: JwtPayload,
+    @Param("kitId") kitId: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.discoverCatalogDrill(
+      user.sub,
+      "kit",
+      kitId,
+      resolveLocale(acceptLanguage),
+    );
+  }
+
   @Get("collection/discover/typeahead")
   @UseGuards(JwtAuthGuard)
   discoverTypeahead(
