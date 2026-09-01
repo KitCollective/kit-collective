@@ -149,6 +149,7 @@ export {
   collectionJerseyUpdateSchema,
 } from "./collection/update.js";
 export {
+  type CollectionConversationDetail,
   type CollectionConversationJerseyContext,
   type CollectionConversationMessage,
   type CollectionConversationReplyTo,
