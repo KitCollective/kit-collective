@@ -10,7 +10,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BiddingFetchError, fetchDiscoverCatalogDrill } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
@@ -24,7 +23,13 @@ import { useTheme } from "@/theme/use-theme";
 
 type CatalogDrillKind = CollectionDiscoverCatalogDrill["kind"];
 
-export function CatalogDrillScreen({ kind }: { kind: CatalogDrillKind }) {
+export function CatalogDrillScreen({
+  kind,
+  contentPaddingBottom,
+}: {
+  kind: CatalogDrillKind;
+  contentPaddingBottom: number;
+}) {
   const params = useLocalSearchParams<{ clubId?: string; playerId?: string; label?: string }>();
   const entityId = kind === "club" ? params.clubId : params.playerId;
   const fallbackTitle =
@@ -38,14 +43,6 @@ export function CatalogDrillScreen({ kind }: { kind: CatalogDrillKind }) {
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const typography = useTypography();
-  const insets = useSafeAreaInsets();
-  const tabBarPadding =
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd;
 
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
@@ -111,7 +108,9 @@ export function CatalogDrillScreen({ kind }: { kind: CatalogDrillKind }) {
       ) : missing ? (
         <EmptyState title="Ikke fundet" body="Denne katalogside findes ikke." />
       ) : (
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarPadding }]}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: contentPaddingBottom }]}
+        >
           <View testID={`catalog-drill-${kind}`} style={styles.identity}>
             <Mark label={title} size="md" />
             <Text style={[typography.mono, { color: theme.contentSecondary }]}>
