@@ -264,23 +264,55 @@ _Avoid_: building the product admin; `/to-design`; treating `GET /v1/catalog/sta
 
 **Admin SPA**:
 The Vite + React operator surface (`apps/admin`). Same Identity as Expo. Chrome in English. CatalogLabel in this surface is requested as `en` (fallback `mul` → `en`). Never indexed. KitPhoto may render here; never on Expo, Astro, or OG.
-_Avoid_: Catalog peek as the product admin; a second login product; Expo as the operator UI; Danish chrome as the admin default
+_Avoid_: Catalog peek as the product admin; a second login product; Expo as the operator UI; Danish chrome as the admin default; dash.better-auth.com as staff chrome
+
+**Identity**:
+The one User sign-in for Expo and Admin SPA. Nest embeds Better Auth against our Postgres. That `User` row *is* the Better Auth user (same UUID). Their session and account tables sit beside it — not a second user table.
+_Avoid_: a parallel staff or Better Auth account table; calling Staff access the login; Better Auth Cloud as the identity store
+
+**Auth session**:
+A server-side Better Auth session on that User. Clients send it as Bearer. The collector can revoke all of their own sessions from Profil. Staff can revoke a collector’s sessions on the Admin drill and their own on the Admin account.
+_Avoid_: a 7-day JWT that cannot be revoked; cookie-only Admin beside a different Expo token; JWT as session truth; staff-only revoke; collector-only “log out here”
+
+**Social login**:
+Google or Facebook on the same User — Expo native idToken and Admin. A verified provider email auto-links to the existing User. Not a second account.
+_Avoid_: Apple in this increment; one User row per provider; treating the provider as Staff access; asking before link when the provider email is verified
+
+**Email verification**:
+Password sign-up must verify. A Social login whose provider already verified the email counts. Not Staff access.
+_Avoid_: a second verify after Google or Facebook; treating `role=admin` as verified
+
+**Password reset**:
+Signed-out email link that sets a new password on the same User. Not the signed-in change-password that already exists.
+_Avoid_: reset as a second account; SMS reset in this increment
+
+**Auth event**:
+A persisted Identity fact: sign-in, sign-out, failure, password reset, provider link. Shown on Auth ops, the Admin collector drill, the staff’s own Admin account, and the collector’s own Expo Profil under settings — not an own-Profil drill and not on Peer Profil.
+_Avoid_: Peer Profil; a second Profil tab for history; treating Sentinel as the only log; stuffing events into `User.role`
+
+**Auth security**:
+Sentinel detections (credential stuffing, bots, impossible travel, and the rest they emit) pulled into Admin SPA. Staff never opens dash.better-auth.com.
+_Avoid_: iframe of their dashboard; calling `User.role` a detection; Expo as the security console
+
+**Auth ops**:
+The Admin SPA page under User Data that lists Auth events and Auth security for the product. English chrome. Not a third waffle tile and not Better Auth’s hosted dashboard.
+_Avoid_: dash.better-auth.com; Catalog peek as auth ops; a second operator login; a waffle place beside Master Data and User Data
 
 **Collector**:
 A User in Expo. The same row can later hold Staff access. Not a separate account type.
-_Avoid_: a dedicated admin user table; locking `role=admin` out of Expo
+_Avoid_: a dedicated admin user table; a Better Auth user beside `User`; locking `role=admin` out of Expo
 
 **Profil**:
-Own collector place in Expo tab slot 5 — identity card, favorites drill, and settings under one person tab. Not Peer Profil.
-_Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar; treating Detaljer stub as the product peer profile
+Own collector place in Expo tab slot 5 — identity card, favorites drill, and settings under one person tab. Own Auth events and “log out everywhere” live under settings. Not Peer Profil.
+_Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar; treating Detaljer stub as the product peer profile; Auth events on the identity card
 
 **Peer Profil**:
 Another collector's public place: Avatar, Handle, About me, location per Vis by, and a 4:5 grid of that collector's non-private UserJerseys. No settings, no Favoritter-of-theirs. Entries include Søg Handle hit, foreign UserJersey detail owner, and Indbakke Detaljer. Overflow can Rapportér / Blokér (same Moderation as Indbakke). A blocked peer is not shown — no grid, no profile, both directions.
 _Avoid_: mirroring own Profil settings; showing private copies; a second Detaljer stub as the only peer surface; browse that ignores block
 
 **Handle**:
-The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision. Never the email. Availability is `yours`, `available`, or `taken`.
-_Avoid_: raw email as the thread-row name; a second login identifier; success-green availability chrome
+The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision — same rule for password and Social login. Never the email. Never the provider display name. Availability is `yours`, `available`, or `taken`.
+_Avoid_: raw email as the thread-row name; a second login identifier; Google name as Handle; asking for a Handle before first session; success-green availability chrome
 
 **Private UserJersey**:
 Owner-set hide on one UserJersey. Default after Save is visible (not private). Setting private clears åben for bud — the two never stay on together. When private, other collectors must not see it on Søg, on a Peer Profil grid, via foreign detail GET, or as a Match target. The owner still sees it on own Samling.
@@ -340,7 +372,7 @@ _Avoid_: heart / wishlist chrome in slot 4; a Match card on Aktivitet; using the
 
 **Entitlement**:
 Nest-owned Billing fact on a User: paid collector plan yes/no, expires, source (`iap_apple` / `iap_google` / `trial` / `comp`, later `stripe`). Orthogonal to Staff access. Absence is the free Collector. Not a `User.role` and not a plan column on User.
-_Avoid_: stuffing the plan into `User.role`; treating `role=admin` as paid; Tier one/two/three before a second SKU; Expo or JWT as billing truth; calling the store chrome "Premium" a schema name; Admin DKK as the charge amount
+_Avoid_: stuffing the plan into `User.role`; treating `role=admin` as paid; Tier one/two/three before a second SKU; Expo or Auth session as billing truth; calling the store chrome "Premium" a schema name; Admin DKK as the charge amount
 
 **Conversation**:
 One thread between two collectors about a UserJersey. Shared unread across Beskeder and Aktivitet. Created when a bud is sent or a reply is posted (later slices).
