@@ -1222,7 +1222,6 @@ export class CollectionService {
     return collectionDiscoverJerseysSchema.parse({ jerseys });
   }
 
-
   async discoverHome(userId: string, locale: LabelLocale = "da"): Promise<CollectionDiscoverHome> {
     const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
     const rows = await this.db
