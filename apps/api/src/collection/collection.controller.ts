@@ -149,6 +149,36 @@ export class CollectionController {
     return this.collectionService.discoverHome(user.sub, resolveLocale(acceptLanguage));
   }
 
+  @Get("collection/discover/clubs/:clubId")
+  @UseGuards(JwtAuthGuard)
+  discoverClubDrill(
+    @CurrentUser() user: JwtPayload,
+    @Param("clubId") clubId: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.discoverCatalogDrill(
+      user.sub,
+      "club",
+      clubId,
+      resolveLocale(acceptLanguage),
+    );
+  }
+
+  @Get("collection/discover/players/:playerId")
+  @UseGuards(JwtAuthGuard)
+  discoverPlayerDrill(
+    @CurrentUser() user: JwtPayload,
+    @Param("playerId") playerId: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.discoverCatalogDrill(
+      user.sub,
+      "player",
+      playerId,
+      resolveLocale(acceptLanguage),
+    );
+  }
+
   @Get("collection/discover/jerseys")
   @UseGuards(JwtAuthGuard)
   discoverJerseys(

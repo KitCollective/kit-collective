@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   type CollectionJersey,
   collectionConversationsSchema,
+  collectionDiscoverCatalogDrillSchema,
   collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
   collectionFavoritesSchema,
@@ -22,6 +23,8 @@ import {
   country,
   createDb,
   league,
+  player,
+  playerClubSeason,
   resetDatabase,
   season,
   teamSeason,
@@ -1184,5 +1187,181 @@ describe("Collection /v1", () => {
     expect(home.moreJerseys?.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
     expect(home.moreJerseys?.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
     expect(JSON.parse(homeResponse.body)).not.toHaveProperty("entitlement");
+  });
+
+  it("rejects unauthenticated Søg catalog drills with 401", async () => {
+    const clubResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/clubs/11111111-1111-4111-8111-111111111111",
+    });
+    const playerResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/players/11111111-1111-4111-8111-111111111111",
+    });
+    expect(clubResponse.statusCode).toBe(401);
+    expect(playerResponse.statusCode).toBe(401);
+  });
+
+  it("composes Club and Player catalog drills with locale labels and omitted rows", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const { db, pool } = createDb(DATABASE_URL);
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: fixture.clubId,
+      locale: "en",
+      kind: "label",
+      text: "FC Copenhagen",
+      source: "seed",
+    });
+    const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    await db.insert(playerClubSeason).values({
+      playerId: insertedPlayer!.id,
+      clubId: fixture.clubId,
+      seasonId: fixture.seasonId,
+    });
+    await db.insert(catalogLabel).values([
+      {
+        entityType: "player",
+        entityId: insertedPlayer!.id,
+        locale: "da",
+        kind: "label",
+        text: "Jonas Wind",
+        source: "seed",
+      },
+      {
+        entityType: "player",
+        entityId: insertedPlayer!.id,
+        locale: "en",
+        kind: "label",
+        text: "Jonas Wind EN",
+        source: "seed",
+      },
+    ]);
+    const [fixtureClub] = await db
+      .select({ countryId: club.countryId })
+      .from(club)
+      .where(eq(club.id, fixture.clubId));
+    const [emptyClub] = await db
+      .insert(club)
+      .values({ countryId: fixtureClub!.countryId, kind: "club" })
+      .returning({ id: club.id });
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: emptyClub!.id,
+      locale: "da",
+      kind: "label",
+      text: "Tom Klub",
+      source: "seed",
+    });
+    await pool.end();
+
+    const owner = await registerSession(app, "catalog-drill-owner@example.com");
+    const viewer = await registerSession(app, "catalog-drill-viewer@example.com");
+    const blockedOwner = await registerSession(app, "catalog-drill-blocked@example.com");
+
+    const visibleJersey = await saveJerseyForUser(app, owner, fixture);
+    const privateJersey = await saveJerseyForUser(app, owner, fixture);
+    await patchJerseyPrivate(app, owner, privateJersey.id, true);
+    const blockedJersey = await saveJerseyForUser(app, blockedOwner, fixture);
+
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${blockedOwner.user.id}/block`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+
+    const unknownClub = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/clubs/11111111-1111-4111-8111-111111111111",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    const unknownPlayer = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/players/11111111-1111-4111-8111-111111111111",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(unknownClub.statusCode).toBe(404);
+    expect(unknownPlayer.statusCode).toBe(404);
+
+    const daClubResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/clubs/${fixture.clubId}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(daClubResponse.statusCode).toBe(200);
+    const daClub = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(daClubResponse.body));
+    expect(daClub).toMatchObject({
+      kind: "club",
+      id: fixture.clubId,
+      title: "F.C. København",
+    });
+    expect(daClub.jerseys.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
+    expect(daClub.jerseys.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
+    expect(daClub.jerseys.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
+    expect(
+      daClub.jerseys.some(
+        (jersey) => jersey.id === visibleJersey.id && jersey.ownerHandle === owner.user.handle,
+      ),
+    ).toBe(true);
+    expect(daClub.count).toBe(daClub.jerseys.length);
+    expect(JSON.parse(daClubResponse.body)).not.toHaveProperty("entitlement");
+
+    const ownClubResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/clubs/${fixture.clubId}`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+    });
+    const ownClub = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(ownClubResponse.body));
+    expect(ownClub.jerseys.some((jersey) => jersey.id === visibleJersey.id)).toBe(false);
+
+    const enClubResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/clubs/${fixture.clubId}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "en" },
+    });
+    const enClub = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(enClubResponse.body));
+    expect(enClub.title).toBe("FC Copenhagen");
+
+    const emptyClubResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/clubs/${emptyClub!.id}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(emptyClubResponse.statusCode).toBe(200);
+    const emptyDrill = collectionDiscoverCatalogDrillSchema.parse(
+      JSON.parse(emptyClubResponse.body),
+    );
+    expect(emptyDrill).toMatchObject({
+      kind: "club",
+      id: emptyClub!.id,
+      title: "Tom Klub",
+      count: 0,
+      jerseys: [],
+    });
+
+    const daPlayerResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/players/${insertedPlayer!.id}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(daPlayerResponse.statusCode).toBe(200);
+    const daPlayer = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(daPlayerResponse.body));
+    expect(daPlayer).toMatchObject({
+      kind: "player",
+      id: insertedPlayer!.id,
+      title: "Jonas Wind",
+    });
+    expect(daPlayer.jerseys.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
+    expect(daPlayer.jerseys.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
+    expect(daPlayer.jerseys.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
+
+    const enPlayerResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/players/${insertedPlayer!.id}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "en" },
+    });
+    const enPlayer = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(enPlayerResponse.body));
+    expect(enPlayer.title).toBe("Jonas Wind EN");
   });
 });
