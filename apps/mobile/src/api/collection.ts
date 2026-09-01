@@ -5,8 +5,8 @@ import {
   type CollectionSaveRequest,
   type CollectionSaveResponse,
   collectionJerseySchema,
-  collectionJerseyUpdateResponseSchema,
   collectionJerseysSchema,
+  collectionJerseyUpdateResponseSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
 } from "@kit/api-contract";

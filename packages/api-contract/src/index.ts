@@ -143,12 +143,6 @@ export {
   collectionSendBidResponseSchema,
 } from "./collection/bidding.js";
 export {
-  type CollectionJerseyUpdate,
-  type CollectionJerseyUpdateResponse,
-  collectionJerseyUpdateResponseSchema,
-  collectionJerseyUpdateSchema,
-} from "./collection/update.js";
-export {
   type CollectionConversationDetail,
   type CollectionConversationJerseyContext,
   type CollectionConversationMessage,
@@ -216,6 +210,12 @@ export {
   collectionShortcutsSchema,
   collectionShortcutWriteSchema,
 } from "./collection/shortcuts.js";
+export {
+  type CollectionJerseyUpdate,
+  type CollectionJerseyUpdateResponse,
+  collectionJerseyUpdateResponseSchema,
+  collectionJerseyUpdateSchema,
+} from "./collection/update.js";
 export {
   VISION_CONFIDENCE_PRESELECT,
   VISION_CONFIDENCE_SUGGEST,

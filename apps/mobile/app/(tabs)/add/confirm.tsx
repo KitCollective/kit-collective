@@ -630,8 +630,11 @@ export default function ConfirmScreen() {
       : null;
   const dockHelper = saveBlockMessage ?? getSaveBlockMessage(draft);
   const saveEnabled = canSave(draft);
-  const saveLabel =
-    editJerseyId ? "Gem" : isBulk && state.drafts.length > 1 ? "Gem og næste" : "Gem";
+  const saveLabel = editJerseyId
+    ? "Gem"
+    : isBulk && state.drafts.length > 1
+      ? "Gem og næste"
+      : "Gem";
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>

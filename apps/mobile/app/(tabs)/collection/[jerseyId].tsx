@@ -1,16 +1,12 @@
 import type { CollectionJersey } from "@kit/api-contract";
-import {
-  JERSEY_CONDITION_LABELS_DA,
-  JERSEY_SIZE_LABELS_DA,
-  KIT_TYPE_LABELS_DA,
-} from "@kit/domain";
+import { JERSEY_CONDITION_LABELS_DA, JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Switch,
@@ -20,16 +16,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { patchJerseyBidding, patchJerseyPrivate } from "@/api/bidding";
-import {
-  deleteUserJersey,
-  fetchCollectionJerseys,
-  resolvePhotoUrl,
-} from "@/api/collection";
+import { deleteUserJersey, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
-import { Sheet } from "@/components/catalog-ui";
-import { Button, IconButton } from "@/components/ui";
 import { createEditCaptureSession } from "@/capture/captureSession";
 import { createSqliteCaptureSessionStore } from "@/capture/captureSessionSqliteStore";
+import { Sheet } from "@/components/catalog-ui";
+import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -232,7 +224,10 @@ export default function JerseyDetailScreen() {
           onPress={() => router.back()}
         />
         {showPagerDots ? (
-          <View style={styles.pagerDots} accessibilityLabel={`Foto ${photoIndex + 1} af ${jersey.photos.length}`}>
+          <View
+            style={styles.pagerDots}
+            accessibilityLabel={`Foto ${photoIndex + 1} af ${jersey.photos.length}`}
+          >
             {jersey.photos.map((photo, index) => (
               <View
                 key={photo.id}
@@ -324,7 +319,11 @@ export default function JerseyDetailScreen() {
         </View>
       </View>
 
-      <Sheet visible={deleteSheetOpen} title="Slet trøje?" onDismiss={() => setDeleteSheetOpen(false)}>
+      <Sheet
+        visible={deleteSheetOpen}
+        title="Slet trøje?"
+        onDismiss={() => setDeleteSheetOpen(false)}
+      >
         <Text style={[typography.body, { color: theme.contentSecondary }]}>
           Trøjen fjernes permanent fra din samling.
         </Text>
