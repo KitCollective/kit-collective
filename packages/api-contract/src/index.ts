@@ -143,10 +143,6 @@ export {
   collectionSendBidResponseSchema,
 } from "./collection/bidding.js";
 export {
-  type CollectionPeerJerseys,
-  collectionPeerJerseysSchema,
-} from "./collection/peer-jerseys.js";
-export {
   type CollectionConversationDetail,
   type CollectionConversationJerseyContext,
   type CollectionConversationMessage,
@@ -198,6 +194,10 @@ export {
   collectionJerseySchema,
   collectionJerseysSchema,
 } from "./collection/jerseys.js";
+export {
+  type CollectionPeerJerseys,
+  collectionPeerJerseysSchema,
+} from "./collection/peer-jerseys.js";
 export {
   type CollectionSavePhoto,
   type CollectionSaveRequest,
@@ -279,6 +279,10 @@ export {
   identityExportSchema,
 } from "./identity/export.js";
 export {
+  type IdentityPeerProfile,
+  identityPeerProfileSchema,
+} from "./identity/peer-profile.js";
+export {
   type IdentityPrefs,
   type IdentityPrefsUpdate,
   identityPrefsSchema,
@@ -306,10 +310,6 @@ export {
   type IdentityRoleErrorCode,
   identityRoleErrorSchema,
 } from "./identity/role.js";
-export {
-  type IdentityPeerProfile,
-  identityPeerProfileSchema,
-} from "./identity/peer-profile.js";
 export {
   type IdentityCredentials,
   type IdentityMe,
