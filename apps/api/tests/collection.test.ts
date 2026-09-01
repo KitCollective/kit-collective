@@ -7,6 +7,7 @@ import {
   collectionDiscoverCatalogDrillSchema,
   collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
+  collectionDiscoverTypeaheadSchema,
   collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionJerseyUpdateResponseSchema,
@@ -22,6 +23,7 @@ import {
   club,
   country,
   createDb,
+  kit,
   league,
   player,
   playerClubSeason,
@@ -32,7 +34,7 @@ import {
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { FailingVisionAdapter, SlowVisionAdapter } from "../dist/vision/test-vision.adapters.js";
@@ -1363,5 +1365,96 @@ describe("Collection /v1", () => {
     });
     const enPlayer = collectionDiscoverCatalogDrillSchema.parse(JSON.parse(enPlayerResponse.body));
     expect(enPlayer.title).toBe("Jonas Wind EN");
+  });
+
+  it("rejects unauthenticated Søg typeahead with 401 and empty query with 400", async () => {
+    const unauthenticated = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/typeahead?q=københavn",
+    });
+    expect(unauthenticated.statusCode).toBe(401);
+
+    const viewer = await registerSession(app, "typeahead-empty-q@example.com");
+    const emptyQuery = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/typeahead?q=",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(emptyQuery.statusCode).toBe(400);
+  });
+
+  it("replaces magazine search with typeahead hits and does not write stamdata", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const { db, pool } = createDb(DATABASE_URL);
+    const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    await db.insert(catalogLabel).values({
+      entityType: "player",
+      entityId: insertedPlayer!.id,
+      locale: "da",
+      kind: "label",
+      text: "Jonas Wind",
+      source: "seed",
+    });
+    const [insertedKit] = await db
+      .insert(kit)
+      .values({ clubId: fixture.clubId, seasonId: fixture.seasonId, type: "home" })
+      .returning({ id: kit.id });
+    const [labelCountBefore] = await db.select({ value: count() }).from(catalogLabel);
+    await pool.end();
+
+    const owner = await registerSession(app, "typeahead-owner@example.com");
+    const viewer = await registerSession(app, "typeahead-viewer@example.com");
+    const blockedOwner = await registerSession(app, "typeahead-blocked@example.com");
+
+    const visibleJersey = await saveJerseyForUser(app, owner, fixture);
+    const privateJersey = await saveJerseyForUser(app, owner, fixture);
+    await patchJerseyPrivate(app, owner, privateJersey.id, true);
+    const blockedJersey = await saveJerseyForUser(app, blockedOwner, fixture);
+
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${blockedOwner.user.id}/block`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+
+    const clubQuery = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/typeahead?q=K%C3%B8benhavn",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(clubQuery.statusCode).toBe(200);
+    const clubHits = collectionDiscoverTypeaheadSchema.parse(JSON.parse(clubQuery.body));
+    expect(clubHits.clubs?.some((clubHit) => clubHit.clubId === fixture.clubId)).toBe(true);
+    expect(clubHits.kits?.some((kitHit) => kitHit.kitId === insertedKit!.id)).toBe(true);
+    expect(clubHits.jerseys?.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
+    expect(clubHits.jerseys?.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
+    expect(clubHits.jerseys?.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
+    expect(JSON.parse(clubQuery.body)).not.toHaveProperty("entitlement");
+    expect(JSON.parse(clubQuery.body)).not.toHaveProperty("leagues");
+
+    const playerQuery = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/typeahead?q=Jonas",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    const playerHits = collectionDiscoverTypeaheadSchema.parse(JSON.parse(playerQuery.body));
+    expect(playerHits.players?.some((hit) => hit.playerId === insertedPlayer!.id)).toBe(true);
+
+    const collectorQuery = await app.inject({
+      method: "GET",
+      url: `/v1/collection/discover/typeahead?q=${encodeURIComponent(owner.user.handle)}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    const collectorHits = collectionDiscoverTypeaheadSchema.parse(JSON.parse(collectorQuery.body));
+    expect(collectorHits.collectors?.some((hit) => hit.handle === owner.user.handle)).toBe(true);
+    expect(collectorHits.collectors?.some((hit) => hit.handle === blockedOwner.user.handle)).toBe(
+      false,
+    );
+
+    const { db: afterDb, pool: afterPool } = createDb(DATABASE_URL);
+    const [labelCountAfter] = await afterDb.select({ value: count() }).from(catalogLabel);
+    await afterPool.end();
+    expect(labelCountAfter?.value).toBe(labelCountBefore?.value);
   });
 });

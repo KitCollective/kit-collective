@@ -83,6 +83,38 @@ export const collectionDiscoverCatalogDrillSchema = z
 
 export type CollectionDiscoverCatalogDrill = z.infer<typeof collectionDiscoverCatalogDrillSchema>;
 
+export const collectionDiscoverTypeaheadKitSchema = z
+  .object({
+    kitId: z.string().uuid(),
+    label: z.string().min(1),
+  })
+  .strict();
+
+export type CollectionDiscoverTypeaheadKit = z.infer<typeof collectionDiscoverTypeaheadKitSchema>;
+
+export const collectionDiscoverTypeaheadPlayerSchema = z
+  .object({
+    playerId: z.string().uuid(),
+    playerLabel: z.string().min(1),
+  })
+  .strict();
+
+export type CollectionDiscoverTypeaheadPlayer = z.infer<
+  typeof collectionDiscoverTypeaheadPlayerSchema
+>;
+
+export const collectionDiscoverTypeaheadSchema = z
+  .object({
+    clubs: z.array(collectionDiscoverHomeClubSchema).optional(),
+    kits: z.array(collectionDiscoverTypeaheadKitSchema).optional(),
+    players: z.array(collectionDiscoverTypeaheadPlayerSchema).optional(),
+    collectors: z.array(collectionDiscoverHomeCollectorSchema).optional(),
+    jerseys: z.array(collectionDiscoverJerseySchema).optional(),
+  })
+  .strict();
+
+export type CollectionDiscoverTypeahead = z.infer<typeof collectionDiscoverTypeaheadSchema>;
+
 export const collectionPeerJerseySchema = z
   .object({
     id: z.string().uuid(),
