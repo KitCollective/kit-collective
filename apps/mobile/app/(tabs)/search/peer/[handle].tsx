@@ -108,6 +108,8 @@ export default function PeerProfileScreen() {
     [profile],
   );
 
+  const photoHeaders = accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
+
   const avatarHeaders =
     accessToken && profile?.avatarUrl ? { Authorization: `Bearer ${accessToken}` } : undefined;
 
@@ -220,7 +222,7 @@ export default function PeerProfileScreen() {
             <JerseyTile
               photoSource={{
                 uri: resolvePhotoUrl(item.photos[0]?.photoUrl ?? ""),
-                headers: avatarHeaders,
+                headers: photoHeaders,
               }}
               clubLabel={item.clubLabel}
               seasonLabel={item.seasonLabel}
