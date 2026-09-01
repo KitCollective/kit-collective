@@ -1,7 +1,11 @@
 import {
+  type CollectionJersey,
   type CollectionJerseys,
+  type CollectionJerseyUpdate,
   type CollectionSaveRequest,
   type CollectionSaveResponse,
+  collectionJerseySchema,
+  collectionJerseyUpdateResponseSchema,
   collectionJerseysSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
@@ -68,6 +72,41 @@ export async function saveUserJersey(
   }
 
   return collectionSaveResponseSchema.parse(await response.json());
+}
+
+export async function updateUserJersey(
+  accessToken: string,
+  jerseyId: string,
+  payload: CollectionJerseyUpdate,
+): Promise<CollectionJersey> {
+  const response = await requestJson(`/v1/collection/jerseys/${jerseyId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new CollectionFetchError("Kunne ikke opdatere trøjen", response.status);
+  }
+
+  const body = collectionJerseyUpdateResponseSchema.parse(await response.json());
+  return collectionJerseySchema.parse(body.jersey);
+}
+
+export async function deleteUserJersey(accessToken: string, jerseyId: string): Promise<void> {
+  const response = await requestJson(`/v1/collection/jerseys/${jerseyId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new CollectionFetchError("Kunne ikke slette trøjen", response.status);
+  }
 }
 
 export function resolvePhotoUrl(photoUrl: string): string {

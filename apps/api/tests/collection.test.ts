@@ -984,4 +984,58 @@ describe("Collection /v1", () => {
     });
     expect(photoAfter.statusCode).toBe(404);
   });
+
+  it("owner PATCH updates jersey metadata via collection update envelope (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "update-jersey-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const updateResponse = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${ownerJersey.id}`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "away",
+        size: "xl",
+        condition: "good",
+      },
+    });
+    expect(updateResponse.statusCode).toBe(200);
+    const body = JSON.parse(updateResponse.body) as { jersey: CollectionJersey };
+    expect(body.jersey.id).toBe(ownerJersey.id);
+    expect(body.jersey.type).toBe("away");
+    expect(body.jersey.size).toBe("xl");
+    expect(body.jersey.condition).toBe("good");
+  });
+
+  it("owner DELETE removes jersey from own list (owner)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "delete-jersey-owner@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/jerseys/${ownerJersey.id}`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(deleteResponse.statusCode).toBe(204);
+    expect(await findOwnJersey(app, owner, ownerJersey.id)).toBeUndefined();
+  });
+
+  it("peer DELETE of foreign jersey returns 404 (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "delete-jersey-peer-owner@example.com");
+    const peer = await registerSession(app, "delete-jersey-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/jerseys/${ownerJersey.id}`,
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+    });
+    expect(deleteResponse.statusCode).toBe(404);
+    expect(await findOwnJersey(app, owner, ownerJersey.id)).toBeDefined();
+  });
 });

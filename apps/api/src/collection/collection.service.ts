@@ -24,6 +24,7 @@ import {
   collectionJerseysSchema,
   collectionPeerJerseySchema,
   collectionPrivatePatchSchema,
+  collectionJerseyUpdateSchema,
   collectionRespondBidRequestSchema,
   collectionRespondBidResponseSchema,
   collectionSaveRequestSchema,
@@ -56,6 +57,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from "@nestjs/common";
 import { and, asc, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
@@ -918,6 +920,121 @@ export class CollectionService {
       .where(eq(userJersey.id, jerseyId));
 
     return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
+  }
+
+  async updateJersey(userId: string, jerseyId: string, rawBody: unknown) {
+    const body = collectionJerseyUpdateSchema.parse(rawBody);
+
+    const [existing] = await this.db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    const [clubRow] = await this.db
+      .select({ id: club.id, countryId: club.countryId })
+      .from(club)
+      .where(eq(club.id, body.clubId))
+      .limit(1);
+
+    if (!clubRow) {
+      throw new BadRequestException("clubId is not a catalog club");
+    }
+
+    const [seasonRow] = await this.db
+      .select({ id: season.id, leagueId: season.leagueId })
+      .from(season)
+      .where(eq(season.id, body.seasonId))
+      .limit(1);
+
+    if (!seasonRow) {
+      throw new BadRequestException("seasonId is not a catalog season");
+    }
+
+    const [teamSeasonRow] = await this.db
+      .select({ id: teamSeason.id })
+      .from(teamSeason)
+      .where(and(eq(teamSeason.clubId, body.clubId), eq(teamSeason.seasonId, body.seasonId)))
+      .limit(1);
+
+    if (!teamSeasonRow) {
+      throw new BadRequestException("clubId and seasonId are not linked in TeamSeason");
+    }
+
+    await this.db
+      .update(userJersey)
+      .set({
+        clubId: body.clubId,
+        seasonId: body.seasonId,
+        catalogKitId: body.catalogKitId ?? null,
+        type: body.type,
+        size: body.size,
+        condition: body.condition,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+
+    return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
+  }
+
+  async deleteOwnJersey(userId: string, jerseyId: string): Promise<void> {
+    const [jerseyRow] = await this.db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
+      .limit(1);
+
+    if (!jerseyRow) {
+      throw new NotFoundException("UserJersey not found");
+    }
+
+    const photoRows = await this.db
+      .select({
+        id: userJerseyPhoto.id,
+        objectKey: userJerseyPhoto.objectKey,
+      })
+      .from(userJerseyPhoto)
+      .where(eq(userJerseyPhoto.userJerseyId, jerseyId));
+
+    const photoBytes = new Map<string, Uint8Array>();
+    for (const photo of photoRows) {
+      if (!photo.objectKey.startsWith(`user/${userId}/${jerseyId}/`)) {
+        throw new InternalServerErrorException("Invalid photo object key");
+      }
+      const bytes = await this.objectStore.getObject(photo.objectKey);
+      if (!bytes) {
+        throw new InternalServerErrorException("Photo bytes missing");
+      }
+      photoBytes.set(photo.objectKey, bytes);
+    }
+
+    const deletedKeys: string[] = [];
+    try {
+      for (const photo of photoRows) {
+        await this.objectStore.deleteObject(photo.objectKey);
+        deletedKeys.push(photo.objectKey);
+      }
+    } catch {
+      for (const key of deletedKeys) {
+        const bytes = photoBytes.get(key);
+        if (bytes) {
+          await this.objectStore.putObject(key, bytes);
+        }
+      }
+      throw new InternalServerErrorException("Failed to delete photo bytes");
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx.delete(userJerseyFavorite).where(eq(userJerseyFavorite.userJerseyId, jerseyId));
+      await tx.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
+      await tx
+        .delete(userJersey)
+        .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+    });
   }
 
   private async loadOwnJerseyOrThrow(userId: string, jerseyId: string): Promise<CollectionJersey> {

@@ -143,7 +143,12 @@ export {
   collectionSendBidResponseSchema,
 } from "./collection/bidding.js";
 export {
-  type CollectionConversationDetail,
+  type CollectionJerseyUpdate,
+  type CollectionJerseyUpdateResponse,
+  collectionJerseyUpdateResponseSchema,
+  collectionJerseyUpdateSchema,
+} from "./collection/update.js";
+export {
   type CollectionConversationJerseyContext,
   type CollectionConversationMessage,
   type CollectionConversationReplyTo,

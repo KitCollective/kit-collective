@@ -21,6 +21,8 @@ export type CaptureJerseyDraft = {
   conditionSelected: boolean;
   notes: string;
   photos: CaptureSessionPhoto[];
+  /** When set, Confirm saves via PATCH instead of POST save (metadata-only edit). */
+  editJerseyId?: string;
 };
 
 export type CaptureSessionState = {

@@ -208,6 +208,28 @@ export class CollectionController {
     return this.collectionService.patchPrivate(user.sub, jerseyId, body);
   }
 
+  @Patch("collection/jerseys/:jerseyId")
+  @UseGuards(JwtAuthGuard)
+  updateJersey(
+    @CurrentUser() user: JwtPayload,
+    @Param("jerseyId") jerseyId: string,
+    @Body() body: unknown,
+  ) {
+    return this.collectionService.updateJersey(user.sub, jerseyId, body);
+  }
+
+  @Delete("collection/jerseys/:jerseyId")
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  async deleteOwnJersey(
+    @CurrentUser() user: JwtPayload,
+    @Param("jerseyId") jerseyId: string,
+    @Res() reply: FastifyReply,
+  ) {
+    await this.collectionService.deleteOwnJersey(user.sub, jerseyId);
+    return reply.status(204).send();
+  }
+
   @Post("collection/jerseys/:jerseyId/bids")
   @HttpCode(201)
   @UseGuards(JwtAuthGuard)
