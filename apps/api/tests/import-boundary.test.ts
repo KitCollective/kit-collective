@@ -86,6 +86,17 @@ describe("import boundaries", () => {
     expect(violations[0]).toContain("bad.ts");
   });
 
+  it("Identity does not import SES or the SES mailer", () => {
+    const identityDir = path.join(ROOT, "src/identity");
+    const files = collectSourceFiles(identityDir);
+    const violations = findForbiddenImports(files, [
+      /ses-mailer/,
+      /@aws-sdk\/client-ses/,
+      /SES_FROM/,
+    ]);
+    expect(violations).toEqual([]);
+  });
+
   it("Nest API does not import seed/ or @kit/seed-*", () => {
     const apiDir = path.join(ROOT, "apps/api");
     const files = collectSourceFiles(apiDir);

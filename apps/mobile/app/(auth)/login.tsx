@@ -98,6 +98,11 @@ export default function LoginScreen() {
           onPress={() => void handleSubmit()}
           loading={loading}
         />
+        <Button
+          label="Glemt adgangskode"
+          variant="tertiary"
+          onPress={() => router.push("/reset")}
+        />
         <Button label="Opret konto" variant="tertiary" onPress={() => router.push("/register")} />
       </ButtonDock>
     </View>

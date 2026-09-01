@@ -32,6 +32,24 @@ export class IdentityController {
     return this.identityService.login(body);
   }
 
+  @Post("identity/verify")
+  @HttpCode(200)
+  verifyEmail(@Body() body: unknown) {
+    return this.identityService.verifyEmail(body);
+  }
+
+  @Post("identity/password-reset")
+  @HttpCode(200)
+  requestPasswordReset(@Body() body: unknown) {
+    return this.identityService.requestPasswordReset(body);
+  }
+
+  @Post("identity/password-reset/complete")
+  @HttpCode(200)
+  completePasswordReset(@Body() body: unknown) {
+    return this.identityService.completePasswordReset(body);
+  }
+
   @Get("identity/me")
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: JwtPayload) {

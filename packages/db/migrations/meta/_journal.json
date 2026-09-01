@@ -134,6 +134,13 @@
       "when": 1788250000000,
       "tag": "0018_auth_session",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788299000000,
+      "tag": "0019_email_verified_default",
+      "breakpoints": true
     }
   ]
 }
