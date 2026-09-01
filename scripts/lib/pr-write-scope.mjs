@@ -7,10 +7,7 @@
 export const RATCHET_EXCEPTION_PREFIXES = [".cursor/hooks/", ".cursor/rules/"];
 
 /** Exact paths exempt per docs/agents/write-scope.md. */
-export const RATCHET_EXCEPTION_EXACT = [
-  ".cursor/hooks.json",
-  "docs/agents/error-ratcheting.md",
-];
+export const RATCHET_EXCEPTION_EXACT = [".cursor/hooks.json", "docs/agents/error-ratcheting.md"];
 
 /**
  * Scripts that implement committed ratchets (see docs/agents/error-ratcheting.md).
