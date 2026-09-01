@@ -12,6 +12,9 @@ const CLIENT_FORBIDDEN_PATTERNS = [
   /from ['"]@kit\/api(?!-contract)/,
   /from ['"]apps\/api/,
   /from ['"]\.\.\/\.\.\/api/,
+  /better-auth/,
+  /\/api\/auth\//,
+  /dash\.better-auth\.com/,
 ];
 
 const API_FORBIDDEN_PATTERNS = [

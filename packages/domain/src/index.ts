@@ -115,6 +115,8 @@ export {
   OFFER_PRODUCT_IDS,
 } from "./billing.js";
 export {
+  AUTH_EVENT_KINDS,
+  type AuthEventKind,
   HANDLE_MAX_LENGTH,
   HANDLE_MIN_LENGTH,
   HANDLE_PATTERN,

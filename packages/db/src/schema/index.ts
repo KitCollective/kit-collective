@@ -1,5 +1,6 @@
 import {
   APPEARANCE_MODES,
+  AUTH_EVENT_KINDS,
   AUTHENTICITY_VALUES,
   CALENDAR_KINDS,
   CATALOG_ENTITY_TYPES,
@@ -56,6 +57,7 @@ export const nationalTeamGenderEnum = pgEnum("national_team_gender", NATIONAL_TE
 export const kitPhotoRightsEnum = pgEnum("kit_photo_rights", KIT_PHOTO_RIGHTS);
 export const kitPhotoVisibilityEnum = pgEnum("kit_photo_visibility", KIT_PHOTO_VISIBILITY);
 export const userRoleEnum = pgEnum("user_role", USER_ROLES);
+export const authEventKindEnum = pgEnum("auth_event_kind", AUTH_EVENT_KINDS);
 export const identityLinkedProviderEnum = pgEnum(
   "identity_linked_provider",
   IDENTITY_LINKED_PROVIDERS,
@@ -237,9 +239,11 @@ export const user = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     email: text("email").notNull(),
     passwordHash: text("password_hash").notNull(),
+    name: text("name").notNull().default(""),
     handle: text("handle").notNull(),
     aboutMe: text("about_me"),
     avatarObjectKey: text("avatar_object_key"),
+    image: text("image"),
     fullName: text("full_name"),
     phone: text("phone"),
     birthday: date("birthday"),
@@ -261,6 +265,7 @@ export const user = pgTable(
     cookieMarketing: boolean("cookie_marketing").notNull().default(false),
     role: userRoleEnum("role").notNull().default("user"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("user_email_unique").on(table.email),
@@ -284,6 +289,60 @@ export const identityProvider = pgTable(
     uniqueIndex("identity_provider_provider_user_unique").on(table.provider, table.providerUserId),
   ],
 );
+
+export const session = pgTable(
+  "session",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    token: text("token").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [uniqueIndex("session_token_unique").on(table.token)],
+);
+
+export const account = pgTable("account", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true }),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const verification = pgTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const authEvent = pgTable("auth_event", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => user.id, { onDelete: "cascade" }),
+  kind: authEventKindEnum("kind").notNull(),
+  provider: identityLinkedProviderEnum("provider"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const userJersey = pgTable("user_jersey", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -563,6 +622,21 @@ export const userRelations = relations(user, ({ many }) => ({
   shortcuts: many(collectionShortcut),
   wishlistEntries: many(wishlistEntry),
   jerseyFavorites: many(userJerseyFavorite),
+  sessions: many(session),
+  accounts: many(account),
+  authEvents: many(authEvent),
+}));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, { fields: [session.userId], references: [user.id] }),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, { fields: [account.userId], references: [user.id] }),
+}));
+
+export const authEventRelations = relations(authEvent, ({ one }) => ({
+  user: one(user, { fields: [authEvent.userId], references: [user.id] }),
 }));
 
 export const userJerseyFavoriteRelations = relations(userJerseyFavorite, ({ one }) => ({
