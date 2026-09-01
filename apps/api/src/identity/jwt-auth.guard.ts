@@ -1,5 +1,11 @@
 import { user } from "@kit/db";
-import { CanActivate, ExecutionContext, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  CanActivate,
+  ExecutionContext,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { eq } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
 import { DB, type DbToken } from "../db/db.module.js";

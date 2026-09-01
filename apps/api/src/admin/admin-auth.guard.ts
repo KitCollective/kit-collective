@@ -6,8 +6,8 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { FastifyRequest } from "fastify";
-import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
 import type { JwtPayload } from "../identity/identity.service.js";
+import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
 
 type RequestWithUser = FastifyRequest & { user?: JwtPayload };
 

@@ -252,14 +252,6 @@ export {
   type VisionSaveActionResult,
 } from "./collection/vision-save-action.js";
 export {
-  type AuthEvent,
-  type AuthEventKind,
-  type AuthEvents,
-  authEventKindSchema,
-  authEventSchema,
-  authEventsSchema,
-} from "./identity/auth-events.js";
-export {
   IDENTITY_LINKED_PROVIDERS,
   type IdentityAccountFields,
   type IdentityAccountUpdate,
@@ -274,6 +266,14 @@ export {
   identityLinkedProviderSchema,
   identityPasswordChangeSchema,
 } from "./identity/account.js";
+export {
+  type AuthEvent,
+  type AuthEventKind,
+  type AuthEvents,
+  authEventKindSchema,
+  authEventSchema,
+  authEventsSchema,
+} from "./identity/auth-events.js";
 export {
   acceptAllCookieConsent,
   type CookieConsent,

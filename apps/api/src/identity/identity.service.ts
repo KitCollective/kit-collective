@@ -35,7 +35,6 @@ import {
   identityProfileUpdateSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
-import type { AuthEventKind } from "@kit/domain";
 import {
   authEvent,
   catalogLabel,
@@ -52,6 +51,7 @@ import {
   userJerseyPhoto,
   visionLog,
 } from "@kit/db";
+import type { AuthEventKind } from "@kit/domain";
 import {
   BadRequestException,
   ConflictException,
@@ -63,13 +63,12 @@ import {
 } from "@nestjs/common";
 import bcrypt from "bcryptjs";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
-import { AUTH, type AuthInstance } from "./auth.js";
-import { bearerTokenFromAuthorization } from "./request-headers.js";
 import { BillingService } from "../billing/billing.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { AUTH, type AuthInstance } from "./auth.js";
 import {
   avatarObjectKeyForUser,
   avatarUrlForPeer,
@@ -78,6 +77,7 @@ import {
   isHandleEmail,
   nextHandleCandidate,
 } from "./identity.helpers.js";
+import { bearerTokenFromAuthorization } from "./request-headers.js";
 
 const { hash, compare } = bcrypt;
 
