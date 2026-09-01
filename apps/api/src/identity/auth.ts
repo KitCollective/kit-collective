@@ -1,8 +1,8 @@
 import { account, type Db, session, user, verification } from "@kit/db";
+import bcrypt from "bcryptjs";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins";
-import bcrypt from "bcryptjs";
 import { requireBetterAuthSecret, requireBetterAuthUrl } from "../config/better-auth-env.js";
 
 const { hash, compare } = bcrypt;

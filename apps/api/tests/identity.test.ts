@@ -24,9 +24,9 @@ import {
   teamSeason,
   user,
 } from "@kit/db";
-import bcrypt from "bcryptjs";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
+import bcrypt from "bcryptjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 
@@ -638,9 +638,7 @@ describe("Identity /v1", () => {
     expect(response.statusCode).toBe(200);
     const body = identitySessionSchema.parse(JSON.parse(response.body));
     expect(body.user.email).toBe("legacy-bcrypt@example.com");
-    expect(body.user.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    );
+    expect(body.user.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(body.accessToken.includes(".") && body.accessToken.split(".").length === 3).toBe(false);
   });
 
