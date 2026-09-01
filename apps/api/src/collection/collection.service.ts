@@ -3,6 +3,7 @@ import {
   type CollectionConversationDetail,
   type CollectionConversationPeer,
   type CollectionConversations,
+  type CollectionDiscoverCatalogDrill,
   type CollectionDiscoverHome,
   type CollectionDiscoverHomeClub,
   type CollectionDiscoverHomeCollector,
@@ -23,6 +24,7 @@ import {
   collectionConversationDetailSchema,
   collectionConversationPeerSchema,
   collectionConversationsSchema,
+  collectionDiscoverCatalogDrillSchema,
   collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
   collectionFavoritesSchema,
@@ -48,6 +50,7 @@ import {
   conversationMessage,
   conversationParticipant,
   jerseyDraft,
+  player,
   playerClubSeason,
   season,
   teamSeason,
@@ -1309,6 +1312,96 @@ export class CollectionService {
     });
   }
 
+  async discoverCatalogDrill(
+    userId: string,
+    kind: "club" | "player",
+    entityId: string,
+    locale: LabelLocale = "da",
+  ): Promise<CollectionDiscoverCatalogDrill> {
+    const title = await this.resolveCatalogDrillTitle(kind, entityId, locale);
+    if (!title) {
+      throw new NotFoundException("Catalog drill not found");
+    }
+
+    const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
+    const baseWhere = and(ne(userJersey.userId, userId), eq(userJersey.private, false));
+
+    const rows =
+      kind === "club"
+        ? await this.db
+            .select({
+              id: userJersey.id,
+              ownerId: userJersey.userId,
+              clubId: userJersey.clubId,
+              seasonId: userJersey.seasonId,
+              type: userJersey.type,
+              seasonLabel: season.label,
+              ownerHandle: user.handle,
+            })
+            .from(userJersey)
+            .innerJoin(season, eq(userJersey.seasonId, season.id))
+            .innerJoin(user, eq(userJersey.userId, user.id))
+            .where(and(baseWhere, eq(userJersey.clubId, entityId)))
+            .orderBy(desc(userJersey.updatedAt))
+        : await this.db
+            .select({
+              id: userJersey.id,
+              ownerId: userJersey.userId,
+              clubId: userJersey.clubId,
+              seasonId: userJersey.seasonId,
+              type: userJersey.type,
+              seasonLabel: season.label,
+              ownerHandle: user.handle,
+            })
+            .from(userJersey)
+            .innerJoin(season, eq(userJersey.seasonId, season.id))
+            .innerJoin(user, eq(userJersey.userId, user.id))
+            .innerJoin(
+              playerClubSeason,
+              and(
+                eq(playerClubSeason.clubId, userJersey.clubId),
+                eq(playerClubSeason.seasonId, userJersey.seasonId),
+                eq(playerClubSeason.playerId, entityId),
+              ),
+            )
+            .where(baseWhere)
+            .orderBy(desc(userJersey.updatedAt));
+
+    const visibleRows = rows.filter((row) => !blockedPeerIds.has(row.ownerId));
+    const clubIds = [...new Set(visibleRows.map((row) => row.clubId))];
+    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const photosByJersey = await this.loadPhotosForJerseys(visibleRows.map((row) => row.id));
+
+    const jerseys = visibleRows.flatMap((row) => {
+      const clubLabel = clubLabels.get(row.clubId);
+      const photos = photosByJersey.get(row.id);
+      if (!clubLabel || !photos || photos.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          id: row.id,
+          clubId: row.clubId,
+          seasonId: row.seasonId,
+          type: row.type,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          ownerHandle: row.ownerHandle,
+          photos,
+        },
+      ];
+    });
+
+    return collectionDiscoverCatalogDrillSchema.parse({
+      kind,
+      id: entityId,
+      title,
+      count: jerseys.length,
+      jerseys,
+    });
+  }
+
   async getPeerJersey(
     userId: string,
     jerseyId: string,
@@ -1886,8 +1979,36 @@ export class CollectionService {
     );
   }
 
+  private async resolveCatalogDrillTitle(
+    kind: "club" | "player",
+    entityId: string,
+    locale: LabelLocale,
+  ): Promise<string | undefined> {
+    if (kind === "club") {
+      const [clubRow] = await this.db
+        .select({ id: club.id })
+        .from(club)
+        .where(eq(club.id, entityId))
+        .limit(1);
+      if (!clubRow) {
+        return undefined;
+      }
+      return (await this.resolveEntityLabels("club", [entityId], locale)).get(entityId);
+    }
+
+    const [playerRow] = await this.db
+      .select({ id: player.id })
+      .from(player)
+      .where(eq(player.id, entityId))
+      .limit(1);
+    if (!playerRow) {
+      return undefined;
+    }
+    return (await this.resolveEntityLabels("player", [entityId], locale)).get(entityId);
+  }
+
   private async resolveEntityLabels(
-    entityType: "country" | "league" | "club",
+    entityType: "country" | "league" | "club" | "player",
     entityIds: string[],
     locale: LabelLocale,
   ): Promise<Map<string, string>> {
