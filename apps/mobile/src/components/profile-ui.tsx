@@ -264,6 +264,49 @@ export function IdentityCard({
   );
 }
 
+type PeerIdentityCardProps = {
+  handle: string;
+  locationCaption?: string | null;
+  aboutMe?: string | null;
+  avatarUri?: string | null;
+  avatarHeaders?: Record<string, string>;
+};
+
+export function PeerIdentityCard({
+  handle,
+  locationCaption,
+  aboutMe,
+  avatarUri,
+  avatarHeaders,
+}: PeerIdentityCardProps) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  return (
+    <View
+      style={[
+        styles.identityCard,
+        { backgroundColor: theme.surface, borderColor: theme.borderSubtle },
+      ]}
+    >
+      <View style={styles.identityRow}>
+        <Avatar handle={handle} uri={avatarUri} uriHeaders={avatarHeaders} size="lg" />
+        <View style={styles.identityTextColumn}>
+          <Text style={[typography.headingSm, { color: theme.contentPrimary, flexShrink: 1 }]}>
+            {handle}
+          </Text>
+          {locationCaption ? (
+            <Text style={[typography.mono, { color: theme.contentMuted }]}>{locationCaption}</Text>
+          ) : null}
+        </View>
+      </View>
+      {aboutMe ? (
+        <Text style={[typography.body, { color: theme.contentSecondary }]}>{aboutMe}</Text>
+      ) : null}
+    </View>
+  );
+}
+
 type AvatarChangeRowProps = {
   handle: string;
   avatarUri?: string | null;

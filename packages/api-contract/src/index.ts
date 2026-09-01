@@ -195,6 +195,10 @@ export {
   collectionJerseysSchema,
 } from "./collection/jerseys.js";
 export {
+  type CollectionPeerJerseys,
+  collectionPeerJerseysSchema,
+} from "./collection/peer-jerseys.js";
+export {
   type CollectionSavePhoto,
   type CollectionSaveRequest,
   type CollectionSaveResponse,
@@ -274,6 +278,10 @@ export {
   type IdentityExport,
   identityExportSchema,
 } from "./identity/export.js";
+export {
+  type IdentityPeerProfile,
+  identityPeerProfileSchema,
+} from "./identity/peer-profile.js";
 export {
   type IdentityPrefs,
   type IdentityPrefsUpdate,

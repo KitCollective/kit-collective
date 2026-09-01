@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const collectionConversationPeerSchema = z
   .object({
+    peerId: z.string().uuid(),
     handle: z.string().min(1),
     jerseyCount: z.number().int().min(0),
     city: z.string().min(1).optional(),

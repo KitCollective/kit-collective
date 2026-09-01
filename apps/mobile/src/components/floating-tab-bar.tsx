@@ -74,6 +74,10 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
 
   const inboxChrome = useInboxChromeOptional();
   const hideForProfileDrill = segments.length > 2 && segments.at(1) === "profile";
+  const searchTail = segments.at(1) === "search" ? segments.slice(2).join("/") : "";
+  const hideForSearchDrill =
+    searchTail.startsWith("peer/") ||
+    (searchTail.length > 0 && !searchTail.startsWith("send-bid/") && !searchTail.includes("/"));
   const hideForConversationRoute =
     segments.length > 2 && segments.at(1) === "inbox" && segments.at(2) !== undefined;
   const hideForWideConversation = inboxChrome?.conversationVisible ?? false;
@@ -81,6 +85,7 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
   if (
     activeRoute === "add" ||
     hideForProfileDrill ||
+    hideForSearchDrill ||
     hideForConversationRoute ||
     hideForWideConversation
   ) {
