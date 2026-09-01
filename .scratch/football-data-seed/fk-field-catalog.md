@@ -40,8 +40,7 @@ Seed-module interface: [`seed/fkapi/reference.md`](../../seed/fkapi/reference.md
 | **NT path** | FKA team `id` / `id_fka` → `external_id` (`system=fkapi`, `entity_type=national_team`) + season label → `kit.national_team_id` — **never** `club_id` |
 | **Fixture path** | Hermetic fixtures may pre-seed TM ExternalIds; same refuse rules apply to live adapter |
 | **Proxy** | Never inject Seed proxy / Decodo into FK fetch |
-
-This lock is unchanged from KIT-138. No kit grain ticket may ship without enforcing it in the fetch adapter and mapper. Today's mapper already refuses missing TM club + season on the **club** path; the NT path is catalog-accepted, not implemented.
+| **Mapper today** | Club path refuses missing TM club + season; NT path is catalog-accepted, not implemented |
 
 ---
 
@@ -63,9 +62,9 @@ FKA kit URL ids (kit grain ExternalId candidates, **not** team ids): Denmark Hom
 | Grain | Primary join | Secondary / fallback |
 | --- | --- | --- |
 | **Club kit** | TM club id → our `external_id` (`transfermarkt`, `club`) — **existing** | FKA `team.id_fka` → optional `external_id` (`fkapi`, `club`) when TM id absent |
-| **NationalTeam kit** | FKA team `id` / `id_fka` → our `external_id` (`fkapi`, `national_team`) — **new on NT grain** | CatalogLabel alias on `national_team` matching FKA team name (`Denmark`) |
+| **NationalTeam kit** | FKA team `id` / `id_fka` → our `external_id` (`fkapi`, `national_team`) — **new on NT grain** | open: exact FKApi `Club.id` on first live search |
 
-**Why not TM id for NT kits:** Transfermarkt `verein/3436` is a NationalTeam identity, not a club. FKApi `/api/kits?club=` expects FKApi club ids — Denmark's FKA team id differs from TM `3436`. The NT kit grain resolves **FKA team → our national_team UUID**, then season label.
+**Why not TM id for NT kits:** Transfermarkt `verein/3436` is a NationalTeam identity, not a club. FKApi `/api/kits?club=` expects FKApi club ids. The NT kit grain resolves **FKA team → our national_team UUID**, then season label.
 
 **Open (does not block catalog accept):** exact FKApi `Club.id` / `id_fka` for Denmark and FCK — confirm on first live FKApi call without Decodo (`/api/clubs/search?keyword=`).
 
@@ -75,7 +74,6 @@ FKA kit URL ids (kit grain ExternalId candidates, **not** team ids): Denmark Hom
 | --- | --- |
 | Denmark WC 2010 kit | `kit.national_team_id` set, `kit.club_id` null |
 | FCK Superliga 2010/11 kit | `kit.club_id` set, `kit.national_team_id` null |
-| Mapper today | Club-only — NT path is catalog-accepted, not implemented |
 
 ---
 
@@ -121,7 +119,7 @@ FKApi exposes richer types with **category** (`match`, `prematch`, `preseason`, 
 | Secondary colour hex | FKApi first secondary `color` | **stamdata now** | **`kit.secondary_color_hex`** (new column) |
 | Tertiary+ colours | FKApi multiple secondaries (FCK Home lists three names: White / Black / Blue) | **later leverage** | extend only if product contests need full palette |
 
-**Column decision:** colours **need new columns** — `primary_color_hex` and `secondary_color_hex` on `kit` (see [schema-gap.md](./schema-gap.md)). Names may live in CatalogLabel when hex alone is not enough for display. **`kit.sponsor_name` already exists** and is a different fact.
+**Column decision:** colours **need new columns** — `primary_color_hex` and `secondary_color_hex` on `kit` (see [schema-gap.md](./schema-gap.md)). Names may live in CatalogLabel when hex alone is not enough for display.
 
 **Observed proof colours (FKA name slash-list; hex from FKApi on the grain ticket):**
 
@@ -147,14 +145,7 @@ FKApi exposes richer types with **category** (`match`, `prematch`, `preseason`, 
 | Sponsor name | FKA HTML fact table (`Sponsor \| Carlsberg` on FCK 2010-11 Home and Away) | **stamdata now** (source confirmed for **club** match kits) | **`kit.sponsor_name`** — **already exists** |
 | Sponsor on NT match kits | Not on Denmark 2010 Home / Away / GK fact tables | **stamdata now** when present; null when absent | same column, nullable |
 | Sponsor on dropped types | Denmark 2010 Training lists Sponsor **Arla** | **drop** with the training row | do not invent a match-kit sponsor from a training shirt |
-| Sponsor via FKApi REST | **Not** in `Kit` model or `/api/kits/{id}` response | **transport gap** | column ready; FKApi adapter cannot populate until upstream adds field |
-
-**Research lock:**
-
-1. **`kit.sponsor_name` already exists** — no new column.
-2. Sponsor is **stamdata now** when the source exposes it (FKA HTML does for sponsored club match kits).
-3. **FKApi transport gap:** current OSS FKApi does not scrape or return sponsor. The FK grain ticket must either (a) wait for FKApi upstream to add sponsor, or (b) add a non-Decodo FKA fact-table parse on a dedicated follow-up — not Decodo, not Nest.
-4. Do **not** drop sponsor because FKApi lacks it — the fact exists on FKA for club kits.
+| Sponsor via FKApi REST | **Not** in `Kit` model or `/api/kits/{id}` response | **transport gap** | column ready; populate when FKApi adds the field, or via a non-Decodo FKA parse follow-up — not Decodo, not Nest |
 
 ---
 
@@ -177,24 +168,6 @@ FKApi exposes richer types with **category** (`match`, `prematch`, `preseason`, 
 | Rating | | | ✓ | noise |
 | Brand / club logos, FKA URL | | | ✓ | ADR-0002 branding |
 | Training / anthem / track kits | | | ✓ | proof scope |
-
----
-
-## Stamdata now (FK proof accept)
-
-FK kit id · normalized type (`home` / `away` / `third` / `gk` / `special`) · manufacturer · season join · TM-side club join **or** FKA-side national_team join · archive bytes · **Kit colours** (name + hex → new columns) · **Kit sponsor** (→ existing `sponsor_name` when source provides it).
-
-## Later leverage
-
-CL/European variant kits · design pattern · English label · competition tags · extra secondary colours beyond first pair.
-
-## Drop
-
-Rating · FKA/TM logos and bare URLs as product assets · prematch/training/travel/jacket category kits for proof scope (including a training-shirt sponsor such as Arla).
-
-## Transport gap (not drop, not deferred stamdata)
-
-FKApi REST lacks **sponsor** today — column and FKA HTML source are ready; adapter populate waits on FKApi upstream or non-Decodo FKA parse ticket.
 
 ---
 

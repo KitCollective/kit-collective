@@ -61,8 +61,6 @@ Fixture shape today: `seed/fkapi/fixtures/superliga-kits.json` (`id`, `clubTrans
 
 **Proof example:** Denmark 2010 — FKA lists Home (`9857`, Red/White), Away (`9858`, White/Red), GK Home (`60206`, Black/Yellow/Red), GK Away (`60205`, Green/White); Season `2010` (calendar WC year); Brand `adidas`; **no Sponsor row** on match kits (Training lists Arla — dropped type).
 
-**Why FKA team id, not TM `3436`:** FKApi `Club` model covers national sides. `/api/kits?club=` expects FKApi ids. Map FKA Denmark team → our `national_team` UUID via `external_id` (`fkapi`, `national_team`).
-
 ---
 
 ## Kit type vocabulary
@@ -106,16 +104,7 @@ Extend `FkRawKit` + normalize on the FK grain ticket. Not Transfermarkt club col
 | NT kits | not observed on Denmark 2010 samples | nullable |
 | FKApi REST | **transport gap** — not in OSS models or API response | do not drop; wait for FKApi upstream or non-Decodo FKA parse |
 
----
-
-## FK after facts (research lock)
-
-No kit fetch — live or production-path — until the scope has:
-
-1. **Club path:** TM Club + Season rows with ExternalIds for every club in scope, **or**
-2. **NT path:** TM NationalTeam + Season rows with ExternalIds for the side.
-
-The fetch adapter and mapper **refuse** otherwise. Fixtures used in CI pre-seed the TM ExternalIds; the same rule applies to live runs.
+Full FK-after-facts lock (club vs NT join, refuse): [fk-field-catalog.md](../../.scratch/football-data-seed/fk-field-catalog.md).
 
 ---
 

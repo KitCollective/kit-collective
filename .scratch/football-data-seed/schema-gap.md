@@ -146,7 +146,7 @@ This document is the **given** for Football Data Seed grain tickets. When a tick
 | Primary / secondary colour | `kit.primary_color_hex`, `kit.secondary_color_hex` (new) + optional `catalog_label` for colour **names** | hex for filters; name optional |
 | Sponsor | ✅ `kit.sponsor_name` | populate when FKA/source exposes it (club match kits confirmed); FKApi REST **transport gap** — [fk-field-catalog.md](./fk-field-catalog.md) |
 
-**Grain ticket:** KIT-143 (club kits) / KIT-144 (NT kits) — extend `FkRawKit` + mapper; colours + sponsor populate. KIT-140 is the catalog, not the fetch.
+**Grain ticket:** KIT-143 (FK club kits) / KIT-144 (FK NationalTeam kits) — extend `FkRawKit` + mapper; colours + sponsor populate. KIT-140 is the catalog, not the fetch.
 
 ---
 

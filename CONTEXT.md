@@ -76,8 +76,8 @@ This work already exists on another issue. No agent action.
 _Avoid_: deleting the issue instead of marking duplicate
 
 **Write scope**:
-Path globs on an implementation issue the implementer may change.
-_Avoid_: treating surface labels as write scope
+Path globs on an implementation issue the implementer may change. Factory `matchesGlob` compiles `**` to `.*`, so `seed/fkapi/**/reference.md` does **not** match `seed/fkapi/reference.md` — declare the exact file or `seed/**/reference.md`.
+_Avoid_: treating surface labels as write scope; `dir/**/file` for a file that sits at `dir/file`
 <!-- factory:generated-end -->
 
 ## Language
