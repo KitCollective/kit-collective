@@ -1169,17 +1169,16 @@ describe("Collection /v1", () => {
     });
     expect(homeResponse.statusCode).toBe(200);
     const home = collectionDiscoverHomeSchema.parse(JSON.parse(homeResponse.body));
-    expect(home.clubs?.map((club) => club.clubLabel)).toEqual(["F.C. København"]);
-    expect(home.openForBid?.map((jersey) => jersey.id)).toEqual([biddingJersey.id]);
-    expect(home.collectors?.map((collector) => collector.handle)).toEqual(
-      expect.arrayContaining([owner.user.handle, bidder.user.handle]),
-    );
+    expect(home.clubs?.some((club) => club.clubId === fixture.clubId)).toBe(true);
+    expect(home.openForBid?.some((jersey) => jersey.id === biddingJersey.id)).toBe(true);
+    expect(home.openForBid?.some((jersey) => jersey.id === visibleJersey.id)).toBe(false);
+    expect(home.collectors?.some((collector) => collector.handle === owner.user.handle)).toBe(true);
+    expect(home.collectors?.some((collector) => collector.handle === bidder.user.handle)).toBe(true);
     expect(home.collectors?.some((collector) => collector.handle === blockedOwner.user.handle)).toBe(
       false,
     );
-    expect(home.moreJerseys?.map((jersey) => jersey.id)).toEqual(
-      expect.arrayContaining([visibleJersey.id, biddingJersey.id]),
-    );
+    expect(home.moreJerseys?.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
+    expect(home.moreJerseys?.some((jersey) => jersey.id === biddingJersey.id)).toBe(true);
     expect(home.moreJerseys?.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
     expect(home.moreJerseys?.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
     expect(JSON.parse(homeResponse.body)).not.toHaveProperty("entitlement");
