@@ -247,7 +247,7 @@ export const user = pgTable(
     fullName: text("full_name"),
     phone: text("phone"),
     birthday: date("birthday"),
-    emailVerified: boolean("email_verified").notNull().default(true),
+    emailVerified: boolean("email_verified").notNull().default(false),
     countryId: uuid("country_id").references(() => country.id),
     city: text("city"),
     showCity: boolean("show_city").notNull().default(false),

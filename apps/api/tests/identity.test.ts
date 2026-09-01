@@ -10,8 +10,10 @@ import {
   handleAvailabilityResponseSchema,
   identityExportSchema,
   identityMeSchema,
+  identityPasswordResetAcceptedSchema,
   identityPrefsSchema,
   identitySessionSchema,
+  identityVerifyResponseSchema,
 } from "@kit/api-contract";
 import {
   catalogLabel,
@@ -29,6 +31,7 @@ import { Test } from "@nestjs/testing";
 import bcrypt from "bcryptjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
+import { recordedMails, resetRecordedMails } from "../dist/notify/recording-mailer.adapter.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -203,7 +206,122 @@ describe("Identity /v1", () => {
     expect(body.user.handle).toBe("collector");
     expect(body.user.role).toBe("user");
     expect(body.user.handle).toBe("collector");
+    expect(body.user.emailVerified).toBe(false);
     expect(body.accessToken.length).toBeGreaterThan(10);
+  });
+
+  it("leaves emailVerified false until the Notify verify token is consumed", async () => {
+    resetRecordedMails();
+    const session = await registerSession(app, "verify-me@example.com");
+    expect(session.user.emailVerified).toBe(false);
+
+    const mail = recordedMails.find(
+      (item) => item.to === "verify-me@example.com" && item.kind === "verify",
+    );
+    expect(mail?.url).toMatch(/token=/);
+    const token = new URL(mail?.url ?? "").searchParams.get("token");
+    expect(token).toBeTruthy();
+
+    const verify = await app.inject({
+      method: "POST",
+      url: "/v1/identity/verify",
+      payload: { token },
+    });
+    expect(verify.statusCode).toBe(200);
+    expect(identityVerifyResponseSchema.parse(JSON.parse(verify.body))).toEqual({
+      emailVerified: true,
+    });
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(identityMeSchema.parse(JSON.parse(me.body)).emailVerified).toBe(true);
+  });
+
+  it("returns the same password-reset success whether the email exists", async () => {
+    resetRecordedMails();
+    await registerSession(app, "reset-known@example.com");
+    const known = await app.inject({
+      method: "POST",
+      url: "/v1/identity/password-reset",
+      payload: { email: "reset-known@example.com" },
+    });
+    const unknown = await app.inject({
+      method: "POST",
+      url: "/v1/identity/password-reset",
+      payload: { email: "reset-unknown@example.com" },
+    });
+    expect(known.statusCode).toBe(200);
+    expect(unknown.statusCode).toBe(200);
+    expect(JSON.parse(known.body)).toEqual(JSON.parse(unknown.body));
+    expect(identityPasswordResetAcceptedSchema.parse(JSON.parse(known.body))).toEqual({
+      accepted: true,
+    });
+    expect(recordedMails.filter((item) => item.kind === "reset")).toHaveLength(1);
+    expect(recordedMails.some((item) => item.to === "reset-unknown@example.com")).toBe(false);
+  });
+
+  it("completes reset on the same User and revokes other Auth sessions", async () => {
+    resetRecordedMails();
+    const first = await registerSession(app, "reset-complete@example.com");
+    const secondLogin = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: { email: "reset-complete@example.com", password: "password123" },
+    });
+    const second = identitySessionSchema.parse(JSON.parse(secondLogin.body));
+
+    const request = await app.inject({
+      method: "POST",
+      url: "/v1/identity/password-reset",
+      payload: { email: "reset-complete@example.com" },
+    });
+    expect(request.statusCode).toBe(200);
+    const mail = recordedMails.find(
+      (item) => item.to === "reset-complete@example.com" && item.kind === "reset",
+    );
+    const token = new URL(mail?.url ?? "").searchParams.get("token");
+
+    const complete = await app.inject({
+      method: "POST",
+      url: "/v1/identity/password-reset/complete",
+      payload: { token, password: "newpassword123" },
+    });
+    expect(complete.statusCode).toBe(200);
+
+    const oldFirst = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${first.accessToken}` },
+    });
+    const oldSecond = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${second.accessToken}` },
+    });
+    expect(oldFirst.statusCode).toBe(401);
+    expect(oldSecond.statusCode).toBe(401);
+
+    const relogin = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: { email: "reset-complete@example.com", password: "newpassword123" },
+    });
+    expect(relogin.statusCode).toBe(200);
+    expect(identitySessionSchema.parse(JSON.parse(relogin.body)).user.id).toBe(first.user.id);
+
+    const events = await app.inject({
+      method: "GET",
+      url: "/v1/identity/auth-events",
+      headers: {
+        authorization: `Bearer ${identitySessionSchema.parse(JSON.parse(relogin.body)).accessToken}`,
+      },
+    });
+    expect(
+      JSON.parse(events.body).events.some((event: { kind: string }) => event.kind === "reset"),
+    ).toBe(true);
   });
 
   it("assigns a unique handle when the email local-part collides", async () => {
@@ -522,7 +640,7 @@ describe("Identity /v1", () => {
 
     expect(me.statusCode).toBe(200);
     const body = identityMeSchema.parse(JSON.parse(me.body));
-    expect(body.emailVerified).toBe(true);
+    expect(body.emailVerified).toBe(false);
     expect(body.fullName).toBe("Ada Lovelace");
     expect(body.phone).toBe("+4512345678");
     expect(body.birthday).toBe("1990-05-15");

@@ -7,6 +7,7 @@ import { DbModule } from "./db/db.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
 import { ModerationModule } from "./moderation/moderation.module.js";
+import { NotifyModule } from "./notify/notify.module.js";
 import { VisionModule } from "./vision/vision.module.js";
 import { WishlistModule } from "./wishlist/wishlist.module.js";
 
@@ -16,6 +17,7 @@ import { WishlistModule } from "./wishlist/wishlist.module.js";
     CatalogModule,
     HealthModule,
     IdentityModule,
+    NotifyModule,
     BillingModule,
     VisionModule,
     CollectionModule,

@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import {
   type AuthEvents,
   authEventsSchema,
@@ -16,12 +17,14 @@ import {
   type IdentityLinkedAccount,
   type IdentityMe,
   type IdentityPasswordChange,
+  type IdentityPasswordResetAccepted,
   type IdentityPeerProfile,
   type IdentityPrefs,
   type IdentityPrefsUpdate,
   type IdentityProfileUpdate,
   type IdentityRole,
   type IdentitySession,
+  type IdentityVerifyResponse,
   identityAccountUpdateSchema,
   identityAvatarUploadSchema,
   identityCredentialsSchema,
@@ -29,11 +32,16 @@ import {
   identityExportSchema,
   identityMeSchema,
   identityPasswordChangeSchema,
+  identityPasswordResetAcceptedSchema,
+  identityPasswordResetCompleteSchema,
+  identityPasswordResetRequestSchema,
   identityPeerProfileSchema,
   identityPrefsSchema,
   identityPrefsUpdateSchema,
   identityProfileUpdateSchema,
   identitySessionSchema,
+  identityVerifyRequestSchema,
+  identityVerifyResponseSchema,
 } from "@kit/api-contract";
 import {
   authEvent,
@@ -45,10 +53,12 @@ import {
   country,
   identityProvider,
   jerseyDraft,
+  session,
   user,
   userJersey,
   userJerseyFavorite,
   userJerseyPhoto,
+  verification,
   visionLog,
 } from "@kit/db";
 import type { AuthEventKind } from "@kit/domain";
@@ -66,8 +76,10 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { BillingService } from "../billing/billing.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
+import { requireBetterAuthUrl } from "../config/better-auth-env.js";
 import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationService } from "../moderation/moderation.service.js";
+import { NotifyService } from "../notify/notify.service.js";
 import { AUTH, type AuthInstance } from "./auth.js";
 import {
   avatarObjectKeyForUser,
@@ -147,6 +159,7 @@ export class IdentityService {
     @Inject(forwardRef(() => BillingService))
     private readonly billingService: BillingService,
     private readonly moderationService: ModerationService,
+    private readonly notifyService: NotifyService,
   ) {
     this.objectStore = hasR2Config() ? createR2ObjectStore() : createMemoryObjectStore();
   }
@@ -175,6 +188,7 @@ export class IdentityService {
         passwordHash,
         name: assignedHandle,
         handle: assignedHandle,
+        emailVerified: false,
       })
       .returning(USER_ME_SELECT);
 
@@ -183,6 +197,7 @@ export class IdentityService {
     }
 
     const accessToken = await this.createSessionToken(created.id);
+    await this.sendAuthMail(created.id, created.email, "verify");
     return await this.buildSession(created, accessToken);
   }
 
@@ -212,6 +227,39 @@ export class IdentityService {
     const accessToken = await this.createSessionToken(found.id);
     await this.recordAuthEvent({ kind: "login", userId: found.id });
     return await this.buildSession(sessionRow, accessToken);
+  }
+
+  async verifyEmail(rawBody: unknown): Promise<IdentityVerifyResponse> {
+    const { token } = identityVerifyRequestSchema.parse(rawBody);
+    const userId = await this.consumeAuthToken(token, "verify");
+    await this.db.update(user).set({ emailVerified: true }).where(eq(user.id, userId));
+    return identityVerifyResponseSchema.parse({ emailVerified: true });
+  }
+
+  async requestPasswordReset(rawBody: unknown): Promise<IdentityPasswordResetAccepted> {
+    const { email } = identityPasswordResetRequestSchema.parse(rawBody);
+    const normalizedEmail = email.toLowerCase();
+    const [found] = await this.db
+      .select({ id: user.id, email: user.email })
+      .from(user)
+      .where(eq(user.email, normalizedEmail))
+      .limit(1);
+
+    if (found) {
+      await this.sendAuthMail(found.id, found.email, "reset");
+    }
+
+    return identityPasswordResetAcceptedSchema.parse({ accepted: true });
+  }
+
+  async completePasswordReset(rawBody: unknown): Promise<IdentityPasswordResetAccepted> {
+    const { token, password } = identityPasswordResetCompleteSchema.parse(rawBody);
+    const userId = await this.consumeAuthToken(token, "reset");
+    const passwordHash = await hash(password, 12);
+    await this.db.update(user).set({ passwordHash }).where(eq(user.id, userId));
+    await this.db.delete(session).where(eq(session.userId, userId));
+    await this.recordAuthEvent({ kind: "reset", userId });
+    return identityPasswordResetAcceptedSchema.parse({ accepted: true });
   }
 
   async logout(userId: string, authorization: string | undefined): Promise<void> {
@@ -467,7 +515,7 @@ export class IdentityService {
 
     const [updated] = await this.db
       .update(user)
-      .set({ email: normalizedEmail, emailVerified: true })
+      .set({ email: normalizedEmail, emailVerified: false })
       .where(eq(user.id, userId))
       .returning(USER_ME_SELECT);
 
@@ -475,6 +523,7 @@ export class IdentityService {
       throw new UnauthorizedException();
     }
 
+    await this.sendAuthMail(userId, updated.email, "verify");
     const linkedAccounts = await this.loadLinkedAccounts(userId);
     return this.toIdentityMe(updated, linkedAccounts);
   }
@@ -900,6 +949,48 @@ export class IdentityService {
       showCity: row.showCity,
       entitlement,
     });
+  }
+
+  private hashAuthToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
+  }
+
+  private async sendAuthMail(
+    userId: string,
+    email: string,
+    kind: "verify" | "reset",
+  ): Promise<void> {
+    const token = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + (kind === "reset" ? 60 : 24 * 60) * 60 * 1000);
+    await this.db.delete(verification).where(eq(verification.identifier, `${kind}:${userId}`));
+    await this.db.insert(verification).values({
+      id: randomBytes(16).toString("hex"),
+      identifier: `${kind}:${userId}`,
+      value: this.hashAuthToken(token),
+      expiresAt,
+    });
+    const origin = requireBetterAuthUrl().replace(/\/$/, "");
+    await this.notifyService.sendAuthMail({
+      to: email,
+      kind,
+      url: `${origin}/${kind}?token=${token}`,
+    });
+  }
+
+  private async consumeAuthToken(token: string, kind: "verify" | "reset"): Promise<string> {
+    const hashed = this.hashAuthToken(token);
+    const [row] = await this.db
+      .select()
+      .from(verification)
+      .where(eq(verification.value, hashed))
+      .limit(1);
+
+    if (!row || !row.identifier.startsWith(`${kind}:`) || row.expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException("Invalid or expired token");
+    }
+
+    await this.db.delete(verification).where(eq(verification.id, row.id));
+    return row.identifier.slice(kind.length + 1);
   }
 
   private async createSessionToken(userId: string): Promise<string> {
