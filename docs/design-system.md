@@ -4,10 +4,10 @@ AI-ready visual and interaction lock for in-scope surfaces.
 Agents apply this file. Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Surfaces in scope**: `mobile` (deep), `web` (thin, share/OG), `admin` (operator dashboard). `api` is out of this lock.
-**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Gap 2026-08-23 (`mobile` collection chrome + brand type). Gap 2026-08-23 (`mobile` Tilføj trøje Confirm — one screen, not Stamdata/Detaljer tabs). Gap 2026-08-24 (brand kit SVG files + admin header/login/favicon placement). Gap 2026-08-28 (`mobile` Indbakke — slot 4 envelope, Beskeder | Aktivitet, thread, send-bud). Gap 2026-08-28 (`mobile` own Profil — identity, favorites, settings under Profil, Switch, Avatar, log-out Sheet). Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
+**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Gap 2026-08-23 (`mobile` collection chrome + brand type). Gap 2026-08-23 (`mobile` Tilføj trøje Confirm — one screen, not Stamdata/Detaljer tabs). Gap 2026-08-24 (brand kit SVG files + admin header/login/favicon placement). Gap 2026-08-28 (`mobile` Indbakke — slot 4 envelope, Beskeder | Aktivitet, thread, send-bud). Gap 2026-08-28 (`mobile` own Profil — identity, favorites, settings under Profil, Switch, Avatar, log-out Sheet). Gap 2026-08-31 (`mobile` Søg magazine + catalog drills, UserJersey detail, Peer Profil — prototype C verdict). Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
 **Owner**: Nicklas
 
-**Taste (locked)**: Vinted for layout and scanability (grid, short captions, search, chips, tab bar) — not for marketplace mechanics. Uber Base for grayscale structure, components, and quiet motion — not for copying UberMove or importing Base Web. One cyan→violet identity wash as garnish, Premier League Fantasy–adjacent, never as chrome that competes with a jersey photo.
+**Taste (locked)**: Vinted for layout and scanability (grid, short captions, search, chips, tab bar) — not for marketplace mechanics. Uber Base for grayscale structure, components, and quiet motion — not for copying UberMove or importing Base Web. One cyan→violet identity wash as garnish, Premier League Fantasy–adjacent, never as chrome that competes with a jersey photo. Søg home is a **magazine of shelves** (prototype C), not a single flat discover grid and not Trøjer|Katalog|Samlere home tabs.
 
 **Taste (`admin`, locked this gap)**: Same Base grayscale family, operator density. Uber Base dashboard (top search, Filters, hairline table) is the north star — not Vinted’s collection grid, not Catalog peek, not Base Web as a dependency, not a “+ New” create affordance in this increment. Place switching is the waffle: two tiles, icon above title (**Master Data** | **User Data**), not underline tabs. Photos are evidence (32px square thumb in Kit and UserJersey rows, full image on drill), not the layout. Chrome in English (ADR-0019).
 
@@ -23,7 +23,7 @@ Status: `locked`
 
 **Outcomes**: Jersey #2 in under 45 seconds. The collection scans as a photo grid, not a spreadsheet. A public Astro link looks like the same product when pasted into a Facebook group. On `admin`, an operator can search and filter stamdata, see KitPhoto, and take down one UserJersey without invented chrome. Missing decisions are flagged, not filled with taste.
 
-**Evidence**: Product PRD (`.scratch/Business/PRD.md`) UX principles; registration-speed research (`.scratch/Research/jersey-registration-speed.md`); lock interview (Vinted IA + Base grayscale + one wash); Gap 2026-08-23 (Uber Base dashboard refs + grill: Staff access, Take-down, ADR-0018, ADR-0019); Gap 2026-08-23 brand book v1.0 (`.scratch/collection-main-screen/claude-design/KitCollective-brand-book-v1.html`) for type families and scale; collection 3a artifact for Samling chrome (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`); Gap 2026-08-23 Tilføj trøje hi-fi (`.scratch/jersey-upload/claude-design/`) for capture spine only — Confirm body is this file, not the Stamdata/Detaljer tabs in that artifact; Gap 2026-08-28 Indbakke hi-fi (`.scratch/inbox/claude-design/KitCollective-indbakke.html`, frames 4a–4i) for inbox chrome only — throwaway `apps/mobile/src/prototype-inbox/` is not the contract; Gap 2026-08-28 own Profil hi-fi (`.scratch/profile-settings/claude-design/KitCollective-profil.html`, frames 5a–5o) for own-collector Profil chrome only — throwaway `apps/mobile/src/prototype-profile/` is not the contract. Wireframe PNGs in that folder are IA only.
+**Evidence**: Product PRD (`.scratch/Business/PRD.md`) UX principles; registration-speed research (`.scratch/Research/jersey-registration-speed.md`); lock interview (Vinted IA + Base grayscale + one wash); Gap 2026-08-23 (Uber Base dashboard refs + grill: Staff access, Take-down, ADR-0018, ADR-0019); Gap 2026-08-23 brand book v1.0 (`.scratch/collection-main-screen/claude-design/KitCollective-brand-book-v1.html`) for type families and scale; collection 3a artifact for Samling chrome (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`); Gap 2026-08-23 Tilføj trøje hi-fi (`.scratch/jersey-upload/claude-design/`) for capture spine only — Confirm body is this file, not the Stamdata/Detaljer tabs in that artifact; Gap 2026-08-28 Indbakke hi-fi (`.scratch/inbox/claude-design/KitCollective-indbakke.html`, frames 4a–4i) for inbox chrome only — throwaway `apps/mobile/src/prototype-inbox/` is not the contract; Gap 2026-08-28 own Profil hi-fi (`.scratch/profile-settings/claude-design/KitCollective-profil.html`, frames 5a–5o) for own-collector Profil chrome only — throwaway `apps/mobile/src/prototype-profile/` is not the contract. Wireframe PNGs in that folder are IA only. Gap 2026-08-31 Søg magazine verdict: `.scratch/soeg-browse/prototype/verdict.md` + `KitCollective-soeg-home.html` (variant C). UserJersey detail: `verdict-detail.md` + `KitCollective-jersey-detail.html` (variant B immersive). Peer Profil: `verdict-peer.md` + `KitCollective-peer-profil.html` (variant A). **Hi-fi evidence:** `.scratch/soeg-browse/claude-design/KitCollective-soeg-og-troejer.html` (frames 6a–6d) — throwaway prototype HTML is not the host API; hi-fi is visual reference only. ADR-0035 (Søg browse stays free).
 
 **Priorities**: On `mobile` / `web`: owned photo and capture speed over catalog completeness. On `admin`: scannable rows over photo-as-layout. All surfaces: grayscale chrome over a mascot brand hue. Data marks over decoration.
 
@@ -74,27 +74,28 @@ Flag missing context; do not invent new rules.
 Status: `locked`
 
 **Included** (surface → depth):
-- `mobile` (Expo, iOS/Android): collection grid, empty state, add / confirm / Save, gallery-first onboarding and camera-on-repeat, search as its own place (Søg tab, not in the collection header), genveje chips + Tilpas (Sheet manager, not a tab), Indbakke (Beskeder | Aktivitet, conversation, Detaljer, empty), Send bud from another collector’s UserJersey (under Søg), own Profil (identity card, unique username, About me, location country → city search / popular / free tag, favorites as other collectors’ UserJerseys, settings hub, cookies, log out), floating icon-only tab bar (Samling · Søg · Tilføj trøje · Indbakke · Profil).
+- `mobile` (Expo, iOS/Android): collection grid, empty state, add / confirm / Save, gallery-first onboarding and camera-on-repeat, **Søg** as magazine home (shelves + typeahead) with Club / Kit / Player catalog drills and Peer Profil / UserJersey detail under the compass stack, genveje chips + Tilpas (Sheet manager, not a tab), Indbakke (Beskeder | Aktivitet, conversation, Detaljer → Peer Profil, empty), Send bud from foreign UserJersey detail (under Søg), own Profil (identity card, unique username, About me, location country → city search / popular / free tag, favorites as other collectors’ UserJerseys, settings hub, cookies, log out), floating icon-only tab bar (Samling · Søg · Tilføj trøje · Indbakke · Profil).
 - `web` (Astro): public collection page, single UserJersey page, Open Graph image and title — same tokens so a shared link is recognisably KitCollective. Thin: no login mutations, no capture UI.
 - `admin` (Vite + React SPA): email/password login (same Identity); waffle places **Master Data** | **User Data** (routes `/stamdata`, `/collectors`); search + Filters Chip; hairline data table; 32px square thumb on Kit and UserJersey rows; Mark/monogram on club, season, and user identity rows; row drill; Take-down confirm; promote/demote with last-admin and self-demote guards. English chrome. Light only. KitPhoto may render here.
 
 **Excluded** (with reason):
 - `api` and catalog peek (`GET /v1/catalog/peek`): unstyled Nest HTML, not product UI (ADR-0016). Peek is not retired by this gap.
-- Marketplace listing chrome (price, buy, boost, ratings on cards): product is a catalog, not Vinted-the-marketplace. Bid amounts live in Indbakke / Send bud, never as overlay on a Samling tile. Own Profil does not host “my listings”, payments, postage, help, about, or legal as primary places.
+- Marketplace listing chrome (price, buy, boost, ratings on cards): product is a catalog, not Vinted-the-marketplace. Bid amounts live in Indbakke / Send bud, never as overlay on a Samling tile or on Søg “Flere trøjer” tiles. Own Profil does not host “my listings”, payments, postage, help, about, or legal as primary places.
 - Collector **gender** as a profile field: nothing in the product uses it this gap. Birthday stays.
 - Archive `KitPhoto` bytes on Expo, Astro, or OG: `admin_only` until rights are resolved.
 - Emoji as icons or category marks.
 - Importing Base Web. Cloning Michelangelo Studio as a full product (sidebar, “+ New”, metric table pills). Admin header cluster (search + pin + notifications + help + waffle + profile) is owner-directed from Michelangelo Studio this gap.
 - Bulk row actions and a “+ New” catalog-create control.
 - Zebra-striped tables. 4:5 collection grid as the admin home.
+- Søg home as **Trøjer | Katalog | Samlere** equal tabs (prototype B) or grid-only + overlay as the locked home (prototype A) — magazine (prototype C) won.
 
 **Deferred** (with reason):
 - `admin` dark mode: this gap is light only; flag, do not invent.
 - Scoped staff roles UI (moderator who cannot see everything).
 - Catalog writes (labels, Kit create/edit, `rights: public`).
 - Players as a primary admin table (squad stays count + expand on club–season).
-- Ønske **content** (list, filters) and IAP paywall. Slot 4 is Indbakke this gap; do not invent a wishlist-row primitive or a sixth tab for Ønske. Placement of Ønske (Profil submenu vs Søg filter) is not locked — flag.
-- Other-collector Profil depth beyond the Detaljer stub (handle + jersey count + city). Own Profil is in scope this gap; do not copy own settings onto the other collector.
+- Ønske **content** (list, filters) and IAP paywall chrome beyond what Wishlist already shipped — flag paywall title words; do not invent wishlist-row primitives.
+- League / Season / NationalTeam as **own** Søg catalog landings (typeahead may filter the magazine; no dedicated drill this gap).
 - Android-specific Message composer chrome (Material field / FAB send). One composer contract; OS keyboard is the platform exception.
 - Expo Web as a first-class surface. Indbakke wide layout (4i) is the token/layout rule if a host is ≥1024 wide; it does not make Expo Web first-class.
 - KC mark on **Profil** header (not locked; flag, do not invent).
@@ -252,7 +253,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Layout
 
-Status: `locked` (Gap 2026-08-23: collection home regions = 3a. Gap 2026-08-28: Indbakke regions = 4a–4i. Gap 2026-08-28: own Profil regions = 5a–5o). Chip row = genveje (Chip / Collection shortcuts). Brand-book Hjemme/Ude on Samling is **not** layout.
+Status: `locked` (Gap 2026-08-23: collection home regions = 3a. Gap 2026-08-28: Indbakke regions = 4a–4i. Gap 2026-08-28: own Profil regions = 5a–5o. Gap 2026-08-31: Søg magazine + catalog drill + UserJersey detail + Peer Profil). Chip row = genveje (Chip / Collection shortcuts). Brand-book Hjemme/Ude on Samling is **not** layout.
 
 **Purpose**: A Vinted-like scan of owned jerseys on `mobile` / `web`. Add is capture, not a listing. Public web is the same product at read-only depth. `admin` is a Base dashboard: table, search, filters; photos are evidence, not the layout. Indbakke is collector-to-collector messages on `mobile`, not a marketplace inbox.
 
@@ -260,16 +261,20 @@ Status: `locked` (Gap 2026-08-23: collection home regions = 3a. Gap 2026-08-28: 
 | Region | Meaning |
 | --- | --- |
 | Screen | Full viewport plus safe-area insets |
-| Header | Collection home: title **Samling** (`display` 28) + count (`mono`) + notification Icon button. No search, no profile, no wordmark, no KC mark. Indbakke list: title **Indbakke** (`title` 24) only — no bell. Conversation: back + handle (`heading-sm`) + optional jersey context (`mono`) + overflow. Detaljer / Send bud / own-Profil drills: back + `title`. Own Profil **home**: title **Profil** (`title` 24) only — no KC mark, no bell |
-| Body | Collection grid or confirm form. Chip row **under** the header when the collection is not empty (Collection shortcuts). Grid scrolls; last rows must clear the floating tab bar. Indbakke: underline tabs then Thread row list, Activity cards, or Empty state `inbox`. Conversation: message column (dates, Bid cards, Chat bubbles) then Message composer. Detaljer and own Profil: grouped lists on `fill.secondary` canvas; groups on `surface`, `radius.md`, hairline `border.subtle` between rows |
-| Footer actions | Primary/secondary buttons for the current task; pinned **Button dock** at the bottom on login, register, confirm, empty collection, and Cookie-indstillinger. Conversation uses Message composer, not Button dock. Send bud uses an in-body `primary` (not a dock). Own Profil home has no dock — last group clears the Tab bar |
+| Header | Collection home: title **Samling** (`display` 28) + count (`mono`) + trailing Icon button (Ønske bookmark when that feature is live — not an empty notification Sheet). No search, no profile, no wordmark, no KC mark. Indbakke list: title **Indbakke** (`title` 24) only — no bell. Conversation: back + handle (`heading-sm`) + optional jersey context (`mono`) + overflow. Detaljer / Send bud / own-Profil drills / Peer Profil / UserJersey detail / Søg catalog drill: back + `title`. Own Profil **home** and **Søg home**: title (`title` 24) only — no KC mark, no bell. Søg home may show a quiet `mono` count only if the host has one job for it — flag; do not invent a second header control |
+| Body | Collection grid or confirm form. Chip row **under** the header when the collection is not empty (Collection shortcuts). Grid scrolls; last rows must clear the floating tab bar. Indbakke: underline tabs then Thread row list, Activity cards, or Empty state `inbox`. Conversation: message column (dates, Bid cards, Chat bubbles) then Message composer. Detaljer, own Profil, and Peer Profil: grouped lists on `fill.secondary` canvas; groups on `surface`, `radius.md`, hairline `border.subtle` between rows. **Søg home**: Search field then magazine shelves (see Pattern Søg). **Søg typeahead**: replaces magazine body with sectioned List rows (+ optional jersey grid). **Søg catalog drill** / **UserJersey detail**: see Patterns |
+| Footer actions | Primary/secondary buttons for the current task; pinned **Button dock** at the bottom on login, register, confirm, empty collection, and Cookie-indstillinger. Conversation uses Message composer, not Button dock. Send bud uses an in-body `primary` (not a dock). Own Profil home and Søg home have no dock — last content clears the Tab bar. Foreign UserJersey detail pins **Send bud** inside the immersive bottom sheet when åben for bud — not a separate Button dock |
 | Tab bar | Floating glass pill **above** the home indicator / safe-area inset. Five icon-only slots (Tab bar). Content may show through behind it. Not a full-width labeled dock |
 
-**Usage (mobile)**: Collection body is a **two-column** photo grid on phone. Jersey photos on tiles are cropped **4:5**. Caption under the photo: club (`heading-sm`) then season · type (`mono`). **Search is not in the collection header** — it is the Søg place (compass slot). Collection chips are **genveje**, not kit type (kit type stays on Confirm). **Tilføj trøje** (raised plus) opens the photo flow (gallery-first on first session, camera-first on repeat), not the overview, not “new shortcut”, and not a marketplace compose screen. “Same club” vs “New jersey” is a choice after Save, not inherited identity on **New**. Other collector screens (Søg, Indbakke, Profil, Detaljer, Send bud) use `title` 24 in the header unless a later lock says otherwise. Conversation header is the other collector’s handle, not `title`. Genveje manager is a **Sheet**, not a titled full-screen place.
+**Usage (mobile)**: Collection body is a **two-column** photo grid on phone. Jersey photos on tiles are cropped **4:5**. Caption under the photo: club (`heading-sm`) then season · type (`mono`). **Search is not in the collection header** — it is the Søg place (compass slot). Collection chips are **genveje**, not kit type (kit type stays on Confirm). **Tilføj trøje** (raised plus) opens the photo flow (gallery-first on first session, camera-first on repeat), not the overview, not “new shortcut”, and not a marketplace compose screen. “Same club” vs “New jersey” is a choice after Save, not inherited identity on **New**. Other collector screens (Søg, Indbakke, Profil, Detaljer, Send bud, Peer Profil, UserJersey detail, catalog drills) use `title` 24 in the header unless a later lock says otherwise. Conversation header is the other collector’s handle, not `title`. Genveje manager is a **Sheet**, not a titled full-screen place.
 
 **Indbakke (phone)**: Two underline tabs **Beskeder** | **Aktivitet** (Top tabs anatomy, Danish labels). One conversation model behind both — unread is shared. Hide the Tab bar on Samtale and Detaljer (same hide rule as capture). Show it on the Indbakke list (including empty) and on Send bud. Send bud is a Søg-stack screen: compass slot is the active place, not envelope.
 
+**Søg (phone)**: Title **Søg**. Search field under the header. No-query body is the **magazine** (Pattern Søg). Query replaces that body with typeahead sections. Catalog drills and foreign detail live under the Søg stack. Compass stays the active Tab bar place on Søg home, typeahead, catalog drill, and Send bud.
+
 **Own Profil (phone)**: Canvas `fill.secondary`. Home shows the Tab bar (person slot selected). Every drill off home hides it (Pattern: Own Profil). Grouped lists match Detaljer: `surface` groups, `radius.md`, hairline rows. Identity card is a `surface` group, not a List row.
+
+**Peer Profil (phone)**: Same canvas and identity-card anatomy as own Profil home, without Rediger / Indstillinger / cookies. Jersey listing under the card. Tab bar **hidden** (drill). Overflow Rapportér / Blokér.
 
 **Indbakke (wide, ≥1024)**: Same tokens. Left column ~360px = list + Beskeder | Aktivitet. Remaining width = conversation. Selected Thread row: `fill.secondary` plus a 2px `fill.primary` leading edge. Not a new desktop product. Expo Web remains deferred as a first-class surface — apply this only when a host actually presents Indbakke at that width.
 
@@ -323,9 +328,9 @@ Do not mix a heading role onto Plex Sans. Do not set body copy in Archivo. Do no
 | Role | Family | Size | Weight | Line-height | Tracking | Use |
 | --- | --- | --- | --- | --- | --- | --- |
 | `display` | Archivo | **32px** (default); **28px** on collection home “Samling” | 600 | 37px (32); 34px (28) | −3% | Rare large heading; collection home title |
-| `title` | Archivo | 24px | 600 | 29px | −2% | Other screen titles (Søg, Indbakke, Detaljer, Send bud, Profil, Genveje, Ny genvej) |
+| `title` | Archivo | 24px | 600 | 29px | −2% | Other screen titles (Søg, Indbakke, Detaljer, Send bud, Profil, Peer Profil, Genveje, Ny genvej, catalog drills, UserJersey detail) |
 | `section` | Archivo | 20px | 600 | 25px | −2% | Mid headings (picker title if not using `title`; empty-state title) |
-| `heading-sm` | Archivo | 15px | 600 | 20px | −2% | Club name on a Jersey tile; collector handle on Thread row, conversation header, and Detaljer stub |
+| `heading-sm` | Archivo | 15px | 600 | 20px | −2% | Club name on a Jersey tile; collector handle on Thread row, conversation header, Peer Profil, and Detaljer entry row |
 | `body` | IBM Plex Sans | 16px | 400 | 25px | 0 | Paragraphs, empty-state body, helper copy, Chat bubble text, thread snippet (one line, truncate) |
 | `label` | IBM Plex Sans | 13px–16px | 500 | 18px (13) / 20px (16) | 0–0.01em | Buttons (16), chips (14), field labels (13) |
 | `caption` | IBM Plex Sans | 12px–13px | 400 | 18px | 0 | Non-data meta (not admin table headers) |
@@ -514,7 +519,7 @@ Flag missing context; do not invent tokens or values.
 
 ## Components
 
-Status: `locked` for the inventory below (v1 + admin gap + inbox gap + Profil gap). A primitive not listed: **flag**. Do not invent components or variants.
+Status: `locked` for the inventory below (v1 + admin gap + inbox gap + Profil gap + Gap 2026-08-31 Søg/detail/Peer). A primitive not listed: **flag**. Do not invent components or variants.
 
 **Inventory (v1)**: Button, Button dock, Icon button, Search field, Text field, Select field, Chip, Jersey tile, Mark, List row, Photo slot, Empty state, Sheet, Tab bar, Banner.
 
@@ -524,7 +529,9 @@ Status: `locked` for the inventory below (v1 + admin gap + inbox gap + Profil ga
 
 **Inventory (Profil gap)**: Switch, Avatar. List row leading/trailing slots as locked below. Own Profil composition is Pattern **Own Profil**.
 
-**Deferred primitives**: Checkbox, paywall card, wishlist row. Thread row / Detaljer still use a 44px circular **initial** on `fill.secondary` — that is not Avatar and not a new Mark `kind`. Admin Profile action stays a 32px operator monogram — not Avatar. Do not invent a Filter primitive (use Button + Chip in Sheet). Do not invent an admin checkbox column.
+**Inventory (Søg / browse gap)**: No new primitives. Patterns **Søg**, **Søg catalog drill**, **UserJersey detail**, and **Peer Profil** compose Search field, List row, Mark, Avatar, Jersey tile, Switch, Button, Sheet.
+
+**Deferred primitives**: Checkbox, paywall card, wishlist row. Thread row may still use a 44px circular **initial** on `fill.secondary` — that is not Avatar and not a new Mark `kind`. Peer Profil and own Profil use Avatar. Admin Profile action stays a 32px operator monogram — not Avatar. Do not invent a Filter primitive (use Button + Chip in Sheet). Do not invent an admin checkbox column.
 
 A primitive not listed: **flag**. Do not invent components or variants.
 
@@ -600,23 +607,23 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Search field
 
-**Purpose**: Filter a collection, find a catalog club, find a city on Min lokation, or filter an admin table by typed query.
+**Purpose**: Filter a collection, find a catalog club, find a city on Min lokation, run Søg typeahead (stamdata + Handles + jersey text), or filter an admin table by typed query.
 
 **Anatomy**: Leading search icon (decorative). Field. Optional clear control (Icon button). Visible label or `accessibilityLabel` (required).
 
-**Properties**: `value`, `placeholder` (not a label substitute), `onSubmit` / live filter. Collection search may filter as you type. Club search queries catalog IDs, never free-text club as truth. City search stores a tag (popular city or free tag), not a Places ID. Admin search matches CatalogLabel aliases in every locale; displayed labels stay `en` on this surface.
+**Properties**: `value`, `placeholder` (not a label substitute), `onSubmit` / live filter. Collection search may filter as you type. Club search queries catalog IDs, never free-text club as truth. City search stores a tag (popular city or free tag), not a Places ID. Admin search matches CatalogLabel aliases in every locale; displayed labels stay `en` on this surface. Søg typeahead matches CatalogLabel (and aliases), Kit identity labels, Player labels, and Handles — choosing a hit navigates; it does not invent a free-text club.
 
-**Variants**: `collection` (Søg place — filter owned jerseys). `catalog` (club pick on confirm). `city` (Min lokation city search — query is a tag, not Places chrome). `admin` (app header). Same chrome; different data. Do not add a header-search variant on collection home.
+**Variants**: `collection` (legacy name: typed filter over a jersey list — on **Søg** this drives magazine typeahead / “Flere trøjer” text filter, **not** own-Samling find). `catalog` (club pick on confirm). `city` (Min lokation city search — query is a tag, not Places chrome). `admin` (app header). Same chrome; different data. Do not add a header-search variant on collection home. Do not invent a fifth variant named `discover`.
 
 **States**: Rest, focus, disabled, empty. Error is rare; if the query cannot run, use Banner, not a red search field.
 
 **Accessibility**: Label associated. Hit target ≥ 44 tall. Keyboard: search / default.
 
-**Composition**: Søg place, inside a Sheet for club pick, Min lokation city screen, or admin app header (leading icon, pill that fills the header center column). **Not** the collection home header. Uses `radius.pill`, `border.subtle`, `type.body`. Admin header search is not capped at the 28rem toolbar max. City focus uses `border.strong` (same as Send bud amount) — not wash.
+**Composition**: Søg place, inside a Sheet for club pick, Min lokation city screen, or admin app header (leading icon, pill that fills the header center column). **Not** the collection home header. Uses `radius.pill`, `border.subtle`, `type.body`. Admin header search is not capped at the 28rem toolbar max. City focus uses `border.strong` (same as Send bud amount) — not wash. On Søg, focus with a non-empty query **replaces** the magazine body (Pattern Søg) — not a translucent overlay that leaves shelves readable behind.
 
-**Unsupported**: Land → league → club hierarchy instead of search. Free-text club saved as catalog truth. Wash fill inside the field. Google Places / “use my location” chrome on Min lokation.
+**Unsupported**: Land → league → club hierarchy instead of search. Free-text club saved as catalog truth. Wash fill inside the field. Google Places / “use my location” chrome on Min lokation. Trøjer|Katalog|Samlere as Search field modes.
 
-**Example** *(not a rule)*: Confirm Sheet labelled “Klub”, placeholder “Søg klub”. Admin header placeholder “Search”. Min lokation placeholder “Søg efter by”.
+**Example** *(not a rule)*: Confirm Sheet labelled “Klub”, placeholder “Søg klub”. Søg placeholder “Klub, trøje, spiller eller samler”. Admin header placeholder “Search”. Min lokation placeholder “Søg efter by”.
 
 **Code**: Unmapped. Flag.
 
@@ -775,7 +782,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Composition**: Own Profil identity card and Rediger profil photo row. Photo pick uses the platform picker; do not invent a crop editor this gap. Not a replacement for Jersey tile, Mark, Thread row initial, or the admin 32px operator monogram.
 
-**Unsupported**: KC monogram as a collector face. Square crop. A third size. Using Avatar for the other collector on Detaljer / Thread row (that 44px initial stays). Using Avatar as a club/country Mark.
+**Unsupported**: KC monogram as a collector face. Square crop. A third size. Using Avatar for Thread row (that 44px circular **initial** stays). Using Avatar as a club/country Mark. Skipping Avatar on Peer Profil (Peer uses Avatar `lg` like own Profil home).
 
 **Example** *(not a rule)*: Home card: 64px photo of the collector, handle `eskou` beside it. No photo: “E” on `fill.secondary`.
 
@@ -841,7 +848,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 `mono` meta such as “Nuværende”, “Bekræftet”, “Altid aktive”, or a current value (“Dansk”) may sit **before** `chevron` when the row is still a drill. Meta + `check` together is allowed (selected city “Valgt” may be the check alone). Meta + `switch` is not — helper text goes under the title.
 
-**Variants**: `select` (club search / facet picker / language / appearance / city). `navigate` (Detaljer stub; own Profil settings and location). `toggle` is **not** a variant — use `navigate`-shaped chrome with trailing `switch`. `manage` (Genveje). `danger` (Detaljer Rapportér / Blokér / Slet samtale; own Profil Log ud in the hub — `icon` + label, no chevron).
+**Variants**: `select` (club search / facet picker / language / appearance / city). `navigate` (Detaljer → Peer Profil; own Profil settings and location; Søg typeahead hits). `toggle` is **not** a variant — use `navigate`-shaped chrome with trailing `switch`. `manage` (Genveje). `danger` (Detaljer Rapportér / Blokér / Slet samtale; Peer Profil / foreign detail overflow; own Profil Log ud in the hub — `icon` + label, no chevron).
 
 **States**: Rest, pressed, selected, disabled, focus. List loading is list-level, not a row variant. Disabled `toggle` rows (master push off) use 40% opacity on the sibling group — pattern, not a row variant.
 
@@ -931,7 +938,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Tab bar
 
-Status: `locked` (Gap 2026-08-23: 3a five-slot icon-only pill. Gap 2026-08-28: slot 4 Indbakke + unread badge. Gap 2026-08-28: hide on own-Profil drills).
+Status: `locked` (Gap 2026-08-23: 3a five-slot icon-only pill. Gap 2026-08-28: slot 4 Indbakke + unread badge. Gap 2026-08-28: hide on own-Profil drills. Gap 2026-08-31: Søg stack + Peer Profil / UserJersey detail hide rules).
 
 **Purpose**: Switch the app’s five primary collector places. Center plus is capture, not a listing compose and not “new shortcut”.
 
@@ -940,7 +947,7 @@ Status: `locked` (Gap 2026-08-23: 3a five-slot icon-only pill. Gap 2026-08-28: s
 | Slot | Icon metaphor | Accessible name (da) | Action |
 | --- | --- | --- | --- |
 | 1 | House | Samling | Own collection (app home after login) |
-| 2 | Compass | Søg | Search place. Compass is the Søg **icon**, not a rename to “Discovery” |
+| 2 | Compass | Søg | Search place — magazine home + typeahead + catalog drills. Compass is the Søg **icon**, not a rename to “Discovery” |
 | 3 | Raised plus (larger than the others, still **inside** the pill) | Tilføj trøje | Starts Photo slot capture. No destination screen named Add |
 | 4 | Envelope | Indbakke | Messages place (Beskeder \| Aktivitet). Not Ønske |
 | 5 | Person | Profil | Profile place |
@@ -960,9 +967,9 @@ Visible chrome is **icon-only**. No tab labels under the icons. No logo in the p
 
 **Accessibility**: Role tab/tablist for the four places; plus is a button named “Tilføj trøje”. Names required even though chrome is icon-only. Slot 4 name includes the count when the badge is visible (e.g. “Indbakke, 2 ulæste”). Hit target ≥ 44 per slot plus inset. Color is not the only selected signal (icon weight / fill vs outline — flag the host glyph set; do not invent a new icon family). Badge is not the only unread signal (row/card fill remains).
 
-**Composition**: Screen footer region on `mobile` collector chrome. Public Astro and `admin` do not use this component. Selecting plus starts the capture flow; it does not open Genveje. **Hide** the Tab bar for: the whole capture session (chooser, system picker return, bind, Confirm, post-Save “Ny trøje” / “Samme klub”); Samtale; Detaljer; **every own-Profil drill** (Rediger profil, Min lokation and city search/tag, Favoritter, Indstillinger and all settings leaves, Cookie-indstillinger). **Show** it on Samling, Søg, Indbakke list (including empty), own Profil **home only**, and Send bud. It returns when the collector lands on Samling after capture, back-navigates from Samtale to Indbakke, or back-navigates from a Profil drill to Profil home.
+**Composition**: Screen footer region on `mobile` collector chrome. Public Astro and `admin` do not use this component. Selecting plus starts the capture flow; it does not open Genveje. **Hide** the Tab bar for: the whole capture session (chooser, system picker return, bind, Confirm, post-Save “Ny trøje” / “Samme klub”); Samtale; Detaljer; **UserJersey detail** (own and foreign); **Peer Profil**; **every own-Profil drill** (Rediger profil, Min lokation and city search/tag, Favoritter, Indstillinger and all settings leaves, Cookie-indstillinger). **Show** it on Samling, **Søg home** (including typeahead body), **Søg catalog drill**, Indbakke list (including empty), own Profil **home only**, and Send bud. Compass remains the active place on Søg home, typeahead, catalog drill, and Send bud. It returns when the collector lands on Samling after capture, back-navigates from Samtale to Indbakke, back-navigates from a Profil drill to Profil home, or back-navigates from detail / Peer Profil / drill to Søg home.
 
-**Unsupported**: Visible labels (brand-book in-book tabs). Two-item Samling/Tilføj dock. FAB or plus **outside** the pill. Sixth control. Heart / Ønske in slot 4. “Discovery” as the product name for slot 2. Plus as “ny genvej”. Marketplace sell icon. Logo. Use on `admin` (Top tabs). Badge on slots 1–3 or 5. Red badge. Using the Samling bell as the Indbakke unread count.
+**Unsupported**: Visible labels (brand-book in-book tabs). Two-item Samling/Tilføj dock. FAB or plus **outside** the pill. Sixth control. Heart / Ønske in slot 4. “Discovery” as the product name for slot 2. Plus as “ny genvej”. Marketplace sell icon. Logo. Use on `admin` (Top tabs). Badge on slots 1–3 or 5. Red badge. Using the Samling bell as the Indbakke unread count. Showing the Tab bar on Peer Profil or UserJersey detail.
 
 **Example** *(not a rule)*: On Indbakke, envelope is primary ink with a black “2”; house/compass/person muted; plus raised in the middle. On Samling, house is primary; bell in the header is a separate control.
 
@@ -1215,17 +1222,17 @@ Flag missing context; do not invent patterns.
 
 **Composition**: Back (to Indbakke) + handle (`heading-sm`) + optional one-line jersey context (`mono`: club · season · type) + overflow Icon button “Detaljer”. Column: centered dates, Bid cards, Chat bubbles (`incoming` left = them, `outgoing` right = me). Message composer pinned. No Tab bar. Dark mode uses the same roles (4d) — not a third palette.
 
-**Unsupported**: Left = me. Tab bar. Payment. Wash bubbles. Inventing a profile beyond the Detaljer stub.
+**Unsupported**: Left = me. Tab bar. Payment. Wash bubbles. Leaving Peer Profil reachable only as a dead Detaljer stub.
 
 Flag missing context; do not invent patterns.
 
 ### Conversation details
 
-**Purpose**: Profile stub and safety actions for one thread.
+**Purpose**: Safety actions for one thread, plus entry to Peer Profil.
 
-**Composition**: Canvas `fill.secondary`. Groups on `surface`, `radius.md`. First group: List row `navigate` (44 circular initial + handle + `mono` “{n} trøjer · {city}” + chevron) — stub only. Second group: List row `danger` Rapportér, Blokér. Third group: List row `danger` Slet samtale (alone). Helper caption: blocking hides the thread for both; delete removes it only for you. No Help. No Tab bar.
+**Composition**: Canvas `fill.secondary`. Groups on `surface`, `radius.md`. First group: List row `navigate` (Avatar `md` or 44 circular initial if Avatar not loaded + handle + `mono` “{n} trøjer · {city}” + chevron) → **Peer Profil**. Second group: List row `danger` Rapportér, Blokér. Third group: List row `danger` Slet samtale (alone). Helper caption: blocking hides the thread for both; delete removes it only for you. No Help. No Tab bar.
 
-**Unsupported**: Help. A fourth group of settings. Inventing jersey count/city if the host has no data — flag.
+**Unsupported**: Help. A fourth group of settings. Inventing jersey count/city if the host has no data — flag. Non-navigating first row.
 
 Flag missing context; do not invent patterns.
 
@@ -1241,7 +1248,7 @@ Flag missing context; do not invent patterns.
    Nothing else on home: no debug line, no balance, no orders, no Help, no legal. Last group clears the Tab bar. Tab bar **visible**; person slot selected.
 2. **Rediger profil** — Back + title + trailing `primary` text **Gem**. Canvas `fill.secondary`. “Skift foto”: List row leading `avatar` `md`. Text field username (helper states locked on Text field). Text field About me (multiline). Location row `navigate` (title “Min lokation”, meta city/country). “Vis by på profil”: trailing `switch` + helper under the title. Tab bar hidden. No gender field.
 3. **Min lokation** — Country list first (fixture list this gap; live geocoding is not in this lock). Current country: `mono` meta “Nuværende” + `chevron`. No flags, no map. Then city: Search field `city` + “Populære byer · {country}”. Selected city: trailing `check` (no chevron). No match: one `navigate` row **Brug «{query}»** with helper that it saves as a free tag — not an error. Tab bar hidden.
-4. **Favoritter** — Back + title. Two-column Jersey tiles (same 4:5 + caption as Samling). No price, no heart overlay, no owner handle on the tile. Empty: Empty state with honest body; **flag** the action if the host needs one — do not invent a `primary` that starts a chat. Tab bar hidden.
+4. **Favoritter** — Back + title. Two-column Jersey tiles (same 4:5 + caption as Samling). No price, no heart overlay, no owner handle on the tile. Empty: Empty state with honest body; **flag** the action if the host needs one — do not invent a `primary` that starts a chat. Tab bar hidden. Tap tile → foreign UserJersey detail.
 5. **Indstillinger hub** — Back + title. Four groups with `mono` section labels:
    - Profiloplysninger / Kontoindstillinger (`navigate`)
    - Push-notifikationer / E-mail-notifikationer (`navigate`)
@@ -1252,7 +1259,59 @@ Flag missing context; do not invent patterns.
 7. **Log ud / Slet min konto** — Sheet `confirm` (`radius.lg`, scrim). Title + consequence + dock `destructive` + `tertiary` Annuller. Not a full-screen place.
 8. **Cookie-indstillinger** — Grouped consent: necessary = `mono` “Altid aktive” (no Switch). Analysis and marketing = Switch. Button dock: `primary` **Acceptér alle**, `secondary` **Kun nødvendige**, `tertiary` **Bekræft mine valg**. No legal essay. Tab bar hidden.
 
-**Unsupported**: Marketplace account chrome (listings, payments, postage, Help, About, legal as primary rows). Gender. Control-panel accordions (prototype C). Hero + Sheet (prototype B). Tab bar on drills. KC monogram as Avatar. `#0B0B0B` as a new dark canvas. Success-green uniqueness. Prototype switcher. Copying `prototype-profile/` as the host API. Other-collector Profil (still the Detaljer stub).
+**Unsupported**: Marketplace account chrome (listings, payments, postage, Help, About, legal as primary rows). Gender. Control-panel accordions (prototype C). Hero + Sheet (prototype B). Tab bar on drills. KC monogram as Avatar. `#0B0B0B` as a new dark canvas. Success-green uniqueness. Prototype switcher. Copying `prototype-profile/` as the host API. Treating Peer Profil as a settings mirror of this pattern.
+
+Flag missing context; do not invent patterns.
+
+### Peer Profil
+
+**Purpose**: View another collector — identity plus their visible (non-private) UserJerseys. Not own settings.
+
+**Composition** — Gap 2026-08-31 prototype **A** (card + grid). Back + title **Profil** (Handle-as-title still flagged if both are needed). Canvas `fill.secondary`. Identity **card** (`surface`, `radius.md`): Avatar `lg`, handle (`heading-sm`), location `mono` per Vis by, About me when present. **No** Rediger profil, Indstillinger, or Cookie rows. Below: section optional + **two-column Jersey tile grid** (same 4:5 + caption as Samling / Favoritter). Empty: Empty state honest body — flag CTA; do not invent “Send besked” without a jersey. Overflow Icon button: Rapportér / Blokér. Tab bar **hidden**. Tap tile → foreign UserJersey detail (immersive Pattern).
+
+**Unsupported**: Own settings chrome. Showing private copies. Their Favoritter. Price/bud overlay on tiles. KitPhoto. Tab bar. Compact bleed grid (prototype B). Hero-band + single feed (prototype C). Dead Detaljer stub as the only peer surface.
+
+Flag missing context; do not invent patterns.
+
+### UserJersey detail
+
+**Purpose**: Full-screen view of one UserJersey — own manage/edit, or foreign browse before Send bud / Favorit.
+
+**Composition (shared)** — Gap 2026-08-31 prototype **B** (immersive pager + sheet). Tab bar **hidden**. Back (and foreign: Favorit + overflow) sit as chrome over a **full-bleed photo stage** (4:5 crop of the active photo; pager dots when more than one photo). Meta and actions live in a **bottom sheet** over the stage (`surface`, `radius.lg` top corners) — not a hero tile + strip + long page scroll as the primary layout. No price overlay. No KitPhoto. No bud amount field here.
+
+**Own (sheet body)**: Club (`heading-sm`), season · type · size · condition (`mono`). Switch rows: **Privat**; **Åben for bud** (Privat on clears and disables bud — helper). Button `secondary` **Rediger** (Confirm UI as edit / patch). **Slet** via Sheet `confirm` (nested confirm is allowed for destructive — flag if host cannot stack). No Send bud. No Favorit.
+
+**Foreign (sheet body)**: Same meta. Owner row `navigate` → Peer Profil. Favorit may also sit in top chrome over the stage (prototype B). When åben for bud: Button `primary` **Send bud** → Send bud stack screen. When closed: no Send bud CTA — flag helper copy. Overflow: Rapportér / Blokér. Private copies are not shown.
+
+**Unsupported**: Send bud as the only foreign view. Hero + strip as the locked primary layout (prototype A). Meta-first gallery (prototype C). Bud amount on this screen. Marketplace boost. Editing someone else’s fields. Wash on the photo stage. Tab bar. Copying the prototype HTML as host API.
+
+Flag missing context; do not invent patterns.
+
+### Søg
+
+**Purpose**: Compass place — discover other collectors’ non-private UserJerseys and open Club / Kit / Player drills or Peer Profil. Free of Entitlement (ADR-0035).
+
+**Composition**:
+1. **Home (no query)** — Title **Søg**. Search field. Magazine shelves in fixed order; **hide a shelf when empty**:
+   1. **Klubber** — horizontal Mark scroll → Club catalog drill.
+   2. **Åbne for bud** — horizontal 4:5 tiles (bidding-enabled only). **Only** bud signal on Søg home — no Bud badge on Flere trøjer.
+   3. **Samlere** — horizontal Avatar/initial scroll → Peer Profil.
+   4. **Flere trøjer** — two-column Jersey tile grid → foreign UserJersey detail.
+   Tab bar visible; compass active.
+2. **Typeahead (query)** — Replace the magazine body (not an overlay). Sectioned List rows: Klubber, Kits, Spillere, Samlere; optional matching jersey grid. Clear restores magazine.
+3. Blocked peers omitted everywhere.
+
+**Unsupported**: Trøjer|Katalog|Samlere home tabs. Grid-only home as the lock. Bud badge on Flere trøjer. KitPhoto. Own-Samling find as Søg’s job. Paywall. Copying `.scratch/soeg-browse/prototype/` into product.
+
+Flag missing context; do not invent patterns.
+
+### Søg catalog drill
+
+**Purpose**: Stamdata landing under Søg for Club, Kit, or Player — visible copies for that grain.
+
+**Composition**: Back + `title` (CatalogLabel) + Mark `md` + `mono` “{n} trøjer”. Two-column Jersey tile grid (Kit: only `catalogKitId` set). Tap → foreign UserJersey detail. Tab bar visible; compass active. No KitPhoto. No wash hero. No League/Season/NationalTeam landings this gap.
+
+**Unsupported**: Archive renders. Admin table chrome. Unknown-Kit bucket. Hiding Tab bar here.
 
 Flag missing context; do not invent patterns.
 
@@ -1260,9 +1319,9 @@ Flag missing context; do not invent patterns.
 
 **Purpose**: Start a bud on **another** collector’s UserJersey. Lands as a message in their Indbakke.
 
-**Composition**: Lives under **Søg** (compass is the active Tab bar place). Back + title **Send bud**. 4:5 photo (`radius.md`) + club (`heading-sm`) + season · type (`mono`) + owner initial + handle. Text field “Dit bud” with `kr` suffix, focus `border.strong`. Helper: last bid on that jersey when known (`mono`). Button `primary` **Send bud**. Caption: the owner gets a message; this is not a purchase. Tab bar visible.
+**Composition**: Lives under **Søg** (compass active). Entry from foreign UserJersey detail CTA (or deep link). Back + title **Send bud**. 4:5 photo (`radius.md`) + club (`heading-sm`) + season · type (`mono`) + owner initial + handle. Text field “Dit bud” with `kr` suffix, focus `border.strong`. Helper: last bid when known (`mono`). Button `primary` **Send bud**. Caption: not a purchase. Tab bar visible.
 
-**Unsupported**: Entry from **own** Samling tiles. Price overlay on the photo. Cart. “Køb nu”. Wash focus. Starting Send bud from Indbakke as a compose-to-nobody control. Entry from a foreign Profil: flag (not locked).
+**Unsupported**: Entry from **own** Samling tiles. Price overlay on the photo. Cart. “Køb nu”. Wash focus. Compose-to-nobody from Indbakke. Amount field inside UserJersey detail.
 
 Flag missing context; do not invent patterns.
 
@@ -1381,8 +1440,10 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 | Crest / badge / portrait files | Rights and assets missing | Stamdata has approved marks |
 | Adopt / Evolve roadmap areas | First lock | A later Gap pass |
 | Expo Web as first-class | Degraded by stack lock | If Expo Web ships as a real surface — 4i layout already exists |
-| Ønske place **content** and **placement** | Slot 4 is Indbakke; list/row UI not locked; no Profil-vs-Søg home | Wishlist feature slice |
-| Other-collector Profil beyond Detaljer stub | Handle + count + city only | A later other-collector slice |
+| Ønske place **content** and **placement** | Wishlist shipped; paywall title words may still flag | Wishlist polish / copy pass |
+| Other-collector Profil beyond Detaljer stub | **Superseded** — Peer Profil locked Gap 2026-08-31 | — |
+| Søg magazine / catalog drills / UserJersey detail | **Superseded** — locked Gap 2026-08-31 | — |
+| League / Season / NationalTeam Søg landings | Out of this gap | Later Søg catalog expansion |
 | Collector gender field | Excluded this gap; nothing in the product uses it | If a slice needs gender as data |
 | Daily-limit and birthday picker chrome | Values/rows locked; calendar/stepper not drawn | Account / push feature slice |
 | Empty Favoritter action | Honest empty body locked; CTA not drawn | If Favoritter can be zero at ship |
