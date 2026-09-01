@@ -23,7 +23,7 @@ import {
   View,
 } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
-import { saveUserJersey } from "@/api/collection";
+import { saveUserJersey, updateUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/vision";
 import { useAuth } from "@/auth/AuthProvider";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
@@ -74,8 +74,9 @@ export default function ConfirmScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
-  const { sessionId } = useLocalSearchParams<{
+  const { sessionId, editJerseyId } = useLocalSearchParams<{
     sessionId: string;
+    editJerseyId?: string;
   }>();
   const { accessToken } = useAuth();
   const { state, isSessionResolved, mutate } = usePersistedCaptureSession(sessionId);
@@ -515,6 +516,20 @@ export default function ConfirmScreen() {
     setSaveError(false);
 
     try {
+      if (editJerseyId) {
+        await updateUserJersey(accessToken, editJerseyId, {
+          clubId: draft.clubId,
+          seasonId: draft.seasonId,
+          catalogKitId: null,
+          type: draft.kitType,
+          size: draft.size,
+          condition: draft.condition,
+        });
+        clearPersistedCaptureSession(sessionId);
+        router.replace(`/(tabs)/collection/${editJerseyId}`);
+        return;
+      }
+
       const photoPayload = await Promise.all(
         draft.photos
           .filter((photo): photo is typeof photo & { role: PhotoRole } => photo.role !== null)
@@ -615,7 +630,11 @@ export default function ConfirmScreen() {
       : null;
   const dockHelper = saveBlockMessage ?? getSaveBlockMessage(draft);
   const saveEnabled = canSave(draft);
-  const saveLabel = isBulk && state.drafts.length > 1 ? "Gem og næste" : "Gem";
+  const saveLabel = editJerseyId
+    ? "Gem"
+    : isBulk && state.drafts.length > 1
+      ? "Gem og næste"
+      : "Gem";
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>

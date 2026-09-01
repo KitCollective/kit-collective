@@ -1,7 +1,7 @@
 import type { CaptureJerseyDraft } from "./captureSessionTypes";
 
 export function getSaveBlockMessage(draft: CaptureJerseyDraft): string | null {
-  if (draft.photos.length === 0) {
+  if (!draft.editJerseyId && draft.photos.length === 0) {
     return "Tilføj mindst ét foto.";
   }
   if (!draft.clubId) {

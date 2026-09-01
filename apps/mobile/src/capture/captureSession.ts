@@ -22,7 +22,7 @@ export function branchFromPhotoCount(count: number): CaptureBranch {
 }
 
 export function canSave(draft: CaptureJerseyDraft): boolean {
-  if (draft.photos.length === 0) {
+  if (!draft.editJerseyId && draft.photos.length === 0) {
     return false;
   }
   if (!draft.clubId || !draft.seasonId) {
@@ -385,6 +385,50 @@ export function appendCameraShotToSession(
 function serializableState(state: CaptureSessionState): CaptureSessionState {
   const { store: _store, ...rest } = state;
   return rest;
+}
+
+export function createEditCaptureSession(
+  jersey: {
+    id: string;
+    clubId: string;
+    clubLabel: string;
+    seasonId: string;
+    type: KitType;
+    size: JerseySize;
+    condition: JerseyCondition;
+  },
+  sessionId: string,
+  store?: CaptureSessionStore,
+): CaptureSessionState {
+  const draftId = createId();
+  const draft: CaptureJerseyDraft = {
+    id: draftId,
+    clubId: jersey.clubId,
+    clubLabel: jersey.clubLabel,
+    seasonId: jersey.seasonId,
+    kitType: jersey.type,
+    size: jersey.size,
+    condition: jersey.condition,
+    kitTypeSelected: true,
+    sizeSelected: true,
+    conditionSelected: true,
+    notes: "",
+    photos: [],
+    editJerseyId: jersey.id,
+  };
+
+  const state: CaptureSessionState = {
+    sessionId,
+    branch: "single",
+    orderedUris: [],
+    unboundUris: [],
+    drafts: [draft],
+    activeDraftId: draftId,
+    store,
+  };
+
+  persist(state);
+  return state;
 }
 
 export function createMemoryCaptureSessionStore(): CaptureSessionStore {

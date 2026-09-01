@@ -211,6 +211,12 @@ export {
   collectionShortcutWriteSchema,
 } from "./collection/shortcuts.js";
 export {
+  type CollectionJerseyUpdate,
+  type CollectionJerseyUpdateResponse,
+  collectionJerseyUpdateResponseSchema,
+  collectionJerseyUpdateSchema,
+} from "./collection/update.js";
+export {
   VISION_CONFIDENCE_PRESELECT,
   VISION_CONFIDENCE_SUGGEST,
   VISION_JOB_STATUSES,
