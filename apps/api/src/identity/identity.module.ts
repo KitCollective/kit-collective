@@ -1,28 +1,26 @@
-import { forwardRef, Module } from "@nestjs/common";
-import { JwtModule } from "@nestjs/jwt";
-import { PassportModule } from "@nestjs/passport";
+import { type Db } from "@kit/db";
+import { forwardRef, Global, Module } from "@nestjs/common";
 import { BillingModule } from "../billing/billing.module.js";
-import { requireJwtSecret } from "../config/jwt-secret.js";
+import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationModule } from "../moderation/moderation.module.js";
+import { AUTH, createAuth } from "./auth.js";
 import { IdentityController } from "./identity.controller.js";
 import { IdentityService } from "./identity.service.js";
-import { JwtStrategy } from "./jwt.strategy.js";
 import { JwtAuthGuard } from "./jwt-auth.guard.js";
 
+@Global()
 @Module({
-  imports: [
-    forwardRef(() => BillingModule),
-    ModerationModule,
-    PassportModule.register({ defaultStrategy: "jwt" }),
-    JwtModule.registerAsync({
-      useFactory: () => ({
-        secret: requireJwtSecret(),
-        signOptions: { expiresIn: "7d" },
-      }),
-    }),
-  ],
+  imports: [forwardRef(() => BillingModule), ModerationModule],
   controllers: [IdentityController],
-  providers: [IdentityService, JwtStrategy, JwtAuthGuard],
-  exports: [IdentityService, JwtModule, JwtAuthGuard],
+  providers: [
+    {
+      provide: AUTH,
+      inject: [DB],
+      useFactory: (db: DbToken) => createAuth(db as Db),
+    },
+    IdentityService,
+    JwtAuthGuard,
+  ],
+  exports: [IdentityService, JwtAuthGuard, AUTH],
 })
 export class IdentityModule {}

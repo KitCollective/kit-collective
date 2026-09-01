@@ -8,10 +8,11 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   Res,
   UseGuards,
 } from "@nestjs/common";
-import type { FastifyReply } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { CurrentUser } from "./current-user.decorator.js";
 import { IdentityService, type JwtPayload } from "./identity.service.js";
 import { JwtAuthGuard } from "./jwt-auth.guard.js";
@@ -99,11 +100,17 @@ export class IdentityController {
     return this.identityService.changeEmail(user.sub, body);
   }
 
+  @Get("identity/auth-events")
+  @UseGuards(JwtAuthGuard)
+  listAuthEvents(@CurrentUser() user: JwtPayload) {
+    return this.identityService.listOwnAuthEvents(user.sub);
+  }
+
   @Post("identity/logout")
   @HttpCode(204)
   @UseGuards(JwtAuthGuard)
-  logout() {
-    return;
+  logout(@CurrentUser() user: JwtPayload, @Req() request: FastifyRequest) {
+    return this.identityService.logout(user.sub, request.headers.authorization);
   }
 
   @Delete("identity/me")
