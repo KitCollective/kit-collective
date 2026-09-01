@@ -14,30 +14,8 @@ function currentFiles() {
   };
 }
 
-test("required GitHub test job runs harness, webhook-router, land-policy, and migration-prefix tests", () => {
+test("required GitHub test job runs land-policy and migration-prefix tests", () => {
   assert.deepEqual(missingFactoryCiCoverage(currentFiles()), []);
-});
-
-test("coverage fails when the test job omits harness/tests", () => {
-  const files = currentFiles();
-  const mutated = {
-    ...files,
-    workflowSource: files.workflowSource.replaceAll("harness/tests", "omitted-harness"),
-    packageSource: files.packageSource.replaceAll("harness/tests", "omitted-harness"),
-  };
-  const missing = missingFactoryCiCoverage(mutated);
-  assert.ok(missing.some((item) => item.includes("harness/tests")));
-});
-
-test("coverage fails when the test job omits webhook-router", () => {
-  const files = currentFiles();
-  const mutated = {
-    ...files,
-    workflowSource: files.workflowSource.replaceAll("webhook-router", "omitted-router"),
-    packageSource: files.packageSource.replaceAll("webhook-router", "omitted-router"),
-  };
-  const missing = missingFactoryCiCoverage(mutated);
-  assert.ok(missing.some((item) => item.includes("webhook-router")));
 });
 
 test("coverage fails when the test job omits migration-prefix", () => {
@@ -91,16 +69,10 @@ test("coverage fails when a mobile check-script leaves the test job", () => {
 
 test("coverage fails when factory tests are continue-on-error", () => {
   const files = currentFiles();
-  let mutatedWorkflow = files.workflowSource;
-  if (mutatedWorkflow.includes("run: pnpm test:harness")) {
-    mutatedWorkflow = mutatedWorkflow.replace(
-      "run: pnpm test:harness",
-      "continue-on-error: true\n        run: pnpm test:harness",
-    );
-  } else {
-    mutatedWorkflow +=
-      "\n      - name: Test harness\n        continue-on-error: true\n        run: node --test harness/tests\n";
-  }
+  const mutatedWorkflow = files.workflowSource.replace(
+    "run: pnpm test:factory-scripts",
+    "continue-on-error: true\n        run: pnpm test:factory-scripts",
+  );
   const missing = missingFactoryCiCoverage({
     workflowSource: mutatedWorkflow,
     packageSource: files.packageSource,

@@ -7,4 +7,4 @@ description: Merges the GitHub PR for a Linear issue after the approver moved it
 
 Read [../_shared/factory.md](../_shared/factory.md). Details: [references/merge.md](references/merge.md).
 
-The merge gate is `scripts/lib/land-policy.mjs` (`landAtMergeGate`). The harness job `harness/land.mjs` (`completeLand`) calls that gate with fake `gh` at the seam (`harness/tests/land.test.mjs`). Do not merge from `Done`; `Done` means the PR is already on `lanes.integration`.
+The merge gate is `scripts/lib/land-policy.mjs` (`landAtMergeGate`). The archived Pi harness job `land.mjs` called that gate at the seam — see [pi-harness-archived.md](../../docs/agents/pi-harness-archived.md). Do not merge from `Done`; `Done` means the PR is already on `lanes.integration`.

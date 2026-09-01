@@ -10,7 +10,6 @@ export const RATCHET_EXCEPTION_PREFIXES = [".cursor/hooks/", ".cursor/rules/"];
 export const RATCHET_EXCEPTION_EXACT = [
   ".cursor/hooks.json",
   "docs/agents/error-ratcheting.md",
-  ".pi/first-pass-classes.json",
 ];
 
 /**
@@ -21,12 +20,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/check-admin-design-tokens.mjs",
   "scripts/check-admin-stamdata-navigation.mjs",
   "scripts/check-factory-ci-tests.mjs",
-  "scripts/check-factory-checker-spawn.mjs",
   "scripts/check-import-boundaries.mjs",
-  "scripts/check-implement-adw-production-gh.mjs",
-  "scripts/check-implement-cheap-retry.mjs",
-  "scripts/check-implement-checker-fail-resume.mjs",
-  "scripts/check-implement-first-run-loop.mjs",
   "scripts/check-migration-prefixes.mjs",
   "scripts/lib/migration-prefix.mjs",
   "scripts/tests/check-migration-prefixes.test.mjs",
@@ -62,11 +56,6 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/tests/check-mobile-paywall-iap.test.mjs",
   "scripts/tests/check-pr-write-scope.test.mjs",
   "scripts/tests/check-factory-ci-tests.test.mjs",
-  "scripts/tests/check-factory-checker-spawn.test.mjs",
-  "scripts/tests/check-implement-adw-production-gh.test.mjs",
-  "scripts/tests/check-implement-cheap-retry.test.mjs",
-  "scripts/tests/check-implement-checker-fail-resume.test.mjs",
-  "scripts/tests/check-implement-first-run-loop.test.mjs",
 ]);
 
 /**
