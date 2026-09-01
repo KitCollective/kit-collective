@@ -1,7 +1,7 @@
 import type { CollectionDiscoverJersey, IdentityPeerProfile } from "@kit/api-contract";
 import { formatProfileLocationCaption, KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,17 +29,9 @@ import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-const TAB_BAR_STYLE_VISIBLE = {
-  position: "absolute" as const,
-  backgroundColor: "transparent",
-  borderTopWidth: 0,
-  elevation: 0,
-};
-
 export default function PeerProfileScreen() {
   const { handle } = useLocalSearchParams<{ handle: string }>();
   const router = useRouter();
-  const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const { accessToken } = useAuth();
   const theme = useTheme();
@@ -51,14 +43,6 @@ export default function PeerProfileScreen() {
   const [jerseys, setJerseys] = useState<CollectionDiscoverJersey[]>([]);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [moderationBusy, setModerationBusy] = useState(false);
-
-  useLayoutEffect(() => {
-    const tabNav = navigation.getParent();
-    tabNav?.setOptions({ tabBarStyle: { display: "none" } });
-    return () => {
-      tabNav?.setOptions({ tabBarStyle: TAB_BAR_STYLE_VISIBLE });
-    };
-  }, [navigation]);
 
   const loadProfile = useCallback(async () => {
     if (!accessToken || !handle) {

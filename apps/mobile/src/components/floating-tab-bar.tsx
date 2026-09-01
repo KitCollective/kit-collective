@@ -74,6 +74,7 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
 
   const inboxChrome = useInboxChromeOptional();
   const hideForProfileDrill = segments.length > 2 && segments.at(1) === "profile";
+  const hideForSearchDrill = segments.length > 2 && segments.at(1) === "search";
   const hideForConversationRoute =
     segments.length > 2 && segments.at(1) === "inbox" && segments.at(2) !== undefined;
   const hideForWideConversation = inboxChrome?.conversationVisible ?? false;
@@ -81,6 +82,7 @@ export function FloatingTabBar({ state, navigation, unreadCount = 0 }: FloatingT
   if (
     activeRoute === "add" ||
     hideForProfileDrill ||
+    hideForSearchDrill ||
     hideForConversationRoute ||
     hideForWideConversation
   ) {

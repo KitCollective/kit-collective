@@ -1,6 +1,6 @@
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,20 +26,12 @@ import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-const TAB_BAR_STYLE_VISIBLE = {
-  position: "absolute" as const,
-  backgroundColor: "transparent",
-  borderTopWidth: 0,
-  elevation: 0,
-};
-
 const BIDDING_CLOSED_HELPER =
   "Ejer har lukket for bud på denne trøje. Du kan stadig gemme den som favorit.";
 
 export default function ForeignJerseyDetailScreen() {
   const { jerseyId } = useLocalSearchParams<{ jerseyId: string }>();
   const router = useRouter();
-  const navigation = useNavigation();
   const { width: screenWidth } = useWindowDimensions();
   const { accessToken } = useAuth();
   const theme = useTheme();
@@ -56,14 +48,6 @@ export default function ForeignJerseyDetailScreen() {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [moderationBusy, setModerationBusy] = useState(false);
-
-  useLayoutEffect(() => {
-    const tabNav = navigation.getParent();
-    tabNav?.setOptions({ tabBarStyle: { display: "none" } });
-    return () => {
-      tabNav?.setOptions({ tabBarStyle: TAB_BAR_STYLE_VISIBLE });
-    };
-  }, [navigation]);
 
   const loadPeerJersey = useCallback(async () => {
     if (!accessToken || !jerseyId) {
