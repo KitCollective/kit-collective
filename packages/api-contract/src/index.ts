@@ -128,6 +128,7 @@ export {
 } from "./collection/activity.js";
 export {
   type CollectionBiddingPatch,
+  type CollectionDiscoverCatalogDrill,
   type CollectionDiscoverHome,
   type CollectionDiscoverHomeClub,
   type CollectionDiscoverHomeCollector,
@@ -138,6 +139,7 @@ export {
   type CollectionSendBidRequest,
   type CollectionSendBidResponse,
   collectionBiddingPatchSchema,
+  collectionDiscoverCatalogDrillSchema,
   collectionDiscoverHomeClubSchema,
   collectionDiscoverHomeCollectorSchema,
   collectionDiscoverHomeSchema,

@@ -1,5 +1,6 @@
 import {
   type CollectionBiddingPatch,
+  type CollectionDiscoverCatalogDrill,
   type CollectionDiscoverHome,
   type CollectionDiscoverJerseys,
   type CollectionJersey,
@@ -8,6 +9,7 @@ import {
   type CollectionRespondBidResponse,
   type CollectionSendBidRequest,
   type CollectionSendBidResponse,
+  collectionDiscoverCatalogDrillSchema,
   collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
   collectionJerseySchema,
@@ -53,6 +55,26 @@ export async function fetchDiscoverHome(accessToken: string): Promise<Collection
   }
 
   return collectionDiscoverHomeSchema.parse(await response.json());
+}
+
+export async function fetchDiscoverCatalogDrill(
+  accessToken: string,
+  kind: "club" | "player",
+  entityId: string,
+): Promise<CollectionDiscoverCatalogDrill> {
+  const segment = kind === "club" ? "clubs" : "players";
+  const response = await requestJson(`/v1/collection/discover/${segment}/${entityId}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Accept-Language": "da",
+    },
+  });
+
+  if (!response.ok) {
+    throw new BiddingFetchError("Kunne ikke hente katalog", response.status);
+  }
+
+  return collectionDiscoverCatalogDrillSchema.parse(await response.json());
 }
 
 export async function fetchDiscoverJerseys(

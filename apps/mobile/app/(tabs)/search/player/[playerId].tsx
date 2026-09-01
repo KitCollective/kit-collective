@@ -2,7 +2,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CatalogDrillScreen } from "@/components/catalog-drill-screen";
 import { space } from "@/theme/tokens";
 
-export default function SearchClubDrillScreen() {
+export default function SearchPlayerDrillScreen() {
   const insets = useSafeAreaInsets();
   const tabBarPadding =
     space.insetLg * 2 +
@@ -12,5 +12,5 @@ export default function SearchClubDrillScreen() {
     insets.bottom +
     space.insetMd;
 
-  return <CatalogDrillScreen kind="club" contentPaddingBottom={tabBarPadding} />;
+  return <CatalogDrillScreen kind="player" contentPaddingBottom={tabBarPadding} />;
 }

@@ -71,6 +71,18 @@ export const collectionDiscoverHomeSchema = z
 
 export type CollectionDiscoverHome = z.infer<typeof collectionDiscoverHomeSchema>;
 
+export const collectionDiscoverCatalogDrillSchema = z
+  .object({
+    kind: z.enum(["club", "player"]),
+    id: z.string().uuid(),
+    title: z.string().min(1),
+    count: z.number().int().min(0),
+    jerseys: z.array(collectionDiscoverJerseySchema),
+  })
+  .strict();
+
+export type CollectionDiscoverCatalogDrill = z.infer<typeof collectionDiscoverCatalogDrillSchema>;
+
 export const collectionPeerJerseySchema = z
   .object({
     id: z.string().uuid(),
