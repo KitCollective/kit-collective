@@ -9,8 +9,10 @@ import {
   collectionJerseysSchema,
   collectionJerseyUpdateResponseSchema,
   collectionPeerJerseySchema,
+  collectionPeerJerseysSchema,
   collectionSaveResponseSchema,
   collectionSendBidResponseSchema,
+  identityPeerProfileSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
@@ -1039,5 +1041,83 @@ describe("Collection /v1", () => {
     });
     expect(deleteResponse.statusCode).toBe(404);
     expect(await findOwnJersey(app, owner, ownerJersey.id)).toBeDefined();
+  });
+
+  it("peer profile GET by handle returns public fields only (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "peer-profile-owner@example.com");
+    const viewer = await registerSession(app, "peer-profile-viewer@example.com");
+    await saveJerseyForUser(app, owner, fixture);
+
+    const profileResponse = await app.inject({
+      method: "GET",
+      url: `/v1/identity/peers/by-handle/${owner.user.handle}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(profileResponse.statusCode).toBe(200);
+    const profile = identityPeerProfileSchema.parse(JSON.parse(profileResponse.body));
+    expect(profile.handle).toBe(owner.user.handle);
+    expect(JSON.parse(profileResponse.body)).not.toHaveProperty("email");
+  });
+
+  it("peer jersey grid omits private copies (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "peer-grid-owner@example.com");
+    const viewer = await registerSession(app, "peer-grid-viewer@example.com");
+    const visibleJersey = await saveJerseyForUser(app, owner, fixture);
+    const privateJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const privatePatch = await app.inject({
+      method: "PATCH",
+      url: `/v1/collection/jerseys/${privateJersey.id}/private`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { private: true },
+    });
+    expect(privatePatch.statusCode).toBe(200);
+
+    const profileResponse = await app.inject({
+      method: "GET",
+      url: `/v1/identity/peers/by-handle/${owner.user.handle}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    const profile = identityPeerProfileSchema.parse(JSON.parse(profileResponse.body));
+
+    const gridResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/peers/${profile.id}/jerseys`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(gridResponse.statusCode).toBe(200);
+    const grid = collectionPeerJerseysSchema.parse(JSON.parse(gridResponse.body));
+    expect(grid.jerseys.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
+    expect(grid.jerseys.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
+  });
+
+  it("blocked peer profile returns 404 (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "peer-block-profile-owner@example.com");
+    const viewer = await registerSession(app, "peer-block-profile-viewer@example.com");
+    await saveJerseyForUser(app, owner, fixture);
+
+    const profileResponse = await app.inject({
+      method: "GET",
+      url: `/v1/identity/peers/by-handle/${owner.user.handle}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    const profile = identityPeerProfileSchema.parse(JSON.parse(profileResponse.body));
+
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${profile.id}/block`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+
+    const hiddenProfile = await app.inject({
+      method: "GET",
+      url: `/v1/identity/peers/${profile.id}`,
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(hiddenProfile.statusCode).toBe(404);
   });
 });

@@ -160,6 +160,16 @@ export class CollectionController {
     return this.collectionService.getPeerJersey(user.sub, jerseyId, resolveLocale(acceptLanguage));
   }
 
+  @Get("collection/peers/:peerId/jerseys")
+  @UseGuards(JwtAuthGuard)
+  listPeerJerseys(
+    @CurrentUser() user: JwtPayload,
+    @Param("peerId") peerId: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.listPeerJerseys(user.sub, peerId, resolveLocale(acceptLanguage));
+  }
+
   @Get("collection/favorites")
   @UseGuards(JwtAuthGuard)
   listFavorites(

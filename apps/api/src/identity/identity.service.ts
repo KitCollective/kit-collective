@@ -14,6 +14,7 @@ import {
   type IdentityLinkedAccount,
   type IdentityMe,
   type IdentityPasswordChange,
+  type IdentityPeerProfile,
   type IdentityPrefs,
   type IdentityPrefsUpdate,
   type IdentityProfileUpdate,
@@ -26,6 +27,7 @@ import {
   identityExportSchema,
   identityMeSchema,
   identityPasswordChangeSchema,
+  identityPeerProfileSchema,
   identityPrefsSchema,
   identityPrefsUpdateSchema,
   identityProfileUpdateSchema,
@@ -62,8 +64,10 @@ import { BillingService } from "../billing/billing.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { DB, type DbToken } from "../db/db.module.js";
+import { ModerationService } from "../moderation/moderation.service.js";
 import {
   avatarObjectKeyForUser,
+  avatarUrlForPeer,
   avatarUrlForUser,
   baseHandleFromEmail,
   isHandleEmail,
@@ -137,6 +141,7 @@ export class IdentityService {
     private readonly jwtService: JwtService,
     @Inject(forwardRef(() => BillingService))
     private readonly billingService: BillingService,
+    private readonly moderationService: ModerationService,
   ) {
     this.objectStore = hasR2Config() ? createR2ObjectStore() : createMemoryObjectStore();
   }
@@ -608,6 +613,88 @@ export class IdentityService {
     }
 
     if (found.avatarObjectKey.includes("/kit/")) {
+      throw new NotFoundException("Avatar not found");
+    }
+
+    const bytes = await this.objectStore.getObject(found.avatarObjectKey);
+    if (!bytes) {
+      throw new NotFoundException("Avatar bytes missing");
+    }
+
+    return bytes;
+  }
+
+  async getPeerProfileByHandle(viewerId: string, rawHandle: string): Promise<IdentityPeerProfile> {
+    const handle = handleSchema.parse(rawHandle);
+    const [peerRow] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.handle, handle))
+      .limit(1);
+
+    if (!peerRow) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    return this.getPeerProfile(viewerId, peerRow.id);
+  }
+
+  async getPeerProfile(viewerId: string, peerUserId: string): Promise<IdentityPeerProfile> {
+    if (peerUserId === viewerId) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    if (await this.moderationService.isBlocked(viewerId, peerUserId)) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    const [peerRow] = await this.db
+      .select({
+        id: user.id,
+        handle: user.handle,
+        aboutMe: user.aboutMe,
+        avatarObjectKey: user.avatarObjectKey,
+        countryId: user.countryId,
+        city: user.city,
+        showCity: user.showCity,
+      })
+      .from(user)
+      .where(eq(user.id, peerUserId))
+      .limit(1);
+
+    if (!peerRow) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    const countryLabel = await this.resolveCountryLabel(peerRow.countryId);
+
+    return identityPeerProfileSchema.parse({
+      id: peerRow.id,
+      handle: peerRow.handle,
+      aboutMe: peerRow.aboutMe,
+      avatarUrl: peerRow.avatarObjectKey ? avatarUrlForPeer(peerRow.id) : null,
+      countryLabel,
+      city: peerRow.city,
+      showCity: peerRow.showCity,
+    });
+  }
+
+  async getPeerAvatarBytes(viewerId: string, peerUserId: string): Promise<Uint8Array> {
+    await this.getPeerProfile(viewerId, peerUserId);
+
+    const [found] = await this.db
+      .select({
+        avatarObjectKey: user.avatarObjectKey,
+      })
+      .from(user)
+      .where(eq(user.id, peerUserId))
+      .limit(1);
+
+    if (!found?.avatarObjectKey) {
+      throw new NotFoundException("Avatar not found");
+    }
+
+    if (!found.avatarObjectKey.startsWith(`user/${peerUserId}/`)) {
       throw new NotFoundException("Avatar not found");
     }
 

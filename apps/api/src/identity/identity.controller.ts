@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Param,
   Res,
   UseGuards,
 } from "@nestjs/common";
@@ -123,6 +124,31 @@ export class IdentityController {
   @UseGuards(JwtAuthGuard)
   async getAvatar(@CurrentUser() user: JwtPayload, @Res() reply: FastifyReply) {
     const bytes = await this.identityService.getAvatarBytes(user.sub);
+    reply.header("Content-Type", "image/jpeg");
+    reply.header("Cache-Control", "private, max-age=3600");
+    return reply.send(Buffer.from(bytes));
+  }
+
+  @Get("identity/peers/by-handle/:handle")
+  @UseGuards(JwtAuthGuard)
+  getPeerProfileByHandle(@CurrentUser() user: JwtPayload, @Param("handle") handle: string) {
+    return this.identityService.getPeerProfileByHandle(user.sub, handle);
+  }
+
+  @Get("identity/peers/:peerId")
+  @UseGuards(JwtAuthGuard)
+  getPeerProfile(@CurrentUser() user: JwtPayload, @Param("peerId") peerId: string) {
+    return this.identityService.getPeerProfile(user.sub, peerId);
+  }
+
+  @Get("identity/peers/:peerId/avatar")
+  @UseGuards(JwtAuthGuard)
+  async getPeerAvatar(
+    @CurrentUser() user: JwtPayload,
+    @Param("peerId") peerId: string,
+    @Res() reply: FastifyReply,
+  ) {
+    const bytes = await this.identityService.getPeerAvatarBytes(user.sub, peerId);
     reply.header("Content-Type", "image/jpeg");
     reply.header("Cache-Control", "private, max-age=3600");
     return reply.send(Buffer.from(bytes));

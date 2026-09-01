@@ -48,3 +48,7 @@ export function avatarObjectKeyForUser(userId: string): string {
 export function avatarUrlForUser(): string {
   return "/v1/identity/avatar";
 }
+
+export function avatarUrlForPeer(userId: string): string {
+  return `/v1/identity/peers/${userId}/avatar`;
+}

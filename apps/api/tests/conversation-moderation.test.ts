@@ -364,6 +364,7 @@ describe("Conversation moderation /v1", () => {
 
     expect(response.statusCode).toBe(200);
     const peer = collectionConversationPeerSchema.parse(JSON.parse(response.body));
+    expect(peer.peerId).toBeTruthy();
     expect(peer.handle).toBeTruthy();
     expect(peer.jerseyCount).toBe(0);
     expect(peer.city).toBe("Aarhus");

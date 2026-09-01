@@ -8,6 +8,7 @@ import {
   type CollectionJersey,
   type CollectionJerseys,
   type CollectionPeerJersey,
+  type CollectionPeerJerseys,
   type CollectionRespondBidResponse,
   type CollectionSavePhoto,
   type CollectionSaveResponse,
@@ -25,6 +26,7 @@ import {
   collectionJerseyUpdateSchema,
   collectionPeerJerseySchema,
   collectionPrivatePatchSchema,
+  collectionPeerJerseysSchema,
   collectionRespondBidRequestSchema,
   collectionRespondBidResponseSchema,
   collectionSaveRequestSchema,
@@ -849,13 +851,84 @@ export class CollectionService {
     const [jerseyCountRow] = await this.db
       .select({ count: count() })
       .from(userJersey)
-      .where(eq(userJersey.userId, peerId));
+      .where(and(eq(userJersey.userId, peerId), eq(userJersey.private, false)));
 
     return collectionConversationPeerSchema.parse({
+      peerId,
       handle: peerRow.handle,
       jerseyCount: Number(jerseyCountRow?.count ?? 0),
       ...(peerRow.showCity && peerRow.city ? { city: peerRow.city } : {}),
     });
+  }
+
+  async listPeerJerseys(
+    userId: string,
+    peerUserId: string,
+    locale: LabelLocale = "da",
+  ): Promise<CollectionPeerJerseys> {
+    if (peerUserId === userId) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    if (await this.moderationService.isBlocked(userId, peerUserId)) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    const [peerRow] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.id, peerUserId))
+      .limit(1);
+
+    if (!peerRow) {
+      throw new NotFoundException("Peer not found");
+    }
+
+    const rows = await this.db
+      .select({
+        id: userJersey.id,
+        clubId: userJersey.clubId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        seasonLabel: season.label,
+        ownerHandle: user.handle,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(user, eq(userJersey.userId, user.id))
+      .where(and(eq(userJersey.userId, peerUserId), eq(userJersey.private, false)))
+      .orderBy(desc(userJersey.updatedAt));
+
+    if (rows.length === 0) {
+      return collectionPeerJerseysSchema.parse({ jerseys: [] });
+    }
+
+    const clubIds = [...new Set(rows.map((row) => row.clubId))];
+    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const photosByJersey = await this.loadPhotosForJerseys(rows.map((row) => row.id));
+
+    const jerseys = rows.flatMap((row) => {
+      const clubLabel = clubLabels.get(row.clubId);
+      const photos = photosByJersey.get(row.id);
+      if (!clubLabel || !photos || photos.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          id: row.id,
+          clubId: row.clubId,
+          seasonId: row.seasonId,
+          type: row.type,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          ownerHandle: row.ownerHandle,
+          photos,
+        },
+      ];
+    });
+
+    return collectionPeerJerseysSchema.parse({ jerseys });
   }
 
   async hideConversation(userId: string, conversationId: string): Promise<void> {

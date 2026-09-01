@@ -1,4 +1,5 @@
 import type { CollectionConversationPeer } from "@kit/api-contract";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,6 +39,7 @@ export function ConversationDetailsView({
   onBack,
   onConversationHidden,
 }: ConversationDetailsViewProps) {
+  const router = useRouter();
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
@@ -103,7 +105,11 @@ export function ConversationDetailsView({
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           <ProfileSurfaceGroup>
-            <ListPeerStubRow handle={peer.handle} meta={peerMeta(peer)} />
+            <ListPeerStubRow
+              handle={peer.handle}
+              meta={peerMeta(peer)}
+              onPress={() => router.push(`/(tabs)/search/peer/${peer.handle}`)}
+            />
           </ProfileSurfaceGroup>
 
           <ProfileSurfaceGroup>

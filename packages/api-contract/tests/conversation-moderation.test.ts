@@ -12,11 +12,13 @@ describe("collection conversation moderation contract", () => {
   it("parses peer stub with optional city", () => {
     expect(
       collectionConversationPeerSchema.parse({
+        peerId: "00000000-0000-0000-0000-000000000010",
         handle: "collector_a",
         jerseyCount: 3,
         city: "København",
       }),
     ).toEqual({
+      peerId: "00000000-0000-0000-0000-000000000010",
       handle: "collector_a",
       jerseyCount: 3,
       city: "København",
@@ -24,10 +26,12 @@ describe("collection conversation moderation contract", () => {
 
     expect(
       collectionConversationPeerSchema.parse({
+        peerId: "00000000-0000-0000-0000-000000000011",
         handle: "collector_b",
         jerseyCount: 0,
       }),
     ).toEqual({
+      peerId: "00000000-0000-0000-0000-000000000011",
       handle: "collector_b",
       jerseyCount: 0,
     });
@@ -36,6 +40,7 @@ describe("collection conversation moderation contract", () => {
   it("rejects peer stub with unknown fields", () => {
     expect(() =>
       collectionConversationPeerSchema.parse({
+        peerId: "00000000-0000-0000-0000-000000000012",
         handle: "collector_a",
         jerseyCount: 1,
         email: "secret@example.com",

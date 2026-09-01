@@ -282,9 +282,7 @@ export default function ForeignJerseyDetailScreen() {
           <ListPeerStubRow
             handle={peerJersey.ownerHandle}
             meta="Samler"
-            onPress={() =>
-              Alert.alert("Peer profil", "Profilvisning kommer i næste milepæl (KIT-153).")
-            }
+            onPress={() => router.push(`/(tabs)/search/peer/${peerJersey.ownerHandle}`)}
           />
         </ProfileSurfaceGroup>
 
