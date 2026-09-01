@@ -92,6 +92,8 @@ export async function patchJerseyBidding(
     throw new BiddingFetchError("Kunne ikke opdatere bud-indstilling", response.status);
   }
 
+  // SAFETY: the /v1 collection PATCH returns an envelope { jersey: CollectionJersey };
+  // collectionJerseySchema.parse validates the payload at this seam.
   const body = (await response.json()) as { jersey: CollectionJersey };
   return collectionJerseySchema.parse(body.jersey);
 }
@@ -113,6 +115,8 @@ export async function patchJerseyPrivate(
     throw new BiddingFetchError("Kunne ikke opdatere privathed", response.status);
   }
 
+  // SAFETY: the /v1 collection PATCH returns an envelope { jersey: CollectionJersey };
+  // collectionJerseySchema.parse validates the payload at this seam.
   const body = (await response.json()) as { jersey: CollectionJersey };
   return collectionJerseySchema.parse(body.jersey);
 }
