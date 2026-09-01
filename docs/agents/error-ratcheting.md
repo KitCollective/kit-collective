@@ -136,7 +136,7 @@ catches it in the API tests and the container smoke test.
 
 ### Workflow API boot env ratchet (KIT-23)
 
-`scripts/check-workflow-api-boot-env.mjs` (CI via `pnpm check:workflow-api-boot-env`) fails when a `.github/workflows` `run:` step `docker run`s the API image (`kit-api` / `kit-deploy-api`) without `JWT_SECRET`. Prevents repeating the KIT-23 checker fail #4 (deployable image cannot boot because `IdentityModule` requires `JWT_SECRET` at Nest bootstrap). Tighten only — extend `REQUIRED_DOCKER_ENV` when new vars become mandatory at boot.
+`scripts/check-workflow-api-boot-env.mjs` (CI via `pnpm check:workflow-api-boot-env`) fails when a `.github/workflows` `run:` step `docker run`s the API image (`kit-api` / `kit-deploy-api`) without `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL`. Prevents repeating the KIT-23 checker fail #4 class (deployable image cannot boot because Identity requires those names at Nest bootstrap). Tighten only — extend `REQUIRED_DOCKER_ENV` when new vars become mandatory at boot. Do not list `JWT_SECRET`; Nest no longer reads it.
 
 ### Mobile tab bar anatomy ratchet (KIT-23)
 

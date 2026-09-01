@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Ratchet (KIT-23): fail CI when a workflow boots the API Docker image without
- * required runtime env vars (JWT_SECRET). Prevents repeating deploy-api.yml
- * smoke failures when IdentityModule requires JWT_SECRET at Nest bootstrap.
+ * required runtime env vars (BETTER_AUTH_SECRET, BETTER_AUTH_URL). Prevents
+ * repeating deploy-api.yml smoke failures when IdentityModule requires Better
+ * Auth names at Nest bootstrap.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -11,7 +12,7 @@ const workflowDir = ".github/workflows";
 const violations = [];
 
 /** Env vars required when a workflow `docker run` starts the API image. */
-const REQUIRED_DOCKER_ENV = ["JWT_SECRET"];
+const REQUIRED_DOCKER_ENV = ["BETTER_AUTH_SECRET", "BETTER_AUTH_URL"];
 
 function walk(dir) {
   for (const name of readdirSync(dir)) {
