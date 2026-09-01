@@ -28,4 +28,22 @@ export class ModerationController {
   ) {
     return this.moderationService.blockConversationPeer(user.sub, conversationId);
   }
+
+  @Post("moderation/peers/:peerId/report")
+  @HttpCode(201)
+  @UseGuards(JwtAuthGuard)
+  reportPeer(
+    @CurrentUser() user: JwtPayload,
+    @Param("peerId") peerId: string,
+    @Body() body: unknown,
+  ) {
+    return this.moderationService.reportPeer(user.sub, peerId, body);
+  }
+
+  @Post("moderation/peers/:peerId/block")
+  @HttpCode(201)
+  @UseGuards(JwtAuthGuard)
+  blockPeer(@CurrentUser() user: JwtPayload, @Param("peerId") peerId: string) {
+    return this.moderationService.blockPeer(user.sub, peerId);
+  }
 }

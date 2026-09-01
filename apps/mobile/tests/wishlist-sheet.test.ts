@@ -158,6 +158,6 @@ describe("hitRowAccessibilityLabel", () => {
 
 describe("resolveWishlistHitRoute", () => {
   it("opens foreign UserJersey detail via send-bid route", () => {
-    expect(resolveWishlistHitRoute(UUID_B)).toBe(`/search/send-bid/${UUID_B}`);
+    expect(resolveWishlistHitRoute(UUID_B)).toBe(`/search/${UUID_B}`);
   });
 });

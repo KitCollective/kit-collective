@@ -72,8 +72,8 @@ export default function SearchScreen() {
   const horizontalPadding = space.insetMd * 2;
   const tileWidth = (width - horizontalPadding - columnGap) / 2;
 
-  const openSendBid = (jerseyId: string) => {
-    router.push(`/(tabs)/search/send-bid/${jerseyId}`);
+  const openForeignDetail = (jerseyId: string) => {
+    router.push(`/(tabs)/search/${jerseyId}`);
   };
 
   return (
@@ -121,7 +121,7 @@ export default function SearchScreen() {
                   clubLabel={item.clubLabel}
                   seasonLabel={item.seasonLabel}
                   typeLabel={KIT_TYPE_LABELS_DA[item.type]}
-                  onPress={() => openSendBid(item.id)}
+                  onPress={() => openForeignDetail(item.id)}
                 />
               </View>
             );

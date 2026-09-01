@@ -6,7 +6,7 @@ import {
   collectionReportConversationResponseSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { conversation, moderationBlock, moderationReport } from "@kit/db";
+import { conversation, moderationBlock, moderationReport, user } from "@kit/db";
 import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, eq, or } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
@@ -55,7 +55,10 @@ export class ModerationService {
     conversationId: string,
   ): Promise<CollectionBlockConversationResponse> {
     const peerId = await this.resolveConversationPeerId(userId, conversationId);
+    return this.blockPeer(userId, peerId);
+  }
 
+  async blockPeer(userId: string, peerId: string): Promise<CollectionBlockConversationResponse> {
     if (peerId === userId) {
       throw new BadRequestException("Cannot block yourself");
     }
@@ -92,13 +95,37 @@ export class ModerationService {
   ): Promise<CollectionReportConversationResponse> {
     const body = collectionReportConversationRequestSchema.parse(rawBody);
     const peerId = await this.resolveConversationPeerId(userId, conversationId);
+    return this.reportPeer(userId, peerId, body, conversationId);
+  }
+
+  async reportPeer(
+    userId: string,
+    peerId: string,
+    rawBody: unknown,
+    conversationId?: string,
+  ): Promise<CollectionReportConversationResponse> {
+    const body = collectionReportConversationRequestSchema.parse(rawBody);
+
+    if (peerId === userId) {
+      throw new BadRequestException("Cannot report yourself");
+    }
+
+    const [peer] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.id, peerId))
+      .limit(1);
+
+    if (!peer) {
+      throw new NotFoundException("Peer not found");
+    }
 
     const [inserted] = await this.db
       .insert(moderationReport)
       .values({
         reporterId: userId,
         peerId,
-        conversationId,
+        conversationId: conversationId ?? null,
         reason: body.reason?.trim() || null,
       })
       .returning({ id: moderationReport.id });

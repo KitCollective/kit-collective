@@ -552,6 +552,7 @@ describe("Collection /v1", () => {
     const peerBody = collectionPeerJerseySchema.parse(JSON.parse(peerResponse.body));
     expect(peerBody.biddingEnabled).toBe(true);
     expect(peerBody.ownerHandle).toBeTruthy();
+    expect(peerBody.ownerId).toBeTruthy();
     expect(peerBody.photos.length).toBeGreaterThan(0);
 
     const bidResponse = await app.inject({

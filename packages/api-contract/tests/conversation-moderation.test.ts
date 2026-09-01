@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   collectionBlockConversationResponseSchema,
+  collectionBlockPeerResponseSchema,
   collectionConversationPeerSchema,
   collectionReportConversationRequestSchema,
   collectionReportConversationResponseSchema,
+  collectionReportPeerResponseSchema,
 } from "../src/collection/conversation-moderation.js";
 
 describe("collection conversation moderation contract", () => {
@@ -59,6 +61,24 @@ describe("collection conversation moderation contract", () => {
       }),
     ).toEqual({
       blockId: "00000000-0000-0000-0000-000000000002",
+    });
+  });
+
+  it("reuses conversation shapes for peer report and block", () => {
+    expect(
+      collectionReportPeerResponseSchema.parse({
+        reportId: "00000000-0000-0000-0000-000000000003",
+      }),
+    ).toEqual({
+      reportId: "00000000-0000-0000-0000-000000000003",
+    });
+
+    expect(
+      collectionBlockPeerResponseSchema.parse({
+        blockId: "00000000-0000-0000-0000-000000000004",
+      }),
+    ).toEqual({
+      blockId: "00000000-0000-0000-0000-000000000004",
     });
   });
 });

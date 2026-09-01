@@ -50,6 +50,7 @@ export const collectionPeerJerseySchema = z
     clubLabel: z.string().min(1),
     seasonLabel: z.string().min(1),
     ownerHandle: z.string().min(1),
+    ownerId: z.string().uuid(),
     ownerInitial: z.string().min(1),
     biddingEnabled: z.boolean(),
     latestBidAmountDkk: z.number().int().min(1).nullable(),

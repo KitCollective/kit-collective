@@ -92,7 +92,7 @@ export function hitRowAccessibilityLabel(name: string, meta: string): string {
 }
 
 export function resolveWishlistHitRoute(matchedJerseyId: string): string {
-  return `/search/send-bid/${matchedJerseyId}`;
+  return `/search/${matchedJerseyId}`;
 }
 
 export function resolveWishlistEmptyTitle(): string {
