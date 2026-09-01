@@ -7,6 +7,7 @@ import {
   collectionDiscoverJerseysSchema,
   collectionFavoritesSchema,
   collectionJerseysSchema,
+  collectionJerseyUpdateResponseSchema,
   collectionPeerJerseySchema,
   collectionSaveResponseSchema,
   collectionSendBidResponseSchema,
@@ -1003,7 +1004,7 @@ describe("Collection /v1", () => {
       },
     });
     expect(updateResponse.statusCode).toBe(200);
-    const body = JSON.parse(updateResponse.body) as { jersey: CollectionJersey };
+    const body = collectionJerseyUpdateResponseSchema.parse(JSON.parse(updateResponse.body));
     expect(body.jersey.id).toBe(ownerJersey.id);
     expect(body.jersey.type).toBe("away");
     expect(body.jersey.size).toBe("xl");
