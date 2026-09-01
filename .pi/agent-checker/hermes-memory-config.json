@@ -1,9 +1,0 @@
-{
-  "memoryMode": "policy-only",
-  "memoryPolicyStyle": "full",
-  "memoryDir": "/var/lib/kit-pi/hermes",
-  "reviewEnabled": true,
-  "correctionDetection": true,
-  "flushOnShutdown": true,
-  "standingInstructionsEnabled": false
-}
