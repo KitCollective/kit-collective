@@ -31,7 +31,7 @@ This document is the **given** for Football Data Seed grain tickets. When a tick
 | NationalTeam identity | ✅ thin | ✅ + Honours | Honours table |
 | NationalTeam season | ❌ no `national_team_season` | ✅ squad | **New table** + `player_national_team_season` |
 | Player | ✅ id only | ✅ Rich player | Player columns + photo + history + honours |
-| Kit | ✅ partial | ✅ + colours | Colour columns; sponsor when confirmed |
+| Kit | ✅ partial | ✅ + colours + sponsor | Colour **new** columns; sponsor column exists (FKApi populate gap) |
 | Honours | ❌ | ✅ all three sides | **New table** |
 | Jersey history | ❌ | ✅ | **New table** |
 | Player photo | ❌ (only `kit_photo`) | ✅ | **New table** (mirror `kit_photo`) |
@@ -144,9 +144,9 @@ This document is the **given** for Football Data Seed grain tickets. When a tick
 | id, type, manufacturer, season, club/NT FK | ✅ `kit` + `manufacturer` + labels | exists |
 | Archive bytes | ✅ `kit_photo` + R2 | exists |
 | Primary / secondary colour | `kit.primary_color_hex`, `kit.secondary_color_hex` (new) + optional `catalog_label` for colour **names** | hex for filters; name optional |
-| Sponsor | ✅ `kit.sponsor_name` | populate when FK source confirmed |
+| Sponsor | ✅ `kit.sponsor_name` | populate when FKA/source exposes it (club match kits confirmed); FKApi REST **transport gap** — [fk-field-catalog.md](./fk-field-catalog.md) |
 
-**Grain ticket:** KIT-140+ / FK milestone — extend `FkRawKit` + mapper.
+**Grain ticket:** KIT-143 (club kits) / KIT-144 (NT kits) — extend `FkRawKit` + mapper; colours + sponsor populate. KIT-140 is the catalog, not the fetch.
 
 ---
 
