@@ -102,9 +102,7 @@ export default function SearchScreen() {
   };
 
   const openClubDrill = (club: CollectionDiscoverHomeClub) => {
-    router.push(
-      `/(tabs)/search/club/${club.clubId}?label=${encodeURIComponent(club.clubLabel)}`,
-    );
+    router.push(`/(tabs)/search/club/${club.clubId}?label=${encodeURIComponent(club.clubLabel)}`);
   };
 
   const openPeerProfile = (collector: CollectionDiscoverHomeCollector) => {
@@ -165,7 +163,9 @@ export default function SearchScreen() {
         queryJerseys.length === 0 ? (
           <EmptyState title="Ingen trøjer" body="Ingen synlige trøjer matcher søgningen." />
         ) : (
-          <ScrollView contentContainerStyle={[styles.gridContent, { paddingBottom: tabBarPadding }]}>
+          <ScrollView
+            contentContainerStyle={[styles.gridContent, { paddingBottom: tabBarPadding }]}
+          >
             <View style={styles.grid}>
               {queryJerseys.map((jersey) => renderJerseyTile(jersey, tileWidth))}
             </View>
@@ -177,7 +177,9 @@ export default function SearchScreen() {
           body="Når andre samlere gemmer synlige trøjer, vises de her."
         />
       ) : (
-        <ScrollView contentContainerStyle={[styles.magazineContent, { paddingBottom: tabBarPadding }]}>
+        <ScrollView
+          contentContainerStyle={[styles.magazineContent, { paddingBottom: tabBarPadding }]}
+        >
           {clubs.length > 0 ? (
             <View testID="magazine-shelf-clubs" style={styles.shelf}>
               <Text style={[typography.section, { color: theme.contentPrimary }]}>Klubber</Text>
@@ -202,7 +204,9 @@ export default function SearchScreen() {
           ) : null}
           {openForBid.length > 0 ? (
             <View testID="magazine-shelf-open-for-bid" style={styles.shelf}>
-              <Text style={[typography.section, { color: theme.contentPrimary }]}>Åbne for bud</Text>
+              <Text style={[typography.section, { color: theme.contentPrimary }]}>
+                Åbne for bud
+              </Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -254,7 +258,9 @@ export default function SearchScreen() {
           ) : null}
           {moreJerseys.length > 0 ? (
             <View testID="magazine-shelf-more-jerseys" style={styles.shelf}>
-              <Text style={[typography.section, { color: theme.contentPrimary }]}>Flere trøjer</Text>
+              <Text style={[typography.section, { color: theme.contentPrimary }]}>
+                Flere trøjer
+              </Text>
               <View style={styles.grid}>
                 {moreJerseys.map((jersey) => renderJerseyTile(jersey, tileWidth))}
               </View>

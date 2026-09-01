@@ -1173,10 +1173,12 @@ describe("Collection /v1", () => {
     expect(home.openForBid?.some((jersey) => jersey.id === biddingJersey.id)).toBe(true);
     expect(home.openForBid?.some((jersey) => jersey.id === visibleJersey.id)).toBe(false);
     expect(home.collectors?.some((collector) => collector.handle === owner.user.handle)).toBe(true);
-    expect(home.collectors?.some((collector) => collector.handle === bidder.user.handle)).toBe(true);
-    expect(home.collectors?.some((collector) => collector.handle === blockedOwner.user.handle)).toBe(
-      false,
+    expect(home.collectors?.some((collector) => collector.handle === bidder.user.handle)).toBe(
+      true,
     );
+    expect(
+      home.collectors?.some((collector) => collector.handle === blockedOwner.user.handle),
+    ).toBe(false);
     expect(home.moreJerseys?.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
     expect(home.moreJerseys?.some((jersey) => jersey.id === biddingJersey.id)).toBe(true);
     expect(home.moreJerseys?.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
