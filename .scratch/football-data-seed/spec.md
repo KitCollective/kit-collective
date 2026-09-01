@@ -134,8 +134,8 @@ Vendor research itself is not a `/tdd` seam. Its accept is a written field catal
 
 ## Further Notes
 
-- Vendor research field catalog (KIT-138): [field-catalog.md](./field-catalog.md). Seed references: `seed/apify/reference.md`, `seed/fkapi/reference.md`. Postgres landing: [schema-gap.md](./schema-gap.md).
+- Vendor research field catalog (KIT-138): [field-catalog.md](./field-catalog.md). Focused FK catalog (KIT-140): [fk-field-catalog.md](./fk-field-catalog.md). Seed references: `seed/apify/reference.md`, `seed/fkapi/reference.md`. Postgres landing: [schema-gap.md](./schema-gap.md).
 - `/to-tickets` must create the Vendor research issue first, on milestone 1, `ready-for-human` only, and relate `blockedBy` from every other issue on this project to that issue (or to a completed predecessor in the same chain). Do not publish those issues from this skill.
 - Speech-to-text “owners” on the player page is treated as honours and registration (parent club vs loan) until Vendor research names the exact fields.
-- Kit already has `sponsorName`. Colours and other kept kit facts are research output, then schema if needed.
+- Kit already has `sponsorName` (KIT-140: stamdata now when FKA exposes it; FKApi REST transport gap). Colours need new hex columns (`kit.primary_color_hex`, `kit.secondary_color_hex`) when the grain lands.
 - Existing locks that still hold: Seed proxy, Kader fetch, Opt-in Apify, ExternalId, Already seeded, Catalog peek, lane rules, facts-only.

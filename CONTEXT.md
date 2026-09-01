@@ -76,8 +76,8 @@ This work already exists on another issue. No agent action.
 _Avoid_: deleting the issue instead of marking duplicate
 
 **Write scope**:
-Path globs on an implementation issue the implementer may change.
-_Avoid_: treating surface labels as write scope
+Path globs on an implementation issue the implementer may change. Factory `matchesGlob` compiles `**` to `.*`, so `seed/fkapi/**/reference.md` does **not** match `seed/fkapi/reference.md` — declare the exact file or `seed/**/reference.md`.
+_Avoid_: treating surface labels as write scope; `dir/**/file` for a file that sits at `dir/file`
 <!-- factory:generated-end -->
 
 ## Language
@@ -175,8 +175,16 @@ Transfermarkt `/rueckennummern/spieler/{id}` — season + club or NationalTeam +
 _Avoid_: treating current profile shirt number as history; inventing rows Transfermarkt did not list; blocking Club season map only because history fetch failed when kader `#` is already present
 
 **Kit colours**:
-Primary and secondary colour name + hex from Football Kit Archive / FKApi. Stamdata now on the Kit grain (extend normalize + schema with the grain). Not Transfermarkt club colour swatches. Postgres: `kit.primary_color_hex`, `kit.secondary_color_hex` — see schema-gap.
+Primary and secondary colour name + hex from Football Kit Archive / FKApi. Stamdata now on the Kit grain (extend normalize + schema with the grain). Not Transfermarkt club colour swatches. Postgres: `kit.primary_color_hex`, `kit.secondary_color_hex` — see schema-gap. Focused catalog: `.scratch/football-data-seed/fk-field-catalog.md`.
 _Avoid_: deferring colours because the fixture type is still thin; treating manufacturer brand logos as colours; fetching FKA through Decodo to “unlock” colours
+
+**Kit sponsor**:
+Shirt sponsor name from Football Kit Archive when the source exposes it. Stamdata now on the Kit grain. Postgres: **`kit.sponsor_name` already exists** — no new column. Club match kits often have it (FCK 2010-11 Carlsberg). NationalTeam World Cup match kits often do not (Denmark 2010). FKApi REST does not return sponsor today (**transport gap**) — do not drop the fact; populate when FKApi adds the field or a non-Decodo FKA parse lands. Training-shirt sponsors (Denmark 2010 Arla) drop with those types.
+_Avoid_: inventing a new sponsor column; dropping sponsor because FKApi lacks it; treating a training-kit sponsor as the match-kit sponsor; routing FKA through Decodo to scrape sponsor
+
+**Kit type (FK)**:
+Our `kit.type` enum is `home`, `away`, `third`, `gk`, `special`. FKApi `Type_K` is richer (categories match / prematch / training / travel / jacket). Proof keeps match-category types normalized into our enum; drops training, anthem, track, rain; Champions League / European variant kits are later leverage (keep one base type per side+season unless Join workflow names them).
+_Avoid_: storing Track/Training as `special`; treating CL Home as a second `home` row on the proof accept; inventing types not in `@kit/domain`
 
 **Tournament squad**:
 A competition-specific NationalTeam roster (e.g. World Cup 2010 final 23) as distinct from the calendar-year NationalTeam kader on Transfermarkt. Hierarchy proof still uses the NT season grain; the WC-only cut stays open until a clean vendor page is confirmed.
@@ -239,8 +247,8 @@ The existing Store-actor FetchAdapter. The operator must explicitly choose it. I
 _Avoid_: retrying HTML 202s on Apify by default; treating Apify as the primary Coolify path
 
 **FK after facts**:
-Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity (including Kit colours when present) and admin_only KitPhoto bytes onto those seasons (ExternalId join). Club kits and NationalTeam kits are sibling grains in the FK milestone. Not before that path’s facts exist. Join workflow composes the two vendors; Cross MCP wraps that later. Does not use Seed proxy / Decodo.
-_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row; routing FK through Decodo
+Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity (including Kit colours, Kit sponsor when the source has it, and normalized Kit type) and admin_only KitPhoto bytes onto those seasons (ExternalId join). Club kits join via TM club id → `kit.club_id`. NationalTeam kits join via FKA team id → `kit.national_team_id` — never a Club row. Missing side or season → refuse (no kit rows, no R2 writes). Join workflow composes the two vendors; Cross MCP wraps that later. Does not use Seed proxy / Decodo.
+_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row; routing FK through Decodo; joining Denmark kits with Transfermarkt `verein/3436` as a club id
 
 **kc_seed_mcp**:
 The predecessor Cursor Seed MCP server id. Standalone stdio process. Exposes `seed_apify` and `seed_fk` only. Not the Cross MCP accept — that is Seed MCP on its own URL. Not Coolify MCP. Not default PI-worker MCP.

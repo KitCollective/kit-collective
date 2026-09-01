@@ -148,23 +148,24 @@ Hermetic fixtures still use Brøndby `191` — not the live 2010 id.
 | FK kit id; type (`home\|away\|third\|gk\|special`); manufacturer/brand name; season label | stamdata now | Kit + Manufacturer + CatalogLabel |
 | Club join via `clubTransfermarktId` | stamdata now | Adapter join after TM Club+Season |
 | Archive image bytes → KitPhoto `admin_only` / `rights: unresolved` | stamdata now | Never Expo/Astro/OG |
-| Primary / secondary colours (name + hex) | **stamdata now** | **Kit colours** — FKApi Color models; extend `FkRawKit` + schema when grain implements |
+| Primary / secondary colours (name + hex) | **stamdata now** | **Kit colours** — FKApi Color models; **new** `kit.primary_color_hex` / `kit.secondary_color_hex` — [fk-field-catalog.md](./fk-field-catalog.md) |
 | English kit label | later leverage | Optional CatalogLabel |
-| Sponsor | open | DB has `sponsor_name`; FKApi OSS models lack sponsor; confirm via FKApi/FKA **without Decodo** |
-| Design, competition tags | later leverage | |
+| Sponsor | **stamdata now** when source has it | **`kit.sponsor_name` exists**; FKA HTML confirmed (FCK 2010-11 Carlsberg); FKApi REST **transport gap** — [fk-field-catalog.md](./fk-field-catalog.md) |
+| Design, competition tags | later leverage | CL/European variant kits are later leverage on proof |
 | Rating, brand/club logos, FKA page URL as product asset | drop | Branding / noise |
-| NationalTeam kit join | open + gap | Sibling grain; current mapper only resolves TM **club** ExternalId |
+| Training / anthem / track kits | drop | Proof keeps match-category types only |
+| NationalTeam kit join | **stamdata now** (path accepted) | FKA team id → `external_id` (`fkapi`, `national_team`) → `kit.national_team_id`; mapper still club-only until grain |
 | Transport | lock | **No Seed proxy / Decodo** on FKA or FKApi requests |
 
 ---
 
 ## Stamdata now (proof accept)
 
-TM competition id/slug/name/country · season id+label · club id+name+country + **Club facts** + **Honours** · club-season squad (player id, name, `#`, **position, DOB, nationality, height, foot**, portrait when on row) · NationalTeam id+name+gender+country + association depth + **Honours** · NT-season squad (`#`, call-up club, DOB, height, foot, position when present) · Player id+name + **DOB, nat, height, foot, position, place of birth, home-country name, Player photo, jersey number history, Honours** · FK kit id, type, manufacturer, season join, TM-side club join ids, archive bytes, **Kit colours**.
+TM competition id/slug/name/country · season id+label · club id+name+country + **Club facts** + **Honours** · club-season squad (player id, name, `#`, **position, DOB, nationality, height, foot**, portrait when on row) · NationalTeam id+name+gender+country + association depth + **Honours** · NT-season squad (`#`, call-up club, DOB, height, foot, position when present) · Player id+name + **DOB, nat, height, foot, position, place of birth, home-country name, Player photo, jersey number history, Honours** · FK kit id, type, manufacturer, season join, TM-side club join **or** FKA-side national_team join, archive bytes, **Kit colours**, **Kit sponsor** (when source has it).
 
 ## Later leverage
 
-League chrome trivia · competition-table aggregates · youth clubs · NT caps/goals/debut until scoped · kit design/competition tags · English kit label · sponsor **if** confirmed without Decodo.
+League chrome trivia · competition-table aggregates · youth clubs · NT caps/goals/debut until scoped · kit design/competition tags · English kit label · CL/European kit variants.
 
 ## Drop
 
@@ -172,12 +173,11 @@ All market value · agent/agency · TM and FKA **logos** & bare profile URLs as 
 
 ## Open confirms (do not invent)
 
-1. FKA / FKApi live shape for FCK 2010/11 + Denmark 2010 (sponsor text, colour payload, national team-page join) — **without** Decodo.
+1. Exact FKApi `Club.id` / `id_fka` for FCK and Denmark — confirm on first live FKApi search without Decodo. FKA HTML sponsor/colours/types and NT join **path** are accepted in [fk-field-catalog.md](./fk-field-catalog.md) (KIT-140).
 2. WC-2010-only **Tournament squad** vs calendar-2010 NT kader.
 3. FIWC participant/squad HTML when not empty.
 4. Whether historical Joined / Signed from / Current club can be trusted for 2010/11.
 5. Loan / registration markers on other Superliga 2010/11 clubs.
-6. NationalTeam kit ExternalId join key (TM `3436` vs FKA team slug).
 
 Schema shape for **stamdata now** fields is not open — see [schema-gap.md](./schema-gap.md).
 
