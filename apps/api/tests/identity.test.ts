@@ -2,6 +2,7 @@ import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  authEventsSchema,
   collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionSaveResponseSchema,
@@ -21,9 +22,11 @@ import {
   resetDatabase,
   season,
   teamSeason,
+  user,
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
+import bcrypt from "bcryptjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 
@@ -165,6 +168,8 @@ describe("Identity /v1", () => {
   beforeAll(async () => {
     process.env.DATABASE_URL = DATABASE_URL;
     process.env.JWT_SECRET = "test-jwt-secret";
+    process.env.BETTER_AUTH_SECRET = "test-better-auth-secret-not-for-production";
+    process.env.BETTER_AUTH_URL = "http://127.0.0.1:3000";
     delete process.env.R2_ENDPOINT;
     await resetDatabase(DATABASE_URL, migrationsFolder);
 
@@ -565,7 +570,7 @@ describe("Identity /v1", () => {
     expect(newLogin.statusCode).toBe(200);
   });
 
-  it("accepts logout and rejects GET me without a session token", async () => {
+  it("revokes the Auth session so the same Bearer is 401 on GET me", async () => {
     const session = await registerSession(app, "logout@example.com");
 
     const logout = await app.inject({
@@ -579,8 +584,113 @@ describe("Identity /v1", () => {
     const me = await app.inject({
       method: "GET",
       url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${session.accessToken}` },
     });
     expect(me.statusCode).toBe(401);
+  });
+
+  it("rejects an old JWT on owner /v1 routes", async () => {
+    const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: "550e8400-e29b-41d4-a716-446655440000",
+        email: "old-jwt@example.com",
+        role: "user",
+      }),
+    ).toString("base64url");
+    const oldJwt = `${header}.${payload}.not-a-session`;
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${oldJwt}` },
+    });
+    expect(me.statusCode).toBe(401);
+
+    const jerseys = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+      headers: { authorization: `Bearer ${oldJwt}` },
+    });
+    expect(jerseys.statusCode).toBe(401);
+  });
+
+  it("logs in an existing bcrypt password without a force-reset", async () => {
+    const passwordHash = await bcrypt.hash("legacy-pass-99", 12);
+    const { db, pool } = createDb(DATABASE_URL);
+    await db.insert(user).values({
+      email: "legacy-bcrypt@example.com",
+      passwordHash,
+      name: "legacy_bcrypt",
+      handle: "legacy_bcrypt",
+    });
+    await pool.end();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "legacy-bcrypt@example.com",
+        password: "legacy-pass-99",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = identitySessionSchema.parse(JSON.parse(response.body));
+    expect(body.user.email).toBe("legacy-bcrypt@example.com");
+    expect(body.user.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    expect(body.accessToken.includes(".") && body.accessToken.split(".").length === 3).toBe(false);
+  });
+
+  it("persists login, logout, and failed login as Auth events", async () => {
+    const registered = await registerSession(app, "events@example.com");
+
+    const failed = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "events@example.com",
+        password: "wrong-password",
+      },
+    });
+    expect(failed.statusCode).toBe(401);
+
+    const loggedIn = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "events@example.com",
+        password: "password123",
+      },
+    });
+    expect(loggedIn.statusCode).toBe(200);
+    const session = identitySessionSchema.parse(JSON.parse(loggedIn.body));
+    expect(session.user.id).toBe(registered.user.id);
+
+    const listed = await app.inject({
+      method: "GET",
+      url: "/v1/identity/auth-events",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(listed.statusCode).toBe(200);
+    const events = authEventsSchema.parse(JSON.parse(listed.body));
+    expect(events.events.map((event) => event.kind)).toEqual(
+      expect.arrayContaining(["login", "failure"]),
+    );
+
+    const logout = await app.inject({
+      method: "POST",
+      url: "/v1/identity/logout",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(logout.statusCode).toBe(204);
+
+    const afterLogout = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(afterLogout.statusCode).toBe(401);
   });
 
   it("deletes the account so subsequent GET me is 401", async () => {

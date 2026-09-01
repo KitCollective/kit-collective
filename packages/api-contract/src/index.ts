@@ -275,6 +275,14 @@ export {
   identityPasswordChangeSchema,
 } from "./identity/account.js";
 export {
+  type AuthEvent,
+  type AuthEventKind,
+  type AuthEvents,
+  authEventKindSchema,
+  authEventSchema,
+  authEventsSchema,
+} from "./identity/auth-events.js";
+export {
   acceptAllCookieConsent,
   type CookieConsent,
   type CookieConsentUpdate,
