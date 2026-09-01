@@ -17,3 +17,27 @@ describe("Expo verify and reset chrome", () => {
     expect(login).toContain("Glemt adgangskode");
   });
 });
+
+describe("Expo social login chrome", () => {
+  it("offers Danish Google and Facebook on login, not Apple or browser OAuth", () => {
+    const login = readFileSync(join(authDir, "login.tsx"), "utf8");
+
+    expect(login).toContain("Fortsæt med Google");
+    expect(login).toContain("Fortsæt med Facebook");
+    expect(login).not.toContain("Apple");
+    expect(login).not.toContain("WebBrowser");
+    expect(login).not.toContain("auth-session");
+    expect(login).not.toContain("accounts.google.com");
+  });
+
+  it("native idToken seam refuses browser OAuth", () => {
+    const seam = readFileSync(join(__dirname, "../src/auth/native-id-token.ts"), "utf8");
+
+    expect(seam).toContain("not browser OAuth");
+    expect(seam).not.toContain("WebBrowser");
+    expect(seam).not.toContain("auth-session");
+    expect(seam).not.toContain("expo-auth-session");
+    expect(seam).not.toContain("openAuthSessionAsync");
+    expect(seam).not.toContain("accounts.google.com");
+  });
+});

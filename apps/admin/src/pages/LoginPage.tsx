@@ -1,15 +1,27 @@
+import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { type FormEvent, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider.js";
+import {
+  requestSocialIdToken as defaultRequestSocialIdToken,
+  type SocialIdTokenRequester,
+} from "../auth/social-id-token.js";
 import { BrandLogo } from "../brand/BrandLogo.js";
 
-export function LoginPage() {
-  const { login, user } = useAuth();
+type LoginPageProps = {
+  requestSocialIdToken?: SocialIdTokenRequester;
+};
+
+export function LoginPage({
+  requestSocialIdToken = defaultRequestSocialIdToken,
+}: LoginPageProps = {}) {
+  const { login, loginSocial, user } = useAuth();
   const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<"password" | "social" | null>(null);
+  const busy = submitting !== null;
 
   if (user?.role === "admin") {
     const redirectTo =
@@ -24,14 +36,27 @@ export function LoginPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    setSubmitting(true);
+    setSubmitting("password");
     setError(null);
     try {
       await login(email, password);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Sign in failed");
     } finally {
-      setSubmitting(false);
+      setSubmitting(null);
+    }
+  }
+
+  async function onSocial(provider: IdentityLinkedProvider) {
+    setSubmitting("social");
+    setError(null);
+    try {
+      const idToken = await requestSocialIdToken(provider);
+      await loginSocial(provider, idToken);
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Sign in failed");
+    } finally {
+      setSubmitting(null);
     }
   }
 
@@ -63,8 +88,24 @@ export function LoginPage() {
             required
           />
         </div>
-        <button type="submit" className="btn btn-primary" disabled={submitting}>
-          {submitting ? "Signing in…" : "Sign in"}
+        <button type="submit" className="btn btn-primary" disabled={busy}>
+          {submitting === "password" ? "Signing in…" : "Sign in"}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busy}
+          onClick={() => void onSocial("google")}
+        >
+          Continue with Google
+        </button>
+        <button
+          type="button"
+          className="btn btn-tertiary"
+          disabled={busy}
+          onClick={() => void onSocial("facebook")}
+        >
+          Continue with Facebook
         </button>
         <p>
           <Link to="/reset">Forgot password</Link>

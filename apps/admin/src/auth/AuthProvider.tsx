@@ -1,4 +1,5 @@
 import {
+  type IdentityLinkedProvider,
   type IdentityMe,
   type IdentitySession,
   identityMeSchema,
@@ -50,11 +51,19 @@ function parseStoredSession(raw: string): AuthState | null {
   return { token: parsed.token, user: userResult.data };
 }
 
+function persistAdminSession(sessionBody: IdentitySession): AuthState {
+  if (sessionBody.user.role !== "admin") {
+    throw new Error("Staff access required");
+  }
+  return { token: sessionBody.accessToken, user: sessionBody.user };
+}
+
 type AuthContextValue = {
   token: string | null;
   user: IdentityMe | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginSocial: (provider: IdentityLinkedProvider, idToken: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -105,11 +114,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    const sessionBody = identitySessionSchema.parse(body);
-    if (sessionBody.user.role !== "admin") {
-      throw new Error("Staff access required");
-    }
-    const next = { token: sessionBody.accessToken, user: sessionBody.user };
+    const next = persistAdminSession(identitySessionSchema.parse(body));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    setSession(next);
+  }, []);
+
+  const loginSocial = useCallback(async (provider: IdentityLinkedProvider, idToken: string) => {
+    const body = await apiFetch<IdentitySession>("/identity/social", {
+      method: "POST",
+      body: JSON.stringify({ provider, idToken }),
+    });
+    const next = persistAdminSession(identitySessionSchema.parse(body));
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setSession(next);
   }, []);
@@ -125,9 +140,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       loading,
       login,
+      loginSocial,
       logout,
     }),
-    [session, loading, login, logout],
+    [session, loading, login, loginSocial, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -10,6 +10,7 @@ import {
   type IdentityCredentials,
   type IdentityEmailChange,
   type IdentityExport,
+  type IdentityLinkedProvider,
   type IdentityMe,
   type IdentityPasswordChange,
   type IdentityPrefs,
@@ -18,6 +19,7 @@ import {
   type IdentitySession,
   identityCredentialsSchema,
   identityExportSchema,
+  identityLinkedProviderSchema,
   identityMeSchema,
   identityPasswordResetAcceptedSchema,
   identityPrefsSchema,
@@ -63,6 +65,26 @@ export async function loginCollector(credentials: IdentityCredentials): Promise<
 
   if (!response.ok) {
     throw new Error("Forkert e-mail eller adgangskode");
+  }
+
+  return identitySessionSchema.parse(await response.json());
+}
+
+export async function loginSocial(
+  provider: IdentityLinkedProvider,
+  idToken: string,
+): Promise<IdentitySession> {
+  const payload = {
+    provider: identityLinkedProviderSchema.parse(provider),
+    idToken,
+  };
+  const response = await requestJson("/v1/identity/social", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke logge ind");
   }
 
   return identitySessionSchema.parse(await response.json());

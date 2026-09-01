@@ -32,6 +32,12 @@ export class IdentityController {
     return this.identityService.login(body);
   }
 
+  @Post("identity/social")
+  @HttpCode(200)
+  socialLogin(@Body() body: unknown) {
+    return this.identityService.socialLogin(body);
+  }
+
   @Post("identity/verify")
   @HttpCode(200)
   verifyEmail(@Body() body: unknown) {
