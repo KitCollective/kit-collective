@@ -260,7 +260,10 @@ export default function JerseyDetailScreen() {
           },
         ]}
       >
-        <View style={styles.sheetHandle} accessibilityElementsHidden />
+        <View
+          style={[styles.sheetHandle, { backgroundColor: theme.borderSubtle }]}
+          accessibilityElementsHidden
+        />
         <Text style={[typography.title, { color: theme.contentPrimary }]}>{jersey.clubLabel}</Text>
         <Text style={[typography.mono, { color: theme.contentSecondary }]}>{metaLine}</Text>
 
