@@ -15,7 +15,7 @@ export default function SearchKitDrillStubScreen() {
       <DrillHeader title={title} onBack={() => router.back()} />
       <EmptyState
         title="Kit"
-        body="Denne katalogside åbner, når Kit-drill lander. Klub- og spillerdrills er live."
+        body="Katalogsiden for dette kit er ikke klar endnu. Klubber og spillere kan åbnes."
       />
     </View>
   );

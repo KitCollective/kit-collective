@@ -1399,6 +1399,14 @@ describe("Collection /v1", () => {
       .insert(kit)
       .values({ clubId: fixture.clubId, seasonId: fixture.seasonId, type: "home" })
       .returning({ id: kit.id });
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: fixture.clubId,
+      locale: "en",
+      kind: "alias",
+      text: "FCK",
+      source: "seed",
+    });
     const [labelCountBefore] = await db.select({ value: count() }).from(catalogLabel);
     await pool.end();
 
@@ -1432,6 +1440,17 @@ describe("Collection /v1", () => {
     expect(clubHits.jerseys?.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
     expect(JSON.parse(clubQuery.body)).not.toHaveProperty("entitlement");
     expect(JSON.parse(clubQuery.body)).not.toHaveProperty("leagues");
+
+    const aliasQuery = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/typeahead?q=FCK",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    const aliasHits = collectionDiscoverTypeaheadSchema.parse(JSON.parse(aliasQuery.body));
+    expect(aliasHits.clubs?.some((clubHit) => clubHit.clubId === fixture.clubId)).toBe(true);
+    expect(aliasHits.clubs?.[0]?.clubLabel).toBe("F.C. København");
+    expect(aliasHits.kits?.some((kitHit) => kitHit.kitId === insertedKit!.id)).toBe(true);
+    expect(aliasHits.jerseys?.some((jersey) => jersey.id === visibleJersey.id)).toBe(true);
 
     const playerQuery = await app.inject({
       method: "GET",

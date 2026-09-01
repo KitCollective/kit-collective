@@ -91,6 +91,11 @@ function canonicalCollectorPair(leftId: string, rightId: string): [string, strin
   return leftId < rightId ? [leftId, rightId] : [rightId, leftId];
 }
 
+function typeaheadTextMatches(parts: Array<string | undefined>, query: string): boolean {
+  const lowered = query.toLowerCase();
+  return parts.some((part) => part !== undefined && part.toLowerCase().includes(lowered));
+}
+
 function handleInitial(handle: string): string {
   const trimmed = handle.trim();
   if (!trimmed) {
@@ -1455,7 +1460,7 @@ export class CollectionService {
       .innerJoin(season, eq(kit.seasonId, season.id));
     const kitClubIds = [...new Set(kitRows.flatMap((row) => (row.clubId ? [row.clubId] : [])))];
     const kitClubLabels = await this.resolveEntityLabels("club", kitClubIds, locale);
-    const lowered = normalizedQuery.toLowerCase();
+    const kitClubSearchTexts = await this.resolveEntitySearchTexts("club", kitClubIds);
     const kits: CollectionDiscoverTypeaheadKit[] = kitRows.flatMap((row) => {
       if (!row.clubId) {
         return [];
@@ -1464,11 +1469,21 @@ export class CollectionService {
       if (!clubLabel) {
         return [];
       }
-      const label = `${clubLabel} ${row.seasonLabel} ${KIT_TYPE_LABELS_DA[row.type]}`;
-      if (!label.toLowerCase().includes(lowered)) {
+      const searchTexts = kitClubSearchTexts.get(row.clubId) ?? [];
+      if (
+        !typeaheadTextMatches(
+          [...searchTexts, row.seasonLabel, KIT_TYPE_LABELS_DA[row.type]],
+          normalizedQuery,
+        )
+      ) {
         return [];
       }
-      return [{ kitId: row.id, label }];
+      return [
+        {
+          kitId: row.id,
+          label: `${clubLabel} ${row.seasonLabel} ${KIT_TYPE_LABELS_DA[row.type]}`,
+        },
+      ];
     });
 
     const collectorRows = await this.db
@@ -1505,13 +1520,17 @@ export class CollectionService {
     const visibleJerseyRows = jerseyRows.filter((row) => !blockedPeerIds.has(row.ownerId));
     const jerseyClubIds = [...new Set(visibleJerseyRows.map((row) => row.clubId))];
     const jerseyClubLabels = await this.resolveEntityLabels("club", jerseyClubIds, locale);
+    const jerseyClubSearchTexts = await this.resolveEntitySearchTexts("club", jerseyClubIds);
     const matchingJerseyRows = visibleJerseyRows.filter((row) => {
       const clubLabel = jerseyClubLabels.get(row.clubId);
       if (!clubLabel) {
         return false;
       }
-      const haystack = `${clubLabel} ${row.seasonLabel} ${row.ownerHandle}`.toLowerCase();
-      return haystack.includes(lowered);
+      const searchTexts = jerseyClubSearchTexts.get(row.clubId) ?? [];
+      return typeaheadTextMatches(
+        [...searchTexts, row.seasonLabel, row.ownerHandle],
+        normalizedQuery,
+      );
     });
     const photosByJersey = await this.loadPhotosForJerseys(matchingJerseyRows.map((row) => row.id));
     const jerseys = matchingJerseyRows.flatMap((row) => {
@@ -2184,6 +2203,37 @@ export class CollectionService {
     }
 
     return labels;
+  }
+
+  private async resolveEntitySearchTexts(
+    entityType: "country" | "league" | "club" | "player",
+    entityIds: string[],
+  ): Promise<Map<string, string[]>> {
+    if (entityIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .select({
+        entityId: catalogLabel.entityId,
+        text: catalogLabel.text,
+      })
+      .from(catalogLabel)
+      .where(
+        and(eq(catalogLabel.entityType, entityType), inArray(catalogLabel.entityId, entityIds)),
+      );
+
+    const texts = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!row.text) {
+        continue;
+      }
+      const existing = texts.get(row.entityId) ?? [];
+      existing.push(row.text);
+      texts.set(row.entityId, existing);
+    }
+
+    return texts;
   }
 
   private async loadSquadPlayersForScopes(
