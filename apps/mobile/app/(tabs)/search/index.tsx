@@ -102,10 +102,9 @@ export default function SearchScreen() {
   };
 
   const openClubDrill = (club: CollectionDiscoverHomeClub) => {
-    router.push({
-      pathname: "/(tabs)/search/club/[clubId]",
-      params: { clubId: club.clubId, label: club.clubLabel },
-    });
+    router.push(
+      `/(tabs)/search/club/${club.clubId}?label=${encodeURIComponent(club.clubLabel)}`,
+    );
   };
 
   const openPeerProfile = (collector: CollectionDiscoverHomeCollector) => {
