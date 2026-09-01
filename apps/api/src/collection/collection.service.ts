@@ -1079,7 +1079,7 @@ export class CollectionService {
       .from(userJerseyFavorite)
       .innerJoin(userJersey, eq(userJerseyFavorite.userJerseyId, userJersey.id))
       .innerJoin(season, eq(userJersey.seasonId, season.id))
-      .where(eq(userJerseyFavorite.collectorId, userId))
+      .where(and(eq(userJerseyFavorite.collectorId, userId), eq(userJersey.private, false)))
       .orderBy(desc(userJerseyFavorite.createdAt));
 
     if (rows.length === 0) {
@@ -1499,6 +1499,7 @@ export class CollectionService {
         jerseyUserId: userJersey.userId,
         jerseyId: userJersey.id,
         biddingEnabled: userJersey.biddingEnabled,
+        private: userJersey.private,
       })
       .from(userJerseyPhoto)
       .innerJoin(userJersey, eq(userJerseyPhoto.userJerseyId, userJersey.id))
@@ -1510,6 +1511,10 @@ export class CollectionService {
     }
 
     const isOwner = row.jerseyUserId === userId;
+    if (!isOwner && row.private) {
+      throw new NotFoundException("Photo not found");
+    }
+
     const isPeerBidTarget = !isOwner && row.biddingEnabled;
     let isFavoriteCollector = false;
 

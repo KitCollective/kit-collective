@@ -900,4 +900,88 @@ describe("Collection /v1", () => {
     const peerBody = collectionPeerJerseySchema.parse(JSON.parse(peerResponse.body));
     expect("private" in peerBody).toBe(false);
   });
+
+  it("omits a favorited jersey from peer favorites after the owner marks it private (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-fav-owner@example.com");
+    const peer = await registerSession(app, "private-fav-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const addFavorite = await app.inject({
+      method: "POST",
+      url: "/v1/collection/favorites",
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+      payload: { userJerseyId: ownerJersey.id },
+    });
+    expect(addFavorite.statusCode).toBe(201);
+
+    const listBefore = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${peer.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(collectionFavoritesSchema.parse(JSON.parse(listBefore.body)).favorites).toHaveLength(1);
+
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+
+    const listAfter = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${peer.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(listAfter.statusCode).toBe(200);
+    const listBody = collectionFavoritesSchema.parse(JSON.parse(listAfter.body));
+    expect(listBody.favorites).toHaveLength(0);
+  });
+
+  it("returns 404 for peer photo bytes on a favorited jersey after private toggle (peer)", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "private-fav-photo-owner@example.com");
+    const peer = await registerSession(app, "private-fav-photo-peer@example.com");
+    const ownerJersey = await saveJerseyForUser(app, owner, fixture);
+
+    const addFavorite = await app.inject({
+      method: "POST",
+      url: "/v1/collection/favorites",
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+      payload: { userJerseyId: ownerJersey.id },
+    });
+    expect(addFavorite.statusCode).toBe(201);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/favorites",
+      headers: {
+        authorization: `Bearer ${peer.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    const listBody = collectionFavoritesSchema.parse(JSON.parse(listResponse.body));
+    const photoUrl = listBody.favorites[0]?.photoUrl;
+    expect(photoUrl).toBeDefined();
+
+    const photoBefore = await app.inject({
+      method: "GET",
+      url: photoUrl!,
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+    });
+    expect(photoBefore.statusCode).toBe(200);
+
+    const privateResponse = await patchJerseyPrivate(app, owner, ownerJersey.id, true);
+    expect(privateResponse.statusCode).toBe(200);
+
+    const photoAfter = await app.inject({
+      method: "GET",
+      url: photoUrl!,
+      headers: { authorization: `Bearer ${peer.accessToken}` },
+    });
+    expect(photoAfter.statusCode).toBe(404);
+  });
 });
