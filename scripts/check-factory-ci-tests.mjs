@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * CI ratchet (KIT-75): the required GitHub `test` job must run harness node
- * tests and webhook-router / land-policy factory-script tests. Fails if those
- * invocations are omitted, or if existing mobile check-scripts leave that job.
+ * CI ratchet (KIT-75): the required GitHub `test` job must run land-policy and
+ * migration-prefix factory-script tests. Fails if those invocations are omitted,
+ * or if existing mobile check-scripts leave that job.
+ * Pi harness tests moved to github.com/KitCollective/kit-pi-harness (2026-09-01).
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -11,12 +12,7 @@ import { fileURLToPath } from "node:url";
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 export const PACKAGE_JSON_PATH = "package.json";
 
-export const FACTORY_NODE_TEST_NEEDLES = [
-  "harness/tests",
-  "webhook-router",
-  "land-policy",
-  "migration-prefix",
-];
+export const FACTORY_NODE_TEST_NEEDLES = ["land-policy", "migration-prefix"];
 
 export const MOBILE_CHECK_NEEDLES = [
   "check:mobile-tab-bar",
