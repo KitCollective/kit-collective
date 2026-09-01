@@ -1000,7 +1000,7 @@ describe("Collection /v1", () => {
         seasonId: fixture.seasonId,
         type: "away",
         size: "xl",
-        condition: "good",
+        condition: "worn",
       },
     });
     expect(updateResponse.statusCode).toBe(200);
@@ -1008,7 +1008,7 @@ describe("Collection /v1", () => {
     expect(body.jersey.id).toBe(ownerJersey.id);
     expect(body.jersey.type).toBe("away");
     expect(body.jersey.size).toBe("xl");
-    expect(body.jersey.condition).toBe("good");
+    expect(body.jersey.condition).toBe("worn");
   });
 
   it("owner DELETE removes jersey from own list (owner)", async () => {

@@ -49,6 +49,7 @@ import {
   userJersey,
   userJerseyFavorite,
   userJerseyPhoto,
+  visionLog,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
@@ -1029,6 +1030,24 @@ export class CollectionService {
     }
 
     await this.db.transaction(async (tx) => {
+      const jerseyConversations = await tx
+        .select({ id: conversation.id })
+        .from(conversation)
+        .where(eq(conversation.userJerseyId, jerseyId));
+      const conversationIds = jerseyConversations.map((row) => row.id);
+
+      if (conversationIds.length > 0) {
+        await tx
+          .delete(conversationMessage)
+          .where(inArray(conversationMessage.conversationId, conversationIds));
+        await tx
+          .delete(conversationParticipant)
+          .where(inArray(conversationParticipant.conversationId, conversationIds));
+        await tx.delete(conversation).where(eq(conversation.userJerseyId, jerseyId));
+      }
+
+      await tx.delete(visionLog).where(eq(visionLog.userJerseyId, jerseyId));
+      await tx.delete(jerseyDraft).where(eq(jerseyDraft.userJerseyId, jerseyId));
       await tx.delete(userJerseyFavorite).where(eq(userJerseyFavorite.userJerseyId, jerseyId));
       await tx.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
       await tx
