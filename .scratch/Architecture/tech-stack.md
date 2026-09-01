@@ -78,7 +78,7 @@ One deployable. Modules = domains, not “helpers”.
 
 | Module | Owns |
 | --- | --- |
-| `Identity` | **Email + password (mandatory).** Apple + Google social. Facebook later if we add it. Verify email. Roles `user` / `admin`. Apple required because we offer social. |
+| `Identity` | **Email + password (mandatory).** Better Auth embedded in this module against our `User` (ADR-0035, ADR-0037). Social: Google + Facebook. Verify email. Password reset. Roles `user` / `admin`. Apple later — not required to offer Google/Facebook (ADR-0038). |
 | `Catalog` | country, league, club, national team, season, kit, manufacturer, player, patch, `CatalogLabel`, `ExternalId`, propose queue |
 | `Collection` | user jersey, photos, drafts sync, visibility, listing status |
 | `Vision` | Gemini worker, nano fallback, suggestion log |
@@ -188,7 +188,7 @@ See [data-model](./data-model.md). Short version:
 
 ## 9. Auth, billing, files, jobs
 
-- **Auth:** our own Nest `Identity` module, **Passport** (`@nestjs/passport` + JWT). **Email + password is the default and always offered.** Social: Sign in with Apple + Google in MVP; Facebook is optional later (same `Identity` table, extra provider). Not Clerk. Not Better Auth (Nest adapter is community; Fastify support is beta — we locked Fastify). Apple is mandatory because we offer third-party login. Admin = same user, `admin` role.
+- **Auth:** Nest `Identity` embeds **Better Auth** (library) against our Postgres `User` row (same UUID). **Email + password is the default and always offered.** Session is a **revocable Bearer** (Better Auth Bearer plugin + DB session), not a stateless JWT (ADR-0036). Social: Google + Facebook (Expo native idToken; Admin same Identity). Apple later. Verified social email auto-links (ADR-0038). Staff never uses `dash.better-auth.com` — `dash` + `sentinel` are adapters that feed Auth events / Auth security into Admin SPA (ADR-0035). Fastify stays; Better Auth is not a second public `/api/auth` contract. Not Clerk. Admin = same User, `admin` role (ADR-0018).
 - **Billing:** digital sub **in the Expo iOS/Android apps = IAP** (Apple/Google are merchant of record; Restore purchases required). Nest stores `Entitlement` after server-side receipt validation. **Stripe is not a substitute inside the store binaries.** Stripe is a later/optional web checkout (`Entitlement.source = stripe`) if we sell outside the stores — same 29 kr product, two pipes. Do not spec Stripe-only MVP if the first clients are App Store / Play.
 - **Files:** both classes live in **R2**, never on the CX33 disk and never as bytea in Postgres. Postgres stores the object key + metadata only.
   - `UserJerseyPhoto` → `user/{userId}/{jerseyId}/{photoId}.jpg` (front/back ~1600 px, label ~2400 px). Served via short-lived signed URLs after visibility checks.
