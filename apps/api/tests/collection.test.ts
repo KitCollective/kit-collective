@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   type CollectionJersey,
   collectionConversationsSchema,
+  collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
   collectionFavoritesSchema,
   collectionJerseysSchema,
@@ -1119,5 +1120,68 @@ describe("Collection /v1", () => {
       headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
     });
     expect(hiddenProfile.statusCode).toBe(404);
+  });
+
+  it("rejects unauthenticated Søg magazine home with 401", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/home",
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("composes Søg magazine shelves and omits empty, private, own, and blocked rows", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const owner = await registerSession(app, "magazine-owner@example.com");
+    const bidder = await registerSession(app, "magazine-bidder@example.com");
+    const viewer = await registerSession(app, "magazine-viewer@example.com");
+    const blockedOwner = await registerSession(app, "magazine-blocked@example.com");
+
+    const visibleJersey = await saveJerseyForUser(app, owner, fixture);
+    const biddingJersey = await saveJerseyForUser(app, bidder, fixture);
+    await patchJerseyBidding(app, bidder, biddingJersey.id, true);
+    const privateJersey = await saveJerseyForUser(app, owner, fixture);
+    await patchJerseyPrivate(app, owner, privateJersey.id, true);
+    const blockedJersey = await saveJerseyForUser(app, blockedOwner, fixture);
+    await patchJerseyBidding(app, blockedOwner, blockedJersey.id, true);
+
+    const ownerHomeResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/home",
+      headers: { authorization: `Bearer ${owner.accessToken}`, "accept-language": "da" },
+    });
+    expect(ownerHomeResponse.statusCode).toBe(200);
+    const ownHome = collectionDiscoverHomeSchema.parse(JSON.parse(ownerHomeResponse.body));
+    expect(ownHome.moreJerseys?.some((jersey) => jersey.id === visibleJersey.id)).toBeFalsy();
+    expect(ownHome.openForBid?.some((jersey) => jersey.id === biddingJersey.id)).toBe(true);
+
+    const blockResponse = await app.inject({
+      method: "POST",
+      url: `/v1/moderation/peers/${blockedOwner.user.id}/block`,
+      headers: { authorization: `Bearer ${viewer.accessToken}` },
+    });
+    expect(blockResponse.statusCode).toBe(201);
+
+    const homeResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/home",
+      headers: { authorization: `Bearer ${viewer.accessToken}`, "accept-language": "da" },
+    });
+    expect(homeResponse.statusCode).toBe(200);
+    const home = collectionDiscoverHomeSchema.parse(JSON.parse(homeResponse.body));
+    expect(home.clubs?.map((club) => club.clubLabel)).toEqual(["F.C. København"]);
+    expect(home.openForBid?.map((jersey) => jersey.id)).toEqual([biddingJersey.id]);
+    expect(home.collectors?.map((collector) => collector.handle)).toEqual(
+      expect.arrayContaining([owner.user.handle, bidder.user.handle]),
+    );
+    expect(home.collectors?.some((collector) => collector.handle === blockedOwner.user.handle)).toBe(
+      false,
+    );
+    expect(home.moreJerseys?.map((jersey) => jersey.id)).toEqual(
+      expect.arrayContaining([visibleJersey.id, biddingJersey.id]),
+    );
+    expect(home.moreJerseys?.some((jersey) => jersey.id === privateJersey.id)).toBe(false);
+    expect(home.moreJerseys?.some((jersey) => jersey.id === blockedJersey.id)).toBe(false);
+    expect(JSON.parse(homeResponse.body)).not.toHaveProperty("entitlement");
   });
 });

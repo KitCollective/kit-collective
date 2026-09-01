@@ -41,6 +41,36 @@ export const collectionDiscoverJerseysSchema = z
 
 export type CollectionDiscoverJerseys = z.infer<typeof collectionDiscoverJerseysSchema>;
 
+export const collectionDiscoverHomeClubSchema = z
+  .object({
+    clubId: z.string().uuid(),
+    clubLabel: z.string().min(1),
+  })
+  .strict();
+
+export type CollectionDiscoverHomeClub = z.infer<typeof collectionDiscoverHomeClubSchema>;
+
+export const collectionDiscoverHomeCollectorSchema = z
+  .object({
+    handle: z.string().min(1),
+    initial: z.string().min(1),
+    avatarUrl: z.string().min(1).nullable(),
+  })
+  .strict();
+
+export type CollectionDiscoverHomeCollector = z.infer<typeof collectionDiscoverHomeCollectorSchema>;
+
+export const collectionDiscoverHomeSchema = z
+  .object({
+    clubs: z.array(collectionDiscoverHomeClubSchema).optional(),
+    openForBid: z.array(collectionDiscoverJerseySchema).optional(),
+    collectors: z.array(collectionDiscoverHomeCollectorSchema).optional(),
+    moreJerseys: z.array(collectionDiscoverJerseySchema).optional(),
+  })
+  .strict();
+
+export type CollectionDiscoverHome = z.infer<typeof collectionDiscoverHomeSchema>;
+
 export const collectionPeerJerseySchema = z
   .object({
     id: z.string().uuid(),
