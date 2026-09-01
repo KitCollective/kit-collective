@@ -1,4 +1,3 @@
-import { createHmac } from "node:crypto";
 import type { IdentityLinkedProvider } from "@kit/api-contract";
 import {
   IdTokenVerificationFailedError,
@@ -6,16 +5,56 @@ import {
   type VerifiedIdToken,
 } from "./id-token.adapter.js";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): boolean {
   return typeof value === "object" && value !== null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? (value as Record<string, unknown>) : null;
 }
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function googleEmailVerified(value: unknown): boolean {
-  return value === true || value === "true";
+function readEmailVerified(value: unknown): boolean | null {
+  if (value === true || value === "true") {
+    return true;
+  }
+  if (value === false || value === "false") {
+    return false;
+  }
+  return null;
+}
+
+function isJwt(token: string): boolean {
+  return token.split(".").length === 3;
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const payload = token.split(".")[1];
+  if (!payload) {
+    throw new IdTokenVerificationFailedError();
+  }
+  try {
+    const json = Buffer.from(payload, "base64url").toString("utf8");
+    const parsed: unknown = JSON.parse(json);
+    const record = asRecord(parsed);
+    if (!record) {
+      throw new IdTokenVerificationFailedError();
+    }
+    return record;
+  } catch {
+    throw new IdTokenVerificationFailedError();
+  }
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new IdTokenVerificationFailedError();
+  }
+  return value;
 }
 
 export class LiveIdTokenAdapter implements IdTokenVerifierAdapter {
@@ -27,56 +66,48 @@ export class LiveIdTokenAdapter implements IdTokenVerifierAdapter {
   }
 
   private async verifyGoogle(idToken: string): Promise<VerifiedIdToken> {
+    const audience = requireEnv("GOOGLE_CLIENT_ID");
     const url = new URL("https://oauth2.googleapis.com/tokeninfo");
     url.searchParams.set("id_token", idToken);
 
     const body = await this.fetchJson(url);
     const email = readString(body.email);
     const providerUserId = readString(body.sub);
-    if (!email || !providerUserId) {
-      throw new IdTokenVerificationFailedError();
-    }
-
-    const audience = process.env.GOOGLE_CLIENT_ID?.trim();
-    if (audience && readString(body.aud) !== audience) {
+    const emailVerified = readEmailVerified(body.email_verified);
+    if (!email || !providerUserId || emailVerified === null || readString(body.aud) !== audience) {
       throw new IdTokenVerificationFailedError();
     }
 
     return {
       provider: "google",
       email: email.toLowerCase(),
-      emailVerified: googleEmailVerified(body.email_verified),
+      emailVerified,
       providerUserId,
       displayName: readString(body.name),
     };
   }
 
   private async verifyFacebook(idToken: string): Promise<VerifiedIdToken> {
-    const url = new URL("https://graph.facebook.com/me");
-    url.searchParams.set("fields", "id,email,name");
-    url.searchParams.set("access_token", idToken);
-
-    const appSecret = process.env.FACEBOOK_APP_SECRET?.trim();
-    if (appSecret) {
-      url.searchParams.set(
-        "appsecret_proof",
-        createHmac("sha256", appSecret).update(idToken).digest("hex"),
-      );
+    requireEnv("FACEBOOK_APP_ID");
+    requireEnv("FACEBOOK_APP_SECRET");
+    if (!isJwt(idToken)) {
+      throw new IdTokenVerificationFailedError();
     }
 
-    const body = await this.fetchJson(url);
-    const email = readString(body.email);
-    const providerUserId = readString(body.id);
-    if (!email || !providerUserId) {
+    const claims = decodeJwtPayload(idToken);
+    const email = readString(claims.email);
+    const providerUserId = readString(claims.sub);
+    const emailVerified = readEmailVerified(claims.email_verified);
+    if (!email || !providerUserId || emailVerified === null) {
       throw new IdTokenVerificationFailedError();
     }
 
     return {
       provider: "facebook",
       email: email.toLowerCase(),
-      emailVerified: true,
+      emailVerified,
       providerUserId,
-      displayName: readString(body.name),
+      displayName: readString(claims.name),
     };
   }
 
@@ -93,10 +124,11 @@ export class LiveIdTokenAdapter implements IdTokenVerifierAdapter {
     }
 
     const body: unknown = await response.json();
-    if (!isRecord(body) || isRecord(body.error)) {
+    const record = asRecord(body);
+    if (!record || asRecord(record.error)) {
       throw new IdTokenVerificationFailedError();
     }
 
-    return body;
+    return record;
   }
 }

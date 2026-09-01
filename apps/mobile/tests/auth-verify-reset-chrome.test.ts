@@ -30,10 +30,14 @@ describe("Expo social login chrome", () => {
     expect(login).not.toContain("accounts.google.com");
   });
 
-  it("native idToken seam refuses browser OAuth", () => {
+  it("native idToken seam calls Google and Facebook native SDKs", () => {
     const seam = readFileSync(join(__dirname, "../src/auth/native-id-token.ts"), "utf8");
 
-    expect(seam).toContain("not browser OAuth");
+    expect(seam).toContain("@react-native-google-signin/google-signin");
+    expect(seam).toContain("GoogleSignin.signIn");
+    expect(seam).toContain("react-native-fbsdk-next");
+    expect(seam).toContain("getAuthenticationTokenIOS");
+    expect(seam).toContain("native_only");
     expect(seam).not.toContain("WebBrowser");
     expect(seam).not.toContain("auth-session");
     expect(seam).not.toContain("expo-auth-session");

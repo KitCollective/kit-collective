@@ -74,7 +74,7 @@ function loadScriptOnce(src: string): Promise<void> {
 }
 
 function facebookIdToken(auth: FacebookAuthResponse | null | undefined): string | undefined {
-  return auth?.id_token ?? auth?.authenticationToken ?? auth?.accessToken;
+  return auth?.id_token ?? auth?.authenticationToken;
 }
 
 async function requestGoogleIdToken(host: SocialIdTokenHost): Promise<string> {
@@ -120,6 +120,9 @@ async function requestGoogleIdToken(host: SocialIdTokenHost): Promise<string> {
       },
     });
     googleId.prompt((notification) => {
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        fail("Google sign-in is unavailable");
+      }
       if (notification.isDismissedMoment()) {
         fail("Google sign-in was cancelled");
       }

@@ -32,12 +32,37 @@ describe("createSocialIdTokenRequester", () => {
           return;
         },
         login(callback) {
-          callback({ authResponse: { accessToken: "facebook-id-token" } });
+          callback({ authResponse: { authenticationToken: "facebook-id-token" } });
         },
       },
     });
 
     await expect(request("facebook")).resolves.toBe("facebook-id-token");
+  });
+
+  it("rejects when Google GIS does not display a credential", async () => {
+    const request = createSocialIdTokenRequester({
+      googleClientId: "google-web-client",
+      loadScript: async () => undefined,
+      google: {
+        accounts: {
+          id: {
+            initialize() {
+              return;
+            },
+            prompt(listener) {
+              listener?.({
+                isNotDisplayed: () => true,
+                isSkippedMoment: () => false,
+                isDismissedMoment: () => false,
+              });
+            },
+          },
+        },
+      },
+    });
+
+    await expect(request("google")).rejects.toThrow("Google sign-in is unavailable");
   });
 
   it("fails closed when client ids are missing", async () => {
