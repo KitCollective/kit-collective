@@ -3,6 +3,7 @@ import type {
   CollectionDiscoverHomeClub,
   CollectionDiscoverHomeCollector,
   CollectionDiscoverJersey,
+  CollectionDiscoverTypeahead,
 } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useRouter } from "expo-router";
@@ -17,12 +18,12 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fetchDiscoverHome, fetchDiscoverJerseys } from "@/api/bidding";
+import { fetchDiscoverHome, fetchDiscoverTypeahead } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
 import { resolvePeerAvatarUrl } from "@/api/peer-profile";
 import { useAuth } from "@/auth/AuthProvider";
 import { Avatar } from "@/components/avatar";
-import { Mark, SearchField } from "@/components/catalog-ui";
+import { ListRow, Mark, SearchField } from "@/components/catalog-ui";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ScreenHeader } from "@/components/screen-header";
 import { EmptyState } from "@/components/ui";
@@ -46,7 +47,7 @@ export default function SearchScreen() {
     space.insetMd;
   const [loading, setLoading] = useState(true);
   const [home, setHome] = useState<CollectionDiscoverHome>({});
-  const [queryJerseys, setQueryJerseys] = useState<CollectionDiscoverJersey[]>([]);
+  const [typeahead, setTypeahead] = useState<CollectionDiscoverTypeahead>({});
   const [query, setQuery] = useState("");
 
   const loadMagazine = useCallback(async () => {
@@ -55,14 +56,13 @@ export default function SearchScreen() {
     }
 
     if (query.trim()) {
-      const response = await fetchDiscoverJerseys(accessToken, query);
-      setQueryJerseys(response.jerseys);
+      setTypeahead(await fetchDiscoverTypeahead(accessToken, query));
       return;
     }
 
     const response = await fetchDiscoverHome(accessToken);
     setHome(response);
-    setQueryJerseys([]);
+    setTypeahead({});
   }, [accessToken, query]);
 
   useEffect(() => {
@@ -109,6 +109,14 @@ export default function SearchScreen() {
     router.push(`/(tabs)/search/peer/${collector.handle}`);
   };
 
+  const openPlayerDrill = (playerId: string, playerLabel: string) => {
+    router.push(`/(tabs)/search/player/${playerId}?label=${encodeURIComponent(playerLabel)}`);
+  };
+
+  const openKitStub = (kitId: string, label: string) => {
+    router.push(`/(tabs)/search/kit/${kitId}?label=${encodeURIComponent(label)}`);
+  };
+
   const photoSource = (jersey: CollectionDiscoverJersey) => {
     const primaryPhoto = jersey.photos[0];
     return primaryPhoto
@@ -141,6 +149,17 @@ export default function SearchScreen() {
     collectors.length === 0 &&
     moreJerseys.length === 0;
   const searching = query.trim().length > 0;
+  const typeaheadClubs = typeahead.clubs ?? [];
+  const typeaheadKits = typeahead.kits ?? [];
+  const typeaheadPlayers = typeahead.players ?? [];
+  const typeaheadCollectors = typeahead.collectors ?? [];
+  const typeaheadJerseys = typeahead.jerseys ?? [];
+  const typeaheadEmpty =
+    typeaheadClubs.length === 0 &&
+    typeaheadKits.length === 0 &&
+    typeaheadPlayers.length === 0 &&
+    typeaheadCollectors.length === 0 &&
+    typeaheadJerseys.length === 0;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -160,15 +179,100 @@ export default function SearchScreen() {
           <ActivityIndicator color={theme.fillPrimary} />
         </View>
       ) : searching ? (
-        queryJerseys.length === 0 ? (
-          <EmptyState title="Ingen trøjer" body="Ingen synlige trøjer matcher søgningen." />
+        typeaheadEmpty ? (
+          <EmptyState
+            title="Ingen resultater"
+            body="Prøv et andet klub-, kit-, spiller- eller samlernavn."
+          />
         ) : (
           <ScrollView
-            contentContainerStyle={[styles.gridContent, { paddingBottom: tabBarPadding }]}
+            testID="search-typeahead"
+            contentContainerStyle={[styles.magazineContent, { paddingBottom: tabBarPadding }]}
           >
-            <View style={styles.grid}>
-              {queryJerseys.map((jersey) => renderJerseyTile(jersey, tileWidth))}
-            </View>
+            {typeaheadClubs.length > 0 ? (
+              <View testID="typeahead-clubs" style={styles.shelf}>
+                <Text style={[typography.section, { color: theme.contentPrimary }]}>Klubber</Text>
+                {typeaheadClubs.map((club) => (
+                  <ListRow
+                    key={club.clubId}
+                    title={club.clubLabel}
+                    onPress={() => openClubDrill(club)}
+                  />
+                ))}
+              </View>
+            ) : null}
+            {typeaheadKits.length > 0 ? (
+              <View testID="typeahead-kits" style={styles.shelf}>
+                <Text style={[typography.section, { color: theme.contentPrimary }]}>Kits</Text>
+                {typeaheadKits.map((kitHit) => (
+                  <ListRow
+                    key={kitHit.kitId}
+                    title={kitHit.label}
+                    onPress={() => openKitStub(kitHit.kitId, kitHit.label)}
+                  />
+                ))}
+              </View>
+            ) : null}
+            {typeaheadPlayers.length > 0 ? (
+              <View testID="typeahead-players" style={styles.shelf}>
+                <Text style={[typography.section, { color: theme.contentPrimary }]}>Spillere</Text>
+                {typeaheadPlayers.map((playerHit) => (
+                  <ListRow
+                    key={playerHit.playerId}
+                    title={playerHit.playerLabel}
+                    onPress={() => openPlayerDrill(playerHit.playerId, playerHit.playerLabel)}
+                  />
+                ))}
+              </View>
+            ) : null}
+            {typeaheadCollectors.length > 0 ? (
+              <View testID="typeahead-collectors" style={styles.shelf}>
+                <Text style={[typography.section, { color: theme.contentPrimary }]}>Samlere</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.rail}
+                >
+                  {typeaheadCollectors.map((collector) => {
+                    const avatarUri = resolvePeerAvatarUrl(collector.avatarUrl);
+                    return (
+                      <Pressable
+                        key={collector.handle}
+                        accessibilityRole="button"
+                        accessibilityLabel={collector.handle}
+                        onPress={() => openPeerProfile(collector)}
+                        style={styles.collector}
+                      >
+                        <Avatar
+                          handle={collector.handle}
+                          uri={avatarUri}
+                          uriHeaders={
+                            accessToken && avatarUri
+                              ? { Authorization: `Bearer ${accessToken}` }
+                              : undefined
+                          }
+                          size="md"
+                        />
+                        <Text
+                          style={[typography.headingSm, { color: theme.contentPrimary }]}
+                          numberOfLines={1}
+                        >
+                          {collector.handle}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
+            {typeaheadJerseys.length > 0 ? (
+              <View testID="typeahead-jerseys" style={styles.shelf}>
+                <Text style={[typography.section, { color: theme.contentPrimary }]}>Trøjer</Text>
+                <View style={styles.grid}>
+                  {typeaheadJerseys.map((jersey) => renderJerseyTile(jersey, tileWidth))}
+                </View>
+              </View>
+            ) : null}
           </ScrollView>
         )
       ) : magazineEmpty ? (

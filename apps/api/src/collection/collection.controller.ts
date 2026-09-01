@@ -179,6 +179,16 @@ export class CollectionController {
     );
   }
 
+  @Get("collection/discover/typeahead")
+  @UseGuards(JwtAuthGuard)
+  discoverTypeahead(
+    @CurrentUser() user: JwtPayload,
+    @Query("q") query?: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.discoverTypeahead(user.sub, query, resolveLocale(acceptLanguage));
+  }
+
   @Get("collection/discover/jerseys")
   @UseGuards(JwtAuthGuard)
   discoverJerseys(

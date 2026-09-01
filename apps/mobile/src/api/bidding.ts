@@ -3,6 +3,7 @@ import {
   type CollectionDiscoverCatalogDrill,
   type CollectionDiscoverHome,
   type CollectionDiscoverJerseys,
+  type CollectionDiscoverTypeahead,
   type CollectionJersey,
   type CollectionPeerJersey,
   type CollectionPrivatePatch,
@@ -12,6 +13,7 @@ import {
   collectionDiscoverCatalogDrillSchema,
   collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
+  collectionDiscoverTypeaheadSchema,
   collectionJerseySchema,
   collectionPeerJerseySchema,
   collectionRespondBidResponseSchema,
@@ -75,6 +77,28 @@ export async function fetchDiscoverCatalogDrill(
   }
 
   return collectionDiscoverCatalogDrillSchema.parse(await response.json());
+}
+
+export async function fetchDiscoverTypeahead(
+  accessToken: string,
+  query: string,
+): Promise<CollectionDiscoverTypeahead> {
+  const trimmed = query.trim();
+  const response = await requestJson(
+    `/v1/collection/discover/typeahead?q=${encodeURIComponent(trimmed)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Accept-Language": "da",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new BiddingFetchError("Kunne ikke søge", response.status);
+  }
+
+  return collectionDiscoverTypeaheadSchema.parse(await response.json());
 }
 
 export async function fetchDiscoverJerseys(

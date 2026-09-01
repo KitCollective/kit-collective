@@ -8,6 +8,9 @@ import {
   type CollectionDiscoverHomeClub,
   type CollectionDiscoverHomeCollector,
   type CollectionDiscoverJerseys,
+  type CollectionDiscoverTypeahead,
+  type CollectionDiscoverTypeaheadKit,
+  type CollectionDiscoverTypeaheadPlayer,
   type CollectionFavorites,
   type CollectionJersey,
   type CollectionJerseys,
@@ -27,6 +30,7 @@ import {
   collectionDiscoverCatalogDrillSchema,
   collectionDiscoverHomeSchema,
   collectionDiscoverJerseysSchema,
+  collectionDiscoverTypeaheadSchema,
   collectionFavoritesSchema,
   collectionJerseysSchema,
   collectionJerseyUpdateSchema,
@@ -50,6 +54,7 @@ import {
   conversationMessage,
   conversationParticipant,
   jerseyDraft,
+  kit,
   player,
   playerClubSeason,
   season,
@@ -84,6 +89,11 @@ export const OBJECT_STORE = Symbol("OBJECT_STORE");
 
 function canonicalCollectorPair(leftId: string, rightId: string): [string, string] {
   return leftId < rightId ? [leftId, rightId] : [rightId, leftId];
+}
+
+function typeaheadTextMatches(parts: Array<string | undefined>, query: string): boolean {
+  const lowered = query.toLowerCase();
+  return parts.some((part) => part !== undefined && part.toLowerCase().includes(lowered));
 }
 
 function handleInitial(handle: string): string {
@@ -1402,6 +1412,156 @@ export class CollectionService {
     });
   }
 
+  async discoverTypeahead(
+    userId: string,
+    query: string | undefined,
+    locale: LabelLocale = "da",
+  ): Promise<CollectionDiscoverTypeahead> {
+    const normalizedQuery = query?.trim() ?? "";
+    if (!normalizedQuery) {
+      throw new BadRequestException("Query is required");
+    }
+
+    const pattern = `%${normalizedQuery}%`;
+    const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
+
+    const clubMatches = await this.db
+      .selectDistinct({ entityId: catalogLabel.entityId })
+      .from(catalogLabel)
+      .where(and(eq(catalogLabel.entityType, "club"), sql`${catalogLabel.text} ilike ${pattern}`));
+    const clubIds = clubMatches.map((row) => row.entityId);
+    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const clubs = clubIds.flatMap((clubId) => {
+      const clubLabel = clubLabels.get(clubId);
+      return clubLabel ? [{ clubId, clubLabel }] : [];
+    });
+
+    const playerMatches = await this.db
+      .selectDistinct({ entityId: catalogLabel.entityId })
+      .from(catalogLabel)
+      .where(
+        and(eq(catalogLabel.entityType, "player"), sql`${catalogLabel.text} ilike ${pattern}`),
+      );
+    const playerIds = playerMatches.map((row) => row.entityId);
+    const playerLabels = await this.resolveEntityLabels("player", playerIds, locale);
+    const players: CollectionDiscoverTypeaheadPlayer[] = playerIds.flatMap((playerId) => {
+      const playerLabel = playerLabels.get(playerId);
+      return playerLabel ? [{ playerId, playerLabel }] : [];
+    });
+
+    const kitRows = await this.db
+      .select({
+        id: kit.id,
+        clubId: kit.clubId,
+        type: kit.type,
+        seasonLabel: season.label,
+      })
+      .from(kit)
+      .innerJoin(season, eq(kit.seasonId, season.id));
+    const kitClubIds = [...new Set(kitRows.flatMap((row) => (row.clubId ? [row.clubId] : [])))];
+    const kitClubLabels = await this.resolveEntityLabels("club", kitClubIds, locale);
+    const kitClubSearchTexts = await this.resolveEntitySearchTexts("club", kitClubIds);
+    const kits: CollectionDiscoverTypeaheadKit[] = kitRows.flatMap((row) => {
+      if (!row.clubId) {
+        return [];
+      }
+      const clubLabel = kitClubLabels.get(row.clubId);
+      if (!clubLabel) {
+        return [];
+      }
+      const searchTexts = kitClubSearchTexts.get(row.clubId) ?? [];
+      if (
+        !typeaheadTextMatches(
+          [...searchTexts, row.seasonLabel, KIT_TYPE_LABELS_DA[row.type]],
+          normalizedQuery,
+        )
+      ) {
+        return [];
+      }
+      return [
+        {
+          kitId: row.id,
+          label: `${clubLabel} ${row.seasonLabel} ${KIT_TYPE_LABELS_DA[row.type]}`,
+        },
+      ];
+    });
+
+    const collectorRows = await this.db
+      .select({
+        id: user.id,
+        handle: user.handle,
+        avatarObjectKey: user.avatarObjectKey,
+      })
+      .from(user)
+      .where(and(ne(user.id, userId), sql`${user.handle} ilike ${pattern}`));
+    const collectors = collectorRows
+      .filter((row) => !blockedPeerIds.has(row.id))
+      .map((row) => ({
+        handle: row.handle,
+        initial: handleInitial(row.handle),
+        avatarUrl: row.avatarObjectKey ? `/v1/identity/peers/${row.id}/avatar` : null,
+      }));
+
+    const jerseyRows = await this.db
+      .select({
+        id: userJersey.id,
+        ownerId: userJersey.userId,
+        clubId: userJersey.clubId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        seasonLabel: season.label,
+        ownerHandle: user.handle,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(user, eq(userJersey.userId, user.id))
+      .where(and(ne(userJersey.userId, userId), eq(userJersey.private, false)))
+      .orderBy(desc(userJersey.updatedAt));
+    const visibleJerseyRows = jerseyRows.filter((row) => !blockedPeerIds.has(row.ownerId));
+    const jerseyClubIds = [...new Set(visibleJerseyRows.map((row) => row.clubId))];
+    const jerseyClubLabels = await this.resolveEntityLabels("club", jerseyClubIds, locale);
+    const jerseyClubSearchTexts = await this.resolveEntitySearchTexts("club", jerseyClubIds);
+    const matchingJerseyRows = visibleJerseyRows.filter((row) => {
+      const clubLabel = jerseyClubLabels.get(row.clubId);
+      if (!clubLabel) {
+        return false;
+      }
+      const searchTexts = jerseyClubSearchTexts.get(row.clubId) ?? [];
+      return typeaheadTextMatches(
+        [...searchTexts, row.seasonLabel, row.ownerHandle],
+        normalizedQuery,
+      );
+    });
+    const photosByJersey = await this.loadPhotosForJerseys(matchingJerseyRows.map((row) => row.id));
+    const jerseys = matchingJerseyRows.flatMap((row) => {
+      const clubLabel = jerseyClubLabels.get(row.clubId);
+      const photos = photosByJersey.get(row.id);
+      if (!clubLabel || !photos || photos.length === 0) {
+        return [];
+      }
+      return [
+        {
+          id: row.id,
+          clubId: row.clubId,
+          seasonId: row.seasonId,
+          type: row.type,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          ownerHandle: row.ownerHandle,
+          photos,
+        },
+      ];
+    });
+
+    return collectionDiscoverTypeaheadSchema.parse({
+      ...(clubs.length > 0 ? { clubs } : {}),
+      ...(kits.length > 0 ? { kits } : {}),
+      ...(players.length > 0 ? { players } : {}),
+      ...(collectors.length > 0 ? { collectors } : {}),
+      ...(jerseys.length > 0 ? { jerseys } : {}),
+    });
+  }
+
   async getPeerJersey(
     userId: string,
     jerseyId: string,
@@ -2043,6 +2203,37 @@ export class CollectionService {
     }
 
     return labels;
+  }
+
+  private async resolveEntitySearchTexts(
+    entityType: "country" | "league" | "club" | "player",
+    entityIds: string[],
+  ): Promise<Map<string, string[]>> {
+    if (entityIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .select({
+        entityId: catalogLabel.entityId,
+        text: catalogLabel.text,
+      })
+      .from(catalogLabel)
+      .where(
+        and(eq(catalogLabel.entityType, entityType), inArray(catalogLabel.entityId, entityIds)),
+      );
+
+    const texts = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!row.text) {
+        continue;
+      }
+      const existing = texts.get(row.entityId) ?? [];
+      existing.push(row.text);
+      texts.set(row.entityId, existing);
+    }
+
+    return texts;
   }
 
   private async loadSquadPlayersForScopes(
