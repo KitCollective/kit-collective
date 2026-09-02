@@ -35,16 +35,7 @@
       ],
       "expo-sqlite",
       "expo-font",
-      "@react-native-google-signin/google-signin",
-      [
-        "react-native-fbsdk-next",
-        {
-          "appID": "0",
-          "clientToken": "pending",
-          "displayName": "KitCollective",
-          "scheme": "kitcollective"
-        }
-      ]
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true

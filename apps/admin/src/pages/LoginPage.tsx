@@ -2,19 +2,10 @@ import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { type FormEvent, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider.js";
-import {
-  requestSocialIdToken as defaultRequestSocialIdToken,
-  type SocialIdTokenRequester,
-} from "../auth/social-id-token.js";
+import { requestSocialIdToken } from "../auth/social-id-token.js";
 import { BrandLogo } from "../brand/BrandLogo.js";
 
-type LoginPageProps = {
-  requestSocialIdToken?: SocialIdTokenRequester;
-};
-
-export function LoginPage({
-  requestSocialIdToken = defaultRequestSocialIdToken,
-}: LoginPageProps = {}) {
+export function LoginPage() {
   const { login, loginSocial, user } = useAuth();
   const location = useLocation();
   const [email, setEmail] = useState("");

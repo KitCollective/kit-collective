@@ -23,8 +23,10 @@ async function requestGoogleNativeIdToken(): Promise<string> {
 }
 
 async function requestFacebookNativeIdToken(): Promise<string> {
-  requiredPublicEnv("EXPO_PUBLIC_FACEBOOK_APP_ID");
-  const { LoginManager, AuthenticationToken } = await import("react-native-fbsdk-next");
+  const { AuthenticationToken, LoginManager, Settings } = await import("react-native-fbsdk-next");
+  Settings.setAppID(requiredPublicEnv("EXPO_PUBLIC_FACEBOOK_APP_ID"));
+  Settings.setClientToken(requiredPublicEnv("EXPO_PUBLIC_FACEBOOK_CLIENT_TOKEN"));
+  Settings.initializeSDK();
   LoginManager.setLoginBehavior("native_only");
   const login = await LoginManager.logInWithPermissions(["public_profile", "email"], "limited");
   if (login.isCancelled) {
