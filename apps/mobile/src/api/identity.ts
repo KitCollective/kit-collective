@@ -1,5 +1,7 @@
 import {
+  type AuthEvents,
   acceptAllCookieConsent,
+  authEventsSchema,
   type CookieConsent,
   type CookieConsentUpdate,
   cookieConsentSchema,
@@ -265,6 +267,33 @@ export async function logoutSession(accessToken: string): Promise<void> {
       Authorization: `Bearer ${accessToken}`,
     },
   });
+}
+
+export async function fetchAuthEvents(accessToken: string): Promise<AuthEvents> {
+  const response = await requestJson("/v1/identity/auth-events", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke hente login-historik");
+  }
+
+  return authEventsSchema.parse(await response.json());
+}
+
+export async function revokeAllSessions(accessToken: string): Promise<void> {
+  const response = await requestJson("/v1/identity/sessions/revoke-all", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke logge ud overalt");
+  }
 }
 
 export async function fetchPrefs(accessToken: string): Promise<IdentityPrefs> {

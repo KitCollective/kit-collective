@@ -344,6 +344,21 @@ export const authEvent = pgTable("auth_event", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const authSecurityDetection = pgTable(
+  "auth_security_detection",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sentinelId: text("sentinel_id").notNull(),
+    kind: text("kind").notNull(),
+    userId: uuid("user_id").references(() => user.id, { onDelete: "set null" }),
+    summary: text("summary").notNull(),
+    detectedAt: timestamp("detected_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("auth_security_detection_sentinel_id_unique").on(table.sentinelId)],
+);
+
 export const userJersey = pgTable("user_jersey", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
@@ -625,6 +640,7 @@ export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   authEvents: many(authEvent),
+  authSecurityDetections: many(authSecurityDetection),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -637,6 +653,10 @@ export const accountRelations = relations(account, ({ one }) => ({
 
 export const authEventRelations = relations(authEvent, ({ one }) => ({
   user: one(user, { fields: [authEvent.userId], references: [user.id] }),
+}));
+
+export const authSecurityDetectionRelations = relations(authSecurityDetection, ({ one }) => ({
+  user: one(user, { fields: [authSecurityDetection.userId], references: [user.id] }),
 }));
 
 export const userJerseyFavoriteRelations = relations(userJerseyFavorite, ({ one }) => ({

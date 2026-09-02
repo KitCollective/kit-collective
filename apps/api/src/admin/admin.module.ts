@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { BillingModule } from "../billing/billing.module.js";
 import { CollectionModule } from "../collection/collection.module.js";
 import { IdentityModule } from "../identity/identity.module.js";
+import { AdminAuthController } from "./admin-auth.controller.js";
 import { AdminAuthGuard } from "./admin-auth.guard.js";
 import { AdminBillingController } from "./admin-billing.controller.js";
 import { AdminCatalogController } from "./admin-catalog.controller.js";
@@ -11,7 +12,12 @@ import { AdminCollectionService } from "./admin-collection.service.js";
 
 @Module({
   imports: [IdentityModule, CollectionModule, BillingModule],
-  controllers: [AdminCatalogController, AdminCollectionController, AdminBillingController],
+  controllers: [
+    AdminCatalogController,
+    AdminCollectionController,
+    AdminBillingController,
+    AdminAuthController,
+  ],
   providers: [
     AdminCatalogService,
     AdminCollectionService,

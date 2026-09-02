@@ -11,3 +11,6 @@ if (!process.env.BETTER_AUTH_URL?.trim()) {
 if (!process.env.JWT_SECRET?.trim()) {
   process.env.JWT_SECRET = "test-jwt-secret";
 }
+if (!process.env.SENTINEL_ADAPTER?.trim()) {
+  process.env.SENTINEL_ADAPTER = "fake";
+}

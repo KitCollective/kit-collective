@@ -10,6 +10,7 @@ export const authEventSchema = z
   .object({
     id: z.string().uuid(),
     kind: authEventKindSchema,
+    userId: z.string().uuid().nullable(),
     provider: identityLinkedProviderSchema.nullable(),
     createdAt: z.string().datetime(),
   })

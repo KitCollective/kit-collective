@@ -141,6 +141,13 @@
       "when": 1788299000000,
       "tag": "0019_email_verified_default",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788350000000,
+      "tag": "0020_auth_security",
+      "breakpoints": true
     }
   ]
 }

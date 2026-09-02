@@ -1,10 +1,14 @@
 import {
+  type AdminAuthEvents,
   type AdminCollectorJerseyIndex,
   type AdminCollectorJerseyIndexRow,
   type AdminCollectorList,
   type AdminCollectorRow,
+  type AuthSecurityDetections,
+  adminAuthEventsSchema,
   adminCollectorJerseyIndexSchema,
   adminCollectorListSchema,
+  authSecurityDetectionsSchema,
 } from "@kit/api-contract";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -12,8 +16,9 @@ import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
 import { useAdminChrome } from "../components/AdminShell.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
+import { formatAuthDateTime, formatAuthEventKind } from "./auth-event-labels.js";
 
-const USER_DATA_TABLES = ["user", "jersey"] as const;
+const USER_DATA_TABLES = ["user", "jersey", "auth-events", "auth-security"] as const;
 
 type UserDataTable = (typeof USER_DATA_TABLES)[number];
 
@@ -23,6 +28,10 @@ function tableLabel(table: UserDataTable): string {
       return "Users";
     case "jersey":
       return "Jerseys";
+    case "auth-events":
+      return "Auth events";
+    case "auth-security":
+      return "Auth security";
     default: {
       const exhaustive: never = table;
       return exhaustive;
@@ -36,6 +45,10 @@ function tableSearchPlaceholder(table: UserDataTable): string {
       return "Search users";
     case "jersey":
       return "Search jerseys";
+    case "auth-events":
+      return "Search Auth events";
+    case "auth-security":
+      return "Search Auth security";
     default: {
       const exhaustive: never = table;
       return exhaustive;
@@ -49,6 +62,10 @@ function columnCount(table: UserDataTable): number {
       return 5;
     case "jersey":
       return 5;
+    case "auth-events":
+      return 4;
+    case "auth-security":
+      return 4;
     default: {
       const exhaustive: never = table;
       return exhaustive;
@@ -63,6 +80,8 @@ export function CollectorsPage() {
   const [table, setTable] = useState<UserDataTable>("user");
   const [users, setUsers] = useState<AdminCollectorList | null>(null);
   const [jerseys, setJerseys] = useState<AdminCollectorJerseyIndex | null>(null);
+  const [authEvents, setAuthEvents] = useState<AdminAuthEvents | null>(null);
+  const [authSecurity, setAuthSecurity] = useState<AuthSecurityDetections | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
@@ -84,25 +103,52 @@ export function CollectorsPage() {
       params.set("q", query.q);
     }
     const suffix = params.toString() ? `?${params.toString()}` : "";
-    const path =
-      table === "user" ? `/admin/collectors${suffix}` : `/admin/collectors/jerseys${suffix}`;
 
-    const request =
-      table === "user"
-        ? apiFetch<AdminCollectorList>(path, { token }).then((body) => {
-            if (cancelled) {
-              return;
-            }
-            setUsers(adminCollectorListSchema.parse(body));
-            setJerseys(null);
-          })
-        : apiFetch<AdminCollectorJerseyIndex>(path, { token }).then((body) => {
-            if (cancelled) {
-              return;
-            }
-            setJerseys(adminCollectorJerseyIndexSchema.parse(body));
-            setUsers(null);
-          });
+    function clearTables() {
+      setUsers(null);
+      setJerseys(null);
+      setAuthEvents(null);
+      setAuthSecurity(null);
+    }
+
+    let request: Promise<void>;
+    if (table === "user") {
+      request = apiFetch<AdminCollectorList>(`/admin/collectors${suffix}`, { token }).then(
+        (body) => {
+          if (cancelled) {
+            return;
+          }
+          clearTables();
+          setUsers(adminCollectorListSchema.parse(body));
+        },
+      );
+    } else if (table === "jersey") {
+      request = apiFetch<AdminCollectorJerseyIndex>(`/admin/collectors/jerseys${suffix}`, {
+        token,
+      }).then((body) => {
+        if (cancelled) {
+          return;
+        }
+        clearTables();
+        setJerseys(adminCollectorJerseyIndexSchema.parse(body));
+      });
+    } else if (table === "auth-events") {
+      request = apiFetch<AdminAuthEvents>("/admin/auth/events", { token }).then((body) => {
+        if (cancelled) {
+          return;
+        }
+        clearTables();
+        setAuthEvents(adminAuthEventsSchema.parse(body));
+      });
+    } else {
+      request = apiFetch<AuthSecurityDetections>("/admin/auth/security", { token }).then((body) => {
+        if (cancelled) {
+          return;
+        }
+        clearTables();
+        setAuthSecurity(authSecurityDetectionsSchema.parse(body));
+      });
+    }
 
     request
       .then(() => {
@@ -118,6 +164,8 @@ export function CollectorsPage() {
         }
         setUsers(null);
         setJerseys(null);
+        setAuthEvents(null);
+        setAuthSecurity(null);
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load user data");
       })
       .finally(() => {
@@ -201,18 +249,23 @@ export function CollectorsPage() {
   }
 
   const columns = columnCount(table);
-  const recordCount =
-    table === "user"
-      ? users
-        ? `${users.total} ${tableLabel(table).toLowerCase()}`
-        : loading
-          ? "Loading…"
-          : "0 users"
-      : jerseys
-        ? `${jerseys.total} ${tableLabel(table).toLowerCase()}`
-        : loading
-          ? "Loading…"
-          : "0 jerseys";
+  const recordCount = (() => {
+    if (loading) {
+      return "Loading…";
+    }
+    if (table === "user") {
+      return users ? `${users.total} ${tableLabel(table).toLowerCase()}` : "0 users";
+    }
+    if (table === "jersey") {
+      return jerseys ? `${jerseys.total} ${tableLabel(table).toLowerCase()}` : "0 jerseys";
+    }
+    if (table === "auth-events") {
+      const total = authEvents?.events.length ?? 0;
+      return `${total} auth events`;
+    }
+    const total = authSecurity?.detections.length ?? 0;
+    return `${total} detections`;
+  })();
 
   return (
     <div className="list-page">
@@ -263,7 +316,7 @@ export function CollectorsPage() {
                 </th>
                 <th scope="col">Joined</th>
               </tr>
-            ) : (
+            ) : table === "jersey" ? (
               <tr>
                 <th className="data-table-mark" scope="col">
                   Thumb
@@ -272,6 +325,20 @@ export function CollectorsPage() {
                 <th scope="col">Season</th>
                 <th scope="col">Type</th>
                 <th scope="col">User</th>
+              </tr>
+            ) : table === "auth-events" ? (
+              <tr>
+                <th scope="col">Kind</th>
+                <th scope="col">User</th>
+                <th scope="col">Provider</th>
+                <th scope="col">When</th>
+              </tr>
+            ) : (
+              <tr>
+                <th scope="col">Kind</th>
+                <th scope="col">Summary</th>
+                <th scope="col">User</th>
+                <th scope="col">When</th>
               </tr>
             )}
           </thead>
@@ -302,6 +369,25 @@ export function CollectorsPage() {
                   </div>
                 </td>
               </tr>
+            ) : table === "auth-events" && (!authEvents || authEvents.events.length === 0) ? (
+              <tr>
+                <td colSpan={columns}>
+                  <div className="empty-state data-table-empty">
+                    <h2>No Auth events yet</h2>
+                    <p>Login, logout, failure, reset, and provider link will appear here.</p>
+                  </div>
+                </td>
+              </tr>
+            ) : table === "auth-security" &&
+              (!authSecurity || authSecurity.detections.length === 0) ? (
+              <tr>
+                <td colSpan={columns}>
+                  <div className="empty-state data-table-empty">
+                    <h2>No Auth security detections</h2>
+                    <p>Sentinel detections upserted into Postgres will appear here.</p>
+                  </div>
+                </td>
+              </tr>
             ) : table === "user" && users ? (
               users.rows.map((row, rowIndex) => (
                 <tr
@@ -318,6 +404,32 @@ export function CollectorsPage() {
                   <td className="data-table-mono">{row.role}</td>
                   <td className="data-table-mono data-table-numeric">{row.jerseyCount}</td>
                   <td className="data-table-meta">{formatDate(row.createdAt)}</td>
+                </tr>
+              ))
+            ) : table === "auth-events" && authEvents ? (
+              authEvents.events.map((row, rowIndex) => (
+                <tr
+                  key={row.id}
+                  tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
+                  onFocus={() => setFocusedRowIndex(rowIndex)}
+                >
+                  <td className="data-table-primary">{formatAuthEventKind(row.kind)}</td>
+                  <td className="data-table-mono">{row.userId ?? "—"}</td>
+                  <td className="data-table-mono">{row.provider ?? "—"}</td>
+                  <td className="data-table-meta">{formatAuthDateTime(row.createdAt)}</td>
+                </tr>
+              ))
+            ) : table === "auth-security" && authSecurity ? (
+              authSecurity.detections.map((row, rowIndex) => (
+                <tr
+                  key={row.id}
+                  tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
+                  onFocus={() => setFocusedRowIndex(rowIndex)}
+                >
+                  <td className="data-table-primary">{row.kind}</td>
+                  <td>{row.summary}</td>
+                  <td className="data-table-mono">{row.userId ?? "—"}</td>
+                  <td className="data-table-meta">{formatAuthDateTime(row.detectedAt)}</td>
                 </tr>
               ))
             ) : jerseys ? (
