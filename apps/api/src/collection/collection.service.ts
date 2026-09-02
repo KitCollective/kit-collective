@@ -1324,7 +1324,7 @@ export class CollectionService {
 
   async discoverCatalogDrill(
     userId: string,
-    kind: "club" | "player",
+    kind: "club" | "player" | "kit",
     entityId: string,
     locale: LabelLocale = "da",
   ): Promise<CollectionDiscoverCatalogDrill> {
@@ -1335,47 +1335,48 @@ export class CollectionService {
 
     const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
     const baseWhere = and(ne(userJersey.userId, userId), eq(userJersey.private, false));
+    const drillSelect = {
+      id: userJersey.id,
+      ownerId: userJersey.userId,
+      clubId: userJersey.clubId,
+      seasonId: userJersey.seasonId,
+      type: userJersey.type,
+      seasonLabel: season.label,
+      ownerHandle: user.handle,
+    } as const;
 
     const rows =
       kind === "club"
         ? await this.db
-            .select({
-              id: userJersey.id,
-              ownerId: userJersey.userId,
-              clubId: userJersey.clubId,
-              seasonId: userJersey.seasonId,
-              type: userJersey.type,
-              seasonLabel: season.label,
-              ownerHandle: user.handle,
-            })
+            .select(drillSelect)
             .from(userJersey)
             .innerJoin(season, eq(userJersey.seasonId, season.id))
             .innerJoin(user, eq(userJersey.userId, user.id))
             .where(and(baseWhere, eq(userJersey.clubId, entityId)))
             .orderBy(desc(userJersey.updatedAt))
-        : await this.db
-            .select({
-              id: userJersey.id,
-              ownerId: userJersey.userId,
-              clubId: userJersey.clubId,
-              seasonId: userJersey.seasonId,
-              type: userJersey.type,
-              seasonLabel: season.label,
-              ownerHandle: user.handle,
-            })
-            .from(userJersey)
-            .innerJoin(season, eq(userJersey.seasonId, season.id))
-            .innerJoin(user, eq(userJersey.userId, user.id))
-            .innerJoin(
-              playerClubSeason,
-              and(
-                eq(playerClubSeason.clubId, userJersey.clubId),
-                eq(playerClubSeason.seasonId, userJersey.seasonId),
-                eq(playerClubSeason.playerId, entityId),
-              ),
-            )
-            .where(baseWhere)
-            .orderBy(desc(userJersey.updatedAt));
+        : kind === "player"
+          ? await this.db
+              .select(drillSelect)
+              .from(userJersey)
+              .innerJoin(season, eq(userJersey.seasonId, season.id))
+              .innerJoin(user, eq(userJersey.userId, user.id))
+              .innerJoin(
+                playerClubSeason,
+                and(
+                  eq(playerClubSeason.clubId, userJersey.clubId),
+                  eq(playerClubSeason.seasonId, userJersey.seasonId),
+                  eq(playerClubSeason.playerId, entityId),
+                ),
+              )
+              .where(baseWhere)
+              .orderBy(desc(userJersey.updatedAt))
+          : await this.db
+              .select(drillSelect)
+              .from(userJersey)
+              .innerJoin(season, eq(userJersey.seasonId, season.id))
+              .innerJoin(user, eq(userJersey.userId, user.id))
+              .where(and(baseWhere, eq(userJersey.catalogKitId, entityId)))
+              .orderBy(desc(userJersey.updatedAt));
 
     const visibleRows = rows.filter((row) => !blockedPeerIds.has(row.ownerId));
     const clubIds = [...new Set(visibleRows.map((row) => row.clubId))];
@@ -2140,7 +2141,7 @@ export class CollectionService {
   }
 
   private async resolveCatalogDrillTitle(
-    kind: "club" | "player",
+    kind: "club" | "player" | "kit",
     entityId: string,
     locale: LabelLocale,
   ): Promise<string | undefined> {
@@ -2156,15 +2157,39 @@ export class CollectionService {
       return (await this.resolveEntityLabels("club", [entityId], locale)).get(entityId);
     }
 
-    const [playerRow] = await this.db
-      .select({ id: player.id })
-      .from(player)
-      .where(eq(player.id, entityId))
+    if (kind === "player") {
+      const [playerRow] = await this.db
+        .select({ id: player.id })
+        .from(player)
+        .where(eq(player.id, entityId))
+        .limit(1);
+      if (!playerRow) {
+        return undefined;
+      }
+      return (await this.resolveEntityLabels("player", [entityId], locale)).get(entityId);
+    }
+
+    const [kitRow] = await this.db
+      .select({
+        id: kit.id,
+        clubId: kit.clubId,
+        type: kit.type,
+        seasonLabel: season.label,
+      })
+      .from(kit)
+      .innerJoin(season, eq(kit.seasonId, season.id))
+      .where(eq(kit.id, entityId))
       .limit(1);
-    if (!playerRow) {
+    if (!kitRow?.clubId) {
       return undefined;
     }
-    return (await this.resolveEntityLabels("player", [entityId], locale)).get(entityId);
+    const clubLabel = (await this.resolveEntityLabels("club", [kitRow.clubId], locale)).get(
+      kitRow.clubId,
+    );
+    if (!clubLabel) {
+      return undefined;
+    }
+    return `${clubLabel} ${kitRow.seasonLabel} ${KIT_TYPE_LABELS_DA[kitRow.type]}`;
   }
 
   private async resolveEntityLabels(

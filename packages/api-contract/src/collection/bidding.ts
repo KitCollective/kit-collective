@@ -73,7 +73,7 @@ export type CollectionDiscoverHome = z.infer<typeof collectionDiscoverHomeSchema
 
 export const collectionDiscoverCatalogDrillSchema = z
   .object({
-    kind: z.enum(["club", "player"]),
+    kind: z.enum(["club", "player", "kit"]),
     id: z.string().uuid(),
     title: z.string().min(1),
     count: z.number().int().min(0),

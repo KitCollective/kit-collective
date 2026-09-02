@@ -59,12 +59,21 @@ export async function fetchDiscoverHome(accessToken: string): Promise<Collection
   return collectionDiscoverHomeSchema.parse(await response.json());
 }
 
+const CATALOG_DRILL_SEGMENTS: Record<
+  CollectionDiscoverCatalogDrill["kind"],
+  "clubs" | "players" | "kits"
+> = {
+  club: "clubs",
+  player: "players",
+  kit: "kits",
+};
+
 export async function fetchDiscoverCatalogDrill(
   accessToken: string,
-  kind: "club" | "player",
+  kind: CollectionDiscoverCatalogDrill["kind"],
   entityId: string,
 ): Promise<CollectionDiscoverCatalogDrill> {
-  const segment = kind === "club" ? "clubs" : "players";
+  const segment = CATALOG_DRILL_SEGMENTS[kind];
   const response = await requestJson(`/v1/collection/discover/${segment}/${entityId}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
