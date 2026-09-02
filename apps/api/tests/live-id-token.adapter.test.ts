@@ -38,7 +38,7 @@ function facebookClaims(overrides: Record<string, unknown> = {}): Record<string,
 function stubFacebookJwks(): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: URL | RequestInfo) => {
+    vi.fn(async (input: URL | string) => {
       const url = String(input);
       if (url.includes("oauth/access_token")) {
         return {
