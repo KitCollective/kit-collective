@@ -287,8 +287,12 @@ Signed-out email link that sets a new password on the same User. Not the signed-
 _Avoid_: reset as a second account; SMS reset in this increment
 
 **Auth event**:
-A persisted Identity fact: sign-in, sign-out, failure, password reset, provider link. Shown on Auth ops, the Admin collector drill, the staff’s own Admin account, and the collector’s own Expo Profil under settings — not an own-Profil drill and not on Peer Profil.
+A persisted Identity fact: sign-in, sign-out, failure, password reset, provider link, lockout. Shown on Auth ops, the Admin collector drill, the staff’s own Admin account, and the collector’s own Expo Profil under settings — not an own-Profil drill and not on Peer Profil.
 _Avoid_: Peer Profil; a second Profil tab for history; treating Sentinel as the only log; stuffing events into `User.role`
+
+**Auth throttle**:
+The persisted Identity door on public writes (login, register, reset, social): independent per-email and per-IP buckets plus a coarse global cap in our Postgres. Over the limit is 429 and an Auth event lockout. Not the `pg.Pool` queue, not Better Auth’s HTTP `rateLimit`, and not Sentinel.
+_Avoid_: one combined `IP+email` key; memory-only counters across instances; treating Auth events as the brake; waiting on `dash.better-auth.com`
 
 **Auth security**:
 Sentinel detections (credential stuffing, bots, impossible travel, and the rest they emit) pulled into Admin SPA. Staff never opens dash.better-auth.com.
