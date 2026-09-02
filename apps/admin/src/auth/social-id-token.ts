@@ -1,8 +1,8 @@
 import type { IdentityLinkedProvider } from "@kit/api-contract";
 
 const GOOGLE_GIS_SRC = "https://accounts.google.com/gsi/client";
-const FACEBOOK_SDK_SRC = "https://connect.facebook.net/en_US/sdk.js";
-const FACEBOOK_SDK_VERSION = "v21.0";
+const FACEBOOK_OAUTH_DIALOG = "https://www.facebook.com/v21.0/dialog/oauth";
+const FACEBOOK_OIDC_SOURCE = "kit-facebook-oidc";
 
 type GoogleCredentialResponse = {
   credential?: string;
@@ -25,26 +25,23 @@ type GoogleAccountsId = {
   ) => void;
 };
 
-type FacebookAuthResponse = {
-  accessToken?: string;
-  authenticationToken?: string;
-  id_token?: string;
-};
-
-type FacebookSdk = {
-  init: (params: { appId: string; cookie?: boolean; xfbml?: boolean; version: string }) => void;
-  login: (
-    callback: (response: { authResponse?: FacebookAuthResponse | null }) => void,
-    options?: { scope: string },
-  ) => void;
+export type FacebookOidcRedirectHost = {
+  opener: { postMessage: (data: unknown, origin: string) => void } | null;
+  location: { search: string; origin: string };
+  close: () => void;
 };
 
 export type SocialIdTokenHost = {
   googleClientId?: string;
   facebookAppId?: string;
+  facebookRedirectUri?: string;
   loadScript?: (src: string) => Promise<void>;
   google?: { accounts: { id: GoogleAccountsId } };
-  facebook?: FacebookSdk;
+  requestFacebookAuthorizationCode?: (params: {
+    appId: string;
+    redirectUri: string;
+  }) => Promise<string>;
+  facebookOidcWindow?: Pick<Window, "addEventListener" | "removeEventListener" | "open" | "origin">;
 };
 
 export type SocialIdTokenRequester = (provider: IdentityLinkedProvider) => Promise<string>;
@@ -55,6 +52,14 @@ function readGoogleClientId(host: SocialIdTokenHost): string | undefined {
 
 function readFacebookAppId(host: SocialIdTokenHost): string | undefined {
   return host.facebookAppId ?? import.meta.env.VITE_FACEBOOK_APP_ID;
+}
+
+function readFacebookRedirectUri(host: SocialIdTokenHost): string {
+  return (
+    host.facebookRedirectUri ??
+    import.meta.env.VITE_FACEBOOK_REDIRECT_URI ??
+    `${window.location.origin}/login`
+  );
 }
 
 function loadScriptOnce(src: string): Promise<void> {
@@ -73,8 +78,21 @@ function loadScriptOnce(src: string): Promise<void> {
   });
 }
 
-function facebookIdToken(auth: FacebookAuthResponse | null | undefined): string | undefined {
-  return auth?.id_token ?? auth?.authenticationToken;
+export function maybeCompleteFacebookOidcRedirect(
+  host: FacebookOidcRedirectHost = window,
+): boolean {
+  if (!host.opener) {
+    return false;
+  }
+  const params = new URLSearchParams(host.location.search);
+  const code = params.get("code");
+  const error = params.get("error");
+  if (!code && !error) {
+    return false;
+  }
+  host.opener.postMessage({ source: FACEBOOK_OIDC_SOURCE, code, error }, host.location.origin);
+  host.close();
+  return true;
 }
 
 async function requestGoogleIdToken(host: SocialIdTokenHost): Promise<string> {
@@ -130,38 +148,62 @@ async function requestGoogleIdToken(host: SocialIdTokenHost): Promise<string> {
   });
 }
 
-async function requestFacebookIdToken(host: SocialIdTokenHost): Promise<string> {
+function openFacebookOidcDialog(
+  host: SocialIdTokenHost,
+  appId: string,
+  redirectUri: string,
+): Promise<string> {
+  const target = host.facebookOidcWindow ?? window;
+  const dialog = new URL(FACEBOOK_OAUTH_DIALOG);
+  dialog.searchParams.set("client_id", appId);
+  dialog.searchParams.set("redirect_uri", redirectUri);
+  dialog.searchParams.set("response_type", "code");
+  dialog.searchParams.set("scope", "openid email public_profile");
+
+  return new Promise((resolve, reject) => {
+    const popup = target.open(dialog.toString(), "facebook-oidc", "width=480,height=720");
+    if (!popup) {
+      reject(new Error("Facebook sign-in is unavailable"));
+      return;
+    }
+
+    const fail = (message: string) => {
+      target.removeEventListener("message", onMessage);
+      reject(new Error(message));
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== target.origin) {
+        return;
+      }
+      const data = event.data;
+      if (typeof data !== "object" || data === null || !("source" in data)) {
+        return;
+      }
+      if (data.source !== FACEBOOK_OIDC_SOURCE) {
+        return;
+      }
+      target.removeEventListener("message", onMessage);
+      const code = "code" in data && typeof data.code === "string" ? data.code : "";
+      if (code) {
+        resolve(code);
+        return;
+      }
+      fail("Facebook sign-in was cancelled");
+    };
+    target.addEventListener("message", onMessage);
+  });
+}
+
+async function requestFacebookAuthorizationCode(host: SocialIdTokenHost): Promise<string> {
   const appId = readFacebookAppId(host);
   if (!appId) {
     throw new Error("Facebook sign-in is not configured");
   }
-
-  await (host.loadScript ?? loadScriptOnce)(FACEBOOK_SDK_SRC);
-  const facebook = host.facebook ?? window.FB;
-  if (!facebook) {
-    throw new Error("Sign in failed");
+  const redirectUri = readFacebookRedirectUri(host);
+  if (host.requestFacebookAuthorizationCode) {
+    return host.requestFacebookAuthorizationCode({ appId, redirectUri });
   }
-
-  facebook.init({
-    appId,
-    cookie: true,
-    xfbml: false,
-    version: FACEBOOK_SDK_VERSION,
-  });
-
-  return new Promise((resolve, reject) => {
-    facebook.login(
-      (response) => {
-        const token = facebookIdToken(response.authResponse);
-        if (token) {
-          resolve(token);
-          return;
-        }
-        reject(new Error("Facebook sign-in was cancelled"));
-      },
-      { scope: "email,public_profile" },
-    );
-  });
+  return openFacebookOidcDialog(host, appId, redirectUri);
 }
 
 export function createSocialIdTokenRequester(host: SocialIdTokenHost = {}): SocialIdTokenRequester {
@@ -169,15 +211,18 @@ export function createSocialIdTokenRequester(host: SocialIdTokenHost = {}): Soci
     if (provider === "google") {
       return requestGoogleIdToken(host);
     }
-    return requestFacebookIdToken(host);
+    return requestFacebookAuthorizationCode(host);
   };
 }
 
 export const requestSocialIdToken: SocialIdTokenRequester = createSocialIdTokenRequester();
 
+if (typeof window !== "undefined") {
+  maybeCompleteFacebookOidcRedirect();
+}
+
 declare global {
   interface Window {
     google?: { accounts: { id: GoogleAccountsId } };
-    FB?: FacebookSdk;
   }
 }

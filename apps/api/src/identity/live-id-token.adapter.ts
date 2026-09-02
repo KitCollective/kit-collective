@@ -1,9 +1,22 @@
+import { createPublicKey, verify } from "node:crypto";
 import type { IdentityLinkedProvider } from "@kit/api-contract";
 import {
   IdTokenVerificationFailedError,
   type IdTokenVerifierAdapter,
   type VerifiedIdToken,
 } from "./id-token.adapter.js";
+
+const FACEBOOK_GRAPH_VERSION = "v21.0";
+const FACEBOOK_ISSUERS = new Set([
+  "https://www.facebook.com",
+  "https://www.facebook.com/",
+  "https://limited.facebook.com",
+  "https://limited.facebook.com/",
+]);
+const FACEBOOK_JWKS_URLS = [
+  "https://limited.facebook.com/.well-known/oauth/openid/jwks/",
+  "https://www.facebook.com/.well-known/oauth/openid/jwks/",
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -31,13 +44,9 @@ function isJwt(token: string): boolean {
   return token.split(".").length === 3;
 }
 
-function decodeJwtPayload(token: string): Record<string, unknown> {
-  const payload = token.split(".")[1];
-  if (!payload) {
-    throw new IdTokenVerificationFailedError();
-  }
+function decodeJwtJson(part: string): Record<string, unknown> {
   try {
-    const json = Buffer.from(payload, "base64url").toString("utf8");
+    const json = Buffer.from(part, "base64url").toString("utf8");
     const parsed: unknown = JSON.parse(json);
     const record = asRecord(parsed);
     if (!record) {
@@ -55,6 +64,14 @@ function requireEnv(name: string): string {
     throw new IdTokenVerificationFailedError();
   }
   return value;
+}
+
+function facebookEmailVerified(claims: Record<string, unknown>): boolean {
+  const claimed = readEmailVerified(claims.email_verified);
+  if (claimed === false) {
+    return false;
+  }
+  return true;
 }
 
 export class LiveIdTokenAdapter implements IdTokenVerifierAdapter {
@@ -88,27 +105,98 @@ export class LiveIdTokenAdapter implements IdTokenVerifierAdapter {
   }
 
   private async verifyFacebook(idToken: string): Promise<VerifiedIdToken> {
-    requireEnv("FACEBOOK_APP_ID");
-    requireEnv("FACEBOOK_APP_SECRET");
-    if (!isJwt(idToken)) {
+    const jwt = isJwt(idToken) ? idToken : await this.exchangeFacebookAuthorizationCode(idToken);
+    return this.verifyFacebookJwt(jwt);
+  }
+
+  private async exchangeFacebookAuthorizationCode(code: string): Promise<string> {
+    const appId = requireEnv("FACEBOOK_APP_ID");
+    const appSecret = requireEnv("FACEBOOK_APP_SECRET");
+    const redirectUri = requireEnv("FACEBOOK_REDIRECT_URI");
+    const url = new URL(`https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/oauth/access_token`);
+    url.searchParams.set("client_id", appId);
+    url.searchParams.set("client_secret", appSecret);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("code", code);
+
+    const body = await this.fetchJson(url);
+    const idToken = readString(body.id_token);
+    if (!idToken || !isJwt(idToken)) {
+      throw new IdTokenVerificationFailedError();
+    }
+    return idToken;
+  }
+
+  private async verifyFacebookJwt(idToken: string): Promise<VerifiedIdToken> {
+    const audience = requireEnv("FACEBOOK_APP_ID");
+    const [headerPart, payloadPart, signaturePart] = idToken.split(".");
+    if (!headerPart || !payloadPart || !signaturePart) {
       throw new IdTokenVerificationFailedError();
     }
 
-    const claims = decodeJwtPayload(idToken);
+    const header = decodeJwtJson(headerPart);
+    const kid = readString(header.kid);
+    if (readString(header.alg) !== "RS256" || !kid) {
+      throw new IdTokenVerificationFailedError();
+    }
+
+    const jwk = await this.facebookJwk(kid);
+    const publicKey = createPublicKey({
+      key: { kty: "RSA", n: jwk.n, e: jwk.e },
+      format: "jwk",
+    });
+    const signed = Buffer.from(`${headerPart}.${payloadPart}`);
+    const signature = Buffer.from(signaturePart, "base64url");
+    if (!verify("RSA-SHA256", signed, publicKey, signature)) {
+      throw new IdTokenVerificationFailedError();
+    }
+
+    const claims = decodeJwtJson(payloadPart);
     const email = readString(claims.email);
     const providerUserId = readString(claims.sub);
-    const emailVerified = readEmailVerified(claims.email_verified);
-    if (!email || !providerUserId || emailVerified === null) {
+    const exp = typeof claims.exp === "number" ? claims.exp : Number.NaN;
+    const iss = readString(claims.iss);
+    if (
+      !email ||
+      !providerUserId ||
+      !iss ||
+      !FACEBOOK_ISSUERS.has(iss) ||
+      readString(claims.aud) !== audience ||
+      !Number.isFinite(exp) ||
+      exp * 1000 <= Date.now()
+    ) {
       throw new IdTokenVerificationFailedError();
     }
 
     return {
       provider: "facebook",
       email: email.toLowerCase(),
-      emailVerified,
+      emailVerified: facebookEmailVerified(claims),
       providerUserId,
       displayName: readString(claims.name),
     };
+  }
+
+  private async facebookJwk(kid: string): Promise<{ n: string; e: string }> {
+    for (const endpoint of FACEBOOK_JWKS_URLS) {
+      const body = await this.fetchJson(new URL(endpoint));
+      const keys = Array.isArray(body.keys) ? body.keys : [];
+      for (const key of keys) {
+        const record = asRecord(key);
+        const n = record ? readString(record.n) : null;
+        const e = record ? readString(record.e) : null;
+        if (
+          record &&
+          readString(record.kid) === kid &&
+          readString(record.kty) === "RSA" &&
+          n &&
+          e
+        ) {
+          return { n, e };
+        }
+      }
+    }
+    throw new IdTokenVerificationFailedError();
   }
 
   private async fetchJson(url: URL): Promise<Record<string, unknown>> {
