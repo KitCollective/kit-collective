@@ -148,25 +148,6 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <SettingsSectionLabel>Login-historik</SettingsSectionLabel>
-          <ProfileSurfaceGroup>
-            {eventRows.length === 0 ? (
-              <ListMetaRow title="Ingen hændelser" meta="—" />
-            ) : (
-              eventRows.map((event, index) => (
-                <View key={event.id}>
-                  {index > 0 ? <ProfileRowDivider /> : null}
-                  <ListMetaRow
-                    title={authEventKindLabel(event.kind)}
-                    meta={formatEventWhen(event.createdAt)}
-                  />
-                </View>
-              ))
-            )}
-          </ProfileSurfaceGroup>
-        </View>
-
-        <View style={styles.section}>
           <SettingsSectionLabel>Push-notifikationer / E-mail-notifikationer</SettingsSectionLabel>
           <ProfileSurfaceGroup>
             <ListNavigateRow
@@ -205,6 +186,20 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <SettingsSectionLabel>Privatlivsindstillinger</SettingsSectionLabel>
           <ProfileSurfaceGroup>
+            {eventRows.length === 0 ? (
+              <ListMetaRow title="Login-historik" meta="Ingen hændelser" />
+            ) : (
+              eventRows.map((event, index) => (
+                <View key={event.id}>
+                  {index > 0 ? <ProfileRowDivider /> : null}
+                  <ListMetaRow
+                    title={authEventKindLabel(event.kind)}
+                    meta={formatEventWhen(event.createdAt)}
+                  />
+                </View>
+              ))
+            )}
+            <ProfileRowDivider />
             <ListNavigateRow
               title="Privatlivsindstillinger"
               icon="lock-closed-outline"
