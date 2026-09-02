@@ -40,12 +40,49 @@ describe("collectionDiscoverCatalogDrillSchema", () => {
     });
   });
 
+  it("accepts a Kit drill with a matching jersey grid", () => {
+    const kitId = "55555555-5555-4555-8555-555555555555";
+    expect(
+      collectionDiscoverCatalogDrillSchema.parse({
+        kind: "kit",
+        id: kitId,
+        title: "F.C. København 2023/24 Hjemme",
+        count: 1,
+        jerseys: [jersey],
+      }),
+    ).toEqual({
+      kind: "kit",
+      id: kitId,
+      title: "F.C. København 2023/24 Hjemme",
+      count: 1,
+      jerseys: [jersey],
+    });
+  });
+
   it("rejects League or Season landings", () => {
     expect(() =>
       collectionDiscoverCatalogDrillSchema.parse({
         kind: "league",
         id: jersey.clubId,
         title: "Superligaen",
+        count: 0,
+        jerseys: [],
+      }),
+    ).toThrow();
+    expect(() =>
+      collectionDiscoverCatalogDrillSchema.parse({
+        kind: "season",
+        id: jersey.seasonId,
+        title: "2023/24",
+        count: 0,
+        jerseys: [],
+      }),
+    ).toThrow();
+    expect(() =>
+      collectionDiscoverCatalogDrillSchema.parse({
+        kind: "national_team",
+        id: jersey.clubId,
+        title: "Danmark",
         count: 0,
         jerseys: [],
       }),

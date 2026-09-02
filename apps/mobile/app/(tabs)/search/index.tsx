@@ -113,7 +113,7 @@ export default function SearchScreen() {
     router.push(`/(tabs)/search/player/${playerId}?label=${encodeURIComponent(playerLabel)}`);
   };
 
-  const openKitStub = (kitId: string, label: string) => {
+  const openKitDrill = (kitId: string, label: string) => {
     router.push(`/(tabs)/search/kit/${kitId}?label=${encodeURIComponent(label)}`);
   };
 
@@ -208,7 +208,7 @@ export default function SearchScreen() {
                   <ListRow
                     key={kitHit.kitId}
                     title={kitHit.label}
-                    onPress={() => openKitStub(kitHit.kitId, kitHit.label)}
+                    onPress={() => openKitDrill(kitHit.kitId, kitHit.label)}
                   />
                 ))}
               </View>
