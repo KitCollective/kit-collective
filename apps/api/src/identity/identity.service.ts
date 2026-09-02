@@ -15,6 +15,7 @@ import {
   type IdentityEmailChange,
   type IdentityExport,
   type IdentityLinkedAccount,
+  type IdentityLinkedProvider,
   type IdentityMe,
   type IdentityPasswordChange,
   type IdentityPasswordResetAccepted,
@@ -40,10 +41,12 @@ import {
   identityPrefsUpdateSchema,
   identityProfileUpdateSchema,
   identitySessionSchema,
+  identitySocialLoginSchema,
   identityVerifyRequestSchema,
   identityVerifyResponseSchema,
 } from "@kit/api-contract";
 import {
+  account,
   authEvent,
   catalogLabel,
   collectionShortcut,
@@ -81,6 +84,8 @@ import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationService } from "../moderation/moderation.service.js";
 import { NotifyService } from "../notify/notify.service.js";
 import { AUTH, type AuthInstance } from "./auth.js";
+import type { IdTokenVerifierAdapter, VerifiedIdToken } from "./id-token.adapter.js";
+import { ID_TOKEN_VERIFIER } from "./id-token.token.js";
 import {
   avatarObjectKeyForUser,
   avatarUrlForPeer,
@@ -160,6 +165,7 @@ export class IdentityService {
     private readonly billingService: BillingService,
     private readonly moderationService: ModerationService,
     private readonly notifyService: NotifyService,
+    @Inject(ID_TOKEN_VERIFIER) private readonly idTokenVerifier: IdTokenVerifierAdapter,
   ) {
     this.objectStore = hasR2Config() ? createR2ObjectStore() : createMemoryObjectStore();
   }
@@ -227,6 +233,122 @@ export class IdentityService {
     const accessToken = await this.createSessionToken(found.id);
     await this.recordAuthEvent({ kind: "login", userId: found.id });
     return await this.buildSession(sessionRow, accessToken);
+  }
+
+  async socialLogin(rawBody: unknown): Promise<IdentitySession> {
+    const parsed = identitySocialLoginSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid social login");
+    }
+    const body = parsed.data;
+
+    let claims: VerifiedIdToken;
+    try {
+      claims = await this.idTokenVerifier.verify(body.provider, body.idToken);
+    } catch {
+      await this.recordAuthEvent({ kind: "failure", userId: null, provider: body.provider });
+      throw new UnauthorizedException("Invalid social login");
+    }
+
+    if (!claims.emailVerified) {
+      await this.recordAuthEvent({ kind: "failure", userId: null, provider: body.provider });
+      throw new UnauthorizedException("Unverified social email");
+    }
+
+    const normalizedEmail = claims.email.toLowerCase();
+
+    const [existingLink] = await this.db
+      .select({ userId: identityProvider.userId })
+      .from(identityProvider)
+      .where(
+        and(
+          eq(identityProvider.provider, body.provider),
+          eq(identityProvider.providerUserId, claims.providerUserId),
+        ),
+      )
+      .limit(1);
+
+    if (existingLink) {
+      const [linkedUser] = await this.db
+        .select(USER_ME_SELECT)
+        .from(user)
+        .where(eq(user.id, existingLink.userId))
+        .limit(1);
+      if (!linkedUser) {
+        throw new UnauthorizedException("Invalid social login");
+      }
+      await this.persistProviderLink({
+        userId: linkedUser.id,
+        provider: body.provider,
+        providerUserId: claims.providerUserId,
+      });
+      const accessToken = await this.createSessionToken(linkedUser.id);
+      await this.recordAuthEvent({
+        kind: "login",
+        userId: linkedUser.id,
+        provider: body.provider,
+      });
+      return await this.buildSession(linkedUser, accessToken);
+    }
+
+    const [existingUser] = await this.db
+      .select(USER_ME_SELECT)
+      .from(user)
+      .where(eq(user.email, normalizedEmail))
+      .limit(1);
+
+    if (existingUser) {
+      const [updated] = await this.db
+        .update(user)
+        .set({ emailVerified: true })
+        .where(eq(user.id, existingUser.id))
+        .returning(USER_ME_SELECT);
+      if (!updated) {
+        throw new UnauthorizedException("Invalid social login");
+      }
+      await this.persistProviderLink({
+        userId: updated.id,
+        provider: body.provider,
+        providerUserId: claims.providerUserId,
+      });
+      const accessToken = await this.createSessionToken(updated.id);
+      await this.recordAuthEvent({
+        kind: "login",
+        userId: updated.id,
+        provider: body.provider,
+      });
+      return await this.buildSession(updated, accessToken);
+    }
+
+    const passwordHash = await hash(randomBytes(32).toString("hex"), 12);
+    const assignedHandle = await this.assignUniqueHandle(normalizedEmail);
+    const [created] = await this.db
+      .insert(user)
+      .values({
+        email: normalizedEmail,
+        passwordHash,
+        name: assignedHandle,
+        handle: assignedHandle,
+        emailVerified: true,
+      })
+      .returning(USER_ME_SELECT);
+
+    if (!created) {
+      throw new ConflictException("Email already registered");
+    }
+
+    await this.persistProviderLink({
+      userId: created.id,
+      provider: body.provider,
+      providerUserId: claims.providerUserId,
+    });
+    const accessToken = await this.createSessionToken(created.id);
+    await this.recordAuthEvent({
+      kind: "login",
+      userId: created.id,
+      provider: body.provider,
+    });
+    return await this.buildSession(created, accessToken);
   }
 
   async verifyEmail(rawBody: unknown): Promise<IdentityVerifyResponse> {
@@ -847,6 +969,48 @@ export class IdentityService {
     return existing ? "taken" : "available";
   }
 
+  private async persistProviderLink(input: {
+    userId: string;
+    provider: IdentityLinkedProvider;
+    providerUserId: string;
+  }): Promise<void> {
+    const [existingLink] = await this.db
+      .select({ id: identityProvider.id })
+      .from(identityProvider)
+      .where(
+        and(
+          eq(identityProvider.provider, input.provider),
+          eq(identityProvider.providerUserId, input.providerUserId),
+        ),
+      )
+      .limit(1);
+
+    if (!existingLink) {
+      await this.db.insert(identityProvider).values({
+        userId: input.userId,
+        provider: input.provider,
+        providerUserId: input.providerUserId,
+      });
+    }
+
+    const [existingAccount] = await this.db
+      .select({ id: account.id })
+      .from(account)
+      .where(
+        and(eq(account.providerId, input.provider), eq(account.accountId, input.providerUserId)),
+      )
+      .limit(1);
+
+    if (!existingAccount) {
+      await this.db.insert(account).values({
+        id: randomBytes(16).toString("hex"),
+        accountId: input.providerUserId,
+        providerId: input.provider,
+        userId: input.userId,
+      });
+    }
+  }
+
   private async assignUniqueHandle(email: string): Promise<string> {
     const base = baseHandleFromEmail(email);
 
@@ -1005,10 +1169,12 @@ export class IdentityService {
   private async recordAuthEvent(input: {
     kind: AuthEventKind;
     userId: string | null;
+    provider?: IdentityLinkedProvider | null;
   }): Promise<void> {
     await this.db.insert(authEvent).values({
       kind: input.kind,
       userId: input.userId,
+      provider: input.provider ?? null,
     });
   }
 
@@ -1030,10 +1196,7 @@ export class IdentityService {
     },
     accessToken: string,
   ): Promise<IdentitySession> {
-    const linkedAccounts = IDENTITY_LINKED_PROVIDERS.map((provider) => ({
-      provider,
-      linked: false,
-    }));
+    const linkedAccounts = await this.loadLinkedAccounts(row.id);
 
     return identitySessionSchema.parse({
       accessToken,

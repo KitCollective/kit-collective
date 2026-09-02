@@ -357,6 +357,10 @@ export {
   identityUserSchema,
 } from "./identity/session.js";
 export {
+  type IdentitySocialLogin,
+  identitySocialLoginSchema,
+} from "./identity/social.js";
+export {
   type WishlistEntries,
   type WishlistEntry,
   type WishlistEntryIdParam,

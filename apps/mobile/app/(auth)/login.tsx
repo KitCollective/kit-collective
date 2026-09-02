@@ -1,3 +1,4 @@
+import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
@@ -12,13 +13,14 @@ import { useTheme } from "@/theme/use-theme";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, signInSocial } = useAuth();
   const theme = useTheme();
   const typography = useTypography();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [socialProvider, setSocialProvider] = useState<IdentityLinkedProvider | null>(null);
 
   async function handleSubmit() {
     setError(null);
@@ -32,6 +34,21 @@ export default function LoginScreen() {
       setLoading(false);
     }
   }
+
+  async function handleSocial(provider: IdentityLinkedProvider) {
+    setError(null);
+    setSocialProvider(provider);
+
+    try {
+      await signInSocial(provider);
+    } catch {
+      setError("Kunne ikke logge ind");
+    } finally {
+      setSocialProvider(null);
+    }
+  }
+
+  const busy = loading || socialProvider !== null;
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.canvas }]}>
@@ -97,6 +114,21 @@ export default function LoginScreen() {
           width="fill"
           onPress={() => void handleSubmit()}
           loading={loading}
+          disabled={busy}
+        />
+        <Button
+          label="Fortsæt med Google"
+          variant="tertiary"
+          onPress={() => void handleSocial("google")}
+          loading={socialProvider === "google"}
+          disabled={busy}
+        />
+        <Button
+          label="Fortsæt med Facebook"
+          variant="tertiary"
+          onPress={() => void handleSocial("facebook")}
+          loading={socialProvider === "facebook"}
+          disabled={busy}
         />
         <Button
           label="Glemt adgangskode"

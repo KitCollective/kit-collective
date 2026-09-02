@@ -1,4 +1,9 @@
-import type { Entitlement, IdentityMe, IdentitySession } from "@kit/api-contract";
+import type {
+  Entitlement,
+  IdentityLinkedProvider,
+  IdentityMe,
+  IdentitySession,
+} from "@kit/api-contract";
 import { OFFER_PRODUCT_IDS } from "@kit/domain";
 import {
   createContext,
@@ -15,8 +20,10 @@ import {
   fetchCurrentUser,
   fetchPrefs,
   loginCollector,
+  loginSocial,
   registerCollector,
 } from "@/api/identity";
+import { requestNativeIdToken } from "@/auth/native-id-token";
 import { clearSession, loadSession, saveSession } from "@/auth/session";
 import { PaywallSheet } from "@/components/paywall-sheet";
 import { loadAnalysisIfConsented } from "@/consent/analysis-loader";
@@ -36,6 +43,7 @@ type AuthContextValue = {
   entitlement: Entitlement | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  signInSocial: (provider: IdentityLinkedProvider) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -135,6 +143,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(
     async (email: string, password: string) => {
       const next = await loginCollector({ email, password });
+      await applySession(next);
+    },
+    [applySession],
+  );
+
+  const signInSocial = useCallback(
+    async (provider: IdentityLinkedProvider) => {
+      const idToken = await requestNativeIdToken(provider);
+      const next = await loginSocial(provider, idToken);
       await applySession(next);
     },
     [applySession],
@@ -271,6 +288,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       entitlement: user?.entitlement ?? null,
       isLoading,
       signIn,
+      signInSocial,
       signUp,
       signOut,
       refreshUser,
@@ -282,6 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       isLoading,
       signIn,
+      signInSocial,
       signUp,
       signOut,
       refreshUser,

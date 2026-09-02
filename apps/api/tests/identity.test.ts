@@ -44,6 +44,18 @@ const DATABASE_URL =
 const JPEG_BASE64 =
   "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAUGB//EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==";
 
+function fixtureIdToken(input: {
+  provider: "google" | "facebook";
+  verified: boolean;
+  email: string;
+  providerUserId: string;
+  displayName?: string;
+}): string {
+  const verification = input.verified ? "verified" : "unverified";
+  const token = `test:${input.provider}:${verification}:${input.email}:${input.providerUserId}`;
+  return input.displayName === undefined ? token : `${token}:${input.displayName}`;
+}
+
 async function registerSession(app: NestFastifyApplication, email: string) {
   const response = await app.inject({
     method: "POST",
@@ -989,5 +1001,204 @@ describe("Identity /v1", () => {
     const payload = identityExportSchema.parse(JSON.parse(response.body));
     expect(payload.email).toBe("export-owner@example.com");
     expect(payload.userJerseyIds).toContain(jersey.id);
+  });
+
+  it("creates a first-time social User with a handle from the email local-part", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/identity/social",
+      payload: {
+        provider: "google",
+        idToken: fixtureIdToken({
+          provider: "google",
+          verified: true,
+          email: "social.first@example.com",
+          providerUserId: "gid-first-1",
+          displayName: "Provider Display Name",
+        }),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = identitySessionSchema.parse(JSON.parse(response.body));
+    expect(body.user.email).toBe("social.first@example.com");
+    expect(body.user.handle).toBe("social_first");
+    expect(body.user.handle).not.toContain("Display");
+    expect(body.user.fullName).toBeNull();
+    expect(body.user.emailVerified).toBe(true);
+    expect(body.user.linkedAccounts).toEqual([
+      { provider: "google", linked: true },
+      { provider: "facebook", linked: false },
+    ]);
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${body.accessToken}` },
+    });
+    expect(me.statusCode).toBe(200);
+    expect(identityMeSchema.parse(JSON.parse(me.body)).linkedAccounts).toEqual(
+      body.user.linkedAccounts,
+    );
+  });
+
+  it("suffixes the handle when the email local-part is already taken", async () => {
+    const existing = await registerSession(app, "social.collision@example.com");
+    expect(existing.user.handle).toBe("social_collision");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/identity/social",
+      payload: {
+        provider: "facebook",
+        idToken: fixtureIdToken({
+          provider: "facebook",
+          verified: true,
+          email: "social.collision@other.com",
+          providerUserId: "fid-collision-1",
+        }),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = identitySessionSchema.parse(JSON.parse(response.body));
+    expect(body.user.id).not.toBe(existing.user.id);
+    expect(body.user.handle).toBe("social_collision2");
+    expect(body.user.linkedAccounts).toEqual([
+      { provider: "google", linked: false },
+      { provider: "facebook", linked: true },
+    ]);
+  });
+
+  it("auto-links a verified social email to the existing User", async () => {
+    const existing = await registerSession(app, "social.link@example.com");
+    expect(existing.user.emailVerified).toBe(false);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/identity/social",
+      payload: {
+        provider: "google",
+        idToken: fixtureIdToken({
+          provider: "google",
+          verified: true,
+          email: "social.link@example.com",
+          providerUserId: "gid-link-1",
+        }),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = identitySessionSchema.parse(JSON.parse(response.body));
+    expect(body.user.id).toBe(existing.user.id);
+    expect(body.user.handle).toBe(existing.user.handle);
+    expect(body.user.emailVerified).toBe(true);
+    expect(body.user.linkedAccounts).toEqual([
+      { provider: "google", linked: true },
+      { provider: "facebook", linked: false },
+    ]);
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${body.accessToken}` },
+    });
+    expect(identityMeSchema.parse(JSON.parse(me.body)).linkedAccounts).toEqual([
+      { provider: "google", linked: true },
+      { provider: "facebook", linked: false },
+    ]);
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "social.link@example.com",
+        password: "password123",
+      },
+    });
+    expect(login.statusCode).toBe(200);
+    expect(identitySessionSchema.parse(JSON.parse(login.body)).user.linkedAccounts).toEqual([
+      { provider: "google", linked: true },
+      { provider: "facebook", linked: false },
+    ]);
+  });
+
+  it("does not auto-link an unverified social email", async () => {
+    const existing = await registerSession(app, "social.unverified@example.com");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/identity/social",
+      payload: {
+        provider: "google",
+        idToken: fixtureIdToken({
+          provider: "google",
+          verified: false,
+          email: "social.unverified@example.com",
+          providerUserId: "gid-unverified-1",
+        }),
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    const me = await app.inject({
+      method: "GET",
+      url: "/v1/identity/me",
+      headers: { authorization: `Bearer ${existing.accessToken}` },
+    });
+    expect(identityMeSchema.parse(JSON.parse(me.body)).linkedAccounts).toEqual([
+      { provider: "google", linked: false },
+      { provider: "facebook", linked: false },
+    ]);
+  });
+
+  it("rejects an invalid social idToken", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/identity/social",
+      payload: {
+        provider: "google",
+        idToken: "not-a-fixture-token",
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("does not create a User from an unverified social email", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/identity/social",
+      payload: {
+        provider: "facebook",
+        idToken: fixtureIdToken({
+          provider: "facebook",
+          verified: false,
+          email: "social.new-unverified@example.com",
+          providerUserId: "fid-new-unverified-1",
+        }),
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+
+    const created = await registerSession(app, "social.new-unverified@example.com");
+    expect(created.user.email).toBe("social.new-unverified@example.com");
+    expect(created.user.linkedAccounts).toEqual([
+      { provider: "google", linked: false },
+      { provider: "facebook", linked: false },
+    ]);
+  });
+
+  it("does not offer Apple on the social contract", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/identity/social",
+      payload: {
+        provider: "apple",
+        idToken: "test:apple:verified:apple@example.com:aid-1",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
   });
 });

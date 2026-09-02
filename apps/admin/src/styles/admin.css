@@ -806,6 +806,15 @@ a {
   border-radius: var(--radius-sm);
 }
 
+.login-card .btn-secondary,
+.login-card .btn-tertiary {
+  width: 100%;
+}
+
+.login-card .btn + .btn {
+  margin-top: var(--space-gap-md);
+}
+
 .offer-form,
 .sheet-panel form {
   max-width: 480px;
