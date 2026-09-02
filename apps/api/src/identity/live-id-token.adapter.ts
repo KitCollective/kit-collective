@@ -5,12 +5,12 @@ import {
   type VerifiedIdToken,
 } from "./id-token.adapter.js";
 
-function isRecord(value: unknown): boolean {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return isRecord(value) ? (value as Record<string, unknown>) : null;
+  return isRecord(value) ? value : null;
 }
 
 function readString(value: unknown): string | null {
