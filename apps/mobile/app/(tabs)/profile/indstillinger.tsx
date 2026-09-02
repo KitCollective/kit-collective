@@ -1,13 +1,15 @@
+import type { AuthEventKind, AuthEvents } from "@kit/api-contract";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fetchPrefs, logoutSession } from "@/api/identity";
+import { fetchAuthEvents, fetchPrefs, logoutSession, revokeAllSessions } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
 import { ConfirmSheet, SettingsSectionLabel } from "@/components/account-ui";
 import {
   DrillHeader,
   ListDangerRow,
+  ListMetaRow,
   ListNavigateRow,
   ProfileRowDivider,
   ProfileSurfaceGroup,
@@ -16,6 +18,35 @@ import { appearanceLabel, localeLabel } from "@/prefs/labels";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
+function authEventKindLabel(kind: AuthEventKind): string {
+  switch (kind) {
+    case "login":
+      return "Log ind";
+    case "logout":
+      return "Log ud";
+    case "failure":
+      return "Mislykket login";
+    case "reset":
+      return "Adgangskode nulstillet";
+    case "provider_link":
+      return "Konto knyttet";
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+}
+
+function formatEventWhen(iso: string): string {
+  return new Date(iso).toLocaleString("da-DK", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function SettingsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -23,8 +54,11 @@ export default function SettingsScreen() {
   const { accessToken, signOut } = useAuth();
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
+  const [revokeVisible, setRevokeVisible] = useState(false);
+  const [revokeLoading, setRevokeLoading] = useState(false);
   const [localeMeta, setLocaleMeta] = useState("Dansk");
   const [appearanceMeta, setAppearanceMeta] = useState("Systemindstilling");
+  const [authEvents, setAuthEvents] = useState<AuthEvents | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -35,10 +69,14 @@ export default function SettingsScreen() {
       }
 
       try {
-        const prefs = await fetchPrefs(accessToken);
+        const [prefs, events] = await Promise.all([
+          fetchPrefs(accessToken),
+          fetchAuthEvents(accessToken),
+        ]);
         if (active) {
           setLocaleMeta(localeLabel(prefs.locale));
           setAppearanceMeta(appearanceLabel(prefs.appearance));
+          setAuthEvents(events);
         }
       } catch {
         // Hub keeps default meta when prefs cannot load.
@@ -68,6 +106,24 @@ export default function SettingsScreen() {
     }
   };
 
+  const confirmRevokeAll = async () => {
+    if (!accessToken) {
+      await signOut();
+      return;
+    }
+
+    setRevokeLoading(true);
+    try {
+      await revokeAllSessions(accessToken);
+    } finally {
+      await signOut();
+      setRevokeLoading(false);
+      setRevokeVisible(false);
+    }
+  };
+
+  const eventRows = authEvents?.events ?? [];
+
   return (
     <View style={[styles.container, { backgroundColor: theme.fillSecondary }]}>
       <View style={{ paddingTop: insets.top }}>
@@ -88,6 +144,25 @@ export default function SettingsScreen() {
               icon="key-outline"
               onPress={() => router.push("/(tabs)/profile/kontoindstillinger")}
             />
+          </ProfileSurfaceGroup>
+        </View>
+
+        <View style={styles.section}>
+          <SettingsSectionLabel>Login-historik</SettingsSectionLabel>
+          <ProfileSurfaceGroup>
+            {eventRows.length === 0 ? (
+              <ListMetaRow title="Ingen hændelser" meta="—" />
+            ) : (
+              eventRows.map((event, index) => (
+                <View key={event.id}>
+                  {index > 0 ? <ProfileRowDivider /> : null}
+                  <ListMetaRow
+                    title={authEventKindLabel(event.kind)}
+                    meta={formatEventWhen(event.createdAt)}
+                  />
+                </View>
+              ))
+            )}
           </ProfileSurfaceGroup>
         </View>
 
@@ -141,6 +216,12 @@ export default function SettingsScreen() {
               icon="log-out-outline"
               onPress={() => setLogoutVisible(true)}
             />
+            <ProfileRowDivider />
+            <ListDangerRow
+              title="Log ud overalt"
+              icon="log-out-outline"
+              onPress={() => setRevokeVisible(true)}
+            />
           </ProfileSurfaceGroup>
         </View>
       </ScrollView>
@@ -153,6 +234,15 @@ export default function SettingsScreen() {
         loading={logoutLoading}
         onConfirm={() => void confirmLogout()}
         onDismiss={() => setLogoutVisible(false)}
+      />
+      <ConfirmSheet
+        visible={revokeVisible}
+        title="Log ud overalt?"
+        consequence="Du logges ud på alle enheder. Din samling og dine favoritter bliver gemt."
+        confirmLabel="Log ud overalt"
+        loading={revokeLoading}
+        onConfirm={() => void confirmRevokeAll()}
+        onDismiss={() => setRevokeVisible(false)}
       />
     </View>
   );

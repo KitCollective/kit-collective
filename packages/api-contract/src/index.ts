@@ -1,4 +1,12 @@
 export {
+  type AdminAuthEvents,
+  type AuthSecurityDetection,
+  type AuthSecurityDetections,
+  adminAuthEventsSchema,
+  authSecurityDetectionSchema,
+  authSecurityDetectionsSchema,
+} from "./admin/auth-ops.js";
+export {
   type GrantCompRequest,
   type GrantCompResponse,
   grantCompRequestSchema,

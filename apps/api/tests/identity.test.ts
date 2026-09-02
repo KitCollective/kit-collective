@@ -1119,6 +1119,20 @@ describe("Identity /v1", () => {
       { provider: "google", linked: true },
       { provider: "facebook", linked: false },
     ]);
+
+    const listed = await app.inject({
+      method: "GET",
+      url: "/v1/identity/auth-events",
+      headers: { authorization: `Bearer ${body.accessToken}` },
+    });
+    expect(listed.statusCode).toBe(200);
+    const events = authEventsSchema.parse(JSON.parse(listed.body));
+    expect(events.events.map((event) => event.kind)).toEqual(
+      expect.arrayContaining(["provider_link"]),
+    );
+    expect(
+      events.events.some((event) => event.kind === "provider_link" && event.provider === "google"),
+    ).toBe(true);
   });
 
   it("does not auto-link an unverified social email", async () => {

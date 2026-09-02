@@ -1,7 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
   type AuthEvents,
+  type AuthSecurityDetections,
   authEventsSchema,
+  authSecurityDetectionsSchema,
   type CookieConsent,
   type CookieConsentUpdate,
   cookieConsentSchema,
@@ -48,6 +50,7 @@ import {
 import {
   account,
   authEvent,
+  authSecurityDetection,
   catalogLabel,
   collectionShortcut,
   conversation,
@@ -95,6 +98,8 @@ import {
   nextHandleCandidate,
 } from "./identity.helpers.js";
 import { bearerTokenFromAuthorization } from "./request-headers.js";
+import type { SentinelAdapter } from "./sentinel.adapter.js";
+import { SENTINEL } from "./sentinel.token.js";
 
 const { hash, compare } = bcrypt;
 
@@ -166,6 +171,7 @@ export class IdentityService {
     private readonly moderationService: ModerationService,
     private readonly notifyService: NotifyService,
     @Inject(ID_TOKEN_VERIFIER) private readonly idTokenVerifier: IdTokenVerifierAdapter,
+    @Inject(SENTINEL) private readonly sentinel: SentinelAdapter,
   ) {
     this.objectStore = hasR2Config() ? createR2ObjectStore() : createMemoryObjectStore();
   }
@@ -396,23 +402,76 @@ export class IdentityService {
   }
 
   async listOwnAuthEvents(userId: string): Promise<AuthEvents> {
+    return this.listAuthEventsForUser(userId);
+  }
+
+  async listAllAuthEvents(): Promise<AuthEvents> {
     const rows = await this.db
       .select({
         id: authEvent.id,
         kind: authEvent.kind,
+        userId: authEvent.userId,
         provider: authEvent.provider,
         createdAt: authEvent.createdAt,
       })
       .from(authEvent)
-      .where(eq(authEvent.userId, userId))
       .orderBy(desc(authEvent.createdAt));
 
-    return authEventsSchema.parse({
-      events: rows.map((row) => ({
+    return this.parseAuthEvents(rows);
+  }
+
+  async listCollectorAuthEvents(userId: string): Promise<AuthEvents> {
+    await this.requireUser(userId);
+    return this.listAuthEventsForUser(userId);
+  }
+
+  async revokeAllSessions(userId: string): Promise<void> {
+    await this.requireUser(userId);
+    await this.db.delete(session).where(eq(session.userId, userId));
+  }
+
+  async listAuthSecurityDetections(): Promise<AuthSecurityDetections> {
+    const pulled = await this.sentinel.listDetections();
+    for (const detection of pulled) {
+      await this.db
+        .insert(authSecurityDetection)
+        .values({
+          sentinelId: detection.sentinelId,
+          kind: detection.kind,
+          userId: detection.userId,
+          summary: detection.summary,
+          detectedAt: detection.detectedAt,
+        })
+        .onConflictDoUpdate({
+          target: authSecurityDetection.sentinelId,
+          set: {
+            kind: detection.kind,
+            userId: detection.userId,
+            summary: detection.summary,
+            detectedAt: detection.detectedAt,
+            updatedAt: new Date(),
+          },
+        });
+    }
+
+    const rows = await this.db
+      .select({
+        id: authSecurityDetection.id,
+        kind: authSecurityDetection.kind,
+        userId: authSecurityDetection.userId,
+        summary: authSecurityDetection.summary,
+        detectedAt: authSecurityDetection.detectedAt,
+      })
+      .from(authSecurityDetection)
+      .orderBy(desc(authSecurityDetection.detectedAt));
+
+    return authSecurityDetectionsSchema.parse({
+      detections: rows.map((row) => ({
         id: row.id,
         kind: row.kind,
-        provider: row.provider,
-        createdAt: row.createdAt.toISOString(),
+        userId: row.userId,
+        summary: row.summary,
+        detectedAt: row.detectedAt.toISOString(),
       })),
     });
   }
@@ -991,6 +1050,11 @@ export class IdentityService {
         provider: input.provider,
         providerUserId: input.providerUserId,
       });
+      await this.recordAuthEvent({
+        kind: "provider_link",
+        userId: input.userId,
+        provider: input.provider,
+      });
     }
 
     const [existingAccount] = await this.db
@@ -1164,6 +1228,53 @@ export class IdentityService {
       throw new UnauthorizedException();
     }
     return created.token;
+  }
+
+  private async listAuthEventsForUser(userId: string): Promise<AuthEvents> {
+    const rows = await this.db
+      .select({
+        id: authEvent.id,
+        kind: authEvent.kind,
+        userId: authEvent.userId,
+        provider: authEvent.provider,
+        createdAt: authEvent.createdAt,
+      })
+      .from(authEvent)
+      .where(eq(authEvent.userId, userId))
+      .orderBy(desc(authEvent.createdAt));
+
+    return this.parseAuthEvents(rows);
+  }
+
+  private parseAuthEvents(
+    rows: Array<{
+      id: string;
+      kind: AuthEventKind;
+      userId: string | null;
+      provider: IdentityLinkedProvider | null;
+      createdAt: Date;
+    }>,
+  ): AuthEvents {
+    return authEventsSchema.parse({
+      events: rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        userId: row.userId,
+        provider: row.provider,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    });
+  }
+
+  private async requireUser(userId: string): Promise<void> {
+    const [found] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    if (!found) {
+      throw new NotFoundException();
+    }
   }
 
   private async recordAuthEvent(input: {

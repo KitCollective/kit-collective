@@ -15,6 +15,7 @@ import {
   HttpCode,
   Param,
   Patch,
+  Post,
   Query,
   Res,
   UseGuards,
@@ -22,13 +23,17 @@ import {
 import type { FastifyReply } from "fastify";
 import { CurrentUser } from "../identity/current-user.decorator.js";
 import type { JwtPayload } from "../identity/identity.service.js";
+import { IdentityService } from "../identity/identity.service.js";
 import { AdminAuthGuard } from "./admin-auth.guard.js";
 import { AdminCollectionService } from "./admin-collection.service.js";
 
 @Controller("admin/collectors")
 @UseGuards(AdminAuthGuard)
 export class AdminCollectionController {
-  constructor(private readonly adminCollectionService: AdminCollectionService) {}
+  constructor(
+    private readonly adminCollectionService: AdminCollectionService,
+    private readonly identityService: IdentityService,
+  ) {}
 
   @Get()
   listCollectors(@Query() query: Record<string, string | string[] | undefined>) {
@@ -59,6 +64,25 @@ export class AdminCollectionController {
       throw new BadRequestException("Invalid user id");
     }
     return this.adminCollectionService.getCollector(parsed.data.userId);
+  }
+
+  @Get(":userId/auth-events")
+  listCollectorAuthEvents(@Param() params: Record<string, string>) {
+    const parsed = adminCollectorUserIdParamSchema.safeParse({ userId: params.userId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid user id");
+    }
+    return this.identityService.listCollectorAuthEvents(parsed.data.userId);
+  }
+
+  @Post(":userId/sessions/revoke")
+  @HttpCode(204)
+  revokeCollectorSessions(@Param() params: Record<string, string>) {
+    const parsed = adminCollectorUserIdParamSchema.safeParse({ userId: params.userId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid user id");
+    }
+    return this.identityService.revokeAllSessions(parsed.data.userId);
   }
 
   @Get(":userId/jerseys")

@@ -1,8 +1,10 @@
 import {
   type AdminCollectorJerseyList,
   type AdminCollectorUser,
+  type AuthEvents,
   adminCollectorJerseyListSchema,
   adminCollectorUserSchema,
+  authEventsSchema,
   type Entitlement,
   grantCompResponseSchema,
 } from "@kit/api-contract";
@@ -14,6 +16,7 @@ import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
 import { BackLink } from "../components/BackLink.js";
 import { ConfirmSheet } from "../components/ConfirmSheet.js";
 import { GrantCompSheet } from "../components/GrantCompSheet.js";
+import { formatAuthDateTime, formatAuthEventKind } from "./auth-event-labels.js";
 
 function formatEntitlementSource(source: Entitlement["source"]): string {
   return source ?? "none";
@@ -70,6 +73,7 @@ export function CollectorUserDrillPage() {
   const navigate = useNavigate();
   const [collector, setCollector] = useState<AdminCollectorUser | null>(null);
   const [jerseys, setJerseys] = useState<AdminCollectorJerseyList | null>(null);
+  const [authEvents, setAuthEvents] = useState<AuthEvents | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [roleSheetOpen, setRoleSheetOpen] = useState(false);
@@ -80,6 +84,8 @@ export function CollectorUserDrillPage() {
   const [grantCompSaving, setGrantCompSaving] = useState(false);
   const [grantCompError, setGrantCompError] = useState<string | null>(null);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
+  const [revokeOpen, setRevokeOpen] = useState(false);
+  const [revoking, setRevoking] = useState(false);
 
   useEffect(() => {
     if (!token || !userId) {
@@ -88,15 +94,18 @@ export function CollectorUserDrillPage() {
     Promise.all([
       apiFetch<AdminCollectorUser>(`/admin/collectors/${userId}`, { token }),
       apiFetch<AdminCollectorJerseyList>(`/admin/collectors/${userId}/jerseys`, { token }),
+      apiFetch<AuthEvents>(`/admin/collectors/${userId}/auth-events`, { token }),
     ])
-      .then(([userBody, jerseyBody]) => {
+      .then(([userBody, jerseyBody, eventsBody]) => {
         setCollector(adminCollectorUserSchema.parse(userBody));
         setJerseys(adminCollectorJerseyListSchema.parse(jerseyBody));
+        setAuthEvents(authEventsSchema.parse(eventsBody));
         setError(null);
       })
       .catch((fetchError) => {
         setCollector(null);
         setJerseys(null);
+        setAuthEvents(null);
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load collector");
       });
   }, [token, userId]);
@@ -220,6 +229,21 @@ export function CollectorUserDrillPage() {
     }
   }
 
+  async function confirmRevokeSessions() {
+    if (!token || !userId) {
+      return;
+    }
+    setRevoking(true);
+    try {
+      await apiFetch(`/admin/collectors/${userId}/sessions/revoke`, { token, method: "POST" });
+      setRevokeOpen(false);
+    } catch (revokeError) {
+      setError(revokeError instanceof Error ? revokeError.message : "Failed to revoke sessions");
+    } finally {
+      setRevoking(false);
+    }
+  }
+
   const roleSheetTitle = pendingRole === "admin" ? "Grant Staff access?" : "Remove Staff access?";
   const roleSheetDescription =
     pendingRole === "admin"
@@ -279,6 +303,13 @@ export function CollectorUserDrillPage() {
               }}
             >
               Grant comp
+            </button>
+            <button
+              type="button"
+              className="btn btn-destructive"
+              onClick={() => setRevokeOpen(true)}
+            >
+              Revoke sessions
             </button>
             {collector.role === "user" ? (
               <button
@@ -359,6 +390,41 @@ export function CollectorUserDrillPage() {
         </div>
       </section>
 
+      <section className="section-block">
+        <h3 className="section-title">Auth events</h3>
+        <div className="data-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">Kind</th>
+                <th scope="col">Provider</th>
+                <th scope="col">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!authEvents || authEvents.events.length === 0 ? (
+                <tr>
+                  <td colSpan={3}>
+                    <div className="empty-state data-table-empty">
+                      <h2>No Auth events</h2>
+                      <p>This collector has no login history yet.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                authEvents.events.map((row) => (
+                  <tr key={row.id}>
+                    <td className="data-table-primary">{formatAuthEventKind(row.kind)}</td>
+                    <td className="data-table-mono">{row.provider ?? "—"}</td>
+                    <td className="data-table-meta">{formatAuthDateTime(row.createdAt)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <ConfirmSheet
         open={roleSheetOpen}
         title={roleSheetTitle}
@@ -372,6 +438,20 @@ export function CollectorUserDrillPage() {
         }}
         onConfirm={confirmRoleChange}
         confirming={roleUpdating}
+      />
+
+      <ConfirmSheet
+        open={revokeOpen}
+        title="Revoke this collector’s sessions?"
+        description="Every Auth session for this User will stop working. They will need to sign in again."
+        confirmLabel="Revoke sessions"
+        confirming={revoking}
+        onClose={() => {
+          if (!revoking) {
+            setRevokeOpen(false);
+          }
+        }}
+        onConfirm={() => void confirmRevokeSessions()}
       />
 
       <GrantCompSheet

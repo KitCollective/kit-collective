@@ -248,7 +248,17 @@ export function AdminShell() {
                 aria-label="Account"
                 onKeyDown={handleMenuKeyDown}
               >
-                <p className="header-menu-meta">{operatorEmail}</p>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="header-menu-item"
+                  onClick={() => {
+                    closeMenu();
+                    navigate("/account");
+                  }}
+                >
+                  {operatorEmail}
+                </button>
                 <button
                   type="button"
                   role="menuitem"

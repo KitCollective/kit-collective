@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthProvider.js";
 import { RequireAdmin } from "./auth/RequireAdmin.js";
 import { AdminShell } from "./components/AdminShell.js";
+import { AccountPage } from "./pages/AccountPage.js";
 import { ClubDrillPage } from "./pages/ClubDrillPage.js";
 import { ClubSeasonDrillPage } from "./pages/ClubSeasonDrillPage.js";
 import { CollectorJerseyDrillPage } from "./pages/CollectorJerseyDrillPage.js";
@@ -38,6 +39,7 @@ export function App() {
                 element={<ClubSeasonDrillPage />}
               />
               <Route path="/collectors" element={<CollectorsPage />} />
+              <Route path="/account" element={<AccountPage />} />
               <Route path="/collectors/offers" element={<OfferDrillPage />} />
               <Route path="/collectors/:userId" element={<CollectorUserDrillPage />} />
               <Route

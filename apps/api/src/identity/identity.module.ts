@@ -5,10 +5,12 @@ import { ModerationModule } from "../moderation/moderation.module.js";
 import { NotifyModule } from "../notify/notify.module.js";
 import { AUTH, createAuth } from "./auth.js";
 import { createIdTokenAdapter } from "./create-id-token.adapter.js";
+import { createSentinelAdapter } from "./create-sentinel.adapter.js";
 import { ID_TOKEN_VERIFIER } from "./id-token.token.js";
 import { IdentityController } from "./identity.controller.js";
 import { IdentityService } from "./identity.service.js";
 import { JwtAuthGuard } from "./jwt-auth.guard.js";
+import { SENTINEL } from "./sentinel.token.js";
 
 @Global()
 @Module({
@@ -23,6 +25,10 @@ import { JwtAuthGuard } from "./jwt-auth.guard.js";
     {
       provide: ID_TOKEN_VERIFIER,
       useFactory: () => createIdTokenAdapter(),
+    },
+    {
+      provide: SENTINEL,
+      useFactory: () => createSentinelAdapter(),
     },
     IdentityService,
     JwtAuthGuard,

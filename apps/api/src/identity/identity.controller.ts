@@ -130,6 +130,13 @@ export class IdentityController {
     return this.identityService.listOwnAuthEvents(user.sub);
   }
 
+  @Post("identity/sessions/revoke-all")
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  revokeAllSessions(@CurrentUser() user: JwtPayload) {
+    return this.identityService.revokeAllSessions(user.sub);
+  }
+
   @Post("identity/logout")
   @HttpCode(204)
   @UseGuards(JwtAuthGuard)
