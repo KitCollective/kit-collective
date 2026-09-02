@@ -26,10 +26,7 @@ async function requestFacebookNativeIdToken(): Promise<string> {
   requiredPublicEnv("EXPO_PUBLIC_FACEBOOK_APP_ID");
   const { LoginManager, AuthenticationToken } = await import("react-native-fbsdk-next");
   LoginManager.setLoginBehavior("native_only");
-  const login = await LoginManager.logInWithPermissions(
-    ["public_profile", "email"],
-    "limited",
-  );
+  const login = await LoginManager.logInWithPermissions(["public_profile", "email"], "limited");
   if (login.isCancelled) {
     throw new Error("Kunne ikke logge ind");
   }
