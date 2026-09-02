@@ -24,6 +24,10 @@ describe("Expo social login chrome", () => {
 
     expect(login).toContain("Fortsæt med Google");
     expect(login).toContain("Fortsæt med Facebook");
+    expect(login).toMatch(/label="Fortsæt med Google"[\s\S]*variant="tertiary"/);
+    expect(login).toMatch(/label="Fortsæt med Facebook"[\s\S]*variant="tertiary"/);
+    expect(login).not.toMatch(/label="Fortsæt med Google"[\s\S]*variant="secondary"/);
+    expect(login).not.toContain("KIT-176");
     expect(login).not.toContain("Apple");
     expect(login).not.toContain("WebBrowser");
     expect(login).not.toContain("auth-session");

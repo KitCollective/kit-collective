@@ -10,8 +10,6 @@ import { useTheme } from "@/theme/use-theme";
 
 // Design-system gap (KIT-23): login/register screens are not in docs/design-system.md
 // Scope §Included or §Deferred. Layout uses locked tokens only; no new primitives.
-// KIT-176: Social continue actions are not in the lock. Button dock secondary fill is
-// Cookie-indstillinger only — using locked secondary + fill, no provider-colored chrome.
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -120,16 +118,14 @@ export default function LoginScreen() {
         />
         <Button
           label="Fortsæt med Google"
-          variant="secondary"
-          width="fill"
+          variant="tertiary"
           onPress={() => void handleSocial("google")}
           loading={socialProvider === "google"}
           disabled={busy}
         />
         <Button
           label="Fortsæt med Facebook"
-          variant="secondary"
-          width="fill"
+          variant="tertiary"
           onPress={() => void handleSocial("facebook")}
           loading={socialProvider === "facebook"}
           disabled={busy}
