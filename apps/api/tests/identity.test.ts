@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -16,6 +17,8 @@ import {
   identityVerifyResponseSchema,
 } from "@kit/api-contract";
 import {
+  authEvent,
+  authThrottleHit,
   catalogLabel,
   club,
   country,
@@ -29,7 +32,8 @@ import {
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import bcrypt from "bcryptjs";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { recordedMails, resetRecordedMails } from "../dist/notify/recording-mailer.adapter.js";
 
@@ -67,6 +71,43 @@ async function registerSession(app: NestFastifyApplication, email: string) {
   });
 
   return identitySessionSchema.parse(JSON.parse(response.body));
+}
+
+function loginInject(
+  app: NestFastifyApplication,
+  input: {
+    email: string;
+    password?: string;
+    remoteAddress?: string;
+    forwardedFor?: string;
+    userAgent?: string;
+    authorization?: string;
+    cookie?: string;
+  },
+) {
+  return app.inject({
+    method: "POST",
+    url: "/v1/identity/login",
+    remoteAddress: input.remoteAddress,
+    headers: {
+      ...(input.forwardedFor ? { "x-forwarded-for": input.forwardedFor } : {}),
+      ...(input.userAgent ? { "user-agent": input.userAgent } : {}),
+      ...(input.authorization ? { authorization: input.authorization } : {}),
+      ...(input.cookie ? { cookie: input.cookie } : {}),
+    },
+    payload: {
+      email: input.email,
+      password: input.password ?? "wrong-password",
+    },
+  });
+}
+
+async function clearAuthThrottle(db: ReturnType<typeof createDb>["db"]) {
+  await db.delete(authThrottleHit);
+}
+
+async function listAuthEventRows(db: ReturnType<typeof createDb>["db"], userId: string) {
+  return db.select().from(authEvent).where(eq(authEvent.userId, userId));
 }
 
 async function insertClubSeasonFixture() {
@@ -179,6 +220,7 @@ async function saveJerseyForUser(
 
 describe("Identity /v1", () => {
   let app: NestFastifyApplication;
+  let helperDb: ReturnType<typeof createDb>;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = DATABASE_URL;
@@ -187,6 +229,7 @@ describe("Identity /v1", () => {
     process.env.BETTER_AUTH_URL = "http://127.0.0.1:3000";
     delete process.env.R2_ENDPOINT;
     await resetDatabase(DATABASE_URL, migrationsFolder);
+    helperDb = createDb(DATABASE_URL);
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -199,6 +242,7 @@ describe("Identity /v1", () => {
   });
 
   afterAll(async () => {
+    await helperDb.pool.end();
     await app.close();
   });
 
@@ -1214,5 +1258,330 @@ describe("Identity /v1", () => {
     });
 
     expect(response.statusCode).toBe(400);
+  });
+
+  describe("Auth throttle on login", () => {
+    beforeEach(async () => {
+      await clearAuthThrottle(helperDb.db);
+    });
+
+    it("returns 401 five times then 429 with lockout for that User", async () => {
+      const session = await registerSession(app, "throttle-email@example.com");
+      const ip = "203.10.0.8";
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const failed = await loginInject(app, {
+          email: "throttle-email@example.com",
+          remoteAddress: ip,
+        });
+        expect(failed.statusCode).toBe(401);
+        expect(JSON.parse(failed.body).message).toBe("Invalid email or password");
+      }
+
+      const listedAfterFailures = await app.inject({
+        method: "GET",
+        url: "/v1/identity/auth-events",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      const failures = authEventsSchema.parse(JSON.parse(listedAfterFailures.body));
+      expect(failures.events.filter((event) => event.kind === "failure")).toHaveLength(5);
+
+      const sixth = await loginInject(app, {
+        email: "throttle-email@example.com",
+        remoteAddress: ip,
+      });
+      expect(sixth.statusCode).toBe(429);
+      expect(JSON.parse(sixth.body).message).toBe("Too many requests");
+      expect(sixth.headers["retry-after"]).toBeUndefined();
+      expect(sixth.body).not.toMatch(/email_failure|ip_family|global_family|remaining/i);
+
+      const listed = await app.inject({
+        method: "GET",
+        url: "/v1/identity/auth-events",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      const events = authEventsSchema.parse(JSON.parse(listed.body));
+      expect(events.events.filter((event) => event.kind === "failure")).toHaveLength(5);
+      const lockouts = events.events.filter((event) => event.kind === "lockout");
+      expect(lockouts.length).toBeGreaterThanOrEqual(1);
+      expect(lockouts[0]?.userId).toBe(session.user.id);
+
+      const seventh = await loginInject(app, {
+        email: "throttle-email@example.com",
+        remoteAddress: ip,
+      });
+      expect(seventh.statusCode).toBe(429);
+    }, 30_000);
+
+    it("429s the 21st family request from one IP when no email has five failures", async () => {
+      const sprayIp = "203.11.0.8";
+      for (let n = 0; n < 20; n += 1) {
+        const failed = await loginInject(app, {
+          email: `spray-${n}@example.com`,
+          remoteAddress: sprayIp,
+        });
+        expect(failed.statusCode).toBe(401);
+      }
+
+      const blocked = await loginInject(app, {
+        email: "spray-later@example.com",
+        remoteAddress: sprayIp,
+      });
+      expect(blocked.statusCode).toBe(429);
+    }, 90_000);
+
+    it("429s the next family request after 100 Postgres-shared global hits in one minute", async () => {
+      await helperDb.db.insert(authThrottleHit).values(
+        Array.from({ length: 100 }, () => ({
+          bucket: "global_family",
+          bucketKey: "global",
+        })),
+      );
+
+      const blocked = await loginInject(app, {
+        email: "global-later@example.com",
+        remoteAddress: "203.40.0.8",
+      });
+      expect(blocked.statusCode).toBe(429);
+    });
+
+    it("locks one email across IPs instead of using a combined IP+email key", async () => {
+      const session = await registerSession(app, "throttle-independent@example.com");
+
+      for (let n = 0; n < 5; n += 1) {
+        const failed = await loginInject(app, {
+          email: "throttle-independent@example.com",
+          remoteAddress: `203.12.${n}.8`,
+        });
+        expect(failed.statusCode).toBe(401);
+      }
+
+      const sixth = await loginInject(app, {
+        email: "throttle-independent@example.com",
+        remoteAddress: "203.12.9.8",
+      });
+      expect(sixth.statusCode).toBe(429);
+
+      const listed = await app.inject({
+        method: "GET",
+        url: "/v1/identity/auth-events",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      const events = authEventsSchema.parse(JSON.parse(listed.body));
+      expect(events.events.some((event) => event.kind === "lockout")).toBe(true);
+    }, 30_000);
+
+    it("persists throttle counters in Postgres", async () => {
+      await loginInject(app, {
+        email: "persist-bucket@example.com",
+        remoteAddress: "203.13.0.8",
+      });
+
+      const hits = await helperDb.db.select().from(authThrottleHit);
+      expect(hits.some((row) => row.bucket === "email_failure")).toBe(true);
+      expect(hits.some((row) => row.bucket === "ip_family")).toBe(true);
+      expect(hits.some((row) => row.bucket === "global_family")).toBe(true);
+    });
+
+    it("matches unknown-email 401 body to known-email wrong password", async () => {
+      await registerSession(app, "throttle-known@example.com");
+      const known = await loginInject(app, {
+        email: "throttle-known@example.com",
+        remoteAddress: "203.14.0.8",
+      });
+      const unknown = await loginInject(app, {
+        email: "throttle-unknown@example.com",
+        remoteAddress: "203.14.1.8",
+      });
+      expect(known.statusCode).toBe(401);
+      expect(unknown.statusCode).toBe(401);
+      expect(JSON.parse(unknown.body)).toEqual(JSON.parse(known.body));
+    });
+
+    it("runs dummy bcrypt on the unknown-email login path", () => {
+      const source = readFileSync(
+        path.join(
+          path.dirname(fileURLToPath(import.meta.url)),
+          "../src/identity/identity.service.ts",
+        ),
+        "utf8",
+      );
+      expect(source).toContain("UNKNOWN_EMAIL_DUMMY_HASH");
+      expect(source).toContain("compare(credentials.password, UNKNOWN_EMAIL_DUMMY_HASH)");
+    });
+
+    it("returns an Auth session after two failures", async () => {
+      await registerSession(app, "throttle-success@example.com");
+      const ip = "203.15.0.8";
+      await loginInject(app, { email: "throttle-success@example.com", remoteAddress: ip });
+      await loginInject(app, { email: "throttle-success@example.com", remoteAddress: ip });
+
+      const succeeded = await loginInject(app, {
+        email: "throttle-success@example.com",
+        password: "password123",
+        remoteAddress: ip,
+      });
+      expect(succeeded.statusCode).toBe(200);
+      expect(identitySessionSchema.parse(JSON.parse(succeeded.body)).user.email).toBe(
+        "throttle-success@example.com",
+      );
+    });
+
+    it("does not 429 GET me with a valid Bearer after login lockout", async () => {
+      const session = await registerSession(app, "throttle-me@example.com");
+      const ip = "203.16.0.8";
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        await loginInject(app, { email: "throttle-me@example.com", remoteAddress: ip });
+      }
+
+      const me = await app.inject({
+        method: "GET",
+        url: "/v1/identity/me",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      expect(me.statusCode).toBe(200);
+      expect(identityMeSchema.parse(JSON.parse(me.body)).email).toBe("throttle-me@example.com");
+    }, 30_000);
+
+    it("stores coarse IP and user-agent on login, failure, and lockout — never secrets", async () => {
+      const session = await registerSession(app, "throttle-attr@example.com");
+      const ip = "203.17.44.91";
+      const userAgent = "KitCollector/1.0";
+      const secretBearer = "Bearer secret-token-value-not-for-storage";
+      const cookie = "session=abc";
+
+      await loginInject(app, {
+        email: "throttle-attr@example.com",
+        remoteAddress: ip,
+        userAgent,
+        authorization: secretBearer,
+        cookie,
+      });
+
+      await loginInject(app, {
+        email: "throttle-attr@example.com",
+        password: "password123",
+        remoteAddress: ip,
+        userAgent,
+        authorization: secretBearer,
+        cookie,
+      });
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await loginInject(app, {
+          email: "throttle-attr@example.com",
+          remoteAddress: ip,
+          userAgent,
+          authorization: secretBearer,
+          cookie,
+        });
+      }
+      await loginInject(app, {
+        email: "throttle-attr@example.com",
+        remoteAddress: ip,
+        userAgent,
+        authorization: secretBearer,
+        cookie,
+      });
+
+      const rows = await listAuthEventRows(helperDb.db, session.user.id);
+      const kinds = new Set(rows.map((row) => row.kind));
+      expect(kinds.has("failure")).toBe(true);
+      expect(kinds.has("login")).toBe(true);
+      expect(kinds.has("lockout")).toBe(true);
+
+      for (const row of rows.filter(
+        (event) => event.kind === "failure" || event.kind === "login" || event.kind === "lockout",
+      )) {
+        expect(row.ipAddress).toBe("203.17.44.0");
+        expect(row.userAgent).toBe(userAgent);
+      }
+
+      const serialized = JSON.stringify(rows);
+      expect(serialized).not.toContain("secret-token-value-not-for-storage");
+      expect(serialized).not.toContain("session=abc");
+    }, 30_000);
+
+    it("trusts X-Forwarded-For only from a private proxy hop", async () => {
+      const session = await registerSession(app, "throttle-xff@example.com");
+
+      await loginInject(app, {
+        email: "throttle-xff@example.com",
+        remoteAddress: "10.0.0.8",
+        forwardedFor: "203.18.44.91",
+        userAgent: "KitCollector/xff",
+      });
+
+      const trustedRows = await listAuthEventRows(helperDb.db, session.user.id);
+      const failure = trustedRows.find((row) => row.kind === "failure");
+      expect(failure?.ipAddress).toBe("203.18.44.0");
+
+      await loginInject(app, {
+        email: "throttle-xff-public@example.com",
+        remoteAddress: "198.51.100.20",
+        forwardedFor: "203.18.44.91",
+        userAgent: "KitCollector/xff",
+      });
+
+      const publicFailures = await helperDb.db
+        .select()
+        .from(authEvent)
+        .where(eq(authEvent.kind, "failure"));
+      const spoofed = publicFailures.filter((row) => row.userAgent === "KitCollector/xff");
+      expect(spoofed.some((row) => row.ipAddress === "198.51.100.0")).toBe(true);
+      expect(
+        spoofed.filter((row) => row.ipAddress === "203.18.44.0" && row.userId === null),
+      ).toHaveLength(0);
+    });
+
+    it("still applies email and global buckets when IP is missing", async () => {
+      const session = await registerSession(app, "throttle-no-ip@example.com");
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const failed = await loginInject(app, {
+          email: "throttle-no-ip@example.com",
+          remoteAddress: "unknown",
+        });
+        expect(failed.statusCode).toBe(401);
+      }
+
+      const sixth = await loginInject(app, {
+        email: "throttle-no-ip@example.com",
+        remoteAddress: "unknown",
+      });
+      expect(sixth.statusCode).toBe(429);
+
+      const rows = await listAuthEventRows(helperDb.db, session.user.id);
+      expect(rows.some((row) => row.kind === "lockout")).toBe(true);
+      expect(
+        rows.filter((row) => row.kind === "failure").every((row) => row.ipAddress === null),
+      ).toBe(true);
+    }, 30_000);
+
+    it("allows a different IP while another IP is 429", async () => {
+      await registerSession(app, "throttle-other-ip@example.com");
+      const lockedIp = "203.19.0.8";
+      for (let n = 0; n < 20; n += 1) {
+        await loginInject(app, {
+          email: `locked-ip-${n}@example.com`,
+          remoteAddress: lockedIp,
+        });
+      }
+      const blocked = await loginInject(app, {
+        email: "locked-ip-later@example.com",
+        remoteAddress: lockedIp,
+      });
+      expect(blocked.statusCode).toBe(429);
+
+      const allowed = await loginInject(app, {
+        email: "throttle-other-ip@example.com",
+        password: "password123",
+        remoteAddress: "203.19.1.8",
+      });
+      expect(allowed.statusCode).toBe(200);
+      expect(identitySessionSchema.parse(JSON.parse(allowed.body)).user.email).toBe(
+        "throttle-other-ip@example.com",
+      );
+    }, 90_000);
   });
 });

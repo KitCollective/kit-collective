@@ -12,6 +12,8 @@ export function formatAuthEventKind(kind: AuthEventKind): string {
       return "Reset";
     case "provider_link":
       return "Provider link";
+    case "lockout":
+      return "Lockout";
     default: {
       const exhaustive: never = kind;
       return exhaustive;

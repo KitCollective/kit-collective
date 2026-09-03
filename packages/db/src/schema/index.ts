@@ -27,6 +27,7 @@ import {
   type AnyPgColumn,
   boolean,
   date,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -343,6 +344,23 @@ export const authEvent = pgTable("auth_event", {
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const authThrottleHit = pgTable(
+  "auth_throttle_hit",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bucket: text("bucket").notNull(),
+    bucketKey: text("bucket_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("auth_throttle_hit_bucket_key_created_idx").on(
+      table.bucket,
+      table.bucketKey,
+      table.createdAt,
+    ),
+  ],
+);
 
 export const authSecurityDetection = pgTable(
   "auth_security_detection",
