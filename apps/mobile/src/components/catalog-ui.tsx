@@ -180,17 +180,31 @@ export function ListRow({ title, meta, selected, onPress }: ListRowProps) {
   );
 }
 
+type SheetVariant = "form" | "door";
+
 type SheetProps = {
   visible: boolean;
   title: string;
   onDismiss: () => void;
   children: ReactNode;
+  variant?: SheetVariant;
+  sentence?: string;
+  leading?: ReactNode;
 };
 
-export function Sheet({ visible, title, onDismiss, children }: SheetProps) {
+export function Sheet({
+  visible,
+  title,
+  onDismiss,
+  children,
+  variant = "form",
+  sentence,
+  leading,
+}: SheetProps) {
   const theme = useTheme();
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
+  const isDoor = variant === "door";
 
   return (
     <Modal
@@ -205,10 +219,28 @@ export function Sheet({ visible, title, onDismiss, children }: SheetProps) {
         accessibilityLabel="Luk"
       />
       <View style={[styles.sheet, { backgroundColor: theme.surfaceRaised }]}>
-        <View style={styles.sheetHeader}>
-          <Text style={[typography.title, { color: theme.contentPrimary }]}>{title}</Text>
-          <IconButton name="Luk" icon="close" onPress={onDismiss} />
+        {isDoor ? (
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={[styles.sheetHandle, { backgroundColor: theme.borderSubtle }]}
+          />
+        ) : null}
+        <View style={[styles.sheetHeader, isDoor && styles.sheetHeaderDoor]}>
+          {leading}
+          <Text
+            accessibilityRole="header"
+            style={[typography.title, styles.sheetTitle, { color: theme.contentPrimary }]}
+          >
+            {title}
+          </Text>
+          {isDoor ? null : <IconButton name="Luk" icon="close" onPress={onDismiss} />}
         </View>
+        {isDoor && sentence ? (
+          <Text style={[typography.body, styles.sheetSentence, { color: theme.contentSecondary }]}>
+            {sentence}
+          </Text>
+        ) : null}
         <View style={styles.sheetBody}>{children}</View>
       </View>
     </Modal>
@@ -319,12 +351,30 @@ const styles = StyleSheet.create({
     paddingBottom: space.insetLg,
     maxHeight: "80%",
   },
+  sheetHandle: {
+    alignSelf: "center",
+    width: space.insetLg,
+    height: space.insetSm,
+    borderRadius: radius.pill,
+    marginTop: space.insetMd,
+  },
   sheetHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: space.insetLg,
     paddingTop: space.insetLg,
+    paddingBottom: space.insetMd,
+    gap: space.gapSm,
+  },
+  sheetHeaderDoor: {
+    paddingTop: space.insetMd,
+  },
+  sheetTitle: {
+    flex: 1,
+  },
+  sheetSentence: {
+    paddingHorizontal: space.insetLg,
     paddingBottom: space.insetMd,
   },
   sheetBody: {
