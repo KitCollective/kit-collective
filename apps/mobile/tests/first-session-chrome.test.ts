@@ -85,4 +85,36 @@ describe("first-session visual host chrome", () => {
     expect(verify).not.toContain("FloatingTabBar");
     expect(verify).not.toContain("Bekræft");
   });
+
+  it("locks profile onboarding chrome without skip, handle field, or preferences", () => {
+    const profile = readFirstSession("profile-onboarding.tsx");
+    const location = readFirstSession("profile-location.tsx");
+    const copy = readFirstSession("profile-copy.ts");
+    const chrome = `${profile}\n${location}\n${copy}`;
+
+    expect(copy).toContain("Din profil");
+    expect(copy).toContain("Vælg billede");
+    expect(copy).toContain("Min lokation");
+    expect(copy).toContain("Om mig");
+    expect(copy).toContain("Fortsæt");
+    expect(profile).toContain("PROFILE_TITLE");
+    expect(profile).toContain("typography.title");
+    expect(profile).toContain('size="lg"');
+    expect(profile).toContain("uploadAvatar");
+    expect(profile).toContain("typography.mono");
+    expect(profile).toContain("ButtonDock");
+    expect(location).toContain("SearchField");
+    expect(location).toContain('variant="city"');
+    expect(location).toContain("popularCitiesForCountryLabel");
+    expect(chrome).not.toContain("FloatingTabBar");
+    expect(chrome).not.toContain("Spring over");
+    expect(chrome).not.toContain("Brugernavn");
+    expect(chrome).not.toContain("Navn");
+    expect(chrome).not.toContain("Ønske");
+    expect(chrome).not.toContain("genvej");
+    expect(chrome).not.toContain("cookie");
+    expect(chrome).not.toContain("notifikation");
+    expect(chrome).not.toContain("prototype-first-run");
+    expect(profile).not.toContain("KC");
+  });
 });

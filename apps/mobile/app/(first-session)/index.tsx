@@ -3,6 +3,7 @@ import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { type DoorEmailStep, DoorSheet, VerifyEmailBeat } from "@/first-session/door";
+import { ProfileOnboardingScreen } from "@/first-session/profile-onboarding";
 import { createFirstSession, reduceFirstSession } from "@/first-session/session";
 import { SplashView } from "@/first-session/splash";
 import { LoadingScreen } from "../_layout";
@@ -29,6 +30,16 @@ export default function FirstSessionHost() {
 
   if (session.place === "collection" || session.place === "tab-shell") {
     return <Redirect href="/(tabs)/collection" />;
+  }
+
+  if (session.place === "profile") {
+    return (
+      <ProfileOnboardingScreen
+        onContinue={() => {
+          setSession((current) => reduceFirstSession(current, { type: "continueProfile" }));
+        }}
+      />
+    );
   }
 
   function resetDoorFields() {

@@ -63,7 +63,7 @@ describe("First session identity without draft", () => {
     expect(session.place).not.toBe("jersey-details");
   });
 
-  it("password register without draft shows verify-email with emailVerified false, then dismiss lands on collection and skips profile and details", () => {
+  it("password register without draft shows verify-email, then profile; empty Fortsæt lands on collection", () => {
     const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
       type: "openDoor",
       mode: "register",
@@ -77,19 +77,26 @@ describe("First session identity without draft", () => {
     expect(afterRegister.place).toBe("verify-email");
     expect(afterRegister.identitySession).toEqual({ emailVerified: false });
     expect(afterRegister.showsTabBar).toBe(false);
+    expect(afterRegister.skippedProfile).toBe(false);
 
-    const session = reduceFirstSession(afterRegister, { type: "dismissVerifyEmail" });
+    const profile = reduceFirstSession(afterRegister, { type: "dismissVerifyEmail" });
+
+    expect(profile.place).toBe("profile");
+    expect(profile.identitySession).toEqual({ emailVerified: false });
+    expect(profile.skippedProfile).toBe(false);
+    expect(profile.skippedJerseyDetails).toBe(true);
+    expect(profile.showsTabBar).toBe(false);
+    expect(profile.place).not.toBe("collection");
+    expect(profile.place).not.toBe("jersey-details");
+
+    const session = reduceFirstSession(profile, { type: "continueProfile" });
 
     expect(session.place).toBe("collection");
-    expect(session.identitySession).toEqual({ emailVerified: false });
-    expect(session.skippedProfile).toBe(true);
-    expect(session.skippedJerseyDetails).toBe(true);
     expect(session.showsTabBar).toBe(true);
-    expect(session.place).not.toBe("profile");
-    expect(session.place).not.toBe("jersey-details");
+    expect(session.skippedJerseyDetails).toBe(true);
   });
 
-  it("social submit skips the verify beat and lands on collection", () => {
+  it("social register skips the verify beat and opens profile", () => {
     const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
       type: "openDoor",
       mode: "register",
@@ -100,14 +107,39 @@ describe("First session identity without draft", () => {
       kind: "register",
     });
 
-    expect(session.place).toBe("collection");
+    expect(session.place).toBe("profile");
     expect(session.place).not.toBe("verify-email");
+    expect(session.skippedProfile).toBe(false);
+    expect(session.showsTabBar).toBe(false);
+
+    const collection = reduceFirstSession(session, { type: "continueProfile" });
+
+    expect(collection.place).toBe("collection");
+    expect(collection.showsTabBar).toBe(true);
+    expect(collection.skippedProfile).toBe(false);
+    expect(collection.skippedJerseyDetails).toBe(true);
+  });
+
+  it("social login without draft lands on collection and never opens profile", () => {
+    const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
+      type: "openDoor",
+      mode: "login",
+    });
+    const session = reduceFirstSession(door, {
+      type: "submitIdentity",
+      method: "social",
+      kind: "login",
+    });
+
+    expect(session.place).toBe("collection");
+    expect(session.skippedProfile).toBe(true);
     expect(session.showsTabBar).toBe(true);
+    expect(session.place).not.toBe("profile");
   });
 });
 
 describe("First session tab bar", () => {
-  it("hides the tab bar on splash, door, and verify-email, and shows it on collection", () => {
+  it("hides the tab bar on splash, door, verify-email, and profile, and shows it on collection", () => {
     const splash = createFirstSession({ signedIn: false });
     expect(splash.place).toBe("splash");
     expect(splash.showsTabBar).toBe(false);
@@ -124,7 +156,11 @@ describe("First session tab bar", () => {
     expect(verify.place).toBe("verify-email");
     expect(verify.showsTabBar).toBe(false);
 
-    const collection = reduceFirstSession(verify, { type: "dismissVerifyEmail" });
+    const profile = reduceFirstSession(verify, { type: "dismissVerifyEmail" });
+    expect(profile.place).toBe("profile");
+    expect(profile.showsTabBar).toBe(false);
+
+    const collection = reduceFirstSession(profile, { type: "continueProfile" });
     expect(collection.place).toBe("collection");
     expect(collection.showsTabBar).toBe(true);
   });

@@ -1,4 +1,10 @@
-export type FirstSessionPlace = "splash" | "door" | "verify-email" | "collection" | "tab-shell";
+export type FirstSessionPlace =
+  | "splash"
+  | "door"
+  | "verify-email"
+  | "profile"
+  | "collection"
+  | "tab-shell";
 
 export type DoorMode = "login" | "register";
 
@@ -26,7 +32,8 @@ export type FirstSessionEvent =
   | { type: "closeDoor" }
   | { type: "continueFromSplash" }
   | { type: "submitIdentity"; method: IdentitySubmitMethod; kind: IdentitySubmitKind }
-  | { type: "dismissVerifyEmail" };
+  | { type: "dismissVerifyEmail" }
+  | { type: "continueProfile" };
 
 function showsTabBarFor(place: FirstSessionPlace): boolean {
   return place === "collection" || place === "tab-shell";
@@ -49,16 +56,15 @@ export function createFirstSession(input: {
   };
 }
 
-function skipProfileAndDetails(
+function identitySkips(
   state: FirstSessionState,
+  kind: IdentitySubmitKind,
 ): Pick<FirstSessionState, "skippedProfile" | "skippedJerseyDetails"> {
-  if (state.hasDraft) {
-    return {
-      skippedProfile: state.skippedProfile,
-      skippedJerseyDetails: state.skippedJerseyDetails,
-    };
+  const skippedJerseyDetails = state.hasDraft ? state.skippedJerseyDetails : true;
+  if (kind === "login" && !state.hasDraft) {
+    return { skippedProfile: true, skippedJerseyDetails };
   }
-  return { skippedProfile: true, skippedJerseyDetails: true };
+  return { skippedProfile: false, skippedJerseyDetails };
 }
 
 export function reduceFirstSession(
@@ -88,12 +94,22 @@ export function reduceFirstSession(
         showsTabBar: false,
       };
     case "submitIdentity": {
-      const skips = skipProfileAndDetails(state);
+      const skips = identitySkips(state, event.kind);
       if (event.method === "password" && event.kind === "register") {
         return {
           ...state,
           place: "verify-email",
           identitySession: { emailVerified: false },
+          showsTabBar: false,
+          ...skips,
+        };
+      }
+      if (event.kind === "register") {
+        return {
+          ...state,
+          place: "profile",
+          identitySession:
+            event.method === "social" ? { emailVerified: true } : state.identitySession,
           showsTabBar: false,
           ...skips,
         };
@@ -108,6 +124,12 @@ export function reduceFirstSession(
       };
     }
     case "dismissVerifyEmail":
+      return {
+        ...state,
+        place: "profile",
+        showsTabBar: false,
+      };
+    case "continueProfile":
       return {
         ...state,
         place: "collection",
