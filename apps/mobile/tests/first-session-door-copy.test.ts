@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DOOR_SPLITTER_LABEL,
+  doorEmailCtaLabel,
+  doorPasswordSubmitLabel,
+  doorSentence,
+  doorStepCaption,
+  doorSwapLabel,
+  doorTitle,
   EMAIL_CHANGE_LABEL,
   EMAIL_NEXT_LABEL,
   FORGOT_PASSWORD_LABEL,
@@ -11,12 +17,6 @@ import {
   SPLASH_REGISTER_LABEL,
   VERIFY_EMAIL_CONTINUE,
   VERIFY_EMAIL_TITLE,
-  doorEmailCtaLabel,
-  doorPasswordSubmitLabel,
-  doorSentence,
-  doorStepCaption,
-  doorSwapLabel,
-  doorTitle,
 } from "../src/first-session/door-copy";
 
 describe("first-session door copy", () => {

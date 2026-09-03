@@ -38,11 +38,11 @@ describe("first-session visual host chrome", () => {
     const catalog = readFileSync(catalogUiPath, "utf8");
     const door = readFirstSession("door-sheet.tsx");
 
-    expect(catalog).toContain('variant?: SheetVariant');
+    expect(catalog).toContain("variant?: SheetVariant");
     expect(catalog).toContain('"door"');
     expect(catalog).toContain("sentence?: string");
     expect(door).toContain('variant="door"');
-    expect(door).toContain("from \"@/components/catalog-ui\"");
+    expect(door).toContain('from "@/components/catalog-ui"');
   });
 
   it("keeps door email steps, icon social, and locked Danish copy without prototype chrome", () => {
