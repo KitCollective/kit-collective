@@ -64,7 +64,7 @@ export function DiscoveryShowcaseScreen({
         )}
       </View>
       <ButtonDock>
-        <Button label={DISCOVERY_ADD_FIRST_LABEL} onPress={onAddFirst} />
+        <Button label={DISCOVERY_ADD_FIRST_LABEL} width="fill" onPress={onAddFirst} />
         <Button label={DISCOVERY_HAVE_ACCOUNT_LABEL} variant="tertiary" onPress={onHaveAccount} />
       </ButtonDock>
     </View>
