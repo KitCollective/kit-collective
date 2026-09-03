@@ -1,6 +1,8 @@
 export type FirstSessionPlace =
   | "splash"
   | "discovery"
+  | "chooser"
+  | "analysing"
   | "door"
   | "verify-email"
   | "profile"
@@ -20,7 +22,9 @@ export type FirstSessionIdentitySession = {
 export type FirstSessionState = {
   place: FirstSessionPlace;
   doorMode: DoorMode | null;
+  doorOverAnalysing: boolean;
   hasDraft: boolean;
+  captureSessionId: string | null;
   identitySession: FirstSessionIdentitySession | null;
   showsTabBar: boolean;
   skippedDiscovery: boolean;
@@ -34,7 +38,14 @@ export type FirstSessionEvent =
   | { type: "continueFromSplash" }
   | { type: "submitIdentity"; method: IdentitySubmitMethod; kind: IdentitySubmitKind }
   | { type: "dismissVerifyEmail" }
-  | { type: "continueProfile" };
+  | { type: "continueProfile" }
+  | { type: "startAdd" }
+  | { type: "cancelChooser" }
+  | { type: "photosPicked"; sessionId: string }
+  | { type: "visionComplete" }
+  | { type: "visionFailed" }
+  | { type: "fillSelf" }
+  | { type: "openDoorFromAnalysing"; mode?: DoorMode };
 
 function showsTabBarFor(place: FirstSessionPlace): boolean {
   return place === "collection" || place === "tab-shell";
@@ -43,12 +54,15 @@ function showsTabBarFor(place: FirstSessionPlace): boolean {
 export function createFirstSession(input: {
   signedIn: boolean;
   hasDraft?: boolean;
+  captureSessionId?: string | null;
 }): FirstSessionState {
   const place: FirstSessionPlace = input.signedIn ? "tab-shell" : "splash";
   return {
     place,
     doorMode: null,
+    doorOverAnalysing: false,
     hasDraft: input.hasDraft ?? false,
+    captureSessionId: input.captureSessionId ?? null,
     identitySession: null,
     showsTabBar: showsTabBarFor(place),
     skippedDiscovery: false,
@@ -63,9 +77,22 @@ function identitySkips(
 ): Pick<FirstSessionState, "skippedProfile" | "skippedJerseyDetails"> {
   const skippedJerseyDetails = state.hasDraft ? state.skippedJerseyDetails : true;
   if (kind === "login" && !state.hasDraft) {
-    return { skippedProfile: true, skippedJerseyDetails };
+    return { skippedProfile: true, skippedJerseyDetails: true };
   }
   return { skippedProfile: false, skippedJerseyDetails };
+}
+
+function openDoorFromAnalysing(
+  state: FirstSessionState,
+  mode: DoorMode = "register",
+): FirstSessionState {
+  return {
+    ...state,
+    place: "door",
+    doorMode: mode,
+    doorOverAnalysing: true,
+    showsTabBar: false,
+  };
 }
 
 export function reduceFirstSession(
@@ -79,15 +106,55 @@ export function reduceFirstSession(
         place: "discovery",
         showsTabBar: false,
       };
+    case "startAdd":
+      return {
+        ...state,
+        place: "chooser",
+        showsTabBar: false,
+      };
+    case "cancelChooser":
+      return {
+        ...state,
+        place: "discovery",
+        showsTabBar: false,
+      };
+    case "photosPicked":
+      return {
+        ...state,
+        place: "analysing",
+        hasDraft: true,
+        captureSessionId: event.sessionId,
+        showsTabBar: false,
+      };
+    case "visionComplete":
+    case "visionFailed":
+      if (state.place === "door" && state.doorOverAnalysing) {
+        return state;
+      }
+      return openDoorFromAnalysing(state, "register");
+    case "fillSelf":
+      return openDoorFromAnalysing(state, "register");
+    case "openDoorFromAnalysing":
+      return openDoorFromAnalysing(state, event.mode ?? "register");
     case "openDoor":
       return {
         ...state,
         place: "door",
         doorMode: event.mode,
+        doorOverAnalysing: false,
         showsTabBar: false,
         skippedDiscovery: state.place === "splash" ? true : state.skippedDiscovery,
       };
     case "closeDoor":
+      if (state.doorOverAnalysing) {
+        return {
+          ...state,
+          place: "analysing",
+          doorMode: null,
+          doorOverAnalysing: false,
+          showsTabBar: false,
+        };
+      }
       return {
         ...state,
         place: state.skippedDiscovery ? "splash" : "discovery",
@@ -101,6 +168,8 @@ export function reduceFirstSession(
           ...state,
           place: "verify-email",
           identitySession: { emailVerified: false },
+          doorMode: null,
+          doorOverAnalysing: false,
           showsTabBar: false,
           ...skips,
         };
@@ -111,6 +180,8 @@ export function reduceFirstSession(
           place: "profile",
           identitySession:
             event.method === "social" ? { emailVerified: true } : state.identitySession,
+          doorMode: null,
+          doorOverAnalysing: false,
           showsTabBar: false,
           ...skips,
         };
@@ -120,6 +191,8 @@ export function reduceFirstSession(
         place: "collection",
         identitySession:
           event.method === "social" ? { emailVerified: true } : state.identitySession,
+        doorMode: null,
+        doorOverAnalysing: false,
         showsTabBar: true,
         ...skips,
       };
@@ -128,6 +201,8 @@ export function reduceFirstSession(
       return {
         ...state,
         place: "profile",
+        doorMode: null,
+        doorOverAnalysing: false,
         showsTabBar: false,
       };
     case "continueProfile":

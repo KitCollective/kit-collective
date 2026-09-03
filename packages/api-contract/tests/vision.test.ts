@@ -1,4 +1,5 @@
 import {
+  UNSIGNED_VISION_SUGGEST_CAP,
   type VisionJobResponse,
   type VisionLogRequest,
   type VisionSuggestRequest,
@@ -60,5 +61,9 @@ describe("vision contract", () => {
       userJerseyId: "55555555-5555-5555-5555-555555555555",
     };
     expect(visionLogRequestSchema.parse(body)).toEqual(body);
+  });
+
+  it("exports unsigned vision suggest cap", () => {
+    expect(UNSIGNED_VISION_SUGGEST_CAP).toBe(20);
   });
 });

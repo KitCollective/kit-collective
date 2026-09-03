@@ -1,7 +1,9 @@
 import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { Redirect, useRouter } from "expo-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
+import { FirstSessionAnalysingScreen } from "@/first-session/analysing-screen";
+import { FirstSessionChooserScreen } from "@/first-session/chooser-screen";
 import { DiscoveryShowcaseScreen } from "@/first-session/discovery-showcase";
 import { type DoorEmailStep, DoorSheet, VerifyEmailBeat } from "@/first-session/door";
 import { ProfileOnboardingScreen } from "@/first-session/profile-onboarding";
@@ -21,6 +23,10 @@ export default function FirstSessionHost() {
   const [loading, setLoading] = useState(false);
   const [socialBusy, setSocialBusy] = useState<IdentityLinkedProvider | null>(null);
 
+  const dispatch = useCallback((event: Parameters<typeof reduceFirstSession>[1]) => {
+    setSession((current) => reduceFirstSession(current, event));
+  }, []);
+
   if (isLoading) {
     return <LoadingScreen />;
   }
@@ -37,7 +43,7 @@ export default function FirstSessionHost() {
     return (
       <ProfileOnboardingScreen
         onContinue={() => {
-          setSession((current) => reduceFirstSession(current, { type: "continueProfile" }));
+          dispatch({ type: "continueProfile" });
         }}
       />
     );
@@ -53,16 +59,16 @@ export default function FirstSessionHost() {
 
   function openDoor(mode: "login" | "register") {
     resetDoorFields();
-    setSession((current) => reduceFirstSession(current, { type: "openDoor", mode }));
+    dispatch({ type: "openDoor", mode });
   }
 
   function closeDoor() {
     resetDoorFields();
-    setSession((current) => reduceFirstSession(current, { type: "closeDoor" }));
+    dispatch({ type: "closeDoor" });
   }
 
   function handleContinueFromSplash() {
-    setSession((current) => reduceFirstSession(current, { type: "continueFromSplash" }));
+    dispatch({ type: "continueFromSplash" });
   }
 
   function handleNextEmail() {
@@ -97,22 +103,18 @@ export default function FirstSessionHost() {
     try {
       if (mode === "register") {
         await signUp(email.trim(), password);
-        setSession((current) =>
-          reduceFirstSession(current, {
-            type: "submitIdentity",
-            method: "password",
-            kind: "register",
-          }),
-        );
+        dispatch({
+          type: "submitIdentity",
+          method: "password",
+          kind: "register",
+        });
       } else {
         await signIn(email.trim(), password);
-        setSession((current) =>
-          reduceFirstSession(current, {
-            type: "submitIdentity",
-            method: "password",
-            kind: "login",
-          }),
-        );
+        dispatch({
+          type: "submitIdentity",
+          method: "password",
+          kind: "login",
+        });
       }
     } catch {
       setError(
@@ -131,13 +133,11 @@ export default function FirstSessionHost() {
     setSocialBusy(provider);
     try {
       await signInSocial(provider);
-      setSession((current) =>
-        reduceFirstSession(current, {
-          type: "submitIdentity",
-          method: "social",
-          kind,
-        }),
-      );
+      dispatch({
+        type: "submitIdentity",
+        method: "social",
+        kind,
+      });
     } catch {
       setError("Kunne ikke logge ind");
     } finally {
@@ -146,21 +146,25 @@ export default function FirstSessionHost() {
   }
 
   function handleDismissVerifyEmail() {
-    setSession((current) => reduceFirstSession(current, { type: "dismissVerifyEmail" }));
+    dispatch({ type: "dismissVerifyEmail" });
   }
 
   const doorMode = session.doorMode ?? "login";
   const showDiscoveryBackdrop =
-    session.place === "discovery" || (session.place === "door" && !session.skippedDiscovery);
+    session.place === "discovery" ||
+    (session.place === "door" && !session.skippedDiscovery && !session.doorOverAnalysing);
   const showSplashBackdrop =
     session.place === "splash" || (session.place === "door" && session.skippedDiscovery);
+  const showAnalysingBackdrop =
+    session.place === "analysing" ||
+    (session.place === "door" && session.doorOverAnalysing && session.captureSessionId !== null);
 
   return (
     <>
       {showDiscoveryBackdrop ? (
         <DiscoveryShowcaseScreen
           onAddFirst={() => {
-            // Photos slice wires this action later.
+            dispatch({ type: "startAdd" });
           }}
           onHaveAccount={() => openDoor("login")}
         />
@@ -170,6 +174,20 @@ export default function FirstSessionHost() {
           onContinue={handleContinueFromSplash}
           onLogin={() => openDoor("login")}
           onRegister={() => openDoor("register")}
+        />
+      ) : null}
+      {session.place === "chooser" ? (
+        <FirstSessionChooserScreen
+          onClose={() => dispatch({ type: "cancelChooser" })}
+          onPhotosPicked={(sessionId) => dispatch({ type: "photosPicked", sessionId })}
+        />
+      ) : null}
+      {showAnalysingBackdrop && session.captureSessionId ? (
+        <FirstSessionAnalysingScreen
+          captureSessionId={session.captureSessionId}
+          onVisionComplete={() => dispatch({ type: "visionComplete" })}
+          onVisionFailed={() => dispatch({ type: "visionFailed" })}
+          onFillSelf={() => dispatch({ type: "fillSelf" })}
         />
       ) : null}
       <DoorSheet
@@ -186,7 +204,11 @@ export default function FirstSessionHost() {
         onSwapMode={() => {
           const next = doorMode === "login" ? "register" : "login";
           resetDoorFields();
-          setSession((current) => reduceFirstSession(current, { type: "openDoor", mode: next }));
+          if (session.doorOverAnalysing) {
+            dispatch({ type: "openDoorFromAnalysing", mode: next });
+            return;
+          }
+          dispatch({ type: "openDoor", mode: next });
         }}
         onEmailChange={setEmail}
         onPasswordChange={setPassword}

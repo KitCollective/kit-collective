@@ -1,5 +1,13 @@
 import type { VisionAdapter, VisionInferenceResult } from "./vision.adapter.js";
 
+export class StubVisionAdapter implements VisionAdapter {
+  constructor(private readonly result: VisionInferenceResult) {}
+
+  async infer(): Promise<VisionInferenceResult | null> {
+    return this.result;
+  }
+}
+
 export class SlowVisionAdapter implements VisionAdapter {
   constructor(
     private readonly delayMs: number,

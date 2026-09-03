@@ -3,7 +3,9 @@ import { BullModule } from "@nestjs/bullmq";
 import { Module } from "@nestjs/common";
 import { DB } from "../db/db.module.js";
 import { IdentityModule } from "../identity/identity.module.js";
+import { AnonymousVisionUserService } from "./anonymous-vision-user.service.js";
 import { createGeminiVisionAdapter } from "./gemini-vision.adapter.js";
+import { UnsignedVisionThrottleService } from "./unsigned-vision-throttle.service.js";
 import { VISION_ADAPTER } from "./vision.adapter.js";
 import { VisionController } from "./vision.controller.js";
 import { VisionProcessor } from "./vision.processor.js";
@@ -31,6 +33,8 @@ const bullProviders = hasRedisConfig() ? [VisionProcessor] : [];
   providers: [
     VisionService,
     VisionQueueService,
+    AnonymousVisionUserService,
+    UnsignedVisionThrottleService,
     ...bullProviders,
     {
       provide: VISION_ADAPTER,

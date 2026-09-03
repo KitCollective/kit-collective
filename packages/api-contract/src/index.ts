@@ -256,6 +256,7 @@ export {
   collectionJerseyUpdateSchema,
 } from "./collection/update.js";
 export {
+  UNSIGNED_VISION_SUGGEST_CAP,
   VISION_CONFIDENCE_PRESELECT,
   VISION_CONFIDENCE_SUGGEST,
   VISION_JOB_STATUSES,
