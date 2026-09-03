@@ -68,7 +68,9 @@ describe("First session host chrome", () => {
     const doorSheet = readFileSync(doorSheetPath, "utf8");
     const copy = readFileSync(doorCopyPath, "utf8");
     const verify = readFileSync(verifyPath, "utf8");
-    const chrome = `${door}\n${doorSheet}\n${copy}\n${verify}`;
+    const profile = readFileSync(profilePath, "utf8");
+    const host = readFileSync(hostPath, "utf8");
+    const chrome = `${door}\n${doorSheet}\n${copy}\n${verify}\n${profile}\n${host}`;
 
     expect(copy).toContain("Gem samlingen");
     expect(copy).toContain("Trøjen er læst. En konto husker den.");

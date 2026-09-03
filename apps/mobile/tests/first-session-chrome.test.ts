@@ -88,7 +88,9 @@ describe("first-session visual host chrome", () => {
 
   it("locks profile onboarding chrome without skip, handle field, or preferences", () => {
     const profile = readFirstSession("profile-onboarding.tsx");
+    const location = readFirstSession("profile-location.tsx");
     const copy = readFirstSession("profile-copy.ts");
+    const chrome = `${profile}\n${location}\n${copy}`;
 
     expect(copy).toContain("Din profil");
     expect(copy).toContain("Vælg billede");
@@ -101,18 +103,18 @@ describe("first-session visual host chrome", () => {
     expect(profile).toContain("uploadAvatar");
     expect(profile).toContain("typography.mono");
     expect(profile).toContain("ButtonDock");
-    expect(profile).toContain("SearchField");
-    expect(profile).toContain('variant="city"');
-    expect(profile).toContain("popularCitiesForCountryLabel");
-    expect(profile).not.toContain("FloatingTabBar");
-    expect(profile).not.toContain("Spring over");
-    expect(profile).not.toContain("Brugernavn");
-    expect(profile).not.toContain("Navn");
-    expect(profile).not.toContain("Ønske");
-    expect(profile).not.toContain("genvej");
-    expect(profile).not.toContain("cookie");
-    expect(profile).not.toContain("notifikation");
-    expect(profile).not.toContain("prototype-first-run");
+    expect(location).toContain("SearchField");
+    expect(location).toContain('variant="city"');
+    expect(location).toContain("popularCitiesForCountryLabel");
+    expect(chrome).not.toContain("FloatingTabBar");
+    expect(chrome).not.toContain("Spring over");
+    expect(chrome).not.toContain("Brugernavn");
+    expect(chrome).not.toContain("Navn");
+    expect(chrome).not.toContain("Ønske");
+    expect(chrome).not.toContain("genvej");
+    expect(chrome).not.toContain("cookie");
+    expect(chrome).not.toContain("notifikation");
+    expect(chrome).not.toContain("prototype-first-run");
     expect(profile).not.toContain("KC");
   });
 });

@@ -6,3 +6,12 @@ export const PROFILE_CONTINUE = "Fortsæt";
 export const PROFILE_CITY_SEARCH = "Søg efter by";
 export const PROFILE_POPULAR_CITIES = "Populære byer";
 export const PROFILE_FREE_TAG_HELPER = "Gemmes som et frit tag — ikke en fejl.";
+export const PROFILE_CURRENT_COUNTRY_META = "Nuværende";
+
+export function profileHandleCaption(handle: string): string {
+  return `@${handle}`;
+}
+
+export function profileFreeTagTitle(query: string): string {
+  return `Brug «${query}»`;
+}
