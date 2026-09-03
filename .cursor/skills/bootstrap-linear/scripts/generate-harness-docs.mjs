@@ -130,6 +130,10 @@ Lost? \`/ask-me\` maps the situation to a factory skill. It hints; it does not f
 
 New or edited factory skill under \`.cursor/skills/\`. Not a domain helper. See \`.cursor/skills/create-new-skill/SKILL.md\`.
 
+### Reap worktree
+
+After land on \`${integration}\`: verify merge on \`origin/${integration}\`, remove the Desktop issue worktree, delete the merged remote branch. See \`.cursor/skills/reap-worktree/SKILL.md\`. Chained from \`/land\` and \`/issue-session\`.
+
 ### Vendor Expo skills
 
 Official Expo/EAS skills live under \`.cursor/skills/expo/\` (not factory skills). \`/implement\` and the \`react-expo\` helper load \`expo-overview\` first, then the matching leaf. Checker \`/code-review\` Standards includes them when the diff touches \`apps/mobile\` or EAS. Product docs win on conflict. Do not recreate \`.agents/\`.

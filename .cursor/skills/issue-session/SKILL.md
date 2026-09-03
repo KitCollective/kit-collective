@@ -86,6 +86,10 @@ Stop the issue (leave `Implementing`, role-comment) when checker-fail returns hi
 
 Move to `Merging` (approver-present). Follow [land/SKILL.md](../land/SKILL.md) and [land/references/merge.md](../land/references/merge.md). Success → `Done` + role comment with merge SHA. Merge fail → `Implementing` + merge error under `### Review feedback` + increment `reviewLoops` + resume from step 3.
 
+### 8. Reap worktree
+
+After land success, follow [reap-worktree/SKILL.md](../reap-worktree/SKILL.md): verify the branch is on `origin/<lanes.integration>`, remove the issue worktree, delete the merged remote branch when safe.
+
 ## After the batch
 
-List each identifier: landed SHA, still in loop, skipped (reason), or blocked. Do not start unnamed issues.
+List each identifier: landed SHA, worktree reaped (yes/no), still in loop, skipped (reason), or blocked. Do not start unnamed issues.
