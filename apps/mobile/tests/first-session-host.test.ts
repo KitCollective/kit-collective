@@ -9,6 +9,8 @@ const doorPath = join(mobileRoot, "src/first-session/door.tsx");
 const doorSheetPath = join(mobileRoot, "src/first-session/door-sheet.tsx");
 const doorCopyPath = join(mobileRoot, "src/first-session/door-copy.ts");
 const verifyPath = join(mobileRoot, "src/first-session/verify-email-beat.tsx");
+const profilePath = join(mobileRoot, "src/first-session/profile-onboarding.tsx");
+const hostPath = join(mobileRoot, "app/(first-session)/index.tsx");
 const indexPath = join(mobileRoot, "app/index.tsx");
 
 function walkSourceFiles(dir: string): string[] {
@@ -90,5 +92,17 @@ describe("First session host chrome", () => {
     expect(chrome).not.toMatch(/Fortsæt med Google/);
     expect(chrome).not.toMatch(/Fortsæt med Facebook/);
     expect(chrome).not.toMatch(/three-slide|tre slides|produktguide/i);
+  });
+
+  it("host opens profile onboarding after register and never copies prototype chrome", () => {
+    const host = readFileSync(hostPath, "utf8");
+    const profile = readFileSync(profilePath, "utf8");
+
+    expect(host).toContain("ProfileOnboardingScreen");
+    expect(host).toContain('place === "profile"');
+    expect(host).toContain("continueProfile");
+    expect(profile).toContain("uploadAvatar");
+    expect(profile).toContain("updateProfile");
+    expect(profile).not.toContain("prototype-first-run");
   });
 });
