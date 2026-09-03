@@ -27,6 +27,23 @@ Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so th
 
 Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside parallel sub-agents.
 
+### Inventory then delta (kit-slice Checker)
+
+When the caller is the factory Checker (In Review / kit-slice), pin the range from the workpad `### Review pin` instead of always using merge-base:
+
+| Pass | Mode | Range | What to write |
+| --- | --- | --- | --- |
+| 1 | **Inventory** | `merge-base...HEAD` (no `lastReviewSha`) | Every hard finding. Write `### Review pin` and `### Review color`. |
+| 2+ | **Delta** | open Review feedback classes **plus** `lastReviewSha...HEAD` | Only still-open classes, or a regression created by the fix. |
+
+Required checks pending → **amber** cheap hold: do **not** start the model review loop. Stay In Review.
+
+Hard findings, `CONFLICTING`, or failed required checks → **red** → Implementing on the **same** branch/PR.
+
+Axes clean **and** MERGEABLE **and** required checks green → **green** → Ready for merge.
+
+Grapile is not a gate. Do not invent findings on unchanged hunks during delta.
+
 ### 2. Identify the spec source
 
 Look for the originating spec, in this order:
