@@ -30,6 +30,8 @@ function authEventKindLabel(kind: AuthEventKind): string {
       return "Adgangskode nulstillet";
     case "provider_link":
       return "Konto knyttet";
+    case "lockout":
+      return "Spærret";
     default: {
       const exhaustive: never = kind;
       return exhaustive;

@@ -16,6 +16,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { CurrentUser } from "./current-user.decorator.js";
 import { IdentityService, type JwtPayload } from "./identity.service.js";
 import { JwtAuthGuard } from "./jwt-auth.guard.js";
+import { requestAttribution } from "./request-headers.js";
 
 @Controller()
 export class IdentityController {
@@ -28,8 +29,8 @@ export class IdentityController {
 
   @Post("identity/login")
   @HttpCode(200)
-  login(@Body() body: unknown) {
-    return this.identityService.login(body);
+  login(@Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.identityService.login(body, requestAttribution(request));
   }
 
   @Post("identity/social")

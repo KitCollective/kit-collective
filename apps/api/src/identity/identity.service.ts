@@ -87,6 +87,7 @@ import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationService } from "../moderation/moderation.service.js";
 import { NotifyService } from "../notify/notify.service.js";
 import { AUTH, type AuthInstance } from "./auth.js";
+import { AuthThrottleService, tooManyLoginAttempts } from "./auth-throttle.service.js";
 import type { IdTokenVerifierAdapter, VerifiedIdToken } from "./id-token.adapter.js";
 import { ID_TOKEN_VERIFIER } from "./id-token.token.js";
 import {
@@ -97,11 +98,15 @@ import {
   isHandleEmail,
   nextHandleCandidate,
 } from "./identity.helpers.js";
-import { bearerTokenFromAuthorization } from "./request-headers.js";
+import { bearerTokenFromAuthorization, type RequestAttribution } from "./request-headers.js";
 import type { SentinelAdapter } from "./sentinel.adapter.js";
 import { SENTINEL } from "./sentinel.token.js";
 
 const { hash, compare } = bcrypt;
+
+/** Cost-12 hash of `unknown-email-dummy` so unknown-email login does the same work as a miss. */
+const UNKNOWN_EMAIL_DUMMY_HASH = "$2a$12$JVlUVacTaWZV1JKt5IGZdu3XbtkBe8srPl74IyGfJhM0LWsQiamwG";
+const INVALID_EMAIL_OR_PASSWORD = "Invalid email or password";
 
 const USER_ME_SELECT = {
   id: user.id,
@@ -172,6 +177,7 @@ export class IdentityService {
     private readonly notifyService: NotifyService,
     @Inject(ID_TOKEN_VERIFIER) private readonly idTokenVerifier: IdTokenVerifierAdapter,
     @Inject(SENTINEL) private readonly sentinel: SentinelAdapter,
+    private readonly authThrottle: AuthThrottleService,
   ) {
     this.objectStore = hasR2Config() ? createR2ObjectStore() : createMemoryObjectStore();
   }
@@ -213,31 +219,64 @@ export class IdentityService {
     return await this.buildSession(created, accessToken);
   }
 
-  async login(rawBody: unknown): Promise<IdentitySession> {
+  async login(rawBody: unknown, attribution: RequestAttribution): Promise<IdentitySession> {
     const credentials = identityCredentialsSchema.parse(rawBody);
+    const normalizedEmail = credentials.email.toLowerCase();
+    const familyAllowed = await this.authThrottle.consumeLoginFamily(attribution.ipAddress);
+    const emailLocked = await this.authThrottle.isEmailLocked(normalizedEmail);
+
+    if (!familyAllowed || emailLocked) {
+      const userId = await this.findUserIdByEmail(normalizedEmail);
+      await this.recordAuthEvent({
+        kind: "lockout",
+        userId,
+        ipAddress: attribution.ipAddress,
+        userAgent: attribution.userAgent,
+      });
+      throw tooManyLoginAttempts();
+    }
+
     const [found] = await this.db
       .select({
         ...USER_ME_SELECT,
         passwordHash: user.passwordHash,
       })
       .from(user)
-      .where(eq(user.email, credentials.email.toLowerCase()))
+      .where(eq(user.email, normalizedEmail))
       .limit(1);
 
     if (!found) {
-      await this.recordAuthEvent({ kind: "failure", userId: null });
-      throw new UnauthorizedException("Invalid email or password");
+      await compare(credentials.password, UNKNOWN_EMAIL_DUMMY_HASH);
+      await this.authThrottle.recordEmailFailure(normalizedEmail);
+      await this.recordAuthEvent({
+        kind: "failure",
+        userId: null,
+        ipAddress: attribution.ipAddress,
+        userAgent: attribution.userAgent,
+      });
+      throw new UnauthorizedException(INVALID_EMAIL_OR_PASSWORD);
     }
 
     const valid = await compare(credentials.password, found.passwordHash);
     if (!valid) {
-      await this.recordAuthEvent({ kind: "failure", userId: found.id });
-      throw new UnauthorizedException("Invalid email or password");
+      await this.authThrottle.recordEmailFailure(normalizedEmail);
+      await this.recordAuthEvent({
+        kind: "failure",
+        userId: found.id,
+        ipAddress: attribution.ipAddress,
+        userAgent: attribution.userAgent,
+      });
+      throw new UnauthorizedException(INVALID_EMAIL_OR_PASSWORD);
     }
 
     const { passwordHash: _passwordHash, ...sessionRow } = found;
     const accessToken = await this.createSessionToken(found.id);
-    await this.recordAuthEvent({ kind: "login", userId: found.id });
+    await this.recordAuthEvent({
+      kind: "login",
+      userId: found.id,
+      ipAddress: attribution.ipAddress,
+      userAgent: attribution.userAgent,
+    });
     return await this.buildSession(sessionRow, accessToken);
   }
 
@@ -1277,15 +1316,28 @@ export class IdentityService {
     }
   }
 
+  private async findUserIdByEmail(email: string): Promise<string | null> {
+    const [found] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.email, email))
+      .limit(1);
+    return found?.id ?? null;
+  }
+
   private async recordAuthEvent(input: {
     kind: AuthEventKind;
     userId: string | null;
     provider?: IdentityLinkedProvider | null;
+    ipAddress?: string | null;
+    userAgent?: string | null;
   }): Promise<void> {
     await this.db.insert(authEvent).values({
       kind: input.kind,
       userId: input.userId,
       provider: input.provider ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
     });
   }
 

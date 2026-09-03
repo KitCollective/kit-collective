@@ -4,6 +4,7 @@ import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationModule } from "../moderation/moderation.module.js";
 import { NotifyModule } from "../notify/notify.module.js";
 import { AUTH, createAuth } from "./auth.js";
+import { AuthThrottleService } from "./auth-throttle.service.js";
 import { createIdTokenAdapter } from "./create-id-token.adapter.js";
 import { createSentinelAdapter } from "./create-sentinel.adapter.js";
 import { ID_TOKEN_VERIFIER } from "./id-token.token.js";
@@ -30,6 +31,7 @@ import { SENTINEL } from "./sentinel.token.js";
       provide: SENTINEL,
       useFactory: () => createSentinelAdapter(),
     },
+    AuthThrottleService,
     IdentityService,
     JwtAuthGuard,
   ],
