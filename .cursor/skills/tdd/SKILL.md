@@ -38,11 +38,11 @@ This skill picks the helpers. `/implement` still owns Linear status and the PR.
 
 Before the first red test, list every agent file in `paths.helpers` (default `.cursor/agents/*.md`). Read each YAML `name` and `description`. Do not use a hardcoded roster.
 
-For the current seam / slice, spawn **every** helper whose `description` matches (labels, apps, stack). Skip files whose description is not this job (planner, checker, release). A slice that matches helper descriptions and whose workpad still says `(none)` is a process miss — spawn before the PR. An issue that cites `docs/design-system.md` or named lock components matches the UI/layout helper even when a Nest or Expo helper already matched.
+For the current seam / slice, spawn **every Role** whose `description` matches (Frontend, Backend, DevOps). Skip files whose description is not this job (planner, checker, release) and skip deprecated aliases (`Do not spawn from /tdd`). A slice that matches a Role description and whose workpad still says `(none)` is a process miss — spawn before the PR. An issue that cites `docs/design-system.md` or named lock components matches **Frontend** even when Backend already matched.
 
-Write the chosen helper names in the workpad under `### Domain helpers used`.
+Write the chosen Role names in the workpad under `### Domain helpers used`.
 
-When `react-expo` is among them, or the seam is EAS, that helper reads `.cursor/skills/expo/expo-overview/SKILL.md` first, then the matching leaf skill, before the first red test. Product docs win on conflict with vendor Expo defaults.
+Roles load **Area skills** on demand (not as agent ids): Expo, Nest, design-system. Frontend loads design-system before Expo leaves. Backend loads Nest when HTTP/auth is in scope. Data/Drizzle stays under Backend in v1. Product docs win on conflict with vendor Expo defaults.
 
 The helper:
 

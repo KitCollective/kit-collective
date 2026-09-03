@@ -15,7 +15,7 @@ Writing discipline: [WRITING.md](WRITING.md). Frontmatter and invocation: [SKILL
 
 - Working skills live in **`.cursor/skills/<name>/`**. Never `~/.cursor/skills-cursor/`. Never recreate `.agents/`.
 - Vendored third-party packs (Expo) stay namespaced at **`.cursor/skills/expo/<skill>/`**. Do not flatten them into factory skills. Do not add factory `agents/openai.yaml` on top.
-- **Domain helpers** (Nest, Drizzle, Expo, …) live in `paths.helpers` (default `.cursor/agents/`). They are not skills and they never own Linear issues. If the user wants product specialization, write a helper, not a skill.
+- **Role subagents** (Frontend, Backend, DevOps) live in `paths.helpers` (default `.cursor/agents/`). Expo, Nest, and design-system are **Area skills** under `.cursor/skills/`, not agent ids. Roles never own Linear issues. If the user wants product specialization, write a Role or Area skill — not a stack-named helper.
 - Skills stay **generic**. Product names, team keys, and lanes come from `factory.config.json`.
 - Every skill gets `agents/openai.yaml` (`display_name`, `short_description`). User-invoked skills also set `policy.allow_implicit_invocation: false` and `disable-model-invocation: true`.
 - After the files exist: `skills-lock.json`, this repo’s `/ask-me` map, and — if agents must discover it — a pointer in `scripts/generate-harness-docs.mjs` then `node scripts/generate-harness-docs.mjs`.
@@ -28,7 +28,7 @@ Writing discipline: [WRITING.md](WRITING.md). Frontmatter and invocation: [SKILL
 Ask (or infer from this conversation):
 
 1. **Job** — what task, and when should it fire?
-2. **Skill vs helper** — generic loop → skill; stack/product specialization → helper under `paths.helpers`.
+2. **Skill vs Role** — generic loop → skill; craft specialization → Role under `paths.helpers` (Frontend, Backend, DevOps). Stack niche (Expo, Nest, design-system) → Area skill under `.cursor/skills/`, not a stack-named helper.
 3. **Invocation** — user-invoked (human is the index) vs model-invoked (agent must reach it, or another skill must). Default user-invoked unless the agent must discover it.
 4. **Matt source** — if this is a port, name the upstream path (`skills/engineering/…`). Copy the loop, then add a **Factory twist** section. Do not wrap Matt by pointer.
 5. **Scripts** — only for deterministic work (validate, generate, bootstrap).

@@ -394,20 +394,40 @@ _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authe
 Removing one UserJersey and its UserJerseyPhoto bytes. The User remains. Not a Kit delete. Not a hide flag.
 _Avoid_: unpublish; soft-hide without a column; deleting the collector by default
 
+**Role subagent**:
+Implement-phase craft owner spawned by the implement lead when the slice needs that craft. v1 roles: **Frontend**, **Backend**, **DevOps**. Stack-named helpers (`react-expo`, `backend-nest`, `db-drizzle`, `ui-ux`) are aliases of those roles.
+_Avoid_: Expo, Nest, or design-system as agent ids; spawning all three roles on every slice; a fourth Data role
+
+**Area skill**:
+Stack niche loaded on demand by a Role subagent. v1: Expo (`.cursor/skills/area-expo`), Nest (`.cursor/skills/area-nest`), design-system (`.cursor/skills/area-design-system`). Not Linear agents and not helper filenames.
+_Avoid_: treating Area skills as spawnable agents; loading every Area skill on every Role
+
+**Frontend**:
+Role subagent for collector UI, Expo screens, layout, and copy. Loads the design-system Area skill before Expo leaves. ui-ux principles live here.
+_Avoid_: a fourth UI role; inventing tokens the lock does not name
+
+**Backend**:
+Role subagent for Nest `/v1`, auth, and **Data/Drizzle** (schema, migrations, CatalogLabel) in v1. Loads the Nest Area skill when HTTP/auth is in scope.
+_Avoid_: a fourth Data/Drizzle role; `apps/mobile` importing `packages/db`
+
+**DevOps**:
+Role subagent for GitHub Actions, Environments, Coolify, EAS channels, and lane secrets.
+_Avoid_: a second Nest worker deploy; production secrets in staging
+
 **Implement parent**:
-The Composer Pi session for the implement role. Owns helpers, the PR, the workpad, and the move to In Review. Writes `### Validation` from the Gate report.
-_Avoid_: Hy3 as `PI_MODEL`; Scout or Gate flipping In Review
+The implement lead session. Owns Role subagent spawn, the PR, the workpad, and the move to In Review. Writes `### Validation` from the pre-review gate.
+_Avoid_: Hy3 as `PI_MODEL`; Scout or Gate flipping In Review; treating stack names as the spawn roster
 
 **Scout**:
 Read-only Pi subagent before implement writes. Required on every implement job. Maps files, seams, and risks. Sends paths and grep snippets only.
 _Avoid_: editing; opening a PR; moving Linear status; dumping whole files or the workpad to OpenRouter; inheriting Composer; skipping when `OPENROUTER_API_KEY` is missing
 
 **Draft**:
-One Pi scaffold subagent after workpad `### Composition` and before Composer domain helpers. Pins free OpenRouter coding models (`minimax/minimax-m3:free`, then `z-ai/glm-5.2:free`, then paid Flash `deepseek/deepseek-v4-flash-0731` → `z-ai/glm-5.3-flash`) with Hy3 then Composer fallbacks (Laguna remains in the balanced free rotation as a paid free-chain step). Writes boilerplate under write-scope only (stubs, types, rote shells, Composition mirrors). Parent and nest/drizzle/expo/ui-ux/devops still own correctness, TDD green, and sensitive seams. Skip Draft on cheap/Spec/first-pass resume (with Skip Scout), when Model route says Skip Draft (critical), and when the slice is auth/IAP/Vision-only.
-_Avoid_: Draft as `PI_MODEL`; Draft owning auth/IAP/Vision/secrets; replacing nest/expo/drizzle/ui-ux; skipping Composer helpers after Draft; treating free primary as hard-fail when rate-limited; omitting Hy3/Composer fallbacks
+One Pi scaffold subagent after workpad `### Composition` and before Role subagents. Pins free OpenRouter coding models (`minimax/minimax-m3:free`, then `z-ai/glm-5.2:free`, then paid Flash `deepseek/deepseek-v4-flash-0731` → `z-ai/glm-5.3-flash`) with Hy3 then Composer fallbacks (Laguna remains in the balanced free rotation as a paid free-chain step). Writes boilerplate under write-scope only (stubs, types, rote shells, Composition mirrors). Parent and Frontend/Backend/DevOps still own correctness, TDD green, and sensitive seams. Skip Draft on cheap/Spec/first-pass resume (with Skip Scout), when Model route says Skip Draft (critical), and when the slice is auth/IAP/Vision-only.
+_Avoid_: Draft as `PI_MODEL`; Draft owning auth/IAP/Vision/secrets; replacing Frontend/Backend/DevOps; skipping Role subagents after Draft; treating free primary as hard-fail when rate-limited; omitting Hy3/Composer fallbacks
 
 **Model route**:
-Cheapest-capable routing across implement gates. Before spawn, a rule heuristic scores slice complexity (`simple` | `standard` | `critical`) from write-scope, helpers, path count, and critical keywords (auth/IAP/Vision/secrets/billing). Optional host env `HARNESS_MODEL_PROFILE` (`economy` | `balanced` | `premium`, default `balanced`) shifts aggressiveness: **balanced** sets parent `--model` to free/cheap rotation for simple only (critical + helpers stay Composer); **economy** is OpenRouter-only for every tier — never `cursor/composer-*` — with role pins: Scout/helpers/Slop → Hy3; Builder **simple** → DeepSeek Flash else Hy3; Optimizer → DeepSeek Flash; ui-ux → GLM 5.3 Flash (multimodal for optional design PNG spot-check); Draft keeps free primary with Flash then Hy3 fallbacks; factory-checker/land → Hy3. Temporary frontmatter pins restore after Pi. Gates: plan (Scout/Hy3) → scaffold (Draft free rotation) → implement (profile + tier) → verify (Hy3 then free/Flash rotation; Mechanical close stays harness-owned). Cheap rotation on 429: MiniMax M3 free → GLM 5.2 free → Laguna S 2.1 (`poolside/laguna-s-2.1`) → DeepSeek Flash → GLM 5.3 Flash → Hy3 → (balanced/premium: Composer; economy: MiMo). Route decisions + outcomes persist in SQLite `route_runs` for retro tuning (`token-report --routes`).
+Cheapest-capable routing across implement gates. Before spawn, a rule heuristic scores slice complexity (`simple` | `standard` | `critical`) from write-scope, Role spawn, path count, and critical keywords (auth/IAP/Vision/secrets/billing). Optional host env `HARNESS_MODEL_PROFILE` (`economy` | `balanced` | `premium`, default `balanced`) shifts aggressiveness: **balanced** sets parent `--model` to free/cheap rotation for simple only (critical + Roles stay Composer); **economy** is OpenRouter-only for every tier — never `cursor/composer-*` — with role pins: Scout/Roles/Slop → Hy3; Builder **simple** → DeepSeek Flash else Hy3; Optimizer → DeepSeek Flash; Frontend → GLM 5.3 Flash (multimodal for optional design PNG spot-check); Draft keeps free primary with Flash then Hy3 fallbacks; factory-checker/land → Hy3. Temporary frontmatter pins restore after Pi. Gates: plan (Scout/Hy3) → scaffold (Draft free rotation) → implement (profile + tier) → verify (Hy3 then free/Flash rotation; Mechanical close stays harness-owned). Cheap rotation on 429: MiniMax M3 free → GLM 5.2 free → Laguna S 2.1 (`poolside/laguna-s-2.1`) → DeepSeek Flash → GLM 5.3 Flash → Hy3 → (balanced/premium: Composer; economy: MiMo). Route decisions + outcomes persist in SQLite `route_runs` for retro tuning (`token-report --routes`).
 _Avoid_: prompt-only routing while parent stays Composer on simple; one model for every gate; stalling the stay on a single free 429; Draft as `PI_MODEL`; treating heuristic score as invoice truth; leaving Composer in an economy chain or helper pin
 
 **Gate**:
@@ -423,8 +443,8 @@ Ticket-derived slice brief (paths + Do not + prior fails + top Hermes lessons) a
 _Avoid_: inventing product scanners in `first-pass.mjs`; treating every checker fail as a full Scout+Draft+helpers tree; bouncing incomplete workpads to Implementing; parallel helper fan-out; spawning Gate; checker rediscovering the whole diff via bash; reading full CONTEXT on every spawn; treating list-rate costUsd as invoice truth
 
 **Hy3**:
-OpenRouter model `tencent/hy3` for Scout (primary), no-think. Economy Builder (standard/critical), nest/expo/drizzle/devops/Slop, and factory-checker/land also pin Hy3. Gate (legacy pin) uses `xiaomi/mimo-v2.5-pro` as primary and Hy3 as first fallback. Scout falls back to MiMo-V2.5-Pro then DeepSeek Flash / Composer. Draft uses free OpenRouter coding models first, then DeepSeek Flash → GLM 5.3 Flash → Hy3, then Composer — not Hy3 as Draft primary. Economy Optimizer pins DeepSeek Flash; economy ui-ux pins GLM 5.3 Flash (native multimodal) for optional Read of at most two cited design PNGs — not a whole-app visual audit, not product Vision (jersey CV). Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. Last fallback is `cursor/composer-2.5` — not Kimi, not Hy4. Domain helpers and Slop pin `cursor/composer-2.5` on disk; an omitted `model:` makes Pi use Kimi; economy rewrites pins for the stay.
-_Avoid_: stealth/ox-alpha; Kimi as Scout/Gate/Draft fallback; omitting helper `model:`; free Draft models for nest/expo/drizzle ownership; Hy3 for planner; blocking the slice on Exacto; pinning Scout/Gate to Hy4 as the default; pinning Draft to a free model without Hy3/Composer fallback; economy factory-checker on Hy3 without `OPENROUTER_API_KEY`; ui-ux touring unrelated screens for “consistency”
+OpenRouter model `tencent/hy3` for Scout (primary), no-think. Economy Builder (standard/critical), Frontend/Backend/DevOps/Slop, and factory-checker/land also pin Hy3. Gate (legacy pin) uses `xiaomi/mimo-v2.5-pro` as primary and Hy3 as first fallback. Scout falls back to MiMo-V2.5-Pro then DeepSeek Flash / Composer. Draft uses free OpenRouter coding models first, then DeepSeek Flash → GLM 5.3 Flash → Hy3, then Composer — not Hy3 as Draft primary. Economy Optimizer pins DeepSeek Flash; economy Frontend pins GLM 5.3 Flash (native multimodal) for optional Read of at most two cited design PNGs — not a whole-app visual audit, not product Vision (jersey CV). Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. Last fallback is `cursor/composer-2.5` — not Kimi, not Hy4. Role subagents and Slop pin `cursor/composer-2.5` on disk; an omitted `model:` makes Pi use Kimi; economy rewrites pins for the stay.
+_Avoid_: stealth/ox-alpha; Kimi as Scout/Gate/Draft fallback; omitting Role `model:`; free Draft models for Frontend/Backend ownership; Hy3 for planner; blocking the slice on Exacto; pinning Scout/Gate to Hy4 as the default; pinning Draft to a free model without Hy3/Composer fallback; economy factory-checker on Hy3 without `OPENROUTER_API_KEY`; Frontend touring unrelated screens for “consistency”
 
 **Coding job**:
 A factory role on the coding slot: implement, factory-checker, auto-merge, or land. Not planner. Auto-merge and land do not spawn Pi.
@@ -495,7 +515,7 @@ The factory role that may call `memory_add`, `memory_replace`, and `memory_remov
 _Avoid_: implement, Scout, Gate, or helpers writing the store; land or Auto-merge as writers
 
 **Memory reader**:
-Pi roles that may search Worker memory (`memory_search`, `session_search`) but not write. Implement parent, Scout, Gate, and domain helpers in the reader slice. No background review, correction detection, shutdown flush, or `skill_manage`.
+Pi roles that may search Worker memory (`memory_search`, `session_search`) but not write. Implement parent, Scout, Gate, and Role subagents in the reader slice. No background review, correction detection, shutdown flush, or `skill_manage`.
 _Avoid_: side-channel writes that bypass the tool allowlist; MEMORY.md dump into the system prompt
 
 **Memory policy-only**:

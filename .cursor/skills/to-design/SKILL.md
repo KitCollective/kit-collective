@@ -19,7 +19,7 @@ Do not invent Linear statuses. Do not publish tickets or open a PR. Next slash i
 - Surfaces come from `labels.surfaces` in factory config. Do not invent a surface.
 - `docs/design-system.md` is the visual lock. Domain nouns stay in `CONTEXT.md`. Offer an ADR under `docs/adr/` only when `/grill-with-docs`’s three tests all hold (hard to reverse, surprising without context, a real trade-off).
 - Distinct from `/codebase-design` (code modules) and `/prototype` (throwaway to *see* a look). A question that needs a look is a `/prototype` detour — tell the human to type it; fold the verdict back here.
-- The UI helper in `paths.helpers` applies this lock during `/implement`. This skill authors the lock; it does not implement screens.
+- The Frontend Role in `paths.helpers` applies this lock during `/implement`. This skill authors the lock; it does not implement screens.
 - Interview in the user’s language. Write `docs/design-system.md` in English.
 - Clients must not import `apps/api` or `packages/db`. The lock talks in tokens, components, and surfaces.
 - Never `/land` or push `lanes.staging` / `lanes.production`.

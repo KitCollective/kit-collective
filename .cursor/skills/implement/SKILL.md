@@ -34,7 +34,7 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 Do not move to `In Review` until all of these are true. Record the commands under workpad `### Validation`.
 
 1. **Locks** — if the slice has UI, read `docs/design-system.md` (tokens, type roles, tab-bar anatomy, component inventory). If it has Nest `/v1` or auth, read `{paths.specs}/Architecture/tech-stack.md` (module boundaries + auth). Flag gaps; do not invent.
-2. **Helpers** — spawn every matching helper (`/tdd`). A slice that touches Nest HTTP and Expo screens whose workpad says `(none)` is a process miss. If the issue cites `docs/design-system.md` or named lock components (Search, Sheet, Mark, Banner, Tab bar, Empty state), the helper whose description matches layout / visual hierarchy / UI copy must run — nest+expo alone is not enough.
+2. **Roles** — spawn every matching Role (`/tdd`): Frontend, Backend, DevOps. A slice that touches Nest HTTP and Expo screens whose workpad says `(none)` is a process miss. If the issue cites `docs/design-system.md` or named lock components (Search, Sheet, Mark, Banner, Tab bar, Empty state), **Frontend** must run — Backend+DevOps alone is not enough.
 3. **Lane** — `git fetch origin <lanes.integration>` and rebase or merge so `gh pr view --json mergeable` is `MERGEABLE`. Behind the lane is not shippable.
 4. **Tests** — full graph, not only the files you touched. Typecheck every package whose src **or tests** you edited (`pnpm --filter <pkg> typecheck`), not only the client.
 5. **CI** — wait until **every** required GitHub check is green or skipped-by-design. Image/deploy smokes count. Pending **or red** → stay on the branch; do not flip status.
@@ -43,8 +43,8 @@ Do not move to `In Review` until all of these are true. Record the commands unde
 
 ## Domain helpers
 
-`/tdd` lists `paths.helpers` and spawns matches from each file’s YAML `description`. Do not hardcode helper names here.
+`/tdd` lists `paths.helpers` and spawns **Role** matches from each file’s YAML `description`. v1 roles: Frontend, Backend, DevOps. Skip planner, checker, release, and files whose description says they are a deprecated alias. Do not hardcode stack names (Expo, Nest, design-system) as agent ids.
 
-When the slice is labelled `mobile` or touches `apps/mobile`, Expo Router, React Native, or EAS, the matching helper (`react-expo`, and `devops` for EAS) must load vendor Expo skills under `.cursor/skills/expo/`: `expo-overview` first, then the matching leaf. Record those skill names in the workpad under `### Domain helpers used`. Product docs win if they conflict with a vendor Expo default.
+When a Role matches, it loads **Area skills** on demand: Expo, Nest, design-system — not as spawned agents. Record Role names and any Area skills under workpad `### Domain helpers used`. Product docs win if they conflict with a vendor Expo default.
 
-This implementer still owns the workpad, the branch, `/signal-up`, the PR, and the move to `In Review`. Planner owns claim. Helpers must not do those.
+This implementer still owns the workpad, the branch, `/signal-up`, the PR, and the move to `In Review`. Planner owns claim. Role subagents must not do those.
