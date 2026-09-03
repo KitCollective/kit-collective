@@ -15,7 +15,7 @@ Writing discipline: [WRITING.md](WRITING.md). Frontmatter and invocation: [SKILL
 
 - Working skills live in **`.cursor/skills/<name>/`**. Never `~/.cursor/skills-cursor/`. Never recreate `.agents/`.
 - Vendored third-party packs (Expo) stay namespaced at **`.cursor/skills/expo/<skill>/`**. Do not flatten them into factory skills. Do not add factory `agents/openai.yaml` on top.
-- **Domain helpers** (Nest, Drizzle, Expo, …) live in `paths.helpers` (default `.cursor/agents/`). They are not skills and they never own Linear issues. If the user wants product specialization, write a helper, not a skill.
+- **Role subagents** (Frontend, Backend, DevOps) live in `paths.helpers` (default `.cursor/agents/`). Expo, Nest, and design-system are **Area skills** under `.cursor/skills/`, not agent ids. Roles never own Linear issues. If the user wants product specialization, write a Role or Area skill — not a stack-named helper.
 - Skills stay **generic**. Product names, team keys, and lanes come from `factory.config.json`.
 - Every skill gets `agents/openai.yaml` (`display_name`, `short_description`). User-invoked skills also set `policy.allow_implicit_invocation: false` and `disable-model-invocation: true`.
 - After the files exist: `skills-lock.json`, this repo’s `/ask-me` map, and — if agents must discover it — a pointer in `scripts/generate-harness-docs.mjs` then `node scripts/generate-harness-docs.mjs`.

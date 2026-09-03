@@ -394,9 +394,29 @@ _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authe
 Removing one UserJersey and its UserJerseyPhoto bytes. The User remains. Not a Kit delete. Not a hide flag.
 _Avoid_: unpublish; soft-hide without a column; deleting the collector by default
 
+**Role subagent**:
+Implement-phase craft owner spawned by the implement lead when the slice needs that craft. v1 roles: **Frontend**, **Backend**, **DevOps**. Stack-named helpers (`react-expo`, `backend-nest`, `db-drizzle`, `ui-ux`) are aliases of those roles.
+_Avoid_: Expo, Nest, or design-system as agent ids; spawning all three roles on every slice; a fourth Data role
+
+**Area skill**:
+Stack niche loaded on demand by a Role subagent. v1: Expo (`.cursor/skills/area-expo`), Nest (`.cursor/skills/area-nest`), design-system (`.cursor/skills/area-design-system`). Not Linear agents and not helper filenames.
+_Avoid_: treating Area skills as spawnable agents; loading every Area skill on every Role
+
+**Frontend**:
+Role subagent for collector UI, Expo screens, layout, and copy. Loads the design-system Area skill before Expo leaves. ui-ux principles live here.
+_Avoid_: a fourth UI role; inventing tokens the lock does not name
+
+**Backend**:
+Role subagent for Nest `/v1`, auth, and **Data/Drizzle** (schema, migrations, CatalogLabel) in v1. Loads the Nest Area skill when HTTP/auth is in scope.
+_Avoid_: a fourth Data/Drizzle role; `apps/mobile` importing `packages/db`
+
+**DevOps**:
+Role subagent for GitHub Actions, Environments, Coolify, EAS channels, and lane secrets.
+_Avoid_: a second Nest worker deploy; production secrets in staging
+
 **Implement parent**:
-The Composer Pi session for the implement role. Owns helpers, the PR, the workpad, and the move to In Review. Writes `### Validation` from the Gate report.
-_Avoid_: Hy3 as `PI_MODEL`; Scout or Gate flipping In Review
+The implement lead session. Owns Role subagent spawn, the PR, the workpad, and the move to In Review. Writes `### Validation` from the pre-review gate.
+_Avoid_: Hy3 as `PI_MODEL`; Scout or Gate flipping In Review; treating stack names as the spawn roster
 
 **Scout**:
 Read-only Pi subagent before implement writes. Required on every implement job. Maps files, seams, and risks. Sends paths and grep snippets only.

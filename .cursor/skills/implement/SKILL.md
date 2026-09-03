@@ -43,8 +43,8 @@ Do not move to `In Review` until all of these are true. Record the commands unde
 
 ## Domain helpers
 
-`/tdd` lists `paths.helpers` and spawns matches from each file’s YAML `description`. Do not hardcode helper names here.
+`/tdd` lists `paths.helpers` and spawns **Role** matches from each file’s YAML `description`. v1 roles: Frontend, Backend, DevOps. Skip planner, checker, release, and files whose description says they are a deprecated alias. Do not hardcode stack names (Expo, Nest, design-system) as agent ids.
 
-When the slice is labelled `mobile` or touches `apps/mobile`, Expo Router, React Native, or EAS, the matching helper (`react-expo`, and `devops` for EAS) must load vendor Expo skills under `.cursor/skills/expo/`: `expo-overview` first, then the matching leaf. Record those skill names in the workpad under `### Domain helpers used`. Product docs win if they conflict with a vendor Expo default.
+When a Role matches, it loads **Area skills** on demand: Expo, Nest, design-system — not as spawned agents. Record Role names and any Area skills under workpad `### Domain helpers used`. Product docs win if they conflict with a vendor Expo default.
 
-This implementer still owns the workpad, the branch, `/signal-up`, the PR, and the move to `In Review`. Planner owns claim. Helpers must not do those.
+This implementer still owns the workpad, the branch, `/signal-up`, the PR, and the move to `In Review`. Planner owns claim. Role subagents must not do those.
