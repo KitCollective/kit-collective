@@ -1,0 +1,3 @@
+interface:
+  display_name: "Area Nest"
+  short_description: "Load Nest /v1 and Better Auth lock on demand from Backend"

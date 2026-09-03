@@ -28,7 +28,7 @@ Writing discipline: [WRITING.md](WRITING.md). Frontmatter and invocation: [SKILL
 Ask (or infer from this conversation):
 
 1. **Job** — what task, and when should it fire?
-2. **Skill vs helper** — generic loop → skill; stack/product specialization → helper under `paths.helpers`.
+2. **Skill vs Role** — generic loop → skill; craft specialization → Role under `paths.helpers` (Frontend, Backend, DevOps). Stack niche (Expo, Nest, design-system) → Area skill under `.cursor/skills/`, not a stack-named helper.
 3. **Invocation** — user-invoked (human is the index) vs model-invoked (agent must reach it, or another skill must). Default user-invoked unless the agent must discover it.
 4. **Matt source** — if this is a port, name the upstream path (`skills/engineering/…`). Copy the loop, then add a **Factory twist** section. Do not wrap Matt by pointer.
 5. **Scripts** — only for deterministic work (validate, generate, bootstrap).

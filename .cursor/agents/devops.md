@@ -10,7 +10,7 @@ Spawn only when the slice needs this craft.
 
 ## Area skills (on demand, not agent ids)
 
-When the slice touches EAS channels, Update, Workflows, or store builds, load **Expo** — `.cursor/skills/area-expo/SKILL.md` — after the Frontend role has not already covered that leaf. Product lane/secret rules still win.
+When the slice touches EAS channels, Update, Workflows, or store builds, load **Expo** — `.cursor/skills/area-expo/SKILL.md`. If Frontend already loaded that Area skill on this slice, do not load it a second time. Product lane/secret rules still win.
 
 Record Area skill names in the workpad under `### Domain helpers used`.
 

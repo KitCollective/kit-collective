@@ -9,7 +9,7 @@ This is an **Area skill**, not a Role subagent. Implement lead does not spawn an
 
 Load from Backend before writing Nest HTTP or auth:
 
-- `.scratch/Architecture/tech-stack.md` — module boundaries, Fastify `/v1`, JWT auth
+- `.scratch/Architecture/tech-stack.md` — module boundaries, Fastify `/v1`, Better Auth + revocable Bearer (not JWT as session truth)
 - Secrets stay in Nest env / GitHub Environments. A new required boot env must be set on every workflow that starts this process.
 
 Return to the Backend Role. Do not change Linear status.

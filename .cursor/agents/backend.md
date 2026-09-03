@@ -20,7 +20,7 @@ From `.scratch/Architecture/tech-stack.md`:
 
 - Modular monolith in `apps/api`. Fastify adapter. `/v1` only.
 - Modules = domains: `Identity` owns register/login/session; `Collection` owns user jersey HTTP (`GET /v1/collection/…` does not live on `IdentityController`).
-- Auth is `@nestjs/passport` + JWT (`JwtStrategy`, `AuthGuard('jwt')`), not a hand-rolled guard. Email + password is mandatory. Not Clerk. Not Better Auth.
+- Auth is Better Auth embedded in `Identity` against our Postgres `User` (same UUID). Session is a revocable Bearer, not a stateless JWT. Email + password is mandatory. Social: Google + Facebook. Not Clerk. Not a second public `/api/auth` contract.
 - No `@nestjs/microservices`. No `@nestjs/bull` (BullMQ only if the stack lock says so).
 - Secrets only in Nest env / GitHub Environments. A new required boot env must be set on every CI/deploy workflow that starts this process.
 - Validate inbound data at API boundaries.

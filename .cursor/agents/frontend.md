@@ -1,6 +1,6 @@
 ---
 name: frontend
-description: Use as a Role subagent from /tdd during /implement when the slice needs collector UI, Expo screens, layout, visual hierarchy, accessibility, or Expo/Astro UI copy. Never owns a Linear issue.
+description: Use as a Role subagent from /tdd during /implement when the slice needs collector UI, React Native, Expo Router, gallery/camera, Expo Web, layout, visual hierarchy, accessibility, or Expo/Astro UI copy. Never owns a Linear issue.
 model: inherit
 ---
 
