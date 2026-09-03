@@ -18,11 +18,15 @@ import {
   NotFoundException,
   Param,
   Post,
+  Req,
   UseGuards,
 } from "@nestjs/common";
+import type { FastifyRequest } from "fastify";
 import { CurrentUser } from "../identity/current-user.decorator.js";
 import type { JwtPayload } from "../identity/identity.service.js";
 import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
+import { AnonymousVisionUserService } from "./anonymous-vision-user.service.js";
+import { UnsignedVisionThrottleService } from "./unsigned-vision-throttle.service.js";
 import { VisionService } from "./vision.service.js";
 import { VisionQueueService } from "./vision-queue.service.js";
 
@@ -53,6 +57,8 @@ export class VisionController {
   constructor(
     private readonly visionService: VisionService,
     private readonly visionQueueService: VisionQueueService,
+    private readonly anonymousVisionUserService: AnonymousVisionUserService,
+    private readonly unsignedVisionThrottleService: UnsignedVisionThrottleService,
   ) {}
 
   @Post("collection/vision/suggest")
@@ -76,6 +82,29 @@ export class VisionController {
     return visionSuggestResponseSchema.parse({ jobId });
   }
 
+  @Post("collection/vision/suggest/unsigned")
+  @HttpCode(202)
+  async suggestUnsigned(
+    @Req() request: FastifyRequest,
+    @Body() rawBody: unknown,
+  ): Promise<VisionSuggestResponse> {
+    this.unsignedVisionThrottleService.assertWithinCap(request);
+
+    const body = visionSuggestRequestSchema.parse(rawBody);
+    const photoBytes = decodeBase64Photo(body.photo.contentBase64);
+    const userId = await this.anonymousVisionUserService.getUserId();
+    const jobId = await this.visionService.createJob(userId, photoBytes, body.draftId);
+
+    this.visionQueueService.enqueue({
+      jobId,
+      userId,
+      draftId: body.draftId,
+      photoBytes,
+    });
+
+    return visionSuggestResponseSchema.parse({ jobId });
+  }
+
   @Get("collection/vision/jobs/:jobId")
   @UseGuards(JwtAuthGuard)
   async getJob(
@@ -84,6 +113,20 @@ export class VisionController {
     @Headers("accept-language") acceptLanguage?: string,
   ): Promise<VisionJobResponse> {
     const job = await this.visionService.getJob(user.sub, jobId, resolveLocale(acceptLanguage));
+    if (!job) {
+      throw new NotFoundException("Vision job not found");
+    }
+
+    return visionJobResponseSchema.parse(job);
+  }
+
+  @Get("collection/vision/jobs/:jobId/unsigned")
+  async getJobUnsigned(
+    @Param("jobId") jobId: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ): Promise<VisionJobResponse> {
+    const userId = await this.anonymousVisionUserService.getUserId();
+    const job = await this.visionService.getJob(userId, jobId, resolveLocale(acceptLanguage));
     if (!job) {
       throw new NotFoundException("Vision job not found");
     }

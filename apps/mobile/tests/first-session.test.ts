@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { getActiveDraft, photoUriForRole, createMemoryCaptureSessionStore } from "../src/capture/captureSession";
+import { replacePersistedCapturePhotos } from "../src/capture/captureSessionPersistence";
 import { createFirstSession, reduceFirstSession } from "../src/first-session/session";
 
 describe("First session launch", () => {
@@ -150,6 +152,17 @@ describe("First session tab bar", () => {
     expect(discovery.place).toBe("discovery");
     expect(discovery.showsTabBar).toBe(false);
 
+    const chooser = reduceFirstSession(discovery, { type: "startAdd" });
+    expect(chooser.place).toBe("chooser");
+    expect(chooser.showsTabBar).toBe(false);
+
+    const analysing = reduceFirstSession(chooser, {
+      type: "photosPicked",
+      sessionId: "capture-session-1",
+    });
+    expect(analysing.place).toBe("analysing");
+    expect(analysing.showsTabBar).toBe(false);
+
     const door = reduceFirstSession(splash, { type: "openDoor", mode: "register" });
     expect(door.place).toBe("door");
     expect(door.showsTabBar).toBe(false);
@@ -207,5 +220,150 @@ describe("First session showcase seam", () => {
     expect(source).toContain("DISCOVERY_ADD_FIRST_LABEL");
     expect(source).toContain("<Button label={DISCOVERY_ADD_FIRST_LABEL}");
     expect(source).not.toContain("disabled={jerseys.length === 0}");
+  });
+});
+
+describe("First session add to door flow", () => {
+  it("startAdd opens chooser without premium gating", () => {
+    const discovery = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "continueFromSplash",
+    });
+    const chooser = reduceFirstSession(discovery, { type: "startAdd" });
+
+    expect(chooser.place).toBe("chooser");
+    expect(chooser.showsTabBar).toBe(false);
+    expect(chooser.hasDraft).toBe(false);
+  });
+
+  it("photosPicked creates draft state and moves to analysing", () => {
+    const chooser = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "continueFromSplash",
+      }),
+      { type: "startAdd" },
+    );
+    const session = reduceFirstSession(chooser, {
+      type: "photosPicked",
+      sessionId: "capture-session-1",
+    });
+
+    expect(session.place).toBe("analysing");
+    expect(session.hasDraft).toBe(true);
+    expect(session.captureSessionId).toBe("capture-session-1");
+    expect(session.showsTabBar).toBe(false);
+  });
+
+  it("visionComplete opens register door over analysing", () => {
+    const analysing = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "photosPicked",
+      sessionId: "capture-session-1",
+    });
+    const door = reduceFirstSession(analysing, { type: "visionComplete" });
+
+    expect(door.place).toBe("door");
+    expect(door.doorMode).toBe("register");
+    expect(door.doorOverAnalysing).toBe(true);
+    expect(door.hasDraft).toBe(true);
+    expect(door.captureSessionId).toBe("capture-session-1");
+  });
+
+  it("visionFailed and fillSelf fail-open to register door over analysing", () => {
+    const analysing = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "photosPicked",
+      sessionId: "capture-session-1",
+    });
+
+    const failed = reduceFirstSession(analysing, { type: "visionFailed" });
+    expect(failed.place).toBe("door");
+    expect(failed.doorMode).toBe("register");
+    expect(failed.doorOverAnalysing).toBe(true);
+
+    const filled = reduceFirstSession(analysing, { type: "fillSelf" });
+    expect(filled.place).toBe("door");
+    expect(filled.doorMode).toBe("register");
+    expect(filled.doorOverAnalysing).toBe(true);
+  });
+
+  it("closeDoor from analysing-backed door returns to analysing", () => {
+    const door = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "photosPicked",
+        sessionId: "capture-session-1",
+      }),
+      { type: "fillSelf" },
+    );
+    const back = reduceFirstSession(door, { type: "closeDoor" });
+
+    expect(back.place).toBe("analysing");
+    expect(back.doorMode).toBe(null);
+    expect(back.doorOverAnalysing).toBe(false);
+    expect(back.captureSessionId).toBe("capture-session-1");
+  });
+
+  it("identity submit keeps draft and capture session without opening confirm", () => {
+    const door = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "photosPicked",
+        sessionId: "capture-session-1",
+      }),
+      { type: "visionComplete" },
+    );
+    const afterLogin = reduceFirstSession(door, {
+      type: "submitIdentity",
+      method: "password",
+      kind: "login",
+    });
+
+    expect(afterLogin.place).toBe("collection");
+    expect(afterLogin.hasDraft).toBe(true);
+    expect(afterLogin.captureSessionId).toBe("capture-session-1");
+    expect(afterLogin.place).not.toBe("confirm");
+
+    const host = readFileSync(join(__dirname, "../app/(first-session)/index.tsx"), "utf8");
+    expect(host).not.toContain("/(tabs)/add/confirm");
+    expect(host).not.toContain("requestPremiumAccess");
+  });
+
+  it("draft survives persisted capture session create through identity", () => {
+    const store = createMemoryCaptureSessionStore();
+    const sessionId = replacePersistedCapturePhotos(
+      null,
+      [{ uri: "file:///photos/front.jpg", role: "front", source: "gallery" }],
+      { store },
+    );
+    const loaded = store.load();
+    expect(loaded).not.toBeNull();
+    if (!loaded) {
+      throw new Error("expected capture session");
+    }
+    expect(photoUriForRole(getActiveDraft(loaded), "front")).toBe("file:///photos/front.jpg");
+
+    const door = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "photosPicked",
+        sessionId,
+      }),
+      { type: "fillSelf" },
+    );
+    const afterRegister = reduceFirstSession(door, {
+      type: "submitIdentity",
+      method: "social",
+      kind: "register",
+    });
+
+    expect(afterRegister.hasDraft).toBe(true);
+    expect(afterRegister.captureSessionId).toBe(sessionId);
+    expect(afterRegister.place).toBe("profile");
+    expect(store.load()?.sessionId).toBe(sessionId);
+  });
+
+  it("unsigned vision client targets unsigned routes", () => {
+    const vision = readFileSync(join(__dirname, "../src/api/vision.ts"), "utf8");
+
+    expect(vision).toContain("startUnsignedVisionSuggest");
+    expect(vision).toContain("fetchUnsignedVisionJob");
+    expect(vision).toContain("/v1/collection/vision/suggest/unsigned");
+    expect(vision).toContain("/v1/collection/vision/jobs/");
+    expect(vision).toContain("/unsigned");
   });
 });
