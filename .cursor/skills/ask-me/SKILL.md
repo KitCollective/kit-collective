@@ -36,6 +36,7 @@ The route most work travels. You have an idea and want it built.
 8. **Checker** — `/code-review` again (judge only) **and** GitHub CI/CD on the PR. Pass + required checks green → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`.
 9. **Approver** reads the GitHub PR, moves Linear to `Done`. That **is** merge approval.
 10. **`/land`** into `lanes.integration`. A complete **milestone** then staging / production (not this skill).
+11. **`/reap-worktree`** — verify integration, drop the issue worktree, delete merged remote branch (Desktop).
 
 ### Context hygiene
 
@@ -67,6 +68,7 @@ Not feature work — upkeep.
 
 - **`/signal-up`** — out-of-scope bug/debt: new Linear issue in **Triage**, label `signal-up` only. Never delegate. Cap per run.
 - **`/land`** — merge the GitHub PR after `Done`. Integration lane only.
+- **`/reap-worktree`** — after land: verify branch on integration, remove issue worktree, delete merged remote branch (Desktop hygiene).
 - **`/bootstrap-linear`** — board missing or unshaped (`linear.setup.json` absent).
 - **`/create-new-skill`** — author a factory skill under `.cursor/skills/`.
 - **Vendor Expo skills** — `.cursor/skills/expo/`. Not slash commands. `/implement`, `/tdd`, and checker load them on mobile and EAS work. Product docs win on conflict.

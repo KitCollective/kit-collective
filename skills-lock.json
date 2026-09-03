@@ -88,6 +88,11 @@
       "sourceType": "factory",
       "skillPath": "factory"
     },
+    "reap-worktree": {
+      "source": "factory",
+      "sourceType": "factory",
+      "skillPath": "factory"
+    },
     "eas-app-stores": {
       "source": "expo/skills",
       "sourceType": "github",
