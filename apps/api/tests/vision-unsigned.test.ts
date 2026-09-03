@@ -1,15 +1,25 @@
 import "reflect-metadata";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import bcrypt from "bcryptjs";
 import {
   UNSIGNED_VISION_SUGGEST_CAP,
   visionJobResponseSchema,
   visionSuggestResponseSchema,
 } from "@kit/api-contract";
-import { catalogLabel, club, country, createDb, league, resetDatabase, season, teamSeason, user } from "@kit/db";
+import {
+  catalogLabel,
+  club,
+  country,
+  createDb,
+  league,
+  resetDatabase,
+  season,
+  teamSeason,
+  user,
+} from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
+import bcrypt from "bcryptjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { FailingVisionAdapter, StubVisionAdapter } from "../dist/vision/test-vision.adapters.js";
@@ -52,21 +62,27 @@ async function insertCatalogFixture() {
     .insert(country)
     .values({ iso3166: "DK" })
     .returning({ id: country.id });
+  if (!insertedCountry) {
+    throw new Error("expected country row");
+  }
 
   const [insertedLeague] = await db
     .insert(league)
-    .values({ countryId: insertedCountry!.id })
+    .values({ countryId: insertedCountry.id })
     .returning({ id: league.id });
+  if (!insertedLeague) {
+    throw new Error("expected league row");
+  }
 
   await db.insert(club).values({
     id: CLUB_ID,
-    countryId: insertedCountry!.id,
+    countryId: insertedCountry.id,
     kind: "club",
   });
 
   await db.insert(season).values({
     id: SEASON_ID,
-    leagueId: insertedLeague!.id,
+    leagueId: insertedLeague.id,
     label: "2023/24",
     startsOn: "2023-07-01",
     endsOn: "2024-06-30",
@@ -212,7 +228,9 @@ describe("Unsigned Vision /v1", () => {
       .useValue(new StubVisionAdapter({ clubId: CLUB_ID, confidences: { overall: 80 } }))
       .compile();
 
-    const throttleApp = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    const throttleApp = moduleRef.createNestApplication<NestFastifyApplication>(
+      new FastifyAdapter(),
+    );
     throttleApp.setGlobalPrefix("v1");
     await throttleApp.init();
     await throttleApp.getHttpAdapter().getInstance().ready();

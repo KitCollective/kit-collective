@@ -1,3 +1,4 @@
+import type { PhotoRole } from "@kit/domain";
 import { useCallback, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
@@ -7,6 +8,7 @@ import {
   persistCameraShotInSession,
   replacePersistedCapturePhotos,
 } from "@/capture/captureFlow";
+import type { CaptureSessionPhoto } from "@/capture/captureSessionTypes";
 import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -16,8 +18,6 @@ import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
-import type { PhotoRole } from "@kit/domain";
-import type { CaptureSessionPhoto } from "@/capture/captureSessionTypes";
 
 type FirstSessionChooserScreenProps = {
   onClose: () => void;

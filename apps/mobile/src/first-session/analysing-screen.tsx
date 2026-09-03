@@ -1,10 +1,10 @@
 import type { VisionJobResponse, VisionSuggestions } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA, PHOTO_ROLES, type PhotoRole } from "@kit/domain";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { fetchUnsignedVisionJob, startUnsignedVisionSuggest } from "@/api/vision";
-import { getActiveDraft, photoUriForRole } from "@/capture/captureSession";
 import { loadPersistedCaptureSession } from "@/capture/captureFlow";
+import { getActiveDraft, photoUriForRole } from "@/capture/captureSession";
 import { readPhotoBase64 } from "@/capture/photoBytes";
 import { PhotoSlot } from "@/components/photo-slot";
 import { Button, ButtonDock } from "@/components/ui";
@@ -87,14 +87,14 @@ export function FirstSessionAnalysingScreen({
     }, {});
   }, [draft]);
 
-  const settle = (handler: () => void) => {
+  const settle = useCallback((handler: () => void) => {
     if (settledRef.current) {
       return;
     }
     settledRef.current = true;
     setProgress(1);
     handler();
-  };
+  }, []);
 
   useEffect(() => {
     const firstPhoto = firstVisionPhoto(photoUris);
@@ -171,13 +171,15 @@ export function FirstSessionAnalysingScreen({
         clearInterval(interval);
       }
     };
-  }, [captureSessionId, onVisionComplete, onVisionFailed, photoUris]);
+  }, [captureSessionId, onVisionComplete, onVisionFailed, photoUris, settle]);
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.canvas }]}>
       <View style={styles.body}>
         <Text style={[typography.title, { color: theme.contentPrimary }]}>{ANALYSING_TITLE}</Text>
-        <Text style={[typography.body, { color: theme.contentSecondary }]}>{ANALYSING_CAPTION}</Text>
+        <Text style={[typography.body, { color: theme.contentSecondary }]}>
+          {ANALYSING_CAPTION}
+        </Text>
 
         <View style={[styles.progressTrack, { backgroundColor: theme.borderSubtle }]}>
           <View
@@ -193,12 +195,7 @@ export function FirstSessionAnalysingScreen({
 
         <View style={styles.photoRow}>
           {PHOTO_ROLES.map((role) => (
-            <PhotoSlot
-              key={role}
-              role={role}
-              uri={photoUris[role]}
-              onPress={() => {}}
-            />
+            <PhotoSlot key={role} role={role} uri={photoUris[role]} onPress={() => {}} />
           ))}
         </View>
 

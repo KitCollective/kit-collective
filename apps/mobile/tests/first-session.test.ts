@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getActiveDraft, photoUriForRole, createCaptureSession, createMemoryCaptureSessionStore } from "../src/capture/captureSession";
+import {
+  createCaptureSession,
+  createMemoryCaptureSessionStore,
+  getActiveDraft,
+  photoUriForRole,
+} from "../src/capture/captureSession";
 import { replacePersistedCapturePhotos } from "../src/capture/captureSessionPersistence";
 import { createFirstSession, reduceFirstSession } from "../src/first-session/session";
 
@@ -375,10 +380,9 @@ describe("First session add to door flow", () => {
 
   it("≤3 picker photos bind one jersey in the capture draft", () => {
     const store = createMemoryCaptureSessionStore();
-    const state = createCaptureSession(
-      ["file:///a.jpg", "file:///b.jpg", "file:///c.jpg"],
-      { store },
-    );
+    const state = createCaptureSession(["file:///a.jpg", "file:///b.jpg", "file:///c.jpg"], {
+      store,
+    });
 
     expect(state.branch).toBe("single");
     expect(getActiveDraft(state).photos).toHaveLength(3);

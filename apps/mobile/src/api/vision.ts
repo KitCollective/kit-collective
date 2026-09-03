@@ -78,9 +78,7 @@ export async function logVisionAction(
   visionLogResponseSchema.parse(await response.json());
 }
 
-export async function startUnsignedVisionSuggest(
-  payload: VisionSuggestRequest,
-): Promise<string> {
+export async function startUnsignedVisionSuggest(payload: VisionSuggestRequest): Promise<string> {
   const response = await requestJson("/v1/collection/vision/suggest/unsigned", {
     method: "POST",
     headers: {
