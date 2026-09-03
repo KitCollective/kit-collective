@@ -56,6 +56,8 @@ function formatSuggestionRows(suggestions: VisionSuggestions): string[] {
   return rows;
 }
 
+const EMPTY_PHOTO_URIS: Partial<Record<PhotoRole, string>> = {};
+
 export function FirstSessionAnalysingScreen({
   captureSessionId,
   onVisionComplete,
@@ -75,7 +77,7 @@ export function FirstSessionAnalysingScreen({
   const draft = captureState ? getActiveDraft(captureState) : null;
   const photoUris = useMemo(() => {
     if (!draft) {
-      return {} as Partial<Record<PhotoRole, string>>;
+      return EMPTY_PHOTO_URIS;
     }
 
     return PHOTO_ROLES.reduce<Partial<Record<PhotoRole, string>>>((acc, role) => {
