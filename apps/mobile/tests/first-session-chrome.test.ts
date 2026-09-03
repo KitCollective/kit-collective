@@ -86,6 +86,26 @@ describe("first-session visual host chrome", () => {
     expect(verify).not.toContain("Bekræft");
   });
 
+  it("locks discovery showcase chrome without title, search, or tab bar", () => {
+    const discovery = readFirstSession("discovery-showcase.tsx");
+    const marquee = readFirstSession("discovery-marquee.tsx");
+    const copy = readFirstSession("discovery-copy.ts");
+    const chrome = `${discovery}\n${marquee}\n${copy}`;
+
+    expect(copy).toContain("Tilføj din første trøje");
+    expect(copy).toContain("Jeg har allerede en konto");
+    expect(discovery).toContain("DiscoveryMarquee");
+    expect(discovery).toContain("ButtonDock");
+    expect(discovery).toContain("fetchShowcaseJerseys");
+    expect(marquee).toContain("displayOnly");
+    expect(discovery).toContain("useReduceMotion");
+    expect(marquee).toContain("stageTilted");
+    expect(chrome).not.toContain("ScreenHeader");
+    expect(chrome).not.toContain("SearchField");
+    expect(chrome).not.toContain("FloatingTabBar");
+    expect(chrome).not.toContain("Søg");
+  });
+
   it("locks profile onboarding chrome without skip, handle field, or preferences", () => {
     const profile = readFirstSession("profile-onboarding.tsx");
     const location = readFirstSession("profile-location.tsx");

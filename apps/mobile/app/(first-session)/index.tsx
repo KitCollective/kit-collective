@@ -3,6 +3,7 @@ import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { type DoorEmailStep, DoorSheet, VerifyEmailBeat } from "@/first-session/door";
+import { DiscoveryShowcaseScreen } from "@/first-session/discovery-showcase";
 import { ProfileOnboardingScreen } from "@/first-session/profile-onboarding";
 import { createFirstSession, reduceFirstSession } from "@/first-session/session";
 import { SplashView } from "@/first-session/splash";
@@ -149,14 +150,28 @@ export default function FirstSessionHost() {
   }
 
   const doorMode = session.doorMode ?? "login";
+  const showDiscoveryBackdrop =
+    session.place === "discovery" || (session.place === "door" && !session.skippedDiscovery);
+  const showSplashBackdrop =
+    session.place === "splash" || (session.place === "door" && session.skippedDiscovery);
 
   return (
     <>
-      <SplashView
-        onContinue={handleContinueFromSplash}
-        onLogin={() => openDoor("login")}
-        onRegister={() => openDoor("register")}
-      />
+      {showDiscoveryBackdrop ? (
+        <DiscoveryShowcaseScreen
+          onAddFirst={() => {
+            // Photos slice wires this action later.
+          }}
+          onHaveAccount={() => openDoor("login")}
+        />
+      ) : null}
+      {showSplashBackdrop ? (
+        <SplashView
+          onContinue={handleContinueFromSplash}
+          onLogin={() => openDoor("login")}
+          onRegister={() => openDoor("register")}
+        />
+      ) : null}
       <DoorSheet
         visible={session.place === "door"}
         mode={doorMode}

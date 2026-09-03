@@ -19,6 +19,7 @@ import {
   type CollectionRespondBidResponse,
   type CollectionSavePhoto,
   type CollectionSaveResponse,
+  type CollectionShowcaseJerseys,
   type CollectionSendBidResponse,
   type CollectionSendMessageResponse,
   collectionActivitySchema,
@@ -45,6 +46,8 @@ import {
   collectionSendBidResponseSchema,
   collectionSendMessageRequestSchema,
   collectionSendMessageResponseSchema,
+  collectionShowcaseJerseysSchema,
+  COLLECTION_SHOWCASE_JERSEY_CAP,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
@@ -1235,6 +1238,50 @@ export class CollectionService {
     return collectionDiscoverJerseysSchema.parse({ jerseys });
   }
 
+  async listShowcaseJerseys(locale: LabelLocale = "da"): Promise<CollectionShowcaseJerseys> {
+    const rows = await this.db
+      .select({
+        id: userJersey.id,
+        clubId: userJersey.clubId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        seasonLabel: season.label,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .where(eq(userJersey.private, false))
+      .orderBy(desc(userJersey.updatedAt))
+      .limit(COLLECTION_SHOWCASE_JERSEY_CAP);
+
+    if (rows.length === 0) {
+      return collectionShowcaseJerseysSchema.parse({ jerseys: [] });
+    }
+
+    const clubIds = [...new Set(rows.map((row) => row.clubId))];
+    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const photosByJersey = await this.loadPhotosForJerseys(rows.map((row) => row.id), "showcase");
+
+    const jerseys = rows.flatMap((row) => {
+      const clubLabel = clubLabels.get(row.clubId);
+      const photos = photosByJersey.get(row.id);
+      if (!clubLabel || !photos || photos.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          id: row.id,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          type: row.type,
+          photos,
+        },
+      ];
+    });
+
+    return collectionShowcaseJerseysSchema.parse({ jerseys });
+  }
+
   async discoverHome(userId: string, locale: LabelLocale = "da"): Promise<CollectionDiscoverHome> {
     const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
     const rows = await this.db
@@ -2055,6 +2102,34 @@ export class CollectionService {
     });
   }
 
+  async getShowcasePhotoBytes(photoId: string): Promise<Uint8Array> {
+    const [row] = await this.db
+      .select({
+        objectKey: userJerseyPhoto.objectKey,
+        private: userJersey.private,
+        jerseyUserId: userJersey.userId,
+      })
+      .from(userJerseyPhoto)
+      .innerJoin(userJersey, eq(userJerseyPhoto.userJerseyId, userJersey.id))
+      .where(eq(userJerseyPhoto.id, photoId))
+      .limit(1);
+
+    if (!row || row.private) {
+      throw new NotFoundException("Photo not found");
+    }
+
+    if (!row.objectKey.startsWith(`user/${row.jerseyUserId}/`)) {
+      throw new NotFoundException("Photo not found");
+    }
+
+    const bytes = await this.objectStore.getObject(row.objectKey);
+    if (!bytes) {
+      throw new NotFoundException("Photo bytes missing");
+    }
+
+    return bytes;
+  }
+
   async getPhotoBytes(userId: string, photoId: string): Promise<Uint8Array> {
     const [row] = await this.db
       .select({
@@ -2323,7 +2398,10 @@ export class CollectionService {
     return playersByScope;
   }
 
-  private async loadPhotosForJerseys(jerseyIds: string[]) {
+  private async loadPhotosForJerseys(
+    jerseyIds: string[],
+    photoUrlScope: "collection" | "showcase" = "collection",
+  ) {
     const photosByJersey = new Map<string, CollectionJersey["photos"]>();
 
     if (jerseyIds.length === 0) {
@@ -2353,7 +2431,10 @@ export class CollectionService {
         role: row.role,
         source: row.source,
         objectKey: row.objectKey,
-        photoUrl: `/v1/collection/photos/${row.id}`,
+        photoUrl:
+          photoUrlScope === "showcase"
+            ? `/v1/collection/showcase/photos/${row.id}`
+            : `/v1/collection/photos/${row.id}`,
         ocrStatus: row.ocrStatus,
       };
 

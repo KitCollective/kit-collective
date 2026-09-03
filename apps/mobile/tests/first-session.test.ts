@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createFirstSession, reduceFirstSession } from "../src/first-session/session";
 
@@ -139,10 +141,14 @@ describe("First session identity without draft", () => {
 });
 
 describe("First session tab bar", () => {
-  it("hides the tab bar on splash, door, verify-email, and profile, and shows it on collection", () => {
+  it("hides the tab bar on splash, discovery, door, verify-email, and profile, and shows it on collection", () => {
     const splash = createFirstSession({ signedIn: false });
     expect(splash.place).toBe("splash");
     expect(splash.showsTabBar).toBe(false);
+
+    const discovery = reduceFirstSession(splash, { type: "continueFromSplash" });
+    expect(discovery.place).toBe("discovery");
+    expect(discovery.showsTabBar).toBe(false);
 
     const door = reduceFirstSession(splash, { type: "openDoor", mode: "register" });
     expect(door.place).toBe("door");
@@ -167,13 +173,39 @@ describe("First session tab bar", () => {
 });
 
 describe("First session continue from splash", () => {
-  it("continueFromSplash does not open Discovery this slice and stays on splash", () => {
+  it("continueFromSplash opens Discovery and keeps skippedDiscovery false", () => {
     const session = reduceFirstSession(createFirstSession({ signedIn: false }), {
       type: "continueFromSplash",
     });
 
-    expect(session.place).toBe("splash");
-    expect(session.place).not.toBe("discovery");
+    expect(session.place).toBe("discovery");
     expect(session.skippedDiscovery).toBe(false);
+    expect(session.showsTabBar).toBe(false);
+  });
+
+  it("openDoor from Discovery keeps skippedDiscovery false and closeDoor returns to Discovery", () => {
+    const discovery = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "continueFromSplash",
+    });
+    const door = reduceFirstSession(discovery, { type: "openDoor", mode: "login" });
+
+    expect(door.place).toBe("door");
+    expect(door.skippedDiscovery).toBe(false);
+
+    const back = reduceFirstSession(door, { type: "closeDoor" });
+    expect(back.place).toBe("discovery");
+  });
+});
+
+describe("First session showcase seam", () => {
+  it("empty showcase response still leaves add-first available in the host", () => {
+    const source = readFileSync(
+      join(__dirname, "../src/first-session/discovery-showcase.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("DISCOVERY_ADD_FIRST_LABEL");
+    expect(source).toContain("<Button label={DISCOVERY_ADD_FIRST_LABEL}");
+    expect(source).not.toContain("disabled={jerseys.length === 0}");
   });
 });
