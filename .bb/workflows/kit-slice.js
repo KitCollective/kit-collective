@@ -57,9 +57,10 @@ const implemented = await agent(
     "Spawn Role subagents as needed: " +
       roleLine +
       ". Area skills (Expo, Nest, design-system) load on demand — not as agent ids.",
+    "Do not change Linear status. Mechanical close owns the In Review flip.",
     "Do not merge. Do not tick description Acceptance criteria.",
     "This path must not use a Pi worker.",
-    "Return the PR URL after the implement work is on the branch.",
+    "Return prUrl and whether the workpad exists.",
   ].join("\n"),
   {
     label: "implement:" + issueId,
@@ -79,6 +80,16 @@ const implemented = await agent(
   },
 );
 
+if (!implemented.workpad || !implemented.prUrl) {
+  return {
+    issueId: issueId,
+    status: "Implementing",
+    provider: "acp-cursor",
+    machine: machine,
+    prUrl: implemented.prUrl || "",
+  };
+}
+
 phase("Mechanical close");
 const closed = await agent(
   [
@@ -86,8 +97,8 @@ const closed = await agent(
     "Rebase onto the integration lane until MERGEABLE.",
     "Run the full test graph and typecheck touched packages.",
     "Wait until every required GitHub check is green or skipped-by-design.",
-    "Do not flip Linear status yourself if checks are pending or red.",
-    "When the gate is clean, attach workpad/PR evidence and move the issue to In Review.",
+    "Only this step may move Linear to In Review, and only after those checks plus workpad and PR evidence.",
+    "Do not flip Linear status if checks are pending or red, or if workpad or PR evidence is missing.",
     "This path must not use a Pi worker.",
   ].join("\n"),
   {
