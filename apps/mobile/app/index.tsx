@@ -10,7 +10,7 @@ export default function Index() {
   }
 
   if (!user) {
-    return <Redirect href="/login" />;
+    return <Redirect href="/(first-session)" />;
   }
 
   return <Redirect href="/(tabs)/collection" />;
