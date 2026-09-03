@@ -103,6 +103,8 @@ describe("First session host chrome", () => {
     expect(host).toContain("ProfileOnboardingScreen");
     expect(host).toContain('place === "profile"');
     expect(host).toContain("continueProfile");
+    expect(host).toContain("DiscoveryShowcaseScreen");
+    expect(host).toContain("continueFromSplash");
     expect(profile).toContain("uploadAvatar");
     expect(profile).toContain("updateProfile");
     expect(profile).not.toContain("prototype-first-run");

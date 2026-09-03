@@ -10,6 +10,7 @@ type JerseyTileProps = {
   seasonLabel: string;
   typeLabel: string;
   onPress?: () => void;
+  displayOnly?: boolean;
 };
 
 export function JerseyTile({
@@ -18,19 +19,15 @@ export function JerseyTile({
   seasonLabel,
   typeLabel,
   onPress,
+  displayOnly = false,
 }: JerseyTileProps) {
   const theme = useTheme();
   const typography = useTypography();
   const metaLine = jerseyTileMetaLine(seasonLabel, typeLabel);
   const accessibilityLabel = `${clubLabel}, ${metaLine}`;
 
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={onPress}
-      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
-    >
+  const content = (
+    <>
       <View
         style={[
           styles.photoFrame,
@@ -51,6 +48,29 @@ export function JerseyTile({
           {metaLine}
         </Text>
       </View>
+    </>
+  );
+
+  if (displayOnly || !onPress) {
+    return (
+      <View
+        accessibilityLabel={accessibilityLabel}
+        importantForAccessibility="yes"
+        style={styles.tile}
+      >
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+    >
+      {content}
     </Pressable>
   );
 }

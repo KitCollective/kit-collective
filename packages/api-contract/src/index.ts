@@ -243,6 +243,13 @@ export {
   collectionShortcutWriteSchema,
 } from "./collection/shortcuts.js";
 export {
+  COLLECTION_SHOWCASE_JERSEY_CAP,
+  type CollectionShowcaseJersey,
+  type CollectionShowcaseJerseys,
+  collectionShowcaseJerseySchema,
+  collectionShowcaseJerseysSchema,
+} from "./collection/showcase.js";
+export {
   type CollectionJerseyUpdate,
   type CollectionJerseyUpdateResponse,
   collectionJerseyUpdateResponseSchema,

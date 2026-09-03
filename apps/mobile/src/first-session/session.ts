@@ -1,5 +1,6 @@
 export type FirstSessionPlace =
   | "splash"
+  | "discovery"
   | "door"
   | "verify-email"
   | "profile"
@@ -75,7 +76,7 @@ export function reduceFirstSession(
     case "continueFromSplash":
       return {
         ...state,
-        place: "splash",
+        place: "discovery",
         showsTabBar: false,
       };
     case "openDoor":
@@ -84,12 +85,12 @@ export function reduceFirstSession(
         place: "door",
         doorMode: event.mode,
         showsTabBar: false,
-        skippedDiscovery: true,
+        skippedDiscovery: state.place === "splash" ? true : state.skippedDiscovery,
       };
     case "closeDoor":
       return {
         ...state,
-        place: "splash",
+        place: state.skippedDiscovery ? "splash" : "discovery",
         doorMode: null,
         showsTabBar: false,
       };

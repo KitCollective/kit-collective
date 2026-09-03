@@ -40,6 +40,19 @@ export class CollectionController {
     private readonly shortcutsService: CollectionShortcutsService,
   ) {}
 
+  @Get("collection/showcase/jerseys")
+  showcaseJerseys(@Headers("accept-language") acceptLanguage?: string) {
+    return this.collectionService.listShowcaseJerseys(resolveLocale(acceptLanguage));
+  }
+
+  @Get("collection/showcase/photos/:photoId")
+  async getShowcasePhoto(@Param("photoId") photoId: string, @Res() reply: FastifyReply) {
+    const bytes = await this.collectionService.getShowcasePhotoBytes(photoId);
+    reply.header("Content-Type", "image/jpeg");
+    reply.header("Cache-Control", "public, max-age=3600");
+    return reply.send(Buffer.from(bytes));
+  }
+
   @Get("collection/jerseys")
   @UseGuards(JwtAuthGuard)
   listJerseys(
