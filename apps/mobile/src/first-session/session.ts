@@ -1,4 +1,4 @@
-export type FirstSessionPlace = "splash" | "door" | "verify-email" | "samling" | "tab-shell";
+export type FirstSessionPlace = "splash" | "door" | "verify-email" | "collection" | "tab-shell";
 
 export type DoorMode = "login" | "register";
 
@@ -29,7 +29,7 @@ export type FirstSessionEvent =
   | { type: "dismissVerifyEmail" };
 
 function showsTabBarFor(place: FirstSessionPlace): boolean {
-  return place === "samling" || place === "tab-shell";
+  return place === "collection" || place === "tab-shell";
 }
 
 export function createFirstSession(input: {
@@ -100,7 +100,7 @@ export function reduceFirstSession(
       }
       return {
         ...state,
-        place: "samling",
+        place: "collection",
         identitySession:
           event.method === "social" ? { emailVerified: true } : state.identitySession,
         showsTabBar: true,
@@ -110,7 +110,7 @@ export function reduceFirstSession(
     case "dismissVerifyEmail":
       return {
         ...state,
-        place: "samling",
+        place: "collection",
         showsTabBar: true,
       };
     default: {

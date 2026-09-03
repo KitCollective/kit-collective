@@ -44,7 +44,7 @@ describe("First session door from splash", () => {
 });
 
 describe("First session identity without draft", () => {
-  it("login without draft lands on samling, skips profile and jersey details, and shows the tab bar", () => {
+  it("login without draft lands on collection, skips profile and jersey details, and shows the tab bar", () => {
     const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
       type: "openDoor",
       mode: "login",
@@ -55,7 +55,7 @@ describe("First session identity without draft", () => {
       kind: "login",
     });
 
-    expect(session.place).toBe("samling");
+    expect(session.place).toBe("collection");
     expect(session.skippedProfile).toBe(true);
     expect(session.skippedJerseyDetails).toBe(true);
     expect(session.showsTabBar).toBe(true);
@@ -63,7 +63,7 @@ describe("First session identity without draft", () => {
     expect(session.place).not.toBe("jersey-details");
   });
 
-  it("password register without draft shows verify-email with emailVerified false, then dismiss lands on samling and skips profile and details", () => {
+  it("password register without draft shows verify-email with emailVerified false, then dismiss lands on collection and skips profile and details", () => {
     const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
       type: "openDoor",
       mode: "register",
@@ -80,7 +80,7 @@ describe("First session identity without draft", () => {
 
     const session = reduceFirstSession(afterRegister, { type: "dismissVerifyEmail" });
 
-    expect(session.place).toBe("samling");
+    expect(session.place).toBe("collection");
     expect(session.identitySession).toEqual({ emailVerified: false });
     expect(session.skippedProfile).toBe(true);
     expect(session.skippedJerseyDetails).toBe(true);
@@ -89,7 +89,7 @@ describe("First session identity without draft", () => {
     expect(session.place).not.toBe("jersey-details");
   });
 
-  it("social submit skips the verify beat and lands on samling", () => {
+  it("social submit skips the verify beat and lands on collection", () => {
     const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
       type: "openDoor",
       mode: "register",
@@ -100,14 +100,14 @@ describe("First session identity without draft", () => {
       kind: "register",
     });
 
-    expect(session.place).toBe("samling");
+    expect(session.place).toBe("collection");
     expect(session.place).not.toBe("verify-email");
     expect(session.showsTabBar).toBe(true);
   });
 });
 
 describe("First session tab bar", () => {
-  it("hides the tab bar on splash, door, and verify-email, and shows it on samling", () => {
+  it("hides the tab bar on splash, door, and verify-email, and shows it on collection", () => {
     const splash = createFirstSession({ signedIn: false });
     expect(splash.place).toBe("splash");
     expect(splash.showsTabBar).toBe(false);
@@ -124,9 +124,9 @@ describe("First session tab bar", () => {
     expect(verify.place).toBe("verify-email");
     expect(verify.showsTabBar).toBe(false);
 
-    const samling = reduceFirstSession(verify, { type: "dismissVerifyEmail" });
-    expect(samling.place).toBe("samling");
-    expect(samling.showsTabBar).toBe(true);
+    const collection = reduceFirstSession(verify, { type: "dismissVerifyEmail" });
+    expect(collection.place).toBe("collection");
+    expect(collection.showsTabBar).toBe(true);
   });
 });
 

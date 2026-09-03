@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { buttonLayoutStyles } from "@/components/button-layout";
 import {
@@ -7,61 +7,20 @@ import {
   SPLASH_REGISTER_LABEL,
 } from "@/first-session/door-copy";
 import { useTypography } from "@/theme/brand-fonts";
-import { color, fontFamily, space, withAlpha } from "@/theme/tokens";
+import { color, space, withAlpha } from "@/theme/tokens";
 
 const LOCKUP_MIN_WIDTH = 132;
+const LOCKUP_WIDTH = 220;
+const LOCKUP_ASPECT = 1296 / 240;
 const INVERSE_MUTED_ALPHA = 0.64;
+
+const lockupWhite = require("../../assets/brand/kitcollective-lockup-white.png");
 
 type SplashScreenProps = {
   onOpenLogin: () => void;
   onOpenRegister: () => void;
   onContinue?: () => void;
 };
-
-function BrandLockupWhite() {
-  const typography = useTypography();
-  const plateSize = typography.display.lineHeight;
-
-  return (
-    <View
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel="KitCollective"
-      style={styles.lockup}
-    >
-      <View
-        style={[
-          styles.lockupPlate,
-          {
-            width: plateSize,
-            height: plateSize,
-            backgroundColor: color.contentInverse,
-          },
-        ]}
-      >
-        <Text
-          style={[
-            typography.headingSm,
-            { fontFamily: fontFamily.displayBold, color: color.fillPrimary },
-          ]}
-        >
-          KC
-        </Text>
-      </View>
-      <Text numberOfLines={1} style={styles.lockupWordmark}>
-        <Text
-          style={[
-            typography.display,
-            { fontFamily: fontFamily.displayRegular, color: color.contentInverse },
-          ]}
-        >
-          Kit
-        </Text>
-        <Text style={[typography.display, { color: color.contentInverse }]}>Collective</Text>
-      </Text>
-    </View>
-  );
-}
 
 export function SplashScreen({ onOpenLogin, onOpenRegister, onContinue }: SplashScreenProps) {
   const typography = useTypography();
@@ -84,7 +43,12 @@ export function SplashScreen({ onOpenLogin, onOpenRegister, onContinue }: Splash
         onPress={onContinue}
         style={styles.plate}
       >
-        <BrandLockupWhite />
+        <Image
+          source={lockupWhite}
+          accessibilityLabel="KitCollective"
+          resizeMode="contain"
+          style={styles.lockup}
+        />
         <Text style={[typography.mono, { color: captionColor }]}>{SPLASH_CAPTION}</Text>
       </Pressable>
       <View
@@ -140,18 +104,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.insetLg,
   },
   lockup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.gapMd,
+    width: LOCKUP_WIDTH,
+    height: LOCKUP_WIDTH / LOCKUP_ASPECT,
     minWidth: LOCKUP_MIN_WIDTH,
-    maxWidth: "100%",
-  },
-  lockupPlate: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  lockupWordmark: {
-    flexShrink: 1,
   },
   dock: {
     paddingHorizontal: space.insetLg,

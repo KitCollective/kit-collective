@@ -27,7 +27,7 @@ export default function FirstSessionHost() {
     return <Redirect href="/(tabs)/collection" />;
   }
 
-  if (session.place === "samling" || session.place === "tab-shell") {
+  if (session.place === "collection" || session.place === "tab-shell") {
     return <Redirect href="/(tabs)/collection" />;
   }
 

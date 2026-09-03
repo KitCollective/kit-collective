@@ -15,12 +15,13 @@ describe("first-session visual host chrome", () => {
     const copy = readFirstSession("door-copy.ts");
 
     expect(splash).toContain("color.fillPrimary");
+    expect(splash).toContain("kitcollective-lockup-white.png");
     expect(splash).toContain("SPLASH_CAPTION");
     expect(copy).toContain("Tryk for at fortsætte");
     expect(splash).toContain("withAlpha(color.contentInverse");
     expect(splash).not.toContain("theme.canvas");
     expect(splash.includes(`#${"0A0A0A"}`)).toBe(false);
-    expect(splash).not.toContain("react-native-svg");
+    expect(splash).not.toContain("BrandLockupWhite");
     expect(splash).not.toContain("prototype-first-run");
     expect(splash).not.toContain("FloatingTabBar");
   });
