@@ -3,7 +3,7 @@
  * Requires DATABASE_URL (real CX33 development lane — not localhost/kit_test).
  * stdout: JSON { connection, totals, bySeason }
  */
-import { createDb } from "@kit/db";
+import { createDb, SEED_CREATE_DB_OPTIONS } from "@kit/db";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -11,7 +11,7 @@ if (!url) {
   process.exit(1);
 }
 
-const { pool } = createDb(url);
+const { pool } = createDb(url, SEED_CREATE_DB_OPTIONS);
 
 const connection = await pool.query(
   "SELECT inet_server_addr()::text AS server_addr, current_database() AS database_name",
