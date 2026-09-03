@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { getActiveDraft, photoUriForRole, createMemoryCaptureSessionStore } from "../src/capture/captureSession";
+import { getActiveDraft, photoUriForRole, createCaptureSession, createMemoryCaptureSessionStore } from "../src/capture/captureSession";
 import { replacePersistedCapturePhotos } from "../src/capture/captureSessionPersistence";
 import { createFirstSession, reduceFirstSession } from "../src/first-session/session";
 
@@ -355,6 +355,44 @@ describe("First session add to door flow", () => {
     expect(afterRegister.captureSessionId).toBe(sessionId);
     expect(afterRegister.place).toBe("profile");
     expect(store.load()?.sessionId).toBe(sessionId);
+  });
+
+  it("visionComplete does not clobber login door mode when door is already open", () => {
+    const analysing = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "photosPicked",
+      sessionId: "capture-session-1",
+    });
+    const loginDoor = reduceFirstSession(analysing, {
+      type: "openDoorFromAnalysing",
+      mode: "login",
+    });
+    const afterVision = reduceFirstSession(loginDoor, { type: "visionComplete" });
+
+    expect(afterVision.place).toBe("door");
+    expect(afterVision.doorMode).toBe("login");
+    expect(afterVision.doorOverAnalysing).toBe(true);
+  });
+
+  it("≤3 picker photos bind one jersey in the capture draft", () => {
+    const store = createMemoryCaptureSessionStore();
+    const state = createCaptureSession(
+      ["file:///a.jpg", "file:///b.jpg", "file:///c.jpg"],
+      { store },
+    );
+
+    expect(state.branch).toBe("single");
+    expect(getActiveDraft(state).photos).toHaveLength(3);
+  });
+
+  it(">3 picker photos use bulk bind branch in the capture draft", () => {
+    const store = createMemoryCaptureSessionStore();
+    const state = createCaptureSession(
+      ["file:///a.jpg", "file:///b.jpg", "file:///c.jpg", "file:///d.jpg"],
+      { store },
+    );
+
+    expect(state.branch).toBe("bulk");
+    expect(state.unboundUris).toHaveLength(4);
   });
 
   it("unsigned vision client targets unsigned routes", () => {

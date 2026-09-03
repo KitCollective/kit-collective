@@ -128,6 +128,10 @@ export function reduceFirstSession(
       };
     case "visionComplete":
     case "visionFailed":
+      if (state.place === "door" && state.doorOverAnalysing) {
+        return state;
+      }
+      return openDoorFromAnalysing(state, "register");
     case "fillSelf":
       return openDoorFromAnalysing(state, "register");
     case "openDoorFromAnalysing":
