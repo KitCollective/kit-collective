@@ -1,4 +1,5 @@
 import {
+  COLLECTION_SHOWCASE_JERSEY_CAP,
   type CollectionActivity,
   type CollectionConversationDetail,
   type CollectionConversationPeer,
@@ -19,9 +20,9 @@ import {
   type CollectionRespondBidResponse,
   type CollectionSavePhoto,
   type CollectionSaveResponse,
-  type CollectionShowcaseJerseys,
   type CollectionSendBidResponse,
   type CollectionSendMessageResponse,
+  type CollectionShowcaseJerseys,
   collectionActivitySchema,
   collectionAddFavoriteRequestSchema,
   collectionBiddingPatchSchema,
@@ -47,7 +48,6 @@ import {
   collectionSendMessageRequestSchema,
   collectionSendMessageResponseSchema,
   collectionShowcaseJerseysSchema,
-  COLLECTION_SHOWCASE_JERSEY_CAP,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
@@ -1259,7 +1259,10 @@ export class CollectionService {
 
     const clubIds = [...new Set(rows.map((row) => row.clubId))];
     const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
-    const photosByJersey = await this.loadPhotosForJerseys(rows.map((row) => row.id), "showcase");
+    const photosByJersey = await this.loadPhotosForJerseys(
+      rows.map((row) => row.id),
+      "showcase",
+    );
 
     const jerseys = rows.flatMap((row) => {
       const clubLabel = clubLabels.get(row.clubId);

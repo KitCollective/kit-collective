@@ -3,15 +3,15 @@ import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
-  Easing,
   cancelAnimation,
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { JerseyTile } from "@/components/jersey-tile";
 import { resolveShowcasePhotoUrl } from "@/api/showcase";
+import { JerseyTile } from "@/components/jersey-tile";
 import { space } from "@/theme/tokens";
 
 const STAGE_TILT_DEG = 2.5;
@@ -37,11 +37,17 @@ function splitColumns(jerseys: CollectionShowcaseJersey[]) {
   return { left, right };
 }
 
-function loopedJerseys(jerseys: CollectionShowcaseJersey[]) {
+function loopedJerseys(jerseys: CollectionShowcaseJersey[]): Array<{
+  jersey: CollectionShowcaseJersey;
+  key: string;
+}> {
   if (jerseys.length === 0) {
-    return jerseys;
+    return [];
   }
-  return [...jerseys, ...jerseys];
+  return jerseys.flatMap((jersey) => [
+    { jersey, key: `${jersey.id}-loop-a` },
+    { jersey, key: `${jersey.id}-loop-b` },
+  ]);
 }
 
 function MarqueeColumn({
@@ -92,11 +98,13 @@ function MarqueeColumn({
 
   const content = (
     <View style={{ gap: TILE_GAP }}>
-      {looped.map((jersey, index) => (
-        <View key={`${jersey.id}-${index}`} style={{ width: tileWidth }}>
+      {looped.map(({ jersey, key }) => (
+        <View key={key} style={{ width: tileWidth }}>
           <JerseyTile
             displayOnly
-            photoSource={{ uri: resolveShowcasePhotoUrl(jersey.photos[0]!.photoUrl) }}
+            photoSource={{
+              uri: resolveShowcasePhotoUrl(jersey.photos[0]?.photoUrl ?? ""),
+            }}
             clubLabel={jersey.clubLabel}
             seasonLabel={jersey.seasonLabel}
             typeLabel={KIT_TYPE_LABELS_DA[jersey.type]}

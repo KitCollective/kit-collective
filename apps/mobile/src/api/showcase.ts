@@ -1,7 +1,4 @@
-import {
-  type CollectionShowcaseJerseys,
-  collectionShowcaseJerseysSchema,
-} from "@kit/api-contract";
+import { type CollectionShowcaseJerseys, collectionShowcaseJerseysSchema } from "@kit/api-contract";
 import { getApiBaseUrl } from "./config";
 
 async function requestJson(path: string, init: RequestInit = {}): Promise<Response> {

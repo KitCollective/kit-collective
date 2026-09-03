@@ -46,10 +46,7 @@ export class CollectionController {
   }
 
   @Get("collection/showcase/photos/:photoId")
-  async getShowcasePhoto(
-    @Param("photoId") photoId: string,
-    @Res() reply: FastifyReply,
-  ) {
+  async getShowcasePhoto(@Param("photoId") photoId: string, @Res() reply: FastifyReply) {
     const bytes = await this.collectionService.getShowcasePhotoBytes(photoId);
     reply.header("Content-Type", "image/jpeg");
     reply.header("Cache-Control", "public, max-age=3600");

@@ -7,8 +7,8 @@ import {
   DISCOVERY_HAVE_ACCOUNT_LABEL,
 } from "@/first-session/discovery-copy";
 import { DiscoveryMarquee } from "@/first-session/discovery-marquee";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { space } from "@/theme/tokens";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
 type DiscoveryShowcaseScreenProps = {
@@ -25,9 +25,9 @@ export function DiscoveryShowcaseScreen({
   const { width } = useWindowDimensions();
   const tileWidth = (width - space.insetMd * 2 - space.gapMd) / 2;
   const [loading, setLoading] = useState(true);
-  const [jerseys, setJerseys] = useState<Awaited<ReturnType<typeof fetchShowcaseJerseys>>["jerseys"]>(
-    [],
-  );
+  const [jerseys, setJerseys] = useState<
+    Awaited<ReturnType<typeof fetchShowcaseJerseys>>["jerseys"]
+  >([]);
 
   useEffect(() => {
     let cancelled = false;

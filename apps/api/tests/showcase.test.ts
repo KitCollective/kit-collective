@@ -3,8 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   COLLECTION_SHOWCASE_JERSEY_CAP,
-  collectionShowcaseJerseysSchema,
   collectionSaveResponseSchema,
+  collectionShowcaseJerseysSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
@@ -210,7 +210,7 @@ describe("Collection showcase /v1", () => {
   it("serves showcase photos without auth for non-private jerseys", async () => {
     const fixture = await insertClubSeasonFixture();
     const session = await registerSession(app, "showcase-photo@example.com");
-    const jersey = await saveJerseyForUser(app, session, fixture);
+    await saveJerseyForUser(app, session, fixture);
 
     const showcase = await app.inject({
       method: "GET",
