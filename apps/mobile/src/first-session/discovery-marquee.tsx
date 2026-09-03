@@ -50,6 +50,19 @@ function loopedJerseys(jerseys: CollectionShowcaseJersey[]): Array<{
   ]);
 }
 
+function columnTiles(
+  jerseys: CollectionShowcaseJersey[],
+  loopForMarquee: boolean,
+): Array<{ jersey: CollectionShowcaseJersey; key: string }> {
+  if (jerseys.length === 0) {
+    return [];
+  }
+  if (loopForMarquee) {
+    return loopedJerseys(jerseys);
+  }
+  return jerseys.map((jersey) => ({ jersey, key: jersey.id }));
+}
+
 function MarqueeColumn({
   jerseys,
   direction,
@@ -62,8 +75,8 @@ function MarqueeColumn({
   tileWidth: number;
 }) {
   const travel = useSharedValue(0);
-  const looped = loopedJerseys(jerseys);
-  const columnHeight = looped.length * (tileWidth * (5 / 4) + TILE_GAP);
+  const tiles = columnTiles(jerseys, !reduceMotion);
+  const columnHeight = tiles.length * (tileWidth * (5 / 4) + TILE_GAP);
 
   useEffect(() => {
     if (reduceMotion || jerseys.length === 0) {
@@ -98,7 +111,7 @@ function MarqueeColumn({
 
   const content = (
     <View style={{ gap: TILE_GAP }}>
-      {looped.map(({ jersey, key }) => (
+      {tiles.map(({ jersey, key }) => (
         <View key={key} style={{ width: tileWidth }}>
           <JerseyTile
             displayOnly

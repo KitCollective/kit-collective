@@ -99,7 +99,7 @@ describe("first-session visual host chrome", () => {
     expect(discovery).toContain("fetchShowcaseJerseys");
     expect(marquee).toContain("displayOnly");
     expect(discovery).toContain("useReduceMotion");
-    expect(marquee).toContain("stageTilted");
+    expect(marquee).toContain("columnTiles(jerseys, !reduceMotion)");
     expect(chrome).not.toContain("ScreenHeader");
     expect(chrome).not.toContain("SearchField");
     expect(chrome).not.toContain("FloatingTabBar");
