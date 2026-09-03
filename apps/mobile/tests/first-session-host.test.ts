@@ -109,4 +109,16 @@ describe("First session host chrome", () => {
     expect(profile).toContain("updateProfile");
     expect(profile).not.toContain("prototype-first-run");
   });
+
+  it("host opens jersey details after profile/login with draft and routes result Samling", () => {
+    const host = readFileSync(hostPath, "utf8");
+
+    expect(host).toContain("JerseyDetailsScreen");
+    expect(host).toContain('place === "jersey-details"');
+    expect(host).toContain("saveJersey");
+    expect(host).toContain("recordDumpSave");
+    expect(host).toContain("firstSessionResult=1");
+    expect(host).not.toContain("requestPremiumAccess");
+    expect(host).not.toContain("Gem senere");
+  });
 });

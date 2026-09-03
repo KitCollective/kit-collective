@@ -1,8 +1,15 @@
 import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, useWindowDimensions, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CollectionFetchError, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { fetchCollectionShortcuts } from "@/api/shortcuts";
@@ -14,14 +21,19 @@ import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
 import { Button, ButtonDock, EmptyState } from "@/components/ui";
 import { WishlistSheet } from "@/components/wishlist-sheet";
+import { RESULT_SAMLING_BUD_CAPTION } from "@/first-session/jersey-details-copy";
+import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 export default function CollectionScreen() {
   const router = useRouter();
+  const { firstSessionResult } = useLocalSearchParams<{ firstSessionResult?: string }>();
+  const showResultSamlingCaption = firstSessionResult === "1";
   const { accessToken, requestPremiumAccess } = useAuth();
   const { width } = useWindowDimensions();
   const theme = useTheme();
+  const typography = useTypography();
   const insets = useSafeAreaInsets();
   const tabBarPadding =
     space.insetLg * 2 +
@@ -150,6 +162,11 @@ export default function CollectionScreen() {
     return (
       <View style={[styles.emptyContainer, { backgroundColor: theme.canvas }]}>
         <CollectionHeader count={0} onWishlistPress={() => void openWishlist()} />
+        {showResultSamlingCaption ? (
+          <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
+            {RESULT_SAMLING_BUD_CAPTION}
+          </Text>
+        ) : null}
         <EmptyState title="Ingen trøjer endnu" body="Tilføj den første fra galleriet." />
         <ButtonDock>
           <Button
@@ -171,6 +188,11 @@ export default function CollectionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <CollectionHeader count={totalJerseyCount} onWishlistPress={() => void openWishlist()} />
+      {showResultSamlingCaption ? (
+        <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
+          {RESULT_SAMLING_BUD_CAPTION}
+        </Text>
+      ) : null}
       <ShortcutChipRow
         shortcuts={shortcuts}
         selectedShortcutId={selectedShortcutId}
@@ -234,6 +256,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  resultCaption: {
+    paddingHorizontal: space.insetMd,
+    paddingBottom: space.insetSm,
   },
   gridContent: {
     paddingHorizontal: space.insetMd,
