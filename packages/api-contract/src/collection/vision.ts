@@ -13,6 +13,9 @@ export type VisionUserAction = (typeof VISION_USER_ACTIONS)[number];
 export const VISION_CONFIDENCE_PRESELECT = 70;
 export const VISION_CONFIDENCE_SUGGEST = 50;
 
+/** Coarse per-IP cap for unsigned first-session Vision suggest (in-memory throttle). */
+export const UNSIGNED_VISION_SUGGEST_CAP = 20;
+
 export const visionSuggestPhotoSchema = z
   .object({
     role: z.enum(PHOTO_ROLES),

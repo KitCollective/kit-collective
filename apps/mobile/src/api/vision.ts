@@ -77,3 +77,34 @@ export async function logVisionAction(
 
   visionLogResponseSchema.parse(await response.json());
 }
+
+export async function startUnsignedVisionSuggest(payload: VisionSuggestRequest): Promise<string> {
+  const response = await requestJson("/v1/collection/vision/suggest/unsigned", {
+    method: "POST",
+    headers: {
+      "Accept-Language": "da",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke starte Vision");
+  }
+
+  const body = visionSuggestResponseSchema.parse(await response.json());
+  return body.jobId;
+}
+
+export async function fetchUnsignedVisionJob(jobId: string): Promise<VisionJobResponse> {
+  const response = await requestJson(`/v1/collection/vision/jobs/${jobId}/unsigned`, {
+    headers: {
+      "Accept-Language": "da",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke hente Vision-forslag");
+  }
+
+  return visionJobResponseSchema.parse(await response.json());
+}

@@ -106,6 +106,34 @@ describe("first-session visual host chrome", () => {
     expect(chrome).not.toContain("Søg");
   });
 
+  it("locks chooser chrome as gallery-first capture without premium or tab bar", () => {
+    const chooser = readFirstSession("chooser-screen.tsx");
+
+    expect(chooser).toContain("Tilføj trøje");
+    expect(chooser).toContain("Upload filer");
+    expect(chooser).toContain("Tag billede");
+    expect(chooser).toContain("pickUploadFiles");
+    expect(chooser).toContain("CaptureCameraSession");
+    expect(chooser).toContain("createPersistedCaptureSession");
+    expect(chooser).not.toContain("requestPremiumAccess");
+    expect(chooser).not.toContain("FloatingTabBar");
+  });
+
+  it("locks analysing chrome with Læser trøjen copy, PhotoSlot, hairline progress, and no wash", () => {
+    const analysing = readFirstSession("analysing-screen.tsx");
+    const copy = readFirstSession("analysing-copy.ts");
+    const chrome = `${analysing}\n${copy}`;
+
+    expect(copy).toContain("Læser trøjen");
+    expect(copy).toContain("Vi finder klub, sæson og type.");
+    expect(copy).toContain("Udfyld selv i stedet");
+    expect(analysing).toContain("PhotoSlot");
+    expect(analysing).toContain("StyleSheet.hairlineWidth");
+    expect(analysing).toContain("startUnsignedVisionSuggest");
+    expect(chrome).not.toContain("identity.wash");
+    expect(chrome).not.toContain("FloatingTabBar");
+  });
+
   it("locks profile onboarding chrome without skip, handle field, or preferences", () => {
     const profile = readFirstSession("profile-onboarding.tsx");
     const location = readFirstSession("profile-location.tsx");
