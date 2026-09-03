@@ -1,4 +1,17 @@
-export { createDb, type Db, migrate, resetDatabase } from "./migrate.js";
+export {
+  assertDatabaseUrlTls,
+  DATABASE_URL_TLS_GUARD_MESSAGE,
+  isDatabaseUrlTlsAllowed,
+} from "./database-url-guard.js";
+export {
+  type CreateDbOptions,
+  createDb,
+  type Db,
+  migrate,
+  NEST_STATEMENT_TIMEOUT_MILLIS,
+  resetDatabase,
+  SEED_CREATE_DB_OPTIONS,
+} from "./migrate.js";
 export {
   assertResetDatabaseAllowed,
   isResetDatabaseAllowed,

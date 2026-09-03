@@ -1,4 +1,4 @@
-import { createDb } from "@kit/db";
+import { createDb, SEED_CREATE_DB_OPTIONS } from "@kit/db";
 import { resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
@@ -115,7 +115,7 @@ export async function runHierarchyGrain(
 ): Promise<RunHierarchyGrainResult> {
   const lane = parseLane(options.lane);
   const databaseUrl = options.databaseUrl ?? resolveDatabaseUrl(lane);
-  const { db, pool } = createDb(databaseUrl);
+  const { db, pool } = createDb(databaseUrl, SEED_CREATE_DB_OPTIONS);
 
   try {
     if (options.kind === "league") {
@@ -167,7 +167,7 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
     failures: [],
   };
 
-  const { db, pool } = createDb(databaseUrl);
+  const { db, pool } = createDb(databaseUrl, SEED_CREATE_DB_OPTIONS);
   try {
     const outOfScopeBefore = await snapshotSeasonPcsByLabel(db, competition);
     const aggregateMap = emptyMapResult();

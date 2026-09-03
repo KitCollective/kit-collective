@@ -1,13 +1,36 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate as drizzleMigrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
+import { assertDatabaseUrlTls } from "./database-url-guard.js";
 import { assertResetDatabaseAllowed } from "./reset-database-guard.js";
 import * as schema from "./schema/index.js";
 
 export type Db = ReturnType<typeof createDb>["db"];
 
-export function createDb(connectionString: string) {
-  const pool = new Pool({ connectionString });
+export type CreateDbOptions = {
+  statementTimeoutMillis?: number;
+};
+
+export const NEST_STATEMENT_TIMEOUT_MILLIS = 5000;
+export const SEED_CREATE_DB_OPTIONS: CreateDbOptions = { statementTimeoutMillis: 0 };
+
+function statementTimeoutSql(millis: number): string {
+  if (!Number.isFinite(millis) || millis < 0) {
+    throw new Error("statementTimeoutMillis must be a non-negative finite number");
+  }
+  return `SET statement_timeout = ${Math.floor(millis)}`;
+}
+
+export function createDb(connectionString: string, options?: CreateDbOptions) {
+  assertDatabaseUrlTls(connectionString);
+  const statementTimeoutMillis = options?.statementTimeoutMillis ?? NEST_STATEMENT_TIMEOUT_MILLIS;
+  const pool = new Pool({
+    connectionString,
+    connectionTimeoutMillis: 2000,
+    onConnect: async (client) => {
+      await client.query(statementTimeoutSql(statementTimeoutMillis));
+    },
+  });
   const db = drizzle(pool, { schema });
   return { db, pool };
 }
