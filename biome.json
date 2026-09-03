@@ -14,7 +14,8 @@
       "!.cursor",
       "!.scratch",
       "!pnpm-lock.yaml",
-      "!skills-lock.json"
+      "!skills-lock.json",
+      "!.bb/workflows"
     ]
   },
   "formatter": {
