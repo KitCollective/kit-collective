@@ -53,7 +53,11 @@ export function JerseyTile({
 
   if (displayOnly || !onPress) {
     return (
-      <View accessibilityLabel={accessibilityLabel} importantForAccessibility="yes" style={styles.tile}>
+      <View
+        accessibilityLabel={accessibilityLabel}
+        importantForAccessibility="yes"
+        style={styles.tile}
+      >
         {content}
       </View>
     );
