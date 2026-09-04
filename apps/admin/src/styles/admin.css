@@ -11,6 +11,7 @@
   --fill-secondary: #f4f4f4;
   --content-inverse: #ffffff;
   --danger: #b42318;
+  --warning: #b54708;
   --scrim: rgb(0 0 0 / 40%);
   --radius-xs: 4px;
   --radius-sm: 8px;
@@ -888,6 +889,14 @@ a {
   border-radius: var(--radius-sm);
   background: var(--fill-secondary);
   color: var(--danger);
+}
+
+.banner-warning {
+  padding: var(--space-inset-sm) var(--space-inset-md);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--fill-secondary);
+  color: var(--warning);
 }
 
 .drill-header {
