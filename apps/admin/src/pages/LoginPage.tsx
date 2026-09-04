@@ -2,6 +2,8 @@ import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { type FormEvent, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider.js";
+import { resolveAuthErrorFeedback } from "../auth/auth-error-feedback.js";
+import { AUTH_THROTTLE_BANNER_MESSAGE } from "../auth/identity-auth-error.js";
 import { requestSocialIdToken } from "../auth/social-id-token.js";
 import { BrandLogo } from "../brand/BrandLogo.js";
 
@@ -11,6 +13,7 @@ export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showThrottleBanner, setShowThrottleBanner] = useState(false);
   const [submitting, setSubmitting] = useState<"password" | "social" | null>(null);
   const busy = submitting !== null;
 
@@ -29,10 +32,13 @@ export function LoginPage() {
     event.preventDefault();
     setSubmitting("password");
     setError(null);
+    setShowThrottleBanner(false);
     try {
       await login(email, password);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Sign in failed");
+      const feedback = resolveAuthErrorFeedback(submitError, "Invalid email or password");
+      setError(feedback.error);
+      setShowThrottleBanner(feedback.showThrottleBanner);
     } finally {
       setSubmitting(null);
     }
@@ -41,11 +47,14 @@ export function LoginPage() {
   async function onSocial(provider: IdentityLinkedProvider) {
     setSubmitting("social");
     setError(null);
+    setShowThrottleBanner(false);
     try {
       const idToken = await requestSocialIdToken(provider);
       await loginSocial(provider, idToken);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Sign in failed");
+      const feedback = resolveAuthErrorFeedback(submitError, "Sign in failed");
+      setError(feedback.error);
+      setShowThrottleBanner(feedback.showThrottleBanner);
     } finally {
       setSubmitting(null);
     }
@@ -56,6 +65,11 @@ export function LoginPage() {
       <form className="login-card" onSubmit={onSubmit}>
         <BrandLogo variant="lockup" className="login-lockup" />
         <h1>Sign in</h1>
+        {showThrottleBanner ? (
+          <div className="banner-warning" role="alert">
+            {AUTH_THROTTLE_BANNER_MESSAGE}
+          </div>
+        ) : null}
         {error ? <div className="banner-error">{error}</div> : null}
         <div className="field">
           <label htmlFor="email">Email</label>

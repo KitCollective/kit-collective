@@ -15,6 +15,7 @@ import {
   useState,
 } from "react";
 import { apiFetch } from "../api/client.js";
+import { identityAuthFetch } from "./identity-auth-fetch.js";
 
 const STORAGE_KEY = "kit.admin.session";
 
@@ -110,21 +111,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const body = await apiFetch<IdentitySession>("/identity/login", {
+    const response = await identityAuthFetch("/identity/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    const next = persistAdminSession(identitySessionSchema.parse(body));
+    const body = identitySessionSchema.parse(await response.json());
+    const next = persistAdminSession(body);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setSession(next);
   }, []);
 
   const loginSocial = useCallback(async (provider: IdentityLinkedProvider, idToken: string) => {
-    const body = await apiFetch<IdentitySession>("/identity/social", {
+    const response = await identityAuthFetch("/identity/social", {
       method: "POST",
       body: JSON.stringify({ provider, idToken }),
     });
-    const next = persistAdminSession(identitySessionSchema.parse(body));
+    const body = identitySessionSchema.parse(await response.json());
+    const next = persistAdminSession(body);
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setSession(next);
   }, []);
