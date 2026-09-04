@@ -28,6 +28,7 @@ import {
   identitySessionSchema,
   identityVerifyResponseSchema,
 } from "@kit/api-contract";
+import { identityAuthErrorFromResponse } from "@/auth/identity-auth-error";
 import { getApiBaseUrl } from "./config";
 
 async function requestJson(path: string, init: RequestInit = {}): Promise<Response> {
@@ -52,7 +53,9 @@ export async function registerCollector(
   });
 
   if (!response.ok) {
-    throw new Error("Kunne ikke oprette konto");
+    throw identityAuthErrorFromResponse(response, {
+      fallbackMessage: "Kunne ikke oprette konto",
+    });
   }
 
   return identitySessionSchema.parse(await response.json());
@@ -66,7 +69,10 @@ export async function loginCollector(credentials: IdentityCredentials): Promise<
   });
 
   if (!response.ok) {
-    throw new Error("Forkert e-mail eller adgangskode");
+    throw identityAuthErrorFromResponse(response, {
+      invalidCredentialsMessage: "Forkert e-mail eller adgangskode",
+      fallbackMessage: "Forkert e-mail eller adgangskode",
+    });
   }
 
   return identitySessionSchema.parse(await response.json());
@@ -86,7 +92,9 @@ export async function loginSocial(
   });
 
   if (!response.ok) {
-    throw new Error("Kunne ikke logge ind");
+    throw identityAuthErrorFromResponse(response, {
+      fallbackMessage: "Kunne ikke logge ind",
+    });
   }
 
   return identitySessionSchema.parse(await response.json());
@@ -386,7 +394,9 @@ export async function requestPasswordReset(email: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error("Kunne ikke sende nulstilling");
+    throw identityAuthErrorFromResponse(response, {
+      fallbackMessage: "Kunne ikke sende nulstilling",
+    });
   }
 
   identityPasswordResetAcceptedSchema.parse(await response.json());
