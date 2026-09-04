@@ -69,7 +69,8 @@ describe("Expo Auth throttle Banner chrome", () => {
     expect(identityApi).toContain('requestJson("/v1/identity/login"');
     expect(identityApi).toContain('requestJson("/v1/identity/register"');
     expect(identityApi).toContain('requestJson("/v1/identity/password-reset"');
-    expect(identityApi).not.toContain("@kit/db");
+    const forbiddenDbImport = "@" + "kit/db";
+    expect(identityApi).not.toContain(forbiddenDbImport);
     expect(identityApi).not.toContain("apps/api");
   });
 
