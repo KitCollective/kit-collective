@@ -35,10 +35,11 @@ import {
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { count, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { FailingVisionAdapter, SlowVisionAdapter } from "../dist/vision/test-vision.adapters.js";
 import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
+import { clearAuthThrottleHits } from "./helpers/auth-throttle.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -250,6 +251,10 @@ describe("Collection /v1", () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  beforeEach(async () => {
+    await clearAuthThrottleHits();
   });
 
   it("rejects unauthenticated save with 401", async () => {

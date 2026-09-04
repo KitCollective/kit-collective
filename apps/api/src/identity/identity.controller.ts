@@ -23,8 +23,8 @@ export class IdentityController {
   constructor(private readonly identityService: IdentityService) {}
 
   @Post("identity/register")
-  register(@Body() body: unknown) {
-    return this.identityService.register(body);
+  register(@Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.identityService.register(body, requestAttribution(request));
   }
 
   @Post("identity/login")
@@ -35,8 +35,8 @@ export class IdentityController {
 
   @Post("identity/social")
   @HttpCode(200)
-  socialLogin(@Body() body: unknown) {
-    return this.identityService.socialLogin(body);
+  socialLogin(@Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.identityService.socialLogin(body, requestAttribution(request));
   }
 
   @Post("identity/verify")
@@ -47,8 +47,8 @@ export class IdentityController {
 
   @Post("identity/password-reset")
   @HttpCode(200)
-  requestPasswordReset(@Body() body: unknown) {
-    return this.identityService.requestPasswordReset(body);
+  requestPasswordReset(@Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.identityService.requestPasswordReset(body, requestAttribution(request));
   }
 
   @Post("identity/password-reset/complete")

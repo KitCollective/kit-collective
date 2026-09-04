@@ -11,6 +11,9 @@ const GLOBAL_FAMILY_LIMIT = 100;
 const GLOBAL_FAMILY_WINDOW_MS = 60 * 1000;
 
 const EMAIL_FAILURE_BUCKET = "email_failure";
+const EMAIL_REQUEST_BUCKET = "email_request";
+const EMAIL_REQUEST_LIMIT = 5;
+const EMAIL_REQUEST_WINDOW_MS = 15 * 60 * 1000;
 const IP_FAMILY_BUCKET = "ip_family";
 const GLOBAL_FAMILY_BUCKET = "global_family";
 const GLOBAL_BUCKET_KEY = "global";
@@ -20,6 +23,35 @@ export class AuthThrottleService {
   constructor(@Inject(DB) private readonly db: DbToken) {}
 
   async consumeLoginFamily(ipAddress: string | null): Promise<boolean> {
+    return this.consumeIpGlobalFamily(ipAddress);
+  }
+
+  async consumePublicWriteFamily(ipAddress: string | null, email: string): Promise<boolean> {
+    const normalizedEmail = email.toLowerCase();
+    if (!(await this.consumeIpGlobalFamily(ipAddress))) {
+      return false;
+    }
+    return this.consumeEmailRequestFamily(normalizedEmail);
+  }
+
+  async consumeEmailRequestFamily(email: string): Promise<boolean> {
+    const normalizedEmail = email.toLowerCase();
+    const emailRequestHits = await this.countHits(
+      EMAIL_REQUEST_BUCKET,
+      normalizedEmail,
+      EMAIL_REQUEST_WINDOW_MS,
+    );
+    if (emailRequestHits >= EMAIL_REQUEST_LIMIT) {
+      return false;
+    }
+    await this.db.insert(authThrottleHit).values({
+      bucket: EMAIL_REQUEST_BUCKET,
+      bucketKey: normalizedEmail,
+    });
+    return true;
+  }
+
+  private async consumeIpGlobalFamily(ipAddress: string | null): Promise<boolean> {
     const globalHits = await this.countHits(
       GLOBAL_FAMILY_BUCKET,
       GLOBAL_BUCKET_KEY,

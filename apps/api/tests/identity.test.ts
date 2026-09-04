@@ -36,6 +36,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { recordedMails, resetRecordedMails } from "../dist/notify/recording-mailer.adapter.js";
+import { clearAuthThrottleHits } from "./helpers/auth-throttle.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -102,8 +103,46 @@ function loginInject(
   });
 }
 
+function registerInject(
+  app: NestFastifyApplication,
+  input: {
+    email: string;
+    password?: string;
+    remoteAddress?: string;
+  },
+) {
+  return app.inject({
+    method: "POST",
+    url: "/v1/identity/register",
+    remoteAddress: input.remoteAddress,
+    payload: {
+      email: input.email,
+      password: input.password ?? "password123",
+    },
+  });
+}
+
+function passwordResetInject(
+  app: NestFastifyApplication,
+  input: {
+    email: string;
+    remoteAddress?: string;
+  },
+) {
+  return app.inject({
+    method: "POST",
+    url: "/v1/identity/password-reset",
+    remoteAddress: input.remoteAddress,
+    payload: { email: input.email },
+  });
+}
+
 async function clearAuthThrottle(db: ReturnType<typeof createDb>["db"]) {
   await db.delete(authThrottleHit);
+}
+
+async function clearAuthThrottleForTests() {
+  await clearAuthThrottleHits();
 }
 
 async function listAuthEventRows(db: ReturnType<typeof createDb>["db"], userId: string) {
@@ -244,6 +283,10 @@ describe("Identity /v1", () => {
   afterAll(async () => {
     await helperDb.pool.end();
     await app.close();
+  });
+
+  beforeEach(async () => {
+    await clearAuthThrottleForTests();
   });
 
   it("registers a collector and returns a session", async () => {
@@ -1583,5 +1626,96 @@ describe("Identity /v1", () => {
         "throttle-other-ip@example.com",
       );
     }, 90_000);
+  });
+
+  describe("Auth throttle on register and password-reset", () => {
+    beforeEach(async () => {
+      await clearAuthThrottle(helperDb.db);
+    });
+
+    it("returns 429 on the sixth register request for the same email", async () => {
+      const ip = "203.20.0.8";
+      const email = "register-throttle@example.com";
+
+      const first = await registerInject(app, { email, remoteAddress: ip });
+      expect(first.statusCode).toBe(201);
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const collision = await registerInject(app, { email, remoteAddress: ip });
+        expect(collision.statusCode).toBe(409);
+      }
+
+      const sixth = await registerInject(app, { email, remoteAddress: ip });
+      expect(sixth.statusCode).toBe(429);
+      expect(JSON.parse(sixth.body).message).toBe("Too many requests");
+    }, 30_000);
+
+    it("returns 409 on register collision when under the email request limit", async () => {
+      await registerSession(app, "collision-throttle@example.com");
+      const ip = "203.20.1.8";
+
+      const collision = await registerInject(app, {
+        email: "collision-throttle@example.com",
+        remoteAddress: ip,
+      });
+      expect(collision.statusCode).toBe(409);
+      expect(JSON.parse(collision.body).message).toBe("Email already registered");
+    });
+
+    it("returns the same password-reset success whether the email exists when under the limit", async () => {
+      await registerSession(app, "reset-throttle-known@example.com");
+      const ip = "203.20.2.8";
+
+      const known = await passwordResetInject(app, {
+        email: "reset-throttle-known@example.com",
+        remoteAddress: ip,
+      });
+      const unknown = await passwordResetInject(app, {
+        email: "reset-throttle-unknown@example.com",
+        remoteAddress: ip,
+      });
+
+      expect(known.statusCode).toBe(200);
+      expect(unknown.statusCode).toBe(200);
+      expect(JSON.parse(known.body)).toEqual(JSON.parse(unknown.body));
+    });
+
+    it("returns 429 on the sixth password-reset request for the same email", async () => {
+      const ip = "203.20.3.8";
+      const email = "reset-throttle-cap@example.com";
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const response = await passwordResetInject(app, { email, remoteAddress: ip });
+        expect(response.statusCode).toBe(200);
+      }
+
+      const sixth = await passwordResetInject(app, { email, remoteAddress: ip });
+      expect(sixth.statusCode).toBe(429);
+      expect(JSON.parse(sixth.body).message).toBe("Too many requests");
+    }, 30_000);
+
+    it("does not 429 signed-in change-password from the public write door", async () => {
+      const session = await registerSession(app, "throttle-password-change@example.com");
+      const ip = "203.20.4.8";
+
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        await loginInject(app, {
+          email: "throttle-password-change@example.com",
+          remoteAddress: ip,
+        });
+      }
+
+      const change = await app.inject({
+        method: "POST",
+        url: "/v1/identity/password",
+        remoteAddress: ip,
+        headers: { authorization: `Bearer ${session.accessToken}` },
+        payload: {
+          currentPassword: "password123",
+          newPassword: "new-password-12",
+        },
+      });
+      expect(change.statusCode).toBe(200);
+    }, 30_000);
   });
 });
