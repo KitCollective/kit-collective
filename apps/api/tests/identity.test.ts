@@ -1648,7 +1648,45 @@ describe("Identity /v1", () => {
       const sixth = await registerInject(app, { email, remoteAddress: ip });
       expect(sixth.statusCode).toBe(429);
       expect(JSON.parse(sixth.body).message).toBe("Too many requests");
+      expect(sixth.headers["retry-after"]).toBeUndefined();
+      expect(sixth.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
     }, 30_000);
+
+    it("429s the 21st register family request from one IP", async () => {
+      const sprayIp = "203.20.6.8";
+      for (let n = 0; n < 20; n += 1) {
+        const created = await registerInject(app, {
+          email: `reg-spray-${n}@example.com`,
+          remoteAddress: sprayIp,
+        });
+        expect(created.statusCode).toBe(201);
+      }
+
+      const blocked = await registerInject(app, {
+        email: "reg-spray-later@example.com",
+        remoteAddress: sprayIp,
+      });
+      expect(blocked.statusCode).toBe(429);
+      expect(JSON.parse(blocked.body).message).toBe("Too many requests");
+      expect(blocked.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
+    }, 90_000);
+
+    it("429s the next register family request after 100 Postgres-shared global hits in one minute", async () => {
+      await helperDb.db.insert(authThrottleHit).values(
+        Array.from({ length: 100 }, () => ({
+          bucket: "global_family",
+          bucketKey: "global",
+        })),
+      );
+
+      const blocked = await registerInject(app, {
+        email: "reg-global-later@example.com",
+        remoteAddress: "203.20.7.8",
+      });
+      expect(blocked.statusCode).toBe(429);
+      expect(JSON.parse(blocked.body).message).toBe("Too many requests");
+      expect(blocked.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
+    });
 
     it("returns 409 on register collision when under the email request limit", async () => {
       await registerSession(app, "collision-throttle@example.com");
@@ -1692,18 +1730,52 @@ describe("Identity /v1", () => {
       const sixth = await passwordResetInject(app, { email, remoteAddress: ip });
       expect(sixth.statusCode).toBe(429);
       expect(JSON.parse(sixth.body).message).toBe("Too many requests");
+      expect(sixth.headers["retry-after"]).toBeUndefined();
+      expect(sixth.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
     }, 30_000);
 
-    it("does not 429 signed-in change-password from the public write door", async () => {
-      const session = await registerSession(app, "throttle-password-change@example.com");
-      const ip = "203.20.4.8";
+    it("returns 429 on social login when the per-email public-write bucket is full", async () => {
+      const ip = "203.20.8.8";
+      const email = "social-throttle@example.com";
 
-      for (let attempt = 0; attempt < 6; attempt += 1) {
-        await loginInject(app, {
-          email: "throttle-password-change@example.com",
-          remoteAddress: ip,
-        });
+      const first = await registerInject(app, { email, remoteAddress: ip });
+      expect(first.statusCode).toBe(201);
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        expect((await registerInject(app, { email, remoteAddress: ip })).statusCode).toBe(409);
       }
+      expect((await registerInject(app, { email, remoteAddress: ip })).statusCode).toBe(429);
+
+      const social = await app.inject({
+        method: "POST",
+        url: "/v1/identity/social",
+        remoteAddress: ip,
+        payload: {
+          provider: "google",
+          idToken: fixtureIdToken({
+            provider: "google",
+            verified: true,
+            email,
+            providerUserId: "gid-throttle-locked",
+          }),
+        },
+      });
+      expect(social.statusCode).toBe(429);
+      expect(JSON.parse(social.body).message).toBe("Too many requests");
+      expect(social.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
+    }, 30_000);
+
+    it("does not 429 signed-in change-password, logout, or GET me after register public-write lockout", async () => {
+      const session = await registerSession(app, "signed-in-door@example.com");
+      const ip = "203.20.9.8";
+      const email = "signed-in-door@example.com";
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const collision = await registerInject(app, { email, remoteAddress: ip });
+        expect(collision.statusCode).toBe(409);
+      }
+
+      const lockedRegister = await registerInject(app, { email, remoteAddress: ip });
+      expect(lockedRegister.statusCode).toBe(429);
 
       const change = await app.inject({
         method: "POST",
@@ -1716,6 +1788,23 @@ describe("Identity /v1", () => {
         },
       });
       expect(change.statusCode).toBe(200);
+
+      const me = await app.inject({
+        method: "GET",
+        url: "/v1/identity/me",
+        remoteAddress: ip,
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      expect(me.statusCode).toBe(200);
+      expect(identityMeSchema.parse(JSON.parse(me.body)).email).toBe(email);
+
+      const logout = await app.inject({
+        method: "POST",
+        url: "/v1/identity/logout",
+        remoteAddress: ip,
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      expect(logout.statusCode).toBe(204);
     }, 30_000);
   });
 });
