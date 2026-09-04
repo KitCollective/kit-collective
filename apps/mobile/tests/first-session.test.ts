@@ -481,7 +481,8 @@ describe("First session jersey details and first Save", () => {
     expect(details).toContain("JERSEY_DETAILS_TITLE");
     expect(details).toContain("JERSEY_DETAILS_PRIMARY_SAVE");
     expect(copy).toContain("Trøjens detaljer");
-    expect(copy).toContain("Gem i samlingen");
+    expect(copy).toMatch(/JERSEY_DETAILS_PRIMARY_SAVE = "Gem"/);
+    expect(copy).not.toContain("Gem i samlingen");
     expect(details).toContain("saveUserJersey");
     expect(details).toContain("canSave");
     expect(details).toContain("shouldGateFirstSessionSave");

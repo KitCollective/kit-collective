@@ -110,7 +110,7 @@ describe("First session host chrome", () => {
     expect(profile).not.toContain("prototype-first-run");
   });
 
-  it("host opens jersey details after profile/login with draft and routes result Samling", () => {
+  it("host opens jersey details after profile/login with draft and routes result Collection", () => {
     const host = readFileSync(hostPath, "utf8");
 
     expect(host).toContain("JerseyDetailsScreen");

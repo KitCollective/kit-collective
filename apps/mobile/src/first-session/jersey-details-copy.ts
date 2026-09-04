@@ -1,8 +1,8 @@
 /** Confirm and Save body title for first-session jersey details (design gap: First session steps 9–10). */
 export const JERSEY_DETAILS_TITLE = "Trøjens detaljer";
 
-/** Primary Save on first-session Confirm body (replaces locked "Gem"). */
-export const JERSEY_DETAILS_PRIMARY_SAVE = "Gem i samlingen";
+/** Primary Save on first-session Confirm body — locked Confirm and Save "Gem". */
+export const JERSEY_DETAILS_PRIMARY_SAVE = "Gem";
 
 /** When more than one unsaved jersey remains in the dump — same enablement as Confirm and Save. */
 export const JERSEY_DETAILS_SAVE_AND_NEXT = "Gem og næste";
