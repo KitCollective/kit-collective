@@ -182,9 +182,16 @@ export class IdentityService {
     this.objectStore = hasR2Config() ? createR2ObjectStore() : createMemoryObjectStore();
   }
 
-  async register(rawBody: unknown): Promise<IdentitySession> {
+  async register(rawBody: unknown, attribution: RequestAttribution): Promise<IdentitySession> {
     const credentials = identityCredentialsSchema.parse(rawBody);
     const normalizedEmail = credentials.email.toLowerCase();
+    const familyAllowed = await this.authThrottle.consumePublicWriteFamily(
+      attribution.ipAddress,
+      normalizedEmail,
+    );
+    if (!familyAllowed) {
+      await this.rejectAuthThrottle(normalizedEmail, attribution);
+    }
 
     const [existing] = await this.db
       .select({ id: user.id })
@@ -226,14 +233,7 @@ export class IdentityService {
     const emailLocked = await this.authThrottle.isEmailLocked(normalizedEmail);
 
     if (!familyAllowed || emailLocked) {
-      const userId = await this.findUserIdByEmail(normalizedEmail);
-      await this.recordAuthEvent({
-        kind: "lockout",
-        userId,
-        ipAddress: attribution.ipAddress,
-        userAgent: attribution.userAgent,
-      });
-      throw tooManyLoginAttempts();
+      await this.rejectAuthThrottle(normalizedEmail, attribution);
     }
 
     const [found] = await this.db
@@ -280,12 +280,17 @@ export class IdentityService {
     return await this.buildSession(sessionRow, accessToken);
   }
 
-  async socialLogin(rawBody: unknown): Promise<IdentitySession> {
+  async socialLogin(rawBody: unknown, attribution: RequestAttribution): Promise<IdentitySession> {
     const parsed = identitySocialLoginSchema.safeParse(rawBody);
     if (!parsed.success) {
       throw new BadRequestException("Invalid social login");
     }
     const body = parsed.data;
+
+    const ipFamilyAllowed = await this.authThrottle.consumeLoginFamily(attribution.ipAddress);
+    if (!ipFamilyAllowed) {
+      await this.rejectAuthThrottle(null, attribution);
+    }
 
     let claims: VerifiedIdToken;
     try {
@@ -301,6 +306,10 @@ export class IdentityService {
     }
 
     const normalizedEmail = claims.email.toLowerCase();
+    const emailRequestAllowed = await this.authThrottle.consumeEmailRequestFamily(normalizedEmail);
+    if (!emailRequestAllowed) {
+      await this.rejectAuthThrottle(normalizedEmail, attribution);
+    }
 
     const [existingLink] = await this.db
       .select({ userId: identityProvider.userId })
@@ -403,9 +412,20 @@ export class IdentityService {
     return identityVerifyResponseSchema.parse({ emailVerified: true });
   }
 
-  async requestPasswordReset(rawBody: unknown): Promise<IdentityPasswordResetAccepted> {
+  async requestPasswordReset(
+    rawBody: unknown,
+    attribution: RequestAttribution,
+  ): Promise<IdentityPasswordResetAccepted> {
     const { email } = identityPasswordResetRequestSchema.parse(rawBody);
     const normalizedEmail = email.toLowerCase();
+    const familyAllowed = await this.authThrottle.consumePublicWriteFamily(
+      attribution.ipAddress,
+      normalizedEmail,
+    );
+    if (!familyAllowed) {
+      await this.rejectAuthThrottle(normalizedEmail, attribution);
+    }
+
     const [found] = await this.db
       .select({ id: user.id, email: user.email })
       .from(user)
@@ -1314,6 +1334,20 @@ export class IdentityService {
     if (!found) {
       throw new NotFoundException();
     }
+  }
+
+  private async rejectAuthThrottle(
+    email: string | null,
+    attribution: RequestAttribution,
+  ): Promise<never> {
+    const userId = email ? await this.findUserIdByEmail(email) : null;
+    await this.recordAuthEvent({
+      kind: "lockout",
+      userId,
+      ipAddress: attribution.ipAddress,
+      userAgent: attribution.userAgent,
+    });
+    throw tooManyLoginAttempts();
   }
 
   private async findUserIdByEmail(email: string): Promise<string | null> {
