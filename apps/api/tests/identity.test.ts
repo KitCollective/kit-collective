@@ -1649,7 +1649,9 @@ describe("Identity /v1", () => {
       expect(sixth.statusCode).toBe(429);
       expect(JSON.parse(sixth.body).message).toBe("Too many requests");
       expect(sixth.headers["retry-after"]).toBeUndefined();
-      expect(sixth.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
+      expect(sixth.body).not.toMatch(
+        /email_request|email_failure|ip_family|global_family|remaining/i,
+      );
     }, 30_000);
 
     it("429s the 21st register family request from one IP", async () => {
@@ -1668,7 +1670,9 @@ describe("Identity /v1", () => {
       });
       expect(blocked.statusCode).toBe(429);
       expect(JSON.parse(blocked.body).message).toBe("Too many requests");
-      expect(blocked.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
+      expect(blocked.body).not.toMatch(
+        /email_request|email_failure|ip_family|global_family|remaining/i,
+      );
     }, 90_000);
 
     it("429s the next register family request after 100 Postgres-shared global hits in one minute", async () => {
@@ -1685,7 +1689,9 @@ describe("Identity /v1", () => {
       });
       expect(blocked.statusCode).toBe(429);
       expect(JSON.parse(blocked.body).message).toBe("Too many requests");
-      expect(blocked.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
+      expect(blocked.body).not.toMatch(
+        /email_request|email_failure|ip_family|global_family|remaining/i,
+      );
     });
 
     it("returns 409 on register collision when under the email request limit", async () => {
@@ -1731,7 +1737,9 @@ describe("Identity /v1", () => {
       expect(sixth.statusCode).toBe(429);
       expect(JSON.parse(sixth.body).message).toBe("Too many requests");
       expect(sixth.headers["retry-after"]).toBeUndefined();
-      expect(sixth.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
+      expect(sixth.body).not.toMatch(
+        /email_request|email_failure|ip_family|global_family|remaining/i,
+      );
     }, 30_000);
 
     it("returns 429 on social login when the per-email public-write bucket is full", async () => {
@@ -1761,7 +1769,9 @@ describe("Identity /v1", () => {
       });
       expect(social.statusCode).toBe(429);
       expect(JSON.parse(social.body).message).toBe("Too many requests");
-      expect(social.body).not.toMatch(/email_request|email_failure|ip_family|global_family|remaining/i);
+      expect(social.body).not.toMatch(
+        /email_request|email_failure|ip_family|global_family|remaining/i,
+      );
     }, 30_000);
 
     it("does not 429 signed-in change-password, logout, or GET me after register public-write lockout", async () => {
