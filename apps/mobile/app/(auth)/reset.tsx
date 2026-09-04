@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { requestPasswordReset } from "@/api/identity";
+import { AuthThrottleBanner, resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
 import { Button, ButtonDock } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -15,18 +16,22 @@ export default function PasswordResetRequestScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [showThrottleBanner, setShowThrottleBanner] = useState(false);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit() {
-    setError(null);
+    setFieldError(null);
+    setShowThrottleBanner(false);
     setLoading(true);
     try {
       await requestPasswordReset(email.trim());
       setDone(true);
-    } catch {
-      setError("Kunne ikke sende nulstilling");
+    } catch (error) {
+      const feedback = resolveAuthErrorFeedback(error, "Kunne ikke sende nulstilling");
+      setFieldError(feedback.fieldError);
+      setShowThrottleBanner(feedback.showThrottleBanner);
     } finally {
       setLoading(false);
     }
@@ -69,7 +74,10 @@ export default function PasswordResetRequestScreen() {
             />
           </View>
         )}
-        {error ? <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text> : null}
+        {showThrottleBanner ? <AuthThrottleBanner /> : null}
+        {fieldError ? (
+          <Text style={[typography.caption, { color: theme.danger }]}>{fieldError}</Text>
+        ) : null}
       </KeyboardAvoidingView>
       <ButtonDock>
         {done ? (

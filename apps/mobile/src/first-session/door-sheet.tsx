@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AuthThrottleBanner } from "@/auth/auth-error-feedback";
 import { Sheet } from "@/components/catalog-ui";
 import { Button, IconButton } from "@/components/ui";
 import {
@@ -46,6 +47,7 @@ type DoorSheetProps = {
   password: string;
   passwordRepeat: string;
   error: string | null;
+  showThrottleBanner: boolean;
   loading: boolean;
   socialBusy: DoorSocialProvider | null;
   onClose: () => void;
@@ -74,6 +76,7 @@ export function DoorSheet({
   password,
   passwordRepeat,
   error,
+  showThrottleBanner,
   loading,
   socialBusy,
   onClose,
@@ -117,6 +120,7 @@ export function DoorSheet({
             { paddingBottom: Math.max(insets.bottom, space.insetMd) },
           ]}
         >
+          {showThrottleBanner ? <AuthThrottleBanner /> : null}
           {emailStep === "choose" ? (
             <ChooseStep
               mode={mode}

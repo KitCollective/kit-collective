@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/auth/AuthProvider";
+import { AuthThrottleBanner, resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
 import { Button, ButtonDock } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -18,31 +19,38 @@ export default function LoginScreen() {
   const typography = useTypography();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [showThrottleBanner, setShowThrottleBanner] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialProvider, setSocialProvider] = useState<IdentityLinkedProvider | null>(null);
 
   async function handleSubmit() {
-    setError(null);
+    setFieldError(null);
+    setShowThrottleBanner(false);
     setLoading(true);
 
     try {
       await signIn(email.trim(), password);
-    } catch {
-      setError("Forkert e-mail eller adgangskode");
+    } catch (error) {
+      const feedback = resolveAuthErrorFeedback(error, "Forkert e-mail eller adgangskode");
+      setFieldError(feedback.fieldError);
+      setShowThrottleBanner(feedback.showThrottleBanner);
     } finally {
       setLoading(false);
     }
   }
 
   async function handleSocial(provider: IdentityLinkedProvider) {
-    setError(null);
+    setFieldError(null);
+    setShowThrottleBanner(false);
     setSocialProvider(provider);
 
     try {
       await signInSocial(provider);
-    } catch {
-      setError("Kunne ikke logge ind");
+    } catch (error) {
+      const feedback = resolveAuthErrorFeedback(error, "Kunne ikke logge ind");
+      setFieldError(feedback.fieldError);
+      setShowThrottleBanner(feedback.showThrottleBanner);
     } finally {
       setSocialProvider(null);
     }
@@ -104,7 +112,10 @@ export default function LoginScreen() {
           />
         </View>
 
-        {error ? <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text> : null}
+        {showThrottleBanner ? <AuthThrottleBanner /> : null}
+        {fieldError ? (
+          <Text style={[typography.caption, { color: theme.danger }]}>{fieldError}</Text>
+        ) : null}
       </KeyboardAvoidingView>
 
       <ButtonDock>

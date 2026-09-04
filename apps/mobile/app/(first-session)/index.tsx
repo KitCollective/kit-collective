@@ -2,6 +2,7 @@ import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { Redirect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
+import { resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
 import { FirstSessionAnalysingScreen } from "@/first-session/analysing-screen";
 import { FirstSessionChooserScreen } from "@/first-session/chooser-screen";
 import { DiscoveryShowcaseScreen } from "@/first-session/discovery-showcase";
@@ -21,6 +22,7 @@ export default function FirstSessionHost() {
   const [password, setPassword] = useState("");
   const [passwordRepeat, setPasswordRepeat] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showThrottleBanner, setShowThrottleBanner] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialBusy, setSocialBusy] = useState<IdentityLinkedProvider | null>(null);
 
@@ -79,6 +81,7 @@ export default function FirstSessionHost() {
     setPassword("");
     setPasswordRepeat("");
     setError(null);
+    setShowThrottleBanner(false);
   }
 
   function openDoor(mode: "login" | "register") {
@@ -97,6 +100,7 @@ export default function FirstSessionHost() {
 
   function handleNextEmail() {
     setError(null);
+    setShowThrottleBanner(false);
     if (emailStep === "choose") {
       setEmailStep(1);
       return;
@@ -111,6 +115,7 @@ export default function FirstSessionHost() {
   async function handleSubmitEmail() {
     const mode = session.doorMode ?? "login";
     setError(null);
+    setShowThrottleBanner(false);
 
     if (mode === "register") {
       if (password.length < 8) {
@@ -140,12 +145,15 @@ export default function FirstSessionHost() {
           kind: "login",
         });
       }
-    } catch {
-      setError(
+    } catch (caught) {
+      const feedback = resolveAuthErrorFeedback(
+        caught,
         mode === "register"
           ? "Kunne ikke oprette konto. Tjek e-mail og adgangskode."
           : "Forkert e-mail eller adgangskode",
       );
+      setError(feedback.fieldError);
+      setShowThrottleBanner(feedback.showThrottleBanner);
     } finally {
       setLoading(false);
     }
@@ -154,6 +162,7 @@ export default function FirstSessionHost() {
   async function handleSocial(provider: IdentityLinkedProvider) {
     const kind = session.doorMode ?? "login";
     setError(null);
+    setShowThrottleBanner(false);
     setSocialBusy(provider);
     try {
       await signInSocial(provider);
@@ -162,8 +171,10 @@ export default function FirstSessionHost() {
         method: "social",
         kind,
       });
-    } catch {
-      setError("Kunne ikke logge ind");
+    } catch (caught) {
+      const feedback = resolveAuthErrorFeedback(caught, "Kunne ikke logge ind");
+      setError(feedback.fieldError);
+      setShowThrottleBanner(feedback.showThrottleBanner);
     } finally {
       setSocialBusy(null);
     }
@@ -222,6 +233,7 @@ export default function FirstSessionHost() {
         password={password}
         passwordRepeat={passwordRepeat}
         error={error}
+        showThrottleBanner={showThrottleBanner}
         loading={loading}
         socialBusy={socialBusy}
         onClose={closeDoor}

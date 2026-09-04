@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/auth/AuthProvider";
+import { AuthThrottleBanner, resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
 import { Button, ButtonDock } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -17,17 +18,24 @@ export default function RegisterScreen() {
   const typography = useTypography();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [showThrottleBanner, setShowThrottleBanner] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit() {
-    setError(null);
+    setFieldError(null);
+    setShowThrottleBanner(false);
     setLoading(true);
 
     try {
       await signUp(email.trim(), password);
-    } catch {
-      setError("Kunne ikke oprette konto. Tjek e-mail og adgangskode.");
+    } catch (error) {
+      const feedback = resolveAuthErrorFeedback(
+        error,
+        "Kunne ikke oprette konto. Tjek e-mail og adgangskode.",
+      );
+      setFieldError(feedback.fieldError);
+      setShowThrottleBanner(feedback.showThrottleBanner);
     } finally {
       setLoading(false);
     }
@@ -87,7 +95,10 @@ export default function RegisterScreen() {
           />
         </View>
 
-        {error ? <Text style={[typography.caption, { color: theme.danger }]}>{error}</Text> : null}
+        {showThrottleBanner ? <AuthThrottleBanner /> : null}
+        {fieldError ? (
+          <Text style={[typography.caption, { color: theme.danger }]}>{fieldError}</Text>
+        ) : null}
       </KeyboardAvoidingView>
 
       <ButtonDock>
