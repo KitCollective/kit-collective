@@ -6,6 +6,7 @@ export type FirstSessionPlace =
   | "door"
   | "verify-email"
   | "profile"
+  | "jersey-details"
   | "collection"
   | "tab-shell";
 
@@ -30,6 +31,8 @@ export type FirstSessionState = {
   skippedDiscovery: boolean;
   skippedProfile: boolean;
   skippedJerseyDetails: boolean;
+  jerseysSavedInSession: number;
+  resultCollection: boolean;
 };
 
 export type FirstSessionEvent =
@@ -39,6 +42,8 @@ export type FirstSessionEvent =
   | { type: "submitIdentity"; method: IdentitySubmitMethod; kind: IdentitySubmitKind }
   | { type: "dismissVerifyEmail" }
   | { type: "continueProfile" }
+  | { type: "saveJersey" }
+  | { type: "recordDumpSave" }
   | { type: "startAdd" }
   | { type: "cancelChooser" }
   | { type: "photosPicked"; sessionId: string }
@@ -68,6 +73,8 @@ export function createFirstSession(input: {
     skippedDiscovery: false,
     skippedProfile: false,
     skippedJerseyDetails: false,
+    jerseysSavedInSession: 0,
+    resultCollection: false,
   };
 }
 
@@ -186,6 +193,19 @@ export function reduceFirstSession(
           ...skips,
         };
       }
+      if (state.hasDraft) {
+        return {
+          ...state,
+          place: "jersey-details",
+          identitySession:
+            event.method === "social" ? { emailVerified: true } : state.identitySession,
+          doorMode: null,
+          doorOverAnalysing: false,
+          showsTabBar: false,
+          ...skips,
+          skippedJerseyDetails: false,
+        };
+      }
       return {
         ...state,
         place: "collection",
@@ -206,10 +226,32 @@ export function reduceFirstSession(
         showsTabBar: false,
       };
     case "continueProfile":
+      if (state.hasDraft) {
+        return {
+          ...state,
+          place: "jersey-details",
+          showsTabBar: false,
+          skippedJerseyDetails: false,
+        };
+      }
       return {
         ...state,
         place: "collection",
         showsTabBar: true,
+      };
+    case "recordDumpSave":
+      return {
+        ...state,
+        jerseysSavedInSession: state.jerseysSavedInSession + 1,
+      };
+    case "saveJersey":
+      return {
+        ...state,
+        place: "collection",
+        showsTabBar: true,
+        hasDraft: false,
+        jerseysSavedInSession: state.jerseysSavedInSession + 1,
+        resultCollection: true,
       };
     default: {
       const _exhaustive: never = event;

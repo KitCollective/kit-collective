@@ -10,7 +10,6 @@ import {
   PHOTO_ROLES,
   type PhotoRole,
 } from "@kit/domain";
-import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,7 +22,7 @@ import {
   View,
 } from "react-native";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
-import { saveUserJersey, updateUserJersey } from "@/api/collection";
+import { saveUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/vision";
 import { useAuth } from "@/auth/AuthProvider";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
@@ -50,16 +49,18 @@ import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
-import {
-  shouldConfirmRedirectAway,
-  usePersistedCaptureSession,
-} from "@/capture/usePersistedCaptureSession";
+import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession";
 import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
-import { PostSaveSheet } from "@/components/post-save-sheet";
 import { Button, ButtonDock } from "@/components/ui";
+import { shouldGateFirstSessionSave } from "@/first-session/first-session-entitlement";
+import {
+  JERSEY_DETAILS_PRIMARY_SAVE,
+  JERSEY_DETAILS_SAVE_AND_NEXT,
+  JERSEY_DETAILS_TITLE,
+} from "@/first-session/jersey-details-copy";
 import { markJerseySaved } from "@/session/addSession";
 import { useTypography } from "@/theme/brand-fonts";
 import { motion, radius, space } from "@/theme/tokens";
@@ -69,17 +70,27 @@ import { useTheme } from "@/theme/use-theme";
 const MIN_CLUB_SEARCH_LENGTH = 2;
 const VISION_TIMEOUT_MS = 12_000;
 
-export default function ConfirmScreen() {
-  const router = useRouter();
+type JerseyDetailsScreenProps = {
+  captureSessionId: string;
+  jerseysSavedInSession: number;
+  /** Called when the last/only jersey is saved and host should enter result Collection. */
+  onSaved: () => void;
+  /** Mid-bulk: a jersey was saved; stay on details and bump session save count. */
+  onJerseySavedInDump?: () => void;
+};
+
+export function JerseyDetailsScreen({
+  captureSessionId,
+  jerseysSavedInSession,
+  onSaved,
+  onJerseySavedInDump,
+}: JerseyDetailsScreenProps) {
   const theme = useTheme();
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
-  const { sessionId, editJerseyId } = useLocalSearchParams<{
-    sessionId: string;
-    editJerseyId?: string;
-  }>();
-  const { accessToken } = useAuth();
-  const { state, isSessionResolved, mutate } = usePersistedCaptureSession(sessionId);
+  const sessionId = captureSessionId;
+  const { accessToken, requestPremiumAccess } = useAuth();
+  const { state, mutate } = usePersistedCaptureSession(sessionId);
 
   const [clubSheetOpen, setClubSheetOpen] = useState(false);
   const [seasonSheetOpen, setSeasonSheetOpen] = useState(false);
@@ -94,9 +105,6 @@ export default function ConfirmScreen() {
   const [catalogMiss, setCatalogMiss] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [saveError, setSaveError] = useState(false);
-  const [postSaveOpen, setPostSaveOpen] = useState(false);
-  const [savedClub, setSavedClub] = useState<CatalogPickerItem | null>(null);
-  const [savedSeasonLabel, setSavedSeasonLabel] = useState<string | null>(null);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const [visionPolling, setVisionPolling] = useState(false);
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
@@ -113,12 +121,6 @@ export default function ConfirmScreen() {
   const visionDraftId = draft?.id ?? null;
   const visionFirstPhotoUri = draft?.photos[0]?.uri ?? null;
   const visionFirstPhotoRole = draft?.photos[0]?.role ?? "front";
-
-  useEffect(() => {
-    if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
-      router.replace("/(tabs)/add");
-    }
-  }, [router, sessionId, state, isSessionResolved]);
 
   useEffect(() => {
     if (!accessToken || !draft?.clubId) {
@@ -198,7 +200,7 @@ export default function ConfirmScreen() {
 
   const applyVisionSuggestions = useCallback(
     async (job: VisionJobResponse, preselect: boolean) => {
-      if (job.status !== "ready" || !job.suggestions || !sessionId) {
+      if (job.status !== "ready" || !job.suggestions) {
         return;
       }
 
@@ -238,7 +240,7 @@ export default function ConfirmScreen() {
         fadeInSuggestion();
       }
     },
-    [accessToken, fadeInSuggestion, mutate, sessionId],
+    [accessToken, fadeInSuggestion, mutate],
   );
 
   const maybeStartVision = useCallback(
@@ -257,7 +259,7 @@ export default function ConfirmScreen() {
         setVisionJobId(jobId);
         setVisionPolling(true);
       } catch {
-        // Vision is optional — confirm screen must not block.
+        // Vision is optional — Save must not wait.
       }
     },
     [accessToken, visionJobId],
@@ -291,7 +293,7 @@ export default function ConfirmScreen() {
           setVisionPolling(true);
         }
       } catch {
-        // Vision is optional — confirm screen must not block.
+        // Vision is optional — Save must not wait.
       }
     })();
 
@@ -512,24 +514,17 @@ export default function ConfirmScreen() {
       return;
     }
 
+    if (shouldGateFirstSessionSave({ jerseysSavedInSession })) {
+      const granted = await requestPremiumAccess();
+      if (!granted) {
+        return;
+      }
+    }
+
     setSaving(true);
     setSaveError(false);
 
     try {
-      if (editJerseyId) {
-        await updateUserJersey(accessToken, editJerseyId, {
-          clubId: draft.clubId,
-          seasonId: draft.seasonId,
-          catalogKitId: null,
-          type: draft.kitType,
-          size: draft.size,
-          condition: draft.condition,
-        });
-        clearPersistedCaptureSession(sessionId);
-        router.replace(`/(tabs)/collection/${editJerseyId}`);
-        return;
-      }
-
       const photoPayload = await Promise.all(
         draft.photos
           .filter((photo): photo is typeof photo & { role: PhotoRole } => photo.role !== null)
@@ -588,28 +583,23 @@ export default function ConfirmScreen() {
           return next;
         });
 
-        if (!nextState || nextState.drafts.length === 0) {
-          clearPersistedCaptureSession(sessionId);
-          setSavedClub(draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null);
-          setSavedSeasonLabel(selectedSeasonLabel);
-          setPostSaveOpen(true);
+        if (nextState && nextState.drafts.length > 0) {
+          onJerseySavedInDump?.();
+          return;
         }
-      } else {
+
         clearPersistedCaptureSession(sessionId);
-        setSavedClub(draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null);
-        setSavedSeasonLabel(selectedSeasonLabel);
-        setPostSaveOpen(true);
+        onSaved();
+        return;
       }
+
+      clearPersistedCaptureSession(sessionId);
+      onSaved();
     } catch {
       setSaveError(true);
     } finally {
       setSaving(false);
     }
-  };
-
-  const handlePostSaveDismiss = () => {
-    setPostSaveOpen(false);
-    router.replace("/(tabs)/collection");
   };
 
   if (!sessionId || !draft) {
@@ -630,16 +620,15 @@ export default function ConfirmScreen() {
       : null;
   const dockHelper = saveBlockMessage ?? getSaveBlockMessage(draft);
   const saveEnabled = canSave(draft);
-  const saveLabel = editJerseyId
-    ? "Gem"
-    : isBulk && state.drafts.length > 1
-      ? "Gem og næste"
-      : "Gem";
+  const saveLabel =
+    isBulk && state.drafts.length > 1 ? JERSEY_DETAILS_SAVE_AND_NEXT : JERSEY_DETAILS_PRIMARY_SAVE;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <Text style={[typography.title, { color: theme.contentPrimary }]}>Bekræft og gem</Text>
+        <Text style={[typography.title, { color: theme.contentPrimary }]}>
+          {JERSEY_DETAILS_TITLE}
+        </Text>
         <Text style={[typography.body, { color: theme.contentMuted }]}>
           Vælg klub, sæson og detaljer.
         </Text>
@@ -946,13 +935,6 @@ export default function ConfirmScreen() {
           ]}
         />
       </Sheet>
-
-      <PostSaveSheet
-        visible={postSaveOpen}
-        savedClub={savedClub}
-        savedSeasonLabel={savedSeasonLabel}
-        onDismiss={handlePostSaveDismiss}
-      />
     </View>
   );
 }

@@ -8,6 +8,7 @@ import {
   photoUriForRole,
 } from "../src/capture/captureSession";
 import { replacePersistedCapturePhotos } from "../src/capture/captureSessionPersistence";
+import { shouldGateFirstSessionSave } from "../src/first-session/first-session-entitlement";
 import { createFirstSession, reduceFirstSession } from "../src/first-session/session";
 
 describe("First session launch", () => {
@@ -305,7 +306,7 @@ describe("First session add to door flow", () => {
     expect(back.captureSessionId).toBe("capture-session-1");
   });
 
-  it("identity submit keeps draft and capture session without opening confirm", () => {
+  it("login with draft opens jersey-details and keeps the capture session", () => {
     const door = reduceFirstSession(
       reduceFirstSession(createFirstSession({ signedIn: false }), {
         type: "photosPicked",
@@ -319,13 +320,15 @@ describe("First session add to door flow", () => {
       kind: "login",
     });
 
-    expect(afterLogin.place).toBe("collection");
+    expect(afterLogin.place).toBe("jersey-details");
     expect(afterLogin.hasDraft).toBe(true);
     expect(afterLogin.captureSessionId).toBe("capture-session-1");
-    expect(afterLogin.place).not.toBe("confirm");
+    expect(afterLogin.showsTabBar).toBe(false);
+    expect(afterLogin.skippedProfile).toBe(false);
+    expect(afterLogin.place).not.toBe("collection");
+    expect(afterLogin.place).not.toBe("profile");
 
     const host = readFileSync(join(__dirname, "../app/(first-session)/index.tsx"), "utf8");
-    expect(host).not.toContain("/(tabs)/add/confirm");
     expect(host).not.toContain("requestPremiumAccess");
   });
 
@@ -407,5 +410,104 @@ describe("First session add to door flow", () => {
     expect(vision).toContain("/v1/collection/vision/suggest/unsigned");
     expect(vision).toContain("/v1/collection/vision/jobs/");
     expect(vision).toContain("/unsigned");
+  });
+});
+
+describe("First session jersey details and first Save", () => {
+  function sessionAtProfileWithDraft() {
+    const door = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "photosPicked",
+        sessionId: "capture-session-1",
+      }),
+      { type: "visionComplete" },
+    );
+    const afterRegister = reduceFirstSession(door, {
+      type: "submitIdentity",
+      method: "social",
+      kind: "register",
+    });
+    expect(afterRegister.place).toBe("profile");
+    expect(afterRegister.hasDraft).toBe(true);
+    return afterRegister;
+  }
+
+  it("continueProfile with draft opens jersey-details with tab bar hidden", () => {
+    const details = reduceFirstSession(sessionAtProfileWithDraft(), { type: "continueProfile" });
+
+    expect(details.place).toBe("jersey-details");
+    expect(details.hasDraft).toBe(true);
+    expect(details.captureSessionId).toBe("capture-session-1");
+    expect(details.showsTabBar).toBe(false);
+    expect(details.skippedJerseyDetails).toBe(false);
+    expect(details.place).not.toBe("collection");
+  });
+
+  it("saveJersey from jersey-details lands on result Collection with tab bar and one save counted", () => {
+    const details = reduceFirstSession(sessionAtProfileWithDraft(), { type: "continueProfile" });
+    const result = reduceFirstSession(details, { type: "saveJersey" });
+
+    expect(result.place).toBe("collection");
+    expect(result.showsTabBar).toBe(true);
+    expect(result.hasDraft).toBe(false);
+    expect(result.jerseysSavedInSession).toBe(1);
+    expect(result.resultCollection).toBe(true);
+  });
+
+  it("first Save is not entitlement-gated; a second save in the dump is", () => {
+    expect(shouldGateFirstSessionSave({ jerseysSavedInSession: 0 })).toBe(false);
+    expect(shouldGateFirstSessionSave({ jerseysSavedInSession: 1 })).toBe(true);
+  });
+
+  it("host wires jersey-details Confirm body and result Collection caption without Gem senere", () => {
+    const host = readFileSync(join(__dirname, "../app/(first-session)/index.tsx"), "utf8");
+    const details = readFileSync(
+      join(__dirname, "../src/first-session/jersey-details-screen.tsx"),
+      "utf8",
+    );
+    const copy = readFileSync(
+      join(__dirname, "../src/first-session/jersey-details-copy.ts"),
+      "utf8",
+    );
+    const collection = readFileSync(join(__dirname, "../app/(tabs)/collection/index.tsx"), "utf8");
+    const collectionHeader = readFileSync(
+      join(__dirname, "../src/components/collection-header.tsx"),
+      "utf8",
+    );
+
+    expect(host).toContain("JerseyDetailsScreen");
+    expect(host).toContain('place === "jersey-details"');
+    expect(host).toContain("saveJersey");
+    expect(details).toContain("JERSEY_DETAILS_TITLE");
+    expect(details).toContain("JERSEY_DETAILS_PRIMARY_SAVE");
+    expect(copy).toContain("Trøjens detaljer");
+    expect(copy).toMatch(/JERSEY_DETAILS_PRIMARY_SAVE = "Gem"/);
+    expect(copy).not.toContain("Gem i samlingen");
+    expect(details).toContain("saveUserJersey");
+    expect(details).toContain("canSave");
+    expect(details).toContain("shouldGateFirstSessionSave");
+    expect(details).toContain("requestPremiumAccess");
+    expect(`${details}\n${copy}`).not.toContain("Gem senere");
+    expect(details).not.toContain("Analyserer foto");
+    expect(details).toContain("visionSkeleton");
+    expect(copy).toContain("RESULT_COLLECTION_BUD_CAPTION");
+    expect(collection).toContain("RESULT_COLLECTION_BUD_CAPTION");
+    expect(collectionHeader).not.toContain("lockup");
+    expect(collectionHeader).not.toContain("kitcollective-lockup");
+  });
+
+  it("after result Collection, plus is not first-session chrome", () => {
+    const result = reduceFirstSession(
+      reduceFirstSession(sessionAtProfileWithDraft(), { type: "continueProfile" }),
+      { type: "saveJersey" },
+    );
+    expect(result.place).toBe("collection");
+    expect(result.resultCollection).toBe(true);
+
+    const tabBar = readFileSync(join(__dirname, "../src/components/floating-tab-bar.tsx"), "utf8");
+    expect(tabBar).toContain("requestPremiumAccess");
+    expect(tabBar).toContain('router.push("/(tabs)/add")');
+    expect(tabBar).not.toContain("first-session");
+    expect(tabBar).not.toContain("Læser trøjen");
   });
 });

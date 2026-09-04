@@ -6,6 +6,7 @@ import { FirstSessionAnalysingScreen } from "@/first-session/analysing-screen";
 import { FirstSessionChooserScreen } from "@/first-session/chooser-screen";
 import { DiscoveryShowcaseScreen } from "@/first-session/discovery-showcase";
 import { type DoorEmailStep, DoorSheet, VerifyEmailBeat } from "@/first-session/door";
+import { JerseyDetailsScreen } from "@/first-session/jersey-details-screen";
 import { ProfileOnboardingScreen } from "@/first-session/profile-onboarding";
 import { createFirstSession, reduceFirstSession } from "@/first-session/session";
 import { SplashView } from "@/first-session/splash";
@@ -36,7 +37,30 @@ export default function FirstSessionHost() {
   }
 
   if (session.place === "collection" || session.place === "tab-shell") {
-    return <Redirect href="/(tabs)/collection" />;
+    return (
+      <Redirect
+        href={
+          session.resultCollection
+            ? "/(tabs)/collection?firstSessionResult=1"
+            : "/(tabs)/collection"
+        }
+      />
+    );
+  }
+
+  if (session.place === "jersey-details" && session.captureSessionId) {
+    return (
+      <JerseyDetailsScreen
+        captureSessionId={session.captureSessionId}
+        jerseysSavedInSession={session.jerseysSavedInSession}
+        onJerseySavedInDump={() => {
+          dispatch({ type: "recordDumpSave" });
+        }}
+        onSaved={() => {
+          dispatch({ type: "saveJersey" });
+        }}
+      />
+    );
   }
 
   if (session.place === "profile") {
