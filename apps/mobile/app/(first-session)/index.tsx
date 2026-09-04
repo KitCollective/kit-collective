@@ -40,7 +40,9 @@ export default function FirstSessionHost() {
     return (
       <Redirect
         href={
-          session.resultSamling ? "/(tabs)/collection?firstSessionResult=1" : "/(tabs)/collection"
+          session.resultCollection
+            ? "/(tabs)/collection?firstSessionResult=1"
+            : "/(tabs)/collection"
         }
       />
     );

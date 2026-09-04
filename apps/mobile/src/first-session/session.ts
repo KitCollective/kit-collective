@@ -32,7 +32,7 @@ export type FirstSessionState = {
   skippedProfile: boolean;
   skippedJerseyDetails: boolean;
   jerseysSavedInSession: number;
-  resultSamling: boolean;
+  resultCollection: boolean;
 };
 
 export type FirstSessionEvent =
@@ -74,7 +74,7 @@ export function createFirstSession(input: {
     skippedProfile: false,
     skippedJerseyDetails: false,
     jerseysSavedInSession: 0,
-    resultSamling: false,
+    resultCollection: false,
   };
 }
 
@@ -251,7 +251,7 @@ export function reduceFirstSession(
         showsTabBar: true,
         hasDraft: false,
         jerseysSavedInSession: state.jerseysSavedInSession + 1,
-        resultSamling: true,
+        resultCollection: true,
       };
     default: {
       const _exhaustive: never = event;

@@ -443,7 +443,7 @@ describe("First session jersey details and first Save", () => {
     expect(details.place).not.toBe("collection");
   });
 
-  it("saveJersey from jersey-details lands on result Samling with tab bar and one save counted", () => {
+  it("saveJersey from jersey-details lands on result Collection with tab bar and one save counted", () => {
     const details = reduceFirstSession(sessionAtProfileWithDraft(), { type: "continueProfile" });
     const result = reduceFirstSession(details, { type: "saveJersey" });
 
@@ -451,8 +451,7 @@ describe("First session jersey details and first Save", () => {
     expect(result.showsTabBar).toBe(true);
     expect(result.hasDraft).toBe(false);
     expect(result.jerseysSavedInSession).toBe(1);
-    expect(result.resultSamling).toBe(true);
-    expect(result.showsTabBar).toBe(true);
+    expect(result.resultCollection).toBe(true);
   });
 
   it("first Save is not entitlement-gated; a second save in the dump is", () => {
@@ -460,7 +459,7 @@ describe("First session jersey details and first Save", () => {
     expect(shouldGateFirstSessionSave({ jerseysSavedInSession: 1 })).toBe(true);
   });
 
-  it("host wires jersey-details Confirm body and result Samling caption without Gem senere", () => {
+  it("host wires jersey-details Confirm body and result Collection caption without Gem senere", () => {
     const host = readFileSync(join(__dirname, "../app/(first-session)/index.tsx"), "utf8");
     const details = readFileSync(
       join(__dirname, "../src/first-session/jersey-details-screen.tsx"),
@@ -488,19 +487,21 @@ describe("First session jersey details and first Save", () => {
     expect(details).toContain("shouldGateFirstSessionSave");
     expect(details).toContain("requestPremiumAccess");
     expect(`${details}\n${copy}`).not.toContain("Gem senere");
-    expect(copy).toContain("RESULT_SAMLING_BUD_CAPTION");
-    expect(collection).toContain("RESULT_SAMLING_BUD_CAPTION");
+    expect(details).not.toContain("Analyserer foto");
+    expect(details).toContain("visionSkeleton");
+    expect(copy).toContain("RESULT_COLLECTION_BUD_CAPTION");
+    expect(collection).toContain("RESULT_COLLECTION_BUD_CAPTION");
     expect(collectionHeader).not.toContain("lockup");
     expect(collectionHeader).not.toContain("kitcollective-lockup");
   });
 
-  it("after result Samling, plus is not first-session chrome", () => {
+  it("after result Collection, plus is not first-session chrome", () => {
     const result = reduceFirstSession(
       reduceFirstSession(sessionAtProfileWithDraft(), { type: "continueProfile" }),
       { type: "saveJersey" },
     );
     expect(result.place).toBe("collection");
-    expect(result.resultSamling).toBe(true);
+    expect(result.resultCollection).toBe(true);
 
     const tabBar = readFileSync(join(__dirname, "../src/components/floating-tab-bar.tsx"), "utf8");
     expect(tabBar).toContain("requestPremiumAccess");

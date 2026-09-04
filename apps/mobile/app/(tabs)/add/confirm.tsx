@@ -677,7 +677,15 @@ export default function ConfirmScreen() {
         </View>
 
         {visionPolling ? (
-          <Text style={[typography.caption, { color: theme.contentMuted }]}>Analyserer foto…</Text>
+          <View
+            accessibilityLabel="Forslag indlæses"
+            style={[styles.visionSkeleton, { backgroundColor: theme.surface }]}
+          >
+            <View style={[styles.visionSkeletonBar, { backgroundColor: theme.fillSecondary }]} />
+            <View
+              style={[styles.visionSkeletonBarShort, { backgroundColor: theme.fillSecondary }]}
+            />
+          </View>
         ) : null}
 
         {activeBanner === "visionSuggestion" && visionSuggestion?.suggestions ? (
@@ -976,6 +984,20 @@ const styles = StyleSheet.create({
   visionActions: {
     flexDirection: "row",
     gap: space.gapSm,
+  },
+  visionSkeleton: {
+    gap: space.gapSm,
+    paddingVertical: space.insetSm,
+  },
+  visionSkeletonBar: {
+    height: 12,
+    width: "72%",
+    borderRadius: radius.sm,
+  },
+  visionSkeletonBarShort: {
+    height: 12,
+    width: "44%",
+    borderRadius: radius.sm,
   },
   detailsLink: {
     minHeight: 44,

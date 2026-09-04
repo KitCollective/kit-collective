@@ -7,8 +7,5 @@ export const JERSEY_DETAILS_PRIMARY_SAVE = "Gem i samlingen";
 /** When more than one unsaved jersey remains in the dump — same enablement as Confirm and Save. */
 export const JERSEY_DETAILS_SAVE_AND_NEXT = "Gem og næste";
 
-/**
- * One-line bud caption on result Samling after first Save.
- * Exact lock string not in docs/design-system.md yet — provisional Danish one-liner.
- */
-export const RESULT_SAMLING_BUD_CAPTION = "Bud kan lande i Indbakke i baggrunden.";
+/** One-line bud caption on result Collection after first Save. */
+export const RESULT_COLLECTION_BUD_CAPTION = "Bud kan lande i Indbakke i baggrunden.";

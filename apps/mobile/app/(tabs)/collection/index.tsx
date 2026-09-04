@@ -21,7 +21,7 @@ import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
 import { Button, ButtonDock, EmptyState } from "@/components/ui";
 import { WishlistSheet } from "@/components/wishlist-sheet";
-import { RESULT_SAMLING_BUD_CAPTION } from "@/first-session/jersey-details-copy";
+import { RESULT_COLLECTION_BUD_CAPTION } from "@/first-session/jersey-details-copy";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -29,7 +29,7 @@ import { useTheme } from "@/theme/use-theme";
 export default function CollectionScreen() {
   const router = useRouter();
   const { firstSessionResult } = useLocalSearchParams<{ firstSessionResult?: string }>();
-  const showResultSamlingCaption = firstSessionResult === "1";
+  const showResultCollectionCaption = firstSessionResult === "1";
   const { accessToken, requestPremiumAccess } = useAuth();
   const { width } = useWindowDimensions();
   const theme = useTheme();
@@ -162,9 +162,9 @@ export default function CollectionScreen() {
     return (
       <View style={[styles.emptyContainer, { backgroundColor: theme.canvas }]}>
         <CollectionHeader count={0} onWishlistPress={() => void openWishlist()} />
-        {showResultSamlingCaption ? (
+        {showResultCollectionCaption ? (
           <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
-            {RESULT_SAMLING_BUD_CAPTION}
+            {RESULT_COLLECTION_BUD_CAPTION}
           </Text>
         ) : null}
         <EmptyState title="Ingen trøjer endnu" body="Tilføj den første fra galleriet." />
@@ -188,9 +188,9 @@ export default function CollectionScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <CollectionHeader count={totalJerseyCount} onWishlistPress={() => void openWishlist()} />
-      {showResultSamlingCaption ? (
+      {showResultCollectionCaption ? (
         <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
-          {RESULT_SAMLING_BUD_CAPTION}
+          {RESULT_COLLECTION_BUD_CAPTION}
         </Text>
       ) : null}
       <ShortcutChipRow

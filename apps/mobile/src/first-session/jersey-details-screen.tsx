@@ -73,7 +73,7 @@ const VISION_TIMEOUT_MS = 12_000;
 type JerseyDetailsScreenProps = {
   captureSessionId: string;
   jerseysSavedInSession: number;
-  /** Called when the last/only jersey is saved and host should enter result Samling. */
+  /** Called when the last/only jersey is saved and host should enter result Collection. */
   onSaved: () => void;
   /** Mid-bulk: a jersey was saved; stay on details and bump session save count. */
   onJerseySavedInDump?: () => void;
@@ -200,7 +200,7 @@ export function JerseyDetailsScreen({
 
   const applyVisionSuggestions = useCallback(
     async (job: VisionJobResponse, preselect: boolean) => {
-      if (job.status !== "ready" || !job.suggestions || !sessionId) {
+      if (job.status !== "ready" || !job.suggestions) {
         return;
       }
 
@@ -240,7 +240,7 @@ export function JerseyDetailsScreen({
         fadeInSuggestion();
       }
     },
-    [accessToken, fadeInSuggestion, mutate, sessionId],
+    [accessToken, fadeInSuggestion, mutate],
   );
 
   const maybeStartVision = useCallback(
@@ -259,7 +259,7 @@ export function JerseyDetailsScreen({
         setVisionJobId(jobId);
         setVisionPolling(true);
       } catch {
-        // Vision is optional — confirm screen must not block.
+        // Vision is optional — Save must not wait.
       }
     },
     [accessToken, visionJobId],
@@ -293,7 +293,7 @@ export function JerseyDetailsScreen({
           setVisionPolling(true);
         }
       } catch {
-        // Vision is optional — confirm screen must not block.
+        // Vision is optional — Save must not wait.
       }
     })();
 
@@ -666,7 +666,15 @@ export function JerseyDetailsScreen({
         </View>
 
         {visionPolling ? (
-          <Text style={[typography.caption, { color: theme.contentMuted }]}>Analyserer foto…</Text>
+          <View
+            accessibilityLabel="Forslag indlæses"
+            style={[styles.visionSkeleton, { backgroundColor: theme.surface }]}
+          >
+            <View style={[styles.visionSkeletonBar, { backgroundColor: theme.fillSecondary }]} />
+            <View
+              style={[styles.visionSkeletonBarShort, { backgroundColor: theme.fillSecondary }]}
+            />
+          </View>
         ) : null}
 
         {activeBanner === "visionSuggestion" && visionSuggestion?.suggestions ? (
@@ -958,6 +966,20 @@ const styles = StyleSheet.create({
   visionActions: {
     flexDirection: "row",
     gap: space.gapSm,
+  },
+  visionSkeleton: {
+    gap: space.gapSm,
+    paddingVertical: space.insetSm,
+  },
+  visionSkeletonBar: {
+    height: 12,
+    width: "72%",
+    borderRadius: radius.sm,
+  },
+  visionSkeletonBarShort: {
+    height: 12,
+    width: "44%",
+    borderRadius: radius.sm,
   },
   detailsLink: {
     minHeight: 44,
