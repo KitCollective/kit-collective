@@ -151,7 +151,7 @@ describe("createFkApiFetchAdapter", () => {
     );
   });
 
-  it("requests nationalTeamFkApiId and season for national-team scope", async () => {
+  it("requests resolved nationalTeamFkApiId and season for national-team fetch scope", async () => {
     const { fetchMock, createProxyAgent } = createProxyDoubles();
     fetchMock.mockResolvedValue({
       ok: true,

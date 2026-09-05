@@ -26,15 +26,34 @@ export type MapperOptions = {
 };
 
 export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> {
-  const rawKits = await options.fetchAdapter.fetchKits(options.scope);
-  if (rawKits.length === 0) {
-    return { kitsUpserted: 0, photosWritten: 0 };
-  }
-
   const pool = new Pool({ connectionString: options.databaseUrl });
 
   try {
-    await assertScopePrerequisites(pool, options.scope, rawKits);
+    let fetchScope = options.scope;
+    if (options.scope.kind === "national_team") {
+      const tmId = transfermarktIdForNationalTeamRef(options.scope.nationalTeamRef);
+      await assertNationalTeamSeasonPrerequisite(pool, tmId, options.scope.season);
+      const fkApiId = await findFkApiExternalIdForNationalTeam(pool, tmId);
+      if (!fkApiId) {
+        throw new Error(
+          `Missing fkapi external_id for NationalTeam Transfermarkt id ${tmId}. Seed FKA team ExternalId before FK fetch.`,
+        );
+      }
+      fetchScope = {
+        kind: "national_team",
+        nationalTeamRef: fkApiId,
+        season: options.scope.season,
+      };
+    }
+
+    const rawKits = await options.fetchAdapter.fetchKits(fetchScope);
+    if (rawKits.length === 0) {
+      return { kitsUpserted: 0, photosWritten: 0 };
+    }
+
+    if (options.scope.kind !== "national_team") {
+      await assertScopePrerequisites(pool, options.scope, rawKits);
+    }
 
     let kitsUpserted = 0;
     let photosWritten = 0;
@@ -259,6 +278,21 @@ async function findNationalTeamByTransfermarktId(
     [EXTERNAL_SYSTEM_TRANSFERMARKT, transfermarktId],
   );
   return result.rows[0] ? { entityId: result.rows[0].entity_id } : undefined;
+}
+
+async function findFkApiExternalIdForNationalTeam(
+  pool: Pool,
+  transfermarktId: string,
+): Promise<string | undefined> {
+  const result = await pool.query<{ value: string }>(
+    `SELECT ei_fk.value FROM external_id ei_tm
+     INNER JOIN external_id ei_fk ON ei_fk.entity_id = ei_tm.entity_id
+       AND ei_fk.entity_type = 'national_team' AND ei_fk.system = $1
+     WHERE ei_tm.entity_type = 'national_team' AND ei_tm.system = $2 AND ei_tm.value = $3
+     LIMIT 1`,
+    [EXTERNAL_SYSTEM_FKAPI, EXTERNAL_SYSTEM_TRANSFERMARKT, transfermarktId],
+  );
+  return result.rows[0]?.value;
 }
 
 async function findNationalTeamByFkApiId(

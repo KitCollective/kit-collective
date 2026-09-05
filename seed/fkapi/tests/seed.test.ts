@@ -1,9 +1,9 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { parseCliArgs } from "../src/cli-args.js";
-import { createFixtureFetchAdapter } from "../src/fetch.js";
+import { createFixtureFetchAdapter, createFkApiFetchAdapter } from "../src/fetch.js";
 import { runFkSeed } from "../src/mapper.js";
 import { normalizeRawKit } from "../src/normalize.js";
 import { runCli } from "../src/run.js";
@@ -517,6 +517,36 @@ describe("FK seed mapper", () => {
       expect(photo.visibility).toBe("admin_only");
     }
     expect(objectStore.objects.size).toBe(3);
+  });
+
+  it("resolves Transfermarkt nationalTeamRef to fkapi external_id before live fetch", async () => {
+    const scope = allocateNationalTeamTestFixtureScope();
+    await seedNationalTeamPrerequisites(pool, scope);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: fetchMock,
+    });
+
+    const result = await runFkSeed({
+      databaseUrl: DATABASE_URL,
+      fetchAdapter: adapter,
+      objectStore: createMemoryObjectStore(),
+      scope: {
+        kind: "national_team",
+        nationalTeamRef: scope.nationalTeamTransfermarktId,
+        season: scope.seasonLabel,
+      },
+    });
+
+    expect(result).toEqual({ kitsUpserted: 0, photosWritten: 0 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://fkapi.example.invalid/kits?nationalTeamFkApiId=${encodeURIComponent(scope.nationalTeamFkApiId)}&season=${encodeURIComponent(scope.seasonLabel)}`,
+      expect.any(Object),
+    );
   });
 
   it("does not call Football Kit Archive when using injected fetch adapter", async () => {
