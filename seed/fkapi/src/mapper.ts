@@ -111,7 +111,12 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
       });
       kitsUpserted += 1;
 
-      photosWritten += await writeArchivePhoto(options.objectStore, pool, kitId, rawKit);
+      photosWritten += await writeArchivePhoto(
+        options.objectStore,
+        pool,
+        kitId,
+        rawKit.imageBytes,
+      );
     }
 
     return { kitsUpserted, photosWritten };
@@ -124,14 +129,10 @@ async function writeArchivePhoto(
   objectStore: ObjectStoreAdapter,
   pool: Pool,
   kitId: string,
-  rawKit: FkRawKit,
+  imageBytes: Uint8Array,
 ): Promise<number> {
-  if (!rawKit.imageBytes || rawKit.imageBytes.length === 0) {
-    return 0;
-  }
-
   const objectKey = `kit/${kitId}/archive.jpg`;
-  await objectStore.putObject(objectKey, rawKit.imageBytes);
+  await objectStore.putObject(objectKey, imageBytes);
   const exists = await objectStore.objectExists(objectKey);
   if (!exists) {
     throw new Error(
@@ -142,7 +143,9 @@ async function writeArchivePhoto(
   return wrote ? 1 : 0;
 }
 
-function assertKitHasArchiveBytes(rawKit: FkRawKit): void {
+function assertKitHasArchiveBytes(
+  rawKit: FkRawKit,
+): asserts rawKit is FkRawKit & { imageBytes: Uint8Array } {
   if (!rawKit.imageBytes || rawKit.imageBytes.length === 0) {
     throw new Error(
       `Kit ${rawKit.id} has no archive image bytes. Refusing accept without lane R2 object for this kit.`,
@@ -150,16 +153,13 @@ function assertKitHasArchiveBytes(rawKit: FkRawKit): void {
   }
 }
 
-function transfermarktIdForNationalTeamRef(ref: string): string {
-  return resolveNationalTeam(ref)?.transfermarktId ?? ref.trim();
-}
-
 async function resolveOrLinkNationalTeamFkApiId(
   pool: Pool,
   nationalTeamRef: string,
   seasonLabel: string,
 ): Promise<string> {
-  const tmId = transfermarktIdForNationalTeamRef(nationalTeamRef);
+  const catalog = resolveNationalTeam(nationalTeamRef);
+  const tmId = catalog?.transfermarktId ?? nationalTeamRef.trim();
   const { entityId: nationalTeamId } = await assertNationalTeamSeasonPrerequisite(
     pool,
     tmId,
@@ -171,7 +171,6 @@ async function resolveOrLinkNationalTeamFkApiId(
     return linked;
   }
 
-  const catalog = resolveNationalTeam(nationalTeamRef);
   if (!catalog?.fkApiTeamId) {
     throw new Error(
       `No FKA team id in catalog for NationalTeam ${nationalTeamRef}. Cannot fetch FK kits.`,

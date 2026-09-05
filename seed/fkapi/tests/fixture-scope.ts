@@ -86,10 +86,6 @@ export async function seedApifyPrerequisites(
   return { clubId, seasonId };
 }
 
-/**
- * Seeds NationalTeam + Season (national_team_season) and links TM external_id.
- * When fkApiTeamId is set, also links fkapi national_team ExternalId.
- */
 async function insertNationalTeamSeasonPrerequisites(
   pool: Pool,
   input: { transfermarktId: string; seasonLabel: string; fkApiTeamId?: string },
