@@ -82,7 +82,7 @@ jobs:
             sleep 2
           done
           curl -fsS http://127.0.0.1:13000/v1/health | grep -q '"database":"ok"'
-          curl -fsS http://127.0.0.1:13000/v1/catalog/stats | grep -q '"countries":0'
+          curl -fsS http://127.0.0.1:13000/v1/catalog/stats | grep -qE '"countries":[1-9]'
           docker stop postgres kit-deploy-api
           docker rm postgres kit-deploy-api
           docker network rm kit-deploy-test

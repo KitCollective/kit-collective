@@ -10,13 +10,15 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { CaptureChooserProvider } from "@/capture/capture-chooser";
+import { LoadingScreen } from "@/first-session/splash-loading";
 import { AppearanceProvider } from "@/theme/appearance";
 import { BrandFontsProvider } from "@/theme/brand-fonts";
-import { useTheme } from "@/theme/use-theme";
+
+export { LoadingScreen };
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -65,23 +67,8 @@ export default function RootLayout() {
   );
 }
 
-export function LoadingScreen() {
-  const theme = useTheme();
-
-  return (
-    <View style={[styles.loading, { backgroundColor: theme.canvas }]}>
-      <ActivityIndicator color={theme.fillPrimary} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  loading: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
 });

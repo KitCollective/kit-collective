@@ -162,6 +162,13 @@
       "when": 1788370000000,
       "tag": "0022_club_rich_grain",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788380000000,
+      "tag": "0023_european_country_iso_codes",
+      "breakpoints": true
     }
   ]
 }

@@ -12,7 +12,7 @@ import {
   season,
   teamSeason,
 } from "@kit/db";
-import type { CatalogEntityType, LabelLocale } from "@kit/domain";
+import { type CatalogEntityType, countryCodesForIso3166, type LabelLocale } from "@kit/domain";
 import { and, eq } from "drizzle-orm";
 import { assertFactsSeasonScope } from "../scope-isolation.js";
 import type {
@@ -133,7 +133,11 @@ async function upsertCountry(
     return { id: byIso[0].id, created: false, labels: labelChanged ? 1 : 0, externalIds: 1 };
   }
 
-  const [row] = await db.insert(country).values({ iso3166: iso }).returning({ id: country.id });
+  const [row] = await db
+    .insert(country)
+    .values({ iso3166: iso, ...countryCodesForIso3166(iso) })
+    .returning({ id: country.id });
+  // SAFETY: insert … returning always yields the created country row.
   const id = row!.id;
   await linkExternalId(db, "country", id, externalValue);
   await upsertCatalogLabel(db, "country", id, "en", name);

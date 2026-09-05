@@ -29,4 +29,10 @@ describe("popularCitiesForCountryLabel", () => {
   it("returns Danish popular cities for Danmark", () => {
     expect(popularCitiesForCountryLabel("Danmark")).toContain("København");
   });
+
+  it("returns UK popular cities for Storbritannien, UK, and England", () => {
+    expect(popularCitiesForCountryLabel("Storbritannien")).toContain("London");
+    expect(popularCitiesForCountryLabel("UK")).toContain("London");
+    expect(popularCitiesForCountryLabel("England")).toContain("London");
+  });
 });

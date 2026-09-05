@@ -176,6 +176,20 @@ describe("stamdata schema", () => {
     );
   });
 
+  it("adds ISO and football codes on country", async () => {
+    const columns = await columnNames(pool, "country");
+    expect(columns).toEqual(
+      expect.arrayContaining([
+        "iso3166",
+        "iso3166_alpha3",
+        "iso3166_numeric",
+        "iso3166_reserved",
+        "fifa",
+        "ioc",
+      ]),
+    );
+  });
+
   it("adds player body columns", async () => {
     const columns = await columnNames(pool, "player");
     expect(columns).toEqual(
