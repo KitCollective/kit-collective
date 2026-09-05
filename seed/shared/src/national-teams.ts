@@ -3,6 +3,8 @@ export type NationalTeamGender = "men" | "women";
 export type NationalTeamDefinition = {
   /** Transfermarkt national side id (verein path). */
   transfermarktId: string;
+  /** Football Kit Archive team id / slug for FKApi `/kits?nationalTeamFkApiId=`. */
+  fkApiTeamId: string;
   gender: NationalTeamGender;
   slug?: string;
   name?: string;
@@ -21,6 +23,7 @@ export type NationalTeamIdentity = {
 
 const DENMARK_MEN: NationalTeamDefinition = {
   transfermarktId: "3436",
+  fkApiTeamId: "denmark-kits",
   gender: "men",
   slug: "daenemark",
   name: "Denmark",

@@ -37,6 +37,7 @@ export {
   type ClubSeedScope,
   type CompetitionSeedScope,
   formatSeedScopeUsage,
+  type NationalTeamSeedScope,
   type ParsedSeedScope,
   type ParseSeedScopeResult,
   parseSeedScopeArgv,

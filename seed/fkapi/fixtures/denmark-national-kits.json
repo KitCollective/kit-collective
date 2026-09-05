@@ -1,0 +1,37 @@
+{
+  "kits": [
+    {
+      "id": "fk-nt-9857",
+      "nationalTeamFkApiId": "fka-denmark",
+      "seasonTransfermarktId": "WC-2010",
+      "seasonLabel": "2010",
+      "type": "home",
+      "manufacturerName": "adidas",
+      "primaryColorHex": "C8102E",
+      "secondaryColorHex": "FFFFFF",
+      "imageBytes": [255, 216, 255, 221]
+    },
+    {
+      "id": "fk-nt-9858",
+      "nationalTeamFkApiId": "fka-denmark",
+      "seasonTransfermarktId": "WC-2010",
+      "seasonLabel": "2010",
+      "type": "away",
+      "manufacturerName": "adidas",
+      "primaryColorHex": "FFFFFF",
+      "secondaryColorHex": "C8102E",
+      "imageBytes": [255, 216, 255, 222]
+    },
+    {
+      "id": "fk-nt-60206",
+      "nationalTeamFkApiId": "fka-denmark",
+      "seasonTransfermarktId": "WC-2010",
+      "seasonLabel": "2010",
+      "type": "gk",
+      "manufacturerName": "adidas",
+      "primaryColorHex": "000000",
+      "secondaryColorHex": "FFD700",
+      "imageBytes": [255, 216, 255, 223]
+    }
+  ]
+}

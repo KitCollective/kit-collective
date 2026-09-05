@@ -2,6 +2,7 @@ import { type Db, playerClubSeason, season } from "@kit/db";
 import { resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import { eq, sql } from "drizzle-orm";
 import { labelToStartYear, startYearToLabel } from "./fetch/season-label.js";
+import { rejectNationalTeamApifyScope } from "./reject-national-team-scope.js";
 import { findLeagueEntityId } from "./seeded.js";
 
 export interface SeasonPcsSnapshot {
@@ -80,6 +81,9 @@ function enumerateSeasonLabels(
 export function resolveScopeSeasonLabels(scope: SeedScope): ReadonlySet<string> {
   if (scope.kind === "club") {
     return new Set([seasonRefToScopeLabel(resolveSeasonRef(scope.competition, scope.season))]);
+  }
+  if (scope.kind === "national_team") {
+    rejectNationalTeamApifyScope();
   }
   return new Set(enumerateSeasonLabels(scope.competition, scope.fromSeason, scope.toSeason));
 }

@@ -14,7 +14,13 @@ export type CompetitionSeedScope = {
   toSeason: string;
 };
 
-export type SeedScope = ClubSeedScope | CompetitionSeedScope;
+export type NationalTeamSeedScope = {
+  kind: "national_team";
+  nationalTeamRef: string;
+  season: string;
+};
+
+export type SeedScope = ClubSeedScope | CompetitionSeedScope | NationalTeamSeedScope;
 
 export type ParsedSeedScope = {
   scope: SeedScope;
@@ -38,6 +44,7 @@ function parseLaneArg(
 /**
  * Competition range: `<competition> <from-season> <to-season> [lane]`
  * Club + season: `club <competition> <club-external-id> <season> [lane]`
+ * NationalTeam + season: `national-team <ntRef> <season> [lane]`
  *
  * Hierarchy grains (`grain league` / `grain league-season`) are parsed by
  * `@kit/seed-apify` — they are not SeedScope walk modes.
@@ -80,11 +87,42 @@ export function parseSeedScopeArgv(argv: string[]): ParseSeedScopeResult {
     };
   }
 
+  if (cleaned[0] === "national-team" || cleaned[0] === "national_team") {
+    if (cleaned.length < 3 || cleaned.length > 4) {
+      return {
+        ok: false,
+        error: "Expected: national-team <ntRef> <season> [lane]",
+      };
+    }
+
+    const [, nationalTeamRef, season, laneInput] = cleaned;
+    if (!nationalTeamRef?.trim() || !season?.trim()) {
+      return { ok: false, error: "national-team scope requires national team ref and season" };
+    }
+
+    const laneParsed = parseLaneArg(laneInput);
+    if ("ok" in laneParsed) {
+      return laneParsed;
+    }
+
+    return {
+      ok: true,
+      parsed: {
+        scope: {
+          kind: "national_team",
+          nationalTeamRef: nationalTeamRef.trim(),
+          season: season.trim(),
+        },
+        lane: laneParsed.lane,
+      },
+    };
+  }
+
   if (cleaned.length < 3 || cleaned.length > 4) {
     return {
       ok: false,
       error:
-        "Expected: <competition> <from-season> <to-season> [lane] or club <competition> <club-id> <season> [lane]",
+        "Expected: <competition> <from-season> <to-season> [lane] or club <competition> <club-id> <season> [lane] or national-team <ntRef> <season> [lane]",
     };
   }
 
@@ -116,6 +154,7 @@ export function formatSeedScopeUsage(command: string): string {
   return [
     `Usage (competition range): ${command} <competition> <from-season> <to-season> [lane]`,
     `Usage (club + season):       ${command} club <competition> <club-external-id> <season> [lane]`,
+    `Usage (national-team + season): ${command} national-team <ntRef> <season> [lane]`,
     `Usage (League grain):        ${command} grain league <competition> [lane]`,
     `Usage (League season grain): ${command} grain league-season <competition> <season> [lane]`,
     "",

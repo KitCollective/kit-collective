@@ -114,9 +114,11 @@ catches it in the API tests and the container smoke test.
 
 `.cursor/rules/pre-review-gate.mdc` — implement must pass the mechanical gate (mergeable against the integration lane, full test graph, typecheck of packages whose tests you edited, all required GitHub checks including image/deploy smokes, boot-env class, matching helpers including the UI/layout helper when the issue cites the design lock, lock reads, AC/What-to-build evidence) before `In Review`. Checker must dump every hard finding in one fail (no drip-feed). A red CI job is not a Spec-clean license; pending checks are not a Standards-early-fail. Spec source is the whole issue body. Prevents repeating the KIT-23 five-round loop and the KIT-24 seven-round loop. Tighten only.
 
-### FK seed test isolation ratchet (KIT-22)
+### FK seed test isolation ratchet (KIT-22 / KIT-144)
 
-`scripts/check-seed-fkapi-test-isolation.mjs` (CI via `pnpm check:seed-fkapi-tests`) fails when `seed/fkapi/tests/**` hardcodes Transfermarkt `external_id` values in prerequisite INSERTs, defines a local `seedApifyPrerequisites`, or calls `seedApifyPrerequisites` without an allocated `TestFixtureScope` from `seed/fkapi/tests/fixture-scope.ts`. Prevents repeating the KIT-22 checker fail (order-dependent unique-constraint collisions when tests share one DB pool). Tighten only.
+`scripts/check-seed-fkapi-test-isolation.mjs` (CI via `pnpm check:seed-fkapi-tests`) fails when `seed/fkapi/tests/**` hardcodes Transfermarkt or `national_team` `external_id` values in prerequisite INSERTs, defines a local `seedApifyPrerequisites` / `seedNationalTeamPrerequisites`, calls `seedApifyPrerequisites` or `seedNationalTeamPrerequisites` without an allocated scope from `seed/fkapi/tests/fixture-scope.ts`, calls `createR2ObjectStore` (live lane R2), or drops NationalTeam hermetic fixtures (`denmark-national-kits.json` + `allocateNationalTeamTestFixtureScope` / `seedNationalTeamPrerequisites` / `createScopedNationalTeamFixtureFetchAdapter`). Prevents repeating the KIT-22 unique-constraint collisions and keeps live FKApi/R2 out of CI for NationalTeam kit grain tests (KIT-144). Tighten only.
+
+`scripts/check-seed-fkapi-test-database-isolation.mjs` (CI via `pnpm check:seed-fkapi-test-database-isolation`) fails when any `seed/fkapi/tests/**` file that calls `resetTestDatabase` reads `process.env.DATABASE_URL` for reset/pool/`runFkSeed` databaseUrl. Use `SEED_FKAPI_TEST_DATABASE_URL` via `resolveSeedFkapiTestDatabaseUrl()` and `TEST_DATABASE_URL` instead. Prevents repeating the KIT-34 / KIT-144 checker fail (shared dev Postgres wiped by FK seed tests). Tighten only.
 
 ### Push behind development ratchet (KIT-23)
 

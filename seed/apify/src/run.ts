@@ -6,6 +6,7 @@ import { mapFacts, mapNationalTeamFacts, type PortraitStore } from "./map/index.
 import { normalize } from "./normalize/index.js";
 import { type HierarchyGrain, type ParsedSeedCli, parseSeedApifyCli } from "./parse-cli.js";
 import { resolvePortraitStoreFromEnv } from "./portrait-store.js";
+import { rejectNationalTeamApifyScope } from "./reject-national-team-scope.js";
 import { filterFactsToClubSeason } from "./scope/club-season.js";
 import {
   assertOutOfScopeSeasonsUnchanged,
@@ -121,6 +122,10 @@ async function expandScope(
   if (scope.kind === "club") {
     const seasonLabel = resolveSeasonRef(scope.competition, scope.season);
     return [{ clubExternalId: scope.clubExternalId, seasonLabel }];
+  }
+
+  if (scope.kind === "national_team") {
+    rejectNationalTeamApifyScope();
   }
 
   return fetchAdapter.listClubSeasonPairs({
@@ -287,6 +292,10 @@ export async function runHierarchyGrain(
 }
 
 export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
+  if (options.scope.kind === "national_team") {
+    rejectNationalTeamApifyScope();
+  }
+
   const lane = parseLane(options.lane);
   const databaseUrl = options.databaseUrl ?? resolveDatabaseUrl(lane);
   const competition = options.scope.competition;

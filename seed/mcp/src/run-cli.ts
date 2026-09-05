@@ -114,6 +114,9 @@ function scopeToCliArgs(scope: SeedScope): string[] {
   if (scope.kind === "club") {
     return ["club", scope.competition, scope.clubExternalId, scope.season];
   }
+  if (scope.kind === "national_team") {
+    return ["national-team", scope.nationalTeamRef, scope.season];
+  }
   return [scope.competition, scope.fromSeason, scope.toSeason];
 }
 

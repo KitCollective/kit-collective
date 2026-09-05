@@ -18,12 +18,19 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
   }
 
   const id = asString(raw.id);
-  const clubTransfermarktId = asString(raw.clubTransfermarktId);
+  const clubTransfermarktId = asOptionalString(raw.clubTransfermarktId);
+  const nationalTeamFkApiId = asOptionalString(raw.nationalTeamFkApiId);
   const seasonTransfermarktId = asString(raw.seasonTransfermarktId);
   const seasonLabel = asString(raw.seasonLabel);
   const type = asKitType(raw.type);
 
-  if (!id || !clubTransfermarktId || !seasonTransfermarktId || !seasonLabel || !type) {
+  if (!id || !seasonTransfermarktId || !seasonLabel || !type) {
+    return null;
+  }
+
+  const hasClub = Boolean(clubTransfermarktId);
+  const hasNationalTeam = Boolean(nationalTeamFkApiId);
+  if (hasClub === hasNationalTeam) {
     return null;
   }
 
@@ -42,9 +49,8 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
     imageBytes = Uint8Array.from(raw.imageBytes as number[]);
   }
 
-  return {
+  const kit: FkRawKit = {
     id,
-    clubTransfermarktId,
     seasonTransfermarktId,
     seasonLabel,
     type,
@@ -55,6 +61,15 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
     secondaryColorHex,
     imageBytes,
   };
+
+  if (clubTransfermarktId) {
+    kit.clubTransfermarktId = clubTransfermarktId;
+  }
+  if (nationalTeamFkApiId) {
+    kit.nationalTeamFkApiId = nationalTeamFkApiId;
+  }
+
+  return kit;
 }
 
 function asString(value: unknown): string | undefined {
