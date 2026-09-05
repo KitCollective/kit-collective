@@ -41,9 +41,7 @@ describe("first-session visual host chrome", () => {
     expect(loading).toContain("SplashFrame");
     expect(loading).toContain("ActivityIndicator");
     expect(loading).toContain("alive={false}");
-    expect(
-      existsSync(join(__dirname, "../assets/brand/splash-prize-jersey.png")),
-    ).toBe(true);
+    expect(existsSync(join(__dirname, "../assets/brand/splash-prize-jersey.png"))).toBe(true);
     expect(backdrop).toContain("splash-prize-jersey.png");
     expect(backdrop).toContain("useReduceMotion");
     expect(backdrop).toContain("withRepeat");

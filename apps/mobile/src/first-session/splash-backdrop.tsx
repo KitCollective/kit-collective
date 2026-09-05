@@ -95,33 +95,47 @@ export function SplashBackdrop({ alive = true }: SplashBackdropProps) {
       pointerEvents="none"
       style={[styles.root, { width, height }]}
     >
-      <Animated.Image
-        source={jerseyPhoto}
-        resizeMode="cover"
-        style={[frame, photoStyle]}
-      />
+      <Animated.Image source={jerseyPhoto} resizeMode="cover" style={[frame, photoStyle]} />
       {motionOn ? (
         <Animated.View style={[styles.sheen, { width, height: sheenHeight }, sheenStyle]}>
           <View
-            style={[styles.sheenBand, { backgroundColor: withAlpha(color.contentInverse, SHEEN_EDGE_ALPHA) }]}
+            style={[
+              styles.sheenBand,
+              { backgroundColor: withAlpha(color.contentInverse, SHEEN_EDGE_ALPHA) },
+            ]}
           />
           <View
-            style={[styles.sheenBand, { backgroundColor: withAlpha(color.contentInverse, SHEEN_MID_ALPHA) }]}
+            style={[
+              styles.sheenBand,
+              { backgroundColor: withAlpha(color.contentInverse, SHEEN_MID_ALPHA) },
+            ]}
           />
           <View
-            style={[styles.sheenBand, { backgroundColor: withAlpha(color.contentInverse, SHEEN_ALPHA) }]}
+            style={[
+              styles.sheenBand,
+              { backgroundColor: withAlpha(color.contentInverse, SHEEN_ALPHA) },
+            ]}
           />
           <View
-            style={[styles.sheenBand, { backgroundColor: withAlpha(color.contentInverse, SHEEN_MID_ALPHA) }]}
+            style={[
+              styles.sheenBand,
+              { backgroundColor: withAlpha(color.contentInverse, SHEEN_MID_ALPHA) },
+            ]}
           />
           <View
-            style={[styles.sheenBand, { backgroundColor: withAlpha(color.contentInverse, SHEEN_EDGE_ALPHA) }]}
+            style={[
+              styles.sheenBand,
+              { backgroundColor: withAlpha(color.contentInverse, SHEEN_EDGE_ALPHA) },
+            ]}
           />
         </Animated.View>
       ) : null}
       <View style={[styles.layer, { backgroundColor: color.scrim }]} />
       <View
-        style={[styles.layer, { backgroundColor: withAlpha(color.fillPrimary, CENTRE_SCRIM_ALPHA) }]}
+        style={[
+          styles.layer,
+          { backgroundColor: withAlpha(color.fillPrimary, CENTRE_SCRIM_ALPHA) },
+        ]}
       />
     </View>
   );

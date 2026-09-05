@@ -123,6 +123,12 @@ export {
   OFFER_PRODUCT_IDS,
 } from "./billing.js";
 export {
+  countryCodesForIso3166,
+  EUROPEAN_COUNTRIES,
+  type EuropeanCountry,
+  europeanCountryByIso3166,
+} from "./countries.js";
+export {
   AUTH_EVENT_KINDS,
   type AuthEventKind,
   HANDLE_MAX_LENGTH,
@@ -139,12 +145,6 @@ export {
   popularCitiesForCountry,
   popularCitiesForCountryLabel,
 } from "./location.js";
-export {
-  countryCodesForIso3166,
-  EUROPEAN_COUNTRIES,
-  type EuropeanCountry,
-  europeanCountryByIso3166,
-} from "./countries.js";
 export {
   APPEARANCE_MODES,
   type AppearanceMode,

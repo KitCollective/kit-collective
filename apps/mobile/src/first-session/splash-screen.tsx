@@ -114,14 +114,7 @@ export function SplashScreen({ onOpenLogin, onOpenRegister, onContinue }: Splash
     return () => {
       clearTimeout(settle);
     };
-  }, [
-    captionOpacity,
-    dockOpacity,
-    dockY,
-    reduceMotion,
-    spinnerOpacity,
-    spinnerY,
-  ]);
+  }, [captionOpacity, dockOpacity, dockY, reduceMotion, spinnerOpacity, spinnerY]);
 
   const spinnerStyle = useAnimatedStyle(() => ({
     opacity: spinnerOpacity.get(),
