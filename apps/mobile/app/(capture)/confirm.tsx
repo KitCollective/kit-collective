@@ -22,6 +22,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey, updateUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/vision";
@@ -59,7 +60,7 @@ import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
-import { Button, ButtonDock } from "@/components/ui";
+import { Button, ButtonDock, BUTTON_DOCK_FADE_SCROLL_PADDING } from "@/components/ui";
 import { markJerseySaved } from "@/session/addSession";
 import { useTypography } from "@/theme/brand-fonts";
 import { motion, radius, space } from "@/theme/tokens";
@@ -74,6 +75,7 @@ export default function ConfirmScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
+  const insets = useSafeAreaInsets();
   const { sessionId, editJerseyId } = useLocalSearchParams<{
     sessionId: string;
     editJerseyId?: string;
@@ -636,10 +638,15 @@ export default function ConfirmScreen() {
     : isBulk && state.drafts.length > 1
       ? "Gem og næste"
       : "Gem";
+  const fadeDockScrollPadding =
+    BUTTON_DOCK_FADE_SCROLL_PADDING + Math.max(insets.bottom, space.insetMd);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: fadeDockScrollPadding }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={[typography.title, { color: theme.contentPrimary }]}>Bekræft og gem</Text>
         <Text style={[typography.body, { color: theme.contentMuted }]}>
           Vælg klub, sæson og detaljer.
@@ -829,7 +836,7 @@ export default function ConfirmScreen() {
         ) : null}
       </ScrollView>
 
-      <ButtonDock>
+      <ButtonDock variant="fade">
         {dockHelper ? (
           <Text style={[typography.caption, { color: theme.contentMuted }]}>{dockHelper}</Text>
         ) : null}
@@ -965,7 +972,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: space.insetLg,
     gap: space.gapLg,
-    paddingBottom: space.insetLg,
   },
   section: {
     gap: space.gapSm,
