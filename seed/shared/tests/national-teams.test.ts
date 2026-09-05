@@ -19,4 +19,8 @@ describe("national team catalog", () => {
       name: "Denmark",
     });
   });
+
+  it("includes FKA team id for FKApi fetch join", () => {
+    expect(resolveNationalTeam("3436")?.fkApiTeamId).toBe("denmark-kits");
+  });
 });

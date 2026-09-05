@@ -75,7 +75,9 @@ export function isPairInSeedScope(scope: SeedScope, seasonLabel: string): boolea
   }
 
   if (scope.kind === "national_team") {
-    return seasonLabel === scope.season.trim();
+    throw new Error(
+      "NationalTeam walk scope belongs to @kit/seed-fkapi; @kit/seed-apify only walks club/competition seasons",
+    );
   }
 
   return seasonLabelInCompetitionScope(scope, seasonLabel);

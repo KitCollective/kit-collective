@@ -82,7 +82,9 @@ export function resolveScopeSeasonLabels(scope: SeedScope): ReadonlySet<string> 
     return new Set([seasonRefToScopeLabel(resolveSeasonRef(scope.competition, scope.season))]);
   }
   if (scope.kind === "national_team") {
-    return new Set([scope.season.trim()]);
+    throw new Error(
+      "NationalTeam walk scope belongs to @kit/seed-fkapi; @kit/seed-apify only walks club/competition seasons",
+    );
   }
   return new Set(enumerateSeasonLabels(scope.competition, scope.fromSeason, scope.toSeason));
 }

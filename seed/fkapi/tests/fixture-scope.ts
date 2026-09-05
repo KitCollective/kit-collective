@@ -131,6 +131,52 @@ export async function seedNationalTeamPrerequisites(
   return { nationalTeamId, seasonId };
 }
 
+/** TM + Season only — no fkapi external_id. For catalog link tests (Denmark 3436). */
+export async function seedNationalTeamTransfermarktSeasonOnly(
+  pool: Pool,
+  input: { transfermarktId: string; seasonLabel: string },
+): Promise<{ nationalTeamId: string; seasonId: string }> {
+  const countryRow = await pool.query<{ id: string }>(
+    `INSERT INTO country (iso3166) VALUES ('DK') RETURNING id`,
+  );
+  const countryId = countryRow.rows[0]?.id;
+  if (!countryId) {
+    throw new Error("Failed to insert country for national team prerequisite");
+  }
+
+  const ntRow = await pool.query<{ id: string }>(
+    `INSERT INTO national_team (country_id, gender) VALUES ($1, 'men') RETURNING id`,
+    [countryId],
+  );
+  const nationalTeamId = ntRow.rows[0]?.id;
+  if (!nationalTeamId) {
+    throw new Error("Failed to insert national team prerequisite");
+  }
+
+  await pool.query(
+    `INSERT INTO external_id (entity_type, entity_id, system, value)
+     VALUES ('national_team', $1, $2, $3)`,
+    [nationalTeamId, EXTERNAL_SYSTEM_TRANSFERMARKT, input.transfermarktId],
+  );
+
+  const seasonRow = await pool.query<{ id: string }>(
+    `INSERT INTO season (label, starts_on, ends_on, calendar_kind)
+     VALUES ($1, '2010-01-01', '2010-12-31', 'calendar') RETURNING id`,
+    [input.seasonLabel],
+  );
+  const seasonId = seasonRow.rows[0]?.id;
+  if (!seasonId) {
+    throw new Error("Failed to insert season for national team prerequisite");
+  }
+
+  await pool.query(
+    `INSERT INTO national_team_season (national_team_id, season_id) VALUES ($1, $2)`,
+    [nationalTeamId, seasonId],
+  );
+
+  return { nationalTeamId, seasonId };
+}
+
 type FixtureFile = {
   kits: Record<string, unknown>[];
 };

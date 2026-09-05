@@ -31,14 +31,11 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
   try {
     let fetchScope = options.scope;
     if (options.scope.kind === "national_team") {
-      const tmId = transfermarktIdForNationalTeamRef(options.scope.nationalTeamRef);
-      await assertNationalTeamSeasonPrerequisite(pool, tmId, options.scope.season);
-      const fkApiId = await findFkApiExternalIdForNationalTeam(pool, tmId);
-      if (!fkApiId) {
-        throw new Error(
-          `Missing fkapi external_id for NationalTeam Transfermarkt id ${tmId}. Seed FKA team ExternalId before FK fetch.`,
-        );
-      }
+      const fkApiId = await resolveOrLinkNationalTeamFkApiId(
+        pool,
+        options.scope.nationalTeamRef,
+        options.scope.season,
+      );
       fetchScope = {
         kind: "national_team",
         nationalTeamRef: fkApiId,
@@ -61,61 +58,43 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
     for (const rawKit of rawKits) {
       assertKitHasArchiveBytes(rawKit);
 
+      let clubId: string | null = null;
+      let nationalTeamId: string | null = null;
+      let seasonId: string;
+
       if (isNationalTeamKit(rawKit)) {
-        const fkaTeamId = rawKit.nationalTeamFkApiId;
-        if (!fkaTeamId) {
-          throw new Error(`Kit ${rawKit.id} marked NationalTeam but missing nationalTeamFkApiId`);
-        }
-        const nationalTeamRow = await findNationalTeamByFkApiId(pool, fkaTeamId);
+        const nationalTeamRow = await findNationalTeamByFkApiId(
+          pool,
+          rawKit.nationalTeamFkApiId as string,
+        );
         const seasonRow = nationalTeamRow
           ? await findSeasonForNationalTeam(pool, nationalTeamRow.entityId, rawKit.seasonLabel)
           : undefined;
 
         if (!nationalTeamRow || !seasonRow) {
           throw new Error(
-            `Missing national team or season for scope: fkaTeam=${fkaTeamId} season=${rawKit.seasonLabel}`,
+            `Missing national team or season for scope: fkaTeam=${rawKit.nationalTeamFkApiId} season=${rawKit.seasonLabel}`,
           );
         }
 
-        const manufacturerId = rawKit.manufacturerName
-          ? await upsertManufacturer(pool, rawKit.manufacturerName)
-          : null;
+        nationalTeamId = nationalTeamRow.entityId;
+        seasonId = seasonRow.id;
+      } else if (isClubKit(rawKit)) {
+        const clubRow = await findClubByTransfermarktId(pool, rawKit.clubTransfermarktId as string);
+        const seasonRow = clubRow
+          ? await findSeasonForClub(pool, clubRow.entityId, rawKit.seasonLabel)
+          : undefined;
 
-        const kitId = await upsertKit(pool, {
-          fkId: rawKit.id,
-          clubId: null,
-          nationalTeamId: nationalTeamRow.entityId,
-          seasonId: seasonRow.id,
-          type: rawKit.type,
-          manufacturerId,
-          sponsorName: rawKit.sponsorName ?? null,
-          primaryColorHex: rawKit.primaryColorHex ?? null,
-          secondaryColorHex: rawKit.secondaryColorHex ?? null,
-        });
-        kitsUpserted += 1;
+        if (!clubRow || !seasonRow) {
+          throw new Error(
+            `Missing club or season for scope: club=${rawKit.clubTransfermarktId} season=${rawKit.seasonLabel}`,
+          );
+        }
 
-        photosWritten += await writeArchivePhoto(options.objectStore, pool, kitId, rawKit);
-        continue;
-      }
-
-      if (!isClubKit(rawKit)) {
+        clubId = clubRow.entityId;
+        seasonId = seasonRow.id;
+      } else {
         throw new Error(`Kit ${rawKit.id} is neither a club kit nor a NationalTeam kit`);
-      }
-
-      const clubTmId = rawKit.clubTransfermarktId;
-      if (!clubTmId) {
-        throw new Error(`Kit ${rawKit.id} marked club but missing clubTransfermarktId`);
-      }
-
-      const clubRow = await findClubByTransfermarktId(pool, clubTmId);
-      const seasonRow = clubRow
-        ? await findSeasonForClub(pool, clubRow.entityId, rawKit.seasonLabel)
-        : undefined;
-
-      if (!clubRow || !seasonRow) {
-        throw new Error(
-          `Missing club or season for scope: club=${clubTmId} season=${rawKit.seasonLabel}`,
-        );
       }
 
       const manufacturerId = rawKit.manufacturerName
@@ -124,9 +103,9 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
 
       const kitId = await upsertKit(pool, {
         fkId: rawKit.id,
-        clubId: clubRow.entityId,
-        nationalTeamId: null,
-        seasonId: seasonRow.id,
+        clubId,
+        nationalTeamId,
+        seasonId,
         type: rawKit.type,
         manufacturerId,
         sponsorName: rawKit.sponsorName ?? null,
@@ -176,6 +155,42 @@ function assertKitHasArchiveBytes(rawKit: FkRawKit): void {
 
 function transfermarktIdForNationalTeamRef(ref: string): string {
   return resolveNationalTeam(ref)?.transfermarktId ?? ref.trim();
+}
+
+async function resolveOrLinkNationalTeamFkApiId(
+  pool: Pool,
+  nationalTeamRef: string,
+  seasonLabel: string,
+): Promise<string> {
+  const tmId = transfermarktIdForNationalTeamRef(nationalTeamRef);
+  await assertNationalTeamSeasonPrerequisite(pool, tmId, seasonLabel);
+
+  const linked = await findFkApiExternalIdForNationalTeam(pool, tmId);
+  if (linked) {
+    return linked;
+  }
+
+  const catalog = resolveNationalTeam(nationalTeamRef);
+  if (!catalog?.fkApiTeamId) {
+    throw new Error(
+      `No FKA team id in catalog for NationalTeam ${nationalTeamRef}. Cannot fetch FK kits.`,
+    );
+  }
+
+  const ntRow = await findNationalTeamByTransfermarktId(pool, tmId);
+  if (!ntRow) {
+    throw new Error(
+      `Missing NationalTeam row for Transfermarkt id ${tmId}. Run Apify national-team grain for this scope first.`,
+    );
+  }
+
+  await pool.query(
+    `INSERT INTO external_id (entity_type, entity_id, system, value)
+     VALUES ('national_team', $1, $2, $3)`,
+    [ntRow.entityId, EXTERNAL_SYSTEM_FKAPI, catalog.fkApiTeamId],
+  );
+
+  return catalog.fkApiTeamId;
 }
 
 async function assertScopePrerequisites(

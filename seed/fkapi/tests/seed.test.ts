@@ -16,6 +16,7 @@ import {
   createScopedNationalTeamFixtureFetchAdapter,
   seedApifyPrerequisites,
   seedNationalTeamPrerequisites,
+  seedNationalTeamTransfermarktSeasonOnly,
 } from "./fixture-scope.js";
 import { resetTestDatabase } from "./test-db.js";
 
@@ -517,6 +518,46 @@ describe("FK seed mapper", () => {
       expect(photo.visibility).toBe("admin_only");
     }
     expect(objectStore.objects.size).toBe(3);
+  });
+
+  it("links catalog FKA team id when fkapi external_id is missing", async () => {
+    const seasonLabel = `2010-catalog-${Date.now()}`;
+    const { nationalTeamId } = await seedNationalTeamTransfermarktSeasonOnly(pool, {
+      transfermarktId: "3436",
+      seasonLabel,
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: fetchMock,
+    });
+
+    await runFkSeed({
+      databaseUrl: DATABASE_URL,
+      fetchAdapter: adapter,
+      objectStore: createMemoryObjectStore(),
+      scope: {
+        kind: "national_team",
+        nationalTeamRef: "3436",
+        season: seasonLabel,
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://fkapi.example.invalid/kits?nationalTeamFkApiId=denmark-kits&season=${encodeURIComponent(seasonLabel)}`,
+      expect.any(Object),
+    );
+
+    const fkRow = await pool.query<{ value: string }>(
+      `SELECT value FROM external_id
+       WHERE entity_type = 'national_team' AND entity_id = $1 AND system = $2`,
+      [nationalTeamId, EXTERNAL_SYSTEM_FKAPI],
+    );
+    expect(fkRow.rows[0]?.value).toBe("denmark-kits");
   });
 
   it("resolves Transfermarkt nationalTeamRef to fkapi external_id before live fetch", async () => {
