@@ -15,12 +15,29 @@ export interface KaderHtmlStore {
   loadCompetitionSeason(competition: string, season: number): Promise<string>;
   loadKader(clubId: string, season: number): Promise<string>;
   loadProfile(playerId: string): Promise<string>;
+  loadClubFacts(clubId: string): Promise<string | undefined>;
+  loadClubHonours(clubId: string): Promise<string | undefined>;
+  loadPortrait(playerId: string): Promise<Uint8Array | undefined>;
 }
 
 export function createKaderHtmlStore(fixturesDir: string): KaderHtmlStore {
   const competitionsDir = path.join(fixturesDir, "competitions");
   const kaderDir = path.join(fixturesDir, "kader");
   const profilesDir = path.join(fixturesDir, "profiles");
+  const factsDir = path.join(fixturesDir, "facts");
+  const honoursDir = path.join(fixturesDir, "honours");
+  const portraitsDir = path.join(fixturesDir, "portraits");
+
+  async function readOptional(filePath: string): Promise<string | undefined> {
+    try {
+      return await readFile(filePath, "utf8");
+    } catch (error: unknown) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        return undefined;
+      }
+      throw error;
+    }
+  }
 
   return {
     async listAvailableSeasons(competition: string): Promise<number[]> {
@@ -47,6 +64,27 @@ export function createKaderHtmlStore(fixturesDir: string): KaderHtmlStore {
     async loadProfile(playerId: string): Promise<string> {
       const filePath = path.join(profilesDir, `player-${playerId}.html`);
       return readFile(filePath, "utf8");
+    },
+
+    async loadClubFacts(clubId: string): Promise<string | undefined> {
+      return readOptional(path.join(factsDir, `${clubId}.html`));
+    },
+
+    async loadClubHonours(clubId: string): Promise<string | undefined> {
+      return readOptional(path.join(honoursDir, `${clubId}.html`));
+    },
+
+    async loadPortrait(playerId: string): Promise<Uint8Array | undefined> {
+      const filePath = path.join(portraitsDir, `${playerId}.bin`);
+      try {
+        const buffer = await readFile(filePath);
+        return new Uint8Array(buffer);
+      } catch (error: unknown) {
+        if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+          return undefined;
+        }
+        throw error;
+      }
     },
   };
 }

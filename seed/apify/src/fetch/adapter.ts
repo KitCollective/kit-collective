@@ -26,6 +26,11 @@ export interface FetchLeagueSeasonParams {
   season: string;
 }
 
+export interface FetchClubParams {
+  competition: string;
+  clubExternalId: string;
+}
+
 export interface FetchAdapter {
   /** League Hierarchy grain — competition identity only (no seasons/clubs). */
   fetchLeague(params: FetchLeagueParams): Promise<TransfermarktRawPayload>;
@@ -34,6 +39,8 @@ export interface FetchAdapter {
    * Clubs carry empty player arrays (kader is Club season grain).
    */
   fetchLeagueSeason(params: FetchLeagueSeasonParams): Promise<TransfermarktRawPayload>;
+  /** Club Hierarchy grain — identity + Club facts + Honours. */
+  fetchClub(params: FetchClubParams): Promise<TransfermarktRawPayload>;
   fetchClubSeason(params: FetchClubSeasonParams): Promise<TransfermarktRawPayload>;
   listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]>;
 }

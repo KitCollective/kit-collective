@@ -8,6 +8,7 @@ import {
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
+  mapClubToPayload,
   mapLeagueSeasonToPayload,
   mapLeagueToPayload,
   seasonClubRowsToPairs,
@@ -24,7 +25,9 @@ import { competitionSearchUrl, parseCompetitionSearchHtml } from "./competition-
 import { createKaderHtmlLiveCache, wrapFetchHtmlWithKaderCache } from "./kader-html-live-cache.js";
 import {
   type KaderParseWarning,
+  parseClubFactsHtml,
   parseCompetitionSeasonHtml,
+  parseHonoursHtml,
   parseKaderHtml,
   parsePlayerProfileHtml,
 } from "./kader-html-parser.js";
@@ -82,6 +85,14 @@ export function playerProfileUrl(playerId: string): string {
   return `https://www.transfermarkt.com/-/profil/spieler/${playerId}`;
 }
 
+export function clubFactsUrl(clubId: string): string {
+  return `https://www.transfermarkt.com/-/datenfakten/verein/${clubId}`;
+}
+
+export function clubHonoursUrl(clubId: string): string {
+  return `https://www.transfermarkt.com/-/erfolge/verein/${clubId}`;
+}
+
 export class TransfermarktHttpError extends Error {
   constructor(
     readonly status: number,
@@ -107,6 +118,20 @@ async function defaultFetchHtml(url: string): Promise<string> {
   return response.text();
 }
 
+async function fetchOptionalHtml(
+  fetchHtml: (url: string) => Promise<string>,
+  url: string,
+): Promise<string | undefined> {
+  try {
+    return await fetchHtml(url);
+  } catch (error) {
+    if (error instanceof TransfermarktHttpError && error.status === 404) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 interface KaderHtmlClient {
   fetchCompetitionSeason(competition: string, season: number): Promise<ActorSeasonClubRow[]>;
   fetchKader(
@@ -118,12 +143,18 @@ interface KaderHtmlClient {
     warnings: KaderParseWarning[];
   }>;
   fetchPlayerProfile(playerId: string): Promise<ActorPlayerProfile>;
+  fetchClubFacts(clubId: string): Promise<ReturnType<typeof parseClubFactsHtml> | undefined>;
+  fetchClubHonours(clubId: string): Promise<ReturnType<typeof parseHonoursHtml>>;
+  fetchPortrait(playerId: string, src?: string): Promise<Uint8Array | undefined>;
 }
 
 function createKaderHtmlClient(
   loadCompetitionHtml: (competition: string, season: number) => Promise<string>,
   loadKaderHtml: (clubId: string, season: number) => Promise<string>,
   loadProfileHtml: (playerId: string) => Promise<string>,
+  loadFactsHtml: (clubId: string) => Promise<string | undefined>,
+  loadHonoursHtml: (clubId: string) => Promise<string | undefined>,
+  loadPortrait: (playerId: string, src?: string) => Promise<Uint8Array | undefined>,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
 ): KaderHtmlClient {
   const competitionCache = new Map<string, ActorSeasonClubRow[]>();
@@ -160,6 +191,20 @@ function createKaderHtmlClient(
       const html = await loadProfileHtml(playerId);
       return parsePlayerProfileHtml(html, playerId);
     },
+
+    async fetchClubFacts(clubId) {
+      const html = await loadFactsHtml(clubId);
+      return html ? parseClubFactsHtml(html) : undefined;
+    },
+
+    async fetchClubHonours(clubId) {
+      const html = await loadHonoursHtml(clubId);
+      return html ? parseHonoursHtml(html) : [];
+    },
+
+    async fetchPortrait(playerId, src) {
+      return loadPortrait(playerId, src);
+    },
   };
 }
 
@@ -191,6 +236,23 @@ function resolveSeasonYearRange(
   return { fromYear, toYear };
 }
 
+async function fetchClubWithClient(
+  client: KaderHtmlClient,
+  params: { competition: string; clubExternalId: string },
+  identity?: CompetitionIdentity,
+) {
+  const facts = await client.fetchClubFacts(params.clubExternalId);
+  const honours = await client.fetchClubHonours(params.clubExternalId);
+  return mapClubToPayload({
+    competitionSlug: params.competition,
+    clubExternalId: params.clubExternalId,
+    clubName: facts?.officialName ?? params.clubExternalId,
+    facts,
+    honours,
+    identity,
+  });
+}
+
 async function fetchClubSeasonWithClient(
   client: KaderHtmlClient,
   params: FetchClubSeasonParams,
@@ -216,6 +278,17 @@ async function fetchClubSeasonWithClient(
     onProfileHole,
   );
 
+  const portraits = new Map<string, Uint8Array>();
+  for (const row of squadRows) {
+    if (!row.playerId || !row.portraitSrc) {
+      continue;
+    }
+    const bytes = await client.fetchPortrait(row.playerId, row.portraitSrc);
+    if (bytes) {
+      portraits.set(row.playerId, bytes);
+    }
+  }
+
   return mapClubSeasonToPayload({
     competitionSlug: params.competition,
     clubExternalId: params.clubExternalId,
@@ -223,6 +296,7 @@ async function fetchClubSeasonWithClient(
     clubName,
     squadRows,
     profileByPlayerId,
+    portraits,
     identity,
   });
 }
@@ -270,6 +344,10 @@ function createAdapterFromClient(
     async fetchClubSeason(params) {
       return fetchClubSeasonWithClient(client, params, onProfileFetch, onProfileHole);
     },
+
+    async fetchClub(params) {
+      return fetchClubWithClient(client, params);
+    },
   };
 }
 
@@ -283,6 +361,9 @@ function createFixturesAdapter(
     (competition, season) => store.loadCompetitionSeason(competition, season),
     (clubId, season) => store.loadKader(clubId, season),
     (playerId) => store.loadProfile(playerId),
+    (clubId) => store.loadClubFacts(clubId),
+    (clubId) => store.loadClubHonours(clubId),
+    (playerId) => store.loadPortrait(playerId),
     onMissingJerseyNumber,
   );
 
@@ -339,6 +420,18 @@ function createLiveAdapter(
     },
     async (clubId, season) => fetchHtml(kaderUrl(clubId, season)),
     async (playerId) => fetchHtml(playerProfileUrl(playerId)),
+    async (clubId) => fetchOptionalHtml(fetchHtml, clubFactsUrl(clubId)),
+    async (clubId) => fetchOptionalHtml(fetchHtml, clubHonoursUrl(clubId)),
+    async (_playerId, src) => {
+      if (!src || !/^https?:\/\//i.test(src)) {
+        return undefined;
+      }
+      const response = await fetch(src);
+      if (!response.ok) {
+        return undefined;
+      }
+      return new Uint8Array(await response.arrayBuffer());
+    },
     onMissingJerseyNumber,
   );
 
@@ -391,6 +484,11 @@ function createLiveAdapter(
     async fetchClubSeason(params) {
       const identity = await identityFor(params.competition);
       return fetchClubSeasonWithClient(client, params, onProfileFetch, onProfileHole, identity);
+    },
+
+    async fetchClub(params) {
+      const identity = await identityFor(params.competition);
+      return fetchClubWithClient(client, params, identity);
     },
   };
 }

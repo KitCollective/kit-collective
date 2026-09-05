@@ -27,17 +27,25 @@ function assertNoForbiddenKeys(
 
 function normalizePlayer(raw: TransfermarktRawPlayer): NormalizedPlayer {
   assertNoForbiddenKeys(raw, FORBIDDEN_PLAYER_KEYS, "player");
-  return {
+  const player: NormalizedPlayer = {
     externalId: raw.id,
     name: raw.name,
     nameLocale: seedLabelLocale(raw.name),
     squadNumber: raw.jerseyNumber,
   };
+  if (raw.position) player.position = raw.position;
+  if (raw.dateOfBirth) player.dateOfBirth = raw.dateOfBirth;
+  if (raw.nationalityIso) player.nationalityIso = raw.nationalityIso;
+  if (raw.nationalityName) player.nationalityName = raw.nationalityName;
+  if (raw.heightCm !== undefined) player.heightCm = raw.heightCm;
+  if (raw.preferredFoot) player.preferredFoot = raw.preferredFoot;
+  if (raw.portraitBytes) player.portraitBytes = raw.portraitBytes;
+  return player;
 }
 
 function normalizeClub(raw: TransfermarktRawClub): NormalizedClub {
   assertNoForbiddenKeys(raw, FORBIDDEN_CLUB_KEYS, "club");
-  return {
+  const club: NormalizedClub = {
     externalId: raw.id,
     name: raw.name,
     nameLocale: seedLabelLocale(raw.name),
@@ -45,6 +53,16 @@ function normalizeClub(raw: TransfermarktRawClub): NormalizedClub {
     kind: raw.kind ?? "club",
     players: raw.players.map(normalizePlayer),
   };
+  if (raw.country?.name) club.countryName = raw.country.name;
+  if (raw.officialName) club.officialName = raw.officialName;
+  if (raw.foundedOn) club.foundedOn = raw.foundedOn;
+  if (raw.stadiumName) club.stadiumName = raw.stadiumName;
+  if (raw.stadiumCapacity !== undefined) club.stadiumCapacity = raw.stadiumCapacity;
+  if (raw.primaryColorHex) club.primaryColorHex = raw.primaryColorHex;
+  if (raw.secondaryColorHex) club.secondaryColorHex = raw.secondaryColorHex;
+  if (raw.websiteUrl) club.websiteUrl = raw.websiteUrl;
+  if (raw.honours?.length) club.honours = raw.honours.map((row) => ({ ...row }));
+  return club;
 }
 
 function normalizeSeason(season: TransfermarktRawPayload["seasons"][number]): NormalizedSeason {
@@ -68,7 +86,38 @@ export function normalizeTransfermarktPayload(raw: TransfermarktRawPayload): Nor
       countryName: raw.competition.country.name,
     },
     seasons: raw.seasons.map(normalizeSeason),
+    clubs: raw.clubs?.map(normalizeClub),
   };
+}
+
+function cleanClub(club: TransfermarktRawClub): TransfermarktRawClub {
+  const cleaned: TransfermarktRawClub = {
+    id: club.id,
+    name: club.name,
+    country: club.country ? { iso3166: club.country.iso3166, name: club.country.name } : undefined,
+    kind: club.kind,
+    officialName: club.officialName,
+    foundedOn: club.foundedOn,
+    stadiumName: club.stadiumName,
+    stadiumCapacity: club.stadiumCapacity,
+    primaryColorHex: club.primaryColorHex,
+    secondaryColorHex: club.secondaryColorHex,
+    websiteUrl: club.websiteUrl,
+    honours: club.honours?.map((row) => ({ ...row })),
+    players: club.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      jerseyNumber: player.jerseyNumber,
+      position: player.position,
+      dateOfBirth: player.dateOfBirth,
+      nationalityIso: player.nationalityIso,
+      nationalityName: player.nationalityName,
+      heightCm: player.heightCm,
+      preferredFoot: player.preferredFoot,
+      portraitBytes: player.portraitBytes,
+    })),
+  };
+  return cleaned;
 }
 
 /** Strip forbidden Transfermarkt fields from a raw payload object (mutates a copy). */
@@ -81,21 +130,9 @@ export function stripForbiddenFields(raw: TransfermarktRawPayload): Transfermark
       startDate: season.startDate,
       endDate: season.endDate,
       calendarKind: season.calendarKind,
-      clubs: season.clubs.map((club) => {
-        const cleaned: TransfermarktRawClub = {
-          id: club.id,
-          name: club.name,
-          country: club.country ? { iso3166: club.country.iso3166 } : undefined,
-          kind: club.kind,
-          players: club.players.map((player) => ({
-            id: player.id,
-            name: player.name,
-            jerseyNumber: player.jerseyNumber,
-          })),
-        };
-        return cleaned;
-      }),
+      clubs: season.clubs.map(cleanClub),
     })),
+    clubs: raw.clubs?.map(cleanClub),
   };
 }
 

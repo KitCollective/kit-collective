@@ -50,6 +50,14 @@ export type KitPhotoRights = (typeof KIT_PHOTO_RIGHTS)[number];
 export const KIT_PHOTO_VISIBILITY = ["admin_only", "public"] as const;
 export type KitPhotoVisibility = (typeof KIT_PHOTO_VISIBILITY)[number];
 
+/** Closed set for Player.preferred_foot from Transfermarkt kader / profile. */
+export const PREFERRED_FOOT = ["left", "right", "both"] as const;
+export type PreferredFoot = (typeof PREFERRED_FOOT)[number];
+
+/** Polymorphic subject for Honour rows (club, national team, or player). */
+export const HONOUR_SUBJECT_TYPES = ["club", "national_team", "player"] as const;
+export type HonourSubjectType = (typeof HONOUR_SUBJECT_TYPES)[number];
+
 export const USER_ROLES = ["user", "admin"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 

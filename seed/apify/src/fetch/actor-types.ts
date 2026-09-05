@@ -13,6 +13,28 @@ export interface ActorSquadRow {
   clubId: string;
   clubName?: string;
   season?: number;
+  position?: string;
+  dateOfBirth?: string;
+  nationalityIso?: string;
+  nationalityName?: string;
+  heightCm?: number;
+  preferredFoot?: "left" | "right" | "both";
+  portraitSrc?: string;
+}
+
+export interface ClubFactsParse {
+  officialName?: string;
+  foundedOn?: string;
+  stadiumName?: string;
+  stadiumCapacity?: number;
+  primaryColorHex?: string;
+  secondaryColorHex?: string;
+  websiteUrl?: string;
+}
+
+export interface HonourParseRow {
+  seasonLabel: string | null;
+  title: string;
 }
 
 /** Row from the actor `players` dataset (profile fetch). */

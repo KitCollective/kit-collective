@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { HONOUR_SUBJECT_TYPES, PREFERRED_FOOT } from "@kit/domain";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resetDatabase } from "../src/migrate.js";
@@ -51,6 +52,9 @@ describe("stamdata schema", () => {
         "manufacturer",
         "kit",
         "kit_photo",
+        "honour",
+        "player_jersey_number",
+        "player_photo",
         "catalog_label",
         "external_id",
         "user",
@@ -152,4 +156,126 @@ describe("stamdata schema", () => {
 
     expect(inserted.rows[0]?.country_id).toBe(countryId);
   });
+
+  it("exports preferred foot and honour subject types from @kit/domain", () => {
+    expect(PREFERRED_FOOT).toEqual(["left", "right", "both"]);
+    expect(HONOUR_SUBJECT_TYPES).toEqual(["club", "national_team", "player"]);
+  });
+
+  it("adds club rich-grain fact columns", async () => {
+    const columns = await columnNames(pool, "club");
+    expect(columns).toEqual(
+      expect.arrayContaining([
+        "founded_on",
+        "stadium_name",
+        "stadium_capacity",
+        "primary_color_hex",
+        "secondary_color_hex",
+        "website_url",
+      ]),
+    );
+  });
+
+  it("adds player body columns", async () => {
+    const columns = await columnNames(pool, "player");
+    expect(columns).toEqual(
+      expect.arrayContaining([
+        "date_of_birth",
+        "height_cm",
+        "preferred_foot",
+        "primary_country_id",
+        "place_of_birth",
+      ]),
+    );
+  });
+
+  it("adds player_club_season.position", async () => {
+    const columns = await columnNames(pool, "player_club_season");
+    expect(columns).toContain("position");
+  });
+
+  it("creates honour, player_jersey_number, and player_photo tables", async () => {
+    const { rows } = await pool.query<{ tablename: string }>(
+      `SELECT tablename FROM pg_tables
+       WHERE schemaname = 'public'
+         AND tablename IN ('honour', 'player_jersey_number', 'player_photo')
+       ORDER BY tablename`,
+    );
+    expect(rows.map((r) => r.tablename)).toEqual([
+      "honour",
+      "player_jersey_number",
+      "player_photo",
+    ]);
+  });
+
+  it("rejects duplicate honour rows for the same subject, season label, and title", async () => {
+    const country = await pool.query<{ id: string }>(
+      `INSERT INTO country (iso3166) VALUES ('NO') RETURNING id`,
+    );
+    const countryId = country.rows[0]?.id;
+    expect(countryId).toBeTruthy();
+    const club = await pool.query<{ id: string }>(
+      `INSERT INTO club (country_id) VALUES ($1) RETURNING id`,
+      [countryId],
+    );
+    const subjectId = club.rows[0]?.id;
+    expect(subjectId).toBeTruthy();
+
+    await pool.query(
+      `INSERT INTO honour (subject_type, subject_id, season_label, title)
+       VALUES ('club', $1, '2010/11', 'Danish champion')`,
+      [subjectId],
+    );
+
+    await expect(
+      pool.query(
+        `INSERT INTO honour (subject_type, subject_id, season_label, title)
+         VALUES ('club', $1, '2010/11', 'Danish champion')`,
+        [subjectId],
+      ),
+    ).rejects.toThrow();
+
+    await pool.query(
+      `INSERT INTO honour (subject_type, subject_id, season_label, title)
+       VALUES ('club', $1, NULL, 'Danish Superliga')`,
+      [subjectId],
+    );
+
+    await expect(
+      pool.query(
+        `INSERT INTO honour (subject_type, subject_id, season_label, title)
+         VALUES ('club', $1, NULL, 'Danish Superliga')`,
+        [subjectId],
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("defaults player_photo rights to unresolved and visibility to admin_only", async () => {
+    const player = await pool.query<{ id: string }>(
+      `INSERT INTO player DEFAULT VALUES RETURNING id`,
+    );
+    const playerId = player.rows[0]?.id;
+    expect(playerId).toBeTruthy();
+
+    const inserted = await pool.query<{ rights: string; visibility: string }>(
+      `INSERT INTO player_photo (player_id, object_key)
+       VALUES ($1, 'players/portrait.jpg')
+       RETURNING rights, visibility`,
+      [playerId],
+    );
+
+    expect(inserted.rows[0]).toEqual({
+      rights: "unresolved",
+      visibility: "admin_only",
+    });
+  });
 });
+
+async function columnNames(pool: Pool, table: string): Promise<string[]> {
+  const { rows } = await pool.query<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = $1`,
+    [table],
+  );
+  return rows.map((r) => r.column_name);
+}

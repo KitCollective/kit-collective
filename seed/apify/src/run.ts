@@ -2,9 +2,10 @@ import { createDb, SEED_CREATE_DB_OPTIONS } from "@kit/db";
 import { resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
-import { mapFacts } from "./map/index.js";
+import { mapFacts, type PortraitStore } from "./map/index.js";
 import { normalize } from "./normalize/index.js";
 import { type HierarchyGrain, type ParsedSeedCli, parseSeedApifyCli } from "./parse-cli.js";
+import { resolvePortraitStoreFromEnv } from "./portrait-store.js";
 import { filterFactsToClubSeason } from "./scope/club-season.js";
 import {
   assertOutOfScopeSeasonsUnchanged,
@@ -22,6 +23,7 @@ export interface RunSeedOptions {
   fetchAdapter: FetchAdapter;
   databaseUrl?: string;
   migrationsFolder?: string;
+  portraitStore?: PortraitStore;
 }
 
 export interface ClubSeasonFailure {
@@ -45,9 +47,11 @@ export interface RunHierarchyGrainOptions {
   kind: HierarchyGrain["kind"];
   competition: string;
   season?: string;
+  clubExternalId?: string;
   lane: Lane;
   fetchAdapter: FetchAdapter;
   databaseUrl?: string;
+  portraitStore?: PortraitStore;
 }
 
 export interface RunHierarchyGrainResult {
@@ -65,6 +69,8 @@ function emptyMapResult(): MapResult {
     playerClubSeasons: 0,
     catalogLabels: 0,
     externalIds: 0,
+    honours: 0,
+    playerPhotos: 0,
   };
 }
 
@@ -78,6 +84,8 @@ function addMapResults(target: MapResult, source: MapResult): void {
   target.playerClubSeasons += source.playerClubSeasons;
   target.catalogLabels += source.catalogLabels;
   target.externalIds += source.externalIds;
+  target.honours += source.honours;
+  target.playerPhotos += source.playerPhotos;
 }
 
 function mapTotal(mapResult: MapResult): number {
@@ -90,7 +98,9 @@ function mapTotal(mapResult: MapResult): number {
     mapResult.players +
     mapResult.playerClubSeasons +
     mapResult.catalogLabels +
-    mapResult.externalIds
+    mapResult.externalIds +
+    mapResult.honours +
+    mapResult.playerPhotos
   );
 }
 
@@ -141,6 +151,59 @@ export async function runHierarchyGrain(
         depth: "league_season",
         allowedSeasonLabels: new Set([seasonLabel]),
       });
+      return { summary };
+    }
+
+    if (options.kind === "club") {
+      if (!options.clubExternalId?.trim()) {
+        throw new Error("club grain requires club id");
+      }
+      const raw = await options.fetchAdapter.fetchClub({
+        competition: options.competition,
+        clubExternalId: options.clubExternalId,
+      });
+      const facts = normalize(raw);
+      const summary = await mapFacts(db, facts, { depth: "club" });
+      return { summary };
+    }
+
+    if (options.kind === "club_season") {
+      if (!options.clubExternalId?.trim() || !options.season?.trim()) {
+        throw new Error("club_season grain requires club id and season");
+      }
+      const seasonLabel = resolveSeasonRef(options.competition, options.season);
+      const raw = await options.fetchAdapter.fetchClubSeason({
+        competition: options.competition,
+        clubExternalId: options.clubExternalId,
+        season: seasonLabel,
+      });
+      const facts = normalize(raw);
+      const summary = await mapFacts(db, facts, {
+        allowedSeasonLabels: new Set([seasonLabel]),
+        portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
+      });
+      return { summary };
+    }
+
+    if (options.kind === "club_proof") {
+      if (!options.season?.trim()) {
+        throw new Error("club_proof grain requires season");
+      }
+      const seasonLabel = resolveSeasonRef(options.competition, options.season);
+      const leagueSeason = await options.fetchAdapter.fetchLeagueSeason({
+        competition: options.competition,
+        season: seasonLabel,
+      });
+      const clubs = leagueSeason.seasons[0]?.clubs ?? [];
+      const summary = emptyMapResult();
+      for (const clubRow of clubs) {
+        const raw = await options.fetchAdapter.fetchClub({
+          competition: options.competition,
+          clubExternalId: clubRow.id,
+        });
+        const facts = normalize(raw);
+        addMapResults(summary, await mapFacts(db, facts, { depth: "club" }));
+      }
       return { summary };
     }
 
@@ -209,6 +272,7 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
 
         const mapResult = await mapFacts(db, scopedFacts, {
           allowedSeasonLabels: new Set([pair.seasonLabel]),
+          portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
         });
         addMapResults(aggregateMap, mapResult);
       } catch (error: unknown) {
