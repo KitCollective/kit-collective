@@ -46,6 +46,11 @@ import {
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
+import {
+  closeConfirmSheet,
+  openConfirmSheet,
+  type ConfirmSheetKind,
+} from "@/capture/confirmSheet";
 import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -56,6 +61,7 @@ import {
 } from "@/capture/usePersistedCaptureSession";
 import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
+import { ProfileSurfaceGroup } from "@/components/profile-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
@@ -81,9 +87,8 @@ export default function ConfirmScreen() {
   const { accessToken } = useAuth();
   const { state, isSessionResolved, mutate } = usePersistedCaptureSession(sessionId);
 
-  const [clubSheetOpen, setClubSheetOpen] = useState(false);
-  const [seasonSheetOpen, setSeasonSheetOpen] = useState(false);
-  const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
+  const [openSheet, setOpenSheet] = useState<ConfirmSheetKind | null>(null);
+  const [pendingSeasonAfterClub, setPendingSeasonAfterClub] = useState(false);
   const [clubQuery, setClubQuery] = useState("");
   const [clubResults, setClubResults] = useState<CatalogPickerItem[]>([]);
   const [seasonResults, setSeasonResults] = useState<CatalogPickerItem[]>([]);
@@ -174,7 +179,7 @@ export default function ConfirmScreen() {
   );
 
   useEffect(() => {
-    if (!clubSheetOpen) {
+    if (openSheet !== "club") {
       return;
     }
 
@@ -183,7 +188,7 @@ export default function ConfirmScreen() {
     }, 300);
 
     return () => clearTimeout(handle);
-  }, [clubQuery, clubSheetOpen, runClubSearch]);
+  }, [clubQuery, openSheet, runClubSearch]);
 
   const fadeInSuggestion = useCallback(() => {
     suggestionOpacity.setValue(reduceMotion ? 1 : 0);
@@ -380,16 +385,30 @@ export default function ConfirmScreen() {
     setClubResults([]);
     setCatalogMiss(false);
     setSearchError(false);
-    setClubSheetOpen(true);
+    setPendingSeasonAfterClub(false);
+    setOpenSheet((current) => openConfirmSheet(current, "club"));
   };
+
+  const dismissConfirmSheet = (kind: ConfirmSheetKind) => {
+    setOpenSheet((current) => closeConfirmSheet(current, kind));
+  };
+
+  useEffect(() => {
+    if (!pendingSeasonAfterClub || openSheet !== null) {
+      return;
+    }
+
+    setPendingSeasonAfterClub(false);
+    setOpenSheet(openConfirmSheet(null, "season"));
+  }, [openSheet, pendingSeasonAfterClub]);
 
   const selectClub = async (club: CatalogPickerItem) => {
     clubManuallySet.current = true;
     seasonManuallySet.current = false;
     setSelectedSeasonLabel(null);
     mutate((current) => setDraftClub(current, current.activeDraftId, club.id, club.label));
-    setClubSheetOpen(false);
-    setSeasonSheetOpen(true);
+    setPendingSeasonAfterClub(true);
+    setOpenSheet((current) => closeConfirmSheet(current, "club"));
 
     if (!accessToken) {
       return;
@@ -488,7 +507,7 @@ export default function ConfirmScreen() {
     saveError,
     visionSuggestionVisible: Boolean(visionSuggestion?.suggestions),
     catalogMiss,
-    clubSheetOpen,
+    clubSheetOpen: openSheet === "club",
   });
 
   const handleSave = async () => {
@@ -725,80 +744,101 @@ export default function ConfirmScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Klub</Text>
-          <ListRow
-            title={selectedClub?.label ?? "Vælg klub"}
-            onPress={openClubSheet}
-            selected={selectedClub !== null}
-          />
-        </View>
-
-        {selectedClub ? (
-          <View style={styles.section}>
-            <Text style={[typography.label, { color: theme.contentPrimary }]}>Sæson</Text>
+          <Text style={[typography.section, { color: theme.contentPrimary }]}>Identitet</Text>
+          <ProfileSurfaceGroup>
             <ListRow
-              title={selectedSeason?.label ?? "Vælg sæson"}
-              onPress={() => setSeasonSheetOpen(true)}
-              selected={selectedSeason !== null}
+              title={selectedClub?.label ?? "Vælg klub"}
+              onPress={openClubSheet}
+              selected={selectedClub !== null}
             />
-          </View>
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Type</Text>
-          <View style={styles.chipRow}>
-            {KIT_TYPES.map((value) => (
-              <Chip
-                key={value}
-                label={KIT_TYPE_LABELS_DA[value]}
-                selected={draft.kitTypeSelected && draft.kitType === value}
-                accessibilityRole="radio"
-                onPress={() => {
-                  kitTypeManuallySet.current = true;
-                  mutate((current) => selectDraftKitType(current, current.activeDraftId, value));
-                }}
-              />
-            ))}
-          </View>
+            {selectedClub ? (
+              <>
+                <View
+                  style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
+                  accessibilityElementsHidden
+                />
+                <ListRow
+                  title={selectedSeason?.label ?? "Vælg sæson"}
+                  onPress={() => setOpenSheet(openConfirmSheet(openSheet, "season"))}
+                  selected={selectedSeason !== null}
+                />
+              </>
+            ) : null}
+          </ProfileSurfaceGroup>
         </View>
 
         <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Størrelse</Text>
-          <View style={styles.chipRow}>
-            {JERSEY_SIZES.map((value) => (
-              <Chip
-                key={value}
-                label={JERSEY_SIZE_LABELS_DA[value]}
-                selected={draft.sizeSelected && draft.size === value}
-                accessibilityRole="radio"
-                onPress={() => {
-                  mutate((current) => selectDraftSize(current, current.activeDraftId, value));
-                }}
-              />
-            ))}
-          </View>
-        </View>
+          <Text style={[typography.section, { color: theme.contentPrimary }]}>Tilstand</Text>
+          <ProfileSurfaceGroup>
+            <View style={styles.groupSection}>
+              <Text style={[typography.label, { color: theme.contentPrimary }]}>Type</Text>
+              <View style={styles.chipRow}>
+                {KIT_TYPES.map((value) => (
+                  <Chip
+                    key={value}
+                    label={KIT_TYPE_LABELS_DA[value]}
+                    selected={draft.kitTypeSelected && draft.kitType === value}
+                    accessibilityRole="radio"
+                    onPress={() => {
+                      kitTypeManuallySet.current = true;
+                      mutate((current) => selectDraftKitType(current, current.activeDraftId, value));
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
 
-        <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Stand</Text>
-          <View style={styles.chipRow}>
-            {JERSEY_CONDITIONS.map((value) => (
-              <Chip
-                key={value}
-                label={JERSEY_CONDITION_LABELS_DA[value]}
-                selected={draft.conditionSelected && draft.condition === value}
-                accessibilityRole="radio"
-                onPress={() => {
-                  mutate((current) => selectDraftCondition(current, current.activeDraftId, value));
-                }}
-              />
-            ))}
-          </View>
+            <View
+              style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
+              accessibilityElementsHidden
+            />
+
+            <View style={styles.groupSection}>
+              <Text style={[typography.label, { color: theme.contentPrimary }]}>Størrelse</Text>
+              <View style={styles.chipRow}>
+                {JERSEY_SIZES.map((value) => (
+                  <Chip
+                    key={value}
+                    label={JERSEY_SIZE_LABELS_DA[value]}
+                    selected={draft.sizeSelected && draft.size === value}
+                    accessibilityRole="radio"
+                    onPress={() => {
+                      mutate((current) => selectDraftSize(current, current.activeDraftId, value));
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View
+              style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
+              accessibilityElementsHidden
+            />
+
+            <View style={styles.groupSection}>
+              <Text style={[typography.label, { color: theme.contentPrimary }]}>Stand</Text>
+              <View style={styles.chipRow}>
+                {JERSEY_CONDITIONS.map((value) => (
+                  <Chip
+                    key={value}
+                    label={JERSEY_CONDITION_LABELS_DA[value]}
+                    selected={draft.conditionSelected && draft.condition === value}
+                    accessibilityRole="radio"
+                    onPress={() => {
+                      mutate((current) =>
+                        selectDraftCondition(current, current.activeDraftId, value),
+                      );
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          </ProfileSurfaceGroup>
         </View>
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => setDetailsSheetOpen(true)}
+          onPress={() => setOpenSheet(openConfirmSheet(openSheet, "details"))}
           style={styles.detailsLink}
         >
           <Text style={[typography.label, { color: theme.contentSecondary }]}>Flere detaljer</Text>
@@ -843,7 +883,7 @@ export default function ConfirmScreen() {
         />
       </ButtonDock>
 
-      <Sheet visible={clubSheetOpen} title="Vælg klub" onDismiss={() => setClubSheetOpen(false)}>
+      <Sheet visible={openSheet === "club"} title="Vælg klub" onDismiss={() => dismissConfirmSheet("club")}>
         <SearchField
           variant="catalog"
           accessibilityLabel="Søg klub"
@@ -892,9 +932,9 @@ export default function ConfirmScreen() {
       </Sheet>
 
       <Sheet
-        visible={seasonSheetOpen}
+        visible={openSheet === "season"}
         title="Vælg sæson"
-        onDismiss={() => setSeasonSheetOpen(false)}
+        onDismiss={() => dismissConfirmSheet("season")}
       >
         {loadingSeasons ? (
           <ActivityIndicator color={theme.fillPrimary} style={styles.loader} />
@@ -909,7 +949,7 @@ export default function ConfirmScreen() {
                   seasonManuallySet.current = true;
                   setSelectedSeasonLabel(season.label);
                   mutate((current) => setDraftSeason(current, current.activeDraftId, season.id));
-                  setSeasonSheetOpen(false);
+                  dismissConfirmSheet("season");
                 }}
               />
             ))}
@@ -918,9 +958,9 @@ export default function ConfirmScreen() {
       </Sheet>
 
       <Sheet
-        visible={detailsSheetOpen}
+        visible={openSheet === "details"}
         title="Flere detaljer"
-        onDismiss={() => setDetailsSheetOpen(false)}
+        onDismiss={() => dismissConfirmSheet("details")}
       >
         <Text style={[typography.label, { color: theme.contentPrimary }]}>Noter</Text>
         <Text style={[typography.caption, { color: theme.contentMuted }]}>
@@ -1003,6 +1043,14 @@ const styles = StyleSheet.create({
   detailsLink: {
     minHeight: 44,
     justifyContent: "center",
+  },
+  groupSection: {
+    padding: space.insetMd,
+    gap: space.gapSm,
+  },
+  groupHairline: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: space.insetMd,
   },
   notesInput: {
     minHeight: 120,
