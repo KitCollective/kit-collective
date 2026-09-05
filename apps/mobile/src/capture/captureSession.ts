@@ -366,6 +366,58 @@ export function upsertDraftPhoto(
   }));
 }
 
+export function removeDraftPhoto(
+  state: CaptureSessionState,
+  draftId: string,
+  role: PhotoRole,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    photos: draft.photos.filter((photo) => photo.role !== role),
+  }));
+}
+
+export function changeDraftPhotoRole(
+  state: CaptureSessionState,
+  draftId: string,
+  fromRole: PhotoRole,
+  toRole: PhotoRole,
+): CaptureSessionState {
+  if (fromRole === toRole) {
+    return state;
+  }
+
+  return updateDraft(state, draftId, (draft) => {
+    const sourcePhoto = draft.photos.find((photo) => photo.role === fromRole);
+    if (!sourcePhoto) {
+      return draft;
+    }
+
+    const targetPhoto = draft.photos.find((photo) => photo.role === toRole);
+    if (targetPhoto) {
+      return {
+        ...draft,
+        photos: draft.photos.map((photo) => {
+          if (photo.role === fromRole) {
+            return { ...photo, role: toRole };
+          }
+          if (photo.role === toRole) {
+            return { ...photo, role: fromRole };
+          }
+          return photo;
+        }),
+      };
+    }
+
+    return {
+      ...draft,
+      photos: draft.photos.map((photo) =>
+        photo.role === fromRole ? { ...photo, role: toRole } : photo,
+      ),
+    };
+  });
+}
+
 export function appendCameraShotToSession(
   state: CaptureSessionState,
   photo: CaptureSessionPhoto & { role: PhotoRole },
