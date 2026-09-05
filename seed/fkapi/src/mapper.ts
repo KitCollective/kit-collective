@@ -65,7 +65,7 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
       if (isNationalTeamKit(rawKit)) {
         const nationalTeamRow = await findNationalTeamByFkApiId(
           pool,
-          rawKit.nationalTeamFkApiId as string,
+          rawKit.nationalTeamFkApiId,
         );
         const seasonRow = nationalTeamRow
           ? await findSeasonForNationalTeam(pool, nationalTeamRow.entityId, rawKit.seasonLabel)
@@ -80,7 +80,7 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
         nationalTeamId = nationalTeamRow.entityId;
         seasonId = seasonRow.id;
       } else if (isClubKit(rawKit)) {
-        const clubRow = await findClubByTransfermarktId(pool, rawKit.clubTransfermarktId as string);
+        const clubRow = await findClubByTransfermarktId(pool, rawKit.clubTransfermarktId);
         const seasonRow = clubRow
           ? await findSeasonForClub(pool, clubRow.entityId, rawKit.seasonLabel)
           : undefined;

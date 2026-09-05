@@ -37,10 +37,14 @@ export type SeedRunResult = {
   photosWritten: number;
 };
 
-export function isNationalTeamKit(kit: FkRawKit): boolean {
+export function isNationalTeamKit(
+  kit: FkRawKit,
+): kit is FkRawKit & { nationalTeamFkApiId: string; clubTransfermarktId?: undefined } {
   return Boolean(kit.nationalTeamFkApiId) && !kit.clubTransfermarktId;
 }
 
-export function isClubKit(kit: FkRawKit): boolean {
+export function isClubKit(
+  kit: FkRawKit,
+): kit is FkRawKit & { clubTransfermarktId: string; nationalTeamFkApiId?: undefined } {
   return Boolean(kit.clubTransfermarktId) && !kit.nationalTeamFkApiId;
 }
