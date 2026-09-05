@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { createDb, SEED_CREATE_DB_OPTIONS } from "../src/index.js";
+import { resolveKitDbTestDatabaseUrl } from "./test-database-url.js";
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = resolveKitDbTestDatabaseUrl();
 
 function statementTimeoutMillis(raw: string): number {
   const trimmed = raw.trim().toLowerCase();
