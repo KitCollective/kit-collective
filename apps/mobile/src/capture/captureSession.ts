@@ -76,7 +76,7 @@ function assignSingleRoles(uris: string[], source: PhotoSource): CaptureSessionP
   const capped = uris.slice(0, MAX_USER_JERSEY_PHOTOS);
   return capped.map((uri, index) => {
     const role: PhotoRole =
-      index < UNIVERSAL_PHOTO_ROLES.length ? UNIVERSAL_PHOTO_ROLES[index] : "other";
+      index < UNIVERSAL_PHOTO_ROLES.length ? UNIVERSAL_PHOTO_ROLES[index]! : "other";
     return { uri, role, source };
   });
 }
@@ -423,13 +423,17 @@ export function changeDraftPhotoRole(
   draftId: string,
   fromRole: PhotoRole,
   toRole: PhotoRole,
+  fromUri?: string,
 ): CaptureSessionState {
   if (fromRole === toRole) {
     return state;
   }
 
   return updateDraft(state, draftId, (draft) => {
-    const sourcePhoto = draft.photos.find((photo) => photo.role === fromRole);
+    const sourcePhoto =
+      fromRole === "other" && fromUri
+        ? draft.photos.find((photo) => photo.uri === fromUri)
+        : draft.photos.find((photo) => photo.role === fromRole);
     if (!sourcePhoto) {
       return draft;
     }
@@ -440,10 +444,10 @@ export function changeDraftPhotoRole(
       return {
         ...draft,
         photos: draft.photos.map((photo) => {
-          if (photo.role === fromRole) {
+          if (photo.uri === sourcePhoto.uri) {
             return { ...photo, role: toRole };
           }
-          if (photo.role === toRole) {
+          if (photo.uri === targetPhoto.uri) {
             return { ...photo, role: fromRole };
           }
           return photo;
@@ -454,7 +458,7 @@ export function changeDraftPhotoRole(
     return {
       ...draft,
       photos: draft.photos.map((photo) =>
-        photo.role === fromRole ? { ...photo, role: toRole } : photo,
+        photo.uri === sourcePhoto.uri ? { ...photo, role: toRole } : photo,
       ),
     };
   });

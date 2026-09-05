@@ -7,7 +7,6 @@ import {
   JERSEY_SIZES,
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
-  PHOTO_ROLES,
   UNIVERSAL_PHOTO_ROLES,
   type PhotoRole,
 } from "@kit/domain";

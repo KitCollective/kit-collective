@@ -363,7 +363,7 @@ export default function ConfirmScreen() {
     };
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
-  const pickPhotoForRole = async (role: PhotoRole) => {
+  const pickPhotoForRole = async (role: PhotoRole, replaceUri?: string) => {
     if (!draft || !sessionId) {
       return;
     }
@@ -381,7 +381,22 @@ export default function ConfirmScreen() {
     }
 
     const uri = uris[0];
-    mutate((current) => upsertDraftPhoto(current, current.activeDraftId, role, uri, "gallery"));
+    const existingLabel =
+      replaceUri && role === "other"
+        ? draft.photos.find((photo) => photo.uri === replaceUri)?.label
+        : undefined;
+    mutate((current) => {
+      const draftId = current.activeDraftId;
+      const base =
+        replaceUri && role === "other"
+          ? removeDraftPhoto(current, draftId, "other", replaceUri)
+          : current;
+      const next = upsertDraftPhoto(base, draftId, role, uri, "gallery");
+      if (existingLabel) {
+        return setDraftPhotoLabel(next, draftId, uri, existingLabel);
+      }
+      return next;
+    });
 
     if (!isBulk && !hadPhotos) {
       void maybeStartVision(role, uri);
@@ -505,8 +520,10 @@ export default function ConfirmScreen() {
       return;
     }
     const role = lightboxRole;
+    const replaceUri = lightboxUri ?? undefined;
     setLightboxRole(null);
-    void pickPhotoForRole(role);
+    setLightboxUri(null);
+    void pickPhotoForRole(role, replaceUri);
   };
 
   const handleLightboxDelete = () => {
@@ -525,7 +542,15 @@ export default function ConfirmScreen() {
       return;
     }
     const fromRole = lightboxRole;
-    mutate((current) => changeDraftPhotoRole(current, current.activeDraftId, fromRole, toRole));
+    mutate((current) =>
+      changeDraftPhotoRole(
+        current,
+        current.activeDraftId,
+        fromRole,
+        toRole,
+        lightboxUri ?? undefined,
+      ),
+    );
     setLightboxRole(toRole);
   };
 

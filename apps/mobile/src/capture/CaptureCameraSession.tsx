@@ -1,4 +1,4 @@
-import { PHOTO_ROLES, UNIVERSAL_PHOTO_ROLES, type PhotoRole } from "@kit/domain";
+import { UNIVERSAL_PHOTO_ROLES, type PhotoRole } from "@kit/domain";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";

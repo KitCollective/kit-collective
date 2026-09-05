@@ -1948,7 +1948,7 @@ export class CollectionService {
 
     const photoValidationError = validateJerseyPhotos(body.photos);
     if (photoValidationError) {
-      throw new BadRequestException(photoValidationError);
+      throw new BadRequestException({ code: photoValidationError });
     }
 
     if (body.draftId) {
