@@ -1,3 +1,5 @@
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -292,6 +294,41 @@ describe("Hierarchy grain — Club Rich", () => {
     expect(second.summary.honours).toBe(0);
   });
 
+  it("keeps Club facts after a Club season map of the same vendor id", async () => {
+    await prepareDatabase();
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    await runHierarchyGrain({
+      kind: "club",
+      competition: "dk1",
+      clubExternalId: "190",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+    await runHierarchyGrain({
+      kind: "club_season",
+      competition: "dk1",
+      clubExternalId: "190",
+      season: "2010/11",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const rows = await db
+        .select({ foundedOn: club.foundedOn, stadiumName: club.stadiumName })
+        .from(club);
+      expect(rows[0]).toMatchObject({
+        foundedOn: "1992-07-01",
+        stadiumName: "Parken",
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
   it("writes kader body facts, position, and portrait without a profile hop", async () => {
     await prepareDatabase();
     const portraits = new Map<string, Uint8Array>();
@@ -363,6 +400,42 @@ describe("Hierarchy grain — Club Rich", () => {
       expect(portraits.get("player/11110/portrait")?.length).toBeGreaterThan(0);
     } finally {
       await pool.end();
+    }
+  });
+
+  it("writes portrait bytes through SEED_OBJECT_DIR without an injected store", async () => {
+    await prepareDatabase();
+    const objectDir = await mkdtemp(path.join(tmpdir(), "kit-portraits-"));
+    const previous = process.env.SEED_OBJECT_DIR;
+    process.env.SEED_OBJECT_DIR = objectDir;
+    try {
+      const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+      const { summary } = await runHierarchyGrain({
+        kind: "club_season",
+        competition: "dk1",
+        clubExternalId: "190",
+        season: "2010/11",
+        lane: "development",
+        fetchAdapter: adapter,
+        databaseUrl: TEST_DATABASE_URL,
+      });
+      expect(summary.playerPhotos).toBe(1);
+      const bytes = await readFile(path.join(objectDir, "player/11110/portrait"));
+      expect(bytes.length).toBeGreaterThan(0);
+
+      const { db, pool } = createDb(TEST_DATABASE_URL);
+      try {
+        const photos = await db.select({ objectKey: playerPhoto.objectKey }).from(playerPhoto);
+        expect(photos[0]?.objectKey).toBe("player/11110/portrait");
+      } finally {
+        await pool.end();
+      }
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SEED_OBJECT_DIR;
+      } else {
+        process.env.SEED_OBJECT_DIR = previous;
+      }
     }
   });
 

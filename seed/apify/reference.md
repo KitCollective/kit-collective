@@ -77,6 +77,8 @@ This file is the seed-module interface for Transfermarkt grains. Not Nest OpenAP
 
 Already seeded: skip fetch when that club+season already has a squad with jersey numbers (and Rich grain body fields once those land).
 
+Portrait bytes on a kader row persist as **Player photo** (`player/{externalId}/portrait`, `rights: unresolved`). Grain CLI and walk use `SEED_OBJECT_DIR` as the lane object-store stand-in (same keys as R2). Inject `portraitStore` in tests.
+
 ---
 
 ## NationalTeam

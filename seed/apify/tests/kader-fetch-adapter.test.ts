@@ -619,6 +619,40 @@ describe("kader fetch adapter live HTTP errors", () => {
       }),
     ).rejects.toBeInstanceOf(TransfermarktHttpError);
   });
+
+  it("treats HTTP 404 on club facts as a missing page", async () => {
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      fetchHtml: async (url) => {
+        if (url.includes("datenfakten") || url.includes("/erfolge/")) {
+          throw new TransfermarktHttpError(404, url);
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    const raw = await adapter.fetchClub({ competition: "dk1", clubExternalId: "190" });
+    expect(raw.clubs?.[0]?.foundedOn).toBeUndefined();
+    expect(raw.clubs?.[0]?.honours).toEqual([]);
+  });
+
+  it("does not treat HTTP 500 on club facts as a missing page", async () => {
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      fetchHtml: async (url) => {
+        if (url.includes("datenfakten")) {
+          throw new TransfermarktHttpError(500, url);
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    await expect(
+      adapter.fetchClub({ competition: "dk1", clubExternalId: "190" }),
+    ).rejects.toMatchObject({
+      status: 500,
+    });
+  });
 });
 
 describe("runSeed with kader HTML adapter", () => {

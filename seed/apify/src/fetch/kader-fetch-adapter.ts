@@ -118,6 +118,20 @@ async function defaultFetchHtml(url: string): Promise<string> {
   return response.text();
 }
 
+async function fetchOptionalHtml(
+  fetchHtml: (url: string) => Promise<string>,
+  url: string,
+): Promise<string | undefined> {
+  try {
+    return await fetchHtml(url);
+  } catch (error) {
+    if (error instanceof TransfermarktHttpError && error.status === 404) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 interface KaderHtmlClient {
   fetchCompetitionSeason(competition: string, season: number): Promise<ActorSeasonClubRow[]>;
   fetchKader(
@@ -406,20 +420,8 @@ function createLiveAdapter(
     },
     async (clubId, season) => fetchHtml(kaderUrl(clubId, season)),
     async (playerId) => fetchHtml(playerProfileUrl(playerId)),
-    async (clubId) => {
-      try {
-        return await fetchHtml(clubFactsUrl(clubId));
-      } catch {
-        return undefined;
-      }
-    },
-    async (clubId) => {
-      try {
-        return await fetchHtml(clubHonoursUrl(clubId));
-      } catch {
-        return undefined;
-      }
-    },
+    async (clubId) => fetchOptionalHtml(fetchHtml, clubFactsUrl(clubId)),
+    async (clubId) => fetchOptionalHtml(fetchHtml, clubHonoursUrl(clubId)),
     async (_playerId, src) => {
       if (!src || !/^https?:\/\//i.test(src)) {
         return undefined;

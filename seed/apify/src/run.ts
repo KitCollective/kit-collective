@@ -5,6 +5,7 @@ import { parseLane, resolveDatabaseUrl } from "./lane.js";
 import { mapFacts, type PortraitStore } from "./map/index.js";
 import { normalize } from "./normalize/index.js";
 import { type HierarchyGrain, type ParsedSeedCli, parseSeedApifyCli } from "./parse-cli.js";
+import { resolvePortraitStoreFromEnv } from "./portrait-store.js";
 import { filterFactsToClubSeason } from "./scope/club-season.js";
 import {
   assertOutOfScopeSeasonsUnchanged,
@@ -22,6 +23,7 @@ export interface RunSeedOptions {
   fetchAdapter: FetchAdapter;
   databaseUrl?: string;
   migrationsFolder?: string;
+  portraitStore?: PortraitStore;
 }
 
 export interface ClubSeasonFailure {
@@ -178,7 +180,7 @@ export async function runHierarchyGrain(
       const facts = normalize(raw);
       const summary = await mapFacts(db, facts, {
         allowedSeasonLabels: new Set([seasonLabel]),
-        portraitStore: options.portraitStore,
+        portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
       });
       return { summary };
     }
@@ -270,6 +272,7 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
 
         const mapResult = await mapFacts(db, scopedFacts, {
           allowedSeasonLabels: new Set([pair.seasonLabel]),
+          portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
         });
         addMapResults(aggregateMap, mapResult);
       } catch (error: unknown) {

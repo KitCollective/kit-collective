@@ -188,14 +188,26 @@ async function upsertSeasonRow(
   return { id: row!.id, created: true };
 }
 
-function clubFactPatch(clubData: NormalizedClub) {
+function definedPatch<T extends Record<string, string | number | null | undefined>>(
+  fields: T,
+): { [K in keyof T]?: Exclude<T[K], undefined> } {
+  const patch: Record<string, string | number | null> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) {
+      patch[key] = value;
+    }
+  }
+  return patch as { [K in keyof T]?: Exclude<T[K], undefined> };
+}
+
+function clubFactFields(clubData: NormalizedClub) {
   return {
-    foundedOn: clubData.foundedOn ?? null,
-    stadiumName: clubData.stadiumName ?? null,
-    stadiumCapacity: clubData.stadiumCapacity ?? null,
-    primaryColorHex: clubData.primaryColorHex ?? null,
-    secondaryColorHex: clubData.secondaryColorHex ?? null,
-    websiteUrl: clubData.websiteUrl ?? null,
+    foundedOn: clubData.foundedOn,
+    stadiumName: clubData.stadiumName,
+    stadiumCapacity: clubData.stadiumCapacity,
+    primaryColorHex: clubData.primaryColorHex,
+    secondaryColorHex: clubData.secondaryColorHex,
+    websiteUrl: clubData.websiteUrl,
   };
 }
 
@@ -204,10 +216,12 @@ async function upsertClubRow(
   countryId: string,
   clubData: NormalizedClub,
 ): Promise<{ id: string; created: boolean; labels: number; externalIds: number }> {
-  const facts = clubFactPatch(clubData);
+  const facts = definedPatch(clubFactFields(clubData));
   const byExternal = await findEntityId(db, clubData.externalId);
   if (byExternal) {
-    await db.update(club).set(facts).where(eq(club.id, byExternal));
+    if (Object.keys(facts).length > 0) {
+      await db.update(club).set(facts).where(eq(club.id, byExternal));
+    }
     let labels = (await upsertCatalogLabel(
       db,
       "club",
@@ -234,7 +248,7 @@ async function upsertClubRow(
 
   const [row] = await db
     .insert(club)
-    .values({ countryId, kind: clubData.kind, ...facts })
+    .values({ countryId, kind: clubData.kind, ...clubFactFields(clubData) })
     .returning({ id: club.id });
   const id = row!.id;
   await linkExternalId(db, "club", id, clubData.externalId);
@@ -275,15 +289,17 @@ async function upsertPlayerRow(
   playerData: NormalizedPlayer,
   primaryCountryId?: string,
 ): Promise<{ id: string; created: boolean; labels: number; externalIds: number }> {
-  const body = {
-    dateOfBirth: playerData.dateOfBirth ?? null,
-    heightCm: playerData.heightCm ?? null,
-    preferredFoot: playerData.preferredFoot ?? null,
-    primaryCountryId: primaryCountryId ?? null,
-  };
+  const body = definedPatch({
+    dateOfBirth: playerData.dateOfBirth,
+    heightCm: playerData.heightCm,
+    preferredFoot: playerData.preferredFoot,
+    primaryCountryId,
+  });
   const byExternal = await findEntityId(db, playerData.externalId);
   if (byExternal) {
-    await db.update(player).set(body).where(eq(player.id, byExternal));
+    if (Object.keys(body).length > 0) {
+      await db.update(player).set(body).where(eq(player.id, byExternal));
+    }
     const labelChanged = await upsertCatalogLabel(
       db,
       "player",
@@ -294,7 +310,15 @@ async function upsertPlayerRow(
     return { id: byExternal, created: false, labels: labelChanged ? 1 : 0, externalIds: 0 };
   }
 
-  const [row] = await db.insert(player).values(body).returning({ id: player.id });
+  const [row] = await db
+    .insert(player)
+    .values({
+      dateOfBirth: playerData.dateOfBirth,
+      heightCm: playerData.heightCm,
+      preferredFoot: playerData.preferredFoot,
+      primaryCountryId,
+    })
+    .returning({ id: player.id });
   const id = row!.id;
   await linkExternalId(db, "player", id, playerData.externalId);
   await upsertCatalogLabel(db, "player", id, playerData.nameLocale, playerData.name);
@@ -326,14 +350,12 @@ async function upsertPlayerClubSeasonRow(
     .limit(1);
 
   if (existing[0]) {
-    if (
-      existing[0].squadNumber !== (squadNumber ?? null) ||
-      existing[0].position !== (position ?? null)
-    ) {
-      await db
-        .update(playerClubSeason)
-        .set({ squadNumber: squadNumber ?? null, position: position ?? null })
-        .where(eq(playerClubSeason.id, existing[0].id));
+    const patch = definedPatch({
+      squadNumber,
+      position,
+    });
+    if (Object.keys(patch).length > 0) {
+      await db.update(playerClubSeason).set(patch).where(eq(playerClubSeason.id, existing[0].id));
     }
     return { id: existing[0].id, created: false };
   }
