@@ -1,0 +1,4 @@
+# Host-global secrets model: do NOT copy secret dotenv into managed worktrees.
+# Linear/GitHub live on the kit-harness host (systemd EnvironmentFile + gh auth).
+# Keep this file so the intent is explicit; patterns below are non-secret only.
+!.env.example

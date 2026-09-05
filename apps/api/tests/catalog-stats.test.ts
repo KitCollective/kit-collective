@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { catalogStatsSchema } from "@kit/api-contract";
 import { catalogLabel, club, country, createDb, resetDatabase } from "@kit/db";
+import { EUROPEAN_COUNTRIES } from "@kit/domain";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -41,13 +42,14 @@ describe("GET /v1/catalog/stats", () => {
     await app.close();
   });
 
-  it("returns zero counts on an empty catalog", async () => {
+  it("returns European stamdata counts on a catalog with no clubs", async () => {
     const response = await app.inject({ method: "GET", url: "/v1/catalog/stats" });
     expect(response.statusCode).toBe(200);
 
     const body = catalogStatsSchema.parse(JSON.parse(response.body));
-    expect(body).toEqual({
-      countries: 0,
+    expect(body.countries).toBe(EUROPEAN_COUNTRIES.length);
+    expect(body.catalogLabels).toBeGreaterThan(EUROPEAN_COUNTRIES.length);
+    expect(body).toMatchObject({
       leagues: 0,
       clubs: 0,
       nationalTeams: 0,
@@ -58,7 +60,6 @@ describe("GET /v1/catalog/stats", () => {
       manufacturers: 0,
       kits: 0,
       kitPhotos: 0,
-      catalogLabels: 0,
       externalIds: 0,
       users: 0,
     });
@@ -69,7 +70,7 @@ describe("GET /v1/catalog/stats", () => {
 
     const [insertedCountry] = await db
       .insert(country)
-      .values({ iso3166: "DK" })
+      .values({ iso3166: "US" })
       .returning({ id: country.id });
 
     const [insertedClub] = await db

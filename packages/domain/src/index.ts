@@ -140,6 +140,12 @@ export {
   popularCitiesForCountryLabel,
 } from "./location.js";
 export {
+  countryCodesForIso3166,
+  EUROPEAN_COUNTRIES,
+  type EuropeanCountry,
+  europeanCountryByIso3166,
+} from "./countries.js";
+export {
   APPEARANCE_MODES,
   type AppearanceMode,
   USER_LOCALES,

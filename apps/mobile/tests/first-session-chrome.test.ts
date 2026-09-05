@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -11,11 +11,11 @@ function readFirstSession(file: string) {
 
 describe("first-session visual host chrome", () => {
   it("paints splash with locked fill.primary, not theme.canvas or a raw dark hex", () => {
-    const splash = readFirstSession("splash-screen.tsx");
+    const splash = `${readFirstSession("splash-screen.tsx")}\n${readFirstSession("splash-frame.tsx")}`;
     const copy = readFirstSession("door-copy.ts");
 
     expect(splash).toContain("color.fillPrimary");
-    expect(splash).toContain("kitcollective-lockup-white.png");
+    expect(splash).not.toContain("kitcollective-lockup-white.png");
     expect(splash).toContain("SPLASH_CAPTION");
     expect(copy).toContain("Tryk for at fortsætte");
     expect(splash).toContain("withAlpha(color.contentInverse");
@@ -24,6 +24,41 @@ describe("first-session visual host chrome", () => {
     expect(splash).not.toContain("BrandLockupWhite");
     expect(splash).not.toContain("prototype-first-run");
     expect(splash).not.toContain("FloatingTabBar");
+  });
+
+  it("keeps the prize-jersey backdrop under a dark scrim with reduced-motion stills", () => {
+    const splash = readFirstSession("splash-screen.tsx");
+    const frame = readFirstSession("splash-frame.tsx");
+    const backdrop = readFirstSession("splash-backdrop.tsx");
+    const loading = readFirstSession("splash-loading.tsx");
+
+    expect(frame).toContain("SplashBackdrop");
+    expect(frame).toContain('justifyContent: "flex-end"');
+    expect(splash).not.toContain("kitcollective-lockup-white.png");
+    expect(splash).toContain("ActivityIndicator");
+    expect(splash).toContain("useReduceMotion");
+    expect(splash).toContain("withTiming");
+    expect(loading).toContain("SplashFrame");
+    expect(loading).toContain("ActivityIndicator");
+    expect(loading).toContain("alive={false}");
+    expect(
+      existsSync(join(__dirname, "../assets/brand/splash-prize-jersey.png")),
+    ).toBe(true);
+    expect(backdrop).toContain("splash-prize-jersey.png");
+    expect(backdrop).toContain("useReduceMotion");
+    expect(backdrop).toContain("withRepeat");
+    expect(backdrop).toContain("cancelAnimation");
+    expect(backdrop).toContain("scale:");
+    expect(backdrop).toContain("withAlpha(color.contentInverse");
+    expect(backdrop).toContain("color.scrim");
+    expect(backdrop).not.toContain("identityWashStart");
+    expect(backdrop).not.toContain("identityWashEnd");
+    expect(backdrop).not.toContain("hairlineWidth");
+    expect(backdrop).toContain("pointerEvents");
+    expect(backdrop).not.toContain("theme.canvas");
+    expect(backdrop.includes(`#${"0A0A0A"}`)).toBe(false);
+    expect(backdrop).not.toContain("#ff");
+    expect(backdrop).not.toContain("#00");
   });
 
   it("keeps splash dock inverted surface login and tertiary inverse register", () => {

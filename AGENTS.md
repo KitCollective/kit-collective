@@ -86,13 +86,17 @@ New or edited factory skill under `.cursor/skills/`. Not a domain helper. See `.
 
 After land on `development`: verify merge on `origin/development`, remove the Desktop issue worktree, delete the merged remote branch. See `.cursor/skills/reap-worktree/SKILL.md`. Chained from `/land` and `/issue-session`.
 
+### Sync development
+
+Safely fast-forward the main repo's `lanes.integration` branch with `origin` (stash WIP, `--ff-only`, stop on diverge). See `.cursor/skills/sync-development/SKILL.md`.
+
 ### Vendor Expo skills
 
 Official Expo/EAS skills live under `.cursor/skills/expo/` (not factory skills). `/implement` and the `react-expo` helper load `expo-overview` first, then the matching leaf. Checker `/code-review` Standards includes them when the diff touches `apps/mobile` or EAS. Product docs win on conflict. Do not recreate `.agents/`.
 
 ### Prototype, research, handoff, wizard
 
-Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primary sources: `/research`. Session must travel: `/handoff`. Human-only setup: `/wizard`.
+Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primary sources: `/research`. Session must travel: `/handoff`. Human-only setup: `/wizard`. Video idea to Higgsfield brief: `/to-video-brief`.
 
 ### Planning stack
 

@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { assertDatabaseUrlTls } from "./database-url-guard.js";
 import { assertResetDatabaseAllowed } from "./reset-database-guard.js";
 import * as schema from "./schema/index.js";
+import { seedEuropeanCountries } from "./seed/european-countries.js";
 
 export type Db = ReturnType<typeof createDb>["db"];
 
@@ -36,8 +37,9 @@ export function createDb(connectionString: string, options?: CreateDbOptions) {
 }
 
 export async function migrate(connectionString: string, migrationsFolder: string) {
-  const { db, pool } = createDb(connectionString);
+  const { db, pool } = createDb(connectionString, SEED_CREATE_DB_OPTIONS);
   await drizzleMigrate(db, { migrationsFolder });
+  await seedEuropeanCountries(db);
   await pool.end();
 }
 

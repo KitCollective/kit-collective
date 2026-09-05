@@ -93,6 +93,16 @@
       "sourceType": "factory",
       "skillPath": "factory"
     },
+    "sync-development": {
+      "source": "factory",
+      "sourceType": "factory",
+      "skillPath": "factory"
+    },
+    "to-video-brief": {
+      "source": "factory",
+      "sourceType": "factory",
+      "skillPath": "factory"
+    },
     "eas-app-stores": {
       "source": "expo/skills",
       "sourceType": "github",

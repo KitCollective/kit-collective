@@ -69,6 +69,7 @@ Not feature work — upkeep.
 - **`/signal-up`** — out-of-scope bug/debt: new Linear issue in **Triage**, label `signal-up` only. Never delegate. Cap per run.
 - **`/land`** — merge the GitHub PR after `Done`. Integration lane only.
 - **`/reap-worktree`** — after land: verify branch on integration, remove issue worktree, delete merged remote branch (Desktop hygiene).
+- **`/sync-development`** — safely fast-forward the main repo's `lanes.integration` with `origin` (stash WIP, `--ff-only`, stop on diverge).
 - **`/bootstrap-linear`** — board missing or unshaped (`linear.setup.json` absent).
 - **`/create-new-skill`** — author a factory skill under `.cursor/skills/`.
 - **Vendor Expo skills** — `.cursor/skills/expo/`. Not slash commands. `/implement`, `/tdd`, and checker load them on mobile and EAS work. Product docs win on conflict.
@@ -91,6 +92,8 @@ Off the main flow. Skills marked *not copied* are Matt’s — do not invent a l
 - **`/research`** — background agent, cited primary sources, Markdown under `{paths.specs}`. Feeds grilling; does not replace it.
 - **`/handoff`** — portable session file. Default OS temp; `{paths.specs}/<effort>/handoff.md` when the next agent is on this repo.
 - **`/wizard`** — interactive bash for steps only a human can take (secrets, dashboards, cutover). Not for steps the agent can do.
+- **`/sync-development`** — catch up local `lanes.integration` with `origin` without force-push or silent discard.
+- **`/to-video-brief`** — a video idea into a brief a Higgsfield workflow can render: routes to the workflow, grills only what the workflow leaves open, writes `docs/video-system.md` plus one brief per video, then renders. Higgsfield owns prompt craft; we own claims, language, and what is on screen.
 - **`/resolving-merge-conflicts`**, **`/grill-me`**, **`/teach`**, **`/to-questionnaire`** — not copied. Merge conflicts: Cursor `fix-merge-conflicts`. Grill: `/grill-with-docs`.
 
 ## Precondition

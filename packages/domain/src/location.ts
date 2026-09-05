@@ -1,3 +1,5 @@
+import { EUROPEAN_COUNTRIES } from "./countries.js";
+
 /** Popular cities fixture keyed by ISO 3166-1 alpha-2. Live geocoding is out of scope. */
 export const POPULAR_CITIES_BY_ISO3166: Readonly<Record<string, readonly string[]>> = {
   DK: ["København", "Aarhus", "Odense", "Aalborg"],
@@ -7,15 +9,20 @@ export const POPULAR_CITIES_BY_ISO3166: Readonly<Record<string, readonly string[
   GB: ["London", "Manchester", "Birmingham", "Glasgow"],
 };
 
-/** Danish catalog labels mapped to ISO 3166 for the popular-city fixture. */
-export const COUNTRY_LABEL_TO_ISO3166: Readonly<Record<string, string>> = {
-  Danmark: "DK",
-  Sverige: "SE",
-  Norge: "NO",
-  Tyskland: "DE",
-  Storbritannien: "GB",
-  England: "GB",
-};
+function countryLabelToIso3166(): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const country of EUROPEAN_COUNTRIES) {
+    map[country.labelDa] = country.iso3166;
+    map[country.labelEn] = country.iso3166;
+    for (const alias of country.aliases ?? []) {
+      map[alias] = country.iso3166;
+    }
+  }
+  return map;
+}
+
+/** Catalog labels and aliases mapped to ISO 3166-1 alpha-2. */
+export const COUNTRY_LABEL_TO_ISO3166: Readonly<Record<string, string>> = countryLabelToIso3166();
 
 export function popularCitiesForCountryLabel(
   countryLabel: string | null | undefined,

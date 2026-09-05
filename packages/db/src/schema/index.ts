@@ -81,13 +81,38 @@ export const visionUserActionEnum = pgEnum("vision_user_action", VISION_USER_ACT
 export const messageKindEnum = pgEnum("message_kind", MESSAGE_KINDS);
 export const bidStatusEnum = pgEnum("bid_status", BID_STATUSES);
 
-export const country = pgTable("country", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  iso3166: text("iso3166").notNull(),
-  validFrom: date("valid_from"),
-  validTo: date("valid_to"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const country = pgTable(
+  "country",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** ISO 3166-1 alpha-2. United Kingdom is GB, not UK. */
+    iso3166: text("iso3166").notNull(),
+    /** ISO 3166-1 alpha-3. */
+    iso3166Alpha3: text("iso3166_alpha3"),
+    /** ISO 3166-1 numeric (UN M49), three digits with leading zeros. */
+    iso3166Numeric: text("iso3166_numeric"),
+    /** Exceptionally reserved ISO 3166-1 alpha-2 (UK for Great Britain). */
+    iso3166Reserved: text("iso3166_reserved"),
+    /** FIFA three-letter association code. Null when FIFA has no country-level code (e.g. UK). */
+    fifa: text("fifa"),
+    /** IOC three-letter code. */
+    ioc: text("ioc"),
+    validFrom: date("valid_from"),
+    validTo: date("valid_to"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("country_iso3166_idx").on(table.iso3166),
+    uniqueIndex("country_iso3166_alpha3_unique")
+      .on(table.iso3166Alpha3)
+      .where(sql`${table.iso3166Alpha3} IS NOT NULL`),
+    uniqueIndex("country_iso3166_numeric_unique")
+      .on(table.iso3166Numeric)
+      .where(sql`${table.iso3166Numeric} IS NOT NULL`),
+    uniqueIndex("country_fifa_unique").on(table.fifa).where(sql`${table.fifa} IS NOT NULL`),
+    uniqueIndex("country_ioc_unique").on(table.ioc).where(sql`${table.ioc} IS NOT NULL`),
+  ],
+);
 
 export const league = pgTable("league", {
   id: uuid("id").primaryKey().defaultRandom(),
