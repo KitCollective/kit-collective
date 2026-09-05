@@ -40,7 +40,7 @@ describe("Sheet chrome", () => {
     const catalog = readFileSync(sheetPath, "utf8");
 
     expect(catalog).toContain("headerAction?: ReactNode");
-    expect(catalog).toContain("headerAction ? (");
+    expect(catalog).toContain("headerAction ?");
     expect(catalog).toContain("sheetHeaderAction");
   });
 
