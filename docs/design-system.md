@@ -4,7 +4,7 @@ AI-ready visual and interaction lock for in-scope surfaces.
 Agents apply this file. Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Surfaces in scope**: `mobile` (deep), `web` (thin, share/OG), `admin` (operator dashboard). `api` is out of this lock.
-**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Gap 2026-08-23 (`mobile` collection chrome + brand type). Gap 2026-08-23 (`mobile` Tilføj trøje Confirm — one screen, not Stamdata/Detaljer tabs). Gap 2026-08-24 (brand kit SVG files + admin header/login/favicon placement). Gap 2026-08-28 (`mobile` Indbakke — slot 4 envelope, Beskeder | Aktivitet, thread, send-bud). Gap 2026-08-28 (`mobile` own Profil — identity, favorites, settings under Profil, Switch, Avatar, log-out Sheet). Gap 2026-09-04 (`mobile` collection empty: title + shirt diagram + hug `Tilføj trøje`; tab bar Lunar capsule — compact height `space.inset.lg × 2 + space.inset.md`, center plus CTA is a solid oval and the active well is a contained wider-than-tall glass background that follows a swipe, magnifies only while dragged, then hops to the nearest place, `radius.pill`, `space.inset.md` sides, `space.inset.lg` bottom). Gap 2026-09-04 (`mobile` well travel hard-clamped to the first and last place — no overshoot; capture Chooser is a Sheet `form` from the plus with single-choice icon + title + helper rows, nothing preselected, and a Næste / Annuller dock — one face shared with the post-Save re-entry, not a full-screen place). Gap 2026-09-05 (`mobile` bottom navigation switched to Expo Router `NativeTabs` — native system Liquid Glass; five labelled tabs in order Samling · Indbakke · Søg **center** · Ønsker · Profil; capture moved to the Samling header action, no center-plus tab; Ønsker is now its own tab; the native bar stays on detail drills (native default, no hide-on-drill) and the capture flow moved to a `(capture)` modal group over the tabs — **supersedes** the 2026-09-04 Lunar capsule + well + center-plus entries). Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
+**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Gap 2026-08-23 (`mobile` collection chrome + brand type). Gap 2026-08-23 (`mobile` Tilføj trøje Confirm — one screen, not Stamdata/Detaljer tabs). Gap 2026-08-24 (brand kit SVG files + admin header/login/favicon placement). Gap 2026-08-28 (`mobile` Indbakke — slot 4 envelope, Beskeder | Aktivitet, thread, send-bud). Gap 2026-08-28 (`mobile` own Profil — identity, favorites, settings under Profil, Switch, Avatar, log-out Sheet). Gap 2026-09-04 (`mobile` collection empty: title + shirt diagram + hug `Tilføj trøje`; tab bar Lunar capsule — compact height `space.inset.lg × 2 + space.inset.md`, center plus CTA is a solid oval and the active well is a contained wider-than-tall glass background that follows a swipe, magnifies only while dragged, then hops to the nearest place, `radius.pill`, `space.inset.md` sides, `space.inset.lg` bottom). Gap 2026-09-04 (`mobile` well travel hard-clamped to the first and last place — no overshoot; capture Chooser is a Sheet `form` from the plus with single-choice icon + title + helper rows, nothing preselected, and a Næste / Annuller dock — one face shared with the post-Save re-entry, not a full-screen place). Gap 2026-09-05 (`mobile` bottom navigation switched to Expo Router `NativeTabs` — native system Liquid Glass; five labelled tabs in order Samling · Indbakke · Søg **center** · Ønsker · Profil; capture moved to the Samling header action, no center-plus tab; Ønsker is now its own tab; the native bar stays on detail drills (native default, no hide-on-drill) and the capture flow moved to a `(capture)` modal group over the tabs — **supersedes** the 2026-09-04 Lunar capsule + well + center-plus entries). Gap 2026-09-05 (`mobile` photo roles — four universal Confirm slots Forside / Bagside / Venstre / Højre plus many optional Andet photos with a free Beskrivelse, max 10 photos per jersey; repeat camera is shoot-first with a filmstrip, no role overlay; gallery branch ≤10 → one jersey, >10 → bulk; **supersedes** “roles stay three”). Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
 **Owner**: Nicklas
 
 **Taste (locked)**: Vinted for layout and scanability (grid, short captions, search, chips, tab bar) — not for marketplace mechanics. Uber Base for grayscale structure, components, and quiet motion — not for copying UberMove or importing Base Web. One cyan→violet identity wash as garnish, Premier League Fantasy–adjacent, never as chrome that competes with a jersey photo.
@@ -74,7 +74,7 @@ Flag missing context; do not invent new rules.
 Status: `locked`
 
 **Included** (surface → depth):
-- `mobile` (Expo, iOS/Android): collection grid, empty state, add / confirm / Save, gallery-first onboarding and camera-on-repeat, search as its own place (Søg tab, not in the collection header), genveje chips + Tilpas (Sheet manager, not a tab), Indbakke (Beskeder | Aktivitet, conversation, Detaljer, empty), Send bud from another collector’s UserJersey (under Søg), own Profil (identity card, unique username, About me, location country → city search / popular / free tag, favorites as other collectors’ UserJerseys, settings hub, cookies, log out), native tab bar (Samling · Indbakke · Søg · Ønsker · Profil) with capture as the Samling header action, not a tab.
+- `mobile` (Expo, iOS/Android): collection grid, empty state, add / confirm / Save, gallery-first onboarding and camera-on-repeat, search as its own place (Søg tab, not in the collection header), genveje chips + Tilpas (Sheet manager, not a tab), Indbakke (Beskeder | Aktivitet, conversation, Detaljer, empty), Send bud from another collector’s UserJersey (under Søg), own Profil (identity card, unique username, About me, location country → city search / popular / free tag, favorites as other collectors’ UserJerseys, settings hub, cookies, log out), native tab bar (Samling · Indbakke · Søg · Ønsker · Profil) with capture as the Samling header action, not a tab. Capture Photo slots on Confirm: four universal roles (Forside / Bagside / Venstre / Højre) plus many optional Andet photos (free Beskrivelse), max 10 photos per UserJersey.
 - `web` (Astro): public collection page, single UserJersey page, Open Graph image and title — same tokens so a shared link is recognisably KitCollective. Thin: no login mutations, no capture UI.
 - `admin` (Vite + React SPA): email/password login (same Identity); waffle places **Master Data** | **User Data** (routes `/stamdata`, `/collectors`); search + Filters Chip; hairline data table; 32px square thumb on Kit and UserJersey rows; Mark/monogram on club, season, and user identity rows; row drill; Take-down confirm; promote/demote with last-admin and self-demote guards. English chrome. Light only. KitPhoto may render here.
 
@@ -524,6 +524,8 @@ Status: `locked` for the inventory below (v1 + admin gap + inbox gap + Profil ga
 
 **Inventory (Profil gap)**: Switch, Avatar. List row leading/trailing slots as locked below. Own Profil composition is Pattern **Own Profil**.
 
+**Inventory (photo-role gap)**: Photo lightbox. No other new primitive. Photo slot `confirm-strip` carries the four universal roles plus Andet thumbs. Repeat-camera filmstrip is Capture-session composition (small 4:5 thumbs, no role), not a new component. `camera-overlay` Photo slot variant is **superseded** — do not put role slots on `CameraView`.
+
 **Deferred primitives**: Checkbox, paywall card, wishlist row. Thread row / Detaljer still use a 44px circular **initial** on `fill.secondary` — that is not Avatar and not a new Mark `kind`. Admin Profile action stays a 32px operator monogram — not Avatar. Do not invent a Filter primitive (use Button + Chip in Sheet). Do not invent an admin checkbox column.
 
 A primitive not listed: **flag**. Do not invent components or variants.
@@ -859,25 +861,47 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Photo slot
 
-**Purpose**: Capture or assign one UserJersey photo with a role.
+**Purpose**: Capture or assign one UserJersey photo with a role, or add another photo under the per-jersey cap.
 
-**Anatomy**: Preview (camera or thumbnail). Role label (`front` | `back` | `label`). Optional empty dashed `border.subtle` when vacant.
+**Anatomy**: 4:5 preview (thumbnail). Caption under the thumb. Optional empty dashed `border.subtle` when vacant.
 
-**Properties**: `role`: `front` | `back` | `label`. `uri` optional. `onPress` capture or replace.
+**Properties**: `role`: `front` | `back` | `left` | `right` | `other` (Andet). Universal roles are unique on one jersey. `other` is **not** unique — many Andet photos may sit on the same jersey. `uri` optional. `caption` optional (Andet only: the free Beskrivelse; empty caption displays **Andet**). `onPress`: an **empty** universal or **Tilføj foto** slot opens the picker directly; a **filled** `confirm-strip` slot opens the **Photo lightbox** (Erstat / Slet / Skift rolle).
 
-**Variants**: `camera-overlay` (full-bleed preview, three slots). `confirm-strip` (thumbnails on confirm).
+**Variants**: `confirm-strip` (thumbnails on Confirm). The former `camera-overlay` variant is **superseded** — repeat camera has no role slots on the viewfinder.
 
-**States**: Empty, filled, selected (which slot is next), focus. At least one filled photo required to Save; all three recommended, not required.
+**States**: Empty, filled, focus. At least one filled photo required to Save; filling all four universal roles is recommended, not required. A jersey holds **at most 10** photos (universal + Andet combined).
 
-**Accessibility**: Name includes role in Danish UI (“Forside”, “Bagside”, “Mærke”). Empty slot says it is empty. Hit target ≥ 44.
+**Accessibility**: Name includes the Danish role (“Forside”, “Bagside”, “Venstre”, “Højre”). Andet name is the Beskrivelse when set, otherwise “Andet”. Empty universal slot says it is empty. Trailing add slot name is “Tilføj foto, tom”. Hit target ≥ 44.
 
-**Composition**: Camera session pattern; confirm strip. Gallery-first onboarding fills slots from the picker.
+**Composition**: Confirm strip only (Pattern **Confirm and Save**). Gallery-first onboarding and shoot-first camera fill roles in order Forside → Bagside → Venstre → Højre; leftover photos become unlabeled Andet. A filled slot opens the Photo lightbox rather than silently re-picking. **Tilføj foto** always adds an Andet photo (even when a universal slot is still empty). There is no **Mærke** slot.
 
-**Unsupported**: Emoji placeholders. Using ImagePicker camera as the primary repeat path (in-app `CameraView` is the repeat path). Blocking Save on all three slots.
+**Unsupported**: Emoji placeholders. Using ImagePicker camera as the primary repeat path (in-app `CameraView` is the repeat path). Blocking Save on all four universal slots or on an Andet Beskrivelse. Role slots overlaid on `CameraView`. A fifth fixed “Andet” slot that is always empty-and-unique. More than 10 photos on one jersey. A closed enum of Andet kinds (vaskemærke is a suggestion, not a role).
 
-**Example** *(not a rule)*: Three overlay slots; Forside filled, Bagside and Mærke empty.
+**Example** *(not a rule)*: Strip shows Forside filled, Bagside / Venstre / Højre empty, one Andet thumb captioned “Vaskemærke”, then a dashed Tilføj foto.
 
-**Code**: Unmapped. Flag.
+**Code**: `apps/mobile` — `PhotoSlot` in `src/components/photo-slot.tsx`.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Photo lightbox
+
+**Purpose**: Open one captured UserJersey photo full-size from a filled Photo slot on Confirm, so the collector can preview it and fix a wrong upload — replace, delete, or re-assign its role (and, for Andet, write a Beskrivelse) — instead of a silent re-pick.
+
+**Anatomy**: Scrim (modal, `theme.scrim`). One large **4:5** preview centred (`radius.md`). Header row with the Sheet-style circular **Luk** chrome button top-left (`withAlpha(content.primary, ~0.06)`). Below the preview: `tertiary` **Erstat**; **Skift rolle** as Chip `single-select` over the five choices **Forside / Bagside / Venstre / Højre / Andet**; when **Andet** is selected, a Text field **Beskrivelse** (placeholder `f.eks. Vaskemærke`) plus three suggestion chips (**Vaskemærke**, **ID-kode**, **Slitage**) that fill the field — shortcuts, not a closed enum; then a spatially separated `destructive` **Slet**.
+
+**Properties**: `uri` (required). `role` (`front` | `back` | `left` | `right` | `other`). `label` (string, Andet only; may be empty). `onReplace`. `onChangeRole`. `onChangeLabel`. `onDelete`. `onDismiss`.
+
+**Variants**: None — a single full-size viewer. Not a multi-photo swipe pager (that is UserJersey detail).
+
+**States**: Rest; presenting; dismissed. Slet removes the photo and closes; a universal slot returns to empty, an Andet thumb leaves the strip. The action is reversible by re-adding. Changing to a **universal** role that is already filled **swaps** the two photos. Changing to **Andet** never swaps — the photo joins the Andet group (until the jersey is at 10). Empty Beskrivelse is allowed; the strip then shows “Andet”.
+
+**Accessibility**: Accessible name = the Danish role, or the Beskrivelse / “Andet”. Scrim dim + focus trap; Escape/back/scrim dismisses. Hit targets ≥ 44. **Slet** uses `danger` and is separated from Erstat so it is not a mis-tap. Reduced motion = instant present, no travel. Suggestion chips name the string they insert.
+
+**Composition**: Opened from a filled `confirm-strip` Photo slot on Confirm. Reuses Chip `single-select` for Skift rolle, Chip (same primitive) as Beskrivelse shortcuts, Text field for the free label, and the Sheet chrome-button token for Luk. Not on Samling tiles; not on the UserJersey detail immersive pager. There is no **Mærke** chip — existing Mærke photos show as Andet with Beskrivelse “Mærke”.
+
+**Unsupported**: A multi-photo swipe gallery here (that is UserJersey detail). A sixth PhotoRole chip. Treating suggestion chips as domain roles. Requiring Beskrivelse before Luk or Gem. A silent replace with no preview. Slet without a way back (leave the slot empty, not a hard destroy of the session). Role-change after every camera shutter (categorisation is this lightbox, on Confirm).
+
+**Code**: `apps/mobile` — `PhotoLightbox` in `src/components/photo-lightbox.tsx`.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
@@ -1274,7 +1298,7 @@ Flag missing context; do not invent patterns.
 
 **Composition** (one scrolling column, `mobile` only; same body for a single jersey and for each active jersey in bulk):
 
-1. Photo slot `confirm-strip` (Forside / Bagside / Mærke). At least one filled. Roles stay three; do not add left/right/other slots.
+1. Photo slot `confirm-strip` above the fields. **Always** four universal 4:5 slots in order Forside / Bagside / Venstre / Højre (empty or filled). Then 0–n Andet thumbs (caption = Beskrivelse, else **Andet**). Then a dashed **Tilføj foto** while the jersey has fewer than **10** photos. Horizontal scroll; do not shrink thumbs. At least one filled. Tapping a **filled** slot opens the **Photo lightbox** (Erstat / Slet / Skift rolle, plus Beskrivelse when Andet); an **empty** universal slot opens the picker for that role; **Tilføj foto** opens the picker and adds an **Andet** photo. There is no Mærke slot. Binding an 11th photo onto this jersey is refused with helper text — the photo stays in **Uredigerede** (bulk) or is not taken (camera shutter off at 10).
 2. Vision suggestion on this jersey only — club, season, kit type. High confidence **pre-selects** the matching Search/Select/Chip. Low confidence: a quiet strip with **Brug** + dismiss. In-flight: skeleton on existing `surface` / `content` tokens, not a blocking “analysing” screen. Failure: the strip disappears; the collector types. Save never waits. Vision does **not** group photos into UserJerseys and does **not** assign Photo slot roles.
 3. Club Search field → Sheet + List row + Mark. Season is club-scoped (Select). No free-text club.
 4. Chip `single-select` groups, all visible here: kit type (Hjemme / Ude / Tredje / Keeper / Special), size (XS–XXL), condition (Ny / Brugt / Slidt). Thumb-reach; not free text; not stars.
@@ -1282,13 +1306,13 @@ Flag missing context; do not invent patterns.
 6. Tertiary text **Flere trøjer i denne upload** escapes to bulk bind without re-picking photos. It does not “split” the current jersey.
 7. Button dock: one `primary` **Gem** (`width.fill`). Disabled until photo + club + season + type + size + condition are set. Helper text explains what is missing — do not leave a black button that 4xxs. When more than one unsaved jersey remains in the session, the label is **Gem og næste**; the enablement rule does not change.
 
-**Bulk chrome** (only when the session has more than three photos — see Capture session): a thin **Uredigerede** row (count, no essay) + jersey tabs (Trøje *n* · count, **+ trøje**) sit **above** this same body. The active tab is the bind target. The unbound row hides when empty. Do not ship a thinner bulk form that drops size or condition.
+**Bulk chrome** (only when the session has more than **ten** photos — see Capture session): a thin **Uredigerede** row (count, no essay) + jersey tabs (Trøje *n* · count, **+ trøje**) sit **above** this same body. The active tab is the bind target. Each jersey still caps at 10 photos. The unbound row hides when empty. Do not ship a thinner bulk form that drops size or condition. A cellar dump of many jerseys (tens or ~100) is this chrome — there is **no** session-wide photo cap.
 
 **Defaults**: “Ny trøje” does not inherit club. “Samme klub” prefills club only — not season, type, or condition. Size is not a sticky default in this gap (measure first; flag if an agent wants last-used size).
 
-**Unsupported**: Stamdata | Detaljer (or any Confirm tabs). Admin Top tabs reused on Confirm. Multi-step stepper. Shirt Squad field completeness before the row exists. Prefilling club on “Ny trøje”. Free-text club. Blocking on manufacturer, `catalogKitId`, or kit completeness. Star ratings for condition. A “Mere” type chip that hides Keeper/Special. Required size or condition only on a second surface. Vision as grouping. An extra **Brug** on every high-confidence hit. Two different Save-enablement rules for single vs bulk. Green success confetti; a toast on top of **Gemt**.
+**Unsupported**: Stamdata | Detaljer (or any Confirm tabs). Admin Top tabs reused on Confirm. Multi-step stepper. Shirt Squad field completeness before the row exists. Prefilling club on “Ny trøje”. Free-text club. Blocking on manufacturer, `catalogKitId`, or kit completeness. Star ratings for condition. A “Mere” type chip that hides Keeper/Special. Required size or condition only on a second surface. Vision as grouping. An extra **Brug** on every high-confidence hit. Two different Save-enablement rules for single vs bulk. Green success confetti; a toast on top of **Gemt**. A Mærke slot or a unique fifth Andet slot. Requiring all four universal photos or an Andet Beskrivelse to Save. Auto-chunking every ten photos into a jersey. Role overlay on the repeat camera. Silently dropping an 11th photo.
 
-**Example** *(not a rule)*: Three 4:5 thumbs, Vision has already selected F.C. København / 2023/24 / Hjemme, collector taps L and Brugt, **Gem** enables. Player and Superliga patch stay behind Flere detaljer.
+**Example** *(not a rule)*: Four 4:5 universal thumbs (Forside filled, the rest empty), Vision has already selected F.C. København / 2023/24 / Hjemme, collector taps L and Brugt, **Gem** enables. A later Andet “Vaskemærke” thumb does not change Gem enablement. Player and Superliga patch stay behind Flere detaljer.
 
 Flag missing context; do not invent patterns.
 
@@ -1298,14 +1322,14 @@ Flag missing context; do not invent patterns.
 
 **Composition**:
 
-1. **Chooser** (after the Samling capture button): a Sheet `form` over the current place, title **Tilføj trøje**, not a full-screen place. One short caption under the title: few photos become one jersey; many land as an unbound row the collector binds. Body is a **single-choice** List row group — each row is a leading line icon, a title, and a helper sentence, with trailing `check` on the selected row: **Upload filer** (system picker: iOS Photos and Files / Android gallery and documents) and **Tag billede** (in-app `CameraView` on repeat; gallery-first remains true for the first session). Picking a row only selects it. **Nothing is preselected**: the selection resets on every present, **Næste** is disabled until the collector picks, and the block is spelled out in `caption` above it (“Vælg en mulighed for at fortsætte.”) so the disabled button is not the only signal. Footer dock commits: `primary` `width.fill` **Næste** then `tertiary` **Annuller**. Annuller, the pinned “Luk”, swipe-down, and the scrim all dismiss without starting a session. Dismiss the Sheet **before** presenting the system picker — the OS picker cannot present on top of it.
+1. **Chooser** (after the Samling capture button): a Sheet `form` over the current place, title **Tilføj trøje**, not a full-screen place. One short caption under the title: up to ten photos become one jersey; more land as unbound. Body is a **single-choice** List row group — each row is a leading line icon, a title, and a helper sentence, with trailing `check` on the selected row: **Upload filer** (system picker: iOS Photos and Files / Android gallery and documents) and **Tag billede** (in-app `CameraView` on repeat; gallery-first remains true for the first session). Picking a row only selects it. **Nothing is preselected**: the selection resets on every present, **Næste** is disabled until the collector picks, and the block is spelled out in `caption` above it (“Vælg en mulighed for at fortsætte.”) so the disabled button is not the only signal. Footer dock commits: `primary` `width.fill` **Næste** then `tertiary` **Annuller**. Annuller, the pinned “Luk”, swipe-down, and the scrim all dismiss without starting a session. Dismiss the Sheet **before** presenting the system picker — the OS picker cannot present on top of it.
 
 This is the **only** Chooser face. The post-Save “Samme klub” / “Ny trøje” paths land back on Samling and re-present the same Sheet with the club prefilled — they do not route to a place. One host at the app root (above **both** the tabs and the `(capture)` group) owns it, so the Samling capture button and the post-Save re-entry cannot drift and never stack two Sheets deep. A Confirm screen whose session is gone redirects to Samling, not to a Chooser place. Steps 2–4 below run inside the `(capture)` modal group presented over the tabs, so capture / confirm / bulk-bind have **no** tab bar.
 2. **System picker**: the OS screen, not an in-app camera roll. iOS may show numbered ordered selection; Android typically does not — bind and Confirm must not assume the collector saw 1, 2, 3. Confirm the pick with **Brug *n* billeder**.
-3. **Branch**: three photos or fewer → Confirm and Save for one UserJersey (picker order fills roles front, back, label when present). More than three → bulk bind first (Uredigerede + jersey tabs), then the same Confirm body per active jersey. Do not auto-chunk every three photos.
-4. **Repeat camera**: one `CameraView`, three Photo slots overlaid, gallery as text/tertiary escape. Persist the draft locally after each shot or pick.
+3. **Branch**: ten photos or fewer → Confirm and Save for one UserJersey (picker order fills Forside, Bagside, Venstre, Højre when those slots are empty; leftover photos become unlabeled Andet). More than ten → bulk bind first (Uredigerede + jersey tabs), then the same Confirm body per active jersey. Do not auto-chunk every ten photos. Per-jersey cap stays 10 after bind; the session itself has no photo cap (a ~100-jersey cellar dump is valid bulk).
+4. **Repeat camera**: shoot-first. One `CameraView`, shutter, count `n/10` (`type.caption` / `type.mono`), gallery as text/tertiary escape. **No role overlay** on the viewfinder. Under the shutter, a filmstrip of this session’s shots — small 4:5 thumbs (`radius.md`), no role caption, horizontal scroll if needed, hit target ≥ 44 tall. **Fortsæt** (disabled at 0 photos) lands on Confirm, where strip + lightbox assign roles with the same fill order as the picker. Shutter disables at 10 with helper **Du kan højst have 10 fotos på én trøje.** Persist the draft locally after each shot or pick. Camera does not guess Venstre/Højre and does not prompt for a role after each shutter.
 
-**Unsupported**: System camera one-shot as the repeat primary path. Asking camera + photos + push on first launch. A custom product photo grid as the picker. Vision grouping photos into jerseys. Groups-of-three as the product. Showing the Tab bar during the capture session itself (steps 2–4 live in the `(capture)` modal group over the tabs; step 1 is the Chooser Sheet sitting over the current place, so the native bar stays behind that scrim). A full-screen place named Add as the Chooser (or a `(tabs)/add` route). Chooser rows that fire the picker on tap and leave **Næste** with nothing to commit. A preselected row, so **Næste** could start a session the collector never chose. A second Chooser face for the post-Save re-entry.
+**Unsupported**: System camera one-shot as the repeat primary path. Asking camera + photos + push on first launch. A custom product photo grid as the picker. Vision grouping photos into jerseys. Groups-of-three or groups-of-ten as the product. Role slots, role chips, or a post-shutter role prompt on `CameraView`. Showing the Tab bar during the capture session itself (steps 2–4 live in the `(capture)` modal group over the tabs; step 1 is the Chooser Sheet sitting over the current place, so the native bar stays behind that scrim). A full-screen place named Add as the Chooser (or a `(tabs)/add` route). Chooser rows that fire the picker on tap and leave **Næste** with nothing to commit. A preselected row, so **Næste** could start a session the collector never chose. A second Chooser face for the post-Save re-entry. `selectionLimit: 10` on the OS picker as a stand-in for the per-jersey cap (the picker is the session dump; the cap is Confirm / bind / shutter).
 
 Flag missing context; do not invent patterns.
 
@@ -1345,6 +1369,8 @@ Status: `thin` — `apps/admin` is not scaffolded; mobile/web mappings may still
 | Jersey tile | web | *unmapped* | Same 4:5 crop and caption rules |
 | Identity wash | mobile, web | *unmapped* | Gradient; never on `KitPhoto` or jersey photo |
 | Tab bar | mobile | `app/(tabs)/_layout.tsx` | `NativeTabs` (native system Liquid Glass); five labelled tabs Samling · Indbakke · Søg (center) · Ønsker · Profil; Indbakke `NativeTabs.Trigger.Badge` = `unreadCount`; capture is the Samling header button (`src/components/collection-header.tsx`) → capture Chooser Sheet (`src/components/capture-source-sheet.tsx`); bar stays on detail drills (native default); capture flow in the `(capture)` modal group. Ratchet: `scripts/check-mobile-tab-bar.mjs` |
+| Photo slot | mobile | `src/components/photo-slot.tsx` | `confirm-strip` only this gap; `camera-overlay` superseded |
+| Photo lightbox | mobile | `src/components/photo-lightbox.tsx` | Photo-role gap; Skift rolle is five chips + Andet Beskrivelse; opened from a filled `confirm-strip` Photo slot |
 | Thread row … Message composer | mobile | *unmapped* | Inbox gap primitives; throwaway `src/prototype-inbox/` is not the host API |
 | Switch, Avatar | mobile | *unmapped* | Profil gap primitives; throwaway `src/prototype-profile/` is not the host API |
 | Catalog peek | api | `GET /v1/catalog/peek` | Not in this system |
@@ -1394,3 +1420,4 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 | Tab-badge overflow (99+) | Integer count locked; cap not chosen | If unread can exceed two digits |
 | Sticky last-used size on Confirm | Wrong-default risk; no telemetry | After cellar sessions show the same collector reuses size |
 | Nameset / patch / player-print controls | Flere detaljer Sheet is locked; field UI is not | Nameset / patch feature slice |
+| UserJersey detail Andet caption chrome | Detail is the immersive pager, not the Confirm strip; Danish role / Beskrivelse **strings** are reused, but pager caption layout is not drawn this gap | A later own-detail slice that shows per-photo captions |

@@ -1,6 +1,6 @@
 # KitCollective data model
 
-**Version:** 1.5 · 2026-08-15  
+**Version:** 1.6 · 2026-09-05  
 **Status:** Locked for schema specs  
 **Parent:** [tech-stack](./tech-stack.md) · [PRD 2.1](../Business/PRD.md)
 
@@ -57,12 +57,12 @@ Import repo → normalized JSON → mapper → **our** tables. Re-run mapper; do
 | --- | --- |
 | `User` | Our account. **Email + password is always available (mandatory path).** Apple / Google (and later Facebook) are extra identities on the same user. Role `user` \| `admin` |
 | **`UserJersey`** | Their copy. Points at `clubId`, `seasonId`, optional `kitId` |
-| `UserJerseyPhoto` | Their front/back/label. `role`, source camera\|gallery. Bytes in **R2** `user/{userId}/{jerseyId}/…`; row holds the key |
+| `UserJerseyPhoto` | Their photos. `role` is `front` \| `back` \| `left` \| `right` \| `other` (Andet); `other` may repeat and may carry a free `label` (Beskrivelse). At most ten per UserJersey. Source camera\|gallery. Bytes in **R2** `user/{userId}/{jerseyId}/…`; row holds the key |
 | `UserJerseyPatch` | Pads actually on this copy (confirmed) |
 | `JerseyDraft` | Local sqlite ↔ server, same id |
 | `VisionLog` | Suggestion + whether they accepted/edited/ignored |
 
-Required on Save: `clubId`, `seasonId`, `type`, `size`, `condition`, ≥1 photo.  
+Required on Save: `clubId`, `seasonId`, `type`, `size`, `condition`, ≥1 photo (max 10). Universal roles are unique; `other` is not.  
 Optional: `kitId`, player print, patches, purchase, authenticity (default `unknown`).
 
 Vision may **suggest** `kitId` / player. It does not create catalog rows.
