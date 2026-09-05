@@ -6,6 +6,7 @@ import { mapFacts, mapNationalTeamFacts, type PortraitStore } from "./map/index.
 import { normalize } from "./normalize/index.js";
 import { type HierarchyGrain, type ParsedSeedCli, parseSeedApifyCli } from "./parse-cli.js";
 import { resolvePortraitStoreFromEnv } from "./portrait-store.js";
+import { rejectNationalTeamApifyScope } from "./reject-national-team-scope.js";
 import { filterFactsToClubSeason } from "./scope/club-season.js";
 import {
   assertOutOfScopeSeasonsUnchanged,
@@ -14,7 +15,6 @@ import {
   SeedScopeIsolationError,
   snapshotSeasonPcsByLabel,
 } from "./scope-isolation.js";
-import { rejectNationalTeamApifyScope } from "./reject-national-team-scope.js";
 import { isClubSeasonAlreadySeeded } from "./seeded.js";
 import type { Lane, MapResult } from "./types.js";
 
