@@ -96,7 +96,7 @@ function canonicalCollectorPair(leftId: string, rightId: string): [string, strin
 
 function typeaheadTextMatches(parts: Array<string | undefined>, query: string): boolean {
   const lowered = query.toLowerCase();
-  return parts.some((part) => part !== undefined && part.toLowerCase().includes(lowered));
+  return parts.some((part) => part?.toLowerCase().includes(lowered));
 }
 
 function handleInitial(handle: string): string {
@@ -386,8 +386,8 @@ export class CollectionService {
       const lastReadAt = lastReadByConversation.get(row.id);
       const unread =
         Boolean(latest) &&
-        latest!.senderId !== userId &&
-        (!lastReadAt || latest!.createdAt > lastReadAt);
+        latest?.senderId !== userId &&
+        (!lastReadAt || latest?.createdAt > lastReadAt);
 
       return {
         id: row.id,
@@ -514,8 +514,8 @@ export class CollectionService {
       const lastReadAt = lastReadByConversation.get(row.conversationId);
       const unread =
         Boolean(latest) &&
-        latest!.senderId !== userId &&
-        (!lastReadAt || latest!.createdAt > lastReadAt);
+        latest?.senderId !== userId &&
+        (!lastReadAt || latest?.createdAt > lastReadAt);
 
       return {
         id: row.id,
@@ -723,7 +723,7 @@ export class CollectionService {
         conversationId,
         senderId: userId,
         kind,
-        body: hasText ? body.text!.trim() : null,
+        body: hasText ? body.text?.trim() : null,
         imageObjectKey: imageObjectKey ?? null,
         replyToMessageId: body.replyToMessageId ?? null,
       })
@@ -762,7 +762,7 @@ export class CollectionService {
       )
       .limit(1);
 
-    if (!row || row.kind !== "image" || !row.imageObjectKey) {
+    if (row?.kind !== "image" || !row.imageObjectKey) {
       throw new NotFoundException("Message photo not found");
     }
 
@@ -1713,7 +1713,7 @@ export class CollectionService {
       return [
         {
           userJerseyId: row.userJerseyId,
-          photoUrl: photos[0]!.photoUrl,
+          photoUrl: photos[0]?.photoUrl,
           clubLabel,
           seasonLabel: row.seasonLabel,
           type: row.type,
@@ -1908,7 +1908,7 @@ export class CollectionService {
       )
       .limit(1);
 
-    if (!messageRow || messageRow.kind !== "bid") {
+    if (messageRow?.kind !== "bid") {
       throw new NotFoundException("Bid message not found");
     }
 
@@ -2487,7 +2487,7 @@ export class CollectionService {
           objectKey,
           role: photo.role,
           source: photo.source,
-          label: photo.role === "other" ? (photo.label?.trim() || null) : null,
+          label: photo.role === "other" ? photo.label?.trim() || null : null,
           ocrStatus: "none",
         })
         .returning({

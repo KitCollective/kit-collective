@@ -71,15 +71,15 @@ export type JerseyCondition = (typeof JERSEY_CONDITIONS)[number];
 
 export {
   isUniversalPhotoRole,
+  type JerseyPhotoInput,
+  type JerseyPhotoValidationError,
   MAX_USER_JERSEY_PHOTOS,
   PHOTO_ROLE_LABELS_DA,
   PHOTO_ROLES,
-  UNIVERSAL_PHOTO_ROLES,
-  validateJerseyPhotos,
-  type JerseyPhotoInput,
-  type JerseyPhotoValidationError,
   type PhotoRole,
+  UNIVERSAL_PHOTO_ROLES,
   type UniversalPhotoRole,
+  validateJerseyPhotos,
 } from "./photo-roles.js";
 
 export const PHOTO_SOURCES = ["gallery", "camera"] as const;

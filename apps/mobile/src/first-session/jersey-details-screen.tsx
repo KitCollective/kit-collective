@@ -7,8 +7,8 @@ import {
   JERSEY_SIZES,
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
-  UNIVERSAL_PHOTO_ROLES,
   type PhotoRole,
+  UNIVERSAL_PHOTO_ROLES,
 } from "@kit/domain";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -532,6 +532,7 @@ export function JerseyDetailsScreen({
             role: photo.role,
             source: photo.source,
             contentBase64: await readPhotoBase64(photo.uri),
+            ...(photo.role === "other" && photo.label?.trim() ? { label: photo.label.trim() } : {}),
           })),
       );
 
@@ -658,7 +659,6 @@ export function JerseyDetailsScreen({
             {otherPhotos.map((photo) => (
               <PhotoSlot
                 key={photo.uri}
-                role="other"
                 uri={photo.uri}
                 caption={photo.label}
                 onPress={() => handlePhotoSlotPress("other")}

@@ -80,7 +80,7 @@ describe("stamdata schema", () => {
     const country = await pool.query<{ id: string }>(
       `INSERT INTO country (iso3166) VALUES ('DK') RETURNING id`,
     );
-    const entityId = country.rows[0]!.id;
+    const entityId = country.rows[0]?.id;
 
     await pool.query(
       `INSERT INTO catalog_label (entity_type, entity_id, locale, kind, text)
@@ -101,7 +101,7 @@ describe("stamdata schema", () => {
     const country = await pool.query<{ id: string }>(
       `INSERT INTO country (iso3166) VALUES ('SE') RETURNING id`,
     );
-    const entityId = country.rows[0]!.id;
+    const entityId = country.rows[0]?.id;
 
     await pool.query(
       `INSERT INTO external_id (entity_type, entity_id, system, value)
@@ -146,7 +146,7 @@ describe("stamdata schema", () => {
     const country = await pool.query<{ id: string }>(
       `INSERT INTO country (iso3166) VALUES ('DK') RETURNING id`,
     );
-    const countryId = country.rows[0]!.id;
+    const countryId = country.rows[0]?.id;
 
     const inserted = await pool.query<{ country_id: string | null }>(
       `INSERT INTO "user" (email, password_hash, handle, country_id)

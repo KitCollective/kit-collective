@@ -1,9 +1,5 @@
 import type { JerseyCondition, JerseySize, KitType, PhotoRole, PhotoSource } from "@kit/domain";
-import {
-  MAX_USER_JERSEY_PHOTOS,
-  PHOTO_ROLES,
-  UNIVERSAL_PHOTO_ROLES,
-} from "@kit/domain";
+import { MAX_USER_JERSEY_PHOTOS, UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -395,9 +391,7 @@ export function setDraftPhotoLabel(
 ): CaptureSessionState {
   return updateDraft(state, draftId, (draft) => ({
     ...draft,
-    photos: draft.photos.map((photo) =>
-      photo.uri === uri ? { ...photo, label } : photo,
-    ),
+    photos: draft.photos.map((photo) => (photo.uri === uri ? { ...photo, label } : photo)),
   }));
 }
 

@@ -165,16 +165,16 @@ describe("bind, unbind, and addJersey", () => {
     const withSecondJersey = addJerseyDraft(session);
     const secondDraftId = withSecondJersey.activeDraftId;
 
-    const switched = setActiveDraft(withSecondJersey, session.drafts[0]!.id);
+    const switched = setActiveDraft(withSecondJersey, session.drafts[0]?.id);
 
-    expect(switched.activeDraftId).toBe(session.drafts[0]!.id);
+    expect(switched.activeDraftId).toBe(session.drafts[0]?.id);
     expect(switched.activeDraftId).not.toBe(secondDraftId);
   });
 
   it("removeDraft drops a saved jersey and advances the active tab", () => {
     const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
     const withSecondJersey = addJerseyDraft(session);
-    const firstDraftId = session.drafts[0]!.id;
+    const firstDraftId = session.drafts[0]?.id;
 
     const removed = removeDraft(withSecondJersey, firstDraftId);
 

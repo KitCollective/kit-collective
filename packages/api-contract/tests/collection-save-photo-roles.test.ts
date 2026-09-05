@@ -1,10 +1,8 @@
-import {
-  collectionSavePhotoSchema,
-  collectionSaveRequestSchema,
-} from "@kit/api-contract";
+import { collectionSavePhotoSchema, collectionSaveRequestSchema } from "@kit/api-contract";
 import { describe, expect, it } from "vitest";
 
-const JPEG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const JPEG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 const baseSaveBody = {
   clubId: "11111111-1111-1111-1111-111111111111",

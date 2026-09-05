@@ -15,9 +15,7 @@ test("PhotoRole enum is front | back | left | right | other", () => {
 test("validateJerseyPhotos accepts one photo and up to ten", () => {
   assert.equal(validateJerseyPhotos([{ role: "front" }]), null);
   assert.equal(
-    validateJerseyPhotos(
-      Array.from({ length: MAX_USER_JERSEY_PHOTOS }, () => ({ role: "other" })),
-    ),
+    validateJerseyPhotos(Array.from({ length: MAX_USER_JERSEY_PHOTOS }, () => ({ role: "other" }))),
     null,
   );
 });
@@ -50,8 +48,5 @@ test("validateJerseyPhotos accepts two other photos", () => {
 });
 
 test("validateJerseyPhotos rejects label on a universal role", () => {
-  assert.equal(
-    validateJerseyPhotos([{ role: "front", label: "oops" }]),
-    "label_on_universal_role",
-  );
+  assert.equal(validateJerseyPhotos([{ role: "front", label: "oops" }]), "label_on_universal_role");
 });

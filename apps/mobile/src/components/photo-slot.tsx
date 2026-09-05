@@ -40,7 +40,7 @@ export function PhotoSlot({
   const theme = useTheme();
   const typography = useTypography();
   const roleLabel =
-    role === "other" ? (caption?.trim() || PHOTO_ROLE_LABELS_DA.other) : PHOTO_ROLE_LABELS_DA[role];
+    role === "other" ? caption?.trim() || PHOTO_ROLE_LABELS_DA.other : PHOTO_ROLE_LABELS_DA[role];
   const isEmpty = !uri;
   const isOverlay = variant === "camera-overlay";
   const slotWidth = isOverlay ? OVERLAY_WIDTH : CONFIRM_WIDTH;

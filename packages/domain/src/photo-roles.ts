@@ -32,7 +32,9 @@ export type JerseyPhotoValidationError =
   | "duplicate_universal_role"
   | "label_on_universal_role";
 
-export function validateJerseyPhotos(photos: JerseyPhotoInput[]): JerseyPhotoValidationError | null {
+export function validateJerseyPhotos(
+  photos: JerseyPhotoInput[],
+): JerseyPhotoValidationError | null {
   if (photos.length < 1) {
     return "too_few_photos";
   }

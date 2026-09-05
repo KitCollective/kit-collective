@@ -1,6 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { PHOTO_ROLE_LABELS_DA, PHOTO_ROLES, type PhotoRole } from "@kit/domain";
-import { Image, Modal, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import {
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Chip } from "@/components/chip";
 import { Button, ButtonDock } from "@/components/ui";
@@ -39,7 +48,7 @@ export function PhotoLightbox({
   const previewWidth = Math.min(windowWidth - space.insetLg * 2, 360);
   const previewHeight = (previewWidth * 5) / 4;
   const roleLabel =
-    role === "other" ? (label.trim() || PHOTO_ROLE_LABELS_DA.other) : PHOTO_ROLE_LABELS_DA[role];
+    role === "other" ? label.trim() || PHOTO_ROLE_LABELS_DA.other : PHOTO_ROLE_LABELS_DA[role];
   const suggestionLabels = ["Vaskemærke", "ID-kode", "Slitage"];
 
   return (
