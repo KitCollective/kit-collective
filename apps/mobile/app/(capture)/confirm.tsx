@@ -60,7 +60,7 @@ import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
-import { Button, ButtonDock, BUTTON_DOCK_FADE_SCROLL_PADDING } from "@/components/ui";
+import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { markJerseySaved } from "@/session/addSession";
 import { useTypography } from "@/theme/brand-fonts";
 import { motion, radius, space } from "@/theme/tokens";

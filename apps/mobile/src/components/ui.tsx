@@ -112,11 +112,7 @@ export const BUTTON_DOCK_FADE_SCRIM_HEIGHT = space.insetLg * 2;
 
 /** Scroll clearance for fade overlay: scrim + dock chrome (helper + gap + fill button). Add safe-area bottom. */
 export const BUTTON_DOCK_FADE_SCROLL_PADDING =
-  BUTTON_DOCK_FADE_SCRIM_HEIGHT +
-  space.insetMd +
-  type.caption.lineHeight +
-  space.gapMd +
-  48;
+  BUTTON_DOCK_FADE_SCRIM_HEIGHT + space.insetMd + type.caption.lineHeight + space.gapMd + 48;
 
 const FADE_GRADIENT_STOPS = [0, 0.25, 0.5, 0.75, 1] as const;
 

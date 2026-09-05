@@ -12,7 +12,7 @@ describe("Button dock chrome", () => {
   it("adds a fade variant alongside the default border dock", () => {
     const ui = readFileSync(uiPath, "utf8");
 
-    expect(ui).toContain('variant?: ButtonDockVariant');
+    expect(ui).toContain("variant?: ButtonDockVariant");
     expect(ui).toContain('"border" | "fade"');
     expect(ui).toContain('variant = "border"');
     expect(ui).toContain("BUTTON_DOCK_FADE_SCRIM_HEIGHT");
