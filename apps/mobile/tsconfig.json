@@ -1,20 +1,21 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "jsx": "react-native",
+    "jsx": "react-jsx",
     "lib": ["ES2022", "DOM"],
-    "module": "ESNext",
+    "module": "preserve",
     "moduleResolution": "bundler",
+    "customConditions": ["react-native"],
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
     "noEmit": true,
-    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "react": ["./node_modules/@types/react"]
     },
-    "types": ["react", "react-native", "node"]
+    "types": ["node"]
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }
