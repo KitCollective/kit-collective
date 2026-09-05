@@ -18,7 +18,16 @@ async function main() {
       const { summary } = await runHierarchyGrain({
         kind: parsed.grain.kind,
         competition: parsed.grain.competition,
-        season: parsed.grain.kind === "league_season" ? parsed.grain.season : undefined,
+        season:
+          parsed.grain.kind === "league_season" ||
+          parsed.grain.kind === "club_season" ||
+          parsed.grain.kind === "club_proof"
+            ? parsed.grain.season
+            : undefined,
+        clubExternalId:
+          parsed.grain.kind === "club" || parsed.grain.kind === "club_season"
+            ? parsed.grain.clubExternalId
+            : undefined,
         lane: parsed.lane,
         fetchAdapter: resolved.adapter,
       });

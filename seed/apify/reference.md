@@ -22,7 +22,7 @@ This file is the seed-module interface for Transfermarkt grains. Not Nest OpenAP
 | Fetch | Injected `FetchAdapter` (live kader via Seed proxy, Opt-in Apify, fixture) |
 | Forbidden | Strip before map (`normalize` / `stripForbiddenFields`) |
 | Rich grain | While on a page, persist every **stamdata now** field — human-only ingest does not defer Club facts or kader body depth |
-| CLI (Hierarchy grains) | `seed-apify grain league <competition> [lane]` · `seed-apify grain league-season <competition> <season> [lane]` |
+| CLI (Hierarchy grains) | `seed-apify grain league <competition> [lane]` · `seed-apify grain league-season <competition> <season> [lane]` · `seed-apify grain club <competition> <clubId> [lane]` · `seed-apify grain club-season <competition> <clubId> <season> [lane]` · `seed-apify grain club-proof <competition> <season> [lane]` (every Club grain on that competition season page) |
 
 ---
 
@@ -76,6 +76,8 @@ This file is the seed-module interface for Transfermarkt grains. Not Nest OpenAP
 | **Open** | loan / parent-club (**Player registration**) markers |
 
 Already seeded: skip fetch when that club+season already has a squad with jersey numbers (and Rich grain body fields once those land).
+
+Portrait bytes on a kader row persist as **Player photo** (`player/{externalId}/portrait`, `rights: unresolved`). Grain CLI and walk use `SEED_OBJECT_DIR` as the lane object-store stand-in (same keys as R2). Inject `portraitStore` in tests.
 
 ---
 

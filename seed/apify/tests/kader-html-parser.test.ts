@@ -3,7 +3,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  parseClubFactsHtml,
   parseCompetitionSeasonHtml,
+  parseHonoursHtml,
   parseKaderHtml,
   parsePlayerProfileHtml,
 } from "../src/fetch/kader-html-parser.js";
@@ -94,5 +96,53 @@ describe("kader HTML parser", () => {
 
     expect(warnings).toHaveLength(0);
     expect(squadRows[0]?.shirtNumber).toBe(10);
+  });
+
+  it("parses plus/1 body facts from a Rich kader row", () => {
+    const { squadRows, warnings } = parseKaderHtml(
+      readFixture("kader/190-2010.html"),
+      "190",
+      "FC Copenhagen",
+      2010,
+    );
+
+    expect(warnings).toHaveLength(0);
+    expect(squadRows[0]).toMatchObject({
+      playerId: "11110",
+      playerName: "Cesar Santin",
+      shirtNumber: 10,
+      position: "Centre-Forward",
+      dateOfBirth: "1981-02-24",
+      nationalityIso: "BR",
+      heightCm: 174,
+      preferredFoot: "right",
+      portraitSrc: "/portraits/11110.jpg",
+    });
+    expect(squadRows[1]).toMatchObject({
+      playerId: "11113",
+      nationalityIso: "DK",
+      heightCm: 184,
+      preferredFoot: "right",
+    });
+  });
+
+  it("parses Club facts and drops telephone", () => {
+    const facts = parseClubFactsHtml(readFixture("facts/190.html"));
+    expect(facts).toEqual({
+      officialName: "F.C. Copenhagen",
+      foundedOn: "1992-07-01",
+      stadiumName: "Parken",
+      stadiumCapacity: 38065,
+      primaryColorHex: "#0053A0",
+      secondaryColorHex: "#FFFFFF",
+      websiteUrl: "https://www.fck.dk",
+    });
+  });
+
+  it("parses Club honours season + title rows", () => {
+    expect(parseHonoursHtml(readFixture("honours/190.html"))).toEqual([
+      { seasonLabel: "10/11", title: "Danish champion" },
+      { seasonLabel: "09/10", title: "Danish champion" },
+    ]);
   });
 });

@@ -190,6 +190,7 @@ describe("runSeed scope isolation", () => {
       fetchLeague: inner.fetchLeague.bind(inner),
       fetchLeagueSeason: inner.fetchLeagueSeason.bind(inner),
       listClubSeasonPairs: inner.listClubSeasonPairs.bind(inner),
+      fetchClub: inner.fetchClub.bind(inner),
       async fetchClubSeason(params) {
         const raw = await inner.fetchClubSeason(params);
         const firstSeason = raw.seasons[0];

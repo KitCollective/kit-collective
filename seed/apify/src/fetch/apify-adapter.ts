@@ -10,6 +10,7 @@ import {
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
+  mapClubToPayload,
   mapLeagueSeasonToPayload,
   mapLeagueToPayload,
   seasonClubRowsToPairs,
@@ -227,6 +228,14 @@ function createRecordingsAdapter(
       return pairs;
     },
 
+    async fetchClub(params) {
+      return mapClubToPayload({
+        competitionSlug: params.competition,
+        clubExternalId: params.clubExternalId,
+        clubName: params.clubExternalId,
+      });
+    },
+
     async fetchClubSeason(params: FetchClubSeasonParams) {
       const startYear = labelToStartYear(params.season);
       const squadRecording = await store.loadSquad(params.clubExternalId, startYear);
@@ -311,6 +320,14 @@ function createLiveAdapter(
         );
       }
       return pairs;
+    },
+
+    async fetchClub(params) {
+      return mapClubToPayload({
+        competitionSlug: params.competition,
+        clubExternalId: params.clubExternalId,
+        clubName: params.clubExternalId,
+      });
     },
 
     async fetchClubSeason(params: FetchClubSeasonParams) {
