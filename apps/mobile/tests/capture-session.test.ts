@@ -7,6 +7,7 @@ import {
   bindUnboundPhotoToDraft,
   branchFromPhotoCount,
   canSave,
+  changeDraftPhotoRole,
   createCaptureSession,
   createMemoryCaptureSessionStore,
   getActiveDraft,
@@ -15,6 +16,7 @@ import {
   photoUriForRole,
   reloadCaptureSession,
   removeDraft,
+  removeDraftPhoto,
   selectDraftCondition,
   selectDraftKitType,
   selectDraftSize,
@@ -24,6 +26,7 @@ import {
   setDraftSeason,
   switchSingleToBulkBind,
   unbindPhoto,
+  upsertDraftPhoto,
 } from "../src/capture/captureSession";
 
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
@@ -289,6 +292,85 @@ describe("canSave and silent sqlite defaults", () => {
     expect(stillBlocked.size).toBeNull();
     expect(stillBlocked.condition).toBeNull();
     expect(canSave(stillBlocked)).toBe(false);
+  });
+});
+
+describe("removeDraftPhoto", () => {
+  it("removes the photo for a role and leaves other photos and fields untouched", () => {
+    const session = createCaptureSession([URI_FRONT, URI_BACK, URI_LABEL]);
+    const draftId = getActiveDraft(session).id;
+
+    const withClub = setDraftClub(session, draftId, UUID);
+    const removed = removeDraftPhoto(withClub, draftId, "back");
+    const draft = getDraft(removed, draftId);
+
+    expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
+    expect(photoUriForRole(draft, "back")).toBeNull();
+    expect(photoUriForRole(draft, "label")).toBe(URI_LABEL);
+    expect(draft.clubId).toBe(UUID);
+    expect(draft.photos).toHaveLength(2);
+  });
+});
+
+describe("changeDraftPhotoRole", () => {
+  it("moves a photo to an empty role", () => {
+    const session = createCaptureSession([URI_FRONT, URI_BACK]);
+    const draftId = getActiveDraft(session).id;
+
+    const moved = changeDraftPhotoRole(session, draftId, "back", "label");
+    const draft = getDraft(moved, draftId);
+
+    expect(photoUriForRole(draft, "back")).toBeNull();
+    expect(photoUriForRole(draft, "label")).toBe(URI_BACK);
+    expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
+  });
+
+  it("swaps photos when the target role is occupied", () => {
+    const session = createCaptureSession([URI_FRONT, URI_BACK, URI_LABEL]);
+    const draftId = getActiveDraft(session).id;
+
+    const swapped = changeDraftPhotoRole(session, draftId, "front", "label");
+    const draft = getDraft(swapped, draftId);
+
+    expect(photoUriForRole(draft, "front")).toBe(URI_LABEL);
+    expect(photoUriForRole(draft, "label")).toBe(URI_FRONT);
+    expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
+    expect(draft.photos).toHaveLength(3);
+  });
+
+  it("is a no-op when the source role is empty", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    const unchanged = changeDraftPhotoRole(session, draftId, "back", "label");
+    const draft = getDraft(unchanged, draftId);
+
+    expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
+    expect(photoUriForRole(draft, "back")).toBeNull();
+    expect(photoUriForRole(draft, "label")).toBeNull();
+  });
+
+  it("is a no-op when from and to roles are the same", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    const unchanged = changeDraftPhotoRole(session, draftId, "front", "front");
+    expect(getDraft(unchanged, draftId).photos).toEqual(getDraft(session, draftId).photos);
+  });
+});
+
+describe("upsertDraftPhoto regression", () => {
+  it("replaces a photo for a role without touching other roles", () => {
+    const session = createCaptureSession([URI_FRONT, URI_BACK]);
+    const draftId = getActiveDraft(session).id;
+    const replacement = "file:///photos/new-label.jpg";
+
+    const updated = upsertDraftPhoto(session, draftId, "back", replacement, "gallery");
+    const draft = getDraft(updated, draftId);
+
+    expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
+    expect(photoUriForRole(draft, "back")).toBe(replacement);
+    expect(draft.photos.find((photo) => photo.role === "back")?.source).toBe("gallery");
   });
 });
 

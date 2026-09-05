@@ -32,9 +32,11 @@ import {
   addJerseyDraft,
   bindUnboundPhotoToDraft,
   canSave,
+  changeDraftPhotoRole,
   getDraft,
   photoUriForRole,
   removeDraft,
+  removeDraftPhoto,
   selectDraftCondition,
   selectDraftKitType,
   selectDraftSize,
@@ -43,7 +45,6 @@ import {
   setDraftNotes,
   setDraftSeason,
   switchSingleToBulkBind,
-  unbindPhoto,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
@@ -64,6 +65,7 @@ import {
 import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
 import { ProfileSurfaceGroup } from "@/components/profile-ui";
@@ -109,6 +111,7 @@ export default function ConfirmScreen() {
   const [visionPolling, setVisionPolling] = useState(false);
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
   const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
+  const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const clubManuallySet = useRef(false);
   const seasonManuallySet = useRef(false);
@@ -359,7 +362,7 @@ export default function ConfirmScreen() {
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
   const pickPhotoForRole = async (role: PhotoRole) => {
-    if (!draft || isBulk) {
+    if (!draft || !sessionId) {
       return;
     }
 
@@ -371,14 +374,14 @@ export default function ConfirmScreen() {
       expoGalleryPickerAdapter,
     );
 
-    if (!uris?.[0] || !sessionId) {
+    if (!uris?.[0]) {
       return;
     }
 
     const uri = uris[0];
     mutate((current) => upsertDraftPhoto(current, current.activeDraftId, role, uri, "gallery"));
 
-    if (!hadPhotos) {
+    if (!isBulk && !hadPhotos) {
       void maybeStartVision(role, uri);
     }
   };
@@ -476,12 +479,12 @@ export default function ConfirmScreen() {
     }
 
     const uri = photoUriForRole(draft, role);
-    if (isBulk) {
-      if (uri) {
-        mutate((current) => unbindPhoto(current, uri));
-        return;
-      }
+    if (uri) {
+      setLightboxRole(role);
+      return;
+    }
 
+    if (isBulk) {
       const firstUnbound = state.unboundUris[0];
       if (firstUnbound) {
         mutate((current) =>
@@ -492,6 +495,33 @@ export default function ConfirmScreen() {
     }
 
     void pickPhotoForRole(role);
+  };
+
+  const handleLightboxReplace = () => {
+    if (!lightboxRole) {
+      return;
+    }
+    const role = lightboxRole;
+    setLightboxRole(null);
+    void pickPhotoForRole(role);
+  };
+
+  const handleLightboxDelete = () => {
+    if (!lightboxRole) {
+      return;
+    }
+    const role = lightboxRole;
+    mutate((current) => removeDraftPhoto(current, current.activeDraftId, role));
+    setLightboxRole(null);
+  };
+
+  const handleLightboxChangeRole = (toRole: PhotoRole) => {
+    if (!lightboxRole) {
+      return;
+    }
+    const fromRole = lightboxRole;
+    mutate((current) => changeDraftPhotoRole(current, current.activeDraftId, fromRole, toRole));
+    setLightboxRole(toRole);
   };
 
   const handleBindUnboundPhoto = (uri: string) => {
@@ -1012,6 +1042,18 @@ export default function ConfirmScreen() {
         savedSeasonLabel={savedSeasonLabel}
         onDismiss={handlePostSaveDismiss}
       />
+
+      {lightboxRole !== null && photoUris[lightboxRole] !== undefined ? (
+        <PhotoLightbox
+          visible
+          role={lightboxRole}
+          uri={photoUris[lightboxRole]}
+          onDismiss={() => setLightboxRole(null)}
+          onReplace={handleLightboxReplace}
+          onDelete={handleLightboxDelete}
+          onChangeRole={handleLightboxChangeRole}
+        />
+      ) : null}
     </View>
   );
 }
