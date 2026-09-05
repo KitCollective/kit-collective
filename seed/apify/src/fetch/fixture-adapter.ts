@@ -123,5 +123,22 @@ export function createFixtureFetchAdapter(fixturePath: string): FetchAdapter {
       }
       throw new Error(`Missing club ${params.clubExternalId} for ${params.competition}`);
     },
+
+    async fetchNationalTeam(params) {
+      const payload = await loadFixture();
+      const match = payload.nationalTeams?.[0];
+      if (match && match.id === params.nationalTeamRef) {
+        return {
+          competition: payload.competition,
+          seasons: [],
+          nationalTeams: [{ ...match, players: [] }],
+        };
+      }
+      throw new Error(`Missing national team ${params.nationalTeamRef}`);
+    },
+
+    async fetchNationalTeamSeason(_params) {
+      throw new Error("fixture adapter does not implement fetchNationalTeamSeason");
+    },
   };
 }

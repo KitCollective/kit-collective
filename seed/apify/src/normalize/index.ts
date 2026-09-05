@@ -1,9 +1,11 @@
 import type {
   NormalizedClub,
   NormalizedFacts,
+  NormalizedNationalTeam,
   NormalizedPlayer,
   NormalizedSeason,
   TransfermarktRawClub,
+  TransfermarktRawNationalTeam,
   TransfermarktRawPayload,
   TransfermarktRawPlayer,
 } from "../types.js";
@@ -11,10 +13,17 @@ import { seedLabelLocale } from "./seed-label-locale.js";
 
 const FORBIDDEN_CLUB_KEYS = new Set(["marketValue", "agent", "tmLogoUrl", "transfermarktUrl"]);
 
+const FORBIDDEN_NATIONAL_TEAM_KEYS = new Set([
+  "marketValue",
+  "agent",
+  "tmLogoUrl",
+  "transfermarktUrl",
+]);
+
 const FORBIDDEN_PLAYER_KEYS = new Set(["marketValue", "agent"]);
 
 function assertNoForbiddenKeys(
-  value: TransfermarktRawClub | TransfermarktRawPlayer,
+  value: TransfermarktRawClub | TransfermarktRawNationalTeam | TransfermarktRawPlayer,
   forbidden: Set<string>,
   path: string,
 ) {
@@ -40,6 +49,8 @@ function normalizePlayer(raw: TransfermarktRawPlayer): NormalizedPlayer {
   if (raw.heightCm !== undefined) player.heightCm = raw.heightCm;
   if (raw.preferredFoot) player.preferredFoot = raw.preferredFoot;
   if (raw.portraitBytes) player.portraitBytes = raw.portraitBytes;
+  if (raw.callUpClubExternalId) player.callUpClubExternalId = raw.callUpClubExternalId;
+  if (raw.callUpClubName) player.callUpClubName = raw.callUpClubName;
   return player;
 }
 
@@ -65,6 +76,24 @@ function normalizeClub(raw: TransfermarktRawClub): NormalizedClub {
   return club;
 }
 
+function normalizeNationalTeam(raw: TransfermarktRawNationalTeam): NormalizedNationalTeam {
+  assertNoForbiddenKeys(raw, FORBIDDEN_NATIONAL_TEAM_KEYS, "nationalTeam");
+  const team: NormalizedNationalTeam = {
+    externalId: raw.id,
+    name: raw.name,
+    nameLocale: seedLabelLocale(raw.name),
+    countryIso: raw.country?.iso3166 ?? "XX",
+    gender: raw.gender,
+    players: raw.players.map(normalizePlayer),
+  };
+  if (raw.country?.name) team.countryName = raw.country.name;
+  if (raw.officialName) team.officialName = raw.officialName;
+  if (raw.foundedOn) team.foundedOn = raw.foundedOn;
+  if (raw.confederation) team.confederation = raw.confederation;
+  if (raw.honours?.length) team.honours = raw.honours.map((row) => ({ ...row }));
+  return team;
+}
+
 function normalizeSeason(season: TransfermarktRawPayload["seasons"][number]): NormalizedSeason {
   return {
     externalId: season.id,
@@ -73,6 +102,7 @@ function normalizeSeason(season: TransfermarktRawPayload["seasons"][number]): No
     endsOn: season.endDate,
     calendarKind: season.calendarKind ?? "split_year",
     clubs: season.clubs.map(normalizeClub),
+    nationalTeams: (season.nationalTeams ?? []).map(normalizeNationalTeam),
   };
 }
 
@@ -87,6 +117,24 @@ export function normalizeTransfermarktPayload(raw: TransfermarktRawPayload): Nor
     },
     seasons: raw.seasons.map(normalizeSeason),
     clubs: raw.clubs?.map(normalizeClub),
+    nationalTeams: raw.nationalTeams?.map(normalizeNationalTeam),
+  };
+}
+
+function cleanPlayer(player: TransfermarktRawPlayer): TransfermarktRawPlayer {
+  return {
+    id: player.id,
+    name: player.name,
+    jerseyNumber: player.jerseyNumber,
+    position: player.position,
+    dateOfBirth: player.dateOfBirth,
+    nationalityIso: player.nationalityIso,
+    nationalityName: player.nationalityName,
+    heightCm: player.heightCm,
+    preferredFoot: player.preferredFoot,
+    portraitBytes: player.portraitBytes,
+    callUpClubExternalId: player.callUpClubExternalId,
+    callUpClubName: player.callUpClubName,
   };
 }
 
@@ -104,20 +152,23 @@ function cleanClub(club: TransfermarktRawClub): TransfermarktRawClub {
     secondaryColorHex: club.secondaryColorHex,
     websiteUrl: club.websiteUrl,
     honours: club.honours?.map((row) => ({ ...row })),
-    players: club.players.map((player) => ({
-      id: player.id,
-      name: player.name,
-      jerseyNumber: player.jerseyNumber,
-      position: player.position,
-      dateOfBirth: player.dateOfBirth,
-      nationalityIso: player.nationalityIso,
-      nationalityName: player.nationalityName,
-      heightCm: player.heightCm,
-      preferredFoot: player.preferredFoot,
-      portraitBytes: player.portraitBytes,
-    })),
+    players: club.players.map(cleanPlayer),
   };
   return cleaned;
+}
+
+function cleanNationalTeam(team: TransfermarktRawNationalTeam): TransfermarktRawNationalTeam {
+  return {
+    id: team.id,
+    name: team.name,
+    country: team.country ? { iso3166: team.country.iso3166, name: team.country.name } : undefined,
+    gender: team.gender,
+    officialName: team.officialName,
+    foundedOn: team.foundedOn,
+    confederation: team.confederation,
+    honours: team.honours?.map((row) => ({ ...row })),
+    players: team.players.map(cleanPlayer),
+  };
 }
 
 /** Strip forbidden Transfermarkt fields from a raw payload object (mutates a copy). */
@@ -131,8 +182,10 @@ export function stripForbiddenFields(raw: TransfermarktRawPayload): Transfermark
       endDate: season.endDate,
       calendarKind: season.calendarKind,
       clubs: season.clubs.map(cleanClub),
+      nationalTeams: season.nationalTeams?.map(cleanNationalTeam),
     })),
     clubs: raw.clubs?.map(cleanClub),
+    nationalTeams: raw.nationalTeams?.map(cleanNationalTeam),
   };
 }
 

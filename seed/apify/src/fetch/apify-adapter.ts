@@ -261,6 +261,14 @@ function createRecordingsAdapter(
         profileByPlayerId,
       });
     },
+
+    async fetchNationalTeam(_params) {
+      throw new Error("Apify recordings adapter does not implement fetchNationalTeam");
+    },
+
+    async fetchNationalTeamSeason(_params) {
+      throw new Error("Apify recordings adapter does not implement fetchNationalTeamSeason");
+    },
   };
 }
 
@@ -355,6 +363,14 @@ function createLiveAdapter(
         squadRows,
         profileByPlayerId,
       });
+    },
+
+    async fetchNationalTeam(params) {
+      throw new Error("Apify live adapter does not implement fetchNationalTeam");
+    },
+
+    async fetchNationalTeamSeason(params) {
+      throw new Error("Apify live adapter does not implement fetchNationalTeamSeason");
     },
   };
 }

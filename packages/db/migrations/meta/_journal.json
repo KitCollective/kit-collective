@@ -176,6 +176,13 @@
       "when": 1788390000000,
       "tag": "0024_kit_colour_grain",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788400000000,
+      "tag": "0025_national_team_grain",
+      "breakpoints": true
     }
   ]
 }

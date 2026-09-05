@@ -35,12 +35,32 @@ export type ClubProofGrain = {
   season: string;
 };
 
+export type NationalTeamGrain = {
+  kind: "national_team";
+  nationalTeamRef: string;
+};
+
+export type NationalTeamSeasonGrain = {
+  kind: "national_team_season";
+  nationalTeamRef: string;
+  season: string;
+};
+
+export type NationalTeamProofGrain = {
+  kind: "national_team_proof";
+  nationalTeamRef: string;
+  season: string;
+};
+
 export type HierarchyGrain =
   | LeagueGrain
   | LeagueSeasonGrain
   | ClubGrain
   | ClubSeasonGrain
-  | ClubProofGrain;
+  | ClubProofGrain
+  | NationalTeamGrain
+  | NationalTeamSeasonGrain
+  | NationalTeamProofGrain;
 
 export type ParsedWalkCli = ParsedSeedScope & { mode: "walk" };
 
@@ -154,7 +174,68 @@ function parseGrainArgv(argv: string[]): ParsedGrainCli {
     };
   }
 
-  throw new Error("Expected grain kind: league | league-season | club | club-season | club-proof");
+  if (grainKind === "national-team" || grainKind === "national_team") {
+    if (argv.length < 2 || argv.length > 3) {
+      throw new Error("Expected: grain national-team <ntRef> [lane]");
+    }
+    const nationalTeamRef = argv[1]?.trim();
+    if (!nationalTeamRef) {
+      throw new Error("national-team grain requires national team ref");
+    }
+    const laneResult = resolveSeedLane(argv[2]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "national_team", nationalTeamRef },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "national-team-season" || grainKind === "national_team_season") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: grain national-team-season <ntRef> <season> [lane]");
+    }
+    const nationalTeamRef = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!nationalTeamRef || !season) {
+      throw new Error("national-team-season grain requires national team ref and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "national_team_season", nationalTeamRef, season },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "national-team-proof" || grainKind === "national_team_proof") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: grain national-team-proof <ntRef> <season> [lane]");
+    }
+    const nationalTeamRef = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!nationalTeamRef || !season) {
+      throw new Error("national-team-proof grain requires national team ref and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "national_team_proof", nationalTeamRef, season },
+      lane: laneResult.lane,
+    };
+  }
+
+  throw new Error(
+    "Expected grain kind: league | league-season | club | club-season | club-proof | national-team | national-team-season | national-team-proof",
+  );
 }
 
 export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {

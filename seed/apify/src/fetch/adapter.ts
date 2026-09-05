@@ -31,6 +31,15 @@ export interface FetchClubParams {
   clubExternalId: string;
 }
 
+export interface FetchNationalTeamParams {
+  nationalTeamRef: string;
+}
+
+export interface FetchNationalTeamSeasonParams {
+  nationalTeamRef: string;
+  season: string;
+}
+
 export interface FetchAdapter {
   /** League Hierarchy grain — competition identity only (no seasons/clubs). */
   fetchLeague(params: FetchLeagueParams): Promise<TransfermarktRawPayload>;
@@ -41,6 +50,10 @@ export interface FetchAdapter {
   fetchLeagueSeason(params: FetchLeagueSeasonParams): Promise<TransfermarktRawPayload>;
   /** Club Hierarchy grain — identity + Club facts + Honours. */
   fetchClub(params: FetchClubParams): Promise<TransfermarktRawPayload>;
+  /** NationalTeam Hierarchy grain — identity + facts + Honours. */
+  fetchNationalTeam(params: FetchNationalTeamParams): Promise<TransfermarktRawPayload>;
+  /** NationalTeam season Hierarchy grain — NT kader for a calendar or split season. */
+  fetchNationalTeamSeason(params: FetchNationalTeamSeasonParams): Promise<TransfermarktRawPayload>;
   fetchClubSeason(params: FetchClubSeasonParams): Promise<TransfermarktRawPayload>;
   listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]>;
 }

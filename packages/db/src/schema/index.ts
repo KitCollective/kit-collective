@@ -148,10 +148,59 @@ export const nationalTeam = pgTable("national_team", {
     .notNull()
     .references(() => country.id),
   gender: nationalTeamGenderEnum("gender").notNull(),
+  foundedOn: date("founded_on"),
+  confederation: text("confederation"),
   validFrom: date("valid_from"),
   validTo: date("valid_to"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const nationalTeamSeason = pgTable(
+  "national_team_season",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nationalTeamId: uuid("national_team_id")
+      .notNull()
+      .references(() => nationalTeam.id),
+    seasonId: uuid("season_id")
+      .notNull()
+      .references(() => season.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("national_team_season_nt_season_unique").on(
+      table.nationalTeamId,
+      table.seasonId,
+    ),
+  ],
+);
+
+export const playerNationalTeamSeason = pgTable(
+  "player_national_team_season",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => player.id),
+    nationalTeamId: uuid("national_team_id")
+      .notNull()
+      .references(() => nationalTeam.id),
+    seasonId: uuid("season_id")
+      .notNull()
+      .references(() => season.id),
+    squadNumber: integer("squad_number"),
+    position: text("position"),
+    callUpClubId: uuid("call_up_club_id").references(() => club.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("player_national_team_season_unique").on(
+      table.playerId,
+      table.nationalTeamId,
+      table.seasonId,
+    ),
+  ],
+);
 
 export const season = pgTable("season", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -716,6 +765,21 @@ export const countryRelations = relations(country, ({ many }) => ({
   players: many(player),
 }));
 
+export const nationalTeamRelations = relations(nationalTeam, ({ one, many }) => ({
+  country: one(country, { fields: [nationalTeam.countryId], references: [country.id] }),
+  nationalTeamSeasons: many(nationalTeamSeason),
+  playerNationalTeamSeasons: many(playerNationalTeamSeason),
+  jerseyNumbers: many(playerJerseyNumber),
+}));
+
+export const nationalTeamSeasonRelations = relations(nationalTeamSeason, ({ one }) => ({
+  nationalTeam: one(nationalTeam, {
+    fields: [nationalTeamSeason.nationalTeamId],
+    references: [nationalTeam.id],
+  }),
+  season: one(season, { fields: [nationalTeamSeason.seasonId], references: [season.id] }),
+}));
+
 export const leagueRelations = relations(league, ({ one, many }) => ({
   country: one(country, { fields: [league.countryId], references: [country.id] }),
   seasons: many(season),
@@ -731,14 +795,17 @@ export const clubRelations = relations(club, ({ one, many }) => ({
   teamSeasons: many(teamSeason),
   kits: many(kit),
   playerClubSeasons: many(playerClubSeason),
+  playerNationalTeamSeasons: many(playerNationalTeamSeason),
   jerseyNumbers: many(playerJerseyNumber),
 }));
 
 export const seasonRelations = relations(season, ({ one, many }) => ({
   league: one(league, { fields: [season.leagueId], references: [league.id] }),
   teamSeasons: many(teamSeason),
+  nationalTeamSeasons: many(nationalTeamSeason),
   kits: many(kit),
   playerClubSeasons: many(playerClubSeason),
+  playerNationalTeamSeasons: many(playerNationalTeamSeason),
   jerseyNumbers: many(playerJerseyNumber),
 }));
 
@@ -762,8 +829,28 @@ export const playerRelations = relations(player, ({ one, many }) => ({
     references: [country.id],
   }),
   clubSeasons: many(playerClubSeason),
+  nationalTeamSeasons: many(playerNationalTeamSeason),
   jerseyNumbers: many(playerJerseyNumber),
   photos: many(playerPhoto),
+}));
+
+export const playerNationalTeamSeasonRelations = relations(playerNationalTeamSeason, ({ one }) => ({
+  player: one(player, {
+    fields: [playerNationalTeamSeason.playerId],
+    references: [player.id],
+  }),
+  nationalTeam: one(nationalTeam, {
+    fields: [playerNationalTeamSeason.nationalTeamId],
+    references: [nationalTeam.id],
+  }),
+  season: one(season, {
+    fields: [playerNationalTeamSeason.seasonId],
+    references: [season.id],
+  }),
+  callUpClub: one(club, {
+    fields: [playerNationalTeamSeason.callUpClubId],
+    references: [club.id],
+  }),
 }));
 
 export const playerClubSeasonRelations = relations(playerClubSeason, ({ one }) => ({

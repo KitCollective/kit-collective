@@ -1,6 +1,6 @@
-import { catalogLabel, type Db, externalId, playerClubSeason, season } from "@kit/db";
+import { catalogLabel, type Db, externalId, playerClubSeason, playerNationalTeamSeason, season } from "@kit/db";
 import { resolveCompetition, resolveSeasonRef } from "@kit/seed-shared";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { TM_SYSTEM } from "./types.js";
 
 async function findEntityId(db: Db, value: string): Promise<string | undefined> {
@@ -72,6 +72,44 @@ export async function isClubSeasonAlreadySeeded(
         eq(playerClubSeason.clubId, clubEntityId),
         eq(playerClubSeason.seasonId, seasonRow[0].id),
         isNotNull(playerClubSeason.squadNumber),
+      ),
+    )
+    .limit(1);
+
+  return numberedSquad.length > 0;
+}
+
+/**
+ * Already seeded = squad with jersey numbers exists for that national-team season pair.
+ */
+export async function isNationalTeamSeasonAlreadySeeded(
+  db: Db,
+  nationalTeamExternalId: string,
+  seasonLabel: string,
+): Promise<boolean> {
+  const nationalTeamEntityId = await findEntityId(db, nationalTeamExternalId);
+  if (!nationalTeamEntityId) {
+    return false;
+  }
+
+  const seasonRow = await db
+    .select({ id: season.id })
+    .from(season)
+    .where(and(isNull(season.leagueId), eq(season.label, seasonLabel)))
+    .limit(1);
+
+  if (!seasonRow[0]) {
+    return false;
+  }
+
+  const numberedSquad = await db
+    .select({ id: playerNationalTeamSeason.id })
+    .from(playerNationalTeamSeason)
+    .where(
+      and(
+        eq(playerNationalTeamSeason.nationalTeamId, nationalTeamEntityId),
+        eq(playerNationalTeamSeason.seasonId, seasonRow[0].id),
+        isNotNull(playerNationalTeamSeason.squadNumber),
       ),
     )
     .limit(1);

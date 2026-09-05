@@ -1,9 +1,16 @@
 import {
   type CompetitionIdentity,
   catalogCompetitionIdentity,
+  catalogNationalTeamIdentity,
+  type NationalTeamIdentity,
   resolveSeasonRef,
 } from "@kit/seed-shared";
-import type { TransfermarktRawClub, TransfermarktRawPayload } from "../types.js";
+import type {
+  TransfermarktRawClub,
+  TransfermarktRawNationalTeam,
+  TransfermarktRawPayload,
+  TransfermarktRawPlayer,
+} from "../types.js";
 import type {
   ActorPlayerProfile,
   ActorSeasonClubRow,
@@ -11,7 +18,12 @@ import type {
   ClubFactsParse,
   HonourParseRow,
 } from "./actor-types.js";
-import { labelToStartYear, seasonCalendarBounds, startYearToLabel } from "./season-label.js";
+import {
+  calendarYearBounds,
+  labelToStartYear,
+  seasonCalendarBounds,
+  startYearToLabel,
+} from "./season-label.js";
 
 export interface MapClubSeasonParams {
   competitionSlug: string;
@@ -105,6 +117,8 @@ type ResolvedPlayer = {
   heightCm?: number;
   preferredFoot?: ActorSquadRow["preferredFoot"];
   portraitBytes?: Uint8Array;
+  callUpClubExternalId?: string;
+  callUpClubName?: string;
 };
 
 function resolvePlayer(
@@ -151,6 +165,8 @@ function resolvePlayer(
     heightCm: row.heightCm,
     preferredFoot: row.preferredFoot,
     portraitBytes: portraits.get(row.playerId),
+    callUpClubExternalId: row.callUpClubExternalId,
+    callUpClubName: row.callUpClubName,
   };
 }
 
@@ -269,3 +285,136 @@ export function expandSeasonStartYears(
 }
 
 export { startYearToLabel };
+
+function resolveNationalTeamOrThrow(
+  ref: string,
+  identity?: NationalTeamIdentity,
+): NationalTeamIdentity {
+  if (identity) {
+    return identity;
+  }
+  const catalog = catalogNationalTeamIdentity(ref);
+  if (!catalog) {
+    throw new Error(`Unknown national team: ${ref}`);
+  }
+  return catalog;
+}
+
+export function nationalTeamCompetitionPayload(
+  identity: NationalTeamIdentity,
+): TransfermarktRawPayload["competition"] {
+  const countryExternalId = `country-${identity.iso3166.toLowerCase()}`;
+  return {
+    id: countryExternalId,
+    name: identity.countryName,
+    country: {
+      id: countryExternalId,
+      name: identity.countryName,
+      iso3166: identity.iso3166,
+    },
+  };
+}
+
+function applyNationalTeamFacts(
+  team: TransfermarktRawNationalTeam,
+  facts?: ClubFactsParse,
+  honours?: HonourParseRow[],
+): TransfermarktRawNationalTeam {
+  return {
+    ...team,
+    officialName: facts?.officialName,
+    foundedOn: facts?.foundedOn,
+    confederation: facts?.confederation,
+    honours,
+  };
+}
+
+function squadRowToPlayer(row: ResolvedPlayer): TransfermarktRawPlayer {
+  const player: TransfermarktRawPlayer = {
+    id: row.id,
+    name: row.name,
+    jerseyNumber: row.jerseyNumber,
+  };
+  if (row.position) player.position = row.position;
+  if (row.dateOfBirth) player.dateOfBirth = row.dateOfBirth;
+  if (row.nationalityIso) player.nationalityIso = row.nationalityIso;
+  if (row.nationalityName) player.nationalityName = row.nationalityName;
+  if (row.heightCm !== undefined) player.heightCm = row.heightCm;
+  if (row.preferredFoot) player.preferredFoot = row.preferredFoot;
+  if (row.portraitBytes) player.portraitBytes = row.portraitBytes;
+  if (row.callUpClubExternalId) player.callUpClubExternalId = row.callUpClubExternalId;
+  if (row.callUpClubName) player.callUpClubName = row.callUpClubName;
+  return player;
+}
+
+export function mapNationalTeamToPayload(params: {
+  nationalTeamRef: string;
+  teamName: string;
+  facts?: ClubFactsParse;
+  honours?: HonourParseRow[];
+  identity?: NationalTeamIdentity;
+}): TransfermarktRawPayload {
+  const identity = resolveNationalTeamOrThrow(params.nationalTeamRef, params.identity);
+  return {
+    competition: nationalTeamCompetitionPayload(identity),
+    seasons: [],
+    nationalTeams: [
+      applyNationalTeamFacts(
+        {
+          id: identity.transfermarktId,
+          name: params.teamName,
+          country: { iso3166: identity.iso3166, name: identity.countryName },
+          gender: identity.gender,
+          players: [],
+        },
+        params.facts,
+        params.honours,
+      ),
+    ],
+  };
+}
+
+export function mapNationalTeamSeasonToPayload(params: {
+  nationalTeamRef: string;
+  seasonLabel: string;
+  teamName: string;
+  squadRows: ActorSquadRow[];
+  profileByPlayerId: Map<string, ActorPlayerProfile>;
+  portraits?: Map<string, Uint8Array>;
+  identity?: NationalTeamIdentity;
+}): TransfermarktRawPayload {
+  const identity = resolveNationalTeamOrThrow(params.nationalTeamRef, params.identity);
+  const startYear = labelToStartYear(params.seasonLabel);
+  const bareCalendarYear = /^\d{4}$/.test(params.seasonLabel);
+  const { startDate, endDate } = bareCalendarYear
+    ? calendarYearBounds(startYear)
+    : seasonCalendarBounds(startYear);
+
+  const players = params.squadRows
+    .map((row) => resolvePlayer(row, params.profileByPlayerId, params.portraits ?? new Map()))
+    .filter((player): player is ResolvedPlayer => player !== null)
+    .map(squadRowToPlayer);
+
+  return {
+    competition: nationalTeamCompetitionPayload(identity),
+    seasons: [
+      {
+        id: String(startYear),
+        label: params.seasonLabel,
+        startDate,
+        endDate,
+        calendarKind: bareCalendarYear ? "calendar" : "split_year",
+        clubs: [],
+        nationalTeams: [
+          {
+            id: identity.transfermarktId,
+            name: params.teamName,
+            country: { iso3166: identity.iso3166, name: identity.countryName },
+            gender: identity.gender,
+            players,
+          },
+        ],
+      },
+    ],
+  };
+}

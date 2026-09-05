@@ -9,8 +9,11 @@ import {
   externalId,
   honour,
   league,
+  nationalTeam,
+  nationalTeamSeason,
   player,
   playerClubSeason,
+  playerNationalTeamSeason,
   playerPhoto,
   resetDatabase,
   season,
@@ -467,6 +470,270 @@ describe("Hierarchy grain — Club Rich", () => {
   });
 });
 
+describe("Hierarchy grain — NationalTeam Rich", () => {
+  beforeAll(async () => {
+    await prepareDatabase();
+  });
+
+  it("persists NationalTeam facts and honours to national_team, not club", async () => {
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    const { summary } = await runHierarchyGrain({
+      kind: "national_team",
+      nationalTeamRef: "3436",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+
+    expect(summary.nationalTeams).toBe(1);
+    expect(summary.clubs).toBe(0);
+    expect(summary.honours).toBe(1);
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const clubCount = await db.select({ n: sql<number>`count(*)::int` }).from(club);
+      expect(clubCount[0]?.n).toBe(0);
+
+      const rows = await db
+        .select({
+          foundedOn: nationalTeam.foundedOn,
+          confederation: nationalTeam.confederation,
+        })
+        .from(nationalTeam);
+      expect(rows[0]).toMatchObject({
+        foundedOn: "1889-05-18",
+        confederation: "UEFA",
+      });
+
+      const ntExternal = await db
+        .select({ value: externalId.value, entityType: externalId.entityType })
+        .from(externalId)
+        .where(and(eq(externalId.system, TM_SYSTEM), eq(externalId.value, "3436")));
+      expect(ntExternal[0]?.entityType).toBe("national_team");
+
+      const titles = await db
+        .select({ title: honour.title, seasonLabel: honour.seasonLabel })
+        .from(honour);
+      expect(titles).toEqual(
+        expect.arrayContaining([{ title: "World Cup participant", seasonLabel: "2010" }]),
+      );
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("second NationalTeam grain is idempotent on ExternalId", async () => {
+    await prepareDatabase();
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    const first = await runHierarchyGrain({
+      kind: "national_team",
+      nationalTeamRef: "3436",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+    const second = await runHierarchyGrain({
+      kind: "national_team",
+      nationalTeamRef: "3436",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+
+    expect(first.summary.nationalTeams).toBe(1);
+    expect(second.summary.nationalTeams).toBe(0);
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const teams = await db.select({ id: nationalTeam.id }).from(nationalTeam);
+      expect(teams).toHaveLength(1);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("strips forbidden fields before NationalTeam map", async () => {
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    const raw = await adapter.fetchNationalTeamSeason({
+      nationalTeamRef: "3436",
+      season: "2010",
+    });
+    const withForbidden = {
+      ...raw,
+      seasons: raw.seasons.map((seasonRow) => ({
+        ...seasonRow,
+        nationalTeams: seasonRow.nationalTeams?.map((team) => ({
+          ...team,
+          marketValue: 1_000_000,
+          agent: { name: "blocked" },
+          players: team.players.map((player) => ({ ...player, marketValue: 1 })),
+        })),
+      })),
+    };
+
+    const facts = normalize(withForbidden);
+    expect(facts.seasons[0]?.nationalTeams?.[0]).not.toHaveProperty("marketValue");
+    expect(facts.seasons[0]?.nationalTeams?.[0]?.players[0]).not.toHaveProperty("marketValue");
+  });
+
+  it("writes national_team_season, player_national_team_season, and player body fields", async () => {
+    await prepareDatabase();
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    await runHierarchyGrain({
+      kind: "club",
+      competition: "dk1",
+      clubExternalId: "190",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+
+    const { summary } = await runHierarchyGrain({
+      kind: "national_team_season",
+      nationalTeamRef: "3436",
+      season: "2010",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+      portraitStore: {
+        async putObject() {},
+      },
+    });
+
+    expect(summary.nationalTeamSeasons).toBe(1);
+    expect(summary.playerNationalTeamSeasons).toBe(2);
+    expect(summary.players).toBe(2);
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const seasons = await db
+        .select({ label: season.label, leagueId: season.leagueId, calendarKind: season.calendarKind })
+        .from(season)
+        .where(eq(season.label, "2010"));
+      expect(seasons[0]).toMatchObject({ label: "2010", leagueId: null, calendarKind: "calendar" });
+
+      const ntsCount = await db.select({ n: sql<number>`count(*)::int` }).from(nationalTeamSeason);
+      expect(ntsCount[0]?.n).toBe(1);
+
+      const pnts = await db
+        .select({
+          squadNumber: playerNationalTeamSeason.squadNumber,
+          position: playerNationalTeamSeason.position,
+          callUpClubId: playerNationalTeamSeason.callUpClubId,
+        })
+        .from(playerNationalTeamSeason);
+      expect(pnts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ squadNumber: 10, position: "Centre-Forward" }),
+          expect.objectContaining({ squadNumber: 8, position: "Defensive Midfield" }),
+        ]),
+      );
+      expect(pnts.every((row) => row.callUpClubId !== null)).toBe(true);
+
+      const players = await db
+        .select({
+          heightCm: player.heightCm,
+          preferredFoot: player.preferredFoot,
+          dateOfBirth: player.dateOfBirth,
+        })
+        .from(player);
+      expect(players).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            heightCm: 174,
+            preferredFoot: "right",
+            dateOfBirth: "1981-02-24",
+          }),
+        ]),
+      );
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("does not profile-hop when player id and jersey number are present", async () => {
+    await prepareDatabase();
+    let profileFetches = 0;
+    const adapter = createKaderFetchAdapter({
+      fixturesDir: kaderFixturesDir,
+      onProfileFetch: () => {
+        profileFetches += 1;
+      },
+    });
+    await runHierarchyGrain({
+      kind: "national_team_season",
+      nationalTeamRef: "3436",
+      season: "2010",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+    expect(profileFetches).toBe(0);
+  });
+
+  it("profile-hops when jersey number is missing on the kader row", async () => {
+    await prepareDatabase();
+    let profileFetches = 0;
+    const adapter = createKaderFetchAdapter({
+      fixturesDir: kaderFixturesDir,
+      onProfileFetch: () => {
+        profileFetches += 1;
+      },
+    });
+
+    await runHierarchyGrain({
+      kind: "national_team_season",
+      nationalTeamRef: "3436",
+      season: "2011",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+
+    expect(profileFetches).toBe(1);
+  });
+
+  it("national-team-proof for Denmark 3436/2010", async () => {
+    await prepareDatabase();
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    await runHierarchyGrain({
+      kind: "club",
+      competition: "dk1",
+      clubExternalId: "190",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+    const { summary } = await runHierarchyGrain({
+      kind: "national_team_proof",
+      nationalTeamRef: "3436",
+      season: "2010",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+      portraitStore: {
+        async putObject() {},
+      },
+    });
+
+    expect(summary.nationalTeams).toBe(1);
+    expect(summary.nationalTeamSeasons).toBe(1);
+    expect(summary.playerNationalTeamSeasons).toBe(2);
+    expect(summary.honours).toBe(1);
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const ntIds = await db
+        .select({ value: externalId.value })
+        .from(externalId)
+        .where(and(eq(externalId.system, TM_SYSTEM), eq(externalId.entityType, "national_team")));
+      expect(ntIds.map((row) => row.value)).toEqual(["3436"]);
+    } finally {
+      await pool.end();
+    }
+  });
+});
+
 describe("Hierarchy grain CLI", () => {
   it("parses grain league and defaults lane to development", () => {
     const parsed = parseCliArgs(["node", "seed-apify", "grain", "league", "dk1"]);
@@ -518,5 +785,27 @@ describe("Hierarchy grain CLI", () => {
       grain: { kind: "club_proof", competition: "dk1", season: "2010/11" },
       lane: "development",
     });
+  });
+
+  it("parses grain national-team, national-team-season, and national-team-proof", () => {
+    expect(parseCliArgs(["node", "seed-apify", "grain", "national-team", "3436"])).toEqual({
+      mode: "grain",
+      grain: { kind: "national_team", nationalTeamRef: "3436" },
+      lane: "development",
+    });
+    expect(parseCliArgs(["node", "seed-apify", "grain", "national-team-season", "3436", "2010"])).toEqual(
+      {
+        mode: "grain",
+        grain: { kind: "national_team_season", nationalTeamRef: "3436", season: "2010" },
+        lane: "development",
+      },
+    );
+    expect(parseCliArgs(["node", "seed-apify", "grain", "national-team-proof", "dk-men", "2010"])).toEqual(
+      {
+        mode: "grain",
+        grain: { kind: "national_team_proof", nationalTeamRef: "dk-men", season: "2010" },
+        lane: "development",
+      },
+    );
   });
 });

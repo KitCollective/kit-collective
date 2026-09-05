@@ -266,9 +266,7 @@ describe("runSeed scope walk", () => {
     await prepareDatabase();
     const inner = createFixtureFetchAdapter(fixturePath);
     const failingAdapter: FetchAdapter = {
-      fetchLeague: inner.fetchLeague.bind(inner),
-      fetchLeagueSeason: inner.fetchLeagueSeason.bind(inner),
-      fetchClub: inner.fetchClub.bind(inner),
+      ...inner,
       async listClubSeasonPairs(params) {
         return inner.listClubSeasonPairs(params);
       },
@@ -289,16 +287,13 @@ describe("runSeed scope walk", () => {
       },
       lane: "development",
       fetchAdapter: {
-        fetchLeague: failingAdapter.fetchLeague.bind(failingAdapter),
-        fetchLeagueSeason: failingAdapter.fetchLeagueSeason.bind(failingAdapter),
-        fetchClub: failingAdapter.fetchClub.bind(failingAdapter),
+        ...failingAdapter,
         async listClubSeasonPairs() {
           return [
             { clubExternalId: "club-missing", seasonLabel: "23/24" },
             { clubExternalId: "club-190", seasonLabel: "23/24" },
           ];
         },
-        fetchClubSeason: failingAdapter.fetchClubSeason.bind(failingAdapter),
       },
       databaseUrl: TEST_DATABASE_URL,
     });

@@ -1,4 +1,4 @@
-import type { CalendarKind, ClubKind, LabelLocale, PreferredFoot } from "@kit/domain";
+import type { CalendarKind, ClubKind, LabelLocale, NationalTeamGender, PreferredFoot } from "@kit/domain";
 import type { ResolvedSeedLane, SeedScope } from "@kit/seed-shared";
 
 export const TM_SYSTEM = "transfermarkt";
@@ -24,6 +24,8 @@ export interface TransfermarktRawPayload {
   seasons: TransfermarktRawSeason[];
   /** Club Hierarchy grain — identity + facts + honours, no seasons required. */
   clubs?: TransfermarktRawClub[];
+  /** NationalTeam Hierarchy grain — identity + facts + honours, no seasons required. */
+  nationalTeams?: TransfermarktRawNationalTeam[];
 }
 
 export interface TransfermarktRawSeason {
@@ -33,6 +35,7 @@ export interface TransfermarktRawSeason {
   endDate: string;
   calendarKind?: CalendarKind;
   clubs: TransfermarktRawClub[];
+  nationalTeams?: TransfermarktRawNationalTeam[];
 }
 
 export interface TransfermarktRawHonour {
@@ -60,6 +63,22 @@ export interface TransfermarktRawClub {
   players: TransfermarktRawPlayer[];
 }
 
+export interface TransfermarktRawNationalTeam {
+  id: string;
+  name: string;
+  country?: { iso3166: string; name?: string };
+  gender: NationalTeamGender;
+  officialName?: string;
+  foundedOn?: string;
+  confederation?: string;
+  honours?: TransfermarktRawHonour[];
+  marketValue?: number;
+  agent?: { name?: string; phone?: string; email?: string };
+  tmLogoUrl?: string;
+  transfermarktUrl?: string;
+  players: TransfermarktRawPlayer[];
+}
+
 export interface TransfermarktRawPlayer {
   id: string;
   name: string;
@@ -71,6 +90,8 @@ export interface TransfermarktRawPlayer {
   heightCm?: number;
   preferredFoot?: PreferredFoot;
   portraitBytes?: Uint8Array;
+  callUpClubExternalId?: string;
+  callUpClubName?: string;
   marketValue?: number;
   agent?: { name?: string; phone?: string; email?: string };
 }
@@ -86,6 +107,7 @@ export interface NormalizedFacts {
   };
   seasons: NormalizedSeason[];
   clubs?: NormalizedClub[];
+  nationalTeams?: NormalizedNationalTeam[];
 }
 
 export interface NormalizedSeason {
@@ -95,6 +117,7 @@ export interface NormalizedSeason {
   endsOn: string;
   calendarKind: CalendarKind;
   clubs: NormalizedClub[];
+  nationalTeams: NormalizedNationalTeam[];
 }
 
 export interface NormalizedHonour {
@@ -120,6 +143,20 @@ export interface NormalizedClub {
   players: NormalizedPlayer[];
 }
 
+export interface NormalizedNationalTeam {
+  externalId: string;
+  name: string;
+  nameLocale: LabelLocale;
+  countryIso: string;
+  countryName?: string;
+  gender: NationalTeamGender;
+  officialName?: string;
+  foundedOn?: string;
+  confederation?: string;
+  honours?: NormalizedHonour[];
+  players: NormalizedPlayer[];
+}
+
 export interface NormalizedPlayer {
   externalId: string;
   name: string;
@@ -132,6 +169,8 @@ export interface NormalizedPlayer {
   heightCm?: number;
   preferredFoot?: PreferredFoot;
   portraitBytes?: Uint8Array;
+  callUpClubExternalId?: string;
+  callUpClubName?: string;
 }
 
 export interface MapResult {
@@ -146,4 +185,7 @@ export interface MapResult {
   externalIds: number;
   honours: number;
   playerPhotos: number;
+  nationalTeams: number;
+  nationalTeamSeasons: number;
+  playerNationalTeamSeasons: number;
 }

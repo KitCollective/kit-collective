@@ -186,10 +186,7 @@ describe.sequential("runSeed season-scope isolation", () => {
     await prepareDatabase();
     const inner = createFixtureFetchAdapter(fixturePath);
     const mislabeledAdapter: FetchAdapter = {
-      fetchLeague: inner.fetchLeague.bind(inner),
-      fetchLeagueSeason: inner.fetchLeagueSeason.bind(inner),
-      listClubSeasonPairs: inner.listClubSeasonPairs.bind(inner),
-      fetchClub: inner.fetchClub.bind(inner),
+      ...inner,
       async fetchClubSeason(params) {
         const raw = await inner.fetchClubSeason(params);
         if (params.season === "23/24") {

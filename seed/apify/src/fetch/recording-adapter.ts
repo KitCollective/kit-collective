@@ -4,6 +4,8 @@ import type {
   FetchClubSeasonParams,
   FetchLeagueParams,
   FetchLeagueSeasonParams,
+  FetchNationalTeamParams,
+  FetchNationalTeamSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
 
@@ -38,6 +40,12 @@ export function createRecordingFetchAdapter(inner: FetchAdapter): {
       async fetchClub(params) {
         clubCalls.push({ ...params });
         return inner.fetchClub(params);
+      },
+      async fetchNationalTeam(params: FetchNationalTeamParams) {
+        return inner.fetchNationalTeam(params);
+      },
+      async fetchNationalTeamSeason(params: FetchNationalTeamSeasonParams) {
+        return inner.fetchNationalTeamSeason(params);
       },
       async fetchClubSeason(params) {
         fetchCalls.push({ ...params });

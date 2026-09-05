@@ -262,6 +262,19 @@ export function parseKaderHtml(
       rowData.portraitSrc = portraitSrc;
     }
 
+    $row.find('a[href*="/verein/"]').each((_, link) => {
+      const href = $(link).attr("href");
+      const match = href ? /\/verein\/(\d+)/.exec(href) : null;
+      const vereinId = match?.[1];
+      if (vereinId && vereinId !== clubId) {
+        rowData.callUpClubExternalId = vereinId;
+        rowData.callUpClubName =
+          $(link).text().trim() || $(link).attr("title")?.trim() || undefined;
+        return false;
+      }
+      return undefined;
+    });
+
     squadRows.push(rowData);
   });
 
@@ -343,6 +356,12 @@ export function parseClubFactsHtml(html: string): ClubFactsParse {
         facts.websiteUrl = href;
       } else if (/^https?:\/\//i.test(value)) {
         facts.websiteUrl = value;
+      }
+      return;
+    }
+    if (label.includes("confederation") || label.includes("association")) {
+      if (value && !label.includes("official")) {
+        facts.confederation = value;
       }
     }
   });
