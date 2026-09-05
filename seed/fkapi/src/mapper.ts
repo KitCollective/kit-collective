@@ -373,10 +373,7 @@ async function upsertManufacturer(pool: Pool, name: string): Promise<string> {
   const inserted = await pool.query<{ id: string }>(
     `INSERT INTO manufacturer DEFAULT VALUES RETURNING id`,
   );
-  const manufacturerId = inserted.rows[0]?.id;
-  if (!manufacturerId) {
-    throw new Error("Failed to insert manufacturer");
-  }
+  const manufacturerId = inserted.rows[0]!.id;
 
   await pool.query(
     `INSERT INTO catalog_label (entity_type, entity_id, locale, kind, text, source)
@@ -436,10 +433,7 @@ async function upsertKit(pool: Pool, input: UpsertKitInput): Promise<string> {
       input.secondaryColorHex,
     ],
   );
-  const kitId = inserted.rows[0]?.id;
-  if (!kitId) {
-    throw new Error(`Failed to insert kit for FK id ${input.fkId}`);
-  }
+  const kitId = inserted.rows[0]!.id;
 
   await pool.query(
     `INSERT INTO external_id (entity_type, entity_id, system, value)

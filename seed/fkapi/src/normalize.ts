@@ -31,7 +31,6 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
   const hasClub = Boolean(clubTransfermarktId);
   const hasNationalTeam = Boolean(nationalTeamFkApiId);
   if (hasClub === hasNationalTeam) {
-    // Exactly one side identity is required — club XOR national team.
     return null;
   }
 
