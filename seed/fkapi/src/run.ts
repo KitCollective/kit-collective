@@ -25,19 +25,13 @@ export async function runCli(options: RunCliOptions): Promise<void> {
     databaseUrl: options.databaseUrl,
     fetchAdapter,
     objectStore,
-    scope: {
-      competition: parsed.args.competition,
-      fromSeason: parsed.args.fromSeason,
-      toSeason: parsed.args.toSeason,
-    },
+    scope: parsed.parsed.scope,
   });
 
   console.log(
     JSON.stringify({
-      lane: parsed.args.lane,
-      competition: parsed.args.competition,
-      fromSeason: parsed.args.fromSeason,
-      toSeason: parsed.args.toSeason,
+      lane: parsed.parsed.lane,
+      scope: parsed.parsed.scope,
       kitsUpserted: result.kitsUpserted,
       photosWritten: result.photosWritten,
     }),

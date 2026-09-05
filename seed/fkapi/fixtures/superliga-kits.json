@@ -8,6 +8,9 @@
       "type": "home",
       "manufacturerName": "Hummel",
       "labelEn": "Brøndby IF home 1998/99",
+      "sponsorName": "Carlsberg",
+      "primaryColorHex": "FFFFFF",
+      "secondaryColorHex": "000000",
       "imageBytes": [255, 216, 255, 219]
     },
     {
@@ -17,6 +20,8 @@
       "seasonLabel": "1998/99",
       "type": "away",
       "manufacturerName": "Hummel",
+      "primaryColorHex": "0000FF",
+      "secondaryColorHex": "FFFFFF",
       "imageBytes": [255, 216, 255, 220]
     }
   ]

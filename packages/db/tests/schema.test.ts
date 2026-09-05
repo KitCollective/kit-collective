@@ -162,6 +162,13 @@ describe("stamdata schema", () => {
     expect(HONOUR_SUBJECT_TYPES).toEqual(["club", "national_team", "player"]);
   });
 
+  it("adds kit colour columns", async () => {
+    const columns = await columnNames(pool, "kit");
+    expect(columns).toEqual(
+      expect.arrayContaining(["primary_color_hex", "secondary_color_hex", "sponsor_name"]),
+    );
+  });
+
   it("adds club rich-grain fact columns", async () => {
     const columns = await columnNames(pool, "club");
     expect(columns).toEqual(

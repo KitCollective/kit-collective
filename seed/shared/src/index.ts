@@ -36,3 +36,4 @@ export {
   parseSeedScopeArgv,
   type SeedScope,
 } from "./seed-scope.js";
+export { normalizeTransfermarktClubId } from "./transfermarkt-club-id.js";

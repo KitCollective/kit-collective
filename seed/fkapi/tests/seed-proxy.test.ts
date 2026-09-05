@@ -114,6 +114,7 @@ describe("createFkApiFetchAdapter", () => {
     });
 
     const kits = await adapter.fetchKits({
+      kind: "competition",
       competition: "superliga",
       fromSeason: "1998/99",
       toSeason: "1998/99",
@@ -123,6 +124,31 @@ describe("createFkApiFetchAdapter", () => {
     expect(kits[0]?.imageBytes).toEqual(Uint8Array.from([255, 216, 255]));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(createProxyAgent).not.toHaveBeenCalled();
+  });
+
+  it("requests club and season query params for club scope without competition range", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: createSeedHttpFetch({ requireProxy: false }, fetchMock, createProxyAgent),
+    });
+
+    await adapter.fetchKits({
+      kind: "club",
+      competition: "superliga",
+      clubExternalId: "club-190",
+      season: "2010/11",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://fkapi.example.invalid/kits?clubTransfermarktId=190&season=2010%2F11",
+      expect.any(Object),
+    );
   });
 });
 

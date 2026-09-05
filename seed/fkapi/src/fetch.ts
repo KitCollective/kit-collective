@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { normalizeTransfermarktClubId, resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import { normalizeRawKit } from "./normalize.js";
 import {
   createSeedHttpFetch,
@@ -8,7 +9,7 @@ import {
   type SeedHttpFetch,
   type SeedProxyConfig,
 } from "./proxy-config.js";
-import type { FkFetchAdapter, FkFetchScope, FkRawKit } from "./types.js";
+import type { FkFetchAdapter, FkRawKit } from "./types.js";
 
 const FIXTURE_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -19,21 +20,38 @@ type FixtureFile = {
   kits: Record<string, unknown>[];
 };
 
+function kitMatchesScope(kit: FkRawKit, scope: SeedScope): boolean {
+  if (scope.kind === "competition") {
+    return true;
+  }
+
+  const clubTmId = normalizeTransfermarktClubId(scope.clubExternalId);
+  const seasonLabel = resolveSeasonRef(scope.competition, scope.season);
+  return (
+    normalizeTransfermarktClubId(kit.clubTransfermarktId) === clubTmId &&
+    kit.seasonLabel === seasonLabel
+  );
+}
+
+async function loadFixtureKits(scope: SeedScope): Promise<FkRawKit[]> {
+  const raw = await readFile(FIXTURE_PATH, "utf8");
+  // SAFETY: the fixture is committed in this repository and normalizeRawKit rejects
+  // any record that does not parse into an FkRawKit.
+  const parsed = JSON.parse(raw) as FixtureFile;
+  const kits: FkRawKit[] = [];
+  for (const item of parsed.kits) {
+    const normalized = normalizeRawKit(item);
+    if (normalized && kitMatchesScope(normalized, scope)) {
+      kits.push(normalized);
+    }
+  }
+  return kits;
+}
+
 export function createFixtureFetchAdapter(): FkFetchAdapter {
   return {
-    async fetchKits(_scope: FkFetchScope): Promise<FkRawKit[]> {
-      const raw = await readFile(FIXTURE_PATH, "utf8");
-      // SAFETY: the fixture is committed in this repository and normalizeRawKit rejects
-      // any record that does not parse into an FkRawKit.
-      const parsed = JSON.parse(raw) as FixtureFile;
-      const kits: FkRawKit[] = [];
-      for (const item of parsed.kits) {
-        const normalized = normalizeRawKit(item);
-        if (normalized) {
-          kits.push(normalized);
-        }
-      }
-      return kits;
+    async fetchKits(scope: SeedScope): Promise<FkRawKit[]> {
+      return loadFixtureKits(scope);
     },
   };
 }
@@ -45,6 +63,21 @@ type FkApiFetchAdapterOptions = {
   token?: string;
 };
 
+function buildKitsUrl(baseUrl: string, scope: SeedScope): URL {
+  const url = new URL("/kits", baseUrl);
+
+  if (scope.kind === "club") {
+    url.searchParams.set("clubTransfermarktId", normalizeTransfermarktClubId(scope.clubExternalId));
+    url.searchParams.set("season", resolveSeasonRef(scope.competition, scope.season));
+    return url;
+  }
+
+  url.searchParams.set("competition", scope.competition);
+  url.searchParams.set("from", resolveSeasonRef(scope.competition, scope.fromSeason));
+  url.searchParams.set("to", resolveSeasonRef(scope.competition, scope.toSeason));
+  return url;
+}
+
 /** Production fetch talks to Football Kit Archive via FKApi — not used in tests. */
 export function createFkApiFetchAdapter(options: FkApiFetchAdapterOptions = {}): FkFetchAdapter {
   const proxyConfig = options.proxyConfig ?? resolveSeedProxyConfig();
@@ -53,11 +86,8 @@ export function createFkApiFetchAdapter(options: FkApiFetchAdapterOptions = {}):
   const token = options.token ?? process.env.FKAPI_TOKEN;
 
   return {
-    async fetchKits(scope: FkFetchScope): Promise<FkRawKit[]> {
-      const url = new URL("/kits", baseUrl);
-      url.searchParams.set("competition", scope.competition);
-      url.searchParams.set("from", scope.fromSeason);
-      url.searchParams.set("to", scope.toSeason);
+    async fetchKits(scope: SeedScope): Promise<FkRawKit[]> {
+      const url = buildKitsUrl(baseUrl, scope);
 
       const headers: Record<string, string> = {};
       if (token) {
@@ -73,6 +103,10 @@ export function createFkApiFetchAdapter(options: FkApiFetchAdapterOptions = {}):
       for (const item of body.kits ?? []) {
         const normalized = normalizeRawKit(item);
         if (!normalized) {
+          continue;
+        }
+
+        if (!kitMatchesScope(normalized, scope)) {
           continue;
         }
 
@@ -100,3 +134,5 @@ async function downloadImageBytes(url: string, httpFetch: SeedHttpFetch): Promis
 function asOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
+
+export { loadFixtureKits };

@@ -169,6 +169,13 @@
       "when": 1788380000000,
       "tag": "0023_european_country_iso_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788390000000,
+      "tag": "0024_kit_colour_grain",
+      "breakpoints": true
     }
   ]
 }

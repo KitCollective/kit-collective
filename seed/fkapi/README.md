@@ -7,15 +7,17 @@ Football Kit Archive ingest for Kit identity and archive `KitPhoto` rows.
 ## CLI shape (shared seed contract)
 
 ```bash
-DATABASE_URL=... pnpm --filter @kit/seed-fkapi seed -- <competition> <from-season> <to-season> <lane>
+DATABASE_URL=... pnpm --filter @kit/seed-fkapi seed -- <competition> <from-season> <to-season> [lane]
+DATABASE_URL=... pnpm --filter @kit/seed-fkapi seed -- club <competition> <club-external-id> <season> [lane]
 ```
 
 - `competition` — e.g. `superliga`, `championship`
 - `from-season` — season label or `0001` (first season for that competition)
 - `to-season` — season label or `today`
-- `lane` — `development` or `staging` (`production` is rejected)
+- `club-external-id` — Transfermarkt club id (`190` or `club-190`) for club scope
+- `lane` — `development` or `staging` (`production` is rejected); defaults to `development` when omitted
 
-Same positional contract as the future Apify seed CLI (not yet implemented in any repo).
+Same positional contract as `@kit/seed-apify` walk modes.
 
 Requires Apify seed club + season rows for the scope before FK seed runs.
 

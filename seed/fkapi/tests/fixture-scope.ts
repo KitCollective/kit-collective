@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
 import { normalizeRawKit } from "../src/normalize.js";
-import type { FkFetchAdapter, FkFetchScope, FkRawKit } from "../src/types.js";
+import type { FkFetchAdapter, FkRawKit } from "../src/types.js";
 import { EXTERNAL_SYSTEM_TRANSFERMARKT } from "../src/types.js";
 
 const FIXTURE_PATH = path.join(
@@ -71,7 +71,7 @@ type FixtureFile = {
 /** Fixture kits remapped to the allocated scope — avoids hardcoded Transfermarkt ids in tests. */
 export function createScopedFixtureFetchAdapter(scope: TestFixtureScope): FkFetchAdapter {
   return {
-    async fetchKits(_fetchScope: FkFetchScope): Promise<FkRawKit[]> {
+    async fetchKits(): Promise<FkRawKit[]> {
       const raw = await readFile(FIXTURE_PATH, "utf8");
       // SAFETY: the fixture is committed in this repository and normalizeRawKit rejects
       // any record that does not parse into an FkRawKit.
@@ -94,3 +94,5 @@ export function createScopedFixtureFetchAdapter(scope: TestFixtureScope): FkFetc
     },
   };
 }
+
+export { FIXTURE_PATH };
