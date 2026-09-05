@@ -3,10 +3,11 @@ import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, offer } from "../src/index.js";
 import { resetDatabase } from "../src/migrate.js";
+import { resolveKitDbTestDatabaseUrl } from "./test-database-url.js";
 
 const migrationsFolder = path.join(path.dirname(fileURLToPath(import.meta.url)), "../migrations");
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = resolveKitDbTestDatabaseUrl();
 
 describe("entitlement and offer schema", () => {
   beforeAll(async () => {

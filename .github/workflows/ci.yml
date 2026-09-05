@@ -28,6 +28,8 @@ jobs:
       DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
       API_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_api_test
       SEED_APIFY_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+      SEED_FKAPI_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+      KIT_DB_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
       # CI-only test values — not product defaults. JWT_SECRET is leftover test setup only.
       JWT_SECRET: ci-test-jwt-secret-not-for-production
       BETTER_AUTH_SECRET: ci-test-better-auth-secret-not-for-production
@@ -78,6 +80,12 @@ jobs:
 
       - name: Check seed apify test database isolation
         run: pnpm check:seed-apify-test-database-isolation
+
+      - name: Check seed fkapi test database isolation
+        run: pnpm check:seed-fkapi-test-database-isolation
+
+      - name: Check kit db test database isolation
+        run: pnpm check:kit-db-test-database-isolation
 
       - name: Assert seed packages are in workspace and turbo test graph
         run: |
@@ -253,6 +261,9 @@ jobs:
 
       - name: Test Danish code-identifier hook
         run: node --test .cursor/hooks/tests/block-danish-code-identifiers.test.mjs
+
+      - name: Test shared-db reset test hook
+        run: node --test .cursor/hooks/tests/block-reset-database-test-on-shared-db.test.mjs
 
       - name: Check admin stamdata navigation
         run: node scripts/check-admin-stamdata-navigation.mjs

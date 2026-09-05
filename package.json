@@ -18,6 +18,8 @@
     "check:seed-development-proof-scripts": "node scripts/check-seed-development-proof-scripts.mjs",
     "check:seed-scope-isolation-test": "node scripts/check-seed-scope-isolation-test.mjs",
     "check:seed-apify-test-database-isolation": "node scripts/check-seed-apify-test-database-isolation.mjs",
+    "check:seed-fkapi-test-database-isolation": "node scripts/check-seed-fkapi-test-database-isolation.mjs",
+    "check:kit-db-test-database-isolation": "node scripts/check-kit-db-test-database-isolation.mjs",
     "check:mobile-tab-bar": "node scripts/check-mobile-tab-bar.mjs",
     "check:mobile-design-tokens": "node scripts/check-mobile-design-tokens.mjs",
     "check:mobile-collection-ui-evidence": "node scripts/check-mobile-collection-ui-evidence.mjs",

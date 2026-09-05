@@ -4,10 +4,11 @@ import { HONOUR_SUBJECT_TYPES, PREFERRED_FOOT } from "@kit/domain";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resetDatabase } from "../src/migrate.js";
+import { resolveKitDbTestDatabaseUrl } from "./test-database-url.js";
 
 const migrationsFolder = path.join(path.dirname(fileURLToPath(import.meta.url)), "../migrations");
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const DATABASE_URL = resolveKitDbTestDatabaseUrl();
 
 const IDENTITY_TABLES = [
   "country",
