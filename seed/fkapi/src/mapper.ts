@@ -183,12 +183,6 @@ async function assertScopePrerequisites(
   scope: FkFetchScope,
   rawKits: FkRawKit[],
 ): Promise<void> {
-  if (scope.kind === "national_team") {
-    const tmId = transfermarktIdForNationalTeamRef(scope.nationalTeamRef);
-    await assertNationalTeamSeasonPrerequisite(pool, tmId, scope.season);
-    return;
-  }
-
   if (scope.kind === "club") {
     const clubTmId = normalizeTransfermarktClubId(scope.clubExternalId);
     const seasonLabel = resolveSeasonRef(scope.competition, scope.season);

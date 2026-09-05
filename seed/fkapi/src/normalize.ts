@@ -1,5 +1,4 @@
 import type { FkRawKit } from "./types.js";
-import { isClubKit, isNationalTeamKit } from "./types.js";
 
 /** Drop fields we never persist (market value, agent PII, TM branding). */
 const FORBIDDEN_KEYS = new Set([
@@ -69,10 +68,6 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
   }
   if (nationalTeamFkApiId) {
     kit.nationalTeamFkApiId = nationalTeamFkApiId;
-  }
-
-  if (!isClubKit(kit) && !isNationalTeamKit(kit)) {
-    return null;
   }
 
   return kit;
