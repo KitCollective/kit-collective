@@ -64,6 +64,12 @@ export function findFkSeedTestIsolationViolations(input) {
       );
     }
 
+    if (/seedNationalTeamPrerequisites\s*\(\s*\w+\s*\)(?!\s*,)/.test(content)) {
+      violations.push(
+        `${rel}: seedNationalTeamPrerequisites must receive an allocated NationalTeamTestFixtureScope as the second argument`,
+      );
+    }
+
     if (/createR2ObjectStore\s*\(/.test(content)) {
       violations.push(
         `${rel}: createR2ObjectStore is live lane R2 — inject a memory ObjectStoreAdapter in tests (fake R2)`,

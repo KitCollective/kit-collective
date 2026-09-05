@@ -38,7 +38,7 @@ function kitMatchesScope(kit: FkRawKit, scope: SeedScope): boolean {
     return kit.seasonLabel === scope.season;
   }
 
-  if (!isClubKit(kit) || !kit.clubTransfermarktId) {
+  if (!isClubKit(kit)) {
     return false;
   }
 

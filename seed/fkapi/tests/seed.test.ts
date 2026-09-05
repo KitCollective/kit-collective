@@ -19,13 +19,14 @@ import {
   seedNationalTeamTransfermarktSeasonOnly,
 } from "./fixture-scope.js";
 import { resetTestDatabase } from "./test-db.js";
+import { resolveSeedFkapiTestDatabaseUrl } from "./test-database-url.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../../packages/db/migrations",
 );
 
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_test";
+const TEST_DATABASE_URL = resolveSeedFkapiTestDatabaseUrl();
 
 function createMemoryObjectStore(): ObjectStoreAdapter & { objects: Map<string, Uint8Array> } {
   const objects = new Map<string, Uint8Array>();
@@ -153,8 +154,8 @@ describe("FK seed mapper", () => {
   let pool: Pool;
 
   beforeAll(async () => {
-    await resetTestDatabase(DATABASE_URL, migrationsFolder);
-    pool = new Pool({ connectionString: DATABASE_URL });
+    await resetTestDatabase(TEST_DATABASE_URL, migrationsFolder);
+    pool = new Pool({ connectionString: TEST_DATABASE_URL });
   });
 
   afterAll(async () => {
@@ -165,7 +166,7 @@ describe("FK seed mapper", () => {
     const objectStore = createMemoryObjectStore();
     await expect(
       runFkSeed({
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
         fetchAdapter: createFixtureFetchAdapter(),
         objectStore,
         scope: {
@@ -184,7 +185,7 @@ describe("FK seed mapper", () => {
     const objectStore = createMemoryObjectStore();
 
     const result = await runFkSeed({
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter: createScopedFixtureFetchAdapter(scope),
       objectStore,
       scope: {
@@ -260,7 +261,7 @@ describe("FK seed mapper", () => {
 
     await expect(
       runFkSeed({
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
         fetchAdapter: createScopedFixtureFetchAdapter(scope),
         objectStore: brokenStore,
         scope: {
@@ -293,7 +294,7 @@ describe("FK seed mapper", () => {
 
     await expect(
       runFkSeed({
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
         fetchAdapter: imagelessAdapter,
         objectStore: createMemoryObjectStore(),
         scope: {
@@ -325,7 +326,7 @@ describe("FK seed mapper", () => {
     };
 
     await runFkSeed({
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter,
       objectStore,
       scope: runScope,
@@ -337,7 +338,7 @@ describe("FK seed mapper", () => {
     );
 
     const second = await runFkSeed({
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter,
       objectStore,
       scope: runScope,
@@ -361,7 +362,7 @@ describe("FK seed mapper", () => {
     const objectStore = createMemoryObjectStore();
 
     const result = await runFkSeed({
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter: createScopedFixtureFetchAdapter(scope),
       objectStore,
       scope: {
@@ -401,7 +402,7 @@ describe("FK seed mapper", () => {
     const objectStore = createMemoryObjectStore();
     await expect(
       runFkSeed({
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
         fetchAdapter: createScopedFixtureFetchAdapter(scope),
         objectStore,
         scope: {
@@ -418,7 +419,7 @@ describe("FK seed mapper", () => {
     const objectStore = createMemoryObjectStore();
     await expect(
       runFkSeed({
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
         fetchAdapter: createFixtureFetchAdapter(),
         objectStore,
         scope: {
@@ -436,7 +437,7 @@ describe("FK seed mapper", () => {
     const objectStore = createMemoryObjectStore();
     await expect(
       runFkSeed({
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
         fetchAdapter: createScopedNationalTeamFixtureFetchAdapter(scope),
         objectStore,
         scope: {
@@ -459,7 +460,7 @@ describe("FK seed mapper", () => {
     const objectStore = createMemoryObjectStore();
 
     const result = await runFkSeed({
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter: createScopedNationalTeamFixtureFetchAdapter(scope),
       objectStore,
       scope: {
@@ -537,7 +538,7 @@ describe("FK seed mapper", () => {
     });
 
     await runFkSeed({
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter: adapter,
       objectStore: createMemoryObjectStore(),
       scope: {
@@ -573,7 +574,7 @@ describe("FK seed mapper", () => {
     });
 
     const result = await runFkSeed({
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter: adapter,
       objectStore: createMemoryObjectStore(),
       scope: {
@@ -611,7 +612,7 @@ describe("FK seed mapper", () => {
 
     const objectStore = createMemoryObjectStore();
     await runFkSeed({
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter: fakeAdapter,
       objectStore,
       scope: {
@@ -637,7 +638,7 @@ describe("runCli", () => {
     await expect(
       runCli({
         argv: ["superliga", "1998/99", "1998/99", "development"],
-        databaseUrl: DATABASE_URL,
+        databaseUrl: TEST_DATABASE_URL,
         objectStore: createMemoryObjectStore(),
       }),
     ).rejects.toThrow(/FKAPI_BASE_URL/);
@@ -648,20 +649,20 @@ describe("runCli", () => {
 
   it("runs end-to-end with fake adapters", async () => {
     const scope = allocateTestFixtureScope();
-    await resetTestDatabase(DATABASE_URL, migrationsFolder);
-    const setupPool = new Pool({ connectionString: DATABASE_URL });
+    await resetTestDatabase(TEST_DATABASE_URL, migrationsFolder);
+    const setupPool = new Pool({ connectionString: TEST_DATABASE_URL });
     await seedApifyPrerequisites(setupPool, scope);
     await setupPool.end();
 
     const objectStore = createMemoryObjectStore();
     await runCli({
       argv: ["superliga", scope.seasonLabel, scope.seasonLabel, "development"],
-      databaseUrl: DATABASE_URL,
+      databaseUrl: TEST_DATABASE_URL,
       fetchAdapter: createScopedFixtureFetchAdapter(scope),
       objectStore,
     });
 
-    const verifyPool = new Pool({ connectionString: DATABASE_URL });
+    const verifyPool = new Pool({ connectionString: TEST_DATABASE_URL });
     const count = await verifyPool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM kit`,
     );

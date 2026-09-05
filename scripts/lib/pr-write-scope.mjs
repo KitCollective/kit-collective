@@ -33,6 +33,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/check-mobile-paywall-iap.mjs",
   "scripts/check-pr-write-scope.mjs",
   "scripts/check-seed-fkapi-test-isolation.mjs",
+  "scripts/check-seed-fkapi-test-database-isolation.mjs",
   "scripts/tests/check-seed-fkapi-test-isolation.test.mjs",
   "scripts/check-seed-apify-test-database-isolation.mjs",
   "scripts/check-seed-development-proof-scripts.mjs",

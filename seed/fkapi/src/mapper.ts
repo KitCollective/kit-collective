@@ -195,7 +195,7 @@ async function assertScopePrerequisites(
 
   const pairs = new Map<string, { clubTmId: string; seasonLabel: string }>();
   for (const kit of rawKits) {
-    if (!isClubKit(kit) || !kit.clubTransfermarktId) {
+    if (!isClubKit(kit)) {
       continue;
     }
     const key = `${kit.clubTransfermarktId}:${kit.seasonLabel}`;
