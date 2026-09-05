@@ -728,6 +728,7 @@ describe("runSeed with kader HTML adapter", () => {
       fetchLeague: fixturesAdapter.fetchLeague.bind(fixturesAdapter),
       fetchLeagueSeason: fixturesAdapter.fetchLeagueSeason.bind(fixturesAdapter),
       listClubSeasonPairs: fixturesAdapter.listClubSeasonPairs.bind(fixturesAdapter),
+      fetchClub: fixturesAdapter.fetchClub.bind(fixturesAdapter),
       fetchClubSeason: rateLimited.fetchClubSeason.bind(rateLimited),
     };
 

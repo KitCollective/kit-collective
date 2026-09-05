@@ -1,5 +1,6 @@
 import type {
   FetchAdapter,
+  FetchClubParams,
   FetchClubSeasonParams,
   FetchLeagueParams,
   FetchLeagueSeasonParams,
@@ -12,11 +13,13 @@ export function createRecordingFetchAdapter(inner: FetchAdapter): {
   getListCalls: () => ListClubSeasonPairsParams[];
   getLeagueCalls: () => FetchLeagueParams[];
   getLeagueSeasonCalls: () => FetchLeagueSeasonParams[];
+  getClubCalls: () => FetchClubParams[];
 } {
   const fetchCalls: FetchClubSeasonParams[] = [];
   const listCalls: ListClubSeasonPairsParams[] = [];
   const leagueCalls: FetchLeagueParams[] = [];
   const leagueSeasonCalls: FetchLeagueSeasonParams[] = [];
+  const clubCalls: FetchClubParams[] = [];
 
   return {
     adapter: {
@@ -32,6 +35,10 @@ export function createRecordingFetchAdapter(inner: FetchAdapter): {
         listCalls.push({ ...params });
         return inner.listClubSeasonPairs(params);
       },
+      async fetchClub(params) {
+        clubCalls.push({ ...params });
+        return inner.fetchClub(params);
+      },
       async fetchClubSeason(params) {
         fetchCalls.push({ ...params });
         return inner.fetchClubSeason(params);
@@ -41,6 +48,7 @@ export function createRecordingFetchAdapter(inner: FetchAdapter): {
     getListCalls: () => [...listCalls],
     getLeagueCalls: () => [...leagueCalls],
     getLeagueSeasonCalls: () => [...leagueSeasonCalls],
+    getClubCalls: () => [...clubCalls],
   };
 }
 

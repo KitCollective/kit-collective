@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "echo 'no tests'"
+    "test": "tsc -p tsconfig.json && node --test tests/catalog-enums.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

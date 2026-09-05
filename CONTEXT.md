@@ -147,11 +147,11 @@ The first Football Data Seed issue, and the opening slice of later milestones. M
 _Avoid_: implementing grains before the field catalog; researching by scraping every league; treating ADR-0002 as name-and-number only
 
 **Rich grain**:
-When a Hierarchy grain is fetched, take every usable fact for that entity so a later UI or backend flow does not need a second vendor hop. Club facts, **Honours** (Club, NationalTeam, Player), kader body facts (position, DOB, nationality, height, foot), player identity depth (including place of birth, home-country name, Player photo, jersey number history), kit sponsor and Kit colours are **stamdata now** once Vendor research named them. Still drop market value, agent PII, and vendor branding logos. Human-only ingest is the reason depth is not deferred.
+When a Hierarchy grain is fetched, take every usable fact for that entity so a later UI or backend flow does not need a second vendor hop. Club facts, **Honours** (Club, NationalTeam, Player), kader body facts (position, DOB, nationality, height, foot), player identity depth (including place of birth, home-country name, Player photo, jersey number history), kit sponsor and Kit colours are **stamdata now** once Vendor research named them. Still drop market value, agent PII, and vendor branding logos. Human-only ingest is the reason depth is not deferred. Postgres for kader / player body: `player.date_of_birth`, `height_cm`, `preferred_foot`, `primary_country_id`, `place_of_birth`; `player_club_season.position` — see schema-gap.
 _Avoid_: a thin id+name+number fetch as the ceiling; a second Seed run just to backfill facts that were on the page the first time; storing market value or agent PII because they were on the page; labelling Club facts, Honours, Kit colours, or Player photo as “later” after the catalog keeps them
 
 **Club facts**:
-Transfermarkt club profile / `datenfakten` depth kept as stamdata now on the Club grain: official name, founded date, stadium, capacity, club colour swatches, website. Not kit colours. Not contact address or phone. Human-only Rich grain — take them while on the page.
+Transfermarkt club profile / `datenfakten` depth kept as stamdata now on the Club grain: official name, founded date, stadium, capacity, club colour swatches, website. Not kit colours. Not contact address or phone. Human-only Rich grain — take them while on the page. Postgres: `club.founded_on`, `stadium_name`, `stadium_capacity`, `primary_color_hex`, `secondary_color_hex`, `website_url` — see schema-gap.
 _Avoid_: treating club colour swatches as Kit colours; storing Tel/Fax/address as stamdata; deferring Club facts to a second Transfermarkt hop
 
 **Player registration**:

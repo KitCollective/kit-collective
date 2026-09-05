@@ -7,6 +7,7 @@ import {
   CLUB_KINDS,
   ENTITLEMENT_SOURCES,
   EXTERNAL_ID_ENTITY_TYPES,
+  HONOUR_SUBJECT_TYPES,
   JERSEY_CONDITIONS,
   JERSEY_SIZES,
   KIT_PHOTO_RIGHTS,
@@ -19,6 +20,7 @@ import {
   OCR_STATUSES,
   PHOTO_ROLES,
   PHOTO_SOURCES,
+  PREFERRED_FOOT,
   USER_LOCALES,
   USER_ROLES,
 } from "@kit/domain";
@@ -32,6 +34,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -57,6 +60,8 @@ export const calendarKindEnum = pgEnum("calendar_kind", CALENDAR_KINDS);
 export const nationalTeamGenderEnum = pgEnum("national_team_gender", NATIONAL_TEAM_GENDERS);
 export const kitPhotoRightsEnum = pgEnum("kit_photo_rights", KIT_PHOTO_RIGHTS);
 export const kitPhotoVisibilityEnum = pgEnum("kit_photo_visibility", KIT_PHOTO_VISIBILITY);
+export const preferredFootEnum = pgEnum("preferred_foot", PREFERRED_FOOT);
+export const honourSubjectTypeEnum = pgEnum("honour_subject_type", HONOUR_SUBJECT_TYPES);
 export const userRoleEnum = pgEnum("user_role", USER_ROLES);
 export const authEventKindEnum = pgEnum("auth_event_kind", AUTH_EVENT_KINDS);
 export const identityLinkedProviderEnum = pgEnum(
@@ -101,6 +106,12 @@ export const club = pgTable("club", {
     .references(() => country.id),
   kind: clubKindEnum("kind").notNull().default("club"),
   successorClubId: uuid("successor_club_id").references((): AnyPgColumn => club.id),
+  foundedOn: date("founded_on"),
+  stadiumName: text("stadium_name"),
+  stadiumCapacity: integer("stadium_capacity"),
+  primaryColorHex: text("primary_color_hex"),
+  secondaryColorHex: text("secondary_color_hex"),
+  websiteUrl: text("website_url"),
   validFrom: date("valid_from"),
   validTo: date("valid_to"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -144,6 +155,11 @@ export const teamSeason = pgTable(
 
 export const player = pgTable("player", {
   id: uuid("id").primaryKey().defaultRandom(),
+  dateOfBirth: date("date_of_birth"),
+  heightCm: smallint("height_cm"),
+  preferredFoot: preferredFootEnum("preferred_foot"),
+  primaryCountryId: uuid("primary_country_id").references(() => country.id),
+  placeOfBirth: text("place_of_birth"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -161,6 +177,7 @@ export const playerClubSeason = pgTable(
       .notNull()
       .references(() => season.id),
     squadNumber: integer("squad_number"),
+    position: text("position"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -193,6 +210,63 @@ export const kitPhoto = pgTable("kit_photo", {
   kitId: uuid("kit_id")
     .notNull()
     .references(() => kit.id),
+  objectKey: text("object_key").notNull(),
+  rights: kitPhotoRightsEnum("rights").notNull().default("unresolved"),
+  visibility: kitPhotoVisibilityEnum("visibility").notNull().default("admin_only"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const honour = pgTable(
+  "honour",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subjectType: honourSubjectTypeEnum("subject_type").notNull(),
+    subjectId: uuid("subject_id").notNull(),
+    seasonLabel: text("season_label"),
+    title: text("title").notNull(),
+    source: labelSourceEnum("source").notNull().default("seed"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("honour_subject_season_title_unique").on(
+      table.subjectType,
+      table.subjectId,
+      sql`COALESCE(${table.seasonLabel}, '')`,
+      table.title,
+    ),
+  ],
+);
+
+export const playerJerseyNumber = pgTable(
+  "player_jersey_number",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => player.id),
+    seasonId: uuid("season_id").references(() => season.id),
+    seasonLabel: text("season_label"),
+    clubId: uuid("club_id").references(() => club.id),
+    nationalTeamId: uuid("national_team_id").references(() => nationalTeam.id),
+    squadNumber: integer("squad_number"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("player_jersey_number_upsert_unique").on(
+      table.playerId,
+      sql`COALESCE(${table.seasonLabel}, '')`,
+      sql`COALESCE(${table.clubId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      sql`COALESCE(${table.nationalTeamId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      sql`COALESCE(${table.squadNumber}, -1)`,
+    ),
+  ],
+);
+
+export const playerPhoto = pgTable("player_photo", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  playerId: uuid("player_id")
+    .notNull()
+    .references(() => player.id),
   objectKey: text("object_key").notNull(),
   rights: kitPhotoRightsEnum("rights").notNull().default("unresolved"),
   visibility: kitPhotoVisibilityEnum("visibility").notNull().default("admin_only"),
@@ -612,6 +686,7 @@ export const countryRelations = relations(country, ({ many }) => ({
   leagues: many(league),
   clubs: many(club),
   nationalTeams: many(nationalTeam),
+  players: many(player),
 }));
 
 export const leagueRelations = relations(league, ({ one, many }) => ({
@@ -628,12 +703,16 @@ export const clubRelations = relations(club, ({ one, many }) => ({
   }),
   teamSeasons: many(teamSeason),
   kits: many(kit),
+  playerClubSeasons: many(playerClubSeason),
+  jerseyNumbers: many(playerJerseyNumber),
 }));
 
 export const seasonRelations = relations(season, ({ one, many }) => ({
   league: one(league, { fields: [season.leagueId], references: [league.id] }),
   teamSeasons: many(teamSeason),
   kits: many(kit),
+  playerClubSeasons: many(playerClubSeason),
+  jerseyNumbers: many(playerJerseyNumber),
 }));
 
 export const kitRelations = relations(kit, ({ one, many }) => ({
@@ -648,6 +727,36 @@ export const kitRelations = relations(kit, ({ one, many }) => ({
     references: [manufacturer.id],
   }),
   photos: many(kitPhoto),
+}));
+
+export const playerRelations = relations(player, ({ one, many }) => ({
+  primaryCountry: one(country, {
+    fields: [player.primaryCountryId],
+    references: [country.id],
+  }),
+  clubSeasons: many(playerClubSeason),
+  jerseyNumbers: many(playerJerseyNumber),
+  photos: many(playerPhoto),
+}));
+
+export const playerClubSeasonRelations = relations(playerClubSeason, ({ one }) => ({
+  player: one(player, { fields: [playerClubSeason.playerId], references: [player.id] }),
+  club: one(club, { fields: [playerClubSeason.clubId], references: [club.id] }),
+  season: one(season, { fields: [playerClubSeason.seasonId], references: [season.id] }),
+}));
+
+export const playerJerseyNumberRelations = relations(playerJerseyNumber, ({ one }) => ({
+  player: one(player, { fields: [playerJerseyNumber.playerId], references: [player.id] }),
+  season: one(season, { fields: [playerJerseyNumber.seasonId], references: [season.id] }),
+  club: one(club, { fields: [playerJerseyNumber.clubId], references: [club.id] }),
+  nationalTeam: one(nationalTeam, {
+    fields: [playerJerseyNumber.nationalTeamId],
+    references: [nationalTeam.id],
+  }),
+}));
+
+export const playerPhotoRelations = relations(playerPhoto, ({ one }) => ({
+  player: one(player, { fields: [playerPhoto.playerId], references: [player.id] }),
 }));
 
 export const userRelations = relations(user, ({ many }) => ({

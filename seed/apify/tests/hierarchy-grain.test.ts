@@ -5,9 +5,11 @@ import {
   club,
   createDb,
   externalId,
+  honour,
   league,
   player,
   playerClubSeason,
+  playerPhoto,
   resetDatabase,
   season,
   teamSeason,
@@ -214,6 +216,184 @@ describe("Hierarchy grain — League season normalize", () => {
   });
 });
 
+describe("Hierarchy grain — Club Rich", () => {
+  beforeAll(async () => {
+    await prepareDatabase();
+  });
+
+  it("persists Club facts and honours, not only name and country", async () => {
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    const { summary } = await runHierarchyGrain({
+      kind: "club",
+      competition: "dk1",
+      clubExternalId: "190",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+
+    expect(summary.clubs).toBe(1);
+    expect(summary.honours).toBe(2);
+    expect(summary.players).toBe(0);
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const rows = await db
+        .select({
+          foundedOn: club.foundedOn,
+          stadiumName: club.stadiumName,
+          stadiumCapacity: club.stadiumCapacity,
+          primaryColorHex: club.primaryColorHex,
+          websiteUrl: club.websiteUrl,
+        })
+        .from(club);
+      expect(rows[0]).toMatchObject({
+        foundedOn: "1992-07-01",
+        stadiumName: "Parken",
+        stadiumCapacity: 38065,
+        primaryColorHex: "#0053A0",
+        websiteUrl: "https://www.fck.dk",
+      });
+      const titles = await db
+        .select({ title: honour.title, seasonLabel: honour.seasonLabel })
+        .from(honour);
+      expect(titles).toEqual(
+        expect.arrayContaining([
+          { title: "Danish champion", seasonLabel: "10/11" },
+          { title: "Danish champion", seasonLabel: "09/10" },
+        ]),
+      );
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("second Club grain is idempotent on ExternalId", async () => {
+    await prepareDatabase();
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    const first = await runHierarchyGrain({
+      kind: "club",
+      competition: "dk1",
+      clubExternalId: "190",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+    const second = await runHierarchyGrain({
+      kind: "club",
+      competition: "dk1",
+      clubExternalId: "190",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+    expect(first.summary.clubs).toBe(1);
+    expect(second.summary.clubs).toBe(0);
+    expect(second.summary.honours).toBe(0);
+  });
+
+  it("writes kader body facts, position, and portrait without a profile hop", async () => {
+    await prepareDatabase();
+    const portraits = new Map<string, Uint8Array>();
+    let profileFetches = 0;
+    const adapter = createKaderFetchAdapter({
+      fixturesDir: kaderFixturesDir,
+      onProfileFetch: () => {
+        profileFetches += 1;
+      },
+    });
+    const { summary } = await runHierarchyGrain({
+      kind: "club_season",
+      competition: "dk1",
+      clubExternalId: "190",
+      season: "2010/11",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+      portraitStore: {
+        async putObject(key, bytes) {
+          portraits.set(key, bytes);
+        },
+      },
+    });
+
+    expect(profileFetches).toBe(0);
+    expect(summary.players).toBe(2);
+    expect(summary.playerPhotos).toBe(1);
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const players = await db
+        .select({
+          heightCm: player.heightCm,
+          preferredFoot: player.preferredFoot,
+          dateOfBirth: player.dateOfBirth,
+        })
+        .from(player);
+      expect(players).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            heightCm: 174,
+            preferredFoot: "right",
+            dateOfBirth: "1981-02-24",
+          }),
+        ]),
+      );
+      const pcs = await db
+        .select({ position: playerClubSeason.position, squadNumber: playerClubSeason.squadNumber })
+        .from(playerClubSeason);
+      expect(pcs).toEqual(
+        expect.arrayContaining([
+          { position: "Centre-Forward", squadNumber: 10 },
+          { position: "Defensive Midfield", squadNumber: 8 },
+        ]),
+      );
+      const photos = await db
+        .select({
+          objectKey: playerPhoto.objectKey,
+          rights: playerPhoto.rights,
+          visibility: playerPhoto.visibility,
+        })
+        .from(playerPhoto);
+      expect(photos[0]).toMatchObject({
+        objectKey: "player/11110/portrait",
+        rights: "unresolved",
+        visibility: "admin_only",
+      });
+      expect(portraits.get("player/11110/portrait")?.length).toBeGreaterThan(0);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("writes every Club grain on the Superliga 2010/11 competition page", async () => {
+    await prepareDatabase();
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    const { summary } = await runHierarchyGrain({
+      kind: "club_proof",
+      competition: "dk1",
+      season: "2010/11",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+    });
+
+    expect(summary.clubs).toBe(2);
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const ids = await db
+        .select({ value: externalId.value })
+        .from(externalId)
+        .where(and(eq(externalId.system, TM_SYSTEM), eq(externalId.entityType, "club")));
+      expect(ids.map((row) => row.value).sort()).toEqual(["190", "191"]);
+      const stadiums = await db.select({ stadiumName: club.stadiumName }).from(club);
+      expect(stadiums.map((row) => row.stadiumName).sort()).toEqual(["Brøndby Stadium", "Parken"]);
+    } finally {
+      await pool.end();
+    }
+  });
+});
+
 describe("Hierarchy grain CLI", () => {
   it("parses grain league and defaults lane to development", () => {
     const parsed = parseCliArgs(["node", "seed-apify", "grain", "league", "dk1"]);
@@ -245,5 +425,25 @@ describe("Hierarchy grain CLI", () => {
     expect(() =>
       parseCliArgs(["node", "seed-apify", "grain", "league", "dk1", "production"]),
     ).toThrow(/production/i);
+  });
+
+  it("parses grain club, club-season, and club-proof", () => {
+    expect(parseCliArgs(["node", "seed-apify", "grain", "club", "dk1", "190"])).toEqual({
+      mode: "grain",
+      grain: { kind: "club", competition: "dk1", clubExternalId: "190" },
+      lane: "development",
+    });
+    expect(
+      parseCliArgs(["node", "seed-apify", "grain", "club-season", "dk1", "190", "2010/11"]),
+    ).toEqual({
+      mode: "grain",
+      grain: { kind: "club_season", competition: "dk1", clubExternalId: "190", season: "2010/11" },
+      lane: "development",
+    });
+    expect(parseCliArgs(["node", "seed-apify", "grain", "club-proof", "dk1", "2010/11"])).toEqual({
+      mode: "grain",
+      grain: { kind: "club_proof", competition: "dk1", season: "2010/11" },
+      lane: "development",
+    });
   });
 });

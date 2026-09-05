@@ -3,8 +3,14 @@ import {
   catalogCompetitionIdentity,
   resolveSeasonRef,
 } from "@kit/seed-shared";
-import type { TransfermarktRawPayload } from "../types.js";
-import type { ActorPlayerProfile, ActorSeasonClubRow, ActorSquadRow } from "./actor-types.js";
+import type { TransfermarktRawClub, TransfermarktRawPayload } from "../types.js";
+import type {
+  ActorPlayerProfile,
+  ActorSeasonClubRow,
+  ActorSquadRow,
+  ClubFactsParse,
+  HonourParseRow,
+} from "./actor-types.js";
 import { labelToStartYear, seasonCalendarBounds, startYearToLabel } from "./season-label.js";
 
 export interface MapClubSeasonParams {
@@ -14,6 +20,9 @@ export interface MapClubSeasonParams {
   clubName: string;
   squadRows: ActorSquadRow[];
   profileByPlayerId: Map<string, ActorPlayerProfile>;
+  portraits?: Map<string, Uint8Array>;
+  facts?: ClubFactsParse;
+  honours?: HonourParseRow[];
   identity?: CompetitionIdentity;
 }
 
@@ -85,42 +94,108 @@ export function mapLeagueSeasonToPayload(params: {
   };
 }
 
-type ResolvedPlayer = { id: string; name: string; jerseyNumber?: number };
+type ResolvedPlayer = {
+  id: string;
+  name: string;
+  jerseyNumber?: number;
+  position?: string;
+  dateOfBirth?: string;
+  nationalityIso?: string;
+  nationalityName?: string;
+  heightCm?: number;
+  preferredFoot?: ActorSquadRow["preferredFoot"];
+  portraitBytes?: Uint8Array;
+};
 
 function resolvePlayer(
   row: ActorSquadRow,
   profileByPlayerId: Map<string, ActorPlayerProfile>,
+  portraits: Map<string, Uint8Array>,
 ): ResolvedPlayer | null {
   const needsProfile = !row.playerId || row.shirtNumber === undefined || row.shirtNumber === null;
-
-  if (!needsProfile) {
-    return {
-      id: row.playerId!,
-      name: row.playerName,
-      jerseyNumber: row.shirtNumber ?? undefined,
-    };
-  }
 
   if (!row.playerId) {
     return null;
   }
 
-  const profile = profileByPlayerId.get(row.playerId);
-  if (!profile) {
+  const profile = needsProfile ? profileByPlayerId.get(row.playerId) : undefined;
+  const jerseyNumber = needsProfile
+    ? profile?.shirtNumber === null || profile?.shirtNumber === undefined
+      ? undefined
+      : profile.shirtNumber
+    : (row.shirtNumber ?? undefined);
+
+  if (needsProfile && !profile) {
     return {
       id: row.playerId,
       name: row.playerName,
       jerseyNumber: undefined,
+      position: row.position,
+      dateOfBirth: row.dateOfBirth,
+      nationalityIso: row.nationalityIso,
+      nationalityName: row.nationalityName,
+      heightCm: row.heightCm,
+      preferredFoot: row.preferredFoot,
+      portraitBytes: portraits.get(row.playerId),
     };
   }
 
   return {
-    id: profile.playerId,
-    name: profile.playerName,
-    jerseyNumber:
-      profile.shirtNumber === null || profile.shirtNumber === undefined
-        ? undefined
-        : profile.shirtNumber,
+    id: profile?.playerId ?? row.playerId,
+    name: profile?.playerName ?? row.playerName,
+    jerseyNumber,
+    position: row.position,
+    dateOfBirth: row.dateOfBirth,
+    nationalityIso: row.nationalityIso,
+    nationalityName: row.nationalityName,
+    heightCm: row.heightCm,
+    preferredFoot: row.preferredFoot,
+    portraitBytes: portraits.get(row.playerId),
+  };
+}
+
+export function applyClubFacts(
+  club: TransfermarktRawClub,
+  facts?: ClubFactsParse,
+  honours?: HonourParseRow[],
+): TransfermarktRawClub {
+  return {
+    ...club,
+    officialName: facts?.officialName,
+    foundedOn: facts?.foundedOn,
+    stadiumName: facts?.stadiumName,
+    stadiumCapacity: facts?.stadiumCapacity,
+    primaryColorHex: facts?.primaryColorHex,
+    secondaryColorHex: facts?.secondaryColorHex,
+    websiteUrl: facts?.websiteUrl,
+    honours,
+  };
+}
+
+export function mapClubToPayload(params: {
+  competitionSlug: string;
+  clubExternalId: string;
+  clubName: string;
+  facts?: ClubFactsParse;
+  honours?: HonourParseRow[];
+  identity?: CompetitionIdentity;
+}): TransfermarktRawPayload {
+  const identity = resolveCompetitionOrThrow(params.competitionSlug, params.identity);
+  return {
+    competition: competitionPayload(identity),
+    seasons: [],
+    clubs: [
+      applyClubFacts(
+        {
+          id: params.clubExternalId,
+          name: params.clubName,
+          country: { iso3166: identity.iso3166, name: identity.countryName },
+          players: [],
+        },
+        params.facts,
+        params.honours,
+      ),
+    ],
   };
 }
 
@@ -130,7 +205,7 @@ export function mapClubSeasonToPayload(params: MapClubSeasonParams): Transfermar
   const { startDate, endDate } = seasonCalendarBounds(startYear);
 
   const players = params.squadRows
-    .map((row) => resolvePlayer(row, params.profileByPlayerId))
+    .map((row) => resolvePlayer(row, params.profileByPlayerId, params.portraits ?? new Map()))
     .filter((player): player is ResolvedPlayer => player !== null);
 
   return {
@@ -143,12 +218,16 @@ export function mapClubSeasonToPayload(params: MapClubSeasonParams): Transfermar
         endDate,
         calendarKind: "split_year",
         clubs: [
-          {
-            id: params.clubExternalId,
-            name: params.clubName,
-            country: { iso3166: identity.iso3166 },
-            players,
-          },
+          applyClubFacts(
+            {
+              id: params.clubExternalId,
+              name: params.clubName,
+              country: { iso3166: identity.iso3166, name: identity.countryName },
+              players,
+            },
+            params.facts,
+            params.honours,
+          ),
         ],
       },
     ],

@@ -108,5 +108,20 @@ export function createFixtureFetchAdapter(fixturePath: string): FetchAdapter {
       }
       return scoped;
     },
+
+    async fetchClub(params) {
+      const payload = await loadFixture();
+      for (const season of payload.seasons) {
+        const match = season.clubs.find((club) => club.id === params.clubExternalId);
+        if (match) {
+          return {
+            competition: payload.competition,
+            seasons: [],
+            clubs: [{ ...match, players: [] }],
+          };
+        }
+      }
+      throw new Error(`Missing club ${params.clubExternalId} for ${params.competition}`);
+    },
   };
 }
