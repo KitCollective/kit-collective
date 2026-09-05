@@ -26,6 +26,12 @@ export {
   SEED_LANES,
   type SeedLane,
 } from "./lane.js";
+export {
+  catalogNationalTeamIdentity,
+  type NationalTeamDefinition,
+  type NationalTeamIdentity,
+  resolveNationalTeam,
+} from "./national-teams.js";
 export { resolveSeasonRef } from "./season-ref.js";
 export {
   type ClubSeedScope,

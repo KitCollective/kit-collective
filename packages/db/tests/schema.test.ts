@@ -215,6 +215,31 @@ describe("stamdata schema", () => {
     expect(columns).toContain("position");
   });
 
+  it("creates national_team_season and player_national_team_season tables", async () => {
+    const { rows } = await pool.query<{ tablename: string }>(
+      `SELECT tablename FROM pg_tables
+       WHERE schemaname = 'public'
+         AND tablename IN ('national_team_season', 'player_national_team_season')
+       ORDER BY tablename`,
+    );
+    expect(rows.map((r) => r.tablename)).toEqual([
+      "national_team_season",
+      "player_national_team_season",
+    ]);
+  });
+
+  it("adds national_team fact columns", async () => {
+    const columns = await columnNames(pool, "national_team");
+    expect(columns).toEqual(expect.arrayContaining(["founded_on", "confederation"]));
+  });
+
+  it("adds player_national_team_season squad and call-up columns", async () => {
+    const columns = await columnNames(pool, "player_national_team_season");
+    expect(columns).toEqual(
+      expect.arrayContaining(["squad_number", "position", "call_up_club_id"]),
+    );
+  });
+
   it("creates honour, player_jersey_number, and player_photo tables", async () => {
     const { rows } = await pool.query<{ tablename: string }>(
       `SELECT tablename FROM pg_tables

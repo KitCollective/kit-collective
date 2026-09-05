@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { catalogLabel, createDb, externalId, playerClubSeason, resetDatabase } from "@kit/db";
 import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { FetchAdapter } from "../src/fetch/adapter.js";
 import {
   createKaderFetchAdapter,
   TransfermarktHttpError,
@@ -758,11 +759,8 @@ describe("runSeed with kader HTML adapter", () => {
         throw new TransfermarktHttpError(403, url);
       },
     });
-    const adapter = {
-      fetchLeague: fixturesAdapter.fetchLeague.bind(fixturesAdapter),
-      fetchLeagueSeason: fixturesAdapter.fetchLeagueSeason.bind(fixturesAdapter),
-      listClubSeasonPairs: fixturesAdapter.listClubSeasonPairs.bind(fixturesAdapter),
-      fetchClub: fixturesAdapter.fetchClub.bind(fixturesAdapter),
+    const adapter: FetchAdapter = {
+      ...fixturesAdapter,
       fetchClubSeason: rateLimited.fetchClubSeason.bind(rateLimited),
     };
 

@@ -17,11 +17,26 @@ async function main() {
     if (parsed.mode === "grain") {
       const { summary } = await runHierarchyGrain({
         kind: parsed.grain.kind,
-        competition: parsed.grain.competition,
+        competition:
+          parsed.grain.kind === "league" ||
+          parsed.grain.kind === "league_season" ||
+          parsed.grain.kind === "club" ||
+          parsed.grain.kind === "club_season" ||
+          parsed.grain.kind === "club_proof"
+            ? parsed.grain.competition
+            : undefined,
+        nationalTeamRef:
+          parsed.grain.kind === "national_team" ||
+          parsed.grain.kind === "national_team_season" ||
+          parsed.grain.kind === "national_team_proof"
+            ? parsed.grain.nationalTeamRef
+            : undefined,
         season:
           parsed.grain.kind === "league_season" ||
           parsed.grain.kind === "club_season" ||
-          parsed.grain.kind === "club_proof"
+          parsed.grain.kind === "club_proof" ||
+          parsed.grain.kind === "national_team_season" ||
+          parsed.grain.kind === "national_team_proof"
             ? parsed.grain.season
             : undefined,
         clubExternalId:

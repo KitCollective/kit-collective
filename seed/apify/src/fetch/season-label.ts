@@ -30,3 +30,11 @@ export function seasonCalendarBounds(startYear: number): {
     endDate: `${startYear + 1}-06-30`,
   };
 }
+
+/** Calendar bounds for a bare calendar year (e.g. NT World Cup 2010). */
+export function calendarYearBounds(year: number): { startDate: string; endDate: string } {
+  return {
+    startDate: `${year}-01-01`,
+    endDate: `${year}-12-31`,
+  };
+}

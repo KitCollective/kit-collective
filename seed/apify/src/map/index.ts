@@ -6,25 +6,35 @@ import {
   externalId,
   honour,
   league,
+  nationalTeam,
+  nationalTeamSeason,
   player,
   playerClubSeason,
+  playerNationalTeamSeason,
   playerPhoto,
   season,
   teamSeason,
 } from "@kit/db";
 import { type CatalogEntityType, countryCodesForIso3166, type LabelLocale } from "@kit/domain";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { assertFactsSeasonScope } from "../scope-isolation.js";
 import type {
   MapResult,
   NormalizedClub,
   NormalizedFacts,
+  NormalizedNationalTeam,
   NormalizedPlayer,
   NormalizedSeason,
 } from "../types.js";
 import { TM_SYSTEM } from "../types.js";
 
-export type MapDepth = "league" | "league_season" | "club" | "full";
+export type MapDepth =
+  | "league"
+  | "league_season"
+  | "club"
+  | "full"
+  | "national_team"
+  | "national_team_season";
 
 export interface PortraitStore {
   putObject(key: string, bytes: Uint8Array): Promise<void>;
@@ -165,14 +175,20 @@ async function upsertLeagueRow(
 
 async function upsertSeasonRow(
   db: Db,
-  leagueId: string,
+  leagueId: string | null,
   seasonData: NormalizedSeason,
 ): Promise<{ id: string; created: boolean }> {
-  const existing = await db
-    .select({ id: season.id })
-    .from(season)
-    .where(and(eq(season.leagueId, leagueId), eq(season.label, seasonData.label)))
-    .limit(1);
+  const existing = leagueId
+    ? await db
+        .select({ id: season.id })
+        .from(season)
+        .where(and(eq(season.leagueId, leagueId), eq(season.label, seasonData.label)))
+        .limit(1)
+    : await db
+        .select({ id: season.id })
+        .from(season)
+        .where(and(isNull(season.leagueId), eq(season.label, seasonData.label)))
+        .limit(1);
 
   if (existing[0]) {
     return { id: existing[0].id, created: false };
@@ -430,7 +446,7 @@ async function upsertPlayerClubSeasonRow(
 
 async function upsertHonours(
   db: Db,
-  subjectType: "club" | "player",
+  subjectType: "club" | "national_team" | "player",
   subjectId: string,
   rows: NormalizedClub["honours"],
 ): Promise<number> {
@@ -508,6 +524,9 @@ function emptyMapResult(): MapResult {
     externalIds: 0,
     honours: 0,
     playerPhotos: 0,
+    nationalTeams: 0,
+    nationalTeamSeasons: 0,
+    playerNationalTeamSeasons: 0,
   };
 }
 
@@ -661,6 +680,304 @@ export async function mapFacts(
 
       for (const playerData of clubData.players) {
         await mapOnePlayer(db, result, clubId, seasonResult.id, playerData, options);
+      }
+    }
+  }
+
+  return result;
+}
+
+function nationalTeamFactPatch(teamData: NormalizedNationalTeam): {
+  foundedOn?: string;
+  confederation?: string;
+} {
+  const patch: { foundedOn?: string; confederation?: string } = {};
+  if (teamData.foundedOn !== undefined) {
+    patch.foundedOn = teamData.foundedOn;
+  }
+  if (teamData.confederation !== undefined) {
+    patch.confederation = teamData.confederation;
+  }
+  return patch;
+}
+
+async function upsertNationalTeamRow(
+  db: Db,
+  countryId: string,
+  teamData: NormalizedNationalTeam,
+): Promise<{ id: string; created: boolean; labels: number; externalIds: number }> {
+  const facts = nationalTeamFactPatch(teamData);
+  const byExternal = await findEntityId(db, teamData.externalId);
+  if (byExternal) {
+    if (Object.keys(facts).length > 0) {
+      await db.update(nationalTeam).set(facts).where(eq(nationalTeam.id, byExternal));
+    }
+    let labels = (await upsertCatalogLabel(
+      db,
+      "national_team",
+      byExternal,
+      teamData.nameLocale,
+      teamData.name,
+    ))
+      ? 1
+      : 0;
+    if (teamData.officialName && teamData.officialName !== teamData.name) {
+      labels += (await upsertCatalogLabel(
+        db,
+        "national_team",
+        byExternal,
+        teamData.nameLocale,
+        teamData.officialName,
+        "alias",
+      ))
+        ? 1
+        : 0;
+    }
+    return { id: byExternal, created: false, labels, externalIds: 0 };
+  }
+
+  const [row] = await db
+    .insert(nationalTeam)
+    .values({ countryId, gender: teamData.gender, ...nationalTeamFactPatch(teamData) })
+    .returning({ id: nationalTeam.id });
+  const id = row!.id;
+  await linkExternalId(db, "national_team", id, teamData.externalId);
+  let labels = 1;
+  await upsertCatalogLabel(db, "national_team", id, teamData.nameLocale, teamData.name);
+  if (teamData.officialName && teamData.officialName !== teamData.name) {
+    await upsertCatalogLabel(
+      db,
+      "national_team",
+      id,
+      teamData.nameLocale,
+      teamData.officialName,
+      "alias",
+    );
+    labels += 1;
+  }
+  return { id, created: true, labels, externalIds: 1 };
+}
+
+async function upsertNationalTeamSeasonRow(
+  db: Db,
+  nationalTeamId: string,
+  seasonId: string,
+): Promise<{ id: string; created: boolean }> {
+  const existing = await db
+    .select({ id: nationalTeamSeason.id })
+    .from(nationalTeamSeason)
+    .where(
+      and(
+        eq(nationalTeamSeason.nationalTeamId, nationalTeamId),
+        eq(nationalTeamSeason.seasonId, seasonId),
+      ),
+    )
+    .limit(1);
+
+  if (existing[0]) {
+    return { id: existing[0].id, created: false };
+  }
+
+  const [row] = await db
+    .insert(nationalTeamSeason)
+    .values({ nationalTeamId, seasonId })
+    .returning({ id: nationalTeamSeason.id });
+
+  return { id: row!.id, created: true };
+}
+
+async function upsertPlayerNationalTeamSeasonRow(
+  db: Db,
+  playerId: string,
+  nationalTeamId: string,
+  seasonId: string,
+  squadNumber?: number,
+  position?: string,
+  callUpClubId?: string,
+): Promise<{ id: string; created: boolean }> {
+  const existing = await db
+    .select({
+      id: playerNationalTeamSeason.id,
+      squadNumber: playerNationalTeamSeason.squadNumber,
+      position: playerNationalTeamSeason.position,
+      callUpClubId: playerNationalTeamSeason.callUpClubId,
+    })
+    .from(playerNationalTeamSeason)
+    .where(
+      and(
+        eq(playerNationalTeamSeason.playerId, playerId),
+        eq(playerNationalTeamSeason.nationalTeamId, nationalTeamId),
+        eq(playerNationalTeamSeason.seasonId, seasonId),
+      ),
+    )
+    .limit(1);
+
+  const patch: {
+    squadNumber?: number;
+    position?: string;
+    callUpClubId?: string;
+  } = {};
+  if (squadNumber !== undefined) {
+    patch.squadNumber = squadNumber;
+  }
+  if (position !== undefined) {
+    patch.position = position;
+  }
+  if (callUpClubId !== undefined) {
+    patch.callUpClubId = callUpClubId;
+  }
+
+  if (existing[0]) {
+    if (Object.keys(patch).length > 0) {
+      await db
+        .update(playerNationalTeamSeason)
+        .set(patch)
+        .where(eq(playerNationalTeamSeason.id, existing[0].id));
+    }
+    return { id: existing[0].id, created: false };
+  }
+
+  const [row] = await db
+    .insert(playerNationalTeamSeason)
+    .values({
+      playerId,
+      nationalTeamId,
+      seasonId,
+      squadNumber: squadNumber ?? null,
+      position: position ?? null,
+      callUpClubId: callUpClubId ?? null,
+    })
+    .returning({ id: playerNationalTeamSeason.id });
+
+  return { id: row!.id, created: true };
+}
+
+async function mapOneNationalTeam(
+  db: Db,
+  result: MapResult,
+  countryId: string,
+  teamData: NormalizedNationalTeam,
+): Promise<string> {
+  const teamResult = await upsertNationalTeamRow(db, countryId, teamData);
+  if (teamResult.created) result.nationalTeams += 1;
+  result.catalogLabels += teamResult.labels;
+  result.externalIds += teamResult.externalIds;
+  result.honours += await upsertHonours(db, "national_team", teamResult.id, teamData.honours);
+  return teamResult.id;
+}
+
+async function mapOneNationalTeamPlayer(
+  db: Db,
+  result: MapResult,
+  nationalTeamId: string,
+  seasonId: string | undefined,
+  playerData: NormalizedPlayer,
+  options?: MapFactsOptions,
+): Promise<void> {
+  let primaryCountryId: string | undefined;
+  if (playerData.nationalityIso) {
+    const nationality = await upsertCountry(
+      db,
+      playerData.nationalityIso,
+      `country-${playerData.nationalityIso.toLowerCase()}`,
+      playerData.nationalityName ?? playerData.nationalityIso,
+    );
+    if (nationality.created) result.countries += 1;
+    result.catalogLabels += nationality.labels;
+    result.externalIds += nationality.externalIds;
+    primaryCountryId = nationality.id;
+  }
+
+  let callUpClubId: string | undefined;
+  if (playerData.callUpClubExternalId) {
+    const existingClubId = await findEntityId(db, playerData.callUpClubExternalId);
+    if (existingClubId) {
+      callUpClubId = existingClubId;
+    }
+  }
+
+  const playerResult = await upsertPlayerRow(db, playerData, primaryCountryId);
+  if (playerResult.created) result.players += 1;
+  result.catalogLabels += playerResult.labels;
+  result.externalIds += playerResult.externalIds;
+
+  if (seasonId) {
+    const pntsResult = await upsertPlayerNationalTeamSeasonRow(
+      db,
+      playerResult.id,
+      nationalTeamId,
+      seasonId,
+      playerData.squadNumber,
+      playerData.position,
+      callUpClubId,
+    );
+    if (pntsResult.created) result.playerNationalTeamSeasons += 1;
+  }
+
+  if (playerData.portraitBytes && options?.portraitStore) {
+    const created = await upsertPlayerPhoto(
+      db,
+      playerResult.id,
+      playerData.externalId,
+      playerData.portraitBytes,
+      options.portraitStore,
+    );
+    if (created) result.playerPhotos += 1;
+  }
+}
+
+export async function mapNationalTeamFacts(
+  db: Db,
+  facts: NormalizedFacts,
+  options?: MapFactsOptions,
+): Promise<MapResult> {
+  const depth: MapDepth = options?.depth ?? "national_team_season";
+
+  if (options?.allowedSeasonLabels) {
+    assertFactsSeasonScope(
+      facts.seasons.map((seasonData) => seasonData.label),
+      options.allowedSeasonLabels,
+    );
+  }
+
+  const result = emptyMapResult();
+
+  const countryResult = await upsertCountry(
+    db,
+    facts.league.countryIso,
+    facts.league.countryExternalId,
+    facts.league.countryName,
+  );
+  if (countryResult.created) result.countries += 1;
+  result.catalogLabels += countryResult.labels;
+  result.externalIds += countryResult.externalIds;
+
+  if (depth === "national_team") {
+    for (const teamData of facts.nationalTeams ?? []) {
+      await mapOneNationalTeam(db, result, countryResult.id, teamData);
+    }
+    return result;
+  }
+
+  for (const seasonData of facts.seasons) {
+    const seasonResult = await upsertSeasonRow(db, null, seasonData);
+    if (seasonResult.created) result.seasons += 1;
+
+    for (const teamData of seasonData.nationalTeams) {
+      const nationalTeamId = await mapOneNationalTeam(db, result, countryResult.id, teamData);
+
+      const ntsResult = await upsertNationalTeamSeasonRow(db, nationalTeamId, seasonResult.id);
+      if (ntsResult.created) result.nationalTeamSeasons += 1;
+
+      for (const playerData of teamData.players) {
+        await mapOneNationalTeamPlayer(
+          db,
+          result,
+          nationalTeamId,
+          seasonResult.id,
+          playerData,
+          options,
+        );
       }
     }
   }

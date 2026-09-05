@@ -1,6 +1,7 @@
 import {
   type CompetitionIdentity,
   catalogCompetitionIdentity,
+  catalogNationalTeamIdentity,
   pickCompetitionHit,
   resolveSeasonRef,
   searchQueryForCompetition,
@@ -11,6 +12,8 @@ import {
   mapClubToPayload,
   mapLeagueSeasonToPayload,
   mapLeagueToPayload,
+  mapNationalTeamSeasonToPayload,
+  mapNationalTeamToPayload,
   seasonClubRowsToPairs,
   startYearToLabel,
 } from "./actor-mapper.js";
@@ -19,6 +22,8 @@ import type {
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,
+  FetchNationalTeamParams,
+  FetchNationalTeamSeasonParams,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
 import { competitionSearchUrl, parseCompetitionSearchHtml } from "./competition-search.js";
@@ -301,6 +306,74 @@ async function fetchClubSeasonWithClient(
   });
 }
 
+async function fetchNationalTeamWithClient(
+  client: KaderHtmlClient,
+  params: FetchNationalTeamParams,
+) {
+  const identity = catalogNationalTeamIdentity(params.nationalTeamRef);
+  if (!identity) {
+    throw new Error(`Unknown national team: ${params.nationalTeamRef}`);
+  }
+  const facts = await client.fetchClubFacts(identity.transfermarktId);
+  const honours = await client.fetchClubHonours(identity.transfermarktId);
+  return mapNationalTeamToPayload({
+    nationalTeamRef: params.nationalTeamRef,
+    teamName: facts?.officialName ?? identity.name,
+    facts,
+    honours,
+    identity,
+  });
+}
+
+async function fetchNationalTeamSeasonWithClient(
+  client: KaderHtmlClient,
+  params: FetchNationalTeamSeasonParams,
+  onProfileFetch?: (playerId: string) => void,
+  onProfileHole?: (playerId: string, error: unknown) => void,
+) {
+  const identity = catalogNationalTeamIdentity(params.nationalTeamRef);
+  if (!identity) {
+    throw new Error(`Unknown national team: ${params.nationalTeamRef}`);
+  }
+  const seasonLabel = params.season.trim();
+  const startYear = labelToStartYear(seasonLabel);
+  const { squadRows } = await client.fetchKader(identity.transfermarktId, startYear, identity.name);
+
+  if (squadRows.length === 0) {
+    throw new Error(
+      `Missing kader for national team ${identity.transfermarktId} season ${seasonLabel}`,
+    );
+  }
+
+  const profileByPlayerId = await resolveProfiles(
+    squadRows,
+    (playerId) => client.fetchPlayerProfile(playerId),
+    onProfileFetch,
+    onProfileHole,
+  );
+
+  const portraits = new Map<string, Uint8Array>();
+  for (const row of squadRows) {
+    if (!row.playerId || !row.portraitSrc) {
+      continue;
+    }
+    const bytes = await client.fetchPortrait(row.playerId, row.portraitSrc);
+    if (bytes) {
+      portraits.set(row.playerId, bytes);
+    }
+  }
+
+  return mapNationalTeamSeasonToPayload({
+    nationalTeamRef: params.nationalTeamRef,
+    seasonLabel,
+    teamName: identity.name,
+    squadRows,
+    profileByPlayerId,
+    portraits,
+    identity,
+  });
+}
+
 function createAdapterFromClient(
   client: KaderHtmlClient,
   listSeasons: (competition: string) => Promise<number[]>,
@@ -347,6 +420,14 @@ function createAdapterFromClient(
 
     async fetchClub(params) {
       return fetchClubWithClient(client, params);
+    },
+
+    async fetchNationalTeam(params) {
+      return fetchNationalTeamWithClient(client, params);
+    },
+
+    async fetchNationalTeamSeason(params) {
+      return fetchNationalTeamSeasonWithClient(client, params, onProfileFetch, onProfileHole);
     },
   };
 }
@@ -489,6 +570,14 @@ function createLiveAdapter(
     async fetchClub(params) {
       const identity = await identityFor(params.competition);
       return fetchClubWithClient(client, params, identity);
+    },
+
+    async fetchNationalTeam(params) {
+      return fetchNationalTeamWithClient(client, params);
+    },
+
+    async fetchNationalTeamSeason(params) {
+      return fetchNationalTeamSeasonWithClient(client, params, onProfileFetch, onProfileHole);
     },
   };
 }

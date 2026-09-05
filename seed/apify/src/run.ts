@@ -2,7 +2,7 @@ import { createDb, SEED_CREATE_DB_OPTIONS } from "@kit/db";
 import { resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
-import { mapFacts, type PortraitStore } from "./map/index.js";
+import { mapFacts, mapNationalTeamFacts, type PortraitStore } from "./map/index.js";
 import { normalize } from "./normalize/index.js";
 import { type HierarchyGrain, type ParsedSeedCli, parseSeedApifyCli } from "./parse-cli.js";
 import { resolvePortraitStoreFromEnv } from "./portrait-store.js";
@@ -45,7 +45,8 @@ export interface RunSeedResult {
 
 export interface RunHierarchyGrainOptions {
   kind: HierarchyGrain["kind"];
-  competition: string;
+  competition?: string;
+  nationalTeamRef?: string;
   season?: string;
   clubExternalId?: string;
   lane: Lane;
@@ -71,6 +72,9 @@ function emptyMapResult(): MapResult {
     externalIds: 0,
     honours: 0,
     playerPhotos: 0,
+    nationalTeams: 0,
+    nationalTeamSeasons: 0,
+    playerNationalTeamSeasons: 0,
   };
 }
 
@@ -86,6 +90,9 @@ function addMapResults(target: MapResult, source: MapResult): void {
   target.externalIds += source.externalIds;
   target.honours += source.honours;
   target.playerPhotos += source.playerPhotos;
+  target.nationalTeams += source.nationalTeams;
+  target.nationalTeamSeasons += source.nationalTeamSeasons;
+  target.playerNationalTeamSeasons += source.playerNationalTeamSeasons;
 }
 
 function mapTotal(mapResult: MapResult): number {
@@ -100,7 +107,10 @@ function mapTotal(mapResult: MapResult): number {
     mapResult.catalogLabels +
     mapResult.externalIds +
     mapResult.honours +
-    mapResult.playerPhotos
+    mapResult.playerPhotos +
+    mapResult.nationalTeams +
+    mapResult.nationalTeamSeasons +
+    mapResult.playerNationalTeamSeasons
   );
 }
 
@@ -128,6 +138,68 @@ export async function runHierarchyGrain(
   const { db, pool } = createDb(databaseUrl, SEED_CREATE_DB_OPTIONS);
 
   try {
+    if (options.kind === "national_team") {
+      if (!options.nationalTeamRef?.trim()) {
+        throw new Error("national_team grain requires national team ref");
+      }
+      const raw = await options.fetchAdapter.fetchNationalTeam({
+        nationalTeamRef: options.nationalTeamRef,
+      });
+      const facts = normalize(raw);
+      const summary = await mapNationalTeamFacts(db, facts, { depth: "national_team" });
+      return { summary };
+    }
+
+    if (options.kind === "national_team_season") {
+      if (!options.nationalTeamRef?.trim() || !options.season?.trim()) {
+        throw new Error("national_team_season grain requires national team ref and season");
+      }
+      const seasonLabel = options.season.trim();
+      const raw = await options.fetchAdapter.fetchNationalTeamSeason({
+        nationalTeamRef: options.nationalTeamRef,
+        season: seasonLabel,
+      });
+      const facts = normalize(raw);
+      const summary = await mapNationalTeamFacts(db, facts, {
+        depth: "national_team_season",
+        allowedSeasonLabels: new Set([seasonLabel]),
+        portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
+      });
+      return { summary };
+    }
+
+    if (options.kind === "national_team_proof") {
+      if (!options.nationalTeamRef?.trim() || !options.season?.trim()) {
+        throw new Error("national_team_proof grain requires national team ref and season");
+      }
+      const seasonLabel = options.season.trim();
+      const summary = emptyMapResult();
+      const entityRaw = await options.fetchAdapter.fetchNationalTeam({
+        nationalTeamRef: options.nationalTeamRef,
+      });
+      addMapResults(
+        summary,
+        await mapNationalTeamFacts(db, normalize(entityRaw), { depth: "national_team" }),
+      );
+      const seasonRaw = await options.fetchAdapter.fetchNationalTeamSeason({
+        nationalTeamRef: options.nationalTeamRef,
+        season: seasonLabel,
+      });
+      addMapResults(
+        summary,
+        await mapNationalTeamFacts(db, normalize(seasonRaw), {
+          depth: "national_team_season",
+          allowedSeasonLabels: new Set([seasonLabel]),
+          portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
+        }),
+      );
+      return { summary };
+    }
+
+    if (!options.competition?.trim()) {
+      throw new Error(`${options.kind} grain requires competition`);
+    }
+
     if (options.kind === "league") {
       const raw = await options.fetchAdapter.fetchLeague({
         competition: options.competition,

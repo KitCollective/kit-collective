@@ -20,6 +20,8 @@ export interface ActorSquadRow {
   heightCm?: number;
   preferredFoot?: "left" | "right" | "both";
   portraitSrc?: string;
+  callUpClubExternalId?: string;
+  callUpClubName?: string;
 }
 
 export interface ClubFactsParse {
@@ -30,6 +32,7 @@ export interface ClubFactsParse {
   primaryColorHex?: string;
   secondaryColorHex?: string;
   websiteUrl?: string;
+  confederation?: string;
 }
 
 export interface HonourParseRow {
