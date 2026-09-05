@@ -55,12 +55,18 @@ export default function TabsLayout() {
       <NativeTabs tintColor={tint} labelStyle={{ color: label }}>
         <NativeTabs.Trigger name="collection">
           <NativeTabs.Trigger.Label>Samling</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }} md="grid_view" />
+          <NativeTabs.Trigger.Icon
+            sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }}
+            md="grid_view"
+          />
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="inbox">
           <NativeTabs.Trigger.Label>Indbakke</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf={{ default: "envelope", selected: "envelope.fill" }} md="mail" />
+          <NativeTabs.Trigger.Icon
+            sf={{ default: "envelope", selected: "envelope.fill" }}
+            md="mail"
+          />
           {unreadCount > 0 ? (
             <NativeTabs.Trigger.Badge>{String(unreadCount)}</NativeTabs.Trigger.Badge>
           ) : null}
@@ -73,12 +79,18 @@ export default function TabsLayout() {
 
         <NativeTabs.Trigger name="wishlist">
           <NativeTabs.Trigger.Label>Ønsker</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf={{ default: "bookmark", selected: "bookmark.fill" }} md="bookmark" />
+          <NativeTabs.Trigger.Icon
+            sf={{ default: "bookmark", selected: "bookmark.fill" }}
+            md="bookmark"
+          />
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="profile">
           <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf={{ default: "person", selected: "person.fill" }} md="person" />
+          <NativeTabs.Trigger.Icon
+            sf={{ default: "person", selected: "person.fill" }}
+            md="person"
+          />
         </NativeTabs.Trigger>
       </NativeTabs>
     </InboxChromeProvider>

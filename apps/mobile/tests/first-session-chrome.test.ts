@@ -82,7 +82,7 @@ describe("first-session visual host chrome", () => {
     expect(copy).toContain("Gentag adgangskode");
     expect(copy).toContain("mindst 8 tegn");
     expect(copy).toContain("Glemt adgangskode?");
-    expect(door).toContain('<BrandMark provider={provider}');
+    expect(door).toContain("<BrandMark provider={provider}");
     expect(door).toContain('provider: "google"');
     expect(door).toContain('provider: "facebook"');
     expect(door).toContain('name: "Google"');

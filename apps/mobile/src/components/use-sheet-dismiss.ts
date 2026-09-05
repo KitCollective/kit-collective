@@ -143,7 +143,17 @@ export function useSheetDismiss({ visible, onDismiss, reduceMotion }: UseSheetDi
           }
           translateY.set(withSpring(0, { ...SETTLE_SPRING, velocity: event.velocityY }));
         }),
-    [dismiss, dragStart, driving, reduceMotion, scrollGesture, scrollOffset, sheetHeight, translateY, viewportHeight],
+    [
+      dismiss,
+      dragStart,
+      driving,
+      reduceMotion,
+      scrollGesture,
+      scrollOffset,
+      sheetHeight,
+      translateY,
+      viewportHeight,
+    ],
   );
 
   const sheetStyle = useAnimatedStyle(() => ({

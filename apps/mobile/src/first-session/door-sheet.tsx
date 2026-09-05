@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -167,12 +167,7 @@ export function DoorSheet({
       onBack={onForgot ? backToAuth : undefined}
       onDismiss={onClose}
     >
-      <DoorSheetBody
-        page={page}
-        mode={mode}
-        reduceMotion={reduceMotion}
-        onSwapMode={onSwapMode}
-      >
+      <DoorSheetBody page={page} mode={mode} reduceMotion={reduceMotion} onSwapMode={onSwapMode}>
         {onForgot ? (
           <ForgotPasswordFace
             email={resetEmail}

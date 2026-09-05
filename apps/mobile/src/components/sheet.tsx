@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
@@ -135,16 +135,18 @@ export function Sheet({
                   mode={onBack ? "back" : "close"}
                   onPress={onBack ?? requestDismiss}
                 />
-                {headerAction ? (
-                  <View style={styles.sheetHeaderAction}>{headerAction}</View>
-                ) : null}
+                {headerAction ? <View style={styles.sheetHeaderAction}>{headerAction}</View> : null}
               </View>
               {titleContent ? (
                 <View style={styles.sheetTitleRegion}>{titleContent}</View>
               ) : (
                 <Text
                   accessibilityRole="header"
-                  style={[typography.title, styles.sheetTitleRegion, { color: theme.contentPrimary }]}
+                  style={[
+                    typography.title,
+                    styles.sheetTitleRegion,
+                    { color: theme.contentPrimary },
+                  ]}
                 >
                   {title}
                 </Text>

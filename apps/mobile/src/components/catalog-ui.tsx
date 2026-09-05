@@ -1,13 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  type TextInputProps,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, type TextInputProps, View } from "react-native";
 import { useTypography } from "@/theme/brand-fonts";
 import type { ThemeColors } from "@/theme/tokens";
 import { radius, space } from "@/theme/tokens";

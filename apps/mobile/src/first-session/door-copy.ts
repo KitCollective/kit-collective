@@ -30,7 +30,8 @@ export const FORGOT_PASSWORD_LABEL = "Glemt adgangskode?";
 
 /** Forgot-password page presented in-sheet (page-in-a-sheet, not a route push). */
 export const FORGOT_PASSWORD_TITLE = "Nulstil adgangskode";
-export const FORGOT_PASSWORD_INFO = "Vi sender et link, hvis e-mailen findes. Samme svar hver gang.";
+export const FORGOT_PASSWORD_INFO =
+  "Vi sender et link, hvis e-mailen findes. Samme svar hver gang.";
 export const FORGOT_PASSWORD_SUBMIT = "Send link";
 export const FORGOT_PASSWORD_DONE = "Tjek din e-mail, hvis kontoen findes.";
 export const FORGOT_PASSWORD_BACK = "Tilbage";

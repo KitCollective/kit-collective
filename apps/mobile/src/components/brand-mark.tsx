@@ -1,8 +1,8 @@
 import type { SvgProps } from "react-native-svg";
+import { useTheme } from "@/theme/use-theme";
 import AppleMark from "../../assets/brand/provider-apple.svg";
 import FacebookMark from "../../assets/brand/provider-facebook.svg";
 import GoogleMark from "../../assets/brand/provider-google.svg";
-import { useTheme } from "@/theme/use-theme";
 
 /** Sign-in provider whose official brand mark we ship as an asset. */
 export type BrandMarkProvider = "google" | "facebook" | "apple";

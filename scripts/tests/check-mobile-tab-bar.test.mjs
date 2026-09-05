@@ -18,13 +18,19 @@ test("native tab layout declares five triggers in the locked order", () => {
 
 test("trigger name count drops when a trigger is removed", () => {
   const source = readFileSync(tabLayoutPath, "utf8");
-  const mutated = source.replace(/<NativeTabs\.Trigger name="profile">[\s\S]*?<\/NativeTabs\.Trigger>/, "");
+  const mutated = source.replace(
+    /<NativeTabs\.Trigger name="profile">[\s\S]*?<\/NativeTabs\.Trigger>/,
+    "",
+  );
   assert.equal(tabTriggerNames(mutated).length, 4);
 });
 
 test("checkMobileTabBar fails when the tab order is broken", () => {
   const source = readFileSync(tabLayoutPath, "utf8");
-  const mutated = source.replace(/<NativeTabs\.Trigger name="profile">[\s\S]*?<\/NativeTabs\.Trigger>/, "");
+  const mutated = source.replace(
+    /<NativeTabs\.Trigger name="profile">[\s\S]*?<\/NativeTabs\.Trigger>/,
+    "",
+  );
   const violations = checkMobileTabBar({ layoutSource: mutated });
   assert.ok(violations.some((violation) => violation.includes("expected five tabs in order")));
 });

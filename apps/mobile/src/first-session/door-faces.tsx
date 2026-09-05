@@ -169,10 +169,14 @@ export function ForgotPasswordFace({
 
   return (
     <View style={styles.stack}>
-      <Text style={[typography.body, { color: theme.contentSecondary }]}>{FORGOT_PASSWORD_INFO}</Text>
+      <Text style={[typography.body, { color: theme.contentSecondary }]}>
+        {FORGOT_PASSWORD_INFO}
+      </Text>
       {showThrottleBanner ? <AuthThrottleBanner /> : null}
       {done ? (
-        <Text style={[typography.body, { color: theme.contentPrimary }]}>{FORGOT_PASSWORD_DONE}</Text>
+        <Text style={[typography.body, { color: theme.contentPrimary }]}>
+          {FORGOT_PASSWORD_DONE}
+        </Text>
       ) : (
         <>
           <LabeledField

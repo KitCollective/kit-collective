@@ -93,7 +93,7 @@ describe("Sheet chrome", () => {
     const catalog = readFileSync(catalogUiPath, "utf8");
 
     expect(catalog).toContain('export { Sheet, useSheetScroll } from "@/components/sheet"');
-    expect(account).toContain("from \"@/components/catalog-ui\"");
+    expect(account).toContain('from "@/components/catalog-ui"');
     expect(account).toContain("<Sheet");
     expect(account).not.toContain("Modal");
   });
@@ -107,7 +107,7 @@ describe("Door identity face", () => {
     expect(door).toContain('label="E-mail"');
     expect(door).toContain('label="Adgangskode"');
     expect(door).toContain("doorPasswordSubmitLabel");
-    expect(door).toContain('<BrandMark provider={provider}');
+    expect(door).toContain("<BrandMark provider={provider}");
     expect(door).toContain('provider: "google"');
     expect(door).toContain('provider: "facebook"');
     // Social buttons fill the row so they read as one centered cluster.
