@@ -73,6 +73,8 @@ export function createScopedFixtureFetchAdapter(scope: TestFixtureScope): FkFetc
   return {
     async fetchKits(): Promise<FkRawKit[]> {
       const raw = await readFile(FIXTURE_PATH, "utf8");
+      // SAFETY: the fixture is committed in this repository and normalizeRawKit rejects
+      // any record that does not parse into an FkRawKit.
       const parsed = JSON.parse(raw) as FixtureFile;
       const kits: FkRawKit[] = [];
 
