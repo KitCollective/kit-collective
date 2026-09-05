@@ -32,9 +32,11 @@ import {
   addJerseyDraft,
   bindUnboundPhotoToDraft,
   canSave,
+  changeDraftPhotoRole,
   getDraft,
   photoUriForRole,
   removeDraft,
+  removeDraftPhoto,
   selectDraftCondition,
   selectDraftKitType,
   selectDraftSize,
@@ -59,6 +61,7 @@ import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 import { PostSaveSheet } from "@/components/post-save-sheet";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { markJerseySaved } from "@/session/addSession";
@@ -103,6 +106,7 @@ export default function ConfirmScreen() {
   const [visionPolling, setVisionPolling] = useState(false);
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
   const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
+  const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const clubManuallySet = useRef(false);
   const seasonManuallySet = useRef(false);
@@ -467,7 +471,39 @@ export default function ConfirmScreen() {
       return;
     }
 
+    if (uri) {
+      setLightboxRole(role);
+      return;
+    }
+
     void pickPhotoForRole(role);
+  };
+
+  const handleLightboxReplace = () => {
+    if (!lightboxRole) {
+      return;
+    }
+    const role = lightboxRole;
+    setLightboxRole(null);
+    void pickPhotoForRole(role);
+  };
+
+  const handleLightboxDelete = () => {
+    if (!lightboxRole || !sessionId) {
+      return;
+    }
+    const role = lightboxRole;
+    mutate((current) => removeDraftPhoto(current, current.activeDraftId, role));
+    setLightboxRole(null);
+  };
+
+  const handleLightboxChangeRole = (toRole: PhotoRole) => {
+    if (!lightboxRole) {
+      return;
+    }
+    const fromRole = lightboxRole;
+    mutate((current) => changeDraftPhotoRole(current, current.activeDraftId, fromRole, toRole));
+    setLightboxRole(toRole);
   };
 
   const handleBindUnboundPhoto = (uri: string) => {
@@ -961,6 +997,18 @@ export default function ConfirmScreen() {
         savedSeasonLabel={savedSeasonLabel}
         onDismiss={handlePostSaveDismiss}
       />
+
+      {lightboxRole && photoUris[lightboxRole] ? (
+        <PhotoLightbox
+          visible
+          role={lightboxRole}
+          uri={photoUris[lightboxRole]!}
+          onDismiss={() => setLightboxRole(null)}
+          onReplace={handleLightboxReplace}
+          onDelete={handleLightboxDelete}
+          onChangeRole={handleLightboxChangeRole}
+        />
+      ) : null}
     </View>
   );
 }
