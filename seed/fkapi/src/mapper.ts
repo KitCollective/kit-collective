@@ -63,10 +63,7 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
       let seasonId: string;
 
       if (isNationalTeamKit(rawKit)) {
-        const nationalTeamRow = await findNationalTeamByFkApiId(
-          pool,
-          rawKit.nationalTeamFkApiId,
-        );
+        const nationalTeamRow = await findNationalTeamByFkApiId(pool, rawKit.nationalTeamFkApiId);
         const seasonRow = nationalTeamRow
           ? await findSeasonForNationalTeam(pool, nationalTeamRow.entityId, rawKit.seasonLabel)
           : undefined;
