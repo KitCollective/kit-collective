@@ -1,9 +1,9 @@
-import { PHOTO_ROLES, PHOTO_ROLE_LABELS_DA, type PhotoRole } from "@kit/domain";
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { PHOTO_ROLE_LABELS_DA, PHOTO_ROLES, type PhotoRole } from "@kit/domain";
+import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Chip } from "@/components/chip";
-import { Button } from "@/components/ui";
+import { Button, ButtonDock } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space, withAlpha } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -18,7 +18,7 @@ type PhotoLightboxProps = {
   onChangeRole: (toRole: PhotoRole) => void;
 };
 
-/** Full-size photo preview with replace, delete, and role-change actions (design lock → Photo lightbox). */
+/** Full-size photo preview with replace, delete, and role-change actions (KIT-208). */
 export function PhotoLightbox({
   visible,
   role,
@@ -56,7 +56,12 @@ export function PhotoLightbox({
               pressed && styles.chromePressed,
             ]}
           >
-            <Ionicons name="close" size={22} color={theme.contentPrimary} accessibilityElementsHidden />
+            <Ionicons
+              name="close"
+              size={22}
+              color={theme.contentPrimary}
+              accessibilityElementsHidden
+            />
           </Pressable>
         </View>
 
@@ -97,19 +102,10 @@ export function PhotoLightbox({
           </View>
         </View>
 
-        <View
-          style={[
-            styles.actions,
-            {
-              paddingBottom: Math.max(insets.bottom, space.insetMd),
-              borderTopColor: theme.borderSubtle,
-              backgroundColor: theme.canvas,
-            },
-          ]}
-        >
+        <ButtonDock>
           <Button label="Erstat" variant="secondary" width="fill" onPress={onReplace} />
           <Button label="Slet" variant="destructive" width="fill" onPress={onDelete} />
-        </View>
+        </ButtonDock>
       </View>
     </Modal>
   );
@@ -156,11 +152,5 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "center",
     gap: space.gapSm,
-  },
-  actions: {
-    gap: space.gapSm,
-    paddingHorizontal: space.insetLg,
-    paddingTop: space.insetMd,
-    borderTopWidth: 1,
   },
 });

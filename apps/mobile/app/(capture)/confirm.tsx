@@ -45,7 +45,6 @@ import {
   setDraftNotes,
   setDraftSeason,
   switchSingleToBulkBind,
-  unbindPhoto,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
@@ -60,8 +59,8 @@ import {
 import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
-import { PhotoSlot } from "@/components/photo-slot";
 import { PhotoLightbox } from "@/components/photo-lightbox";
+import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { markJerseySaved } from "@/session/addSession";
@@ -357,7 +356,7 @@ export default function ConfirmScreen() {
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
   const pickPhotoForRole = async (role: PhotoRole) => {
-    if (!draft || isBulk) {
+    if (!draft || !sessionId) {
       return;
     }
 
@@ -369,14 +368,14 @@ export default function ConfirmScreen() {
       expoGalleryPickerAdapter,
     );
 
-    if (!uris?.[0] || !sessionId) {
+    if (!uris?.[0]) {
       return;
     }
 
     const uri = uris[0];
     mutate((current) => upsertDraftPhoto(current, current.activeDraftId, role, uri, "gallery"));
 
-    if (!hadPhotos) {
+    if (!isBulk && !hadPhotos) {
       void maybeStartVision(role, uri);
     }
   };
@@ -456,23 +455,18 @@ export default function ConfirmScreen() {
     }
 
     const uri = photoUriForRole(draft, role);
-    if (isBulk) {
-      if (uri) {
-        mutate((current) => unbindPhoto(current, uri));
-        return;
-      }
+    if (uri) {
+      setLightboxRole(role);
+      return;
+    }
 
+    if (isBulk) {
       const firstUnbound = state.unboundUris[0];
       if (firstUnbound) {
         mutate((current) =>
           bindUnboundPhotoToDraft(current, firstUnbound, current.activeDraftId, role),
         );
       }
-      return;
-    }
-
-    if (uri) {
-      setLightboxRole(role);
       return;
     }
 
@@ -489,7 +483,7 @@ export default function ConfirmScreen() {
   };
 
   const handleLightboxDelete = () => {
-    if (!lightboxRole || !sessionId) {
+    if (!lightboxRole) {
       return;
     }
     const role = lightboxRole;
@@ -998,11 +992,11 @@ export default function ConfirmScreen() {
         onDismiss={handlePostSaveDismiss}
       />
 
-      {lightboxRole && photoUris[lightboxRole] ? (
+      {lightboxRole !== null && photoUris[lightboxRole] !== undefined ? (
         <PhotoLightbox
           visible
           role={lightboxRole}
-          uri={photoUris[lightboxRole]!}
+          uri={photoUris[lightboxRole]}
           onDismiss={() => setLightboxRole(null)}
           onReplace={handleLightboxReplace}
           onDelete={handleLightboxDelete}

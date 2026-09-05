@@ -13,6 +13,7 @@ describe("Photo lightbox chrome", () => {
     expect(source).toContain("previewHeight = (previewWidth * 5) / 4");
     expect(source).toContain('accessibilityLabel="Luk"');
     expect(source).toContain('name="close"');
+    expect(source).toContain("ButtonDock");
     expect(source).toContain('label="Erstat"');
     expect(source).toContain('variant="secondary"');
     expect(source).toContain('label="Slet"');
@@ -37,6 +38,8 @@ describe("Confirm photo slot behaviour", () => {
     expect(source).toContain("PhotoLightbox");
     expect(source).toContain("setLightboxRole(role)");
     expect(source).toContain("pickPhotoForRole(role)");
+    expect(source).toContain("bindUnboundPhotoToDraft");
+    expect(source).not.toContain("unbindPhoto(current, uri)");
     expect(source).toContain("removeDraftPhoto");
     expect(source).toContain("changeDraftPhotoRole");
     expect(source).toContain("upsertDraftPhoto");
