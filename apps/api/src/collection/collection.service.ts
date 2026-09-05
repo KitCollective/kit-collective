@@ -385,9 +385,9 @@ export class CollectionService {
 
       const lastReadAt = lastReadByConversation.get(row.id);
       const unread =
-        Boolean(latest) &&
-        latest?.senderId !== userId &&
-        (!lastReadAt || latest?.createdAt > lastReadAt);
+        latest !== undefined &&
+        latest.senderId !== userId &&
+        (!lastReadAt || latest.createdAt > lastReadAt);
 
       return {
         id: row.id,
@@ -513,9 +513,9 @@ export class CollectionService {
       const latest = latestByConversation.get(row.conversationId);
       const lastReadAt = lastReadByConversation.get(row.conversationId);
       const unread =
-        Boolean(latest) &&
-        latest?.senderId !== userId &&
-        (!lastReadAt || latest?.createdAt > lastReadAt);
+        latest !== undefined &&
+        latest.senderId !== userId &&
+        (!lastReadAt || latest.createdAt > lastReadAt);
 
       return {
         id: row.id,
