@@ -48,14 +48,112 @@ describe("Native tab bar chrome", () => {
     expect(order).toEqual(["collection", "inbox", "search", "wishlist", "profile"]);
     // Søg (search) is the center tab.
     expect(order[2]).toBe("search");
+    // NativeTabs would inset the first UIScrollView on focus. Outer overviews
+    // no longer use PagerView; keep the Trigger opt-out so lists stay manual.
+    expect([...layout.matchAll(/disableAutomaticContentInsets/g)]).toHaveLength(5);
+    expect([...layout.matchAll(/contentStyle=\{tabContentStyle\}/g)]).toHaveLength(5);
   });
 
-  it("labels every tab in Danish", () => {
+  it("renders tab icons a little under the system SF default", () => {
     const layout = readFileSync(tabLayoutPath, "utf8");
+    const icon = readFileSync(join(__dirname, "../src/components/tab-bar-icon.tsx"), "utf8");
+    const metrics = readFileSync(join(__dirname, "../src/components/tab-bar-metrics.ts"), "utf8");
 
-    for (const label of ["Samling", "Indbakke", "Søg", "Ønsker", "Profil"]) {
-      expect(layout).toContain(`>${label}<`);
+    expect(layout).toContain("useTabBarIconSrc");
+    expect(icon).toContain("TAB_BAR_ICON_SIZE");
+    expect(icon).toContain("Promise.all");
+    expect(metrics).toContain("export const TAB_BAR_ICON_SIZE = 22");
+  });
+
+  it("pages parent overviews with the finger and keeps drills on the stack", () => {
+    const collection = readFileSync(collectionPath, "utf8");
+    const inbox = readFileSync(join(__dirname, "../app/(tabs)/inbox/index.tsx"), "utf8");
+    const search = readFileSync(join(__dirname, "../app/(tabs)/search/index.tsx"), "utf8");
+    const wishlist = readFileSync(join(__dirname, "../app/(tabs)/wishlist/index.tsx"), "utf8");
+    const profile = readFileSync(join(__dirname, "../app/(tabs)/profile/index.tsx"), "utf8");
+    const jersey = readFileSync(join(__dirname, "../app/(tabs)/collection/[jerseyId].tsx"), "utf8");
+    const swipe = readFileSync(join(__dirname, "../src/navigation/place-swipe.ts"), "utf8");
+    const layout = readFileSync(tabLayoutPath, "utf8");
+    const pager = readFileSync(join(__dirname, "../src/navigation/place-pager.tsx"), "utf8");
+    const warmup = readFileSync(join(__dirname, "../src/navigation/place-home-warmup.ts"), "utf8");
+
+    for (const source of [collection, inbox, search, wishlist, profile]) {
+      expect(source).toContain("PlacePagerScreen");
     }
+    expect(jersey).not.toContain("PlacePagerScreen");
+    expect(swipe).toContain("inboxYieldsToPlaceSwipe");
+    expect(swipe).toContain("inboxOuterPanShouldActivate");
+    expect(layout).toContain("prefetchPlaceOverviews");
+    expect(layout).toContain("place-home-warmup");
+    expect(pager).toContain("GestureDetector");
+    expect(pager).toContain("inboxOuterPanShouldActivate");
+    expect(pager).not.toContain("blocksExternalGesture");
+    expect(pager).toContain("requireExternalGestureToFail");
+    expect(pager).toContain("inboxInnerConsumesSwipe");
+    expect(inbox).toContain("InboxInnerPager");
+    expect(inbox).not.toContain("inboxPagerNative");
+    expect(inbox).not.toContain("react-native-pager-view");
+    const innerPager = readFileSync(
+      join(__dirname, "../src/navigation/inbox-inner-pager.tsx"),
+      "utf8",
+    );
+    expect(innerPager).toContain("inboxOuterPanShouldActivate");
+    expect(innerPager).not.toContain("react-native-pager-view");
+    expect(pager).toContain("placePagerSnapIndex");
+    expect(pager).toContain("placePagerHoldUntilAfterBlur");
+    expect(pager).toContain("scheduleOnRN(commitPlace");
+    expect(pager).not.toContain("react-native-pager-view");
+    expect(pager).toContain("PLACE_ORDER.map");
+    expect(pager).not.toContain("setSettling");
+    const pagerScreen = readFileSync(
+      join(__dirname, "../src/navigation/place-pager-screen.tsx"),
+      "utf8",
+    );
+    expect(pagerScreen).toContain("focused={focused}");
+    expect(pagerScreen).toContain("PlaceHomeLiveProvider");
+    expect(pager).toContain("withSpring");
+    expect(pager).toContain("theme.canvas");
+    expect(pagerScreen).toContain("theme.canvas");
+    const screenHeader = readFileSync(
+      join(__dirname, "../src/components/screen-header.tsx"),
+      "utf8",
+    );
+    const collectionHeader = readFileSync(
+      join(__dirname, "../src/components/collection-header.tsx"),
+      "utf8",
+    );
+    expect(screenHeader).toContain("useStableSafeAreaInsets");
+    expect(collectionHeader).toContain("useStableSafeAreaInsets");
+    expect(warmup).toContain("collection/index");
+    expect(warmup).toContain("inbox/index");
+    expect(inbox).toContain("usePlaceOverview");
+    expect(search).toContain("usePlaceOverview");
+  });
+
+  it("uses one stack push animation for in-app drills", () => {
+    const collectionLayout = readFileSync(
+      join(__dirname, "../app/(tabs)/collection/_layout.tsx"),
+      "utf8",
+    );
+    const profileLayout = readFileSync(
+      join(__dirname, "../app/(tabs)/profile/_layout.tsx"),
+      "utf8",
+    );
+    const inboxLayout = readFileSync(join(__dirname, "../app/(tabs)/inbox/_layout.tsx"), "utf8");
+    const searchLayout = readFileSync(join(__dirname, "../app/(tabs)/search/_layout.tsx"), "utf8");
+    const motion = readFileSync(join(__dirname, "../src/navigation/stack-motion.ts"), "utf8");
+
+    expect(motion).toContain('return reduceMotion ? "fade" : "default"');
+    expect(motion).toContain("stackRouteMotion");
+    expect(collectionLayout).toContain("stackScreenMotion(reduceMotion)");
+    expect(collectionLayout).toContain('name="index" options={{ animation: "none" }}');
+    expect(profileLayout).toContain("stackScreenMotion(reduceMotion)");
+    expect(profileLayout).toContain('animation: "none"');
+    expect(inboxLayout).toContain("stackRouteMotion(route.name, reduceMotion)");
+    expect(inboxLayout).toContain("theme.canvas");
+    expect(searchLayout).toContain("stackRouteMotion(route.name, reduceMotion)");
+    expect(searchLayout).toContain("theme.canvas");
+    expect(profileLayout).not.toContain('"fade"');
   });
 
   it("makes capture the Samling header action, not a tab", () => {

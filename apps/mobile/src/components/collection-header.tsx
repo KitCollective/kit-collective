@@ -1,8 +1,8 @@
 import { StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
+import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 
 type CollectionHeaderProps = {
@@ -11,7 +11,7 @@ type CollectionHeaderProps = {
 };
 
 export function CollectionHeader({ count, onAddPress }: CollectionHeaderProps) {
-  const insets = useSafeAreaInsets();
+  const insets = useStableSafeAreaInsets();
   const theme = useTheme();
   const typography = useTypography();
 

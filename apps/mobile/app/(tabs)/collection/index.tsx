@@ -10,7 +10,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CollectionFetchError, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { fetchCollectionShortcuts } from "@/api/shortcuts";
 import { useAuth } from "@/auth/AuthProvider";
@@ -24,11 +23,20 @@ import { ShortcutChipRow } from "@/components/shortcut-chip-row";
 import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { Button, EmptyState } from "@/components/ui";
 import { RESULT_COLLECTION_BUD_CAPTION } from "@/first-session/jersey-details-copy";
+import { registerPlaceHome, useIsPlaceHomeLive } from "@/navigation/place-homes";
+import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
+import { PlacePagerScreen } from "@/navigation/place-pager-screen";
+import { usePlaceOverview } from "@/navigation/use-place-overview";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
+import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 
 export default function CollectionScreen() {
+  return <PlacePagerScreen place="collection" />;
+}
+
+function CollectionHome() {
   const router = useRouter();
   const { firstSessionResult } = useLocalSearchParams<{ firstSessionResult?: string }>();
   const showResultCollectionCaption = firstSessionResult === "1";
@@ -37,16 +45,34 @@ export default function CollectionScreen() {
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const typography = useTypography();
-  const insets = useSafeAreaInsets();
+  const insets = useStableSafeAreaInsets();
   const tabBarPadding = tabBarContentInset(insets.bottom);
-  const [loading, setLoading] = useState(true);
-  const [jerseys, setJerseys] = useState<CollectionJersey[]>([]);
-  const [allJerseys, setAllJerseys] = useState<CollectionJersey[]>([]);
-  const [totalJerseyCount, setTotalJerseyCount] = useState(0);
-  const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
+  const cachedCollection = usePlaceOverview("collection");
+  const isLive = useIsPlaceHomeLive("collection");
+  const [loading, setLoading] = useState(cachedCollection == null);
+  const [jerseys, setJerseys] = useState<CollectionJersey[]>(cachedCollection?.jerseys ?? []);
+  const [allJerseys, setAllJerseys] = useState<CollectionJersey[]>(
+    cachedCollection?.allJerseys ?? [],
+  );
+  const [totalJerseyCount, setTotalJerseyCount] = useState(cachedCollection?.totalJerseyCount ?? 0);
+  const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>(
+    cachedCollection?.shortcuts ?? [],
+  );
   const [selectedShortcutId, setSelectedShortcutId] = useState<string | null>(null);
   const [genvejeOpen, setGenvejeOpen] = useState(false);
-  const hasInitialLoadRef = useRef(false);
+  const hasInitialLoadRef = useRef(cachedCollection != null);
+
+  useEffect(() => {
+    if (!cachedCollection || selectedShortcutId != null) {
+      return;
+    }
+    setJerseys(cachedCollection.jerseys);
+    setAllJerseys(cachedCollection.allJerseys);
+    setTotalJerseyCount(cachedCollection.totalJerseyCount);
+    setShortcuts(cachedCollection.shortcuts);
+    setLoading(false);
+    hasInitialLoadRef.current = true;
+  }, [cachedCollection, selectedShortcutId]);
 
   const loadCollection = useCallback(async () => {
     if (!accessToken) {
@@ -59,6 +85,13 @@ export default function CollectionScreen() {
 
       if (selectedShortcutId === null) {
         setTotalJerseyCount(response.jerseys.length);
+        const previous = readPlaceOverview("collection");
+        writePlaceOverview("collection", {
+          jerseys: response.jerseys,
+          allJerseys: previous?.allJerseys ?? response.jerseys,
+          totalJerseyCount: response.jerseys.length,
+          shortcuts: previous?.shortcuts ?? [],
+        });
       }
     } catch (error) {
       if (
@@ -81,6 +114,13 @@ export default function CollectionScreen() {
     const response = await fetchCollectionJerseys(accessToken, null);
     setTotalJerseyCount(response.jerseys.length);
     setAllJerseys(response.jerseys);
+    const previous = readPlaceOverview("collection");
+    writePlaceOverview("collection", {
+      jerseys: previous?.jerseys ?? response.jerseys,
+      allJerseys: response.jerseys,
+      totalJerseyCount: response.jerseys.length,
+      shortcuts: previous?.shortcuts ?? [],
+    });
   }, [accessToken]);
 
   const loadShortcuts = useCallback(async () => {
@@ -90,6 +130,13 @@ export default function CollectionScreen() {
 
     const response = await fetchCollectionShortcuts(accessToken);
     setShortcuts(response.shortcuts);
+    const previous = readPlaceOverview("collection");
+    if (previous) {
+      writePlaceOverview("collection", {
+        ...previous,
+        shortcuts: response.shortcuts,
+      });
+    }
   }, [accessToken]);
 
   const refreshAll = useCallback(async () => {
@@ -100,7 +147,7 @@ export default function CollectionScreen() {
     let active = true;
 
     async function run() {
-      if (!accessToken) {
+      if (!accessToken || !isLive) {
         return;
       }
 
@@ -121,15 +168,15 @@ export default function CollectionScreen() {
     return () => {
       active = false;
     };
-  }, [accessToken, refreshAll]);
+  }, [accessToken, isLive, refreshAll]);
 
   useEffect(() => {
-    if (!accessToken || !hasInitialLoadRef.current) {
+    if (!accessToken || !isLive || !hasInitialLoadRef.current) {
       return;
     }
 
     void loadCollection();
-  }, [accessToken, loadCollection]);
+  }, [accessToken, isLive, loadCollection]);
 
   const openJerseyDetail = (jerseyId: string) => {
     router.push(`/(tabs)/collection/${jerseyId}`);
@@ -242,6 +289,8 @@ export default function CollectionScreen() {
     </View>
   );
 }
+
+registerPlaceHome("collection", CollectionHome);
 
 const styles = StyleSheet.create({
   container: {

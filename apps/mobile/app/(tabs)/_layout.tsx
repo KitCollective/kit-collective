@@ -1,10 +1,18 @@
 import { useFocusEffect } from "expo-router";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DynamicColorIOS, Platform } from "react-native";
 import { fetchConversations } from "@/api/conversations";
 import { useAuth } from "@/auth/AuthProvider";
+import { useTabBarIconSrc } from "@/components/tab-bar-icon";
 import { InboxChromeProvider } from "@/inbox/inbox-chrome";
+import "@/navigation/place-home-warmup";
+import { clearPlaceOverviews } from "@/navigation/place-overview-cache";
+import {
+  prefetchPlaceOverviews,
+  resetPlaceOverviewPrefetch,
+} from "@/navigation/place-overview-prefetch";
+import { PlaceSwipeProvider } from "@/navigation/place-swipe-context";
 import { useAppearanceOptional } from "@/theme/appearance";
 import { getThemeColors, type ThemeColors } from "@/theme/tokens";
 
@@ -38,6 +46,15 @@ export default function TabsLayout() {
     }, [refreshUnreadCount]),
   );
 
+  useEffect(() => {
+    if (!accessToken) {
+      clearPlaceOverviews();
+      resetPlaceOverviewPrefetch();
+      return;
+    }
+    void prefetchPlaceOverviews(accessToken);
+  }, [accessToken]);
+
   // Liquid Glass has no JS color-scheme callback, so iOS resolves each token
   // natively via DynamicColor; Android takes the already-resolved token.
   const light = getThemeColors("light");
@@ -47,52 +64,69 @@ export default function TabsLayout() {
     Platform.OS === "ios"
       ? DynamicColorIOS({ light: light[token], dark: dark[token] })
       : resolved[token];
+  const canvas = nativeTabColor("canvas");
   const tint = nativeTabColor("contentPrimary");
+  const tabContentStyle = { backgroundColor: canvas };
   const label = nativeTabColor("contentSecondary");
+  const collectionIcon = useTabBarIconSrc("grid-outline", "grid");
+  const inboxIcon = useTabBarIconSrc("mail-outline", "mail");
+  const searchIcon = useTabBarIconSrc("search");
+  const wishlistIcon = useTabBarIconSrc("bookmark-outline", "bookmark");
+  const profileIcon = useTabBarIconSrc("person-outline", "person");
 
   return (
     <InboxChromeProvider refreshUnreadCount={refreshUnreadCount}>
-      <NativeTabs tintColor={tint} labelStyle={{ color: label }}>
-        <NativeTabs.Trigger name="collection">
-          <NativeTabs.Trigger.Label>Samling</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "square.grid.2x2", selected: "square.grid.2x2.fill" }}
-            md="grid_view"
-          />
-        </NativeTabs.Trigger>
+      <PlaceSwipeProvider>
+        <NativeTabs tintColor={tint} labelStyle={{ color: label }}>
+          <NativeTabs.Trigger
+            name="collection"
+            disableAutomaticContentInsets
+            contentStyle={tabContentStyle}
+          >
+            <NativeTabs.Trigger.Label>Samling</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon renderingMode="template" src={collectionIcon} />
+          </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="inbox">
-          <NativeTabs.Trigger.Label>Indbakke</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "envelope", selected: "envelope.fill" }}
-            md="mail"
-          />
-          {unreadCount > 0 ? (
-            <NativeTabs.Trigger.Badge>{String(unreadCount)}</NativeTabs.Trigger.Badge>
-          ) : null}
-        </NativeTabs.Trigger>
+          <NativeTabs.Trigger
+            name="inbox"
+            disableAutomaticContentInsets
+            contentStyle={tabContentStyle}
+          >
+            <NativeTabs.Trigger.Label>Indbakke</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon renderingMode="template" src={inboxIcon} />
+            {unreadCount > 0 ? (
+              <NativeTabs.Trigger.Badge>{String(unreadCount)}</NativeTabs.Trigger.Badge>
+            ) : null}
+          </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="search">
-          <NativeTabs.Trigger.Label>Søg</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon sf="magnifyingglass" md="search" />
-        </NativeTabs.Trigger>
+          <NativeTabs.Trigger
+            name="search"
+            disableAutomaticContentInsets
+            contentStyle={tabContentStyle}
+          >
+            <NativeTabs.Trigger.Label>Søg</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon renderingMode="template" src={searchIcon} />
+          </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="wishlist">
-          <NativeTabs.Trigger.Label>Ønsker</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "bookmark", selected: "bookmark.fill" }}
-            md="bookmark"
-          />
-        </NativeTabs.Trigger>
+          <NativeTabs.Trigger
+            name="wishlist"
+            disableAutomaticContentInsets
+            contentStyle={tabContentStyle}
+          >
+            <NativeTabs.Trigger.Label>Ønsker</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon renderingMode="template" src={wishlistIcon} />
+          </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="profile">
-          <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
-          <NativeTabs.Trigger.Icon
-            sf={{ default: "person", selected: "person.fill" }}
-            md="person"
-          />
-        </NativeTabs.Trigger>
-      </NativeTabs>
+          <NativeTabs.Trigger
+            name="profile"
+            disableAutomaticContentInsets
+            contentStyle={tabContentStyle}
+          >
+            <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Icon renderingMode="template" src={profileIcon} />
+          </NativeTabs.Trigger>
+        </NativeTabs>
+      </PlaceSwipeProvider>
     </InboxChromeProvider>
   );
 }

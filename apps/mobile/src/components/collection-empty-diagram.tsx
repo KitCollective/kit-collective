@@ -20,7 +20,8 @@ const LOCK_EASE = Easing.bezier(0.4, 0, 0.2, 1);
 
 /**
  * Decorative shirt diagram for the collection empty state.
- * Same Ionicons family as the Tab bar — not an illustration library.
+ * Decorative shirt diagram for the collection empty state.
+ * Same Ionicons family as the Tab bar icons — not an illustration library.
  */
 export function CollectionEmptyDiagram() {
   const theme = useTheme();

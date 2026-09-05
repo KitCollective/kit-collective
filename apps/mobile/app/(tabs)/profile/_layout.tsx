@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import { stackScreenMotion } from "@/navigation/stack-motion";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
@@ -10,11 +11,14 @@ export default function ProfileLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        animation: reduceMotion ? "none" : "fade",
+        animation: stackScreenMotion(reduceMotion),
         contentStyle: { backgroundColor: theme.fillSecondary },
       }}
     >
-      <Stack.Screen name="index" />
+      <Stack.Screen
+        name="index"
+        options={{ animation: "none", contentStyle: { backgroundColor: theme.canvas } }}
+      />
       <Stack.Screen name="edit" />
       <Stack.Screen name="min-lokation" />
       <Stack.Screen name="favoritter" />

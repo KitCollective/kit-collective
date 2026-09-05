@@ -7,6 +7,7 @@ type MetroSvgConfig = {
 };
 
 const requireCjs = createRequire(import.meta.url);
+// SAFETY: metro.config.js is committed CJS; tests only read resolver/transformer fields.
 const metroConfig = requireCjs("../metro.config.js") as MetroSvgConfig;
 
 // Guards the Metro wiring that lets `import Mark from "./x.svg"` resolve to a

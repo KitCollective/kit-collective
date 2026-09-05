@@ -3,7 +3,6 @@ import { JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
 import { type Href, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchClubSeasons } from "@/api/catalog";
 import {
   createWishlistEntry,
@@ -19,8 +18,12 @@ import { FacetPickerOverlay } from "@/components/facet-picker-overlay";
 import { ScreenHeader } from "@/components/screen-header";
 import { SeasonPickerOverlay } from "@/components/season-picker-overlay";
 import { Button, EmptyState, IconButton } from "@/components/ui";
+import { useIsPlaceHomeLive } from "@/navigation/place-homes";
+import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
+import { usePlaceOverview } from "@/navigation/use-place-overview";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
+import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 import {
   buildWishlistWritePayload,
@@ -45,12 +48,14 @@ export function WishlistScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const insets = useStableSafeAreaInsets();
   const { accessToken, requestPremiumAccess, closePaywall } = useAuth();
 
+  const cachedWishlist = usePlaceOverview("wishlist");
+  const isLive = useIsPlaceHomeLive("wishlist");
   const [mode, setMode] = useState<WishlistSheetMode>("list");
-  const [entries, setEntries] = useState<WishlistEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [entries, setEntries] = useState<WishlistEntry[]>(cachedWishlist?.entries ?? []);
+  const [loading, setLoading] = useState(cachedWishlist == null);
   const [saving, setSaving] = useState(false);
   const [criteria, setCriteria] = useState<WishlistCriteria>(emptyWishlistCriteria());
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -59,16 +64,27 @@ export function WishlistScreen() {
   const [seasonOptions, setSeasonOptions] = useState<Array<{ id: string; label: string }>>([]);
   const [loadingSeasons, setLoadingSeasons] = useState(false);
 
+  useEffect(() => {
+    if (!cachedWishlist) {
+      return;
+    }
+    setEntries(cachedWishlist.entries);
+    setLoading(false);
+  }, [cachedWishlist]);
+
   const loadEntries = useCallback(async () => {
     if (!accessToken) {
       setEntries([]);
       return;
     }
 
-    setLoading(true);
+    if (!readPlaceOverview("wishlist")) {
+      setLoading(true);
+    }
     try {
       const response = await fetchWishlistEntries(accessToken);
       setEntries(response.entries);
+      writePlaceOverview("wishlist", { entries: response.entries });
     } finally {
       setLoading(false);
     }
@@ -105,8 +121,11 @@ export function WishlistScreen() {
   };
 
   useEffect(() => {
+    if (!isLive) {
+      return;
+    }
     void loadEntries();
-  }, [loadEntries]);
+  }, [isLive, loadEntries]);
 
   const openPaywallOnPremiumError = async (error: unknown): Promise<boolean> => {
     if (error instanceof WishlistPremiumRequiredError) {
@@ -186,6 +205,8 @@ export function WishlistScreen() {
     if (!hasWishlistHit(entry) || !entry.matchedJerseyId) {
       return;
     }
+    // SAFETY: handleHitPress already required a hit + matchedJerseyId; the helper
+    // returns `/search/${id}`, which is a typed Expo Router Href.
     router.push(resolveWishlistHitRoute(entry.matchedJerseyId) as Href);
   };
 

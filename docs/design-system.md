@@ -238,7 +238,7 @@ Status: `locked`
 | `motion.slow` | 400ms | Rare: large contextual reveal (empty → first tile) |
 | Easing | `cubic-bezier(0.4, 0, 0.2, 1)` | Default in/out |
 
-**Usage**: Animate opacity and transform only. Moments that earn motion: shutter feedback, sheet present/dismiss, Vision suggestion fade-in, tab change, the collection empty shirt diagram, and the Tab bar selected well. No bounce, no confetti. No auto-playing loops on load except a loading indicator and the collection empty diagram (transform only; reduced-motion = still).
+**Usage**: Animate opacity and transform only. Stack push/pop uses the platform push (`animation: default`) from `stackScreenMotion` so every **drill** feels the same; reduced-motion is a fade with no travel. Parent overview **index** screens use `animation: none` (`stackRouteMotion`) so a tab jump after a finger-swipe does not play a second sideshift behind the pager. Tap on the bottom nav has no extra animation (the OS owns the switch). On the five **parent overview** homes only, a horizontal pager follows the finger between places; those homes are prefetched so the destination is already painted. After the finger lifts, the row settles with `motion.base` (no bounce), then `router.navigate` hops the Liquid Glass pill. Native tab `contentStyle` is canvas so attach is not a white React Navigation flash. All five overview homes stay mounted in each pager (changing pager children snaps native to index 0). On blur, neighbour pages stay in the tree on the same render — a `useEffect` hold is one frame too late and paints the host page while NativeTabs still shows the outgoing tab. After `PLACE_PAGER_HOLD_AFTER_BLUR_MS` (450) the outgoing pager parks on its host page off-screen. InteractionManager is too early for that park. Indbakke’s Beskeder | Aktivitet consume that swipe until the inner edge, then the pager continues to Søg or Samling. Other moments that earn motion: shutter feedback, sheet present/dismiss, Vision suggestion fade-in, Top tabs underline, and the collection empty shirt diagram. No bounce, no confetti. No auto-playing loops on load except a loading indicator and the collection empty diagram (transform only; reduced-motion = still).
 
 **Relationships**: Reduced-motion still states use the same layouts at rest.
 
@@ -260,7 +260,7 @@ Status: `locked` (Gap 2026-08-23: collection home regions = 3a. Gap 2026-08-28: 
 | Region | Meaning |
 | --- | --- |
 | Screen | Full viewport plus safe-area insets |
-| Header | Collection home: title **Samling** (`display` 28) + count (`mono`) + capture Icon button (`add`, “Tilføj trøje”) top-right. No search, no profile, no wordmark, no KC mark. Indbakke list: title **Indbakke** (`title` 24) only — no bell. Conversation: back + handle (`heading-sm`) + optional jersey context (`mono`) + overflow. Detaljer / Send bud / own-Profil drills: back + `title`. Own Profil **home**: title **Profil** (`title` 24) only — no KC mark, no bell |
+| Header | **Overview title is one recurring role** across the five parent places (Samling · Indbakke · Søg · Ønsker · Profil): title in `display` 28, via `ScreenHeader` (`CollectionHeader` matches it). Collection home: **Samling** (`display` 28) + count (`mono`) + capture Icon button (`add`, “Tilføj trøje”) top-right. No search, no profile, no wordmark, no KC mark. Indbakke list: **Indbakke** (`display` 28) only — no bell. Conversation: back + handle (`heading-sm`) + optional jersey context (`mono`) + overflow. Detaljer / Send bud / own-Profil drills: back + `title` 24 (drills stay `title`). Own Profil **home**: **Profil** (`display` 28) only — no KC mark, no bell |
 | Body | Collection grid or confirm form. Chip row **under** the header when the collection is not empty (Collection shortcuts). Grid scrolls; last rows must clear the native tab bar. Indbakke: underline tabs then Thread row list, Activity cards, or Empty state `inbox`. Conversation: message column (dates, Bid cards, Chat bubbles) then Message composer. Detaljer and own Profil: grouped lists on `fill.secondary` canvas; groups on `surface`, `radius.md`, hairline `border.subtle` between rows |
 | Footer actions | Primary/secondary buttons for the current task; pinned **Button dock** at the bottom on login, register, confirm, and Cookie-indstillinger. Empty collection uses the Empty state hug action under the title — not a dock. Conversation uses Message composer, not Button dock. Send bud uses an in-body `primary` (not a dock). Own Profil home has no dock — last group clears the Tab bar |
 | Tab bar | Floating bright-glass capsule `space.inset.md` from the sides and `space.inset.lg` from the bottom, `radius.pill`. Five icon-only slots (Tab bar). Content may show through behind it. Not a full-width labeled dock |
@@ -937,15 +937,17 @@ Status: `locked` (Gap 2026-09-05: switched to Expo Router `NativeTabs` — nativ
 
 **Anatomy**: `NativeTabs` from `expo-router/unstable-native-tabs`. The OS draws the bar: iOS 26+ = Liquid Glass derived from the content behind it; iOS 18 and earlier = system blur; Android = Material bottom bar. It is a **full-width system bar**, not a floating capsule. Five tabs, left → right, each an icon **+ Danish label** (native HIG):
 
-| # | Icon (SF / Material) | Label (da) | Route | Place |
+| # | Icon (template 22pt / meaning) | Label (da) | Route | Place |
 | --- | --- | --- | --- | --- |
-| 1 | `square.grid.2x2` / `grid_view` | Samling | `collection` | Own collection (app home after login) |
-| 2 | `envelope` / `mail` | Indbakke | `inbox` | Messages (Beskeder \| Aktivitet) + unread badge |
-| 3 | `magnifyingglass` / `search` | Søg | `search` | Search place — **center tab** |
-| 4 | `bookmark` / `bookmark` | Ønsker | `wishlist` | Wishlist place — its own tab |
-| 5 | `person` / `person` | Profil | `profile` | Profile place |
+| 1 | grid (Samling) | Samling | `collection` | Own collection (app home after login) |
+| 2 | envelope (Indbakke) | Indbakke | `inbox` | Messages (Beskeder \| Aktivitet) + unread badge |
+| 3 | search (Søg) | Søg | `search` | Search place — **center tab** |
+| 4 | bookmark (Ønsker) | Ønsker | `wishlist` | Wishlist place — its own tab |
+| 5 | person (Profil) | Profil | `profile` | Profile place |
 
-Søg is the **center** tab (slot 3 of five). Labels are shown. Selected vs unselected is the **system indicator** (iOS 26 Liquid Glass selection pill) — do not paint a custom well or background oval.
+Søg is the **center** tab (slot 3 of five). Labels are shown. Selected vs unselected is the **system indicator** (iOS 26 Liquid Glass selection pill) — do not paint a custom well or background oval. Icons render as **22pt template images** (`TAB_BAR_ICON_SIZE`) because NativeTabs has no SF `pointSize`; they stay slightly under the iOS 26 system default. `tintColor` still tints them.
+
+**Parent overview swipe**: On the five tab **index** screens only (not drills), a Reanimated row follows the finger between Samling → Indbakke → Søg → Ønsker → Profil (not `PagerView` — NativeTabs attach remounts that native pager). Neighbour overviews are **prefetched** when the tab shell mounts (and hydrated from that cache on remount) so a swipe does not cold-start a spinner. Copies in the pager **read that cache**; only the focused tab's own home hits the network (`useIsPlaceHomeLive`). The Liquid Glass pill hops when the page settles (the OS does not let JS drive it mid-drag). Overview chrome uses `useStableSafeAreaInsets` (module-level max of nested NativeTabs insets so a pre-attach 34 does not win over a bounded 83). `tabBarContentInset` does not add the tab bar height twice when the inset is already bounded. The outgoing pager keeps its five homes mounted on the blur frame and only parks on its host page off-screen after `PLACE_PAGER_HOLD_AFTER_BLUR_MS`. Indbakke is a nested pager: Beskeder | Aktivitet consume the swipe until that edge, then the outer pager continues. Reduced motion and wide layout: tap only, no travel.
 
 **Unread**:
 - **Thread row / Activity card**: unchanged (unread uses `fill.secondary`; read Activity card uses hairline `border.subtle` on `surface`).
@@ -966,7 +968,7 @@ Søg is the **center** tab (slot 3 of five). Labels are shown. Selected vs unsel
 
 **Example** *(not a rule)*: On Indbakke, the envelope tab is selected with a Liquid Glass pill and a badge “2”; the other four sit muted. On Samling, the grid tab is selected and the capture button sits at the top-right of the header.
 
-**Code**: `apps/mobile/app/(tabs)/_layout.tsx` (`NativeTabs`). Capture button: `apps/mobile/src/components/collection-header.tsx`. Ratchet: `scripts/check-mobile-tab-bar.mjs`.
+**Code**: `apps/mobile/app/(tabs)/_layout.tsx` (`NativeTabs`). Icons: `apps/mobile/src/components/tab-bar-icon.tsx`. Stack motion: `apps/mobile/src/navigation/stack-motion.ts`. Parent swipe: `apps/mobile/src/navigation/place-swipe.ts`. Overview prefetch: `apps/mobile/src/navigation/place-overview-cache.ts` + `place-overview-prefetch.ts`. Capture button: `apps/mobile/src/components/collection-header.tsx`. Ratchet: `scripts/check-mobile-tab-bar.mjs`.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
@@ -1158,7 +1160,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Example** *(not a rule)*: Indbakke: Beskeder underlined black; Aktivitet muted. Stamdata club drill: Players | Jerseys.
 
-**Code**: Unmapped. Flag.
+**Code**: `apps/mobile/src/components/top-tabs.tsx`. The underline travels with `motion.fast` when the active tab changes.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
@@ -1198,7 +1200,7 @@ Flag missing context; do not invent patterns.
 **Purpose**: Collector-to-collector messages. A bud creates a thread; it is not checkout.
 
 **Composition**:
-1. Header title **Indbakke** (`title`). No Samling bell here.
+1. Header title **Indbakke** (`display` 28 — the recurring overview title). No Samling bell here.
 2. Top tabs **Beskeder** | **Aktivitet** (shared unread model — one conversation behind both).
 3. Beskeder: Thread rows. Aktivitet: Activity cards. Either empty: Empty state `inbox` (no fake rows).
 4. Tab bar visible; Indbakke tab selected; badge = unread conversation count.
@@ -1234,7 +1236,7 @@ Flag missing context; do not invent patterns.
 **Purpose**: Own-collector identity, favorites, and settings live under the Profil tab — list + drill, not a control panel and not a marketplace account hub.
 
 **Composition**:
-1. **Home (5a)** — Header title **Profil** (`title`). Canvas `fill.secondary`. Three `surface` groups (`radius.md`):
+1. **Home (5a)** — Header title **Profil** (`display` 28 — the recurring overview title). Canvas `fill.secondary`. Three `surface` groups (`radius.md`):
    - Identity card: Avatar `lg` + username (`heading-sm`) + location `mono` (`{city} · {country}` when “Vis by” is on; country only when off) + Button `secondary` **Rediger profil** (hit target ≥ 44; do not copy the hi-fi’s 36px height). The card is not a List row.
    - Favoritter: List row `navigate`, leading `icon`, meta `{n} trøjer`, trailing `chevron`.
    - Indstillinger + Cookie-indstillinger: two `navigate` rows, leading `icon`, trailing `chevron`.
