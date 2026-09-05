@@ -188,27 +188,85 @@ async function upsertSeasonRow(
   return { id: row!.id, created: true };
 }
 
-function definedPatch<T extends Record<string, string | number | null | undefined>>(
-  fields: T,
-): { [K in keyof T]?: Exclude<T[K], undefined> } {
-  const patch: Record<string, string | number | null> = {};
-  for (const [key, value] of Object.entries(fields)) {
-    if (value !== undefined) {
-      patch[key] = value;
-    }
+function clubFactPatch(clubData: NormalizedClub): {
+  foundedOn?: string;
+  stadiumName?: string;
+  stadiumCapacity?: number;
+  primaryColorHex?: string;
+  secondaryColorHex?: string;
+  websiteUrl?: string;
+} {
+  const patch: {
+    foundedOn?: string;
+    stadiumName?: string;
+    stadiumCapacity?: number;
+    primaryColorHex?: string;
+    secondaryColorHex?: string;
+    websiteUrl?: string;
+  } = {};
+  if (clubData.foundedOn !== undefined) {
+    patch.foundedOn = clubData.foundedOn;
   }
-  return patch as { [K in keyof T]?: Exclude<T[K], undefined> };
+  if (clubData.stadiumName !== undefined) {
+    patch.stadiumName = clubData.stadiumName;
+  }
+  if (clubData.stadiumCapacity !== undefined) {
+    patch.stadiumCapacity = clubData.stadiumCapacity;
+  }
+  if (clubData.primaryColorHex !== undefined) {
+    patch.primaryColorHex = clubData.primaryColorHex;
+  }
+  if (clubData.secondaryColorHex !== undefined) {
+    patch.secondaryColorHex = clubData.secondaryColorHex;
+  }
+  if (clubData.websiteUrl !== undefined) {
+    patch.websiteUrl = clubData.websiteUrl;
+  }
+  return patch;
 }
 
-function clubFactFields(clubData: NormalizedClub) {
-  return {
-    foundedOn: clubData.foundedOn,
-    stadiumName: clubData.stadiumName,
-    stadiumCapacity: clubData.stadiumCapacity,
-    primaryColorHex: clubData.primaryColorHex,
-    secondaryColorHex: clubData.secondaryColorHex,
-    websiteUrl: clubData.websiteUrl,
-  };
+function playerBodyPatch(
+  playerData: NormalizedPlayer,
+  primaryCountryId: string | undefined,
+): {
+  dateOfBirth?: string;
+  heightCm?: number;
+  preferredFoot?: NormalizedPlayer["preferredFoot"];
+  primaryCountryId?: string;
+} {
+  const patch: {
+    dateOfBirth?: string;
+    heightCm?: number;
+    preferredFoot?: NormalizedPlayer["preferredFoot"];
+    primaryCountryId?: string;
+  } = {};
+  if (playerData.dateOfBirth !== undefined) {
+    patch.dateOfBirth = playerData.dateOfBirth;
+  }
+  if (playerData.heightCm !== undefined) {
+    patch.heightCm = playerData.heightCm;
+  }
+  if (playerData.preferredFoot !== undefined) {
+    patch.preferredFoot = playerData.preferredFoot;
+  }
+  if (primaryCountryId !== undefined) {
+    patch.primaryCountryId = primaryCountryId;
+  }
+  return patch;
+}
+
+function playerClubSeasonPatch(
+  squadNumber: number | undefined,
+  position: string | undefined,
+): { squadNumber?: number; position?: string } {
+  const patch: { squadNumber?: number; position?: string } = {};
+  if (squadNumber !== undefined) {
+    patch.squadNumber = squadNumber;
+  }
+  if (position !== undefined) {
+    patch.position = position;
+  }
+  return patch;
 }
 
 async function upsertClubRow(
@@ -216,7 +274,7 @@ async function upsertClubRow(
   countryId: string,
   clubData: NormalizedClub,
 ): Promise<{ id: string; created: boolean; labels: number; externalIds: number }> {
-  const facts = definedPatch(clubFactFields(clubData));
+  const facts = clubFactPatch(clubData);
   const byExternal = await findEntityId(db, clubData.externalId);
   if (byExternal) {
     if (Object.keys(facts).length > 0) {
@@ -248,7 +306,7 @@ async function upsertClubRow(
 
   const [row] = await db
     .insert(club)
-    .values({ countryId, kind: clubData.kind, ...clubFactFields(clubData) })
+    .values({ countryId, kind: clubData.kind, ...clubFactPatch(clubData) })
     .returning({ id: club.id });
   const id = row!.id;
   await linkExternalId(db, "club", id, clubData.externalId);
@@ -289,12 +347,7 @@ async function upsertPlayerRow(
   playerData: NormalizedPlayer,
   primaryCountryId?: string,
 ): Promise<{ id: string; created: boolean; labels: number; externalIds: number }> {
-  const body = definedPatch({
-    dateOfBirth: playerData.dateOfBirth,
-    heightCm: playerData.heightCm,
-    preferredFoot: playerData.preferredFoot,
-    primaryCountryId,
-  });
+  const body = playerBodyPatch(playerData, primaryCountryId);
   const byExternal = await findEntityId(db, playerData.externalId);
   if (byExternal) {
     if (Object.keys(body).length > 0) {
@@ -350,10 +403,7 @@ async function upsertPlayerClubSeasonRow(
     .limit(1);
 
   if (existing[0]) {
-    const patch = definedPatch({
-      squadNumber,
-      position,
-    });
+    const patch = playerClubSeasonPatch(squadNumber, position);
     if (Object.keys(patch).length > 0) {
       await db.update(playerClubSeason).set(patch).where(eq(playerClubSeason.id, existing[0].id));
     }
