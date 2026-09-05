@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 
-const addScreenPath = "apps/mobile/app/(tabs)/add/confirm.tsx";
+const addScreenPath = "apps/mobile/app/(capture)/confirm.tsx";
 const collectionTestPath = "apps/api/tests/collection.test.ts";
 const violations = [];
 

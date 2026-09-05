@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 
-const CHOOSER_PATH = "apps/mobile/app/(tabs)/add/index.tsx";
+const CHOOSER_PATH = "apps/mobile/src/capture/captureSourceFlow.ts";
 const UPLOAD_FILES_PATH = "apps/mobile/src/capture/pickUploadFiles.ts";
 const DOCUMENT_PICKER_PATH = "apps/mobile/src/capture/pickDocumentImages.ts";
 const PACKAGE_JSON_PATH = "apps/mobile/package.json";

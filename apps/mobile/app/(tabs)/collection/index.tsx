@@ -10,47 +10,69 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CollectionFetchError, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { fetchCollectionShortcuts } from "@/api/shortcuts";
 import { useAuth } from "@/auth/AuthProvider";
+import { useCaptureChooser } from "@/capture/capture-chooser";
+import { CollectionEmptyDiagram } from "@/components/collection-empty-diagram";
 import { CollectionHeader } from "@/components/collection-header";
 import { ShortcutsSheet } from "@/components/genveje-sheet";
 import { shouldFallbackToAlleOnFetchError } from "@/components/genveje-sheet-logic";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
-import { Button, ButtonDock, EmptyState } from "@/components/ui";
-import { WishlistSheet } from "@/components/wishlist-sheet";
+import { tabBarContentInset } from "@/components/tab-bar-metrics";
+import { Button, EmptyState } from "@/components/ui";
 import { RESULT_COLLECTION_BUD_CAPTION } from "@/first-session/jersey-details-copy";
+import { registerPlaceHome, useIsPlaceHomeLive } from "@/navigation/place-homes";
+import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
+import { PlacePagerScreen } from "@/navigation/place-pager-screen";
+import { usePlaceOverview } from "@/navigation/use-place-overview";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
+import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 
 export default function CollectionScreen() {
+  return <PlacePagerScreen place="collection" />;
+}
+
+function CollectionHome() {
   const router = useRouter();
   const { firstSessionResult } = useLocalSearchParams<{ firstSessionResult?: string }>();
   const showResultCollectionCaption = firstSessionResult === "1";
   const { accessToken, requestPremiumAccess } = useAuth();
+  const captureChooser = useCaptureChooser();
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const typography = useTypography();
-  const insets = useSafeAreaInsets();
-  const tabBarPadding =
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd;
-  const [loading, setLoading] = useState(true);
-  const [jerseys, setJerseys] = useState<CollectionJersey[]>([]);
-  const [allJerseys, setAllJerseys] = useState<CollectionJersey[]>([]);
-  const [totalJerseyCount, setTotalJerseyCount] = useState(0);
-  const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
+  const insets = useStableSafeAreaInsets();
+  const tabBarPadding = tabBarContentInset(insets.bottom);
+  const cachedCollection = usePlaceOverview("collection");
+  const isLive = useIsPlaceHomeLive("collection");
+  const [loading, setLoading] = useState(cachedCollection == null);
+  const [jerseys, setJerseys] = useState<CollectionJersey[]>(cachedCollection?.jerseys ?? []);
+  const [allJerseys, setAllJerseys] = useState<CollectionJersey[]>(
+    cachedCollection?.allJerseys ?? [],
+  );
+  const [totalJerseyCount, setTotalJerseyCount] = useState(cachedCollection?.totalJerseyCount ?? 0);
+  const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>(
+    cachedCollection?.shortcuts ?? [],
+  );
   const [selectedShortcutId, setSelectedShortcutId] = useState<string | null>(null);
-  const [wishlistOpen, setWishlistOpen] = useState(false);
   const [genvejeOpen, setGenvejeOpen] = useState(false);
-  const hasInitialLoadRef = useRef(false);
+  const hasInitialLoadRef = useRef(cachedCollection != null);
+
+  useEffect(() => {
+    if (!cachedCollection || selectedShortcutId != null) {
+      return;
+    }
+    setJerseys(cachedCollection.jerseys);
+    setAllJerseys(cachedCollection.allJerseys);
+    setTotalJerseyCount(cachedCollection.totalJerseyCount);
+    setShortcuts(cachedCollection.shortcuts);
+    setLoading(false);
+    hasInitialLoadRef.current = true;
+  }, [cachedCollection, selectedShortcutId]);
 
   const loadCollection = useCallback(async () => {
     if (!accessToken) {
@@ -63,6 +85,13 @@ export default function CollectionScreen() {
 
       if (selectedShortcutId === null) {
         setTotalJerseyCount(response.jerseys.length);
+        const previous = readPlaceOverview("collection");
+        writePlaceOverview("collection", {
+          jerseys: response.jerseys,
+          allJerseys: previous?.allJerseys ?? response.jerseys,
+          totalJerseyCount: response.jerseys.length,
+          shortcuts: previous?.shortcuts ?? [],
+        });
       }
     } catch (error) {
       if (
@@ -85,6 +114,13 @@ export default function CollectionScreen() {
     const response = await fetchCollectionJerseys(accessToken, null);
     setTotalJerseyCount(response.jerseys.length);
     setAllJerseys(response.jerseys);
+    const previous = readPlaceOverview("collection");
+    writePlaceOverview("collection", {
+      jerseys: previous?.jerseys ?? response.jerseys,
+      allJerseys: response.jerseys,
+      totalJerseyCount: response.jerseys.length,
+      shortcuts: previous?.shortcuts ?? [],
+    });
   }, [accessToken]);
 
   const loadShortcuts = useCallback(async () => {
@@ -94,6 +130,13 @@ export default function CollectionScreen() {
 
     const response = await fetchCollectionShortcuts(accessToken);
     setShortcuts(response.shortcuts);
+    const previous = readPlaceOverview("collection");
+    if (previous) {
+      writePlaceOverview("collection", {
+        ...previous,
+        shortcuts: response.shortcuts,
+      });
+    }
   }, [accessToken]);
 
   const refreshAll = useCallback(async () => {
@@ -104,7 +147,7 @@ export default function CollectionScreen() {
     let active = true;
 
     async function run() {
-      if (!accessToken) {
+      if (!accessToken || !isLive) {
         return;
       }
 
@@ -125,15 +168,15 @@ export default function CollectionScreen() {
     return () => {
       active = false;
     };
-  }, [accessToken, refreshAll]);
+  }, [accessToken, isLive, refreshAll]);
 
   useEffect(() => {
-    if (!accessToken || !hasInitialLoadRef.current) {
+    if (!accessToken || !isLive || !hasInitialLoadRef.current) {
       return;
     }
 
     void loadCollection();
-  }, [accessToken, loadCollection]);
+  }, [accessToken, isLive, loadCollection]);
 
   const openJerseyDetail = (jerseyId: string) => {
     router.push(`/(tabs)/collection/${jerseyId}`);
@@ -142,12 +185,8 @@ export default function CollectionScreen() {
   const startCapture = async () => {
     const granted = await requestPremiumAccess();
     if (granted) {
-      router.push("/(tabs)/add/capture");
+      captureChooser.open();
     }
-  };
-
-  const openWishlist = () => {
-    setWishlistOpen(true);
   };
 
   if (loading) {
@@ -160,23 +199,30 @@ export default function CollectionScreen() {
 
   if (totalJerseyCount === 0) {
     return (
-      <View style={[styles.emptyContainer, { backgroundColor: theme.canvas }]}>
-        <CollectionHeader count={0} onWishlistPress={() => void openWishlist()} />
+      <View
+        style={[
+          styles.emptyContainer,
+          { backgroundColor: theme.canvas, paddingBottom: tabBarPadding },
+        ]}
+      >
+        <CollectionHeader count={0} onAddPress={() => void startCapture()} />
         {showResultCollectionCaption ? (
           <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
             {RESULT_COLLECTION_BUD_CAPTION}
           </Text>
         ) : null}
-        <EmptyState title="Ingen trøjer endnu" body="Tilføj den første fra galleriet." />
-        <ButtonDock>
-          <Button
-            label="Tilføj trøje"
-            variant="primary"
-            width="fill"
-            onPress={() => void startCapture()}
-          />
-        </ButtonDock>
-        <WishlistSheet visible={wishlistOpen} onDismiss={() => setWishlistOpen(false)} />
+        <EmptyState
+          title="Ingen trøjer endnu"
+          diagram={<CollectionEmptyDiagram />}
+          action={
+            <Button
+              label="Tilføj trøje"
+              variant="primary"
+              width="hug"
+              onPress={() => void startCapture()}
+            />
+          }
+        />
       </View>
     );
   }
@@ -187,7 +233,7 @@ export default function CollectionScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <CollectionHeader count={totalJerseyCount} onWishlistPress={() => void openWishlist()} />
+      <CollectionHeader count={totalJerseyCount} onAddPress={() => void startCapture()} />
       {showResultCollectionCaption ? (
         <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
           {RESULT_COLLECTION_BUD_CAPTION}
@@ -228,7 +274,6 @@ export default function CollectionScreen() {
           );
         }}
       />
-      <WishlistSheet visible={wishlistOpen} onDismiss={() => setWishlistOpen(false)} />
       <ShortcutsSheet
         visible={genvejeOpen}
         accessToken={accessToken ?? ""}
@@ -244,6 +289,8 @@ export default function CollectionScreen() {
     </View>
   );
 }
+
+registerPlaceHome("collection", CollectionHome);
 
 const styles = StyleSheet.create({
   container: {

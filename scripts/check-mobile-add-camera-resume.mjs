@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 
-const CAPTURE_PATH = "apps/mobile/app/(tabs)/add/capture.tsx";
+const CAPTURE_PATH = "apps/mobile/app/(capture)/capture.tsx";
 const PERSISTENCE_PATH = "apps/mobile/src/capture/captureSessionPersistence.ts";
 const POINTER_PATH = "apps/mobile/src/capture/captureSessionActivePointer.ts";
 const CAMERA_SESSION_PATH = "apps/mobile/src/capture/CaptureCameraSession.tsx";

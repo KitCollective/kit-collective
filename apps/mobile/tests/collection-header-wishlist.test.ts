@@ -8,11 +8,15 @@ const headerPath = path.join(
   "../src/components/collection-header.tsx",
 );
 
-describe("CollectionHeader wishlist chrome", () => {
-  it("uses bookmark icon and Danish Ønske accessible name", () => {
+describe("CollectionHeader capture chrome", () => {
+  it("hosts capture as the top-right action, not the wishlist bookmark", () => {
     const source = readFileSync(headerPath, "utf8");
-    expect(source).toContain('name="Ønske"');
-    expect(source).toContain('icon="bookmark-outline"');
+    // Capture moved into the header when the tab bar went native (2026-09-05).
+    expect(source).toContain('name="Tilføj trøje"');
+    expect(source).toContain('icon="add"');
+    // Wishlist is its own native tab now — the bookmark left the header.
+    expect(source).not.toContain('icon="bookmark-outline"');
+    expect(source).not.toContain('name="Ønske"');
     expect(source).not.toContain("notifications-outline");
     expect(source).not.toContain("Notifikationer");
   });

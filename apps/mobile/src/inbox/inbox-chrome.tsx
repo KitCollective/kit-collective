@@ -35,8 +35,3 @@ export function useInboxChrome(): InboxChromeContextValue {
   }
   return context;
 }
-
-/** Optional hook for FloatingTabBar when provider is absent (tests). */
-export function useInboxChromeOptional(): InboxChromeContextValue | null {
-  return useContext(InboxChromeContext);
-}

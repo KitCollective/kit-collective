@@ -1,17 +1,17 @@
 import { StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
+import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 
 type CollectionHeaderProps = {
   count: number;
-  onWishlistPress: () => void;
+  onAddPress: () => void;
 };
 
-export function CollectionHeader({ count, onWishlistPress }: CollectionHeaderProps) {
-  const insets = useSafeAreaInsets();
+export function CollectionHeader({ count, onAddPress }: CollectionHeaderProps) {
+  const insets = useStableSafeAreaInsets();
   const theme = useTheme();
   const typography = useTypography();
 
@@ -22,9 +22,9 @@ export function CollectionHeader({ count, onWishlistPress }: CollectionHeaderPro
         <Text style={[typography.monoSm, { color: theme.contentMuted }]}>{count}</Text>
       </View>
       <IconButton
-        name="Ønske"
-        icon="bookmark-outline"
-        onPress={onWishlistPress}
+        name="Tilføj trøje"
+        icon="add"
+        onPress={onAddPress}
         iconColor={theme.contentPrimary}
       />
     </View>

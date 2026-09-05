@@ -17,7 +17,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchDiscoverHome, fetchDiscoverTypeahead } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
 import { resolvePeerAvatarUrl } from "@/api/peer-profile";
@@ -26,29 +25,43 @@ import { Avatar } from "@/components/avatar";
 import { ListRow, Mark, SearchField } from "@/components/catalog-ui";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ScreenHeader } from "@/components/screen-header";
+import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { EmptyState } from "@/components/ui";
+import { registerPlaceHome, useIsPlaceHomeLive } from "@/navigation/place-homes";
+import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
+import { PlacePagerScreen } from "@/navigation/place-pager-screen";
+import { usePlaceOverview } from "@/navigation/use-place-overview";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
+import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 
 export default function SearchScreen() {
+  return <PlacePagerScreen place="search" />;
+}
+
+function SearchHome() {
   const router = useRouter();
   const { accessToken } = useAuth();
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const typography = useTypography();
-  const insets = useSafeAreaInsets();
-  const tabBarPadding =
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd;
-  const [loading, setLoading] = useState(true);
-  const [home, setHome] = useState<CollectionDiscoverHome>({});
+  const insets = useStableSafeAreaInsets();
+  const tabBarPadding = tabBarContentInset(insets.bottom);
+  const cachedSearch = usePlaceOverview("search");
+  const isLive = useIsPlaceHomeLive("search");
+  const [loading, setLoading] = useState(cachedSearch == null);
+  const [home, setHome] = useState<CollectionDiscoverHome>(cachedSearch?.home ?? {});
   const [typeahead, setTypeahead] = useState<CollectionDiscoverTypeahead>({});
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (!cachedSearch || query.trim()) {
+      return;
+    }
+    setHome(cachedSearch.home);
+    setLoading(false);
+  }, [cachedSearch, query]);
 
   const loadMagazine = useCallback(async () => {
     if (!accessToken) {
@@ -63,17 +76,20 @@ export default function SearchScreen() {
     const response = await fetchDiscoverHome(accessToken);
     setHome(response);
     setTypeahead({});
+    writePlaceOverview("search", { home: response });
   }, [accessToken, query]);
 
   useEffect(() => {
     let active = true;
 
     async function run() {
-      if (!accessToken) {
+      if (!accessToken || !isLive) {
         return;
       }
 
-      setLoading(true);
+      if (readPlaceOverview("search") == null || query.trim()) {
+        setLoading(true);
+      }
       try {
         await loadMagazine();
       } finally {
@@ -91,7 +107,7 @@ export default function SearchScreen() {
       active = false;
       clearTimeout(timer);
     };
-  }, [accessToken, loadMagazine]);
+  }, [accessToken, isLive, loadMagazine, query]);
 
   const columnGap = space.gapMd;
   const horizontalPadding = space.insetMd * 2;
@@ -375,6 +391,8 @@ export default function SearchScreen() {
     </View>
   );
 }
+
+registerPlaceHome("search", SearchHome);
 
 const styles = StyleSheet.create({
   container: {

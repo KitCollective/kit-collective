@@ -98,7 +98,7 @@ describe("findUploadPickerViolations", () => {
   it("requires Upload filer to route through pickUploadFiles with documents support", () => {
     assert.deepEqual(
       findUploadPickerViolations({
-        indexSource: `const uris = await pickUploadFiles();`,
+        chooserSource: `const uris = await pickUploadFiles();`,
         pickUploadSource: `import { pickDocumentImages } from "./pickDocumentImages";`,
       }),
       [],
@@ -112,7 +112,7 @@ describe("checkMobileAddFormWiring", () => {
       checkMobileAddFormWiring({
         addSources: [],
         confirmSource: compliantConfirm,
-        indexSource: `const uris = await pickUploadFiles();`,
+        chooserSource: `const uris = await pickUploadFiles();`,
         captureSource: `
           mergeGalleryEscapePhotos(existingPhotos, uris);
           onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}

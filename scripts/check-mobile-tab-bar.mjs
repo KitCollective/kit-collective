@@ -1,77 +1,81 @@
 #!/usr/bin/env node
 /**
- * Ratchet (KIT-42): fail CI when the Expo tab bar omits the locked five-slot
- * icon-only glass pill (docs/design-system.md Tab bar, Gap 2026-08-23).
+ * Ratchet (KIT-42): fail CI when the Expo bottom navigation drifts from the locked
+ * native-tabs design (docs/design-system.md → Tab bar, Gap 2026-09-05). The bar is
+ * `NativeTabs` (iOS 26 Liquid Glass) with five labelled tabs in a fixed order,
+ * Søg in the center, and capture living as the Samling header action — never a tab.
  */
 import { readFileSync } from "node:fs";
 
 const tabLayoutPath = "apps/mobile/app/(tabs)/_layout.tsx";
-const floatingBarPath = "apps/mobile/src/components/floating-tab-bar.tsx";
+const collectionHeaderPath = "apps/mobile/src/components/collection-header.tsx";
 
-/** Four corner tabs render via renderSlot(); center plus is a separate Ionicons tag. */
-export function countIconRenderSites(source) {
-  const renderSlotCount = (source.match(/renderSlot\(/g) ?? []).length;
-  const plusIconCount = (source.match(/<Ionicons[^>]*\bname="add"/g) ?? []).length;
-  return renderSlotCount + plusIconCount;
+const EXPECTED_TAB_ORDER = ["collection", "inbox", "search", "wishlist", "profile"];
+const EXPECTED_LABELS = ["Samling", "Indbakke", "Søg", "Ønsker", "Profil"];
+
+/** Ordered list of NativeTabs.Trigger route names as declared in the layout. */
+export function tabTriggerNames(source) {
+  return [...source.matchAll(/<NativeTabs\.Trigger\s+name="([^"]+)"/g)].map((match) => match[1]);
 }
 
 export function checkMobileTabBar(overrides = {}) {
   const violations = [];
 
   const layoutSource = overrides.layoutSource ?? readFileSync(tabLayoutPath, "utf8");
-  const barSource = overrides.barSource ?? readFileSync(floatingBarPath, "utf8");
+  const headerSource = overrides.headerSource ?? readFileSync(collectionHeaderPath, "utf8");
 
-  if (!layoutSource.includes("FloatingTabBar")) {
-    violations.push(`${tabLayoutPath}: must render FloatingTabBar as the custom tab bar`);
-  }
-
-  if (!layoutSource.includes("href: null")) {
-    violations.push(`${tabLayoutPath}: add route must be hidden from the tab bar (href: null)`);
-  }
-
-  if (/tabBarLabel\s*:/.test(layoutSource)) {
+  if (!layoutSource.includes("NativeTabs")) {
     violations.push(
-      `${tabLayoutPath}: tab bar must be icon-only (no tabBarLabel in screen options)`,
+      `${tabLayoutPath}: must render NativeTabs (native system Liquid Glass tab bar)`,
     );
   }
 
-  const requiredAccessibleNames = ["Samling", "Søg", "Tilføj trøje", "Indbakke", "Profil"];
-  for (const name of requiredAccessibleNames) {
-    if (!barSource.includes(name)) {
-      violations.push(`${floatingBarPath}: missing Danish accessible name "${name}"`);
+  if (layoutSource.includes("FloatingTabBar")) {
+    violations.push(
+      `${tabLayoutPath}: custom FloatingTabBar was replaced by NativeTabs — do not reintroduce it`,
+    );
+  }
+
+  const names = tabTriggerNames(layoutSource);
+  if (names.join(",") !== EXPECTED_TAB_ORDER.join(",")) {
+    violations.push(
+      `${tabLayoutPath}: expected five tabs in order ${EXPECTED_TAB_ORDER.join(", ")} (found: ${names.join(", ") || "none"})`,
+    );
+  }
+
+  if (names[2] !== "search") {
+    violations.push(`${tabLayoutPath}: Søg (search) must be the center tab`);
+  }
+
+  for (const label of EXPECTED_LABELS) {
+    if (!layoutSource.includes(`>${label}<`)) {
+      violations.push(`${tabLayoutPath}: missing Danish tab label "${label}"`);
     }
   }
 
-  if (!barSource.includes('accessibilityRole="button"') || !barSource.includes("Tilføj trøje")) {
-    violations.push(`${floatingBarPath}: center plus must be a button named Tilføj trøje`);
+  if (names.includes("add") || names.includes("capture")) {
+    violations.push(
+      `${tabLayoutPath}: capture must not be a tab — it is the Samling header action`,
+    );
   }
 
-  const iconRenderSites = countIconRenderSites(barSource);
-  const requiredIconNames = [
-    "home-outline",
-    "compass-outline",
-    "add",
-    "mail-outline",
-    "person-outline",
-  ];
-  const missingIconNames = requiredIconNames.filter((name) => !barSource.includes(`"${name}"`));
-  if (iconRenderSites !== 5 || missingIconNames.length > 0) {
-    const renderSlotCount = (barSource.match(/renderSlot\(/g) ?? []).length;
-    const plusIconCount = (barSource.match(/<Ionicons[^>]*\bname="add"/g) ?? []).length;
+  if (!headerSource.includes('name="Tilføj trøje"') || !headerSource.includes('icon="add"')) {
     violations.push(
-      `${floatingBarPath}: expected five icon render sites (renderSlot=${renderSlotCount}, plus=${plusIconCount}, total=${iconRenderSites}; missing names: ${missingIconNames.join(", ") || "none"})`,
+      `${collectionHeaderPath}: capture must be the Samling header button named "Tilføj trøje" with the add icon`,
     );
   }
 
   return violations;
 }
 
-const violations = checkMobileTabBar();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const violations = checkMobileTabBar();
 
-if (violations.length > 0) {
-  console.error("Mobile tab bar ratchet failed:\n");
-  for (const v of violations) console.error(`  - ${v}`);
-  process.exit(1);
+  if (violations.length > 0) {
+    console.error("Mobile tab bar ratchet failed:\n");
+    for (const v of violations) console.error(`  - ${v}`);
+    process.exit(1);
+  }
+
+  console.log("Mobile tab bar check passed.");
 }
-
-console.log("Mobile tab bar check passed.");

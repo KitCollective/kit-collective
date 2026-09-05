@@ -1,6 +1,7 @@
 import type { CatalogPickerItem } from "@kit/api-contract";
 import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
+import { useCaptureChooser } from "@/capture/capture-chooser";
 import { Sheet } from "@/components/catalog-ui";
 import { Button } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
@@ -23,17 +24,14 @@ export function PostSaveSheet({
   const router = useRouter();
   const theme = useTheme();
   const typography = useTypography();
+  const captureChooser = useCaptureChooser();
 
   const openChooser = (club?: CatalogPickerItem | null) => {
-    router.replace({
-      pathname: "/(tabs)/add",
-      params: club
-        ? {
-            prefilledClubId: club.id,
-            prefilledClubLabel: club.label,
-          }
-        : undefined,
-    });
+    // Close this Sheet and leave Confirm before presenting the Chooser: two
+    // Sheets deep is not a supported depth (docs/design-system.md → Sheet).
+    onDismiss();
+    router.replace("/(tabs)/collection");
+    captureChooser.open(club ? { id: club.id, label: club.label } : null);
   };
 
   const body =

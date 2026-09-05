@@ -128,27 +128,26 @@ export function ButtonDock({ children }: ButtonDockProps) {
 
 type EmptyStateProps = {
   title: string;
-  body: string;
+  body?: string;
+  diagram?: ReactNode;
   action?: ReactNode;
 };
 
-export function EmptyState({ title, body, action }: EmptyStateProps) {
+export function EmptyState({ title, body, diagram, action }: EmptyStateProps) {
   const theme = useTheme();
   const typography = useTypography();
 
   return (
     <View style={styles.emptyState}>
+      {diagram}
       <Text style={[typography.section, { color: theme.contentPrimary, textAlign: "center" }]}>
         {title}
       </Text>
-      <Text
-        style={[
-          typography.body,
-          { color: theme.contentMuted, textAlign: "center", marginBottom: space.insetMd },
-        ]}
-      >
-        {body}
-      </Text>
+      {body ? (
+        <Text style={[typography.body, { color: theme.contentMuted, textAlign: "center" }]}>
+          {body}
+        </Text>
+      ) : null}
       {action}
     </View>
   );
