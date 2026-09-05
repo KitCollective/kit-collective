@@ -46,11 +46,7 @@ import {
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
-import {
-  closeConfirmSheet,
-  openConfirmSheet,
-  type ConfirmSheetKind,
-} from "@/capture/confirmSheet";
+import { type ConfirmSheetKind, closeConfirmSheet, openConfirmSheet } from "@/capture/confirmSheet";
 import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -61,10 +57,10 @@ import {
 } from "@/capture/usePersistedCaptureSession";
 import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
-import { ProfileSurfaceGroup } from "@/components/profile-ui";
 import { Chip } from "@/components/chip";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
+import { ProfileSurfaceGroup } from "@/components/profile-ui";
 import { Button, ButtonDock } from "@/components/ui";
 import { markJerseySaved } from "@/session/addSession";
 import { useTypography } from "@/theme/brand-fonts";
@@ -781,7 +777,9 @@ export default function ConfirmScreen() {
                     accessibilityRole="radio"
                     onPress={() => {
                       kitTypeManuallySet.current = true;
-                      mutate((current) => selectDraftKitType(current, current.activeDraftId, value));
+                      mutate((current) =>
+                        selectDraftKitType(current, current.activeDraftId, value),
+                      );
                     }}
                   />
                 ))}
@@ -883,7 +881,11 @@ export default function ConfirmScreen() {
         />
       </ButtonDock>
 
-      <Sheet visible={openSheet === "club"} title="Vælg klub" onDismiss={() => dismissConfirmSheet("club")}>
+      <Sheet
+        visible={openSheet === "club"}
+        title="Vælg klub"
+        onDismiss={() => dismissConfirmSheet("club")}
+      >
         <SearchField
           variant="catalog"
           accessibilityLabel="Søg klub"
