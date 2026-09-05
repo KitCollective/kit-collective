@@ -607,7 +607,11 @@ describe("Hierarchy grain — NationalTeam Rich", () => {
     const { db, pool } = createDb(TEST_DATABASE_URL);
     try {
       const seasons = await db
-        .select({ label: season.label, leagueId: season.leagueId, calendarKind: season.calendarKind })
+        .select({
+          label: season.label,
+          leagueId: season.leagueId,
+          calendarKind: season.calendarKind,
+        })
         .from(season)
         .where(eq(season.label, "2010"));
       expect(seasons[0]).toMatchObject({ label: "2010", leagueId: null, calendarKind: "calendar" });
@@ -793,19 +797,19 @@ describe("Hierarchy grain CLI", () => {
       grain: { kind: "national_team", nationalTeamRef: "3436" },
       lane: "development",
     });
-    expect(parseCliArgs(["node", "seed-apify", "grain", "national-team-season", "3436", "2010"])).toEqual(
-      {
-        mode: "grain",
-        grain: { kind: "national_team_season", nationalTeamRef: "3436", season: "2010" },
-        lane: "development",
-      },
-    );
-    expect(parseCliArgs(["node", "seed-apify", "grain", "national-team-proof", "dk-men", "2010"])).toEqual(
-      {
-        mode: "grain",
-        grain: { kind: "national_team_proof", nationalTeamRef: "dk-men", season: "2010" },
-        lane: "development",
-      },
-    );
+    expect(
+      parseCliArgs(["node", "seed-apify", "grain", "national-team-season", "3436", "2010"]),
+    ).toEqual({
+      mode: "grain",
+      grain: { kind: "national_team_season", nationalTeamRef: "3436", season: "2010" },
+      lane: "development",
+    });
+    expect(
+      parseCliArgs(["node", "seed-apify", "grain", "national-team-proof", "dk-men", "2010"]),
+    ).toEqual({
+      mode: "grain",
+      grain: { kind: "national_team_proof", nationalTeamRef: "dk-men", season: "2010" },
+      lane: "development",
+    });
   });
 });

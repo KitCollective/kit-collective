@@ -745,7 +745,14 @@ async function upsertNationalTeamRow(
   let labels = 1;
   await upsertCatalogLabel(db, "national_team", id, teamData.nameLocale, teamData.name);
   if (teamData.officialName && teamData.officialName !== teamData.name) {
-    await upsertCatalogLabel(db, "national_team", id, teamData.nameLocale, teamData.officialName, "alias");
+    await upsertCatalogLabel(
+      db,
+      "national_team",
+      id,
+      teamData.nameLocale,
+      teamData.officialName,
+      "alias",
+    );
     labels += 1;
   }
   return { id, created: true, labels, externalIds: 1 };

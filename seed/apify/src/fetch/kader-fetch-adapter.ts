@@ -337,11 +337,7 @@ async function fetchNationalTeamSeasonWithClient(
   }
   const seasonLabel = params.season.trim();
   const startYear = labelToStartYear(seasonLabel);
-  const { squadRows } = await client.fetchKader(
-    identity.transfermarktId,
-    startYear,
-    identity.name,
-  );
+  const { squadRows } = await client.fetchKader(identity.transfermarktId, startYear, identity.name);
 
   if (squadRows.length === 0) {
     throw new Error(

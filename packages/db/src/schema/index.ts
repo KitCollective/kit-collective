@@ -168,10 +168,7 @@ export const nationalTeamSeason = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("national_team_season_nt_season_unique").on(
-      table.nationalTeamId,
-      table.seasonId,
-    ),
+    uniqueIndex("national_team_season_nt_season_unique").on(table.nationalTeamId, table.seasonId),
   ],
 );
 

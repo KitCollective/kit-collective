@@ -1,4 +1,11 @@
-import { catalogLabel, type Db, externalId, playerClubSeason, playerNationalTeamSeason, season } from "@kit/db";
+import {
+  catalogLabel,
+  type Db,
+  externalId,
+  playerClubSeason,
+  playerNationalTeamSeason,
+  season,
+} from "@kit/db";
 import { resolveCompetition, resolveSeasonRef } from "@kit/seed-shared";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { TM_SYSTEM } from "./types.js";
