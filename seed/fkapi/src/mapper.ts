@@ -160,7 +160,11 @@ async function resolveOrLinkNationalTeamFkApiId(
   seasonLabel: string,
 ): Promise<string> {
   const tmId = transfermarktIdForNationalTeamRef(nationalTeamRef);
-  await assertNationalTeamSeasonPrerequisite(pool, tmId, seasonLabel);
+  const { entityId: nationalTeamId } = await assertNationalTeamSeasonPrerequisite(
+    pool,
+    tmId,
+    seasonLabel,
+  );
 
   const linked = await findFkApiExternalIdForNationalTeam(pool, tmId);
   if (linked) {
@@ -174,17 +178,10 @@ async function resolveOrLinkNationalTeamFkApiId(
     );
   }
 
-  const ntRow = await findNationalTeamByTransfermarktId(pool, tmId);
-  if (!ntRow) {
-    throw new Error(
-      `Missing NationalTeam row for Transfermarkt id ${tmId}. Run Apify national-team grain for this scope first.`,
-    );
-  }
-
   await pool.query(
     `INSERT INTO external_id (entity_type, entity_id, system, value)
      VALUES ('national_team', $1, $2, $3)`,
-    [ntRow.entityId, EXTERNAL_SYSTEM_FKAPI, catalog.fkApiTeamId],
+    [nationalTeamId, EXTERNAL_SYSTEM_FKAPI, catalog.fkApiTeamId],
   );
 
   return catalog.fkApiTeamId;
@@ -243,7 +240,7 @@ async function assertNationalTeamSeasonPrerequisite(
   pool: Pool,
   nationalTeamTmId: string,
   seasonLabel: string,
-): Promise<void> {
+): Promise<{ entityId: string }> {
   const ntRow = await findNationalTeamByTransfermarktId(pool, nationalTeamTmId);
   if (!ntRow) {
     throw new Error(
@@ -257,6 +254,8 @@ async function assertNationalTeamSeasonPrerequisite(
       `Missing Season row for label ${seasonLabel} and NationalTeam ${nationalTeamTmId}. Run Apify national-team-season grain for this scope first.`,
     );
   }
+
+  return { entityId: ntRow.entityId };
 }
 
 async function findClubByTransfermarktId(

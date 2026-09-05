@@ -14,6 +14,7 @@ import {
   SeedScopeIsolationError,
   snapshotSeasonPcsByLabel,
 } from "./scope-isolation.js";
+import { rejectNationalTeamApifyScope } from "./reject-national-team-scope.js";
 import { isClubSeasonAlreadySeeded } from "./seeded.js";
 import type { Lane, MapResult } from "./types.js";
 
@@ -124,9 +125,7 @@ async function expandScope(
   }
 
   if (scope.kind === "national_team") {
-    throw new Error(
-      "NationalTeam walk scope belongs to @kit/seed-fkapi; @kit/seed-apify only walks club/competition seasons",
-    );
+    rejectNationalTeamApifyScope();
   }
 
   return fetchAdapter.listClubSeasonPairs({
@@ -294,9 +293,7 @@ export async function runHierarchyGrain(
 
 export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
   if (options.scope.kind === "national_team") {
-    throw new Error(
-      "NationalTeam walk scope belongs to @kit/seed-fkapi; @kit/seed-apify only walks club/competition seasons",
-    );
+    rejectNationalTeamApifyScope();
   }
 
   const lane = parseLane(options.lane);
