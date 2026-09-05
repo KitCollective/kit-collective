@@ -7,19 +7,18 @@ export type FkRawKit = {
   type: KitType;
   manufacturerName?: string;
   labelEn?: string;
+  sponsorName?: string;
+  primaryColorHex?: string;
+  secondaryColorHex?: string;
   imageBytes?: Uint8Array;
 };
 
 export type KitType = "home" | "away" | "third" | "gk" | "special";
 
-export type FkFetchScope = {
-  competition: string;
-  fromSeason: string;
-  toSeason: string;
-};
+export type { SeedScope as FkFetchScope } from "@kit/seed-shared";
 
 export type FkFetchAdapter = {
-  fetchKits(scope: FkFetchScope): Promise<FkRawKit[]>;
+  fetchKits(scope: import("@kit/seed-shared").SeedScope): Promise<FkRawKit[]>;
 };
 
 export type ObjectStoreAdapter = {
@@ -29,21 +28,6 @@ export type ObjectStoreAdapter = {
 
 export const EXTERNAL_SYSTEM_FKAPI = "fkapi";
 export const EXTERNAL_SYSTEM_TRANSFERMARKT = "transfermarkt";
-
-export type SeedLane = "development" | "staging";
-
-export type CliArgs = {
-  competition: string;
-  fromSeason: string;
-  toSeason: string;
-  lane: SeedLane;
-};
-
-export type SeedRunOptions = {
-  databaseUrl: string;
-  fetchAdapter: FkFetchAdapter;
-  objectStore: ObjectStoreAdapter;
-};
 
 export type SeedRunResult = {
   kitsUpserted: number;

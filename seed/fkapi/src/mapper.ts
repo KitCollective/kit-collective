@@ -1,3 +1,4 @@
+import { normalizeTransfermarktClubId, resolveSeasonRef } from "@kit/seed-shared";
 import { Pool } from "pg";
 import type {
   FkFetchAdapter,
@@ -24,7 +25,7 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
   const pool = new Pool({ connectionString: options.databaseUrl });
 
   try {
-    await assertScopePrerequisites(pool, rawKits);
+    await assertScopePrerequisites(pool, options.scope, rawKits);
 
     let kitsUpserted = 0;
     let photosWritten = 0;
@@ -51,6 +52,9 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
         seasonId: seasonRow.id,
         type: rawKit.type,
         manufacturerId,
+        sponsorName: rawKit.sponsorName ?? null,
+        primaryColorHex: rawKit.primaryColorHex ?? null,
+        secondaryColorHex: rawKit.secondaryColorHex ?? null,
       });
       kitsUpserted += 1;
 
@@ -84,7 +88,18 @@ function assertKitHasArchiveBytes(rawKit: FkRawKit): void {
   }
 }
 
-async function assertScopePrerequisites(pool: Pool, rawKits: FkRawKit[]): Promise<void> {
+async function assertScopePrerequisites(
+  pool: Pool,
+  scope: FkFetchScope,
+  rawKits: FkRawKit[],
+): Promise<void> {
+  if (scope.kind === "club") {
+    const clubTmId = normalizeTransfermarktClubId(scope.clubExternalId);
+    const seasonLabel = resolveSeasonRef(scope.competition, scope.season);
+    await assertClubSeasonPrerequisite(pool, clubTmId, seasonLabel);
+    return;
+  }
+
   const pairs = new Map<string, { clubTmId: string; seasonLabel: string }>();
   for (const kit of rawKits) {
     const key = `${kit.clubTransfermarktId}:${kit.seasonLabel}`;
@@ -95,19 +110,27 @@ async function assertScopePrerequisites(pool: Pool, rawKits: FkRawKit[]): Promis
   }
 
   for (const { clubTmId, seasonLabel } of pairs.values()) {
-    const clubRow = await findClubByTransfermarktId(pool, clubTmId);
-    if (!clubRow) {
-      throw new Error(
-        `Missing Club row for Transfermarkt id ${clubTmId}. Run Apify seed for this scope first.`,
-      );
-    }
+    await assertClubSeasonPrerequisite(pool, clubTmId, seasonLabel);
+  }
+}
 
-    const seasonRow = await findSeasonForClub(pool, clubRow.entityId, seasonLabel);
-    if (!seasonRow) {
-      throw new Error(
-        `Missing Season row for label ${seasonLabel} and club ${clubTmId}. Run Apify seed for this scope first.`,
-      );
-    }
+async function assertClubSeasonPrerequisite(
+  pool: Pool,
+  clubTmId: string,
+  seasonLabel: string,
+): Promise<void> {
+  const clubRow = await findClubByTransfermarktId(pool, clubTmId);
+  if (!clubRow) {
+    throw new Error(
+      `Missing Club row for Transfermarkt id ${clubTmId}. Run Apify seed for this scope first.`,
+    );
+  }
+
+  const seasonRow = await findSeasonForClub(pool, clubRow.entityId, seasonLabel);
+  if (!seasonRow) {
+    throw new Error(
+      `Missing Season row for label ${seasonLabel} and club ${clubTmId}. Run Apify seed for this scope first.`,
+    );
   }
 }
 
@@ -115,11 +138,12 @@ async function findClubByTransfermarktId(
   pool: Pool,
   transfermarktId: string,
 ): Promise<{ entityId: string } | undefined> {
+  const normalized = normalizeTransfermarktClubId(transfermarktId);
   const result = await pool.query<{ entity_id: string }>(
     `SELECT entity_id FROM external_id
      WHERE entity_type = 'club' AND system = $1 AND value = $2
      LIMIT 1`,
-    [EXTERNAL_SYSTEM_TRANSFERMARKT, transfermarktId],
+    [EXTERNAL_SYSTEM_TRANSFERMARKT, normalized],
   );
   return result.rows[0] ? { entityId: result.rows[0].entity_id } : undefined;
 }
@@ -185,6 +209,9 @@ type UpsertKitInput = {
   seasonId: string;
   type: FkRawKit["type"];
   manufacturerId: string | null;
+  sponsorName: string | null;
+  primaryColorHex: string | null;
+  secondaryColorHex: string | null;
 };
 
 async function upsertKit(pool: Pool, input: UpsertKitInput): Promise<string> {
@@ -192,17 +219,35 @@ async function upsertKit(pool: Pool, input: UpsertKitInput): Promise<string> {
 
   if (existing) {
     await pool.query(
-      `UPDATE kit SET club_id = $1, season_id = $2, type = $3, manufacturer_id = $4
-       WHERE id = $5`,
-      [input.clubId, input.seasonId, input.type, input.manufacturerId, existing.entityId],
+      `UPDATE kit SET club_id = $1, season_id = $2, type = $3, manufacturer_id = $4,
+       sponsor_name = $5, primary_color_hex = $6, secondary_color_hex = $7
+       WHERE id = $8`,
+      [
+        input.clubId,
+        input.seasonId,
+        input.type,
+        input.manufacturerId,
+        input.sponsorName,
+        input.primaryColorHex,
+        input.secondaryColorHex,
+        existing.entityId,
+      ],
     );
     return existing.entityId;
   }
 
   const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO kit (club_id, season_id, type, manufacturer_id)
-     VALUES ($1, $2, $3, $4) RETURNING id`,
-    [input.clubId, input.seasonId, input.type, input.manufacturerId],
+    `INSERT INTO kit (club_id, season_id, type, manufacturer_id, sponsor_name, primary_color_hex, secondary_color_hex)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [
+      input.clubId,
+      input.seasonId,
+      input.type,
+      input.manufacturerId,
+      input.sponsorName,
+      input.primaryColorHex,
+      input.secondaryColorHex,
+    ],
   );
   const kitId = inserted.rows[0]!.id;
 

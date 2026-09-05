@@ -29,6 +29,9 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
 
   const manufacturerName = asOptionalString(raw.manufacturerName);
   const labelEn = asOptionalString(raw.labelEn);
+  const sponsorName = asOptionalString(raw.sponsorName);
+  const primaryColorHex = asColorHex(raw.primaryColorHex);
+  const secondaryColorHex = asColorHex(raw.secondaryColorHex);
 
   let imageBytes: Uint8Array | undefined;
   if (raw.imageBytes instanceof Uint8Array) {
@@ -47,6 +50,9 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
     type,
     manufacturerName,
     labelEn,
+    sponsorName,
+    primaryColorHex,
+    secondaryColorHex,
     imageBytes,
   };
 }
@@ -57,6 +63,17 @@ function asString(value: unknown): string | undefined {
 
 function asOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function asColorHex(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length === 0) {
+    return undefined;
+  }
+  const normalized = value.startsWith("#") ? value.slice(1) : value;
+  if (!/^[0-9A-Fa-f]{6}$/.test(normalized)) {
+    return undefined;
+  }
+  return normalized.toUpperCase();
 }
 
 function asKitType(value: unknown): FkRawKit["type"] | undefined {

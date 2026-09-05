@@ -225,6 +225,8 @@ export const kit = pgTable("kit", {
   type: kitTypeEnum("type").notNull(),
   manufacturerId: uuid("manufacturer_id").references(() => manufacturer.id),
   sponsorName: text("sponsor_name"),
+  primaryColorHex: text("primary_color_hex"),
+  secondaryColorHex: text("secondary_color_hex"),
   validFrom: date("valid_from"),
   validTo: date("valid_to"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
