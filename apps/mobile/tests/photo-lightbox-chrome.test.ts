@@ -22,12 +22,13 @@ describe("Photo lightbox chrome", () => {
     expect(source).toContain("PHOTO_ROLES");
   });
 
-  it("locks role chips to front, back, and label only", () => {
+  it("locks role chips to front, back, left, right, and other without Mærke", () => {
     const source = readFileSync(lightboxPath, "utf8");
 
     expect(source).toContain("PHOTO_ROLE_LABELS_DA");
-    expect(source).not.toContain("left");
-    expect(source).not.toContain("right");
+    expect(source).toContain("Beskrivelse");
+    expect(source).toContain("Vaskemærke");
+    expect(source).not.toContain("Mærke");
   });
 });
 
@@ -43,6 +44,7 @@ describe("Confirm photo slot behaviour", () => {
     expect(source).toContain("removeDraftPhoto");
     expect(source).toContain("changeDraftPhotoRole");
     expect(source).toContain("upsertDraftPhoto");
+    expect(source).toContain("UNIVERSAL_PHOTO_ROLES");
   });
 
   it("keeps Photo slot as the confirm-strip primitive with 4:5 tiles", () => {

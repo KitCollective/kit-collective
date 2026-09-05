@@ -69,7 +69,7 @@ import {
   visionLog,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
-import { KIT_TYPE_LABELS_DA } from "@kit/domain";
+import { KIT_TYPE_LABELS_DA, validateJerseyPhotos } from "@kit/domain";
 import {
   BadRequestException,
   ForbiddenException,
@@ -1940,7 +1940,16 @@ export class CollectionService {
     rawBody: unknown,
     locale: LabelLocale = "da",
   ): Promise<CollectionSaveResponse> {
-    const body = collectionSaveRequestSchema.parse(rawBody);
+    const parsed = collectionSaveRequestSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    const body = parsed.data;
+
+    const photoValidationError = validateJerseyPhotos(body.photos);
+    if (photoValidationError) {
+      throw new BadRequestException(photoValidationError);
+    }
 
     if (body.draftId) {
       const existing = await this.findJerseyByDraft(userId, body.draftId);
@@ -2418,6 +2427,7 @@ export class CollectionService {
         objectKey: userJerseyPhoto.objectKey,
         role: userJerseyPhoto.role,
         source: userJerseyPhoto.source,
+        label: userJerseyPhoto.label,
         ocrStatus: userJerseyPhoto.ocrStatus,
       })
       .from(userJerseyPhoto)
@@ -2439,6 +2449,7 @@ export class CollectionService {
             ? `/v1/collection/showcase/photos/${row.id}`
             : `/v1/collection/photos/${row.id}`,
         ocrStatus: row.ocrStatus,
+        ...(row.label ? { label: row.label } : {}),
       };
 
       const existing = photosByJersey.get(row.userJerseyId) ?? [];
@@ -2476,6 +2487,7 @@ export class CollectionService {
           objectKey,
           role: photo.role,
           source: photo.source,
+          label: photo.role === "other" ? (photo.label?.trim() || null) : null,
           ocrStatus: "none",
         })
         .returning({
@@ -2483,6 +2495,7 @@ export class CollectionService {
           role: userJerseyPhoto.role,
           source: userJerseyPhoto.source,
           objectKey: userJerseyPhoto.objectKey,
+          label: userJerseyPhoto.label,
           ocrStatus: userJerseyPhoto.ocrStatus,
         });
 
@@ -2497,6 +2510,7 @@ export class CollectionService {
         objectKey: inserted.objectKey,
         photoUrl: `/v1/collection/photos/${inserted.id}`,
         ocrStatus: inserted.ocrStatus,
+        ...(inserted.label ? { label: inserted.label } : {}),
       });
     }
 

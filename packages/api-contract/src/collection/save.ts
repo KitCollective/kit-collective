@@ -2,8 +2,10 @@ import {
   JERSEY_CONDITIONS,
   JERSEY_SIZES,
   KIT_TYPES,
+  MAX_USER_JERSEY_PHOTOS,
   PHOTO_ROLES,
   PHOTO_SOURCES,
+  validateJerseyPhotos,
 } from "@kit/domain";
 import { z } from "zod";
 
@@ -12,8 +14,18 @@ export const collectionSavePhotoSchema = z
     role: z.enum(PHOTO_ROLES),
     source: z.enum(PHOTO_SOURCES),
     contentBase64: z.string().min(1),
+    label: z.string().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((photo, ctx) => {
+    const label = photo.label?.trim();
+    if (label && photo.role !== "other") {
+      ctx.addIssue({
+        code: "custom",
+        message: "label is only allowed when role is other",
+      });
+    }
+  });
 
 export const collectionSaveRequestSchema = z
   .object({
@@ -26,9 +38,26 @@ export const collectionSaveRequestSchema = z
     type: z.enum(KIT_TYPES),
     size: z.enum(JERSEY_SIZES),
     condition: z.enum(JERSEY_CONDITIONS),
-    photos: z.array(collectionSavePhotoSchema).min(1),
+    photos: z.array(collectionSavePhotoSchema).min(1).max(MAX_USER_JERSEY_PHOTOS),
   })
-  .strict();
+  .strict()
+  .superRefine((body, ctx) => {
+    const error = validateJerseyPhotos(body.photos);
+    if (error === "duplicate_universal_role") {
+      ctx.addIssue({
+        code: "custom",
+        message: "duplicate universal photo role",
+        path: ["photos"],
+      });
+    }
+    if (error === "label_on_universal_role") {
+      ctx.addIssue({
+        code: "custom",
+        message: "label is only allowed when role is other",
+        path: ["photos"],
+      });
+    }
+  });
 
 export const collectionJerseyPhotoSchema = z
   .object({
@@ -38,8 +67,18 @@ export const collectionJerseyPhotoSchema = z
     objectKey: z.string().min(1),
     photoUrl: z.string().min(1),
     ocrStatus: z.literal("none"),
+    label: z.string().nullable().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((photo, ctx) => {
+    const label = photo.label?.trim();
+    if (label && photo.role !== "other") {
+      ctx.addIssue({
+        code: "custom",
+        message: "label is only allowed when role is other",
+      });
+    }
+  });
 
 export const collectionJerseySquadPlayerSchema = z
   .object({
@@ -64,7 +103,7 @@ export const collectionJerseySchema = z
     clubLabel: z.string().min(1),
     seasonLabel: z.string().min(1),
     squadPlayers: z.array(collectionJerseySquadPlayerSchema),
-    photos: z.array(collectionJerseyPhotoSchema).min(1),
+    photos: z.array(collectionJerseyPhotoSchema).min(1).max(MAX_USER_JERSEY_PHOTOS),
     biddingEnabled: z.boolean(),
     private: z.boolean(),
   })

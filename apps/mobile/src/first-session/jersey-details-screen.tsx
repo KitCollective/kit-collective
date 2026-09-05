@@ -8,6 +8,7 @@ import {
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
   PHOTO_ROLES,
+  UNIVERSAL_PHOTO_ROLES,
   type PhotoRole,
 } from "@kit/domain";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -606,12 +607,14 @@ export function JerseyDetailsScreen({
     return null;
   }
 
-  const photoUris: Record<PhotoRole, string | undefined> = {
-    front: photoUriForRole(draft, "front") ?? undefined,
-    back: photoUriForRole(draft, "back") ?? undefined,
-    label: photoUriForRole(draft, "label") ?? undefined,
-  };
-  const photoList = PHOTO_ROLES.filter((role) => photoUris[role]);
+  const universalPhotoUris = Object.fromEntries(
+    UNIVERSAL_PHOTO_ROLES.map((role) => [role, photoUriForRole(draft, role) ?? undefined]),
+  ) as Record<(typeof UNIVERSAL_PHOTO_ROLES)[number], string | undefined>;
+  const otherPhotos = draft.photos.filter((photo) => photo.role === "other");
+  const photoList = [
+    ...UNIVERSAL_PHOTO_ROLES.filter((role) => universalPhotoUris[role]),
+    ...otherPhotos.map((photo) => photo.uri),
+  ];
   const selectedClub =
     draft.clubId && draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null;
   const selectedSeason =
@@ -645,12 +648,21 @@ export function JerseyDetailsScreen({
         <View style={styles.section}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
           <View style={styles.photoRow}>
-            {PHOTO_ROLES.map((role) => (
+            {UNIVERSAL_PHOTO_ROLES.map((role) => (
               <PhotoSlot
                 key={role}
                 role={role}
-                uri={photoUris[role]}
+                uri={universalPhotoUris[role]}
                 onPress={() => handlePhotoSlotPress(role)}
+              />
+            ))}
+            {otherPhotos.map((photo) => (
+              <PhotoSlot
+                key={photo.uri}
+                role="other"
+                uri={photo.uri}
+                caption={photo.label}
+                onPress={() => handlePhotoSlotPress("other")}
               />
             ))}
           </View>
@@ -658,9 +670,9 @@ export function JerseyDetailsScreen({
             <Text style={[typography.caption, { color: theme.contentMuted }]}>
               Mindst ét foto er påkrævet.
             </Text>
-          ) : photoList.length < PHOTO_ROLES.length ? (
+          ) : photoList.length < UNIVERSAL_PHOTO_ROLES.length ? (
             <Text style={[typography.caption, { color: theme.contentMuted }]}>
-              3 fotos anbefales — mærkefoto gør det lettere senere.
+              Fire universelle fotos anbefales — ekstra Andet-fotos er valgfrie.
             </Text>
           ) : null}
         </View>

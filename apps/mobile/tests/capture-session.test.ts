@@ -79,14 +79,14 @@ describe("branchFromPhotoCount", () => {
 });
 
 describe("single branch role assignment", () => {
-  it("fills front, back, and label in picker order and leaves leftover roles empty", () => {
+  it("fills front, back, and left in picker order and leaves leftover roles empty", () => {
     const session = createCaptureSession([URI_FRONT, URI_BACK, URI_LABEL]);
     const draft = getActiveDraft(session);
 
     expect(session.branch).toBe("single");
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
-    expect(photoUriForRole(draft, "label")).toBe(URI_LABEL);
+    expect(photoUriForRole(draft, "left")).toBe(URI_LABEL);
   });
 
   it("assigns only front when one photo is picked", () => {
@@ -94,7 +94,7 @@ describe("single branch role assignment", () => {
 
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBeNull();
-    expect(photoUriForRole(draft, "label")).toBeNull();
+    expect(photoUriForRole(draft, "left")).toBeNull();
   });
 
   it("assigns front and back when two photos are picked", () => {
@@ -102,14 +102,15 @@ describe("single branch role assignment", () => {
 
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
-    expect(photoUriForRole(draft, "label")).toBeNull();
+    expect(photoUriForRole(draft, "left")).toBeNull();
   });
 
-  it("uses domain Photo roles front | back | label only", () => {
+  it("uses domain Photo roles front | back | left | right | other", () => {
     const draft = getActiveDraft(createCaptureSession([URI_FRONT, URI_BACK, URI_LABEL]));
 
-    expect(draft.photos.map((photo) => photo.role)).toEqual(["front", "back", "label"]);
-    expect(new Set(draft.photos.map((photo) => photo.role))).toEqual(new Set(PHOTO_ROLES));
+    expect(draft.photos.map((photo) => photo.role)).toEqual(["front", "back", "left"]);
+    expect(PHOTO_ROLES).toContain("other");
+    expect(PHOTO_ROLES).not.toContain("label");
   });
 });
 
@@ -264,7 +265,7 @@ describe("canSave", () => {
   it("is true for a bulk draft once a photo is bound and all fields are selected", () => {
     const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
     const draftId = getActiveDraft(session).id;
-    const bound = bindPhoto(session, URI_EXTRA_A, draftId, "label");
+    const bound = bindPhoto(session, URI_EXTRA_A, draftId, "left");
     const complete = fillDraftForSave(bound, draftId);
 
     expect(canSave(getDraft(complete, draftId))).toBe(true);
@@ -306,7 +307,7 @@ describe("removeDraftPhoto", () => {
 
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBeNull();
-    expect(photoUriForRole(draft, "label")).toBe(URI_LABEL);
+    expect(photoUriForRole(draft, "left")).toBe(URI_LABEL);
     expect(draft.clubId).toBe(UUID);
     expect(draft.photos).toHaveLength(2);
   });
@@ -317,23 +318,23 @@ describe("changeDraftPhotoRole", () => {
     const session = createCaptureSession([URI_FRONT, URI_BACK]);
     const draftId = getActiveDraft(session).id;
 
-    const moved = changeDraftPhotoRole(session, draftId, "back", "label");
+    const moved = changeDraftPhotoRole(session, draftId, "back", "left");
     const draft = getDraft(moved, draftId);
 
     expect(photoUriForRole(draft, "back")).toBeNull();
-    expect(photoUriForRole(draft, "label")).toBe(URI_BACK);
+    expect(photoUriForRole(draft, "left")).toBe(URI_BACK);
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
   });
 
-  it("swaps photos when the target role is occupied", () => {
+  it("swaps photos when the target universal role is occupied", () => {
     const session = createCaptureSession([URI_FRONT, URI_BACK, URI_LABEL]);
     const draftId = getActiveDraft(session).id;
 
-    const swapped = changeDraftPhotoRole(session, draftId, "front", "label");
+    const swapped = changeDraftPhotoRole(session, draftId, "front", "left");
     const draft = getDraft(swapped, draftId);
 
     expect(photoUriForRole(draft, "front")).toBe(URI_LABEL);
-    expect(photoUriForRole(draft, "label")).toBe(URI_FRONT);
+    expect(photoUriForRole(draft, "left")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
     expect(draft.photos).toHaveLength(3);
   });
@@ -342,12 +343,12 @@ describe("changeDraftPhotoRole", () => {
     const session = createCaptureSession([URI_FRONT]);
     const draftId = getActiveDraft(session).id;
 
-    const unchanged = changeDraftPhotoRole(session, draftId, "back", "label");
+    const unchanged = changeDraftPhotoRole(session, draftId, "back", "left");
     const draft = getDraft(unchanged, draftId);
 
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBeNull();
-    expect(photoUriForRole(draft, "label")).toBeNull();
+    expect(photoUriForRole(draft, "left")).toBeNull();
   });
 
   it("is a no-op when from and to roles are the same", () => {

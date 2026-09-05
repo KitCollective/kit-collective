@@ -297,6 +297,31 @@ describe("stamdata schema", () => {
     ).rejects.toThrow();
   });
 
+  it("adds photo role enum values front | back | left | right | other", async () => {
+    const { rows: enumRows } = await pool.query<{ enumlabel: string }>(
+      `SELECT e.enumlabel
+       FROM pg_enum e
+       JOIN pg_type t ON e.enumtypid = t.oid
+       WHERE t.typname = 'photo_role'
+       ORDER BY e.enumsortorder`,
+    );
+    expect(enumRows.map((row) => row.enumlabel)).toEqual([
+      "front",
+      "back",
+      "left",
+      "right",
+      "other",
+    ]);
+
+    const { rows: indexRows } = await pool.query<{ indexname: string }>(
+      `SELECT indexname FROM pg_indexes
+       WHERE schemaname = 'public'
+         AND tablename = 'user_jersey_photo'
+         AND indexname = 'user_jersey_photo_universal_role_unique'`,
+    );
+    expect(indexRows).toHaveLength(1);
+  });
+
   it("defaults player_photo rights to unresolved and visibility to admin_only", async () => {
     const player = await pool.query<{ id: string }>(
       `INSERT INTO player DEFAULT VALUES RETURNING id`,

@@ -1,4 +1,4 @@
-import { PHOTO_ROLES, type PhotoRole } from "@kit/domain";
+import { PHOTO_ROLES, UNIVERSAL_PHOTO_ROLES, type PhotoRole } from "@kit/domain";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,7 +24,7 @@ type CapturedPhoto = {
 };
 
 function nextEmptyRole(photos: CapturedPhoto[]): PhotoRole | null {
-  for (const role of PHOTO_ROLES) {
+  for (const role of UNIVERSAL_PHOTO_ROLES) {
     if (!photos.some((photo) => photo.role === role)) {
       return role;
     }
@@ -51,7 +51,7 @@ export function CaptureCameraSession({
   const [isFocused, setIsFocused] = useState(true);
   const [pendingShot, setPendingShot] = useState(false);
   const [photos, setPhotos] = useState<CapturedPhoto[]>(initialPhotos);
-  const [activeRole, setActiveRole] = useState<PhotoRole>(PHOTO_ROLES[0]);
+  const [activeRole, setActiveRole] = useState<PhotoRole>(UNIVERSAL_PHOTO_ROLES[0]);
 
   useFocusEffect(
     useCallback(() => {
@@ -67,10 +67,11 @@ export function CaptureCameraSession({
     }
   }, [photos]);
 
-  const photoMap: Record<PhotoRole, string | undefined> = {
+  const photoMap: Record<(typeof UNIVERSAL_PHOTO_ROLES)[number], string | undefined> = {
     front: photos.find((photo) => photo.role === "front")?.uri,
     back: photos.find((photo) => photo.role === "back")?.uri,
-    label: photos.find((photo) => photo.role === "label")?.uri,
+    left: photos.find((photo) => photo.role === "left")?.uri,
+    right: photos.find((photo) => photo.role === "right")?.uri,
   };
 
   const captureFromCamera = useCallback(async () => {
@@ -157,7 +158,7 @@ export function CaptureCameraSession({
       >
         <View style={styles.header} pointerEvents="box-none">
           <IconButton name="Luk" icon="close" iconColor={color.contentInverse} onPress={onClose} />
-          <Text style={styles.hint}>Tag forside, bagside og mærke</Text>
+          <Text style={styles.hint}>Tag fotos af trøjen</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -180,7 +181,7 @@ export function CaptureCameraSession({
         <View style={styles.spacer} />
 
         <View style={styles.slotRow}>
-          {PHOTO_ROLES.map((role) => (
+          {UNIVERSAL_PHOTO_ROLES.map((role) => (
             <PhotoSlot
               key={role}
               variant="camera-overlay"
@@ -215,9 +216,12 @@ export function CaptureCameraSession({
             variant="secondary"
             disabled={photos.length === 0}
             onPress={() => {
-              const orderedUris = PHOTO_ROLES.map(
-                (role) => photos.find((photo) => photo.role === role)?.uri,
-              ).filter((uri): uri is string => Boolean(uri));
+              const orderedUris = [
+                ...UNIVERSAL_PHOTO_ROLES.map(
+                  (role) => photos.find((photo) => photo.role === role)?.uri,
+                ).filter((uri): uri is string => Boolean(uri)),
+                ...photos.filter((photo) => photo.role === "other").map((photo) => photo.uri),
+              ];
               onComplete(orderedUris);
             }}
           />

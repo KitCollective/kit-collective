@@ -32,11 +32,11 @@ describe("photo source tracking", () => {
     });
     const draftId = getActiveDraft(session).id;
 
-    session = upsertDraftPhoto(session, draftId, "label", "file:///gallery/label.jpg", "gallery");
+    session = upsertDraftPhoto(session, draftId, "left", "file:///gallery/label.jpg", "gallery");
     const draft = getActiveDraft(session);
 
     expect(draft.photos.find((photo) => photo.role === "front")?.source).toBe("camera");
     expect(draft.photos.find((photo) => photo.role === "back")?.source).toBe("camera");
-    expect(draft.photos.find((photo) => photo.role === "label")?.source).toBe("gallery");
+    expect(draft.photos.find((photo) => photo.role === "left")?.source).toBe("gallery");
   });
 });
