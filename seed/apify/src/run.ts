@@ -123,6 +123,12 @@ async function expandScope(
     return [{ clubExternalId: scope.clubExternalId, seasonLabel }];
   }
 
+  if (scope.kind === "national_team") {
+    throw new Error(
+      "NationalTeam walk scope belongs to @kit/seed-fkapi; @kit/seed-apify only walks club/competition seasons",
+    );
+  }
+
   return fetchAdapter.listClubSeasonPairs({
     competition: scope.competition,
     fromSeason: scope.fromSeason,
@@ -287,6 +293,12 @@ export async function runHierarchyGrain(
 }
 
 export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
+  if (options.scope.kind === "national_team") {
+    throw new Error(
+      "NationalTeam walk scope belongs to @kit/seed-fkapi; @kit/seed-apify only walks club/competition seasons",
+    );
+  }
+
   const lane = parseLane(options.lane);
   const databaseUrl = options.databaseUrl ?? resolveDatabaseUrl(lane);
   const competition = options.scope.competition;

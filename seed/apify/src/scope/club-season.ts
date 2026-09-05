@@ -74,5 +74,9 @@ export function isPairInSeedScope(scope: SeedScope, seasonLabel: string): boolea
     return seasonLabel === resolved;
   }
 
+  if (scope.kind === "national_team") {
+    return seasonLabel === scope.season.trim();
+  }
+
   return seasonLabelInCompetitionScope(scope, seasonLabel);
 }

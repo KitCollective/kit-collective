@@ -81,6 +81,9 @@ export function resolveScopeSeasonLabels(scope: SeedScope): ReadonlySet<string> 
   if (scope.kind === "club") {
     return new Set([seasonRefToScopeLabel(resolveSeasonRef(scope.competition, scope.season))]);
   }
+  if (scope.kind === "national_team") {
+    return new Set([scope.season.trim()]);
+  }
   return new Set(enumerateSeasonLabels(scope.competition, scope.fromSeason, scope.toSeason));
 }
 
