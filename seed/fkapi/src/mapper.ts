@@ -111,12 +111,7 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
       });
       kitsUpserted += 1;
 
-      photosWritten += await writeArchivePhoto(
-        options.objectStore,
-        pool,
-        kitId,
-        rawKit.imageBytes,
-      );
+      photosWritten += await writeArchivePhoto(options.objectStore, pool, kitId, rawKit.imageBytes);
     }
 
     return { kitsUpserted, photosWritten };
