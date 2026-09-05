@@ -40,9 +40,7 @@ export function findFkSeedTestIsolationViolations(input) {
       );
     }
 
-    if (
-      /VALUES\s*\(\s*'national_team'\s*,\s*\$1\s*,\s*\$2\s*,\s*'[^']+'\s*\)/.test(content)
-    ) {
+    if (/VALUES\s*\(\s*'national_team'\s*,\s*\$1\s*,\s*\$2\s*,\s*'[^']+'\s*\)/.test(content)) {
       violations.push(
         `${rel}: hardcoded national_team external_id in INSERT — use seedNationalTeamPrerequisites from fixture-scope.ts`,
       );
@@ -158,8 +156,7 @@ function main() {
 }
 
 const isDirectRun =
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isDirectRun) {
   main();
