@@ -37,7 +37,7 @@ export default function CaptureScreen() {
     (sessionId: string) => {
       clearActiveCameraCaptureSessionId();
       router.replace({
-        pathname: "/(tabs)/add/confirm",
+        pathname: "/(capture)/confirm",
         params: { sessionId },
       });
     },

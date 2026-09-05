@@ -14,13 +14,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CollectionFetchError, fetchCollectionJerseys, resolvePhotoUrl } from "@/api/collection";
 import { fetchCollectionShortcuts } from "@/api/shortcuts";
 import { useAuth } from "@/auth/AuthProvider";
+import { useCaptureChooser } from "@/capture/capture-chooser";
+import { CollectionEmptyDiagram } from "@/components/collection-empty-diagram";
 import { CollectionHeader } from "@/components/collection-header";
 import { ShortcutsSheet } from "@/components/genveje-sheet";
 import { shouldFallbackToAlleOnFetchError } from "@/components/genveje-sheet-logic";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
-import { Button, ButtonDock, EmptyState } from "@/components/ui";
-import { WishlistSheet } from "@/components/wishlist-sheet";
+import { tabBarContentInset } from "@/components/tab-bar-metrics";
+import { Button, EmptyState } from "@/components/ui";
 import { RESULT_COLLECTION_BUD_CAPTION } from "@/first-session/jersey-details-copy";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -31,24 +33,18 @@ export default function CollectionScreen() {
   const { firstSessionResult } = useLocalSearchParams<{ firstSessionResult?: string }>();
   const showResultCollectionCaption = firstSessionResult === "1";
   const { accessToken, requestPremiumAccess } = useAuth();
+  const captureChooser = useCaptureChooser();
   const { width } = useWindowDimensions();
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
-  const tabBarPadding =
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd;
+  const tabBarPadding = tabBarContentInset(insets.bottom);
   const [loading, setLoading] = useState(true);
   const [jerseys, setJerseys] = useState<CollectionJersey[]>([]);
   const [allJerseys, setAllJerseys] = useState<CollectionJersey[]>([]);
   const [totalJerseyCount, setTotalJerseyCount] = useState(0);
   const [shortcuts, setShortcuts] = useState<CollectionShortcut[]>([]);
   const [selectedShortcutId, setSelectedShortcutId] = useState<string | null>(null);
-  const [wishlistOpen, setWishlistOpen] = useState(false);
   const [genvejeOpen, setGenvejeOpen] = useState(false);
   const hasInitialLoadRef = useRef(false);
 
@@ -142,12 +138,8 @@ export default function CollectionScreen() {
   const startCapture = async () => {
     const granted = await requestPremiumAccess();
     if (granted) {
-      router.push("/(tabs)/add/capture");
+      captureChooser.open();
     }
-  };
-
-  const openWishlist = () => {
-    setWishlistOpen(true);
   };
 
   if (loading) {
@@ -160,23 +152,30 @@ export default function CollectionScreen() {
 
   if (totalJerseyCount === 0) {
     return (
-      <View style={[styles.emptyContainer, { backgroundColor: theme.canvas }]}>
-        <CollectionHeader count={0} onWishlistPress={() => void openWishlist()} />
+      <View
+        style={[
+          styles.emptyContainer,
+          { backgroundColor: theme.canvas, paddingBottom: tabBarPadding },
+        ]}
+      >
+        <CollectionHeader count={0} onAddPress={() => void startCapture()} />
         {showResultCollectionCaption ? (
           <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
             {RESULT_COLLECTION_BUD_CAPTION}
           </Text>
         ) : null}
-        <EmptyState title="Ingen trøjer endnu" body="Tilføj den første fra galleriet." />
-        <ButtonDock>
-          <Button
-            label="Tilføj trøje"
-            variant="primary"
-            width="fill"
-            onPress={() => void startCapture()}
-          />
-        </ButtonDock>
-        <WishlistSheet visible={wishlistOpen} onDismiss={() => setWishlistOpen(false)} />
+        <EmptyState
+          title="Ingen trøjer endnu"
+          diagram={<CollectionEmptyDiagram />}
+          action={
+            <Button
+              label="Tilføj trøje"
+              variant="primary"
+              width="hug"
+              onPress={() => void startCapture()}
+            />
+          }
+        />
       </View>
     );
   }
@@ -187,7 +186,7 @@ export default function CollectionScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <CollectionHeader count={totalJerseyCount} onWishlistPress={() => void openWishlist()} />
+      <CollectionHeader count={totalJerseyCount} onAddPress={() => void startCapture()} />
       {showResultCollectionCaption ? (
         <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
           {RESULT_COLLECTION_BUD_CAPTION}
@@ -228,7 +227,6 @@ export default function CollectionScreen() {
           );
         }}
       />
-      <WishlistSheet visible={wishlistOpen} onDismiss={() => setWishlistOpen(false)} />
       <ShortcutsSheet
         visible={genvejeOpen}
         accessToken={accessToken ?? ""}

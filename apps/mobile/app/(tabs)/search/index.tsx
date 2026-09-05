@@ -26,6 +26,7 @@ import { Avatar } from "@/components/avatar";
 import { ListRow, Mark, SearchField } from "@/components/catalog-ui";
 import { JerseyTile } from "@/components/jersey-tile";
 import { ScreenHeader } from "@/components/screen-header";
+import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { EmptyState } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -38,13 +39,7 @@ export default function SearchScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
-  const tabBarPadding =
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd;
+  const tabBarPadding = tabBarContentInset(insets.bottom);
   const [loading, setLoading] = useState(true);
   const [home, setHome] = useState<CollectionDiscoverHome>({});
   const [typeahead, setTypeahead] = useState<CollectionDiscoverTypeahead>({});

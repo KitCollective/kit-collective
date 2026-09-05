@@ -9,6 +9,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { favoritesMetaLine } from "@/components/favorites-meta";
 import { IdentityCard, ListNavigateRow, ProfileSurfaceGroup } from "@/components/profile-ui";
 import { ScreenHeader } from "@/components/screen-header";
+import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
@@ -24,13 +25,7 @@ export default function ProfileHomeScreen() {
     [user],
   );
 
-  const tabBarPadding =
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd;
+  const tabBarPadding = tabBarContentInset(insets.bottom);
 
   const avatarHeaders =
     accessToken && user?.avatarUrl ? { Authorization: `Bearer ${accessToken}` } : undefined;

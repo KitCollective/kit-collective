@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const repoRoot = join(__dirname, "../../../..");
-const wishlistSheetPath = join(repoRoot, "apps/mobile/src/components/wishlist-sheet.tsx");
+const wishlistSheetPath = join(repoRoot, "apps/mobile/src/components/wishlist-screen.tsx");
 const wishlistLogicPath = join(repoRoot, "apps/mobile/src/components/wishlist-sheet-logic.ts");
 const wishlistTestPath = join(repoRoot, "apps/mobile/tests/wishlist-sheet.test.ts");
 const wishlistServicePath = join(repoRoot, "apps/api/src/wishlist/wishlist.service.ts");

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const inboxIndexPath = join(__dirname, "../app/(tabs)/inbox/index.tsx");
-const floatingBarPath = join(__dirname, "../src/components/floating-tab-bar.tsx");
+const tabLayoutPath = join(__dirname, "../app/(tabs)/_layout.tsx");
 const conversationViewPath = join(__dirname, "../src/components/conversation-view.tsx");
 const messageComposerPath = join(__dirname, "../src/components/message-composer.tsx");
 
@@ -15,13 +15,15 @@ describe("inbox conversation chrome (KIT-118)", () => {
     expect(source).not.toMatch(/setSelectedConversationId\(firstId\)/);
   });
 
-  it("hides the tab bar when a wide-layout conversation is visible", () => {
+  it("keeps the native tab bar visible on wide-layout conversations", () => {
     const inboxSource = readFileSync(inboxIndexPath, "utf8");
-    const barSource = readFileSync(floatingBarPath, "utf8");
+    const layoutSource = readFileSync(tabLayoutPath, "utf8");
 
+    // Inbox still tracks conversation visibility for its own layout/refresh needs.
     expect(inboxSource).toMatch(/setConversationVisible\(Boolean\(selectedConversationId\)\)/);
-    expect(barSource).toMatch(/hideForWideConversation/);
-    expect(barSource).toMatch(/conversationVisible/);
+    // Native tabs stay on detail screens — no custom hide mechanism (design lock 2026-09-05).
+    expect(layoutSource).toContain("NativeTabs");
+    expect(layoutSource).not.toContain("hideForWideConversation");
   });
 
   it("refreshes inbox unread after conversation GET succeeds", () => {

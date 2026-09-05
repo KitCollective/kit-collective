@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     gap: space.gapMd,
   },
   stage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   stageContent: {
     flexGrow: 1,

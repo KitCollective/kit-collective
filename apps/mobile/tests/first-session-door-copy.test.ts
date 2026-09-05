@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  DOOR_LOGIN_SEGMENT,
+  DOOR_REGISTER_SEGMENT,
   DOOR_SPLITTER_LABEL,
-  doorEmailCtaLabel,
   doorPasswordSubmitLabel,
-  doorSentence,
-  doorStepCaption,
   doorSwapLabel,
   doorTitle,
-  EMAIL_CHANGE_LABEL,
-  EMAIL_NEXT_LABEL,
+  FORGOT_PASSWORD_BACK,
+  FORGOT_PASSWORD_DONE,
+  FORGOT_PASSWORD_INFO,
   FORGOT_PASSWORD_LABEL,
+  FORGOT_PASSWORD_SUBMIT,
+  FORGOT_PASSWORD_TITLE,
   PASSWORD_HELPER,
   PASSWORD_REPEAT_LABEL,
   SPLASH_CAPTION,
@@ -20,36 +22,41 @@ import {
 } from "../src/first-session/door-copy";
 
 describe("first-session door copy", () => {
-  it("locks login labels", () => {
-    expect(doorTitle("login")).toBe("Log ind");
-    expect(doorSentence("login")).toBe("Samlingen venter.");
-    expect(doorEmailCtaLabel("login")).toBe("Log ind med e-mail");
+  it("uses Login as the general term in login mode", () => {
+    expect(doorTitle("login")).toBe("Login");
     expect(doorSwapLabel("login")).toBe("Ny her? Opret konto");
-    expect(doorPasswordSubmitLabel("login")).toBe("Log ind");
+    expect(doorPasswordSubmitLabel("login")).toBe("Login");
   });
 
-  it("locks register labels", () => {
-    expect(doorTitle("register")).toBe("Gem samlingen");
-    expect(doorSentence("register")).toBe("Trøjen er læst. En konto husker den.");
-    expect(doorEmailCtaLabel("register")).toBe("Opret med e-mail");
-    expect(doorSwapLabel("register")).toBe("Jeg har en konto");
+  it("locks register labels with Opret", () => {
+    expect(doorTitle("register")).toBe("Opret");
+    expect(doorSwapLabel("register")).toBe("Har du en konto? Login");
     expect(doorPasswordSubmitLabel("register")).toBe("Opret konto");
   });
 
-  it("locks email step chrome", () => {
-    expect(doorStepCaption(1)).toBe("1/2");
-    expect(doorStepCaption(2)).toBe("2/2");
-    expect(EMAIL_NEXT_LABEL).toBe("Næste");
-    expect(EMAIL_CHANGE_LABEL).toBe("Skift");
+  it("locks the two-mode title switcher segments", () => {
+    expect(DOOR_LOGIN_SEGMENT).toBe("Login");
+    expect(DOOR_REGISTER_SEGMENT).toBe("Opret");
+  });
+
+  it("locks single-face identity chrome without a sentence line", () => {
     expect(PASSWORD_REPEAT_LABEL).toBe("Gentag adgangskode");
     expect(PASSWORD_HELPER).toBe("mindst 8 tegn");
     expect(FORGOT_PASSWORD_LABEL).toBe("Glemt adgangskode?");
     expect(DOOR_SPLITTER_LABEL).toBe("eller");
   });
 
+  it("locks the in-sheet forgot-password page copy", () => {
+    expect(FORGOT_PASSWORD_TITLE).toBe("Nulstil adgangskode");
+    expect(FORGOT_PASSWORD_SUBMIT).toBe("Send link");
+    expect(FORGOT_PASSWORD_BACK).toBe("Tilbage");
+    expect(FORGOT_PASSWORD_INFO).toContain("Vi sender et link");
+    expect(FORGOT_PASSWORD_DONE).toContain("Tjek din e-mail");
+  });
+
   it("locks splash and verify collector copy", () => {
     expect(SPLASH_CAPTION).toBe("Tryk for at fortsætte");
-    expect(SPLASH_LOGIN_LABEL).toBe("Log ind");
+    expect(SPLASH_LOGIN_LABEL).toBe("Login");
     expect(SPLASH_REGISTER_LABEL).toBe("Opret konto");
     expect(VERIFY_EMAIL_TITLE).toBe("Tjek din e-mail");
     expect(VERIFY_EMAIL_CONTINUE).toBe("Fortsæt");

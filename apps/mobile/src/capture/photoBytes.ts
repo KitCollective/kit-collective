@@ -1,12 +1,10 @@
-import * as FileSystem from "expo-file-system";
+import { File } from "expo-file-system";
 
 export async function readPhotoBase64(uri: string): Promise<string> {
   if (uri.startsWith("data:")) {
     return uri.split(",")[1] ?? "";
   }
-  return await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  return await new File(uri).base64();
 }
 
 export function captureQualityForRole(role: string): number {

@@ -11,9 +11,9 @@ import { ConversationView } from "@/components/conversation-view";
 import { ScreenHeader } from "@/components/screen-header";
 import { formatThreadTime, ThreadRow } from "@/components/thread-row";
 import { TopTabs } from "@/components/top-tabs";
+import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { EmptyState } from "@/components/ui";
 import { useInboxChrome } from "@/inbox/inbox-chrome";
-import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 const INBOX_TABS = ["Beskeder", "Aktivitet"] as const;
@@ -30,13 +30,7 @@ export default function InboxScreen() {
   const { setConversationVisible, refreshUnreadCount } = useInboxChrome();
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_BREAKPOINT;
-  const tabBarPadding =
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd;
+  const tabBarPadding = tabBarContentInset(insets.bottom);
   const [activeTab, setActiveTab] = useState<InboxTab>("Beskeder");
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<CollectionConversation[]>([]);

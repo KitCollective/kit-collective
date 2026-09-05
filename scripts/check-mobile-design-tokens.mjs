@@ -270,6 +270,11 @@ function isThemeAwareScope(relPath) {
     return true;
   }
 
+  // Capture flow moved out of (tabs)/add into its own modal group (2026-09-05).
+  if (relPath.startsWith("apps/mobile/app/(capture)/")) {
+    return true;
+  }
+
   return false;
 }
 
@@ -287,6 +292,11 @@ function isColorScope(relPath) {
   }
 
   if (relPath.startsWith("apps/mobile/app/(tabs)/")) {
+    return true;
+  }
+
+  // Capture flow moved out of (tabs)/add into its own modal group (2026-09-05).
+  if (relPath.startsWith("apps/mobile/app/(capture)/")) {
     return true;
   }
 

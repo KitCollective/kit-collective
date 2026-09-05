@@ -144,7 +144,7 @@ export default function JerseyDetailScreen() {
     const store = createSqliteCaptureSessionStore(sessionId);
     createEditCaptureSession(jersey, sessionId, store);
     router.push({
-      pathname: "/(tabs)/add/confirm",
+      pathname: "/(capture)/confirm",
       params: { sessionId, editJerseyId: jersey.id },
     });
   };
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     gap: space.gapMd,
   },
   stage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   stageContent: {
     flexGrow: 1,

@@ -7,10 +7,10 @@ import { useTheme } from "@/theme/use-theme";
 
 type CollectionHeaderProps = {
   count: number;
-  onWishlistPress: () => void;
+  onAddPress: () => void;
 };
 
-export function CollectionHeader({ count, onWishlistPress }: CollectionHeaderProps) {
+export function CollectionHeader({ count, onAddPress }: CollectionHeaderProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const typography = useTypography();
@@ -22,9 +22,9 @@ export function CollectionHeader({ count, onWishlistPress }: CollectionHeaderPro
         <Text style={[typography.monoSm, { color: theme.contentMuted }]}>{count}</Text>
       </View>
       <IconButton
-        name="Ønske"
-        icon="bookmark-outline"
-        onPress={onWishlistPress}
+        name="Tilføj trøje"
+        icon="add"
+        onPress={onAddPress}
         iconColor={theme.contentPrimary}
       />
     </View>

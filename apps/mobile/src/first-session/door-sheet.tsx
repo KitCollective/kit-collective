@@ -1,48 +1,62 @@
-import { Ionicons } from "@expo/vector-icons";
-import type { ComponentProps } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Dimensions,
   KeyboardAvoidingView,
+  type LayoutChangeEvent,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  Easing,
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AuthThrottleBanner } from "@/auth/auth-error-feedback";
-import { Sheet } from "@/components/catalog-ui";
-import { Button, IconButton } from "@/components/ui";
+import { scheduleOnRN } from "react-native-worklets";
+import { requestPasswordReset } from "@/api/identity";
+import { resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
+import { project, rubberband } from "@/components/gesture-physics";
+import { Sheet, useSheetScroll } from "@/components/sheet";
 import {
-  DOOR_SPLITTER_LABEL,
-  type DoorEmailStep,
+  DOOR_LOGIN_SEGMENT,
+  DOOR_REGISTER_SEGMENT,
   type DoorMode,
   type DoorSocialProvider,
-  doorEmailCtaLabel,
-  doorPasswordSubmitLabel,
-  doorSentence,
-  doorStepCaption,
-  doorSwapLabel,
   doorTitle,
-  EMAIL_CHANGE_LABEL,
-  EMAIL_NEXT_LABEL,
-  FORGOT_PASSWORD_LABEL,
-  PASSWORD_HELPER,
-  PASSWORD_REPEAT_LABEL,
+  FORGOT_PASSWORD_TITLE,
 } from "@/first-session/door-copy";
+import { AuthFace, ForgotPasswordFace } from "@/first-session/door-faces";
 import { useTypography } from "@/theme/brand-fonts";
-import { radius, space } from "@/theme/tokens";
+import { motion, space } from "@/theme/tokens";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
-export type { DoorEmailStep, DoorMode, DoorSocialProvider } from "@/first-session/door-copy";
+export type { DoorMode, DoorSocialProvider } from "@/first-session/door-copy";
 
-type IoniconName = ComponentProps<typeof Ionicons>["name"];
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+
+const FACE_SLIDE = 48;
+const SWIPE_ACTIVATE = 14;
+const SWIPE_COMMIT_FRACTION = 0.3;
+
+type DoorFace = "login" | "register" | "forgot";
+const FACE_ORDER: Record<DoorFace, number> = { login: 0, register: 1, forgot: 2 };
+
+function enterDirection(prev: DoorFace, next: DoorFace): 1 | -1 {
+  return FACE_ORDER[next] > FACE_ORDER[prev] ? 1 : -1;
+}
 
 type DoorSheetProps = {
   visible: boolean;
   mode: DoorMode;
-  emailStep: DoorEmailStep;
   email: string;
   password: string;
   passwordRepeat: string;
@@ -55,23 +69,13 @@ type DoorSheetProps = {
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
   onPasswordRepeatChange: (value: string) => void;
-  onNextEmail: () => void;
-  onChangeEmail: () => void;
-  onSubmitEmail: () => void;
+  onSubmit: () => void;
   onSocial: (provider: DoorSocialProvider) => void;
-  onForgotPassword: () => void;
-  onBackStep?: () => void;
 };
-
-const SOCIAL_PROVIDERS: { provider: DoorSocialProvider; icon: IoniconName; name: string }[] = [
-  { provider: "google", icon: "logo-google", name: "Google" },
-  { provider: "facebook", icon: "logo-facebook", name: "Facebook" },
-];
 
 export function DoorSheet({
   visible,
   mode,
-  emailStep,
   email,
   password,
   passwordRepeat,
@@ -84,437 +88,330 @@ export function DoorSheet({
   onEmailChange,
   onPasswordChange,
   onPasswordRepeatChange,
-  onNextEmail,
-  onChangeEmail,
-  onSubmitEmail,
+  onSubmit,
   onSocial,
-  onForgotPassword,
-  onBackStep,
 }: DoorSheetProps) {
-  const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   const busy = loading || socialBusy !== null;
-  const showBack = emailStep !== "choose";
-  const handleBack = onBackStep ?? (emailStep === 2 ? onChangeEmail : undefined);
+
+  const [page, setPage] = useState<"auth" | "forgot">("auth");
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetThrottle, setResetThrottle] = useState(false);
+
+  const onForgot = page === "forgot";
+
+  useEffect(() => {
+    if (!visible) {
+      setPage("auth");
+      setResetEmail("");
+      setResetLoading(false);
+      setResetDone(false);
+      setResetError(null);
+      setResetThrottle(false);
+    }
+  }, [visible]);
+
+  function handleSelectMode(next: DoorMode) {
+    if (next !== mode) {
+      onSwapMode();
+    }
+  }
+
+  function openForgot() {
+    setResetEmail(email);
+    setResetError(null);
+    setResetDone(false);
+    setResetThrottle(false);
+    setPage("forgot");
+  }
+
+  function backToAuth() {
+    setResetError(null);
+    setResetThrottle(false);
+    setPage("auth");
+  }
+
+  async function handleResetSubmit() {
+    setResetError(null);
+    setResetThrottle(false);
+    if (resetEmail.trim().length === 0) {
+      setResetError("Skriv din e-mail");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await requestPasswordReset(resetEmail.trim());
+      setResetDone(true);
+    } catch (caught) {
+      const feedback = resolveAuthErrorFeedback(caught, "Kunne ikke sende nulstilling");
+      setResetError(feedback.fieldError);
+      setResetThrottle(feedback.showThrottleBanner);
+    } finally {
+      setResetLoading(false);
+    }
+  }
 
   return (
     <Sheet
       visible={visible}
       variant="door"
-      title={doorTitle(mode)}
-      sentence={doorSentence(mode)}
-      onDismiss={onClose}
-      leading={
-        showBack && handleBack ? (
-          <IconButton name="Tilbage" icon="chevron-back" onPress={handleBack} />
-        ) : undefined
+      title={onForgot ? FORGOT_PASSWORD_TITLE : doorTitle(mode)}
+      titleContent={
+        onForgot ? undefined : (
+          <DoorModeSwitcher mode={mode} disabled={busy} onSelect={handleSelectMode} />
+        )
       }
+      onBack={onForgot ? backToAuth : undefined}
+      onDismiss={onClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.avoider}
+      <DoorSheetBody
+        page={page}
+        mode={mode}
+        reduceMotion={reduceMotion}
+        onSwapMode={onSwapMode}
       >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={[
-            styles.body,
-            { paddingBottom: Math.max(insets.bottom, space.insetMd) },
-          ]}
-        >
-          {showThrottleBanner ? <AuthThrottleBanner /> : null}
-          {emailStep === "choose" ? (
-            <ChooseStep
-              mode={mode}
-              busy={busy}
-              socialBusy={socialBusy}
-              onNextEmail={onNextEmail}
-              onSocial={onSocial}
-              onSwapMode={onSwapMode}
-            />
-          ) : emailStep === 1 ? (
-            <EmailAddressStep
-              email={email}
-              busy={busy}
-              error={error}
-              onEmailChange={onEmailChange}
-              onNextEmail={onNextEmail}
-            />
-          ) : (
-            <EmailPasswordStep
-              mode={mode}
-              email={email}
-              password={password}
-              passwordRepeat={passwordRepeat}
-              loading={loading}
-              busy={busy}
-              error={error}
-              onPasswordChange={onPasswordChange}
-              onPasswordRepeatChange={onPasswordRepeatChange}
-              onSubmitEmail={onSubmitEmail}
-              onForgotPassword={onForgotPassword}
-              onChangeEmail={onChangeEmail}
-            />
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        {onForgot ? (
+          <ForgotPasswordFace
+            email={resetEmail}
+            loading={resetLoading}
+            done={resetDone}
+            error={resetError}
+            showThrottleBanner={resetThrottle}
+            onEmailChange={setResetEmail}
+            onSubmit={() => {
+              void handleResetSubmit();
+            }}
+          />
+        ) : (
+          <AuthFace
+            mode={mode}
+            email={email}
+            password={password}
+            passwordRepeat={passwordRepeat}
+            error={error}
+            showThrottleBanner={showThrottleBanner}
+            loading={loading}
+            socialBusy={socialBusy}
+            busy={busy}
+            onEmailChange={onEmailChange}
+            onPasswordChange={onPasswordChange}
+            onPasswordRepeatChange={onPasswordRepeatChange}
+            onSubmit={onSubmit}
+            onSocial={onSocial}
+            onForgotPassword={openForgot}
+            onSwapMode={onSwapMode}
+          />
+        )}
+      </DoorSheetBody>
     </Sheet>
   );
 }
 
-function ChooseStep({
+function DoorSheetBody({
+  page,
   mode,
-  busy,
-  socialBusy,
-  onNextEmail,
-  onSocial,
+  reduceMotion,
   onSwapMode,
+  children,
 }: {
+  page: "auth" | "forgot";
   mode: DoorMode;
-  busy: boolean;
-  socialBusy: DoorSocialProvider | null;
-  onNextEmail: () => void;
-  onSocial: (provider: DoorSocialProvider) => void;
+  reduceMotion: boolean;
   onSwapMode: () => void;
+  children: ReactNode;
 }) {
-  const theme = useTheme();
-  const typography = useTypography();
-
-  return (
-    <View style={styles.stack}>
-      <Button
-        label={doorEmailCtaLabel(mode)}
-        variant="primary"
-        width="fill"
-        disabled={busy}
-        onPress={onNextEmail}
-      />
-      <View style={styles.splitter}>
-        <View style={[styles.splitterLine, { backgroundColor: theme.borderSubtle }]} />
-        <Text style={[typography.monoSm, { color: theme.contentMuted }]}>
-          {DOOR_SPLITTER_LABEL}
-        </Text>
-        <View style={[styles.splitterLine, { backgroundColor: theme.borderSubtle }]} />
-      </View>
-      <View style={styles.socialRow}>
-        {SOCIAL_PROVIDERS.map((item) => (
-          <SocialIconButton
-            key={item.provider}
-            name={item.name}
-            icon={item.icon}
-            disabled={busy}
-            loading={socialBusy === item.provider}
-            onPress={() => onSocial(item.provider)}
-          />
-        ))}
-      </View>
-      <Button
-        label={doorSwapLabel(mode)}
-        variant="tertiary"
-        width="fill"
-        disabled={busy}
-        onPress={onSwapMode}
-      />
-    </View>
-  );
-}
-
-function EmailAddressStep({
-  email,
-  busy,
-  error,
-  onEmailChange,
-  onNextEmail,
-}: {
-  email: string;
-  busy: boolean;
-  error: string | null;
-  onEmailChange: (value: string) => void;
-  onNextEmail: () => void;
-}) {
-  return (
-    <View style={styles.stack}>
-      <StepCaption step={1} />
-      <LabeledField
-        label="E-mail"
-        value={email}
-        onChangeText={onEmailChange}
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-        placeholder="dig@eksempel.dk"
-      />
-      {error ? <ErrorText message={error} /> : null}
-      <Button
-        label={EMAIL_NEXT_LABEL}
-        variant="primary"
-        width="fill"
-        disabled={busy}
-        onPress={onNextEmail}
-      />
-    </View>
-  );
-}
-
-function EmailPasswordStep({
-  mode,
-  email,
-  password,
-  passwordRepeat,
-  loading,
-  busy,
-  error,
-  onPasswordChange,
-  onPasswordRepeatChange,
-  onSubmitEmail,
-  onForgotPassword,
-  onChangeEmail,
-}: {
-  mode: DoorMode;
-  email: string;
-  password: string;
-  passwordRepeat: string;
-  loading: boolean;
-  busy: boolean;
-  error: string | null;
-  onPasswordChange: (value: string) => void;
-  onPasswordRepeatChange: (value: string) => void;
-  onSubmitEmail: () => void;
-  onForgotPassword: () => void;
-  onChangeEmail: () => void;
-}) {
-  const theme = useTheme();
-  const typography = useTypography();
+  const insets = useSafeAreaInsets();
+  const sheetScroll = useSheetScroll();
+  const onForgot = page === "forgot";
   const isRegister = mode === "register";
+  const face: DoorFace = onForgot ? "forgot" : mode;
 
-  return (
-    <View style={styles.stack}>
-      <StepCaption step={2} />
-      <View style={styles.emailRow}>
-        <Text style={[typography.body, styles.emailValue, { color: theme.contentSecondary }]}>
-          {email}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={EMAIL_CHANGE_LABEL}
-          disabled={busy}
-          onPress={onChangeEmail}
-          style={({ pressed }) => [styles.changeHit, pressed && styles.pressed]}
-        >
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>
-            {EMAIL_CHANGE_LABEL}
-          </Text>
-        </Pressable>
-      </View>
-      <LabeledField
-        label="Adgangskode"
-        value={password}
-        onChangeText={onPasswordChange}
-        autoCapitalize="none"
-        autoComplete={isRegister ? "new-password" : "password"}
-        secureTextEntry
-        helper={isRegister ? PASSWORD_HELPER : undefined}
-      />
-      {isRegister ? (
-        <LabeledField
-          label={PASSWORD_REPEAT_LABEL}
-          value={passwordRepeat}
-          onChangeText={onPasswordRepeatChange}
-          autoCapitalize="none"
-          autoComplete="new-password"
-          secureTextEntry
-        />
-      ) : (
-        <Button
-          label={FORGOT_PASSWORD_LABEL}
-          variant="tertiary"
-          width="fill"
-          disabled={busy}
-          onPress={onForgotPassword}
-        />
-      )}
-      {error ? <ErrorText message={error} /> : null}
-      <Button
-        label={doorPasswordSubmitLabel(mode)}
-        variant="primary"
-        width="fill"
-        loading={loading}
-        disabled={busy}
-        onPress={onSubmitEmail}
-      />
-    </View>
+  const faceX = useSharedValue(0);
+  const faceOpacity = useSharedValue(1);
+  const dragStart = useSharedValue(0);
+  const bodyWidth = useSharedValue(Dimensions.get("window").width);
+  const prevFaceRef = useRef<DoorFace>(face);
+
+  useEffect(() => {
+    const prev = prevFaceRef.current;
+    if (prev === face) {
+      return;
+    }
+    const direction = enterDirection(prev, face);
+    prevFaceRef.current = face;
+
+    if (reduceMotion) {
+      faceX.set(0);
+      faceOpacity.set(0);
+      faceOpacity.set(withTiming(1, { duration: motion.fast, easing: EASE_OUT }));
+      return;
+    }
+    faceX.set(direction * FACE_SLIDE);
+    faceOpacity.set(0);
+    faceX.set(withTiming(0, { duration: motion.base, easing: EASE_OUT }));
+    faceOpacity.set(withTiming(1, { duration: motion.base, easing: EASE_OUT }));
+  }, [face, reduceMotion, faceOpacity, faceX]);
+
+  const modeSwipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!reduceMotion && page === "auth")
+        .maxPointers(1)
+        .activeOffsetX([-SWIPE_ACTIVATE, SWIPE_ACTIVATE])
+        .failOffsetY([-SWIPE_ACTIVATE, SWIPE_ACTIVATE])
+        .onStart(() => {
+          dragStart.set(faceX.get());
+        })
+        .onUpdate((event) => {
+          const raw = dragStart.get() + event.translationX;
+          const allowed = isRegister ? Math.max(0, raw) : Math.min(0, raw);
+          const resisted = raw - allowed;
+          faceX.set(allowed + rubberband(resisted, bodyWidth.get()));
+          faceOpacity.set(
+            interpolate(Math.abs(faceX.get()), [0, bodyWidth.get()], [1, 0], Extrapolation.CLAMP),
+          );
+        })
+        .onEnd((event) => {
+          const width = bodyWidth.get();
+          const projected = faceX.get() + project(event.velocityX);
+          const commit = isRegister
+            ? projected > width * SWIPE_COMMIT_FRACTION
+            : projected < -width * SWIPE_COMMIT_FRACTION;
+          if (commit) {
+            const target = isRegister ? width : -width;
+            faceOpacity.set(withTiming(0, { duration: motion.fast, easing: EASE_OUT }));
+            faceX.set(
+              withTiming(target, { duration: motion.fast, easing: EASE_OUT }, (finished) => {
+                if (finished) {
+                  scheduleOnRN(onSwapMode);
+                }
+              }),
+            );
+            return;
+          }
+          faceX.set(
+            withSpring(0, { duration: motion.base, dampingRatio: 0.8, velocity: event.velocityX }),
+          );
+          faceOpacity.set(withTiming(1, { duration: motion.base, easing: EASE_OUT }));
+        }),
+    [reduceMotion, page, isRegister, onSwapMode, bodyWidth, dragStart, faceOpacity, faceX],
   );
-}
 
-function StepCaption({ step }: { step: 1 | 2 }) {
-  const theme = useTheme();
-  const typography = useTypography();
+  const faceStyle = useAnimatedStyle(() => ({
+    opacity: faceOpacity.get(),
+    transform: [{ translateX: reduceMotion ? 0 : faceX.get() }],
+  }));
 
-  return (
-    <Text style={[typography.monoSm, { color: theme.contentMuted }]}>{doorStepCaption(step)}</Text>
-  );
-}
+  function onBodyLayout(event: LayoutChangeEvent) {
+    const width = event.nativeEvent.layout.width;
+    if (width > 0) {
+      bodyWidth.set(width);
+    }
+  }
 
-function ErrorText({ message }: { message: string }) {
-  const theme = useTheme();
-  const typography = useTypography();
-
-  return <Text style={[typography.caption, { color: theme.danger }]}>{message}</Text>;
-}
-
-function LabeledField({
-  label,
-  value,
-  onChangeText,
-  helper,
-  autoCapitalize,
-  autoComplete,
-  keyboardType,
-  secureTextEntry,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  helper?: string;
-  autoCapitalize?: "none" | "sentences";
-  autoComplete?: "email" | "password" | "new-password";
-  keyboardType?: "email-address";
-  secureTextEntry?: boolean;
-  placeholder?: string;
-}) {
-  const theme = useTheme();
-  const typography = useTypography();
-
-  return (
-    <View style={styles.field}>
-      <Text style={[typography.label, { color: theme.contentPrimary }]}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        autoCapitalize={autoCapitalize}
-        autoComplete={autoComplete}
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={theme.contentMuted}
-        style={[
-          styles.input,
-          typography.body,
-          {
-            borderColor: theme.borderSubtle,
-            color: theme.contentPrimary,
-            backgroundColor: theme.surface,
-          },
-        ]}
-      />
-      {helper ? (
-        <Text style={[typography.caption, { color: theme.contentSecondary }]}>{helper}</Text>
-      ) : null}
-    </View>
-  );
-}
-
-function SocialIconButton({
-  name,
-  icon,
-  disabled,
-  loading,
-  onPress,
-}: {
-  name: string;
-  icon: IoniconName;
-  disabled: boolean;
-  loading: boolean;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={name}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.socialButton,
-        {
-          borderColor: theme.borderSubtle,
-          backgroundColor: theme.surface,
-        },
-        disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
+  const scrollView = (
+    <Animated.ScrollView
+      onScroll={sheetScroll?.scrollHandler}
+      scrollEventThrottle={16}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={[
+        styles.scrollBody,
+        { paddingBottom: Math.max(insets.bottom, space.insetMd) },
       ]}
     >
-      <Ionicons
-        name={icon}
-        size={24}
-        color={theme.contentPrimary}
-        accessibilityElementsHidden
-        style={loading ? styles.disabled : undefined}
-      />
-    </Pressable>
+      <GestureDetector gesture={modeSwipe}>
+        <Animated.View style={[styles.face, faceStyle]} onLayout={onBodyLayout}>
+          {children}
+        </Animated.View>
+      </GestureDetector>
+    </Animated.ScrollView>
+  );
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.avoider}
+    >
+      {sheetScroll ? (
+        <GestureDetector gesture={sheetScroll.scrollGesture}>{scrollView}</GestureDetector>
+      ) : (
+        scrollView
+      )}
+    </KeyboardAvoidingView>
+  );
+}
+
+function DoorModeSwitcher({
+  mode,
+  disabled,
+  onSelect,
+}: {
+  mode: DoorMode;
+  disabled: boolean;
+  onSelect: (mode: DoorMode) => void;
+}) {
+  const theme = useTheme();
+  const typography = useTypography();
+
+  const segments: { mode: DoorMode; label: string }[] = [
+    { mode: "login", label: DOOR_LOGIN_SEGMENT },
+    { mode: "register", label: DOOR_REGISTER_SEGMENT },
+  ];
+
+  return (
+    <View style={styles.switcherRow}>
+      {segments.map((segment) => {
+        const selected = segment.mode === mode;
+        return (
+          <Pressable
+            key={segment.mode}
+            accessibilityRole="button"
+            accessibilityLabel={segment.label}
+            accessibilityState={{ selected }}
+            disabled={disabled || selected}
+            onPress={() => onSelect(segment.mode)}
+            style={({ pressed }) => [styles.switcherSegment, pressed && styles.pressed]}
+          >
+            <Text
+              numberOfLines={1}
+              style={[
+                typography.title,
+                { color: selected ? theme.contentPrimary : theme.contentMuted },
+              ]}
+            >
+              {segment.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   avoider: {
-    maxHeight: "100%",
-  },
-  body: {
-    gap: space.gapMd,
-  },
-  stack: {
-    gap: space.gapMd,
-  },
-  splitter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.gapMd,
-  },
-  splitterLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-  },
-  socialRow: {
-    flexDirection: "row",
-    gap: space.gapMd,
-  },
-  socialButton: {
-    minHeight: 56,
-    minWidth: 56,
-    borderWidth: 1,
-    borderRadius: radius.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  field: {
-    gap: space.gapSm,
-  },
-  input: {
-    minHeight: 48,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: space.insetMd,
-    paddingVertical: space.insetSm,
-  },
-  emailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.gapMd,
-    minHeight: 44,
-  },
-  emailValue: {
     flex: 1,
   },
-  changeHit: {
+  scrollBody: {
+    flexGrow: 1,
+    paddingTop: space.gapMd,
+  },
+  face: {
+    flexGrow: 1,
+  },
+  switcherRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.gapLg,
+  },
+  switcherSegment: {
     minHeight: 44,
-    minWidth: 44,
     justifyContent: "center",
   },
   pressed: {
     opacity: 0.9,
-  },
-  disabled: {
-    opacity: 0.5,
   },
 });

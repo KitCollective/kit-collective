@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BiddingFetchError, fetchPeerJersey, sendBid } from "@/api/bidding";
 import { resolvePhotoUrl } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
+import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { Button, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -26,13 +27,7 @@ export default function SendBidScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
-  const tabBarPadding =
-    space.insetLg * 2 +
-    space.insetMd +
-    space.insetLg +
-    space.insetSm +
-    insets.bottom +
-    space.insetMd;
+  const tabBarPadding = tabBarContentInset(insets.bottom);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [amount, setAmount] = useState("");

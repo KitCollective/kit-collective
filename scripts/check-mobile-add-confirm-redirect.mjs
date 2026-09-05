@@ -5,7 +5,7 @@
  */
 import { readFileSync } from "node:fs";
 
-const CONFIRM_PATH = "apps/mobile/app/(tabs)/add/confirm.tsx";
+const CONFIRM_PATH = "apps/mobile/app/(capture)/confirm.tsx";
 const HOOK_PATH = "apps/mobile/src/capture/usePersistedCaptureSession.ts";
 const REDIRECT_HELPER_PATH = "apps/mobile/src/capture/confirmRedirect.ts";
 const REDIRECT_TEST_PATH = "apps/mobile/tests/confirm-redirect.test.ts";

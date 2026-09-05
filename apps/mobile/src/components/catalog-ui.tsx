@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import {
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -9,12 +8,12 @@ import {
   type TextInputProps,
   View,
 } from "react-native";
-import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import type { ThemeColors } from "@/theme/tokens";
 import { radius, space } from "@/theme/tokens";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
+
+export { Sheet, useSheetScroll } from "@/components/sheet";
 
 type MarkProps = {
   label: string;
@@ -180,73 +179,6 @@ export function ListRow({ title, meta, selected, onPress }: ListRowProps) {
   );
 }
 
-type SheetVariant = "form" | "door";
-
-type SheetProps = {
-  visible: boolean;
-  title: string;
-  onDismiss: () => void;
-  children: ReactNode;
-  variant?: SheetVariant;
-  sentence?: string;
-  leading?: ReactNode;
-};
-
-export function Sheet({
-  visible,
-  title,
-  onDismiss,
-  children,
-  variant = "form",
-  sentence,
-  leading,
-}: SheetProps) {
-  const theme = useTheme();
-  const typography = useTypography();
-  const reduceMotion = useReduceMotion();
-  const isDoor = variant === "door";
-
-  return (
-    <Modal
-      animationType={reduceMotion ? "none" : "slide"}
-      transparent
-      visible={visible}
-      onRequestClose={onDismiss}
-    >
-      <Pressable
-        style={[styles.sheetScrim, { backgroundColor: theme.scrim }]}
-        onPress={onDismiss}
-        accessibilityLabel="Luk"
-      />
-      <View style={[styles.sheet, { backgroundColor: theme.surfaceRaised }]}>
-        {isDoor ? (
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={[styles.sheetHandle, { backgroundColor: theme.borderSubtle }]}
-          />
-        ) : null}
-        <View style={[styles.sheetHeader, isDoor && styles.sheetHeaderDoor]}>
-          {leading}
-          <Text
-            accessibilityRole="header"
-            style={[typography.title, styles.sheetTitle, { color: theme.contentPrimary }]}
-          >
-            {title}
-          </Text>
-          {isDoor ? null : <IconButton name="Luk" icon="close" onPress={onDismiss} />}
-        </View>
-        {isDoor && sentence ? (
-          <Text style={[typography.body, styles.sheetSentence, { color: theme.contentSecondary }]}>
-            {sentence}
-          </Text>
-        ) : null}
-        <View style={styles.sheetBody}>{children}</View>
-      </View>
-    </Modal>
-  );
-}
-
 type BannerTone = "danger" | "warning" | "info" | "success";
 
 type BannerProps = {
@@ -341,45 +273,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.insetSm,
     borderWidth: 1,
     borderRadius: radius.md,
-  },
-  sheetScrim: {
-    flex: 1,
-  },
-  sheet: {
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingBottom: space.insetLg,
-    maxHeight: "80%",
-  },
-  sheetHandle: {
-    alignSelf: "center",
-    width: space.insetLg,
-    height: space.insetSm,
-    borderRadius: radius.pill,
-    marginTop: space.insetMd,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: space.insetLg,
-    paddingTop: space.insetLg,
-    paddingBottom: space.insetMd,
-    gap: space.gapSm,
-  },
-  sheetHeaderDoor: {
-    paddingTop: space.insetMd,
-  },
-  sheetTitle: {
-    flex: 1,
-  },
-  sheetSentence: {
-    paddingHorizontal: space.insetLg,
-    paddingBottom: space.insetMd,
-  },
-  sheetBody: {
-    paddingHorizontal: space.insetLg,
-    gap: space.gapMd,
   },
   banner: {
     borderWidth: 1,

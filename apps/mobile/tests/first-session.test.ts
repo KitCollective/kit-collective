@@ -504,10 +504,17 @@ describe("First session jersey details and first Save", () => {
     expect(result.place).toBe("collection");
     expect(result.resultCollection).toBe(true);
 
-    const tabBar = readFileSync(join(__dirname, "../src/components/floating-tab-bar.tsx"), "utf8");
-    expect(tabBar).toContain("requestPremiumAccess");
-    expect(tabBar).toContain('router.push("/(tabs)/add")');
-    expect(tabBar).not.toContain("first-session");
-    expect(tabBar).not.toContain("Læser trøjen");
+    // Capture is now the Samling header action, not tab-bar chrome.
+    const collectionScreen = readFileSync(
+      join(__dirname, "../app/(tabs)/collection/index.tsx"),
+      "utf8",
+    );
+    expect(collectionScreen).toContain("requestPremiumAccess");
+    expect(collectionScreen).toContain("captureChooser.open()");
+    // The header capture button is ordinary chrome, never first-session/loading chrome.
+    const header = readFileSync(join(__dirname, "../src/components/collection-header.tsx"), "utf8");
+    expect(header).toContain('name="Tilføj trøje"');
+    expect(header).not.toContain("first-session");
+    expect(header).not.toContain("Læser trøjen");
   });
 });

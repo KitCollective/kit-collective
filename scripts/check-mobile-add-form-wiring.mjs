@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 /**
- * Ratchet (KIT-48): fail CI when a Sheet/form TextInput under apps/mobile/app/(tabs)/add/**
+ * Ratchet (KIT-48): fail CI when a Sheet/form TextInput under apps/mobile/app/(capture)/**
  * is bound to local useState but never wired to capture-session mutate or save payload.
+ * The capture flow moved out of (tabs)/add into the (capture) modal group (2026-09-05).
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const ADD_DIR = "apps/mobile/app/(tabs)/add";
+const ADD_DIR = "apps/mobile/app/(capture)";
 const CONFIRM_PATH = `${ADD_DIR}/confirm.tsx`;
-const INDEX_PATH = `${ADD_DIR}/index.tsx`;
 const CAPTURE_PATH = `${ADD_DIR}/capture.tsx`;
+/** The Chooser is a Sheet now, so Upload filer is wired here instead of add/index.tsx. */
+const CHOOSER_FLOW_PATH = "apps/mobile/src/capture/captureSourceFlow.ts";
 const PICK_UPLOAD_FILES_PATH = "apps/mobile/src/capture/pickUploadFiles.ts";
 
 function listTsxFiles(dir) {
@@ -111,20 +113,20 @@ export function findConfirmRedirectViolations({ confirmSource }) {
 }
 
 /**
- * @param {{ indexSource: string, pickUploadSource: string }} input
+ * @param {{ chooserSource: string, pickUploadSource: string }} input
  * @returns {string[]}
  */
-export function findUploadPickerViolations({ indexSource, pickUploadSource }) {
+export function findUploadPickerViolations({ chooserSource, pickUploadSource }) {
   const violations = [];
 
-  if (indexSource.includes("pickGalleryPhotos")) {
+  if (chooserSource.includes("pickGalleryPhotos")) {
     violations.push(
-      `${INDEX_PATH}: Upload filer must use pickUploadFiles (Photos + Files/documents), not pickGalleryPhotos directly`,
+      `${CHOOSER_FLOW_PATH}: Upload filer must use pickUploadFiles (Photos + Files/documents), not pickGalleryPhotos directly`,
     );
   }
 
-  if (!indexSource.includes("pickUploadFiles")) {
-    violations.push(`${INDEX_PATH}: Upload filer must call pickUploadFiles`);
+  if (!chooserSource.includes("pickUploadFiles")) {
+    violations.push(`${CHOOSER_FLOW_PATH}: Upload filer must call pickUploadFiles`);
   }
 
   if (
@@ -167,7 +169,7 @@ export function checkMobileAddFormWiring({
     source: readFileSync(filePath, "utf8"),
   })),
   confirmSource = readFileSync(CONFIRM_PATH, "utf8"),
-  indexSource = readFileSync(INDEX_PATH, "utf8"),
+  chooserSource = readFileSync(CHOOSER_FLOW_PATH, "utf8"),
   captureSource = readFileSync(CAPTURE_PATH, "utf8"),
   pickUploadSource = readFileSync(PICK_UPLOAD_FILES_PATH, "utf8"),
 } = {}) {
@@ -179,7 +181,7 @@ export function checkMobileAddFormWiring({
 
   violations.push(...findConfirmSaveViolations({ confirmSource }));
   violations.push(...findConfirmRedirectViolations({ confirmSource }));
-  violations.push(...findUploadPickerViolations({ indexSource, pickUploadSource }));
+  violations.push(...findUploadPickerViolations({ chooserSource, pickUploadSource }));
   violations.push(...findGalleryEscapeViolations({ captureSource }));
 
   return violations;

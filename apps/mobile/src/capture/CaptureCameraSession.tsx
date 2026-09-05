@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.fillSecondary,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "space-between",
     paddingHorizontal: space.insetMd,
     zIndex: 2,

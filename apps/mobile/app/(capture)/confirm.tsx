@@ -116,7 +116,8 @@ export default function ConfirmScreen() {
 
   useEffect(() => {
     if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
-      router.replace("/(tabs)/add");
+      // The Chooser is a Sheet now, so a dead session lands back on Samling.
+      router.replace("/(tabs)/collection");
     }
   }, [router, sessionId, state, isSessionResolved]);
 

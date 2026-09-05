@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "@/auth/AuthProvider";
+import { CaptureChooserProvider } from "@/capture/capture-chooser";
 import { AppearanceProvider } from "@/theme/appearance";
 import { BrandFontsProvider } from "@/theme/brand-fonts";
 import { useTheme } from "@/theme/use-theme";
@@ -48,12 +49,15 @@ export default function RootLayout() {
       <BrandFontsProvider enabled={brandFontsEnabled}>
         <AppearanceProvider>
           <AuthProvider>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(first-session)" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(tabs)" />
-            </Stack>
+            <CaptureChooserProvider>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(first-session)" />
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="(capture)" options={{ presentation: "modal" }} />
+              </Stack>
+            </CaptureChooserProvider>
           </AuthProvider>
         </AppearanceProvider>
       </BrandFontsProvider>

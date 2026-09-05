@@ -1,8 +1,9 @@
 import type { WishlistEntry } from "@kit/api-contract";
 import { JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
-import { useRouter } from "expo-router";
+import { type Href, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchClubSeasons } from "@/api/catalog";
 import {
   createWishlistEntry,
@@ -12,9 +13,10 @@ import {
   WishlistPremiumRequiredError,
 } from "@/api/wishlist";
 import { useAuth } from "@/auth/AuthProvider";
-import { SelectField, Sheet } from "@/components/catalog-ui";
+import { SelectField } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { FacetPickerOverlay } from "@/components/facet-picker-overlay";
+import { ScreenHeader } from "@/components/screen-header";
 import { SeasonPickerOverlay } from "@/components/season-picker-overlay";
 import { Button, EmptyState, IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
@@ -39,15 +41,11 @@ import {
   type WishlistSheetMode,
 } from "./wishlist-sheet-logic";
 
-type WishlistSheetProps = {
-  visible: boolean;
-  onDismiss: () => void;
-};
-
-export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
+export function WishlistScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { accessToken, requestPremiumAccess, closePaywall } = useAuth();
 
   const [mode, setMode] = useState<WishlistSheetMode>("list");
@@ -107,10 +105,8 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
   };
 
   useEffect(() => {
-    if (visible) {
-      void loadEntries();
-    }
-  }, [visible, loadEntries]);
+    void loadEntries();
+  }, [loadEntries]);
 
   const openPaywallOnPremiumError = async (error: unknown): Promise<boolean> => {
     if (error instanceof WishlistPremiumRequiredError) {
@@ -190,26 +186,23 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
     if (!hasWishlistHit(entry) || !entry.matchedJerseyId) {
       return;
     }
-    onDismiss();
-    router.push(resolveWishlistHitRoute(entry.matchedJerseyId));
+    router.push(resolveWishlistHitRoute(entry.matchedJerseyId) as Href);
   };
 
   const sheetTitle = resolveWishlistSheetTitle(mode);
   const canSave = canSaveWishlistEntry(criteria, saving);
 
   return (
-    <>
-      <Sheet
-        visible={visible}
+    <View style={[styles.screen, { backgroundColor: theme.canvas }]}>
+      <ScreenHeader
         title={sheetTitle}
-        onDismiss={() => {
-          if (mode === "form") {
-            setMode("list");
-            return;
-          }
-          onDismiss();
-        }}
-      >
+        trailing={
+          mode === "form" ? (
+            <IconButton name="Tilbage" icon="chevron-back" onPress={() => setMode("list")} />
+          ) : undefined
+        }
+      />
+      <View style={[styles.content, { paddingBottom: insets.bottom + space.insetMd }]}>
         {mode === "list" ? (
           <View style={styles.listBody}>
             {loading ? (
@@ -293,7 +286,7 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
             )}
           </View>
         ) : (
-          <View style={styles.formBody}>
+          <ScrollView contentContainerStyle={styles.formBody}>
             <Text style={[typography.body, { color: theme.contentSecondary }]}>
               {WISHLIST_AND_HELPER_COPY}
             </Text>
@@ -366,13 +359,13 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
               disabled={!canSave}
               onPress={() => void handleSave()}
             />
-          </View>
+          </ScrollView>
         )}
-      </Sheet>
+      </View>
 
       {clubPickerOpen && accessToken ? (
         <FacetPickerOverlay
-          visible={visible && clubPickerOpen}
+          visible={clubPickerOpen}
           facetKind="club"
           accessToken={accessToken}
           selectedId={criteria.club?.id ?? null}
@@ -384,7 +377,7 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
 
       {seasonPickerOpen && accessToken && criteria.club ? (
         <SeasonPickerOverlay
-          visible={visible && seasonPickerOpen}
+          visible={seasonPickerOpen}
           seasons={seasonOptions}
           selectedId={criteria.season?.id ?? null}
           loading={loadingSeasons}
@@ -397,12 +390,20 @@ export function WishlistSheet({ visible, onDismiss }: WishlistSheetProps) {
           onDismiss={() => setSeasonPickerOpen(false)}
         />
       ) : null}
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: space.insetMd,
+  },
   listBody: {
+    flex: 1,
     gap: space.insetMd,
   },
   formBody: {

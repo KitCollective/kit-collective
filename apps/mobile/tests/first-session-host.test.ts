@@ -7,6 +7,7 @@ const splashPath = join(mobileRoot, "src/first-session/splash.tsx");
 const splashScreenPath = join(mobileRoot, "src/first-session/splash-screen.tsx");
 const doorPath = join(mobileRoot, "src/first-session/door.tsx");
 const doorSheetPath = join(mobileRoot, "src/first-session/door-sheet.tsx");
+const doorFacesPath = join(mobileRoot, "src/first-session/door-faces.tsx");
 const doorCopyPath = join(mobileRoot, "src/first-session/door-copy.ts");
 const verifyPath = join(mobileRoot, "src/first-session/verify-email-beat.tsx");
 const profilePath = join(mobileRoot, "src/first-session/profile-onboarding.tsx");
@@ -51,7 +52,7 @@ describe("First session host chrome", () => {
     }
   });
 
-  it("splash copy is Tryk for at fortsætte / Log ind / Opret konto", () => {
+  it("splash copy is Tryk for at fortsætte / Login / Opret konto", () => {
     const splash = readFileSync(splashPath, "utf8");
     const splashScreen = readFileSync(splashScreenPath, "utf8");
     const copy = readFileSync(doorCopyPath, "utf8");
@@ -59,35 +60,39 @@ describe("First session host chrome", () => {
     expect(splash).toContain("SplashScreen");
     expect(splashScreen).toContain("SPLASH_CAPTION");
     expect(copy).toContain("Tryk for at fortsætte");
-    expect(copy).toContain("Log ind");
+    expect(copy).toContain('SPLASH_LOGIN_LABEL = "Login"');
     expect(copy).toContain("Opret konto");
+    // "Login" replaces "Log ind" as the general term in door + splash entry copy.
+    expect(copy).not.toContain("Log ind");
   });
 
   it("door copy is locked, Apple is hidden, and banned first-session chrome is absent", () => {
     const door = readFileSync(doorPath, "utf8");
     const doorSheet = readFileSync(doorSheetPath, "utf8");
+    const doorFaces = readFileSync(doorFacesPath, "utf8");
     const copy = readFileSync(doorCopyPath, "utf8");
     const verify = readFileSync(verifyPath, "utf8");
     const profile = readFileSync(profilePath, "utf8");
     const host = readFileSync(hostPath, "utf8");
-    const chrome = `${door}\n${doorSheet}\n${copy}\n${verify}\n${profile}\n${host}`;
+    const chrome = `${door}\n${doorSheet}\n${doorFaces}\n${copy}\n${verify}\n${profile}\n${host}`;
 
-    expect(copy).toContain("Gem samlingen");
-    expect(copy).toContain("Trøjen er læst. En konto husker den.");
-    expect(copy).toContain("Log ind");
-    expect(copy).toContain("Samlingen venter.");
-    expect(copy).toContain("Opret med e-mail");
-    expect(copy).toContain("Log ind med e-mail");
+    // Two-mode title switcher, Login as the general term, no sentence line.
+    expect(copy).toContain("Login");
+    expect(copy).toContain("Opret");
     expect(copy).toContain("eller");
-    expect(copy).toContain("Jeg har en konto");
+    expect(copy).toContain("Har du en konto? Login");
     expect(copy).toContain("Ny her? Opret konto");
-    expect(copy).toContain("1/2");
-    expect(copy).toContain("Næste");
-    expect(copy).toContain("Skift");
     expect(copy).toContain("Gentag adgangskode");
     expect(copy).toContain("mindst 8 tegn");
     expect(copy).toContain("Glemt adgangskode?");
     expect(copy).toContain("Tjek din e-mail");
+    // Sentence line and its copy are gone.
+    expect(copy).not.toContain("Samlingen venter.");
+    expect(copy).not.toContain("Trøjen er læst. En konto husker den.");
+    expect(copy).not.toContain("doorSentence");
+    expect(copy).not.toContain("Log ind");
+    expect(copy).not.toContain("1/2");
+    expect(copy).not.toContain("Skift");
     expect(doorSheet).toContain('variant="door"');
     expect(chrome).not.toContain("Apple");
     expect(chrome).not.toContain("Gem kun på denne telefon");

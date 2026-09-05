@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const srcDir = join(__dirname, "../src/first-session");
-const catalogUiPath = join(__dirname, "../src/components/catalog-ui.tsx");
+const sheetPath = join(__dirname, "../src/components/sheet.tsx");
 
 function readFirstSession(file: string) {
   return readFileSync(join(srcDir, file), "utf8");
@@ -36,37 +36,65 @@ describe("first-session visual host chrome", () => {
   });
 
   it("extends Sheet with door variant rather than a new primitive", () => {
-    const catalog = readFileSync(catalogUiPath, "utf8");
+    const catalog = readFileSync(sheetPath, "utf8");
     const door = readFirstSession("door-sheet.tsx");
 
     expect(catalog).toContain("variant?: SheetVariant");
     expect(catalog).toContain('"door"');
     expect(catalog).toContain("sentence?: string");
     expect(door).toContain('variant="door"');
-    expect(door).toContain('from "@/components/catalog-ui"');
+    expect(door).toContain('from "@/components/sheet"');
   });
 
-  it("keeps door email steps, icon social, and locked Danish copy without prototype chrome", () => {
+  it("adopts the shared Lunar-style chrome: top-left circular button, switcher below header, back sub-page", () => {
+    const catalog = readFileSync(sheetPath, "utf8");
     const door = readFirstSession("door-sheet.tsx");
+
+    // Light circular top-left button (X for root, chevron for sub-pages) on a translucent
+    // neutral surface — semantic tokens only.
+    expect(catalog).toContain("SheetChromeButton");
+    expect(catalog).toContain('name={isBack ? "chevron-back" : "close"}');
+    expect(catalog).toContain("withAlpha(theme.contentPrimary, 0.06)");
+    // Content starts below the header row.
+    expect(catalog).toContain("sheetTitleRegion");
+    expect(catalog).not.toContain("sheetClose");
+    // Door header row holds only the circular button; switcher is the first content row,
+    // and the reset sub-page uses the shared back handler.
+    expect(door).toContain("titleContent={");
+    expect(door).toContain("onBack={onForgot ? backToAuth : undefined}");
+    expect(door).not.toContain("leading={");
+    expect(door).not.toContain('icon="arrow-back"');
+    // Drag-anywhere dismiss with the scroll handoff wired through the door body.
+    expect(door).toContain("useSheetScroll");
+    expect(door).toContain("Animated.ScrollView");
+  });
+
+  it("keeps a single-face door with email + password, icon social, and locked Danish copy", () => {
+    const door = `${readFirstSession("door-sheet.tsx")}\n${readFirstSession("door-faces.tsx")}`;
     const copy = readFirstSession("door-copy.ts");
 
-    expect(door).toContain("doorStepCaption");
-    expect(door).toContain("EMAIL_NEXT_LABEL");
-    expect(door).toContain("EMAIL_CHANGE_LABEL");
+    expect(door).toContain('label="E-mail"');
+    expect(door).toContain('label="Adgangskode"');
     expect(door).toContain("PASSWORD_REPEAT_LABEL");
     expect(door).toContain("PASSWORD_HELPER");
     expect(door).toContain("FORGOT_PASSWORD_LABEL");
-    expect(copy).toContain("1/2");
-    expect(copy).toContain("2/2");
-    expect(copy).toContain("Næste");
-    expect(copy).toContain("Skift");
+    expect(door).toContain("doorPasswordSubmitLabel");
     expect(copy).toContain("Gentag adgangskode");
     expect(copy).toContain("mindst 8 tegn");
     expect(copy).toContain("Glemt adgangskode?");
-    expect(door).toContain("logo-google");
-    expect(door).toContain("logo-facebook");
+    expect(door).toContain('<BrandMark provider={provider}');
+    expect(door).toContain('provider: "google"');
+    expect(door).toContain('provider: "facebook"');
     expect(door).toContain('name: "Google"');
     expect(door).toContain('name: "Facebook"');
+    // No multi-step chrome — one face for the whole identity flow.
+    expect(door).not.toContain("emailStep");
+    expect(door).not.toContain("doorStepCaption");
+    expect(door).not.toContain("EMAIL_NEXT_LABEL");
+    expect(door).not.toContain("EMAIL_CHANGE_LABEL");
+    expect(door).not.toContain("doorEmailCtaLabel");
+    expect(copy).not.toContain("1/2");
+    expect(copy).not.toContain("Skift");
     expect(door).not.toContain("Apple");
     expect(door).not.toContain("Fortsæt med");
     expect(door).not.toContain("Gem kun på denne telefon");

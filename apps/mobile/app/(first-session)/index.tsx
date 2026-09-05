@@ -1,12 +1,12 @@
 import type { IdentityLinkedProvider } from "@kit/api-contract";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect } from "expo-router";
 import { useCallback, useState } from "react";
 import { useAuth } from "@/auth/AuthProvider";
 import { resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
 import { FirstSessionAnalysingScreen } from "@/first-session/analysing-screen";
 import { FirstSessionChooserScreen } from "@/first-session/chooser-screen";
 import { DiscoveryShowcaseScreen } from "@/first-session/discovery-showcase";
-import { type DoorEmailStep, DoorSheet, VerifyEmailBeat } from "@/first-session/door";
+import { DoorSheet, VerifyEmailBeat } from "@/first-session/door";
 import { JerseyDetailsScreen } from "@/first-session/jersey-details-screen";
 import { ProfileOnboardingScreen } from "@/first-session/profile-onboarding";
 import { createFirstSession, reduceFirstSession } from "@/first-session/session";
@@ -14,10 +14,8 @@ import { SplashView } from "@/first-session/splash";
 import { LoadingScreen } from "../_layout";
 
 export default function FirstSessionHost() {
-  const router = useRouter();
   const { user, isLoading, signIn, signUp, signInSocial } = useAuth();
   const [session, setSession] = useState(() => createFirstSession({ signedIn: false }));
-  const [emailStep, setEmailStep] = useState<DoorEmailStep>("choose");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordRepeat, setPasswordRepeat] = useState("");
@@ -76,7 +74,6 @@ export default function FirstSessionHost() {
   }
 
   function resetDoorFields() {
-    setEmailStep("choose");
     setEmail("");
     setPassword("");
     setPasswordRepeat("");
@@ -98,24 +95,15 @@ export default function FirstSessionHost() {
     dispatch({ type: "continueFromSplash" });
   }
 
-  function handleNextEmail() {
-    setError(null);
-    setShowThrottleBanner(false);
-    if (emailStep === "choose") {
-      setEmailStep(1);
-      return;
-    }
-    if (email.trim().length === 0) {
-      setError("Skriv din e-mail");
-      return;
-    }
-    setEmailStep(2);
-  }
-
   async function handleSubmitEmail() {
     const mode = session.doorMode ?? "login";
     setError(null);
     setShowThrottleBanner(false);
+
+    if (email.trim().length === 0) {
+      setError("Skriv din e-mail");
+      return;
+    }
 
     if (mode === "register") {
       if (password.length < 8) {
@@ -228,7 +216,6 @@ export default function FirstSessionHost() {
       <DoorSheet
         visible={session.place === "door"}
         mode={doorMode}
-        emailStep={emailStep}
         email={email}
         password={password}
         passwordRepeat={passwordRepeat}
@@ -249,31 +236,11 @@ export default function FirstSessionHost() {
         onEmailChange={setEmail}
         onPasswordChange={setPassword}
         onPasswordRepeatChange={setPasswordRepeat}
-        onNextEmail={handleNextEmail}
-        onChangeEmail={() => {
-          setEmailStep(1);
-          setPassword("");
-          setPasswordRepeat("");
-        }}
-        onSubmitEmail={() => {
+        onSubmit={() => {
           void handleSubmitEmail();
         }}
         onSocial={(provider) => {
           void handleSocial(provider);
-        }}
-        onForgotPassword={() => {
-          router.push("/(auth)/reset");
-        }}
-        onBackStep={() => {
-          if (emailStep === 2) {
-            setEmailStep(1);
-            setPassword("");
-            setPasswordRepeat("");
-            return;
-          }
-          if (emailStep === 1) {
-            setEmailStep("choose");
-          }
         }}
       />
       <VerifyEmailBeat

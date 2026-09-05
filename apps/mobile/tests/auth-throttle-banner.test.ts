@@ -51,6 +51,7 @@ describe("Expo Auth throttle Banner chrome", () => {
     const reset = readFileSync(join(authDir, "reset.tsx"), "utf8");
     const firstSession = readFileSync(join(firstSessionDir, "index.tsx"), "utf8");
     const doorSheet = readFileSync(doorSheetPath, "utf8");
+    const doorFaces = readFileSync(join(__dirname, "../src/first-session/door-faces.tsx"), "utf8");
     const identityApi = readFileSync(join(apiDir, "identity.ts"), "utf8");
 
     for (const source of [login, register, reset]) {
@@ -59,7 +60,7 @@ describe("Expo Auth throttle Banner chrome", () => {
       expect(source).toContain("showThrottleBanner");
     }
 
-    expect(doorSheet).toContain("AuthThrottleBanner");
+    expect(doorFaces).toContain("AuthThrottleBanner");
     expect(doorSheet).toContain("showThrottleBanner");
 
     expect(firstSession).toContain("resolveAuthErrorFeedback");
