@@ -365,11 +365,11 @@ function createLiveAdapter(
       });
     },
 
-    async fetchNationalTeam(params) {
+    async fetchNationalTeam(_params) {
       throw new Error("Apify live adapter does not implement fetchNationalTeam");
     },
 
-    async fetchNationalTeamSeason(params) {
+    async fetchNationalTeamSeason(_params) {
       throw new Error("Apify live adapter does not implement fetchNationalTeamSeason");
     },
   };
