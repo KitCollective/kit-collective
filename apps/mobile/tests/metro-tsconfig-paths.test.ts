@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+// SAFETY: tsconfig.json is committed JSON; the test only reads compilerOptions.paths.
 const tsconfig = JSON.parse(readFileSync(join(__dirname, "../tsconfig.json"), "utf8")) as {
   compilerOptions: { paths?: Record<string, string[]> };
 };
