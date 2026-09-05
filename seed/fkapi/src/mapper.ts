@@ -1,4 +1,8 @@
-import { normalizeTransfermarktClubId, resolveSeasonRef } from "@kit/seed-shared";
+import {
+  normalizeTransfermarktClubId,
+  resolveNationalTeam,
+  resolveSeasonRef,
+} from "@kit/seed-shared";
 import { Pool } from "pg";
 import type {
   FkFetchAdapter,
@@ -7,7 +11,12 @@ import type {
   ObjectStoreAdapter,
   SeedRunResult,
 } from "./types.js";
-import { EXTERNAL_SYSTEM_FKAPI, EXTERNAL_SYSTEM_TRANSFERMARKT } from "./types.js";
+import {
+  EXTERNAL_SYSTEM_FKAPI,
+  EXTERNAL_SYSTEM_TRANSFERMARKT,
+  isClubKit,
+  isNationalTeamKit,
+} from "./types.js";
 
 export type MapperOptions = {
   databaseUrl: string;
@@ -33,12 +42,60 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
     for (const rawKit of rawKits) {
       assertKitHasArchiveBytes(rawKit);
 
-      const clubRow = await findClubByTransfermarktId(pool, rawKit.clubTransfermarktId);
-      const seasonRow = await findSeasonForClub(pool, clubRow!.entityId, rawKit.seasonLabel);
+      if (isNationalTeamKit(rawKit)) {
+        const fkaTeamId = rawKit.nationalTeamFkApiId;
+        if (!fkaTeamId) {
+          throw new Error(`Kit ${rawKit.id} marked NationalTeam but missing nationalTeamFkApiId`);
+        }
+        const nationalTeamRow = await findNationalTeamByFkApiId(pool, fkaTeamId);
+        const seasonRow = nationalTeamRow
+          ? await findSeasonForNationalTeam(pool, nationalTeamRow.entityId, rawKit.seasonLabel)
+          : undefined;
+
+        if (!nationalTeamRow || !seasonRow) {
+          throw new Error(
+            `Missing national team or season for scope: fkaTeam=${fkaTeamId} season=${rawKit.seasonLabel}`,
+          );
+        }
+
+        const manufacturerId = rawKit.manufacturerName
+          ? await upsertManufacturer(pool, rawKit.manufacturerName)
+          : null;
+
+        const kitId = await upsertKit(pool, {
+          fkId: rawKit.id,
+          clubId: null,
+          nationalTeamId: nationalTeamRow.entityId,
+          seasonId: seasonRow.id,
+          type: rawKit.type,
+          manufacturerId,
+          sponsorName: rawKit.sponsorName ?? null,
+          primaryColorHex: rawKit.primaryColorHex ?? null,
+          secondaryColorHex: rawKit.secondaryColorHex ?? null,
+        });
+        kitsUpserted += 1;
+
+        photosWritten += await writeArchivePhoto(options.objectStore, pool, kitId, rawKit);
+        continue;
+      }
+
+      if (!isClubKit(rawKit)) {
+        throw new Error(`Kit ${rawKit.id} is neither a club kit nor a NationalTeam kit`);
+      }
+
+      const clubTmId = rawKit.clubTransfermarktId;
+      if (!clubTmId) {
+        throw new Error(`Kit ${rawKit.id} marked club but missing clubTransfermarktId`);
+      }
+
+      const clubRow = await findClubByTransfermarktId(pool, clubTmId);
+      const seasonRow = clubRow
+        ? await findSeasonForClub(pool, clubRow.entityId, rawKit.seasonLabel)
+        : undefined;
 
       if (!clubRow || !seasonRow) {
         throw new Error(
-          `Missing club or season for scope: club=${rawKit.clubTransfermarktId} season=${rawKit.seasonLabel}`,
+          `Missing club or season for scope: club=${clubTmId} season=${rawKit.seasonLabel}`,
         );
       }
 
@@ -49,6 +106,7 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
       const kitId = await upsertKit(pool, {
         fkId: rawKit.id,
         clubId: clubRow.entityId,
+        nationalTeamId: null,
         seasonId: seasonRow.id,
         type: rawKit.type,
         manufacturerId,
@@ -58,26 +116,35 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
       });
       kitsUpserted += 1;
 
-      if (rawKit.imageBytes && rawKit.imageBytes.length > 0) {
-        const objectKey = `kit/${kitId}/archive.jpg`;
-        await options.objectStore.putObject(objectKey, rawKit.imageBytes);
-        const exists = await options.objectStore.objectExists(objectKey);
-        if (!exists) {
-          throw new Error(
-            `Lane R2 object missing after putObject: ${objectKey}. Refusing accept without archive bytes in object store.`,
-          );
-        }
-        const wrote = await upsertKitPhoto(pool, kitId, objectKey);
-        if (wrote) {
-          photosWritten += 1;
-        }
-      }
+      photosWritten += await writeArchivePhoto(options.objectStore, pool, kitId, rawKit);
     }
 
     return { kitsUpserted, photosWritten };
   } finally {
     await pool.end();
   }
+}
+
+async function writeArchivePhoto(
+  objectStore: ObjectStoreAdapter,
+  pool: Pool,
+  kitId: string,
+  rawKit: FkRawKit,
+): Promise<number> {
+  if (!rawKit.imageBytes || rawKit.imageBytes.length === 0) {
+    return 0;
+  }
+
+  const objectKey = `kit/${kitId}/archive.jpg`;
+  await objectStore.putObject(objectKey, rawKit.imageBytes);
+  const exists = await objectStore.objectExists(objectKey);
+  if (!exists) {
+    throw new Error(
+      `Lane R2 object missing after putObject: ${objectKey}. Refusing accept without archive bytes in object store.`,
+    );
+  }
+  const wrote = await upsertKitPhoto(pool, kitId, objectKey);
+  return wrote ? 1 : 0;
 }
 
 function assertKitHasArchiveBytes(rawKit: FkRawKit): void {
@@ -88,11 +155,21 @@ function assertKitHasArchiveBytes(rawKit: FkRawKit): void {
   }
 }
 
+function transfermarktIdForNationalTeamRef(ref: string): string {
+  return resolveNationalTeam(ref)?.transfermarktId ?? ref.trim();
+}
+
 async function assertScopePrerequisites(
   pool: Pool,
   scope: FkFetchScope,
   rawKits: FkRawKit[],
 ): Promise<void> {
+  if (scope.kind === "national_team") {
+    const tmId = transfermarktIdForNationalTeamRef(scope.nationalTeamRef);
+    await assertNationalTeamSeasonPrerequisite(pool, tmId, scope.season);
+    return;
+  }
+
   if (scope.kind === "club") {
     const clubTmId = normalizeTransfermarktClubId(scope.clubExternalId);
     const seasonLabel = resolveSeasonRef(scope.competition, scope.season);
@@ -102,6 +179,9 @@ async function assertScopePrerequisites(
 
   const pairs = new Map<string, { clubTmId: string; seasonLabel: string }>();
   for (const kit of rawKits) {
+    if (!isClubKit(kit) || !kit.clubTransfermarktId) {
+      continue;
+    }
     const key = `${kit.clubTransfermarktId}:${kit.seasonLabel}`;
     pairs.set(key, {
       clubTmId: kit.clubTransfermarktId,
@@ -134,6 +214,26 @@ async function assertClubSeasonPrerequisite(
   }
 }
 
+async function assertNationalTeamSeasonPrerequisite(
+  pool: Pool,
+  nationalTeamTmId: string,
+  seasonLabel: string,
+): Promise<void> {
+  const ntRow = await findNationalTeamByTransfermarktId(pool, nationalTeamTmId);
+  if (!ntRow) {
+    throw new Error(
+      `Missing NationalTeam row for Transfermarkt id ${nationalTeamTmId}. Run Apify national-team grain for this scope first.`,
+    );
+  }
+
+  const seasonRow = await findSeasonForNationalTeam(pool, ntRow.entityId, seasonLabel);
+  if (!seasonRow) {
+    throw new Error(
+      `Missing Season row for label ${seasonLabel} and NationalTeam ${nationalTeamTmId}. Run Apify national-team-season grain for this scope first.`,
+    );
+  }
+}
+
 async function findClubByTransfermarktId(
   pool: Pool,
   transfermarktId: string,
@@ -144,6 +244,32 @@ async function findClubByTransfermarktId(
      WHERE entity_type = 'club' AND system = $1 AND value = $2
      LIMIT 1`,
     [EXTERNAL_SYSTEM_TRANSFERMARKT, normalized],
+  );
+  return result.rows[0] ? { entityId: result.rows[0].entity_id } : undefined;
+}
+
+async function findNationalTeamByTransfermarktId(
+  pool: Pool,
+  transfermarktId: string,
+): Promise<{ entityId: string } | undefined> {
+  const result = await pool.query<{ entity_id: string }>(
+    `SELECT entity_id FROM external_id
+     WHERE entity_type = 'national_team' AND system = $1 AND value = $2
+     LIMIT 1`,
+    [EXTERNAL_SYSTEM_TRANSFERMARKT, transfermarktId],
+  );
+  return result.rows[0] ? { entityId: result.rows[0].entity_id } : undefined;
+}
+
+async function findNationalTeamByFkApiId(
+  pool: Pool,
+  fkApiId: string,
+): Promise<{ entityId: string } | undefined> {
+  const result = await pool.query<{ entity_id: string }>(
+    `SELECT entity_id FROM external_id
+     WHERE entity_type = 'national_team' AND system = $1 AND value = $2
+     LIMIT 1`,
+    [EXTERNAL_SYSTEM_FKAPI, fkApiId],
   );
   return result.rows[0] ? { entityId: result.rows[0].entity_id } : undefined;
 }
@@ -159,6 +285,21 @@ async function findSeasonForClub(
      WHERE ts.club_id = $1 AND s.label = $2
      LIMIT 1`,
     [clubId, seasonLabel],
+  );
+  return result.rows[0];
+}
+
+async function findSeasonForNationalTeam(
+  pool: Pool,
+  nationalTeamId: string,
+  seasonLabel: string,
+): Promise<{ id: string } | undefined> {
+  const result = await pool.query<{ id: string }>(
+    `SELECT s.id FROM season s
+     INNER JOIN national_team_season nts ON nts.season_id = s.id
+     WHERE nts.national_team_id = $1 AND s.label = $2
+     LIMIT 1`,
+    [nationalTeamId, seasonLabel],
   );
   return result.rows[0];
 }
@@ -192,7 +333,10 @@ async function upsertManufacturer(pool: Pool, name: string): Promise<string> {
   const inserted = await pool.query<{ id: string }>(
     `INSERT INTO manufacturer DEFAULT VALUES RETURNING id`,
   );
-  const manufacturerId = inserted.rows[0]!.id;
+  const manufacturerId = inserted.rows[0]?.id;
+  if (!manufacturerId) {
+    throw new Error("Failed to insert manufacturer");
+  }
 
   await pool.query(
     `INSERT INTO catalog_label (entity_type, entity_id, locale, kind, text, source)
@@ -205,7 +349,8 @@ async function upsertManufacturer(pool: Pool, name: string): Promise<string> {
 
 type UpsertKitInput = {
   fkId: string;
-  clubId: string;
+  clubId: string | null;
+  nationalTeamId: string | null;
   seasonId: string;
   type: FkRawKit["type"];
   manufacturerId: string | null;
@@ -219,11 +364,12 @@ async function upsertKit(pool: Pool, input: UpsertKitInput): Promise<string> {
 
   if (existing) {
     await pool.query(
-      `UPDATE kit SET club_id = $1, season_id = $2, type = $3, manufacturer_id = $4,
-       sponsor_name = $5, primary_color_hex = $6, secondary_color_hex = $7
-       WHERE id = $8`,
+      `UPDATE kit SET club_id = $1, national_team_id = $2, season_id = $3, type = $4,
+       manufacturer_id = $5, sponsor_name = $6, primary_color_hex = $7, secondary_color_hex = $8
+       WHERE id = $9`,
       [
         input.clubId,
+        input.nationalTeamId,
         input.seasonId,
         input.type,
         input.manufacturerId,
@@ -237,10 +383,11 @@ async function upsertKit(pool: Pool, input: UpsertKitInput): Promise<string> {
   }
 
   const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO kit (club_id, season_id, type, manufacturer_id, sponsor_name, primary_color_hex, secondary_color_hex)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    `INSERT INTO kit (club_id, national_team_id, season_id, type, manufacturer_id, sponsor_name, primary_color_hex, secondary_color_hex)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
     [
       input.clubId,
+      input.nationalTeamId,
       input.seasonId,
       input.type,
       input.manufacturerId,
@@ -249,7 +396,10 @@ async function upsertKit(pool: Pool, input: UpsertKitInput): Promise<string> {
       input.secondaryColorHex,
     ],
   );
-  const kitId = inserted.rows[0]!.id;
+  const kitId = inserted.rows[0]?.id;
+  if (!kitId) {
+    throw new Error(`Failed to insert kit for FK id ${input.fkId}`);
+  }
 
   await pool.query(
     `INSERT INTO external_id (entity_type, entity_id, system, value)

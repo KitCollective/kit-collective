@@ -150,6 +150,30 @@ describe("createFkApiFetchAdapter", () => {
       expect.any(Object),
     );
   });
+
+  it("requests nationalTeamFkApiId and season for national-team scope", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: createSeedHttpFetch({ requireProxy: false }, fetchMock, createProxyAgent),
+    });
+
+    await adapter.fetchKits({
+      kind: "national_team",
+      nationalTeamRef: "fka-denmark",
+      season: "2010",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://fkapi.example.invalid/kits?nationalTeamFkApiId=fka-denmark&season=2010",
+      expect.any(Object),
+    );
+  });
 });
 
 describe("runCli proxy behaviour", () => {

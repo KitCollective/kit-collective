@@ -10,10 +10,16 @@ import {
   type SeedProxyConfig,
 } from "./proxy-config.js";
 import type { FkFetchAdapter, FkRawKit } from "./types.js";
+import { isClubKit, isNationalTeamKit } from "./types.js";
 
 const FIXTURE_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "../fixtures/superliga-kits.json",
+);
+
+const NT_FIXTURE_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../fixtures/denmark-national-kits.json",
 );
 
 type FixtureFile = {
@@ -22,7 +28,18 @@ type FixtureFile = {
 
 function kitMatchesScope(kit: FkRawKit, scope: SeedScope): boolean {
   if (scope.kind === "competition") {
-    return true;
+    return isClubKit(kit);
+  }
+
+  if (scope.kind === "national_team") {
+    if (!isNationalTeamKit(kit)) {
+      return false;
+    }
+    return kit.seasonLabel === scope.season;
+  }
+
+  if (!isClubKit(kit) || !kit.clubTransfermarktId) {
+    return false;
   }
 
   const clubTmId = normalizeTransfermarktClubId(scope.clubExternalId);
@@ -34,7 +51,8 @@ function kitMatchesScope(kit: FkRawKit, scope: SeedScope): boolean {
 }
 
 async function loadFixtureKits(scope: SeedScope): Promise<FkRawKit[]> {
-  const raw = await readFile(FIXTURE_PATH, "utf8");
+  const fixturePath = scope.kind === "national_team" ? NT_FIXTURE_PATH : FIXTURE_PATH;
+  const raw = await readFile(fixturePath, "utf8");
   // SAFETY: the fixture is committed in this repository and normalizeRawKit rejects
   // any record that does not parse into an FkRawKit.
   const parsed = JSON.parse(raw) as FixtureFile;
@@ -69,6 +87,12 @@ function buildKitsUrl(baseUrl: string, scope: SeedScope): URL {
   if (scope.kind === "club") {
     url.searchParams.set("clubTransfermarktId", normalizeTransfermarktClubId(scope.clubExternalId));
     url.searchParams.set("season", resolveSeasonRef(scope.competition, scope.season));
+    return url;
+  }
+
+  if (scope.kind === "national_team") {
+    url.searchParams.set("nationalTeamFkApiId", scope.nationalTeamRef);
+    url.searchParams.set("season", scope.season);
     return url;
   }
 

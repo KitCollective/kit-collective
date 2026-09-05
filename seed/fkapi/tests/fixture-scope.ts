@@ -4,15 +4,26 @@ import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
 import { normalizeRawKit } from "../src/normalize.js";
 import type { FkFetchAdapter, FkRawKit } from "../src/types.js";
-import { EXTERNAL_SYSTEM_TRANSFERMARKT } from "../src/types.js";
+import { EXTERNAL_SYSTEM_FKAPI, EXTERNAL_SYSTEM_TRANSFERMARKT } from "../src/types.js";
 
 const FIXTURE_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "../fixtures/superliga-kits.json",
 );
 
+const NT_FIXTURE_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../fixtures/denmark-national-kits.json",
+);
+
 export type TestFixtureScope = {
   clubTransfermarktId: string;
+  seasonLabel: string;
+};
+
+export type NationalTeamTestFixtureScope = {
+  nationalTeamTransfermarktId: string;
+  nationalTeamFkApiId: string;
   seasonLabel: string;
 };
 
@@ -25,6 +36,17 @@ export function allocateTestFixtureScope(): TestFixtureScope {
   return {
     clubTransfermarktId: `tm-test-${suffix}`,
     seasonLabel: `1998/99-test-${suffix}`,
+  };
+}
+
+/** Allocates a unique NationalTeam TM + FKA team id + season label for NT kit grain tests. */
+export function allocateNationalTeamTestFixtureScope(): NationalTeamTestFixtureScope {
+  scopeCounter += 1;
+  const suffix = `${Date.now()}-${scopeCounter}`;
+  return {
+    nationalTeamTransfermarktId: `nt-tm-${suffix}`,
+    nationalTeamFkApiId: `fka-nt-${suffix}`,
+    seasonLabel: `2010-test-${suffix}`,
   };
 }
 
@@ -64,6 +86,51 @@ export async function seedApifyPrerequisites(
   return { clubId, seasonId };
 }
 
+/**
+ * Seeds NationalTeam + Season (national_team_season) and links both TM and FKA team ExternalIds.
+ * FK NT kits join via fkapi national_team ExternalId — never a Club row.
+ */
+export async function seedNationalTeamPrerequisites(
+  pool: Pool,
+  scope: NationalTeamTestFixtureScope,
+): Promise<{ nationalTeamId: string; seasonId: string }> {
+  const countryRow = await pool.query<{ id: string }>(
+    `INSERT INTO country (iso3166) VALUES ('DK') RETURNING id`,
+  );
+  const countryId = countryRow.rows[0]!.id;
+
+  const ntRow = await pool.query<{ id: string }>(
+    `INSERT INTO national_team (country_id, gender) VALUES ($1, 'men') RETURNING id`,
+    [countryId],
+  );
+  const nationalTeamId = ntRow.rows[0]!.id;
+
+  await pool.query(
+    `INSERT INTO external_id (entity_type, entity_id, system, value)
+     VALUES ('national_team', $1, $2, $3)`,
+    [nationalTeamId, EXTERNAL_SYSTEM_TRANSFERMARKT, scope.nationalTeamTransfermarktId],
+  );
+  await pool.query(
+    `INSERT INTO external_id (entity_type, entity_id, system, value)
+     VALUES ('national_team', $1, $2, $3)`,
+    [nationalTeamId, EXTERNAL_SYSTEM_FKAPI, scope.nationalTeamFkApiId],
+  );
+
+  const seasonRow = await pool.query<{ id: string }>(
+    `INSERT INTO season (label, starts_on, ends_on, calendar_kind)
+     VALUES ($1, '2010-01-01', '2010-12-31', 'calendar') RETURNING id`,
+    [scope.seasonLabel],
+  );
+  const seasonId = seasonRow.rows[0]!.id;
+
+  await pool.query(
+    `INSERT INTO national_team_season (national_team_id, season_id) VALUES ($1, $2)`,
+    [nationalTeamId, seasonId],
+  );
+
+  return { nationalTeamId, seasonId };
+}
+
 type FixtureFile = {
   kits: Record<string, unknown>[];
 };
@@ -95,4 +162,33 @@ export function createScopedFixtureFetchAdapter(scope: TestFixtureScope): FkFetc
   };
 }
 
-export { FIXTURE_PATH };
+/** NationalTeam fixture kits remapped to the allocated FKA team id + season. */
+export function createScopedNationalTeamFixtureFetchAdapter(
+  scope: NationalTeamTestFixtureScope,
+): FkFetchAdapter {
+  return {
+    async fetchKits(): Promise<FkRawKit[]> {
+      const raw = await readFile(NT_FIXTURE_PATH, "utf8");
+      // SAFETY: the fixture is committed in this repository and normalizeRawKit rejects
+      // any record that does not parse into an FkRawKit.
+      const parsed = JSON.parse(raw) as FixtureFile;
+      const kits: FkRawKit[] = [];
+
+      for (const item of parsed.kits) {
+        const remapped = {
+          ...item,
+          nationalTeamFkApiId: scope.nationalTeamFkApiId,
+          seasonLabel: scope.seasonLabel,
+        };
+        const normalized = normalizeRawKit(remapped);
+        if (normalized) {
+          kits.push(normalized);
+        }
+      }
+
+      return kits;
+    },
+  };
+}
+
+export { FIXTURE_PATH, NT_FIXTURE_PATH };
