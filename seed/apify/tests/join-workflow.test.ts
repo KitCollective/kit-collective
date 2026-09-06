@@ -1,12 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  createJoinProofClubFixtureFetchAdapter,
-  createJoinProofNationalTeamFixtureFetchAdapter,
-} from "@kit/seed-fkapi/fetch";
-import { runFkSeed } from "@kit/seed-fkapi/mapper";
-import type { ObjectStoreAdapter } from "@kit/seed-fkapi/types";
-import {
   club,
   createDb,
   externalId,
@@ -18,6 +12,12 @@ import {
   season,
   teamSeason,
 } from "@kit/db";
+import {
+  createJoinProofClubFixtureFetchAdapter,
+  createJoinProofNationalTeamFixtureFetchAdapter,
+} from "@kit/seed-fkapi/fetch";
+import { runFkSeed } from "@kit/seed-fkapi/mapper";
+import type { ObjectStoreAdapter } from "@kit/seed-fkapi/types";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createKaderFetchAdapter } from "../src/fetch/kader-fetch-adapter.js";
@@ -382,9 +382,7 @@ describe("Join workflow — FK integration", () => {
         .select({ nationalTeamId: kit.nationalTeamId, clubId: kit.clubId })
         .from(kit);
       expect(kitRows).toHaveLength(3);
-      expect(kitRows.every((row) => row.nationalTeamId !== null && row.clubId === null)).toBe(
-        true,
-      );
+      expect(kitRows.every((row) => row.nationalTeamId !== null && row.clubId === null)).toBe(true);
       const photos = await db.select({ id: kitPhoto.id }).from(kitPhoto);
       expect(photos).toHaveLength(3);
     } finally {
