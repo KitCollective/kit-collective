@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { COLLECTOR_PHOTO_VARIANTS, RESERVED_PHOTO_VARIANTS } from "@kit/domain";
+import { z } from "zod";
 
 /** Query param on `GET /v1/collection/photos/{id}`. */
 export const collectionPhotoVariantQuerySchema = z

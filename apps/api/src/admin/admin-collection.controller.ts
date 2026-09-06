@@ -1,7 +1,7 @@
 import {
-  adminCollectorPhotoVariantQuerySchema,
   adminCollectorJerseyParamsSchema,
   adminCollectorPhotoParamsSchema,
+  adminCollectorPhotoVariantQuerySchema,
   adminCollectorQuerySchema,
   adminCollectorUserIdParamSchema,
   adminRoleUpdateRequestSchema,

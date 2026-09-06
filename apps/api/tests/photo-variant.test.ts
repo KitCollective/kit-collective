@@ -1,15 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { gridPhotoObjectKey, legacyPhotoObjectKey } from "@kit/domain";
 import { ForbiddenException } from "@nestjs/common";
-import {
-  gridPhotoObjectKey,
-  legacyPhotoObjectKey,
-} from "@kit/domain";
+import { describe, expect, it } from "vitest";
 import { createMemoryObjectStore } from "../dist/collection/object-store.js";
 import { resolveStoredPhotoBytes } from "../dist/collection/photo-variant-resolve.js";
 
-const JPEG_BYTES = Uint8Array.from([
-  0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0xff, 0xd9,
-]);
+const JPEG_BYTES = Uint8Array.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43, 0x00, 0xff, 0xd9]);
 const userId = "11111111-1111-1111-1111-111111111111";
 const jerseyId = "22222222-2222-2222-2222-222222222222";
 const photoId = "33333333-3333-3333-3333-333333333333";

@@ -1,5 +1,5 @@
-import type { LabelLocale } from "@kit/domain";
 import { collectionPhotoVariantQuerySchema } from "@kit/api-contract";
+import type { LabelLocale } from "@kit/domain";
 import {
   BadRequestException,
   Body,

@@ -3,6 +3,7 @@ import {
   type AdminCollectorJerseyIndex,
   type AdminCollectorJerseyList,
   type AdminCollectorList,
+  type AdminCollectorPhotoVariantQuery,
   type AdminCollectorQuery,
   type AdminCollectorUser,
   type AdminRoleUpdateRequest,
@@ -15,7 +16,6 @@ import {
   type GrantCompRequest,
   type IdentityRoleErrorCode,
   identityRoleErrorSchema,
-  type AdminCollectorPhotoVariantQuery,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, season, user, userJersey, userJerseyPhoto } from "@kit/db";

@@ -1,4 +1,4 @@
-import { ForbiddenException } from "@nestjs/common";
+import type { CollectionPhotoVariantQuery } from "@kit/api-contract";
 import {
   gridPhotoObjectKey,
   isCollectorPhotoVariant,
@@ -8,7 +8,7 @@ import {
   photoPrefixFromStoredObjectKey,
   variantObjectKey,
 } from "@kit/domain";
-import type { CollectionPhotoVariantQuery } from "@kit/api-contract";
+import { ForbiddenException } from "@nestjs/common";
 import type { ObjectStoreAdapter } from "./object-store.js";
 
 export async function resolveStoredPhotoBytes(

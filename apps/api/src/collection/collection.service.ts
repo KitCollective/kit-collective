@@ -1,3 +1,4 @@
+import type { CollectionPhotoVariantQuery } from "@kit/api-contract";
 import {
   COLLECTION_SHOWCASE_JERSEY_CAP,
   type CollectionActivity,
@@ -75,7 +76,6 @@ import {
   photoObjectKeysForDeletion,
   validateJerseyPhotos,
 } from "@kit/domain";
-import type { CollectionPhotoVariantQuery } from "@kit/api-contract";
 import {
   BadRequestException,
   ForbiddenException,
@@ -92,10 +92,7 @@ import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
-import {
-  gridObjectKeyForNewPhoto,
-  resolveStoredPhotoBytes,
-} from "./photo-variant-resolve.js";
+import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
@@ -2497,10 +2494,7 @@ export class CollectionService {
     const saved: CollectionJersey["photos"] = [];
 
     for (const photo of photos) {
-      const bytes = decodeBase64Photo(
-        photo.contentBase64,
-        maxSavePhotoBytesForRole(photo.role),
-      );
+      const bytes = decodeBase64Photo(photo.contentBase64, maxSavePhotoBytesForRole(photo.role));
       const photoId = crypto.randomUUID();
       const objectKey = gridObjectKeyForNewPhoto(userId, jerseyId, photoId);
 

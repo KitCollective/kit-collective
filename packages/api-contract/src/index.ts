@@ -221,6 +221,12 @@ export {
   collectionPeerJerseysSchema,
 } from "./collection/peer-jerseys.js";
 export {
+  type AdminCollectorPhotoVariantQuery,
+  adminCollectorPhotoVariantQuerySchema,
+  type CollectionPhotoVariantQuery,
+  collectionPhotoVariantQuerySchema,
+} from "./collection/photo-variant.js";
+export {
   type CollectionSavePhoto,
   type CollectionSaveRequest,
   type CollectionSaveResponse,
@@ -228,12 +234,6 @@ export {
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
 } from "./collection/save.js";
-export {
-  type AdminCollectorPhotoVariantQuery,
-  adminCollectorPhotoVariantQuerySchema,
-  type CollectionPhotoVariantQuery,
-  collectionPhotoVariantQuerySchema,
-} from "./collection/photo-variant.js";
 export {
   type CollectionShortcut,
   type CollectionShortcutIdParam,
