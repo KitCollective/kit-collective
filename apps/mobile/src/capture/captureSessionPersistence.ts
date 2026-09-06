@@ -7,12 +7,12 @@ import {
   reloadCaptureSession,
   setDraftClub,
 } from "./captureSession";
-import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
 import {
   clearActiveCameraCaptureSessionId,
   getActiveCameraCaptureSessionId,
   setActiveCameraCaptureSessionId,
 } from "./captureSessionActivePointer";
+import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
 import type {
   CaptureSessionPhoto,
   CaptureSessionState,

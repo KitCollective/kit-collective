@@ -328,7 +328,9 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         ...readPhotoIdByUri(sessionRow.photo_id_by_uri_json),
         ...Object.fromEntries(
           unboundRows
-            .filter((row): row is { uri: string; photo_id: string } => typeof row.photo_id === "string")
+            .filter(
+              (row): row is { uri: string; photo_id: string } => typeof row.photo_id === "string",
+            )
             .map((row) => [row.uri, row.photo_id]),
         ),
       };
