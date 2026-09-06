@@ -79,9 +79,7 @@ export function useConfirmPhotos({
       if (cancelled) {
         return;
       }
-      setStripPhotoUris(
-        Object.fromEntries(entries) as Record<PhotoRole, string | undefined>,
-      );
+      setStripPhotoUris(Object.fromEntries(entries) as Record<PhotoRole, string | undefined>);
     });
 
     return () => {

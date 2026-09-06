@@ -83,7 +83,10 @@ export function isReservedPhotoVariant(value: string): value is ReservedPhotoVar
 export const STRIP_VARIANT_WIDTH = 640;
 
 /** Center-crop rectangle for a 4:5 portrait tile. */
-export function centerCrop4x5Rect(width: number, height: number): {
+export function centerCrop4x5Rect(
+  width: number,
+  height: number,
+): {
   originX: number;
   originY: number;
   width: number;

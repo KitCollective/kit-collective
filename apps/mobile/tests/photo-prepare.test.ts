@@ -1,4 +1,4 @@
-import { UNIVERSAL_PHOTO_ROLES, centerCrop4x5Rect, STRIP_VARIANT_WIDTH } from "@kit/domain";
+import { centerCrop4x5Rect, STRIP_VARIANT_WIDTH, UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearDevicePhotoPrepareCacheForTests,

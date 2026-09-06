@@ -1,9 +1,5 @@
 import type { PhotoRole } from "@kit/domain";
-import {
-  centerCrop4x5Rect,
-  isUniversalPhotoRole,
-  STRIP_VARIANT_WIDTH,
-} from "@kit/domain";
+import { centerCrop4x5Rect, isUniversalPhotoRole, STRIP_VARIANT_WIDTH } from "@kit/domain";
 import type { CaptureJerseyDraft } from "./captureSessionTypes";
 
 export function captureQualityForRole(role: string): number {
@@ -125,8 +121,7 @@ export async function prepareDevicePhoto(
   adapter: PhotoManipulatorAdapter,
   options: { includeBase64?: boolean } = {},
 ): Promise<PreparedPhoto> {
-  const includeBase64 =
-    options.includeBase64 ?? (purpose !== "strip" && purpose !== "lightbox");
+  const includeBase64 = options.includeBase64 ?? (purpose !== "strip" && purpose !== "lightbox");
   const { width, height } = await adapter.getImageInfo(uri);
   const actions = actionsForPurpose(width, height, purpose, role);
   const compress = captureQualityForRole(role);

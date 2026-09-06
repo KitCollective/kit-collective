@@ -19,15 +19,6 @@ import {
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
-  lightboxObjectKey,
-  MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL,
-  originalObjectKey,
-  photoObjectKeysForDeletion,
-  photoPrefixFromStoredObjectKey,
-  stripObjectKey,
-  variantObjectKey,
-} from "@kit/domain";
-import {
   catalogLabel,
   club,
   country,
@@ -41,6 +32,15 @@ import {
   teamSeason,
   visionLog,
 } from "@kit/db";
+import {
+  lightboxObjectKey,
+  MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL,
+  originalObjectKey,
+  photoObjectKeysForDeletion,
+  photoPrefixFromStoredObjectKey,
+  stripObjectKey,
+  variantObjectKey,
+} from "@kit/domain";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { count, eq } from "drizzle-orm";
