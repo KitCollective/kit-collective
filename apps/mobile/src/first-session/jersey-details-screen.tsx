@@ -180,7 +180,17 @@ export function JerseyDetailsScreen({
       }),
     ).then((entries) => {
       if (!cancelled) {
-        setStripPhotoUris(Object.fromEntries(entries) as Record<PhotoRole, string | undefined>);
+        const next: Record<PhotoRole, string | undefined> = {
+          front: undefined,
+          back: undefined,
+          left: undefined,
+          right: undefined,
+          other: undefined,
+        };
+        for (const [role, uri] of entries) {
+          next[role] = uri;
+        }
+        setStripPhotoUris(next);
       }
     });
 
