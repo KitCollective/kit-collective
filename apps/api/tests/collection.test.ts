@@ -32,11 +32,22 @@ import {
   teamSeason,
   visionLog,
 } from "@kit/db";
+import {
+  lightboxObjectKey,
+  MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL,
+  originalObjectKey,
+  photoObjectKeysForDeletion,
+  photoPrefixFromStoredObjectKey,
+  stripObjectKey,
+  variantObjectKey,
+} from "@kit/domain";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { count, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
+import { OBJECT_STORE } from "../dist/collection/collection.service.js";
+import type { ObjectStoreAdapter } from "../dist/collection/object-store.js";
 import { FailingVisionAdapter, SlowVisionAdapter } from "../dist/vision/test-vision.adapters.js";
 import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
 import { clearAuthThrottleHits } from "./helpers/auth-throttle.js";
@@ -194,6 +205,54 @@ async function patchJerseyBidding(
     headers: { authorization: `Bearer ${session.accessToken}` },
     payload: { biddingEnabled: value },
   });
+}
+
+async function waitForDerivativeObjects(
+  objectStore: ObjectStoreAdapter,
+  storedObjectKey: string,
+): Promise<void> {
+  const prefix = photoPrefixFromStoredObjectKey(storedObjectKey);
+  if (!prefix) {
+    throw new Error("invalid photo object key");
+  }
+  const stripKey = stripObjectKey(prefix);
+  const lightboxKey = lightboxObjectKey(prefix);
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const [stripExists, lightboxExists] = await Promise.all([
+      objectStore.objectExists(stripKey),
+      objectStore.objectExists(lightboxKey),
+    ]);
+    if (stripExists && lightboxExists) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("Timed out waiting for derivative objects");
+}
+
+async function waitForPhotoVariants(
+  app: NestFastifyApplication,
+  session: Session,
+  photoId: string,
+  storedObjectKey: string,
+): Promise<void> {
+  const objectStore = app.get<ObjectStoreAdapter>(OBJECT_STORE);
+  await waitForDerivativeObjects(objectStore, storedObjectKey);
+
+  const stripResponse = await app.inject({
+    method: "GET",
+    url: `/v1/collection/photos/${photoId}?variant=strip`,
+    headers: { authorization: `Bearer ${session.accessToken}` },
+  });
+  const lightboxResponse = await app.inject({
+    method: "GET",
+    url: `/v1/collection/photos/${photoId}?variant=lightbox`,
+    headers: { authorization: `Bearer ${session.accessToken}` },
+  });
+  if (stripResponse.statusCode !== 200 || lightboxResponse.statusCode !== 200) {
+    throw new Error("strip/lightbox variants not served after derivatives exist");
+  }
 }
 
 async function findOwnJersey(
@@ -1711,6 +1770,136 @@ describe("Collection /v1", () => {
     });
 
     expect(response.statusCode).toBe(403);
+  });
+
+  it("serves strip and lightbox variants after save without waiting on original upload", async () => {
+    const session = await registerSession(app, "strip-lightbox@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const saveResponse = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(saveResponse.statusCode).toBe(201);
+    const saved = collectionSaveResponseSchema.parse(JSON.parse(saveResponse.body));
+    const photoId = saved.jersey.photos[0]?.id;
+    const objectKey = saved.jersey.photos[0]?.objectKey;
+
+    await waitForPhotoVariants(app, session, photoId!, objectKey!);
+
+    const stripResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photoId}?variant=strip`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    const lightboxResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photoId}?variant=lightbox`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(stripResponse.statusCode).toBe(200);
+    expect(lightboxResponse.statusCode).toBe(200);
+    expect(stripResponse.headers["content-type"]).toContain("image/jpeg");
+    expect(lightboxResponse.headers["content-type"]).toContain("image/jpeg");
+    expect(stripResponse.rawPayload.length).toBeGreaterThan(0);
+    expect(lightboxResponse.rawPayload.length).toBeGreaterThan(0);
+  });
+
+  it("accepts original upload on a separate PUT after save", async () => {
+    const session = await registerSession(app, "original-put@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const jersey = await saveJerseyForUser(app, session, fixture);
+    const photoId = jersey.photos[0]?.id;
+
+    const uploadResponse = await app.inject({
+      method: "PUT",
+      url: `/v1/collection/photos/${photoId}/original`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { contentBase64: JPEG_BASE64 },
+    });
+
+    expect(uploadResponse.statusCode).toBe(204);
+
+    const blockedResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photoId}?variant=original`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(blockedResponse.statusCode).toBe(403);
+  });
+
+  it("rejects oversized original upload", async () => {
+    const session = await registerSession(app, "original-oversize@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const jersey = await saveJerseyForUser(app, session, fixture);
+    const photoId = jersey.photos[0]?.id;
+    const oversized = Buffer.alloc(MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL + 1, 0xff).toString("base64");
+
+    const uploadResponse = await app.inject({
+      method: "PUT",
+      url: `/v1/collection/photos/${photoId}/original`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { contentBase64: oversized },
+    });
+
+    expect([400, 413]).toContain(uploadResponse.statusCode);
+  });
+
+  it("DELETE removes grid, strip, lightbox, and original bytes from object store", async () => {
+    const session = await registerSession(app, "delete-photo-variants@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const jersey = await saveJerseyForUser(app, session, fixture);
+    const photo = jersey.photos[0];
+    const photoId = photo?.id;
+    const objectKey = photo?.objectKey;
+    const objectStore = app.get<ObjectStoreAdapter>(OBJECT_STORE);
+
+    await waitForDerivativeObjects(objectStore, objectKey!);
+
+    const originalUpload = await app.inject({
+      method: "PUT",
+      url: `/v1/collection/photos/${photoId}/original`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { contentBase64: JPEG_BASE64 },
+    });
+    expect(originalUpload.statusCode).toBe(204);
+
+    const prefix = photoPrefixFromStoredObjectKey(objectKey!);
+    expect(prefix).not.toBeNull();
+    const variantKeys = [
+      variantObjectKey(prefix!, "grid"),
+      stripObjectKey(prefix!),
+      lightboxObjectKey(prefix!),
+      originalObjectKey(prefix!),
+    ];
+    for (const key of variantKeys) {
+      expect(await objectStore.objectExists(key)).toBe(true);
+    }
+
+    const deleteResponse = await app.inject({
+      method: "DELETE",
+      url: `/v1/collection/jerseys/${jersey.id}`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(deleteResponse.statusCode).toBe(204);
+
+    for (const key of photoObjectKeysForDeletion(objectKey!)) {
+      expect(await objectStore.objectExists(key)).toBe(false);
+    }
   });
 
   it("rejects oversized save uploads", async () => {

@@ -2,6 +2,7 @@ import {
   type CollectionJersey,
   type CollectionJerseys,
   type CollectionJerseyUpdate,
+  type CollectionPhotoVariantQuery,
   type CollectionSaveRequest,
   type CollectionSaveResponse,
   collectionJerseySchema,
@@ -109,11 +110,29 @@ export async function deleteUserJersey(accessToken: string, jerseyId: string): P
   }
 }
 
-export function resolvePhotoUrl(photoUrl: string, variant?: "grid"): string {
+export function resolvePhotoUrl(photoUrl: string, variant?: CollectionPhotoVariantQuery): string {
   const base = photoUrl.startsWith("http") ? photoUrl : `${getApiBaseUrl()}${photoUrl}`;
   if (!variant) {
     return base;
   }
   const separator = base.includes("?") ? "&" : "?";
   return `${base}${separator}variant=${variant}`;
+}
+
+export async function uploadPhotoOriginal(
+  accessToken: string,
+  photoId: string,
+  contentBase64: string,
+): Promise<void> {
+  const response = await requestJson(`/v1/collection/photos/${photoId}/original`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ contentBase64 }),
+  });
+
+  if (!response.ok) {
+    throw new CollectionFetchError("Kunne ikke uploade originalfoto", response.status);
+  }
 }

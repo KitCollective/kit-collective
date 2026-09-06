@@ -7,6 +7,7 @@ import {
   JERSEY_SIZES,
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
+  PHOTO_ROLES,
   type PhotoRole,
   UNIVERSAL_PHOTO_ROLES,
   type UniversalPhotoRole,
@@ -52,12 +53,15 @@ import {
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
+import { resolveConfirmLightboxUri, resolveConfirmStripUri } from "@/capture/confirmPhotoUri";
 import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoBytes";
+import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { pickUploadFiles } from "@/capture/pickUploadFiles";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { showSaveFailureToast } from "@/capture/saveFailureToast";
+import { scheduleOriginalPhotoUploads } from "@/capture/uploadPhotoOriginal";
 import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession";
 import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { UnboundPhotosRow } from "@/components/bulk/UnboundPhotosRow";
@@ -122,7 +126,16 @@ export function JerseyDetailsScreen({
   const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
   const [photoCapMessage, setPhotoCapMessage] = useState<string | null>(null);
   const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
+  const [lightboxSourceUri, setLightboxSourceUri] = useState<string | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
+  const [stripPhotoUris, setStripPhotoUris] = useState<Record<PhotoRole, string | undefined>>({
+    front: undefined,
+    back: undefined,
+    left: undefined,
+    right: undefined,
+    other: undefined,
+  });
+  const [otherStripUris, setOtherStripUris] = useState<Record<string, string>>({});
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const clubManuallySet = useRef(false);
   const seasonManuallySet = useRef(false);
@@ -135,6 +148,98 @@ export function JerseyDetailsScreen({
   const visionDraftId = draft?.id ?? null;
   const visionFirstPhotoUri = draft?.photos[0]?.uri ?? null;
   const visionFirstPhotoRole = draft?.photos[0]?.role ?? "front";
+
+  useEffect(() => {
+    if (!draft) {
+      setStripPhotoUris({
+        front: undefined,
+        back: undefined,
+        left: undefined,
+        right: undefined,
+        other: undefined,
+      });
+      setOtherStripUris({});
+      return;
+    }
+
+    warmDevicePrepareForDraftRuntime(draft);
+
+    let cancelled = false;
+    void Promise.all(
+      PHOTO_ROLES.map(async (role) => {
+        const uri = photoUriForRole(draft, role);
+        if (!uri) {
+          return [role, undefined] as const;
+        }
+        try {
+          const stripUri = await resolveConfirmStripUri(uri, role);
+          return [role, stripUri] as const;
+        } catch {
+          return [role, uri] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) {
+        const next: Record<PhotoRole, string | undefined> = {
+          front: undefined,
+          back: undefined,
+          left: undefined,
+          right: undefined,
+          other: undefined,
+        };
+        for (const [role, uri] of entries) {
+          next[role] = uri;
+        }
+        setStripPhotoUris(next);
+      }
+    });
+
+    const otherPhotos = draft.photos.filter(
+      (photo): photo is typeof photo & { role: "other" } => photo.role === "other",
+    );
+    void Promise.all(
+      otherPhotos.map(async (photo) => {
+        try {
+          const stripUri = await resolveConfirmStripUri(photo.uri, "other");
+          return [photo.uri, stripUri] as const;
+        } catch {
+          return [photo.uri, photo.uri] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) {
+        setOtherStripUris(Object.fromEntries(entries));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft]);
+
+  useEffect(() => {
+    if (!lightboxRole || !lightboxSourceUri) {
+      setLightboxUri(null);
+      return;
+    }
+
+    let cancelled = false;
+    void resolveConfirmLightboxUri(lightboxSourceUri, lightboxRole)
+      .then((uri) => {
+        if (!cancelled) {
+          setLightboxUri(uri);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLightboxUri(lightboxSourceUri);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lightboxRole, lightboxSourceUri]);
 
   useEffect(() => {
     if (!accessToken || !draft?.clubId) {
@@ -509,7 +614,7 @@ export function JerseyDetailsScreen({
     const uri = photoUriForRole(draft, role);
     if (uri) {
       setLightboxRole(role);
-      setLightboxUri(uri);
+      setLightboxSourceUri(uri);
       return;
     }
 
@@ -531,20 +636,22 @@ export function JerseyDetailsScreen({
       return;
     }
     const role = lightboxRole;
-    const replaceUri = lightboxUri ?? undefined;
+    const replaceUri = lightboxSourceUri ?? undefined;
     setLightboxRole(null);
+    setLightboxSourceUri(null);
     setLightboxUri(null);
     void pickPhotoForRole(role, replaceUri);
   };
 
   const handleLightboxDelete = () => {
-    if (!lightboxRole || !lightboxUri) {
+    if (!lightboxRole || !lightboxSourceUri) {
       return;
     }
     const role = lightboxRole;
-    const uri = lightboxUri;
+    const uri = lightboxSourceUri;
     mutate((current) => removeDraftPhoto(current, current.activeDraftId, role, uri));
     setLightboxRole(null);
+    setLightboxSourceUri(null);
     setLightboxUri(null);
   };
 
@@ -559,17 +666,19 @@ export function JerseyDetailsScreen({
         current.activeDraftId,
         fromRole,
         toRole,
-        lightboxUri ?? undefined,
+        lightboxSourceUri ?? undefined,
       ),
     );
     setLightboxRole(toRole);
   };
 
   const handleLightboxChangeLabel = (label: string) => {
-    if (!lightboxUri) {
+    if (!lightboxSourceUri) {
       return;
     }
-    mutate((current) => setDraftPhotoLabel(current, current.activeDraftId, lightboxUri, label));
+    mutate((current) =>
+      setDraftPhotoLabel(current, current.activeDraftId, lightboxSourceUri, label),
+    );
   };
 
   const handleBindUnboundPhoto = (uri: string) => {
@@ -671,6 +780,18 @@ export function JerseyDetailsScreen({
         photos: photoPayload,
       });
 
+      scheduleOriginalPhotoUploads(
+        accessToken,
+        draft.photos
+          .filter((photo): photo is typeof photo & { role: PhotoRole } => photo.role !== null)
+          .map((photo, index) => ({
+            id: response.jersey.photos[index]?.id ?? "",
+            uri: photo.uri,
+            role: photo.role,
+          }))
+          .filter((entry) => entry.id.length > 0),
+      );
+
       const jobIdForLog = response.visionJobId ?? visionJobId;
       if (jobIdForLog) {
         try {
@@ -732,10 +853,10 @@ export function JerseyDetailsScreen({
   }
 
   const universalPhotoUris: Record<UniversalPhotoRole, string | undefined> = {
-    front: photoUriForRole(draft, "front") ?? undefined,
-    back: photoUriForRole(draft, "back") ?? undefined,
-    left: photoUriForRole(draft, "left") ?? undefined,
-    right: photoUriForRole(draft, "right") ?? undefined,
+    front: stripPhotoUris.front,
+    back: stripPhotoUris.back,
+    left: stripPhotoUris.left,
+    right: stripPhotoUris.right,
   };
   const otherPhotos = draft.photos.filter(
     (photo): photo is typeof photo & { role: "other" } => photo.role === "other",
@@ -796,11 +917,11 @@ export function JerseyDetailsScreen({
               <PhotoSlot
                 key={photo.uri}
                 role={photo.role}
-                uri={photo.uri}
+                uri={otherStripUris[photo.uri] ?? photo.uri}
                 caption={photo.label}
                 onPress={() => {
                   setLightboxRole("other");
-                  setLightboxUri(photo.uri);
+                  setLightboxSourceUri(photo.uri);
                 }}
               />
             ))}
@@ -1105,9 +1226,10 @@ export function JerseyDetailsScreen({
           visible
           role={lightboxRole}
           uri={lightboxUri}
-          label={draft.photos.find((photo) => photo.uri === lightboxUri)?.label ?? ""}
+          label={draft.photos.find((photo) => photo.uri === lightboxSourceUri)?.label ?? ""}
           onDismiss={() => {
             setLightboxRole(null);
+            setLightboxSourceUri(null);
             setLightboxUri(null);
           }}
           onReplace={handleLightboxReplace}

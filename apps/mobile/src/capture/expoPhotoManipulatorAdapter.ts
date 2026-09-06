@@ -1,6 +1,6 @@
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { Image } from "react-native";
-import type { PhotoManipulatorAdapter, PhotoResizeAction } from "./photoPrepare";
+import type { PhotoManipulatorAction, PhotoManipulatorAdapter } from "./photoPrepare";
 
 export const expoPhotoManipulatorAdapter: PhotoManipulatorAdapter = {
   getImageInfo(uri) {
@@ -12,7 +12,7 @@ export const expoPhotoManipulatorAdapter: PhotoManipulatorAdapter = {
       );
     });
   },
-  async manipulateAsync(uri, actions: PhotoResizeAction[], options) {
+  async manipulateAsync(uri, actions: PhotoManipulatorAction[], options) {
     const result = await manipulateAsync(uri, actions, {
       compress: options.compress,
       format: SaveFormat.JPEG,

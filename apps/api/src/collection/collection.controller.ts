@@ -420,4 +420,17 @@ export class CollectionController {
     reply.header("Cache-Control", "private, max-age=3600");
     return reply.send(Buffer.from(bytes));
   }
+
+  @Put("collection/photos/:photoId/original")
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  async uploadPhotoOriginal(
+    @CurrentUser() user: JwtPayload,
+    @Param("photoId") photoId: string,
+    @Body() body: unknown,
+    @Res() reply: FastifyReply,
+  ) {
+    await this.collectionService.uploadPhotoOriginal(user.sub, photoId, body);
+    return reply.status(204).send();
+  }
 }

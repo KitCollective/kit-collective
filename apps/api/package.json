@@ -26,7 +26,8 @@
     "drizzle-orm": "^0.39.1",
     "ioredis": "^6.0.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.6",

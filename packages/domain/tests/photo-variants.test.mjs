@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   gridPhotoObjectKey,
+  isCollectorPhotoVariant,
   isLegacyPhotoObjectKey,
+  isReservedPhotoVariant,
   legacyPhotoObjectKey,
   legacyPhotoObjectKeyFromPrefix,
+  maxOriginalPhotoBytesForRole,
   maxSavePhotoBytesForRole,
   photoObjectKeysForDeletion,
   photoPrefix,
@@ -47,9 +50,19 @@ describe("photo-variants", () => {
     assert.ok(keys.includes(grid));
     assert.ok(keys.includes(legacyPhotoObjectKey(userId, jerseyId, photoId)));
     assert.ok(keys.includes(`user/${userId}/${jerseyId}/${photoId}/original`));
+    assert.ok(keys.includes(`user/${userId}/${jerseyId}/${photoId}/strip.jpg`));
+    assert.ok(keys.includes(`user/${userId}/${jerseyId}/${photoId}/lightbox.jpg`));
+  });
+
+  it("treats strip and lightbox as collector variants", () => {
+    assert.equal(isCollectorPhotoVariant("strip"), true);
+    assert.equal(isCollectorPhotoVariant("lightbox"), true);
+    assert.equal(isReservedPhotoVariant("original"), true);
   });
 
   it("uses role-specific save byte caps", () => {
     assert.ok(maxSavePhotoBytesForRole("front") < maxSavePhotoBytesForRole("other"));
+    assert.ok(maxSavePhotoBytesForRole("front") < maxOriginalPhotoBytesForRole("front"));
+    assert.ok(maxOriginalPhotoBytesForRole("front") < maxOriginalPhotoBytesForRole("other"));
   });
 });

@@ -6,6 +6,7 @@ import { VisionModule } from "../vision/vision.module.js";
 import { CollectionController } from "./collection.controller.js";
 import { CollectionService, OBJECT_STORE } from "./collection.service.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
+import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js";
 
 @Module({
   imports: [IdentityModule, VisionModule, MatchModule, ModerationModule],
@@ -13,6 +14,7 @@ import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
   providers: [
     CollectionService,
     CollectionShortcutsService,
+    PhotoDerivativeQueueService,
     {
       provide: OBJECT_STORE,
       useFactory: () => CollectionService.objectStoreFactory(),

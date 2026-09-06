@@ -206,7 +206,7 @@ export default function JerseyDetailScreen() {
           <Image
             key={photo.id}
             source={{
-              uri: resolvePhotoUrl(photo.photoUrl),
+              uri: resolvePhotoUrl(photo.photoUrl, "lightbox"),
               headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
             }}
             style={[styles.stagePhoto, { width: screenWidth }]}

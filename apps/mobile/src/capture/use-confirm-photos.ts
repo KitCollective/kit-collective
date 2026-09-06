@@ -1,5 +1,6 @@
 import type { PhotoRole } from "@kit/domain";
-import { useState } from "react";
+import { PHOTO_ROLES } from "@kit/domain";
+import { useEffect, useState } from "react";
 import {
   appendUnboundPhotos,
   bindUnboundPhotoToDraft,
@@ -14,6 +15,7 @@ import type {
   CaptureSessionMutator,
   CaptureSessionState,
 } from "@/capture/captureSessionTypes";
+import { resolveConfirmLightboxUri, resolveConfirmStripUri } from "@/capture/confirmPhotoUri";
 import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -38,6 +40,92 @@ export function useConfirmPhotos({
   onFirstSinglePhoto,
 }: UseConfirmPhotosOptions) {
   const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
+  const [lightboxUri, setLightboxUri] = useState<string | undefined>(undefined);
+  const [stripPhotoUris, setStripPhotoUris] = useState<Record<PhotoRole, string | undefined>>({
+    front: undefined,
+    back: undefined,
+    left: undefined,
+    right: undefined,
+    other: undefined,
+  });
+
+  useEffect(() => {
+    if (!draft) {
+      setStripPhotoUris({
+        front: undefined,
+        back: undefined,
+        left: undefined,
+        right: undefined,
+        other: undefined,
+      });
+      return;
+    }
+
+    let cancelled = false;
+    void Promise.all(
+      PHOTO_ROLES.map(async (role) => {
+        const uri = photoUriForRole(draft, role);
+        if (!uri) {
+          return [role, undefined] as const;
+        }
+        try {
+          const stripUri = await resolveConfirmStripUri(uri, role);
+          return [role, stripUri] as const;
+        } catch {
+          return [role, uri] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) {
+        return;
+      }
+      const next: Record<PhotoRole, string | undefined> = {
+        front: undefined,
+        back: undefined,
+        left: undefined,
+        right: undefined,
+        other: undefined,
+      };
+      for (const [role, uri] of entries) {
+        next[role] = uri;
+      }
+      setStripPhotoUris(next);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft]);
+
+  useEffect(() => {
+    if (!draft || !lightboxRole) {
+      setLightboxUri(undefined);
+      return;
+    }
+
+    const sourceUri = photoUriForRole(draft, lightboxRole);
+    if (!sourceUri) {
+      setLightboxUri(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    void resolveConfirmLightboxUri(sourceUri, lightboxRole)
+      .then((uri) => {
+        if (!cancelled) {
+          setLightboxUri(uri);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLightboxUri(sourceUri);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, lightboxRole]);
 
   const pickPhotoForRole = async (role: PhotoRole) => {
     if (!draft || !sessionId) {
@@ -117,16 +205,9 @@ export function useConfirmPhotos({
   };
 
   return {
-    photoUris: draft
-      ? ({
-          front: photoUriForRole(draft, "front") ?? undefined,
-          back: photoUriForRole(draft, "back") ?? undefined,
-          left: photoUriForRole(draft, "left") ?? undefined,
-          right: photoUriForRole(draft, "right") ?? undefined,
-          other: photoUriForRole(draft, "other") ?? undefined,
-        } satisfies Record<PhotoRole, string | undefined>)
-      : null,
+    photoUris: stripPhotoUris,
     lightboxRole,
+    lightboxUri,
     dismissLightbox: () => setLightboxRole(null),
     handlePhotoSlotPress,
     replaceLightboxPhoto,

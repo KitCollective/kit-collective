@@ -221,6 +221,10 @@ export {
   collectionPeerJerseysSchema,
 } from "./collection/peer-jerseys.js";
 export {
+  type CollectionPhotoOriginalUpload,
+  collectionPhotoOriginalUploadSchema,
+} from "./collection/photo-original-upload.js";
+export {
   type AdminCollectorPhotoVariantQuery,
   adminCollectorPhotoVariantQuerySchema,
   type CollectionPhotoVariantQuery,

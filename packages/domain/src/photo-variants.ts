@@ -1,9 +1,9 @@
 /** Named JPEG variants under a UserJerseyPhoto prefix (collector-visible). */
-export const COLLECTOR_PHOTO_VARIANTS = ["grid"] as const;
+export const COLLECTOR_PHOTO_VARIANTS = ["grid", "strip", "lightbox"] as const;
 export type CollectorPhotoVariant = (typeof COLLECTOR_PHOTO_VARIANTS)[number];
 
-/** Reserved for later slices — not served on collector GET in KIT-218. */
-export const RESERVED_PHOTO_VARIANTS = ["strip", "lightbox", "original"] as const;
+/** Stored but not served on collector GET. */
+export const RESERVED_PHOTO_VARIANTS = ["original"] as const;
 export type ReservedPhotoVariant = (typeof RESERVED_PHOTO_VARIANTS)[number];
 
 export type PhotoVariantQuery = CollectorPhotoVariant | ReservedPhotoVariant;
@@ -11,6 +11,10 @@ export type PhotoVariantQuery = CollectorPhotoVariant | ReservedPhotoVariant;
 /** Guard when client prepare is skipped — matches device display long-edge caps at JPEG quality. */
 export const MAX_SAVE_PHOTO_BYTES_UNIVERSAL = 2 * 1024 * 1024;
 export const MAX_SAVE_PHOTO_BYTES_OTHER = 4 * 1024 * 1024;
+
+/** Archive original PUT — large enough for a typical 12 MP camera JPEG after base64. */
+export const MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL = 12 * 1024 * 1024;
+export const MAX_ORIGINAL_PHOTO_BYTES_OTHER = 16 * 1024 * 1024;
 
 const LEGACY_PHOTO_KEY_PATTERN = /^user\/[^/]+\/[^/]+\/[^/]+\.jpg$/;
 
@@ -63,12 +67,66 @@ export function maxSavePhotoBytesForRole(role: string): number {
   return role === "other" ? MAX_SAVE_PHOTO_BYTES_OTHER : MAX_SAVE_PHOTO_BYTES_UNIVERSAL;
 }
 
+export function maxOriginalPhotoBytesForRole(role: string): number {
+  return role === "other" ? MAX_ORIGINAL_PHOTO_BYTES_OTHER : MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL;
+}
+
 export function isCollectorPhotoVariant(value: string): value is CollectorPhotoVariant {
-  return value === "grid";
+  return value === "grid" || value === "strip" || value === "lightbox";
 }
 
 export function isReservedPhotoVariant(value: string): value is ReservedPhotoVariant {
-  return value === "strip" || value === "lightbox" || value === "original";
+  return value === "original";
+}
+
+/** Confirm strip 4:5 tile width (retina-friendly). */
+export const STRIP_VARIANT_WIDTH = 640;
+
+/** Center-crop rectangle for a 4:5 portrait tile. */
+export function centerCrop4x5Rect(
+  width: number,
+  height: number,
+): {
+  originX: number;
+  originY: number;
+  width: number;
+  height: number;
+} {
+  const targetRatio = 4 / 5;
+  const sourceRatio = width / height;
+  let cropWidth = width;
+  let cropHeight = height;
+  if (sourceRatio > targetRatio) {
+    cropWidth = Math.round(height * targetRatio);
+  } else {
+    cropHeight = Math.round(width / targetRatio);
+  }
+  return {
+    originX: Math.max(0, Math.round((width - cropWidth) / 2)),
+    originY: Math.max(0, Math.round((height - cropHeight) / 2)),
+    width: cropWidth,
+    height: cropHeight,
+  };
+}
+
+/** Lightbox long-edge caps — match device prepare. */
+export const LIGHTBOX_MAX_EDGE_UNIVERSAL = 1600;
+export const LIGHTBOX_MAX_EDGE_OTHER = 2400;
+
+export function lightboxMaxEdgeForRole(role: string): number {
+  return role === "other" ? LIGHTBOX_MAX_EDGE_OTHER : LIGHTBOX_MAX_EDGE_UNIVERSAL;
+}
+
+export function originalObjectKey(prefix: string): string {
+  return `${prefix}original`;
+}
+
+export function stripObjectKey(prefix: string): string {
+  return `${prefix}strip.jpg`;
+}
+
+export function lightboxObjectKey(prefix: string): string {
+  return `${prefix}lightbox.jpg`;
 }
 
 /** Keys to remove when a UserJerseyPhoto row is deleted (prefix + legacy). */
