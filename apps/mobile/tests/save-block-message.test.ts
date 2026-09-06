@@ -15,6 +15,13 @@ function emptyDraft(overrides: Partial<CaptureJerseyDraft> = {}): CaptureJerseyD
     sizeSelected: false,
     conditionSelected: false,
     notes: "",
+    playerName: "",
+    playerId: null,
+    playerNumber: "",
+    seasonLabel: null,
+    badgeEnabled: false,
+    badgeId: null,
+    badgeLabel: null,
     photos: [],
     ...overrides,
   };

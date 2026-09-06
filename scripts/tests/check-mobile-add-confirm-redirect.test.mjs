@@ -4,11 +4,16 @@ import { checkMobileAddConfirmRedirect } from "../check-mobile-add-confirm-redir
 
 const compliantConfirm = `
 const { state, isSessionResolved, mutate } = usePersistedCaptureSession(sessionId);
+useConfirmExit(sessionId, state, isSessionResolved);
+`;
+
+const compliantConfirmExit = `
+const exitedRef = useRef(false);
 useEffect(() => {
   if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
-    router.replace("/(tabs)/add");
+    exitToCollection();
   }
-}, [router, sessionId, state, isSessionResolved]);
+}, [exitToCollection, sessionId, state, isSessionResolved]);
 `;
 
 const compliantHook = `
@@ -32,6 +37,7 @@ describe("checkMobileAddConfirmRedirect", () => {
     assert.deepEqual(
       checkMobileAddConfirmRedirect({
         confirmSource: compliantConfirm,
+        confirmExitSource: compliantConfirmExit,
         hookSource: compliantHook,
         redirectHelperSource: compliantRedirectHelper,
         redirectTestSource: compliantRedirectTest,
@@ -49,6 +55,7 @@ describe("checkMobileAddConfirmRedirect", () => {
           }
         }, [router, sessionId, state]);
       `,
+      confirmExitSource: "",
       hookSource: compliantHook,
       redirectHelperSource: compliantRedirectHelper,
       redirectTestSource: compliantRedirectTest,
@@ -61,6 +68,7 @@ describe("checkMobileAddConfirmRedirect", () => {
   it("fails when the hook omits isSessionResolved", () => {
     const violations = checkMobileAddConfirmRedirect({
       confirmSource: compliantConfirm,
+      confirmExitSource: compliantConfirmExit,
       hookSource: "return { state, mutate };",
       redirectHelperSource: compliantRedirectHelper,
       redirectTestSource: compliantRedirectTest,

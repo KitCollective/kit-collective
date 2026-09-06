@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const lightboxPath = join(__dirname, "../src/components/photo-lightbox.tsx");
 const confirmPath = join(__dirname, "../app/(capture)/confirm.tsx");
+const confirmPhotosPath = join(__dirname, "../src/capture/use-confirm-photos.ts");
 const photoSlotPath = join(__dirname, "../src/components/photo-slot.tsx");
 
 describe("Photo lightbox chrome", () => {
@@ -35,31 +36,34 @@ describe("Photo lightbox chrome", () => {
 describe("Confirm photo slot behaviour", () => {
   it("opens the lightbox for a filled slot and the picker for an empty slot", () => {
     const source = readFileSync(confirmPath, "utf8");
+    const photos = readFileSync(confirmPhotosPath, "utf8");
 
     expect(source).toContain("PhotoLightbox");
-    expect(source).toContain("setLightboxRole(role)");
-    expect(source).toContain("pickPhotoForRole(role)");
-    expect(source).toContain("bindUnboundPhotoToDraft");
-    expect(source).not.toContain("unbindPhoto(current, uri)");
-    expect(source).toContain("removeDraftPhoto");
-    expect(source).toContain("changeDraftPhotoRole");
-    expect(source).toContain("upsertDraftPhoto");
-    expect(source).toContain("UNIVERSAL_PHOTO_ROLES");
-    expect(source).toContain('variant="add"');
-    expect(source).toContain("handleAddPhotoPress");
-    expect(source).toContain("canAddPhotoToDraft");
-    expect(source).toContain("JERSEY_PHOTO_CAP_HELPER_DA");
-    expect(source).toContain("horizontal");
-    expect(source).toContain("contentContainerStyle={styles.photoRow}");
+    expect(photos).toContain("setLightboxRole(role)");
+    expect(photos).toContain("pickPhotoForRole(role)");
+    expect(photos).toContain("bindUnboundPhotoToDraft");
+    expect(photos).not.toContain("unbindPhoto(current, uri)");
+    expect(photos).toContain("removeDraftPhoto");
+    expect(photos).toContain("changeDraftPhotoRole");
+    expect(photos).toContain("upsertDraftPhoto");
   });
 
   it("keeps Photo slot as the confirm-strip primitive with 4:5 tiles", () => {
     const source = readFileSync(photoSlotPath, "utf8");
+    const viewer = readFileSync(
+      join(__dirname, "../src/components/confirm-photo-viewer.tsx"),
+      "utf8",
+    );
 
     expect(source).toContain("confirm-strip");
     expect(source).toContain('"add"');
     expect(source).toContain("Tilføj foto");
     expect(source).toContain("photoSlotHeight");
     expect(source).toContain("(width * 5) / 4");
+    expect(viewer).toContain('labelPlacement="overlay"');
+    expect(viewer).toContain("CONFIRM_VIEWER_WIDTH");
+    expect(source).toContain("overlayBadge");
+    expect(source).not.toContain("overlayBar");
+    expect(source).toContain("theme.fillPrimary");
   });
 });

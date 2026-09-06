@@ -27,6 +27,15 @@ describe("Button dock chrome", () => {
     expect(confirm).toContain("fadeDockScrollPadding");
   });
 
+  it("does not render Save-block helper text over Gem on the hub", () => {
+    const confirm = readFileSync(confirmPath, "utf8");
+
+    // The Data/Detaljer donuts + dashed capsules already surface what is missing;
+    // no helper string sits over Gem. Save enablement (disabled prop) is unchanged.
+    expect(confirm).not.toContain("dockHelper");
+    expect(confirm).toContain("disabled={!saveEnabled}");
+  });
+
   it("keeps login, register, and cookie-indstillinger on the border dock", () => {
     const login = readFileSync(loginPath, "utf8");
     const register = readFileSync(registerPath, "utf8");
@@ -38,14 +47,20 @@ describe("Button dock chrome", () => {
     }
   });
 
-  it("renders fade with reduce-motion-aware blur and a static scrim gradient", () => {
+  it("renders fade with reduce-motion-aware blur and a continuous canvas gradient", () => {
+    const fadeScrim = readFileSync(join(__dirname, "../src/components/fade-scrim.tsx"), "utf8");
     const ui = readFileSync(uiPath, "utf8");
 
-    expect(ui).toContain("useReduceMotion");
-    expect(ui).toContain("BlurView");
-    expect(ui).toContain("!reduceMotion");
-    expect(ui).toContain("withAlpha(theme.canvas");
-    expect(ui).toContain("FADE_GRADIENT_STOPS");
+    expect(fadeScrim).toContain("useReduceMotion");
+    expect(fadeScrim).toContain("BlurView");
+    expect(fadeScrim).toContain("!reduceMotion");
+    expect(fadeScrim).toContain("LinearGradient");
+    expect(fadeScrim).toContain("theme.canvas");
+    expect(fadeScrim).toContain("space.insetMd");
+    expect(fadeScrim).not.toContain("space.insetLg * 2");
+    expect(fadeScrim).not.toMatch(/FADE_SCRIM_HEIGHT = space\.insetLg;/);
+    expect(ui).toContain("FadeScrim");
+    expect(ui).toContain('edge="bottom"');
   });
 
   it("keeps the hairline on border and omits it on fade", () => {
