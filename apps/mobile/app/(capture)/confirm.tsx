@@ -82,6 +82,7 @@ import { useTheme } from "@/theme/use-theme";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 const VISION_TIMEOUT_MS = 12_000;
+const ADD_PHOTO_ROLE: PhotoRole = "other";
 
 export default function ConfirmScreen() {
   const router = useRouter();
@@ -810,14 +811,16 @@ export default function ConfirmScreen() {
             {showAddPhotoSlot ? (
               <PhotoSlot
                 key="add-photo"
-                role="other"
+                role={ADD_PHOTO_ROLE}
                 variant="add"
                 onPress={handleAddPhotoPress}
               />
             ) : null}
           </View>
           {photoCapMessage ? (
-            <Text style={[typography.caption, { color: theme.contentMuted }]}>{photoCapMessage}</Text>
+            <Text style={[typography.caption, { color: theme.contentMuted }]}>
+              {photoCapMessage}
+            </Text>
           ) : null}
           {photoList.length === 0 ? (
             <Text style={[typography.caption, { color: theme.contentMuted }]}>

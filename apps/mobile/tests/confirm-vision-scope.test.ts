@@ -17,11 +17,11 @@ import {
 const UUID = "550e8400-e29b-41d4-a716-446655440000";
 const UUID_B = "550e8400-e29b-41d4-a716-446655440001";
 const URI_FRONT = "file:///photos/front.jpg";
-const URI_EXTRA_A = "file:///photos/extra-a.jpg";
-const URI_EXTRA_B = "file:///photos/extra-b.jpg";
-const URI_EXTRA_C = "file:///photos/extra-c.jpg";
-const URI_EXTRA_D = "file:///photos/extra-d.jpg";
 const BULK_URIS = Array.from({ length: 11 }, (_, index) => `file:///photos/bulk-${index}.jpg`);
+const BULK_URI_A = BULK_URIS[0];
+if (!BULK_URI_A) {
+  throw new Error("expected bulk fixture uris");
+}
 
 describe("confirmVisionScopeFromDraft", () => {
   it("tracks draft id and first bound photo only", () => {
@@ -33,7 +33,7 @@ describe("confirmVisionScopeFromDraft", () => {
       firstPhotoUri: null,
     });
 
-    const bound = bindUnboundPhotoToDraft(session, BULK_URIS[0]!, draft.id);
+    const bound = bindUnboundPhotoToDraft(session, BULK_URI_A, draft.id);
     const boundDraft = getDraft(bound, draft.id);
 
     expect(confirmVisionScopeFromDraft(boundDraft)).toEqual({
@@ -80,7 +80,7 @@ describe("shouldResetConfirmVision", () => {
     const draftId = getActiveDraft(session).id;
     const before = confirmVisionScopeFromDraft(getDraft(session, draftId));
 
-    const bound = bindUnboundPhotoToDraft(session, BULK_URIS[0]!, draftId);
+    const bound = bindUnboundPhotoToDraft(session, BULK_URI_A, draftId);
     const after = confirmVisionScopeFromDraft(getDraft(bound, draftId));
 
     expect(shouldResetConfirmVision(before, after)).toBe(true);

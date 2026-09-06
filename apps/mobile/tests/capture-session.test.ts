@@ -39,10 +39,13 @@ const URI_BACK = "file:///photos/back.jpg";
 const URI_LABEL = "file:///photos/label.jpg";
 const URI_EXTRA_A = "file:///photos/extra-a.jpg";
 const URI_EXTRA_B = "file:///photos/extra-b.jpg";
-const URI_EXTRA_C = "file:///photos/extra-c.jpg";
-const URI_EXTRA_D = "file:///photos/extra-d.jpg";
 
 const BULK_URIS = Array.from({ length: 11 }, (_, index) => `file:///photos/bulk-${index}.jpg`);
+const BULK_URI_A = BULK_URIS[0];
+const BULK_URI_B = BULK_URIS[1];
+if (!BULK_URI_A || !BULK_URI_B) {
+  throw new Error("expected bulk fixture uris");
+}
 
 function fillDraftForSave(
   session: ReturnType<typeof createCaptureSession>,
@@ -147,7 +150,7 @@ describe("bind, unbind, and addJersey", () => {
     const session = createCaptureSession(BULK_URIS);
     const draftId = getActiveDraft(session).id;
 
-    const bound = bindPhoto(session, BULK_URIS[0]!, draftId, "front");
+    const bound = bindPhoto(session, BULK_URI_A, draftId, "front");
     const draft = getDraft(bound, draftId);
 
     expect(bound.unboundUris).toEqual(BULK_URIS.slice(1));
@@ -157,9 +160,9 @@ describe("bind, unbind, and addJersey", () => {
   it("unbind returns a bound photo to the unbound list", () => {
     const session = createCaptureSession(BULK_URIS);
     const draftId = getActiveDraft(session).id;
-    const bound = bindPhoto(session, BULK_URIS[0]!, draftId, "back");
+    const bound = bindPhoto(session, BULK_URI_A, draftId, "back");
 
-    const unbound = unbindPhoto(bound, BULK_URIS[0]!);
+    const unbound = unbindPhoto(bound, BULK_URI_A);
 
     expect(unbound.unboundUris).toContain(BULK_URIS[0]);
     expect(photoUriForRole(getDraft(unbound, draftId), "back")).toBeNull();
@@ -211,7 +214,7 @@ describe("bind, unbind, and addJersey", () => {
     const session = createCaptureSession(BULK_URIS);
     const draftId = getActiveDraft(session).id;
 
-    const bound = bindUnboundPhotoToDraft(session, BULK_URIS[0]!, draftId);
+    const bound = bindUnboundPhotoToDraft(session, BULK_URI_A, draftId);
     const draft = getDraft(bound, draftId);
 
     expect(nextAvailableRole(draft)).toBe("back");
@@ -290,7 +293,7 @@ describe("canSave", () => {
   it("is true for a bulk draft once a photo is bound and all fields are selected", () => {
     const session = createCaptureSession(BULK_URIS);
     const draftId = getActiveDraft(session).id;
-    const bound = bindPhoto(session, BULK_URIS[0]!, draftId, "left");
+    const bound = bindPhoto(session, BULK_URI_A, draftId, "left");
     const complete = fillDraftForSave(bound, draftId);
 
     expect(canSave(getDraft(complete, draftId))).toBe(true);
@@ -463,9 +466,9 @@ describe("persistence", () => {
     });
     const draftId = getActiveDraft(session).id;
 
-    session = bindPhoto(session, BULK_URIS[0]!, draftId, "front");
-    session = bindPhoto(session, BULK_URIS[1]!, draftId, "back");
-    session = unbindPhoto(session, BULK_URIS[1]!);
+    session = bindPhoto(session, BULK_URI_A, draftId, "front");
+    session = bindPhoto(session, BULK_URI_B, draftId, "back");
+    session = unbindPhoto(session, BULK_URI_B);
     session = addJerseyDraft(session);
     session = setDraftClub(session, draftId, UUID);
     session = selectDraftKitType(session, draftId, "away");
