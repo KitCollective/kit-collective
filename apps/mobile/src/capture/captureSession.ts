@@ -74,10 +74,7 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
   };
 }
 
-export function assignPhotosFillOrder(
-  uris: string[],
-  source: PhotoSource,
-): CaptureSessionPhoto[] {
+export function assignPhotosFillOrder(uris: string[], source: PhotoSource): CaptureSessionPhoto[] {
   const capped = uris.slice(0, MAX_USER_JERSEY_PHOTOS);
   return capped.map((uri, index) => {
     const role: PhotoRole =

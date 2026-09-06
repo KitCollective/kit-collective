@@ -186,9 +186,7 @@ export function CaptureCameraSession({
               pressed && !cameraDenied && !atPhotoCap && styles.shutterPressed,
             ]}
           />
-          {atPhotoCap ? (
-            <Text style={styles.capHelper}>{JERSEY_PHOTO_CAP_HELPER_DA}</Text>
-          ) : null}
+          {atPhotoCap ? <Text style={styles.capHelper}>{JERSEY_PHOTO_CAP_HELPER_DA}</Text> : null}
         </View>
 
         {photoUris.length > 0 ? (
