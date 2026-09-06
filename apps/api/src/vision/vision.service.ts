@@ -19,17 +19,17 @@ import type {
 } from "./vision.adapter.js";
 import { VISION_ADAPTER } from "./vision.adapter.js";
 import {
-  parseGroupingResult,
-  resolveGroupingStatus,
-  serializeGroupingResult,
-  shouldPreselectGrouping,
-} from "./vision-grouping-confidence.js";
-import {
   parseConfidences,
   resolveVisionStatus,
   serializeConfidences,
   shouldPreselect,
 } from "./vision-confidence.js";
+import {
+  parseGroupingResult,
+  resolveGroupingStatus,
+  serializeGroupingResult,
+  shouldPreselectGrouping,
+} from "./vision-grouping-confidence.js";
 
 export const VISION_QUEUE_NAME = "vision";
 

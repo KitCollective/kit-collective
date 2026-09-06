@@ -59,9 +59,7 @@ export function useConfirmGrouping({
       if (!preselect) {
         setSuggestion(job);
         fadeInSuggestion();
-        mutate((current) =>
-          applyGroupingSuggestion(current, job.grouping!, { preselect: false }),
-        );
+        mutate((current) => applyGroupingSuggestion(current, job.grouping!, { preselect: false }));
         return;
       }
 

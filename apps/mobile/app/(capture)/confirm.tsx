@@ -14,8 +14,8 @@ import {
 } from "@/capture/confirmSectionProgress";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
-import { useConfirmPhotos } from "@/capture/use-confirm-photos";
 import { useConfirmGrouping } from "@/capture/use-confirm-grouping";
+import { useConfirmPhotos } from "@/capture/use-confirm-photos";
 import { useConfirmVision } from "@/capture/use-confirm-vision";
 import { useConfirmSave } from "@/capture/useConfirmSave";
 import { JerseyTabBar } from "@/components/bulk/JerseyTabBar";
@@ -168,18 +168,14 @@ export default function ConfirmScreen() {
         </View>
 
         <ConfirmVisionSlot
-          bannerState={
-            grouping.analyzing
-              ? "analyzing"
-              : vision.bannerState
-          }
+          bannerState={grouping.analyzing ? "analyzing" : vision.bannerState}
           suggestion={vision.suggestion}
           groupingMessage={grouping.groupingMessage}
-          suggestionOpacity={grouping.groupingMessage ? grouping.suggestionOpacity : vision.suggestionOpacity}
+          suggestionOpacity={
+            grouping.groupingMessage ? grouping.suggestionOpacity : vision.suggestionOpacity
+          }
           onApplySuggestion={() =>
-            grouping.groupingMessage
-              ? grouping.applySuggestion()
-              : void vision.applySuggestion()
+            grouping.groupingMessage ? grouping.applySuggestion() : void vision.applySuggestion()
           }
           onDismissSuggestion={
             grouping.groupingMessage ? grouping.dismissSuggestion : vision.dismissSuggestion

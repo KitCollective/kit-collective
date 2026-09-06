@@ -31,9 +31,7 @@ export type VisionGroupingInferenceResult = {
 
 export type VisionAdapter = {
   infer(photoBytes: Uint8Array): Promise<VisionInferenceResult | null>;
-  inferGrouping?(
-    photos: VisionGroupingPhotoInput[],
-  ): Promise<VisionGroupingInferenceResult | null>;
+  inferGrouping?(photos: VisionGroupingPhotoInput[]): Promise<VisionGroupingInferenceResult | null>;
 };
 
 export const VISION_ADAPTER = Symbol("VISION_ADAPTER");

@@ -10,7 +10,9 @@ export function serializeGroupingResult(grouping: VisionGroupingSuggestions): st
   return JSON.stringify(grouping);
 }
 
-export function parseGroupingResult(raw: string | null | undefined): VisionGroupingSuggestions | null {
+export function parseGroupingResult(
+  raw: string | null | undefined,
+): VisionGroupingSuggestions | null {
   if (!raw) {
     return null;
   }

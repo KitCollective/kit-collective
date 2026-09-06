@@ -1,7 +1,6 @@
 import type {
   VisionAdapter,
   VisionGroupingInferenceResult,
-  VisionGroupingPhotoInput,
   VisionInferenceResult,
 } from "./vision.adapter.js";
 

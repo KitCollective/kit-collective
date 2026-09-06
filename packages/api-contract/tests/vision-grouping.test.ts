@@ -3,8 +3,8 @@ import {
   VISION_CONFIDENCE_SUGGEST,
   type VisionGroupingSuggestRequest,
   type VisionJobResponse,
-  visionGroupingSuggestRequestSchema,
   visionGroupingSuggestionsSchema,
+  visionGroupingSuggestRequestSchema,
   visionJobResponseSchema,
   visionSuggestResponseSchema,
 } from "@kit/api-contract";

@@ -60,16 +60,20 @@ describe("grouping session", () => {
 
     expect(applied.drafts).toHaveLength(2);
     expect(applied.unboundUris).toHaveLength(BULK_URIS.length - 3);
-    expect(getDraft(applied, applied.drafts[0]!.id).photos.every((photo) => photo.role === null)).toBe(
-      true,
-    );
+    expect(
+      getDraft(applied, applied.drafts[0]!.id).photos.every((photo) => photo.role === null),
+    ).toBe(true);
   });
 
   it("pending mode does not move unbound photos until accept", () => {
     const session = createCaptureSession(BULK_URIS);
     const photoIds = [session.photoIdByUri![BULK_URIS[0]!]!, session.photoIdByUri![BULK_URIS[1]!]!];
 
-    const pending = applyGroupingSuggestion(session, { groups: [{ photoIds }] }, { preselect: false });
+    const pending = applyGroupingSuggestion(
+      session,
+      { groups: [{ photoIds }] },
+      { preselect: false },
+    );
 
     expect(pending.unboundUris).toEqual(session.unboundUris);
     expect(pending.pendingGrouping?.groups).toHaveLength(1);
@@ -91,9 +95,13 @@ describe("grouping session", () => {
   it("lets the collector unbind after a grouping suggestion", () => {
     const session = createCaptureSession(BULK_URIS);
     const photoId = session.photoIdByUri![BULK_URIS[0]!]!;
-    const applied = applyGroupingSuggestion(session, { groups: [{ photoIds: [photoId] }] }, {
-      preselect: true,
-    });
+    const applied = applyGroupingSuggestion(
+      session,
+      { groups: [{ photoIds: [photoId] }] },
+      {
+        preselect: true,
+      },
+    );
     const draftId = applied.drafts[0]!.id;
     const uri = BULK_URIS[0]!;
 
@@ -106,7 +114,11 @@ describe("grouping session", () => {
   it("dismissPendingGrouping clears a pending suggestion without binding", () => {
     const session = createCaptureSession(BULK_URIS);
     const photoIds = [session.photoIdByUri![BULK_URIS[0]!]!];
-    const pending = applyGroupingSuggestion(session, { groups: [{ photoIds }] }, { preselect: false });
+    const pending = applyGroupingSuggestion(
+      session,
+      { groups: [{ photoIds }] },
+      { preselect: false },
+    );
 
     const dismissed = dismissPendingGrouping(pending);
 

@@ -290,12 +290,12 @@ export {
 export {
   type VisionGroupingGroup,
   type VisionGroupingPhoto,
-  type VisionGroupingSuggestRequest,
   type VisionGroupingSuggestions,
+  type VisionGroupingSuggestRequest,
   visionGroupingGroupSchema,
   visionGroupingPhotoSchema,
-  visionGroupingSuggestRequestSchema,
   visionGroupingSuggestionsSchema,
+  visionGroupingSuggestRequestSchema,
 } from "./collection/vision-grouping.js";
 export {
   resolveVisionSaveAction,

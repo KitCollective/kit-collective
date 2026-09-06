@@ -87,10 +87,11 @@ export function persistCameraShotInSession(
     persistCaptureSessionFromPhotos(
       [{ photoId: createSessionId(), uri: photo.uri, role: null, source }],
       {
-      sessionId: newSessionId,
-      prefilledClub: options?.prefilledClub,
-      store: options?.store,
-    });
+        sessionId: newSessionId,
+        prefilledClub: options?.prefilledClub,
+        store: options?.store,
+      },
+    );
     setActiveCameraCaptureSessionId(newSessionId);
     return newSessionId;
   }

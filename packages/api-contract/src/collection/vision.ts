@@ -2,8 +2,8 @@ import { KIT_TYPES, PHOTO_ROLES } from "@kit/domain";
 import { z } from "zod";
 import {
   VISION_JOB_KINDS,
-  visionGroupingSuggestionsSchema,
   type VisionJobKind,
+  visionGroupingSuggestionsSchema,
 } from "./vision-grouping.js";
 
 /** Vision job lifecycle on VisionLog.status. */
