@@ -65,6 +65,15 @@ describe("stamdata schema", () => {
     );
   });
 
+  it("kit_type includes fourth", async () => {
+    const { rows } = await pool.query<{ value: string }>(
+      `SELECT unnest(enum_range(NULL::kit_type)) AS value`,
+    );
+    expect(rows.map((row) => row.value)).toEqual(
+      expect.arrayContaining(["home", "away", "third", "fourth", "gk", "special"]),
+    );
+  });
+
   it("identity tables have no name column", async () => {
     for (const table of IDENTITY_TABLES) {
       const { rows } = await pool.query<{ column_name: string }>(

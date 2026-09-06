@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import type { ComponentProps, ReactNode } from "react";
 import {
   ActivityIndicator,
@@ -11,9 +10,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type ButtonWidth, buttonLayoutStyles } from "@/components/button-layout";
+import { FADE_SCRIM_HEIGHT, FadeScrim } from "@/components/fade-scrim";
 import { useTypography } from "@/theme/brand-fonts";
-import { space, type, withAlpha } from "@/theme/tokens";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
+import { space, type } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
@@ -108,13 +107,11 @@ type ButtonDockProps = {
 };
 
 /** Top gradient+blur zone for the fade dock variant. */
-export const BUTTON_DOCK_FADE_SCRIM_HEIGHT = space.insetLg * 2;
+export const BUTTON_DOCK_FADE_SCRIM_HEIGHT = FADE_SCRIM_HEIGHT;
 
 /** Scroll clearance for fade overlay: scrim + dock chrome (helper + gap + fill button). Add safe-area bottom. */
 export const BUTTON_DOCK_FADE_SCROLL_PADDING =
   BUTTON_DOCK_FADE_SCRIM_HEIGHT + space.insetMd + type.caption.lineHeight + space.gapMd + 48;
-
-const FADE_GRADIENT_STOPS = [0, 0.25, 0.5, 0.75, 1] as const;
 
 /**
  * Bottom-pinned footer actions region (docs/design-system.md → Layout → Footer actions).
@@ -123,35 +120,17 @@ const FADE_GRADIENT_STOPS = [0, 0.25, 0.5, 0.75, 1] as const;
 export function ButtonDock({ children, variant = "border" }: ButtonDockProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
-  const reduceMotion = useReduceMotion();
   const bottomPadding = Math.max(insets.bottom, space.insetMd);
 
   if (variant === "fade") {
     return (
       <View style={styles.dockFadeRoot} pointerEvents="box-none">
-        <View
-          style={[styles.fadeScrim, { height: BUTTON_DOCK_FADE_SCRIM_HEIGHT }]}
-          pointerEvents="none"
-        >
-          {!reduceMotion ? (
-            <BlurView intensity={24} tint="default" style={StyleSheet.absoluteFill} />
-          ) : null}
-          <View style={styles.fadeGradient}>
-            {FADE_GRADIENT_STOPS.map((alpha) => (
-              <View
-                key={alpha}
-                style={[
-                  styles.fadeGradientBand,
-                  { backgroundColor: withAlpha(theme.canvas, alpha) },
-                ]}
-              />
-            ))}
-          </View>
-        </View>
+        <FadeScrim edge="bottom" />
         <View
           style={[
             styles.dockContent,
             {
+              paddingTop: space.insetSm,
               paddingBottom: bottomPadding,
               backgroundColor: theme.canvas,
             },
@@ -238,16 +217,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.insetLg,
     paddingTop: space.insetMd,
     gap: space.gapMd,
-  },
-  fadeScrim: {
-    width: "100%",
-    overflow: "hidden",
-  },
-  fadeGradient: {
-    ...StyleSheet.absoluteFill,
-  },
-  fadeGradientBand: {
-    flex: 1,
   },
   emptyState: {
     flex: 1,

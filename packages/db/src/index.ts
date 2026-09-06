@@ -18,4 +18,5 @@ export {
   RESET_DATABASE_GUARD_MESSAGE,
 } from "./reset-database-guard.js";
 export * from "./schema/index.js";
+export { type SeedDevCatalogResult, seedDevCatalog } from "./seed/dev-catalog.js";
 export { seedEuropeanCountries } from "./seed/european-countries.js";

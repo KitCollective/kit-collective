@@ -3,6 +3,7 @@ import { PHOTO_ROLES } from "@kit/domain";
 import { describe, expect, it } from "vitest";
 import {
   addJerseyDraft,
+  appendUnboundPhotos,
   bindPhoto,
   bindUnboundPhotoToDraft,
   branchFromPhotoCount,
@@ -11,6 +12,7 @@ import {
   changeDraftPhotoRole,
   createCaptureSession,
   createMemoryCaptureSessionStore,
+  discardUnboundPhoto,
   getActiveDraft,
   getDraft,
   nextAvailableRole,
@@ -22,6 +24,8 @@ import {
   selectDraftKitType,
   selectDraftSize,
   setActiveDraft,
+  setDraftBadge,
+  setDraftBadgeEnabled,
   setDraftClub,
   setDraftNotes,
   setDraftPhotoLabel,
@@ -233,6 +237,25 @@ describe("bind, unbind, and addJersey", () => {
     expect(draft.photos).toHaveLength(3);
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
   });
+
+  it("discardUnboundPhoto removes a sandbox photo from the session", () => {
+    const session = createCaptureSession(BULK_URIS);
+
+    const discarded = discardUnboundPhoto(session, BULK_URI_B);
+
+    expect(discarded.unboundUris).toEqual(BULK_URIS.filter((uri) => uri !== BULK_URI_B));
+    expect(discarded.orderedUris).not.toContain(BULK_URI_B);
+  });
+
+  it("appendUnboundPhotos adds new uris to the sandbox", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const extra = "file:///photos/sandbox-new.jpg";
+
+    const appended = appendUnboundPhotos(session, [extra, URI_FRONT]);
+
+    expect(appended.unboundUris).toEqual([extra]);
+    expect(appended.orderedUris).toEqual([URI_FRONT, extra]);
+  });
 });
 
 describe("setDraftNotes", () => {
@@ -242,6 +265,47 @@ describe("setDraftNotes", () => {
 
     const withNotes = setDraftNotes(session, draftId, "Match-worn");
     expect(getDraft(withNotes, draftId).notes).toBe("Match-worn");
+  });
+});
+
+describe("setDraftBadge", () => {
+  it("stores an enabled sleeve badge and clears it when the switch turns off", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    let next = setDraftBadgeEnabled(session, draftId, true);
+    next = setDraftBadge(next, draftId, {
+      id: UUID,
+      label: "Champions League",
+    });
+    expect(getDraft(next, draftId)).toMatchObject({
+      badgeEnabled: true,
+      badgeId: UUID,
+      badgeLabel: "Champions League",
+    });
+
+    next = setDraftBadgeEnabled(next, draftId, false);
+    expect(getDraft(next, draftId)).toMatchObject({
+      badgeEnabled: false,
+      badgeId: null,
+      badgeLabel: null,
+    });
+  });
+
+  it("clears the selected badge when club or season changes", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    let next = setDraftClub(session, draftId, UUID);
+    next = setDraftSeason(next, draftId, UUID_B);
+    next = setDraftBadge(next, draftId, { id: UUID, label: "Superligaen" });
+
+    next = setDraftSeason(next, draftId, "660e8400-e29b-41d4-a716-446655440003");
+    expect(getDraft(next, draftId).badgeId).toBeNull();
+    expect(getDraft(next, draftId).badgeEnabled).toBe(true);
+
+    next = setDraftClub(next, draftId, "660e8400-e29b-41d4-a716-446655440002");
+    expect(getDraft(next, draftId).badgeEnabled).toBe(false);
   });
 });
 

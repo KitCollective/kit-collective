@@ -180,21 +180,27 @@ describe("Native tab bar chrome", () => {
     expect(existsSync(join(__dirname, "../app/(tabs)/add"))).toBe(false);
   });
 
-  it("opens the capture chooser as a Sheet, gated behind a single choice", () => {
+  it("opens the capture chooser as a Sheet with direct-action rows", () => {
     const sheet = readFileSync(sheetPath, "utf8");
 
     expect(sheet).toContain('title="Tilføj trøje"');
-    expect(sheet).toContain('accessibilityRole="radio"');
-    expect(sheet).toContain('label="Næste"');
-    expect(sheet).toContain('label="Annuller"');
-    // Each choice carries a title, a helper sentence, and a leading icon.
+    // Rows are direct actions (role button), not a radio group.
+    expect(sheet).toContain('accessibilityRole="button"');
+    // Each choice carries a title, a helper sentence, a leading icon, and a trailing chevron.
     expect(sheet).toContain('icon: "images-outline"');
     expect(sheet).toContain('icon: "camera-outline"');
     expect(sheet).toContain("option.helper");
-    // Nothing preselected: Næste is blocked, and the block is spelled out.
-    expect(sheet).toContain("useState<CaptureSource | null>(null)");
-    expect(sheet).toContain("disabled={selected === null}");
-    expect(sheet).toContain("Vælg en mulighed for at fortsætte.");
+    expect(sheet).toContain('name="chevron-forward"');
+    // Tapping a row is the commit — no Næste dock, no preselect, no "vælg en mulighed" caption.
+    expect(sheet).toContain("onConfirm(option.source)");
+    expect(sheet).not.toContain('label="Næste"');
+    expect(sheet).not.toContain('accessibilityRole="radio"');
+    expect(sheet).not.toContain("Vælg en mulighed for at fortsætte.");
+    // Upload filer is renamed Upload billeder.
+    expect(sheet).toContain('title: "Upload billeder"');
+    // Top-left Luk is dropped; a footer Annuller cancels instead.
+    expect(sheet).toContain("hideChrome");
+    expect(sheet).toContain('label="Annuller"');
   });
 
   it("keeps one chooser face for the plus and the post-Save re-entry", () => {
@@ -203,6 +209,9 @@ describe("Native tab bar chrome", () => {
 
     expect(chooser).toContain("CaptureSourceSheet");
     expect(chooser).toContain("startCaptureFromSource");
+    // iOS waits for the Sheet Modal to leave before presenting the system picker.
+    expect(chooser).toContain("onModalHide");
+    expect(chooser).toContain('Platform.OS === "ios"');
     // Post-Save re-opens the same Sheet instead of a full-screen Add place.
     expect(postSave).toContain("useCaptureChooser");
     expect(postSave).not.toContain('pathname: "/(tabs)/add"');
@@ -213,7 +222,17 @@ describe("Native tab bar chrome", () => {
     const flow = readFileSync(join(__dirname, "../src/capture/captureSourceFlow.ts"), "utf8");
 
     expect(flow).toContain('"/(capture)/capture"');
-    expect(flow).toContain('"/(capture)/confirm"');
+    // Upload billeder routes through the (capture) loading screen (which then lands on
+    // /(capture)/confirm) so the collector sees a transition, never the tabs.
+    expect(flow).toContain('"/(capture)/loading"');
     expect(flow).not.toContain('"/(tabs)/add');
+  });
+
+  it("presents the capture group as a full-screen modal, not an iOS page sheet", () => {
+    const root = readFileSync(join(__dirname, "../app/_layout.tsx"), "utf8");
+
+    expect(root).toContain('name="(capture)"');
+    expect(root).toContain('presentation: "fullScreenModal"');
+    expect(root).not.toContain('presentation: "modal"');
   });
 });

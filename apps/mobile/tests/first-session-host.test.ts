@@ -98,7 +98,6 @@ describe("First session host chrome", () => {
     expect(chrome).not.toContain("Gem kun på denne telefon");
     expect(chrome).not.toMatch(/Fortsæt med Google/);
     expect(chrome).not.toMatch(/Fortsæt med Facebook/);
-    expect(chrome).not.toMatch(/three-slide|tre slides|produktguide/i);
   });
 
   it("host opens profile onboarding after register and never copies prototype chrome", () => {
@@ -108,8 +107,12 @@ describe("First session host chrome", () => {
     expect(host).toContain("ProfileOnboardingScreen");
     expect(host).toContain('place === "profile"');
     expect(host).toContain("continueProfile");
-    expect(host).toContain("DiscoveryShowcaseScreen");
+    expect(host).toContain("OnboardScreen");
+    expect(host).toContain("completeOnboard");
     expect(host).toContain("continueFromSplash");
+    // One backdrop at a time is decided in the reducer, not by flag algebra in the host.
+    expect(host).toContain("firstSessionBackdrop");
+    expect(host).not.toContain("showOnboardBackdrop");
     expect(profile).toContain("uploadAvatar");
     expect(profile).toContain("updateProfile");
     expect(profile).not.toContain("prototype-first-run");

@@ -5,18 +5,20 @@
  */
 import { readFileSync } from "node:fs";
 
-const CHOOSER_PATH = "apps/mobile/src/capture/captureSourceFlow.ts";
+const SOURCE_FLOW_PATH = "apps/mobile/src/capture/captureSourceFlow.ts";
+const UPLOAD_CAPTURE_PATH = "apps/mobile/src/capture/uploadCaptureSession.ts";
 const UPLOAD_FILES_PATH = "apps/mobile/src/capture/pickUploadFiles.ts";
 const DOCUMENT_PICKER_PATH = "apps/mobile/src/capture/pickDocumentImages.ts";
 const PACKAGE_JSON_PATH = "apps/mobile/package.json";
 const UPLOAD_TEST_PATH = "apps/mobile/tests/pick-upload-files.test.ts";
 
 /**
- * @param {{ chooserSource: string, uploadFilesSource: string, documentPickerSource: string, packageJsonSource: string, uploadTestSource: string }} input
+ * @param {{ sourceFlowSource: string, uploadCaptureSource: string, uploadFilesSource: string, documentPickerSource: string, packageJsonSource: string, uploadTestSource: string }} input
  * @returns {string[]}
  */
 export function checkMobileAddUploadFiles({
-  chooserSource,
+  sourceFlowSource,
+  uploadCaptureSource,
   uploadFilesSource,
   documentPickerSource,
   packageJsonSource,
@@ -24,16 +26,18 @@ export function checkMobileAddUploadFiles({
 }) {
   const violations = [];
 
-  if (!chooserSource.includes("pickUploadFiles")) {
+  if (!sourceFlowSource.includes('pathname: "/(capture)/loading"')) {
     violations.push(
-      `${CHOOSER_PATH}: Upload filer must call pickUploadFiles, not pickGalleryPhotos directly`,
+      `${SOURCE_FLOW_PATH}: Upload filer must route through the presentation-gated loading screen`,
     );
   }
 
-  if (/pickGalleryPhotos/.test(chooserSource) && !chooserSource.includes("pickUploadFiles")) {
-    violations.push(
-      `${CHOOSER_PATH}: Upload filer must not bypass pickUploadFiles for gallery-only selection`,
-    );
+  if (!uploadCaptureSource.includes("pickUploadFiles")) {
+    violations.push(`${UPLOAD_CAPTURE_PATH}: presentation-gated upload must call pickUploadFiles`);
+  }
+
+  if (/pickGalleryPhotos/.test(sourceFlowSource)) {
+    violations.push(`${SOURCE_FLOW_PATH}: must not bypass the loading route with an inline picker`);
   }
 
   if (!uploadFilesSource.includes("pickDocumentImages")) {
@@ -63,7 +67,8 @@ export function checkMobileAddUploadFiles({
 
 export function checkMobileAddUploadFilesFromDisk() {
   return checkMobileAddUploadFiles({
-    chooserSource: readFileSync(CHOOSER_PATH, "utf8"),
+    sourceFlowSource: readFileSync(SOURCE_FLOW_PATH, "utf8"),
+    uploadCaptureSource: readFileSync(UPLOAD_CAPTURE_PATH, "utf8"),
     uploadFilesSource: readFileSync(UPLOAD_FILES_PATH, "utf8"),
     documentPickerSource: readFileSync(DOCUMENT_PICKER_PATH, "utf8"),
     packageJsonSource: readFileSync(PACKAGE_JSON_PATH, "utf8"),

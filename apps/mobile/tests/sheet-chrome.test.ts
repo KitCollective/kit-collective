@@ -44,6 +44,15 @@ describe("Sheet chrome", () => {
     expect(catalog).toContain("sheetHeaderAction");
   });
 
+  it("can omit the chrome button and wait for Modal hide", () => {
+    const catalog = readFileSync(sheetPath, "utf8");
+
+    expect(catalog).toContain("hideChrome?: boolean");
+    expect(catalog).toContain("onModalHide?: () => void");
+    expect(catalog).toContain("onDismiss={onModalHide}");
+    expect(catalog).toContain("hideChrome && !headerAction ? null");
+  });
+
   it("supports a sub-page back state via onBack", () => {
     const catalog = readFileSync(sheetPath, "utf8");
 

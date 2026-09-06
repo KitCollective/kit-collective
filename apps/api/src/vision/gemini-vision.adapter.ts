@@ -106,7 +106,7 @@ export class GeminiVisionAdapter implements VisionAdapter {
               {
                 parts: [
                   {
-                    text: 'Identify the football club, season, and kit type (home|away|third|gk|special) from this jersey photo. Reply JSON only: {"clubHint":"...","seasonHint":"...","kitType":"home","confidence":0.85}. confidence is 0-1 for how sure you are overall. Use English club names. Omit fields you cannot infer.',
+                    text: 'Identify the football club, season, and kit type (home|away|third|fourth|gk|special) from this jersey photo. Reply JSON only: {"clubHint":"...","seasonHint":"...","kitType":"home","confidence":0.85}. confidence is 0-1 for how sure you are overall. Use English club names. Omit fields you cannot infer.',
                   },
                   {
                     inline_data: {
