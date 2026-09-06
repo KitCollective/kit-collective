@@ -8,8 +8,13 @@ import { FirstSessionChooserScreen } from "@/first-session/chooser-screen";
 import { DiscoveryShowcaseScreen } from "@/first-session/discovery-showcase";
 import { DoorSheet, VerifyEmailBeat } from "@/first-session/door";
 import { JerseyDetailsScreen } from "@/first-session/jersey-details-screen";
+import { OnboardScreen } from "@/first-session/onboard-screen";
 import { ProfileOnboardingScreen } from "@/first-session/profile-onboarding";
-import { createFirstSession, reduceFirstSession } from "@/first-session/session";
+import {
+  createFirstSession,
+  firstSessionBackdrop,
+  reduceFirstSession,
+} from "@/first-session/session";
 import { SplashView } from "@/first-session/splash";
 import { LoadingScreen } from "../_layout";
 
@@ -173,18 +178,11 @@ export default function FirstSessionHost() {
   }
 
   const doorMode = session.doorMode ?? "login";
-  const showDiscoveryBackdrop =
-    session.place === "discovery" ||
-    (session.place === "door" && !session.skippedDiscovery && !session.doorOverAnalysing);
-  const showSplashBackdrop =
-    session.place === "splash" || (session.place === "door" && session.skippedDiscovery);
-  const showAnalysingBackdrop =
-    session.place === "analysing" ||
-    (session.place === "door" && session.doorOverAnalysing && session.captureSessionId !== null);
+  const backdrop = firstSessionBackdrop(session);
 
   return (
     <>
-      {showDiscoveryBackdrop ? (
+      {backdrop === "discovery" ? (
         <DiscoveryShowcaseScreen
           onAddFirst={() => {
             dispatch({ type: "startAdd" });
@@ -192,11 +190,19 @@ export default function FirstSessionHost() {
           onHaveAccount={() => openDoor("login")}
         />
       ) : null}
-      {showSplashBackdrop ? (
+      {backdrop === "splash" ? (
         <SplashView
           onContinue={handleContinueFromSplash}
           onLogin={() => openDoor("login")}
           onRegister={() => openDoor("register")}
+        />
+      ) : null}
+      {backdrop === "onboard" ? (
+        <OnboardScreen
+          exit={session.identitySession ? "app" : "door"}
+          onComplete={() => {
+            dispatch({ type: "completeOnboard" });
+          }}
         />
       ) : null}
       {session.place === "chooser" ? (
@@ -205,7 +211,7 @@ export default function FirstSessionHost() {
           onPhotosPicked={(sessionId) => dispatch({ type: "photosPicked", sessionId })}
         />
       ) : null}
-      {showAnalysingBackdrop && session.captureSessionId ? (
+      {backdrop === "analysing" && session.captureSessionId ? (
         <FirstSessionAnalysingScreen
           captureSessionId={session.captureSessionId}
           onVisionComplete={() => dispatch({ type: "visionComplete" })}
