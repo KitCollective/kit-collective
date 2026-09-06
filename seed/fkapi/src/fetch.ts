@@ -22,13 +22,26 @@ const NT_FIXTURE_PATH = path.join(
   "../fixtures/denmark-national-kits.json",
 );
 
+const JOIN_PROOF_CLUB_FIXTURE_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../fixtures/superliga-2010-11-kits.json",
+);
+
 type FixtureFile = {
   kits: Record<string, unknown>[];
 };
 
 function kitMatchesScope(kit: FkRawKit, scope: SeedScope): boolean {
   if (scope.kind === "competition") {
-    return isClubKit(kit);
+    if (!isClubKit(kit)) {
+      return false;
+    }
+    const fromLabel = resolveSeasonRef(scope.competition, scope.fromSeason);
+    const toLabel = resolveSeasonRef(scope.competition, scope.toSeason);
+    if (fromLabel === toLabel) {
+      return kit.seasonLabel === fromLabel;
+    }
+    return true;
   }
 
   if (scope.kind === "national_team") {
@@ -70,6 +83,42 @@ export function createFixtureFetchAdapter(): FkFetchAdapter {
   return {
     async fetchKits(scope: SeedScope): Promise<FkRawKit[]> {
       return loadFixtureKits(scope);
+    },
+  };
+}
+
+/** Join workflow proof fixture — Superliga 2010/11 club kits only. */
+export function createJoinProofClubFixtureFetchAdapter(): FkFetchAdapter {
+  return {
+    async fetchKits(scope: SeedScope): Promise<FkRawKit[]> {
+      const raw = await readFile(JOIN_PROOF_CLUB_FIXTURE_PATH, "utf8");
+      const parsed = JSON.parse(raw) as FixtureFile;
+      const kits: FkRawKit[] = [];
+      for (const item of parsed.kits) {
+        const normalized = normalizeRawKit(item);
+        if (normalized && kitMatchesScope(normalized, scope)) {
+          kits.push(normalized);
+        }
+      }
+      return kits;
+    },
+  };
+}
+
+/** Join workflow proof fixture — Denmark WC 2010 national team kits. */
+export function createJoinProofNationalTeamFixtureFetchAdapter(): FkFetchAdapter {
+  return {
+    async fetchKits(scope: SeedScope): Promise<FkRawKit[]> {
+      const raw = await readFile(NT_FIXTURE_PATH, "utf8");
+      const parsed = JSON.parse(raw) as FixtureFile;
+      const kits: FkRawKit[] = [];
+      for (const item of parsed.kits) {
+        const normalized = normalizeRawKit(item);
+        if (normalized && kitMatchesScope(normalized, scope)) {
+          kits.push(normalized);
+        }
+      }
+      return kits;
     },
   };
 }

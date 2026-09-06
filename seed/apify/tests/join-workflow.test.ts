@@ -1,9 +1,17 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  createJoinProofClubFixtureFetchAdapter,
+  createJoinProofNationalTeamFixtureFetchAdapter,
+} from "@kit/seed-fkapi/fetch";
+import { runFkSeed } from "@kit/seed-fkapi/mapper";
+import type { ObjectStoreAdapter } from "@kit/seed-fkapi/types";
+import {
   club,
   createDb,
   externalId,
+  kit,
+  kitPhoto,
   playerClubSeason,
   playerNationalTeamSeason,
   resetDatabase,
@@ -11,8 +19,9 @@ import {
   teamSeason,
 } from "@kit/db";
 import { and, eq, sql } from "drizzle-orm";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createKaderFetchAdapter } from "../src/fetch/kader-fetch-adapter.js";
+import { resolveDefaultFkFetchAdapter } from "../src/fk-runner.js";
 import {
   type FkJoinRunner,
   runClubJoinWorkflow,
@@ -36,6 +45,31 @@ const TEST_DATABASE_URL = resolveSeedApifyTestDatabaseUrl();
 
 async function prepareDatabase() {
   await resetDatabase(TEST_DATABASE_URL, migrationsFolder);
+}
+
+function createMemoryObjectStore(): ObjectStoreAdapter & { objects: Map<string, Uint8Array> } {
+  const objects = new Map<string, Uint8Array>();
+  return {
+    objects,
+    async putObject(key: string, bytes: Uint8Array): Promise<void> {
+      objects.set(key, bytes);
+    },
+    async objectExists(key: string): Promise<boolean> {
+      return objects.has(key);
+    },
+  };
+}
+
+function createJoinClubFkRunner(objectStore: ObjectStoreAdapter): FkJoinRunner {
+  const fetchAdapter = createJoinProofClubFixtureFetchAdapter();
+  return async ({ scope, databaseUrl }) =>
+    runFkSeed({ databaseUrl, fetchAdapter, objectStore, scope });
+}
+
+function createJoinNationalTeamFkRunner(objectStore: ObjectStoreAdapter): FkJoinRunner {
+  const fetchAdapter = createJoinProofNationalTeamFixtureFetchAdapter();
+  return async ({ scope, databaseUrl }) =>
+    runFkSeed({ databaseUrl, fetchAdapter, objectStore, scope });
 }
 
 describe("Join workflow CLI", () => {
@@ -267,5 +301,94 @@ describe("Join workflow — NationalTeam path idempotency", () => {
     expect(second.nationalTeamSeasonSkipped).toBe(true);
     expect(second.apify.nationalTeamSeasons).toBe(0);
     expect(second.apify.playerNationalTeamSeasons).toBe(0);
+  });
+});
+
+describe("Join workflow — FK integration", () => {
+  it("requires FKAPI_BASE_URL for CLI FK fetch (no silent fixture default)", () => {
+    const previous = process.env.FKAPI_BASE_URL;
+    delete process.env.FKAPI_BASE_URL;
+    try {
+      expect(() => resolveDefaultFkFetchAdapter()).toThrow(/FKAPI_BASE_URL/);
+    } finally {
+      if (previous !== undefined) {
+        process.env.FKAPI_BASE_URL = previous;
+      }
+    }
+  });
+
+  beforeEach(async () => {
+    await prepareDatabase();
+  });
+
+  it("writes kit and kit_photo rows for Superliga 2010/11 club join", async () => {
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    const objectStore = createMemoryObjectStore();
+    const summary = await runClubJoinWorkflow({
+      path: "club",
+      competition: "dk1",
+      season: "2010/11",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+      fkRunner: createJoinClubFkRunner(objectStore),
+    });
+
+    expect(summary.fk.kitsUpserted).toBeGreaterThan(0);
+    expect(summary.fk.photosWritten).toBeGreaterThan(0);
+    expect(objectStore.objects.size).toBeGreaterThan(0);
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const kitRows = await db.select({ id: kit.id, clubId: kit.clubId }).from(kit);
+      expect(kitRows.length).toBeGreaterThan(0);
+      expect(kitRows.every((row) => row.clubId !== null)).toBe(true);
+
+      const photos = await db
+        .select({
+          objectKey: kitPhoto.objectKey,
+          rights: kitPhoto.rights,
+          visibility: kitPhoto.visibility,
+        })
+        .from(kitPhoto);
+      expect(photos.length).toBeGreaterThan(0);
+      expect(photos.every((row) => row.rights === "unresolved")).toBe(true);
+      expect(photos.every((row) => row.visibility === "admin_only")).toBe(true);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("writes kit and kit_photo rows for Denmark WC 2010 national team join", async () => {
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
+    const objectStore = createMemoryObjectStore();
+    const summary = await runNationalTeamJoinWorkflow({
+      path: "national_team",
+      nationalTeamRef: "3436",
+      season: "2010",
+      lane: "development",
+      fetchAdapter: adapter,
+      databaseUrl: TEST_DATABASE_URL,
+      fkRunner: createJoinNationalTeamFkRunner(objectStore),
+      portraitStore: { async putObject() {} },
+    });
+
+    expect(summary.fk.kitsUpserted).toBe(3);
+    expect(summary.fk.photosWritten).toBe(3);
+
+    const { db, pool } = createDb(TEST_DATABASE_URL);
+    try {
+      const kitRows = await db
+        .select({ nationalTeamId: kit.nationalTeamId, clubId: kit.clubId })
+        .from(kit);
+      expect(kitRows).toHaveLength(3);
+      expect(kitRows.every((row) => row.nationalTeamId !== null && row.clubId === null)).toBe(
+        true,
+      );
+      const photos = await db.select({ id: kitPhoto.id }).from(kitPhoto);
+      expect(photos).toHaveLength(3);
+    } finally {
+      await pool.end();
+    }
   });
 });

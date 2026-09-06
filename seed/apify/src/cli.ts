@@ -1,28 +1,8 @@
 #!/usr/bin/env node
-import { createFixtureFetchAdapter as createFkFixtureFetchAdapter } from "@kit/seed-fkapi/fetch";
-import { runFkSeed } from "@kit/seed-fkapi/mapper";
-import { createR2ObjectStore } from "@kit/seed-fkapi/object-store";
-import {
-  type FkJoinRunner,
-  runClubJoinWorkflow,
-  runNationalTeamJoinWorkflow,
-} from "./join-workflow.js";
+import { createDefaultFkRunner } from "./fk-runner.js";
+import { runClubJoinWorkflow, runNationalTeamJoinWorkflow } from "./join-workflow.js";
 import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 import { parseCliArgs, runHierarchyGrain, runSeed } from "./run.js";
-
-function createDefaultFkRunner(
-  fetchAdapter?: import("@kit/seed-fkapi/types").FkFetchAdapter,
-): FkJoinRunner {
-  const fkFetch = fetchAdapter ?? createFkFixtureFetchAdapter();
-  const objectStore = createR2ObjectStore();
-  return async ({ scope, databaseUrl }) =>
-    runFkSeed({
-      databaseUrl,
-      fetchAdapter: fkFetch,
-      objectStore,
-      scope,
-    });
-}
 
 async function main() {
   const parsed = parseCliArgs(process.argv);
