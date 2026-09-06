@@ -4,7 +4,12 @@ import type { KitType } from "@kit/domain";
 import { KIT_TYPES } from "@kit/domain";
 import { and, eq, ilike, or } from "drizzle-orm";
 import { NoopVisionAdapter } from "./noop-vision.adapter.js";
-import type { VisionAdapter, VisionInferenceResult } from "./vision.adapter.js";
+import type {
+  VisionAdapter,
+  VisionGroupingInferenceResult,
+  VisionGroupingPhotoInput,
+  VisionInferenceResult,
+} from "./vision.adapter.js";
 import { computeOverallConfidence } from "./vision-confidence.js";
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
@@ -31,6 +36,39 @@ function isKitType(value: unknown): value is KitType {
   }
 
   return KIT_TYPES.some((kitType) => kitType === value);
+}
+
+function extractGeminiText(body: unknown): string | null {
+  if (!isRecord(body)) {
+    return null;
+  }
+
+  const candidates = body.candidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return null;
+  }
+
+  const firstCandidate = candidates[0];
+  if (!isRecord(firstCandidate)) {
+    return null;
+  }
+
+  const content = firstCandidate.content;
+  if (!isRecord(content)) {
+    return null;
+  }
+
+  const parts = content.parts;
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return null;
+  }
+
+  const firstPart = parts[0];
+  if (!isRecord(firstPart) || typeof firstPart.text !== "string") {
+    return null;
+  }
+
+  return firstPart.text;
 }
 
 function decodeGeminiResponse(body: unknown): GeminiStructured | null {
@@ -148,6 +186,96 @@ export class GeminiVisionAdapter implements VisionAdapter {
       return {
         ...mapped,
         visionRaw: JSON.stringify(structured),
+        latencyMs: Date.now() - started,
+        model: GEMINI_MODEL,
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async inferGrouping(
+    photos: VisionGroupingPhotoInput[],
+  ): Promise<VisionGroupingInferenceResult | null> {
+    if (!hasGeminiConfig() || photos.length < 2) {
+      return null;
+    }
+
+    const started = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+    try {
+      const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+        {
+          text: 'Group these football jersey photos into separate shirts. Reply JSON only: {"groups":[{"photoIds":["<uuid>",...],"confidence":0.85}]}. Use the exact photoId strings provided before each image. confidence is 0-1 per group.',
+        },
+      ];
+
+      for (const photo of photos) {
+        parts.push({ text: `photoId: ${photo.photoId}` });
+        parts.push({
+          inline_data: {
+            mime_type: "image/jpeg",
+            data: Buffer.from(photo.bytes).toString("base64"),
+          },
+        });
+      }
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature: 0.1,
+            },
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const body = await response.json();
+      const text = extractGeminiText(body);
+      if (!text) {
+        return null;
+      }
+
+      const parsed: unknown = JSON.parse(text);
+      if (!isRecord(parsed) || !Array.isArray(parsed.groups)) {
+        return null;
+      }
+
+      const groups = parsed.groups
+        .map((group) => {
+          if (!isRecord(group) || !Array.isArray(group.photoIds)) {
+            return null;
+          }
+          const photoIds = group.photoIds.filter((id): id is string => typeof id === "string");
+          if (photoIds.length === 0) {
+            return null;
+          }
+          const confidence =
+            typeof group.confidence === "number" ? Math.round(group.confidence * 100) : 0;
+          return { photoIds, confidence };
+        })
+        .filter((group): group is { photoIds: string[]; confidence: number } => group !== null);
+
+      if (groups.length === 0) {
+        return null;
+      }
+
+      return {
+        groups,
         latencyMs: Date.now() - started,
         model: GEMINI_MODEL,
       };

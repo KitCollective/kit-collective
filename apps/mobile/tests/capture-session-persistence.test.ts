@@ -35,7 +35,9 @@ describe("captureSessionPersistence", () => {
     );
 
     const draft = getActiveDraft(store.load()!);
-    expect(draft.photos).toEqual([{ uri: URI_FRONT, role: null, source: "camera" }]);
+    expect(draft.photos).toEqual([
+      expect.objectContaining({ uri: URI_FRONT, role: null, source: "camera" }),
+    ]);
     expect(store.load()?.orderedUris).toEqual([URI_FRONT]);
     expect(getActiveCameraCaptureSessionId()).toBe(sessionId);
   });
@@ -61,8 +63,8 @@ describe("captureSessionPersistence", () => {
     }
     const draft = getActiveDraft(sessionState);
     expect(draft.photos).toEqual([
-      { uri: URI_FRONT, role: null, source: "camera" },
-      { uri: URI_BACK, role: null, source: "camera" },
+      expect.objectContaining({ uri: URI_FRONT, role: null, source: "camera" }),
+      expect.objectContaining({ uri: URI_BACK, role: null, source: "camera" }),
     ]);
     expect(getActiveCameraCaptureSessionId()).toBe(sessionId);
   });

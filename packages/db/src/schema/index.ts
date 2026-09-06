@@ -77,6 +77,7 @@ export const photoSourceEnum = pgEnum("photo_source", PHOTO_SOURCES);
 export const ocrStatusEnum = pgEnum("ocr_status", OCR_STATUSES);
 export const authenticityEnum = pgEnum("authenticity", AUTHENTICITY_VALUES);
 export const visionJobStatusEnum = pgEnum("vision_job_status", VISION_JOB_STATUSES);
+export const visionJobKindEnum = pgEnum("vision_job_kind", ["identity", "grouping"] as const);
 export const visionUserActionEnum = pgEnum("vision_user_action", VISION_USER_ACTIONS);
 export const messageKindEnum = pgEnum("message_kind", MESSAGE_KINDS);
 export const bidStatusEnum = pgEnum("bid_status", BID_STATUSES);
@@ -664,6 +665,7 @@ export const visionLog = pgTable("vision_log", {
     .references(() => user.id),
   draftId: uuid("draft_id"),
   userJerseyId: uuid("user_jersey_id").references(() => userJersey.id),
+  kind: visionJobKindEnum("kind").notNull().default("identity"),
   status: visionJobStatusEnum("status").notNull().default("pending"),
   suggestedClubId: uuid("suggested_club_id").references(() => club.id),
   suggestedSeasonId: uuid("suggested_season_id").references(() => season.id),
@@ -671,6 +673,7 @@ export const visionLog = pgTable("vision_log", {
   suggestedType: kitTypeEnum("suggested_type"),
   visionRaw: text("vision_raw"),
   confidences: text("confidences"),
+  groupingResult: text("grouping_result"),
   latencyMs: integer("latency_ms"),
   model: text("model"),
   userAction: visionUserActionEnum("user_action"),

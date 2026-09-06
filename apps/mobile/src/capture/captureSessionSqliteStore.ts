@@ -10,6 +10,7 @@ import {
   type PhotoSource,
 } from "@kit/domain";
 import { draftDb } from "@/drafts/db";
+import { reloadCaptureSession } from "./captureSession";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -47,7 +48,67 @@ type PhotoRow = {
   role: string | null;
   source: string;
   label: string | null;
+  photo_id: string | null;
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readPhotoIdByUri(value: string | null | undefined): Record<string, string> {
+  if (!value) {
+    return {};
+  }
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[0] === "string" && typeof entry[1] === "string",
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function readPendingGrouping(
+  value: string | null | undefined,
+): CaptureSessionState["pendingGrouping"] {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!isRecord(parsed) || !Array.isArray(parsed.groups)) {
+      return undefined;
+    }
+
+    const groups = parsed.groups
+      .map((entry) => {
+        if (!isRecord(entry) || !Array.isArray(entry.photoIds)) {
+          return null;
+        }
+        const photoIds = entry.photoIds.filter((id): id is string => typeof id === "string");
+        if (photoIds.length === 0) {
+          return null;
+        }
+        return { photoIds };
+      })
+      .filter((group): group is { photoIds: string[] } => group !== null);
+
+    if (groups.length === 0) {
+      return undefined;
+    }
+
+    return { groups };
+  } catch {
+    return undefined;
+  }
+}
 
 function readKitType(value: string | null): KitType | null {
   if (!value) {
@@ -131,26 +192,32 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         ]);
         draftDb.runSync(`DELETE FROM capture_session_draft WHERE session_id = ?`, [sessionId]);
         draftDb.runSync(
-          `INSERT INTO capture_session (id, branch, active_draft_id, ordered_uris_json, updated_at)
-           VALUES (?, ?, ?, ?, ?)
+          `INSERT INTO capture_session (id, branch, active_draft_id, ordered_uris_json, photo_id_by_uri_json, pending_grouping_json, grouping_design_gap, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              branch = excluded.branch,
              active_draft_id = excluded.active_draft_id,
              ordered_uris_json = excluded.ordered_uris_json,
+             photo_id_by_uri_json = excluded.photo_id_by_uri_json,
+             pending_grouping_json = excluded.pending_grouping_json,
+             grouping_design_gap = excluded.grouping_design_gap,
              updated_at = excluded.updated_at`,
           [
             sessionId,
             state.branch,
             state.activeDraftId,
             JSON.stringify(state.orderedUris),
+            JSON.stringify(state.photoIdByUri ?? {}),
+            state.pendingGrouping ? JSON.stringify(state.pendingGrouping) : null,
+            state.groupingDesignGap ? 1 : 0,
             Date.now(),
           ],
         );
 
         for (const [index, uri] of state.unboundUris.entries()) {
           draftDb.runSync(
-            `INSERT INTO capture_unbound_photo (session_id, uri, sort_order) VALUES (?, ?, ?)`,
-            [sessionId, uri, index],
+            `INSERT INTO capture_unbound_photo (session_id, uri, photo_id, sort_order) VALUES (?, ?, ?, ?)`,
+            [sessionId, uri, state.photoIdByUri?.[uri] ?? null, index],
           );
         }
 
@@ -190,9 +257,17 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
 
           for (const photo of draft.photos) {
             draftDb.runSync(
-              `INSERT INTO capture_session_draft_photo (session_id, draft_id, uri, role, source, label)
-               VALUES (?, ?, ?, ?, ?, ?)`,
-              [sessionId, draft.id, photo.uri, photo.role, photo.source, photo.label ?? null],
+              `INSERT INTO capture_session_draft_photo (session_id, draft_id, uri, role, source, label, photo_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [
+                sessionId,
+                draft.id,
+                photo.uri,
+                photo.role,
+                photo.source,
+                photo.label ?? null,
+                photo.photoId ?? null,
+              ],
             );
           }
         }
@@ -209,8 +284,11 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         branch: "single" | "bulk";
         active_draft_id: string;
         ordered_uris_json: string;
+        photo_id_by_uri_json: string | null;
+        pending_grouping_json: string | null;
+        grouping_design_gap: number;
       }>(
-        `SELECT id, branch, active_draft_id, ordered_uris_json FROM capture_session WHERE id = ?`,
+        `SELECT id, branch, active_draft_id, ordered_uris_json, photo_id_by_uri_json, pending_grouping_json, grouping_design_gap FROM capture_session WHERE id = ?`,
         [sessionId],
       );
 
@@ -218,8 +296,8 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         return null;
       }
 
-      const unboundRows = draftDb.getAllSync<{ uri: string }>(
-        `SELECT uri FROM capture_unbound_photo WHERE session_id = ? ORDER BY sort_order ASC`,
+      const unboundRows = draftDb.getAllSync<{ uri: string; photo_id: string | null }>(
+        `SELECT uri, photo_id FROM capture_unbound_photo WHERE session_id = ? ORDER BY sort_order ASC`,
         [sessionId],
       );
 
@@ -229,7 +307,7 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
       );
 
       const photoRows = draftDb.getAllSync<PhotoRow>(
-        `SELECT draft_id, uri, role, source, label FROM capture_session_draft_photo WHERE session_id = ?`,
+        `SELECT draft_id, uri, role, source, label, photo_id FROM capture_session_draft_photo WHERE session_id = ?`,
         [sessionId],
       );
 
@@ -240,16 +318,31 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
             uri: photo.uri,
             role: readPhotoRole(photo.role),
             source: readPhotoSource(photo.source),
+            ...(photo.photo_id ? { photoId: photo.photo_id } : {}),
             ...(photo.label ? { label: photo.label } : {}),
           }));
         return readDraft(row, photos);
       });
+
+      const photoIdByUri = {
+        ...readPhotoIdByUri(sessionRow.photo_id_by_uri_json),
+        ...Object.fromEntries(
+          unboundRows
+            .filter(
+              (row): row is { uri: string; photo_id: string } => typeof row.photo_id === "string",
+            )
+            .map((row) => [row.uri, row.photo_id]),
+        ),
+      };
 
       return {
         sessionId,
         branch: readBranch(sessionRow.branch),
         orderedUris: readOrderedUris(sessionRow.ordered_uris_json),
         unboundUris: unboundRows.map((row) => row.uri),
+        photoIdByUri,
+        pendingGrouping: readPendingGrouping(sessionRow.pending_grouping_json),
+        groupingDesignGap: sessionRow.grouping_design_gap === 1,
         drafts,
         activeDraftId: sessionRow.active_draft_id,
       };
@@ -264,5 +357,5 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
 }
 
 export function reloadSqliteCaptureSession(sessionId: string): CaptureSessionState | null {
-  return createSqliteCaptureSessionStore(sessionId).load();
+  return reloadCaptureSession(createSqliteCaptureSessionStore(sessionId));
 }

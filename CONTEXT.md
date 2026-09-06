@@ -102,8 +102,8 @@ Locale + kind name for stamdata. The English seed string is not the Danish UI na
 _Avoid_: hardcoding English as the UI label
 
 **Vision suggestion**:
-Gemini output. Persist catalog UUIDs after confirm.
-_Avoid_: raw model names as foreign keys
+Gemini output. May suggest identity fields (club, season, kit type) and bulk photoId groups into UserJersey drafts. Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers; Vision never silently assigns Photo roles.
+_Avoid_: raw model names as foreign keys; auto-committing Photo roles; OpenRouter for collector photos
 
 **Save**:
 Must not wait on Vision, kit completeness, or manufacturer.

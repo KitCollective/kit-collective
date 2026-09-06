@@ -1,10 +1,26 @@
-import type { VisionAdapter, VisionInferenceResult } from "./vision.adapter.js";
+import type {
+  VisionAdapter,
+  VisionGroupingInferenceResult,
+  VisionInferenceResult,
+} from "./vision.adapter.js";
 
 export class StubVisionAdapter implements VisionAdapter {
   constructor(private readonly result: VisionInferenceResult) {}
 
   async infer(): Promise<VisionInferenceResult | null> {
     return this.result;
+  }
+}
+
+export class StubGroupingVisionAdapter implements VisionAdapter {
+  constructor(private readonly grouping: VisionGroupingInferenceResult) {}
+
+  async infer(): Promise<VisionInferenceResult | null> {
+    return null;
+  }
+
+  async inferGrouping(): Promise<VisionGroupingInferenceResult | null> {
+    return this.grouping;
   }
 }
 

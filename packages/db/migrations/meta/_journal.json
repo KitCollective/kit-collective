@@ -197,6 +197,13 @@
       "when": 1788420000000,
       "tag": "0027_kit_type_fourth",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788430000000,
+      "tag": "0028_vision_grouping",
+      "breakpoints": true
     }
   ]
 }

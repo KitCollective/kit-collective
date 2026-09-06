@@ -19,7 +19,9 @@ describe("appendUnassignedCameraShotToSession", () => {
     session.store?.save(session);
 
     const draft = getActiveDraft(session);
-    expect(draft.photos).toEqual([{ uri: URI_FRONT, role: null, source: "camera" }]);
+    expect(draft.photos).toEqual([
+      expect.objectContaining({ uri: URI_FRONT, role: null, source: "camera" }),
+    ]);
     expect(session.orderedUris).toEqual([URI_FRONT]);
     expect(reloadCaptureSession(store)?.orderedUris).toEqual([URI_FRONT]);
   });

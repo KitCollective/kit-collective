@@ -4,6 +4,7 @@ import {
   applyFillOrderToActiveDraft,
   createCaptureSessionFromPhotos,
   getActiveDraft,
+  reloadCaptureSession,
   setDraftClub,
 } from "./captureSession";
 import {
@@ -68,7 +69,7 @@ function persistCaptureSessionFromPhotos(
 }
 
 export function loadPersistedCaptureSession(sessionId: string): CaptureSessionState | null {
-  return sqliteStore(sessionId).load();
+  return reloadCaptureSession(sqliteStore(sessionId));
 }
 
 export function persistCameraShotInSession(
@@ -84,11 +85,14 @@ export function persistCameraShotInSession(
 
   if (!sessionId) {
     const newSessionId = createSessionId();
-    persistCaptureSessionFromPhotos([{ uri: photo.uri, role: null, source }], {
-      sessionId: newSessionId,
-      prefilledClub: options?.prefilledClub,
-      store: options?.store,
-    });
+    persistCaptureSessionFromPhotos(
+      [{ photoId: createSessionId(), uri: photo.uri, role: null, source }],
+      {
+        sessionId: newSessionId,
+        prefilledClub: options?.prefilledClub,
+        store: options?.store,
+      },
+    );
     setActiveCameraCaptureSessionId(newSessionId);
     return newSessionId;
   }

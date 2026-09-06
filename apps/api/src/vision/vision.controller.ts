@@ -1,7 +1,9 @@
 import {
+  type VisionGroupingSuggestRequest,
   type VisionJobResponse,
   type VisionLogResponse,
   type VisionSuggestResponse,
+  visionGroupingSuggestRequestSchema,
   visionJobResponseSchema,
   visionLogRequestSchema,
   visionLogResponseSchema,
@@ -70,11 +72,12 @@ export class VisionController {
   ): Promise<VisionSuggestResponse> {
     const body = visionSuggestRequestSchema.parse(rawBody);
     const photoBytes = decodeBase64Photo(body.photo.contentBase64);
-    const jobId = await this.visionService.createJob(user.sub, photoBytes, body.draftId);
+    const jobId = await this.visionService.createJob(user.sub, { draftId: body.draftId });
 
     this.visionQueueService.enqueue({
       jobId,
       userId: user.sub,
+      kind: "identity",
       draftId: body.draftId,
       photoBytes,
     });
@@ -93,13 +96,42 @@ export class VisionController {
     const body = visionSuggestRequestSchema.parse(rawBody);
     const photoBytes = decodeBase64Photo(body.photo.contentBase64);
     const userId = await this.anonymousVisionUserService.getUserId();
-    const jobId = await this.visionService.createJob(userId, photoBytes, body.draftId);
+    const jobId = await this.visionService.createJob(userId, { draftId: body.draftId });
 
     this.visionQueueService.enqueue({
       jobId,
       userId,
+      kind: "identity",
       draftId: body.draftId,
       photoBytes,
+    });
+
+    return visionSuggestResponseSchema.parse({ jobId });
+  }
+
+  @Post("collection/vision/grouping/suggest")
+  @HttpCode(202)
+  @UseGuards(JwtAuthGuard)
+  async suggestGrouping(
+    @CurrentUser() user: JwtPayload,
+    @Body() rawBody: unknown,
+  ): Promise<VisionSuggestResponse> {
+    const body: VisionGroupingSuggestRequest = visionGroupingSuggestRequestSchema.parse(rawBody);
+    const groupingPhotos = body.photos.map((photo) => ({
+      photoId: photo.photoId,
+      bytes: decodeBase64Photo(photo.contentBase64),
+    }));
+    const jobId = await this.visionService.createJob(user.sub, {
+      kind: "grouping",
+      sessionId: body.sessionId,
+    });
+
+    this.visionQueueService.enqueue({
+      jobId,
+      userId: user.sub,
+      kind: "grouping",
+      sessionId: body.sessionId,
+      groupingPhotos,
     });
 
     return visionSuggestResponseSchema.parse({ jobId });

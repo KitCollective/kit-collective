@@ -1,5 +1,7 @@
 import {
   resolveVisionSaveAction,
+  type VisionGroupingSuggestions,
+  type VisionJobKind,
   type VisionJobStatus,
   type VisionSuggestions,
   type VisionUserAction,
@@ -10,7 +12,11 @@ import type { KitType, LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
-import type { VisionAdapter, VisionInferenceResult } from "./vision.adapter.js";
+import type {
+  VisionAdapter,
+  VisionGroupingPhotoInput,
+  VisionInferenceResult,
+} from "./vision.adapter.js";
 import { VISION_ADAPTER } from "./vision.adapter.js";
 import {
   parseConfidences,
@@ -18,14 +24,23 @@ import {
   serializeConfidences,
   shouldPreselect,
 } from "./vision-confidence.js";
+import {
+  parseGroupingResult,
+  resolveGroupingStatus,
+  serializeGroupingResult,
+  shouldPreselectGrouping,
+} from "./vision-grouping-confidence.js";
 
 export const VISION_QUEUE_NAME = "vision";
 
 export type VisionJobPayload = {
   jobId: string;
   userId: string;
+  kind: VisionJobKind;
   draftId?: string;
-  photoBytes: Uint8Array;
+  sessionId?: string;
+  photoBytes?: Uint8Array;
+  groupingPhotos?: VisionGroupingPhotoInput[];
 };
 
 @Injectable()
@@ -35,12 +50,20 @@ export class VisionService {
     @Inject(VISION_ADAPTER) private readonly adapter: VisionAdapter,
   ) {}
 
-  async createJob(userId: string, _photoBytes: Uint8Array, draftId?: string): Promise<string> {
+  async createJob(
+    userId: string,
+    options: {
+      kind?: VisionJobKind;
+      draftId?: string;
+      sessionId?: string;
+    } = {},
+  ): Promise<string> {
     const [row] = await this.db
       .insert(visionLog)
       .values({
         userId,
-        draftId: draftId ?? null,
+        draftId: options.draftId ?? null,
+        kind: options.kind ?? "identity",
         status: "pending",
       })
       .returning({ id: visionLog.id });
@@ -57,10 +80,18 @@ export class VisionService {
   }
 
   async processJob(payload: VisionJobPayload): Promise<void> {
+    if (payload.kind === "grouping") {
+      await this.processGroupingJob(payload);
+      return;
+    }
+
     let result: VisionInferenceResult | null = null;
     let status: VisionJobStatus = "noop";
 
     try {
+      if (!payload.photoBytes) {
+        throw new Error("Identity vision job missing photo bytes");
+      }
       result = await this.adapter.infer(payload.photoBytes);
       const resolved = resolveVisionStatus(result);
       status = resolved.status;
@@ -90,6 +121,52 @@ export class VisionService {
     }
   }
 
+  private async processGroupingJob(payload: VisionJobPayload): Promise<void> {
+    let status: VisionJobStatus = "noop";
+    let grouping: VisionGroupingSuggestions | null = null;
+
+    try {
+      const photos = payload.groupingPhotos ?? [];
+      if (!this.adapter.inferGrouping || photos.length < 2) {
+        status = "noop";
+      } else {
+        const result = await this.adapter.inferGrouping(photos);
+        const resolved = resolveGroupingStatus(result);
+        status = resolved.status;
+        if (resolved.result) {
+          grouping = {
+            groups: resolved.result.groups.map((group) => ({
+              photoIds: group.photoIds,
+              confidence: group.confidence,
+            })),
+          };
+        }
+      }
+    } catch {
+      status = "failed";
+    }
+
+    try {
+      await this.db
+        .update(visionLog)
+        .set({
+          status,
+          groupingResult: grouping ? serializeGroupingResult(grouping) : null,
+          confidences: grouping
+            ? serializeConfidences({
+                overall: Math.min(
+                  ...(grouping.groups.map((group) => group.confidence ?? 0) ?? [0]),
+                ),
+              })
+            : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(visionLog.id, payload.jobId));
+    } catch {
+      // Fail open — grouping must not block Save.
+    }
+  }
+
   async findActiveJobForDraft(userId: string, draftId: string): Promise<string | null> {
     const [row] = await this.db
       .select({ id: visionLog.id })
@@ -114,19 +191,23 @@ export class VisionService {
   ): Promise<{
     jobId: string;
     status: VisionJobStatus;
+    kind?: VisionJobKind;
     preselect?: boolean;
     suggestions?: VisionSuggestions;
+    grouping?: VisionGroupingSuggestions;
   } | null> {
     const [row] = await this.db
       .select({
         id: visionLog.id,
         userId: visionLog.userId,
+        kind: visionLog.kind,
         status: visionLog.status,
         suggestedClubId: visionLog.suggestedClubId,
         suggestedSeasonId: visionLog.suggestedSeasonId,
         suggestedCatalogKitId: visionLog.suggestedCatalogKitId,
         suggestedType: visionLog.suggestedType,
         confidences: visionLog.confidences,
+        groupingResult: visionLog.groupingResult,
       })
       .from(visionLog)
       .where(eq(visionLog.id, jobId))
@@ -140,6 +221,28 @@ export class VisionService {
       return {
         jobId: row.id,
         status: row.status,
+        kind: row.kind,
+      };
+    }
+
+    if (row.kind === "grouping") {
+      const grouping = parseGroupingResult(row.groupingResult);
+      if (!grouping) {
+        return {
+          jobId: row.id,
+          status: row.status,
+          kind: row.kind,
+        };
+      }
+
+      const confidences = parseConfidences(row.confidences);
+      const overall = confidences?.overall ?? 0;
+      return {
+        jobId: row.id,
+        status: row.status,
+        kind: row.kind,
+        preselect: shouldPreselectGrouping(overall),
+        grouping,
       };
     }
 
@@ -165,6 +268,7 @@ export class VisionService {
     return {
       jobId: row.id,
       status: row.status,
+      kind: row.kind,
       preselect,
       suggestions,
     };

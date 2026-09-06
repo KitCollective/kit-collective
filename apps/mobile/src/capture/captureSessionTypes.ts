@@ -3,6 +3,8 @@ import type { JerseyCondition, JerseySize, KitType, PhotoRole, PhotoSource } fro
 export type CaptureBranch = "single" | "bulk";
 
 export type CaptureSessionPhoto = {
+  /** Stable id for Vision grouping — assigned when the photo enters the session. */
+  photoId?: string;
   uri: string;
   role: PhotoRole | null;
   source: PhotoSource;
@@ -39,6 +41,11 @@ export type CaptureSessionState = {
   branch: CaptureBranch;
   orderedUris: string[];
   unboundUris: string[];
+  photoIdByUri?: Record<string, string>;
+  pendingGrouping?: {
+    groups: Array<{ photoIds: string[] }>;
+  };
+  groupingDesignGap?: boolean;
   drafts: CaptureJerseyDraft[];
   activeDraftId: string;
   store?: CaptureSessionStore;
