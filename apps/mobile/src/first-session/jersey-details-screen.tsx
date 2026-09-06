@@ -30,9 +30,11 @@ import { clearPersistedCaptureSession } from "@/capture/captureFlow";
 import {
   addJerseyDraft,
   bindUnboundPhotoToDraft,
+  canAddPhotoToDraft,
   canSave,
   changeDraftPhotoRole,
   getDraft,
+  JERSEY_PHOTO_CAP_HELPER_DA,
   photoUriForRole,
   removeDraft,
   removeDraftPhoto,
@@ -73,6 +75,7 @@ import { useTheme } from "@/theme/use-theme";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 const VISION_TIMEOUT_MS = 12_000;
+const ADD_PHOTO_ROLE: PhotoRole = "other";
 
 type JerseyDetailsScreenProps = {
   captureSessionId: string;
@@ -113,6 +116,7 @@ export function JerseyDetailsScreen({
   const [visionPolling, setVisionPolling] = useState(false);
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
   const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
+  const [photoCapMessage, setPhotoCapMessage] = useState<string | null>(null);
   const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
   const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
@@ -358,7 +362,16 @@ export function JerseyDetailsScreen({
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
   const pickPhotoForRole = async (role: PhotoRole, replaceUri?: string) => {
-    if (!draft || isBulk) {
+    if (!draft) {
+      return;
+    }
+
+    if (isBulk && role !== "other") {
+      return;
+    }
+
+    if (!replaceUri && !canAddPhotoToDraft(draft)) {
+      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
       return;
     }
 
@@ -374,6 +387,7 @@ export function JerseyDetailsScreen({
       return;
     }
 
+    setPhotoCapMessage(null);
     const uri = uris[0];
     const existingLabel =
       replaceUri && role === "other"
@@ -466,6 +480,19 @@ export function JerseyDetailsScreen({
     setVisionSuggestion(null);
   };
 
+  const handleAddPhotoPress = () => {
+    if (!draft) {
+      return;
+    }
+
+    if (!canAddPhotoToDraft(draft)) {
+      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
+      return;
+    }
+
+    void pickPhotoForRole("other");
+  };
+
   const handlePhotoSlotPress = (role: PhotoRole) => {
     if (!state || !draft) {
       return;
@@ -538,6 +565,12 @@ export function JerseyDetailsScreen({
   };
 
   const handleBindUnboundPhoto = (uri: string) => {
+    if (draft && !canAddPhotoToDraft(draft)) {
+      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
+      return;
+    }
+
+    setPhotoCapMessage(null);
     mutate((current) => bindUnboundPhotoToDraft(current, uri, current.activeDraftId));
   };
 
@@ -694,6 +727,7 @@ export function JerseyDetailsScreen({
     draft.seasonId && selectedSeasonLabel
       ? { id: draft.seasonId, label: selectedSeasonLabel }
       : null;
+  const showAddPhotoSlot = canAddPhotoToDraft(draft);
   const dockHelper = saveBlockMessage ?? getSaveBlockMessage(draft);
   const saveEnabled = canSave(draft);
   const saveLabel =
@@ -720,7 +754,11 @@ export function JerseyDetailsScreen({
 
         <View style={styles.section}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
-          <View style={styles.photoRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.photoRow}
+          >
             {UNIVERSAL_PHOTO_ROLES.map((role) => (
               <PhotoSlot
                 key={role}
@@ -741,7 +779,20 @@ export function JerseyDetailsScreen({
                 }}
               />
             ))}
-          </View>
+            {showAddPhotoSlot ? (
+              <PhotoSlot
+                key="add-photo"
+                role={ADD_PHOTO_ROLE}
+                variant="add"
+                onPress={handleAddPhotoPress}
+              />
+            ) : null}
+          </ScrollView>
+          {photoCapMessage ? (
+            <Text style={[typography.caption, { color: theme.contentMuted }]}>
+              {photoCapMessage}
+            </Text>
+          ) : null}
           {photoList.length === 0 ? (
             <Text style={[typography.caption, { color: theme.contentMuted }]}>
               Mindst ét foto er påkrævet.

@@ -18,8 +18,14 @@ function createId(): string {
 export type { CaptureBranch, CaptureJerseyDraft, CaptureSessionState, CaptureSessionStore };
 
 export function branchFromPhotoCount(count: number): CaptureBranch {
-  return count > 3 ? "bulk" : "single";
+  return count > MAX_USER_JERSEY_PHOTOS ? "bulk" : "single";
 }
+
+export function canAddPhotoToDraft(draft: CaptureJerseyDraft): boolean {
+  return draft.photos.length < MAX_USER_JERSEY_PHOTOS;
+}
+
+export const JERSEY_PHOTO_CAP_HELPER_DA = "Du kan højst have 10 fotos på én trøje.";
 
 export function canSave(draft: CaptureJerseyDraft): boolean {
   if (!draft.editJerseyId && draft.photos.length === 0) {
