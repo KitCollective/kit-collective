@@ -12,11 +12,11 @@ import {
   detailsRequiredFilledCount,
   detailsSectionFacts,
 } from "@/capture/confirmSectionProgress";
+import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmPhotos } from "@/capture/use-confirm-photos";
 import { useConfirmVision } from "@/capture/use-confirm-vision";
 import { useConfirmSave } from "@/capture/useConfirmSave";
-import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { JerseyTabBar } from "@/components/bulk/JerseyTabBar";
 import { UnboundPhotosRow } from "@/components/bulk/UnboundPhotosRow";
 import { ConfirmHubHeader, confirmHubHeaderScrollPadding } from "@/components/confirm-hub-header";

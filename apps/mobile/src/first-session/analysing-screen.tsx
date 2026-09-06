@@ -149,7 +149,11 @@ export function FirstSessionAnalysingScreen({
 
     void (async () => {
       try {
-        const contentBase64 = await readPreparedPhotoBase64(firstPhoto.uri, firstPhoto.role, "visionIdentity");
+        const contentBase64 = await readPreparedPhotoBase64(
+          firstPhoto.uri,
+          firstPhoto.role,
+          "visionIdentity",
+        );
         jobId = await startUnsignedVisionSuggest({
           draftId: captureSessionId,
           photo: { role: firstPhoto.role, contentBase64 },

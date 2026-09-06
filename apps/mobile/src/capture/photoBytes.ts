@@ -1,10 +1,7 @@
 import type { PhotoRole } from "@kit/domain";
 import { File } from "expo-file-system";
-import {
-  type PhotoPreparePurpose,
-  readPreparedDevicePhotoBase64,
-} from "./photoPrepare";
 import { expoPhotoManipulatorAdapter } from "./expoPhotoManipulatorAdapter";
+import { type PhotoPreparePurpose, readPreparedDevicePhotoBase64 } from "./photoPrepare";
 
 export async function readPhotoBase64(uri: string): Promise<string> {
   if (uri.startsWith("data:")) {
@@ -33,8 +30,6 @@ export async function readPreparedPhotoBase64(
   return readPreparedDevicePhotoBase64(uri, role, purpose, expoPhotoManipulatorAdapter);
 }
 
-export {
-  type PhotoPreparePurpose,
-} from "./photoPrepare";
+export type { PhotoPreparePurpose } from "./photoPrepare";
 
 export { warmDevicePrepareForDraftRuntime } from "./photoPrepareRuntime";

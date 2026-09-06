@@ -1,17 +1,17 @@
 import type { PhotoRole } from "@kit/domain";
-import { describe, expect, it, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearDevicePhotoPrepareCacheForTests,
   DISPLAY_MAX_EDGE_OTHER,
   DISPLAY_MAX_EDGE_UNIVERSAL,
   GROUPING_THUMB_MAX_EDGE,
   maxEdgeForPrepare,
+  type PhotoManipulatorAdapter,
   prepareDevicePhoto,
   readPreparedDevicePhotoBase64,
   resizeActionForMaxLongEdge,
   scheduleDevicePhotoPrepare,
   VISION_IDENTITY_MAX_EDGE,
-  type PhotoManipulatorAdapter,
 } from "../src/capture/photoPrepare";
 
 function createFakeAdapter(
@@ -135,9 +135,7 @@ describe("prepareDevicePhoto", () => {
       adapter,
     );
 
-    expect(adapter.calls[0]?.actions).toEqual([
-      { resize: { width: DISPLAY_MAX_EDGE_OTHER } },
-    ]);
+    expect(adapter.calls[0]?.actions).toEqual([{ resize: { width: DISPLAY_MAX_EDGE_OTHER } }]);
     expect(prepared.width).toBe(DISPLAY_MAX_EDGE_OTHER);
   });
 
@@ -152,9 +150,7 @@ describe("prepareDevicePhoto", () => {
     const adapter = createFakeAdapter({ width: 3000, height: 2000 });
     await prepareDevicePhoto("file:///photos/front.jpg", "front", "visionIdentity", adapter);
 
-    expect(adapter.calls[0]?.actions).toEqual([
-      { resize: { width: VISION_IDENTITY_MAX_EDGE } },
-    ]);
+    expect(adapter.calls[0]?.actions).toEqual([{ resize: { width: VISION_IDENTITY_MAX_EDGE } }]);
   });
 });
 
