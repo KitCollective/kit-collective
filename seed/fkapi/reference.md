@@ -111,5 +111,5 @@ Full FK-after-facts lock (club vs NT join, refuse): [fk-field-catalog.md](../../
 ## Out of this reference
 
 - Transfermarkt Hierarchy grains → [`seed/apify/reference.md`](../apify/reference.md)
-- Join workflow season compose → milestone 3
+- Join workflow compose catalog → [`.scratch/football-data-seed/compose-catalog.md`](../../.scratch/football-data-seed/compose-catalog.md) (KIT-145 accept)
 - Seed MCP → milestone 4

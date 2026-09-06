@@ -135,5 +135,5 @@ Portrait bytes on a kader row persist as **Player photo** (`player/{externalId}/
 ## Out of this reference
 
 - Football Kit Archive fields → [`seed/fkapi/reference.md`](../fkapi/reference.md)
-- Join workflow compose → milestone 3 research
+- Join workflow compose catalog → [`.scratch/football-data-seed/compose-catalog.md`](../../.scratch/football-data-seed/compose-catalog.md) (KIT-145 accept)
 - Seed MCP tool shapes → milestone 4 research

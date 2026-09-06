@@ -137,6 +137,14 @@ _Avoid_: product `/v1` seed; scrapers on the Nest request path; treating Catalog
 The composed walk that fills a named competition season (Club sides or NationalTeam sides, then FK kits on those sides) and proves stamdata plus image bytes in the lane. Third Football Data Seed milestone. Not MCP.
 _Avoid_: treating the walk as the first accept; fusing TM and FK into one MCP tool before the walk is proven; a club-only walk as the product ceiling
 
+**Compose catalog**:
+The written accept for Join workflow research (KIT-145): what a **complete named season** means in lane Postgres and R2 for the Club path and the NationalTeam path, how Hierarchy grains compose in order, and how Catalog peek proves the walk — before KIT-146 codes the module. Lives in `.scratch/football-data-seed/compose-catalog.md`.
+_Avoid_: coding the Join walk without this catalog; treating the one-sentence Seed run as milestone 1 accept; mixing Club and NationalTeam into one compose checklist row
+
+**Complete named season**:
+For a proof scope (Superliga 2010/11 or Denmark men World Cup 2010), stamdata rows from every required Hierarchy grain **and** admin_only image bytes for every kept Kit (and kader portraits when present) in the lane Postgres + R2 bucket. Defined in the Compose catalog — not “league season page fetched” alone.
+_Avoid_: calling `club_proof` without squads “complete”; counting training-kit FK rows toward proof; public archive URLs on peek
+
 **Seed MCP**:
 The Football Data Seed MCP server. Own URL on a unique hostname. Coolify may host the container; ingest chat talks only to this URL. Long jobs run in that service. Cross MCP milestone. Speaks Hierarchy grains and the Join workflow. Coolify MCP stays Docker and host only.
 _Avoid_: Coolify `control` for ingest; sharing the Coolify MCP URL; calling Coolify MCP the seed interface; treating `kc_seed_mcp` stdio as the Cross MCP accept; a laptop-only stdio server as the accept
