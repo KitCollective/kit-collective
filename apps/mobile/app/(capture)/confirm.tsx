@@ -8,6 +8,7 @@ import {
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
   type PhotoRole,
+  type UniversalPhotoRole,
   UNIVERSAL_PHOTO_ROLES,
 } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -711,9 +712,12 @@ export default function ConfirmScreen() {
     return null;
   }
 
-  const universalPhotoUris = Object.fromEntries(
-    UNIVERSAL_PHOTO_ROLES.map((role) => [role, photoUriForRole(draft, role) ?? undefined]),
-  ) as Record<(typeof UNIVERSAL_PHOTO_ROLES)[number], string | undefined>;
+  const universalPhotoUris: Record<UniversalPhotoRole, string | undefined> = {
+    front: photoUriForRole(draft, "front") ?? undefined,
+    back: photoUriForRole(draft, "back") ?? undefined,
+    left: photoUriForRole(draft, "left") ?? undefined,
+    right: photoUriForRole(draft, "right") ?? undefined,
+  };
   const otherPhotos = draft.photos.filter(
     (photo): photo is typeof photo & { role: "other" } => photo.role === "other",
   );

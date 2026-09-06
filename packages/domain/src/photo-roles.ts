@@ -18,7 +18,7 @@ export const PHOTO_ROLE_LABELS_DA: Record<PhotoRole, string> = {
 };
 
 export function isUniversalPhotoRole(role: PhotoRole): role is UniversalPhotoRole {
-  return (UNIVERSAL_PHOTO_ROLES as readonly string[]).includes(role);
+  return role !== "other";
 }
 
 export type JerseyPhotoInput = {
