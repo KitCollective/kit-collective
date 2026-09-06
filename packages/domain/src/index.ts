@@ -69,15 +69,18 @@ export type JerseySize = (typeof JERSEY_SIZES)[number];
 export const JERSEY_CONDITIONS = ["new", "used", "worn"] as const;
 export type JerseyCondition = (typeof JERSEY_CONDITIONS)[number];
 
-export const PHOTO_ROLES = ["front", "back", "label"] as const;
-export type PhotoRole = (typeof PHOTO_ROLES)[number];
-
-/** Danish labels for photo role slots (UI only). */
-export const PHOTO_ROLE_LABELS_DA: Record<PhotoRole, string> = {
-  front: "Forside",
-  back: "Bagside",
-  label: "Mærke",
-};
+export {
+  isUniversalPhotoRole,
+  type JerseyPhotoInput,
+  type JerseyPhotoValidationError,
+  MAX_USER_JERSEY_PHOTOS,
+  PHOTO_ROLE_LABELS_DA,
+  PHOTO_ROLES,
+  type PhotoRole,
+  UNIVERSAL_PHOTO_ROLES,
+  type UniversalPhotoRole,
+  validateJerseyPhotos,
+} from "./photo-roles.js";
 
 export const PHOTO_SOURCES = ["gallery", "camera"] as const;
 export type PhotoSource = (typeof PHOTO_SOURCES)[number];

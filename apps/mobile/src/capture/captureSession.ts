@@ -1,5 +1,5 @@
 import type { JerseyCondition, JerseySize, KitType, PhotoRole, PhotoSource } from "@kit/domain";
-import { PHOTO_ROLES } from "@kit/domain";
+import { MAX_USER_JERSEY_PHOTOS, UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -69,11 +69,12 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
 }
 
 function assignSingleRoles(uris: string[], source: PhotoSource): CaptureSessionPhoto[] {
-  return uris.map((uri, index) => ({
-    uri,
-    role: PHOTO_ROLES[index] ?? null,
-    source,
-  }));
+  const capped = uris.slice(0, MAX_USER_JERSEY_PHOTOS);
+  return capped.map((uri, index) => {
+    const role: PhotoRole =
+      index < UNIVERSAL_PHOTO_ROLES.length ? UNIVERSAL_PHOTO_ROLES[index]! : "other";
+    return { uri, role, source };
+  });
 }
 
 function persist(state: CaptureSessionState): void {
@@ -110,9 +111,7 @@ export function createCaptureSession(
     branch === "single"
       ? {
           ...createEmptyDraft(draftId),
-          photos: assignSingleRoles(orderedUris, photoSource).filter(
-            (photo): photo is CaptureSessionPhoto & { role: PhotoRole } => photo.role !== null,
-          ),
+          photos: assignSingleRoles(orderedUris, photoSource),
         }
       : createEmptyDraft(draftId);
 
@@ -257,10 +256,13 @@ export function switchSingleToBulkBind(state: CaptureSessionState): CaptureSessi
 }
 
 export function nextAvailableRole(draft: CaptureJerseyDraft): PhotoRole | null {
-  for (const role of PHOTO_ROLES) {
+  for (const role of UNIVERSAL_PHOTO_ROLES) {
     if (!draft.photos.some((photo) => photo.role === role)) {
       return role;
     }
+  }
+  if (draft.photos.length < MAX_USER_JERSEY_PHOTOS) {
+    return "other";
   }
   return null;
 }
@@ -360,9 +362,36 @@ export function upsertDraftPhoto(
   uri: string,
   source: PhotoSource,
 ): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => {
+    if (role === "other") {
+      if (draft.photos.some((photo) => photo.uri === uri)) {
+        return draft;
+      }
+      if (draft.photos.length >= MAX_USER_JERSEY_PHOTOS) {
+        return draft;
+      }
+      return {
+        ...draft,
+        photos: [...draft.photos, { uri, role, source }],
+      };
+    }
+
+    return {
+      ...draft,
+      photos: [...draft.photos.filter((photo) => photo.role !== role), { uri, role, source }],
+    };
+  });
+}
+
+export function setDraftPhotoLabel(
+  state: CaptureSessionState,
+  draftId: string,
+  uri: string,
+  label: string,
+): CaptureSessionState {
   return updateDraft(state, draftId, (draft) => ({
     ...draft,
-    photos: [...draft.photos.filter((photo) => photo.role !== role), { uri, role, source }],
+    photos: draft.photos.map((photo) => (photo.uri === uri ? { ...photo, label } : photo)),
   }));
 }
 
@@ -370,10 +399,16 @@ export function removeDraftPhoto(
   state: CaptureSessionState,
   draftId: string,
   role: PhotoRole,
+  uri?: string,
 ): CaptureSessionState {
   return updateDraft(state, draftId, (draft) => ({
     ...draft,
-    photos: draft.photos.filter((photo) => photo.role !== role),
+    photos: draft.photos.filter((photo) => {
+      if (role === "other" && uri) {
+        return photo.uri !== uri;
+      }
+      return photo.role !== role;
+    }),
   }));
 }
 
@@ -382,26 +417,31 @@ export function changeDraftPhotoRole(
   draftId: string,
   fromRole: PhotoRole,
   toRole: PhotoRole,
+  fromUri?: string,
 ): CaptureSessionState {
   if (fromRole === toRole) {
     return state;
   }
 
   return updateDraft(state, draftId, (draft) => {
-    const sourcePhoto = draft.photos.find((photo) => photo.role === fromRole);
+    const sourcePhoto =
+      fromRole === "other" && fromUri
+        ? draft.photos.find((photo) => photo.uri === fromUri)
+        : draft.photos.find((photo) => photo.role === fromRole);
     if (!sourcePhoto) {
       return draft;
     }
 
-    const targetPhoto = draft.photos.find((photo) => photo.role === toRole);
+    const targetPhoto =
+      toRole !== "other" ? draft.photos.find((photo) => photo.role === toRole) : undefined;
     if (targetPhoto) {
       return {
         ...draft,
         photos: draft.photos.map((photo) => {
-          if (photo.role === fromRole) {
+          if (photo.uri === sourcePhoto.uri) {
             return { ...photo, role: toRole };
           }
-          if (photo.role === toRole) {
+          if (photo.uri === targetPhoto.uri) {
             return { ...photo, role: fromRole };
           }
           return photo;
@@ -412,7 +452,7 @@ export function changeDraftPhotoRole(
     return {
       ...draft,
       photos: draft.photos.map((photo) =>
-        photo.role === fromRole ? { ...photo, role: toRole } : photo,
+        photo.uri === sourcePhoto.uri ? { ...photo, role: toRole } : photo,
       ),
     };
   });
@@ -425,9 +465,12 @@ export function appendCameraShotToSession(
 ): CaptureSessionState {
   const next = upsertDraftPhoto(state, state.activeDraftId, photo.role, photo.uri, source);
   const draft = getActiveDraft(next);
-  const orderedUris = PHOTO_ROLES.map(
-    (role) => draft.photos.find((entry) => entry.role === role)?.uri,
-  ).filter((uri): uri is string => Boolean(uri));
+  const orderedUris = [
+    ...UNIVERSAL_PHOTO_ROLES.map(
+      (role) => draft.photos.find((entry) => entry.role === role)?.uri,
+    ).filter((uri): uri is string => Boolean(uri)),
+    ...draft.photos.filter((entry) => entry.role === "other").map((entry) => entry.uri),
+  ];
   return {
     ...next,
     orderedUris,

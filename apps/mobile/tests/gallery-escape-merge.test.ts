@@ -18,7 +18,7 @@ describe("mergeGalleryEscapePhotos", () => {
     expect(merged).toEqual([
       { uri: URI_FRONT, role: "front", source: "camera" },
       { uri: URI_BACK, role: "back", source: "camera" },
-      { uri: URI_LABEL, role: "label", source: "gallery" },
+      { uri: URI_LABEL, role: "left", source: "gallery" },
     ]);
   });
 

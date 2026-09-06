@@ -307,6 +307,63 @@ describe("Collection /v1", () => {
     expect(body.jersey.photos[0]?.objectKey.includes("kit/")).toBe(false);
   });
 
+  it("rejects duplicate universal photo roles on save", async () => {
+    const session = await registerSession(app, "photo-roles-dup@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const duplicateResponse = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [
+          { role: "front", source: "gallery", contentBase64: JPEG_BASE64 },
+          { role: "front", source: "gallery", contentBase64: JPEG_BASE64 },
+        ],
+      },
+    });
+
+    expect(duplicateResponse.statusCode).toBe(400);
+  });
+
+  it("persists other photo role with optional label on save", async () => {
+    const session = await registerSession(app, "photo-roles-other@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const saveResponse = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [
+          { role: "front", source: "gallery", contentBase64: JPEG_BASE64 },
+          { role: "other", source: "gallery", contentBase64: JPEG_BASE64, label: "Vaskemærke" },
+        ],
+      },
+    });
+
+    expect(saveResponse.statusCode).toBe(201);
+    const body = collectionSaveResponseSchema.parse(JSON.parse(saveResponse.body));
+    const otherPhoto = body.jersey.photos.find((photo) => photo.role === "other");
+    expect(otherPhoto?.label).toBe("Vaskemærke");
+  });
+
   it("lists saved jerseys with catalog labels and user photo URLs", async () => {
     const session = await registerSession(app, "list@example.com");
     const fixture = await insertClubSeasonFixture();

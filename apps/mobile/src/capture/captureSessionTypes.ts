@@ -6,6 +6,8 @@ export type CaptureSessionPhoto = {
   uri: string;
   role: PhotoRole | null;
   source: PhotoSource;
+  /** Beskrivelse when role is other. */
+  label?: string;
 };
 
 export type CaptureJerseyDraft = {

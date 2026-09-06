@@ -7,8 +7,9 @@ import {
   JERSEY_SIZES,
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
-  PHOTO_ROLES,
   type PhotoRole,
+  UNIVERSAL_PHOTO_ROLES,
+  type UniversalPhotoRole,
 } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -43,6 +44,7 @@ import {
   setActiveDraft,
   setDraftClub,
   setDraftNotes,
+  setDraftPhotoLabel,
   setDraftSeason,
   switchSingleToBulkBind,
   upsertDraftPhoto,
@@ -112,6 +114,7 @@ export default function ConfirmScreen() {
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
   const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
   const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const clubManuallySet = useRef(false);
   const seasonManuallySet = useRef(false);
@@ -361,7 +364,7 @@ export default function ConfirmScreen() {
     };
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
-  const pickPhotoForRole = async (role: PhotoRole) => {
+  const pickPhotoForRole = async (role: PhotoRole, replaceUri?: string) => {
     if (!draft || !sessionId) {
       return;
     }
@@ -379,7 +382,22 @@ export default function ConfirmScreen() {
     }
 
     const uri = uris[0];
-    mutate((current) => upsertDraftPhoto(current, current.activeDraftId, role, uri, "gallery"));
+    const existingLabel =
+      replaceUri && role === "other"
+        ? draft.photos.find((photo) => photo.uri === replaceUri)?.label
+        : undefined;
+    mutate((current) => {
+      const draftId = current.activeDraftId;
+      const base =
+        replaceUri && role === "other"
+          ? removeDraftPhoto(current, draftId, "other", replaceUri)
+          : current;
+      const next = upsertDraftPhoto(base, draftId, role, uri, "gallery");
+      if (existingLabel) {
+        return setDraftPhotoLabel(next, draftId, uri, existingLabel);
+      }
+      return next;
+    });
 
     if (!isBulk && !hadPhotos) {
       void maybeStartVision(role, uri);
@@ -481,6 +499,7 @@ export default function ConfirmScreen() {
     const uri = photoUriForRole(draft, role);
     if (uri) {
       setLightboxRole(role);
+      setLightboxUri(uri);
       return;
     }
 
@@ -502,17 +521,21 @@ export default function ConfirmScreen() {
       return;
     }
     const role = lightboxRole;
+    const replaceUri = lightboxUri ?? undefined;
     setLightboxRole(null);
-    void pickPhotoForRole(role);
+    setLightboxUri(null);
+    void pickPhotoForRole(role, replaceUri);
   };
 
   const handleLightboxDelete = () => {
-    if (!lightboxRole) {
+    if (!lightboxRole || !lightboxUri) {
       return;
     }
     const role = lightboxRole;
-    mutate((current) => removeDraftPhoto(current, current.activeDraftId, role));
+    const uri = lightboxUri;
+    mutate((current) => removeDraftPhoto(current, current.activeDraftId, role, uri));
     setLightboxRole(null);
+    setLightboxUri(null);
   };
 
   const handleLightboxChangeRole = (toRole: PhotoRole) => {
@@ -520,8 +543,23 @@ export default function ConfirmScreen() {
       return;
     }
     const fromRole = lightboxRole;
-    mutate((current) => changeDraftPhotoRole(current, current.activeDraftId, fromRole, toRole));
+    mutate((current) =>
+      changeDraftPhotoRole(
+        current,
+        current.activeDraftId,
+        fromRole,
+        toRole,
+        lightboxUri ?? undefined,
+      ),
+    );
     setLightboxRole(toRole);
+  };
+
+  const handleLightboxChangeLabel = (label: string) => {
+    if (!lightboxUri) {
+      return;
+    }
+    mutate((current) => setDraftPhotoLabel(current, current.activeDraftId, lightboxUri, label));
   };
 
   const handleBindUnboundPhoto = (uri: string) => {
@@ -594,6 +632,7 @@ export default function ConfirmScreen() {
             role: photo.role,
             source: photo.source,
             contentBase64: await readPhotoBase64(photo.uri),
+            ...(photo.role === "other" && photo.label?.trim() ? { label: photo.label.trim() } : {}),
           })),
       );
 
@@ -673,12 +712,19 @@ export default function ConfirmScreen() {
     return null;
   }
 
-  const photoUris: Record<PhotoRole, string | undefined> = {
+  const universalPhotoUris: Record<UniversalPhotoRole, string | undefined> = {
     front: photoUriForRole(draft, "front") ?? undefined,
     back: photoUriForRole(draft, "back") ?? undefined,
-    label: photoUriForRole(draft, "label") ?? undefined,
+    left: photoUriForRole(draft, "left") ?? undefined,
+    right: photoUriForRole(draft, "right") ?? undefined,
   };
-  const photoList = PHOTO_ROLES.filter((role) => photoUris[role]);
+  const otherPhotos = draft.photos.filter(
+    (photo): photo is typeof photo & { role: "other" } => photo.role === "other",
+  );
+  const photoList = [
+    ...UNIVERSAL_PHOTO_ROLES.filter((role) => universalPhotoUris[role]),
+    ...otherPhotos.map((photo) => photo.uri),
+  ];
   const selectedClub =
     draft.clubId && draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null;
   const selectedSeason =
@@ -718,12 +764,24 @@ export default function ConfirmScreen() {
         <View style={styles.section}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
           <View style={styles.photoRow}>
-            {PHOTO_ROLES.map((role) => (
+            {UNIVERSAL_PHOTO_ROLES.map((role) => (
               <PhotoSlot
                 key={role}
                 role={role}
-                uri={photoUris[role]}
+                uri={universalPhotoUris[role]}
                 onPress={() => handlePhotoSlotPress(role)}
+              />
+            ))}
+            {otherPhotos.map((photo) => (
+              <PhotoSlot
+                key={photo.uri}
+                role={photo.role}
+                uri={photo.uri}
+                caption={photo.label}
+                onPress={() => {
+                  setLightboxRole("other");
+                  setLightboxUri(photo.uri);
+                }}
               />
             ))}
           </View>
@@ -731,9 +789,9 @@ export default function ConfirmScreen() {
             <Text style={[typography.caption, { color: theme.contentMuted }]}>
               Mindst ét foto er påkrævet.
             </Text>
-          ) : photoList.length < PHOTO_ROLES.length ? (
+          ) : photoList.length < UNIVERSAL_PHOTO_ROLES.length ? (
             <Text style={[typography.caption, { color: theme.contentMuted }]}>
-              3 fotos anbefales — mærkefoto gør det lettere senere.
+              Fire universelle fotos anbefales — ekstra Andet-fotos er valgfrie.
             </Text>
           ) : null}
         </View>
@@ -1043,15 +1101,20 @@ export default function ConfirmScreen() {
         onDismiss={handlePostSaveDismiss}
       />
 
-      {lightboxRole !== null && photoUris[lightboxRole] !== undefined ? (
+      {lightboxRole !== null && lightboxUri ? (
         <PhotoLightbox
           visible
           role={lightboxRole}
-          uri={photoUris[lightboxRole]}
-          onDismiss={() => setLightboxRole(null)}
+          uri={lightboxUri}
+          label={draft.photos.find((photo) => photo.uri === lightboxUri)?.label ?? ""}
+          onDismiss={() => {
+            setLightboxRole(null);
+            setLightboxUri(null);
+          }}
           onReplace={handleLightboxReplace}
           onDelete={handleLightboxDelete}
           onChangeRole={handleLightboxChangeRole}
+          onChangeLabel={handleLightboxChangeLabel}
         />
       ) : null}
     </View>

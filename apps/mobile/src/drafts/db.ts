@@ -78,3 +78,4 @@ function ensureColumn(table: string, column: string, definition: string): void {
 
 ensureColumn("capture_session_draft", "notes", "TEXT NOT NULL DEFAULT ''");
 ensureColumn("capture_session_draft_photo", "source", "TEXT NOT NULL DEFAULT 'gallery'");
+ensureColumn("capture_session_draft_photo", "label", "TEXT");

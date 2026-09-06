@@ -87,7 +87,7 @@ describe("captureSessionPersistence", () => {
       [
         { role: "front", uri: URI_FRONT, source: "camera" },
         { role: "back", uri: URI_BACK, source: "gallery" },
-        { role: "label", uri: URI_LABEL, source: "gallery" },
+        { role: "left", uri: URI_LABEL, source: "gallery" },
       ],
       { store },
     );
@@ -100,7 +100,7 @@ describe("captureSessionPersistence", () => {
     const draft = getActiveDraft(sessionState);
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
-    expect(photoUriForRole(draft, "label")).toBe(URI_LABEL);
+    expect(photoUriForRole(draft, "left")).toBe(URI_LABEL);
     expect(sessionState.orderedUris).toEqual([URI_FRONT, URI_BACK, URI_LABEL]);
   });
 

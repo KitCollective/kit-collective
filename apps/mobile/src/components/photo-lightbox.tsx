@@ -1,6 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { PHOTO_ROLE_LABELS_DA, PHOTO_ROLES, type PhotoRole } from "@kit/domain";
-import { Image, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Chip } from "@/components/chip";
 import { Button, ButtonDock } from "@/components/ui";
@@ -12,10 +21,12 @@ type PhotoLightboxProps = {
   visible: boolean;
   role: PhotoRole;
   uri: string;
+  label?: string;
   onDismiss: () => void;
   onReplace: () => void;
   onDelete: () => void;
   onChangeRole: (toRole: PhotoRole) => void;
+  onChangeLabel?: (label: string) => void;
 };
 
 /** Full-size photo preview with replace, delete, and role-change actions (KIT-208). */
@@ -23,10 +34,12 @@ export function PhotoLightbox({
   visible,
   role,
   uri,
+  label = "",
   onDismiss,
   onReplace,
   onDelete,
   onChangeRole,
+  onChangeLabel,
 }: PhotoLightboxProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -34,7 +47,9 @@ export function PhotoLightbox({
   const { width: windowWidth } = useWindowDimensions();
   const previewWidth = Math.min(windowWidth - space.insetLg * 2, 360);
   const previewHeight = (previewWidth * 5) / 4;
-  const roleLabel = PHOTO_ROLE_LABELS_DA[role];
+  const roleLabel =
+    role === "other" ? label.trim() || PHOTO_ROLE_LABELS_DA.other : PHOTO_ROLE_LABELS_DA[role];
+  const suggestionLabels = ["Vaskemærke", "ID-kode", "Slitage"];
 
   return (
     <Modal
@@ -100,6 +115,37 @@ export function PhotoLightbox({
               ))}
             </View>
           </View>
+
+          {role === "other" ? (
+            <View style={styles.roleRow}>
+              <Text style={[typography.caption, { color: theme.contentMuted }]}>Beskrivelse</Text>
+              <TextInput
+                accessibilityLabel="Beskrivelse"
+                placeholder="f.eks. Vaskemærke"
+                placeholderTextColor={theme.contentMuted}
+                value={label}
+                onChangeText={onChangeLabel}
+                style={[
+                  styles.descriptionInput,
+                  {
+                    color: theme.contentPrimary,
+                    borderColor: theme.borderSubtle,
+                    backgroundColor: theme.surface,
+                  },
+                ]}
+              />
+              <View style={styles.chipRow}>
+                {suggestionLabels.map((suggestion) => (
+                  <Chip
+                    key={suggestion}
+                    label={suggestion}
+                    selected={label === suggestion}
+                    onPress={() => onChangeLabel?.(suggestion)}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <ButtonDock>
@@ -152,5 +198,13 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "center",
     gap: space.gapSm,
+  },
+  descriptionInput: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: space.insetMd,
+    paddingVertical: space.insetSm,
+    minHeight: 44,
   },
 });

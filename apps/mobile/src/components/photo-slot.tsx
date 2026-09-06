@@ -10,6 +10,7 @@ type PhotoSlotVariant = "confirm-strip" | "camera-overlay";
 type PhotoSlotProps = {
   role: PhotoRole;
   uri?: string;
+  caption?: string;
   variant?: PhotoSlotVariant;
   selected?: boolean;
   onPress: () => void;
@@ -31,13 +32,15 @@ const OVERLAY_HEIGHT = photoSlotHeight(OVERLAY_WIDTH);
 export function PhotoSlot({
   role,
   uri,
+  caption,
   variant = "confirm-strip",
   selected = false,
   onPress,
 }: PhotoSlotProps) {
   const theme = useTheme();
   const typography = useTypography();
-  const roleLabel = PHOTO_ROLE_LABELS_DA[role];
+  const roleLabel =
+    role === "other" ? caption?.trim() || PHOTO_ROLE_LABELS_DA.other : PHOTO_ROLE_LABELS_DA[role];
   const isEmpty = !uri;
   const isOverlay = variant === "camera-overlay";
   const slotWidth = isOverlay ? OVERLAY_WIDTH : CONFIRM_WIDTH;

@@ -183,6 +183,13 @@
       "when": 1788400000000,
       "tag": "0025_national_team_grain",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788410000000,
+      "tag": "0026_photo_roles",
+      "breakpoints": true
     }
   ]
 }
