@@ -148,6 +148,36 @@ export async function seedNationalTeamTransfermarktSeasonOnly(
   return insertNationalTeamSeasonPrerequisites(pool, input);
 }
 
+/** NationalTeam + fkapi id, no Season / national_team_season — refuse path for missing season. */
+export async function seedNationalTeamWithoutSeason(
+  pool: Pool,
+  scope: NationalTeamTestFixtureScope,
+): Promise<{ nationalTeamId: string }> {
+  const countryRow = await pool.query<{ id: string }>(
+    `INSERT INTO country (iso3166) VALUES ('DK') RETURNING id`,
+  );
+  const countryId = countryRow.rows[0]!.id;
+
+  const ntRow = await pool.query<{ id: string }>(
+    `INSERT INTO national_team (country_id, gender) VALUES ($1, 'men') RETURNING id`,
+    [countryId],
+  );
+  const nationalTeamId = ntRow.rows[0]!.id;
+
+  await pool.query(
+    `INSERT INTO external_id (entity_type, entity_id, system, value)
+     VALUES ('national_team', $1, $2, $3)`,
+    [nationalTeamId, EXTERNAL_SYSTEM_TRANSFERMARKT, scope.nationalTeamTransfermarktId],
+  );
+  await pool.query(
+    `INSERT INTO external_id (entity_type, entity_id, system, value)
+     VALUES ('national_team', $1, $2, $3)`,
+    [nationalTeamId, EXTERNAL_SYSTEM_FKAPI, scope.nationalTeamFkApiId],
+  );
+
+  return { nationalTeamId };
+}
+
 type FixtureFile = {
   kits: Record<string, unknown>[];
 };

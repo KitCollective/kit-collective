@@ -174,6 +174,46 @@ describe("createFkApiFetchAdapter", () => {
       expect.any(Object),
     );
   });
+
+  it("drops national-team kits whose FKA team id is not the resolved scope", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        kits: [
+          {
+            id: "fk-nt-keep",
+            nationalTeamFkApiId: "fka-denmark",
+            seasonTransfermarktId: "WC-2010",
+            seasonLabel: "2010",
+            type: "home",
+            imageBytes: [255, 216, 255],
+          },
+          {
+            id: "fk-nt-other",
+            nationalTeamFkApiId: "fka-sweden",
+            seasonTransfermarktId: "WC-2010",
+            seasonLabel: "2010",
+            type: "home",
+            imageBytes: [255, 216, 255],
+          },
+        ],
+      }),
+    });
+
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: createSeedHttpFetch({ requireProxy: false }, fetchMock, createProxyAgent),
+    });
+
+    const kits = await adapter.fetchKits({
+      kind: "national_team",
+      nationalTeamRef: "fka-denmark",
+      season: "2010",
+    });
+
+    expect(kits.map((kit) => kit.id)).toEqual(["fk-nt-keep"]);
+  });
 });
 
 describe("runCli proxy behaviour", () => {

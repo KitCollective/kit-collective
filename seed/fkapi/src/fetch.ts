@@ -35,7 +35,7 @@ function kitMatchesScope(kit: FkRawKit, scope: SeedScope): boolean {
     if (!isNationalTeamKit(kit)) {
       return false;
     }
-    return kit.seasonLabel === scope.season;
+    return kit.nationalTeamFkApiId === scope.nationalTeamRef && kit.seasonLabel === scope.season;
   }
 
   if (!isClubKit(kit)) {

@@ -17,6 +17,7 @@ import {
   seedApifyPrerequisites,
   seedNationalTeamPrerequisites,
   seedNationalTeamTransfermarktSeasonOnly,
+  seedNationalTeamWithoutSeason,
 } from "./fixture-scope.js";
 import { resolveSeedFkapiTestDatabaseUrl } from "./test-database-url.js";
 import { resetTestDatabase } from "./test-db.js";
@@ -447,6 +448,29 @@ describe("FK seed mapper", () => {
         },
       }),
     ).rejects.toThrow(/Missing NationalTeam row/);
+    expect(objectStore.objects.size).toBe(0);
+    const kitCount = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM kit WHERE national_team_id IS NOT NULL`,
+    );
+    expect(kitCount.rows[0]?.count).toBe("0");
+  });
+
+  it("refuses national-team scope when Season is missing for an existing NationalTeam", async () => {
+    const scope = allocateNationalTeamTestFixtureScope();
+    await seedNationalTeamWithoutSeason(pool, scope);
+    const objectStore = createMemoryObjectStore();
+    await expect(
+      runFkSeed({
+        databaseUrl: TEST_DATABASE_URL,
+        fetchAdapter: createScopedNationalTeamFixtureFetchAdapter(scope),
+        objectStore,
+        scope: {
+          kind: "national_team",
+          nationalTeamRef: scope.nationalTeamTransfermarktId,
+          season: scope.seasonLabel,
+        },
+      }),
+    ).rejects.toThrow(/Missing Season row/);
     expect(objectStore.objects.size).toBe(0);
     const kitCount = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM kit WHERE national_team_id IS NOT NULL`,
