@@ -93,7 +93,7 @@ export default function CaptureScreen() {
   );
 
   const openGalleryEscape = useCallback(
-    async (existingUris: string[]) => {
+    async (existingPhotos: string[]) => {
       const uris = await pickGalleryPhotos(
         {
           allowsMultipleSelection: true,
@@ -106,7 +106,7 @@ export default function CaptureScreen() {
         return false;
       }
 
-      const merged = mergeGalleryEscapePhotos(existingUris, uris);
+      const merged = mergeGalleryEscapePhotos(existingPhotos, uris);
       finishCaptureFromPhotos(merged);
       return true;
     },
@@ -142,7 +142,7 @@ export default function CaptureScreen() {
       initialPhotoUris={initialPhotoUris}
       onComplete={(uris) => finishCapture(uris, "camera")}
       onClose={() => router.back()}
-      onGalleryEscape={(existingUris) => void openGalleryEscape(existingUris)}
+      onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}
       onPhotoCaptured={handlePhotoCaptured}
     />
   );
