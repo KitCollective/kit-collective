@@ -5,7 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { fetchUnsignedVisionJob, startUnsignedVisionSuggest } from "@/api/vision";
 import { loadPersistedCaptureSession } from "@/capture/captureFlow";
 import { getActiveDraft, photoUriForRole } from "@/capture/captureSession";
-import { readPhotoBase64 } from "@/capture/photoBytes";
+import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { PhotoSlot } from "@/components/photo-slot";
 import { Button, ButtonDock } from "@/components/ui";
 import {
@@ -149,7 +149,7 @@ export function FirstSessionAnalysingScreen({
 
     void (async () => {
       try {
-        const contentBase64 = await readPhotoBase64(firstPhoto.uri);
+        const contentBase64 = await readPreparedPhotoBase64(firstPhoto.uri, firstPhoto.role, "visionIdentity");
         jobId = await startUnsignedVisionSuggest({
           draftId: captureSessionId,
           photo: { role: firstPhoto.role, contentBase64 },

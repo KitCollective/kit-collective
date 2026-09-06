@@ -13,7 +13,7 @@ import {
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
 import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
-import { readPhotoBase64 } from "@/capture/photoBytes";
+import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { motion } from "@/theme/tokens";
 
 const VISION_TIMEOUT_MS = 12_000;
@@ -110,7 +110,7 @@ export function useConfirmVision({
 
       startAttempted.current = true;
       try {
-        const contentBase64 = await readPhotoBase64(uri);
+        const contentBase64 = await readPreparedPhotoBase64(uri, role, "visionIdentity");
         const nextJobId = await startVisionSuggest(accessToken, {
           photo: { role, contentBase64 },
         });
@@ -145,7 +145,11 @@ export function useConfirmVision({
     void (async () => {
       startAttempted.current = true;
       try {
-        const contentBase64 = await readPhotoBase64(firstPhotoUri);
+        const contentBase64 = await readPreparedPhotoBase64(
+          firstPhotoUri,
+          firstPhotoRole,
+          "visionIdentity",
+        );
         const nextJobId = await startVisionSuggest(accessToken, {
           photo: { role: firstPhotoRole, contentBase64 },
         });

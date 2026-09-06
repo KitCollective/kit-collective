@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/auth/AuthProvider";
@@ -16,6 +16,7 @@ import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmPhotos } from "@/capture/use-confirm-photos";
 import { useConfirmVision } from "@/capture/use-confirm-vision";
 import { useConfirmSave } from "@/capture/useConfirmSave";
+import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { JerseyTabBar } from "@/components/bulk/JerseyTabBar";
 import { UnboundPhotosRow } from "@/components/bulk/UnboundPhotosRow";
 import { ConfirmHubHeader, confirmHubHeaderScrollPadding } from "@/components/confirm-hub-header";
@@ -76,6 +77,13 @@ export default function ConfirmScreen() {
     mutate,
     onFirstSinglePhoto: (role, uri) => void vision.startVision(role, uri),
   });
+
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+    warmDevicePrepareForDraftRuntime(draft);
+  }, [draft]);
   const [dataSectionHeight, setDataSectionHeight] = useState(0);
   const [detailsSectionHeight, setDetailsSectionHeight] = useState(0);
   const sectionMinHeight = Math.max(dataSectionHeight, detailsSectionHeight) || undefined;
