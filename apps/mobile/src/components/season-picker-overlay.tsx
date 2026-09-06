@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
 import type { CatalogPickerItem } from "@kit/api-contract";
+import { useMemo, useState } from "react";
 import { type CatalogPickerRow, dummySeasonsForClub } from "@/catalog/dummyCatalog";
 import { CatalogPickerModal } from "@/components/catalog-picker-modal";
 

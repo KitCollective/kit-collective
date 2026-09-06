@@ -1,17 +1,17 @@
 import type { CatalogPickerItem, VisionJobResponse } from "@kit/api-contract";
 import { resolveVisionSaveAction } from "@kit/api-contract";
 import type { PhotoRole } from "@kit/domain";
-import { fetchVisionJob, logVisionAction } from "@/api/vision";
 import { saveUserJersey, updateUserJersey } from "@/api/collection";
+import { fetchVisionJob, logVisionAction } from "@/api/vision";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
 import { addJerseyDraft, removeDraft } from "@/capture/captureSession";
-import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
-import { readPhotoBase64 } from "@/capture/photoBytes";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
   CaptureSessionState,
 } from "@/capture/captureSessionTypes";
+import { readPhotoBase64 } from "@/capture/photoBytes";
+import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { markJerseySaved } from "@/session/addSession";
 
 export type ConfirmSaveOutcome =

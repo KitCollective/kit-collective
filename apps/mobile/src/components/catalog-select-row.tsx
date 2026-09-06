@@ -52,10 +52,7 @@ export function CatalogSelectRow({
       )}
       <View style={styles.body}>
         <Text
-          style={[
-            typography.body,
-            { color: isEmpty ? theme.contentMuted : theme.contentPrimary },
-          ]}
+          style={[typography.body, { color: isEmpty ? theme.contentMuted : theme.contentPrimary }]}
         >
           {value ?? placeholder}
         </Text>
