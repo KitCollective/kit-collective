@@ -31,18 +31,20 @@ import {
   addJerseyDraft,
   bindUnboundPhotoToDraft,
   canSave,
+  changeDraftPhotoRole,
   getDraft,
   photoUriForRole,
   removeDraft,
+  removeDraftPhoto,
   selectDraftCondition,
   selectDraftKitType,
   selectDraftSize,
   setActiveDraft,
   setDraftClub,
   setDraftNotes,
+  setDraftPhotoLabel,
   setDraftSeason,
   switchSingleToBulkBind,
-  unbindPhoto,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
@@ -54,6 +56,7 @@ import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession
 import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 import { PhotoSlot } from "@/components/photo-slot";
 import { Button, ButtonDock } from "@/components/ui";
 import { shouldGateFirstSessionSave } from "@/first-session/first-session-entitlement";
@@ -110,6 +113,8 @@ export function JerseyDetailsScreen({
   const [visionPolling, setVisionPolling] = useState(false);
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
   const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
+  const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const clubManuallySet = useRef(false);
   const seasonManuallySet = useRef(false);
@@ -352,7 +357,7 @@ export function JerseyDetailsScreen({
     };
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
-  const pickPhotoForRole = async (role: PhotoRole) => {
+  const pickPhotoForRole = async (role: PhotoRole, replaceUri?: string) => {
     if (!draft || isBulk) {
       return;
     }
@@ -370,7 +375,22 @@ export function JerseyDetailsScreen({
     }
 
     const uri = uris[0];
-    mutate((current) => upsertDraftPhoto(current, current.activeDraftId, role, uri, "gallery"));
+    const existingLabel =
+      replaceUri && role === "other"
+        ? draft.photos.find((photo) => photo.uri === replaceUri)?.label
+        : undefined;
+    mutate((current) => {
+      const draftId = current.activeDraftId;
+      const base =
+        replaceUri && role === "other"
+          ? removeDraftPhoto(current, draftId, "other", replaceUri)
+          : current;
+      const next = upsertDraftPhoto(base, draftId, role, uri, "gallery");
+      if (existingLabel) {
+        return setDraftPhotoLabel(next, draftId, uri, existingLabel);
+      }
+      return next;
+    });
 
     if (!hadPhotos) {
       void maybeStartVision(role, uri);
@@ -452,12 +472,13 @@ export function JerseyDetailsScreen({
     }
 
     const uri = photoUriForRole(draft, role);
-    if (isBulk) {
-      if (uri) {
-        mutate((current) => unbindPhoto(current, uri));
-        return;
-      }
+    if (uri) {
+      setLightboxRole(role);
+      setLightboxUri(uri);
+      return;
+    }
 
+    if (isBulk) {
       const firstUnbound = state.unboundUris[0];
       if (firstUnbound) {
         mutate((current) =>
@@ -468,6 +489,52 @@ export function JerseyDetailsScreen({
     }
 
     void pickPhotoForRole(role);
+  };
+
+  const handleLightboxReplace = () => {
+    if (!lightboxRole) {
+      return;
+    }
+    const role = lightboxRole;
+    const replaceUri = lightboxUri ?? undefined;
+    setLightboxRole(null);
+    setLightboxUri(null);
+    void pickPhotoForRole(role, replaceUri);
+  };
+
+  const handleLightboxDelete = () => {
+    if (!lightboxRole || !lightboxUri) {
+      return;
+    }
+    const role = lightboxRole;
+    const uri = lightboxUri;
+    mutate((current) => removeDraftPhoto(current, current.activeDraftId, role, uri));
+    setLightboxRole(null);
+    setLightboxUri(null);
+  };
+
+  const handleLightboxChangeRole = (toRole: PhotoRole) => {
+    if (!lightboxRole) {
+      return;
+    }
+    const fromRole = lightboxRole;
+    mutate((current) =>
+      changeDraftPhotoRole(
+        current,
+        current.activeDraftId,
+        fromRole,
+        toRole,
+        lightboxUri ?? undefined,
+      ),
+    );
+    setLightboxRole(toRole);
+  };
+
+  const handleLightboxChangeLabel = (label: string) => {
+    if (!lightboxUri) {
+      return;
+    }
+    mutate((current) => setDraftPhotoLabel(current, current.activeDraftId, lightboxUri, label));
   };
 
   const handleBindUnboundPhoto = (uri: string) => {
@@ -668,7 +735,10 @@ export function JerseyDetailsScreen({
                 role={photo.role}
                 uri={photo.uri}
                 caption={photo.label}
-                onPress={() => handlePhotoSlotPress("other")}
+                onPress={() => {
+                  setLightboxRole("other");
+                  setLightboxUri(photo.uri);
+                }}
               />
             ))}
           </View>
@@ -953,6 +1023,23 @@ export function JerseyDetailsScreen({
           ]}
         />
       </Sheet>
+
+      {lightboxRole !== null && lightboxUri ? (
+        <PhotoLightbox
+          visible
+          role={lightboxRole}
+          uri={lightboxUri}
+          label={draft.photos.find((photo) => photo.uri === lightboxUri)?.label ?? ""}
+          onDismiss={() => {
+            setLightboxRole(null);
+            setLightboxUri(null);
+          }}
+          onReplace={handleLightboxReplace}
+          onDelete={handleLightboxDelete}
+          onChangeRole={handleLightboxChangeRole}
+          onChangeLabel={handleLightboxChangeLabel}
+        />
+      ) : null}
     </View>
   );
 }
