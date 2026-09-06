@@ -8,6 +8,7 @@ import {
 } from "./captureSessionActivePointer";
 import type { PrefilledClub } from "./captureSessionPersistence";
 import {
+  finalizeShootFirstSession,
   loadPersistedCaptureSession,
   persistCameraShotInSession,
   replacePersistedCapturePhotos,
@@ -21,6 +22,7 @@ export type { PrefilledClub };
 export {
   clearActiveCameraCaptureSessionId,
   clearMemoryActiveCameraCaptureSessionIdForTests,
+  finalizeShootFirstSession,
   loadPersistedCaptureSession,
   mergeGalleryEscapePhotos,
   persistCameraShotInSession,

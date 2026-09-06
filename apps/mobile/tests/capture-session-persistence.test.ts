@@ -10,6 +10,7 @@ import {
   setMemoryActiveCameraCaptureSessionIdForTests,
 } from "../src/capture/captureSessionActivePointer";
 import {
+  finalizeShootFirstSession,
   persistCameraShotInSession,
   replacePersistedCapturePhotos,
   resolveResumableCameraSession,
@@ -25,29 +26,31 @@ describe("captureSessionPersistence", () => {
     clearMemoryActiveCameraCaptureSessionIdForTests();
   });
 
-  it("persists the first camera shot in a new session", () => {
+  it("persists the first camera shot unassigned in a new session", () => {
     const store = createMemoryCaptureSessionStore();
     const sessionId = persistCameraShotInSession(
       null,
-      { role: "front", uri: URI_FRONT, source: "camera" },
+      { uri: URI_FRONT, source: "camera" },
       { store, photoSource: "camera" },
     );
 
+    const draft = getActiveDraft(store.load()!);
+    expect(draft.photos).toEqual([{ uri: URI_FRONT, role: null, source: "camera" }]);
     expect(store.load()?.orderedUris).toEqual([URI_FRONT]);
     expect(getActiveCameraCaptureSessionId()).toBe(sessionId);
   });
 
-  it("appends later camera shots to the same session", () => {
+  it("appends later camera shots unassigned to the same session", () => {
     const store = createMemoryCaptureSessionStore();
     const sessionId = persistCameraShotInSession(
       null,
-      { role: "front", uri: URI_FRONT, source: "camera" },
+      { uri: URI_FRONT, source: "camera" },
       { store, photoSource: "camera" },
     );
 
     persistCameraShotInSession(
       sessionId,
-      { role: "back", uri: URI_BACK, source: "camera" },
+      { uri: URI_BACK, source: "camera" },
       { store, photoSource: "camera" },
     );
 
@@ -57,8 +60,10 @@ describe("captureSessionPersistence", () => {
       throw new Error("expected session");
     }
     const draft = getActiveDraft(sessionState);
-    expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
-    expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
+    expect(draft.photos).toEqual([
+      { uri: URI_FRONT, role: null, source: "camera" },
+      { uri: URI_BACK, role: null, source: "camera" },
+    ]);
     expect(getActiveCameraCaptureSessionId()).toBe(sessionId);
   });
 
@@ -66,7 +71,7 @@ describe("captureSessionPersistence", () => {
     const store = createMemoryCaptureSessionStore();
     const sessionId = persistCameraShotInSession(
       "missing-session-id",
-      { role: "front", uri: URI_FRONT, source: "camera" },
+      { uri: URI_FRONT, source: "camera" },
       { store, photoSource: "camera" },
     );
 
@@ -74,20 +79,20 @@ describe("captureSessionPersistence", () => {
     expect(store.load()?.orderedUris).toEqual([URI_FRONT]);
   });
 
-  it("atomically replaces photos without a separate clear step", () => {
+  it("atomically replaces photos and applies fill order for unassigned shots", () => {
     const store = createMemoryCaptureSessionStore();
     const sessionId = persistCameraShotInSession(
       null,
-      { role: "front", uri: URI_FRONT, source: "camera" },
+      { uri: URI_FRONT, source: "camera" },
       { store, photoSource: "camera" },
     );
 
     replacePersistedCapturePhotos(
       sessionId,
       [
-        { role: "front", uri: URI_FRONT, source: "camera" },
-        { role: "back", uri: URI_BACK, source: "gallery" },
-        { role: "left", uri: URI_LABEL, source: "gallery" },
+        { role: null, uri: URI_FRONT, source: "camera" },
+        { role: null, uri: URI_BACK, source: "gallery" },
+        { role: null, uri: URI_LABEL, source: "gallery" },
       ],
       { store },
     );
@@ -108,7 +113,7 @@ describe("captureSessionPersistence", () => {
     const backingStore = createMemoryCaptureSessionStore();
     const sessionId = persistCameraShotInSession(
       null,
-      { role: "front", uri: URI_FRONT, source: "camera" },
+      { uri: URI_FRONT, source: "camera" },
       { store: backingStore, photoSource: "camera" },
     );
 
@@ -128,8 +133,8 @@ describe("captureSessionPersistence", () => {
       replacePersistedCapturePhotos(
         sessionId,
         [
-          { role: "front", uri: URI_FRONT, source: "camera" },
-          { role: "back", uri: URI_BACK, source: "gallery" },
+          { role: null, uri: URI_FRONT, source: "camera" },
+          { role: null, uri: URI_BACK, source: "gallery" },
         ],
         { store: failingStore },
       ),
@@ -142,7 +147,7 @@ describe("captureSessionPersistence", () => {
     const store = createMemoryCaptureSessionStore();
     const sessionId = persistCameraShotInSession(
       null,
-      { role: "front", uri: URI_FRONT, source: "camera" },
+      { uri: URI_FRONT, source: "camera" },
       { store, photoSource: "camera" },
     );
 
@@ -152,6 +157,43 @@ describe("captureSessionPersistence", () => {
       readSession: (id) => (id === sessionId ? store.load() : null),
     });
     expect(resumed?.sessionId).toBe(sessionId);
-    expect(resumed?.photos).toEqual([{ role: "front", uri: URI_FRONT }]);
+    expect(resumed?.photoUris).toEqual([URI_FRONT]);
+  });
+
+  it("assigns fill order when finalizing a shoot-first session", () => {
+    const store = createMemoryCaptureSessionStore();
+    const sessionId = persistCameraShotInSession(
+      null,
+      { uri: URI_FRONT, source: "camera" },
+      { store, photoSource: "camera" },
+    );
+    persistCameraShotInSession(
+      sessionId,
+      { uri: URI_BACK, source: "camera" },
+      { store, photoSource: "camera" },
+    );
+
+    finalizeShootFirstSession(sessionId, { store });
+
+    const draft = getActiveDraft(store.load()!);
+    expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
+    expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
+  });
+
+  it("preserves per-photo source when replacing mixed camera and gallery shots", () => {
+    const store = createMemoryCaptureSessionStore();
+
+    replacePersistedCapturePhotos(
+      null,
+      [
+        { role: null, uri: URI_FRONT, source: "camera" },
+        { role: null, uri: URI_BACK, source: "gallery" },
+      ],
+      { store },
+    );
+
+    const draft = getActiveDraft(store.load()!);
+    expect(draft.photos.find((photo) => photo.uri === URI_FRONT)?.source).toBe("camera");
+    expect(draft.photos.find((photo) => photo.uri === URI_BACK)?.source).toBe("gallery");
   });
 });

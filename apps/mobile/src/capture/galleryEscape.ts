@@ -1,54 +1,29 @@
-import type { PhotoRole } from "@kit/domain";
-import { MAX_USER_JERSEY_PHOTOS, UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
+import { MAX_USER_JERSEY_PHOTOS } from "@kit/domain";
 import type { CaptureSessionPhoto } from "./captureSessionTypes";
 
 /**
- * Merge in-progress camera shots with gallery escape picks.
- * Camera photos keep their roles; gallery URIs fill the next empty universal roles, then Andet.
+ * Merge in-progress shoot-first camera shots with gallery escape picks.
+ * All photos stay unassigned until Confirm applies fill order.
  */
 export function mergeGalleryEscapePhotos(
-  cameraPhotos: Array<{ role: PhotoRole; uri: string }>,
+  cameraUris: string[],
   galleryUris: string[],
 ): CaptureSessionPhoto[] {
-  const merged: CaptureSessionPhoto[] = cameraPhotos.map((photo) => ({
-    uri: photo.uri,
-    role: photo.role,
+  const merged: CaptureSessionPhoto[] = cameraUris.map((uri) => ({
+    uri,
+    role: null,
     source: "camera",
   }));
 
-  const filledRoles = new Set(cameraPhotos.map((photo) => photo.role));
-  let galleryIndex = 0;
-
-  for (const role of UNIVERSAL_PHOTO_ROLES) {
-    if (filledRoles.has(role)) {
-      continue;
-    }
-    if (galleryIndex >= galleryUris.length) {
-      break;
-    }
-    const uri = galleryUris[galleryIndex];
-    if (!uri) {
+  for (const uri of galleryUris) {
+    if (merged.length >= MAX_USER_JERSEY_PHOTOS) {
       break;
     }
     merged.push({
       uri,
-      role,
+      role: null,
       source: "gallery",
     });
-    galleryIndex += 1;
-  }
-
-  while (galleryIndex < galleryUris.length && merged.length < MAX_USER_JERSEY_PHOTOS) {
-    const uri = galleryUris[galleryIndex];
-    if (!uri) {
-      break;
-    }
-    merged.push({
-      uri,
-      role: "other",
-      source: "gallery",
-    });
-    galleryIndex += 1;
   }
 
   return merged;
