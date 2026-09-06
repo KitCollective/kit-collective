@@ -256,7 +256,7 @@ function CollectionHome() {
           const primaryPhoto = item.photos[0];
           const photoSource = primaryPhoto
             ? {
-                uri: resolvePhotoUrl(primaryPhoto.photoUrl),
+                uri: resolvePhotoUrl(primaryPhoto.photoUrl, "grid"),
                 headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
               }
             : undefined;

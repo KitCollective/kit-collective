@@ -69,7 +69,13 @@ import {
   visionLog,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
-import { KIT_TYPE_LABELS_DA, validateJerseyPhotos } from "@kit/domain";
+import {
+  KIT_TYPE_LABELS_DA,
+  maxSavePhotoBytesForRole,
+  photoObjectKeysForDeletion,
+  validateJerseyPhotos,
+} from "@kit/domain";
+import type { CollectionPhotoVariantQuery } from "@kit/api-contract";
 import {
   BadRequestException,
   ForbiddenException,
@@ -86,6 +92,10 @@ import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
+import {
+  gridObjectKeyForNewPhoto,
+  resolveStoredPhotoBytes,
+} from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
@@ -153,12 +163,15 @@ function hasR2Config(): boolean {
   );
 }
 
-function decodeBase64Photo(contentBase64: string): Uint8Array {
+function decodeBase64Photo(contentBase64: string, maxBytes?: number): Uint8Array {
   const commaIndex = contentBase64.indexOf(",");
   const normalized = commaIndex >= 0 ? contentBase64.slice(commaIndex + 1) : contentBase64;
   const bytes = Buffer.from(normalized, "base64");
   if (bytes.length === 0) {
     throw new BadRequestException("Photo bytes are empty");
+  }
+  if (maxBytes !== undefined && bytes.length > maxBytes) {
+    throw new BadRequestException("Photo exceeds the maximum upload size");
   }
   return Uint8Array.from(bytes);
 }
@@ -1095,22 +1108,31 @@ export class CollectionService {
       .where(eq(userJerseyPhoto.userJerseyId, jerseyId));
 
     const photoBytes = new Map<string, Uint8Array>();
+    const keysToDelete = new Set<string>();
     for (const photo of photoRows) {
       if (!photo.objectKey.startsWith(`user/${userId}/${jerseyId}/`)) {
         throw new InternalServerErrorException("Invalid photo object key");
       }
-      const bytes = await this.objectStore.getObject(photo.objectKey);
-      if (!bytes) {
-        throw new InternalServerErrorException("Photo bytes missing");
+      for (const key of photoObjectKeysForDeletion(photo.objectKey)) {
+        keysToDelete.add(key);
       }
-      photoBytes.set(photo.objectKey, bytes);
+    }
+
+    for (const key of keysToDelete) {
+      const bytes = await this.objectStore.getObject(key);
+      if (bytes) {
+        photoBytes.set(key, bytes);
+      }
     }
 
     const deletedKeys: string[] = [];
     try {
-      for (const photo of photoRows) {
-        await this.objectStore.deleteObject(photo.objectKey);
-        deletedKeys.push(photo.objectKey);
+      for (const key of keysToDelete) {
+        if (!(await this.objectStore.objectExists(key))) {
+          continue;
+        }
+        await this.objectStore.deleteObject(key);
+        deletedKeys.push(key);
       }
     } catch {
       for (const key of deletedKeys) {
@@ -2114,7 +2136,10 @@ export class CollectionService {
     });
   }
 
-  async getShowcasePhotoBytes(photoId: string): Promise<Uint8Array> {
+  async getShowcasePhotoBytes(
+    photoId: string,
+    variant?: CollectionPhotoVariantQuery,
+  ): Promise<Uint8Array> {
     const [row] = await this.db
       .select({
         objectKey: userJerseyPhoto.objectKey,
@@ -2134,7 +2159,7 @@ export class CollectionService {
       throw new NotFoundException("Photo not found");
     }
 
-    const bytes = await this.objectStore.getObject(row.objectKey);
+    const bytes = await resolveStoredPhotoBytes(this.objectStore, row.objectKey, variant);
     if (!bytes) {
       throw new NotFoundException("Photo bytes missing");
     }
@@ -2142,7 +2167,11 @@ export class CollectionService {
     return bytes;
   }
 
-  async getPhotoBytes(userId: string, photoId: string): Promise<Uint8Array> {
+  async getPhotoBytes(
+    userId: string,
+    photoId: string,
+    variant?: CollectionPhotoVariantQuery,
+  ): Promise<Uint8Array> {
     const [row] = await this.db
       .select({
         objectKey: userJerseyPhoto.objectKey,
@@ -2197,7 +2226,7 @@ export class CollectionService {
       throw new NotFoundException("Photo not found");
     }
 
-    const bytes = await this.objectStore.getObject(row.objectKey);
+    const bytes = await resolveStoredPhotoBytes(this.objectStore, row.objectKey, variant);
     if (!bytes) {
       throw new NotFoundException("Photo bytes missing");
     }
@@ -2468,9 +2497,12 @@ export class CollectionService {
     const saved: CollectionJersey["photos"] = [];
 
     for (const photo of photos) {
-      const bytes = decodeBase64Photo(photo.contentBase64);
+      const bytes = decodeBase64Photo(
+        photo.contentBase64,
+        maxSavePhotoBytesForRole(photo.role),
+      );
       const photoId = crypto.randomUUID();
-      const objectKey = `user/${userId}/${jerseyId}/${photoId}.jpg`;
+      const objectKey = gridObjectKeyForNewPhoto(userId, jerseyId, photoId);
 
       await this.objectStore.putObject(objectKey, bytes);
 

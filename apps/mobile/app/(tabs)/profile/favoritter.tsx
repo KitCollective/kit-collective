@@ -88,7 +88,7 @@ export default function FavoritesScreen() {
             <View style={{ width: tileWidth }}>
               <JerseyTile
                 photoSource={{
-                  uri: resolvePhotoUrl(item.photoUrl),
+                  uri: resolvePhotoUrl(item.photoUrl, "grid"),
                   headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
                 }}
                 clubLabel={item.clubLabel}

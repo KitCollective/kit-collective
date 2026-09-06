@@ -109,9 +109,11 @@ export async function deleteUserJersey(accessToken: string, jerseyId: string): P
   }
 }
 
-export function resolvePhotoUrl(photoUrl: string): string {
-  if (photoUrl.startsWith("http")) {
-    return photoUrl;
+export function resolvePhotoUrl(photoUrl: string, variant?: "grid"): string {
+  const base = photoUrl.startsWith("http") ? photoUrl : `${getApiBaseUrl()}${photoUrl}`;
+  if (!variant) {
+    return base;
   }
-  return `${getApiBaseUrl()}${photoUrl}`;
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}variant=${variant}`;
 }

@@ -229,7 +229,12 @@ export {
   collectionSaveResponseSchema,
 } from "./collection/save.js";
 export {
-  type CollectionJerseysQuery,
+  type AdminCollectorPhotoVariantQuery,
+  adminCollectorPhotoVariantQuerySchema,
+  type CollectionPhotoVariantQuery,
+  collectionPhotoVariantQuerySchema,
+} from "./collection/photo-variant.js";
+export {
   type CollectionShortcut,
   type CollectionShortcutIdParam,
   type CollectionShortcutReorder,

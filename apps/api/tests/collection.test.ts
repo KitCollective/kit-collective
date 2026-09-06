@@ -1654,4 +1654,86 @@ describe("Collection /v1", () => {
     await afterPool.end();
     expect(labelCountAfter?.value).toBe(labelCountBefore?.value);
   });
+
+  it("stores grid JPEG on save and serves variant=grid", async () => {
+    const session = await registerSession(app, "grid-variant@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const saveResponse = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(saveResponse.statusCode).toBe(201);
+    const saved = collectionSaveResponseSchema.parse(JSON.parse(saveResponse.body));
+    const photo = saved.jersey.photos[0];
+    expect(photo?.objectKey.endsWith("/grid.jpg")).toBe(true);
+
+    const gridResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photo?.id}?variant=grid`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(gridResponse.statusCode).toBe(200);
+    expect(gridResponse.headers["content-type"]).toContain("image/jpeg");
+
+    const defaultResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photo?.id}`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(defaultResponse.statusCode).toBe(200);
+    expect(defaultResponse.rawPayload).toEqual(gridResponse.rawPayload);
+  });
+
+  it("rejects original variant for collectors", async () => {
+    const session = await registerSession(app, "grid-original-block@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const jersey = await saveJerseyForUser(app, session, fixture);
+    const photoId = jersey.photos[0]?.id;
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photoId}?variant=original`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it("rejects oversized save uploads", async () => {
+    const session = await registerSession(app, "grid-clamp@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const oversized = Buffer.alloc(2 * 1024 * 1024 + 1, 0xff).toString("base64");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: oversized }],
+      },
+    });
+
+    expect([400, 413]).toContain(response.statusCode);
+  });
 });

@@ -1,5 +1,7 @@
 import type { LabelLocale } from "@kit/domain";
+import { collectionPhotoVariantQuerySchema } from "@kit/api-contract";
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -46,11 +48,19 @@ export class CollectionController {
   }
 
   @Get("collection/showcase/photos/:photoId")
-  async getShowcasePhoto(@Param("photoId") photoId: string, @Res() reply: FastifyReply) {
-    const bytes = await this.collectionService.getShowcasePhotoBytes(photoId);
-    reply.header("Content-Type", "image/jpeg");
-    reply.header("Cache-Control", "public, max-age=3600");
-    return reply.send(Buffer.from(bytes));
+  async getShowcasePhoto(
+    @Param("photoId") photoId: string,
+    @Query("variant") variantRaw?: string,
+    @Res() reply?: FastifyReply,
+  ) {
+    const variant = collectionPhotoVariantQuerySchema.safeParse(variantRaw);
+    if (!variant.success) {
+      throw new BadRequestException("Invalid photo variant");
+    }
+    const bytes = await this.collectionService.getShowcasePhotoBytes(photoId, variant.data);
+    reply!.header("Content-Type", "image/jpeg");
+    reply!.header("Cache-Control", "public, max-age=3600");
+    return reply!.send(Buffer.from(bytes));
   }
 
   @Get("collection/jerseys")
@@ -398,11 +408,16 @@ export class CollectionController {
   async getPhoto(
     @CurrentUser() user: JwtPayload,
     @Param("photoId") photoId: string,
-    @Res() reply: FastifyReply,
+    @Query("variant") variantRaw?: string,
+    @Res() reply?: FastifyReply,
   ) {
-    const bytes = await this.collectionService.getPhotoBytes(user.sub, photoId);
-    reply.header("Content-Type", "image/jpeg");
-    reply.header("Cache-Control", "private, max-age=3600");
-    return reply.send(Buffer.from(bytes));
+    const variant = collectionPhotoVariantQuerySchema.safeParse(variantRaw);
+    if (!variant.success) {
+      throw new BadRequestException("Invalid photo variant");
+    }
+    const bytes = await this.collectionService.getPhotoBytes(user.sub, photoId, variant.data);
+    reply!.header("Content-Type", "image/jpeg");
+    reply!.header("Cache-Control", "private, max-age=3600");
+    return reply!.send(Buffer.from(bytes));
   }
 }
