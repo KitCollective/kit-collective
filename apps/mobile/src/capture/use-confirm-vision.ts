@@ -1,4 +1,8 @@
-import type { VisionFieldPreselect, VisionJobResponse, VisionSuggestRequest } from "@kit/api-contract";
+import type {
+  VisionFieldPreselect,
+  VisionJobResponse,
+  VisionSuggestRequest,
+} from "@kit/api-contract";
 import type { PhotoRole } from "@kit/domain";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated } from "react-native";
@@ -64,7 +68,10 @@ function hasPreselectFields(fieldPreselect: VisionFieldPreselect | undefined): b
 
 function hasSuggestFields(job: VisionJobResponse): boolean {
   return Boolean(
-    job.suggestions?.clubId || job.suggestions?.seasonId || job.suggestions?.type || job.catalogMiss,
+    job.suggestions?.clubId ||
+      job.suggestions?.seasonId ||
+      job.suggestions?.type ||
+      job.catalogMiss,
   );
 }
 
@@ -148,7 +155,15 @@ export function useConfirmVision({
       setApplied(true);
       fadeInSuggestion();
     },
-    [accessToken, draft, fadeInSuggestion, mutate, onCatalogMiss, sessionId, setSelectedSeasonLabel],
+    [
+      accessToken,
+      draft,
+      fadeInSuggestion,
+      mutate,
+      onCatalogMiss,
+      sessionId,
+      setSelectedSeasonLabel,
+    ],
   );
 
   const draftId = draft?.id ?? null;
@@ -193,7 +208,15 @@ export function useConfirmVision({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [accessToken, draft, draftId, onCatalogMiss, photoFingerprint, setJobId, setSelectedSeasonLabel]);
+  }, [
+    accessToken,
+    draft,
+    draftId,
+    onCatalogMiss,
+    photoFingerprint,
+    setJobId,
+    setSelectedSeasonLabel,
+  ]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !polling) {

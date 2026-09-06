@@ -916,12 +916,7 @@ export function applyIdentitySuggestion(
   const manual = options.manualEdits ?? {};
   let next = state;
 
-  if (
-    !manual.club &&
-    options.fieldPreselect.club &&
-    suggestions.clubId &&
-    suggestions.clubLabel
-  ) {
+  if (!manual.club && options.fieldPreselect.club && suggestions.clubId && suggestions.clubLabel) {
     next = setDraftClub(next, draftId, suggestions.clubId, suggestions.clubLabel);
   }
 
@@ -935,4 +930,3 @@ export function applyIdentitySuggestion(
 
   return next;
 }
-

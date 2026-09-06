@@ -30,8 +30,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
 import {
   addJerseyDraft,
-  applyIdentitySuggestion,
   appendUnboundPhotos,
+  applyIdentitySuggestion,
   bindUnboundPhotoToDraft,
   canAddPhotoToDraft,
   canSave,
@@ -54,8 +54,8 @@ import {
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
-import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
 import { resolveConfirmLightboxUri, resolveConfirmStripUri } from "@/capture/confirmPhotoUri";
+import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
 import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
@@ -329,7 +329,9 @@ export function JerseyDetailsScreen({
 
       const suggestions = job.suggestions;
       const fieldPreselect = job.fieldPreselect ?? {};
-      const shouldPreselect = Boolean(fieldPreselect.club || fieldPreselect.season || fieldPreselect.type);
+      const shouldPreselect = Boolean(
+        fieldPreselect.club || fieldPreselect.season || fieldPreselect.type,
+      );
 
       if (!shouldPreselect) {
         setVisionSuggestion(job);
@@ -361,7 +363,6 @@ export function JerseyDetailsScreen({
     },
     [accessToken, fadeInSuggestion, mutate],
   );
-
 
   useEffect(() => {
     setVisionJobId(null);

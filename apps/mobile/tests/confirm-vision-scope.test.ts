@@ -99,7 +99,6 @@ describe("shouldResetConfirmVision", () => {
 
   it("resets when a second photo is added on single branch", () => {
     const session = createCaptureSession([URI_FRONT]);
-    const draftId = getActiveDraft(session).id;
     const before = confirmVisionScopeFromDraft(getActiveDraft(session));
 
     const withBack = createCaptureSession([URI_FRONT, URI_BACK]);

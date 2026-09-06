@@ -96,7 +96,7 @@ function decodeGeminiResponse(body: unknown): GeminiStructured | null {
 export class GeminiVisionAdapter implements VisionAdapter {
   private readonly mapper: VisionCatalogMapper;
 
-  constructor(private readonly db: Db) {
+  constructor(db: Db) {
     this.mapper = new VisionCatalogMapper(db);
   }
 

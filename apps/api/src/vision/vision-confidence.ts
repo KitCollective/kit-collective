@@ -5,7 +5,6 @@ import {
   type VisionJobStatus,
   type VisionSuggestions,
 } from "@kit/api-contract";
-import type { KitType } from "@kit/domain";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
 
 export function serializeConfidences(confidences: VisionFieldConfidences): string {
@@ -118,7 +117,10 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
   }
 
   const confidences = result.confidences;
-  const clubGate = resolveFieldGate(confidences?.club ?? confidences?.overall, Boolean(result.clubId));
+  const clubGate = resolveFieldGate(
+    confidences?.club ?? confidences?.overall,
+    Boolean(result.clubId),
+  );
   const seasonGate = resolveFieldGate(
     confidences?.season ?? confidences?.overall,
     Boolean(result.seasonId),
