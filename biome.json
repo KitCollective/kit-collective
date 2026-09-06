@@ -13,6 +13,7 @@
       "!**/fixtures",
       "!.cursor",
       "!.scratch",
+      "!onboard-register",
       "!pnpm-lock.yaml",
       "!skills-lock.json",
       "!.bb/workflows"
