@@ -6,25 +6,27 @@
 import { readFileSync } from "node:fs";
 
 const CONFIRM_PATH = "apps/mobile/app/(capture)/confirm.tsx";
+const CONFIRM_EXIT_PATH = "apps/mobile/src/capture/use-confirm-exit.ts";
 const HOOK_PATH = "apps/mobile/src/capture/usePersistedCaptureSession.ts";
 const REDIRECT_HELPER_PATH = "apps/mobile/src/capture/confirmRedirect.ts";
 const REDIRECT_TEST_PATH = "apps/mobile/tests/confirm-redirect.test.ts";
 
 /**
- * @param {{ confirmSource: string, hookSource: string, redirectHelperSource: string, redirectTestSource: string }} input
+ * @param {{ confirmSource: string, confirmExitSource: string, hookSource: string, redirectHelperSource: string, redirectTestSource: string }} input
  * @returns {string[]}
  */
 export function checkMobileAddConfirmRedirect({
   confirmSource,
+  confirmExitSource,
   hookSource,
   redirectHelperSource,
   redirectTestSource,
 }) {
   const violations = [];
 
-  if (!confirmSource.includes("shouldConfirmRedirectAway")) {
+  if (!confirmSource.includes("useConfirmExit")) {
     violations.push(
-      `${CONFIRM_PATH}: must gate redirect with shouldConfirmRedirectAway instead of raw !state`,
+      `${CONFIRM_PATH}: must delegate guarded session-loss redirects to useConfirmExit`,
     );
   }
 
@@ -34,13 +36,18 @@ export function checkMobileAddConfirmRedirect({
     );
   }
 
-  if (
-    /if\s*\(\s*!sessionId\s*\|\|\s*!state\s*\)/.test(confirmSource) &&
-    !confirmSource.includes("shouldConfirmRedirectAway")
-  ) {
+  if (/if\s*\(\s*!sessionId\s*\|\|\s*!state\s*\)/.test(confirmSource)) {
     violations.push(
       `${CONFIRM_PATH}: must not redirect on !state before the session load has resolved`,
     );
+  }
+
+  if (!confirmExitSource.includes("shouldConfirmRedirectAway")) {
+    violations.push(`${CONFIRM_EXIT_PATH}: must gate redirects with shouldConfirmRedirectAway`);
+  }
+
+  if (!confirmExitSource.includes("exitedRef")) {
+    violations.push(`${CONFIRM_EXIT_PATH}: manual and automatic exits must remain idempotent`);
   }
 
   if (!hookSource.includes("isSessionResolved")) {
@@ -71,6 +78,7 @@ export function checkMobileAddConfirmRedirect({
 export function checkMobileAddConfirmRedirectFromDisk() {
   return checkMobileAddConfirmRedirect({
     confirmSource: readFileSync(CONFIRM_PATH, "utf8"),
+    confirmExitSource: readFileSync(CONFIRM_EXIT_PATH, "utf8"),
     hookSource: readFileSync(HOOK_PATH, "utf8"),
     redirectHelperSource: readFileSync(REDIRECT_HELPER_PATH, "utf8"),
     redirectTestSource: readFileSync(REDIRECT_TEST_PATH, "utf8"),

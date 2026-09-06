@@ -29,10 +29,12 @@ import { useAuth } from "@/auth/AuthProvider";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
 import {
   addJerseyDraft,
+  appendUnboundPhotos,
   bindUnboundPhotoToDraft,
   canAddPhotoToDraft,
   canSave,
   changeDraftPhotoRole,
+  discardUnboundPhoto,
   getDraft,
   JERSEY_PHOTO_CAP_HELPER_DA,
   photoUriForRole,
@@ -50,12 +52,15 @@ import {
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
-import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
+import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
+import { pickUploadFiles } from "@/capture/pickUploadFiles";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
+import { showSaveFailureToast } from "@/capture/saveFailureToast";
 import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession";
 import { BulkChrome } from "@/components/bulk/BulkChrome";
+import { UnboundPhotosRow } from "@/components/bulk/UnboundPhotosRow";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
 import { PhotoLightbox } from "@/components/photo-lightbox";
@@ -111,7 +116,6 @@ export function JerseyDetailsScreen({
   const [saving, setSaving] = useState(false);
   const [catalogMiss, setCatalogMiss] = useState(false);
   const [searchError, setSearchError] = useState(false);
-  const [saveError, setSaveError] = useState(false);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const [visionPolling, setVisionPolling] = useState(false);
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
@@ -574,12 +578,26 @@ export function JerseyDetailsScreen({
     mutate((current) => bindUnboundPhotoToDraft(current, uri, current.activeDraftId));
   };
 
+  const handleDiscardUnboundPhoto = (uri: string) => {
+    mutate((current) => discardUnboundPhoto(current, uri));
+  };
+
+  const handleUploadToSandbox = async () => {
+    const uris = await pickUploadFiles({ allowsMultipleSelection: true }, expoUploadFilesAdapter);
+    if (!uris?.length) {
+      return;
+    }
+    mutate((current) => appendUnboundPhotos(current, uris));
+  };
+
   const handleSelectDraft = (draftId: string) => {
     mutate((current) => setActiveDraft(current, draftId));
   };
 
   const handleAddJersey = () => {
-    mutate(addJerseyDraft);
+    mutate((current) =>
+      addJerseyDraft(current.branch === "single" ? switchSingleToBulkBind(current) : current),
+    );
   };
 
   const handleMoreJerseysInUpload = () => {
@@ -587,7 +605,8 @@ export function JerseyDetailsScreen({
   };
 
   const activeBanner = resolveConfirmBanner({
-    saveError,
+    // Save failure is an animated bottom toast now, not an inline banner.
+    saveError: false,
     visionSuggestionVisible: Boolean(visionSuggestion?.suggestions),
     catalogMiss,
     clubSheetOpen,
@@ -623,7 +642,6 @@ export function JerseyDetailsScreen({
     }
 
     setSaving(true);
-    setSaveError(false);
 
     try {
       const photoPayload = await Promise.all(
@@ -698,7 +716,8 @@ export function JerseyDetailsScreen({
       clearPersistedCaptureSession(sessionId);
       onSaved();
     } catch {
-      setSaveError(true);
+      // Fire-and-forget danger toast with a Prøv igen retry — Save never waits on it.
+      showSaveFailureToast(() => void handleSave());
     } finally {
       setSaving(false);
     }
@@ -732,6 +751,9 @@ export function JerseyDetailsScreen({
   const saveEnabled = canSave(draft);
   const saveLabel =
     isBulk && state.drafts.length > 1 ? JERSEY_DETAILS_SAVE_AND_NEXT : JERSEY_DETAILS_PRIMARY_SAVE;
+  const activeJerseyIndex =
+    state?.drafts.findIndex((entry) => entry.id === state.activeDraftId) ?? -1;
+  const activeTabLabel = activeJerseyIndex >= 0 ? `Trøje ${activeJerseyIndex + 1}` : "Trøje";
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -748,7 +770,6 @@ export function JerseyDetailsScreen({
             state={state}
             onSelectDraft={handleSelectDraft}
             onAddJersey={handleAddJersey}
-            onBindUnboundPhoto={handleBindUnboundPhoto}
           />
         ) : null}
 
@@ -803,6 +824,16 @@ export function JerseyDetailsScreen({
             </Text>
           ) : null}
         </View>
+
+        {state ? (
+          <UnboundPhotosRow
+            uris={state.unboundUris}
+            activeTabLabel={activeTabLabel}
+            onPressPhoto={handleBindUnboundPhoto}
+            onDiscardPhoto={handleDiscardUnboundPhoto}
+            onUpload={() => void handleUploadToSandbox()}
+          />
+        ) : null}
 
         {visionPolling ? (
           <View
@@ -943,16 +974,6 @@ export function JerseyDetailsScreen({
               Flere trøjer i denne upload
             </Text>
           </Pressable>
-        ) : null}
-
-        {activeBanner === "saveError" ? (
-          <Banner
-            tone="danger"
-            message="Kunne ikke gemme trøjen. Prøv igen."
-            action={
-              <Button label="Prøv igen" variant="tertiary" onPress={() => void handleSave()} />
-            }
-          />
         ) : null}
       </ScrollView>
 

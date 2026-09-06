@@ -36,6 +36,7 @@ type TextFieldProps = {
   onChangeText: (value: string) => void;
   helper?: string;
   helperTone?: "secondary" | "danger";
+  meta?: string;
   multiline?: boolean;
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   secureTextEntry?: boolean;
@@ -47,17 +48,25 @@ export function TextField({
   onChangeText,
   helper,
   helperTone = "secondary",
+  meta,
   multiline = false,
   autoCapitalize = "none",
   secureTextEntry = false,
 }: TextFieldProps) {
   const theme = useTheme();
   const typography = useTypography();
+  const labelStyle = meta ? typography.label : typography.labelSm;
 
   return (
     <View style={styles.field}>
-      <Text style={[typography.labelSm, { color: theme.contentPrimary }]}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Text style={[labelStyle, { color: theme.contentPrimary }]}>{label}</Text>
+        {meta ? (
+          <Text style={[typography.caption, { color: theme.contentMuted }]}>{meta}</Text>
+        ) : null}
+      </View>
       <TextInput
+        accessibilityLabel={meta ? `${label}, ${meta}` : label}
         autoCapitalize={autoCapitalize}
         multiline={multiline}
         secureTextEntry={secureTextEntry}
@@ -565,6 +574,11 @@ const styles = StyleSheet.create({
     height: 44,
   },
   field: {
+    gap: space.gapSm,
+  },
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
     gap: space.gapSm,
   },
   input: {

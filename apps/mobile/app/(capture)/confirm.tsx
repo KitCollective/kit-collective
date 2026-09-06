@@ -1,93 +1,37 @@
-import type { CatalogPickerItem, VisionJobResponse } from "@kit/api-contract";
-import { resolveVisionSaveAction } from "@kit/api-contract";
-import {
-  JERSEY_CONDITION_LABELS_DA,
-  JERSEY_CONDITIONS,
-  JERSEY_SIZE_LABELS_DA,
-  JERSEY_SIZES,
-  KIT_TYPE_LABELS_DA,
-  KIT_TYPES,
-  type PhotoRole,
-  UNIVERSAL_PHOTO_ROLES,
-  type UniversalPhotoRole,
-} from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { useState } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
-import { saveUserJersey, updateUserJersey } from "@/api/collection";
-import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/vision";
 import { useAuth } from "@/auth/AuthProvider";
-import { clearPersistedCaptureSession } from "@/capture/captureFlow";
+import { addJerseyDraft, setActiveDraft, switchSingleToBulkBind } from "@/capture/captureSession";
 import {
-  addJerseyDraft,
-  bindUnboundPhotoToDraft,
-  canAddPhotoToDraft,
-  canSave,
-  changeDraftPhotoRole,
-  getDraft,
-  JERSEY_PHOTO_CAP_HELPER_DA,
-  photoUriForRole,
-  removeDraft,
-  removeDraftPhoto,
-  selectDraftCondition,
-  selectDraftKitType,
-  selectDraftSize,
-  setActiveDraft,
-  setDraftClub,
-  setDraftNotes,
-  setDraftPhotoLabel,
-  setDraftSeason,
-  switchSingleToBulkBind,
-  upsertDraftPhoto,
-} from "@/capture/captureSession";
-import { resolveConfirmBanner } from "@/capture/confirmBanner";
-import {
-  type ConfirmSheetKind,
-  closeConfirmSheet,
-  openConfirmSheet,
-  shouldOpenSeasonAfterClubDismiss,
-} from "@/capture/confirmSheet";
-import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
-import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
-import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
-import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
-import {
-  shouldConfirmRedirectAway,
-  usePersistedCaptureSession,
-} from "@/capture/usePersistedCaptureSession";
-import { BulkChrome } from "@/components/bulk/BulkChrome";
-import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
-import { Chip } from "@/components/chip";
+  DATA_REQUIRED_COUNT,
+  DETAILS_REQUIRED_COUNT,
+  dataRequiredFilledCount,
+  dataSectionFacts,
+  detailsRequiredFilledCount,
+  detailsSectionFacts,
+} from "@/capture/confirmSectionProgress";
+import { useConfirmExit } from "@/capture/use-confirm-exit";
+import { useConfirmPhotos } from "@/capture/use-confirm-photos";
+import { useConfirmVision } from "@/capture/use-confirm-vision";
+import { useConfirmSave } from "@/capture/useConfirmSave";
+import { JerseyTabBar } from "@/components/bulk/JerseyTabBar";
+import { UnboundPhotosRow } from "@/components/bulk/UnboundPhotosRow";
+import { ConfirmHubHeader, confirmHubHeaderScrollPadding } from "@/components/confirm-hub-header";
+import { ConfirmPhotoViewer } from "@/components/confirm-photo-viewer";
+import { ConfirmSectionRow } from "@/components/confirm-section-row";
+import { ConfirmVisionSlot } from "@/components/confirm-vision-slot";
 import { PhotoLightbox } from "@/components/photo-lightbox";
-import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
-import { ProfileSurfaceGroup } from "@/components/profile-ui";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
-import { markJerseySaved } from "@/session/addSession";
-import { useTypography } from "@/theme/brand-fonts";
-import { motion, radius, space } from "@/theme/tokens";
+import { space } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
-
-const MIN_CLUB_SEARCH_LENGTH = 2;
-const VISION_TIMEOUT_MS = 12_000;
-const ADD_PHOTO_ROLE: PhotoRole = "other";
 
 export default function ConfirmScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const typography = useTypography();
   const reduceMotion = useReduceMotion();
   const insets = useSafeAreaInsets();
   const { sessionId, editJerseyId } = useLocalSearchParams<{
@@ -95,933 +39,154 @@ export default function ConfirmScreen() {
     editJerseyId?: string;
   }>();
   const { accessToken } = useAuth();
-  const { state, isSessionResolved, mutate } = usePersistedCaptureSession(sessionId);
-
-  const [openSheet, setOpenSheet] = useState<ConfirmSheetKind | null>(null);
-  const [pendingSeasonAfterClub, setPendingSeasonAfterClub] = useState(false);
-  const [clubQuery, setClubQuery] = useState("");
-  const [clubResults, setClubResults] = useState<CatalogPickerItem[]>([]);
-  const [seasonResults, setSeasonResults] = useState<CatalogPickerItem[]>([]);
-  const [selectedSeasonLabel, setSelectedSeasonLabel] = useState<string | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [loadingSeasons, setLoadingSeasons] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [catalogMiss, setCatalogMiss] = useState(false);
-  const [searchError, setSearchError] = useState(false);
-  const [saveError, setSaveError] = useState(false);
-  const [postSaveOpen, setPostSaveOpen] = useState(false);
-  const [savedClub, setSavedClub] = useState<CatalogPickerItem | null>(null);
-  const [savedSeasonLabel, setSavedSeasonLabel] = useState<string | null>(null);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
-  const [visionPolling, setVisionPolling] = useState(false);
-  const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
-  const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
-  const [photoCapMessage, setPhotoCapMessage] = useState<string | null>(null);
-  const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
-  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
-  const suggestionOpacity = useRef(new Animated.Value(0)).current;
-  const clubManuallySet = useRef(false);
-  const seasonManuallySet = useRef(false);
-  const kitTypeManuallySet = useRef(false);
-  const appliedVisionJobId = useRef<string | null>(null);
-  const visionStartAttempted = useRef(false);
-
-  const draft = state ? getDraft(state, state.activeDraftId) : null;
-  const isBulk = state?.branch === "bulk";
-  const visionDraftId = draft?.id ?? null;
-  const visionFirstPhotoUri = draft?.photos[0]?.uri ?? null;
-  const visionFirstPhotoRole = draft?.photos[0]?.role ?? "front";
-
-  useEffect(() => {
-    if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
-      // The Chooser is a Sheet now, so a dead session lands back on Samling.
-      router.replace("/(tabs)/collection");
-    }
-  }, [router, sessionId, state, isSessionResolved]);
-
-  useEffect(() => {
-    if (!accessToken || !draft?.clubId) {
-      return;
-    }
-
-    let cancelled = false;
-    void fetchClubSeasons(accessToken, draft.clubId).then((response) => {
-      if (!cancelled) {
-        setSeasonResults(response.seasons);
-        if (draft.seasonId) {
-          const match = response.seasons.find((season) => season.id === draft.seasonId);
-          if (match) {
-            setSelectedSeasonLabel(match.label);
-          }
-        }
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, draft?.clubId, draft?.seasonId]);
-
-  const runClubSearch = useCallback(
-    async (query: string) => {
-      const trimmed = query.trim();
-
-      if (!accessToken || trimmed.length === 0) {
-        setClubResults([]);
-        setCatalogMiss(false);
-        setSearchError(false);
-        return;
-      }
-
-      setSearching(true);
-      setSearchError(false);
-
-      try {
-        const response = await searchCatalogClubs(accessToken, trimmed, "da");
-        setClubResults(response.clubs);
-        setCatalogMiss(trimmed.length >= MIN_CLUB_SEARCH_LENGTH && response.clubs.length === 0);
-      } catch {
-        setClubResults([]);
-        setCatalogMiss(false);
-        setSearchError(true);
-      } finally {
-        setSearching(false);
-      }
-    },
-    [accessToken],
-  );
-
-  useEffect(() => {
-    if (openSheet !== "club") {
-      return;
-    }
-
-    const handle = setTimeout(() => {
-      void runClubSearch(clubQuery);
-    }, 300);
-
-    return () => clearTimeout(handle);
-  }, [clubQuery, openSheet, runClubSearch]);
-
-  const fadeInSuggestion = useCallback(() => {
-    suggestionOpacity.setValue(reduceMotion ? 1 : 0);
-    if (reduceMotion) {
-      return;
-    }
-    Animated.timing(suggestionOpacity, {
-      toValue: 1,
-      duration: motion.fast,
-      useNativeDriver: true,
-    }).start();
-  }, [reduceMotion, suggestionOpacity]);
-
-  const applyVisionSuggestions = useCallback(
-    async (job: VisionJobResponse, preselect: boolean) => {
-      if (job.status !== "ready" || !job.suggestions || !sessionId) {
-        return;
-      }
-
-      const suggestions = job.suggestions;
-
-      if (preselect) {
-        mutate((current) => {
-          let next = current;
-          if (!clubManuallySet.current && suggestions.clubId && suggestions.clubLabel) {
-            next = setDraftClub(
-              next,
-              next.activeDraftId,
-              suggestions.clubId,
-              suggestions.clubLabel,
-            );
-          }
-          if (!seasonManuallySet.current && suggestions.seasonId) {
-            next = setDraftSeason(next, next.activeDraftId, suggestions.seasonId);
-          }
-          if (!seasonManuallySet.current && suggestions.seasonLabel) {
-            setSelectedSeasonLabel(suggestions.seasonLabel);
-          }
-          if (!kitTypeManuallySet.current && suggestions.type) {
-            next = selectDraftKitType(next, next.activeDraftId, suggestions.type);
-          }
-          return next;
-        });
-
-        if (!seasonManuallySet.current && suggestions.clubId && accessToken) {
-          const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
-          setSeasonResults(seasons.seasons);
-        }
-
-        fadeInSuggestion();
-      } else {
-        setVisionSuggestion(job);
-        fadeInSuggestion();
-      }
-    },
-    [accessToken, fadeInSuggestion, mutate, sessionId],
-  );
-
-  const maybeStartVision = useCallback(
-    async (role: PhotoRole, uri: string) => {
-      if (!accessToken || visionJobId || visionStartAttempted.current) {
-        return;
-      }
-
-      visionStartAttempted.current = true;
-
-      try {
-        const contentBase64 = await readPhotoBase64(uri);
-        const jobId = await startVisionSuggest(accessToken, {
-          photo: { role, contentBase64 },
-        });
-        setVisionJobId(jobId);
-        setVisionPolling(true);
-      } catch {
-        // Vision is optional — confirm screen must not block.
-      }
-    },
-    [accessToken, visionJobId],
-  );
-
-  useEffect(() => {
-    setVisionJobId(null);
-    setVisionPolling(false);
-    setVisionSuggestion(null);
-    visionStartAttempted.current = false;
-    appliedVisionJobId.current = null;
-    clubManuallySet.current = false;
-    seasonManuallySet.current = false;
-    kitTypeManuallySet.current = false;
-    setSelectedSeasonLabel(null);
-
-    if (!accessToken || !visionDraftId || !visionFirstPhotoUri) {
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      visionStartAttempted.current = true;
-      try {
-        const contentBase64 = await readPhotoBase64(visionFirstPhotoUri);
-        const jobId = await startVisionSuggest(accessToken, {
-          photo: { role: visionFirstPhotoRole, contentBase64 },
-        });
-        if (!cancelled) {
-          setVisionJobId(jobId);
-          setVisionPolling(true);
-        }
-      } catch {
-        // Vision is optional — confirm screen must not block.
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, visionDraftId, visionFirstPhotoUri, visionFirstPhotoRole]);
-
-  useEffect(() => {
-    if (!accessToken || !visionJobId || !visionPolling) {
-      return;
-    }
-
-    let cancelled = false;
-    const startedAt = Date.now();
-    const poll = async () => {
-      if (Date.now() - startedAt >= VISION_TIMEOUT_MS) {
-        if (!cancelled) {
-          setVisionPolling(false);
-        }
-        return;
-      }
-
-      try {
-        const job = await fetchVisionJob(accessToken, visionJobId);
-        if (cancelled) {
-          return;
-        }
-
-        if (job.status === "pending") {
-          return;
-        }
-
-        setVisionPolling(false);
-
-        if (job.status === "ready" && job.suggestions && appliedVisionJobId.current !== job.jobId) {
-          appliedVisionJobId.current = job.jobId;
-          await applyVisionSuggestions(job, job.preselect === true);
-        }
-      } catch {
-        if (!cancelled) {
-          setVisionPolling(false);
-        }
-      }
-    };
-
-    const interval = setInterval(() => {
-      void poll();
-    }, 2000);
-    void poll();
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
-
-  const pickPhotoForRole = async (role: PhotoRole, replaceUri?: string) => {
-    if (!draft || !sessionId) {
-      return;
-    }
-
-    if (!replaceUri && !canAddPhotoToDraft(draft)) {
-      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
-      return;
-    }
-
-    const hadPhotos = draft.photos.length > 0;
-    const uris = await pickGalleryPhotos(
-      {
-        quality: captureQualityForRole(role),
-      },
-      expoGalleryPickerAdapter,
-    );
-
-    if (!uris?.[0]) {
-      return;
-    }
-
-    setPhotoCapMessage(null);
-    const uri = uris[0];
-    const existingLabel =
-      replaceUri && role === "other"
-        ? draft.photos.find((photo) => photo.uri === replaceUri)?.label
-        : undefined;
-    mutate((current) => {
-      const draftId = current.activeDraftId;
-      const base =
-        replaceUri && role === "other"
-          ? removeDraftPhoto(current, draftId, "other", replaceUri)
-          : current;
-      const next = upsertDraftPhoto(base, draftId, role, uri, "gallery");
-      if (existingLabel) {
-        return setDraftPhotoLabel(next, draftId, uri, existingLabel);
-      }
-      return next;
-    });
-
-    if (!isBulk && !hadPhotos) {
-      void maybeStartVision(role, uri);
-    }
-  };
-
-  const openClubSheet = () => {
-    setClubQuery("");
-    setClubResults([]);
-    setCatalogMiss(false);
-    setSearchError(false);
-    setPendingSeasonAfterClub(false);
-    setOpenSheet((current) => openConfirmSheet(current, "club"));
-  };
-
-  const dismissConfirmSheet = (kind: ConfirmSheetKind) => {
-    setOpenSheet((current) => closeConfirmSheet(current, kind));
-  };
-
-  useEffect(() => {
-    if (openSheet !== null) {
-      return;
-    }
-
-    if (!shouldOpenSeasonAfterClubDismiss(pendingSeasonAfterClub, "club")) {
-      return;
-    }
-
-    setPendingSeasonAfterClub(false);
-    setOpenSheet(openConfirmSheet(null, "season"));
-  }, [openSheet, pendingSeasonAfterClub]);
-
-  const selectClub = async (club: CatalogPickerItem) => {
-    clubManuallySet.current = true;
-    seasonManuallySet.current = false;
-    setSelectedSeasonLabel(null);
-    mutate((current) => setDraftClub(current, current.activeDraftId, club.id, club.label));
-    setPendingSeasonAfterClub(true);
-    setOpenSheet((current) => closeConfirmSheet(current, "club"));
-
-    if (!accessToken) {
-      return;
-    }
-
-    setLoadingSeasons(true);
-    try {
-      const response = await fetchClubSeasons(accessToken, club.id);
-      setSeasonResults(response.seasons);
-    } catch {
-      setSeasonResults([]);
-    } finally {
-      setLoadingSeasons(false);
-    }
-  };
-
-  const applySuggestionBanner = async () => {
-    if (!visionSuggestion?.suggestions || !accessToken) {
-      return;
-    }
-
-    const suggestions = visionSuggestion.suggestions;
-    mutate((current) => {
-      let next = current;
-      if (suggestions.clubId && suggestions.clubLabel) {
-        clubManuallySet.current = true;
-        next = setDraftClub(next, next.activeDraftId, suggestions.clubId, suggestions.clubLabel);
-      }
-      if (suggestions.seasonId) {
-        seasonManuallySet.current = true;
-        next = setDraftSeason(next, next.activeDraftId, suggestions.seasonId);
-      }
-      if (suggestions.seasonLabel) {
-        setSelectedSeasonLabel(suggestions.seasonLabel);
-      }
-      if (suggestions.type) {
-        kitTypeManuallySet.current = true;
-        next = selectDraftKitType(next, next.activeDraftId, suggestions.type);
-      }
-      return next;
-    });
-
-    if (suggestions.clubId) {
-      const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
-      setSeasonResults(seasons.seasons);
-    }
-
-    setVisionSuggestion(null);
-  };
-
-  const dismissVisionSuggestion = () => {
-    setVisionSuggestion(null);
-  };
-
-  const handleAddPhotoPress = () => {
-    if (!draft) {
-      return;
-    }
-
-    if (!canAddPhotoToDraft(draft)) {
-      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
-      return;
-    }
-
-    void pickPhotoForRole("other");
-  };
-
-  const handlePhotoSlotPress = (role: PhotoRole) => {
-    if (!state || !draft) {
-      return;
-    }
-
-    const uri = photoUriForRole(draft, role);
-    if (uri) {
-      setLightboxRole(role);
-      setLightboxUri(uri);
-      return;
-    }
-
-    if (isBulk) {
-      const firstUnbound = state.unboundUris[0];
-      if (firstUnbound) {
-        mutate((current) =>
-          bindUnboundPhotoToDraft(current, firstUnbound, current.activeDraftId, role),
-        );
-      }
-      return;
-    }
-
-    void pickPhotoForRole(role);
-  };
-
-  const handleLightboxReplace = () => {
-    if (!lightboxRole) {
-      return;
-    }
-    const role = lightboxRole;
-    const replaceUri = lightboxUri ?? undefined;
-    setLightboxRole(null);
-    setLightboxUri(null);
-    void pickPhotoForRole(role, replaceUri);
-  };
-
-  const handleLightboxDelete = () => {
-    if (!lightboxRole || !lightboxUri) {
-      return;
-    }
-    const role = lightboxRole;
-    const uri = lightboxUri;
-    mutate((current) => removeDraftPhoto(current, current.activeDraftId, role, uri));
-    setLightboxRole(null);
-    setLightboxUri(null);
-  };
-
-  const handleLightboxChangeRole = (toRole: PhotoRole) => {
-    if (!lightboxRole) {
-      return;
-    }
-    const fromRole = lightboxRole;
-    mutate((current) =>
-      changeDraftPhotoRole(
-        current,
-        current.activeDraftId,
-        fromRole,
-        toRole,
-        lightboxUri ?? undefined,
-      ),
-    );
-    setLightboxRole(toRole);
-  };
-
-  const handleLightboxChangeLabel = (label: string) => {
-    if (!lightboxUri) {
-      return;
-    }
-    mutate((current) => setDraftPhotoLabel(current, current.activeDraftId, lightboxUri, label));
-  };
-
-  const handleBindUnboundPhoto = (uri: string) => {
-    if (draft && !canAddPhotoToDraft(draft)) {
-      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
-      return;
-    }
-
-    setPhotoCapMessage(null);
-    mutate((current) => bindUnboundPhotoToDraft(current, uri, current.activeDraftId));
-  };
+  const {
+    state,
+    isSessionResolved,
+    mutate,
+    draft,
+    isBulk,
+    saving,
+    postSaveOpen,
+    savedClub,
+    savedSeasonLabel,
+    setSelectedSeasonLabel,
+    saveEnabled,
+    saveLabel,
+    handleSave,
+    handlePostSaveDismiss,
+  } = useConfirmSave({ sessionId, editJerseyId, visionJobId });
+
+  const exitToCollection = useConfirmExit(sessionId, state, isSessionResolved);
+  const vision = useConfirmVision({
+    accessToken,
+    sessionId,
+    draft,
+    mutate,
+    reduceMotion,
+    jobId: visionJobId,
+    setJobId: setVisionJobId,
+    setSelectedSeasonLabel,
+  });
+  const photos = useConfirmPhotos({
+    sessionId,
+    state,
+    draft,
+    isBulk,
+    mutate,
+    onFirstSinglePhoto: (role, uri) => void vision.startVision(role, uri),
+  });
+  const [dataSectionHeight, setDataSectionHeight] = useState(0);
+  const [detailsSectionHeight, setDetailsSectionHeight] = useState(0);
+  const sectionMinHeight = Math.max(dataSectionHeight, detailsSectionHeight) || undefined;
 
   const handleSelectDraft = (draftId: string) => {
     mutate((current) => setActiveDraft(current, draftId));
   };
 
   const handleAddJersey = () => {
-    mutate(addJerseyDraft);
+    mutate((current) =>
+      addJerseyDraft(current.branch === "single" ? switchSingleToBulkBind(current) : current),
+    );
   };
 
-  const handleMoreJerseysInUpload = () => {
-    mutate(switchSingleToBulkBind);
-  };
-
-  const activeBanner = resolveConfirmBanner({
-    saveError,
-    visionSuggestionVisible: Boolean(visionSuggestion?.suggestions),
-    catalogMiss,
-    clubSheetOpen: openSheet === "club",
-  });
-
-  const handleSave = async () => {
-    if (!draft || !sessionId) {
+  const openSection = (section: "data" | "details") => {
+    if (!sessionId) {
       return;
     }
-
-    const block = getSaveBlockMessage(draft);
-    if (block) {
-      setSaveBlockMessage(block);
-      return;
-    }
-
-    if (
-      !accessToken ||
-      !draft.clubId ||
-      !draft.seasonId ||
-      !draft.kitType ||
-      !draft.size ||
-      !draft.condition
-    ) {
-      return;
-    }
-
-    setSaving(true);
-    setSaveError(false);
-
-    try {
-      if (editJerseyId) {
-        await updateUserJersey(accessToken, editJerseyId, {
-          clubId: draft.clubId,
-          seasonId: draft.seasonId,
-          catalogKitId: null,
-          type: draft.kitType,
-          size: draft.size,
-          condition: draft.condition,
-        });
-        clearPersistedCaptureSession(sessionId);
-        router.replace(`/(tabs)/collection/${editJerseyId}`);
-        return;
-      }
-
-      const photoPayload = await Promise.all(
-        draft.photos
-          .filter((photo): photo is typeof photo & { role: PhotoRole } => photo.role !== null)
-          .map(async (photo) => ({
-            role: photo.role,
-            source: photo.source,
-            contentBase64: await readPhotoBase64(photo.uri),
-            ...(photo.role === "other" && photo.label?.trim() ? { label: photo.label.trim() } : {}),
-          })),
-      );
-
-      const response = await saveUserJersey(accessToken, {
-        draftId: draft.id,
-        clubId: draft.clubId,
-        seasonId: draft.seasonId,
-        catalogKitId: null,
-        type: draft.kitType,
-        size: draft.size,
-        condition: draft.condition,
-        visionJobId: visionJobId ?? undefined,
-        photos: photoPayload,
-      });
-
-      const jobIdForLog = response.visionJobId ?? visionJobId;
-      if (jobIdForLog) {
-        try {
-          const job = await fetchVisionJob(accessToken, jobIdForLog);
-          const resolved = resolveVisionSaveAction({
-            status: job.status,
-            suggestions: job.suggestions,
-            selectedClubId: draft.clubId,
-            selectedSeasonId: draft.seasonId,
-            selectedKitType: draft.kitType,
-          });
-
-          await logVisionAction(accessToken, {
-            jobId: jobIdForLog,
-            action: resolved.action,
-            userJerseyId: response.jersey.id,
-            clubId: resolved.clubId,
-            seasonId: resolved.seasonId,
-            type: resolved.type,
-          });
-        } catch {
-          // Logging must not block navigation after Save.
-        }
-      }
-
-      markJerseySaved();
-
-      if (state?.branch === "bulk") {
-        const nextState = mutate((current) => {
-          let next = removeDraft(current, draft.id);
-          if (next.drafts.length === 0 && next.unboundUris.length > 0) {
-            next = addJerseyDraft(next);
-          }
-          return next;
-        });
-
-        if (!nextState || nextState.drafts.length === 0) {
-          clearPersistedCaptureSession(sessionId);
-          setSavedClub(draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null);
-          setSavedSeasonLabel(selectedSeasonLabel);
-          setPostSaveOpen(true);
-        }
-      } else {
-        clearPersistedCaptureSession(sessionId);
-        setSavedClub(draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null);
-        setSavedSeasonLabel(selectedSeasonLabel);
-        setPostSaveOpen(true);
-      }
-    } catch {
-      setSaveError(true);
-    } finally {
-      setSaving(false);
-    }
+    router.push({
+      pathname: section === "data" ? "/(capture)/confirm-data" : "/(capture)/confirm-details",
+      params: {
+        sessionId,
+        ...(editJerseyId ? { editJerseyId } : {}),
+      },
+    });
   };
 
-  const handlePostSaveDismiss = () => {
-    setPostSaveOpen(false);
-    router.replace("/(tabs)/collection");
-  };
+  const fadeDockScrollPadding =
+    BUTTON_DOCK_FADE_SCROLL_PADDING + Math.max(insets.bottom, space.insetMd);
 
-  if (!sessionId || !draft) {
+  if (!sessionId || !draft || !photos.photoUris) {
     return null;
   }
 
-  const universalPhotoUris: Record<UniversalPhotoRole, string | undefined> = {
-    front: photoUriForRole(draft, "front") ?? undefined,
-    back: photoUriForRole(draft, "back") ?? undefined,
-    left: photoUriForRole(draft, "left") ?? undefined,
-    right: photoUriForRole(draft, "right") ?? undefined,
-  };
-  const otherPhotos = draft.photos.filter(
-    (photo): photo is typeof photo & { role: "other" } => photo.role === "other",
-  );
-  const photoList = [
-    ...UNIVERSAL_PHOTO_ROLES.filter((role) => universalPhotoUris[role]),
-    ...otherPhotos.map((photo) => photo.uri),
-  ];
-  const selectedClub =
-    draft.clubId && draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null;
-  const selectedSeason =
-    draft.seasonId && selectedSeasonLabel
-      ? { id: draft.seasonId, label: selectedSeasonLabel }
-      : null;
-  const showAddPhotoSlot = canAddPhotoToDraft(draft);
-  const dockHelper = saveBlockMessage ?? getSaveBlockMessage(draft);
-  const saveEnabled = canSave(draft);
-  const saveLabel = editJerseyId
-    ? "Gem"
-    : isBulk && state.drafts.length > 1
-      ? "Gem og næste"
-      : "Gem";
-  const fadeDockScrollPadding =
-    BUTTON_DOCK_FADE_SCROLL_PADDING + Math.max(insets.bottom, space.insetMd);
+  const activeJerseyIndex = state?.drafts.findIndex((entry) => entry.id === draft.id) ?? 0;
+  const activeTabLabel = `Trøje ${activeJerseyIndex + 1}`;
+  const lightboxUri = photos.lightboxRole ? photos.photoUris[photos.lightboxRole] : undefined;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: fadeDockScrollPadding }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: confirmHubHeaderScrollPadding(insets.top),
+            paddingBottom: fadeDockScrollPadding,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[typography.title, { color: theme.contentPrimary }]}>Bekræft og gem</Text>
-        <Text style={[typography.body, { color: theme.contentMuted }]}>
-          Vælg klub, sæson og detaljer.
-        </Text>
-
-        {isBulk && state ? (
-          <BulkChrome
-            state={state}
+        {state ? (
+          <JerseyTabBar
+            drafts={state.drafts}
+            activeDraftId={state.activeDraftId}
             onSelectDraft={handleSelectDraft}
             onAddJersey={handleAddJersey}
-            onBindUnboundPhoto={handleBindUnboundPhoto}
           />
         ) : null}
 
-        <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.photoRow}
-          >
-            {UNIVERSAL_PHOTO_ROLES.map((role) => (
-              <PhotoSlot
-                key={role}
-                role={role}
-                uri={universalPhotoUris[role]}
-                onPress={() => handlePhotoSlotPress(role)}
-              />
-            ))}
-            {otherPhotos.map((photo) => (
-              <PhotoSlot
-                key={photo.uri}
-                role={photo.role}
-                uri={photo.uri}
-                caption={photo.label}
-                onPress={() => {
-                  setLightboxRole("other");
-                  setLightboxUri(photo.uri);
-                }}
-              />
-            ))}
-            {showAddPhotoSlot ? (
-              <PhotoSlot
-                key="add-photo"
-                role={ADD_PHOTO_ROLE}
-                variant="add"
-                onPress={handleAddPhotoPress}
-              />
-            ) : null}
-          </ScrollView>
-          {photoCapMessage ? (
-            <Text style={[typography.caption, { color: theme.contentMuted }]}>
-              {photoCapMessage}
-            </Text>
-          ) : null}
-          {photoList.length === 0 ? (
-            <Text style={[typography.caption, { color: theme.contentMuted }]}>
-              Mindst ét foto er påkrævet.
-            </Text>
-          ) : photoList.length < UNIVERSAL_PHOTO_ROLES.length ? (
-            <Text style={[typography.caption, { color: theme.contentMuted }]}>
-              Fire universelle fotos anbefales — ekstra Andet-fotos er valgfrie.
-            </Text>
+        <View style={styles.photoStack}>
+          <ConfirmPhotoViewer
+            photoUris={photos.photoUris}
+            onPressRole={photos.handlePhotoSlotPress}
+          />
+
+          {state ? (
+            <UnboundPhotosRow
+              uris={state.unboundUris}
+              activeTabLabel={activeTabLabel}
+              onPressPhoto={photos.bindUnboundPhoto}
+              onDiscardPhoto={photos.discardUnboundPhoto}
+              onUpload={() => void photos.uploadToSandbox()}
+            />
           ) : null}
         </View>
 
-        {visionPolling ? (
-          <View
-            accessibilityLabel="Forslag indlæses"
-            style={[styles.visionSkeleton, { backgroundColor: theme.surface }]}
-          >
-            <View style={[styles.visionSkeletonBar, { backgroundColor: theme.fillSecondary }]} />
-            <View
-              style={[styles.visionSkeletonBarShort, { backgroundColor: theme.fillSecondary }]}
-            />
-          </View>
-        ) : null}
+        <ConfirmVisionSlot
+          bannerState={vision.bannerState}
+          suggestion={vision.suggestion}
+          suggestionOpacity={vision.suggestionOpacity}
+          onApplySuggestion={() => void vision.applySuggestion()}
+          onDismissSuggestion={vision.dismissSuggestion}
+        />
 
-        {activeBanner === "visionSuggestion" && visionSuggestion?.suggestions ? (
-          <Animated.View style={{ opacity: suggestionOpacity }}>
-            <Banner
-              tone="info"
-              message={`Forslag: ${[
-                visionSuggestion.suggestions.clubLabel,
-                visionSuggestion.suggestions.seasonLabel,
-                visionSuggestion.suggestions.type
-                  ? KIT_TYPE_LABELS_DA[visionSuggestion.suggestions.type]
-                  : null,
-              ]
-                .filter(Boolean)
-                .join(" · ")}`}
-              action={
-                <View style={styles.visionActions}>
-                  <Button
-                    label="Brug"
-                    variant="tertiary"
-                    onPress={() => void applySuggestionBanner()}
-                  />
-                  <Button label="Luk" variant="tertiary" onPress={dismissVisionSuggestion} />
-                </View>
-              }
-            />
-          </Animated.View>
-        ) : null}
+        <View style={styles.hubSpacer} />
 
-        {activeBanner === "catalogMiss" ? (
-          <Banner
-            tone="info"
-            message="Klubben findes ikke i kataloget endnu. Dit draft bliver gemt."
-            action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
+        <View style={styles.sectionPair}>
+          <ConfirmSectionRow
+            title="Data"
+            facts={dataSectionFacts(draft)}
+            filled={dataRequiredFilledCount(draft)}
+            required={DATA_REQUIRED_COUNT}
+            minHeight={sectionMinHeight}
+            onMeasureHeight={setDataSectionHeight}
+            onPress={() => openSection("data")}
           />
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={[typography.section, { color: theme.contentPrimary }]}>Identitet</Text>
-          <ProfileSurfaceGroup>
-            <ListRow
-              title={selectedClub?.label ?? "Vælg klub"}
-              onPress={openClubSheet}
-              selected={selectedClub !== null}
-            />
-            {selectedClub ? (
-              <>
-                <View
-                  style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
-                  accessibilityElementsHidden
-                />
-                <ListRow
-                  title={selectedSeason?.label ?? "Vælg sæson"}
-                  onPress={() => setOpenSheet(openConfirmSheet(openSheet, "season"))}
-                  selected={selectedSeason !== null}
-                />
-              </>
-            ) : null}
-          </ProfileSurfaceGroup>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[typography.section, { color: theme.contentPrimary }]}>Tilstand</Text>
-          <ProfileSurfaceGroup>
-            <View style={styles.groupSection}>
-              <Text style={[typography.label, { color: theme.contentPrimary }]}>Type</Text>
-              <View style={styles.chipRow}>
-                {KIT_TYPES.map((value) => (
-                  <Chip
-                    key={value}
-                    label={KIT_TYPE_LABELS_DA[value]}
-                    selected={draft.kitTypeSelected && draft.kitType === value}
-                    accessibilityRole="radio"
-                    onPress={() => {
-                      kitTypeManuallySet.current = true;
-                      mutate((current) =>
-                        selectDraftKitType(current, current.activeDraftId, value),
-                      );
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View
-              style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
-              accessibilityElementsHidden
-            />
-
-            <View style={styles.groupSection}>
-              <Text style={[typography.label, { color: theme.contentPrimary }]}>Størrelse</Text>
-              <View style={styles.chipRow}>
-                {JERSEY_SIZES.map((value) => (
-                  <Chip
-                    key={value}
-                    label={JERSEY_SIZE_LABELS_DA[value]}
-                    selected={draft.sizeSelected && draft.size === value}
-                    accessibilityRole="radio"
-                    onPress={() => {
-                      mutate((current) => selectDraftSize(current, current.activeDraftId, value));
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-
-            <View
-              style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
-              accessibilityElementsHidden
-            />
-
-            <View style={styles.groupSection}>
-              <Text style={[typography.label, { color: theme.contentPrimary }]}>Stand</Text>
-              <View style={styles.chipRow}>
-                {JERSEY_CONDITIONS.map((value) => (
-                  <Chip
-                    key={value}
-                    label={JERSEY_CONDITION_LABELS_DA[value]}
-                    selected={draft.conditionSelected && draft.condition === value}
-                    accessibilityRole="radio"
-                    onPress={() => {
-                      mutate((current) =>
-                        selectDraftCondition(current, current.activeDraftId, value),
-                      );
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-          </ProfileSurfaceGroup>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setOpenSheet(openConfirmSheet(openSheet, "details"))}
-          style={styles.detailsLink}
-        >
-          <Text style={[typography.label, { color: theme.contentSecondary }]}>Flere detaljer</Text>
-        </Pressable>
-
-        {!isBulk ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Flere trøjer i denne upload"
-            accessibilityHint="Åbner binding af flere trøjer uden at vælge billeder igen"
-            onPress={handleMoreJerseysInUpload}
-            style={styles.detailsLink}
-          >
-            <Text style={[typography.label, { color: theme.contentSecondary }]}>
-              Flere trøjer i denne upload
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {activeBanner === "saveError" ? (
-          <Banner
-            tone="danger"
-            message="Kunne ikke gemme trøjen. Prøv igen."
-            action={
-              <Button label="Prøv igen" variant="tertiary" onPress={() => void handleSave()} />
-            }
+          <ConfirmSectionRow
+            title="Detaljer"
+            facts={detailsSectionFacts(draft)}
+            filled={detailsRequiredFilledCount(draft)}
+            required={DETAILS_REQUIRED_COUNT}
+            minHeight={sectionMinHeight}
+            onMeasureHeight={setDetailsSectionHeight}
+            onPress={() => openSection("details")}
           />
-        ) : null}
+        </View>
       </ScrollView>
 
+      <ConfirmHubHeader onClose={exitToCollection} />
+
       <ButtonDock variant="fade">
-        {dockHelper ? (
-          <Text style={[typography.caption, { color: theme.contentMuted }]}>{dockHelper}</Text>
-        ) : null}
         <Button
           label={saveLabel}
           variant="primary"
@@ -1032,115 +197,6 @@ export default function ConfirmScreen() {
         />
       </ButtonDock>
 
-      <Sheet
-        visible={openSheet === "club"}
-        title="Vælg klub"
-        onDismiss={() => dismissConfirmSheet("club")}
-      >
-        <SearchField
-          variant="catalog"
-          accessibilityLabel="Søg klub"
-          placeholder="Søg klub"
-          value={clubQuery}
-          onChangeText={setClubQuery}
-          onClear={() => setClubQuery("")}
-        />
-
-        {catalogMiss ? (
-          <Banner
-            tone="info"
-            message="Klubben findes ikke i kataloget endnu."
-            action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
-          />
-        ) : null}
-
-        {searchError ? (
-          <Banner
-            tone="warning"
-            message="Kunne ikke søge i kataloget. Prøv igen."
-            action={
-              <Button
-                label="Prøv igen"
-                variant="tertiary"
-                onPress={() => void runClubSearch(clubQuery)}
-              />
-            }
-          />
-        ) : null}
-
-        {searching ? (
-          <ActivityIndicator color={theme.fillPrimary} style={styles.loader} />
-        ) : (
-          <ScrollView keyboardShouldPersistTaps="handled">
-            {clubResults.map((club) => (
-              <ListRow
-                key={club.id}
-                title={club.label}
-                selected={selectedClub?.id === club.id}
-                onPress={() => void selectClub(club)}
-              />
-            ))}
-          </ScrollView>
-        )}
-      </Sheet>
-
-      <Sheet
-        visible={openSheet === "season"}
-        title="Vælg sæson"
-        onDismiss={() => dismissConfirmSheet("season")}
-      >
-        {loadingSeasons ? (
-          <ActivityIndicator color={theme.fillPrimary} style={styles.loader} />
-        ) : (
-          <ScrollView keyboardShouldPersistTaps="handled">
-            {seasonResults.map((season) => (
-              <ListRow
-                key={season.id}
-                title={season.label}
-                selected={selectedSeason?.id === season.id}
-                onPress={() => {
-                  seasonManuallySet.current = true;
-                  setSelectedSeasonLabel(season.label);
-                  mutate((current) => setDraftSeason(current, current.activeDraftId, season.id));
-                  dismissConfirmSheet("season");
-                }}
-              />
-            ))}
-          </ScrollView>
-        )}
-      </Sheet>
-
-      <Sheet
-        visible={openSheet === "details"}
-        title="Flere detaljer"
-        onDismiss={() => dismissConfirmSheet("details")}
-      >
-        <Text style={[typography.label, { color: theme.contentPrimary }]}>Noter</Text>
-        <Text style={[typography.caption, { color: theme.contentMuted }]}>
-          Noter gemmes i denne session. De sendes ikke med ved Gem endnu.
-        </Text>
-        <TextInput
-          accessibilityLabel="Noter"
-          multiline
-          placeholder="Noter om trøjen"
-          placeholderTextColor={theme.contentMuted}
-          value={draft.notes}
-          onChangeText={(text) => {
-            mutate((current) => setDraftNotes(current, current.activeDraftId, text));
-          }}
-          style={[
-            styles.notesInput,
-            typography.body,
-            {
-              color: theme.contentPrimary,
-              borderColor: theme.borderSubtle,
-              backgroundColor: theme.surface,
-              borderRadius: radius.sm,
-            },
-          ]}
-        />
-      </Sheet>
-
       <PostSaveSheet
         visible={postSaveOpen}
         savedClub={savedClub}
@@ -1148,20 +204,15 @@ export default function ConfirmScreen() {
         onDismiss={handlePostSaveDismiss}
       />
 
-      {lightboxRole !== null && lightboxUri ? (
+      {photos.lightboxRole !== null && lightboxUri ? (
         <PhotoLightbox
           visible
-          role={lightboxRole}
+          role={photos.lightboxRole}
           uri={lightboxUri}
-          label={draft.photos.find((photo) => photo.uri === lightboxUri)?.label ?? ""}
-          onDismiss={() => {
-            setLightboxRole(null);
-            setLightboxUri(null);
-          }}
-          onReplace={handleLightboxReplace}
-          onDelete={handleLightboxDelete}
-          onChangeRole={handleLightboxChangeRole}
-          onChangeLabel={handleLightboxChangeLabel}
+          onDismiss={photos.dismissLightbox}
+          onReplace={photos.replaceLightboxPhoto}
+          onDelete={photos.deleteLightboxPhoto}
+          onChangeRole={photos.changeLightboxPhotoRole}
         />
       ) : null}
     </View>
@@ -1173,58 +224,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     padding: space.insetLg,
     gap: space.gapLg,
   },
-  section: {
-    gap: space.gapSm,
+  hubSpacer: {
+    flexGrow: 1,
   },
-  photoRow: {
-    flexDirection: "row",
-    gap: space.gapSm,
+  // Tighter than the column's gapLg so the sandbox reads as attached to the viewer.
+  photoStack: {
+    gap: space.gapMd,
   },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: space.gapSm,
-  },
-  loader: {
-    paddingVertical: space.insetLg,
-  },
-  visionActions: {
-    flexDirection: "row",
-    gap: space.gapSm,
-  },
-  visionSkeleton: {
-    gap: space.gapSm,
-    paddingVertical: space.insetSm,
-  },
-  visionSkeletonBar: {
-    height: 12,
-    width: "72%",
-    borderRadius: radius.sm,
-  },
-  visionSkeletonBarShort: {
-    height: 12,
-    width: "44%",
-    borderRadius: radius.sm,
-  },
-  detailsLink: {
-    minHeight: 44,
-    justifyContent: "center",
-  },
-  groupSection: {
-    padding: space.insetMd,
-    gap: space.gapSm,
-  },
-  groupHairline: {
-    height: StyleSheet.hairlineWidth,
-    marginHorizontal: space.insetMd,
-  },
-  notesInput: {
-    minHeight: 120,
-    borderWidth: 1,
-    padding: space.insetMd,
-    textAlignVertical: "top",
+  sectionPair: {
+    flexDirection: "column",
+    gap: space.gapMd,
   },
 });

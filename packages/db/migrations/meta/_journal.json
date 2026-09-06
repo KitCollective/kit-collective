@@ -190,6 +190,13 @@
       "when": 1788410000000,
       "tag": "0026_photo_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788420000000,
+      "tag": "0027_kit_type_fourth",
+      "breakpoints": true
     }
   ]
 }

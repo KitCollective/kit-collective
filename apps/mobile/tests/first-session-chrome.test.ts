@@ -66,6 +66,8 @@ describe("first-session visual host chrome", () => {
     expect(splash).toContain("color.contentPrimary");
     expect(splash).toContain("color.contentInverse");
     expect(splash).not.toContain("outline");
+    expect(splash).toContain("Gesture.Pan");
+    expect(splash).toContain("scheduleOnRN(onOpenRegister)");
   });
 
   it("extends Sheet with door variant rather than a new primitive", () => {
@@ -192,6 +194,41 @@ describe("first-session visual host chrome", () => {
     expect(analysing).toContain("StyleSheet.hairlineWidth");
     expect(analysing).toContain("startUnsignedVisionSuggest");
     expect(chrome).not.toContain("identity.wash");
+    expect(chrome).not.toContain("FloatingTabBar");
+  });
+
+  it("locks onboard chrome as three product slides with Fortsæt then Opret konto", () => {
+    const screen = readFirstSession("onboard-screen.tsx");
+    const copy = readFirstSession("onboard-copy.ts");
+    const chrome = `${screen}\n${copy}`;
+
+    expect(copy).toContain("Registrer din samling");
+    expect(copy).toContain("Se den som billeder");
+    expect(copy).toContain("Få besked om drømmetrøjen");
+    expect(copy).toContain("En trøje bliver en post — ikke et skema.");
+    expect(copy).toContain("Foto først, klub og sæson under.");
+    expect(copy).toContain("uden at scrolle.");
+    expect(copy).toContain("ONBOARD_NEXT_LABEL");
+    expect(copy).toContain("SPLASH_REGISTER_LABEL");
+    expect(screen).toContain("ButtonDock");
+    expect(screen).toContain("snapToInterval");
+    expect(screen).toContain("theme.fillSecondary");
+    expect(screen).toContain("theme.surface");
+    expect(screen).toContain("radius.md");
+    expect(screen).toContain("theme.borderSubtle");
+    expect(screen).toContain("assets/onboard/register.png");
+    expect(screen).toContain("assets/onboard/collection.png");
+    expect(screen).toContain("assets/onboard/wishlist.png");
+    expect(screen).toContain("typography.title");
+    expect(screen).toContain("typography.body");
+    expect(screen).toContain('resizeMode="contain"');
+    expect(screen).toContain("space.insetLg * 16");
+    expect(screen).not.toContain("pagingEnabled");
+    expect(screen).not.toContain('alignSelf: "stretch"');
+    expect(chrome).not.toContain("Vision");
+    expect(chrome).not.toContain("45 sekunder");
+    expect(chrome).not.toContain("29 kr");
+    expect(chrome).not.toContain("Spring over");
     expect(chrome).not.toContain("FloatingTabBar");
   });
 

@@ -3,6 +3,7 @@
  * Ratchet (KIT-48): fail CI when a Sheet/form TextInput under apps/mobile/app/(capture)/**
  * is bound to local useState but never wired to capture-session mutate or save payload.
  * The capture flow moved out of (tabs)/add into the (capture) modal group (2026-09-05).
+ * Confirm save, notes, exit, and upload picker now live in dedicated modules (2026-09-06).
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -10,8 +11,13 @@ import { join } from "node:path";
 const ADD_DIR = "apps/mobile/app/(capture)";
 const CONFIRM_PATH = `${ADD_DIR}/confirm.tsx`;
 const CAPTURE_PATH = `${ADD_DIR}/capture.tsx`;
-/** The Chooser is a Sheet now, so Upload filer is wired here instead of add/index.tsx. */
+const SAVE_PATH = "apps/mobile/src/capture/saveConfirmJersey.ts";
+const DETAILS_PATH = "apps/mobile/src/components/confirm-details-screen.tsx";
+const DATA_PATH = "apps/mobile/src/components/confirm-data-screen.tsx";
+const CONFIRM_EXIT_PATH = "apps/mobile/src/capture/use-confirm-exit.ts";
+/** The Chooser is a Sheet now; Upload filer is presentation-gated, then pickUploadFiles. */
 const CHOOSER_FLOW_PATH = "apps/mobile/src/capture/captureSourceFlow.ts";
+const UPLOAD_CAPTURE_PATH = "apps/mobile/src/capture/uploadCaptureSession.ts";
 const PICK_UPLOAD_FILES_PATH = "apps/mobile/src/capture/pickUploadFiles.ts";
 
 function listTsxFiles(dir) {
@@ -28,6 +34,18 @@ function listTsxFiles(dir) {
     }
   }
   return files;
+}
+
+function defaultAddSources() {
+  const routeSources = listTsxFiles(ADD_DIR).map((filePath) => ({
+    filePath,
+    source: readFileSync(filePath, "utf8"),
+  }));
+  return [
+    ...routeSources,
+    { filePath: DETAILS_PATH, source: readFileSync(DETAILS_PATH, "utf8") },
+    { filePath: DATA_PATH, source: readFileSync(DATA_PATH, "utf8") },
+  ];
 }
 
 /**
@@ -63,27 +81,27 @@ export function findOrphanFormStateViolations({ filePath, source }) {
 }
 
 /**
- * @param {{ confirmSource: string }} input
+ * @param {{ saveSource: string, detailsSource: string }} input
  * @returns {string[]}
  */
-export function findConfirmSaveViolations({ confirmSource }) {
+export function findConfirmSaveViolations({ saveSource, detailsSource }) {
   const violations = [];
 
-  if (!confirmSource.includes("photo.source")) {
+  if (!saveSource.includes("photo.source")) {
     violations.push(
-      `${CONFIRM_PATH}: save payload must use per-photo photo.source instead of a single route-level default`,
+      `${SAVE_PATH}: save payload must use per-photo photo.source instead of a single route-level default`,
     );
   }
 
-  if (/\bdefaultPhotoSource\b/.test(confirmSource)) {
+  if (/\bdefaultPhotoSource\b/.test(saveSource)) {
     violations.push(
-      `${CONFIRM_PATH}: must not infer one photoSource for every photo from route params`,
+      `${SAVE_PATH}: must not infer one photoSource for every photo from route params`,
     );
   }
 
-  if (!confirmSource.includes("setDraftNotes") || !confirmSource.includes("draft.notes")) {
+  if (!detailsSource.includes("setDraftNotes") || !detailsSource.includes("draft.notes")) {
     violations.push(
-      `${CONFIRM_PATH}: Flere detaljer notes must be stored on the capture-session draft via setDraftNotes/draft.notes`,
+      `${DETAILS_PATH}: Flere detaljer notes must be stored on the capture-session draft via setDraftNotes/draft.notes`,
     );
   }
 
@@ -91,15 +109,15 @@ export function findConfirmSaveViolations({ confirmSource }) {
 }
 
 /**
- * @param {{ confirmSource: string }} input
+ * @param {{ confirmSource: string, confirmExitSource: string }} input
  * @returns {string[]}
  */
-export function findConfirmRedirectViolations({ confirmSource }) {
+export function findConfirmRedirectViolations({ confirmSource, confirmExitSource }) {
   const violations = [];
 
-  if (!confirmSource.includes("shouldConfirmRedirectAway")) {
+  if (!confirmSource.includes("useConfirmExit")) {
     violations.push(
-      `${CONFIRM_PATH}: must gate chooser redirect with shouldConfirmRedirectAway so mount does not race session load`,
+      `${CONFIRM_PATH}: must delegate guarded session-loss redirects to useConfirmExit`,
     );
   }
 
@@ -109,14 +127,24 @@ export function findConfirmRedirectViolations({ confirmSource }) {
     );
   }
 
+  if (!confirmExitSource.includes("shouldConfirmRedirectAway")) {
+    violations.push(
+      `${CONFIRM_EXIT_PATH}: must gate chooser redirect with shouldConfirmRedirectAway so mount does not race session load`,
+    );
+  }
+
   return violations;
 }
 
 /**
- * @param {{ chooserSource: string, pickUploadSource: string }} input
+ * @param {{ chooserSource: string, uploadCaptureSource: string, pickUploadSource: string }} input
  * @returns {string[]}
  */
-export function findUploadPickerViolations({ chooserSource, pickUploadSource }) {
+export function findUploadPickerViolations({
+  chooserSource,
+  uploadCaptureSource,
+  pickUploadSource,
+}) {
   const violations = [];
 
   if (chooserSource.includes("pickGalleryPhotos")) {
@@ -125,8 +153,10 @@ export function findUploadPickerViolations({ chooserSource, pickUploadSource }) 
     );
   }
 
-  if (!chooserSource.includes("pickUploadFiles")) {
-    violations.push(`${CHOOSER_FLOW_PATH}: Upload filer must call pickUploadFiles`);
+  if (!uploadCaptureSource.includes("pickUploadFiles")) {
+    violations.push(
+      `${UPLOAD_CAPTURE_PATH}: presentation-gated Upload filer must call pickUploadFiles`,
+    );
   }
 
   if (
@@ -164,12 +194,13 @@ export function findGalleryEscapeViolations({ captureSource }) {
 }
 
 export function checkMobileAddFormWiring({
-  addSources = listTsxFiles(ADD_DIR).map((filePath) => ({
-    filePath,
-    source: readFileSync(filePath, "utf8"),
-  })),
+  addSources = defaultAddSources(),
   confirmSource = readFileSync(CONFIRM_PATH, "utf8"),
+  confirmExitSource = readFileSync(CONFIRM_EXIT_PATH, "utf8"),
+  saveSource = readFileSync(SAVE_PATH, "utf8"),
+  detailsSource = readFileSync(DETAILS_PATH, "utf8"),
   chooserSource = readFileSync(CHOOSER_FLOW_PATH, "utf8"),
+  uploadCaptureSource = readFileSync(UPLOAD_CAPTURE_PATH, "utf8"),
   captureSource = readFileSync(CAPTURE_PATH, "utf8"),
   pickUploadSource = readFileSync(PICK_UPLOAD_FILES_PATH, "utf8"),
 } = {}) {
@@ -179,9 +210,11 @@ export function checkMobileAddFormWiring({
     violations.push(...findOrphanFormStateViolations(file));
   }
 
-  violations.push(...findConfirmSaveViolations({ confirmSource }));
-  violations.push(...findConfirmRedirectViolations({ confirmSource }));
-  violations.push(...findUploadPickerViolations({ chooserSource, pickUploadSource }));
+  violations.push(...findConfirmSaveViolations({ saveSource, detailsSource }));
+  violations.push(...findConfirmRedirectViolations({ confirmSource, confirmExitSource }));
+  violations.push(
+    ...findUploadPickerViolations({ chooserSource, uploadCaptureSource, pickUploadSource }),
+  );
   violations.push(...findGalleryEscapeViolations({ captureSource }));
 
   return violations;

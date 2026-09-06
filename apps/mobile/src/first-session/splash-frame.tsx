@@ -16,7 +16,7 @@ export function SplashFrame({ alive = true, caption, dock }: SplashFrameProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.screen, { backgroundColor: color.fillPrimary }]}>
+    <View collapsable={false} style={[styles.screen, { backgroundColor: color.fillPrimary }]}>
       <SplashBackdrop alive={alive} />
       <View style={[styles.chrome, { paddingTop: insets.top }]} pointerEvents="box-none">
         <View style={styles.plate} pointerEvents="box-none">

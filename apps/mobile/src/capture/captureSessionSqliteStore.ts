@@ -31,6 +31,13 @@ type DraftRow = {
   size_selected: number;
   condition_selected: number;
   notes: string;
+  player_name: string;
+  player_id: string | null;
+  player_number: string;
+  season_label: string | null;
+  badge_enabled: number;
+  badge_id: string | null;
+  badge_label: string | null;
   sort_order: number;
 };
 
@@ -102,6 +109,13 @@ function readDraft(row: DraftRow, photos: CaptureSessionPhoto[]): CaptureJerseyD
     sizeSelected: row.size_selected === 1,
     conditionSelected: row.condition_selected === 1,
     notes: row.notes ?? "",
+    playerName: row.player_name ?? "",
+    playerId: row.player_id ?? null,
+    playerNumber: row.player_number ?? "",
+    seasonLabel: row.season_label ?? null,
+    badgeEnabled: row.badge_enabled === 1,
+    badgeId: row.badge_id ?? null,
+    badgeLabel: row.badge_label ?? null,
     photos,
   };
 }
@@ -143,17 +157,19 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         for (const [index, draft] of state.drafts.entries()) {
           draftDb.runSync(
             `INSERT INTO capture_session_draft (
-               id, session_id, club_id, club_label, season_id,
+               id, session_id, club_id, club_label, season_id, season_label,
                kit_type, size, condition,
                kit_type_selected, size_selected, condition_selected,
-               notes, sort_order, updated_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               notes, player_name, player_id, player_number,
+               badge_enabled, badge_id, badge_label, sort_order, updated_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               draft.id,
               sessionId,
               draft.clubId,
               draft.clubLabel,
               draft.seasonId,
+              draft.seasonLabel,
               draft.kitType,
               draft.size,
               draft.condition,
@@ -161,6 +177,12 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
               draft.sizeSelected ? 1 : 0,
               draft.conditionSelected ? 1 : 0,
               draft.notes,
+              draft.playerName,
+              draft.playerId,
+              draft.playerNumber,
+              draft.badgeEnabled ? 1 : 0,
+              draft.badgeId,
+              draft.badgeLabel,
               index,
               Date.now(),
             ],

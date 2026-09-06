@@ -60,6 +60,16 @@ type SheetProps = {
   titleContent?: ReactNode;
   headerAction?: ReactNode;
   onBack?: () => void;
+  /**
+   * Fires once the Modal has fully left the screen (iOS `Modal.onDismiss`). Use this to
+   * present a system picker/ActionSheet that cannot layer over a still-closing Sheet.
+   */
+  onModalHide?: () => void;
+  /**
+   * Omit the top-left circular chrome button (Luk/Tilbage). Only for Sheets that carry
+   * their own footer cancel (e.g. the capture Chooser). Swipe-down + scrim still dismiss.
+   */
+  hideChrome?: boolean;
 };
 
 export function Sheet({
@@ -72,6 +82,8 @@ export function Sheet({
   titleContent,
   headerAction,
   onBack,
+  onModalHide,
+  hideChrome = false,
 }: SheetProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -95,7 +107,13 @@ export function Sheet({
   );
 
   return (
-    <Modal animationType="none" transparent visible={visible} onRequestClose={requestDismiss}>
+    <Modal
+      animationType="none"
+      transparent
+      visible={visible}
+      onRequestClose={requestDismiss}
+      onDismiss={onModalHide}
+    >
       <GestureHandlerRootView
         style={styles.sheetRoot}
         onLayout={(event) => onViewportLayout(event.nativeEvent.layout.height)}
@@ -130,13 +148,19 @@ export function Sheet({
                   ]}
                 />
               </View>
-              <View style={styles.sheetHeader}>
-                <SheetChromeButton
-                  mode={onBack ? "back" : "close"}
-                  onPress={onBack ?? requestDismiss}
-                />
-                {headerAction ? <View style={styles.sheetHeaderAction}>{headerAction}</View> : null}
-              </View>
+              {hideChrome && !headerAction ? null : (
+                <View style={styles.sheetHeader}>
+                  {hideChrome ? null : (
+                    <SheetChromeButton
+                      mode={onBack ? "back" : "close"}
+                      onPress={onBack ?? requestDismiss}
+                    />
+                  )}
+                  {headerAction ? (
+                    <View style={styles.sheetHeaderAction}>{headerAction}</View>
+                  ) : null}
+                </View>
+              )}
               {titleContent ? (
                 <View style={styles.sheetTitleRegion}>{titleContent}</View>
               ) : (
