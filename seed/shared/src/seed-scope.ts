@@ -157,6 +157,8 @@ export function formatSeedScopeUsage(command: string): string {
     `Usage (national-team + season): ${command} national-team <ntRef> <season> [lane]`,
     `Usage (League grain):        ${command} grain league <competition> [lane]`,
     `Usage (League season grain): ${command} grain league-season <competition> <season> [lane]`,
+    `Usage (Join workflow):       ${command} join club <competition> <season> [lane]`,
+    `Usage (Join sentence):       ${command} join sentence "<natural language>"`,
     "",
     "  0001 = that competition's first Transfermarkt season (e.g. Superliga 1991/92).",
     "  Season labels like 1995/96 are passed through unchanged.",

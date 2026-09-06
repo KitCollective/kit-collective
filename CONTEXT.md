@@ -134,7 +134,7 @@ Documented seed-module interface for a Hierarchy grain (inputs, output fields, E
 _Avoid_: product `/v1` seed; scrapers on the Nest request path; treating Catalog peek as the reference
 
 **Join workflow**:
-The composed walk that fills a named competition season (Club sides or NationalTeam sides, then FK kits on those sides) and proves stamdata plus image bytes in the lane. Third Football Data Seed milestone. Not MCP.
+The composed walk that fills a named competition season (Club sides or NationalTeam sides, then FK kits on those sides) and proves stamdata plus image bytes in the lane. Third Football Data Seed milestone. Operator entry: `seed-apify join` (structured scope or one-sentence `join sentence`). Not MCP.
 _Avoid_: treating the walk as the first accept; fusing TM and FK into one MCP tool before the walk is proven; a club-only walk as the product ceiling
 
 **Compose catalog**:

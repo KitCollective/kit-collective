@@ -32,6 +32,13 @@ export {
   TransfermarktCircuitOpenError,
 } from "./fetch/transfermarkt-rate-limit.js";
 export { parseLane, resolveDatabaseUrl } from "./lane.js";
+export {
+  type FkJoinRunner,
+  type FkJoinRunResult,
+  type JoinWorkflowSummary,
+  runClubJoinWorkflow,
+  runNationalTeamJoinWorkflow,
+} from "./join-workflow.js";
 export { mapFacts } from "./map/index.js";
 export { normalize, stripForbiddenFields } from "./normalize/index.js";
 export type {
@@ -39,6 +46,7 @@ export type {
   LeagueGrain,
   LeagueSeasonGrain,
   ParsedGrainCli,
+  ParsedJoinCli,
   ParsedSeedCli,
   ParsedWalkCli,
 } from "./parse-cli.js";

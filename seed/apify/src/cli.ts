@@ -1,6 +1,26 @@
 #!/usr/bin/env node
+import { runFkSeed } from "@kit/seed-fkapi/mapper";
+import { createR2ObjectStore } from "@kit/seed-fkapi/object-store";
+import { createFixtureFetchAdapter as createFkFixtureFetchAdapter } from "@kit/seed-fkapi/fetch";
 import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 import { parseCliArgs, runHierarchyGrain, runSeed } from "./run.js";
+import {
+  runClubJoinWorkflow,
+  runNationalTeamJoinWorkflow,
+  type FkJoinRunner,
+} from "./join-workflow.js";
+
+function createDefaultFkRunner(fetchAdapter?: import("@kit/seed-fkapi/types").FkFetchAdapter): FkJoinRunner {
+  const fkFetch = fetchAdapter ?? createFkFixtureFetchAdapter();
+  const objectStore = createR2ObjectStore();
+  return async ({ scope, databaseUrl }) =>
+    runFkSeed({
+      databaseUrl,
+      fetchAdapter: fkFetch,
+      objectStore,
+      scope,
+    });
+}
 
 async function main() {
   const parsed = parseCliArgs(process.argv);
@@ -14,6 +34,37 @@ async function main() {
   }
 
   try {
+    if (parsed.mode === "join") {
+      const fkRunner = createDefaultFkRunner();
+      const summary =
+        parsed.scope.path === "club"
+          ? await runClubJoinWorkflow({
+              path: "club",
+              competition: parsed.scope.competition,
+              season: parsed.scope.season,
+              lane: parsed.scope.lane,
+              fetchAdapter: resolved.adapter,
+              fkRunner,
+            })
+          : await runNationalTeamJoinWorkflow({
+              path: "national_team",
+              nationalTeamRef: parsed.scope.nationalTeamRef,
+              season: parsed.scope.season,
+              lane: parsed.scope.lane,
+              fetchAdapter: resolved.adapter,
+              fkRunner,
+            });
+
+      console.log(
+        JSON.stringify(
+          { ok: true, mode: "join", lane: parsed.scope.lane, scope: parsed.scope, summary },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
     if (parsed.mode === "grain") {
       const { summary } = await runHierarchyGrain({
         kind: parsed.grain.kind,
