@@ -28,7 +28,7 @@ Requires Apify seed Club/NationalTeam + Season rows for the scope before FK seed
 - `DATABASE_URL` — lane Postgres (required)
 - `R2_*` — object store for archive bytes (SigV4 via `@aws-sdk/client-s3`)
 - `FKAPI_BASE_URL`, `FKAPI_TOKEN` — required for live fetch; omitted in tests
-- `SEED_PROXY_URL`, `SEED_REQUIRE_PROXY` — Coolify jobs fail closed without proxy when required
+- Football Kit Archive / FKApi does **not** use `SEED_PROXY_URL` / Decodo (Transfermarkt-only)
 
 ## Tests
 

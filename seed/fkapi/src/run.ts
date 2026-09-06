@@ -2,7 +2,6 @@ import { parseCliArgs } from "./cli-args.js";
 import { createFkApiFetchAdapter } from "./fetch.js";
 import { runFkSeed } from "./mapper.js";
 import { createR2ObjectStore } from "./object-store.js";
-import { assertSeedProxyAvailable, resolveSeedProxyConfig } from "./proxy-config.js";
 import type { FkFetchAdapter, ObjectStoreAdapter } from "./types.js";
 
 export type RunCliOptions = {
@@ -45,8 +44,5 @@ function resolveDefaultFetchAdapter(): FkFetchAdapter {
     );
   }
 
-  const proxyConfig = resolveSeedProxyConfig();
-  assertSeedProxyAvailable(proxyConfig);
-
-  return createFkApiFetchAdapter({ proxyConfig });
+  return createFkApiFetchAdapter();
 }

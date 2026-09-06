@@ -3,12 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeTransfermarktClubId, resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import { normalizeRawKit } from "./normalize.js";
-import {
-  createSeedHttpFetch,
-  resolveSeedProxyConfig,
-  type SeedHttpFetch,
-  type SeedProxyConfig,
-} from "./proxy-config.js";
+import { createSeedHttpFetch, type SeedHttpFetch } from "./proxy-config.js";
 import type { FkFetchAdapter, FkRawKit } from "./types.js";
 import { isClubKit, isNationalTeamKit } from "./types.js";
 
@@ -75,7 +70,6 @@ export function createFixtureFetchAdapter(): FkFetchAdapter {
 }
 
 type FkApiFetchAdapterOptions = {
-  proxyConfig?: SeedProxyConfig;
   httpFetch?: SeedHttpFetch;
   baseUrl?: string;
   token?: string;
@@ -104,8 +98,7 @@ function buildKitsUrl(baseUrl: string, scope: SeedScope): URL {
 
 /** Production fetch talks to Football Kit Archive via FKApi — not used in tests. */
 export function createFkApiFetchAdapter(options: FkApiFetchAdapterOptions = {}): FkFetchAdapter {
-  const proxyConfig = options.proxyConfig ?? resolveSeedProxyConfig();
-  const httpFetch = options.httpFetch ?? createSeedHttpFetch(proxyConfig);
+  const httpFetch = options.httpFetch ?? createSeedHttpFetch({ requireProxy: false });
   const baseUrl = options.baseUrl ?? process.env.FKAPI_BASE_URL ?? "https://fkapi.example.invalid";
   const token = options.token ?? process.env.FKAPI_TOKEN;
 

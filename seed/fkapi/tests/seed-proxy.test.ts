@@ -6,8 +6,6 @@ import {
   createSeedHttpFetch,
   resolveSeedProxyConfig,
 } from "../src/proxy-config.js";
-import { runCli } from "../src/run.js";
-import type { ObjectStoreAdapter } from "../src/types.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -213,28 +211,5 @@ describe("createFkApiFetchAdapter", () => {
     });
 
     expect(kits.map((kit) => kit.id)).toEqual(["fk-nt-keep"]);
-  });
-});
-
-describe("runCli proxy behaviour", () => {
-  it("fails closed for live FK when SEED_REQUIRE_PROXY is set without SEED_PROXY_URL", async () => {
-    process.env.FKAPI_BASE_URL = "https://fkapi.example.invalid";
-    process.env.SEED_REQUIRE_PROXY = "true";
-    delete process.env.SEED_PROXY_URL;
-
-    const objectStore: ObjectStoreAdapter = {
-      async putObject() {},
-      async objectExists() {
-        return true;
-      },
-    };
-
-    await expect(
-      runCli({
-        argv: ["superliga", "1998/99", "1998/99", "development"],
-        databaseUrl: "postgresql://unused",
-        objectStore,
-      }),
-    ).rejects.toThrow(/SEED_REQUIRE_PROXY is set but SEED_PROXY_URL is missing/);
   });
 });
