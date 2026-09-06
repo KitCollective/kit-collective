@@ -108,7 +108,10 @@ function cacheKey(uri: string, role: PhotoRole, purpose: PhotoPreparePurpose): s
   return `${uri}::${role}::${purpose}`;
 }
 
-function rememberPreparedPhoto(key: string, pending: Promise<PreparedPhoto>): Promise<PreparedPhoto> {
+function rememberPreparedPhoto(
+  key: string,
+  pending: Promise<PreparedPhoto>,
+): Promise<PreparedPhoto> {
   prepareCache.set(key, pending);
   void pending.catch(() => {
     prepareCache.delete(key);

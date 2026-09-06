@@ -197,12 +197,7 @@ describe("scheduleDevicePhotoPrepare", () => {
 
     scheduleDevicePhotoPrepare("file:///photos/camera-shot.heic", "front", "display", adapter);
     await expect(
-      readPreparedDevicePhotoBase64(
-        "file:///photos/camera-shot.heic",
-        "front",
-        "display",
-        adapter,
-      ),
+      readPreparedDevicePhotoBase64("file:///photos/camera-shot.heic", "front", "display", adapter),
     ).rejects.toThrow("file not ready");
 
     shouldFail = false;
