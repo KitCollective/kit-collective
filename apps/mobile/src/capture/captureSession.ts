@@ -86,6 +86,18 @@ export function assignPhotosFillOrder(
   });
 }
 
+/** Assign roles in picker order while preserving each photo's source. */
+export function assignPhotosFillOrderPreservingSource(
+  photos: CaptureSessionPhoto[],
+): CaptureSessionPhoto[] {
+  const capped = photos.slice(0, MAX_USER_JERSEY_PHOTOS);
+  return capped.map((photo, index) => {
+    const role: PhotoRole =
+      index < UNIVERSAL_PHOTO_ROLES.length ? UNIVERSAL_PHOTO_ROLES[index]! : "other";
+    return { uri: photo.uri, role, source: photo.source };
+  });
+}
+
 function assignSingleRoles(uris: string[], source: PhotoSource): CaptureSessionPhoto[] {
   return assignPhotosFillOrder(uris, source);
 }
@@ -516,10 +528,7 @@ export function applyFillOrderToActiveDraft(state: CaptureSessionState): Capture
     return state;
   }
 
-  const assigned = assignPhotosFillOrder(
-    draft.photos.map((photo) => photo.uri),
-    draft.photos[0]?.source ?? "camera",
-  );
+  const assigned = assignPhotosFillOrderPreservingSource(draft.photos);
   const next = updateDraft(state, state.activeDraftId, (current) => ({
     ...current,
     photos: assigned,

@@ -179,4 +179,21 @@ describe("captureSessionPersistence", () => {
     expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
     expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
   });
+
+  it("preserves per-photo source when replacing mixed camera and gallery shots", () => {
+    const store = createMemoryCaptureSessionStore();
+
+    replacePersistedCapturePhotos(
+      null,
+      [
+        { role: null, uri: URI_FRONT, source: "camera" },
+        { role: null, uri: URI_BACK, source: "gallery" },
+      ],
+      { store },
+    );
+
+    const draft = getActiveDraft(store.load()!);
+    expect(draft.photos.find((photo) => photo.uri === URI_FRONT)?.source).toBe("camera");
+    expect(draft.photos.find((photo) => photo.uri === URI_BACK)?.source).toBe("gallery");
+  });
 });

@@ -9,6 +9,7 @@ import {
 import type { PrefilledClub } from "./captureSessionPersistence";
 import {
   loadPersistedCaptureSession,
+  finalizeShootFirstSession,
   persistCameraShotInSession,
   replacePersistedCapturePhotos,
   resolveResumableCameraSession,
