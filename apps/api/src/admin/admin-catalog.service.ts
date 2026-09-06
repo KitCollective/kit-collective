@@ -27,6 +27,7 @@ import {
   season,
   teamSeason,
 } from "@kit/db";
+import { KIT_TYPES } from "@kit/domain";
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
@@ -144,7 +145,7 @@ export class AdminCatalogService {
         .filter((row): row is typeof row & { label: string } => Boolean(row.label))
         .map((row) => ({ id: row.id, label: row.label })),
       seasons: seasons.map((row) => ({ id: row.id, label: row.label })),
-      kitTypes: ["home", "away", "third", "gk", "special"],
+      kitTypes: [...KIT_TYPES],
     });
   }
 

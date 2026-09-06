@@ -32,7 +32,7 @@ export type LabelKind = (typeof LABEL_KINDS)[number];
 export const LABEL_SOURCES = ["seed", "admin"] as const;
 export type LabelSource = (typeof LABEL_SOURCES)[number];
 
-export const KIT_TYPES = ["home", "away", "third", "gk", "special"] as const;
+export const KIT_TYPES = ["home", "away", "third", "fourth", "gk", "special"] as const;
 export type KitType = (typeof KIT_TYPES)[number];
 
 export const CLUB_KINDS = ["club", "farm", "dissolved"] as const;
@@ -96,6 +96,7 @@ export const KIT_TYPE_LABELS_DA: Record<KitType, string> = {
   home: "Hjemme",
   away: "Ude",
   third: "Tredje",
+  fourth: "Fjerde",
   gk: "Keeper",
   special: "Special",
 };

@@ -91,7 +91,8 @@
         "scripts/**",
         "**/src/cli.ts",
         "**/src/run.ts",
-        "**/src/run-cli.ts"
+        "**/src/run-cli.ts",
+        "packages/db/src/seed/run-dev-catalog.ts"
       ],
       "linter": {
         "rules": {
