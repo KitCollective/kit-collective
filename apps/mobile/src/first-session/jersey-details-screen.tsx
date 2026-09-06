@@ -362,7 +362,11 @@ export function JerseyDetailsScreen({
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
   const pickPhotoForRole = async (role: PhotoRole, replaceUri?: string) => {
-    if (!draft || isBulk) {
+    if (!draft) {
+      return;
+    }
+
+    if (isBulk && role !== "other") {
       return;
     }
 
