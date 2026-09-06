@@ -6,6 +6,8 @@ import {
   createSeedHttpFetch,
   resolveSeedProxyConfig,
 } from "../src/proxy-config.js";
+import { runCli } from "../src/run.js";
+import type { ObjectStoreAdapter } from "../src/types.js";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -211,5 +213,61 @@ describe("createFkApiFetchAdapter", () => {
     });
 
     expect(kits.map((kit) => kit.id)).toEqual(["fk-nt-keep"]);
+  });
+
+  it("default live adapter does not construct a proxy agent when SEED_PROXY_* is set", async () => {
+    process.env.SEED_PROXY_URL = "http://user:pass@proxy.example:8080";
+    process.env.SEED_REQUIRE_PROXY = "true";
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetcher: fetchMock,
+      createProxyAgent,
+    });
+    await adapter.fetchKits({
+      kind: "national_team",
+      nationalTeamRef: "fka-denmark",
+      season: "2010",
+    });
+
+    expect(createProxyAgent).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://fkapi.example.invalid/kits?nationalTeamFkApiId=fka-denmark&season=2010",
+      expect.objectContaining({ dispatcher: undefined }),
+    );
+  });
+});
+
+describe("runCli live FK fetch", () => {
+  it("does not refuse national-team CLI when SEED_REQUIRE_PROXY is set without SEED_PROXY_URL", async () => {
+    process.env.FKAPI_BASE_URL = "https://fkapi.example.invalid";
+    process.env.SEED_REQUIRE_PROXY = "true";
+    delete process.env.SEED_PROXY_URL;
+
+    const objectStore: ObjectStoreAdapter = {
+      async putObject() {},
+      async objectExists() {
+        return true;
+      },
+    };
+
+    let message = "";
+    try {
+      await runCli({
+        argv: ["national-team", "3436", "2010", "development"],
+        databaseUrl: "postgresql://unused",
+        objectStore,
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).not.toMatch(/SEED_REQUIRE_PROXY/);
+    expect(message.length).toBeGreaterThan(0);
   });
 });

@@ -3,7 +3,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeTransfermarktClubId, resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import { normalizeRawKit } from "./normalize.js";
-import { createSeedHttpFetch, type SeedHttpFetch } from "./proxy-config.js";
+import {
+  createSeedHttpFetch,
+  type SeedHttpFetch,
+  type SeedHttpFetcher,
+  type SeedHttpProxyAgentFactory,
+} from "./proxy-config.js";
 import type { FkFetchAdapter, FkRawKit } from "./types.js";
 import { isClubKit, isNationalTeamKit } from "./types.js";
 
@@ -71,9 +76,25 @@ export function createFixtureFetchAdapter(): FkFetchAdapter {
 
 type FkApiFetchAdapterOptions = {
   httpFetch?: SeedHttpFetch;
+  httpFetcher?: SeedHttpFetcher;
+  createProxyAgent?: SeedHttpProxyAgentFactory;
   baseUrl?: string;
   token?: string;
 };
+
+/** Direct FKApi HTTP — never Seed proxy / Decodo. */
+function createFkDirectHttpFetch(
+  fetchImpl?: SeedHttpFetcher,
+  createProxyAgent?: SeedHttpProxyAgentFactory,
+): SeedHttpFetch {
+  if (fetchImpl && createProxyAgent) {
+    return createSeedHttpFetch({ requireProxy: false }, fetchImpl, createProxyAgent);
+  }
+  if (fetchImpl) {
+    return createSeedHttpFetch({ requireProxy: false }, fetchImpl);
+  }
+  return createSeedHttpFetch({ requireProxy: false });
+}
 
 function buildKitsUrl(baseUrl: string, scope: SeedScope): URL {
   const url = new URL("/kits", baseUrl);
@@ -98,7 +119,8 @@ function buildKitsUrl(baseUrl: string, scope: SeedScope): URL {
 
 /** Production fetch talks to Football Kit Archive via FKApi — not used in tests. */
 export function createFkApiFetchAdapter(options: FkApiFetchAdapterOptions = {}): FkFetchAdapter {
-  const httpFetch = options.httpFetch ?? createSeedHttpFetch({ requireProxy: false });
+  const httpFetch =
+    options.httpFetch ?? createFkDirectHttpFetch(options.httpFetcher, options.createProxyAgent);
   const baseUrl = options.baseUrl ?? process.env.FKAPI_BASE_URL ?? "https://fkapi.example.invalid";
   const token = options.token ?? process.env.FKAPI_TOKEN;
 
