@@ -173,4 +173,47 @@ describe("scheduleDevicePhotoPrepare", () => {
     expect(base64).toBe("ZmFrZS1qcGVn");
     expect(adapter.calls).toHaveLength(1);
   });
+
+  it("retries prepare after a transient warm failure", async () => {
+    let shouldFail = true;
+    const adapter: PhotoManipulatorAdapter & { calls: unknown[] } = {
+      calls: [],
+      async getImageInfo() {
+        if (shouldFail) {
+          throw new Error("file not ready");
+        }
+        return { width: 1200, height: 900 };
+      },
+      async manipulateAsync(uri, actions, options) {
+        this.calls.push({ uri, actions, options });
+        return {
+          uri: `${uri}.prepared.jpg`,
+          width: 1200,
+          height: 900,
+          base64: options.includeBase64 ? "ZmFrZS1qcGVn" : undefined,
+        };
+      },
+    };
+
+    scheduleDevicePhotoPrepare("file:///photos/camera-shot.heic", "front", "display", adapter);
+    await expect(
+      readPreparedDevicePhotoBase64(
+        "file:///photos/camera-shot.heic",
+        "front",
+        "display",
+        adapter,
+      ),
+    ).rejects.toThrow("file not ready");
+
+    shouldFail = false;
+    const base64 = await readPreparedDevicePhotoBase64(
+      "file:///photos/camera-shot.heic",
+      "front",
+      "display",
+      adapter,
+    );
+
+    expect(base64).toBe("ZmFrZS1qcGVn");
+    expect(adapter.calls).toHaveLength(1);
+  });
 });

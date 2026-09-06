@@ -1,8 +1,8 @@
 import type { PhotoRole } from "@kit/domain";
-import { UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
+import { isUniversalPhotoRole } from "@kit/domain";
 import type { CaptureJerseyDraft } from "./captureSessionTypes";
 
-function jpegQualityForRole(role: PhotoRole): number {
+export function captureQualityForRole(role: string): number {
   return role === "other" ? 0.92 : 0.8;
 }
 
@@ -38,6 +38,10 @@ export type PreparedPhoto = {
   format: "jpeg";
 };
 
+export function displayMaxEdgeForRole(role: PhotoRole): number {
+  return isUniversalPhotoRole(role) ? DISPLAY_MAX_EDGE_UNIVERSAL : DISPLAY_MAX_EDGE_OTHER;
+}
+
 export function maxEdgeForPrepare(purpose: PhotoPreparePurpose, role: PhotoRole): number {
   if (purpose === "visionIdentity") {
     return VISION_IDENTITY_MAX_EDGE;
@@ -45,7 +49,7 @@ export function maxEdgeForPrepare(purpose: PhotoPreparePurpose, role: PhotoRole)
   if (purpose === "groupingThumb") {
     return GROUPING_THUMB_MAX_EDGE;
   }
-  return role === "other" ? DISPLAY_MAX_EDGE_OTHER : DISPLAY_MAX_EDGE_UNIVERSAL;
+  return displayMaxEdgeForRole(role);
 }
 
 export function resizeActionForMaxLongEdge(
@@ -63,19 +67,6 @@ export function resizeActionForMaxLongEdge(
   return { resize: { height: maxLongEdge } };
 }
 
-function isUniversalRole(role: PhotoRole): boolean {
-  for (const universalRole of UNIVERSAL_PHOTO_ROLES) {
-    if (role === universalRole) {
-      return true;
-    }
-  }
-  return false;
-}
-
-export function displayMaxEdgeForRole(role: PhotoRole): number {
-  return isUniversalRole(role) ? DISPLAY_MAX_EDGE_UNIVERSAL : DISPLAY_MAX_EDGE_OTHER;
-}
-
 /**
  * Resize to a capped long edge and always emit JPEG (HEIC/PNG inputs become JPEG).
  * The source `uri` stays on disk for Confirm; this returns a new prepared file URI + bytes.
@@ -90,7 +81,7 @@ export async function prepareDevicePhoto(
   const { width, height } = await adapter.getImageInfo(uri);
   const resize = resizeActionForMaxLongEdge(width, height, maxLongEdge);
   const actions = resize ? [resize] : [];
-  const compress = jpegQualityForRole(role);
+  const compress = captureQualityForRole(role);
 
   const result = await adapter.manipulateAsync(uri, actions, {
     compress,
@@ -117,6 +108,14 @@ function cacheKey(uri: string, role: PhotoRole, purpose: PhotoPreparePurpose): s
   return `${uri}::${role}::${purpose}`;
 }
 
+function rememberPreparedPhoto(key: string, pending: Promise<PreparedPhoto>): Promise<PreparedPhoto> {
+  prepareCache.set(key, pending);
+  void pending.catch(() => {
+    prepareCache.delete(key);
+  });
+  return pending;
+}
+
 /**
  * Fire-and-forget device prepare after a photo lands in the draft (camera/gallery/files).
  * Does not replace the draft URI shown on Confirm.
@@ -131,7 +130,7 @@ export function scheduleDevicePhotoPrepare(
   if (prepareCache.has(key)) {
     return;
   }
-  prepareCache.set(key, prepareDevicePhoto(uri, role, purpose, adapter));
+  rememberPreparedPhoto(key, prepareDevicePhoto(uri, role, purpose, adapter));
 }
 
 export async function readPreparedDevicePhotoBase64(
@@ -143,8 +142,7 @@ export async function readPreparedDevicePhotoBase64(
   const key = cacheKey(uri, role, purpose);
   let pending = prepareCache.get(key);
   if (!pending) {
-    pending = prepareDevicePhoto(uri, role, purpose, adapter);
-    prepareCache.set(key, pending);
+    pending = rememberPreparedPhoto(key, prepareDevicePhoto(uri, role, purpose, adapter));
   }
   const prepared = await pending;
   return prepared.base64;
