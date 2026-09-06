@@ -1,4 +1,4 @@
-import type { PhotoRole, PhotoSource } from "@kit/domain";
+import type { PhotoSource } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
@@ -6,6 +6,7 @@ import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
   clearActiveCameraCaptureSessionId,
   createPersistedCaptureSession,
+  finalizeShootFirstSession,
   mergeGalleryEscapePhotos,
   persistCameraShotInSession,
   readPrefilledClub,
@@ -31,7 +32,7 @@ export default function CaptureScreen() {
     () => Platform.OS === "web" || isRepeatCaptureSession() || resumedSession !== null,
   );
   const sessionIdRef = useRef<string | null>(resumedSession?.sessionId ?? null);
-  const [initialCameraPhotos] = useState(resumedSession?.photos ?? []);
+  const [initialPhotoUris] = useState(resumedSession?.photoUris ?? []);
 
   const navigateToConfirm = useCallback(
     (sessionId: string) => {
@@ -66,6 +67,7 @@ export default function CaptureScreen() {
       }
 
       if (sessionIdRef.current) {
+        finalizeShootFirstSession(sessionIdRef.current);
         navigateToConfirm(sessionIdRef.current);
         return;
       }
@@ -80,10 +82,10 @@ export default function CaptureScreen() {
   );
 
   const handlePhotoCaptured = useCallback(
-    (photo: { role: PhotoRole; uri: string }) => {
+    (uri: string) => {
       sessionIdRef.current = persistCameraShotInSession(
         sessionIdRef.current,
-        { ...photo, source: "camera" },
+        { uri, source: "camera" },
         { prefilledClub, photoSource: "camera" },
       );
     },
@@ -91,7 +93,7 @@ export default function CaptureScreen() {
   );
 
   const openGalleryEscape = useCallback(
-    async (existingPhotos: Array<{ role: PhotoRole; uri: string }>) => {
+    async (existingUris: string[]) => {
       const uris = await pickGalleryPhotos(
         {
           allowsMultipleSelection: true,
@@ -104,7 +106,7 @@ export default function CaptureScreen() {
         return false;
       }
 
-      const merged = mergeGalleryEscapePhotos(existingPhotos, uris);
+      const merged = mergeGalleryEscapePhotos(existingUris, uris);
       finishCaptureFromPhotos(merged);
       return true;
     },
@@ -137,10 +139,10 @@ export default function CaptureScreen() {
 
   return (
     <CaptureCameraSession
-      initialPhotos={initialCameraPhotos}
+      initialPhotoUris={initialPhotoUris}
       onComplete={(uris) => finishCapture(uris, "camera")}
       onClose={() => router.back()}
-      onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}
+      onGalleryEscape={(existingUris) => void openGalleryEscape(existingUris)}
       onPhotoCaptured={handlePhotoCaptured}
     />
   );

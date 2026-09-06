@@ -1,9 +1,9 @@
-import type { PhotoRole } from "@kit/domain";
 import { useCallback, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
   createPersistedCaptureSession,
+  finalizeShootFirstSession,
   mergeGalleryEscapePhotos,
   persistCameraShotInSession,
   replacePersistedCapturePhotos,
@@ -32,7 +32,7 @@ export function FirstSessionChooserScreen({
   const typography = useTypography();
   const [showCamera, setShowCamera] = useState(false);
   const [cameraSessionId, setCameraSessionId] = useState<string | null>(null);
-  const [cameraPhotos, setCameraPhotos] = useState<Array<{ role: PhotoRole; uri: string }>>([]);
+  const [cameraPhotoUris, setCameraPhotoUris] = useState<string[]>([]);
 
   const handleUpload = useCallback(async () => {
     const uris = await pickUploadFiles(
@@ -65,7 +65,7 @@ export function FirstSessionChooserScreen({
   );
 
   const handleGalleryEscape = useCallback(
-    async (existingPhotos: Array<{ role: PhotoRole; uri: string }>) => {
+    async (existingUris: string[]) => {
       const uris = await pickGalleryPhotos(
         {
           allowsMultipleSelection: true,
@@ -78,7 +78,7 @@ export function FirstSessionChooserScreen({
         return false;
       }
 
-      finishCaptureFromPhotos(mergeGalleryEscapePhotos(existingPhotos, uris));
+      finishCaptureFromPhotos(mergeGalleryEscapePhotos(existingUris, uris));
       return true;
     },
     [finishCaptureFromPhotos],
@@ -87,7 +87,7 @@ export function FirstSessionChooserScreen({
   if (showCamera) {
     return (
       <CaptureCameraSession
-        initialPhotos={cameraPhotos}
+        initialPhotoUris={cameraPhotoUris}
         onComplete={(uris) => {
           if (uris.length === 0) {
             setShowCamera(false);
@@ -95,6 +95,7 @@ export function FirstSessionChooserScreen({
           }
 
           if (cameraSessionId) {
+            finalizeShootFirstSession(cameraSessionId);
             onPhotosPicked(cameraSessionId);
             return;
           }
@@ -105,18 +106,15 @@ export function FirstSessionChooserScreen({
           onPhotosPicked(sessionId);
         }}
         onClose={() => setShowCamera(false)}
-        onGalleryEscape={(existingPhotos) => void handleGalleryEscape(existingPhotos)}
-        onPhotoCaptured={(photo) => {
+        onGalleryEscape={(existingUris) => void handleGalleryEscape(existingUris)}
+        onPhotoCaptured={(uri) => {
           const sessionId = persistCameraShotInSession(
             cameraSessionId,
-            { ...photo, source: "camera" },
+            { uri, source: "camera" },
             { photoSource: "camera" },
           );
           setCameraSessionId(sessionId);
-          setCameraPhotos((current) => {
-            const next = current.filter((entry) => entry.role !== photo.role);
-            return [...next, photo];
-          });
+          setCameraPhotoUris((current) => [...current, uri]);
         }}
       />
     );

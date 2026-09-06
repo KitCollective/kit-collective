@@ -21,6 +21,7 @@ export type { PrefilledClub };
 export {
   clearActiveCameraCaptureSessionId,
   clearMemoryActiveCameraCaptureSessionIdForTests,
+  finalizeShootFirstSession,
   loadPersistedCaptureSession,
   mergeGalleryEscapePhotos,
   persistCameraShotInSession,

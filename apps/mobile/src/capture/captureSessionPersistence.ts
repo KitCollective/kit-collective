@@ -1,6 +1,7 @@
-import type { PhotoRole, PhotoSource } from "@kit/domain";
+import type { PhotoSource } from "@kit/domain";
 import {
-  appendCameraShotToSession,
+  appendUnassignedCameraShotToSession,
+  applyFillOrderToActiveDraft,
   createCaptureSessionFromPhotos,
   getActiveDraft,
   setDraftClub,
@@ -72,18 +73,18 @@ export function loadPersistedCaptureSession(sessionId: string): CaptureSessionSt
 
 export function persistCameraShotInSession(
   sessionId: string | null,
-  photo: CaptureSessionPhoto & { role: PhotoRole },
+  photo: { uri: string; source?: PhotoSource },
   options?: {
     prefilledClub?: PrefilledClub | null;
     photoSource?: PhotoSource;
     store?: CaptureSessionStore;
   },
 ): string {
-  const source = options?.photoSource ?? "camera";
+  const source = photo.source ?? options?.photoSource ?? "camera";
 
   if (!sessionId) {
     const newSessionId = createSessionId();
-    persistCaptureSessionFromPhotos([{ ...photo, source }], {
+    persistCaptureSessionFromPhotos([{ uri: photo.uri, role: null, source }], {
       sessionId: newSessionId,
       prefilledClub: options?.prefilledClub,
       store: options?.store,
@@ -98,14 +99,28 @@ export function persistCameraShotInSession(
     return persistCameraShotInSession(null, photo, options);
   }
 
-  const next = appendCameraShotToSession(
+  const next = appendUnassignedCameraShotToSession(
     { ...loaded, store: sessionStore(sessionId, options?.store) },
-    photo,
+    photo.uri,
     source,
   );
   next.store?.save(next);
   setActiveCameraCaptureSessionId(sessionId);
   return sessionId;
+}
+
+export function finalizeShootFirstSession(
+  sessionId: string,
+  options?: { store?: CaptureSessionStore },
+): void {
+  const store = sessionStore(sessionId, options?.store);
+  const loaded = store.load();
+  if (!loaded) {
+    return;
+  }
+
+  const next = applyFillOrderToActiveDraft({ ...loaded, store });
+  next.store?.save(next);
 }
 
 export function replacePersistedCapturePhotos(
@@ -116,31 +131,40 @@ export function replacePersistedCapturePhotos(
     store?: CaptureSessionStore;
   },
 ): string {
-  if (!sessionId) {
-    return persistCaptureSessionFromPhotos(photos, {
-      prefilledClub: options?.prefilledClub,
-      store: options?.store,
-    });
-  }
+  const nextSessionId = !sessionId
+    ? persistCaptureSessionFromPhotos(photos, {
+        prefilledClub: options?.prefilledClub,
+        store: options?.store,
+      })
+    : (() => {
+        const store = sessionStore(sessionId, options?.store);
+        const loaded = store.load();
+        if (!loaded) {
+          return replacePersistedCapturePhotos(null, photos, options);
+        }
 
-  const store = sessionStore(sessionId, options?.store);
+        return persistCaptureSessionFromPhotos(photos, {
+          sessionId,
+          prefilledClub: options?.prefilledClub,
+          store,
+        });
+      })();
+
+  const store = sessionStore(nextSessionId, options?.store);
   const loaded = store.load();
-  if (!loaded) {
-    return replacePersistedCapturePhotos(null, photos, options);
+  if (loaded && photos.some((photo) => photo.role === null)) {
+    const withRoles = applyFillOrderToActiveDraft({ ...loaded, store });
+    withRoles.store?.save(withRoles);
   }
 
-  return persistCaptureSessionFromPhotos(photos, {
-    sessionId,
-    prefilledClub: options?.prefilledClub,
-    store,
-  });
+  return nextSessionId;
 }
 
 export function resolveResumableCameraSession(options?: {
   readSession?: (sessionId: string) => CaptureSessionState | null;
 }): {
   sessionId: string;
-  photos: Array<{ role: PhotoRole; uri: string }>;
+  photoUris: string[];
 } | null {
   const sessionId = getActiveCameraCaptureSessionId();
   if (!sessionId) {
@@ -155,14 +179,12 @@ export function resolveResumableCameraSession(options?: {
   }
 
   const draft = getActiveDraft(loaded);
-  const photos = draft.photos
-    .filter((photo): photo is CaptureSessionPhoto & { role: PhotoRole } => photo.role !== null)
-    .map((photo) => ({ role: photo.role, uri: photo.uri }));
+  const photoUris = draft.photos.map((photo) => photo.uri);
 
-  if (photos.length === 0) {
+  if (photoUris.length === 0) {
     clearActiveCameraCaptureSessionId();
     return null;
   }
 
-  return { sessionId, photos };
+  return { sessionId, photoUris };
 }

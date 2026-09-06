@@ -74,13 +74,20 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
   };
 }
 
-function assignSingleRoles(uris: string[], source: PhotoSource): CaptureSessionPhoto[] {
+export function assignPhotosFillOrder(
+  uris: string[],
+  source: PhotoSource,
+): CaptureSessionPhoto[] {
   const capped = uris.slice(0, MAX_USER_JERSEY_PHOTOS);
   return capped.map((uri, index) => {
     const role: PhotoRole =
       index < UNIVERSAL_PHOTO_ROLES.length ? UNIVERSAL_PHOTO_ROLES[index]! : "other";
     return { uri, role, source };
   });
+}
+
+function assignSingleRoles(uris: string[], source: PhotoSource): CaptureSessionPhoto[] {
+  return assignPhotosFillOrder(uris, source);
 }
 
 function persist(state: CaptureSessionState): void {
@@ -139,10 +146,7 @@ export function createCaptureSessionFromPhotos(
   photos: CaptureSessionPhoto[],
   options?: { store?: CaptureSessionStore; sessionId?: string },
 ): CaptureSessionState {
-  const boundPhotos = photos.filter(
-    (photo): photo is CaptureSessionPhoto & { role: PhotoRole } => photo.role !== null,
-  );
-  const orderedUris = boundPhotos.map((photo) => photo.uri);
+  const orderedUris = photos.map((photo) => photo.uri);
   const branch = branchFromPhotoCount(orderedUris.length);
   const draftId = createId();
   const sessionId = options?.sessionId ?? createId();
@@ -151,7 +155,7 @@ export function createCaptureSessionFromPhotos(
     branch === "single"
       ? {
           ...createEmptyDraft(draftId),
-          photos: boundPhotos,
+          photos: [...photos],
         }
       : createEmptyDraft(draftId);
 
@@ -480,6 +484,49 @@ export function appendCameraShotToSession(
   return {
     ...next,
     orderedUris,
+  };
+}
+
+/** Shoot-first repeat camera: append a shot without assigning a role until Confirm. */
+export function appendUnassignedCameraShotToSession(
+  state: CaptureSessionState,
+  uri: string,
+  source: PhotoSource = "camera",
+): CaptureSessionState {
+  const draft = getActiveDraft(state);
+  if (!canAddPhotoToDraft(draft)) {
+    return state;
+  }
+
+  const next = updateDraft(state, state.activeDraftId, (current) => ({
+    ...current,
+    photos: [...current.photos, { uri, role: null, source }],
+  }));
+  const updatedDraft = getActiveDraft(next);
+  return {
+    ...next,
+    orderedUris: updatedDraft.photos.map((photo) => photo.uri),
+  };
+}
+
+/** Apply Forside → Bagside → Venstre → Højre → Andet fill order before Confirm. */
+export function applyFillOrderToActiveDraft(state: CaptureSessionState): CaptureSessionState {
+  const draft = getActiveDraft(state);
+  if (draft.photos.length === 0 || draft.photos.every((photo) => photo.role !== null)) {
+    return state;
+  }
+
+  const assigned = assignPhotosFillOrder(
+    draft.photos.map((photo) => photo.uri),
+    draft.photos[0]?.source ?? "camera",
+  );
+  const next = updateDraft(state, state.activeDraftId, (current) => ({
+    ...current,
+    photos: assigned,
+  }));
+  return {
+    ...next,
+    orderedUris: assigned.map((photo) => photo.uri),
   };
 }
 
