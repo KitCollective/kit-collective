@@ -42,15 +42,19 @@ type UseConfirmVisionOptions = {
   onCatalogMiss?: (miss: boolean) => void;
 };
 
+function photoRoleForVision(role: PhotoRole | null): PhotoRole {
+  return role ?? "front";
+}
+
 async function buildIdentitySuggestRequest(
   draft: CaptureJerseyDraft,
 ): Promise<VisionSuggestRequest> {
   const photos = await Promise.all(
     draft.photos.map(async (photo) => ({
-      role: (photo.role ?? "front") as PhotoRole,
+      role: photoRoleForVision(photo.role),
       contentBase64: await readPreparedPhotoBase64(
         photo.uri,
-        photo.role ?? "front",
+        photoRoleForVision(photo.role),
         "visionIdentity",
       ),
     })),

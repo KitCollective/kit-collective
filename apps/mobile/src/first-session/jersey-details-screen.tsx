@@ -385,14 +385,13 @@ export function JerseyDetailsScreen({
         visionStartAttempted.current = true;
         try {
           const photos = await Promise.all(
-            draft.photos.map(async (photo) => ({
-              role: (photo.role ?? "front") as PhotoRole,
-              contentBase64: await readPreparedPhotoBase64(
-                photo.uri,
-                photo.role ?? "front",
-                "visionIdentity",
-              ),
-            })),
+            draft.photos.map(async (photo) => {
+              const role = photo.role ?? "front";
+              return {
+                role,
+                contentBase64: await readPreparedPhotoBase64(photo.uri, role, "visionIdentity"),
+              };
+            }),
           );
           const jobId = await startVisionSuggest(accessToken, {
             draftId: draft.id,
