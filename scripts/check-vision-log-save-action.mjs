@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Ratchet (KIT-27): fail CI when the mobile Save screen does not use the shared
+ * Ratchet (KIT-27): fail CI when Confirm save does not use the shared
  * resolveVisionSaveAction helper — every VisionJobStatus must log a userAction.
  *
  * Integration coverage: apps/api/tests/collection.test.ts case
@@ -9,30 +9,37 @@
  */
 import { readFileSync } from "node:fs";
 
-const addScreenPath = "apps/mobile/app/(capture)/confirm.tsx";
+const savePath = "apps/mobile/src/capture/saveConfirmJersey.ts";
+const confirmPath = "apps/mobile/app/(capture)/confirm.tsx";
 const collectionTestPath = "apps/api/tests/collection.test.ts";
 const violations = [];
 
-const source = readFileSync(addScreenPath, "utf8");
+const source = readFileSync(savePath, "utf8");
+const confirmSource = readFileSync(confirmPath, "utf8");
 
 if (!source.includes("resolveVisionSaveAction")) {
   violations.push(
-    `${addScreenPath}: must import and call resolveVisionSaveAction from @kit/api-contract so every VisionJobStatus logs a userAction at Save`,
+    `${savePath}: must import and call resolveVisionSaveAction from @kit/api-contract so every VisionJobStatus logs a userAction at Save`,
   );
 }
 
 if (!source.includes("response.visionJobId")) {
   violations.push(
-    `${addScreenPath}: must reconcile using response.visionJobId from Save when the client never learned the job id`,
+    `${savePath}: must reconcile using response.visionJobId from Save when the client never learned the job id`,
   );
 }
 
 const forbiddenPatterns = ["fullyMatches", "matchesClub && matchesSeason"];
 for (const pattern of forbiddenPatterns) {
-  if (source.includes(pattern)) {
-    violations.push(
-      `${addScreenPath}: inline vision save-action branching (${pattern}) is forbidden — use resolveVisionSaveAction`,
-    );
+  for (const [path, body] of [
+    [savePath, source],
+    [confirmPath, confirmSource],
+  ]) {
+    if (body.includes(pattern)) {
+      violations.push(
+        `${path}: inline vision save-action branching (${pattern}) is forbidden — use resolveVisionSaveAction`,
+      );
+    }
   }
 }
 
