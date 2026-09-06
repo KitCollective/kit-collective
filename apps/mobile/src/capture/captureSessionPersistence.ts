@@ -12,7 +12,6 @@ import {
   getActiveCameraCaptureSessionId,
   setActiveCameraCaptureSessionId,
 } from "./captureSessionActivePointer";
-import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
 import type {
   CaptureSessionPhoto,
   CaptureSessionState,
@@ -70,7 +69,7 @@ function persistCaptureSessionFromPhotos(
 }
 
 export function loadPersistedCaptureSession(sessionId: string): CaptureSessionState | null {
-  return reloadCaptureSession(createSqliteCaptureSessionStore(sessionId));
+  return reloadCaptureSession(sqliteStore(sessionId));
 }
 
 export function persistCameraShotInSession(
