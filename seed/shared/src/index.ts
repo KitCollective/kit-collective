@@ -18,6 +18,16 @@ export {
   catalogCompetitionIdentity,
   resolveCompetition,
 } from "./competitions.js";
+export type {
+  JoinClubScope,
+  JoinNationalTeamScope,
+  JoinScope,
+} from "./join-scope.js";
+export {
+  formatJoinSentenceUsage,
+  type ParseJoinSentenceResult,
+  parseJoinSentence,
+} from "./join-sentence.js";
 export {
   laneDatabaseEnvVar,
   type ResolvedSeedLane,

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { createDefaultFkRunner } from "./fk-runner.js";
+import { runClubJoinWorkflow, runNationalTeamJoinWorkflow } from "./join-workflow.js";
 import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 import { parseCliArgs, runHierarchyGrain, runSeed } from "./run.js";
 
@@ -14,6 +16,37 @@ async function main() {
   }
 
   try {
+    if (parsed.mode === "join") {
+      const fkRunner = createDefaultFkRunner();
+      const summary =
+        parsed.scope.path === "club"
+          ? await runClubJoinWorkflow({
+              path: "club",
+              competition: parsed.scope.competition,
+              season: parsed.scope.season,
+              lane: parsed.scope.lane,
+              fetchAdapter: resolved.adapter,
+              fkRunner,
+            })
+          : await runNationalTeamJoinWorkflow({
+              path: "national_team",
+              nationalTeamRef: parsed.scope.nationalTeamRef,
+              season: parsed.scope.season,
+              lane: parsed.scope.lane,
+              fetchAdapter: resolved.adapter,
+              fkRunner,
+            });
+
+      console.log(
+        JSON.stringify(
+          { ok: true, mode: "join", lane: parsed.scope.lane, scope: parsed.scope, summary },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
     if (parsed.mode === "grain") {
       const { summary } = await runHierarchyGrain({
         kind: parsed.grain.kind,

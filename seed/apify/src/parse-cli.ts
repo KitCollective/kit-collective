@@ -1,5 +1,7 @@
 import {
+  type JoinScope,
   type ParsedSeedScope,
+  parseJoinSentence,
   parseSeedScopeArgv,
   type ResolvedSeedLane,
   resolveSeedLane,
@@ -70,7 +72,12 @@ export type ParsedGrainCli = {
   lane: ResolvedSeedLane;
 };
 
-export type ParsedSeedCli = ParsedWalkCli | ParsedGrainCli;
+export type ParsedJoinCli = {
+  mode: "join";
+  scope: JoinScope;
+};
+
+export type ParsedSeedCli = ParsedWalkCli | ParsedGrainCli | ParsedJoinCli;
 
 function parseGrainArgv(argv: string[]): ParsedGrainCli {
   const grainKind = argv[0];
@@ -238,10 +245,68 @@ function parseGrainArgv(argv: string[]): ParsedGrainCli {
   );
 }
 
+function parseJoinArgv(argv: string[]): ParsedJoinCli {
+  const subcommand = argv[0];
+  if (subcommand === "sentence") {
+    if (argv.length < 2) {
+      throw new Error('Expected: join sentence "<natural language>"');
+    }
+    const sentence = argv.slice(1).join(" ").trim();
+    const parsed = parseJoinSentence(sentence);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+    return { mode: "join", scope: parsed.scope };
+  }
+
+  if (subcommand === "club") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: join club <competition> <season> [lane]");
+    }
+    const competition = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!competition || !season) {
+      throw new Error("join club requires competition and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "join",
+      scope: { path: "club", competition, season, lane: laneResult.lane },
+    };
+  }
+
+  if (subcommand === "national-team" || subcommand === "national_team") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: join national-team <ntRef> <season> [lane]");
+    }
+    const nationalTeamRef = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!nationalTeamRef || !season) {
+      throw new Error("join national-team requires national team ref and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "join",
+      scope: { path: "national_team", nationalTeamRef, season, lane: laneResult.lane },
+    };
+  }
+
+  throw new Error("Expected join subcommand: sentence | club | national-team");
+}
+
 export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {
   const cleaned = argv.filter((arg) => arg !== "--");
   if (cleaned[0] === "grain") {
     return parseGrainArgv(cleaned.slice(1));
+  }
+  if (cleaned[0] === "join") {
+    return parseJoinArgv(cleaned.slice(1));
   }
 
   const result = parseSeedScopeArgv(cleaned);

@@ -2,7 +2,7 @@
   "kits": [
     {
       "id": "fk-nt-9857",
-      "nationalTeamFkApiId": "fka-denmark",
+      "nationalTeamFkApiId": "denmark-kits",
       "seasonTransfermarktId": "WC-2010",
       "seasonLabel": "2010",
       "type": "home",
@@ -13,7 +13,7 @@
     },
     {
       "id": "fk-nt-9858",
-      "nationalTeamFkApiId": "fka-denmark",
+      "nationalTeamFkApiId": "denmark-kits",
       "seasonTransfermarktId": "WC-2010",
       "seasonLabel": "2010",
       "type": "away",
@@ -24,7 +24,7 @@
     },
     {
       "id": "fk-nt-60206",
-      "nationalTeamFkApiId": "fka-denmark",
+      "nationalTeamFkApiId": "denmark-kits",
       "seasonTransfermarktId": "WC-2010",
       "seasonLabel": "2010",
       "type": "gk",

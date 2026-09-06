@@ -6,6 +6,24 @@
   "bin": {
     "kit-seed-fkapi": "./dist/cli.js"
   },
+  "exports": {
+    "./mapper": {
+      "types": "./dist/mapper.d.ts",
+      "import": "./dist/mapper.js"
+    },
+    "./object-store": {
+      "types": "./dist/object-store.d.ts",
+      "import": "./dist/object-store.js"
+    },
+    "./fetch": {
+      "types": "./dist/fetch.d.ts",
+      "import": "./dist/fetch.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
