@@ -31,7 +31,6 @@ export {
   DEFAULT_TRANSFERMARKT_RATE_LIMIT_STOP_AFTER,
   TransfermarktCircuitOpenError,
 } from "./fetch/transfermarkt-rate-limit.js";
-export { parseLane, resolveDatabaseUrl } from "./lane.js";
 export {
   type FkJoinRunner,
   type FkJoinRunResult,
@@ -39,6 +38,7 @@ export {
   runClubJoinWorkflow,
   runNationalTeamJoinWorkflow,
 } from "./join-workflow.js";
+export { parseLane, resolveDatabaseUrl } from "./lane.js";
 export { mapFacts } from "./map/index.js";
 export { normalize, stripForbiddenFields } from "./normalize/index.js";
 export type {
