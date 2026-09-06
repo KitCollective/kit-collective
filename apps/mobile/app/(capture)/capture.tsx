@@ -32,7 +32,7 @@ export default function CaptureScreen() {
     () => Platform.OS === "web" || isRepeatCaptureSession() || resumedSession !== null,
   );
   const sessionIdRef = useRef<string | null>(resumedSession?.sessionId ?? null);
-  const [initialPhotoUris] = useState(resumedSession?.photoUris ?? []);
+  const [initialCameraPhotos] = useState(resumedSession?.photoUris ?? []);
 
   const navigateToConfirm = useCallback(
     (sessionId: string) => {
@@ -139,7 +139,7 @@ export default function CaptureScreen() {
 
   return (
     <CaptureCameraSession
-      initialPhotoUris={initialPhotoUris}
+      initialPhotos={initialCameraPhotos}
       onComplete={(uris) => finishCapture(uris, "camera")}
       onClose={() => router.back()}
       onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}

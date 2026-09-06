@@ -23,7 +23,7 @@ const FILMSTRIP_THUMB_WIDTH = (FILMSTRIP_THUMB_HEIGHT * 4) / 5;
 const CAMERA_CAPTURE_QUALITY = 0.8;
 
 type CaptureCameraSessionProps = {
-  initialPhotoUris?: string[];
+  initialPhotos?: string[];
   onComplete: (uris: string[]) => void;
   onClose: () => void;
   onGalleryEscape: (existingUris: string[]) => void;
@@ -40,7 +40,7 @@ type CaptureCameraSessionProps = {
  * until the user has granted permission via the shutter button.
  */
 export function CaptureCameraSession({
-  initialPhotoUris = [],
+  initialPhotos = [],
   onComplete,
   onClose,
   onGalleryEscape,
@@ -51,7 +51,7 @@ export function CaptureCameraSession({
   const [permission, requestPermission] = useCameraPermissions();
   const [isFocused, setIsFocused] = useState(true);
   const [pendingShot, setPendingShot] = useState(false);
-  const [photoUris, setPhotoUris] = useState<string[]>(initialPhotoUris);
+  const [photoUris, setPhotoUris] = useState<string[]>(initialPhotos);
 
   useFocusEffect(
     useCallback(() => {

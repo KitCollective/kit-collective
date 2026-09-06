@@ -87,7 +87,7 @@ export function FirstSessionChooserScreen({
   if (showCamera) {
     return (
       <CaptureCameraSession
-        initialPhotoUris={cameraPhotoUris}
+        initialPhotos={cameraPhotoUris}
         onComplete={(uris) => {
           if (uris.length === 0) {
             setShowCamera(false);
