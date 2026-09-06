@@ -130,6 +130,18 @@ Portrait bytes on a kader row persist as **Player photo** (`player/{externalId}/
 | **Drop** | market value |
 | **Open** | appearances/goals; loan registration; NT season sibling row shape |
 
+## Join workflow (KIT-146)
+
+Operator entry on `@kit/seed-apify`:
+
+| Command | Composes |
+| --- | --- |
+| `seed-apify join club <competition> <season> [lane]` | League → League season → Club × N → Club season × N → FK kits |
+| `seed-apify join national-team <ntRef> <season> [lane]` | NationalTeam → NationalTeam season → FK kits |
+| `seed-apify join sentence "<natural language>"` | Parses ADR-0014 proof sentences (Superliga 2010/11, Denmark WC 2010) |
+
+Grains remain the documented interface; Join composes them internally. Default lane is development; staging only when named; production rejected.
+
 ---
 
 ## Out of this reference

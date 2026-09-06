@@ -332,6 +332,9 @@ importers:
       '@kit/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@kit/seed-fkapi':
+        specifier: workspace:*
+        version: link:../fkapi
       '@kit/seed-shared':
         specifier: workspace:*
         version: link:../shared
