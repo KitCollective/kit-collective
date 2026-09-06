@@ -1,5 +1,7 @@
+import { collectionPhotoVariantQuerySchema } from "@kit/api-contract";
 import type { LabelLocale } from "@kit/domain";
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -46,8 +48,16 @@ export class CollectionController {
   }
 
   @Get("collection/showcase/photos/:photoId")
-  async getShowcasePhoto(@Param("photoId") photoId: string, @Res() reply: FastifyReply) {
-    const bytes = await this.collectionService.getShowcasePhotoBytes(photoId);
+  async getShowcasePhoto(
+    @Param("photoId") photoId: string,
+    @Res() reply: FastifyReply,
+    @Query("variant") variantRaw?: string,
+  ) {
+    const variant = collectionPhotoVariantQuerySchema.safeParse(variantRaw);
+    if (!variant.success) {
+      throw new BadRequestException("Invalid photo variant");
+    }
+    const bytes = await this.collectionService.getShowcasePhotoBytes(photoId, variant.data);
     reply.header("Content-Type", "image/jpeg");
     reply.header("Cache-Control", "public, max-age=3600");
     return reply.send(Buffer.from(bytes));
@@ -399,8 +409,13 @@ export class CollectionController {
     @CurrentUser() user: JwtPayload,
     @Param("photoId") photoId: string,
     @Res() reply: FastifyReply,
+    @Query("variant") variantRaw?: string,
   ) {
-    const bytes = await this.collectionService.getPhotoBytes(user.sub, photoId);
+    const variant = collectionPhotoVariantQuerySchema.safeParse(variantRaw);
+    if (!variant.success) {
+      throw new BadRequestException("Invalid photo variant");
+    }
+    const bytes = await this.collectionService.getPhotoBytes(user.sub, photoId, variant.data);
     reply.header("Content-Type", "image/jpeg");
     reply.header("Cache-Control", "private, max-age=3600");
     return reply.send(Buffer.from(bytes));

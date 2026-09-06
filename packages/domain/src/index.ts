@@ -82,6 +82,27 @@ export {
   validateJerseyPhotos,
 } from "./photo-roles.js";
 
+export {
+  COLLECTOR_PHOTO_VARIANTS,
+  type CollectorPhotoVariant,
+  gridPhotoObjectKey,
+  isCollectorPhotoVariant,
+  isLegacyPhotoObjectKey,
+  isReservedPhotoVariant,
+  legacyPhotoObjectKey,
+  legacyPhotoObjectKeyFromPrefix,
+  MAX_SAVE_PHOTO_BYTES_OTHER,
+  MAX_SAVE_PHOTO_BYTES_UNIVERSAL,
+  maxSavePhotoBytesForRole,
+  type PhotoVariantQuery,
+  photoObjectKeysForDeletion,
+  photoPrefix,
+  photoPrefixFromStoredObjectKey,
+  RESERVED_PHOTO_VARIANTS,
+  type ReservedPhotoVariant,
+  variantObjectKey,
+} from "./photo-variants.js";
+
 export const PHOTO_SOURCES = ["gallery", "camera"] as const;
 export type PhotoSource = (typeof PHOTO_SOURCES)[number];
 

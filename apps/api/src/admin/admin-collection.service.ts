@@ -3,6 +3,7 @@ import {
   type AdminCollectorJerseyIndex,
   type AdminCollectorJerseyList,
   type AdminCollectorList,
+  type AdminCollectorPhotoVariantQuery,
   type AdminCollectorQuery,
   type AdminCollectorUser,
   type AdminRoleUpdateRequest,
@@ -18,6 +19,7 @@ import {
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import { catalogLabel, club, season, user, userJersey, userJerseyPhoto } from "@kit/db";
+import { photoObjectKeysForDeletion } from "@kit/domain";
 import {
   HttpException,
   HttpStatus,
@@ -30,6 +32,7 @@ import { and, asc, count, desc, eq, exists, ilike, inArray, or } from "drizzle-o
 import { BillingService } from "../billing/billing.service.js";
 import { OBJECT_STORE } from "../collection/collection.service.js";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
+import { resolveStoredPhotoBytes } from "../collection/photo-variant-resolve.js";
 import { DB } from "../db/db.module.js";
 
 function throwRoleGuardError(code: IdentityRoleErrorCode, message: string): never {
@@ -303,7 +306,7 @@ export class AdminCollectionService {
       photos: photoRows.map((photo) => ({
         id: photo.id,
         role: photo.role,
-        photoPath: `/admin/collectors/${userId}/jerseys/${jerseyId}/photos/${photo.id}`,
+        photoPath: `/admin/collectors/${userId}/jerseys/${jerseyId}/photos/${photo.id}?variant=grid`,
       })),
     });
   }
@@ -312,6 +315,7 @@ export class AdminCollectionService {
     userId: string,
     jerseyId: string,
     photoId: string,
+    variant?: AdminCollectorPhotoVariantQuery,
   ): Promise<Uint8Array> {
     const [row] = await this.db
       .select({
@@ -334,7 +338,9 @@ export class AdminCollectionService {
       throw new NotFoundException("Photo not found");
     }
 
-    const bytes = await this.objectStore.getObject(row.objectKey);
+    const bytes = await resolveStoredPhotoBytes(this.objectStore, row.objectKey, variant, {
+      allowReservedVariants: true,
+    });
     if (!bytes) {
       throw new NotFoundException("Photo bytes missing");
     }
@@ -362,22 +368,31 @@ export class AdminCollectionService {
       .where(eq(userJerseyPhoto.userJerseyId, jerseyId));
 
     const photoBytes = new Map<string, Uint8Array>();
+    const keysToDelete = new Set<string>();
     for (const photo of photoRows) {
       if (!photo.objectKey.startsWith(`user/${userId}/${jerseyId}/`)) {
         throw new InternalServerErrorException("Invalid photo object key");
       }
-      const bytes = await this.objectStore.getObject(photo.objectKey);
-      if (!bytes) {
-        throw new InternalServerErrorException("Photo bytes missing");
+      for (const key of photoObjectKeysForDeletion(photo.objectKey)) {
+        keysToDelete.add(key);
       }
-      photoBytes.set(photo.objectKey, bytes);
+    }
+
+    for (const key of keysToDelete) {
+      const bytes = await this.objectStore.getObject(key);
+      if (bytes) {
+        photoBytes.set(key, bytes);
+      }
     }
 
     const deletedKeys: string[] = [];
     try {
-      for (const photo of photoRows) {
-        await this.objectStore.deleteObject(photo.objectKey);
-        deletedKeys.push(photo.objectKey);
+      for (const key of keysToDelete) {
+        if (!(await this.objectStore.objectExists(key))) {
+          continue;
+        }
+        await this.objectStore.deleteObject(key);
+        deletedKeys.push(key);
       }
     } catch {
       for (const key of deletedKeys) {
@@ -545,7 +560,7 @@ export class AdminCollectionService {
       }
       paths.set(
         row.userJerseyId,
-        `/admin/collectors/${userId}/jerseys/${row.userJerseyId}/photos/${row.id}`,
+        `/admin/collectors/${userId}/jerseys/${row.userJerseyId}/photos/${row.id}?variant=grid`,
       );
     }
 
