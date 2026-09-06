@@ -9,13 +9,28 @@ import {
   findUploadPickerViolations,
 } from "../check-mobile-add-form-wiring.mjs";
 
-const compliantConfirm = `
-const draft = getDraft(state, state.activeDraftId);
-const { state, isSessionResolved } = usePersistedCaptureSession(sessionId);
-shouldConfirmRedirectAway(sessionId, state, isSessionResolved);
-mutate((current) => setDraftNotes(current, current.activeDraftId, text));
-<TextInput value={draft.notes} />
+const compliantSave = `
 source: photo.source,
+`;
+
+const compliantDetails = `
+mutate((current) => setDraftNotes(current, current.activeDraftId, text));
+<TextField value={draft.notes} />
+`;
+
+const compliantConfirm = `
+const { state, isSessionResolved } = usePersistedCaptureSession(sessionId);
+useConfirmExit(sessionId, state, isSessionResolved);
+`;
+
+const compliantConfirmExit = `
+if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
+  exitToCollection();
+}
+`;
+
+const compliantUploadCapture = `
+const uris = await pickUploadFiles();
 `;
 
 describe("findOrphanFormStateViolations", () => {
@@ -48,17 +63,19 @@ describe("findOrphanFormStateViolations", () => {
 
 describe("findConfirmSaveViolations", () => {
   it("requires per-photo source and draft-backed notes", () => {
-    assert.deepEqual(findConfirmSaveViolations({ confirmSource: compliantConfirm }), []);
+    assert.deepEqual(
+      findConfirmSaveViolations({ saveSource: compliantSave, detailsSource: compliantDetails }),
+      [],
+    );
   });
 
   it("fails when save uses a single default photo source", () => {
     const violations = findConfirmSaveViolations({
-      confirmSource: `
+      saveSource: `
         const defaultPhotoSource = "camera";
         source: defaultPhotoSource,
-        draft.notes
-        setDraftNotes
       `,
+      detailsSource: compliantDetails,
     });
 
     assert.ok(violations.some((line) => line.includes("photo.source")));
@@ -84,10 +101,8 @@ describe("findConfirmRedirectViolations", () => {
   it("requires resolved-session redirect guard", () => {
     assert.deepEqual(
       findConfirmRedirectViolations({
-        confirmSource: `
-          const { state, isSessionResolved } = usePersistedCaptureSession(sessionId);
-          shouldConfirmRedirectAway(sessionId, state, isSessionResolved)
-        `,
+        confirmSource: compliantConfirm,
+        confirmExitSource: compliantConfirmExit,
       }),
       [],
     );
@@ -98,7 +113,8 @@ describe("findUploadPickerViolations", () => {
   it("requires Upload filer to route through pickUploadFiles with documents support", () => {
     assert.deepEqual(
       findUploadPickerViolations({
-        chooserSource: `const uris = await pickUploadFiles();`,
+        chooserSource: `router.push({ pathname: "/(capture)/loading" });`,
+        uploadCaptureSource: compliantUploadCapture,
         pickUploadSource: `import { pickDocumentImages } from "./pickDocumentImages";`,
       }),
       [],
@@ -112,7 +128,11 @@ describe("checkMobileAddFormWiring", () => {
       checkMobileAddFormWiring({
         addSources: [],
         confirmSource: compliantConfirm,
-        chooserSource: `const uris = await pickUploadFiles();`,
+        confirmExitSource: compliantConfirmExit,
+        saveSource: compliantSave,
+        detailsSource: compliantDetails,
+        chooserSource: `router.push({ pathname: "/(capture)/loading" });`,
+        uploadCaptureSource: compliantUploadCapture,
         captureSource: `
           mergeGalleryEscapePhotos(existingPhotos, uris);
           onGalleryEscape={(existingPhotos) => void openGalleryEscape(existingPhotos)}
