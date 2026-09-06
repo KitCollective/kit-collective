@@ -86,3 +86,8 @@ ensureColumn("capture_session_draft", "badge_id", "TEXT");
 ensureColumn("capture_session_draft", "badge_label", "TEXT");
 ensureColumn("capture_session_draft_photo", "source", "TEXT NOT NULL DEFAULT 'gallery'");
 ensureColumn("capture_session_draft_photo", "label", "TEXT");
+ensureColumn("capture_session_draft_photo", "photo_id", "TEXT");
+ensureColumn("capture_unbound_photo", "photo_id", "TEXT");
+ensureColumn("capture_session", "photo_id_by_uri_json", "TEXT");
+ensureColumn("capture_session", "pending_grouping_json", "TEXT");
+ensureColumn("capture_session", "grouping_design_gap", "INTEGER NOT NULL DEFAULT 0");

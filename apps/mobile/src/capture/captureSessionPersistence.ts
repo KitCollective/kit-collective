@@ -68,7 +68,13 @@ function persistCaptureSessionFromPhotos(
 }
 
 export function loadPersistedCaptureSession(sessionId: string): CaptureSessionState | null {
-  return sqliteStore(sessionId).load();
+  const { reloadCaptureSession } = require("./captureSession") as {
+    reloadCaptureSession: (store: CaptureSessionStore) => CaptureSessionState | null;
+  };
+  const { createSqliteCaptureSessionStore } = require("./captureSessionSqliteStore") as {
+    createSqliteCaptureSessionStore: (id: string) => CaptureSessionStore;
+  };
+  return reloadCaptureSession(createSqliteCaptureSessionStore(sessionId));
 }
 
 export function persistCameraShotInSession(

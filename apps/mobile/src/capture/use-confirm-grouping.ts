@@ -57,9 +57,15 @@ export function useConfirmGrouping({
 
       const preselect = job.preselect === true;
       if (!preselect) {
-        setSuggestion(job);
-        fadeInSuggestion();
-        mutate((current) => applyGroupingSuggestion(current, job.grouping!, { preselect: false }));
+        mutate((current) => {
+          const next = applyGroupingSuggestion(current, job.grouping!, { preselect: false });
+          if (next.groupingDesignGap) {
+            return next;
+          }
+          setSuggestion(job);
+          fadeInSuggestion();
+          return next;
+        });
         return;
       }
 
@@ -79,7 +85,6 @@ export function useConfirmGrouping({
     }
 
     let cancelled = false;
-    startAttempted.current = true;
 
     void (async () => {
       try {
@@ -99,10 +104,12 @@ export function useConfirmGrouping({
           sessionId,
           photos: filtered,
         });
-        if (!cancelled) {
-          setJobId(nextJobId);
-          setPolling(true);
+        if (cancelled) {
+          return;
         }
+        startAttempted.current = true;
+        setJobId(nextJobId);
+        setPolling(true);
       } catch {
         // Grouping is optional — Confirm and Save continue independently.
       }
@@ -164,8 +171,8 @@ export function useConfirmGrouping({
   }, [mutate]);
 
   const groupingMessage =
-    suggestion?.grouping && suggestion.grouping.groups.length > 1
-      ? `${suggestion.grouping.groups.length} trøjer foreslået`
+    state?.groupingDesignGap || (suggestion?.grouping && suggestion.grouping.groups.length > 1)
+      ? null
       : suggestion?.grouping
         ? "Trøje foreslået"
         : null;

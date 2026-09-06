@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   applyGroupingSuggestion,
   createCaptureSession,
+  createMemoryCaptureSessionStore,
   dismissPendingGrouping,
   getActiveDraft,
   getDraft,
+  reloadCaptureSession,
   sessionPhotoIds,
   shouldStartGroupingJob,
   unbindPhoto,
@@ -124,5 +126,29 @@ describe("grouping session", () => {
 
     expect(dismissed.pendingGrouping).toBeUndefined();
     expect(dismissed.unboundUris).toEqual(session.unboundUris);
+  });
+
+  it("keeps stable photoIds after save and reload", () => {
+    const store = createMemoryCaptureSessionStore();
+    const session = createCaptureSession(BULK_URIS, { store });
+    const beforeIds = sessionPhotoIds(session);
+
+    const reloaded = reloadCaptureSession(store);
+
+    expect(reloaded).not.toBeNull();
+    expect(sessionPhotoIds(reloaded!)).toEqual(beforeIds);
+    for (const uri of BULK_URIS) {
+      expect(reloaded!.photoIdByUri?.[uri]).toBe(session.photoIdByUri?.[uri]);
+    }
+  });
+
+  it("reloadCaptureSession backfills photoIdByUri for legacy snapshots", () => {
+    const store = createMemoryCaptureSessionStore();
+    const session = createCaptureSession(BULK_URIS, { store });
+
+    store.save({ ...session, photoIdByUri: undefined });
+    const reloaded = reloadCaptureSession(store);
+
+    expect(reloaded?.photoIdByUri?.[BULK_URIS[0]!]).toBeTruthy();
   });
 });
