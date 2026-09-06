@@ -1,4 +1,5 @@
 import type { PhotoRole } from "@kit/domain";
+import { UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearDevicePhotoPrepareCacheForTests,
@@ -7,6 +8,7 @@ import {
   GROUPING_THUMB_MAX_EDGE,
   maxEdgeForPrepare,
   type PhotoManipulatorAdapter,
+  type PhotoResizeAction,
   prepareDevicePhoto,
   readPreparedDevicePhotoBase64,
   resizeActionForMaxLongEdge,
@@ -36,11 +38,11 @@ function createFakeAdapter(
     },
     async manipulateAsync(
       uri: string,
-      actions: unknown[],
+      actions: PhotoResizeAction[],
       options: { compress: number; format: "jpeg"; includeBase64: boolean },
     ) {
       calls.push({ uri, actions, options });
-      const resize = (actions[0] as { resize?: { width?: number; height?: number } })?.resize;
+      const resize = actions[0]?.resize;
       const width = resize?.width ?? info.width;
       const height = resize?.height ?? info.height;
       return {
@@ -58,7 +60,7 @@ function createFakeAdapter(
 
 describe("maxEdgeForPrepare", () => {
   it("targets ~1600 px long edge for universal display roles", () => {
-    for (const role of ["front", "back", "left", "right"] as PhotoRole[]) {
+    for (const role of UNIVERSAL_PHOTO_ROLES) {
       expect(maxEdgeForPrepare("display", role)).toBe(DISPLAY_MAX_EDGE_UNIVERSAL);
     }
   });

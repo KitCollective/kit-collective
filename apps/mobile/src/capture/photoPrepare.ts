@@ -64,7 +64,12 @@ export function resizeActionForMaxLongEdge(
 }
 
 function isUniversalRole(role: PhotoRole): boolean {
-  return (UNIVERSAL_PHOTO_ROLES as readonly string[]).includes(role);
+  for (const universalRole of UNIVERSAL_PHOTO_ROLES) {
+    if (role === universalRole) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function displayMaxEdgeForRole(role: PhotoRole): number {
