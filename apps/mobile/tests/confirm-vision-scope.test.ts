@@ -21,10 +21,11 @@ const URI_EXTRA_A = "file:///photos/extra-a.jpg";
 const URI_EXTRA_B = "file:///photos/extra-b.jpg";
 const URI_EXTRA_C = "file:///photos/extra-c.jpg";
 const URI_EXTRA_D = "file:///photos/extra-d.jpg";
+const BULK_URIS = Array.from({ length: 11 }, (_, index) => `file:///photos/bulk-${index}.jpg`);
 
 describe("confirmVisionScopeFromDraft", () => {
   it("tracks draft id and first bound photo only", () => {
-    const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
+    const session = createCaptureSession(BULK_URIS);
     const draft = getActiveDraft(session);
 
     expect(confirmVisionScopeFromDraft(draft)).toEqual({
@@ -32,12 +33,12 @@ describe("confirmVisionScopeFromDraft", () => {
       firstPhotoUri: null,
     });
 
-    const bound = bindUnboundPhotoToDraft(session, URI_EXTRA_A, draft.id);
+    const bound = bindUnboundPhotoToDraft(session, BULK_URIS[0]!, draft.id);
     const boundDraft = getDraft(bound, draft.id);
 
     expect(confirmVisionScopeFromDraft(boundDraft)).toEqual({
       draftId: draft.id,
-      firstPhotoUri: URI_EXTRA_A,
+      firstPhotoUri: BULK_URIS[0],
     });
   });
 });
@@ -65,7 +66,7 @@ describe("shouldResetConfirmVision", () => {
   });
 
   it("resets when the active jersey tab changes", () => {
-    const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
+    const session = createCaptureSession(BULK_URIS);
     const before = confirmVisionScopeFromDraft(getActiveDraft(session));
 
     const withSecondJersey = addJerseyDraft(session);
@@ -75,11 +76,11 @@ describe("shouldResetConfirmVision", () => {
   });
 
   it("resets when the first photo is newly bound on a draft", () => {
-    const session = createCaptureSession([URI_EXTRA_A, URI_EXTRA_B, URI_EXTRA_C, URI_EXTRA_D]);
+    const session = createCaptureSession(BULK_URIS);
     const draftId = getActiveDraft(session).id;
     const before = confirmVisionScopeFromDraft(getDraft(session, draftId));
 
-    const bound = bindUnboundPhotoToDraft(session, URI_EXTRA_A, draftId);
+    const bound = bindUnboundPhotoToDraft(session, BULK_URIS[0]!, draftId);
     const after = confirmVisionScopeFromDraft(getDraft(bound, draftId));
 
     expect(shouldResetConfirmVision(before, after)).toBe(true);

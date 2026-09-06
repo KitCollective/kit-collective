@@ -45,12 +45,18 @@ describe("Confirm photo slot behaviour", () => {
     expect(source).toContain("changeDraftPhotoRole");
     expect(source).toContain("upsertDraftPhoto");
     expect(source).toContain("UNIVERSAL_PHOTO_ROLES");
+    expect(source).toContain('variant="add"');
+    expect(source).toContain("handleAddPhotoPress");
+    expect(source).toContain("canAddPhotoToDraft");
+    expect(source).toContain("JERSEY_PHOTO_CAP_HELPER_DA");
   });
 
   it("keeps Photo slot as the confirm-strip primitive with 4:5 tiles", () => {
     const source = readFileSync(photoSlotPath, "utf8");
 
     expect(source).toContain("confirm-strip");
+    expect(source).toContain('"add"');
+    expect(source).toContain("Tilføj foto");
     expect(source).toContain("photoSlotHeight");
     expect(source).toContain("(width * 5) / 4");
   });

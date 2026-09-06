@@ -381,7 +381,7 @@ describe("First session add to door flow", () => {
     expect(afterVision.doorOverAnalysing).toBe(true);
   });
 
-  it("≤3 picker photos bind one jersey in the capture draft", () => {
+  it("≤10 picker photos bind one jersey in the capture draft", () => {
     const store = createMemoryCaptureSessionStore();
     const state = createCaptureSession(["file:///a.jpg", "file:///b.jpg", "file:///c.jpg"], {
       store,
@@ -391,15 +391,13 @@ describe("First session add to door flow", () => {
     expect(getActiveDraft(state).photos).toHaveLength(3);
   });
 
-  it(">3 picker photos use bulk bind branch in the capture draft", () => {
+  it(">10 picker photos use bulk bind branch in the capture draft", () => {
     const store = createMemoryCaptureSessionStore();
-    const state = createCaptureSession(
-      ["file:///a.jpg", "file:///b.jpg", "file:///c.jpg", "file:///d.jpg"],
-      { store },
-    );
+    const uris = Array.from({ length: 11 }, (_, index) => `file:///photo-${index}.jpg`);
+    const state = createCaptureSession(uris, { store });
 
     expect(state.branch).toBe("bulk");
-    expect(state.unboundUris).toHaveLength(4);
+    expect(state.unboundUris).toHaveLength(11);
   });
 
   it("unsigned vision client targets unsigned routes", () => {
