@@ -83,9 +83,9 @@ export {
 } from "./photo-roles.js";
 
 export {
-  centerCrop4x5Rect,
   COLLECTOR_PHOTO_VARIANTS,
   type CollectorPhotoVariant,
+  centerCrop4x5Rect,
   gridPhotoObjectKey,
   isCollectorPhotoVariant,
   isLegacyPhotoObjectKey,
@@ -96,8 +96,11 @@ export {
   legacyPhotoObjectKeyFromPrefix,
   lightboxMaxEdgeForRole,
   lightboxObjectKey,
+  MAX_ORIGINAL_PHOTO_BYTES_OTHER,
+  MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL,
   MAX_SAVE_PHOTO_BYTES_OTHER,
   MAX_SAVE_PHOTO_BYTES_UNIVERSAL,
+  maxOriginalPhotoBytesForRole,
   maxSavePhotoBytesForRole,
   originalObjectKey,
   type PhotoVariantQuery,

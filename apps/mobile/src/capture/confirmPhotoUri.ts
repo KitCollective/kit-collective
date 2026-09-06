@@ -1,5 +1,4 @@
 import type { PhotoRole } from "@kit/domain";
-import { centerCrop4x5Rect, STRIP_VARIANT_WIDTH } from "@kit/domain";
 import { resolvePhotoUrl } from "@/api/collection";
 import { readPreparedPhotoUri } from "@/capture/photoBytes";
 
@@ -22,5 +21,3 @@ export async function resolveConfirmLightboxUri(uri: string, role: PhotoRole): P
   }
   return readPreparedPhotoUri(uri, role, "lightbox");
 }
-
-export { centerCrop4x5Rect, STRIP_VARIANT_WIDTH };

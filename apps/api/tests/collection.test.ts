@@ -20,6 +20,7 @@ import {
 } from "@kit/api-contract";
 import {
   lightboxObjectKey,
+  MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL,
   originalObjectKey,
   photoObjectKeysForDeletion,
   photoPrefixFromStoredObjectKey,
@@ -1846,7 +1847,7 @@ describe("Collection /v1", () => {
     const fixture = await insertClubSeasonFixture();
     const jersey = await saveJerseyForUser(app, session, fixture);
     const photoId = jersey.photos[0]?.id;
-    const oversized = Buffer.alloc(2 * 1024 * 1024 + 1, 0xff).toString("base64");
+    const oversized = Buffer.alloc(MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL + 1, 0xff).toString("base64");
 
     const uploadResponse = await app.inject({
       method: "PUT",

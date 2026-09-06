@@ -14,7 +14,7 @@ const userId = "11111111-1111-1111-1111-111111111111";
 const jerseyId = "22222222-2222-2222-2222-222222222222";
 const photoId = "33333333-3333-3333-3333-333333333333";
 
-/** 2×3 landscape JPEG generated with sharp in a prior test run — replaced by inline fixture. */
+/** Inline sharp-generated landscape JPEG fixture for derivative tests. */
 async function createLandscapeJpeg(width = 1200, height = 900): Promise<Uint8Array> {
   const sharp = (await import("sharp")).default;
   const buffer = await sharp({

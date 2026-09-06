@@ -73,6 +73,7 @@ import {
 import type { LabelLocale } from "@kit/domain";
 import {
   KIT_TYPE_LABELS_DA,
+  maxOriginalPhotoBytesForRole,
   maxSavePhotoBytesForRole,
   photoObjectKeysForDeletion,
   photoPrefixFromStoredObjectKey,
@@ -2188,7 +2189,7 @@ export class CollectionService {
       throw new NotFoundException("Photo not found");
     }
 
-    const bytes = decodeBase64Photo(body.contentBase64, maxSavePhotoBytesForRole(row.role));
+    const bytes = decodeBase64Photo(body.contentBase64, maxOriginalPhotoBytesForRole(row.role));
 
     const prefix = photoPrefixFromStoredObjectKey(row.objectKey);
     if (!prefix) {

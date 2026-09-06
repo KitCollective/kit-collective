@@ -7,6 +7,7 @@ import {
   isReservedPhotoVariant,
   legacyPhotoObjectKey,
   legacyPhotoObjectKeyFromPrefix,
+  maxOriginalPhotoBytesForRole,
   maxSavePhotoBytesForRole,
   photoObjectKeysForDeletion,
   photoPrefix,
@@ -61,5 +62,7 @@ describe("photo-variants", () => {
 
   it("uses role-specific save byte caps", () => {
     assert.ok(maxSavePhotoBytesForRole("front") < maxSavePhotoBytesForRole("other"));
+    assert.ok(maxSavePhotoBytesForRole("front") < maxOriginalPhotoBytesForRole("front"));
+    assert.ok(maxOriginalPhotoBytesForRole("front") < maxOriginalPhotoBytesForRole("other"));
   });
 });

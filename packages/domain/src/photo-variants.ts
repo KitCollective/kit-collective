@@ -12,6 +12,10 @@ export type PhotoVariantQuery = CollectorPhotoVariant | ReservedPhotoVariant;
 export const MAX_SAVE_PHOTO_BYTES_UNIVERSAL = 2 * 1024 * 1024;
 export const MAX_SAVE_PHOTO_BYTES_OTHER = 4 * 1024 * 1024;
 
+/** Archive original PUT — large enough for a typical 12 MP camera JPEG after base64. */
+export const MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL = 12 * 1024 * 1024;
+export const MAX_ORIGINAL_PHOTO_BYTES_OTHER = 16 * 1024 * 1024;
+
 const LEGACY_PHOTO_KEY_PATTERN = /^user\/[^/]+\/[^/]+\/[^/]+\.jpg$/;
 
 export function photoPrefix(userId: string, jerseyId: string, photoId: string): string {
@@ -61,6 +65,10 @@ export function variantObjectKey(prefix: string, variant: CollectorPhotoVariant)
 
 export function maxSavePhotoBytesForRole(role: string): number {
   return role === "other" ? MAX_SAVE_PHOTO_BYTES_OTHER : MAX_SAVE_PHOTO_BYTES_UNIVERSAL;
+}
+
+export function maxOriginalPhotoBytesForRole(role: string): number {
+  return role === "other" ? MAX_ORIGINAL_PHOTO_BYTES_OTHER : MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL;
 }
 
 export function isCollectorPhotoVariant(value: string): value is CollectorPhotoVariant {
