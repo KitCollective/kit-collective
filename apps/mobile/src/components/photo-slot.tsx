@@ -5,11 +5,12 @@ import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
-type PhotoSlotVariant = "confirm-strip" | "camera-overlay";
+type PhotoSlotVariant = "confirm-strip" | "camera-overlay" | "add";
 
 type PhotoSlotProps = {
   role: PhotoRole;
   uri?: string;
+  caption?: string;
   variant?: PhotoSlotVariant;
   selected?: boolean;
   onPress: () => void;
@@ -31,13 +32,19 @@ const OVERLAY_HEIGHT = photoSlotHeight(OVERLAY_WIDTH);
 export function PhotoSlot({
   role,
   uri,
+  caption,
   variant = "confirm-strip",
   selected = false,
   onPress,
 }: PhotoSlotProps) {
   const theme = useTheme();
   const typography = useTypography();
-  const roleLabel = PHOTO_ROLE_LABELS_DA[role];
+  const isAdd = variant === "add";
+  const roleLabel = isAdd
+    ? "Tilføj foto"
+    : role === "other"
+      ? caption?.trim() || PHOTO_ROLE_LABELS_DA.other
+      : PHOTO_ROLE_LABELS_DA[role];
   const isEmpty = !uri;
   const isOverlay = variant === "camera-overlay";
   const slotWidth = isOverlay ? OVERLAY_WIDTH : CONFIRM_WIDTH;
@@ -48,9 +55,15 @@ export function PhotoSlot({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        isEmpty ? `${roleLabel}, tom` : selected ? `${roleLabel}, valgt` : roleLabel
+        isAdd
+          ? "Tilføj foto, tom"
+          : isEmpty
+            ? `${roleLabel}, tom`
+            : selected
+              ? `${roleLabel}, valgt`
+              : roleLabel
       }
-      accessibilityHint={isEmpty ? "Tilføj foto" : "Erstat foto"}
+      accessibilityHint={isEmpty || isAdd ? "Tilføj foto" : "Erstat foto"}
       onPress={onPress}
       style={({ pressed }) => [styles.slot, { width: slotWidth }, pressed && styles.slotPressed]}
     >
@@ -74,7 +87,7 @@ export function PhotoSlot({
               { color: isOverlay ? theme.contentInverse : theme.contentMuted },
             ]}
           >
-            Tom
+            {isAdd ? "+" : "Tom"}
           </Text>
         </View>
       ) : (

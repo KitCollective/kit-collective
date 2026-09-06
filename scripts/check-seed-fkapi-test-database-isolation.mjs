@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * CI ratchet: seed/fkapi integration tests must not use DATABASE_URL for resetTestDatabase.
- * Prevents repeating KIT-34 / KIT-144 checker fail (shared dev Postgres wiped by tests).
+ * CI ratchet (KIT-211): seed/fkapi tests must not use DATABASE_URL for DROP SCHEMA.
+ * Prevents repeating the KIT-34 class (shared development Postgres wiped by tests).
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,21 +23,21 @@ function collectTestFiles(dir) {
   return files;
 }
 
-const forbidden = [
-  "process.env.DATABASE_URL",
-  "resetTestDatabase(DATABASE_URL",
-  "connectionString: DATABASE_URL",
-  "databaseUrl: DATABASE_URL",
-];
-
-const required = ["resolveSeedFkapiTestDatabaseUrl", "TEST_DATABASE_URL"];
+const forbidden = ["process.env.DATABASE_URL", "resetTestDatabase(DATABASE_URL"];
+const requiredInResetTests = ["resolveSeedFkapiTestDatabaseUrl", "TEST_DATABASE_URL"];
 
 let failed = false;
 
 for (const file of collectTestFiles(testsDir)) {
   const rel = file.slice(root.length + 1);
   const source = readFileSync(file, "utf8");
-  if (!source.includes("resetTestDatabase")) {
+  if (source.includes("process.env.DATABASE_URL")) {
+    console.error(
+      `check-seed-fkapi-test-database-isolation: ${rel} must not contain process.env.DATABASE_URL`,
+    );
+    failed = true;
+  }
+  if (!source.includes("resetTestDatabase(TEST_DATABASE_URL")) {
     continue;
   }
 
@@ -47,7 +47,7 @@ for (const file of collectTestFiles(testsDir)) {
       failed = true;
     }
   }
-  for (const needle of required) {
+  for (const needle of requiredInResetTests) {
     if (!source.includes(needle)) {
       console.error(`check-seed-fkapi-test-database-isolation: ${rel} missing ${needle}`);
       failed = true;
@@ -66,6 +66,14 @@ if (!helper.includes("isRecognizablyTestDatabase")) {
 if (helper.includes("process.env.DATABASE_URL")) {
   console.error(
     "check-seed-fkapi-test-database-isolation: test-database-url.ts must not read DATABASE_URL",
+  );
+  failed = true;
+}
+
+const resetHelper = readFileSync(join(testsDir, "test-db.ts"), "utf8");
+if (!resetHelper.includes("isRecognizablyTestDatabase")) {
+  console.error(
+    "check-seed-fkapi-test-database-isolation: test-db.ts must refuse non-test URLs before DROP SCHEMA",
   );
   failed = true;
 }

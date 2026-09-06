@@ -75,6 +75,14 @@ The **checker** may require this in `### Review feedback` on the second fail of 
 
 `.cursor/hooks/block-seed-apify-test-on-shared-db.sh` denies `@kit/seed-apify` vitest/test invocations when `DATABASE_URL` points at the shared development Postgres and `SEED_APIFY_TEST_DATABASE_URL` is not set to a disposable test database. `scripts/check-seed-apify-test-database-isolation.mjs` (CI via `pnpm check:seed-apify-test-database-isolation`) fails when any `seed/apify/tests/**` file that calls `resetDatabase` reads `process.env.DATABASE_URL` for `resetDatabase`/`createDb`. Prevents repeating the KIT-34 checker round-6 fail (shared dev Postgres wiped by `resetDatabase` during local test runs). Tighten only.
 
+### Shared-lane test DROP ratchet (KIT-211, tightens KIT-73)
+
+`.cursor/hooks/block-reset-database-test-on-shared-db.sh` denies unfiltered `pnpm test` / `turbo run test` and package-filtered vitest for `@kit/db`, `@kit/api`, `@kit/seed-apify`, and `@kit/seed-fkapi` when `DATABASE_URL` is the shared development/staging/production lane unless that package’s dedicated `KIT_DB_TEST_DATABASE_URL` / `API_TEST_DATABASE_URL` / `SEED_APIFY_TEST_DATABASE_URL` / `SEED_FKAPI_TEST_DATABASE_URL` is a disposable test database (localhost / 127.0.0.1 / `*test*`). Matching only package names in the command missed repo-root turbo graphs.
+
+`seed/fkapi/tests` and `packages/db/tests` must not read `process.env.DATABASE_URL` for `resetTestDatabase` / `resetDatabase` / `createDb`. They resolve `SEED_FKAPI_TEST_DATABASE_URL` and `KIT_DB_TEST_DATABASE_URL` (fallback localhost `kit_test`) and refuse a non-test URL before DROP. `scripts/check-seed-fkapi-test-database-isolation.mjs` and `scripts/check-kit-db-test-database-isolation.mjs` (CI via `pnpm check:seed-fkapi-test-database-isolation` / `pnpm check:kit-db-test-database-isolation`) fail when that contract drifts.
+
+`.cursor/rules/test-database-isolation.mdc` tells agents not to load lane `DATABASE_URL` into vitest, not to DROP/reset against CX33, and not to one-off `ssl: false` migrate against the lane. Prevents repeating the KIT-211 wipe (empty development `public` after FK/`@kit/db` tests followed injected lane `DATABASE_URL`). Tighten only.
+
 ### Code quality ratchet
 
 `biome.json` (format + lint), `oxlint.config.ts` with the vendored plugin under
@@ -118,8 +126,6 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-seed-fkapi-test-isolation.mjs` (CI via `pnpm check:seed-fkapi-tests`) fails when `seed/fkapi/tests/**` hardcodes Transfermarkt or `national_team` `external_id` values in prerequisite INSERTs, defines a local `seedApifyPrerequisites` / `seedNationalTeamPrerequisites`, calls `seedApifyPrerequisites` or `seedNationalTeamPrerequisites` without an allocated scope from `seed/fkapi/tests/fixture-scope.ts`, calls `createR2ObjectStore` (live lane R2), or drops NationalTeam hermetic fixtures (`denmark-national-kits.json` + `allocateNationalTeamTestFixtureScope` / `seedNationalTeamPrerequisites` / `createScopedNationalTeamFixtureFetchAdapter`). Prevents repeating the KIT-22 unique-constraint collisions and keeps live FKApi/R2 out of CI for NationalTeam kit grain tests (KIT-144). Tighten only.
 
-`scripts/check-seed-fkapi-test-database-isolation.mjs` (CI via `pnpm check:seed-fkapi-test-database-isolation`) fails when any `seed/fkapi/tests/**` file that calls `resetTestDatabase` reads `process.env.DATABASE_URL` for reset/pool/`runFkSeed` databaseUrl. Use `SEED_FKAPI_TEST_DATABASE_URL` via `resolveSeedFkapiTestDatabaseUrl()` and `TEST_DATABASE_URL` instead. Prevents repeating the KIT-34 / KIT-144 checker fail (shared dev Postgres wiped by FK seed tests). Tighten only.
-
 ### Push behind development ratchet (KIT-23)
 
 `.cursor/hooks/block-push-behind-development.sh` denies `git push` when the current branch is behind `origin/development`. Prevents repeating the KIT-23 checker fail (unmergeable PR because the feature branch was never rebased after `development` moved). Pushes to `development`, `staging`, and `production` are exempt. Tighten only.
@@ -130,7 +136,7 @@ catches it in the API tests and the container smoke test.
 
 `scripts/check-seed-scope-isolation-test.mjs` (CI via `pnpm check:seed-scope-isolation-test`) fails when `seed/apify/tests/scope-isolation.test.ts` drops the cross-season isolation coverage (`runSeed` must not mutate `player_club_season` rows outside the requested scope). Prevents repeating the KIT-34 checker round-4 fail (2017/18 skip run mutating 2016/17). Tighten only.
 
-`.cursor/hooks/block-seed-apify-test-on-shared-db.sh` denies `@kit/seed-apify` vitest/test invocations when `DATABASE_URL` points at the shared development Postgres and `SEED_APIFY_TEST_DATABASE_URL` is not set to a disposable test database. `scripts/check-seed-apify-test-database-isolation.mjs` (CI via `pnpm check:seed-apify-test-database-isolation`) fails when any `seed/apify/tests/**` file that calls `resetDatabase` reads `process.env.DATABASE_URL` for `resetDatabase`/`createDb`. Prevents repeating the KIT-34 checker round-6 fail (shared dev Postgres wiped by `resetDatabase` during local test runs). Tighten only.
+`.cursor/hooks/block-seed-apify-test-on-shared-db.sh` denies `@kit/seed-apify` vitest/test invocations when `DATABASE_URL` points at the shared development Postgres and `SEED_APIFY_TEST_DATABASE_URL` is not set to a disposable test database. `scripts/check-seed-apify-test-database-isolation.mjs` (CI via `pnpm check:seed-apify-test-database-isolation`) fails when any `seed/apify/tests/**` file that calls `resetDatabase` reads `process.env.DATABASE_URL` for `resetDatabase`/`createDb`. Prevents repeating the KIT-34 checker round-6 fail (shared dev Postgres wiped by `resetDatabase` during local test runs). FK seed and `@kit/db` tests are the KIT-211 ratchet. Tighten only.
 
 ### Mobile design-system inventory ratchet (KIT-23)
 

@@ -1,39 +1,40 @@
-import { PHOTO_ROLES, type PhotoRole } from "@kit/domain";
+import { MAX_USER_JERSEY_PHOTOS } from "@kit/domain";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { captureQualityForRole } from "@/capture/photoBytes";
+import { JERSEY_PHOTO_CAP_HELPER_DA } from "@/capture/captureSession";
 import { Banner } from "@/components/catalog-ui";
-import { PhotoSlot } from "@/components/photo-slot";
 import { Button, IconButton } from "@/components/ui";
 import { color, radius, space, type } from "@/theme/tokens";
 
+const FILMSTRIP_THUMB_HEIGHT = 44;
+const FILMSTRIP_THUMB_WIDTH = (FILMSTRIP_THUMB_HEIGHT * 4) / 5;
+const CAMERA_CAPTURE_QUALITY = 0.8;
+
 type CaptureCameraSessionProps = {
-  initialPhotos?: CapturedPhoto[];
+  initialPhotos?: string[];
   onComplete: (uris: string[]) => void;
   onClose: () => void;
-  onGalleryEscape: (existingPhotos: CapturedPhoto[]) => void;
-  onPhotoCaptured?: (photo: CapturedPhoto) => void;
+  onGalleryEscape: (existingUris: string[]) => void;
+  onPhotoCaptured?: (uri: string) => void;
 };
-
-type CapturedPhoto = {
-  role: PhotoRole;
-  uri: string;
-};
-
-function nextEmptyRole(photos: CapturedPhoto[]): PhotoRole | null {
-  for (const role of PHOTO_ROLES) {
-    if (!photos.some((photo) => photo.role === role)) {
-      return role;
-    }
-  }
-  return null;
-}
 
 /**
  * Repeat-capture session with in-app CameraView.
+ *
+ * Shoot-first: no role overlay on the viewfinder. Roles are assigned on Confirm
+ * via fill order Forside → Bagside → Venstre → Højre → unlabeled Andet.
  *
  * Camera permission is deferred until shutter intent: CameraView is not mounted
  * until the user has granted permission via the shutter button.
@@ -50,8 +51,7 @@ export function CaptureCameraSession({
   const [permission, requestPermission] = useCameraPermissions();
   const [isFocused, setIsFocused] = useState(true);
   const [pendingShot, setPendingShot] = useState(false);
-  const [photos, setPhotos] = useState<CapturedPhoto[]>(initialPhotos);
-  const [activeRole, setActiveRole] = useState<PhotoRole>(PHOTO_ROLES[0]);
+  const [photoUris, setPhotoUris] = useState<string[]>(initialPhotos);
 
   useFocusEffect(
     useCallback(() => {
@@ -60,26 +60,15 @@ export function CaptureCameraSession({
     }, []),
   );
 
-  useEffect(() => {
-    const next = nextEmptyRole(photos);
-    if (next) {
-      setActiveRole(next);
-    }
-  }, [photos]);
-
-  const photoMap: Record<PhotoRole, string | undefined> = {
-    front: photos.find((photo) => photo.role === "front")?.uri,
-    back: photos.find((photo) => photo.role === "back")?.uri,
-    label: photos.find((photo) => photo.role === "label")?.uri,
-  };
+  const atPhotoCap = photoUris.length >= MAX_USER_JERSEY_PHOTOS;
 
   const captureFromCamera = useCallback(async () => {
-    if (!cameraRef.current) {
+    if (!cameraRef.current || atPhotoCap) {
       return;
     }
 
     const shot = await cameraRef.current.takePictureAsync({
-      quality: captureQualityForRole(activeRole),
+      quality: CAMERA_CAPTURE_QUALITY,
       skipProcessing: Platform.OS === "ios",
     });
 
@@ -87,12 +76,15 @@ export function CaptureCameraSession({
       return;
     }
 
-    const captured = { role: activeRole, uri: shot.uri };
-    setPhotos((current) => [...current.filter((photo) => photo.role !== activeRole), captured]);
-    onPhotoCaptured?.(captured);
-  }, [activeRole, onPhotoCaptured]);
+    setPhotoUris((current) => [...current, shot.uri]);
+    onPhotoCaptured?.(shot.uri);
+  }, [atPhotoCap, onPhotoCaptured]);
 
   const takeShot = useCallback(async () => {
+    if (atPhotoCap) {
+      return;
+    }
+
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
@@ -103,7 +95,7 @@ export function CaptureCameraSession({
     }
 
     await captureFromCamera();
-  }, [captureFromCamera, permission?.granted, requestPermission]);
+  }, [atPhotoCap, captureFromCamera, permission?.granted, requestPermission]);
 
   useEffect(() => {
     if (!permission?.granted || !pendingShot || !isFocused) {
@@ -157,7 +149,9 @@ export function CaptureCameraSession({
       >
         <View style={styles.header} pointerEvents="box-none">
           <IconButton name="Luk" icon="close" iconColor={color.contentInverse} onPress={onClose} />
-          <Text style={styles.hint}>Tag forside, bagside og mærke</Text>
+          <Text style={styles.count}>
+            {photoUris.length}/{MAX_USER_JERSEY_PHOTOS}
+          </Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -179,47 +173,51 @@ export function CaptureCameraSession({
 
         <View style={styles.spacer} />
 
-        <View style={styles.slotRow}>
-          {PHOTO_ROLES.map((role) => (
-            <PhotoSlot
-              key={role}
-              variant="camera-overlay"
-              role={role}
-              uri={photoMap[role]}
-              selected={activeRole === role}
-              onPress={() => setActiveRole(role)}
-            />
-          ))}
+        <View style={styles.shutterBlock}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tag billede"
+            accessibilityHint="Tager et foto til denne trøje"
+            disabled={cameraDenied || atPhotoCap}
+            onPress={() => void takeShot()}
+            style={({ pressed }) => [
+              styles.shutter,
+              (cameraDenied || atPhotoCap) && styles.shutterDisabled,
+              pressed && !cameraDenied && !atPhotoCap && styles.shutterPressed,
+            ]}
+          />
+          {atPhotoCap ? <Text style={styles.capHelper}>{JERSEY_PHOTO_CAP_HELPER_DA}</Text> : null}
         </View>
+
+        {photoUris.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filmstripContent}
+            style={styles.filmstrip}
+          >
+            {photoUris.map((uri) => (
+              <Image
+                key={uri}
+                source={{ uri }}
+                style={styles.filmstripThumb}
+                accessibilityIgnoresInvertColors
+              />
+            ))}
+          </ScrollView>
+        ) : null}
 
         <View style={styles.controls}>
           <Button
             label="Vælg fra galleri"
             variant="tertiary"
-            onPress={() => onGalleryEscape(photos)}
-          />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Tag billede"
-            accessibilityHint="Tager et foto til den valgte slot"
-            disabled={cameraDenied}
-            onPress={() => void takeShot()}
-            style={({ pressed }) => [
-              styles.shutter,
-              cameraDenied && styles.shutterDisabled,
-              pressed && !cameraDenied && styles.shutterPressed,
-            ]}
+            onPress={() => onGalleryEscape(photoUris)}
           />
           <Button
             label="Fortsæt"
             variant="secondary"
-            disabled={photos.length === 0}
-            onPress={() => {
-              const orderedUris = PHOTO_ROLES.map(
-                (role) => photos.find((photo) => photo.role === role)?.uri,
-              ).filter((uri): uri is string => Boolean(uri));
-              onComplete(orderedUris);
-            }}
+            disabled={photoUris.length === 0}
+            onPress={() => onComplete(photoUris)}
           />
         </View>
       </View>
@@ -249,11 +247,12 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 44,
   },
-  hint: {
+  count: {
     flex: 1,
     textAlign: "center",
-    fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
+    fontSize: type.mono.fontSize,
+    lineHeight: type.mono.lineHeight,
+    fontFamily: type.mono.fontFamily,
     color: color.contentInverse,
     opacity: 0.9,
   },
@@ -263,17 +262,10 @@ const styles = StyleSheet.create({
   spacer: {
     flex: 1,
   },
-  slotRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: space.gapSm,
-    marginBottom: space.insetLg,
-  },
-  controls: {
-    flexDirection: "row",
+  shutterBlock: {
     alignItems: "center",
-    justifyContent: "space-between",
     gap: space.gapSm,
+    marginBottom: space.insetSm,
   },
   shutter: {
     width: space.insetLg + space.insetMd + space.insetLg,
@@ -288,5 +280,32 @@ const styles = StyleSheet.create({
   },
   shutterPressed: {
     opacity: 0.85,
+  },
+  capHelper: {
+    textAlign: "center",
+    fontSize: type.caption.fontSize,
+    lineHeight: type.caption.lineHeight,
+    color: color.contentInverse,
+    opacity: 0.9,
+  },
+  filmstrip: {
+    marginBottom: space.insetSm,
+    minHeight: FILMSTRIP_THUMB_HEIGHT,
+  },
+  filmstripContent: {
+    gap: space.gapSm,
+    alignItems: "center",
+  },
+  filmstripThumb: {
+    width: FILMSTRIP_THUMB_WIDTH,
+    height: FILMSTRIP_THUMB_HEIGHT,
+    borderRadius: radius.md,
+    backgroundColor: color.fillSecondary,
+  },
+  controls: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.gapSm,
   },
 });

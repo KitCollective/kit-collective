@@ -635,17 +635,27 @@ export const conversationMessage = pgTable("conversation_message", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const userJerseyPhoto = pgTable("user_jersey_photo", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userJerseyId: uuid("user_jersey_id")
-    .notNull()
-    .references(() => userJersey.id),
-  objectKey: text("object_key").notNull(),
-  role: photoRoleEnum("role").notNull(),
-  source: photoSourceEnum("source").notNull(),
-  ocrStatus: ocrStatusEnum("ocr_status").notNull().default("none"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const userJerseyPhoto = pgTable(
+  "user_jersey_photo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userJerseyId: uuid("user_jersey_id")
+      .notNull()
+      .references(() => userJersey.id),
+    objectKey: text("object_key").notNull(),
+    role: photoRoleEnum("role").notNull(),
+    source: photoSourceEnum("source").notNull(),
+    /** Free Beskrivelse when role is other; null for universal roles. */
+    label: text("label"),
+    ocrStatus: ocrStatusEnum("ocr_status").notNull().default("none"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("user_jersey_photo_universal_role_unique")
+      .on(table.userJerseyId, table.role)
+      .where(sql`${table.role} IN ('front', 'back', 'left', 'right')`),
+  ],
+);
 
 export const visionLog = pgTable("vision_log", {
   id: uuid("id").primaryKey().defaultRandom(),

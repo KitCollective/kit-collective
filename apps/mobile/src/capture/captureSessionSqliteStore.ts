@@ -39,6 +39,7 @@ type PhotoRow = {
   uri: string;
   role: string | null;
   source: string;
+  label: string | null;
 };
 
 function readKitType(value: string | null): KitType | null {
@@ -167,9 +168,9 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
 
           for (const photo of draft.photos) {
             draftDb.runSync(
-              `INSERT INTO capture_session_draft_photo (session_id, draft_id, uri, role, source)
-               VALUES (?, ?, ?, ?, ?)`,
-              [sessionId, draft.id, photo.uri, photo.role, photo.source],
+              `INSERT INTO capture_session_draft_photo (session_id, draft_id, uri, role, source, label)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [sessionId, draft.id, photo.uri, photo.role, photo.source, photo.label ?? null],
             );
           }
         }
@@ -206,7 +207,7 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
       );
 
       const photoRows = draftDb.getAllSync<PhotoRow>(
-        `SELECT draft_id, uri, role, source FROM capture_session_draft_photo WHERE session_id = ?`,
+        `SELECT draft_id, uri, role, source, label FROM capture_session_draft_photo WHERE session_id = ?`,
         [sessionId],
       );
 
@@ -217,6 +218,7 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
             uri: photo.uri,
             role: readPhotoRole(photo.role),
             source: readPhotoSource(photo.source),
+            ...(photo.label ? { label: photo.label } : {}),
           }));
         return readDraft(row, photos);
       });

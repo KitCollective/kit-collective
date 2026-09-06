@@ -6,28 +6,22 @@ const URI_BACK = "file:///camera/back.jpg";
 const URI_LABEL = "file:///gallery/label.jpg";
 
 describe("mergeGalleryEscapePhotos", () => {
-  it("keeps camera shots and fills the next empty role from gallery picks", () => {
-    const merged = mergeGalleryEscapePhotos(
-      [
-        { role: "front", uri: URI_FRONT },
-        { role: "back", uri: URI_BACK },
-      ],
-      [URI_LABEL],
-    );
+  it("keeps shoot-first camera URIs and appends gallery picks unassigned", () => {
+    const merged = mergeGalleryEscapePhotos([URI_FRONT, URI_BACK], [URI_LABEL]);
 
     expect(merged).toEqual([
-      { uri: URI_FRONT, role: "front", source: "camera" },
-      { uri: URI_BACK, role: "back", source: "camera" },
-      { uri: URI_LABEL, role: "label", source: "gallery" },
+      { uri: URI_FRONT, role: null, source: "camera" },
+      { uri: URI_BACK, role: null, source: "camera" },
+      { uri: URI_LABEL, role: null, source: "gallery" },
     ]);
   });
 
-  it("assigns gallery-only escape picks to roles in order", () => {
+  it("stores gallery-only escape picks unassigned in order", () => {
     const merged = mergeGalleryEscapePhotos([], [URI_FRONT, URI_BACK]);
 
     expect(merged).toEqual([
-      { uri: URI_FRONT, role: "front", source: "gallery" },
-      { uri: URI_BACK, role: "back", source: "gallery" },
+      { uri: URI_FRONT, role: null, source: "gallery" },
+      { uri: URI_BACK, role: null, source: "gallery" },
     ]);
   });
 });

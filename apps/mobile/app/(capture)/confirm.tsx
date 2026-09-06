@@ -7,8 +7,9 @@ import {
   JERSEY_SIZES,
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
-  PHOTO_ROLES,
   type PhotoRole,
+  UNIVERSAL_PHOTO_ROLES,
+  type UniversalPhotoRole,
 } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -22,6 +23,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fetchClubSeasons, searchCatalogClubs } from "@/api/catalog";
 import { saveUserJersey, updateUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction, startVisionSuggest } from "@/api/vision";
@@ -30,22 +32,32 @@ import { clearPersistedCaptureSession } from "@/capture/captureFlow";
 import {
   addJerseyDraft,
   bindUnboundPhotoToDraft,
+  canAddPhotoToDraft,
   canSave,
+  changeDraftPhotoRole,
   getDraft,
+  JERSEY_PHOTO_CAP_HELPER_DA,
   photoUriForRole,
   removeDraft,
+  removeDraftPhoto,
   selectDraftCondition,
   selectDraftKitType,
   selectDraftSize,
   setActiveDraft,
   setDraftClub,
   setDraftNotes,
+  setDraftPhotoLabel,
   setDraftSeason,
   switchSingleToBulkBind,
-  unbindPhoto,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
+import {
+  type ConfirmSheetKind,
+  closeConfirmSheet,
+  openConfirmSheet,
+  shouldOpenSeasonAfterClubDismiss,
+} from "@/capture/confirmSheet";
 import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -57,9 +69,11 @@ import {
 import { BulkChrome } from "@/components/bulk/BulkChrome";
 import { Banner, ListRow, SearchField, Sheet } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 import { PhotoSlot } from "@/components/photo-slot";
 import { PostSaveSheet } from "@/components/post-save-sheet";
-import { Button, ButtonDock } from "@/components/ui";
+import { ProfileSurfaceGroup } from "@/components/profile-ui";
+import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { markJerseySaved } from "@/session/addSession";
 import { useTypography } from "@/theme/brand-fonts";
 import { motion, radius, space } from "@/theme/tokens";
@@ -68,12 +82,14 @@ import { useTheme } from "@/theme/use-theme";
 
 const MIN_CLUB_SEARCH_LENGTH = 2;
 const VISION_TIMEOUT_MS = 12_000;
+const ADD_PHOTO_ROLE: PhotoRole = "other";
 
 export default function ConfirmScreen() {
   const router = useRouter();
   const theme = useTheme();
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
+  const insets = useSafeAreaInsets();
   const { sessionId, editJerseyId } = useLocalSearchParams<{
     sessionId: string;
     editJerseyId?: string;
@@ -81,9 +97,8 @@ export default function ConfirmScreen() {
   const { accessToken } = useAuth();
   const { state, isSessionResolved, mutate } = usePersistedCaptureSession(sessionId);
 
-  const [clubSheetOpen, setClubSheetOpen] = useState(false);
-  const [seasonSheetOpen, setSeasonSheetOpen] = useState(false);
-  const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
+  const [openSheet, setOpenSheet] = useState<ConfirmSheetKind | null>(null);
+  const [pendingSeasonAfterClub, setPendingSeasonAfterClub] = useState(false);
   const [clubQuery, setClubQuery] = useState("");
   const [clubResults, setClubResults] = useState<CatalogPickerItem[]>([]);
   const [seasonResults, setSeasonResults] = useState<CatalogPickerItem[]>([]);
@@ -101,6 +116,9 @@ export default function ConfirmScreen() {
   const [visionPolling, setVisionPolling] = useState(false);
   const [visionSuggestion, setVisionSuggestion] = useState<VisionJobResponse | null>(null);
   const [saveBlockMessage, setSaveBlockMessage] = useState<string | null>(null);
+  const [photoCapMessage, setPhotoCapMessage] = useState<string | null>(null);
+  const [lightboxRole, setLightboxRole] = useState<PhotoRole | null>(null);
+  const [lightboxUri, setLightboxUri] = useState<string | null>(null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const clubManuallySet = useRef(false);
   const seasonManuallySet = useRef(false);
@@ -174,7 +192,7 @@ export default function ConfirmScreen() {
   );
 
   useEffect(() => {
-    if (!clubSheetOpen) {
+    if (openSheet !== "club") {
       return;
     }
 
@@ -183,7 +201,7 @@ export default function ConfirmScreen() {
     }, 300);
 
     return () => clearTimeout(handle);
-  }, [clubQuery, clubSheetOpen, runClubSearch]);
+  }, [clubQuery, openSheet, runClubSearch]);
 
   const fadeInSuggestion = useCallback(() => {
     suggestionOpacity.setValue(reduceMotion ? 1 : 0);
@@ -350,8 +368,13 @@ export default function ConfirmScreen() {
     };
   }, [accessToken, visionJobId, visionPolling, applyVisionSuggestions]);
 
-  const pickPhotoForRole = async (role: PhotoRole) => {
-    if (!draft || isBulk) {
+  const pickPhotoForRole = async (role: PhotoRole, replaceUri?: string) => {
+    if (!draft || !sessionId) {
+      return;
+    }
+
+    if (!replaceUri && !canAddPhotoToDraft(draft)) {
+      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
       return;
     }
 
@@ -363,14 +386,30 @@ export default function ConfirmScreen() {
       expoGalleryPickerAdapter,
     );
 
-    if (!uris?.[0] || !sessionId) {
+    if (!uris?.[0]) {
       return;
     }
 
+    setPhotoCapMessage(null);
     const uri = uris[0];
-    mutate((current) => upsertDraftPhoto(current, current.activeDraftId, role, uri, "gallery"));
+    const existingLabel =
+      replaceUri && role === "other"
+        ? draft.photos.find((photo) => photo.uri === replaceUri)?.label
+        : undefined;
+    mutate((current) => {
+      const draftId = current.activeDraftId;
+      const base =
+        replaceUri && role === "other"
+          ? removeDraftPhoto(current, draftId, "other", replaceUri)
+          : current;
+      const next = upsertDraftPhoto(base, draftId, role, uri, "gallery");
+      if (existingLabel) {
+        return setDraftPhotoLabel(next, draftId, uri, existingLabel);
+      }
+      return next;
+    });
 
-    if (!hadPhotos) {
+    if (!isBulk && !hadPhotos) {
       void maybeStartVision(role, uri);
     }
   };
@@ -380,16 +419,34 @@ export default function ConfirmScreen() {
     setClubResults([]);
     setCatalogMiss(false);
     setSearchError(false);
-    setClubSheetOpen(true);
+    setPendingSeasonAfterClub(false);
+    setOpenSheet((current) => openConfirmSheet(current, "club"));
   };
+
+  const dismissConfirmSheet = (kind: ConfirmSheetKind) => {
+    setOpenSheet((current) => closeConfirmSheet(current, kind));
+  };
+
+  useEffect(() => {
+    if (openSheet !== null) {
+      return;
+    }
+
+    if (!shouldOpenSeasonAfterClubDismiss(pendingSeasonAfterClub, "club")) {
+      return;
+    }
+
+    setPendingSeasonAfterClub(false);
+    setOpenSheet(openConfirmSheet(null, "season"));
+  }, [openSheet, pendingSeasonAfterClub]);
 
   const selectClub = async (club: CatalogPickerItem) => {
     clubManuallySet.current = true;
     seasonManuallySet.current = false;
     setSelectedSeasonLabel(null);
     mutate((current) => setDraftClub(current, current.activeDraftId, club.id, club.label));
-    setClubSheetOpen(false);
-    setSeasonSheetOpen(true);
+    setPendingSeasonAfterClub(true);
+    setOpenSheet((current) => closeConfirmSheet(current, "club"));
 
     if (!accessToken) {
       return;
@@ -444,18 +501,32 @@ export default function ConfirmScreen() {
     setVisionSuggestion(null);
   };
 
+  const handleAddPhotoPress = () => {
+    if (!draft) {
+      return;
+    }
+
+    if (!canAddPhotoToDraft(draft)) {
+      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
+      return;
+    }
+
+    void pickPhotoForRole("other");
+  };
+
   const handlePhotoSlotPress = (role: PhotoRole) => {
     if (!state || !draft) {
       return;
     }
 
     const uri = photoUriForRole(draft, role);
-    if (isBulk) {
-      if (uri) {
-        mutate((current) => unbindPhoto(current, uri));
-        return;
-      }
+    if (uri) {
+      setLightboxRole(role);
+      setLightboxUri(uri);
+      return;
+    }
 
+    if (isBulk) {
       const firstUnbound = state.unboundUris[0];
       if (firstUnbound) {
         mutate((current) =>
@@ -468,7 +539,59 @@ export default function ConfirmScreen() {
     void pickPhotoForRole(role);
   };
 
+  const handleLightboxReplace = () => {
+    if (!lightboxRole) {
+      return;
+    }
+    const role = lightboxRole;
+    const replaceUri = lightboxUri ?? undefined;
+    setLightboxRole(null);
+    setLightboxUri(null);
+    void pickPhotoForRole(role, replaceUri);
+  };
+
+  const handleLightboxDelete = () => {
+    if (!lightboxRole || !lightboxUri) {
+      return;
+    }
+    const role = lightboxRole;
+    const uri = lightboxUri;
+    mutate((current) => removeDraftPhoto(current, current.activeDraftId, role, uri));
+    setLightboxRole(null);
+    setLightboxUri(null);
+  };
+
+  const handleLightboxChangeRole = (toRole: PhotoRole) => {
+    if (!lightboxRole) {
+      return;
+    }
+    const fromRole = lightboxRole;
+    mutate((current) =>
+      changeDraftPhotoRole(
+        current,
+        current.activeDraftId,
+        fromRole,
+        toRole,
+        lightboxUri ?? undefined,
+      ),
+    );
+    setLightboxRole(toRole);
+  };
+
+  const handleLightboxChangeLabel = (label: string) => {
+    if (!lightboxUri) {
+      return;
+    }
+    mutate((current) => setDraftPhotoLabel(current, current.activeDraftId, lightboxUri, label));
+  };
+
   const handleBindUnboundPhoto = (uri: string) => {
+    if (draft && !canAddPhotoToDraft(draft)) {
+      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
+      return;
+    }
+
+    setPhotoCapMessage(null);
     mutate((current) => bindUnboundPhotoToDraft(current, uri, current.activeDraftId));
   };
 
@@ -488,7 +611,7 @@ export default function ConfirmScreen() {
     saveError,
     visionSuggestionVisible: Boolean(visionSuggestion?.suggestions),
     catalogMiss,
-    clubSheetOpen,
+    clubSheetOpen: openSheet === "club",
   });
 
   const handleSave = async () => {
@@ -538,6 +661,7 @@ export default function ConfirmScreen() {
             role: photo.role,
             source: photo.source,
             contentBase64: await readPhotoBase64(photo.uri),
+            ...(photo.role === "other" && photo.label?.trim() ? { label: photo.label.trim() } : {}),
           })),
       );
 
@@ -617,18 +741,26 @@ export default function ConfirmScreen() {
     return null;
   }
 
-  const photoUris: Record<PhotoRole, string | undefined> = {
+  const universalPhotoUris: Record<UniversalPhotoRole, string | undefined> = {
     front: photoUriForRole(draft, "front") ?? undefined,
     back: photoUriForRole(draft, "back") ?? undefined,
-    label: photoUriForRole(draft, "label") ?? undefined,
+    left: photoUriForRole(draft, "left") ?? undefined,
+    right: photoUriForRole(draft, "right") ?? undefined,
   };
-  const photoList = PHOTO_ROLES.filter((role) => photoUris[role]);
+  const otherPhotos = draft.photos.filter(
+    (photo): photo is typeof photo & { role: "other" } => photo.role === "other",
+  );
+  const photoList = [
+    ...UNIVERSAL_PHOTO_ROLES.filter((role) => universalPhotoUris[role]),
+    ...otherPhotos.map((photo) => photo.uri),
+  ];
   const selectedClub =
     draft.clubId && draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null;
   const selectedSeason =
     draft.seasonId && selectedSeasonLabel
       ? { id: draft.seasonId, label: selectedSeasonLabel }
       : null;
+  const showAddPhotoSlot = canAddPhotoToDraft(draft);
   const dockHelper = saveBlockMessage ?? getSaveBlockMessage(draft);
   const saveEnabled = canSave(draft);
   const saveLabel = editJerseyId
@@ -636,10 +768,15 @@ export default function ConfirmScreen() {
     : isBulk && state.drafts.length > 1
       ? "Gem og næste"
       : "Gem";
+  const fadeDockScrollPadding =
+    BUTTON_DOCK_FADE_SCROLL_PADDING + Math.max(insets.bottom, space.insetMd);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: fadeDockScrollPadding }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={[typography.title, { color: theme.contentPrimary }]}>Bekræft og gem</Text>
         <Text style={[typography.body, { color: theme.contentMuted }]}>
           Vælg klub, sæson og detaljer.
@@ -656,23 +793,52 @@ export default function ConfirmScreen() {
 
         <View style={styles.section}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
-          <View style={styles.photoRow}>
-            {PHOTO_ROLES.map((role) => (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.photoRow}
+          >
+            {UNIVERSAL_PHOTO_ROLES.map((role) => (
               <PhotoSlot
                 key={role}
                 role={role}
-                uri={photoUris[role]}
+                uri={universalPhotoUris[role]}
                 onPress={() => handlePhotoSlotPress(role)}
               />
             ))}
-          </View>
+            {otherPhotos.map((photo) => (
+              <PhotoSlot
+                key={photo.uri}
+                role={photo.role}
+                uri={photo.uri}
+                caption={photo.label}
+                onPress={() => {
+                  setLightboxRole("other");
+                  setLightboxUri(photo.uri);
+                }}
+              />
+            ))}
+            {showAddPhotoSlot ? (
+              <PhotoSlot
+                key="add-photo"
+                role={ADD_PHOTO_ROLE}
+                variant="add"
+                onPress={handleAddPhotoPress}
+              />
+            ) : null}
+          </ScrollView>
+          {photoCapMessage ? (
+            <Text style={[typography.caption, { color: theme.contentMuted }]}>
+              {photoCapMessage}
+            </Text>
+          ) : null}
           {photoList.length === 0 ? (
             <Text style={[typography.caption, { color: theme.contentMuted }]}>
               Mindst ét foto er påkrævet.
             </Text>
-          ) : photoList.length < PHOTO_ROLES.length ? (
+          ) : photoList.length < UNIVERSAL_PHOTO_ROLES.length ? (
             <Text style={[typography.caption, { color: theme.contentMuted }]}>
-              3 fotos anbefales — mærkefoto gør det lettere senere.
+              Fire universelle fotos anbefales — ekstra Andet-fotos er valgfrie.
             </Text>
           ) : null}
         </View>
@@ -725,80 +891,103 @@ export default function ConfirmScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Klub</Text>
-          <ListRow
-            title={selectedClub?.label ?? "Vælg klub"}
-            onPress={openClubSheet}
-            selected={selectedClub !== null}
-          />
-        </View>
-
-        {selectedClub ? (
-          <View style={styles.section}>
-            <Text style={[typography.label, { color: theme.contentPrimary }]}>Sæson</Text>
+          <Text style={[typography.section, { color: theme.contentPrimary }]}>Identitet</Text>
+          <ProfileSurfaceGroup>
             <ListRow
-              title={selectedSeason?.label ?? "Vælg sæson"}
-              onPress={() => setSeasonSheetOpen(true)}
-              selected={selectedSeason !== null}
+              title={selectedClub?.label ?? "Vælg klub"}
+              onPress={openClubSheet}
+              selected={selectedClub !== null}
             />
-          </View>
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Type</Text>
-          <View style={styles.chipRow}>
-            {KIT_TYPES.map((value) => (
-              <Chip
-                key={value}
-                label={KIT_TYPE_LABELS_DA[value]}
-                selected={draft.kitTypeSelected && draft.kitType === value}
-                accessibilityRole="radio"
-                onPress={() => {
-                  kitTypeManuallySet.current = true;
-                  mutate((current) => selectDraftKitType(current, current.activeDraftId, value));
-                }}
-              />
-            ))}
-          </View>
+            {selectedClub ? (
+              <>
+                <View
+                  style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
+                  accessibilityElementsHidden
+                />
+                <ListRow
+                  title={selectedSeason?.label ?? "Vælg sæson"}
+                  onPress={() => setOpenSheet(openConfirmSheet(openSheet, "season"))}
+                  selected={selectedSeason !== null}
+                />
+              </>
+            ) : null}
+          </ProfileSurfaceGroup>
         </View>
 
         <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Størrelse</Text>
-          <View style={styles.chipRow}>
-            {JERSEY_SIZES.map((value) => (
-              <Chip
-                key={value}
-                label={JERSEY_SIZE_LABELS_DA[value]}
-                selected={draft.sizeSelected && draft.size === value}
-                accessibilityRole="radio"
-                onPress={() => {
-                  mutate((current) => selectDraftSize(current, current.activeDraftId, value));
-                }}
-              />
-            ))}
-          </View>
-        </View>
+          <Text style={[typography.section, { color: theme.contentPrimary }]}>Tilstand</Text>
+          <ProfileSurfaceGroup>
+            <View style={styles.groupSection}>
+              <Text style={[typography.label, { color: theme.contentPrimary }]}>Type</Text>
+              <View style={styles.chipRow}>
+                {KIT_TYPES.map((value) => (
+                  <Chip
+                    key={value}
+                    label={KIT_TYPE_LABELS_DA[value]}
+                    selected={draft.kitTypeSelected && draft.kitType === value}
+                    accessibilityRole="radio"
+                    onPress={() => {
+                      kitTypeManuallySet.current = true;
+                      mutate((current) =>
+                        selectDraftKitType(current, current.activeDraftId, value),
+                      );
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
 
-        <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Stand</Text>
-          <View style={styles.chipRow}>
-            {JERSEY_CONDITIONS.map((value) => (
-              <Chip
-                key={value}
-                label={JERSEY_CONDITION_LABELS_DA[value]}
-                selected={draft.conditionSelected && draft.condition === value}
-                accessibilityRole="radio"
-                onPress={() => {
-                  mutate((current) => selectDraftCondition(current, current.activeDraftId, value));
-                }}
-              />
-            ))}
-          </View>
+            <View
+              style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
+              accessibilityElementsHidden
+            />
+
+            <View style={styles.groupSection}>
+              <Text style={[typography.label, { color: theme.contentPrimary }]}>Størrelse</Text>
+              <View style={styles.chipRow}>
+                {JERSEY_SIZES.map((value) => (
+                  <Chip
+                    key={value}
+                    label={JERSEY_SIZE_LABELS_DA[value]}
+                    selected={draft.sizeSelected && draft.size === value}
+                    accessibilityRole="radio"
+                    onPress={() => {
+                      mutate((current) => selectDraftSize(current, current.activeDraftId, value));
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View
+              style={[styles.groupHairline, { backgroundColor: theme.borderSubtle }]}
+              accessibilityElementsHidden
+            />
+
+            <View style={styles.groupSection}>
+              <Text style={[typography.label, { color: theme.contentPrimary }]}>Stand</Text>
+              <View style={styles.chipRow}>
+                {JERSEY_CONDITIONS.map((value) => (
+                  <Chip
+                    key={value}
+                    label={JERSEY_CONDITION_LABELS_DA[value]}
+                    selected={draft.conditionSelected && draft.condition === value}
+                    accessibilityRole="radio"
+                    onPress={() => {
+                      mutate((current) =>
+                        selectDraftCondition(current, current.activeDraftId, value),
+                      );
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          </ProfileSurfaceGroup>
         </View>
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => setDetailsSheetOpen(true)}
+          onPress={() => setOpenSheet(openConfirmSheet(openSheet, "details"))}
           style={styles.detailsLink}
         >
           <Text style={[typography.label, { color: theme.contentSecondary }]}>Flere detaljer</Text>
@@ -829,7 +1018,7 @@ export default function ConfirmScreen() {
         ) : null}
       </ScrollView>
 
-      <ButtonDock>
+      <ButtonDock variant="fade">
         {dockHelper ? (
           <Text style={[typography.caption, { color: theme.contentMuted }]}>{dockHelper}</Text>
         ) : null}
@@ -843,7 +1032,11 @@ export default function ConfirmScreen() {
         />
       </ButtonDock>
 
-      <Sheet visible={clubSheetOpen} title="Vælg klub" onDismiss={() => setClubSheetOpen(false)}>
+      <Sheet
+        visible={openSheet === "club"}
+        title="Vælg klub"
+        onDismiss={() => dismissConfirmSheet("club")}
+      >
         <SearchField
           variant="catalog"
           accessibilityLabel="Søg klub"
@@ -892,9 +1085,9 @@ export default function ConfirmScreen() {
       </Sheet>
 
       <Sheet
-        visible={seasonSheetOpen}
+        visible={openSheet === "season"}
         title="Vælg sæson"
-        onDismiss={() => setSeasonSheetOpen(false)}
+        onDismiss={() => dismissConfirmSheet("season")}
       >
         {loadingSeasons ? (
           <ActivityIndicator color={theme.fillPrimary} style={styles.loader} />
@@ -909,7 +1102,7 @@ export default function ConfirmScreen() {
                   seasonManuallySet.current = true;
                   setSelectedSeasonLabel(season.label);
                   mutate((current) => setDraftSeason(current, current.activeDraftId, season.id));
-                  setSeasonSheetOpen(false);
+                  dismissConfirmSheet("season");
                 }}
               />
             ))}
@@ -918,9 +1111,9 @@ export default function ConfirmScreen() {
       </Sheet>
 
       <Sheet
-        visible={detailsSheetOpen}
+        visible={openSheet === "details"}
         title="Flere detaljer"
-        onDismiss={() => setDetailsSheetOpen(false)}
+        onDismiss={() => dismissConfirmSheet("details")}
       >
         <Text style={[typography.label, { color: theme.contentPrimary }]}>Noter</Text>
         <Text style={[typography.caption, { color: theme.contentMuted }]}>
@@ -954,6 +1147,23 @@ export default function ConfirmScreen() {
         savedSeasonLabel={savedSeasonLabel}
         onDismiss={handlePostSaveDismiss}
       />
+
+      {lightboxRole !== null && lightboxUri ? (
+        <PhotoLightbox
+          visible
+          role={lightboxRole}
+          uri={lightboxUri}
+          label={draft.photos.find((photo) => photo.uri === lightboxUri)?.label ?? ""}
+          onDismiss={() => {
+            setLightboxRole(null);
+            setLightboxUri(null);
+          }}
+          onReplace={handleLightboxReplace}
+          onDelete={handleLightboxDelete}
+          onChangeRole={handleLightboxChangeRole}
+          onChangeLabel={handleLightboxChangeLabel}
+        />
+      ) : null}
     </View>
   );
 }
@@ -965,7 +1175,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: space.insetLg,
     gap: space.gapLg,
-    paddingBottom: space.insetLg,
   },
   section: {
     gap: space.gapSm,
@@ -1003,6 +1212,14 @@ const styles = StyleSheet.create({
   detailsLink: {
     minHeight: 44,
     justifyContent: "center",
+  },
+  groupSection: {
+    padding: space.insetMd,
+    gap: space.gapSm,
+  },
+  groupHairline: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: space.insetMd,
   },
   notesInput: {
     minHeight: 120,

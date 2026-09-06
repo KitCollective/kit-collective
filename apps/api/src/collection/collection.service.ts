@@ -69,7 +69,7 @@ import {
   visionLog,
 } from "@kit/db";
 import type { LabelLocale } from "@kit/domain";
-import { KIT_TYPE_LABELS_DA } from "@kit/domain";
+import { KIT_TYPE_LABELS_DA, validateJerseyPhotos } from "@kit/domain";
 import {
   BadRequestException,
   ForbiddenException,
@@ -96,7 +96,7 @@ function canonicalCollectorPair(leftId: string, rightId: string): [string, strin
 
 function typeaheadTextMatches(parts: Array<string | undefined>, query: string): boolean {
   const lowered = query.toLowerCase();
-  return parts.some((part) => part !== undefined && part.toLowerCase().includes(lowered));
+  return parts.some((part) => part?.toLowerCase().includes(lowered));
 }
 
 function handleInitial(handle: string): string {
@@ -385,9 +385,9 @@ export class CollectionService {
 
       const lastReadAt = lastReadByConversation.get(row.id);
       const unread =
-        Boolean(latest) &&
-        latest!.senderId !== userId &&
-        (!lastReadAt || latest!.createdAt > lastReadAt);
+        latest !== undefined &&
+        latest.senderId !== userId &&
+        (!lastReadAt || latest.createdAt > lastReadAt);
 
       return {
         id: row.id,
@@ -513,9 +513,9 @@ export class CollectionService {
       const latest = latestByConversation.get(row.conversationId);
       const lastReadAt = lastReadByConversation.get(row.conversationId);
       const unread =
-        Boolean(latest) &&
-        latest!.senderId !== userId &&
-        (!lastReadAt || latest!.createdAt > lastReadAt);
+        latest !== undefined &&
+        latest.senderId !== userId &&
+        (!lastReadAt || latest.createdAt > lastReadAt);
 
       return {
         id: row.id,
@@ -723,7 +723,7 @@ export class CollectionService {
         conversationId,
         senderId: userId,
         kind,
-        body: hasText ? body.text!.trim() : null,
+        body: hasText ? body.text?.trim() : null,
         imageObjectKey: imageObjectKey ?? null,
         replyToMessageId: body.replyToMessageId ?? null,
       })
@@ -762,7 +762,7 @@ export class CollectionService {
       )
       .limit(1);
 
-    if (!row || row.kind !== "image" || !row.imageObjectKey) {
+    if (row?.kind !== "image" || !row.imageObjectKey) {
       throw new NotFoundException("Message photo not found");
     }
 
@@ -1713,7 +1713,7 @@ export class CollectionService {
       return [
         {
           userJerseyId: row.userJerseyId,
-          photoUrl: photos[0]!.photoUrl,
+          photoUrl: photos[0]?.photoUrl,
           clubLabel,
           seasonLabel: row.seasonLabel,
           type: row.type,
@@ -1908,7 +1908,7 @@ export class CollectionService {
       )
       .limit(1);
 
-    if (!messageRow || messageRow.kind !== "bid") {
+    if (messageRow?.kind !== "bid") {
       throw new NotFoundException("Bid message not found");
     }
 
@@ -1940,7 +1940,16 @@ export class CollectionService {
     rawBody: unknown,
     locale: LabelLocale = "da",
   ): Promise<CollectionSaveResponse> {
-    const body = collectionSaveRequestSchema.parse(rawBody);
+    const parsed = collectionSaveRequestSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+    const body = parsed.data;
+
+    const photoValidationError = validateJerseyPhotos(body.photos);
+    if (photoValidationError) {
+      throw new BadRequestException({ code: photoValidationError });
+    }
 
     if (body.draftId) {
       const existing = await this.findJerseyByDraft(userId, body.draftId);
@@ -2418,6 +2427,7 @@ export class CollectionService {
         objectKey: userJerseyPhoto.objectKey,
         role: userJerseyPhoto.role,
         source: userJerseyPhoto.source,
+        label: userJerseyPhoto.label,
         ocrStatus: userJerseyPhoto.ocrStatus,
       })
       .from(userJerseyPhoto)
@@ -2439,6 +2449,7 @@ export class CollectionService {
             ? `/v1/collection/showcase/photos/${row.id}`
             : `/v1/collection/photos/${row.id}`,
         ocrStatus: row.ocrStatus,
+        ...(row.label ? { label: row.label } : {}),
       };
 
       const existing = photosByJersey.get(row.userJerseyId) ?? [];
@@ -2476,6 +2487,7 @@ export class CollectionService {
           objectKey,
           role: photo.role,
           source: photo.source,
+          label: photo.role === "other" ? photo.label?.trim() || null : null,
           ocrStatus: "none",
         })
         .returning({
@@ -2483,6 +2495,7 @@ export class CollectionService {
           role: userJerseyPhoto.role,
           source: userJerseyPhoto.source,
           objectKey: userJerseyPhoto.objectKey,
+          label: userJerseyPhoto.label,
           ocrStatus: userJerseyPhoto.ocrStatus,
         });
 
@@ -2497,6 +2510,7 @@ export class CollectionService {
         objectKey: inserted.objectKey,
         photoUrl: `/v1/collection/photos/${inserted.id}`,
         ocrStatus: inserted.ocrStatus,
+        ...(inserted.label ? { label: inserted.label } : {}),
       });
     }
 

@@ -18,8 +18,8 @@ import {
   seedNationalTeamPrerequisites,
   seedNationalTeamTransfermarktSeasonOnly,
 } from "./fixture-scope.js";
-import { resetTestDatabase } from "./test-db.js";
 import { resolveSeedFkapiTestDatabaseUrl } from "./test-database-url.js";
+import { resetTestDatabase } from "./test-db.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

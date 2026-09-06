@@ -90,6 +90,13 @@ _Avoid_: shirt as catalog, jersey for the catalog row
 A collector’s owned instance of a Kit, with photos and personal fields.
 _Avoid_: Kit (for a copy), collection item
 
+**UserJerseyPhoto**:
+One photo on a UserJersey. Four universal roles (`front` | `back` | `left` | `right` — Forside /
+Bagside / Venstre / Højre) plus many `other` (Andet) with an optional free Beskrivelse. At most ten
+photos per UserJersey. Mærke is not a role.
+_Avoid_: a third fixed `label` role; a closed Andet enum; more than ten photos on one copy; Vision
+assigning roles
+
 **CatalogLabel**:
 Locale + kind name for stamdata. The English seed string is not the Danish UI name.
 _Avoid_: hardcoding English as the UI label

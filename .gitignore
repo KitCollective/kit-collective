@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+# bb.env is the BB Factory My Secrets name list (repo root). Do not add *.env — that would hide it.
 .cursor/mcp.json
 .agents/
 node_modules/
