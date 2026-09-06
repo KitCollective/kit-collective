@@ -38,4 +38,15 @@ describe("resolveStoredPhotoBytes", () => {
       ForbiddenException,
     );
   });
+
+  it("returns strip bytes when strip.jpg exists", async () => {
+    const store = createMemoryObjectStore();
+    const gridKey = gridPhotoObjectKey(userId, jerseyId, photoId);
+    const stripKey = `${gridKey.replace("/grid.jpg", "/")}strip.jpg`;
+    await store.putObject(gridKey, JPEG_BYTES);
+    await store.putObject(stripKey, Uint8Array.from([0x01, 0x02, 0x03]));
+
+    const bytes = await resolveStoredPhotoBytes(store, gridKey, "strip");
+    expect(bytes).toEqual(Uint8Array.from([0x01, 0x02, 0x03]));
+  });
 });

@@ -1,9 +1,9 @@
 /** Named JPEG variants under a UserJerseyPhoto prefix (collector-visible). */
-export const COLLECTOR_PHOTO_VARIANTS = ["grid"] as const;
+export const COLLECTOR_PHOTO_VARIANTS = ["grid", "strip", "lightbox"] as const;
 export type CollectorPhotoVariant = (typeof COLLECTOR_PHOTO_VARIANTS)[number];
 
-/** Reserved for later slices — not served on collector GET in KIT-218. */
-export const RESERVED_PHOTO_VARIANTS = ["strip", "lightbox", "original"] as const;
+/** Stored but not served on collector GET. */
+export const RESERVED_PHOTO_VARIANTS = ["original"] as const;
 export type ReservedPhotoVariant = (typeof RESERVED_PHOTO_VARIANTS)[number];
 
 export type PhotoVariantQuery = CollectorPhotoVariant | ReservedPhotoVariant;
@@ -64,11 +64,34 @@ export function maxSavePhotoBytesForRole(role: string): number {
 }
 
 export function isCollectorPhotoVariant(value: string): value is CollectorPhotoVariant {
-  return value === "grid";
+  return value === "grid" || value === "strip" || value === "lightbox";
 }
 
 export function isReservedPhotoVariant(value: string): value is ReservedPhotoVariant {
-  return value === "strip" || value === "lightbox" || value === "original";
+  return value === "original";
+}
+
+/** Confirm strip 4:5 tile width (retina-friendly). */
+export const STRIP_VARIANT_WIDTH = 640;
+
+/** Lightbox long-edge caps — match device prepare. */
+export const LIGHTBOX_MAX_EDGE_UNIVERSAL = 1600;
+export const LIGHTBOX_MAX_EDGE_OTHER = 2400;
+
+export function lightboxMaxEdgeForRole(role: string): number {
+  return role === "other" ? LIGHTBOX_MAX_EDGE_OTHER : LIGHTBOX_MAX_EDGE_UNIVERSAL;
+}
+
+export function originalObjectKey(prefix: string): string {
+  return `${prefix}original`;
+}
+
+export function stripObjectKey(prefix: string): string {
+  return `${prefix}strip.jpg`;
+}
+
+export function lightboxObjectKey(prefix: string): string {
+  return `${prefix}lightbox.jpg`;
 }
 
 /** Keys to remove when a UserJerseyPhoto row is deleted (prefix + legacy). */

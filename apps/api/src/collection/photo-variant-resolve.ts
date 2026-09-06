@@ -5,7 +5,9 @@ import {
   isLegacyPhotoObjectKey,
   isReservedPhotoVariant,
   legacyPhotoObjectKeyFromPrefix,
+  lightboxObjectKey,
   photoPrefixFromStoredObjectKey,
+  stripObjectKey,
   variantObjectKey,
 } from "@kit/domain";
 import { ForbiddenException } from "@nestjs/common";
@@ -28,10 +30,23 @@ export async function resolveStoredPhotoBytes(
   const prefix = photoPrefixFromStoredObjectKey(storedObjectKey);
 
   if (variant && isCollectorPhotoVariant(variant) && prefix) {
-    const variantKey = variantObjectKey(prefix, variant);
+    const variantKey =
+      variant === "strip"
+        ? stripObjectKey(prefix)
+        : variant === "lightbox"
+          ? lightboxObjectKey(prefix)
+          : variantObjectKey(prefix, variant);
     const variantBytes = await objectStore.getObject(variantKey);
     if (variantBytes) {
       return variantBytes;
+    }
+
+    if (variant === "strip" || variant === "lightbox") {
+      const gridKey = variantObjectKey(prefix, "grid");
+      const gridBytes = await objectStore.getObject(gridKey);
+      if (gridBytes) {
+        return gridBytes;
+      }
     }
   }
 

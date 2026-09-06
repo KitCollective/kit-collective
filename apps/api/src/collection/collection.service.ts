@@ -44,6 +44,7 @@ import {
   collectionRespondBidResponseSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
+  collectionPhotoOriginalUploadSchema,
   collectionSendBidRequestSchema,
   collectionSendBidResponseSchema,
   collectionSendMessageRequestSchema,
@@ -74,6 +75,7 @@ import {
   KIT_TYPE_LABELS_DA,
   maxSavePhotoBytesForRole,
   photoObjectKeysForDeletion,
+  photoPrefixFromStoredObjectKey,
   validateJerseyPhotos,
 } from "@kit/domain";
 import {
@@ -93,6 +95,11 @@ import { VisionQueueService } from "../vision/vision-queue.service.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
+import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js";
+import {
+  derivativeKeysForPhoto,
+  storeGpsStrippedOriginal,
+} from "./photo-derivatives.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");
@@ -183,6 +190,7 @@ export class CollectionService {
     private readonly matchQueueService: MatchQueueService,
     private readonly shortcutsService: CollectionShortcutsService,
     private readonly moderationService: ModerationService,
+    private readonly photoDerivativeQueueService: PhotoDerivativeQueueService,
   ) {}
 
   static objectStoreFactory(): ObjectStoreAdapter {
@@ -2164,6 +2172,43 @@ export class CollectionService {
     return bytes;
   }
 
+  async uploadPhotoOriginal(userId: string, photoId: string, rawBody: unknown): Promise<void> {
+    const body = collectionPhotoOriginalUploadSchema.parse(rawBody);
+    const bytes = decodeBase64Photo(body.contentBase64);
+
+    const [row] = await this.db
+      .select({
+        objectKey: userJerseyPhoto.objectKey,
+        role: userJerseyPhoto.role,
+        jerseyUserId: userJersey.userId,
+        jerseyId: userJersey.id,
+      })
+      .from(userJerseyPhoto)
+      .innerJoin(userJersey, eq(userJerseyPhoto.userJerseyId, userJersey.id))
+      .where(eq(userJerseyPhoto.id, photoId))
+      .limit(1);
+
+    if (!row || row.jerseyUserId !== userId) {
+      throw new NotFoundException("Photo not found");
+    }
+
+    const prefix = photoPrefixFromStoredObjectKey(row.objectKey);
+    if (!prefix) {
+      throw new InternalServerErrorException("Invalid photo object key");
+    }
+
+    const keys = derivativeKeysForPhoto(userId, row.jerseyId, photoId);
+    await storeGpsStrippedOriginal(this.objectStore, keys.original, bytes);
+
+    this.photoDerivativeQueueService.enqueue(this.objectStore, {
+      userId,
+      jerseyId: row.jerseyId,
+      photoId,
+      role: row.role,
+      sourceObjectKey: keys.original,
+    });
+  }
+
   async getPhotoBytes(
     userId: string,
     photoId: string,
@@ -2537,6 +2582,14 @@ export class CollectionService {
         photoUrl: `/v1/collection/photos/${inserted.id}`,
         ocrStatus: inserted.ocrStatus,
         ...(inserted.label ? { label: inserted.label } : {}),
+      });
+
+      this.photoDerivativeQueueService.enqueue(this.objectStore, {
+        userId,
+        jerseyId,
+        photoId,
+        role: photo.role,
+        sourceObjectKey: objectKey,
       });
     }
 

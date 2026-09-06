@@ -1713,6 +1713,76 @@ describe("Collection /v1", () => {
     expect(response.statusCode).toBe(403);
   });
 
+  it("serves strip and lightbox variants after save without waiting on original upload", async () => {
+    const session = await registerSession(app, "strip-lightbox@example.com");
+    const fixture = await insertClubSeasonFixture();
+
+    const saveResponse = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(saveResponse.statusCode).toBe(201);
+    const saved = collectionSaveResponseSchema.parse(JSON.parse(saveResponse.body));
+    const photoId = saved.jersey.photos[0]?.id;
+
+    for (let i = 0; i < 8; i++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    const stripResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photoId}?variant=strip`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    const lightboxResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photoId}?variant=lightbox`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(stripResponse.statusCode).toBe(200);
+    expect(lightboxResponse.statusCode).toBe(200);
+    expect(stripResponse.headers["content-type"]).toContain("image/jpeg");
+    expect(lightboxResponse.headers["content-type"]).toContain("image/jpeg");
+    expect(lightboxResponse.rawPayload.length).toBeGreaterThanOrEqual(stripResponse.rawPayload.length);
+  });
+
+  it("accepts original upload on a separate PUT after save", async () => {
+    const session = await registerSession(app, "original-put@example.com");
+    const fixture = await insertClubSeasonFixture();
+    const jersey = await saveJerseyForUser(app, session, fixture);
+    const photoId = jersey.photos[0]?.id;
+
+    const uploadResponse = await app.inject({
+      method: "PUT",
+      url: `/v1/collection/photos/${photoId}/original`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: { contentBase64: JPEG_BASE64 },
+    });
+
+    expect(uploadResponse.statusCode).toBe(204);
+
+    const blockedResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/photos/${photoId}?variant=original`,
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(blockedResponse.statusCode).toBe(403);
+  });
+
   it("rejects oversized save uploads", async () => {
     const session = await registerSession(app, "grid-clamp@example.com");
     const fixture = await insertClubSeasonFixture();

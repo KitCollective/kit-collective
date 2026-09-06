@@ -11,6 +11,7 @@ import type {
   CaptureSessionState,
 } from "@/capture/captureSessionTypes";
 import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
+import { scheduleOriginalPhotoUploads } from "@/capture/uploadPhotoOriginal";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { markJerseySaved } from "@/session/addSession";
 
@@ -89,6 +90,18 @@ export async function saveConfirmJersey(input: {
       visionJobId: input.visionJobId ?? undefined,
       photos: photoPayload,
     });
+
+    scheduleOriginalPhotoUploads(
+      input.accessToken,
+      input.draft.photos
+        .filter((photo): photo is typeof photo & { role: PhotoRole } => photo.role !== null)
+        .map((photo, index) => ({
+          id: response.jersey.photos[index]?.id ?? "",
+          uri: photo.uri,
+          role: photo.role,
+        }))
+        .filter((entry) => entry.id.length > 0),
+    );
 
     const jobIdForLog = response.visionJobId ?? input.visionJobId;
     if (jobIdForLog) {
