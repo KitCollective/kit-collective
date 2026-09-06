@@ -83,7 +83,7 @@ export default function ConfirmScreen() {
     draft,
     isBulk,
     mutate,
-    onFirstSinglePhoto: (role, uri) => void vision.startVision(role, uri),
+    onFirstSinglePhoto: () => {},
   });
 
   useEffect(() => {

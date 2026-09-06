@@ -883,3 +883,56 @@ export function dismissPendingGrouping(state: CaptureSessionState): CaptureSessi
 export function sessionPhotoIds(state: CaptureSessionState): string[] {
   return Object.values(state.photoIdByUri ?? {});
 }
+
+export type IdentitySuggestionInput = {
+  clubId?: string;
+  clubLabel?: string;
+  seasonId?: string;
+  seasonLabel?: string;
+  type?: KitType;
+};
+
+export type IdentityFieldPreselect = {
+  club?: boolean;
+  season?: boolean;
+  type?: boolean;
+};
+
+export type IdentityManualEditMask = {
+  club?: boolean;
+  season?: boolean;
+  type?: boolean;
+};
+
+export function applyIdentitySuggestion(
+  state: CaptureSessionState,
+  draftId: string,
+  suggestions: IdentitySuggestionInput,
+  options: {
+    fieldPreselect: IdentityFieldPreselect;
+    manualEdits?: IdentityManualEditMask;
+  },
+): CaptureSessionState {
+  const manual = options.manualEdits ?? {};
+  let next = state;
+
+  if (
+    !manual.club &&
+    options.fieldPreselect.club &&
+    suggestions.clubId &&
+    suggestions.clubLabel
+  ) {
+    next = setDraftClub(next, draftId, suggestions.clubId, suggestions.clubLabel);
+  }
+
+  if (!manual.season && options.fieldPreselect.season && suggestions.seasonId) {
+    next = setDraftSeason(next, draftId, suggestions.seasonId);
+  }
+
+  if (!manual.type && options.fieldPreselect.type && suggestions.type) {
+    next = selectDraftKitType(next, draftId, suggestions.type);
+  }
+
+  return next;
+}
+

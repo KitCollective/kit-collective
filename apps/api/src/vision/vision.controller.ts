@@ -71,7 +71,10 @@ export class VisionController {
     @Body() rawBody: unknown,
   ): Promise<VisionSuggestResponse> {
     const body = visionSuggestRequestSchema.parse(rawBody);
-    const photoBytes = decodeBase64Photo(body.photo.contentBase64);
+    const identityPhotos = body.photos.map((photo) => ({
+      role: photo.role,
+      bytes: decodeBase64Photo(photo.contentBase64),
+    }));
     const jobId = await this.visionService.createJob(user.sub, { draftId: body.draftId });
 
     this.visionQueueService.enqueue({
@@ -79,7 +82,7 @@ export class VisionController {
       userId: user.sub,
       kind: "identity",
       draftId: body.draftId,
-      photoBytes,
+      identityPhotos,
     });
 
     return visionSuggestResponseSchema.parse({ jobId });
@@ -94,7 +97,10 @@ export class VisionController {
     this.unsignedVisionThrottleService.assertWithinCap(request);
 
     const body = visionSuggestRequestSchema.parse(rawBody);
-    const photoBytes = decodeBase64Photo(body.photo.contentBase64);
+    const identityPhotos = body.photos.map((photo) => ({
+      role: photo.role,
+      bytes: decodeBase64Photo(photo.contentBase64),
+    }));
     const userId = await this.anonymousVisionUserService.getUserId();
     const jobId = await this.visionService.createJob(userId, { draftId: body.draftId });
 
@@ -103,7 +109,7 @@ export class VisionController {
       userId,
       kind: "identity",
       draftId: body.draftId,
-      photoBytes,
+      identityPhotos,
     });
 
     return visionSuggestResponseSchema.parse({ jobId });
