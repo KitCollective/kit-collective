@@ -1,4 +1,3 @@
-import type { PhotoRole } from "@kit/domain";
 import { UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
