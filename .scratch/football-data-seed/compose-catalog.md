@@ -65,7 +65,7 @@ Steps 1–4 are Transfermarkt (Seed proxy / Decodo allowed). Step 5 is FKApi / f
 | `team_season` | One row per club × `2010/11` |
 | `player` + `player_club_season` | Squad with jersey `#` (+ position, DOB, nat, height, foot when on kader) for every club |
 | `player_photo` | Portrait bytes for rows that had a kader image (same rights as KitPhoto) |
-| `kit` | Match-category types per side (`home`, `away`, `third` when listed, `gk` for GK variants) — **`kit.club_id` set, `kit.national_team_id` null** |
+| `kit` | Match-category types per side (`home`, `away`, `third`, `special` when FKA lists it, `gk` for GK variants) — **`kit.club_id` set, `kit.national_team_id` null** |
 | `kit.sponsor_name` / colour hex | Populated when source exposes them (FCK Carlsberg + colours confirmed) |
 | `kit_photo` | ≥1 admin_only photo per kept kit type |
 
@@ -84,7 +84,7 @@ Minimum match kits operators expect after FK join for **2010/11** (per club that
 
 | Side | Types kept (proof) | Example (FCK TM `190`) |
 | --- | --- | --- |
-| Each Superliga club | `home`, `away`, + `third` / `gk` when FKA lists match-category rows | Home, Away, Third, GK variants — drop Training / CL duplicates per fk-field-catalog |
+| Each Superliga club | `home`, `away`, `third`, `special` (when FKA lists match-category rows), `gk` — drop Training / CL duplicates per fk-field-catalog | Home, Away, Third, **Special**, GK variants |
 
 Exact per-club counts are source-driven; completeness means **every club with TM squad rows has at least the match kits FKA exposes for `10-11`**, not a fixed integer across all 12 clubs.
 
@@ -137,7 +137,7 @@ After a complete Join workflow run, `GET /v1/catalog/peek` on the lane API shoul
 | --- | --- | --- |
 | Season heading | `2010/11` | `2010` (NT season label) |
 | Side rows | Each Superliga club name + **squad count > 0** | Denmark + squad count > 0 |
-| Kits under side | `home`, `away`, … each with **photo count ≥ 1** | Same for four match kits |
+| Kits under side | `home`, `away`, `third`, `special`, `gk`, … each with **photo count ≥ 1** | Same for four match kits |
 | Missing | `no kits` under a club with TM squad → **not complete** | Same |
 
 Peek does not prove hex colours or sponsor strings — Postgres / mapper tests do — but empty photo counts catch missing R2 writes.
@@ -176,7 +176,7 @@ Today’s proof grains are **partial compose** — KIT-146 adds the full walk + 
 
 | Today | Join workflow adds |
 | --- | --- |
-| `grain club-proof` → league season + **Club** rows only (no squads yet) | **Club season** for every club + FK pass |
+| `grain club-proof` → reads competition season page for club list, maps **Club** grain only (no `league` / `season` / squad rows) | **League season** + **Club season** for every club + FK pass |
 | `grain national-team-proof` → NT + NT season | FK pass + single Seed sentence entry |
 | Separate `seed-apify` walk / per-grain CLI | One module composing steps in catalog order |
 
