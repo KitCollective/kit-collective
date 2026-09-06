@@ -2,6 +2,7 @@ import { gridPhotoObjectKey } from "@kit/domain";
 import { describe, expect, it } from "vitest";
 import { createMemoryObjectStore } from "../dist/collection/object-store.js";
 import {
+  renderGridVariant,
   renderLightboxVariant,
   renderStripVariant,
   storeGpsStrippedOriginal,
@@ -41,13 +42,16 @@ describe("photo derivatives", () => {
 
   it("renders an uncropped lightbox larger than a center-cropped grid tile", async () => {
     const source = await createLandscapeJpeg(2400, 1800);
+    const grid = await renderGridVariant(source);
     const lightbox = await renderLightboxVariant(source, "front");
-    const strip = await renderStripVariant(source);
-    expect(lightbox.length).toBeGreaterThan(strip.length);
+    expect(lightbox.length).toBeGreaterThan(grid.length);
     const sharp = (await import("sharp")).default;
     const lightboxMeta = await sharp(Buffer.from(lightbox)).metadata();
     expect(lightboxMeta.width).toBe(1600);
     expect(lightboxMeta.height).toBe(1200);
+    const gridMeta = await sharp(Buffer.from(grid)).metadata();
+    expect(gridMeta.width).toBe(800);
+    expect(gridMeta.height).toBe(1000);
   });
 
   it("stores original without EXIF GPS metadata", async () => {
@@ -100,6 +104,7 @@ describe("photo derivatives", () => {
     });
 
     const prefix = gridKey.replace("/grid.jpg", "/");
+    expect(await store.objectExists(`${prefix}grid.jpg`)).toBe(true);
     expect(await store.objectExists(`${prefix}strip.jpg`)).toBe(true);
     expect(await store.objectExists(`${prefix}lightbox.jpg`)).toBe(true);
   });

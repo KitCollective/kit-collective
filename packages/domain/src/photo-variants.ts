@@ -74,6 +74,30 @@ export function isReservedPhotoVariant(value: string): value is ReservedPhotoVar
 /** Confirm strip 4:5 tile width (retina-friendly). */
 export const STRIP_VARIANT_WIDTH = 640;
 
+/** Center-crop rectangle for a 4:5 portrait tile. */
+export function centerCrop4x5Rect(width: number, height: number): {
+  originX: number;
+  originY: number;
+  width: number;
+  height: number;
+} {
+  const targetRatio = 4 / 5;
+  const sourceRatio = width / height;
+  let cropWidth = width;
+  let cropHeight = height;
+  if (sourceRatio > targetRatio) {
+    cropWidth = Math.round(height * targetRatio);
+  } else {
+    cropHeight = Math.round(width / targetRatio);
+  }
+  return {
+    originX: Math.max(0, Math.round((width - cropWidth) / 2)),
+    originY: Math.max(0, Math.round((height - cropHeight) / 2)),
+    width: cropWidth,
+    height: cropHeight,
+  };
+}
+
 /** Lightbox long-edge caps — match device prepare. */
 export const LIGHTBOX_MAX_EDGE_UNIVERSAL = 1600;
 export const LIGHTBOX_MAX_EDGE_OTHER = 2400;

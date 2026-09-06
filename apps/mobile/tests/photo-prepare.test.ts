@@ -1,4 +1,4 @@
-import { UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
+import { UNIVERSAL_PHOTO_ROLES, centerCrop4x5Rect, STRIP_VARIANT_WIDTH } from "@kit/domain";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clearDevicePhotoPrepareCacheForTests,
@@ -6,8 +6,8 @@ import {
   DISPLAY_MAX_EDGE_UNIVERSAL,
   GROUPING_THUMB_MAX_EDGE,
   maxEdgeForPrepare,
+  type PhotoManipulatorAction,
   type PhotoManipulatorAdapter,
-  type PhotoResizeAction,
   prepareDevicePhoto,
   readPreparedDevicePhotoBase64,
   resizeActionForMaxLongEdge,
@@ -37,13 +37,21 @@ function createFakeAdapter(
     },
     async manipulateAsync(
       uri: string,
-      actions: PhotoResizeAction[],
+      actions: PhotoManipulatorAction[],
       options: { compress: number; format: "jpeg"; includeBase64: boolean },
     ) {
       calls.push({ uri, actions, options });
-      const resize = actions[0]?.resize;
-      const width = resize?.width ?? info.width;
-      const height = resize?.height ?? info.height;
+      let width = info.width;
+      let height = info.height;
+      for (const action of actions) {
+        if ("crop" in action) {
+          width = action.crop.width;
+          height = action.crop.height;
+        } else if ("resize" in action) {
+          width = action.resize.width ?? width;
+          height = action.resize.height ?? height;
+        }
+      }
       return {
         uri: `${uri}.prepared.jpg`,
         width,
@@ -75,6 +83,10 @@ describe("maxEdgeForPrepare", () => {
 
   it("targets grouping thumbs at ≤384 px", () => {
     expect(maxEdgeForPrepare("groupingThumb", "front")).toBe(GROUPING_THUMB_MAX_EDGE);
+  });
+
+  it("targets strip width for Confirm hub tiles", () => {
+    expect(maxEdgeForPrepare("strip", "front")).toBe(STRIP_VARIANT_WIDTH);
   });
 });
 
@@ -152,6 +164,35 @@ describe("prepareDevicePhoto", () => {
     await prepareDevicePhoto("file:///photos/front.jpg", "front", "visionIdentity", adapter);
 
     expect(adapter.calls[0]?.actions).toEqual([{ resize: { width: VISION_IDENTITY_MAX_EDGE } }]);
+  });
+
+  it("center-crops and resizes for strip prepare", async () => {
+    const adapter = createFakeAdapter({ width: 1600, height: 1200 });
+    const prepared = await prepareDevicePhoto(
+      "file:///photos/front.jpg",
+      "front",
+      "strip",
+      adapter,
+      { includeBase64: false },
+    );
+
+    const crop = centerCrop4x5Rect(1600, 1200);
+    expect(adapter.calls[0]?.actions).toEqual([
+      { crop },
+      { resize: { width: STRIP_VARIANT_WIDTH, height: 800 } },
+    ]);
+    expect(prepared.base64).toBeUndefined();
+    expect(prepared.width).toBe(STRIP_VARIANT_WIDTH);
+  });
+
+  it("resizes without crop for lightbox prepare", async () => {
+    const adapter = createFakeAdapter({ width: 3200, height: 2400 });
+    await prepareDevicePhoto("file:///photos/front.jpg", "front", "lightbox", adapter, {
+      includeBase64: false,
+    });
+
+    expect(adapter.calls[0]?.actions).toEqual([{ resize: { width: DISPLAY_MAX_EDGE_UNIVERSAL } }]);
+    expect(adapter.calls[0]?.options.includeBase64).toBe(false);
   });
 });
 

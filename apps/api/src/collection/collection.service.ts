@@ -2171,7 +2171,6 @@ export class CollectionService {
 
   async uploadPhotoOriginal(userId: string, photoId: string, rawBody: unknown): Promise<void> {
     const body = collectionPhotoOriginalUploadSchema.parse(rawBody);
-    const bytes = decodeBase64Photo(body.contentBase64);
 
     const [row] = await this.db
       .select({
@@ -2188,6 +2187,8 @@ export class CollectionService {
     if (!row || row.jerseyUserId !== userId) {
       throw new NotFoundException("Photo not found");
     }
+
+    const bytes = decodeBase64Photo(body.contentBase64, maxSavePhotoBytesForRole(row.role));
 
     const prefix = photoPrefixFromStoredObjectKey(row.objectKey);
     if (!prefix) {

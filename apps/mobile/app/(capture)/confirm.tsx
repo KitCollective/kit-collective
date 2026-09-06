@@ -120,7 +120,6 @@ export default function ConfirmScreen() {
 
   const activeJerseyIndex = state?.drafts.findIndex((entry) => entry.id === draft.id) ?? 0;
   const activeTabLabel = `Trøje ${activeJerseyIndex + 1}`;
-  const lightboxUri = photos.lightboxRole ? photos.photoUris[photos.lightboxRole] : undefined;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -212,11 +211,11 @@ export default function ConfirmScreen() {
         onDismiss={handlePostSaveDismiss}
       />
 
-      {photos.lightboxRole !== null && lightboxUri ? (
+      {photos.lightboxRole !== null && photos.lightboxUri ? (
         <PhotoLightbox
           visible
           role={photos.lightboxRole}
-          uri={lightboxUri}
+          uri={photos.lightboxUri}
           onDismiss={photos.dismissLightbox}
           onReplace={photos.replaceLightboxPhoto}
           onDelete={photos.deleteLightboxPhoto}

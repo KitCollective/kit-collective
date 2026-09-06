@@ -83,6 +83,7 @@ export {
 } from "./photo-roles.js";
 
 export {
+  centerCrop4x5Rect,
   COLLECTOR_PHOTO_VARIANTS,
   type CollectorPhotoVariant,
   gridPhotoObjectKey,

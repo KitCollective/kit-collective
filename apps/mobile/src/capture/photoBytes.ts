@@ -5,6 +5,7 @@ import {
   captureQualityForRole,
   type PhotoPreparePurpose,
   readPreparedDevicePhotoBase64,
+  readPreparedDevicePhotoUri,
 } from "./photoPrepare";
 
 export async function readPhotoBase64(uri: string): Promise<string> {
@@ -27,6 +28,14 @@ export async function readPreparedPhotoBase64(
   purpose: PhotoPreparePurpose,
 ): Promise<string> {
   return readPreparedDevicePhotoBase64(uri, role, purpose, expoPhotoManipulatorAdapter);
+}
+
+export async function readPreparedPhotoUri(
+  uri: string,
+  role: PhotoRole,
+  purpose: PhotoPreparePurpose,
+): Promise<string> {
+  return readPreparedDevicePhotoUri(uri, role, purpose, expoPhotoManipulatorAdapter);
 }
 
 export type { PhotoPreparePurpose } from "./photoPrepare";

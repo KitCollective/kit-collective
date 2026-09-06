@@ -1,5 +1,6 @@
 import type { PhotoRole } from "@kit/domain";
 import {
+  centerCrop4x5Rect,
   lightboxMaxEdgeForRole,
   lightboxObjectKey,
   originalObjectKey,
@@ -66,25 +67,47 @@ export async function renderStripVariant(bytes: Uint8Array): Promise<Uint8Array>
     throw new Error("Cannot render strip variant without image dimensions");
   }
 
-  const targetRatio = STRIP_ASPECT_WIDTH / STRIP_ASPECT_HEIGHT;
-  const sourceRatio = width / height;
-  let cropWidth = width;
-  let cropHeight = height;
-  if (sourceRatio > targetRatio) {
-    cropWidth = Math.round(height * targetRatio);
-  } else {
-    cropHeight = Math.round(width / targetRatio);
-  }
-  const left = Math.max(0, Math.round((width - cropWidth) / 2));
-  const top = Math.max(0, Math.round((height - cropHeight) / 2));
+  const crop = centerCrop4x5Rect(width, height);
 
   const output = await input
-    .extract({ left, top, width: cropWidth, height: cropHeight })
+    .extract({
+      left: crop.originX,
+      top: crop.originY,
+      width: crop.width,
+      height: crop.height,
+    })
     .resize(
       STRIP_VARIANT_WIDTH,
       Math.round((STRIP_VARIANT_WIDTH * STRIP_ASPECT_HEIGHT) / STRIP_ASPECT_WIDTH),
     )
     .jpeg({ quality: 80, mozjpeg: true })
+    .toBuffer();
+
+  return Uint8Array.from(output);
+}
+
+/** 4:5 Samling grid tile — cropped smaller than uncropped lightbox. */
+export async function renderGridVariant(bytes: Uint8Array): Promise<Uint8Array> {
+  const input = sharp(Buffer.from(bytes)).rotate();
+  const metadata = await input.metadata();
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+  if (width === 0 || height === 0) {
+    throw new Error("Cannot render grid variant without image dimensions");
+  }
+
+  const crop = centerCrop4x5Rect(width, height);
+  const gridWidth = 800;
+
+  const output = await input
+    .extract({
+      left: crop.originX,
+      top: crop.originY,
+      width: crop.width,
+      height: crop.height,
+    })
+    .resize(gridWidth, Math.round((gridWidth * 5) / 4))
+    .jpeg({ quality: 78, mozjpeg: true })
     .toBuffer();
 
   return Uint8Array.from(output);
@@ -126,10 +149,12 @@ export async function writeStripAndLightboxVariants(
     return;
   }
   const keys = derivativeKeysForPhoto(job.userId, job.jerseyId, job.photoId);
-  const [stripBytes, lightboxBytes] = await Promise.all([
+  const [gridBytes, stripBytes, lightboxBytes] = await Promise.all([
+    renderGridVariant(bytes),
     renderStripVariant(bytes),
     renderLightboxVariant(bytes, job.role),
   ]);
+  await objectStore.putObject(keys.grid, gridBytes);
   await objectStore.putObject(keys.strip, stripBytes);
   await objectStore.putObject(keys.lightbox, lightboxBytes);
 }
