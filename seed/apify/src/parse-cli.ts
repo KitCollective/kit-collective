@@ -297,9 +297,7 @@ function parseJoinArgv(argv: string[]): ParsedJoinCli {
     };
   }
 
-  throw new Error(
-    "Expected join subcommand: sentence | club | national-team",
-  );
+  throw new Error("Expected join subcommand: sentence | club | national-team");
 }
 
 export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {

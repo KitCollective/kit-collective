@@ -1,15 +1,12 @@
-import { createDb, SEED_CREATE_DB_OPTIONS, type Db } from "@kit/db";
+import { createDb, type Db, SEED_CREATE_DB_OPTIONS } from "@kit/db";
 import { resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
 import type { PortraitStore } from "./map/index.js";
 import { resolvePortraitStoreFromEnv } from "./portrait-store.js";
-import {
-  isClubSeasonAlreadySeeded,
-  isNationalTeamSeasonAlreadySeeded,
-} from "./seeded.js";
-import type { Lane, MapResult } from "./types.js";
 import { runHierarchyGrain } from "./run.js";
+import { isClubSeasonAlreadySeeded, isNationalTeamSeasonAlreadySeeded } from "./seeded.js";
+import type { Lane, MapResult } from "./types.js";
 
 export type FkJoinRunResult = {
   kitsUpserted: number;

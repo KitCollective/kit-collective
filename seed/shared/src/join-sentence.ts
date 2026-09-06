@@ -1,10 +1,8 @@
-import { resolveSeedLane, type ResolvedSeedLane } from "./lane.js";
-import { resolveNationalTeam } from "./national-teams.js";
 import type { JoinClubScope, JoinNationalTeamScope, JoinScope } from "./join-scope.js";
+import { type ResolvedSeedLane, resolveSeedLane } from "./lane.js";
+import { resolveNationalTeam } from "./national-teams.js";
 
-export type ParseJoinSentenceResult =
-  | { ok: true; scope: JoinScope }
-  | { ok: false; error: string };
+export type ParseJoinSentenceResult = { ok: true; scope: JoinScope } | { ok: false; error: string };
 
 const CLUB_SEASON_PATTERN = /\b20?10\s*\/\s*11\b|\b2010-11\b/i;
 const NT_SEASON_PATTERN = /\bworld\s*cup\s*20?10\b|\bwc\s*20?10\b|\b20?10\b/i;
@@ -119,7 +117,7 @@ export function formatJoinSentenceUsage(command: string): string {
     "  Lane defaults to development; staging only when named. Production is rejected.",
     "",
     "  Example sentence:",
-    '    Seed Superliga 2010/11 including every club, squads, and kits into development.',
-    '    Seed Denmark men World Cup 2010 including squad and kits into development.',
+    "    Seed Superliga 2010/11 including every club, squads, and kits into development.",
+    "    Seed Denmark men World Cup 2010 including squad and kits into development.",
   ].join("\n");
 }

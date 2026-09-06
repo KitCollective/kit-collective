@@ -13,7 +13,11 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createKaderFetchAdapter } from "../src/fetch/kader-fetch-adapter.js";
-import { runClubJoinWorkflow, runNationalTeamJoinWorkflow, type FkJoinRunner } from "../src/join-workflow.js";
+import {
+  type FkJoinRunner,
+  runClubJoinWorkflow,
+  runNationalTeamJoinWorkflow,
+} from "../src/join-workflow.js";
 import { parseCliArgs } from "../src/run.js";
 import { TM_SYSTEM } from "../src/types.js";
 import { resolveSeedApifyTestDatabaseUrl } from "./test-database-url.js";
@@ -132,7 +136,6 @@ describe("Join workflow — Club path Superliga 2010/11", () => {
       await pool.end();
     }
   });
-
 });
 
 describe("Join workflow — Club path idempotency", () => {
@@ -210,9 +213,7 @@ describe("Join workflow — NationalTeam path Denmark WC 2010", () => {
       const ntRows = await db
         .select({ value: externalId.value })
         .from(externalId)
-        .where(
-          and(eq(externalId.system, TM_SYSTEM), eq(externalId.entityType, "national_team")),
-        );
+        .where(and(eq(externalId.system, TM_SYSTEM), eq(externalId.entityType, "national_team")));
       expect(ntRows.map((row) => row.value)).toEqual(["3436"]);
 
       const squadRows = await db
@@ -230,7 +231,6 @@ describe("Join workflow — NationalTeam path Denmark WC 2010", () => {
       await pool.end();
     }
   });
-
 });
 
 describe("Join workflow — NationalTeam path idempotency", () => {
