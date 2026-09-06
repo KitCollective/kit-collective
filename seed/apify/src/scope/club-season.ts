@@ -1,5 +1,6 @@
 import { type CompetitionSeedScope, resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import { labelToStartYear } from "../fetch/season-label.js";
+import { rejectNationalTeamApifyScope } from "../reject-national-team-scope.js";
 import type { NormalizedFacts } from "../types.js";
 
 function seasonRefToStartYear(ref: string): number {
@@ -72,6 +73,10 @@ export function isPairInSeedScope(scope: SeedScope, seasonLabel: string): boolea
   if (scope.kind === "club") {
     const resolved = resolveSeasonRef(scope.competition, scope.season);
     return seasonLabel === resolved;
+  }
+
+  if (scope.kind === "national_team") {
+    rejectNationalTeamApifyScope();
   }
 
   return seasonLabelInCompetitionScope(scope, seasonLabel);

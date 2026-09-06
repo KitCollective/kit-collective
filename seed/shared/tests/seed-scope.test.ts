@@ -65,6 +65,19 @@ describe("parseSeedScopeArgv", () => {
     }
   });
 
+  it("parses national-team + season scope", () => {
+    const result = parseSeedScopeArgv(["national-team", "dk-men", "2010", "development"]);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.parsed.scope).toEqual({
+        kind: "national_team",
+        nationalTeamRef: "dk-men",
+        season: "2010",
+      });
+      expect(result.parsed.lane).toBe("development");
+    }
+  });
+
   it("rejects production lane", () => {
     const result = parseSeedScopeArgv(["dk1", "0001", "today", "production"]);
     expect(result.ok).toBe(false);

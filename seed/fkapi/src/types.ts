@@ -1,7 +1,10 @@
 /** Raw kit payload from the Football Kit Archive fetch adapter. */
 export type FkRawKit = {
   id: string;
-  clubTransfermarktId: string;
+  /** Club kits join via Transfermarkt club ExternalId. Mutually exclusive with nationalTeamFkApiId. */
+  clubTransfermarktId?: string;
+  /** NationalTeam kits join via FKA team id → fkapi national_team ExternalId. Never a Club row. */
+  nationalTeamFkApiId?: string;
   seasonTransfermarktId: string;
   seasonLabel: string;
   type: KitType;
@@ -33,3 +36,15 @@ export type SeedRunResult = {
   kitsUpserted: number;
   photosWritten: number;
 };
+
+export function isNationalTeamKit(
+  kit: FkRawKit,
+): kit is FkRawKit & { nationalTeamFkApiId: string; clubTransfermarktId?: undefined } {
+  return Boolean(kit.nationalTeamFkApiId) && !kit.clubTransfermarktId;
+}
+
+export function isClubKit(
+  kit: FkRawKit,
+): kit is FkRawKit & { clubTransfermarktId: string; nationalTeamFkApiId?: undefined } {
+  return Boolean(kit.clubTransfermarktId) && !kit.nationalTeamFkApiId;
+}

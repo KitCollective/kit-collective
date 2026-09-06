@@ -68,6 +68,32 @@ describe("buildSeedCliInvocation", () => {
     });
   });
 
+  it("wraps national-team + season scope for fkapi", () => {
+    expect(
+      buildSeedCliInvocation("fkapi", {
+        scope: {
+          kind: "national_team",
+          nationalTeamRef: "denmark",
+          season: "2010",
+        },
+        lane: "development",
+      }),
+    ).toEqual({
+      command: "pnpm",
+      argv: [
+        "--filter",
+        "@kit/seed-fkapi",
+        "exec",
+        "node",
+        "dist/cli.js",
+        "national-team",
+        "denmark",
+        "2010",
+        "development",
+      ],
+    });
+  });
+
   it("wraps the fkapi CLI", () => {
     const { argv } = buildSeedCliInvocation("fkapi", {
       scope: {

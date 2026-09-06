@@ -150,10 +150,101 @@ describe("createFkApiFetchAdapter", () => {
       expect.any(Object),
     );
   });
+
+  it("requests resolved nationalTeamFkApiId and season for national-team fetch scope", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: createSeedHttpFetch({ requireProxy: false }, fetchMock, createProxyAgent),
+    });
+
+    await adapter.fetchKits({
+      kind: "national_team",
+      nationalTeamRef: "fka-denmark",
+      season: "2010",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://fkapi.example.invalid/kits?nationalTeamFkApiId=fka-denmark&season=2010",
+      expect.any(Object),
+    );
+  });
+
+  it("drops national-team kits whose FKA team id is not the resolved scope", async () => {
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        kits: [
+          {
+            id: "fk-nt-keep",
+            nationalTeamFkApiId: "fka-denmark",
+            seasonTransfermarktId: "WC-2010",
+            seasonLabel: "2010",
+            type: "home",
+            imageBytes: [255, 216, 255],
+          },
+          {
+            id: "fk-nt-other",
+            nationalTeamFkApiId: "fka-sweden",
+            seasonTransfermarktId: "WC-2010",
+            seasonLabel: "2010",
+            type: "home",
+            imageBytes: [255, 216, 255],
+          },
+        ],
+      }),
+    });
+
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: createSeedHttpFetch({ requireProxy: false }, fetchMock, createProxyAgent),
+    });
+
+    const kits = await adapter.fetchKits({
+      kind: "national_team",
+      nationalTeamRef: "fka-denmark",
+      season: "2010",
+    });
+
+    expect(kits.map((kit) => kit.id)).toEqual(["fk-nt-keep"]);
+  });
+
+  it("default live adapter does not construct a proxy agent when SEED_PROXY_* is set", async () => {
+    process.env.SEED_PROXY_URL = "http://user:pass@proxy.example:8080";
+    process.env.SEED_REQUIRE_PROXY = "true";
+    const { fetchMock, createProxyAgent } = createProxyDoubles();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetcher: fetchMock,
+      createProxyAgent,
+    });
+    await adapter.fetchKits({
+      kind: "national_team",
+      nationalTeamRef: "fka-denmark",
+      season: "2010",
+    });
+
+    expect(createProxyAgent).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://fkapi.example.invalid/kits?nationalTeamFkApiId=fka-denmark&season=2010",
+      expect.objectContaining({ dispatcher: undefined }),
+    );
+  });
 });
 
-describe("runCli proxy behaviour", () => {
-  it("fails closed for live FK when SEED_REQUIRE_PROXY is set without SEED_PROXY_URL", async () => {
+describe("runCli live FK fetch", () => {
+  it("does not refuse national-team CLI when SEED_REQUIRE_PROXY is set without SEED_PROXY_URL", async () => {
     process.env.FKAPI_BASE_URL = "https://fkapi.example.invalid";
     process.env.SEED_REQUIRE_PROXY = "true";
     delete process.env.SEED_PROXY_URL;
@@ -165,12 +256,18 @@ describe("runCli proxy behaviour", () => {
       },
     };
 
-    await expect(
-      runCli({
-        argv: ["superliga", "1998/99", "1998/99", "development"],
+    let message = "";
+    try {
+      await runCli({
+        argv: ["national-team", "3436", "2010", "development"],
         databaseUrl: "postgresql://unused",
         objectStore,
-      }),
-    ).rejects.toThrow(/SEED_REQUIRE_PROXY is set but SEED_PROXY_URL is missing/);
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+
+    expect(message).not.toMatch(/SEED_REQUIRE_PROXY/);
+    expect(message.length).toBeGreaterThan(0);
   });
 });

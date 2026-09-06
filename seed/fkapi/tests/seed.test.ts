@@ -1,18 +1,23 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { parseCliArgs } from "../src/cli-args.js";
-import { createFixtureFetchAdapter } from "../src/fetch.js";
+import { createFixtureFetchAdapter, createFkApiFetchAdapter } from "../src/fetch.js";
 import { runFkSeed } from "../src/mapper.js";
 import { normalizeRawKit } from "../src/normalize.js";
 import { runCli } from "../src/run.js";
 import type { FkFetchAdapter, ObjectStoreAdapter } from "../src/types.js";
 import { EXTERNAL_SYSTEM_FKAPI } from "../src/types.js";
 import {
+  allocateNationalTeamTestFixtureScope,
   allocateTestFixtureScope,
   createScopedFixtureFetchAdapter,
+  createScopedNationalTeamFixtureFetchAdapter,
   seedApifyPrerequisites,
+  seedNationalTeamPrerequisites,
+  seedNationalTeamTransfermarktSeasonOnly,
+  seedNationalTeamWithoutSeason,
 } from "./fixture-scope.js";
 import { resolveSeedFkapiTestDatabaseUrl } from "./test-database-url.js";
 import { resetTestDatabase } from "./test-db.js";
@@ -65,6 +70,18 @@ describe("FK seed CLI args", () => {
     }
   });
 
+  it("parses national-team + season scope", () => {
+    const parsed = parseCliArgs(["national-team", "3436", "2010", "development"]);
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.parsed.scope).toEqual({
+        kind: "national_team",
+        nationalTeamRef: "3436",
+        season: "2010",
+      });
+    }
+  });
+
   it("rejects lane production", () => {
     const parsed = parseCliArgs(["superliga", "0001", "today", "production"]);
     expect(parsed.ok).toBe(false);
@@ -107,6 +124,29 @@ describe("normalize", () => {
       sponsorName: "Carlsberg",
       primaryColorHex: "FFFFFF",
       secondaryColorHex: "000000",
+    });
+  });
+
+  it("normalizes NationalTeam kits via FKA team id without a club Transfermarkt id", () => {
+    const result = normalizeRawKit({
+      id: "fk-nt-1",
+      nationalTeamFkApiId: "fka-denmark",
+      seasonTransfermarktId: "WC-2010",
+      seasonLabel: "2010",
+      type: "home",
+      manufacturerName: "adidas",
+      primaryColorHex: "C8102E",
+      secondaryColorHex: "FFFFFF",
+    });
+    expect(result).toEqual({
+      id: "fk-nt-1",
+      nationalTeamFkApiId: "fka-denmark",
+      seasonTransfermarktId: "WC-2010",
+      seasonLabel: "2010",
+      type: "home",
+      manufacturerName: "adidas",
+      primaryColorHex: "C8102E",
+      secondaryColorHex: "FFFFFF",
     });
   });
 });
@@ -314,7 +354,7 @@ describe("FK seed mapper", () => {
     );
 
     expect(secondKitIds.rows).toEqual(firstKitIds.rows);
-    expect(secondCount.rows[0]!.count).toBe(firstCount.rows[0]!.count);
+    expect(secondCount.rows[0]?.count).toBe(firstCount.rows[0]?.count);
   });
 
   it("fetches kits for a club + season scope without searching the competition range", async () => {
@@ -352,12 +392,12 @@ describe("FK seed mapper", () => {
     );
     const clubRow = await pool.query<{ id: string }>(
       `INSERT INTO club (country_id, kind) VALUES ($1, 'club') RETURNING id`,
-      [countryRow.rows[0]!.id],
+      [countryRow.rows[0]?.id],
     );
     await pool.query(
       `INSERT INTO external_id (entity_type, entity_id, system, value)
        VALUES ('club', $1, 'transfermarkt', $2)`,
-      [clubRow.rows[0]!.id, scope.clubTransfermarktId],
+      [clubRow.rows[0]?.id, scope.clubTransfermarktId],
     );
 
     const objectStore = createMemoryObjectStore();
@@ -391,6 +431,188 @@ describe("FK seed mapper", () => {
         },
       }),
     ).rejects.toThrow(/Missing Club row/);
+  });
+
+  it("refuses national-team scope when NationalTeam or Season rows are missing", async () => {
+    const scope = allocateNationalTeamTestFixtureScope();
+    const objectStore = createMemoryObjectStore();
+    await expect(
+      runFkSeed({
+        databaseUrl: TEST_DATABASE_URL,
+        fetchAdapter: createScopedNationalTeamFixtureFetchAdapter(scope),
+        objectStore,
+        scope: {
+          kind: "national_team",
+          nationalTeamRef: scope.nationalTeamTransfermarktId,
+          season: scope.seasonLabel,
+        },
+      }),
+    ).rejects.toThrow(/Missing NationalTeam row/);
+    expect(objectStore.objects.size).toBe(0);
+    const kitCount = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM kit WHERE national_team_id IS NOT NULL`,
+    );
+    expect(kitCount.rows[0]?.count).toBe("0");
+  });
+
+  it("refuses national-team scope when Season is missing for an existing NationalTeam", async () => {
+    const scope = allocateNationalTeamTestFixtureScope();
+    await seedNationalTeamWithoutSeason(pool, scope);
+    const objectStore = createMemoryObjectStore();
+    await expect(
+      runFkSeed({
+        databaseUrl: TEST_DATABASE_URL,
+        fetchAdapter: createScopedNationalTeamFixtureFetchAdapter(scope),
+        objectStore,
+        scope: {
+          kind: "national_team",
+          nationalTeamRef: scope.nationalTeamTransfermarktId,
+          season: scope.seasonLabel,
+        },
+      }),
+    ).rejects.toThrow(/Missing Season row/);
+    expect(objectStore.objects.size).toBe(0);
+    const kitCount = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM kit WHERE national_team_id IS NOT NULL`,
+    );
+    expect(kitCount.rows[0]?.count).toBe("0");
+  });
+
+  it("writes NationalTeam kits hanging off nationalTeamId with admin_only archive photos", async () => {
+    const scope = allocateNationalTeamTestFixtureScope();
+    const { nationalTeamId, seasonId } = await seedNationalTeamPrerequisites(pool, scope);
+    const objectStore = createMemoryObjectStore();
+
+    const result = await runFkSeed({
+      databaseUrl: TEST_DATABASE_URL,
+      fetchAdapter: createScopedNationalTeamFixtureFetchAdapter(scope),
+      objectStore,
+      scope: {
+        kind: "national_team",
+        nationalTeamRef: scope.nationalTeamTransfermarktId,
+        season: scope.seasonLabel,
+      },
+    });
+
+    expect(result.kitsUpserted).toBe(3);
+    expect(result.photosWritten).toBe(3);
+
+    const kits = await pool.query<{
+      id: string;
+      club_id: string | null;
+      national_team_id: string | null;
+      season_id: string;
+      type: string;
+      manufacturer_id: string | null;
+      sponsor_name: string | null;
+      primary_color_hex: string | null;
+      secondary_color_hex: string | null;
+    }>(
+      `SELECT id, club_id, national_team_id, season_id, type, manufacturer_id, sponsor_name,
+              primary_color_hex, secondary_color_hex
+       FROM kit WHERE national_team_id IS NOT NULL ORDER BY type`,
+    );
+
+    expect(kits.rows).toHaveLength(3);
+    for (const row of kits.rows) {
+      expect(row.national_team_id).toBe(nationalTeamId);
+      expect(row.club_id).toBeNull();
+      expect(row.season_id).toBe(seasonId);
+    }
+
+    const home = kits.rows.find((row) => row.type === "home");
+    const away = kits.rows.find((row) => row.type === "away");
+    const gk = kits.rows.find((row) => row.type === "gk");
+    expect(home?.manufacturer_id).toBeTruthy();
+    expect(away?.manufacturer_id).toBe(home?.manufacturer_id);
+    expect(gk?.manufacturer_id).toBe(home?.manufacturer_id);
+    expect(home?.sponsor_name).toBeNull();
+    expect(home?.primary_color_hex).toBe("C8102E");
+    expect(home?.secondary_color_hex).toBe("FFFFFF");
+    expect(away?.primary_color_hex).toBe("FFFFFF");
+    expect(gk?.primary_color_hex).toBe("000000");
+
+    const photos = await pool.query<{ rights: string; visibility: string }>(
+      `SELECT rights, visibility FROM kit_photo
+       WHERE kit_id = ANY($1::uuid[])`,
+      [kits.rows.map((row) => row.id)],
+    );
+    expect(photos.rows).toHaveLength(3);
+    for (const photo of photos.rows) {
+      expect(photo.rights).toBe("unresolved");
+      expect(photo.visibility).toBe("admin_only");
+    }
+    expect(objectStore.objects.size).toBe(3);
+  });
+
+  it("links catalog FKA team id when fkapi external_id is missing", async () => {
+    const seasonLabel = `2010-catalog-${Date.now()}`;
+    const { nationalTeamId } = await seedNationalTeamTransfermarktSeasonOnly(pool, {
+      transfermarktId: "3436",
+      seasonLabel,
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: fetchMock,
+    });
+
+    await runFkSeed({
+      databaseUrl: TEST_DATABASE_URL,
+      fetchAdapter: adapter,
+      objectStore: createMemoryObjectStore(),
+      scope: {
+        kind: "national_team",
+        nationalTeamRef: "3436",
+        season: seasonLabel,
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://fkapi.example.invalid/kits?nationalTeamFkApiId=denmark-kits&season=${encodeURIComponent(seasonLabel)}`,
+      expect.any(Object),
+    );
+
+    const fkRow = await pool.query<{ value: string }>(
+      `SELECT value FROM external_id
+       WHERE entity_type = 'national_team' AND entity_id = $1 AND system = $2`,
+      [nationalTeamId, EXTERNAL_SYSTEM_FKAPI],
+    );
+    expect(fkRow.rows[0]?.value).toBe("denmark-kits");
+  });
+
+  it("resolves Transfermarkt nationalTeamRef to fkapi external_id before live fetch", async () => {
+    const scope = allocateNationalTeamTestFixtureScope();
+    await seedNationalTeamPrerequisites(pool, scope);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ kits: [] }),
+    });
+    const adapter = createFkApiFetchAdapter({
+      baseUrl: "https://fkapi.example.invalid",
+      httpFetch: fetchMock,
+    });
+
+    const result = await runFkSeed({
+      databaseUrl: TEST_DATABASE_URL,
+      fetchAdapter: adapter,
+      objectStore: createMemoryObjectStore(),
+      scope: {
+        kind: "national_team",
+        nationalTeamRef: scope.nationalTeamTransfermarktId,
+        season: scope.seasonLabel,
+      },
+    });
+
+    expect(result).toEqual({ kitsUpserted: 0, photosWritten: 0 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `https://fkapi.example.invalid/kits?nationalTeamFkApiId=${encodeURIComponent(scope.nationalTeamFkApiId)}&season=${encodeURIComponent(scope.seasonLabel)}`,
+      expect.any(Object),
+    );
   });
 
   it("does not call Football Kit Archive when using injected fetch adapter", async () => {

@@ -5,15 +5,21 @@ import { normalizeTransfermarktClubId, resolveSeasonRef, type SeedScope } from "
 import { normalizeRawKit } from "./normalize.js";
 import {
   createSeedHttpFetch,
-  resolveSeedProxyConfig,
   type SeedHttpFetch,
-  type SeedProxyConfig,
+  type SeedHttpFetcher,
+  type SeedHttpProxyAgentFactory,
 } from "./proxy-config.js";
 import type { FkFetchAdapter, FkRawKit } from "./types.js";
+import { isClubKit, isNationalTeamKit } from "./types.js";
 
 const FIXTURE_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "../fixtures/superliga-kits.json",
+);
+
+const NT_FIXTURE_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../fixtures/denmark-national-kits.json",
 );
 
 type FixtureFile = {
@@ -22,7 +28,18 @@ type FixtureFile = {
 
 function kitMatchesScope(kit: FkRawKit, scope: SeedScope): boolean {
   if (scope.kind === "competition") {
-    return true;
+    return isClubKit(kit);
+  }
+
+  if (scope.kind === "national_team") {
+    if (!isNationalTeamKit(kit)) {
+      return false;
+    }
+    return kit.nationalTeamFkApiId === scope.nationalTeamRef && kit.seasonLabel === scope.season;
+  }
+
+  if (!isClubKit(kit)) {
+    return false;
   }
 
   const clubTmId = normalizeTransfermarktClubId(scope.clubExternalId);
@@ -34,7 +51,8 @@ function kitMatchesScope(kit: FkRawKit, scope: SeedScope): boolean {
 }
 
 async function loadFixtureKits(scope: SeedScope): Promise<FkRawKit[]> {
-  const raw = await readFile(FIXTURE_PATH, "utf8");
+  const fixturePath = scope.kind === "national_team" ? NT_FIXTURE_PATH : FIXTURE_PATH;
+  const raw = await readFile(fixturePath, "utf8");
   // SAFETY: the fixture is committed in this repository and normalizeRawKit rejects
   // any record that does not parse into an FkRawKit.
   const parsed = JSON.parse(raw) as FixtureFile;
@@ -57,11 +75,26 @@ export function createFixtureFetchAdapter(): FkFetchAdapter {
 }
 
 type FkApiFetchAdapterOptions = {
-  proxyConfig?: SeedProxyConfig;
   httpFetch?: SeedHttpFetch;
+  httpFetcher?: SeedHttpFetcher;
+  createProxyAgent?: SeedHttpProxyAgentFactory;
   baseUrl?: string;
   token?: string;
 };
+
+/** Direct FKApi HTTP — never Seed proxy / Decodo. */
+function createFkDirectHttpFetch(
+  fetchImpl?: SeedHttpFetcher,
+  createProxyAgent?: SeedHttpProxyAgentFactory,
+): SeedHttpFetch {
+  if (fetchImpl && createProxyAgent) {
+    return createSeedHttpFetch({ requireProxy: false }, fetchImpl, createProxyAgent);
+  }
+  if (fetchImpl) {
+    return createSeedHttpFetch({ requireProxy: false }, fetchImpl);
+  }
+  return createSeedHttpFetch({ requireProxy: false });
+}
 
 function buildKitsUrl(baseUrl: string, scope: SeedScope): URL {
   const url = new URL("/kits", baseUrl);
@@ -69,6 +102,12 @@ function buildKitsUrl(baseUrl: string, scope: SeedScope): URL {
   if (scope.kind === "club") {
     url.searchParams.set("clubTransfermarktId", normalizeTransfermarktClubId(scope.clubExternalId));
     url.searchParams.set("season", resolveSeasonRef(scope.competition, scope.season));
+    return url;
+  }
+
+  if (scope.kind === "national_team") {
+    url.searchParams.set("nationalTeamFkApiId", scope.nationalTeamRef);
+    url.searchParams.set("season", scope.season);
     return url;
   }
 
@@ -80,8 +119,8 @@ function buildKitsUrl(baseUrl: string, scope: SeedScope): URL {
 
 /** Production fetch talks to Football Kit Archive via FKApi — not used in tests. */
 export function createFkApiFetchAdapter(options: FkApiFetchAdapterOptions = {}): FkFetchAdapter {
-  const proxyConfig = options.proxyConfig ?? resolveSeedProxyConfig();
-  const httpFetch = options.httpFetch ?? createSeedHttpFetch(proxyConfig);
+  const httpFetch =
+    options.httpFetch ?? createFkDirectHttpFetch(options.httpFetcher, options.createProxyAgent);
   const baseUrl = options.baseUrl ?? process.env.FKAPI_BASE_URL ?? "https://fkapi.example.invalid";
   const token = options.token ?? process.env.FKAPI_TOKEN;
 

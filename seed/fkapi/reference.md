@@ -57,7 +57,7 @@ Fixture shape today: `seed/fkapi/fixtures/superliga-kits.json` (`id`, `clubTrans
 | **Stamdata now** | same as club kit: normalized type, manufacturer, season, archive bytes, Kit colours, Kit sponsor when present |
 | **Later leverage** | label, design |
 | **Drop** | branding logos/URLs; training/anthem/track for proof |
-| **Gap** | Current mapper (`seed/fkapi/src/mapper.ts`) resolves TM **club** ExternalId only — NationalTeam kit path is catalog-accepted, not implemented |
+| **Gap** | None for grain — NationalTeam kit path joins FKA team id → `external_id` (`fkapi`, `national_team`) → `kit.national_team_id` with `club_id` null |
 
 **Proof example:** Denmark 2010 — FKA lists Home (`9857`, Red/White), Away (`9858`, White/Red), GK Home (`60206`, Black/Yellow/Red), GK Away (`60205`, Green/White); Season `2010` (calendar WC year); Brand `adidas`; **no Sponsor row** on match kits (Training lists Arla — dropped type).
 

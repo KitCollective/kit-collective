@@ -72,6 +72,9 @@ jobs:
       - name: Check FK seed test isolation
         run: pnpm check:seed-fkapi-tests
 
+      - name: Test FK seed test isolation ratchet logic
+        run: node --test scripts/tests/check-seed-fkapi-test-isolation.test.mjs
+
       - name: Check seed development proof scripts
         run: pnpm check:seed-development-proof-scripts
 
