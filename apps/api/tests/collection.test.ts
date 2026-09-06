@@ -1757,7 +1757,9 @@ describe("Collection /v1", () => {
     expect(lightboxResponse.statusCode).toBe(200);
     expect(stripResponse.headers["content-type"]).toContain("image/jpeg");
     expect(lightboxResponse.headers["content-type"]).toContain("image/jpeg");
-    expect(lightboxResponse.rawPayload.length).toBeGreaterThanOrEqual(stripResponse.rawPayload.length);
+    expect(lightboxResponse.rawPayload.length).toBeGreaterThanOrEqual(
+      stripResponse.rawPayload.length,
+    );
   });
 
   it("accepts original upload on a separate PUT after save", async () => {

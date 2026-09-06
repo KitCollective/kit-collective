@@ -78,7 +78,10 @@ describe("photo derivatives", () => {
 
     const stored = await store.getObject(originalKey);
     expect(stored).not.toBeNull();
-    const meta = await sharp(Buffer.from(stored!)).metadata();
+    if (!stored) {
+      throw new Error("expected stored original bytes");
+    }
+    const meta = await sharp(Buffer.from(stored)).metadata();
     expect(meta.exif).toBeUndefined();
   });
 
@@ -122,6 +125,7 @@ describe("photo derivatives", () => {
     const lightbox = await resolveStoredPhotoBytes(store, gridKey, "lightbox");
     expect(strip).not.toEqual(source);
     expect(lightbox).not.toEqual(source);
-    expect(lightbox!.length).toBeGreaterThan(strip!.length);
+    expect(strip?.length).toBeGreaterThan(0);
+    expect(lightbox?.length).toBeGreaterThan(strip?.length ?? 0);
   });
 });

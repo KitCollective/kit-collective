@@ -110,10 +110,7 @@ export async function deleteUserJersey(accessToken: string, jerseyId: string): P
   }
 }
 
-export function resolvePhotoUrl(
-  photoUrl: string,
-  variant?: CollectionPhotoVariantQuery,
-): string {
+export function resolvePhotoUrl(photoUrl: string, variant?: CollectionPhotoVariantQuery): string {
   const base = photoUrl.startsWith("http") ? photoUrl : `${getApiBaseUrl()}${photoUrl}`;
   if (!variant) {
     return base;
