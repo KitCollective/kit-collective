@@ -81,12 +81,39 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
   };
 }
 
+function createPhotoId(): string {
+  return createId();
+}
+
+function photoIdForUri(state: CaptureSessionState, uri: string): string {
+  if (!state.photoIdByUri) {
+    state.photoIdByUri = photoIdsForUris(state.orderedUris);
+  }
+  if (!state.photoIdByUri[uri]) {
+    state.photoIdByUri[uri] = createPhotoId();
+  }
+  return state.photoIdByUri[uri];
+}
+
+function photoIdsForUris(uris: string[]): Record<string, string> {
+  return Object.fromEntries(uris.map((uri) => [uri, createPhotoId()]));
+}
+
+function withPhotoId(
+  uri: string,
+  role: PhotoRole | null,
+  source: PhotoSource,
+  photoId?: string,
+): CaptureSessionPhoto {
+  return { photoId: photoId ?? createPhotoId(), uri, role, source };
+}
+
 export function assignPhotosFillOrder(uris: string[], source: PhotoSource): CaptureSessionPhoto[] {
   const capped = uris.slice(0, MAX_USER_JERSEY_PHOTOS);
   return capped.map((uri, index) => {
     const role: PhotoRole =
       index < UNIVERSAL_PHOTO_ROLES.length ? UNIVERSAL_PHOTO_ROLES[index]! : "other";
-    return { uri, role, source };
+    return withPhotoId(uri, role, source);
   });
 }
 
@@ -98,7 +125,7 @@ export function assignPhotosFillOrderPreservingSource(
   return capped.map((photo, index) => {
     const role: PhotoRole =
       index < UNIVERSAL_PHOTO_ROLES.length ? UNIVERSAL_PHOTO_ROLES[index]! : "other";
-    return { uri: photo.uri, role, source: photo.source };
+    return withPhotoId(photo.uri, role, photo.source, photo.photoId);
   });
 }
 
@@ -149,6 +176,7 @@ export function createCaptureSession(
     branch,
     orderedUris: [...orderedUris],
     unboundUris: branch === "bulk" ? [...orderedUris] : [],
+    photoIdByUri: photoIdsForUris(orderedUris),
     drafts: [draft],
     activeDraftId: draftId,
     store: options?.store,
@@ -180,6 +208,9 @@ export function createCaptureSessionFromPhotos(
     branch,
     orderedUris: [...orderedUris],
     unboundUris: branch === "bulk" ? [...orderedUris] : [],
+    photoIdByUri: Object.fromEntries(
+      photos.map((photo) => [photo.uri, photo.photoId ?? createPhotoId()]),
+    ),
     drafts: [draft],
     activeDraftId: draftId,
     store: options?.store,
@@ -201,11 +232,15 @@ export function bindPhoto(
   }
 
   const nextUnbound = state.unboundUris.filter((entry) => entry !== uri);
+  const photoId = photoIdForUri(state, uri);
   return updateDraft({ ...state, unboundUris: nextUnbound }, draftId, (draft) => {
     const photos =
       role === undefined
-        ? [...draft.photos, { uri, role: null, source }]
-        : [...draft.photos.filter((photo) => photo.role !== role), { uri, role, source }];
+        ? [...draft.photos, withPhotoId(uri, null, source, photoId)]
+        : [
+            ...draft.photos.filter((photo) => photo.role !== role),
+            withPhotoId(uri, role, source, photoId),
+          ];
     return { ...draft, photos };
   });
 }
@@ -237,6 +272,10 @@ export function appendUnboundPhotos(
     ...state,
     orderedUris: [...state.orderedUris, ...nextUris],
     unboundUris: [...state.unboundUris, ...nextUris],
+    photoIdByUri: {
+      ...state.photoIdByUri,
+      ...photoIdsForUris(nextUris),
+    },
   });
 }
 
@@ -498,13 +537,16 @@ export function upsertDraftPhoto(
       }
       return {
         ...draft,
-        photos: [...draft.photos, { uri, role, source }],
+        photos: [...draft.photos, withPhotoId(uri, role, source, photoIdForUri(state, uri))],
       };
     }
 
     return {
       ...draft,
-      photos: [...draft.photos.filter((photo) => photo.role !== role), { uri, role, source }],
+      photos: [
+        ...draft.photos.filter((photo) => photo.role !== role),
+        withPhotoId(uri, role, source, photoIdForUri(state, uri)),
+      ],
     };
   });
 }
@@ -616,7 +658,7 @@ export function appendUnassignedCameraShotToSession(
 
   const next = updateDraft(state, state.activeDraftId, (current) => ({
     ...current,
-    photos: [...current.photos, { uri, role: null, source }],
+    photos: [...current.photos, withPhotoId(uri, null, source, photoIdForUri(state, uri))],
   }));
   const updatedDraft = getActiveDraft(next);
   return {
@@ -690,6 +732,7 @@ export function createEditCaptureSession(
     branch: "single",
     orderedUris: [],
     unboundUris: [],
+    photoIdByUri: {},
     drafts: [draft],
     activeDraftId: draftId,
     store,
@@ -715,5 +758,128 @@ export function createMemoryCaptureSessionStore(): CaptureSessionStore {
 }
 
 export function reloadCaptureSession(store: CaptureSessionStore): CaptureSessionState | null {
-  return store.load();
+  const loaded = store.load();
+  if (!loaded) {
+    return null;
+  }
+
+  return {
+    ...loaded,
+    photoIdByUri: loaded.photoIdByUri ?? photoIdsForUris(loaded.orderedUris),
+  };
+}
+
+export function shouldStartGroupingJob(state: CaptureSessionState): boolean {
+  if (state.branch !== "bulk") {
+    return false;
+  }
+
+  return state.unboundUris.length === state.orderedUris.length && state.unboundUris.length >= 2;
+}
+
+export function uriForPhotoId(state: CaptureSessionState, photoId: string): string | null {
+  const entry = Object.entries(state.photoIdByUri ?? {}).find(([, id]) => id === photoId);
+  return entry?.[0] ?? null;
+}
+
+function ensureDraftForGroupIndex(
+  state: CaptureSessionState,
+  groupIndex: number,
+): CaptureSessionState {
+  let next = state;
+  while (next.drafts.length <= groupIndex) {
+    next = addJerseyDraft(next);
+  }
+  return next;
+}
+
+function bindPhotoIdsToDraft(
+  state: CaptureSessionState,
+  draftId: string,
+  photoIds: string[],
+): CaptureSessionState {
+  let next = state;
+  for (const photoId of photoIds) {
+    const uri = uriForPhotoId(next, photoId);
+    if (!uri || !next.unboundUris.includes(uri)) {
+      continue;
+    }
+    const draft = getDraft(next, draftId);
+    if (!canAddPhotoToDraft(draft)) {
+      break;
+    }
+    next = bindPhoto(next, uri, draftId, undefined);
+  }
+  return next;
+}
+
+export function applyGroupingSuggestion(
+  state: CaptureSessionState,
+  grouping: { groups: Array<{ photoIds: string[] }> },
+  options: { preselect: boolean },
+): CaptureSessionState {
+  if (grouping.groups.length === 0) {
+    return state;
+  }
+
+  if (!options.preselect) {
+    if (grouping.groups.length > 1) {
+      return withState(state, {
+        ...state,
+        pendingGrouping: grouping,
+        groupingDesignGap: true,
+      });
+    }
+
+    return withState(state, {
+      ...state,
+      pendingGrouping: grouping,
+      groupingDesignGap: false,
+    });
+  }
+
+  let next = withState(state, {
+    ...state,
+    pendingGrouping: undefined,
+    groupingDesignGap: false,
+  });
+
+  grouping.groups.forEach((group, index) => {
+    next = ensureDraftForGroupIndex(next, index);
+    const draftId = next.drafts[index]?.id;
+    if (!draftId) {
+      return;
+    }
+    next = bindPhotoIdsToDraft(next, draftId, group.photoIds);
+  });
+
+  if (next.drafts[0]) {
+    next = setActiveDraft(next, next.drafts[0].id);
+  }
+
+  return next;
+}
+
+export function acceptPendingGrouping(state: CaptureSessionState): CaptureSessionState {
+  if (!state.pendingGrouping) {
+    return state;
+  }
+
+  return applyGroupingSuggestion(state, state.pendingGrouping, { preselect: true });
+}
+
+export function dismissPendingGrouping(state: CaptureSessionState): CaptureSessionState {
+  if (!state.pendingGrouping) {
+    return state;
+  }
+
+  return withState(state, {
+    ...state,
+    pendingGrouping: undefined,
+    groupingDesignGap: false,
+  });
+}
+
+export function sessionPhotoIds(state: CaptureSessionState): string[] {
+  return Object.values(state.photoIdByUri ?? {});
 }

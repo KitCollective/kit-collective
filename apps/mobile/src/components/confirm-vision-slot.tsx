@@ -10,6 +10,7 @@ import { space } from "@/theme/tokens";
 type ConfirmVisionSlotProps = {
   bannerState: ConfirmVisionBannerState;
   suggestion: VisionJobResponse | null;
+  groupingMessage?: string | null;
   suggestionOpacity: Animated.Value;
   onApplySuggestion: () => void;
   onDismissSuggestion: () => void;
@@ -19,10 +20,28 @@ type ConfirmVisionSlotProps = {
 export function ConfirmVisionSlot({
   bannerState,
   suggestion,
+  groupingMessage,
   suggestionOpacity,
   onApplySuggestion,
   onDismissSuggestion,
 }: ConfirmVisionSlotProps) {
+  if (groupingMessage) {
+    return (
+      <Animated.View style={{ opacity: suggestionOpacity }}>
+        <Banner
+          tone="info"
+          message={`Forslag: ${groupingMessage}`}
+          action={
+            <View style={styles.actions}>
+              <Button label="Brug" variant="tertiary" onPress={() => void onApplySuggestion()} />
+              <Button label="Luk" variant="tertiary" onPress={onDismissSuggestion} />
+            </View>
+          }
+        />
+      </Animated.View>
+    );
+  }
+
   if (!suggestion?.suggestions) {
     return <ConfirmVisionBanner state={bannerState} />;
   }

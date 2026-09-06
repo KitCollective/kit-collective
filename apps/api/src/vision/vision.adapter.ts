@@ -18,8 +18,22 @@ export type VisionInferenceResult = {
   model?: string;
 };
 
+export type VisionGroupingPhotoInput = {
+  photoId: string;
+  bytes: Uint8Array;
+};
+
+export type VisionGroupingInferenceResult = {
+  groups: Array<{ photoIds: string[]; confidence: number }>;
+  latencyMs?: number;
+  model?: string;
+};
+
 export type VisionAdapter = {
   infer(photoBytes: Uint8Array): Promise<VisionInferenceResult | null>;
+  inferGrouping?(
+    photos: VisionGroupingPhotoInput[],
+  ): Promise<VisionGroupingInferenceResult | null>;
 };
 
 export const VISION_ADAPTER = Symbol("VISION_ADAPTER");

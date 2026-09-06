@@ -268,8 +268,10 @@ export {
   UNSIGNED_VISION_SUGGEST_CAP,
   VISION_CONFIDENCE_PRESELECT,
   VISION_CONFIDENCE_SUGGEST,
+  VISION_JOB_KINDS,
   VISION_JOB_STATUSES,
   VISION_USER_ACTIONS,
+  type VisionJobKind,
   type VisionJobResponse,
   type VisionJobStatus,
   type VisionLogRequest,
@@ -285,6 +287,16 @@ export {
   visionSuggestRequestSchema,
   visionSuggestResponseSchema,
 } from "./collection/vision.js";
+export {
+  type VisionGroupingGroup,
+  type VisionGroupingPhoto,
+  type VisionGroupingSuggestRequest,
+  type VisionGroupingSuggestions,
+  visionGroupingGroupSchema,
+  visionGroupingPhotoSchema,
+  visionGroupingSuggestRequestSchema,
+  visionGroupingSuggestionsSchema,
+} from "./collection/vision-grouping.js";
 export {
   resolveVisionSaveAction,
   type VisionSaveActionInput,

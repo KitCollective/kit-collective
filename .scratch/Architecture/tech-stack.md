@@ -125,8 +125,8 @@ Photo entity (MVP): `role`, `source`, dimensions, URIs. Vacant OCR envelope (`oc
 | Fallback | OpenAI `gpt-4.1-nano` |
 | Do not use | `gpt-4o-mini` for images (tile pricing), reasoning models on the hot path |
 | Timeout | 8–12 s, fail open |
-| Output | Structured JSON → map to catalog UUIDs in Nest |
-| Auto-fill | ≥70% **and** catalog hit → pre-select on confirm. 50–69% → show as suggestion. Else ignore |
+| Output | Structured JSON → map to catalog UUIDs in Nest. Grouping jobs return photoId groups; identity jobs return club/season/type |
+| Auto-fill | ≥70% **and** catalog hit → pre-select on confirm. 50–69% → show as suggestion. Else ignore. Grouping ≥70% pre-binds via bind reducers; Vision never auto-commits Photo roles |
 | Logging | `vision_raw`, confidences, latency, model, user action (accepted / edited / ignored). **No embedding / pgvector** |
 | Cost (order of mag.) | ~$0.0004 / 1600² image; ~$0.0009 / 3-image jersey |
 

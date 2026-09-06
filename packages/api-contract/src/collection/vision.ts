@@ -1,5 +1,10 @@
 import { KIT_TYPES, PHOTO_ROLES } from "@kit/domain";
 import { z } from "zod";
+import {
+  VISION_JOB_KINDS,
+  visionGroupingSuggestionsSchema,
+  type VisionJobKind,
+} from "./vision-grouping.js";
 
 /** Vision job lifecycle on VisionLog.status. */
 export const VISION_JOB_STATUSES = ["pending", "ready", "failed", "noop"] as const;
@@ -51,11 +56,15 @@ export const visionJobResponseSchema = z
   .object({
     jobId: z.string().uuid(),
     status: z.enum(VISION_JOB_STATUSES),
+    kind: z.enum(VISION_JOB_KINDS).optional(),
     /** When true (≥70% confidence), confirm may pre-select fields. When false (50–69%), show only. */
     preselect: z.boolean().optional(),
     suggestions: visionSuggestionsSchema.optional(),
+    grouping: visionGroupingSuggestionsSchema.optional(),
   })
   .strict();
+
+export { VISION_JOB_KINDS, type VisionJobKind };
 
 export const visionLogRequestSchema = z
   .object({

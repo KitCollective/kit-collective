@@ -15,9 +15,10 @@ describe("photo source tracking", () => {
     const draft = getActiveDraft(session);
 
     expect(draft.photos).toEqual([
-      { uri: URI_FRONT, role: "front", source: "gallery" },
-      { uri: URI_BACK, role: "back", source: "gallery" },
+      expect.objectContaining({ uri: URI_FRONT, role: "front", source: "gallery" }),
+      expect.objectContaining({ uri: URI_BACK, role: "back", source: "gallery" }),
     ]);
+    expect(draft.photos.every((photo) => (photo.photoId?.length ?? 0) > 0)).toBe(true);
   });
 
   it("tags camera sessions with camera source", () => {

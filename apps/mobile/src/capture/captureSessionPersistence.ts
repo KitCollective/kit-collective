@@ -84,7 +84,9 @@ export function persistCameraShotInSession(
 
   if (!sessionId) {
     const newSessionId = createSessionId();
-    persistCaptureSessionFromPhotos([{ uri: photo.uri, role: null, source }], {
+    persistCaptureSessionFromPhotos(
+      [{ photoId: createSessionId(), uri: photo.uri, role: null, source }],
+      {
       sessionId: newSessionId,
       prefilledClub: options?.prefilledClub,
       store: options?.store,
