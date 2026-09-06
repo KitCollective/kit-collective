@@ -4,8 +4,10 @@ import {
   applyFillOrderToActiveDraft,
   createCaptureSessionFromPhotos,
   getActiveDraft,
+  reloadCaptureSession,
   setDraftClub,
 } from "./captureSession";
+import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
 import {
   clearActiveCameraCaptureSessionId,
   getActiveCameraCaptureSessionId,
@@ -68,12 +70,6 @@ function persistCaptureSessionFromPhotos(
 }
 
 export function loadPersistedCaptureSession(sessionId: string): CaptureSessionState | null {
-  const { reloadCaptureSession } = require("./captureSession") as {
-    reloadCaptureSession: (store: CaptureSessionStore) => CaptureSessionState | null;
-  };
-  const { createSqliteCaptureSessionStore } = require("./captureSessionSqliteStore") as {
-    createSqliteCaptureSessionStore: (id: string) => CaptureSessionStore;
-  };
   return reloadCaptureSession(createSqliteCaptureSessionStore(sessionId));
 }
 

@@ -251,22 +251,24 @@ export class GeminiVisionAdapter implements VisionAdapter {
       }
 
       const parsed: unknown = JSON.parse(text);
-      if (
-        !parsed ||
-        typeof parsed !== "object" ||
-        !Array.isArray((parsed as { groups?: unknown }).groups)
-      ) {
+      if (!isRecord(parsed) || !Array.isArray(parsed.groups)) {
         return null;
       }
 
-      const groups = (
-        parsed as { groups: Array<{ photoIds?: string[]; confidence?: number }> }
-      ).groups
-        .map((group) => ({
-          photoIds: (group.photoIds ?? []).filter((id) => typeof id === "string"),
-          confidence: Math.round((group.confidence ?? 0) * 100),
-        }))
-        .filter((group) => group.photoIds.length > 0);
+      const groups = parsed.groups
+        .map((group) => {
+          if (!isRecord(group) || !Array.isArray(group.photoIds)) {
+            return null;
+          }
+          const photoIds = group.photoIds.filter((id): id is string => typeof id === "string");
+          if (photoIds.length === 0) {
+            return null;
+          }
+          const confidence =
+            typeof group.confidence === "number" ? Math.round(group.confidence * 100) : 0;
+          return { photoIds, confidence };
+        })
+        .filter((group): group is { photoIds: string[]; confidence: number } => group !== null);
 
       if (groups.length === 0) {
         return null;

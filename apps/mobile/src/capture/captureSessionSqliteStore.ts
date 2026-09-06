@@ -10,6 +10,7 @@ import {
   type PhotoSource,
 } from "@kit/domain";
 import { draftDb } from "@/drafts/db";
+import { reloadCaptureSession } from "./captureSession";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -50,6 +51,10 @@ type PhotoRow = {
   photo_id: string | null;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function readPhotoIdByUri(value: string | null | undefined): Record<string, string> {
   if (!value) {
     return {};
@@ -78,14 +83,28 @@ function readPendingGrouping(
   }
   try {
     const parsed: unknown = JSON.parse(value);
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      !Array.isArray((parsed as { groups?: unknown }).groups)
-    ) {
+    if (!isRecord(parsed) || !Array.isArray(parsed.groups)) {
       return undefined;
     }
-    return parsed as CaptureSessionState["pendingGrouping"];
+
+    const groups = parsed.groups
+      .map((entry) => {
+        if (!isRecord(entry) || !Array.isArray(entry.photoIds)) {
+          return null;
+        }
+        const photoIds = entry.photoIds.filter((id): id is string => typeof id === "string");
+        if (photoIds.length === 0) {
+          return null;
+        }
+        return { photoIds };
+      })
+      .filter((group): group is { photoIds: string[] } => group !== null);
+
+    if (groups.length === 0) {
+      return undefined;
+    }
+
+    return { groups };
   } catch {
     return undefined;
   }
@@ -308,7 +327,9 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
       const photoIdByUri = {
         ...readPhotoIdByUri(sessionRow.photo_id_by_uri_json),
         ...Object.fromEntries(
-          unboundRows.filter((row) => row.photo_id).map((row) => [row.uri, row.photo_id as string]),
+          unboundRows
+            .filter((row): row is { uri: string; photo_id: string } => typeof row.photo_id === "string")
+            .map((row) => [row.uri, row.photo_id]),
         ),
       };
 
@@ -334,8 +355,5 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
 }
 
 export function reloadSqliteCaptureSession(sessionId: string): CaptureSessionState | null {
-  const { reloadCaptureSession } = require("./captureSession") as {
-    reloadCaptureSession: (store: CaptureSessionStore) => CaptureSessionState | null;
-  };
   return reloadCaptureSession(createSqliteCaptureSessionStore(sessionId));
 }
