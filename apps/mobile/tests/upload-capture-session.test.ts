@@ -76,8 +76,8 @@ describe("runUploadCapture", () => {
 describe("startUploadCaptureWhenPresented", () => {
   // Holder objects avoid TS narrowing a `let x = null` (assigned only inside a callback)
   // to `never` at the call site.
-  function presentHolder() {
-    return { run: null as (() => void) | null };
+  function presentHolder(): { run: (() => void) | null } {
+    return { run: null };
   }
 
   it("does not invoke the picker until the presented signal fires", async () => {
@@ -158,7 +158,7 @@ describe("startUploadCaptureWhenPresented", () => {
 
   it("suppresses a late result that resolves after unmount", async () => {
     const present = presentHolder();
-    const pick = { resolve: null as ((result: UploadCaptureResult) => void) | null };
+    const pick: { resolve: ((result: UploadCaptureResult) => void) | null } = { resolve: null };
     const onResult = vi.fn();
 
     const cleanup = startUploadCaptureWhenPresented({

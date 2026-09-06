@@ -68,7 +68,7 @@ function DangerToast({ text1, props, hide }: ToastConfigParams<DangerToastProps>
 
 /** Toast layouts for custom types. Mount on the root `<Toast config={toastConfig} />`. */
 export const toastConfig: ToastConfig = {
-  error: (params) => <DangerToast {...(params as ToastConfigParams<DangerToastProps>)} />,
+  error: (params) => <DangerToast {...params} />,
 };
 
 const styles = StyleSheet.create({

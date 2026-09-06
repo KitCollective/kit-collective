@@ -5,13 +5,12 @@ type PushArg = { pathname: string; params?: Record<string, string> };
 
 function fakeRouter() {
   const pushes: PushArg[] = [];
-  // Only `push` is exercised by startCaptureFromSource; cast keeps the fake minimal.
+  // SAFETY: startCaptureFromSource only calls router.push; the fake omits unused router methods.
   const router = {
     push: (arg: PushArg) => {
       pushes.push(arg);
     },
-    // biome-ignore lint/suspicious/noExplicitAny: minimal router fake for a unit test.
-  } as any;
+  } as Parameters<typeof startCaptureFromSource>[1]["router"];
   return { router, pushes };
 }
 

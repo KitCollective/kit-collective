@@ -13,6 +13,7 @@ const packageJsonPath = join(__dirname, "../package.json");
 
 describe("standard toast library (react-native-toast-message)", () => {
   it("is a workspace dependency of apps/mobile", () => {
+    // SAFETY: package.json is committed JSON; the assertion only reads dependency names.
     const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
       dependencies?: Record<string, string>;
     };
