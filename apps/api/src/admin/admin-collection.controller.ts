@@ -110,8 +110,8 @@ export class AdminCollectionController {
   @Get(":userId/jerseys/:jerseyId/photos/:photoId")
   async getCollectorPhoto(
     @Param() params: Record<string, string>,
-    @Query("variant") variantRaw?: string,
     @Res() reply: FastifyReply,
+    @Query("variant") variantRaw?: string,
   ) {
     const parsed = adminCollectorPhotoParamsSchema.safeParse({
       userId: params.userId,

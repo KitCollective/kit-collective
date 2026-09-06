@@ -50,8 +50,8 @@ export class CollectionController {
   @Get("collection/showcase/photos/:photoId")
   async getShowcasePhoto(
     @Param("photoId") photoId: string,
-    @Query("variant") variantRaw?: string,
     @Res() reply: FastifyReply,
+    @Query("variant") variantRaw?: string,
   ) {
     const variant = collectionPhotoVariantQuerySchema.safeParse(variantRaw);
     if (!variant.success) {
@@ -408,8 +408,8 @@ export class CollectionController {
   async getPhoto(
     @CurrentUser() user: JwtPayload,
     @Param("photoId") photoId: string,
-    @Query("variant") variantRaw?: string,
     @Res() reply: FastifyReply,
+    @Query("variant") variantRaw?: string,
   ) {
     const variant = collectionPhotoVariantQuerySchema.safeParse(variantRaw);
     if (!variant.success) {
