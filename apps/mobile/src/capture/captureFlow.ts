@@ -8,8 +8,8 @@ import {
 } from "./captureSessionActivePointer";
 import type { PrefilledClub } from "./captureSessionPersistence";
 import {
-  loadPersistedCaptureSession,
   finalizeShootFirstSession,
+  loadPersistedCaptureSession,
   persistCameraShotInSession,
   replacePersistedCapturePhotos,
   resolveResumableCameraSession,
