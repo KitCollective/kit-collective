@@ -36,7 +36,9 @@ export function photoPrefixFromStoredObjectKey(objectKey: string): string | null
     return match ? `${match[1]}/` : null;
   }
 
-  const namedVariantMatch = objectKey.match(/^(user\/[^/]+\/[^/]+\/[^/]+)\/(?:grid|strip|lightbox)\.jpg$/);
+  const namedVariantMatch = objectKey.match(
+    /^(user\/[^/]+\/[^/]+\/[^/]+)\/(?:grid|strip|lightbox)\.jpg$/,
+  );
   if (namedVariantMatch) {
     return `${namedVariantMatch[1]}/`;
   }

@@ -111,7 +111,7 @@ export class AdminCollectionController {
   async getCollectorPhoto(
     @Param() params: Record<string, string>,
     @Query("variant") variantRaw?: string,
-    @Res() reply?: FastifyReply,
+    @Res() reply: FastifyReply,
   ) {
     const parsed = adminCollectorPhotoParamsSchema.safeParse({
       userId: params.userId,
@@ -131,7 +131,7 @@ export class AdminCollectionController {
       parsed.data.photoId,
       variant.data,
     );
-    return reply!.type("image/jpeg").send(Buffer.from(bytes));
+    return reply.type("image/jpeg").send(Buffer.from(bytes));
   }
 
   @Delete(":userId/jerseys/:jerseyId")

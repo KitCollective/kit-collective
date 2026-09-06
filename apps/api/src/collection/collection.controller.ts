@@ -51,16 +51,16 @@ export class CollectionController {
   async getShowcasePhoto(
     @Param("photoId") photoId: string,
     @Query("variant") variantRaw?: string,
-    @Res() reply?: FastifyReply,
+    @Res() reply: FastifyReply,
   ) {
     const variant = collectionPhotoVariantQuerySchema.safeParse(variantRaw);
     if (!variant.success) {
       throw new BadRequestException("Invalid photo variant");
     }
     const bytes = await this.collectionService.getShowcasePhotoBytes(photoId, variant.data);
-    reply!.header("Content-Type", "image/jpeg");
-    reply!.header("Cache-Control", "public, max-age=3600");
-    return reply!.send(Buffer.from(bytes));
+    reply.header("Content-Type", "image/jpeg");
+    reply.header("Cache-Control", "public, max-age=3600");
+    return reply.send(Buffer.from(bytes));
   }
 
   @Get("collection/jerseys")
@@ -409,15 +409,15 @@ export class CollectionController {
     @CurrentUser() user: JwtPayload,
     @Param("photoId") photoId: string,
     @Query("variant") variantRaw?: string,
-    @Res() reply?: FastifyReply,
+    @Res() reply: FastifyReply,
   ) {
     const variant = collectionPhotoVariantQuerySchema.safeParse(variantRaw);
     if (!variant.success) {
       throw new BadRequestException("Invalid photo variant");
     }
     const bytes = await this.collectionService.getPhotoBytes(user.sub, photoId, variant.data);
-    reply!.header("Content-Type", "image/jpeg");
-    reply!.header("Cache-Control", "private, max-age=3600");
-    return reply!.send(Buffer.from(bytes));
+    reply.header("Content-Type", "image/jpeg");
+    reply.header("Cache-Control", "private, max-age=3600");
+    return reply.send(Buffer.from(bytes));
   }
 }

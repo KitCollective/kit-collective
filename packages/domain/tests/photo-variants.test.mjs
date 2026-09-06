@@ -32,10 +32,7 @@ describe("photo-variants", () => {
     const legacy = legacyPhotoObjectKey(userId, jerseyId, photoId);
     assert.equal(isLegacyPhotoObjectKey(legacy), true);
     assert.equal(photoPrefixFromStoredObjectKey(legacy), `user/${userId}/${jerseyId}/${photoId}/`);
-    assert.equal(
-      legacyPhotoObjectKeyFromPrefix(`user/${userId}/${jerseyId}/${photoId}/`),
-      legacy,
-    );
+    assert.equal(legacyPhotoObjectKeyFromPrefix(`user/${userId}/${jerseyId}/${photoId}/`), legacy);
   });
 
   it("derives prefix from grid key", () => {
