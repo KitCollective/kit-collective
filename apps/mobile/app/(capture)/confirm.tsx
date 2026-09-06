@@ -714,7 +714,9 @@ export default function ConfirmScreen() {
   const universalPhotoUris = Object.fromEntries(
     UNIVERSAL_PHOTO_ROLES.map((role) => [role, photoUriForRole(draft, role) ?? undefined]),
   ) as Record<(typeof UNIVERSAL_PHOTO_ROLES)[number], string | undefined>;
-  const otherPhotos = draft.photos.filter((photo) => photo.role === "other");
+  const otherPhotos = draft.photos.filter(
+    (photo): photo is typeof photo & { role: "other" } => photo.role === "other",
+  );
   const photoList = [
     ...UNIVERSAL_PHOTO_ROLES.filter((role) => universalPhotoUris[role]),
     ...otherPhotos.map((photo) => photo.uri),
@@ -769,6 +771,7 @@ export default function ConfirmScreen() {
             {otherPhotos.map((photo) => (
               <PhotoSlot
                 key={photo.uri}
+                role={photo.role}
                 uri={photo.uri}
                 caption={photo.label}
                 onPress={() => {
