@@ -63,6 +63,7 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
     clubId: null,
     clubLabel: null,
     seasonId: null,
+    seasonLabel: null,
     kitType: null,
     size: null,
     condition: null,
@@ -70,6 +71,12 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
     sizeSelected: false,
     conditionSelected: false,
     notes: "",
+    playerName: "",
+    playerId: null,
+    playerNumber: "",
+    badgeEnabled: false,
+    badgeId: null,
+    badgeLabel: null,
     photos: [],
   };
 }
@@ -203,6 +210,36 @@ export function bindPhoto(
   });
 }
 
+export function discardUnboundPhoto(state: CaptureSessionState, uri: string): CaptureSessionState {
+  if (!state.unboundUris.includes(uri)) {
+    throw new Error("Photo is not unbound");
+  }
+
+  return withState(state, {
+    ...state,
+    orderedUris: state.orderedUris.filter((entry) => entry !== uri),
+    unboundUris: state.unboundUris.filter((entry) => entry !== uri),
+  });
+}
+
+export function appendUnboundPhotos(
+  state: CaptureSessionState,
+  uris: string[],
+): CaptureSessionState {
+  const nextUris = uris.filter(
+    (uri) => !state.orderedUris.includes(uri) && !state.unboundUris.includes(uri),
+  );
+  if (nextUris.length === 0) {
+    return state;
+  }
+
+  return withState(state, {
+    ...state,
+    orderedUris: [...state.orderedUris, ...nextUris],
+    unboundUris: [...state.unboundUris, ...nextUris],
+  });
+}
+
 export function unbindPhoto(state: CaptureSessionState, uri: string): CaptureSessionState {
   const owningDraft = state.drafts.find((draft) => draft.photos.some((photo) => photo.uri === uri));
   if (!owningDraft) {
@@ -308,23 +345,43 @@ export function setDraftClub(
   clubId: string,
   clubLabel?: string | null,
 ): CaptureSessionState {
-  return updateDraft(state, draftId, (draft) => ({
-    ...draft,
-    clubId,
-    clubLabel: clubLabel ?? draft.clubLabel,
-    seasonId: draft.clubId === clubId ? draft.seasonId : null,
-  }));
+  return updateDraft(state, draftId, (draft) => {
+    const clubChanged = draft.clubId !== clubId;
+    return {
+      ...draft,
+      clubId,
+      clubLabel: clubLabel ?? draft.clubLabel,
+      seasonId: clubChanged ? null : draft.seasonId,
+      seasonLabel: clubChanged ? null : draft.seasonLabel,
+      playerId: clubChanged ? null : draft.playerId,
+      playerName: clubChanged ? "" : draft.playerName,
+      playerNumber: clubChanged ? "" : draft.playerNumber,
+      badgeEnabled: clubChanged ? false : draft.badgeEnabled,
+      badgeId: clubChanged ? null : draft.badgeId,
+      badgeLabel: clubChanged ? null : draft.badgeLabel,
+    };
+  });
 }
 
 export function setDraftSeason(
   state: CaptureSessionState,
   draftId: string,
   seasonId: string,
+  seasonLabel?: string | null,
 ): CaptureSessionState {
-  return updateDraft(state, draftId, (draft) => ({
-    ...draft,
-    seasonId,
-  }));
+  return updateDraft(state, draftId, (draft) => {
+    const seasonChanged = draft.seasonId !== seasonId;
+    return {
+      ...draft,
+      seasonId,
+      seasonLabel: seasonLabel ?? draft.seasonLabel,
+      playerId: seasonChanged ? null : draft.playerId,
+      playerName: seasonChanged ? "" : draft.playerName,
+      playerNumber: seasonChanged ? "" : draft.playerNumber,
+      badgeId: seasonChanged ? null : draft.badgeId,
+      badgeLabel: seasonChanged ? null : draft.badgeLabel,
+    };
+  });
 }
 
 export function selectDraftKitType(
@@ -371,6 +428,56 @@ export function setDraftNotes(
   return updateDraft(state, draftId, (draft) => ({
     ...draft,
     notes,
+  }));
+}
+
+export function setDraftPlayerName(
+  state: CaptureSessionState,
+  draftId: string,
+  playerName: string,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    playerName,
+  }));
+}
+
+export function setDraftPlayer(
+  state: CaptureSessionState,
+  draftId: string,
+  player: { id: string; name: string; number: string } | null,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    playerId: player?.id ?? null,
+    playerName: player?.name ?? "",
+    playerNumber: player?.number ?? "",
+  }));
+}
+
+export function setDraftBadgeEnabled(
+  state: CaptureSessionState,
+  draftId: string,
+  enabled: boolean,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    badgeEnabled: enabled,
+    badgeId: enabled ? draft.badgeId : null,
+    badgeLabel: enabled ? draft.badgeLabel : null,
+  }));
+}
+
+export function setDraftBadge(
+  state: CaptureSessionState,
+  draftId: string,
+  badge: { id: string; label: string } | null,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    badgeEnabled: badge !== null ? true : draft.badgeEnabled,
+    badgeId: badge?.id ?? null,
+    badgeLabel: badge?.label ?? null,
   }));
 }
 
@@ -567,6 +674,13 @@ export function createEditCaptureSession(
     sizeSelected: true,
     conditionSelected: true,
     notes: "",
+    playerName: "",
+    playerId: null,
+    playerNumber: "",
+    seasonLabel: null,
+    badgeEnabled: false,
+    badgeId: null,
+    badgeLabel: null,
     photos: [],
     editJerseyId: jersey.id,
   };

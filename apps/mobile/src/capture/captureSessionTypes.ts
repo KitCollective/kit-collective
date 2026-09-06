@@ -22,6 +22,13 @@ export type CaptureJerseyDraft = {
   sizeSelected: boolean;
   conditionSelected: boolean;
   notes: string;
+  playerName: string;
+  playerId: string | null;
+  playerNumber: string;
+  seasonLabel: string | null;
+  badgeEnabled: boolean;
+  badgeId: string | null;
+  badgeLabel: string | null;
   photos: CaptureSessionPhoto[];
   /** When set, Confirm saves via PATCH instead of POST save (metadata-only edit). */
   editJerseyId?: string;
@@ -36,6 +43,10 @@ export type CaptureSessionState = {
   activeDraftId: string;
   store?: CaptureSessionStore;
 };
+
+export type CaptureSessionMutator = (
+  updater: (current: CaptureSessionState) => CaptureSessionState,
+) => CaptureSessionState | null;
 
 export type CaptureSessionStore = {
   save(state: CaptureSessionState): void;

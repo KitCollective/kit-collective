@@ -2,8 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { loadPersistedCaptureSession, withPersistedCaptureSession } from "./captureFlow";
 import type { CaptureSessionState } from "./captureSessionTypes";
 
-export { shouldConfirmRedirectAway } from "./confirmRedirect";
-
 export function usePersistedCaptureSession(sessionId: string | undefined) {
   const [state, setState] = useState<CaptureSessionState | null>(() => {
     if (!sessionId) {

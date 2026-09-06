@@ -1,22 +1,20 @@
-import type { CatalogPickerItem } from "@kit/api-contract";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { searchCatalogClubs } from "@/api/catalog";
-import { ListRow, SearchField } from "@/components/catalog-ui";
-import { IconButton } from "@/components/ui";
-import { useTypography } from "@/theme/brand-fonts";
-import { space } from "@/theme/tokens";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
-import { useTheme } from "@/theme/use-theme";
+import { type CatalogPickerRow, searchDummyClubs } from "@/catalog/dummyCatalog";
+import { CatalogPickerModal } from "@/components/catalog-picker-modal";
 
 type ClubPickerOverlayProps = {
   visible: boolean;
-  accessToken: string;
+  accessToken?: string | null;
   selectedClubId: string | null;
-  onSelect: (club: CatalogPickerItem) => void;
+  onSelect: (club: CatalogPickerRow) => void;
   onDismiss: () => void;
 };
+
+function mergeClubRows(live: CatalogPickerRow[], dummy: CatalogPickerRow[]): CatalogPickerRow[] {
+  const seen = new Set(live.map((row) => row.id));
+  return [...live, ...dummy.filter((row) => !seen.has(row.id))];
+}
 
 export function ClubPickerOverlay({
   visible,
@@ -25,31 +23,32 @@ export function ClubPickerOverlay({
   onSelect,
   onDismiss,
 }: ClubPickerOverlayProps) {
-  const theme = useTheme();
-  const typography = useTypography();
-  const insets = useSafeAreaInsets();
-  const reduceMotion = useReduceMotion();
-  const [clubQuery, setClubQuery] = useState("");
-  const [searching, setSearching] = useState(false);
-  const [searchError, setSearchError] = useState(false);
-  const [clubResults, setClubResults] = useState<CatalogPickerItem[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [items, setItems] = useState<CatalogPickerRow[]>(() => searchDummyClubs(""));
 
-  const runClubSearch = useCallback(
-    async (query: string) => {
-      if (!query.trim()) {
-        setClubResults([]);
+  const runSearch = useCallback(
+    async (nextQuery: string) => {
+      const dummy = searchDummyClubs(nextQuery);
+      const trimmed = nextQuery.trim();
+
+      if (!accessToken || trimmed.length < 2) {
+        setItems(dummy);
+        setErrorMessage(null);
         return;
       }
 
-      setSearching(true);
-      setSearchError(false);
+      setLoading(true);
+      setErrorMessage(null);
       try {
-        const response = await searchCatalogClubs(accessToken, query.trim());
-        setClubResults(response.clubs);
+        const response = await searchCatalogClubs(accessToken, trimmed, "da");
+        setItems(mergeClubRows(response.clubs, dummy));
       } catch {
-        setSearchError(true);
+        setItems(dummy);
+        setErrorMessage("Kunne ikke søge i kataloget. Viser testdata.");
       } finally {
-        setSearching(false);
+        setLoading(false);
       }
     },
     [accessToken],
@@ -57,96 +56,36 @@ export function ClubPickerOverlay({
 
   useEffect(() => {
     if (!visible) {
+      setQuery("");
+      setItems(searchDummyClubs(""));
+      setErrorMessage(null);
       return;
     }
 
     const timer = setTimeout(() => {
-      void runClubSearch(clubQuery);
+      void runSearch(query);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [clubQuery, visible, runClubSearch]);
+  }, [query, visible, runSearch]);
 
   return (
-    <Modal
-      animationType={reduceMotion ? "none" : "slide"}
+    <CatalogPickerModal
       visible={visible}
-      onRequestClose={onDismiss}
-    >
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: theme.canvas,
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom,
-          },
-        ]}
-      >
-        <View style={styles.header}>
-          <IconButton name="Tilbage" icon="arrow-back" onPress={onDismiss} />
-          <Text style={[typography.title, { color: theme.contentPrimary, flex: 1 }]}>
-            Vælg klub
-          </Text>
-          <IconButton name="Luk" icon="close" onPress={onDismiss} />
-        </View>
-
-        <View style={styles.body}>
-          <SearchField
-            variant="catalog"
-            accessibilityLabel="Søg klub"
-            placeholder="Søg klub"
-            value={clubQuery}
-            onChangeText={setClubQuery}
-            onClear={() => setClubQuery("")}
-          />
-
-          {searchError ? (
-            <Text style={[typography.body, { color: theme.danger }]}>
-              Kunne ikke søge i kataloget. Prøv igen.
-            </Text>
-          ) : null}
-
-          {searching ? (
-            <ActivityIndicator color={theme.fillPrimary} style={styles.loader} />
-          ) : (
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {clubResults.map((club) => (
-                <ListRow
-                  key={club.id}
-                  title={club.label}
-                  selected={selectedClubId === club.id}
-                  onPress={() => {
-                    onSelect(club);
-                    onDismiss();
-                  }}
-                />
-              ))}
-            </ScrollView>
-          )}
-        </View>
-      </View>
-    </Modal>
+      title="Vælg klub"
+      searchPlaceholder="Søg klub"
+      query={query}
+      onQueryChange={setQuery}
+      items={items}
+      selectedId={selectedClubId}
+      loading={loading}
+      errorMessage={errorMessage}
+      emptyMessage="Ingen klubber matcher."
+      onSelect={(item) => {
+        onSelect(item);
+        onDismiss();
+      }}
+      onDismiss={onDismiss}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.gapSm,
-    paddingHorizontal: space.insetMd,
-    paddingBottom: space.insetMd,
-  },
-  body: {
-    flex: 1,
-    paddingHorizontal: space.insetLg,
-    gap: space.gapMd,
-  },
-  loader: {
-    marginTop: space.insetMd,
-  },
-});

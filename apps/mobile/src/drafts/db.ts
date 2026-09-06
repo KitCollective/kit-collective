@@ -77,5 +77,12 @@ function ensureColumn(table: string, column: string, definition: string): void {
 }
 
 ensureColumn("capture_session_draft", "notes", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("capture_session_draft", "player_name", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("capture_session_draft", "player_id", "TEXT");
+ensureColumn("capture_session_draft", "player_number", "TEXT NOT NULL DEFAULT ''");
+ensureColumn("capture_session_draft", "season_label", "TEXT");
+ensureColumn("capture_session_draft", "badge_enabled", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("capture_session_draft", "badge_id", "TEXT");
+ensureColumn("capture_session_draft", "badge_label", "TEXT");
 ensureColumn("capture_session_draft_photo", "source", "TEXT NOT NULL DEFAULT 'gallery'");
 ensureColumn("capture_session_draft_photo", "label", "TEXT");
