@@ -1,13 +1,13 @@
+import type { PhotoRole } from "@kit/domain";
 import {
   lightboxMaxEdgeForRole,
   lightboxObjectKey,
   originalObjectKey,
   photoPrefix,
-  stripObjectKey,
   STRIP_VARIANT_WIDTH,
+  stripObjectKey,
   variantObjectKey,
 } from "@kit/domain";
-import type { PhotoRole } from "@kit/domain";
 import sharp from "sharp";
 import type { ObjectStoreAdapter } from "./object-store.js";
 
@@ -80,7 +80,10 @@ export async function renderStripVariant(bytes: Uint8Array): Promise<Uint8Array>
 
   const output = await input
     .extract({ left, top, width: cropWidth, height: cropHeight })
-    .resize(STRIP_VARIANT_WIDTH, Math.round((STRIP_VARIANT_WIDTH * STRIP_ASPECT_HEIGHT) / STRIP_ASPECT_WIDTH))
+    .resize(
+      STRIP_VARIANT_WIDTH,
+      Math.round((STRIP_VARIANT_WIDTH * STRIP_ASPECT_HEIGHT) / STRIP_ASPECT_WIDTH),
+    )
     .jpeg({ quality: 80, mozjpeg: true })
     .toBuffer();
 
@@ -88,7 +91,10 @@ export async function renderStripVariant(bytes: Uint8Array): Promise<Uint8Array>
 }
 
 /** Uncropped resize for Photo lightbox — larger long edge than grid tiles. */
-export async function renderLightboxVariant(bytes: Uint8Array, role: PhotoRole): Promise<Uint8Array> {
+export async function renderLightboxVariant(
+  bytes: Uint8Array,
+  role: PhotoRole,
+): Promise<Uint8Array> {
   const maxLongEdge = lightboxMaxEdgeForRole(role);
   const input = sharp(Buffer.from(bytes)).rotate();
   const metadata = await input.metadata();

@@ -89,10 +89,10 @@ export {
   isCollectorPhotoVariant,
   isLegacyPhotoObjectKey,
   isReservedPhotoVariant,
-  legacyPhotoObjectKey,
-  legacyPhotoObjectKeyFromPrefix,
   LIGHTBOX_MAX_EDGE_OTHER,
   LIGHTBOX_MAX_EDGE_UNIVERSAL,
+  legacyPhotoObjectKey,
+  legacyPhotoObjectKeyFromPrefix,
   lightboxMaxEdgeForRole,
   lightboxObjectKey,
   MAX_SAVE_PHOTO_BYTES_OTHER,
@@ -105,8 +105,8 @@ export {
   photoPrefixFromStoredObjectKey,
   RESERVED_PHOTO_VARIANTS,
   type ReservedPhotoVariant,
-  stripObjectKey,
   STRIP_VARIANT_WIDTH,
+  stripObjectKey,
   variantObjectKey,
 } from "./photo-variants.js";
 

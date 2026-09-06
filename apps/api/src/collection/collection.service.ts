@@ -39,12 +39,12 @@ import {
   collectionJerseyUpdateSchema,
   collectionPeerJerseySchema,
   collectionPeerJerseysSchema,
+  collectionPhotoOriginalUploadSchema,
   collectionPrivatePatchSchema,
   collectionRespondBidRequestSchema,
   collectionRespondBidResponseSchema,
   collectionSaveRequestSchema,
   collectionSaveResponseSchema,
-  collectionPhotoOriginalUploadSchema,
   collectionSendBidRequestSchema,
   collectionSendBidResponseSchema,
   collectionSendMessageRequestSchema,
@@ -94,12 +94,9 @@ import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
-import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js";
-import {
-  derivativeKeysForPhoto,
-  storeGpsStrippedOriginal,
-} from "./photo-derivatives.js";
+import { derivativeKeysForPhoto, storeGpsStrippedOriginal } from "./photo-derivatives.js";
+import { gridObjectKeyForNewPhoto, resolveStoredPhotoBytes } from "./photo-variant-resolve.js";
 import { createR2ObjectStore } from "./r2-object-store.js";
 
 export const OBJECT_STORE = Symbol("OBJECT_STORE");

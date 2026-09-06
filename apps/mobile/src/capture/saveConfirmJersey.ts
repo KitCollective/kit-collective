@@ -11,8 +11,8 @@ import type {
   CaptureSessionState,
 } from "@/capture/captureSessionTypes";
 import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
-import { scheduleOriginalPhotoUploads } from "@/capture/uploadPhotoOriginal";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
+import { scheduleOriginalPhotoUploads } from "@/capture/uploadPhotoOriginal";
 import { markJerseySaved } from "@/session/addSession";
 
 export type ConfirmSaveOutcome =
