@@ -586,6 +586,12 @@ export default function ConfirmScreen() {
   };
 
   const handleBindUnboundPhoto = (uri: string) => {
+    if (draft && !canAddPhotoToDraft(draft)) {
+      setPhotoCapMessage(JERSEY_PHOTO_CAP_HELPER_DA);
+      return;
+    }
+
+    setPhotoCapMessage(null);
     mutate((current) => bindUnboundPhotoToDraft(current, uri, current.activeDraftId));
   };
 
@@ -787,7 +793,11 @@ export default function ConfirmScreen() {
 
         <View style={styles.section}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Fotos</Text>
-          <View style={styles.photoRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.photoRow}
+          >
             {UNIVERSAL_PHOTO_ROLES.map((role) => (
               <PhotoSlot
                 key={role}
@@ -816,7 +826,7 @@ export default function ConfirmScreen() {
                 onPress={handleAddPhotoPress}
               />
             ) : null}
-          </View>
+          </ScrollView>
           {photoCapMessage ? (
             <Text style={[typography.caption, { color: theme.contentMuted }]}>
               {photoCapMessage}

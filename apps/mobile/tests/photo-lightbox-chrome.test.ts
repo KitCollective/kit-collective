@@ -49,6 +49,8 @@ describe("Confirm photo slot behaviour", () => {
     expect(source).toContain("handleAddPhotoPress");
     expect(source).toContain("canAddPhotoToDraft");
     expect(source).toContain("JERSEY_PHOTO_CAP_HELPER_DA");
+    expect(source).toContain("horizontal");
+    expect(source).toContain("contentContainerStyle={styles.photoRow}");
   });
 
   it("keeps Photo slot as the confirm-strip primitive with 4:5 tiles", () => {
