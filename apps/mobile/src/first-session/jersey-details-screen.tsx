@@ -8,8 +8,8 @@ import {
   KIT_TYPE_LABELS_DA,
   KIT_TYPES,
   type PhotoRole,
-  type UniversalPhotoRole,
   UNIVERSAL_PHOTO_ROLES,
+  type UniversalPhotoRole,
 } from "@kit/domain";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
