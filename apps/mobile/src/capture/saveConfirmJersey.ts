@@ -10,7 +10,7 @@ import type {
   CaptureJerseyDraft,
   CaptureSessionState,
 } from "@/capture/captureSessionTypes";
-import { readPhotoBase64 } from "@/capture/photoBytes";
+import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { markJerseySaved } from "@/session/addSession";
 
@@ -74,7 +74,7 @@ export async function saveConfirmJersey(input: {
         .map(async (photo) => ({
           role: photo.role,
           source: photo.source,
-          contentBase64: await readPhotoBase64(photo.uri),
+          contentBase64: await readPreparedPhotoBase64(photo.uri, photo.role, "display"),
         })),
     );
 

@@ -53,7 +53,7 @@ import {
 } from "@/capture/captureSession";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
 import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
-import { captureQualityForRole, readPhotoBase64 } from "@/capture/photoBytes";
+import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
 import { pickUploadFiles } from "@/capture/pickUploadFiles";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
@@ -266,7 +266,7 @@ export function JerseyDetailsScreen({
       visionStartAttempted.current = true;
 
       try {
-        const contentBase64 = await readPhotoBase64(uri);
+        const contentBase64 = await readPreparedPhotoBase64(uri, role, "visionIdentity");
         const jobId = await startVisionSuggest(accessToken, {
           photo: { role, contentBase64 },
         });
@@ -298,7 +298,11 @@ export function JerseyDetailsScreen({
     void (async () => {
       visionStartAttempted.current = true;
       try {
-        const contentBase64 = await readPhotoBase64(visionFirstPhotoUri);
+        const contentBase64 = await readPreparedPhotoBase64(
+          visionFirstPhotoUri,
+          visionFirstPhotoRole,
+          "visionIdentity",
+        );
         const jobId = await startVisionSuggest(accessToken, {
           photo: { role: visionFirstPhotoRole, contentBase64 },
         });
@@ -650,7 +654,7 @@ export function JerseyDetailsScreen({
           .map(async (photo) => ({
             role: photo.role,
             source: photo.source,
-            contentBase64: await readPhotoBase64(photo.uri),
+            contentBase64: await readPreparedPhotoBase64(photo.uri, photo.role, "display"),
             ...(photo.role === "other" && photo.label?.trim() ? { label: photo.label.trim() } : {}),
           })),
       );
