@@ -1,6 +1,7 @@
 import {
   adminCollectorJerseyParamsSchema,
   adminCollectorPhotoParamsSchema,
+  adminCollectorPhotoVariantQuerySchema,
   adminCollectorQuerySchema,
   adminCollectorUserIdParamSchema,
   adminRoleUpdateRequestSchema,
@@ -107,7 +108,11 @@ export class AdminCollectionController {
   }
 
   @Get(":userId/jerseys/:jerseyId/photos/:photoId")
-  async getCollectorPhoto(@Param() params: Record<string, string>, @Res() reply: FastifyReply) {
+  async getCollectorPhoto(
+    @Param() params: Record<string, string>,
+    @Res() reply: FastifyReply,
+    @Query("variant") variantRaw?: string,
+  ) {
     const parsed = adminCollectorPhotoParamsSchema.safeParse({
       userId: params.userId,
       jerseyId: params.jerseyId,
@@ -116,10 +121,15 @@ export class AdminCollectionController {
     if (!parsed.success) {
       throw new BadRequestException("Invalid photo id");
     }
+    const variant = adminCollectorPhotoVariantQuerySchema.safeParse(variantRaw);
+    if (!variant.success) {
+      throw new BadRequestException("Invalid photo variant");
+    }
     const bytes = await this.adminCollectionService.getCollectorPhotoBytes(
       parsed.data.userId,
       parsed.data.jerseyId,
       parsed.data.photoId,
+      variant.data,
     );
     return reply.type("image/jpeg").send(Buffer.from(bytes));
   }
