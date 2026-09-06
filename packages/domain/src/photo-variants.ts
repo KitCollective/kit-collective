@@ -64,11 +64,11 @@ export function maxSavePhotoBytesForRole(role: string): number {
 }
 
 export function isCollectorPhotoVariant(value: string): value is CollectorPhotoVariant {
-  return (COLLECTOR_PHOTO_VARIANTS as readonly string[]).includes(value);
+  return value === "grid";
 }
 
 export function isReservedPhotoVariant(value: string): value is ReservedPhotoVariant {
-  return (RESERVED_PHOTO_VARIANTS as readonly string[]).includes(value);
+  return value === "strip" || value === "lightbox" || value === "original";
 }
 
 /** Keys to remove when a UserJerseyPhoto row is deleted (prefix + legacy). */
