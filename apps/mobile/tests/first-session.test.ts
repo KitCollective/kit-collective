@@ -487,7 +487,10 @@ describe("First session add to door flow", () => {
 
   it("unsigned vision client targets unsigned routes", () => {
     const vision = readFileSync(join(__dirname, "../src/api/vision.ts"), "utf8");
-    const analysing = readFileSync(join(__dirname, "../src/first-session/analysing-screen.tsx"), "utf8");
+    const analysing = readFileSync(
+      join(__dirname, "../src/first-session/analysing-screen.tsx"),
+      "utf8",
+    );
 
     expect(vision).toContain("startUnsignedVisionSuggest");
     expect(vision).toContain("fetchUnsignedVisionJob");

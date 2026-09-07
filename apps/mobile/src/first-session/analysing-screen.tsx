@@ -157,7 +157,7 @@ export function FirstSessionAnalysingScreen({
         clearInterval(interval);
       }
     };
-  }, [captureSessionId, draft, onVisionComplete, onVisionFailed, settle]);
+  }, [draft, onVisionComplete, onVisionFailed, settle]);
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.canvas }]}>

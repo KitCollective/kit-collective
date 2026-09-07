@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { buildIdentitySuggestRequest } from "../src/capture/identitySuggestRequest";
 import type { CaptureJerseyDraft } from "../src/capture/captureSessionTypes";
+import { buildIdentitySuggestRequest } from "../src/capture/identitySuggestRequest";
 
 vi.mock("../src/capture/photoBytes", () => ({
   readPreparedPhotoBase64: vi.fn(async (uri: string) => `base64:${uri}`),
@@ -60,7 +60,9 @@ describe("buildIdentitySuggestRequest", () => {
     const draft = draftWithPhotos([{ uri: "file:///unassigned.jpg", role: null }]);
     const request = await buildIdentitySuggestRequest(draft);
 
-    expect(request.photos).toEqual([{ role: "front", contentBase64: "base64:file:///unassigned.jpg" }]);
+    expect(request.photos).toEqual([
+      { role: "front", contentBase64: "base64:file:///unassigned.jpg" },
+    ]);
   });
 });
 
