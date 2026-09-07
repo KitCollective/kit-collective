@@ -80,6 +80,7 @@ describe("Coolify Seed MCP host", () => {
     expect(wire).toMatch(/SEED_FK_FETCH/);
     expect(wire).toMatch(/base_directory: "\/"/);
     expect(wire).toMatch(/sslmode=require/);
+    expect(wire).toMatch(/uselibpqcompat=true/);
     expect(wire).not.toMatch(/COOLIFY_API_TOKEN.*SEED_MCP_TOKEN/);
   });
 });

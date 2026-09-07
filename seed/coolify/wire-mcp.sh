@@ -33,15 +33,22 @@ fi
 
 require_sslmode() {
   local url="$1"
-  if [[ -z "$url" || "$url" == *"sslmode="* ]]; then
+  if [[ -z "$url" ]]; then
     printf '%s' "$url"
     return
   fi
-  if [[ "$url" == *"?"* ]]; then
-    printf '%s' "${url}&sslmode=require"
-  else
-    printf '%s' "${url}?sslmode=require"
+  if [[ "$url" != *"sslmode="* ]]; then
+    if [[ "$url" == *"?"* ]]; then
+      url="${url}&sslmode=require"
+    else
+      url="${url}?sslmode=require"
+    fi
   fi
+  # node-pg treats sslmode=require as verify-full; CX33 Postgres is not a public CA.
+  if [[ "$url" != *"uselibpqcompat="* ]]; then
+    url="${url}&uselibpqcompat=true"
+  fi
+  printf '%s' "$url"
 }
 
 DATABASE_URL="$(require_sslmode "$DATABASE_URL")"
