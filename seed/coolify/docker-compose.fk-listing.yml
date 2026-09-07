@@ -1,0 +1,25 @@
+# 24/7 FK listing HTTP (Coolify application, not a one-shot job).
+#
+# Service seed-fk-listing. Restart unless-stopped. PORT 8787.
+# Process: node seed/fkapi/dist/listing-http.js
+# Origin for FKAPI_BASE_URL (no /kits suffix). Not sunr4y/fkapi.
+# Not docker-compose.fkapi-job.yml (that job ingest kit identity + archive bytes).
+#
+# Do not set the Seed proxy env, Decodo, or Coolify API names on this process.
+# Decodo stays Transfermarkt-only. Host API credentials stay on the wire script.
+
+services:
+  seed-fk-listing:
+    build:
+      context: ../..
+      dockerfile: seed/coolify/Dockerfile
+    image: kit-collective-seed-fk-listing:latest
+    restart: unless-stopped
+    mem_limit: 512m
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+    command:
+      - node
+      - seed/fkapi/dist/listing-http.js

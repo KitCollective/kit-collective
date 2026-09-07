@@ -1,6 +1,6 @@
 # Seed reference — Football Kit Archive grains
 
-**Vendor:** Football Kit Archive via FKApi (`FKAPI_BASE_URL` / `FKAPI_TOKEN`) or fixtures  
+**Vendor:** Football Kit Archive via factory FK listing HTTP (`FKAPI_BASE_URL` → `GET /kits`, ADR-0041) or fixtures. Not sunr4y/fkapi.  
 **Field catalog (accept):** [`.scratch/football-data-seed/fk-field-catalog.md`](../../.scratch/football-data-seed/fk-field-catalog.md) (KIT-140 focused) · parent [field-catalog.md](../../.scratch/football-data-seed/field-catalog.md) (KIT-138)  
 **Postgres landing:** [`.scratch/football-data-seed/schema-gap.md`](../../.scratch/football-data-seed/schema-gap.md)  
 **Forbidden (ADR-0002):** market value, agent PII, vendor branding (brand/club logos, FKA page URLs as product assets).  

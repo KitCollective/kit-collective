@@ -1,11 +1,19 @@
 # Coolify seed jobs
 
-One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They are **jobs**, not 24/7 services.
+One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They are **jobs**, not 24/7 services — except the FK listing HTTP origin below.
+
+## FK listing: 24/7 HTTP vs one-shot job
+
+| Kind | File | Restart | Role |
+| --- | --- | --- | --- |
+| **24/7 FK listing HTTP** | `docker-compose.fk-listing.yml` + Coolify application `seed-fk-listing` (`Dockerfile.fk-listing`, `wire-fk-listing.sh`) | `unless-stopped` | Origin for `FKAPI_BASE_URL` (`GET /kits` on port 8787). Not sunr4y/fkapi. Set `FKAPI_BASE_URL` to `http://{fqdn}` with **no** `/kits` suffix. |
+| One-shot FK job | `docker-compose.fkapi-job.yml` | `"no"` | FK kit identity + archive bytes **after** Apify for the same scope |
 
 ## Files
 
 | File | CLI | When to run |
 | --- | --- | --- |
+| `docker-compose.fk-listing.yml` | `@kit/seed-fkapi` `listing-http` | 24/7 Coolify origin for `FKAPI_BASE_URL` |
 | `docker-compose.apify-job.yml` | `@kit/seed-apify` | Transfermarkt facts for a competition + season range |
 | `docker-compose.fkapi-job.yml` | `@kit/seed-fkapi` | FK kit identity + archive bytes **after** Apify for the same scope |
 
