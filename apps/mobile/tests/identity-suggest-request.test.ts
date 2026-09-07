@@ -2,10 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const identitySuggestRequestPath = join(
-  __dirname,
-  "../src/capture/identitySuggestRequest.ts",
-);
+const identitySuggestRequestPath = join(__dirname, "../src/capture/identitySuggestRequest.ts");
 const analysingPath = join(__dirname, "../src/first-session/analysing-screen.tsx");
 const confirmVisionPath = join(__dirname, "../src/capture/use-confirm-vision.ts");
 const jerseyDetailsPath = join(__dirname, "../src/first-session/jersey-details-screen.tsx");
