@@ -60,6 +60,14 @@ describe("Coolify Seed MCP host", () => {
     expect(pkg.scripts["start:http"]).toBe("node dist/http.js");
     expect(dockerfile).toMatch(/CMD\s*\[["']node["']\s*,\s*["']seed\/mcp\/dist\/http\.js["']\]/);
     expect(remote).toMatch(/CMD\s*\[["']node["']\s*,\s*["']seed\/mcp\/dist\/http\.js["']\]/);
+    const fkapi = dockerfile.indexOf("@kit/seed-fkapi build");
+    const apify = dockerfile.indexOf("@kit/seed-apify build");
+    expect(fkapi).toBeGreaterThan(-1);
+    expect(apify).toBeGreaterThan(-1);
+    expect(fkapi).toBeLessThan(apify);
+    expect(remote.indexOf("@kit/seed-fkapi build")).toBeLessThan(
+      remote.indexOf("@kit/seed-apify build"),
+    );
   });
 
   it("wire script defaults to development and refuses production", () => {
