@@ -409,8 +409,18 @@ describe("Hierarchy grain — Club Rich", () => {
   it("writes portrait bytes through SEED_OBJECT_DIR without an injected store", async () => {
     await prepareDatabase();
     const objectDir = await mkdtemp(path.join(tmpdir(), "kit-portraits-"));
-    const previous = process.env.SEED_OBJECT_DIR;
+    const previousObjectDir = process.env.SEED_OBJECT_DIR;
+    const previousR2 = {
+      R2_ENDPOINT: process.env.R2_ENDPOINT,
+      R2_BUCKET: process.env.R2_BUCKET,
+      R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+      R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+    };
     process.env.SEED_OBJECT_DIR = objectDir;
+    delete process.env.R2_ENDPOINT;
+    delete process.env.R2_BUCKET;
+    delete process.env.R2_ACCESS_KEY_ID;
+    delete process.env.R2_SECRET_ACCESS_KEY;
     try {
       const adapter = createKaderFetchAdapter({ fixturesDir: kaderFixturesDir });
       const { summary } = await runHierarchyGrain({
@@ -434,10 +444,17 @@ describe("Hierarchy grain — Club Rich", () => {
         await pool.end();
       }
     } finally {
-      if (previous === undefined) {
+      if (previousObjectDir === undefined) {
         delete process.env.SEED_OBJECT_DIR;
       } else {
-        process.env.SEED_OBJECT_DIR = previous;
+        process.env.SEED_OBJECT_DIR = previousObjectDir;
+      }
+      for (const [key, value] of Object.entries(previousR2)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
       }
     }
   });
