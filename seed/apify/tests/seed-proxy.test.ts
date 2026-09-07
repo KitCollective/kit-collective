@@ -156,17 +156,30 @@ describe("createProxyFetchHtml", () => {
   });
 });
 
+function liveKaderEnv() {
+  delete process.env.SEED_APIFY_FIXTURE;
+  delete process.env.SEED_KADER_HTML;
+  delete process.env.SEED_FETCH;
+  delete process.env.SEED_TM_TRANSPORT;
+}
+
 describe("resolveFetchAdapter proxy behaviour", () => {
   it("fails closed for live kader when SEED_REQUIRE_PROXY is set without SEED_PROXY_URL", async () => {
-    delete process.env.SEED_APIFY_FIXTURE;
-    delete process.env.SEED_KADER_HTML;
-    delete process.env.SEED_FETCH;
+    liveKaderEnv();
     process.env.SEED_REQUIRE_PROXY = "true";
     delete process.env.SEED_PROXY_URL;
 
     await expect(resolveFetchAdapter()).rejects.toThrow(
       /SEED_REQUIRE_PROXY is set but SEED_PROXY_URL is missing/,
     );
+  });
+
+  it("fails closed for live kader when SEED_TM_TRANSPORT=proxy without SEED_PROXY_URL", async () => {
+    liveKaderEnv();
+    process.env.SEED_TM_TRANSPORT = "proxy";
+    delete process.env.SEED_PROXY_URL;
+
+    await expect(resolveFetchAdapter()).rejects.toThrow(/SEED_PROXY_URL is missing/);
   });
 
   it("does not require proxy for fixture adapters", async () => {
@@ -176,18 +189,48 @@ describe("resolveFetchAdapter proxy behaviour", () => {
 
     const adapter = await resolveFetchAdapter();
     expect(adapter.adapter.fetchClubSeason).toBeTypeOf("function");
+    expect(adapter.close).toBeUndefined();
   });
 
-  it("accepts live kader when SEED_PROXY_URL is set", async () => {
-    delete process.env.SEED_APIFY_FIXTURE;
-    delete process.env.SEED_KADER_HTML;
-    delete process.env.SEED_FETCH;
-    delete process.env.SEED_REQUIRE_PROXY;
+  it("uses proxy close for live kader when Coolify requires a proxy", async () => {
+    liveKaderEnv();
+    process.env.SEED_REQUIRE_PROXY = "true";
     process.env.SEED_PROXY_URL = "http://proxy.example:8080";
 
     const resolved = await resolveFetchAdapter();
     expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
     expect(resolved.close).toBeTypeOf("function");
     await resolved.close?.();
+  });
+
+  it("uses direct live kader when SEED_PROXY_URL is set locally without REQUIRE_PROXY", async () => {
+    liveKaderEnv();
+    delete process.env.SEED_REQUIRE_PROXY;
+    process.env.SEED_PROXY_URL = "http://proxy.example:8080";
+
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
+    expect(resolved.close).toBeUndefined();
+  });
+
+  it("uses proxy close when SEED_TM_TRANSPORT=proxy", async () => {
+    liveKaderEnv();
+    delete process.env.SEED_REQUIRE_PROXY;
+    process.env.SEED_TM_TRANSPORT = "proxy";
+    process.env.SEED_PROXY_URL = "http://proxy.example:8080";
+
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.close).toBeTypeOf("function");
+    await resolved.close?.();
+  });
+
+  it("uses direct live kader when SEED_TM_TRANSPORT=direct even if proxy env is set", async () => {
+    liveKaderEnv();
+    process.env.SEED_TM_TRANSPORT = "direct";
+    process.env.SEED_REQUIRE_PROXY = "true";
+    process.env.SEED_PROXY_URL = "http://proxy.example:8080";
+
+    const resolved = await resolveFetchAdapter();
+    expect(resolved.close).toBeUndefined();
   });
 });

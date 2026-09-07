@@ -1,35 +1,4 @@
-import { ProxyAgent, fetch as undiciFetch } from "undici";
-
-export interface SeedProxyConfig {
-  /** HTTP(S) proxy URL when configured. */
-  proxyUrl?: string;
-  /** When true, live FK fetch refuses to run without a proxy URL. */
-  requireProxy: boolean;
-}
-
-const TRUTHY = new Set(["1", "true", "yes", "on"]);
-
-function isTruthy(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-  return TRUTHY.has(value.trim().toLowerCase());
-}
-
-export function resolveSeedProxyConfig(env: NodeJS.ProcessEnv = process.env): SeedProxyConfig {
-  const proxyUrl = env.SEED_PROXY_URL?.trim() || undefined;
-  const requireProxy = isTruthy(env.SEED_REQUIRE_PROXY);
-
-  return { proxyUrl, requireProxy };
-}
-
-export function assertSeedProxyAvailable(config: SeedProxyConfig): void {
-  if (config.requireProxy && !config.proxyUrl) {
-    throw new Error(
-      "SEED_REQUIRE_PROXY is set but SEED_PROXY_URL is missing. Refusing live Football Kit Archive fetch without a proxy.",
-    );
-  }
-}
+import { fetch as undiciFetch } from "undici";
 
 export class FkFetchHttpError extends Error {
   constructor(
@@ -58,12 +27,6 @@ export type SeedHttpFetcher = (
   },
 ) => Promise<Awaited<ReturnType<typeof undiciFetch>>>;
 
-export type SeedHttpProxyAgentFactory = (proxyUrl: string) => unknown;
-
-function createUndiciProxyAgent(proxyUrl: string): ProxyAgent {
-  return new ProxyAgent(proxyUrl);
-}
-
 async function defaultSeedHttpFetcher(
   url: string,
   init: {
@@ -71,23 +34,15 @@ async function defaultSeedHttpFetcher(
     headers: Record<string, string>;
   },
 ): Promise<Awaited<ReturnType<typeof undiciFetch>>> {
-  const dispatcher = init.dispatcher instanceof ProxyAgent ? init.dispatcher : undefined;
-  if (init.dispatcher !== undefined && dispatcher === undefined) {
-    throw new Error("default Seed HTTP fetch requires an undici ProxyAgent dispatcher");
-  }
   return undiciFetch(url, {
-    dispatcher,
     headers: init.headers,
   });
 }
 
+/** Direct FK HTTP — never Seed proxy / Decodo. */
 export function createSeedHttpFetch(
-  proxyConfig: SeedProxyConfig,
   fetchImpl: SeedHttpFetcher = defaultSeedHttpFetcher,
-  createProxyAgent: SeedHttpProxyAgentFactory = createUndiciProxyAgent,
 ): SeedHttpFetch {
-  const dispatcher = proxyConfig.proxyUrl ? createProxyAgent(proxyConfig.proxyUrl) : undefined;
-
   return async (url: string, init?: SeedHttpFetchOptions) => {
     const headers: Record<string, string> = {
       "User-Agent": "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
@@ -96,7 +51,7 @@ export function createSeedHttpFetch(
     };
 
     const response = await fetchImpl(url, {
-      dispatcher,
+      dispatcher: undefined,
       headers,
     });
 

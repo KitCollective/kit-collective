@@ -170,6 +170,8 @@ describe("Coolify FK listing host", () => {
     expect(compose).not.toMatch(/^\s+COOLIFY_/m);
     expect(job).toMatch(/restart:\s*"no"/);
     expect(job).not.toMatch(/listing-http/);
+    expect(job).not.toMatch(/SEED_PROXY_URL/);
+    expect(job).not.toMatch(/SEED_REQUIRE_PROXY/);
     expect(dockerfile).toMatch(
       /CMD\s*\[["']node["']\s*,\s*["']seed\/fkapi\/dist\/listing-http\.js["']\]/,
     );
