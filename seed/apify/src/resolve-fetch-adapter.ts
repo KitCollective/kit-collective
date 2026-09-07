@@ -1,3 +1,4 @@
+import { resolveTransfermarktTransport } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { createApifyFetchAdapter, createLiveApifyFetchAdapter } from "./fetch/apify-adapter.js";
 import { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
@@ -9,11 +10,7 @@ import {
   parsePositiveIntEnv,
 } from "./fetch/transfermarkt-fetch-policy.js";
 import { DEFAULT_TRANSFERMARKT_RATE_LIMIT_STOP_AFTER } from "./fetch/transfermarkt-rate-limit.js";
-import {
-  assertSeedProxyAvailable,
-  createProxyFetchHtml,
-  resolveSeedProxyConfig,
-} from "./proxy-config.js";
+import { createProxyFetchHtml } from "./proxy-config.js";
 
 function resolveKaderFetchPolicyFromEnv(env: NodeJS.ProcessEnv = process.env) {
   return {
@@ -85,14 +82,12 @@ export async function resolveFetchAdapter(): Promise<ResolvedFetchAdapter> {
     );
   }
 
-  const proxyConfig = resolveSeedProxyConfig();
-  assertSeedProxyAvailable(proxyConfig);
-
+  const transport = resolveTransfermarktTransport(process.env);
   const kaderCacheDir = process.env.SEED_KADER_CACHE?.trim() || undefined;
   const kaderFetchPolicy = resolveKaderFetchPolicyFromEnv();
 
-  if (proxyConfig.proxyUrl) {
-    const { fetchHtml, close } = createProxyFetchHtml(proxyConfig.proxyUrl);
+  if (transport.mode === "proxy") {
+    const { fetchHtml, close } = createProxyFetchHtml(transport.proxyUrl);
     return {
       adapter: createKaderFetchAdapter({
         fetchHtml,

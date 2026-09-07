@@ -266,8 +266,8 @@ The live Transfermarkt path: HTTP GET of the Competition season page and each cl
 _Avoid_: calling this a Nest scraper; treating Cheerio as anti-bot; fetching a player profile page when the kader row already has id and number
 
 **Seed proxy**:
-Outbound HTTP(S) proxy used **only for Transfermarkt** from Coolify jobs and from `kc_seed_mcp`. Vendors: Decodo residential (per GB) or Decodo Site Unblocker (`unblock.decodo.com` as HTTP proxy). Coolify stores the secret and injects it into the TM job; `kc_seed_mcp` reads the same **names** from its own env. Kader fetch on Coolify does not run until that secret is present (fail closed). Football Kit Archive / FKApi must **not** use Decodo.
-_Avoid_: pointing Decodo at Football Kit Archive; Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
+Outbound HTTP(S) proxy used **only for Transfermarkt**. Policy module: `resolveTransfermarktTransport` (ADR-0042). Coolify / server (`SEED_REQUIRE_PROXY`) injects Decodo (`SEED_PROXY_URL` — residential or Site Unblocker `unblock.decodo.com`) and fail-closes without it. Desktop / local live Kader uses the machine’s own IP by default, even when `SEED_PROXY_URL` is in env; opt in with `SEED_TM_TRANSPORT=proxy`. Football Kit Archive / listing HTTP must **not** use Decodo (ADR-0041).
+_Avoid_: pointing Decodo at Football Kit Archive; treating a Desktop `.env` `SEED_PROXY_URL` as mandatory for local TM; Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
 
 **Opt-in Apify**:
 The existing Store-actor FetchAdapter. The operator must explicitly choose it. It is not an automatic fallback when Kader fetch fails or is slow. Quota is spent only when Nicklas opts in.

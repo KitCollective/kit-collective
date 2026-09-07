@@ -54,3 +54,8 @@ export {
   type SeedScope,
 } from "./seed-scope.js";
 export { normalizeTransfermarktClubId } from "./transfermarkt-club-id.js";
+export {
+  resolveTransfermarktTransport,
+  type TransfermarktTransport,
+  type TransfermarktTransportEnv,
+} from "./transfermarkt-transport.js";
