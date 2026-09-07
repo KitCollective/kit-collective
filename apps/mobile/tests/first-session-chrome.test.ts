@@ -192,6 +192,7 @@ describe("first-session visual host chrome", () => {
     expect(copy).toContain("Udfyld selv i stedet");
     expect(analysing).toContain("PhotoSlot");
     expect(analysing).toContain("StyleSheet.hairlineWidth");
+    expect(analysing).toContain("buildIdentitySuggestRequest");
     expect(analysing).toContain("startUnsignedVisionSuggest");
     expect(chrome).not.toContain("identity.wash");
     expect(chrome).not.toContain("FloatingTabBar");
