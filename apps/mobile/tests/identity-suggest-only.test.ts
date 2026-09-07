@@ -40,4 +40,30 @@ describe("buildSuggestOnlyVisionJob", () => {
       type: "home",
     });
   });
+
+  it("keeps suggest-only player and badge after partial preselect", () => {
+    const narrowed = buildSuggestOnlyVisionJob({
+      ...baseJob,
+      suggestions: {
+        ...baseJob.suggestions,
+        playerId: "00000000-0000-0000-0000-000000000003",
+        playerLabel: "Jonas Wind",
+        playerNumber: "10",
+        patchId: "00000000-0000-0000-0000-000000000004",
+        patchLabel: "Superligaen",
+      },
+      fieldPreselect: { club: true },
+    });
+
+    expect(narrowed?.suggestions).toEqual({
+      seasonId: "00000000-0000-0000-0000-000000000002",
+      seasonLabel: "2024/25",
+      type: "home",
+      playerId: "00000000-0000-0000-0000-000000000003",
+      playerLabel: "Jonas Wind",
+      playerNumber: "10",
+      patchId: "00000000-0000-0000-0000-000000000004",
+      patchLabel: "Superligaen",
+    });
+  });
 });

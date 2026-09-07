@@ -7,7 +7,7 @@ import {
   type VisionUserAction,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { catalogLabel, season, visionLog } from "@kit/db";
+import { catalogLabel, playerClubSeason, season, visionLog } from "@kit/db";
 import type { KitType, LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -197,7 +197,13 @@ export class VisionService {
     status: VisionJobStatus;
     kind?: VisionJobKind;
     preselect?: boolean;
-    fieldPreselect?: { club?: boolean; season?: boolean; type?: boolean; player?: boolean; badge?: boolean };
+    fieldPreselect?: {
+      club?: boolean;
+      season?: boolean;
+      type?: boolean;
+      player?: boolean;
+      badge?: boolean;
+    };
     catalogMiss?: boolean;
     suggestions?: VisionSuggestions;
     grouping?: VisionGroupingSuggestions;
@@ -289,6 +295,28 @@ export class VisionService {
       patchLabel: patchLabel ?? undefined,
     };
 
+    if (
+      suggestions.playerId &&
+      !suggestions.playerNumber &&
+      row.suggestedClubId &&
+      row.suggestedSeasonId
+    ) {
+      const [squadRow] = await this.db
+        .select({ squadNumber: playerClubSeason.squadNumber })
+        .from(playerClubSeason)
+        .where(
+          and(
+            eq(playerClubSeason.playerId, suggestions.playerId),
+            eq(playerClubSeason.clubId, row.suggestedClubId),
+            eq(playerClubSeason.seasonId, row.suggestedSeasonId),
+          ),
+        )
+        .limit(1);
+      if (squadRow?.squadNumber != null) {
+        suggestions.playerNumber = String(squadRow.squadNumber);
+      }
+    }
+
     const hasSuggestions = Boolean(
       suggestions.clubId ||
         suggestions.seasonId ||
@@ -326,11 +354,6 @@ export class VisionService {
       entityLabels.find((row) => row.locale === "en" && row.kind === "label")?.label ??
       null
     );
-  }
-
-  /** @deprecated Use resolveEntityLabel("club", …) */
-  private async resolveClubLabel(clubId: string, locale: LabelLocale): Promise<string | null> {
-    return this.resolveEntityLabel("club", clubId, locale);
   }
 
   private async resolveSeasonLabel(seasonId: string): Promise<string | null> {

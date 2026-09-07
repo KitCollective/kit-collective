@@ -249,22 +249,29 @@ export class CollectionService {
     const squadScopeKeys = rows.map((row) => `${row.clubId}:${row.seasonId}`);
     const uniqueSquadScopes = [...new Set(squadScopeKeys)];
 
-    const [clubLabels, countryLabels, leagueLabels, photosByJersey, squadPlayersByScope, playerFieldsByJersey, patchesByJersey] =
-      await Promise.all([
-        this.resolveEntityLabels("club", clubIds, locale),
-        this.resolveEntityLabels("country", countryIds, locale),
-        this.resolveEntityLabels("league", leagueIds, locale),
-        this.loadPhotosForJerseys(jerseyIds),
-        this.loadSquadPlayersForScopes(
-          uniqueSquadScopes.map((key) => {
-            const [clubId, seasonId] = key.split(":");
-            return { clubId: clubId!, seasonId: seasonId! };
-          }),
-          locale,
-        ),
-        this.loadPlayerFieldsForJerseys(rows, locale),
-        this.loadPatchesForJerseys(jerseyIds, locale),
-      ]);
+    const [
+      clubLabels,
+      countryLabels,
+      leagueLabels,
+      photosByJersey,
+      squadPlayersByScope,
+      playerFieldsByJersey,
+      patchesByJersey,
+    ] = await Promise.all([
+      this.resolveEntityLabels("club", clubIds, locale),
+      this.resolveEntityLabels("country", countryIds, locale),
+      this.resolveEntityLabels("league", leagueIds, locale),
+      this.loadPhotosForJerseys(jerseyIds),
+      this.loadSquadPlayersForScopes(
+        uniqueSquadScopes.map((key) => {
+          const [clubId, seasonId] = key.split(":");
+          return { clubId: clubId!, seasonId: seasonId! };
+        }),
+        locale,
+      ),
+      this.loadPlayerFieldsForJerseys(rows, locale),
+      this.loadPatchesForJerseys(jerseyIds, locale),
+    ]);
 
     const jerseys: CollectionJersey[] = rows.map((row) => {
       const clubLabel = clubLabels.get(row.clubId);

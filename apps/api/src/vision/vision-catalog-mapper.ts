@@ -204,7 +204,10 @@ export class VisionCatalogMapper {
       const parsedNumber = Number.parseInt(numberHint.trim(), 10);
       if (!Number.isNaN(parsedNumber)) {
         const [row] = await this.db
-          .select({ playerId: playerClubSeason.playerId, squadNumber: playerClubSeason.squadNumber })
+          .select({
+            playerId: playerClubSeason.playerId,
+            squadNumber: playerClubSeason.squadNumber,
+          })
           .from(playerClubSeason)
           .where(
             and(
@@ -316,9 +319,13 @@ export class VisionCatalogMapper {
       badge?: number;
     },
   ): VisionFieldConfidences {
-    const fieldScores = [fields.club, fields.season, fields.kitType, fields.player, fields.badge].filter(
-      (score): score is number => typeof score === "number",
-    );
+    const fieldScores = [
+      fields.club,
+      fields.season,
+      fields.kitType,
+      fields.player,
+      fields.badge,
+    ].filter((score): score is number => typeof score === "number");
     const overallFromFields =
       fieldScores.length > 0
         ? Math.round(fieldScores.reduce((sum, score) => sum + score, 0) / fieldScores.length)

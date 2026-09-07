@@ -14,10 +14,10 @@ import {
 } from "@/capture/captureSession";
 import {
   clearConfirmSeasonEdited,
+  markConfirmBadgeEdited,
   markConfirmClubEdited,
   markConfirmKitTypeEdited,
   markConfirmPlayerEdited,
-  markConfirmBadgeEdited,
   markConfirmSeasonEdited,
 } from "@/capture/confirmManualEdits";
 import { useConfirmExit } from "@/capture/use-confirm-exit";

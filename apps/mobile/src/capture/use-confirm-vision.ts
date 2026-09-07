@@ -13,10 +13,10 @@ import {
 } from "@/capture/captureSession";
 import type { CaptureJerseyDraft, CaptureSessionMutator } from "@/capture/captureSessionTypes";
 import {
+  confirmBadgeWasEdited,
   confirmClubWasEdited,
   confirmKitTypeWasEdited,
   confirmPlayerWasEdited,
-  confirmBadgeWasEdited,
   confirmSeasonWasEdited,
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
