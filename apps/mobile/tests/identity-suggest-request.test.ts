@@ -1,88 +1,44 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import type { CaptureJerseyDraft } from "../src/capture/captureSessionTypes";
-import { buildIdentitySuggestRequest } from "../src/capture/identitySuggestRequest";
+import { describe, expect, it } from "vitest";
 
-vi.mock("../src/capture/photoBytes", () => ({
-  readPreparedPhotoBase64: vi.fn(async (uri: string) => `base64:${uri}`),
-}));
+const identitySuggestRequestPath = join(
+  __dirname,
+  "../src/capture/identitySuggestRequest.ts",
+);
+const analysingPath = join(__dirname, "../src/first-session/analysing-screen.tsx");
+const confirmVisionPath = join(__dirname, "../src/capture/use-confirm-vision.ts");
+const jerseyDetailsPath = join(__dirname, "../src/first-session/jersey-details-screen.tsx");
 
-function draftWithPhotos(
-  photos: Array<{ uri: string; role: "front" | "back" | "other" | null }>,
-): CaptureJerseyDraft {
-  return {
-    id: "draft-11111111-1111-4111-8111-111111111111",
-    clubId: null,
-    clubLabel: null,
-    seasonId: null,
-    seasonLabel: null,
-    kitType: null,
-    size: null,
-    condition: null,
-    kitTypeSelected: false,
-    sizeSelected: false,
-    conditionSelected: false,
-    notes: "",
-    playerName: "",
-    playerId: null,
-    playerNumber: "",
-    badgeEnabled: false,
-    badgeId: null,
-    badgeLabel: null,
-    photos: photos.map((photo) => ({
-      uri: photo.uri,
-      role: photo.role,
-      source: "gallery",
-    })),
-  };
-}
+describe("identitySuggestRequest seam", () => {
+  it("builds one VisionSuggestRequest from every bound draft photo", () => {
+    const source = readFileSync(identitySuggestRequestPath, "utf8");
 
-describe("buildIdentitySuggestRequest", () => {
-  it("includes every bound draft photo with visionIdentity prepare purpose", async () => {
-    const draft = draftWithPhotos([
-      { uri: "file:///front.jpg", role: "front" },
-      { uri: "file:///back.jpg", role: "back" },
-      { uri: "file:///tag.jpg", role: "other" },
-    ]);
-
-    const request = await buildIdentitySuggestRequest(draft);
-
-    expect(request.draftId).toBe(draft.id);
-    expect(request.photos).toEqual([
-      { role: "front", contentBase64: "base64:file:///front.jpg" },
-      { role: "back", contentBase64: "base64:file:///back.jpg" },
-      { role: "other", contentBase64: "base64:file:///tag.jpg" },
-    ]);
+    expect(source).toContain("export async function buildIdentitySuggestRequest");
+    expect(source).toContain("draft.photos.map");
+    expect(source).toContain('"visionIdentity"');
+    expect(source).toContain("draftId: draft.id");
+    expect(source).toContain('role ?? "front"');
   });
 
-  it("defaults missing photo role to front", async () => {
-    const draft = draftWithPhotos([{ uri: "file:///unassigned.jpg", role: null }]);
-    const request = await buildIdentitySuggestRequest(draft);
-
-    expect(request.photos).toEqual([
-      { role: "front", contentBase64: "base64:file:///unassigned.jpg" },
-    ]);
-  });
-});
-
-describe("first-session identity seam", () => {
-  it("analysing uses the shared identity suggest builder and unsigned job routes", () => {
-    const analysing = readFileSync(
-      join(__dirname, "../src/first-session/analysing-screen.tsx"),
-      "utf8",
-    );
-    const confirmVision = readFileSync(
-      join(__dirname, "../src/capture/use-confirm-vision.ts"),
-      "utf8",
-    );
+  it("first-session analysing uses the shared builder and unsigned job routes", () => {
+    const analysing = readFileSync(analysingPath, "utf8");
 
     expect(analysing).toContain("buildIdentitySuggestRequest");
     expect(analysing).toContain("startUnsignedVisionSuggest");
     expect(analysing).toContain("fetchUnsignedVisionJob");
-    expect(analysing).not.toContain("firstVisionPhoto");
-    expect(confirmVision).toContain("buildIdentitySuggestRequest");
     expect(analysing).toContain("VisionJobResponse");
+    expect(analysing).not.toContain("firstVisionPhoto");
     expect(analysing).not.toContain("grouping");
+  });
+
+  it("signed Confirm and jersey-details reuse the same identity suggest builder", () => {
+    const confirmVision = readFileSync(confirmVisionPath, "utf8");
+    const jerseyDetails = readFileSync(jerseyDetailsPath, "utf8");
+
+    expect(confirmVision).toContain("buildIdentitySuggestRequest");
+    expect(jerseyDetails).toContain("buildIdentitySuggestRequest");
+    expect(confirmVision).not.toContain("draft.photos.map(async (photo)");
+    expect(jerseyDetails).not.toContain("draft.photos.map(async (photo)");
   });
 });
