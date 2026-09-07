@@ -75,8 +75,7 @@ async function main(): Promise<void> {
 }
 
 const isDirectRun =
-  process.argv[1] !== undefined &&
-  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+  process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isDirectRun) {
   main().catch((error: unknown) => {
