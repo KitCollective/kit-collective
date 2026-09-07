@@ -62,6 +62,12 @@ export function ConfirmVisionSlot({
     suggestion.suggestions.clubLabel,
     suggestion.suggestions.seasonLabel,
     suggestion.suggestions.type ? KIT_TYPE_LABELS_DA[suggestion.suggestions.type] : null,
+    suggestion.suggestions.playerLabel
+      ? suggestion.suggestions.playerNumber
+        ? `${suggestion.suggestions.playerLabel} (Nr. ${suggestion.suggestions.playerNumber})`
+        : suggestion.suggestions.playerLabel
+      : null,
+    suggestion.suggestions.patchLabel,
   ]
     .filter(Boolean)
     .join(" · ");

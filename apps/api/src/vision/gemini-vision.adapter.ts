@@ -18,6 +18,9 @@ type GeminiStructured = {
   clubHint?: string;
   seasonHint?: string;
   kitType?: KitType;
+  playerHint?: string;
+  playerNumberHint?: string;
+  patchHint?: string;
   confidence?: number;
 };
 
@@ -86,6 +89,16 @@ function decodeGeminiResponse(body: unknown): GeminiStructured | null {
       clubHint: typeof parsed.clubHint === "string" ? parsed.clubHint : undefined,
       seasonHint: typeof parsed.seasonHint === "string" ? parsed.seasonHint : undefined,
       kitType: isKitType(parsed.kitType) ? parsed.kitType : undefined,
+      playerHint: typeof parsed.playerHint === "string" ? parsed.playerHint : undefined,
+      playerNumberHint:
+        typeof parsed.playerNumberHint === "string"
+          ? parsed.playerNumberHint
+          : typeof parsed.playerNumber === "string"
+            ? parsed.playerNumber
+            : typeof parsed.playerNumber === "number"
+              ? String(parsed.playerNumber)
+              : undefined,
+      patchHint: typeof parsed.patchHint === "string" ? parsed.patchHint : undefined,
       confidence: typeof parsed.confidence === "number" ? parsed.confidence : undefined,
     };
   } catch {
@@ -114,8 +127,8 @@ export class GeminiVisionAdapter implements VisionAdapter {
         {
           text:
             photos.length === 1
-              ? 'Identify the football club, season, and kit type (home|away|third|fourth|gk|special) from this jersey photo. Reply JSON only: {"clubHint":"...","seasonHint":"...","kitType":"home","confidence":0.85}. confidence is 0-1 for how sure you are overall. Use English club names. Omit fields you cannot infer.'
-              : 'Identify the football club, season, and kit type (home|away|third|fourth|gk|special) from these jersey photos of the same shirt. Reply JSON only: {"clubHint":"...","seasonHint":"...","kitType":"home","confidence":0.85}. confidence is 0-1 for how sure you are overall. Use English club names. Omit fields you cannot infer.',
+              ? 'Identify the football club, season, kit type (home|away|third|fourth|gk|special), squad player name or number, and sleeve patch or competition badge from this jersey photo. Reply JSON only: {"clubHint":"...","seasonHint":"...","kitType":"home","playerHint":"...","playerNumberHint":"10","patchHint":"Champions League","confidence":0.85}. confidence is 0-1 for how sure you are overall. Use English club names. Omit fields you cannot infer.'
+              : 'Identify the football club, season, kit type (home|away|third|fourth|gk|special), squad player name or number, and sleeve patch or competition badge from these jersey photos of the same shirt. Reply JSON only: {"clubHint":"...","seasonHint":"...","kitType":"home","playerHint":"...","playerNumberHint":"10","patchHint":"Champions League","confidence":0.85}. confidence is 0-1 for how sure you are overall. Use English club names. Omit fields you cannot infer.',
         },
       ];
 

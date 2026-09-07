@@ -14,8 +14,10 @@ import {
 } from "@/capture/captureSession";
 import {
   clearConfirmSeasonEdited,
+  markConfirmBadgeEdited,
   markConfirmClubEdited,
   markConfirmKitTypeEdited,
+  markConfirmPlayerEdited,
   markConfirmSeasonEdited,
 } from "@/capture/confirmManualEdits";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
@@ -128,6 +130,7 @@ export function ConfirmDataScreen() {
             accessibilityLabel="Badge"
             accessibilityState={{ checked: draft.badgeEnabled }}
             onPress={() => {
+              markConfirmBadgeEdited();
               mutate((current) =>
                 setDraftBadgeEnabled(current, current.activeDraftId, !draft.badgeEnabled),
               );
@@ -162,6 +165,7 @@ export function ConfirmDataScreen() {
                     selected={draft.badgeId === badge.id}
                     accessibilityRole="radio"
                     onPress={() => {
+                      markConfirmBadgeEdited();
                       mutate((current) =>
                         setDraftBadge(current, current.activeDraftId, {
                           id: badge.id,
@@ -216,6 +220,7 @@ export function ConfirmDataScreen() {
         seasonId={draft.seasonId}
         selectedId={draft.playerId}
         onSelect={(player) => {
+          markConfirmPlayerEdited();
           mutate((current) =>
             setDraftPlayer(current, current.activeDraftId, {
               id: player.id,

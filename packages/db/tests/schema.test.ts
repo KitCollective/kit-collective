@@ -58,6 +58,8 @@ describe("stamdata schema", () => {
         "player_photo",
         "catalog_label",
         "external_id",
+        "patch",
+        "user_jersey_patch",
         "user",
         "moderation_block",
         "moderation_report",

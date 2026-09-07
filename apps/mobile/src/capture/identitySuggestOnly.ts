@@ -4,6 +4,8 @@ export type IdentityManualEditMask = {
   club?: boolean;
   season?: boolean;
   type?: boolean;
+  player?: boolean;
+  badge?: boolean;
 };
 
 function filterSuggestOnlyFields(
@@ -31,6 +33,23 @@ function filterSuggestOnlyFields(
     filtered.type = suggestions.type;
     if (suggestions.catalogKitId) {
       filtered.catalogKitId = suggestions.catalogKitId;
+    }
+  }
+
+  if (suggestions.playerId && !fieldPreselect.player && !manualEdits.player) {
+    filtered.playerId = suggestions.playerId;
+    if (suggestions.playerLabel) {
+      filtered.playerLabel = suggestions.playerLabel;
+    }
+    if (suggestions.playerNumber) {
+      filtered.playerNumber = suggestions.playerNumber;
+    }
+  }
+
+  if (suggestions.patchId && !fieldPreselect.badge && !manualEdits.badge) {
+    filtered.patchId = suggestions.patchId;
+    if (suggestions.patchLabel) {
+      filtered.patchLabel = suggestions.patchLabel;
     }
   }
 

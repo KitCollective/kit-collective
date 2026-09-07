@@ -80,4 +80,32 @@ describe("applyIdentitySuggestion", () => {
     expect(draft.size).toBeNull();
     expect(draft.condition).toBeNull();
   });
+
+  it("preselects player and badge when flagged in fieldPreselect", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+    const PLAYER = "550e8400-e29b-41d4-a716-446655440002";
+    const PATCH = "550e8400-e29b-41d4-a716-446655440003";
+
+    const applied = applyIdentitySuggestion(
+      session,
+      draftId,
+      {
+        playerId: PLAYER,
+        playerLabel: "Jonas Wind",
+        playerNumber: "23",
+        patchId: PATCH,
+        patchLabel: "Superligaen",
+      },
+      {
+        fieldPreselect: { player: true, badge: true },
+      },
+    );
+
+    const draft = getActiveDraft(applied);
+    expect(draft.playerId).toBe(PLAYER);
+    expect(draft.playerName).toBe("Jonas Wind");
+    expect(draft.badgeId).toBe(PATCH);
+    expect(draft.badgeLabel).toBe("Superligaen");
+  });
 });

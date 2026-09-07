@@ -525,6 +525,15 @@ export const authSecurityDetection = pgTable(
   (table) => [uniqueIndex("auth_security_detection_sentinel_id_unique").on(table.sentinelId)],
 );
 
+export const patch = pgTable("patch", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  seasonId: uuid("season_id")
+    .notNull()
+    .references(() => season.id),
+  leagueId: uuid("league_id").references(() => league.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const userJersey = pgTable("user_jersey", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
@@ -536,6 +545,7 @@ export const userJersey = pgTable("user_jersey", {
   seasonId: uuid("season_id")
     .notNull()
     .references(() => season.id),
+  playerId: uuid("player_id").references(() => player.id),
   catalogKitId: uuid("catalog_kit_id").references(() => kit.id),
   type: kitTypeEnum("type").notNull(),
   size: jerseySizeEnum("size").notNull(),
@@ -548,6 +558,20 @@ export const userJersey = pgTable("user_jersey", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const userJerseyPatch = pgTable(
+  "user_jersey_patch",
+  {
+    userJerseyId: uuid("user_jersey_id")
+      .notNull()
+      .references(() => userJersey.id),
+    patchId: uuid("patch_id")
+      .notNull()
+      .references(() => patch.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userJerseyId, table.patchId] })],
+);
 
 export const conversation = pgTable(
   "conversation",
@@ -671,6 +695,8 @@ export const visionLog = pgTable("vision_log", {
   suggestedSeasonId: uuid("suggested_season_id").references(() => season.id),
   suggestedCatalogKitId: uuid("suggested_catalog_kit_id").references(() => kit.id),
   suggestedType: kitTypeEnum("suggested_type"),
+  suggestedPlayerId: uuid("suggested_player_id").references(() => player.id),
+  suggestedPatchId: uuid("suggested_patch_id").references(() => patch.id),
   visionRaw: text("vision_raw"),
   confidences: text("confidences"),
   groupingResult: text("grouping_result"),
@@ -939,8 +965,23 @@ export const userJerseyRelations = relations(userJersey, ({ one, many }) => ({
   user: one(user, { fields: [userJersey.userId], references: [user.id] }),
   club: one(club, { fields: [userJersey.clubId], references: [club.id] }),
   season: one(season, { fields: [userJersey.seasonId], references: [season.id] }),
+  player: one(player, { fields: [userJersey.playerId], references: [player.id] }),
   catalogKit: one(kit, { fields: [userJersey.catalogKitId], references: [kit.id] }),
   photos: many(userJerseyPhoto),
+  patches: many(userJerseyPatch),
+}));
+
+export const userJerseyPatchRelations = relations(userJerseyPatch, ({ one }) => ({
+  userJersey: one(userJersey, {
+    fields: [userJerseyPatch.userJerseyId],
+    references: [userJersey.id],
+  }),
+  patch: one(patch, { fields: [userJerseyPatch.patchId], references: [patch.id] }),
+}));
+
+export const patchRelations = relations(patch, ({ one }) => ({
+  season: one(season, { fields: [patch.seasonId], references: [season.id] }),
+  league: one(league, { fields: [patch.leagueId], references: [league.id] }),
 }));
 
 export const userJerseyPhotoRelations = relations(userJerseyPhoto, ({ one }) => ({
@@ -964,6 +1005,14 @@ export const visionLogRelations = relations(visionLog, ({ one }) => ({
   suggestedCatalogKit: one(kit, {
     fields: [visionLog.suggestedCatalogKitId],
     references: [kit.id],
+  }),
+  suggestedPlayer: one(player, {
+    fields: [visionLog.suggestedPlayerId],
+    references: [player.id],
+  }),
+  suggestedPatch: one(patch, {
+    fields: [visionLog.suggestedPatchId],
+    references: [patch.id],
   }),
 }));
 

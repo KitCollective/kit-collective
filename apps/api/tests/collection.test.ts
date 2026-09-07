@@ -25,11 +25,14 @@ import {
   createDb,
   kit,
   league,
+  patch,
   player,
   playerClubSeason,
   resetDatabase,
   season,
   teamSeason,
+  userJersey,
+  userJerseyPatch,
   visionLog,
 } from "@kit/db";
 import {
@@ -1924,5 +1927,91 @@ describe("Collection /v1", () => {
     });
 
     expect([400, 413]).toContain(response.statusCode);
+  });
+
+  it("persists optional player and sleeve patch on save", async () => {
+    const fixture = await insertClubSeasonFixture();
+    const { db, pool } = createDb(DATABASE_URL);
+    const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    await db.insert(playerClubSeason).values({
+      playerId: insertedPlayer!.id,
+      clubId: fixture.clubId,
+      seasonId: fixture.seasonId,
+      squadNumber: 10,
+    });
+    await db.insert(catalogLabel).values({
+      entityType: "player",
+      entityId: insertedPlayer!.id,
+      locale: "da",
+      kind: "label",
+      text: "Jonas Wind",
+      source: "seed",
+    });
+    const [insertedPatch] = await db
+      .insert(patch)
+      .values({ seasonId: fixture.seasonId })
+      .returning({ id: patch.id });
+    await db.insert(catalogLabel).values({
+      entityType: "patch",
+      entityId: insertedPatch!.id,
+      locale: "da",
+      kind: "label",
+      text: "Superligaen",
+      source: "seed",
+    });
+    await pool.end();
+
+    const session = await registerSession(app, "player-patch-save@example.com");
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        clubId: fixture.clubId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        playerId: insertedPlayer!.id,
+        patchIds: [insertedPatch!.id],
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const saved = collectionSaveResponseSchema.parse(JSON.parse(response.body));
+    expect(saved.jersey.playerId).toBe(insertedPlayer!.id);
+    expect(saved.jersey.playerLabel).toBe("Jonas Wind");
+    expect(saved.jersey.playerNumber).toBe("10");
+    expect(saved.jersey.patches).toEqual([{ id: insertedPatch!.id, label: "Superligaen" }]);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    const listed = collectionJerseysSchema.parse(JSON.parse(listResponse.body));
+    const jersey = listed.jerseys.find((row) => row.id === saved.jersey.id);
+    expect(jersey?.playerId).toBe(insertedPlayer!.id);
+    expect(jersey?.patches).toEqual([{ id: insertedPatch!.id, label: "Superligaen" }]);
+
+    const { db: verifyDb, pool: verifyPool } = createDb(DATABASE_URL);
+    const [row] = await verifyDb
+      .select({ playerId: userJersey.playerId })
+      .from(userJersey)
+      .where(eq(userJersey.id, saved.jersey.id));
+    const patchRows = await verifyDb
+      .select({ patchId: userJerseyPatch.patchId })
+      .from(userJerseyPatch)
+      .where(eq(userJerseyPatch.userJerseyId, saved.jersey.id));
+    await verifyPool.end();
+    expect(row?.playerId).toBe(insertedPlayer!.id);
+    expect(patchRows.map((entry) => entry.patchId)).toEqual([insertedPatch!.id]);
   });
 });
