@@ -4,7 +4,8 @@ import type { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { FOOTBALL_KIT_ARCHIVE_ORIGIN, startFkListingHttpServer } from "../src/listing-http.js";
+import { startFkListingHttpServer } from "../src/listing-http.js";
+import type { FkListingKitSource } from "../src/listing-kit-source.js";
 import { parseFkListingKitsQuery } from "../src/listing-query.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -48,7 +49,6 @@ describe("FK listing HTTP", () => {
   it("GET /health returns 200", async () => {
     const server = startFkListingHttpServer({
       env: { PORT: "0", FK_LISTING_BIND: "127.0.0.1" },
-      probeOrigin: async () => ({ status: 403 }),
     });
     try {
       const port = await listeningPort(server);
@@ -63,7 +63,6 @@ describe("FK listing HTTP", () => {
   it("GET /kits without query returns 400 not empty kits", async () => {
     const server = startFkListingHttpServer({
       env: { PORT: "0", FK_LISTING_BIND: "127.0.0.1" },
-      probeOrigin: async () => ({ status: 200 }),
     });
     try {
       const port = await listeningPort(server);
@@ -79,14 +78,14 @@ describe("FK listing HTTP", () => {
     }
   });
 
-  it("GET /kits fails closed when Football Kit Archive origin is not 200", async () => {
-    const probed: string[] = [];
+  it("GET /kits fails closed when the kit source cannot load live kits", async () => {
+    const loadKits: FkListingKitSource = async () => ({
+      ok: false,
+      error: "Wayback has no Football Kit Archive kit snapshot for this scope",
+    });
     const server = startFkListingHttpServer({
       env: { PORT: "0", FK_LISTING_BIND: "127.0.0.1" },
-      probeOrigin: async (url) => {
-        probed.push(url);
-        return { status: 403 };
-      },
+      loadKits,
     });
     try {
       const port = await listeningPort(server);
@@ -94,17 +93,63 @@ describe("FK listing HTTP", () => {
         `http://127.0.0.1:${port}/kits?clubTransfermarktId=190&season=2010%2F11`,
       );
       expect(response.status).toBe(502);
-      expect(probed).toEqual([FOOTBALL_KIT_ARCHIVE_ORIGIN]);
       const body = await response.json();
       expect(body).toEqual({
-        error: "Football Kit Archive origin refused (not Decodo). Listing HTTP fails closed.",
-        originStatus: 403,
+        error: "Wayback has no Football Kit Archive kit snapshot for this scope",
         scope: {
           kind: "club",
           competition: "superligaen",
           clubExternalId: "190",
           season: "2010/11",
         },
+      });
+    } finally {
+      server.close();
+    }
+  });
+
+  it("GET /kits returns kit JSON when the kit source loads", async () => {
+    const loadKits: FkListingKitSource = async () => ({
+      ok: true,
+      kits: [
+        {
+          id: "fc-copenhagen-2010-11-home-kit",
+          clubTransfermarktId: "190",
+          seasonTransfermarktId: "2010/11",
+          seasonLabel: "2010/11",
+          type: "home",
+          manufacturerName: "Kappa",
+          sponsorName: "Carlsberg",
+          imageUrl:
+            "https://web.archive.org/web/20230813082833id_/https://cdn.footballkitarchive.com/2021/07/04/6BRVH8Hy1F8md50.jpg",
+        },
+      ],
+    });
+    const server = startFkListingHttpServer({
+      env: { PORT: "0", FK_LISTING_BIND: "127.0.0.1" },
+      loadKits,
+    });
+    try {
+      const port = await listeningPort(server);
+      const response = await fetch(
+        `http://127.0.0.1:${port}/kits?clubTransfermarktId=190&season=2010%2F11`,
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toEqual({
+        kits: [
+          {
+            id: "fc-copenhagen-2010-11-home-kit",
+            clubTransfermarktId: "190",
+            seasonTransfermarktId: "2010/11",
+            seasonLabel: "2010/11",
+            type: "home",
+            manufacturerName: "Kappa",
+            sponsorName: "Carlsberg",
+            imageUrl:
+              "https://web.archive.org/web/20230813082833id_/https://cdn.footballkitarchive.com/2021/07/04/6BRVH8Hy1F8md50.jpg",
+          },
+        ],
       });
     } finally {
       server.close();
@@ -131,5 +176,7 @@ describe("Coolify FK listing host", () => {
     expect(wire).toMatch(/SEED_LANE:-development/);
     expect(wire).toMatch(/production is refused/);
     expect(wire).not.toMatch(/\{key: "SEED_PROXY_URL"/);
+    expect(readRepo("seed/fkapi/src/listing-kit-source.ts")).toMatch(/web\.archive\.org/);
+    expect(readRepo("seed/fkapi/src/listing-http.ts")).not.toMatch(/SEED_PROXY_URL/);
   });
 });
