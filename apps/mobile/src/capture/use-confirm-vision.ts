@@ -18,8 +18,8 @@ import {
 } from "@/capture/confirmManualEdits";
 import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
 import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
-import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
 import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
+import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
 import { motion } from "@/theme/tokens";
 
 const VISION_TIMEOUT_MS = 12_000;
