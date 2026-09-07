@@ -34,6 +34,7 @@ describe("vision-confidence", () => {
   it("marks ready with per-field preselect and suggest-only fields", () => {
     const highClub = resolveIdentityJob({
       clubId: "00000000-0000-0000-0000-000000000001",
+      catalogKitId: "00000000-0000-0000-0000-000000000003",
       confidences: { overall: 80, club: 80, season: 55, kitType: 55 },
       seasonId: "00000000-0000-0000-0000-000000000002",
       type: "home",

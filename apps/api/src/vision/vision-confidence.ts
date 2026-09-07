@@ -127,7 +127,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
   );
   const typeGate = resolveFieldGate(
     confidences?.kitType ?? confidences?.overall,
-    Boolean(result.type),
+    Boolean(result.catalogKitId),
   );
 
   const catalogMiss = Boolean(result.clubHint && !result.clubId);
@@ -149,7 +149,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     }
   }
 
-  if (typeGate !== "omit" && result.type) {
+  if (typeGate !== "omit" && result.type && result.catalogKitId) {
     suggestions.type = result.type;
     if (typeGate === "preselect") {
       fieldPreselect.type = true;

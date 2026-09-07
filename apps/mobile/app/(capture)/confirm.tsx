@@ -42,6 +42,7 @@ export default function ConfirmScreen() {
   }>();
   const { accessToken } = useAuth();
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
+  const [catalogMiss, setCatalogMiss] = useState(false);
   const {
     state,
     isSessionResolved,
@@ -76,6 +77,7 @@ export default function ConfirmScreen() {
     jobId: visionJobId,
     setJobId: setVisionJobId,
     setSelectedSeasonLabel,
+    onCatalogMiss: setCatalogMiss,
   });
   const photos = useConfirmPhotos({
     sessionId,
@@ -171,6 +173,7 @@ export default function ConfirmScreen() {
           bannerState={grouping.analyzing ? "analyzing" : vision.bannerState}
           suggestion={vision.suggestion}
           groupingMessage={grouping.groupingMessage}
+          catalogMiss={catalogMiss}
           suggestionOpacity={
             grouping.groupingMessage ? grouping.suggestionOpacity : vision.suggestionOpacity
           }

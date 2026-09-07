@@ -100,6 +100,12 @@ export function useConfirmVision({
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const appliedJobId = useRef<string | null>(null);
   const startAttempted = useRef(false);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const prevScopeRef = useRef<{ draftId: string | null; photoFingerprint: string | null }>({
+    draftId: null,
+    photoFingerprint: null,
+  });
 
   const fadeInSuggestion = useCallback(() => {
     suggestionOpacity.setValue(reduceMotion ? 1 : 0);
@@ -115,23 +121,32 @@ export function useConfirmVision({
 
   const applySuggestions = useCallback(
     async (job: VisionJobResponse) => {
-      if (job.status !== "ready" || !sessionId || !draft) {
+      if (job.status !== "ready" || !sessionId) {
+        return;
+      }
+
+      const currentDraft = draftRef.current;
+      if (!currentDraft) {
         return;
       }
 
       onCatalogMiss?.(job.catalogMiss === true);
 
+      if (job.catalogMiss && !job.suggestions) {
+        return;
+      }
+
       const fieldPreselect = job.fieldPreselect ?? {};
       const suggestions = job.suggestions;
       const shouldPreselect = hasPreselectFields(fieldPreselect);
 
-      if (!shouldPreselect && !hasSuggestFields(job)) {
-        return;
-      }
-
       if (!shouldPreselect && suggestions) {
         setSuggestion(job);
         fadeInSuggestion();
+        return;
+      }
+
+      if (!shouldPreselect && !hasSuggestFields(job)) {
         return;
       }
 
@@ -154,49 +169,58 @@ export function useConfirmVision({
         if (!confirmSeasonWasEdited() && suggestions.clubId && accessToken) {
           await fetchClubSeasons(accessToken, suggestions.clubId);
         }
+        setApplied(true);
+        fadeInSuggestion();
       }
-
-      setApplied(true);
-      fadeInSuggestion();
     },
-    [
-      accessToken,
-      draft,
-      fadeInSuggestion,
-      mutate,
-      onCatalogMiss,
-      sessionId,
-      setSelectedSeasonLabel,
-    ],
+    [accessToken, fadeInSuggestion, mutate, onCatalogMiss, sessionId, setSelectedSeasonLabel],
   );
 
   const draftId = draft?.id ?? null;
   const photoFingerprint = draftPhotoFingerprint(draft);
 
   useEffect(() => {
-    setJobId(null);
-    setPolling(false);
-    setSuggestion(null);
-    setApplied(false);
-    startAttempted.current = false;
-    appliedJobId.current = null;
-    resetConfirmManualEdits();
-    setSelectedSeasonLabel(null);
-    onCatalogMiss?.(false);
+    const prev = prevScopeRef.current;
+    const draftChanged = prev.draftId !== draftId;
+    const photosChanged = prev.photoFingerprint !== photoFingerprint;
+    prevScopeRef.current = { draftId, photoFingerprint };
 
-    if (!accessToken || !draftId || !photoFingerprint || !draft) {
+    if (!accessToken || !draftId || !photoFingerprint) {
       return;
+    }
+
+    if (draftChanged) {
+      setJobId(null);
+      setPolling(false);
+      setSuggestion(null);
+      setApplied(false);
+      startAttempted.current = false;
+      appliedJobId.current = null;
+      resetConfirmManualEdits();
+      setSelectedSeasonLabel(null);
+      onCatalogMiss?.(false);
+    } else if (!photosChanged) {
+      return;
+    } else {
+      setJobId(null);
+      setPolling(false);
+      setSuggestion(null);
+      setApplied(false);
+      startAttempted.current = false;
+      appliedJobId.current = null;
+      onCatalogMiss?.(false);
     }
 
     let cancelled = false;
     const timer = setTimeout(() => {
       void (async () => {
-        if (startAttempted.current) {
+        const currentDraft = draftRef.current;
+        if (!currentDraft || startAttempted.current) {
           return;
         }
         startAttempted.current = true;
         try {
-          const payload = await buildIdentitySuggestRequest(draft);
+          const payload = await buildIdentitySuggestRequest(currentDraft);
           const nextJobId = await startVisionSuggest(accessToken, payload);
           if (!cancelled) {
             setJobId(nextJobId);
@@ -212,15 +236,7 @@ export function useConfirmVision({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [
-    accessToken,
-    draft,
-    draftId,
-    onCatalogMiss,
-    photoFingerprint,
-    setJobId,
-    setSelectedSeasonLabel,
-  ]);
+  }, [accessToken, draftId, onCatalogMiss, photoFingerprint, setJobId, setSelectedSeasonLabel]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !polling) {

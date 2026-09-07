@@ -144,8 +144,14 @@ export function JerseyDetailsScreen({
   const kitTypeManuallySet = useRef(false);
   const appliedVisionJobId = useRef<string | null>(null);
   const visionStartAttempted = useRef(false);
+  const prevVisionScopeRef = useRef<{ draftId: string | null; photoFingerprint: string | null }>({
+    draftId: null,
+    photoFingerprint: null,
+  });
 
   const draft = state ? getDraft(state, state.activeDraftId) : null;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const isBulk = state?.branch === "bulk";
   const visionDraftId = draft?.id ?? null;
   const visionPhotoFingerprint = draftPhotoFingerprint(draft);
@@ -365,27 +371,51 @@ export function JerseyDetailsScreen({
   );
 
   useEffect(() => {
-    setVisionJobId(null);
-    setVisionPolling(false);
-    setVisionSuggestion(null);
-    visionStartAttempted.current = false;
-    appliedVisionJobId.current = null;
-    clubManuallySet.current = false;
-    seasonManuallySet.current = false;
-    kitTypeManuallySet.current = false;
-    setSelectedSeasonLabel(null);
+    const prev = prevVisionScopeRef.current;
+    const draftChanged = prev.draftId !== visionDraftId;
+    const photosChanged = prev.photoFingerprint !== visionPhotoFingerprint;
+    prevVisionScopeRef.current = {
+      draftId: visionDraftId,
+      photoFingerprint: visionPhotoFingerprint,
+    };
 
-    if (!accessToken || !visionDraftId || !visionPhotoFingerprint || !draft) {
+    if (!accessToken || !visionDraftId || !visionPhotoFingerprint) {
       return;
+    }
+
+    if (draftChanged) {
+      setVisionJobId(null);
+      setVisionPolling(false);
+      setVisionSuggestion(null);
+      visionStartAttempted.current = false;
+      appliedVisionJobId.current = null;
+      clubManuallySet.current = false;
+      seasonManuallySet.current = false;
+      kitTypeManuallySet.current = false;
+      setSelectedSeasonLabel(null);
+      setCatalogMiss(false);
+    } else if (!photosChanged) {
+      return;
+    } else {
+      setVisionJobId(null);
+      setVisionPolling(false);
+      setVisionSuggestion(null);
+      visionStartAttempted.current = false;
+      appliedVisionJobId.current = null;
+      setCatalogMiss(false);
     }
 
     let cancelled = false;
     const timer = setTimeout(() => {
       void (async () => {
+        const currentDraft = draftRef.current;
+        if (!currentDraft) {
+          return;
+        }
         visionStartAttempted.current = true;
         try {
           const photos = await Promise.all(
-            draft.photos.map(async (photo) => {
+            currentDraft.photos.map(async (photo) => {
               const role = photo.role ?? "front";
               return {
                 role,
@@ -394,7 +424,7 @@ export function JerseyDetailsScreen({
             }),
           );
           const jobId = await startVisionSuggest(accessToken, {
-            draftId: draft.id,
+            draftId: currentDraft.id,
             photos,
           });
           if (!cancelled) {
@@ -411,7 +441,7 @@ export function JerseyDetailsScreen({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [accessToken, draft, visionDraftId, visionPhotoFingerprint]);
+  }, [accessToken, visionDraftId, visionPhotoFingerprint]);
 
   useEffect(() => {
     if (!accessToken || !visionJobId || !visionPolling) {
