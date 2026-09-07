@@ -11,7 +11,7 @@ import {
   SEED_MCP_HTTP_TOOL_NAMES,
 } from "../src/http-server.js";
 import type { CliRunner } from "../src/run-cli.js";
-import { SEED_MCP_SERVER_NAME, SEED_MCP_TOOL_NAMES } from "../src/server.js";
+import { SEED_MCP_SERVER_NAME } from "../src/server.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -22,9 +22,9 @@ describe("kc_seed_mcp HTTP catalog", () => {
     expect(createSeedMcpHttpServer(vi.fn<CliRunner>())).toBeDefined();
   });
 
-  it("stdio debug binary keeps seed_apify and seed_fk and is not the HTTP catalog", () => {
-    expect(SEED_MCP_TOOL_NAMES).toEqual(["seed_apify", "seed_fk"]);
-    expect(SEED_MCP_HTTP_TOOL_NAMES).not.toEqual(SEED_MCP_TOOL_NAMES);
+  it("HTTP catalog is not the stdio debug tools", () => {
+    expect(SEED_MCP_HTTP_TOOL_NAMES).not.toContain("seed_apify");
+    expect(SEED_MCP_HTTP_TOOL_NAMES).not.toContain("seed_fk");
   });
 
   it("tool descriptions say Coolify MCP is host-only so ingest chat does not use Coolify control", () => {

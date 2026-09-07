@@ -81,6 +81,12 @@ jobs:
       - name: Check seed scope isolation test
         run: pnpm check:seed-scope-isolation-test
 
+      - name: Check Seed MCP stdio catalog owner
+        run: node scripts/check-seed-mcp-stdio-catalog-owner.mjs
+
+      - name: Test Seed MCP stdio catalog owner ratchet
+        run: node --test scripts/tests/check-seed-mcp-stdio-catalog-owner.test.mjs
+
       - name: Check seed apify test database isolation
         run: pnpm check:seed-apify-test-database-isolation
 

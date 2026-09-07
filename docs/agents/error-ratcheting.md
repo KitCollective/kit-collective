@@ -45,6 +45,10 @@ After checker fail or approver reject, if the mistake is a **recurring class** (
 
 The **checker** may require this in `### Review feedback` on the second fail of the same class. The **planner** may comment the same requirement. Neither writes the hook or rule. The **implement** PR lands it. Ratchet files use the write-scope exception in `docs/agents/write-scope.md` — they are not a write-scope miss on that issue. Prefer a hook over a new always-applied rule when a deny/allow gate would have caught it — do not grow `.cursor/rules/` for one-off mistakes.
 
+### Seed MCP stdio catalog owner ratchet (KIT-233)
+
+`scripts/check-seed-mcp-stdio-catalog-owner.mjs` (CI via `node scripts/check-seed-mcp-stdio-catalog-owner.mjs`) fails when `seed/mcp/tests/server.test.ts` does not pin `SEED_MCP_TOOL_NAMES` to `["seed_apify", "seed_fk"]` exactly once, or when any other `seed/mcp/tests/**` file re-asserts that tuple. HTTP tests may assert the HTTP catalog is not those tool names without re-proving the stdio list. `scripts/tests/check-seed-mcp-stdio-catalog-owner.test.mjs` mutation-tests the checker. Prevents repeating the KIT-233 checker fails (duplicate stdio catalog in `server.test.ts`, then again in `http.test.ts`). Tighten only.
+
 ### Seed package import ratchet (KIT-9)
 
 `scripts/check-import-boundaries.mjs` denies `@kit/db` and `packages/db` imports inside `seed/fkapi/`. Seed mappers talk to Postgres via `DATABASE_URL` only (ADR 0001). Tighten only — do not remove this check without superseding ADR 0001.

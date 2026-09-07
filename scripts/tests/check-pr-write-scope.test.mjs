@@ -48,6 +48,11 @@ test("isRatchetException allows named ratchet scripts, not arbitrary scripts/lib
   assert.equal(isRatchetException("scripts/check-pr-write-scope.mjs"), true);
   assert.equal(isRatchetException("scripts/check-seed-fkapi-test-database-isolation.mjs"), true);
   assert.equal(isRatchetException("scripts/check-kit-db-test-database-isolation.mjs"), true);
+  assert.equal(isRatchetException("scripts/check-seed-mcp-stdio-catalog-owner.mjs"), true);
+  assert.equal(
+    isRatchetException("scripts/tests/check-seed-mcp-stdio-catalog-owner.test.mjs"),
+    true,
+  );
   assert.equal(isRatchetException("scripts/check-migration-prefixes.mjs"), true);
   assert.equal(isRatchetException("scripts/lib/migration-prefix.mjs"), true);
   assert.equal(isRatchetException("scripts/tests/check-migration-prefixes.test.mjs"), true);
