@@ -23,6 +23,7 @@ import {
 } from "@/capture/confirmManualEdits";
 import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
 import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
+import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
 import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { motion } from "@/theme/tokens";
 
@@ -162,13 +163,25 @@ export function useConfirmVision({
           }),
         );
 
-        if (!confirmSeasonWasEdited() && suggestions.seasonLabel) {
+        if (!confirmSeasonWasEdited() && suggestions.seasonLabel && fieldPreselect.season) {
           setSelectedSeasonLabel(suggestions.seasonLabel);
         }
 
-        if (!confirmSeasonWasEdited() && suggestions.clubId && accessToken) {
+        if (!confirmSeasonWasEdited() && suggestions.clubId && accessToken && fieldPreselect.club) {
           await fetchClubSeasons(accessToken, suggestions.clubId);
         }
+
+        const suggestOnlyJob = buildSuggestOnlyVisionJob(job, {
+          club: confirmClubWasEdited(),
+          season: confirmSeasonWasEdited(),
+          type: confirmKitTypeWasEdited(),
+        });
+        if (suggestOnlyJob) {
+          setSuggestion(suggestOnlyJob);
+          fadeInSuggestion();
+          return;
+        }
+
         setApplied(true);
         fadeInSuggestion();
       }
@@ -307,6 +320,7 @@ export function useConfirmVision({
       await fetchClubSeasons(accessToken, suggestions.clubId);
     }
     setSuggestion(null);
+    setApplied(true);
     onCatalogMiss?.(false);
   }, [accessToken, mutate, onCatalogMiss, setSelectedSeasonLabel, suggestion]);
 

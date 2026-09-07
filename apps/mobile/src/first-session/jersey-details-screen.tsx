@@ -57,6 +57,7 @@ import { resolveConfirmBanner } from "@/capture/confirmBanner";
 import { resolveConfirmLightboxUri, resolveConfirmStripUri } from "@/capture/confirmPhotoUri";
 import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
 import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
+import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
 import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -356,13 +357,24 @@ export function JerseyDetailsScreen({
         }),
       );
 
-      if (!seasonManuallySet.current && suggestions.seasonLabel) {
+      if (!seasonManuallySet.current && suggestions.seasonLabel && fieldPreselect.season) {
         setSelectedSeasonLabel(suggestions.seasonLabel);
       }
 
-      if (!seasonManuallySet.current && suggestions.clubId && accessToken) {
+      if (!seasonManuallySet.current && suggestions.clubId && accessToken && fieldPreselect.club) {
         const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
         setSeasonResults(seasons.seasons);
+      }
+
+      const suggestOnlyJob = buildSuggestOnlyVisionJob(job, {
+        club: clubManuallySet.current,
+        season: seasonManuallySet.current,
+        type: kitTypeManuallySet.current,
+      });
+      if (suggestOnlyJob) {
+        setVisionSuggestion(suggestOnlyJob);
+        fadeInSuggestion();
+        return;
       }
 
       fadeInSuggestion();
