@@ -1,7 +1,6 @@
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import type { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -16,7 +15,10 @@ function readRepo(relativePath: string): string {
 
 async function listeningPort(server: ReturnType<typeof createServer>): Promise<number> {
   await once(server, "listening");
-  const address = server.address() as AddressInfo;
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("expected TCP listen address");
+  }
   return address.port;
 }
 
@@ -67,9 +69,11 @@ describe("FK listing HTTP", () => {
       const port = await listeningPort(server);
       const response = await fetch(`http://127.0.0.1:${port}/kits`);
       expect(response.status).toBe(400);
-      const body = (await response.json()) as { error: string; kits?: unknown };
-      expect(body.kits).toBeUndefined();
-      expect(body.error).toMatch(/clubTransfermarktId/);
+      const body = await response.json();
+      expect(body).toEqual({
+        error:
+          "kits query requires clubTransfermarktId+season, nationalTeamFkApiId+season, or competition+from+to",
+      });
     } finally {
       server.close();
     }
@@ -91,8 +95,17 @@ describe("FK listing HTTP", () => {
       );
       expect(response.status).toBe(502);
       expect(probed).toEqual([FOOTBALL_KIT_ARCHIVE_ORIGIN]);
-      const body = (await response.json()) as { kits?: unknown };
-      expect(body.kits).toBeUndefined();
+      const body = await response.json();
+      expect(body).toEqual({
+        error: "Football Kit Archive origin refused (not Decodo). Listing HTTP fails closed.",
+        originStatus: 403,
+        scope: {
+          kind: "club",
+          competition: "superligaen",
+          clubExternalId: "190",
+          season: "2010/11",
+        },
+      });
     } finally {
       server.close();
     }
