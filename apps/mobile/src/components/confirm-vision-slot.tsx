@@ -11,6 +11,7 @@ type ConfirmVisionSlotProps = {
   bannerState: ConfirmVisionBannerState;
   suggestion: VisionJobResponse | null;
   groupingMessage?: string | null;
+  catalogMiss?: boolean;
   suggestionOpacity: Animated.Value;
   onApplySuggestion: () => void;
   onDismissSuggestion: () => void;
@@ -21,6 +22,7 @@ export function ConfirmVisionSlot({
   bannerState,
   suggestion,
   groupingMessage,
+  catalogMiss = false,
   suggestionOpacity,
   onApplySuggestion,
   onDismissSuggestion,
@@ -43,6 +45,16 @@ export function ConfirmVisionSlot({
   }
 
   if (!suggestion?.suggestions) {
+    if (catalogMiss) {
+      return (
+        <Banner
+          tone="info"
+          message="Klubben findes ikke i kataloget endnu. Dit draft bliver gemt."
+          action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
+        />
+      );
+    }
+
     return <ConfirmVisionBanner state={bannerState} />;
   }
 
@@ -50,6 +62,12 @@ export function ConfirmVisionSlot({
     suggestion.suggestions.clubLabel,
     suggestion.suggestions.seasonLabel,
     suggestion.suggestions.type ? KIT_TYPE_LABELS_DA[suggestion.suggestions.type] : null,
+    suggestion.suggestions.playerLabel
+      ? suggestion.suggestions.playerNumber
+        ? `${suggestion.suggestions.playerLabel} (Nr. ${suggestion.suggestions.playerNumber})`
+        : suggestion.suggestions.playerLabel
+      : null,
+    suggestion.suggestions.patchLabel,
   ]
     .filter(Boolean)
     .join(" · ");

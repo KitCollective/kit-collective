@@ -7,7 +7,7 @@ import {
   type VisionUserAction,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { catalogLabel, club, season, visionLog } from "@kit/db";
+import { catalogLabel, playerClubSeason, season, visionLog } from "@kit/db";
 import type { KitType, LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -15,14 +15,15 @@ import { DB } from "../db/db.module.js";
 import type {
   VisionAdapter,
   VisionGroupingPhotoInput,
+  VisionIdentityPhotoInput,
   VisionInferenceResult,
 } from "./vision.adapter.js";
 import { VISION_ADAPTER } from "./vision.adapter.js";
 import {
+  parseClubHintFromVisionRaw,
   parseConfidences,
-  resolveVisionStatus,
+  resolveIdentityJob,
   serializeConfidences,
-  shouldPreselect,
 } from "./vision-confidence.js";
 import {
   parseGroupingResult,
@@ -39,7 +40,7 @@ export type VisionJobPayload = {
   kind: VisionJobKind;
   draftId?: string;
   sessionId?: string;
-  photoBytes?: Uint8Array;
+  identityPhotos?: VisionIdentityPhotoInput[];
   groupingPhotos?: VisionGroupingPhotoInput[];
 };
 
@@ -89,13 +90,14 @@ export class VisionService {
     let status: VisionJobStatus = "noop";
 
     try {
-      if (!payload.photoBytes) {
+      const photos = payload.identityPhotos ?? [];
+      if (photos.length === 0) {
         throw new Error("Identity vision job missing photo bytes");
       }
-      result = await this.adapter.infer(payload.photoBytes);
-      const resolved = resolveVisionStatus(result);
+      result = await this.adapter.infer(photos);
+      const resolved = resolveIdentityJob(result);
       status = resolved.status;
-      result = resolved.result;
+      result = resolved.storedResult;
     } catch {
       status = "failed";
     }
@@ -109,6 +111,8 @@ export class VisionService {
           suggestedSeasonId: result?.seasonId ?? null,
           suggestedCatalogKitId: result?.catalogKitId ?? null,
           suggestedType: result?.type ?? null,
+          suggestedPlayerId: result?.playerId ?? null,
+          suggestedPatchId: result?.patchId ?? null,
           visionRaw: result?.visionRaw ?? null,
           confidences: result?.confidences ? serializeConfidences(result.confidences) : null,
           latencyMs: result?.latencyMs ?? null,
@@ -193,6 +197,14 @@ export class VisionService {
     status: VisionJobStatus;
     kind?: VisionJobKind;
     preselect?: boolean;
+    fieldPreselect?: {
+      club?: boolean;
+      season?: boolean;
+      type?: boolean;
+      player?: boolean;
+      badge?: boolean;
+    };
+    catalogMiss?: boolean;
     suggestions?: VisionSuggestions;
     grouping?: VisionGroupingSuggestions;
   } | null> {
@@ -206,8 +218,11 @@ export class VisionService {
         suggestedSeasonId: visionLog.suggestedSeasonId,
         suggestedCatalogKitId: visionLog.suggestedCatalogKitId,
         suggestedType: visionLog.suggestedType,
+        suggestedPlayerId: visionLog.suggestedPlayerId,
+        suggestedPatchId: visionLog.suggestedPatchId,
         confidences: visionLog.confidences,
         groupingResult: visionLog.groupingResult,
+        visionRaw: visionLog.visionRaw,
       })
       .from(visionLog)
       .where(eq(visionLog.id, jobId))
@@ -247,48 +262,96 @@ export class VisionService {
     }
 
     const confidences = parseConfidences(row.confidences);
-    const preselect = shouldPreselect(confidences);
-
-    const clubLabel = row.suggestedClubId
-      ? await this.resolveClubLabel(row.suggestedClubId, locale)
-      : undefined;
-    const seasonLabel = row.suggestedSeasonId
-      ? await this.resolveSeasonLabel(row.suggestedSeasonId)
-      : undefined;
-
-    const suggestions: VisionSuggestions = {
+    const clubHint = parseClubHintFromVisionRaw(row.visionRaw);
+    const resolved = resolveIdentityJob({
       clubId: row.suggestedClubId ?? undefined,
       seasonId: row.suggestedSeasonId ?? undefined,
       catalogKitId: row.suggestedCatalogKitId ?? undefined,
       type: row.suggestedType ?? undefined,
+      playerId: row.suggestedPlayerId ?? undefined,
+      patchId: row.suggestedPatchId ?? undefined,
+      clubHint,
+      confidences: confidences ?? undefined,
+    });
+
+    const clubLabel = row.suggestedClubId
+      ? await this.resolveEntityLabel("club", row.suggestedClubId, locale)
+      : undefined;
+    const seasonLabel = row.suggestedSeasonId
+      ? await this.resolveSeasonLabel(row.suggestedSeasonId)
+      : undefined;
+    const playerLabel = row.suggestedPlayerId
+      ? await this.resolveEntityLabel("player", row.suggestedPlayerId, locale)
+      : undefined;
+    const patchLabel = row.suggestedPatchId
+      ? await this.resolveEntityLabel("patch", row.suggestedPatchId, locale)
+      : undefined;
+
+    const suggestions: VisionSuggestions = {
+      ...resolved.suggestions,
       clubLabel: clubLabel ?? undefined,
       seasonLabel: seasonLabel ?? undefined,
+      playerLabel: playerLabel ?? undefined,
+      patchLabel: patchLabel ?? undefined,
     };
+
+    if (
+      suggestions.playerId &&
+      !suggestions.playerNumber &&
+      row.suggestedClubId &&
+      row.suggestedSeasonId
+    ) {
+      const [squadRow] = await this.db
+        .select({ squadNumber: playerClubSeason.squadNumber })
+        .from(playerClubSeason)
+        .where(
+          and(
+            eq(playerClubSeason.playerId, suggestions.playerId),
+            eq(playerClubSeason.clubId, row.suggestedClubId),
+            eq(playerClubSeason.seasonId, row.suggestedSeasonId),
+          ),
+        )
+        .limit(1);
+      if (squadRow?.squadNumber != null) {
+        suggestions.playerNumber = String(squadRow.squadNumber);
+      }
+    }
+
+    const hasSuggestions = Boolean(
+      suggestions.clubId ||
+        suggestions.seasonId ||
+        suggestions.type ||
+        suggestions.catalogKitId ||
+        suggestions.playerId ||
+        suggestions.patchId,
+    );
 
     return {
       jobId: row.id,
       status: row.status,
       kind: row.kind,
-      preselect,
-      suggestions,
+      preselect: resolved.preselect,
+      fieldPreselect: resolved.fieldPreselect,
+      catalogMiss: resolved.catalogMiss || undefined,
+      suggestions: hasSuggestions ? suggestions : undefined,
     };
   }
 
-  private async resolveClubLabel(clubId: string, locale: LabelLocale): Promise<string | null> {
+  private async resolveEntityLabel(
+    entityType: "club" | "player" | "patch",
+    entityId: string,
+    locale: LabelLocale,
+  ): Promise<string | null> {
     const rows = await this.db
       .select({ label: catalogLabel.text, locale: catalogLabel.locale, kind: catalogLabel.kind })
-      .from(club)
-      .leftJoin(
-        catalogLabel,
-        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
-      )
-      .where(eq(club.id, clubId));
+      .from(catalogLabel)
+      .where(and(eq(catalogLabel.entityType, entityType), eq(catalogLabel.entityId, entityId)));
 
-    const clubLabels = rows.filter((row) => row.label);
+    const entityLabels = rows.filter((row) => row.label);
     return (
-      clubLabels.find((row) => row.locale === locale && row.kind === "label")?.label ??
-      clubLabels.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
-      clubLabels.find((row) => row.locale === "en" && row.kind === "label")?.label ??
+      entityLabels.find((row) => row.locale === locale && row.kind === "label")?.label ??
+      entityLabels.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
+      entityLabels.find((row) => row.locale === "en" && row.kind === "label")?.label ??
       null
     );
   }

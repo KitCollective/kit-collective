@@ -35,7 +35,7 @@ export class VisionQueueService {
         userId,
         kind: "identity",
         draftId,
-        photoBytes,
+        identityPhotos: [{ bytes: photoBytes }],
       },
       (payload) => this.enqueue(payload),
     );

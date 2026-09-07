@@ -14,7 +14,7 @@ describe("vision contract", () => {
   it("parses suggest request and response", () => {
     const request: VisionSuggestRequest = {
       draftId: "11111111-1111-1111-1111-111111111111",
-      photo: { role: "front", contentBase64: "abc123" },
+      photos: [{ role: "front", contentBase64: "abc123" }],
     };
     expect(visionSuggestRequestSchema.parse(request)).toEqual(request);
 

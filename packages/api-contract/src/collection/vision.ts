@@ -31,7 +31,17 @@ export const visionSuggestPhotoSchema = z
 export const visionSuggestRequestSchema = z
   .object({
     draftId: z.string().uuid().optional(),
-    photo: visionSuggestPhotoSchema,
+    photos: z.array(visionSuggestPhotoSchema).min(1),
+  })
+  .strict();
+
+export const visionFieldPreselectSchema = z
+  .object({
+    club: z.boolean().optional(),
+    season: z.boolean().optional(),
+    type: z.boolean().optional(),
+    player: z.boolean().optional(),
+    badge: z.boolean().optional(),
   })
   .strict();
 
@@ -49,6 +59,11 @@ export const visionSuggestionsSchema = z
     type: z.enum(KIT_TYPES).optional(),
     clubLabel: z.string().min(1).optional(),
     seasonLabel: z.string().min(1).optional(),
+    playerId: z.string().uuid().optional(),
+    playerLabel: z.string().min(1).optional(),
+    playerNumber: z.string().min(1).optional(),
+    patchId: z.string().uuid().optional(),
+    patchLabel: z.string().min(1).optional(),
   })
   .strict();
 
@@ -57,8 +72,12 @@ export const visionJobResponseSchema = z
     jobId: z.string().uuid(),
     status: z.enum(VISION_JOB_STATUSES),
     kind: z.enum(VISION_JOB_KINDS).optional(),
-    /** When true (≥70% confidence), confirm may pre-select fields. When false (50–69%), show only. */
+    /** When true (≥70% overall), legacy clients may pre-select all suggested fields. */
     preselect: z.boolean().optional(),
+    /** Per-field preselect: ≥70% + catalog hit for that field. */
+    fieldPreselect: visionFieldPreselectSchema.optional(),
+    /** True when the model hinted a club but the catalog mapper found no club row. */
+    catalogMiss: z.boolean().optional(),
     suggestions: visionSuggestionsSchema.optional(),
     grouping: visionGroupingSuggestionsSchema.optional(),
   })
@@ -85,6 +104,7 @@ export const visionLogResponseSchema = z
   .strict();
 
 export type VisionSuggestPhoto = z.infer<typeof visionSuggestPhotoSchema>;
+export type VisionFieldPreselect = z.infer<typeof visionFieldPreselectSchema>;
 export type VisionSuggestRequest = z.infer<typeof visionSuggestRequestSchema>;
 export type VisionSuggestResponse = z.infer<typeof visionSuggestResponseSchema>;
 export type VisionSuggestions = z.infer<typeof visionSuggestionsSchema>;

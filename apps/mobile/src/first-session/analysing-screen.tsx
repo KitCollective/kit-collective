@@ -5,7 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { fetchUnsignedVisionJob, startUnsignedVisionSuggest } from "@/api/vision";
 import { loadPersistedCaptureSession } from "@/capture/captureFlow";
 import { getActiveDraft, photoUriForRole } from "@/capture/captureSession";
-import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
+import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
 import { PhotoSlot } from "@/components/photo-slot";
 import { Button, ButtonDock } from "@/components/ui";
 import {
@@ -29,18 +29,6 @@ type FirstSessionAnalysingScreenProps = {
   onVisionFailed: () => void;
   onFillSelf: () => void;
 };
-
-function firstVisionPhoto(
-  photoUris: Partial<Record<PhotoRole, string>>,
-): { role: PhotoRole; uri: string } | null {
-  for (const role of PHOTO_ROLES) {
-    const uri = photoUris[role];
-    if (uri) {
-      return { role, uri };
-    }
-  }
-  return null;
-}
 
 function formatSuggestionRows(suggestions: VisionSuggestions): string[] {
   const rows: string[] = [];
@@ -99,8 +87,7 @@ export function FirstSessionAnalysingScreen({
   }, []);
 
   useEffect(() => {
-    const firstPhoto = firstVisionPhoto(photoUris);
-    if (!firstPhoto) {
+    if (!draft || draft.photos.length === 0) {
       settle(onVisionFailed);
       return;
     }
@@ -149,15 +136,8 @@ export function FirstSessionAnalysingScreen({
 
     void (async () => {
       try {
-        const contentBase64 = await readPreparedPhotoBase64(
-          firstPhoto.uri,
-          firstPhoto.role,
-          "visionIdentity",
-        );
-        jobId = await startUnsignedVisionSuggest({
-          draftId: captureSessionId,
-          photo: { role: firstPhoto.role, contentBase64 },
-        });
+        const payload = await buildIdentitySuggestRequest(draft);
+        jobId = await startUnsignedVisionSuggest(payload);
       } catch {
         if (!cancelled) {
           settle(onVisionFailed);
@@ -177,7 +157,7 @@ export function FirstSessionAnalysingScreen({
         clearInterval(interval);
       }
     };
-  }, [captureSessionId, onVisionComplete, onVisionFailed, photoUris, settle]);
+  }, [draft, onVisionComplete, onVisionFailed, settle]);
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.canvas }]}>
