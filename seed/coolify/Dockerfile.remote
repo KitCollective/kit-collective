@@ -1,6 +1,7 @@
-# Self-contained seed image for Coolify compose jobs (no local build context).
+# Self-contained seed image for Coolify (no local build context).
 # Clones the public monorepo at build time so agents can deploy via Coolify API/MCP
 # without checking out the repo on the CX33 host first.
+# Default CMD is the 24/7 Seed MCP HTTP process. One-shot jobs override `command`.
 
 ARG GIT_REPOSITORY=https://github.com/KitCollective/kit-collective.git
 ARG GIT_REF=development
@@ -38,3 +39,6 @@ COPY --from=deps /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=build /app/seed ./seed
 COPY --from=build /app/packages ./packages
 COPY --from=deps /app/apps/api/package.json ./apps/api/package.json
+
+EXPOSE 8787
+CMD ["node", "seed/mcp/dist/http.js"]

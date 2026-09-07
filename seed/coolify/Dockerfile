@@ -1,6 +1,5 @@
-# One-shot seed jobs for Coolify on the CX33 host.
-# These are resource-limited jobs, not 24/7 services. Import each compose file as a
-# Coolify "Docker Compose" resource with restart policy disabled / run-once semantics.
+# Seed image for Coolify on the CX33 host.
+# Default CMD is the 24/7 Seed MCP HTTP process. One-shot jobs override `command`.
 
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
@@ -33,5 +32,7 @@ COPY --from=build /app/packages ./packages
 COPY --from=deps /app/apps/api/package.json ./apps/api/package.json
 
 # Builds @kit/domain + @kit/db (seed-apify imports them at module scope) plus shared + MCP
-# layers. Apify/FK CLI packages (KIT-8 / KIT-9) must exist in seed/ before the job command
-# can succeed at runtime.
+# layers. Apify/FK CLI packages (KIT-8 / KIT-9) must exist in seed/ before a job command
+# can succeed at runtime. Jobs override this CMD; Coolify applications keep it.
+EXPOSE 8787
+CMD ["node", "seed/mcp/dist/http.js"]
