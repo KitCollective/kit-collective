@@ -132,7 +132,7 @@ async function waitForVisionJob(
 
 function unsignedSuggestPayload() {
   return {
-    photo: { role: "front" as const, contentBase64: JPEG_BASE64 },
+    photos: [{ role: "front" as const, contentBase64: JPEG_BASE64 }],
   };
 }
 

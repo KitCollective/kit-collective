@@ -12,10 +12,18 @@ export type VisionInferenceResult = {
   seasonId?: string;
   catalogKitId?: string;
   type?: KitType;
+  /** Raw model club hint — used to detect catalog miss when clubId is absent. */
+  clubHint?: string;
   visionRaw?: string;
   confidences?: VisionFieldConfidences;
   latencyMs?: number;
   model?: string;
+};
+
+export type VisionIdentityPhotoInput = {
+  photoId?: string;
+  role?: string;
+  bytes: Uint8Array;
 };
 
 export type VisionGroupingPhotoInput = {
@@ -30,7 +38,7 @@ export type VisionGroupingInferenceResult = {
 };
 
 export type VisionAdapter = {
-  infer(photoBytes: Uint8Array): Promise<VisionInferenceResult | null>;
+  infer(photos: VisionIdentityPhotoInput[]): Promise<VisionInferenceResult | null>;
   inferGrouping?(photos: VisionGroupingPhotoInput[]): Promise<VisionGroupingInferenceResult | null>;
 };
 

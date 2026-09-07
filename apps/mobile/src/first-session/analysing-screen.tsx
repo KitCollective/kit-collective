@@ -156,7 +156,7 @@ export function FirstSessionAnalysingScreen({
         );
         jobId = await startUnsignedVisionSuggest({
           draftId: captureSessionId,
-          photo: { role: firstPhoto.role, contentBase64 },
+          photos: [{ role: firstPhoto.role, contentBase64 }],
         });
       } catch {
         if (!cancelled) {

@@ -15,14 +15,15 @@ import { DB } from "../db/db.module.js";
 import type {
   VisionAdapter,
   VisionGroupingPhotoInput,
+  VisionIdentityPhotoInput,
   VisionInferenceResult,
 } from "./vision.adapter.js";
 import { VISION_ADAPTER } from "./vision.adapter.js";
 import {
+  parseClubHintFromVisionRaw,
   parseConfidences,
-  resolveVisionStatus,
+  resolveIdentityJob,
   serializeConfidences,
-  shouldPreselect,
 } from "./vision-confidence.js";
 import {
   parseGroupingResult,
@@ -39,7 +40,7 @@ export type VisionJobPayload = {
   kind: VisionJobKind;
   draftId?: string;
   sessionId?: string;
-  photoBytes?: Uint8Array;
+  identityPhotos?: VisionIdentityPhotoInput[];
   groupingPhotos?: VisionGroupingPhotoInput[];
 };
 
@@ -89,13 +90,14 @@ export class VisionService {
     let status: VisionJobStatus = "noop";
 
     try {
-      if (!payload.photoBytes) {
+      const photos = payload.identityPhotos ?? [];
+      if (photos.length === 0) {
         throw new Error("Identity vision job missing photo bytes");
       }
-      result = await this.adapter.infer(payload.photoBytes);
-      const resolved = resolveVisionStatus(result);
+      result = await this.adapter.infer(photos);
+      const resolved = resolveIdentityJob(result);
       status = resolved.status;
-      result = resolved.result;
+      result = resolved.storedResult;
     } catch {
       status = "failed";
     }
@@ -193,6 +195,8 @@ export class VisionService {
     status: VisionJobStatus;
     kind?: VisionJobKind;
     preselect?: boolean;
+    fieldPreselect?: { club?: boolean; season?: boolean; type?: boolean };
+    catalogMiss?: boolean;
     suggestions?: VisionSuggestions;
     grouping?: VisionGroupingSuggestions;
   } | null> {
@@ -208,6 +212,7 @@ export class VisionService {
         suggestedType: visionLog.suggestedType,
         confidences: visionLog.confidences,
         groupingResult: visionLog.groupingResult,
+        visionRaw: visionLog.visionRaw,
       })
       .from(visionLog)
       .where(eq(visionLog.id, jobId))
@@ -247,7 +252,15 @@ export class VisionService {
     }
 
     const confidences = parseConfidences(row.confidences);
-    const preselect = shouldPreselect(confidences);
+    const clubHint = parseClubHintFromVisionRaw(row.visionRaw);
+    const resolved = resolveIdentityJob({
+      clubId: row.suggestedClubId ?? undefined,
+      seasonId: row.suggestedSeasonId ?? undefined,
+      catalogKitId: row.suggestedCatalogKitId ?? undefined,
+      type: row.suggestedType ?? undefined,
+      clubHint,
+      confidences: confidences ?? undefined,
+    });
 
     const clubLabel = row.suggestedClubId
       ? await this.resolveClubLabel(row.suggestedClubId, locale)
@@ -257,20 +270,23 @@ export class VisionService {
       : undefined;
 
     const suggestions: VisionSuggestions = {
-      clubId: row.suggestedClubId ?? undefined,
-      seasonId: row.suggestedSeasonId ?? undefined,
-      catalogKitId: row.suggestedCatalogKitId ?? undefined,
-      type: row.suggestedType ?? undefined,
+      ...resolved.suggestions,
       clubLabel: clubLabel ?? undefined,
       seasonLabel: seasonLabel ?? undefined,
     };
+
+    const hasSuggestions = Boolean(
+      suggestions.clubId || suggestions.seasonId || suggestions.type || suggestions.catalogKitId,
+    );
 
     return {
       jobId: row.id,
       status: row.status,
       kind: row.kind,
-      preselect,
-      suggestions,
+      preselect: resolved.preselect,
+      fieldPreselect: resolved.fieldPreselect,
+      catalogMiss: resolved.catalogMiss || undefined,
+      suggestions: hasSuggestions ? suggestions : undefined,
     };
   }
 
