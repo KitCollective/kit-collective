@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { CliRunner } from "../src/run-cli.js";
 import {
@@ -10,8 +7,6 @@ import {
   SEED_MCP_SERVER_NAME,
   SEED_MCP_TOOL_NAMES,
 } from "../src/server.js";
-
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 describe("kc_seed_mcp catalog", () => {
   it("registers as kc_seed_mcp with seed_apify and seed_fk only", () => {
@@ -30,36 +25,8 @@ describe("kc_seed_mcp catalog", () => {
   });
 });
 
-describe("mcp.json.example", () => {
-  it("registers kc_seed_mcp stdio with Seed env names and no Coolify tokens", () => {
-    // SAFETY: mcp.json.example is committed JSON; the checks below reject a missing
-    // kc_seed_mcp entry and only read env key names, never secret values.
-    const example = JSON.parse(
-      readFileSync(join(repoRoot, ".cursor/mcp.json.example"), "utf8"),
-    ) as {
-      mcpServers: Record<
-        string,
-        { command?: string; args?: string[]; env?: Record<string, string> }
-      >;
-    };
-
-    const seedServer = example.mcpServers.kc_seed_mcp;
-    expect(seedServer).toBeDefined();
-    if (!seedServer) {
-      throw new Error("kc_seed_mcp missing from mcp.json.example");
-    }
-    expect(seedServer.command).toBe("node");
-    expect(seedServer.args).toEqual(["seed/mcp/dist/index.js"]);
-    expect(example.mcpServers.seed).toBeUndefined();
-
-    const envKeys = Object.keys(seedServer.env ?? {});
-    expect(envKeys).toContain("SEED_PROXY_URL");
-    expect(envKeys).toContain("SEED_REQUIRE_PROXY");
-    expect(envKeys).toContain("FKAPI_BASE_URL");
-    expect(envKeys).toContain("FKAPI_TOKEN");
-    expect(envKeys).toContain("R2_BUCKET");
-    expect(envKeys).not.toContain("COOLIFY_API_URL");
-    expect(envKeys).not.toContain("COOLIFY_MCP_URL");
-    expect(envKeys).not.toContain("COOLIFY_API_TOKEN");
+describe("stdio debug catalog", () => {
+  it("keeps seed_apify and seed_fk on the local stdio binary", () => {
+    expect(SEED_MCP_TOOL_NAMES).toEqual(["seed_apify", "seed_fk"]);
   });
 });

@@ -146,7 +146,7 @@ For a proof scope (Superliga 2010/11 or Denmark men World Cup 2010), stamdata ro
 _Avoid_: calling `club_proof` without squads “complete”; counting training-kit FK rows toward proof; public archive URLs on peek
 
 **Seed MCP**:
-The Football Data Seed MCP server. Own URL (`SEED_MCP_URL`, path `/mcp`) on a unique hostname — Coolify auto-FQDN (sslip.io) until a named DNS exists; never Coolify’s MCP URL. Coolify hosts the Cross MCP container; ingest chat talks only to this URL. Long jobs run in that service. Tools are `seed_grain` and `seed_join`.
+The Football Data Seed MCP server. Own URL (`SEED_MCP_URL`, path `/mcp`) on a unique hostname — Coolify auto-FQDN (sslip.io) until a named DNS exists; never Coolify’s MCP URL. In-tree Streamable HTTP adapter is `@kit/seed-mcp` (`seed/mcp`, `start:http`); Coolify assigns the hostname (KIT-148). Coolify hosts the Cross MCP container; ingest chat talks only to this URL. Long jobs run in that service. Tools are `seed_grain` and `seed_join`.
 _Avoid_: Coolify `control` for ingest; sharing the Coolify MCP URL; calling Coolify MCP the seed interface; treating `kc_seed_mcp` stdio as the Cross MCP accept; a laptop-only stdio server as the accept; hardcoding a production domain in git
 
 **Seed MCP token**:
