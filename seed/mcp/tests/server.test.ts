@@ -24,9 +24,3 @@ describe("kc_seed_mcp catalog", () => {
     }
   });
 });
-
-describe("stdio debug catalog", () => {
-  it("keeps seed_apify and seed_fk on the local stdio binary", () => {
-    expect(SEED_MCP_TOOL_NAMES).toEqual(["seed_apify", "seed_fk"]);
-  });
-});

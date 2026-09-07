@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
-import { applySeedMcpHttpAuth, requireSeedMcpTokenForHttp } from "../src/http-auth.js";
+import { gateSeedMcpHttpRequest, requireSeedMcpTokenForHttp } from "../src/http-auth.js";
 import { runSeedGrain, runSeedJoin } from "../src/http-run.js";
 import {
   createSeedMcpHttpServer,
@@ -191,6 +191,75 @@ describe("seed_grain dispatch", () => {
     );
     expect(runner.mock.calls[0]?.[1]?.at(-1)).toBe("staging");
   });
+
+  it("overlays staging DATABASE_URL when the Join sentence names staging", async () => {
+    const runner = vi.fn<CliRunner>().mockResolvedValue({
+      exitCode: 0,
+      stdout: "ok",
+      stderr: "",
+    });
+    const previous = process.env.SEED_STAGING_DATABASE_URL;
+    process.env.SEED_STAGING_DATABASE_URL = "postgresql://staging/example";
+    try {
+      const result = await runSeedJoin(
+        {
+          subcommand: "sentence",
+          sentence: "Seed Superliga 2010/11 including every club, squads, and kits into staging.",
+        },
+        runner,
+      );
+      expect(result.ok).toBe(true);
+      expect(runner).toHaveBeenCalledTimes(1);
+      const argv = runner.mock.calls[0]?.[1] ?? [];
+      expect(argv.at(-1)).not.toBe("staging");
+      expect(argv).toContain("join");
+      expect(argv).toContain("sentence");
+      expect(runner.mock.calls[0]?.[2]).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            SEED_LANE: "staging",
+            DATABASE_URL: "postgresql://staging/example",
+          }),
+        }),
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SEED_STAGING_DATABASE_URL;
+      } else {
+        process.env.SEED_STAGING_DATABASE_URL = previous;
+      }
+    }
+  });
+
+  it("rejects a Join sentence that names production before spawning", async () => {
+    const runner = vi.fn<CliRunner>();
+    const result = await runSeedJoin(
+      {
+        subcommand: "sentence",
+        sentence: "Seed Superliga 2010/11 including every club, squads, and kits into production.",
+      },
+      runner,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/production/i);
+    }
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the tool lane disagrees with the Join sentence lane", async () => {
+    const runner = vi.fn<CliRunner>();
+    const result = await runSeedJoin(
+      {
+        subcommand: "sentence",
+        sentence: "Seed Superliga 2010/11 including every club, squads, and kits into development.",
+        lane: "staging",
+      },
+      runner,
+    );
+    expect(result.ok).toBe(false);
+    expect(runner).not.toHaveBeenCalled();
+  });
 });
 
 describe("SEED_MCP_TOKEN HTTP auth", () => {
@@ -202,7 +271,9 @@ describe("SEED_MCP_TOKEN HTTP auth", () => {
   });
 
   it("denies a request without a matching bearer and does not run a grain or Join", async () => {
-    const runner = vi.fn<CliRunner>();
+    const then = vi.fn(async () => {
+      throw new Error("Join must not run after a denied Bearer");
+    });
     const unauthorized: { status?: number; ended?: string } = {};
     const res = {
       writeHead(status: number) {
@@ -213,25 +284,20 @@ describe("SEED_MCP_TOKEN HTTP auth", () => {
       },
     };
 
-    const allowed = applySeedMcpHttpAuth({ headers: {} }, res, "op-token");
-    expect(allowed).toBe(false);
+    const missing = await gateSeedMcpHttpRequest({ headers: {} }, res, "op-token", then);
+    expect(missing).toBe(false);
     expect(unauthorized.status).toBe(401);
+    expect(unauthorized.ended).toBe("Unauthorized");
 
-    const wrong = applySeedMcpHttpAuth(
+    const wrong = await gateSeedMcpHttpRequest(
       { headers: { authorization: "Bearer other" } },
       res,
       "op-token",
+      then,
     );
     expect(wrong).toBe(false);
     expect(unauthorized.status).toBe(401);
-
-    if (allowed || wrong) {
-      await runSeedJoin(
-        { subcommand: "club", competition: "superligaen", season: "2010/11" },
-        runner,
-      );
-    }
-    expect(runner).not.toHaveBeenCalled();
+    expect(then).not.toHaveBeenCalled();
   });
 });
 

@@ -1,7 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 export const SEED_MCP_TOKEN_ENV = "SEED_MCP_TOKEN";
-export const SEED_MCP_URL_ENV = "SEED_MCP_URL";
 
 const MISSING_TOKEN = "SEED_MCP_TOKEN is required to serve Streamable HTTP (fail closed)";
 
@@ -52,4 +51,18 @@ export function applySeedMcpHttpAuth(
   res.writeHead(401);
   res.end("Unauthorized");
   return false;
+}
+
+/** Auth gate used by Streamable HTTP. `then` runs only after a matching Bearer. */
+export async function gateSeedMcpHttpRequest(
+  req: SeedMcpHttpRequest,
+  res: SeedMcpHttpResponse,
+  token: string,
+  then: () => Promise<void>,
+): Promise<boolean> {
+  if (!applySeedMcpHttpAuth(req, res, token)) {
+    return false;
+  }
+  await then();
+  return true;
 }

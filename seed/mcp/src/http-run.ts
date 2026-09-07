@@ -1,4 +1,4 @@
-import { resolveSeedLane } from "@kit/seed-shared";
+import { parseJoinSentence, resolveSeedLane } from "@kit/seed-shared";
 import type { CliRunner } from "./run-cli.js";
 import { laneEnvForCli, resolveSeedRepoRoot } from "./run-cli.js";
 
@@ -149,6 +149,36 @@ function joinCliArgs(input: SeedJoinInput): string[] | { error: string } {
   return ["join", "national-team", ntRef, season];
 }
 
+function resolveJoinLane(input: SeedJoinInput): ReturnType<typeof resolveSeedLane> {
+  if (input.subcommand !== "sentence") {
+    return resolveSeedLane(input.lane);
+  }
+  const sentence = input.sentence?.trim();
+  if (!sentence) {
+    return { ok: false, error: "sentence is required" };
+  }
+  const parsed = parseJoinSentence(sentence);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  const sentenceLane = parsed.scope.lane;
+  const toolLaneArg = input.lane?.trim();
+  if (!toolLaneArg) {
+    return { ok: true, lane: sentenceLane };
+  }
+  const toolLane = resolveSeedLane(toolLaneArg);
+  if (!toolLane.ok) {
+    return toolLane;
+  }
+  if (toolLane.lane !== sentenceLane) {
+    return {
+      ok: false,
+      error: `Join sentence lane '${sentenceLane}' does not match tool lane '${toolLane.lane}'`,
+    };
+  }
+  return toolLane;
+}
+
 async function runApifyCli(
   scopeArgs: string[],
   lane: ReturnType<typeof resolveSeedLane>,
@@ -187,5 +217,5 @@ export async function runSeedJoin(
   if (!Array.isArray(args)) {
     return { ok: false, error: args.error };
   }
-  return runApifyCli(args, resolveSeedLane(input.lane), runner);
+  return runApifyCli(args, resolveJoinLane(input), runner);
 }

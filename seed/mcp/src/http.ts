@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { applySeedMcpHttpAuth, requireSeedMcpTokenForHttp } from "./http-auth.js";
+import { gateSeedMcpHttpRequest, requireSeedMcpTokenForHttp } from "./http-auth.js";
 import { createSeedMcpHttpServer } from "./http-server.js";
 import { defaultCliRunner } from "./run-cli.js";
 
@@ -34,32 +34,30 @@ export function startSeedMcpHttpServer(
       res.end();
       return;
     }
-    if (!applySeedMcpHttpAuth(req, res, token)) {
-      return;
-    }
-
-    const sessionIdHeader = req.headers["mcp-session-id"];
-    const sessionId = Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader;
-    const existing = sessionId ? sessions.get(sessionId) : undefined;
-    if (existing) {
-      await existing.handleRequest(req, res);
-      return;
-    }
-
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      onsessioninitialized: (id) => {
-        sessions.set(id, transport);
-      },
-    });
-    transport.onclose = () => {
-      if (transport.sessionId) {
-        sessions.delete(transport.sessionId);
+    await gateSeedMcpHttpRequest(req, res, token, async () => {
+      const sessionIdHeader = req.headers["mcp-session-id"];
+      const sessionId = Array.isArray(sessionIdHeader) ? sessionIdHeader[0] : sessionIdHeader;
+      const existing = sessionId ? sessions.get(sessionId) : undefined;
+      if (existing) {
+        await existing.handleRequest(req, res);
+        return;
       }
-    };
-    const mcp = createSeedMcpHttpServer(defaultCliRunner);
-    await mcp.connect(transport);
-    await transport.handleRequest(req, res);
+
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (id) => {
+          sessions.set(id, transport);
+        },
+      });
+      transport.onclose = () => {
+        if (transport.sessionId) {
+          sessions.delete(transport.sessionId);
+        }
+      };
+      const mcp = createSeedMcpHttpServer(defaultCliRunner);
+      await mcp.connect(transport);
+      await transport.handleRequest(req, res);
+    });
   });
 
   const port = Number(env.PORT ?? "8787");
