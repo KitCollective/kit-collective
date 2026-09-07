@@ -17,7 +17,7 @@ The MCP container is a long-running HTTP process (`node seed/mcp/dist/http.js`, 
 1. Prefer a git-connected Coolify **application** (not a compose job). Coolify’s Docker context for a nested Dockerfile is `seed/coolify/`, so the app uses `dockerfile_location` `/seed/coolify/Dockerfile.remote` (clones the repo in the image). Local compose still builds `seed/coolify/Dockerfile` from the monorepo root. Default image `CMD` is HTTP; jobs override `command`.
 2. Run `seed/coolify/wire-mcp.sh` or GitHub Action **Wire Coolify Seed MCP** (`workflow_dispatch`, GitHub Environment `development` only). Default `SEED_LANE=development`. Production is refused.
 3. Coolify API credentials (`COOLIFY_API_URL`, `COOLIFY_API_TOKEN`) talk to the host API. They are **not** copied into the Seed MCP process. The ingest token is `SEED_MCP_TOKEN` (required, fail closed) — a different secret.
-4. Health check: `GET /mcp` expecting **401** (unauthenticated is denied; the process is up).
+4. Health check: `GET /mcp` expecting **401** (unauthenticated is denied; the process is up). The image installs `curl` so Coolify can probe from inside the container.
 5. After create, the script prints the FQDN. Set client `SEED_MCP_URL` to `https://{fqdn}/mcp` (or `http://{fqdn}/mcp` if TLS is off). **Do not commit that value.**
 6. `mem_limit` is at least 1g (Join runs inside this process). Compose uses `2048m`.
 7. When `FKAPI_BASE_URL` is unset, the service sets `SEED_FK_FETCH=fixture`. Omit every `COOLIFY_*` name from the process env.
