@@ -146,16 +146,28 @@ For a proof scope (Superliga 2010/11 or Denmark men World Cup 2010), stamdata ro
 _Avoid_: calling `club_proof` without squads “complete”; counting training-kit FK rows toward proof; public archive URLs on peek
 
 **Seed MCP**:
-The Football Data Seed MCP server. Own URL on a unique hostname. Coolify may host the container; ingest chat talks only to this URL. Long jobs run in that service. Cross MCP milestone. Speaks Hierarchy grains and the Join workflow. Coolify MCP stays Docker and host only.
-_Avoid_: Coolify `control` for ingest; sharing the Coolify MCP URL; calling Coolify MCP the seed interface; treating `kc_seed_mcp` stdio as the Cross MCP accept; a laptop-only stdio server as the accept
+The Football Data Seed MCP server. Own URL (`SEED_MCP_URL`, path `/mcp`) on a unique hostname — Coolify auto-FQDN (sslip.io) until a named DNS exists; never Coolify’s MCP URL. Coolify hosts the Cross MCP container; ingest chat talks only to this URL. Long jobs run in that service. Tools are `seed_grain` and `seed_join`.
+_Avoid_: Coolify `control` for ingest; sharing the Coolify MCP URL; calling Coolify MCP the seed interface; treating `kc_seed_mcp` stdio as the Cross MCP accept; a laptop-only stdio server as the accept; hardcoding a production domain in git
 
 **Seed MCP token**:
-Bearer token required on every Seed MCP request. Fail closed if missing. The env **name** is documented; the value is never in git.
-_Avoid_: anonymous public MCP; putting the token in the repo or in client bundles; treating Coolify’s API token as this token
+Bearer token (`SEED_MCP_TOKEN`) required on every Seed MCP HTTP request. Fail closed if missing. Coolify app env holds the server copy; Desktop and Cloud Agent use the same **name** for the client header. The value is never in git. Not an OAuth authorization server in v1.
+_Avoid_: anonymous public MCP; putting the token in the repo or in client bundles; treating Coolify’s API token as this token; an OAuth AS as the v1 gate
+
+**Seed MCP catalog**:
+The written accept for Cross MCP research (KIT-147): hostname uniqueness vs Coolify MCP, token env name, and tool shapes — before KIT-148 hosts the server. Lives in `.scratch/football-data-seed/mcp-catalog.md`.
+_Avoid_: coding Streamable HTTP without this catalog; treating stdio `GetMcpTools` as Cross MCP done
+
+**seed_grain**:
+Cross MCP tool for one Hierarchy grain (the `seed-apify grain` kinds). Not a Fetch step. Not the Join walk.
+_Avoid_: exposing Fetch steps as MCP tools; calling `seed_apify` the Cross MCP grain tool
+
+**seed_join**:
+Cross MCP tool for the Join workflow (`club`, `national-team`, or `sentence`). FK after facts runs inside this tool.
+_Avoid_: a sibling `seed_fk` chat tool; fusing TM and FK into one tool instead of Join
 
 **Cross MCP**:
-The last Football Data Seed milestone: a human sentence over Hierarchy grains and the Join workflow, served by Seed MCP on its own URL. Not the first accept.
-_Avoid_: MCP as milestone 1; routing ingest through Coolify MCP
+The last Football Data Seed milestone: `seed_grain` and `seed_join` on Seed MCP HTTP (`kc_seed_mcp`). Not the first accept.
+_Avoid_: MCP as milestone 1; routing ingest through Coolify MCP; treating predecessor `seed_apify` + `seed_fk` as the accept
 
 **Vendor research**:
 The first Football Data Seed issue, and the opening slice of later milestones. Maps what Transfermarkt and Football Kit Archive can yield, what we keep as stamdata, and what UI or backend flows can use. Blocks every other issue on this project until the field catalog is accepted.
@@ -262,12 +274,12 @@ The existing Store-actor FetchAdapter. The operator must explicitly choose it. I
 _Avoid_: retrying HTML 202s on Apify by default; treating Apify as the primary Coolify path
 
 **FK after facts**:
-Live Football Kit Archive fetch for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity (including Kit colours, Kit sponsor when the source has it, and normalized Kit type) and admin_only KitPhoto bytes onto those seasons (ExternalId join). Club kits join via TM club id → `kit.club_id`. NationalTeam kits join via FKA team id → `kit.national_team_id` — never a Club row. Missing side or season → refuse (no kit rows, no R2 writes). Join workflow composes the two vendors; Cross MCP wraps that later. Does not use Seed proxy / Decodo.
-_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row; routing FK through Decodo; joining Denmark kits with Transfermarkt `verein/3436` as a club id
+Kit ingest for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity (including Kit colours, Kit sponsor when the source has it, and normalized Kit type) and admin_only KitPhoto bytes onto those seasons (ExternalId join). Club kits join via TM club id → `kit.club_id`. NationalTeam kits join via FKA team id → `kit.national_team_id` — never a Club row. Missing side or season → refuse (no kit rows, no R2 writes). Join workflow composes the two vendors; Cross MCP wraps that later. Does not use Seed proxy / Decodo. Live FKApi (`FKAPI_BASE_URL`) is optional — this factory does not host sunr4y/fkapi. Operator Join without that URL sets `SEED_FK_FETCH=fixture` for Hierarchy proof kits.
+_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row; routing FK through Decodo; joining Denmark kits with Transfermarkt `verein/3436` as a club id; requiring a hosted FKApi before proof Join can run
 
 **kc_seed_mcp**:
-The predecessor Cursor Seed MCP server id. Standalone stdio process. Exposes `seed_apify` and `seed_fk` only. Not the Cross MCP accept — that is Seed MCP on its own URL. Not Coolify MCP. Not default PI-worker MCP.
-_Avoid_: naming the server `seed` in Cursor config; mixing Coolify tokens into the Seed MCP process; using Coolify `control` for ingest scope; treating this stdio wrapper as Football Data Seed done
+Cursor server id for Seed MCP. Cross MCP accept is Streamable HTTP (`SEED_MCP_URL` + Bearer `SEED_MCP_TOKEN`). Stdio (`seed_apify` + `seed_fk`) is the predecessor and stays as a local debug binary — not the accept. Not Coolify MCP. Not default PI-worker MCP.
+_Avoid_: naming the server `seed` in Cursor config; a second Cursor id for the HTTP server; mixing Coolify tokens into the Seed MCP process; using Coolify `control` for ingest scope; treating stdio `GetMcpTools` as Cross MCP done
 
 **Coolify MCP**:
 Cursor MCP server for the Coolify host catalog — Docker and host management only. Desktop or Cloud Agent wiring. Not installed on the PI worker. Not ingest.
