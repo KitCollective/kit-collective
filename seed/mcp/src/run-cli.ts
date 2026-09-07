@@ -1,4 +1,4 @@
-import type { SpawnOptions } from "node:child_process";
+import { type SpawnOptions, spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -14,6 +14,28 @@ export type CliRunner = (
   args: string[],
   options: SpawnOptions,
 ) => Promise<{ exitCode: number; stdout: string; stderr: string }>;
+
+export const defaultCliRunner: CliRunner = (command, args, options) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      ...options,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout?.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({ exitCode: code ?? 1, stdout, stderr });
+    });
+  });
 
 export type SeedCliTarget = "apify" | "fkapi";
 

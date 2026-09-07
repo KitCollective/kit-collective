@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "bin": {
-    "seed-mcp": "./dist/index.js"
+    "seed-mcp": "./dist/index.js",
+    "seed-mcp-http": "./dist/http.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "start:http": "node dist/http.js"
   },
   "dependencies": {
     "@kit/db": "workspace:*",
