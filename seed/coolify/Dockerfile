@@ -24,7 +24,7 @@ FROM base AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl ca-certificates \
+  && apt-get install -y --no-install-recommends curl wget ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json ./package.json

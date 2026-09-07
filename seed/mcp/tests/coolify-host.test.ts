@@ -60,8 +60,8 @@ describe("Coolify Seed MCP host", () => {
     expect(pkg.scripts["start:http"]).toBe("node dist/http.js");
     expect(dockerfile).toMatch(/CMD\s*\[["']node["']\s*,\s*["']seed\/mcp\/dist\/http\.js["']\]/);
     expect(remote).toMatch(/CMD\s*\[["']node["']\s*,\s*["']seed\/mcp\/dist\/http\.js["']\]/);
-    expect(dockerfile).toMatch(/\bcurl\b/);
-    expect(remote).toMatch(/\bcurl\b/);
+    expect(dockerfile).toMatch(/\bwget\b/);
+    expect(remote).toMatch(/\bwget\b/);
     const fkapi = dockerfile.indexOf("@kit/seed-fkapi build");
     const apify = dockerfile.indexOf("@kit/seed-apify build");
     expect(fkapi).toBeGreaterThan(-1);
