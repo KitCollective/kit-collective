@@ -11,6 +11,7 @@ LANE="${SEED_LANE:-development}"
 GIT_REPOSITORY="${GIT_REPOSITORY:-KitCollective/kit-collective}"
 GIT_REF="${GIT_REF:-$LANE}"
 # Coolify stores limits_memory in bytes (a raw 2048 was treated as 2KiB on KIT-148).
+# POST /applications/public validates the field as a string of those bytes.
 LIMITS_MEMORY_BYTES="${SEED_COOLIFY_LIMITS_MEMORY_BYTES:-536870912}"
 
 if [[ "$LANE" == "production" ]]; then
@@ -82,7 +83,7 @@ CREATE_BASE="$(jq -n \
   --arg git_branch "$GIT_REF" \
   --arg name "$APP_NAME" \
   --arg description "FK listing HTTP (${LANE})" \
-  --argjson limits_memory "$LIMITS_MEMORY_BYTES" \
+  --arg limits_memory "$LIMITS_MEMORY_BYTES" \
   '{
     project_uuid: $project_uuid,
     server_uuid: $server_uuid,
@@ -116,7 +117,7 @@ else
 fi
 
 request PATCH "/applications/${APP_UUID}" "$(jq -n \
-  --argjson limits_memory "$LIMITS_MEMORY_BYTES" \
+  --arg limits_memory "$LIMITS_MEMORY_BYTES" \
   '{
     health_check_enabled: true,
     health_check_path: "/health",
