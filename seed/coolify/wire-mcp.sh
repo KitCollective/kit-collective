@@ -99,7 +99,7 @@ CREATE_BASE="$(jq -n \
     git_branch: $git_branch,
     build_pack: "dockerfile",
     base_directory: "/",
-    dockerfile_location: "/seed/coolify/Dockerfile",
+    dockerfile_location: "/seed/coolify/Dockerfile.remote",
     ports_exposes: "8787",
     name: $name,
     description: $description,
@@ -109,9 +109,8 @@ CREATE_BASE="$(jq -n \
     health_check_method: "GET",
     health_check_return_code: 401,
     health_check_start_period: 60,
-    limits_memory: 2048,
     is_force_https_enabled: false,
-    instant_deploy: true
+    instant_deploy: false
   }')"
 
 if [[ -z "$APP_UUID" || "$APP_UUID" == "null" ]]; then
@@ -136,9 +135,8 @@ request PATCH "/applications/${APP_UUID}" "$(jq -n '{
   health_check_return_code: 401,
   health_check_start_period: 60,
   base_directory: "/",
-  dockerfile_location: "/seed/coolify/Dockerfile",
-  ports_exposes: "8787",
-  limits_memory: 2048
+  dockerfile_location: "/seed/coolify/Dockerfile.remote",
+  ports_exposes: "8787"
 }')" >/dev/null
 
 # Dockerfile.remote is the fallback when Coolify cannot use the git-connected Dockerfile
@@ -159,23 +157,27 @@ BULK_ENVS="$(jq -n \
   --arg r2_secret "${R2_SECRET_ACCESS_KEY:-}" \
   --arg r2_bucket "${R2_BUCKET:-}" \
   --arg r2_endpoint "${R2_ENDPOINT:-}" \
+  --arg git_ref "$GIT_REF" \
+  --arg git_repository "https://github.com/${GIT_REPOSITORY#https://github.com/}" \
   '{
     data: [
-      {key: "PORT", value: "8787", is_literal: true, is_preview: false},
-      {key: "SEED_MCP_TOKEN", value: $ingest_token, is_literal: true, is_preview: false},
-      {key: "SEED_FK_FETCH", value: $fk_fetch, is_literal: true, is_preview: false},
-      {key: "DATABASE_URL", value: $database_url, is_literal: true, is_preview: false},
-      {key: "SEED_STAGING_DATABASE_URL", value: $staging_url, is_literal: true, is_preview: false},
-      {key: "SEED_PROXY_URL", value: $proxy_url, is_literal: true, is_preview: false},
-      {key: "SEED_REQUIRE_PROXY", value: $require_proxy, is_literal: true, is_preview: false},
-      {key: "APIFY_TOKEN", value: $apify_token, is_literal: true, is_preview: false},
-      {key: "FKAPI_BASE_URL", value: $fkapi_base, is_literal: true, is_preview: false},
-      {key: "FKAPI_TOKEN", value: $fkapi_token, is_literal: true, is_preview: false},
-      {key: "R2_ACCOUNT_ID", value: $r2_account, is_literal: true, is_preview: false},
-      {key: "R2_ACCESS_KEY_ID", value: $r2_access, is_literal: true, is_preview: false},
-      {key: "R2_SECRET_ACCESS_KEY", value: $r2_secret, is_literal: true, is_preview: false},
-      {key: "R2_BUCKET", value: $r2_bucket, is_literal: true, is_preview: false},
-      {key: "R2_ENDPOINT", value: $r2_endpoint, is_literal: true, is_preview: false}
+      {key: "PORT", value: "8787", is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "SEED_MCP_TOKEN", value: $ingest_token, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "SEED_FK_FETCH", value: $fk_fetch, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "DATABASE_URL", value: $database_url, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "SEED_STAGING_DATABASE_URL", value: $staging_url, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "SEED_PROXY_URL", value: $proxy_url, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "SEED_REQUIRE_PROXY", value: $require_proxy, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "APIFY_TOKEN", value: $apify_token, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "FKAPI_BASE_URL", value: $fkapi_base, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "FKAPI_TOKEN", value: $fkapi_token, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "R2_ACCOUNT_ID", value: $r2_account, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "R2_ACCESS_KEY_ID", value: $r2_access, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "R2_SECRET_ACCESS_KEY", value: $r2_secret, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "R2_BUCKET", value: $r2_bucket, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "R2_ENDPOINT", value: $r2_endpoint, is_literal: true, is_preview: false, is_runtime: true, is_buildtime: false},
+      {key: "GIT_REF", value: $git_ref, is_literal: true, is_preview: false, is_runtime: false, is_buildtime: true},
+      {key: "GIT_REPOSITORY", value: $git_repository, is_literal: true, is_preview: false, is_runtime: false, is_buildtime: true}
     ]
   }')"
 
