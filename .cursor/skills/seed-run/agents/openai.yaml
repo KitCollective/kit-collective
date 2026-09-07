@@ -1,0 +1,5 @@
+interface:
+  display_name: "Seed run"
+  short_description: "Desktop grain and Join ingest via seed-apify CLI"
+policy:
+  allow_implicit_invocation: false

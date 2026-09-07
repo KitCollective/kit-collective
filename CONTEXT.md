@@ -222,8 +222,8 @@ Football Data Seed issues stay `ready-for-human` only. Not `ready-for-agent`. Pl
 _Avoid_: `ready-for-agent` on this project's slices; PI dispatch on Football Data Seed; treating this label here as a missing-info wait
 
 **Seed run**:
-One sentence that starts the full ingest for a Seed scope into a lane’s Postgres. Composes Hierarchy grains. Lives in the Join workflow milestone (Cross MCP wraps it). Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
-_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad; treating the Seed run as the first Football Data Seed accept
+One sentence that starts the full ingest for a Seed scope into a lane’s Postgres. Composes Hierarchy grains. Lives in the Join workflow milestone. Desktop operator path is `/seed-run` over the `seed-apify` CLI (grains and `join`). Cross MCP wraps the same CLI later. Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
+_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad; treating the Seed run as the first Football Data Seed accept; calling Coolify `control` or Seed MCP to ingest when the CLI is available
 
 **Competition query**:
 The operator names a league in natural language (`Premier League`, `La Liga i Spanien`, `tyrkiske Superliga`). The Seed job resolves that to a Transfermarkt competition (id + slug + country): catalog alias first, otherwise a Transfermarkt search. Country words disambiguate. Then the existing walk: Competition season page → clubs → kader → numbers.

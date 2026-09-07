@@ -130,6 +130,10 @@ Lost? \`/ask-me\` maps the situation to a factory skill. It hints; it does not f
 
 New or edited factory skill under \`.cursor/skills/\`. Not a domain helper. See \`.cursor/skills/create-new-skill/SKILL.md\`.
 
+### Seed run
+
+Desktop ingest via \`seed-apify\` CLI (grains and Join). Install packages, pick the smallest command, respect TM budget. Not Seed MCP. See \`.cursor/skills/seed-run/SKILL.md\`.
+
 ### Reap worktree
 
 After land on \`${integration}\`: verify merge on \`origin/${integration}\`, remove the Desktop issue worktree, delete the merged remote branch. See \`.cursor/skills/reap-worktree/SKILL.md\`. Chained from \`/land\` and \`/issue-session\`.
@@ -144,7 +148,7 @@ Official Expo/EAS skills live under \`.cursor/skills/expo/\` (not factory skills
 
 ### Prototype, research, handoff, wizard
 
-Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited primary sources: \`/research\`. Session must travel: \`/handoff\`. Human-only setup: \`/wizard\`. Video idea to Higgsfield brief: \`/to-video-brief\`.
+Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited primary sources: \`/research\`. Session must travel: \`/handoff\`. Human-only setup: \`/wizard\`. Desktop seed ingest: \`/seed-run\`. Video idea to Higgsfield brief: \`/to-video-brief\`.
 
 ### Planning stack
 

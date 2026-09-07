@@ -103,6 +103,11 @@
       "sourceType": "factory",
       "skillPath": "factory"
     },
+    "seed-run": {
+      "source": "factory",
+      "sourceType": "factory",
+      "skillPath": "factory"
+    },
     "eas-app-stores": {
       "source": "expo/skills",
       "sourceType": "github",
