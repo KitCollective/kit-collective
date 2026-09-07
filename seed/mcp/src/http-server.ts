@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { runSeedGrain, runSeedJoin, type SeedGrainKind } from "./http-run.js";
+import { runSeedGrain, runSeedJoin, SEED_GRAIN_KINDS } from "./http-run.js";
 import type { CliRunner } from "./run-cli.js";
 import { SEED_MCP_SERVER_NAME } from "./server.js";
 
@@ -76,18 +76,7 @@ export function createSeedMcpHttpServer(runner: CliRunner): McpServer {
     "seed_grain",
     GRAIN_DESCRIPTION,
     {
-      kind: z
-        .enum([
-          "league",
-          "league-season",
-          "club",
-          "club-season",
-          "club-proof",
-          "national-team",
-          "national-team-season",
-          "national-team-proof",
-        ])
-        .describe("Hierarchy grain kind (CLI grain kinds)."),
+      kind: z.enum(SEED_GRAIN_KINDS).describe("Hierarchy grain kind (CLI grain kinds)."),
       competition: z.string().min(1).optional().describe("Competition name or slug."),
       clubId: z.string().min(1).optional().describe("Club Transfermarkt id for club kinds."),
       ntRef: z.string().min(1).optional().describe("NationalTeam ref for national-team kinds."),
@@ -97,7 +86,7 @@ export function createSeedMcpHttpServer(runner: CliRunner): McpServer {
     async (input) => {
       const result = await runSeedGrain(
         {
-          kind: input.kind as SeedGrainKind,
+          kind: input.kind,
           competition: input.competition,
           clubId: input.clubId,
           ntRef: input.ntRef,
