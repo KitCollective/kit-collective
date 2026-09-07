@@ -2716,7 +2716,9 @@ export class CollectionService {
     rows: Array<{ id: string; clubId: string; seasonId: string; playerId: string | null }>,
     locale: LabelLocale,
   ): Promise<Map<string, { label: string; number: string | null }>> {
-    const playerIds = [...new Set(rows.map((row) => row.playerId).filter(Boolean))] as string[];
+    const playerIds = [
+      ...new Set(rows.map((row) => row.playerId).filter((id): id is string => Boolean(id))),
+    ];
     const fieldsByJersey = new Map<string, { label: string; number: string | null }>();
 
     if (playerIds.length === 0) {
