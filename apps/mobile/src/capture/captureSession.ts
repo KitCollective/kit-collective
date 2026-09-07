@@ -890,18 +890,27 @@ export type IdentitySuggestionInput = {
   seasonId?: string;
   seasonLabel?: string;
   type?: KitType;
+  playerId?: string;
+  playerLabel?: string;
+  playerNumber?: string;
+  patchId?: string;
+  patchLabel?: string;
 };
 
 export type IdentityFieldPreselect = {
   club?: boolean;
   season?: boolean;
   type?: boolean;
+  player?: boolean;
+  badge?: boolean;
 };
 
 export type IdentityManualEditMask = {
   club?: boolean;
   season?: boolean;
   type?: boolean;
+  player?: boolean;
+  badge?: boolean;
 };
 
 export function applyIdentitySuggestion(
@@ -926,6 +935,31 @@ export function applyIdentitySuggestion(
 
   if (!manual.type && options.fieldPreselect.type && suggestions.type) {
     next = selectDraftKitType(next, draftId, suggestions.type);
+  }
+
+  if (
+    !manual.player &&
+    options.fieldPreselect.player &&
+    suggestions.playerId &&
+    suggestions.playerLabel
+  ) {
+    next = setDraftPlayer(next, draftId, {
+      id: suggestions.playerId,
+      name: suggestions.playerLabel,
+      number: suggestions.playerNumber ?? "",
+    });
+  }
+
+  if (
+    !manual.badge &&
+    options.fieldPreselect.badge &&
+    suggestions.patchId &&
+    suggestions.patchLabel
+  ) {
+    next = setDraftBadge(next, draftId, {
+      id: suggestions.patchId,
+      label: suggestions.patchLabel,
+    });
   }
 
   return next;

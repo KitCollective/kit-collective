@@ -10,6 +10,8 @@ export const collectionJerseyUpdateSchema = z
     type: z.enum(KIT_TYPES),
     size: z.enum(JERSEY_SIZES),
     condition: z.enum(JERSEY_CONDITIONS),
+    playerId: z.string().uuid().nullable().optional(),
+    patchIds: z.array(z.string().uuid()).max(1).optional(),
   })
   .strict();
 

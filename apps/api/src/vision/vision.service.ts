@@ -7,7 +7,7 @@ import {
   type VisionUserAction,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { catalogLabel, club, season, visionLog } from "@kit/db";
+import { catalogLabel, season, visionLog } from "@kit/db";
 import type { KitType, LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -111,6 +111,8 @@ export class VisionService {
           suggestedSeasonId: result?.seasonId ?? null,
           suggestedCatalogKitId: result?.catalogKitId ?? null,
           suggestedType: result?.type ?? null,
+          suggestedPlayerId: result?.playerId ?? null,
+          suggestedPatchId: result?.patchId ?? null,
           visionRaw: result?.visionRaw ?? null,
           confidences: result?.confidences ? serializeConfidences(result.confidences) : null,
           latencyMs: result?.latencyMs ?? null,
@@ -195,7 +197,7 @@ export class VisionService {
     status: VisionJobStatus;
     kind?: VisionJobKind;
     preselect?: boolean;
-    fieldPreselect?: { club?: boolean; season?: boolean; type?: boolean };
+    fieldPreselect?: { club?: boolean; season?: boolean; type?: boolean; player?: boolean; badge?: boolean };
     catalogMiss?: boolean;
     suggestions?: VisionSuggestions;
     grouping?: VisionGroupingSuggestions;
@@ -210,6 +212,8 @@ export class VisionService {
         suggestedSeasonId: visionLog.suggestedSeasonId,
         suggestedCatalogKitId: visionLog.suggestedCatalogKitId,
         suggestedType: visionLog.suggestedType,
+        suggestedPlayerId: visionLog.suggestedPlayerId,
+        suggestedPatchId: visionLog.suggestedPatchId,
         confidences: visionLog.confidences,
         groupingResult: visionLog.groupingResult,
         visionRaw: visionLog.visionRaw,
@@ -258,25 +262,40 @@ export class VisionService {
       seasonId: row.suggestedSeasonId ?? undefined,
       catalogKitId: row.suggestedCatalogKitId ?? undefined,
       type: row.suggestedType ?? undefined,
+      playerId: row.suggestedPlayerId ?? undefined,
+      patchId: row.suggestedPatchId ?? undefined,
       clubHint,
       confidences: confidences ?? undefined,
     });
 
     const clubLabel = row.suggestedClubId
-      ? await this.resolveClubLabel(row.suggestedClubId, locale)
+      ? await this.resolveEntityLabel("club", row.suggestedClubId, locale)
       : undefined;
     const seasonLabel = row.suggestedSeasonId
       ? await this.resolveSeasonLabel(row.suggestedSeasonId)
+      : undefined;
+    const playerLabel = row.suggestedPlayerId
+      ? await this.resolveEntityLabel("player", row.suggestedPlayerId, locale)
+      : undefined;
+    const patchLabel = row.suggestedPatchId
+      ? await this.resolveEntityLabel("patch", row.suggestedPatchId, locale)
       : undefined;
 
     const suggestions: VisionSuggestions = {
       ...resolved.suggestions,
       clubLabel: clubLabel ?? undefined,
       seasonLabel: seasonLabel ?? undefined,
+      playerLabel: playerLabel ?? undefined,
+      patchLabel: patchLabel ?? undefined,
     };
 
     const hasSuggestions = Boolean(
-      suggestions.clubId || suggestions.seasonId || suggestions.type || suggestions.catalogKitId,
+      suggestions.clubId ||
+        suggestions.seasonId ||
+        suggestions.type ||
+        suggestions.catalogKitId ||
+        suggestions.playerId ||
+        suggestions.patchId,
     );
 
     return {
@@ -290,23 +309,28 @@ export class VisionService {
     };
   }
 
-  private async resolveClubLabel(clubId: string, locale: LabelLocale): Promise<string | null> {
+  private async resolveEntityLabel(
+    entityType: "club" | "player" | "patch",
+    entityId: string,
+    locale: LabelLocale,
+  ): Promise<string | null> {
     const rows = await this.db
       .select({ label: catalogLabel.text, locale: catalogLabel.locale, kind: catalogLabel.kind })
-      .from(club)
-      .leftJoin(
-        catalogLabel,
-        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
-      )
-      .where(eq(club.id, clubId));
+      .from(catalogLabel)
+      .where(and(eq(catalogLabel.entityType, entityType), eq(catalogLabel.entityId, entityId)));
 
-    const clubLabels = rows.filter((row) => row.label);
+    const entityLabels = rows.filter((row) => row.label);
     return (
-      clubLabels.find((row) => row.locale === locale && row.kind === "label")?.label ??
-      clubLabels.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
-      clubLabels.find((row) => row.locale === "en" && row.kind === "label")?.label ??
+      entityLabels.find((row) => row.locale === locale && row.kind === "label")?.label ??
+      entityLabels.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
+      entityLabels.find((row) => row.locale === "en" && row.kind === "label")?.label ??
       null
     );
+  }
+
+  /** @deprecated Use resolveEntityLabel("club", …) */
+  private async resolveClubLabel(clubId: string, locale: LabelLocale): Promise<string | null> {
+    return this.resolveEntityLabel("club", clubId, locale);
   }
 
   private async resolveSeasonLabel(seasonId: string): Promise<string | null> {

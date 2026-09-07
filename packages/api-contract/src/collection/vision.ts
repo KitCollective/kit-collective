@@ -40,6 +40,8 @@ export const visionFieldPreselectSchema = z
     club: z.boolean().optional(),
     season: z.boolean().optional(),
     type: z.boolean().optional(),
+    player: z.boolean().optional(),
+    badge: z.boolean().optional(),
   })
   .strict();
 
@@ -57,6 +59,11 @@ export const visionSuggestionsSchema = z
     type: z.enum(KIT_TYPES).optional(),
     clubLabel: z.string().min(1).optional(),
     seasonLabel: z.string().min(1).optional(),
+    playerId: z.string().uuid().optional(),
+    playerLabel: z.string().min(1).optional(),
+    playerNumber: z.string().min(1).optional(),
+    patchId: z.string().uuid().optional(),
+    patchLabel: z.string().min(1).optional(),
   })
   .strict();
 

@@ -39,6 +39,8 @@ export const collectionSaveRequestSchema = z
     size: z.enum(JERSEY_SIZES),
     condition: z.enum(JERSEY_CONDITIONS),
     photos: z.array(collectionSavePhotoSchema).min(1).max(MAX_USER_JERSEY_PHOTOS),
+    playerId: z.string().uuid().optional(),
+    patchIds: z.array(z.string().uuid()).max(1).optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
@@ -80,6 +82,13 @@ export const collectionJerseyPhotoSchema = z
     }
   });
 
+export const collectionJerseyPatchSchema = z
+  .object({
+    id: z.string().uuid(),
+    label: z.string().min(1),
+  })
+  .strict();
+
 export const collectionJerseySquadPlayerSchema = z
   .object({
     id: z.string().uuid(),
@@ -103,6 +112,10 @@ export const collectionJerseySchema = z
     clubLabel: z.string().min(1),
     seasonLabel: z.string().min(1),
     squadPlayers: z.array(collectionJerseySquadPlayerSchema),
+    playerId: z.string().uuid().nullable().optional(),
+    playerLabel: z.string().min(1).nullable().optional(),
+    playerNumber: z.string().nullable().optional(),
+    patches: z.array(collectionJerseyPatchSchema).optional(),
     photos: z.array(collectionJerseyPhotoSchema).min(1).max(MAX_USER_JERSEY_PHOTOS),
     biddingEnabled: z.boolean(),
     private: z.boolean(),
@@ -120,6 +133,7 @@ export const collectionSaveResponseSchema = z
 export type CollectionSavePhoto = z.infer<typeof collectionSavePhotoSchema>;
 export type CollectionSaveRequest = z.infer<typeof collectionSaveRequestSchema>;
 export type CollectionJerseyPhoto = z.infer<typeof collectionJerseyPhotoSchema>;
+export type CollectionJerseyPatch = z.infer<typeof collectionJerseyPatchSchema>;
 export type CollectionJerseySquadPlayer = z.infer<typeof collectionJerseySquadPlayerSchema>;
 export type CollectionJersey = z.infer<typeof collectionJerseySchema>;
 export type CollectionSaveResponse = z.infer<typeof collectionSaveResponseSchema>;

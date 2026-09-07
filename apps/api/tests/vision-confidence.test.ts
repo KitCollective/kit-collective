@@ -31,6 +31,30 @@ describe("vision-confidence", () => {
     expect(resolveFieldGate(80, false)).toBe("omit");
   });
 
+  it("preselects player independently of club at ≥70%", () => {
+    const playerOnly = resolveIdentityJob({
+      playerId: "00000000-0000-0000-0000-000000000004",
+      playerNumber: "10",
+      confidences: { overall: 80, player: 80 },
+    });
+
+    expect(playerOnly.status).toBe("ready");
+    expect(playerOnly.fieldPreselect).toEqual({ player: true });
+    expect(playerOnly.suggestions?.playerId).toBe("00000000-0000-0000-0000-000000000004");
+    expect(playerOnly.suggestions?.playerNumber).toBe("10");
+  });
+
+  it("suggest-only badge below preselect threshold", () => {
+    const badgeSuggest = resolveIdentityJob({
+      patchId: "00000000-0000-0000-0000-000000000005",
+      confidences: { overall: 55, badge: 55 },
+    });
+
+    expect(badgeSuggest.status).toBe("ready");
+    expect(badgeSuggest.fieldPreselect?.badge).toBeUndefined();
+    expect(badgeSuggest.suggestions?.patchId).toBe("00000000-0000-0000-0000-000000000005");
+  });
+
   it("marks ready with per-field preselect and suggest-only fields", () => {
     const highClub = resolveIdentityJob({
       clubId: "00000000-0000-0000-0000-000000000001",

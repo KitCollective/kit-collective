@@ -5,6 +5,8 @@ export type VisionFieldConfidences = {
   club?: number;
   season?: number;
   kitType?: number;
+  player?: number;
+  badge?: number;
 };
 
 export type VisionInferenceResult = {
@@ -12,6 +14,9 @@ export type VisionInferenceResult = {
   seasonId?: string;
   catalogKitId?: string;
   type?: KitType;
+  playerId?: string;
+  playerNumber?: string;
+  patchId?: string;
   /** Raw model club hint — used to detect catalog miss when clubId is absent. */
   clubHint?: string;
   visionRaw?: string;

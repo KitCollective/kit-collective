@@ -6,13 +6,17 @@ import { fetchVisionJob, startVisionSuggest } from "@/api/vision";
 import {
   applyIdentitySuggestion,
   selectDraftKitType,
+  setDraftBadge,
   setDraftClub,
+  setDraftPlayer,
   setDraftSeason,
 } from "@/capture/captureSession";
 import type { CaptureJerseyDraft, CaptureSessionMutator } from "@/capture/captureSessionTypes";
 import {
   confirmClubWasEdited,
   confirmKitTypeWasEdited,
+  confirmPlayerWasEdited,
+  confirmBadgeWasEdited,
   confirmSeasonWasEdited,
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
@@ -39,7 +43,13 @@ type UseConfirmVisionOptions = {
 };
 
 function hasPreselectFields(fieldPreselect: VisionFieldPreselect | undefined): boolean {
-  return Boolean(fieldPreselect?.club || fieldPreselect?.season || fieldPreselect?.type);
+  return Boolean(
+    fieldPreselect?.club ||
+      fieldPreselect?.season ||
+      fieldPreselect?.type ||
+      fieldPreselect?.player ||
+      fieldPreselect?.badge,
+  );
 }
 
 function hasSuggestFields(job: VisionJobResponse): boolean {
@@ -47,6 +57,8 @@ function hasSuggestFields(job: VisionJobResponse): boolean {
     job.suggestions?.clubId ||
       job.suggestions?.seasonId ||
       job.suggestions?.type ||
+      job.suggestions?.playerId ||
+      job.suggestions?.patchId ||
       job.catalogMiss,
   );
 }
@@ -130,6 +142,8 @@ export function useConfirmVision({
               club: confirmClubWasEdited(),
               season: confirmSeasonWasEdited(),
               type: confirmKitTypeWasEdited(),
+              player: confirmPlayerWasEdited(),
+              badge: confirmBadgeWasEdited(),
             },
           }),
         );
@@ -146,6 +160,8 @@ export function useConfirmVision({
           club: confirmClubWasEdited(),
           season: confirmSeasonWasEdited(),
           type: confirmKitTypeWasEdited(),
+          player: confirmPlayerWasEdited(),
+          badge: confirmBadgeWasEdited(),
         });
         if (suggestOnlyJob) {
           setSuggestion(suggestOnlyJob);
@@ -283,6 +299,19 @@ export function useConfirmVision({
       }
       if (suggestions.type) {
         next = selectDraftKitType(next, next.activeDraftId, suggestions.type);
+      }
+      if (suggestions.playerId && suggestions.playerLabel) {
+        next = setDraftPlayer(next, next.activeDraftId, {
+          id: suggestions.playerId,
+          name: suggestions.playerLabel,
+          number: suggestions.playerNumber ?? "",
+        });
+      }
+      if (suggestions.patchId && suggestions.patchLabel) {
+        next = setDraftBadge(next, next.activeDraftId, {
+          id: suggestions.patchId,
+          label: suggestions.patchLabel,
+        });
       }
       return next;
     });

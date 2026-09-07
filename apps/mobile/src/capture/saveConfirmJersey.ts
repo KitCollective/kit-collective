@@ -64,6 +64,8 @@ export async function saveConfirmJersey(input: {
         type: input.draft.kitType,
         size: input.draft.size,
         condition: input.draft.condition,
+        playerId: input.draft.playerId ?? null,
+        patchIds: input.draft.badgeId ? [input.draft.badgeId] : [],
       });
       clearPersistedCaptureSession(input.sessionId);
       return { status: "edit-saved", jerseyId: input.editJerseyId };
@@ -87,6 +89,8 @@ export async function saveConfirmJersey(input: {
       type: input.draft.kitType,
       size: input.draft.size,
       condition: input.draft.condition,
+      playerId: input.draft.playerId ?? undefined,
+      patchIds: input.draft.badgeId ? [input.draft.badgeId] : undefined,
       visionJobId: input.visionJobId ?? undefined,
       photos: photoPayload,
     });

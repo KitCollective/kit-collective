@@ -31,6 +31,8 @@ export function parseConfidences(raw: string | null | undefined): VisionFieldCon
       club: typeof parsed.club === "number" ? parsed.club : undefined,
       season: typeof parsed.season === "number" ? parsed.season : undefined,
       kitType: typeof parsed.kitType === "number" ? parsed.kitType : undefined,
+      player: typeof parsed.player === "number" ? parsed.player : undefined,
+      badge: typeof parsed.badge === "number" ? parsed.badge : undefined,
     };
   } catch {
     return null;
@@ -129,6 +131,14 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     confidences?.kitType ?? confidences?.overall,
     Boolean(result.catalogKitId),
   );
+  const playerGate = resolveFieldGate(
+    confidences?.player ?? confidences?.overall,
+    Boolean(result.playerId),
+  );
+  const badgeGate = resolveFieldGate(
+    confidences?.badge ?? confidences?.overall,
+    Boolean(result.patchId),
+  );
 
   const catalogMiss = Boolean(result.clubHint && !result.clubId);
 
@@ -156,12 +166,34 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     }
   }
 
+  if (playerGate !== "omit" && result.playerId) {
+    suggestions.playerId = result.playerId;
+    if (result.playerNumber) {
+      suggestions.playerNumber = result.playerNumber;
+    }
+    if (playerGate === "preselect") {
+      fieldPreselect.player = true;
+    }
+  }
+
+  if (badgeGate !== "omit" && result.patchId) {
+    suggestions.patchId = result.patchId;
+    if (badgeGate === "preselect") {
+      fieldPreselect.badge = true;
+    }
+  }
+
   if (result.catalogKitId && seasonGate !== "omit") {
     suggestions.catalogKitId = result.catalogKitId;
   }
 
   const hasSuggestion = Boolean(
-    suggestions.clubId || suggestions.seasonId || suggestions.type || suggestions.catalogKitId,
+    suggestions.clubId ||
+      suggestions.seasonId ||
+      suggestions.type ||
+      suggestions.catalogKitId ||
+      suggestions.playerId ||
+      suggestions.patchId,
   );
 
   if (!hasSuggestion && !catalogMiss) {
@@ -179,7 +211,13 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     };
   }
 
-  const preselect = Boolean(fieldPreselect.club || fieldPreselect.season || fieldPreselect.type);
+  const preselect = Boolean(
+    fieldPreselect.club ||
+      fieldPreselect.season ||
+      fieldPreselect.type ||
+      fieldPreselect.player ||
+      fieldPreselect.badge,
+  );
 
   return {
     status: hasSuggestion || catalogMiss ? "ready" : "noop",

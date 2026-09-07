@@ -60,6 +60,7 @@ import {
   conversationParticipant,
   jerseyDraft,
   kit,
+  patch,
   player,
   playerClubSeason,
   season,
@@ -67,6 +68,7 @@ import {
   user,
   userJersey,
   userJerseyFavorite,
+  userJerseyPatch,
   userJerseyPhoto,
   visionLog,
 } from "@kit/db";
@@ -218,6 +220,7 @@ export class CollectionService {
         countryId: club.countryId,
         leagueId: season.leagueId,
         catalogKitId: userJersey.catalogKitId,
+        playerId: userJersey.playerId,
         type: userJersey.type,
         size: userJersey.size,
         condition: userJersey.condition,
@@ -246,7 +249,7 @@ export class CollectionService {
     const squadScopeKeys = rows.map((row) => `${row.clubId}:${row.seasonId}`);
     const uniqueSquadScopes = [...new Set(squadScopeKeys)];
 
-    const [clubLabels, countryLabels, leagueLabels, photosByJersey, squadPlayersByScope] =
+    const [clubLabels, countryLabels, leagueLabels, photosByJersey, squadPlayersByScope, playerFieldsByJersey, patchesByJersey] =
       await Promise.all([
         this.resolveEntityLabels("club", clubIds, locale),
         this.resolveEntityLabels("country", countryIds, locale),
@@ -259,6 +262,8 @@ export class CollectionService {
           }),
           locale,
         ),
+        this.loadPlayerFieldsForJerseys(rows, locale),
+        this.loadPatchesForJerseys(jerseyIds, locale),
       ]);
 
     const jerseys: CollectionJersey[] = rows.map((row) => {
@@ -283,6 +288,8 @@ export class CollectionService {
         throw new NotFoundException(`League label missing for jersey ${row.id}`);
       }
 
+      const playerFields = playerFieldsByJersey.get(row.id);
+
       return {
         id: row.id,
         clubId: row.clubId,
@@ -298,6 +305,10 @@ export class CollectionService {
         clubLabel,
         seasonLabel: row.seasonLabel,
         squadPlayers: squadPlayersByScope.get(`${row.clubId}:${row.seasonId}`) ?? [],
+        playerId: row.playerId ?? null,
+        playerLabel: playerFields?.label ?? null,
+        playerNumber: playerFields?.number ?? null,
+        patches: patchesByJersey.get(row.id) ?? [],
         photos,
         biddingEnabled: row.biddingEnabled,
         private: row.private,
@@ -1075,11 +1086,15 @@ export class CollectionService {
       throw new BadRequestException("clubId and seasonId are not linked in TeamSeason");
     }
 
+    await this.assertOptionalPlayerScoped(body.clubId, body.seasonId, body.playerId);
+    await this.assertOptionalPatchesScoped(body.seasonId, body.patchIds);
+
     await this.db
       .update(userJersey)
       .set({
         clubId: body.clubId,
         seasonId: body.seasonId,
+        playerId: body.playerId ?? null,
         catalogKitId: body.catalogKitId ?? null,
         type: body.type,
         size: body.size,
@@ -1087,6 +1102,16 @@ export class CollectionService {
         updatedAt: new Date(),
       })
       .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+
+    await this.db.delete(userJerseyPatch).where(eq(userJerseyPatch.userJerseyId, jerseyId));
+    if (body.patchIds?.length) {
+      await this.db.insert(userJerseyPatch).values(
+        body.patchIds.map((patchId) => ({
+          userJerseyId: jerseyId,
+          patchId,
+        })),
+      );
+    }
 
     return { jersey: await this.loadOwnJerseyOrThrow(userId, jerseyId) };
   }
@@ -2013,17 +2038,8 @@ export class CollectionService {
       throw new BadRequestException("clubId and seasonId are not linked in TeamSeason");
     }
 
-    const clubLabels = await this.resolveEntityLabels("club", [body.clubId], locale);
-    const clubLabel = clubLabels.get(body.clubId);
-    if (!clubLabel) {
-      throw new BadRequestException("clubId has no resolved label");
-    }
-
-    const countryLabels = await this.resolveEntityLabels("country", [clubRow.countryId], locale);
-    const countryLabel = countryLabels.get(clubRow.countryId);
-    if (!countryLabel) {
-      throw new BadRequestException("clubId country has no resolved label");
-    }
+    await this.assertOptionalPlayerScoped(body.clubId, body.seasonId, body.playerId);
+    await this.assertOptionalPatchesScoped(body.seasonId, body.patchIds);
 
     const [insertedJersey] = await this.db
       .insert(userJersey)
@@ -2031,6 +2047,7 @@ export class CollectionService {
         userId,
         clubId: body.clubId,
         seasonId: body.seasonId,
+        playerId: body.playerId ?? null,
         catalogKitId: body.catalogKitId ?? null,
         type: body.type,
         size: body.size,
@@ -2049,6 +2066,15 @@ export class CollectionService {
 
     if (!insertedJersey) {
       throw new BadRequestException("Could not create UserJersey");
+    }
+
+    if (body.patchIds?.length) {
+      await this.db.insert(userJerseyPatch).values(
+        body.patchIds.map((patchId) => ({
+          userJerseyId: insertedJersey.id,
+          patchId,
+        })),
+      );
     }
 
     const photos = await this.persistPhotos(userId, insertedJersey.id, body.photos);
@@ -2113,6 +2139,32 @@ export class CollectionService {
       locale,
     );
 
+    const playerFieldsByJersey = await this.loadPlayerFieldsForJerseys(
+      [
+        {
+          id: insertedJersey.id,
+          clubId: insertedJersey.clubId,
+          seasonId: insertedJersey.seasonId,
+          playerId: body.playerId ?? null,
+        },
+      ],
+      locale,
+    );
+    const patchesByJersey = await this.loadPatchesForJerseys([insertedJersey.id], locale);
+    const playerFields = playerFieldsByJersey.get(insertedJersey.id);
+
+    const clubLabels = await this.resolveEntityLabels("club", [body.clubId], locale);
+    const clubLabel = clubLabels.get(body.clubId);
+    if (!clubLabel) {
+      throw new BadRequestException("clubId has no resolved label");
+    }
+
+    const countryLabels = await this.resolveEntityLabels("country", [clubRow.countryId], locale);
+    const countryLabel = countryLabels.get(clubRow.countryId);
+    if (!countryLabel) {
+      throw new BadRequestException("clubId country has no resolved label");
+    }
+
     const jersey: CollectionJersey = {
       id: insertedJersey.id,
       clubId: insertedJersey.clubId,
@@ -2128,6 +2180,10 @@ export class CollectionService {
       clubLabel,
       seasonLabel: seasonRow.label,
       squadPlayers: squadPlayersByScope.get(`${body.clubId}:${body.seasonId}`) ?? [],
+      playerId: body.playerId ?? null,
+      playerLabel: playerFields?.label ?? null,
+      playerNumber: playerFields?.number ?? null,
+      patches: patchesByJersey.get(insertedJersey.id) ?? [],
       photos,
       biddingEnabled: false,
       private: false,
@@ -2350,7 +2406,7 @@ export class CollectionService {
   }
 
   private async resolveEntityLabels(
-    entityType: "country" | "league" | "club" | "player",
+    entityType: "country" | "league" | "club" | "player" | "patch",
     entityIds: string[],
     locale: LabelLocale,
   ): Promise<Map<string, string>> {
@@ -2593,5 +2649,141 @@ export class CollectionService {
     }
 
     return saved;
+  }
+
+  private async assertOptionalPlayerScoped(
+    clubId: string,
+    seasonId: string,
+    playerId: string | null | undefined,
+  ): Promise<void> {
+    if (!playerId) {
+      return;
+    }
+
+    const [playerRow] = await this.db
+      .select({ id: player.id })
+      .from(player)
+      .where(eq(player.id, playerId))
+      .limit(1);
+
+    if (!playerRow) {
+      throw new BadRequestException("playerId is not catalog truth");
+    }
+
+    const [scopedRow] = await this.db
+      .select({ id: playerClubSeason.id })
+      .from(playerClubSeason)
+      .where(
+        and(
+          eq(playerClubSeason.playerId, playerId),
+          eq(playerClubSeason.clubId, clubId),
+          eq(playerClubSeason.seasonId, seasonId),
+        ),
+      )
+      .limit(1);
+
+    if (!scopedRow) {
+      throw new BadRequestException("playerId is not on this club season");
+    }
+  }
+
+  private async assertOptionalPatchesScoped(
+    seasonId: string,
+    patchIds: string[] | undefined,
+  ): Promise<void> {
+    if (!patchIds?.length) {
+      return;
+    }
+
+    const rows = await this.db
+      .select({ id: patch.id })
+      .from(patch)
+      .where(and(inArray(patch.id, patchIds), eq(patch.seasonId, seasonId)));
+
+    if (rows.length !== patchIds.length) {
+      throw new BadRequestException("patchIds are not catalog truth for this season");
+    }
+  }
+
+  private async loadPlayerFieldsForJerseys(
+    rows: Array<{ id: string; clubId: string; seasonId: string; playerId: string | null }>,
+    locale: LabelLocale,
+  ): Promise<Map<string, { label: string; number: string | null }>> {
+    const playerIds = [...new Set(rows.map((row) => row.playerId).filter(Boolean))] as string[];
+    const fieldsByJersey = new Map<string, { label: string; number: string | null }>();
+
+    if (playerIds.length === 0) {
+      return fieldsByJersey;
+    }
+
+    const labels = await this.resolveEntityLabels("player", playerIds, locale);
+    const squadRows = await this.db
+      .select({
+        playerId: playerClubSeason.playerId,
+        clubId: playerClubSeason.clubId,
+        seasonId: playerClubSeason.seasonId,
+        squadNumber: playerClubSeason.squadNumber,
+      })
+      .from(playerClubSeason)
+      .where(inArray(playerClubSeason.playerId, playerIds));
+
+    for (const row of rows) {
+      if (!row.playerId) {
+        continue;
+      }
+
+      const label = labels.get(row.playerId);
+      if (!label) {
+        continue;
+      }
+
+      const squad = squadRows.find(
+        (entry) =>
+          entry.playerId === row.playerId &&
+          entry.clubId === row.clubId &&
+          entry.seasonId === row.seasonId,
+      );
+
+      fieldsByJersey.set(row.id, {
+        label,
+        number: squad?.squadNumber ? String(squad.squadNumber) : null,
+      });
+    }
+
+    return fieldsByJersey;
+  }
+
+  private async loadPatchesForJerseys(
+    jerseyIds: string[],
+    locale: LabelLocale,
+  ): Promise<Map<string, NonNullable<CollectionJersey["patches"]>>> {
+    const patchesByJersey = new Map<string, NonNullable<CollectionJersey["patches"]>>();
+
+    if (jerseyIds.length === 0) {
+      return patchesByJersey;
+    }
+
+    const rows = await this.db
+      .select({
+        userJerseyId: userJerseyPatch.userJerseyId,
+        patchId: userJerseyPatch.patchId,
+      })
+      .from(userJerseyPatch)
+      .where(inArray(userJerseyPatch.userJerseyId, jerseyIds));
+
+    const patchIds = [...new Set(rows.map((row) => row.patchId))];
+    const labels = await this.resolveEntityLabels("patch", patchIds, locale);
+
+    for (const jerseyId of jerseyIds) {
+      const jerseyPatches = rows
+        .filter((row) => row.userJerseyId === jerseyId)
+        .flatMap((row) => {
+          const label = labels.get(row.patchId);
+          return label ? [{ id: row.patchId, label }] : [];
+        });
+      patchesByJersey.set(jerseyId, jerseyPatches);
+    }
+
+    return patchesByJersey;
   }
 }
