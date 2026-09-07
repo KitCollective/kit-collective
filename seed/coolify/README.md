@@ -47,7 +47,7 @@ One-shot Docker Compose definitions for the same CLIs that Seed MCP wraps. They 
 | `SEED_FROM_SEASON` | via MCP tool args | yes (`0001` = first season) | yes |
 | `SEED_TO_SEASON` | via MCP tool args | yes (`today` allowed) | yes |
 | `SEED_LANE` | optional (default development) | optional | optional |
-| `DATABASE_URL` | yes | yes | yes |
+| `DATABASE_URL` | yes (`sslmode=require` for CX33) | yes | yes |
 | `SEED_STAGING_DATABASE_URL` | when targeting staging | — | — |
 | `SEED_PROXY_URL` | yes (live Kader on Coolify) | yes (live Kader on Coolify) | when FK origin 202s from CX33 |
 | `SEED_REQUIRE_PROXY` | recommended `true` on Coolify | recommended `true` on Coolify | recommended `true` on Coolify |

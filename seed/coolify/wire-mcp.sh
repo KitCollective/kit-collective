@@ -31,6 +31,24 @@ if [[ -z "${SEED_MCP_TOKEN:-}" ]]; then
   exit 1
 fi
 
+require_sslmode() {
+  local url="$1"
+  if [[ -z "$url" || "$url" == *"sslmode="* ]]; then
+    printf '%s' "$url"
+    return
+  fi
+  if [[ "$url" == *"?"* ]]; then
+    printf '%s' "${url}&sslmode=require"
+  else
+    printf '%s' "${url}?sslmode=require"
+  fi
+}
+
+DATABASE_URL="$(require_sslmode "$DATABASE_URL")"
+if [[ -n "${SEED_STAGING_DATABASE_URL:-}" ]]; then
+  SEED_STAGING_DATABASE_URL="$(require_sslmode "$SEED_STAGING_DATABASE_URL")"
+fi
+
 if [[ ! -f "$ROOT/seed/coolify/Dockerfile" ]]; then
   echo "wire-mcp: missing seed/coolify/Dockerfile" >&2
   exit 1
