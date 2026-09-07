@@ -58,6 +58,7 @@ import { resolveConfirmLightboxUri, resolveConfirmStripUri } from "@/capture/con
 import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
 import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
+import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
 import { captureQualityForRole, readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
@@ -426,19 +427,8 @@ export function JerseyDetailsScreen({
         }
         visionStartAttempted.current = true;
         try {
-          const photos = await Promise.all(
-            currentDraft.photos.map(async (photo) => {
-              const role = photo.role ?? "front";
-              return {
-                role,
-                contentBase64: await readPreparedPhotoBase64(photo.uri, role, "visionIdentity"),
-              };
-            }),
-          );
-          const jobId = await startVisionSuggest(accessToken, {
-            draftId: currentDraft.id,
-            photos,
-          });
+          const payload = await buildIdentitySuggestRequest(currentDraft);
+          const jobId = await startVisionSuggest(accessToken, payload);
           if (!cancelled) {
             setVisionJobId(jobId);
             setVisionPolling(true);
