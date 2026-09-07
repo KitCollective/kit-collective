@@ -1,6 +1,7 @@
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
-import type { AddressInfo, createServer } from "node:http";
+import type { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
