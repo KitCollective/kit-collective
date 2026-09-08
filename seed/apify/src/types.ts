@@ -26,6 +26,8 @@ export interface TransfermarktRawPayload {
       name: string;
       iso3166: string;
     };
+    /** League badge bytes from the TM image CDN. Never a hot-linked URL. */
+    badgeBytes?: Uint8Array;
   };
   seasons: TransfermarktRawSeason[];
   /** Club Hierarchy grain — identity + facts + honours, no seasons required. */
@@ -47,6 +49,8 @@ export interface TransfermarktRawSeason {
 export interface TransfermarktRawHonour {
   seasonLabel: string | null;
   title: string;
+  markObjectKey?: string;
+  markBytes?: Uint8Array;
 }
 
 export interface TransfermarktRawClub {
@@ -64,6 +68,8 @@ export interface TransfermarktRawClub {
   secondaryColorHex?: string;
   websiteUrl?: string;
   honours?: TransfermarktRawHonour[];
+  /** Club crest bytes from the TM image CDN. Never `tmLogoUrl`. */
+  crestBytes?: Uint8Array;
   marketValue?: number;
   agent?: { name?: string; phone?: string; email?: string };
   tmLogoUrl?: string;
@@ -154,6 +160,7 @@ export interface NormalizedFacts {
     countryIso: string;
     countryExternalId: string;
     countryName: string;
+    badgeBytes?: Uint8Array;
   };
   seasons: NormalizedSeason[];
   clubs?: NormalizedClub[];
@@ -173,6 +180,8 @@ export interface NormalizedSeason {
 export interface NormalizedHonour {
   seasonLabel: string | null;
   title: string;
+  markObjectKey?: string;
+  markBytes?: Uint8Array;
 }
 
 export interface NormalizedClub {
@@ -191,6 +200,7 @@ export interface NormalizedClub {
   secondaryColorHex?: string;
   websiteUrl?: string;
   honours?: NormalizedHonour[];
+  crestBytes?: Uint8Array;
   players: NormalizedPlayer[];
 }
 
@@ -247,6 +257,7 @@ export interface MapResult {
   externalIds: number;
   honours: number;
   playerPhotos: number;
+  catalogMarks: number;
   nationalTeams: number;
   nationalTeamSeasons: number;
   playerNationalTeamSeasons: number;

@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test tests/catalog-enums.test.mjs tests/photo-roles.test.mjs tests/photo-variants.test.mjs"
+    "test": "tsc -p tsconfig.json && node --test tests/catalog-enums.test.mjs tests/photo-roles.test.mjs tests/photo-variants.test.mjs tests/squad-position.test.mjs"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

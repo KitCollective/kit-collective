@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { getApiBase, joinApiPath } from "../api/client.js";
 
 type AuthenticatedImageProps = {
@@ -6,9 +6,16 @@ type AuthenticatedImageProps = {
   token: string;
   alt?: string;
   className?: string;
+  fallback?: ReactNode;
 };
 
-export function AuthenticatedImage({ path, token, alt = "", className }: AuthenticatedImageProps) {
+export function AuthenticatedImage({
+  path,
+  token,
+  alt = "",
+  className,
+  fallback,
+}: AuthenticatedImageProps) {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,7 +55,7 @@ export function AuthenticatedImage({ path, token, alt = "", className }: Authent
   }, [path, token]);
 
   if (!src) {
-    return <span className={className ?? "thumb-slot"} aria-hidden />;
+    return fallback ?? <span className={className ?? "thumb-slot"} aria-hidden />;
   }
 
   return <img src={src} alt={alt} className={className} />;

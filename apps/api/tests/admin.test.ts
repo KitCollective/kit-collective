@@ -11,6 +11,7 @@ import {
 } from "@kit/api-contract";
 import {
   catalogLabel,
+  catalogMark,
   club,
   country,
   createDb,
@@ -229,6 +230,17 @@ describe("Admin /v1", () => {
       squadNumber: 10,
     });
 
+    const crestKey = "club/190/crest";
+    const crestBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    await objectStore.putObject(crestKey, crestBytes);
+    await db.insert(catalogMark).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      objectKey: crestKey,
+      rights: "unresolved",
+      visibility: "admin_only",
+    });
+
     await pool.end();
 
     await registerUser(app, "staff@example.com");
@@ -247,7 +259,7 @@ describe("Admin /v1", () => {
 
     const aliasSearch = await app.inject({
       method: "GET",
-      url: "/v1/admin/catalog/stamdata?q=FCK",
+      url: "/v1/admin/catalog/stamdata?entityType=club&q=FCK",
       headers: {
         authorization: `Bearer ${adminSession.accessToken}`,
       },
@@ -255,10 +267,22 @@ describe("Admin /v1", () => {
     expect(aliasSearch.statusCode).toBe(200);
     const aliasBody = adminStamdataListSchema.parse(JSON.parse(aliasSearch.body));
     expect(aliasBody.rows.some((row) => row.label.includes("FC Copenhagen"))).toBe(true);
+    const markedClub = aliasBody.rows.find((row) => row.label.includes("FC Copenhagen"));
+    expect(markedClub?.markPath).toBe(`/admin/catalog/clubs/${insertedClub!.id}/mark`);
+
+    const clubMarkResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/mark`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(clubMarkResponse.statusCode).toBe(200);
+    expect(clubMarkResponse.headers["content-type"]).toContain("image/png");
 
     const countryAliasSearch = await app.inject({
       method: "GET",
-      url: "/v1/admin/catalog/stamdata?q=Danmark",
+      url: "/v1/admin/catalog/stamdata?entityType=club&q=Danmark",
       headers: {
         authorization: `Bearer ${adminSession.accessToken}`,
       },
@@ -269,18 +293,38 @@ describe("Admin /v1", () => {
 
     const leagueAliasSearch = await app.inject({
       method: "GET",
-      url: "/v1/admin/catalog/stamdata?q=SL",
+      url: "/v1/admin/catalog/stamdata?entityType=league&q=SL",
       headers: {
         authorization: `Bearer ${adminSession.accessToken}`,
       },
     });
     expect(leagueAliasSearch.statusCode).toBe(200);
     const leagueAliasBody = adminStamdataListSchema.parse(JSON.parse(leagueAliasSearch.body));
-    expect(
-      leagueAliasBody.rows.some(
-        (row) => row.entityType === "season" || row.entityType === "club_season",
-      ),
-    ).toBe(true);
+    expect(leagueAliasBody.rows.some((row) => row.entityType === "league")).toBe(true);
+
+    const playerSearch = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=player&q=Player",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(playerSearch.statusCode).toBe(200);
+    const playerBody = adminStamdataListSchema.parse(JSON.parse(playerSearch.body));
+    expect(playerBody.rows.some((row) => row.label === "Player One")).toBe(true);
+
+    const pagedClubs = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=club&limit=1&offset=0",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(pagedClubs.statusCode).toBe(200);
+    const pagedBody = adminStamdataListSchema.parse(JSON.parse(pagedClubs.body));
+    expect(pagedBody.total).toBeGreaterThanOrEqual(1);
+    expect(pagedBody.rows).toHaveLength(1);
+    expect(pagedBody.rows[0]?.entityType).toBe("club");
 
     const clubDrillResponse = await app.inject({
       method: "GET",
@@ -293,6 +337,8 @@ describe("Admin /v1", () => {
     const clubDrillBody = adminClubDrillSchema.parse(JSON.parse(clubDrillResponse.body));
     expect(clubDrillBody.label).toBe("FC Copenhagen");
     expect(clubDrillBody.kind).toBe("club");
+    expect(clubDrillBody.markPath).toBe(`/admin/catalog/clubs/${insertedClub!.id}/mark`);
+    expect(clubDrillBody.honours).toEqual([]);
     expect(clubDrillBody.seasons.some((season) => season.label === "2024/25")).toBe(true);
 
     const clubSeasonDrillResponse = await app.inject({
@@ -330,9 +376,26 @@ describe("Admin /v1", () => {
     });
     expect(listResponse.statusCode).toBe(200);
     const listBody = adminStamdataListSchema.parse(JSON.parse(listResponse.body));
-    const kitRow = listBody.rows.find((row) => row.entityType === "kit");
-    expect(kitRow?.label).toContain("FC Copenhagen");
-    expect(kitRow?.photoPath).toBe(`/admin/catalog/kits/${insertedKit!.id}/photo`);
+    expect(listBody.rows.every((row) => row.entityType === "club")).toBe(true);
+    expect(listBody.rows.some((row) => row.label.includes("FC Copenhagen"))).toBe(true);
+
+    const leagueDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/leagues/${insertedLeague!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(leagueDrillResponse.statusCode).toBe(200);
+
+    const playerDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/players/${insertedPlayer!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(playerDrillResponse.statusCode).toBe(200);
 
     const drillResponse = await app.inject({
       method: "GET",

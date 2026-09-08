@@ -37,6 +37,7 @@ export type {
   FetchLeagueParams,
   FetchLeagueSeasonParams,
   JerseyNumbersFetcher,
+  CatalogMarksFetcher,
   ListClubSeasonPairsParams,
 } from "./fetch/adapter.js";
 export {

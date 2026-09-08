@@ -225,6 +225,13 @@
       "when": 1788536400000,
       "tag": "0031_jersey_number_vendor_side",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788546400000,
+      "tag": "0032_catalog_mark",
+      "breakpoints": true
     }
   ]
 }

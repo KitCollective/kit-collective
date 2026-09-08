@@ -19,6 +19,11 @@ describe("adminClubDrillSchema", () => {
       validFrom: "1992-07-01",
       validTo: null,
       seasons: [{ id: ids.season, label: "2024/25" }],
+      honours: [],
+      foundedOn: "1992-07-01",
+      stadiumName: "Parken",
+      stadiumCapacity: 38065,
+      websiteUrl: "https://www.fck.dk",
     };
     expect(adminClubDrillSchema.parse(drill)).toEqual(drill);
   });
@@ -42,7 +47,7 @@ describe("adminClubSeasonDrillSchema", () => {
       clubLabel: "FC Copenhagen",
       seasonLabel: "2024/25",
       squadCount: 1,
-      squad: [{ id: ids.player, label: "Player One", squadNumber: 10 }],
+      squad: [{ id: ids.player, label: "Player One", squadNumber: 10, position: "Central Midfield" }],
       kits: [
         {
           id: ids.kit,

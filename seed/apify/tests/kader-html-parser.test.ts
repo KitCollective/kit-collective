@@ -198,9 +198,26 @@ describe("parseHonoursHtml against the live FC Copenhagen honours page", () => {
   });
 
   it("splits the season label off the title", () => {
-    expect(honours).toContainEqual({ seasonLabel: "24/25", title: "Danish Champion" });
-    expect(honours).toContainEqual({ seasonLabel: "24/25", title: "Danish cup winner" });
+    expect(honours).toContainEqual(
+      expect.objectContaining({ seasonLabel: "24/25", title: "Danish Champion" }),
+    );
+    expect(honours).toContainEqual(
+      expect.objectContaining({ seasonLabel: "24/25", title: "Danish cup winner" }),
+    );
     expect(honours.filter((row) => row.title === "Danish Champion").length).toBeGreaterThan(10);
+  });
+
+  it("keeps the trophy or competition mark URL from the titles table", () => {
+    expect(honours).toContainEqual({
+      seasonLabel: "24/25",
+      title: "Danish Champion",
+      imageSrc: "https://img.a.transfermarkt.technology/logo/tiny/dk1.png?lm=4711",
+    });
+    expect(honours).toContainEqual({
+      seasonLabel: "25/26",
+      title: "Champions League Participant",
+      imageSrc: "https://img.a.transfermarkt.technology/erfolge/tiny/6.png?lm=4711",
+    });
   });
 
   it("never emits a header row as an honour", () => {

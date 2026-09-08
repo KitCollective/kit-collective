@@ -91,12 +91,18 @@ export type ParsedJerseyNumbersCli = {
   lane: ResolvedSeedLane;
 };
 
+export type ParsedCatalogMarksCli = {
+  mode: "catalog-marks";
+  lane: ResolvedSeedLane;
+};
+
 export type ParsedSeedCli =
   | ParsedWalkCli
   | ParsedGrainCli
   | ParsedJoinCli
   | ParsedBulkCli
-  | ParsedJerseyNumbersCli;
+  | ParsedJerseyNumbersCli
+  | ParsedCatalogMarksCli;
 
 function parseJerseyNumbersArgv(argv: string[]): ParsedJerseyNumbersCli {
   const laneArg = argv.at(-1);
@@ -410,6 +416,23 @@ function parseBulkArgv(argv: string[]): ParsedBulkCli {
   };
 }
 
+function parseCatalogMarksArgv(argv: string[]): ParsedCatalogMarksCli {
+  const laneArg = argv.at(-1);
+  const laneResult = resolveSeedLane(
+    laneArg === "development" || laneArg === "staging" || laneArg === "production"
+      ? laneArg
+      : undefined,
+  );
+  if (!laneResult.ok) {
+    throw new Error(laneResult.error);
+  }
+  const positional = laneArg && laneArg === laneResult.lane ? argv.slice(0, -1) : argv;
+  if (positional.length === 0 || (positional.length === 1 && positional[0] === "backfill")) {
+    return { mode: "catalog-marks", lane: laneResult.lane };
+  }
+  throw new Error("Expected: catalog-marks backfill [lane]");
+}
+
 export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {
   const cleaned = argv.filter((arg) => arg !== "--");
   if (cleaned[0] === "grain") {
@@ -423,6 +446,9 @@ export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {
   }
   if (cleaned[0] === "jersey-numbers" || cleaned[0] === "jersey_numbers") {
     return parseJerseyNumbersArgv(cleaned.slice(1));
+  }
+  if (cleaned[0] === "catalog-marks" || cleaned[0] === "catalog_marks") {
+    return parseCatalogMarksArgv(cleaned.slice(1));
   }
 
   const result = parseSeedScopeArgv(cleaned);

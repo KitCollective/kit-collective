@@ -7,6 +7,7 @@ import {
 } from "@kit/seed-shared";
 import type {
   TransfermarktRawClub,
+  TransfermarktRawHonour,
   TransfermarktRawNationalTeam,
   TransfermarktRawPayload,
   TransfermarktRawPlayer,
@@ -17,7 +18,6 @@ import type {
   ActorSeasonClubRow,
   ActorSquadRow,
   ClubFactsParse,
-  HonourParseRow,
 } from "./actor-types.js";
 import {
   calendarYearBounds,
@@ -35,7 +35,7 @@ export interface MapClubSeasonParams {
   profileByPlayerId: Map<string, ActorPlayerProfile>;
   portraits?: Map<string, Uint8Array>;
   facts?: ClubFactsParse;
-  honours?: HonourParseRow[];
+  honours?: TransfermarktRawHonour[];
   identity?: CompetitionIdentity;
 }
 
@@ -173,7 +173,7 @@ function resolvePlayer(
 export function applyClubFacts(
   club: TransfermarktRawClub,
   facts?: ClubFactsParse,
-  honours?: HonourParseRow[],
+  honours?: TransfermarktRawHonour[],
 ): TransfermarktRawClub {
   return {
     ...club,
@@ -197,7 +197,7 @@ export function mapClubToPayload(params: {
   clubExternalId: string;
   clubName: string;
   facts?: ClubFactsParse;
-  honours?: HonourParseRow[];
+  honours?: TransfermarktRawHonour[];
   identity?: CompetitionIdentity;
 }): TransfermarktRawPayload {
   const identity = resolveCompetitionOrThrow(params.competitionSlug, params.identity);
@@ -323,7 +323,7 @@ export function nationalTeamCompetitionPayload(
 function applyNationalTeamFacts(
   team: TransfermarktRawNationalTeam,
   facts?: ClubFactsParse,
-  honours?: HonourParseRow[],
+  honours?: TransfermarktRawHonour[],
 ): TransfermarktRawNationalTeam {
   return {
     ...team,
@@ -359,7 +359,7 @@ export function mapNationalTeamToPayload(params: {
   nationalTeamRef: string;
   teamName: string;
   facts?: ClubFactsParse;
-  honours?: HonourParseRow[];
+  honours?: TransfermarktRawHonour[];
   identity?: NationalTeamIdentity;
 }): TransfermarktRawPayload {
   const identity = resolveNationalTeamOrThrow(params.nationalTeamRef, params.identity);

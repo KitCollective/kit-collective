@@ -4,6 +4,7 @@ import {
   AUTHENTICITY_VALUES,
   CALENDAR_KINDS,
   CATALOG_ENTITY_TYPES,
+  CATALOG_MARK_ENTITY_TYPES,
   CLUB_KINDS,
   ENTITLEMENT_SOURCES,
   EXTERNAL_ID_ENTITY_TYPES,
@@ -62,6 +63,10 @@ export const kitPhotoRightsEnum = pgEnum("kit_photo_rights", KIT_PHOTO_RIGHTS);
 export const kitPhotoVisibilityEnum = pgEnum("kit_photo_visibility", KIT_PHOTO_VISIBILITY);
 export const preferredFootEnum = pgEnum("preferred_foot", PREFERRED_FOOT);
 export const honourSubjectTypeEnum = pgEnum("honour_subject_type", HONOUR_SUBJECT_TYPES);
+export const catalogMarkEntityTypeEnum = pgEnum(
+  "catalog_mark_entity_type",
+  CATALOG_MARK_ENTITY_TYPES,
+);
 export const userRoleEnum = pgEnum("user_role", USER_ROLES);
 export const authEventKindEnum = pgEnum("auth_event_kind", AUTH_EVENT_KINDS);
 export const identityLinkedProviderEnum = pgEnum(
@@ -380,6 +385,20 @@ export const playerPhoto = pgTable("player_photo", {
   visibility: kitPhotoVisibilityEnum("visibility").notNull().default("admin_only"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const catalogMark = pgTable(
+  "catalog_mark",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entityType: catalogMarkEntityTypeEnum("entity_type").notNull(),
+    entityId: uuid("entity_id").notNull(),
+    objectKey: text("object_key").notNull(),
+    rights: kitPhotoRightsEnum("rights").notNull().default("unresolved"),
+    visibility: kitPhotoVisibilityEnum("visibility").notNull().default("admin_only"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("catalog_mark_entity_unique").on(table.entityType, table.entityId)],
+);
 
 export const catalogLabel = pgTable(
   "catalog_label",

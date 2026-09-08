@@ -4,19 +4,23 @@ import {
   adminClubDrillSchema,
   adminClubSeasonDrillSchema,
 } from "@kit/api-contract";
-import { type KeyboardEvent, useEffect, useState } from "react";
+import { Fragment, type KeyboardEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
 import { BackLink } from "../components/BackLink.js";
+import { CatalogMark } from "../components/CatalogMark.js";
+import { groupSquadPlayers } from "./club-drill-squad.js";
 import {
   isClubSeasonExpandPending,
   isClubSeasonReadyToExpand,
   resolveSeasonIdForClub,
 } from "./club-season-expand.js";
 
-type ClubTab = "players" | "jerseys";
+type ClubTab = "players" | "jerseys" | "honours";
+
+const CLUB_TABS: ClubTab[] = ["players", "jerseys", "honours"];
 
 function clubKindLabel(kind: AdminClubDrill["kind"]): string {
   switch (kind) {
@@ -35,6 +39,18 @@ function clubKindLabel(kind: AdminClubDrill["kind"]): string {
 
 function formatDate(value: string | null): string {
   return value && value.length > 0 ? value : "—";
+}
+
+function websiteHref(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
 
 export function ClubDrillPage() {
@@ -118,11 +134,14 @@ export function ClubDrillPage() {
     };
   }, [token, clubId, seasonId, club]);
 
+  const routedClub = club && clubId && club.id === clubId ? club : null;
   const players = seasonDrill?.squad ?? [];
   const jerseys = seasonDrill?.kits ?? [];
-  const rows = tab === "players" ? players : jerseys;
-  const columnCount = tab === "players" ? 2 : 4;
-  const routedClub = club && clubId && club.id === clubId ? club : null;
+  const honours = routedClub?.honours ?? [];
+  const rows = tab === "players" ? players : tab === "jerseys" ? jerseys : honours;
+  const columnCount = tab === "players" ? 3 : tab === "jerseys" ? 4 : 3;
+  const squadGroups = tab === "players" ? groupSquadPlayers(players) : [];
+  const website = routedClub?.websiteUrl ? websiteHref(routedClub.websiteUrl) : undefined;
 
   function openJersey(kitId: string) {
     navigate(`/stamdata/kits/${kitId}`);
@@ -133,7 +152,12 @@ export function ClubDrillPage() {
       return;
     }
     event.preventDefault();
-    setTab((current) => (current === "players" ? "jerseys" : "players"));
+    setTab((current) => {
+      const index = CLUB_TABS.indexOf(current);
+      const delta = event.key === "ArrowRight" ? 1 : -1;
+      const next = (index + delta + CLUB_TABS.length) % CLUB_TABS.length;
+      return CLUB_TABS[next] ?? current;
+    });
   }
 
   function handleJerseyKeyDown(
@@ -185,33 +209,82 @@ export function ClubDrillPage() {
 
       {routedClub ? (
         <section className="summary-panel identity-strip">
-          <dl className="stats-row">
-            <div>
-              <dt>Country</dt>
-              <dd>{routedClub.countryLabel ?? "—"}</dd>
-            </div>
-            <div>
-              <dt>Kind</dt>
-              <dd>{clubKindLabel(routedClub.kind)}</dd>
-            </div>
-            <div>
-              <dt>Valid from</dt>
-              <dd className="type-mono">{formatDate(routedClub.validFrom)}</dd>
-            </div>
-            <div>
-              <dt>Valid to</dt>
-              <dd className="type-mono">{formatDate(routedClub.validTo)}</dd>
-            </div>
-            {routedClub.successorLabel ? (
-              <div>
-                <dt>Successor</dt>
-                <dd>{routedClub.successorLabel}</dd>
-              </div>
-            ) : null}
-          </dl>
-          <span className="monogram-slot identity-mark" aria-hidden="true">
-            {routedClub.monogram}
+          <span className="identity-mark" aria-hidden="true">
+            <CatalogMark
+              markPath={routedClub.markPath}
+              monogram={routedClub.monogram}
+              token={token}
+              size="lg"
+            />
           </span>
+          <div className="identity-facts">
+            <dl className="stats-row">
+              <div>
+                <dt>Current league</dt>
+                <dd>{routedClub.currentLeagueLabel ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Country</dt>
+                <dd>{routedClub.countryLabel ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Kind</dt>
+                <dd>{clubKindLabel(routedClub.kind)}</dd>
+              </div>
+            </dl>
+            <dl className="stats-row">
+              {routedClub.foundedOn ? (
+                <div>
+                  <dt>Founded</dt>
+                  <dd className="type-mono">{formatDate(routedClub.foundedOn)}</dd>
+                </div>
+              ) : null}
+              {routedClub.stadiumName ? (
+                <div>
+                  <dt>Stadium</dt>
+                  <dd>{routedClub.stadiumName}</dd>
+                </div>
+              ) : null}
+              {routedClub.stadiumCapacity !== null ? (
+                <div>
+                  <dt>Capacity</dt>
+                  <dd className="type-mono">{routedClub.stadiumCapacity.toLocaleString("en-GB")}</dd>
+                </div>
+              ) : null}
+              {routedClub.websiteUrl ? (
+                <div className="stats-row-span">
+                  <dt>Website</dt>
+                  <dd>
+                    {website ? (
+                      <a href={website} rel="noreferrer" target="_blank">
+                        {routedClub.websiteUrl}
+                      </a>
+                    ) : (
+                      routedClub.websiteUrl
+                    )}
+                  </dd>
+                </div>
+              ) : null}
+              {routedClub.validFrom ? (
+                <div>
+                  <dt>Valid from</dt>
+                  <dd className="type-mono">{formatDate(routedClub.validFrom)}</dd>
+                </div>
+              ) : null}
+              {routedClub.validTo ? (
+                <div>
+                  <dt>Valid to</dt>
+                  <dd className="type-mono">{formatDate(routedClub.validTo)}</dd>
+                </div>
+              ) : null}
+              {routedClub.successorLabel ? (
+                <div>
+                  <dt>Successor</dt>
+                  <dd>{routedClub.successorLabel}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
         </section>
       ) : null}
 
@@ -252,7 +325,23 @@ export function ClubDrillPage() {
           >
             Jerseys
           </button>
+          <button
+            type="button"
+            className="top-tab"
+            role="tab"
+            id="club-tab-honours"
+            aria-selected={tab === "honours"}
+            aria-controls="club-tabpanel"
+            tabIndex={tab === "honours" ? 0 : -1}
+            onClick={() => {
+              setTab("honours");
+              setFocusedRowIndex(0);
+            }}
+          >
+            Honours
+          </button>
         </div>
+        {tab === "honours" ? null : (
         <div className="field season-field">
           <label htmlFor="club-season">Season</label>
           <select
@@ -272,6 +361,7 @@ export function ClubDrillPage() {
             )}
           </select>
         </div>
+        )}
       </div>
 
       <div className="data-table-wrap" id="club-tabpanel" role="tabpanel">
@@ -283,6 +373,15 @@ export function ClubDrillPage() {
                   #
                 </th>
                 <th scope="col">Name</th>
+                <th scope="col">Position</th>
+              </tr>
+            ) : tab === "honours" ? (
+              <tr>
+                <th className="data-table-mark" scope="col">
+                  Mark
+                </th>
+                <th scope="col">Season</th>
+                <th scope="col">Title</th>
               </tr>
             ) : (
               <tr>
@@ -296,7 +395,38 @@ export function ClubDrillPage() {
             )}
           </thead>
           <tbody>
-            {seasonLoading || (!routedClub && !error) ? (
+            {tab === "honours" ? (
+              !routedClub && !error ? (
+                <tr>
+                  <td colSpan={columnCount}>
+                    <div className="empty-state data-table-empty">Loading…</div>
+                  </td>
+                </tr>
+              ) : honours.length === 0 ? (
+                <tr>
+                  <td colSpan={columnCount}>
+                    <div className="empty-state data-table-empty">
+                      <h2>No honours</h2>
+                      <p>No titles are recorded for this club.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                honours.map((row) => (
+                  <tr key={row.id}>
+                    <td className="data-table-mark">
+                      <CatalogMark
+                        markPath={row.markPath}
+                        monogram={row.title.slice(0, 2).toUpperCase()}
+                        token={token}
+                      />
+                    </td>
+                    <td className="data-table-mono">{row.seasonLabel ?? "—"}</td>
+                    <td className="data-table-primary">{row.title}</td>
+                  </tr>
+                ))
+              )
+            ) : seasonLoading || (!routedClub && !error) ? (
               <tr>
                 <td colSpan={columnCount}>
                   <div className="empty-state data-table-empty">Loading…</div>
@@ -330,13 +460,23 @@ export function ClubDrillPage() {
                 </td>
               </tr>
             ) : tab === "players" ? (
-              players.map((player) => (
-                <tr key={player.id}>
-                  <td className="data-table-mono data-table-numeric">
-                    {player.squadNumber !== null ? player.squadNumber : "—"}
-                  </td>
-                  <td className="data-table-primary">{player.label}</td>
-                </tr>
+              squadGroups.map((group) => (
+                <Fragment key={group.group}>
+                  <tr className="data-table-group">
+                    <th className="data-table-group" colSpan={columnCount} scope="colgroup">
+                      {group.label}
+                    </th>
+                  </tr>
+                  {group.rows.map((player) => (
+                    <tr key={player.id}>
+                      <td className="data-table-mono data-table-numeric">
+                        {player.squadNumber !== null ? player.squadNumber : "—"}
+                      </td>
+                      <td className="data-table-primary">{player.label}</td>
+                      <td className="data-table-meta">{player.position ?? "—"}</td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))
             ) : (
               jerseys.map((jersey, rowIndex) => (

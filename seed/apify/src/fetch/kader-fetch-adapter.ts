@@ -7,7 +7,12 @@ import {
   searchQueryForCompetition,
 } from "@kit/seed-shared";
 import { describeSeedError, safeSeedUrl, seedProgress } from "../progress.js";
-import type { TransfermarktRawPlayerJerseyNumbers } from "../types.js";
+import type { TransfermarktRawHonour, TransfermarktRawPlayerJerseyNumbers } from "../types.js";
+import {
+  catalogMarkObjectKeyFromCdnUrl,
+  clubCrestCdnUrl,
+  leagueBadgeCdnUrl,
+} from "../catalog-mark-cdn.js";
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
@@ -21,6 +26,7 @@ import {
 } from "./actor-mapper.js";
 import type { ActorPlayerProfile, ActorSeasonClubRow } from "./actor-types.js";
 import type {
+  CatalogMarksFetcher,
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,
@@ -295,14 +301,53 @@ function resolveSeasonYearRange(
   return { fromYear, toYear };
 }
 
+async function honoursWithMarkBytes(
+  client: KaderHtmlClient,
+  rows: Awaited<ReturnType<KaderHtmlClient["fetchClubHonours"]>>,
+): Promise<TransfermarktRawHonour[]> {
+  const cache = new Map<string, Uint8Array>();
+  const result: TransfermarktRawHonour[] = [];
+  for (const row of rows) {
+    const honour: TransfermarktRawHonour = {
+      seasonLabel: row.seasonLabel,
+      title: row.title,
+    };
+    if (!row.imageSrc) {
+      result.push(honour);
+      continue;
+    }
+    const objectKey = catalogMarkObjectKeyFromCdnUrl(row.imageSrc);
+    if (!objectKey) {
+      result.push(honour);
+      continue;
+    }
+    let bytes = cache.get(objectKey);
+    if (!bytes) {
+      bytes = await client.fetchPortrait("mark", row.imageSrc);
+      if (bytes) {
+        cache.set(objectKey, bytes);
+      }
+    }
+    if (bytes) {
+      honour.markObjectKey = objectKey;
+      honour.markBytes = bytes;
+    }
+    result.push(honour);
+  }
+  return result;
+}
+
 async function fetchClubWithClient(
   client: KaderHtmlClient,
   params: { competition: string; clubExternalId: string },
   identity?: CompetitionIdentity,
 ) {
   const facts = await client.fetchClubFacts(params.clubExternalId);
-  const honours = await client.fetchClubHonours(params.clubExternalId);
-  return mapClubToPayload({
+  const honours = await honoursWithMarkBytes(
+    client,
+    await client.fetchClubHonours(params.clubExternalId),
+  );
+  const payload = mapClubToPayload({
     competitionSlug: params.competition,
     clubExternalId: params.clubExternalId,
     clubName: facts?.officialName ?? params.clubExternalId,
@@ -310,6 +355,14 @@ async function fetchClubWithClient(
     honours,
     identity,
   });
+  const crestBytes = await client.fetchPortrait(
+    params.clubExternalId,
+    clubCrestCdnUrl(params.clubExternalId),
+  );
+  if (crestBytes && payload.clubs?.[0]) {
+    payload.clubs[0].crestBytes = crestBytes;
+  }
+  return payload;
 }
 
 async function fetchClubSeasonWithClient(
@@ -369,7 +422,10 @@ async function fetchNationalTeamWithClient(
     throw new Error(`Unknown national team: ${params.nationalTeamRef}`);
   }
   const facts = await client.fetchClubFacts(identity.transfermarktId);
-  const honours = await client.fetchClubHonours(identity.transfermarktId);
+  const honours = await honoursWithMarkBytes(
+    client,
+    await client.fetchClubHonours(identity.transfermarktId),
+  );
   return mapNationalTeamToPayload({
     nationalTeamRef: params.nationalTeamRef,
     teamName: facts?.officialName ?? identity.name,
@@ -433,14 +489,30 @@ function createAdapterFromClient(
   listSeasons: (competition: string) => Promise<number[]>,
   onProfileFetch?: (playerId: string) => void,
   onProfileHole?: (playerId: string, error: unknown) => void,
-): FetchAdapter & JerseyNumbersFetcher {
+): FetchAdapter & JerseyNumbersFetcher & CatalogMarksFetcher {
   return {
     async fetchPlayerJerseyNumbers(playerExternalId) {
       return client.fetchJerseyNumbers(playerExternalId);
     },
 
+    async fetchCdnBytes(src) {
+      return client.fetchPortrait("mark", src);
+    },
+
+    async fetchClubHonours(clubId) {
+      return client.fetchClubHonours(clubId);
+    },
+
     async fetchLeague(params) {
-      return mapLeagueToPayload(params.competition);
+      const payload = mapLeagueToPayload(params.competition);
+      const badgeBytes = await client.fetchPortrait(
+        "league",
+        leagueBadgeCdnUrl(payload.competition.id),
+      );
+      if (badgeBytes) {
+        payload.competition.badgeBytes = badgeBytes;
+      }
+      return payload;
     },
 
     async fetchLeagueSeason(params) {
@@ -495,7 +567,7 @@ function createFixturesAdapter(
   onProfileFetch?: (playerId: string) => void,
   onProfileHole?: (playerId: string, error: unknown) => void,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
-): FetchAdapter & JerseyNumbersFetcher {
+): FetchAdapter & JerseyNumbersFetcher & CatalogMarksFetcher {
   const client = createKaderHtmlClient(
     (competition, season) => store.loadCompetitionSeason(competition, season),
     (clubId, season) => store.loadKader(clubId, season),
@@ -588,7 +660,7 @@ function createLiveAdapter(
   onProfileFetch?: (playerId: string) => void,
   onProfileHole?: (playerId: string, error: unknown) => void,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
-): FetchAdapter & JerseyNumbersFetcher {
+): FetchAdapter & JerseyNumbersFetcher & CatalogMarksFetcher {
   const identityFor = createIdentityResolver(fetchHtml);
   const client = createKaderHtmlClient(
     async (competition, season) => {
@@ -610,9 +682,25 @@ function createLiveAdapter(
       return client.fetchJerseyNumbers(playerExternalId);
     },
 
+    async fetchCdnBytes(src) {
+      return client.fetchPortrait("mark", src);
+    },
+
+    async fetchClubHonours(clubId) {
+      return client.fetchClubHonours(clubId);
+    },
+
     async fetchLeague(params) {
       const identity = await identityFor(params.competition);
-      return mapLeagueToPayload(params.competition, identity);
+      const payload = mapLeagueToPayload(params.competition, identity);
+      const badgeBytes = await client.fetchPortrait(
+        "league",
+        leagueBadgeCdnUrl(payload.competition.id),
+      );
+      if (badgeBytes) {
+        payload.competition.badgeBytes = badgeBytes;
+      }
+      return payload;
     },
 
     async fetchLeagueSeason(params) {
@@ -735,7 +823,7 @@ function buildLiveTransport(options: KaderFetchAdapterOptions): LiveTransport {
 
 export function createKaderFetchAdapter(
   options: KaderFetchAdapterOptions = {},
-): FetchAdapter & JerseyNumbersFetcher {
+): FetchAdapter & JerseyNumbersFetcher & CatalogMarksFetcher {
   if (options.fixturesDir) {
     const store = createKaderHtmlStore(options.fixturesDir);
     return createFixturesAdapter(

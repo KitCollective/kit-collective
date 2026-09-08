@@ -1,3 +1,4 @@
+import type { HonourParseRow } from "./actor-types.js";
 import type { TransfermarktRawPayload, TransfermarktRawPlayerJerseyNumbers } from "../types.js";
 
 export interface ClubSeasonPair {
@@ -67,6 +68,17 @@ export interface FetchAdapter {
  */
 export interface JerseyNumbersFetcher {
   fetchPlayerJerseyNumbers(playerExternalId: string): Promise<TransfermarktRawPlayerJerseyNumbers>;
+}
+
+/**
+ * CDN bytes and club honours HTML for catalog marks (crests, badges, trophies).
+ *
+ * Kept off `FetchAdapter` the same way jersey numbers are: Apify JSON payloads have no
+ * image bytes, and a walk can succeed without marks.
+ */
+export interface CatalogMarksFetcher {
+  fetchCdnBytes(src: string): Promise<Uint8Array | undefined>;
+  fetchClubHonours(clubId: string): Promise<HonourParseRow[]>;
 }
 
 /** @deprecated Use FetchClubSeasonParams */

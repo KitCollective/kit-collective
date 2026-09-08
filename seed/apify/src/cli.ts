@@ -2,6 +2,7 @@
 import { runBulkFromCli } from "./bulk.js";
 import { createDefaultFkRunner } from "./fk-runner.js";
 import { runJerseyNumbersFromCli } from "./jersey-numbers.js";
+import { runCatalogMarksFromCli } from "./catalog-marks.js";
 import { runClubJoinWorkflow, runNationalTeamJoinWorkflow } from "./join-workflow.js";
 import { describeSeedError, seedProgress } from "./progress.js";
 import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
@@ -23,6 +24,8 @@ async function main() {
     seedProgress(
       `cli jersey-numbers ${parsed.playerExternalIds.length || "backfill"} lane=${parsed.lane}`,
     );
+  } else if (parsed.mode === "catalog-marks") {
+    seedProgress(`cli catalog-marks backfill lane=${parsed.lane}`);
   } else {
     seedProgress(`cli walk lane=${parsed.lane}`);
   }
@@ -125,6 +128,21 @@ async function main() {
         fetcher,
       });
       console.log(JSON.stringify({ ok: true, command: "jersey-numbers", ...result }, null, 2));
+      return;
+    }
+
+    if (parsed.mode === "catalog-marks") {
+      const fetcher = resolved.catalogMarks;
+      if (!fetcher) {
+        throw new Error(
+          "catalog-marks needs the Transfermarkt HTML transport. Unset SEED_FETCH=apify and SEED_APIFY_FIXTURE.",
+        );
+      }
+      const result = await runCatalogMarksFromCli({
+        lane: parsed.lane,
+        fetcher,
+      });
+      console.log(JSON.stringify({ ok: true, command: "catalog-marks", ...result }, null, 2));
       return;
     }
 
