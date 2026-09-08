@@ -88,6 +88,37 @@ export interface JerseyCheckpoint {
   append(record: JerseyCheckpointRecord): Promise<void>;
 }
 
+function isJerseyCheckpointStatus(value: unknown): value is JerseyCheckpointStatus {
+  return value === "done" || value === "failed";
+}
+
+function parseJerseyCheckpointRecord(value: unknown): JerseyCheckpointRecord | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  if (!("playerExternalId" in value) || typeof value.playerExternalId !== "string") {
+    return undefined;
+  }
+  if (!("status" in value) || !isJerseyCheckpointStatus(value.status)) {
+    return undefined;
+  }
+  if (!("at" in value) || typeof value.at !== "string") {
+    return undefined;
+  }
+  const record: JerseyCheckpointRecord = {
+    playerExternalId: value.playerExternalId,
+    status: value.status,
+    at: value.at,
+  };
+  if ("rows" in value && typeof value.rows === "number") {
+    record.rows = value.rows;
+  }
+  if ("reason" in value && typeof value.reason === "string") {
+    record.reason = value.reason;
+  }
+  return record;
+}
+
 export function jerseyCheckpointPath(planId: string, stateDir = resolveBulkStateDir()): string {
   return path.join(stateDir, `${planId}.jsonl`);
 }
@@ -117,7 +148,10 @@ export function createJsonlJerseyCheckpoint(filePath: string): JerseyCheckpoint 
         }
         try {
           // A kill mid-write can tear the last line; a torn line is not a state transition.
-          records.push(JSON.parse(trimmed) as JerseyCheckpointRecord);
+          const record = parseJerseyCheckpointRecord(JSON.parse(trimmed));
+          if (record) {
+            records.push(record);
+          }
         } catch {}
       }
       return records;

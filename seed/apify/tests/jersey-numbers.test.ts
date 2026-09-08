@@ -70,6 +70,13 @@ function createFixtureJerseyFetcher(): JerseyNumbersFetcher & { requests: string
   };
 }
 
+function requiredId(row: { id: string } | undefined, label: string): string {
+  if (!row?.id) {
+    throw new Error(`expected ${label} insert to return an id`);
+  }
+  return row.id;
+}
+
 /**
  * The slice of lane shape the mapper reads: a player, a club and a national side it can
  * resolve, plus one season each side has membership in. Everything else on the career page
@@ -80,10 +87,10 @@ async function seedLaneShape(db: ReturnType<typeof createDb>["db"]) {
     .insert(country)
     .values({ iso3166: "GB" })
     .returning({ id: country.id });
-  const countryId = countryRow?.id as string;
+  const countryId = requiredId(countryRow, "country");
 
   const [leagueRow] = await db.insert(league).values({ countryId }).returning({ id: league.id });
-  const leagueId = leagueRow?.id as string;
+  const leagueId = requiredId(leagueRow, "league");
 
   const [seasonRow] = await db
     .insert(season)
@@ -95,20 +102,20 @@ async function seedLaneShape(db: ReturnType<typeof createDb>["db"]) {
       calendarKind: "split_year",
     })
     .returning({ id: season.id });
-  const seasonId = seasonRow?.id as string;
+  const seasonId = requiredId(seasonRow, "season");
 
   const [clubRow] = await db.insert(club).values({ countryId }).returning({ id: club.id });
-  const clubId = clubRow?.id as string;
+  const clubId = requiredId(clubRow, "club");
   await db.insert(teamSeason).values({ clubId, seasonId });
 
   const [nationalTeamRow] = await db
     .insert(nationalTeam)
     .values({ countryId, gender: "men" })
     .returning({ id: nationalTeam.id });
-  const nationalTeamId = nationalTeamRow?.id as string;
+  const nationalTeamId = requiredId(nationalTeamRow, "national team");
 
   const [playerRow] = await db.insert(player).values({}).returning({ id: player.id });
-  const playerId = playerRow?.id as string;
+  const playerId = requiredId(playerRow, "player");
 
   await db.insert(externalId).values([
     { entityType: "player", entityId: playerId, system: TM_SYSTEM, value: "3333" },
@@ -306,7 +313,7 @@ describe("Jersey number history — persistence", () => {
       const [emptyPlayer] = await db.insert(player).values({}).returning({ id: player.id });
       await db.insert(externalId).values({
         entityType: "player",
-        entityId: emptyPlayer?.id as string,
+        entityId: requiredId(emptyPlayer, "empty player"),
         system: TM_SYSTEM,
         value: "nohistory",
       });
