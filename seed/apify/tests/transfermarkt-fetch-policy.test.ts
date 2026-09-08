@@ -164,7 +164,7 @@ describe("createTransfermarktRetryFetch", () => {
   });
 
   it("caps the backoff delay", async () => {
-    const sleep = vi.fn(async () => undefined);
+    const sleep = vi.fn(async (_ms: number) => undefined);
     const inner = vi
       .fn()
       .mockRejectedValue(new TransfermarktHttpError(502, "https://example.test/1"));
@@ -179,7 +179,11 @@ describe("createTransfermarktRetryFetch", () => {
     await expect(fetchHtml("https://example.test/1")).rejects.toBeInstanceOf(
       TransfermarktHttpError,
     );
-    for (const [delay] of sleep.mock.calls as unknown as Array<[number]>) {
+    for (const call of sleep.mock.calls) {
+      const delay = call[0];
+      if (typeof delay !== "number") {
+        throw new Error("retry sleep must be called with a delay in milliseconds");
+      }
       expect(delay).toBeLessThanOrEqual(TRANSFERMARKT_RETRY_MAX_DELAY_MS);
     }
   });

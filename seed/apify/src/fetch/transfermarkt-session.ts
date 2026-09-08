@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { Agent, fetch as undiciFetch } from "undici";
+import { Agent, type Dispatcher, fetch as undiciFetch } from "undici";
 import { seedProgress } from "../progress.js";
 import {
   isTransfermarktWafChallengeResponse,
@@ -124,15 +124,40 @@ export function createCookieJar(initial: Record<string, string> = {}): CookieJar
   };
 }
 
+function cookieRecordFromUnknown(parsed: unknown): Record<string, string> {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {};
+  }
+  const record: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value === "string") {
+      record[key] = value;
+    }
+  }
+  return record;
+}
+
+function unknownErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function defaultSessionFetch(
   url: string,
   init: { headers: Record<string, string>; dispatcher?: unknown },
 ): Promise<TransfermarktSessionResponse> {
   const response = await undiciFetch(url, {
     headers: init.headers,
-    dispatcher: init.dispatcher as never,
+    // SAFETY: this default fetch only runs with an undici Agent or ProxyAgent from this
+    // package; tests inject fetchImpl and never pass a fake dispatcher through here.
+    dispatcher: init.dispatcher as Dispatcher | undefined,
   });
-  return response as unknown as TransfermarktSessionResponse;
+  return {
+    status: response.status,
+    ok: response.ok,
+    headers: { getSetCookie: () => response.headers.getSetCookie() },
+    text: () => response.text(),
+    arrayBuffer: () => response.arrayBuffer(),
+  };
 }
 
 function createKeepAliveAgent(): Agent {
@@ -165,10 +190,7 @@ export function createTransfermarktSession(
       let initial: Record<string, string> = {};
       if (cookieFile) {
         try {
-          const parsed: unknown = JSON.parse(await readFile(cookieFile, "utf8"));
-          if (parsed && typeof parsed === "object") {
-            initial = parsed as Record<string, string>;
-          }
+          initial = cookieRecordFromUnknown(JSON.parse(await readFile(cookieFile, "utf8")));
         } catch {
           initial = {};
         }
@@ -187,7 +209,7 @@ export function createTransfermarktSession(
       await mkdir(path.dirname(cookieFile), { recursive: true });
       await writeFile(cookieFile, `${JSON.stringify(current.entries(), null, 2)}\n`, "utf8");
     } catch (error: unknown) {
-      seedProgress(`cookie jar not persisted: ${(error as Error).message}`);
+      seedProgress(`cookie jar not persisted: ${unknownErrorMessage(error)}`);
     }
   }
 
