@@ -84,11 +84,7 @@ export type ParsedBulkCli = {
   lane: ResolvedSeedLane;
 };
 
-export type ParsedSeedCli =
-  | ParsedWalkCli
-  | ParsedGrainCli
-  | ParsedJoinCli
-  | ParsedBulkCli;
+export type ParsedSeedCli = ParsedWalkCli | ParsedGrainCli | ParsedJoinCli | ParsedBulkCli;
 
 function parseGrainArgv(argv: string[]): ParsedGrainCli {
   const grainKind = argv[0];
