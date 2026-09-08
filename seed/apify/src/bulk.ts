@@ -497,20 +497,26 @@ export function parseBulkPlan(contents: string, source: string): BulkPlan {
     throw new Error(`Bulk plan ${source} must be an object with id and entries`);
   }
 
-  const candidate = parsed as { id?: unknown; entries?: unknown };
-  const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+  const id = "id" in parsed && typeof parsed.id === "string" ? parsed.id.trim() : "";
   if (!id) {
     throw new Error(`Bulk plan ${source} requires a non-empty string id`);
   }
-  if (!Array.isArray(candidate.entries) || candidate.entries.length === 0) {
+  if (!("entries" in parsed) || !Array.isArray(parsed.entries) || parsed.entries.length === 0) {
     throw new Error(`Bulk plan ${source} requires at least one entry`);
   }
 
-  const entries = candidate.entries.map((raw, position) => {
-    const entry = raw as { competition?: unknown; fromSeason?: unknown; toSeason?: unknown };
-    const competition = typeof entry.competition === "string" ? entry.competition.trim() : "";
-    const fromSeason = typeof entry.fromSeason === "string" ? entry.fromSeason.trim() : "";
-    const toSeason = typeof entry.toSeason === "string" ? entry.toSeason.trim() : "";
+  const entries = parsed.entries.map((raw, position) => {
+    if (!raw || typeof raw !== "object") {
+      throw new Error(
+        `Bulk plan ${source} entry ${position} requires competition, fromSeason, and toSeason`,
+      );
+    }
+    const competition =
+      "competition" in raw && typeof raw.competition === "string" ? raw.competition.trim() : "";
+    const fromSeason =
+      "fromSeason" in raw && typeof raw.fromSeason === "string" ? raw.fromSeason.trim() : "";
+    const toSeason =
+      "toSeason" in raw && typeof raw.toSeason === "string" ? raw.toSeason.trim() : "";
     if (!competition || !fromSeason || !toSeason) {
       throw new Error(
         `Bulk plan ${source} entry ${position} requires competition, fromSeason, and toSeason`,

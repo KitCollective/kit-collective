@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { BulkCheckpoint, BulkRecord } from "./bulk.js";
+import type { BulkCheckpoint, BulkRecord, BulkTask, BulkTaskKind, BulkTaskStatus } from "./bulk.js";
 
 export const DEFAULT_SEED_BULK_STATE_DIR = ".seed-state";
 
@@ -13,12 +13,78 @@ export function bulkCheckpointPath(planId: string, stateDir = resolveBulkStateDi
 }
 
 function isMissingFileError(error: unknown): boolean {
-  return Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: string }).code === "ENOENT",
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
+}
+
+function isBulkTaskKind(value: unknown): value is BulkTaskKind {
+  return (
+    value === "league" || value === "league_season" || value === "club" || value === "club_season"
   );
+}
+
+function isBulkTaskStatus(value: unknown): value is BulkTaskStatus {
+  return value === "pending" || value === "done" || value === "failed" || value === "skipped";
+}
+
+function parseBulkTask(value: unknown): BulkTask | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  if (!("id" in value) || typeof value.id !== "string") {
+    return undefined;
+  }
+  if (!("kind" in value) || !isBulkTaskKind(value.kind)) {
+    return undefined;
+  }
+  if (!("competition" in value) || typeof value.competition !== "string") {
+    return undefined;
+  }
+  const task: BulkTask = {
+    id: value.id,
+    kind: value.kind,
+    competition: value.competition,
+  };
+  if ("season" in value && typeof value.season === "string") {
+    task.season = value.season;
+  }
+  if ("clubExternalId" in value && typeof value.clubExternalId === "string") {
+    task.clubExternalId = value.clubExternalId;
+  }
+  return task;
+}
+
+function parseBulkRecord(value: unknown): BulkRecord | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  if (!("taskId" in value) || typeof value.taskId !== "string") {
+    return undefined;
+  }
+  if (!("kind" in value) || !isBulkTaskKind(value.kind)) {
+    return undefined;
+  }
+  if (!("status" in value) || !isBulkTaskStatus(value.status)) {
+    return undefined;
+  }
+  if (!("at" in value) || typeof value.at !== "string") {
+    return undefined;
+  }
+  const record: BulkRecord = {
+    taskId: value.taskId,
+    kind: value.kind,
+    status: value.status,
+    at: value.at,
+  };
+  if ("reason" in value && typeof value.reason === "string") {
+    record.reason = value.reason;
+  }
+  if ("task" in value) {
+    const task = parseBulkTask(value.task);
+    if (task) {
+      record.task = task;
+    }
+  }
+  return record;
 }
 
 export function parseBulkRecords(contents: string): BulkRecord[] {
@@ -30,7 +96,10 @@ export function parseBulkRecords(contents: string): BulkRecord[] {
     }
     try {
       // A crash can truncate the last line mid-write; a torn line is not a state transition.
-      records.push(JSON.parse(trimmed) as BulkRecord);
+      const record = parseBulkRecord(JSON.parse(trimmed));
+      if (record) {
+        records.push(record);
+      }
     } catch {}
   }
   return records;
