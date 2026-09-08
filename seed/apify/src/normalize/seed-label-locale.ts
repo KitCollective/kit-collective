@@ -1,7 +1,7 @@
 import type { LabelLocale } from "@kit/domain";
 
 const ORG_MARKERS =
-  /\b(FC|F\.C\.|IF|BK|SK|FF|CF|SC|AC|AS|SV|FK|United|City|Rovers|Wanderers|Athletic|Albion|Hotspur)\b/i;
+  /\b(FC|F\.C\.|IF|BK|SK|FF|CF|SC|AC|AS|SV|FK|United|City|Rovers|Wanderers|Athletic|Albion|Hotspur|Club|Klub|Boldklub|Boldklubben|Football|Fodbold)\b/i;
 
 const ASCII_PERSONAL_NAME = /^[A-Z][a-z]+(?:[\s\-'][A-Z][a-z]+)+$/;
 
@@ -11,6 +11,10 @@ const NORDIC_ASCII_TRANSLITERATION =
 /**
  * Transfermarkt sends English seed strings. Default locale is `en`.
  * Use `mul` only when the string is spelled the same in da, en, sv, and no.
+ *
+ * Club names are never locale-invariant even when they carry Danish orthography:
+ * `Football Club København` and `FC Copenhagen` are the same club in the same locale,
+ * so both must land in the `en` bucket for the label/alias pair to dedupe.
  */
 export function seedLabelLocale(name: string): LabelLocale {
   return isLocaleInvariantSeedString(name) ? "mul" : "en";

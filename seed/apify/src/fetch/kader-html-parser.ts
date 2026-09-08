@@ -1,11 +1,13 @@
 import * as cheerio from "cheerio";
 import type {
+  ActorNationality,
   ActorPlayerProfile,
   ActorSeasonClubRow,
   ActorSquadRow,
   ClubFactsParse,
   HonourParseRow,
 } from "./actor-types.js";
+import { nationalityIsoFromName } from "./nationality-iso.js";
 
 export interface KaderParseWarning {
   kind: "missing_jersey_number";
@@ -74,16 +76,6 @@ const MONTHS: Record<string, string> = {
   december: "12",
 };
 
-const NATIONALITY_ISO: Record<string, string> = {
-  denmark: "DK",
-  sweden: "SE",
-  norway: "NO",
-  finland: "FI",
-  iceland: "IS",
-  germany: "DE",
-  "faroe islands": "FO",
-};
-
 export function parseEnglishDate(raw: string): string | undefined {
   const trimmed = raw.replace(/\s*\(\d+\)\s*$/, "").trim();
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
@@ -97,6 +89,25 @@ export function parseEnglishDate(raw: string): string | undefined {
       return undefined;
     }
     return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  // The English Transfermarkt site renders squad and profile dates day-first
+  // (`24/01/1981`), so a slashed date is read as DD/MM/YYYY unless the first
+  // component is impossible as a day.
+  const slashed = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  if (slashed) {
+    const [, first, second, year] = slashed;
+    if (!first || !second || !year) {
+      return undefined;
+    }
+    const firstValue = Number.parseInt(first, 10);
+    const secondValue = Number.parseInt(second, 10);
+    const dayFirst = firstValue > 12 || secondValue <= 12;
+    const day = dayFirst ? firstValue : secondValue;
+    const month = dayFirst ? secondValue : firstValue;
+    if (day < 1 || day > 31 || month < 1 || month > 12) {
+      return undefined;
+    }
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
   const named = /^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/.exec(trimmed);
   if (!named) {
@@ -143,6 +154,52 @@ export function parseCapacity(raw: string): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
+/** An element selection, as returned by `.find()`. Cheerio does not export `Element`. */
+type CheerioElements = ReturnType<ReturnType<cheerio.CheerioAPI["root"]>["find"]>;
+
+/** Strip a leading `#12` shirt badge that Transfermarkt renders inside the name node. */
+export function stripShirtBadge(raw: string): string {
+  return raw
+    .replace(/\s+/g, " ")
+    .replace(/^#\s*\d+\s*/, "")
+    .trim();
+}
+
+/**
+ * Read every citizenship flag inside a node.
+ *
+ * Transfermarkt marks flags with `img.flaggenrahmen`. Recorded fixtures predating that
+ * class are matched by exclusion instead: the portrait carries `bilderrahmen-fixed` and
+ * club crests are served from `/wappen/`, so anything else with a country label is a flag.
+ */
+function nationalitiesIn($: cheerio.CheerioAPI, scope: CheerioElements): ActorNationality[] {
+  const images = scope.find("img").toArray();
+  const framed = images.filter((image) => $(image).hasClass("flaggenrahmen"));
+  const candidates = framed.length
+    ? framed
+    : images.filter((image) => {
+        const $image = $(image);
+        if ($image.hasClass("bilderrahmen-fixed")) {
+          return false;
+        }
+        return !/\/wappen\//.test($image.attr("src") ?? "");
+      });
+
+  const nationalities: ActorNationality[] = [];
+  const seen = new Set<string>();
+  for (const image of candidates) {
+    const $image = $(image);
+    const name = ($image.attr("title") || $image.attr("alt"))?.trim();
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    const iso = $image.attr("data-iso")?.trim().toUpperCase() || nationalityIsoFromName(name);
+    nationalities.push(iso ? { name, iso } : { name });
+  }
+  return nationalities;
+}
+
 export function parseJerseyNumber(raw: string | undefined): number | null | undefined {
   if (raw === undefined) {
     return undefined;
@@ -175,7 +232,8 @@ export function parseKaderHtml(
   $("table.items > tbody > tr").each((_, row) => {
     const playerLink = $(row).find('a[href*="/spieler/"]').first();
     const href = playerLink.attr("href");
-    const playerName = playerLink.text().trim() || playerLink.attr("title")?.trim();
+    const playerName =
+      stripShirtBadge(playerLink.text()) || stripShirtBadge(playerLink.attr("title") ?? "");
     if (!playerName) {
       return;
     }
@@ -201,30 +259,29 @@ export function parseKaderHtml(
     const $row = $(row);
     const inlineRows = $row.find("table.inline-table tr");
     const positionText = inlineRows.eq(1).find("td").first().text().trim();
-    // Lazy cadre tables keep a 1x1 GIF in `src` and the real portrait URL in `data-src`.
+    // Transfermarkt lazy-loads portraits: `src` holds a base64 placeholder and the CDN URL
+    // sits in `data-src`. Reading `src` alone yields a data URI and never a portrait.
     const $portrait = $row.find("img.bilderrahmen-fixed").first();
     const portraitSrc = $portrait.attr("data-src")?.trim() || $portrait.attr("src")?.trim();
 
-    const flag = $row
-      .find("img[title], img[data-iso]")
-      .filter((_, img) => {
-        const $img = $(img);
-        return Boolean($img.attr("data-iso") || $img.attr("title"));
-      })
-      .first();
-    const nationalityName = flag.attr("title")?.trim();
-    const nationalityIso =
-      flag.attr("data-iso")?.trim().toUpperCase() ||
-      (nationalityName ? NATIONALITY_ISO[nationalityName.toLowerCase()] : undefined);
+    const nationalities = nationalitiesIn($, $row);
+    const primaryNationality = nationalities[0];
 
     let dateOfBirth: string | undefined;
+    let agedDateOfBirth: string | undefined;
     let heightCm: number | undefined;
     let preferredFoot: ActorSquadRow["preferredFoot"] | undefined;
 
     $row.find("td").each((_, cell) => {
       const text = $(cell).text().replace(/\s+/g, " ").trim();
-      if (!dateOfBirth) {
-        dateOfBirth = parseEnglishDate(text);
+      const parsedDate = parseEnglishDate(text);
+      if (parsedDate) {
+        // The squad table also carries a "Joined" date. Only the date-of-birth column
+        // appends the age, so an aged cell always wins over the first parseable date.
+        if (!agedDateOfBirth && /\(\d+\)$/.test(text)) {
+          agedDateOfBirth = parsedDate;
+        }
+        dateOfBirth ??= parsedDate;
       }
       if (heightCm === undefined) {
         heightCm = parseHeightCm(text);
@@ -233,6 +290,7 @@ export function parseKaderHtml(
         preferredFoot = parsePreferredFoot(text);
       }
     });
+    dateOfBirth = agedDateOfBirth ?? dateOfBirth;
 
     const rowData: ActorSquadRow = {
       playerId,
@@ -248,11 +306,12 @@ export function parseKaderHtml(
     if (dateOfBirth) {
       rowData.dateOfBirth = dateOfBirth;
     }
-    if (nationalityIso) {
-      rowData.nationalityIso = nationalityIso;
+    if (primaryNationality?.iso) {
+      rowData.nationalityIso = primaryNationality.iso;
     }
-    if (nationalityName) {
-      rowData.nationalityName = nationalityName;
+    if (primaryNationality) {
+      rowData.nationalityName = primaryNationality.name;
+      rowData.nationalities = nationalities;
     }
     if (heightCm !== undefined) {
       rowData.heightCm = heightCm;
@@ -302,9 +361,45 @@ function hexColorsFrom(htmlFragment: string): string[] {
   return colors;
 }
 
+/**
+ * Read stadium name and capacity out of the profile data header.
+ *
+ * The live `/datenfakten/verein/<id>` table carries official name, address, founded,
+ * colours and homepage — but never a Stadium row. Transfermarkt renders the stadium in
+ * the page header instead (`li.data-header__label` → anchor for the name,
+ * `span.tabellenplatz` for the seat count), so a `<tr>`-only walk left
+ * `club.stadium_name` and `club.stadium_capacity` empty for every club.
+ */
+function readStadiumFromDataHeader($: cheerio.CheerioAPI, facts: ClubFactsParse): void {
+  $("li.data-header__label").each((_, item) => {
+    const $item = $(item);
+    if (!/^\s*stadium\s*:/i.test($item.text().replace(/\s+/g, " "))) {
+      return undefined;
+    }
+
+    const $content = $item.find(".data-header__content").first();
+    const $capacity = $content.find(".tabellenplatz").first();
+    const capacity = parseCapacity($capacity.text());
+    if (capacity !== undefined) {
+      facts.stadiumCapacity = capacity;
+    }
+
+    // Drop the seat count before falling back to the cell text, so a header without an
+    // anchor does not store "King Power Stadium 32.259 Seats" as the stadium name.
+    $capacity.remove();
+    const name = ($content.find("a").first().text() || $content.text()).replace(/\s+/g, " ").trim();
+    if (name) {
+      facts.stadiumName = name;
+    }
+    return false;
+  });
+}
+
 export function parseClubFactsHtml(html: string): ClubFactsParse {
   const $ = cheerio.load(html);
   const facts: ClubFactsParse = {};
+
+  readStadiumFromDataHeader($, facts);
 
   $("tr").each((_, row) => {
     const $row = $(row);
@@ -371,57 +466,118 @@ export function parseClubFactsHtml(html: string): ClubFactsParse {
   return facts;
 }
 
+/**
+ * Locate the "All titles" table.
+ *
+ * The live `/erfolge/verein/<id>` page renders it as a bare `<table>` inside a
+ * `div.box` — it carries no `items` class, so selecting `table.items` alone returned
+ * zero honours for every real club page.
+ */
+function honourTables($: cheerio.CheerioAPI) {
+  const items = $("table.items").toArray();
+  if (items.length) {
+    return items;
+  }
+  return $("table")
+    .toArray()
+    .filter((table) => {
+      const header = $(table).find("th").text().toLowerCase();
+      return header.includes("title") || header.includes("erfolg");
+    });
+}
+
 export function parseHonoursHtml(html: string): HonourParseRow[] {
   const $ = cheerio.load(html);
   const rows: HonourParseRow[] = [];
   const seen = new Set<string>();
 
-  $("table.items tbody tr, table.items tr").each((_, row) => {
-    const cells = $(row)
-      .find("td")
-      .toArray()
-      .map((cell) => $(cell).text().replace(/\s+/g, " ").trim())
-      .filter(Boolean);
-    if (cells.length < 1) {
-      return;
-    }
+  $(honourTables($))
+    .find("tr")
+    .each((_, row) => {
+      const cells = $(row)
+        .find("td")
+        .toArray()
+        .map((cell) => $(cell).text().replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+      if (cells.length < 1) {
+        return;
+      }
 
-    const first = cells[0];
-    if (!first) {
-      return;
-    }
-    let seasonLabel: string | null = null;
-    let title: string;
-    if (cells.length === 1) {
-      title = first;
-    } else if (
-      /^\d{2}\/\d{2}$/.test(first) ||
-      /^\d{4}$/.test(first) ||
-      /^\d{4}\/\d{2}$/.test(first)
-    ) {
-      seasonLabel = first;
-      title = cells.slice(1).join(" ");
-    } else {
-      title = cells.join(" ");
-    }
-    if (!title) {
-      return;
-    }
-    const key = `${seasonLabel ?? ""}:${title}`;
-    if (seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    rows.push({ seasonLabel, title });
-  });
+      const first = cells[0];
+      if (!first) {
+        return;
+      }
+      let seasonLabel: string | null = null;
+      let title: string;
+      if (cells.length === 1) {
+        title = first;
+      } else if (
+        /^\d{2}\/\d{2}$/.test(first) ||
+        /^\d{4}$/.test(first) ||
+        /^\d{4}\/\d{2}$/.test(first)
+      ) {
+        seasonLabel = first;
+        title = cells.slice(1).join(" ");
+      } else {
+        title = cells.join(" ");
+      }
+      if (!title) {
+        return;
+      }
+      const key = `${seasonLabel ?? ""}:${title}`;
+      if (seen.has(key)) {
+        return;
+      }
+      seen.add(key);
+      rows.push({ seasonLabel, title });
+    });
 
   return rows;
 }
 
+/**
+ * Read the profile page's label/value grid.
+ *
+ * `div.info-table` is a flat list of alternating `--regular` label cells and `--bold`
+ * value cells rather than a real table, so labels are paired with the next value node.
+ */
+function profileInfoTable($: cheerio.CheerioAPI): Map<string, CheerioElements> {
+  const pairs = new Map<string, CheerioElements>();
+  const cells = $("div.info-table").first().children().toArray();
+
+  for (let index = 0; index < cells.length; index += 1) {
+    const $cell = $(cells[index]);
+    if (!($cell.attr("class") ?? "").includes("info-table__content--regular")) {
+      continue;
+    }
+    const next = cells[index + 1];
+    if (!next) {
+      continue;
+    }
+    const $value = $(next);
+    if (!($value.attr("class") ?? "").includes("info-table__content--bold")) {
+      continue;
+    }
+    const label = labelKey($cell.text());
+    if (label && !pairs.has(label)) {
+      pairs.set(label, $value);
+    }
+  }
+
+  return pairs;
+}
+
+function profileText(pairs: Map<string, CheerioElements>, label: string): string | undefined {
+  const value = pairs.get(label)?.text().replace(/\s+/g, " ").trim();
+  return value && value !== "-" ? value : undefined;
+}
+
 export function parsePlayerProfileHtml(html: string, playerId: string): ActorPlayerProfile {
   const $ = cheerio.load(html);
-  const playerName =
+  const headline =
     $("h1.data-header__headline-wrapper").text().trim() || $("h1").first().text().trim();
+  // The headline embeds the shirt badge as a bare `#12` text node before the name.
+  const playerName = stripShirtBadge(headline);
 
   if (!playerName) {
     throw new Error(`Invalid player profile for ${playerId}`);
@@ -434,9 +590,77 @@ export function parsePlayerProfileHtml(html: string, playerId: string): ActorPla
   const shirtDigits = shirtMatch?.[1];
   const shirtNumber = shirtDigits ? Number.parseInt(shirtDigits, 10) : null;
 
-  return {
-    playerId,
-    playerName,
-    shirtNumber,
-  };
+  const profile: ActorPlayerProfile = { playerId, playerName, shirtNumber };
+  const pairs = profileInfoTable($);
+
+  const fullName = profileText(pairs, "full name");
+  if (fullName) {
+    profile.fullName = fullName;
+  }
+  const nameInHomeCountry = profileText(pairs, "name in home country");
+  if (nameInHomeCountry) {
+    profile.nameInHomeCountry = nameInHomeCountry;
+  }
+
+  const birthCell = pairs.get("date of birth/age");
+  if (birthCell) {
+    // The value links to Transfermarkt's "what happened today" page, whose href ends in
+    // an unambiguous ISO date — a safer source than the localised cell text.
+    const linked = /\/datum\/(\d{4}-\d{2}-\d{2})/.exec(
+      birthCell.find("a[href]").attr("href") ?? "",
+    );
+    const dateOfBirth =
+      linked?.[1] ?? parseEnglishDate(birthCell.text().replace(/\s+/g, " ").trim());
+    if (dateOfBirth) {
+      profile.dateOfBirth = dateOfBirth;
+    }
+  }
+
+  const placeOfBirth = profileText(pairs, "place of birth");
+  if (placeOfBirth) {
+    profile.placeOfBirth = placeOfBirth;
+  }
+
+  const heightCm = parseHeightCm(profileText(pairs, "height") ?? "");
+  if (heightCm !== undefined) {
+    profile.heightCm = heightCm;
+  }
+
+  const preferredFoot = parsePreferredFoot(profileText(pairs, "foot") ?? "");
+  if (preferredFoot) {
+    profile.preferredFoot = preferredFoot;
+  }
+
+  // "Midfield - Central Midfield" — keep the specific position, drop the group prefix.
+  const position = profileText(pairs, "position")?.split(" - ").pop()?.trim();
+  if (position) {
+    profile.position = position;
+  }
+
+  const citizenship = pairs.get("citizenship");
+  if (citizenship) {
+    const nationalities = nationalitiesIn($, citizenship);
+    const primary = nationalities[0];
+    if (primary) {
+      profile.nationalities = nationalities;
+      profile.nationalityName = primary.name;
+      if (primary.iso) {
+        profile.nationalityIso = primary.iso;
+      }
+    }
+  }
+
+  const currentClub = pairs.get("current club");
+  if (currentClub) {
+    const name = currentClub.text().replace(/\s+/g, " ").trim();
+    if (name && name !== "-") {
+      profile.currentClubName = name;
+    }
+    const clubId = /\/verein\/(\d+)/.exec(currentClub.find("a[href]").attr("href") ?? "")?.[1];
+    if (clubId) {
+      profile.currentClubExternalId = clubId;
+    }
+  }
+
+  return profile;
 }

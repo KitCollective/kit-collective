@@ -5,6 +5,12 @@ export interface ActorSeasonClubRow {
   clubUrl?: string;
 }
 
+/** One citizenship read off a Transfermarkt flag image. */
+export interface ActorNationality {
+  name: string;
+  iso?: string;
+}
+
 /** Row from the actor `squads` dataset. */
 export interface ActorSquadRow {
   playerId?: string;
@@ -17,6 +23,8 @@ export interface ActorSquadRow {
   dateOfBirth?: string;
   nationalityIso?: string;
   nationalityName?: string;
+  /** Every citizenship on the row, in page order. The first is the primary one. */
+  nationalities?: ActorNationality[];
   heightCm?: number;
   preferredFoot?: "left" | "right" | "both";
   portraitSrc?: string;
@@ -40,11 +48,32 @@ export interface HonourParseRow {
   title: string;
 }
 
-/** Row from the actor `players` dataset (profile fetch). */
+/**
+ * Row from the actor `players` dataset (profile fetch).
+ *
+ * Every field beyond the identity triple is optional: the profile page renders a
+ * label/value table whose rows vary per player, and older recorded fixtures only
+ * carry the triple.
+ */
 export interface ActorPlayerProfile {
   playerId: string;
   playerName: string;
   shirtNumber?: number | null;
+  /** "Full name" row, e.g. `Mustafa Abdellaoue`. */
+  fullName?: string;
+  /** "Name in home country" row — may be non-Latin script. */
+  nameInHomeCountry?: string;
+  dateOfBirth?: string;
+  placeOfBirth?: string;
+  heightCm?: number;
+  preferredFoot?: "left" | "right" | "both";
+  /** Detailed position, e.g. `Right Winger` (the group prefix is dropped). */
+  position?: string;
+  nationalityIso?: string;
+  nationalityName?: string;
+  nationalities?: ActorNationality[];
+  currentClubName?: string;
+  currentClubExternalId?: string;
 }
 
 /** Recorded competition season page fixture. */
