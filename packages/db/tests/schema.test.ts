@@ -50,6 +50,7 @@ describe("stamdata schema", () => {
         "team_season",
         "player",
         "player_club_season",
+        "player_nationality",
         "manufacturer",
         "kit",
         "kit_photo",
@@ -250,6 +251,63 @@ describe("stamdata schema", () => {
     expect(columns).toEqual(
       expect.arrayContaining(["squad_number", "position", "call_up_club_id"]),
     );
+  });
+
+  it("keeps every citizenship on player_nationality, ordered, one row per country", async () => {
+    const country = await pool.query<{ id: string; iso3166: string }>(
+      `INSERT INTO country (iso3166) VALUES ('DE'), ('TR') RETURNING id, iso3166`,
+    );
+    const countryIdByIso = new Map(country.rows.map((row) => [row.iso3166, row.id]));
+    const player = await pool.query<{ id: string }>(
+      `INSERT INTO player (primary_country_id) VALUES ($1) RETURNING id`,
+      [countryIdByIso.get("DE")],
+    );
+    const playerId = player.rows[0]?.id;
+    expect(playerId).toBeTruthy();
+
+    await pool.query(
+      `INSERT INTO player_nationality (player_id, country_id, sort_order)
+       VALUES ($1, $2, 0), ($1, $3, 1)`,
+      [playerId, countryIdByIso.get("DE"), countryIdByIso.get("TR")],
+    );
+
+    const stored = await pool.query<{ iso3166: string; sort_order: number }>(
+      `SELECT c.iso3166, pn.sort_order
+       FROM player_nationality pn
+       JOIN country c ON c.id = pn.country_id
+       WHERE pn.player_id = $1
+       ORDER BY pn.sort_order`,
+      [playerId],
+    );
+    expect(stored.rows).toEqual([
+      { iso3166: "DE", sort_order: 0 },
+      { iso3166: "TR", sort_order: 1 },
+    ]);
+
+    await expect(
+      pool.query(
+        `INSERT INTO player_nationality (player_id, country_id, sort_order) VALUES ($1, $2, 5)`,
+        [playerId, countryIdByIso.get("TR")],
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("defaults player_nationality.sort_order to the primary slot", async () => {
+    const country = await pool.query<{ id: string }>(
+      `INSERT INTO country (iso3166) VALUES ('PT') RETURNING id`,
+    );
+    const player = await pool.query<{ id: string }>(
+      `INSERT INTO player DEFAULT VALUES RETURNING id`,
+    );
+
+    const inserted = await pool.query<{ sort_order: number }>(
+      `INSERT INTO player_nationality (player_id, country_id)
+       VALUES ($1, $2)
+       RETURNING sort_order`,
+      [player.rows[0]?.id, country.rows[0]?.id],
+    );
+
+    expect(inserted.rows[0]?.sort_order).toBe(0);
   });
 
   it("creates honour, player_jersey_number, and player_photo tables", async () => {
