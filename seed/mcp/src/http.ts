@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { gateSeedMcpHttpRequest, requireSeedMcpTokenForHttp } from "./http-auth.js";
 import { createSeedMcpHttpServer } from "./http-server.js";
@@ -72,7 +74,12 @@ async function main(): Promise<void> {
   startSeedMcpHttpServer();
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});
+const isDirectRun =
+  process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectRun) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
