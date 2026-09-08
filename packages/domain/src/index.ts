@@ -58,6 +58,20 @@ export type PreferredFoot = (typeof PREFERRED_FOOT)[number];
 export const HONOUR_SUBJECT_TYPES = ["club", "national_team", "player"] as const;
 export type HonourSubjectType = (typeof HONOUR_SUBJECT_TYPES)[number];
 
+/**
+ * Stamdata identity marks stored as object-store bytes (club crest, league badge,
+ * honour trophy, national-team mark). Player portraits stay on `player_photo`.
+ */
+export const CATALOG_MARK_ENTITY_TYPES = ["club", "league", "honour", "national_team"] as const;
+export type CatalogMarkEntityType = (typeof CATALOG_MARK_ENTITY_TYPES)[number];
+
+export {
+  compareSquadOrder,
+  SQUAD_POSITION_GROUPS,
+  type SquadPositionGroup,
+  squadPositionGroup,
+} from "./squad-position.js";
+
 export const USER_ROLES = ["user", "admin"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 

@@ -57,6 +57,7 @@ describe("stamdata schema", () => {
         "honour",
         "player_jersey_number",
         "player_photo",
+        "catalog_mark",
         "catalog_label",
         "external_id",
         "patch",
@@ -445,6 +446,19 @@ describe("stamdata schema", () => {
        VALUES ($1, 'players/portrait.jpg')
        RETURNING rights, visibility`,
       [playerId],
+    );
+
+    expect(inserted.rows[0]).toEqual({
+      rights: "unresolved",
+      visibility: "admin_only",
+    });
+  });
+
+  it("defaults catalog_mark rights to unresolved and visibility to admin_only", async () => {
+    const inserted = await pool.query<{ rights: string; visibility: string }>(
+      `INSERT INTO catalog_mark (entity_type, entity_id, object_key)
+       VALUES ('club', gen_random_uuid(), 'club/190/crest')
+       RETURNING rights, visibility`,
     );
 
     expect(inserted.rows[0]).toEqual({

@@ -3,6 +3,8 @@ import {
   type AdminClubSeasonDrill,
   type AdminFilterOptions,
   type AdminKitDrill,
+  type AdminLeagueDrill,
+  type AdminPlayerDrill,
   type AdminSeasonDrill,
   type AdminStamdataList,
   type AdminStamdataQuery,
@@ -11,25 +13,30 @@ import {
   adminClubSeasonDrillSchema,
   adminFilterOptionsSchema,
   adminKitDrillSchema,
+  adminLeagueDrillSchema,
+  adminPlayerDrillSchema,
   adminSeasonDrillSchema,
   adminStamdataListSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
   catalogLabel,
+  catalogMark,
   club,
   country,
+  honour,
   kit,
   kitPhoto,
   league,
   player,
   playerClubSeason,
+  playerPhoto,
   season,
   teamSeason,
 } from "@kit/db";
-import { KIT_TYPES } from "@kit/domain";
+import { compareSquadOrder, KIT_TYPES } from "@kit/domain";
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { createMemoryObjectStore } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
@@ -68,6 +75,66 @@ const resolvedEnLabel = sql<string | null>`coalesce(
   max(case when ${catalogLabel.locale} = 'mul' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end)
 )`;
 
+const DEFAULT_PAGE_SIZE = 50;
+
+function sniffImageContentType(bytes: Uint8Array): string {
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50) {
+    return "image/png";
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    return "image/jpeg";
+  }
+  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+    return "image/gif";
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  return "application/octet-stream";
+}
+
+function clubMarkPath(clubId: string): string {
+  return `/admin/catalog/clubs/${clubId}/mark`;
+}
+
+function leagueMarkPath(leagueId: string): string {
+  return `/admin/catalog/leagues/${leagueId}/mark`;
+}
+
+function honourMarkPath(honourId: string): string {
+  return `/admin/catalog/honours/${honourId}/mark`;
+}
+
+function playerPhotoPath(playerId: string): string {
+  return `/admin/catalog/players/${playerId}/photo`;
+}
+
+function pageLimit(query: AdminStamdataQuery): number {
+  return query.limit ?? DEFAULT_PAGE_SIZE;
+}
+
+function pageOffset(query: AdminStamdataQuery): number {
+  return query.offset ?? 0;
+}
+
+function countryLabelSubquery(entityIdColumn: SQLWrapper) {
+  return sql<string | null>`(
+    select coalesce(
+      max(case when country_label.locale = 'en' and country_label.kind = 'label' then country_label.text end),
+      max(case when country_label.locale = 'mul' and country_label.kind = 'label' then country_label.text end)
+    )
+    from catalog_label as country_label
+    where country_label.entity_type = 'country'
+      and country_label.entity_id = ${entityIdColumn}
+  )`;
+}
+
 @Injectable()
 export class AdminCatalogService {
   constructor(
@@ -83,23 +150,16 @@ export class AdminCatalogService {
   }
 
   async listStamdata(query: AdminStamdataQuery): Promise<AdminStamdataList> {
-    const rows: AdminStamdataRow[] = [];
     const searchPattern = query.q ? `%${query.q}%` : null;
+    const entityType = query.entityType ?? "club";
 
-    if (!query.kitType && query.hasPhoto !== "true") {
-      rows.push(...(await this.listClubRows(query, searchPattern)));
-      rows.push(...(await this.listSeasonRows(query, searchPattern)));
-      rows.push(...(await this.listClubSeasonRows(query, searchPattern)));
+    if (entityType === "league") {
+      return this.listLeaguePage(query, searchPattern);
     }
-
-    rows.push(...(await this.listKitRows(query, searchPattern)));
-
-    rows.sort((a, b) => a.label.localeCompare(b.label, "en"));
-
-    return adminStamdataListSchema.parse({
-      total: rows.length,
-      rows,
-    });
+    if (entityType === "player") {
+      return this.listPlayerPage(query, searchPattern);
+    }
+    return this.listClubPage(query, searchPattern);
   }
 
   async getFilterOptions(): Promise<AdminFilterOptions> {
@@ -206,7 +266,48 @@ export class AdminCatalogService {
       throw new NotFoundException("Kit photo bytes not found");
     }
 
-    return { bytes, contentType: "image/jpeg" };
+    return { bytes, contentType: sniffImageContentType(bytes) };
+  }
+
+  async getCatalogMarkBytes(
+    entityType: "club" | "league" | "honour",
+    entityId: string,
+  ): Promise<{ bytes: Uint8Array; contentType: string }> {
+    const [row] = await this.db
+      .select({ objectKey: catalogMark.objectKey })
+      .from(catalogMark)
+      .where(and(eq(catalogMark.entityType, entityType), eq(catalogMark.entityId, entityId)))
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException("Catalog mark not found");
+    }
+
+    const bytes = await this.objectStore.getObject(row.objectKey);
+    if (!bytes) {
+      throw new NotFoundException("Catalog mark bytes not found");
+    }
+
+    return { bytes, contentType: sniffImageContentType(bytes) };
+  }
+
+  async getPlayerPhotoBytes(playerId: string): Promise<{ bytes: Uint8Array; contentType: string }> {
+    const [row] = await this.db
+      .select({ objectKey: playerPhoto.objectKey })
+      .from(playerPhoto)
+      .where(eq(playerPhoto.playerId, playerId))
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException("Player photo not found");
+    }
+
+    const bytes = await this.objectStore.getObject(row.objectKey);
+    if (!bytes) {
+      throw new NotFoundException("Player photo bytes not found");
+    }
+
+    return { bytes, contentType: sniffImageContentType(bytes) };
   }
 
   async getClubSeasonDrill(
@@ -253,6 +354,7 @@ export class AdminCatalogService {
           id: player.id,
           label: resolvedEnLabel,
           squadNumber: playerClubSeason.squadNumber,
+          position: playerClubSeason.position,
         })
         .from(playerClubSeason)
         .innerJoin(player, eq(playerClubSeason.playerId, player.id))
@@ -261,7 +363,7 @@ export class AdminCatalogService {
           and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
         )
         .where(and(eq(playerClubSeason.clubId, clubId), eq(playerClubSeason.seasonId, seasonId)))
-        .groupBy(player.id, playerClubSeason.squadNumber)
+        .groupBy(player.id, playerClubSeason.squadNumber, playerClubSeason.position)
         .orderBy(asc(playerClubSeason.squadNumber), asc(player.id));
 
       squad = players
@@ -270,7 +372,9 @@ export class AdminCatalogService {
           id: row.id,
           label: row.label,
           squadNumber: row.squadNumber,
-        }));
+          position: row.position,
+        }))
+        .sort(compareSquadOrder);
     }
 
     const kits = await this.listClubSeasonKits(clubId, seasonId);
@@ -295,6 +399,10 @@ export class AdminCatalogService {
         validFrom: club.validFrom,
         validTo: club.validTo,
         successorClubId: club.successorClubId,
+        foundedOn: club.foundedOn,
+        stadiumName: club.stadiumName,
+        stadiumCapacity: club.stadiumCapacity,
+        websiteUrl: club.websiteUrl,
         label: resolvedEnLabel,
       })
       .from(club)
@@ -310,6 +418,10 @@ export class AdminCatalogService {
         club.validFrom,
         club.validTo,
         club.successorClubId,
+        club.foundedOn,
+        club.stadiumName,
+        club.stadiumCapacity,
+        club.websiteUrl,
       )
       .limit(1);
 
@@ -356,11 +468,18 @@ export class AdminCatalogService {
       label: row.label,
       countryLabel,
       monogram: monogramFromLabel(row.label),
+      markPath: (await this.catalogMarkPaths("club", [clubId])).get(clubId),
       kind: row.kind,
       validFrom: row.validFrom ?? null,
       validTo: row.validTo ?? null,
       successorLabel,
+      currentLeagueLabel: await this.currentLeagueLabel(clubId),
+      foundedOn: row.foundedOn ?? null,
+      stadiumName: row.stadiumName ?? null,
+      stadiumCapacity: row.stadiumCapacity ?? null,
+      websiteUrl: row.websiteUrl ?? null,
       seasons: await this.listClubSeasons(clubId),
+      honours: await this.listClubHonours(clubId),
     });
   }
 
@@ -393,13 +512,119 @@ export class AdminCatalogService {
     });
   }
 
+  async getLeagueDrill(leagueId: string): Promise<AdminLeagueDrill> {
+    const [row] = await this.db
+      .select({
+        id: league.id,
+        label: resolvedEnLabel,
+        countryLabel: countryLabelSubquery(league.countryId),
+      })
+      .from(league)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "league"), eq(catalogLabel.entityId, league.id)),
+      )
+      .where(eq(league.id, leagueId))
+      .groupBy(league.id, league.countryId)
+      .limit(1);
+
+    if (!row?.label) {
+      throw new NotFoundException("League not found");
+    }
+
+    const seasons = await this.db
+      .select({
+        id: season.id,
+        label: season.label,
+      })
+      .from(season)
+      .where(eq(season.leagueId, leagueId))
+      .orderBy(desc(season.startsOn));
+
+    return adminLeagueDrillSchema.parse({
+      id: row.id,
+      label: row.label,
+      countryLabel: row.countryLabel ?? undefined,
+      monogram: monogramFromLabel(row.label),
+      markPath: (await this.catalogMarkPaths("league", [leagueId])).get(leagueId),
+      seasons,
+    });
+  }
+
+  async getPlayerDrill(playerId: string): Promise<AdminPlayerDrill> {
+    const [row] = await this.db
+      .select({
+        id: player.id,
+        label: resolvedEnLabel,
+        dateOfBirth: player.dateOfBirth,
+        countryLabel: countryLabelSubquery(player.primaryCountryId),
+      })
+      .from(player)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
+      )
+      .where(eq(player.id, playerId))
+      .groupBy(player.id, player.dateOfBirth, player.primaryCountryId)
+      .limit(1);
+
+    if (!row?.label) {
+      throw new NotFoundException("Player not found");
+    }
+
+    const clubSeasons = await this.db
+      .select({
+        clubLabel: resolvedEnLabel,
+        seasonLabel: season.label,
+        squadNumber: playerClubSeason.squadNumber,
+      })
+      .from(playerClubSeason)
+      .innerJoin(club, eq(playerClubSeason.clubId, club.id))
+      .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+      )
+      .where(eq(playerClubSeason.playerId, playerId))
+      .groupBy(
+        playerClubSeason.id,
+        club.id,
+        season.label,
+        season.startsOn,
+        playerClubSeason.squadNumber,
+      )
+      .orderBy(desc(season.startsOn));
+
+    return adminPlayerDrillSchema.parse({
+      id: row.id,
+      label: row.label,
+      monogram: monogramFromLabel(row.label),
+      markPath: (await this.playerPhotoPaths([playerId])).get(playerId),
+      dateOfBirth: row.dateOfBirth ?? null,
+      countryLabel: row.countryLabel ?? undefined,
+      clubSeasons: clubSeasons
+        .filter((item): item is typeof item & { clubLabel: string } => Boolean(item.clubLabel))
+        .map((item) => ({
+          clubLabel: item.clubLabel,
+          seasonLabel: item.seasonLabel,
+          squadNumber: item.squadNumber,
+        })),
+    });
+  }
+
   private async matchingCatalogIds(searchPattern: string | null): Promise<{
     countries: Set<string>;
     leagues: Set<string>;
     clubs: Set<string>;
+    players: Set<string>;
   }> {
     if (!searchPattern) {
-      return { countries: new Set(), leagues: new Set(), clubs: new Set() };
+      return {
+        countries: new Set(),
+        leagues: new Set(),
+        clubs: new Set(),
+        players: new Set(),
+      };
     }
 
     const matches = await this.db
@@ -410,7 +635,7 @@ export class AdminCatalogService {
       .from(catalogLabel)
       .where(
         and(
-          inArray(catalogLabel.entityType, ["country", "league", "club"]),
+          inArray(catalogLabel.entityType, ["country", "league", "club", "player"]),
           sql`${catalogLabel.text} ilike ${searchPattern}`,
         ),
       );
@@ -418,6 +643,7 @@ export class AdminCatalogService {
     const countries = new Set<string>();
     const leagues = new Set<string>();
     const clubs = new Set<string>();
+    const players = new Set<string>();
     for (const match of matches) {
       if (match.entityType === "country") {
         countries.add(match.entityId);
@@ -425,28 +651,30 @@ export class AdminCatalogService {
         leagues.add(match.entityId);
       } else if (match.entityType === "club") {
         clubs.add(match.entityId);
+      } else if (match.entityType === "player") {
+        players.add(match.entityId);
       }
     }
 
-    return { countries, leagues, clubs };
+    return { countries, leagues, clubs, players };
   }
 
-  private async listClubRows(
+  private async listClubPage(
     query: AdminStamdataQuery,
     searchPattern: string | null,
-  ): Promise<AdminStamdataRow[]> {
+  ): Promise<AdminStamdataList> {
     const conditions: SQL[] = [];
 
-    if (query.countryId) {
-      conditions.push(eq(club.countryId, query.countryId));
+    if (query.countryIds && query.countryIds.length > 0) {
+      conditions.push(inArray(club.countryId, query.countryIds));
     }
-    if (query.leagueId) {
+    if (query.leagueIds && query.leagueIds.length > 0) {
       conditions.push(
         sql`exists (
           select 1 from ${teamSeason}
           inner join ${season} on ${teamSeason.seasonId} = ${season.id}
           where ${teamSeason.clubId} = ${club.id}
-          and ${season.leagueId} = ${query.leagueId}
+          and ${inArray(season.leagueId, query.leagueIds)}
         )`,
       );
     }
@@ -483,7 +711,7 @@ export class AdminCatalogService {
         );
       }
       if (searchClauses.length === 0) {
-        return [];
+        return adminStamdataListSchema.parse({ total: 0, rows: [] });
       }
       const searchClause = or(...searchClauses);
       if (searchClause) {
@@ -495,6 +723,7 @@ export class AdminCatalogService {
       .select({
         id: club.id,
         label: resolvedEnLabel,
+        countryLabel: countryLabelSubquery(club.countryId),
       })
       .from(club)
       .leftJoin(
@@ -502,253 +731,283 @@ export class AdminCatalogService {
         and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
       )
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .groupBy(club.id)
-      .orderBy(asc(club.id));
+      .groupBy(club.id, club.countryId)
+      .orderBy(asc(resolvedEnLabel));
 
-    return rows
+    const mapped: AdminStamdataRow[] = rows
       .filter((row): row is typeof row & { label: string } => Boolean(row.label))
       .map((row) => ({
         entityType: "club" as const,
         id: row.id,
         label: row.label,
         monogram: monogramFromLabel(row.label),
+        countryLabel: row.countryLabel ?? undefined,
       }));
+
+    const offset = pageOffset(query);
+    const limit = pageLimit(query);
+    const page = mapped.slice(offset, offset + limit);
+    const markPaths = await this.catalogMarkPaths(
+      "club",
+      page.map((row) => row.id),
+    );
+    return adminStamdataListSchema.parse({
+      total: mapped.length,
+      rows: page.map((row) => ({
+        ...row,
+        markPath: markPaths.get(row.id),
+      })),
+    });
   }
 
-  private async listSeasonRows(
+  private async listLeaguePage(
     query: AdminStamdataQuery,
     searchPattern: string | null,
-  ): Promise<AdminStamdataRow[]> {
+  ): Promise<AdminStamdataList> {
     const conditions: SQL[] = [];
 
-    if (query.countryId) {
+    if (query.countryIds && query.countryIds.length > 0) {
+      conditions.push(inArray(league.countryId, query.countryIds));
+    }
+
+    const catalogIds = await this.matchingCatalogIds(searchPattern);
+    if (searchPattern) {
+      const searchClauses: SQL[] = [];
+      if (catalogIds.leagues.size > 0) {
+        searchClauses.push(inArray(league.id, [...catalogIds.leagues]));
+      }
+      if (catalogIds.countries.size > 0) {
+        searchClauses.push(inArray(league.countryId, [...catalogIds.countries]));
+      }
+      if (searchClauses.length === 0) {
+        return adminStamdataListSchema.parse({ total: 0, rows: [] });
+      }
+      const searchClause = or(...searchClauses);
+      if (searchClause) {
+        conditions.push(searchClause);
+      }
+    }
+
+    const rows = await this.db
+      .select({
+        id: league.id,
+        label: resolvedEnLabel,
+        countryLabel: countryLabelSubquery(league.countryId),
+      })
+      .from(league)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "league"), eq(catalogLabel.entityId, league.id)),
+      )
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .groupBy(league.id, league.countryId)
+      .orderBy(asc(resolvedEnLabel));
+
+    const mapped: AdminStamdataRow[] = rows
+      .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+      .map((row) => ({
+        entityType: "league" as const,
+        id: row.id,
+        label: row.label,
+        monogram: monogramFromLabel(row.label),
+        countryLabel: row.countryLabel ?? undefined,
+      }));
+
+    const offset = pageOffset(query);
+    const limit = pageLimit(query);
+    const page = mapped.slice(offset, offset + limit);
+    const markPaths = await this.catalogMarkPaths(
+      "league",
+      page.map((row) => row.id),
+    );
+    return adminStamdataListSchema.parse({
+      total: mapped.length,
+      rows: page.map((row) => ({
+        ...row,
+        markPath: markPaths.get(row.id),
+      })),
+    });
+  }
+
+  private async listPlayerPage(
+    query: AdminStamdataQuery,
+    searchPattern: string | null,
+  ): Promise<AdminStamdataList> {
+    const conditions: SQL[] = [];
+
+    if (query.countryIds && query.countryIds.length > 0) {
+      conditions.push(inArray(player.primaryCountryId, query.countryIds));
+    }
+    if (query.leagueIds && query.leagueIds.length > 0) {
       conditions.push(
         sql`exists (
-          select 1 from ${league}
-          where ${season.leagueId} = ${league.id}
-          and ${league.countryId} = ${query.countryId}
+          select 1 from ${playerClubSeason}
+          inner join ${season} on ${playerClubSeason.seasonId} = ${season.id}
+          where ${playerClubSeason.playerId} = ${player.id}
+          and ${inArray(season.leagueId, query.leagueIds)}
         )`,
       );
     }
-    if (query.leagueId) {
-      conditions.push(eq(season.leagueId, query.leagueId));
-    }
-    if (query.seasonId) {
-      conditions.push(eq(season.id, query.seasonId));
-    }
 
+    const catalogIds = await this.matchingCatalogIds(searchPattern);
     if (searchPattern) {
-      const catalogIds = await this.matchingCatalogIds(searchPattern);
-      const searchClauses: SQL[] = [sql`${season.label} ilike ${searchPattern}`];
-      if (catalogIds.leagues.size > 0) {
-        searchClauses.push(inArray(season.leagueId, [...catalogIds.leagues]));
+      const searchClauses: SQL[] = [];
+      if (catalogIds.players.size > 0) {
+        searchClauses.push(inArray(player.id, [...catalogIds.players]));
       }
       if (catalogIds.countries.size > 0) {
+        searchClauses.push(inArray(player.primaryCountryId, [...catalogIds.countries]));
+      }
+      if (catalogIds.clubs.size > 0) {
         searchClauses.push(
           sql`exists (
-            select 1 from ${league}
-            where ${season.leagueId} = ${league.id}
-            and ${league.countryId} in (${sql.join(
-              [...catalogIds.countries].map((id) => sql`${id}`),
+            select 1 from ${playerClubSeason}
+            where ${playerClubSeason.playerId} = ${player.id}
+            and ${playerClubSeason.clubId} in (${sql.join(
+              [...catalogIds.clubs].map((id) => sql`${id}`),
               sql`, `,
             )})
           )`,
         );
       }
+      if (searchClauses.length === 0) {
+        return adminStamdataListSchema.parse({ total: 0, rows: [] });
+      }
       const searchClause = or(...searchClauses);
       if (searchClause) {
         conditions.push(searchClause);
       }
     }
 
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const countRows = await this.db
+      .select({
+        total: sql<number>`cast(count(distinct ${player.id}) as int)`,
+      })
+      .from(player)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
+      )
+      .where(whereClause);
+    const total = countRows[0]?.total ?? 0;
+
     const rows = await this.db
       .select({
-        id: season.id,
-        label: season.label,
+        id: player.id,
+        label: resolvedEnLabel,
+        dateOfBirth: player.dateOfBirth,
+        countryLabel: countryLabelSubquery(player.primaryCountryId),
       })
-      .from(season)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(season.startsOn));
+      .from(player)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
+      )
+      .where(whereClause)
+      .groupBy(player.id, player.dateOfBirth, player.primaryCountryId)
+      .orderBy(asc(resolvedEnLabel))
+      .limit(pageLimit(query))
+      .offset(pageOffset(query));
 
+    const photoPaths = await this.playerPhotoPaths(rows.map((row) => row.id));
+    return adminStamdataListSchema.parse({
+      total,
+      rows: rows
+        .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+        .map((row) => ({
+          entityType: "player" as const,
+          id: row.id,
+          label: row.label,
+          monogram: monogramFromLabel(row.label),
+          markPath: photoPaths.get(row.id),
+          countryLabel: row.countryLabel ?? undefined,
+          dateOfBirth: row.dateOfBirth ?? null,
+        })),
+    });
+  }
+
+  private async catalogMarkPaths(
+    entityType: "club" | "league" | "honour",
+    ids: string[],
+  ): Promise<Map<string, string>> {
+    const paths = new Map<string, string>();
+    if (ids.length === 0) {
+      return paths;
+    }
+    const rows = await this.db
+      .select({ entityId: catalogMark.entityId })
+      .from(catalogMark)
+      .where(and(eq(catalogMark.entityType, entityType), inArray(catalogMark.entityId, ids)));
+    const toPath =
+      entityType === "club"
+        ? clubMarkPath
+        : entityType === "league"
+          ? leagueMarkPath
+          : honourMarkPath;
+    for (const row of rows) {
+      paths.set(row.entityId, toPath(row.entityId));
+    }
+    return paths;
+  }
+
+  private async playerPhotoPaths(ids: string[]): Promise<Map<string, string>> {
+    const paths = new Map<string, string>();
+    if (ids.length === 0) {
+      return paths;
+    }
+    const rows = await this.db
+      .select({ playerId: playerPhoto.playerId })
+      .from(playerPhoto)
+      .where(inArray(playerPhoto.playerId, ids));
+    for (const row of rows) {
+      paths.set(row.playerId, playerPhotoPath(row.playerId));
+    }
+    return paths;
+  }
+
+  private async listClubHonours(clubId: string) {
+    const rows = await this.db
+      .select({
+        id: honour.id,
+        seasonLabel: honour.seasonLabel,
+        title: honour.title,
+      })
+      .from(honour)
+      .where(and(eq(honour.subjectType, "club"), eq(honour.subjectId, clubId)))
+      .orderBy(desc(honour.seasonLabel), asc(honour.title));
+    const markPaths = await this.catalogMarkPaths(
+      "honour",
+      rows.map((row) => row.id),
+    );
     return rows.map((row) => ({
-      entityType: "season" as const,
       id: row.id,
-      label: row.label,
-      monogram: monogramFromLabel(row.label),
+      seasonLabel: row.seasonLabel,
+      title: row.title,
+      markPath: markPaths.get(row.id),
     }));
   }
 
-  private async listClubSeasonRows(
-    query: AdminStamdataQuery,
-    searchPattern: string | null,
-  ): Promise<AdminStamdataRow[]> {
-    const conditions: SQL[] = [];
-
-    if (query.countryId) {
-      conditions.push(eq(club.countryId, query.countryId));
+  private async currentLeagueLabel(clubId: string): Promise<string | undefined> {
+    const seasons = await this.listClubSeasons(clubId);
+    const latest = seasons[0];
+    if (!latest) {
+      return undefined;
     }
-    if (query.leagueId) {
-      conditions.push(eq(season.leagueId, query.leagueId));
-    }
-    if (query.seasonId) {
-      conditions.push(eq(season.id, query.seasonId));
-    }
-
-    if (searchPattern) {
-      const catalogIds = await this.matchingCatalogIds(searchPattern);
-      const searchClauses: SQL[] = [];
-      if (catalogIds.clubs.size > 0) {
-        searchClauses.push(inArray(club.id, [...catalogIds.clubs]));
-      }
-      if (catalogIds.countries.size > 0) {
-        searchClauses.push(inArray(club.countryId, [...catalogIds.countries]));
-      }
-      if (catalogIds.leagues.size > 0) {
-        searchClauses.push(inArray(season.leagueId, [...catalogIds.leagues]));
-      }
-      searchClauses.push(sql`${season.label} ilike ${searchPattern}`);
-      const searchClause = or(...searchClauses);
-      if (searchClause) {
-        conditions.push(searchClause);
-      }
-    }
-
-    const rows = await this.db
+    const [row] = await this.db
       .select({
-        id: teamSeason.id,
-        clubId: club.id,
-        seasonId: season.id,
-        clubLabel: resolvedEnLabel,
-        seasonLabel: season.label,
-        squadCount: sql<number>`count(distinct ${playerClubSeason.id})::int`,
+        label: resolvedEnLabel,
       })
-      .from(teamSeason)
-      .innerJoin(club, eq(teamSeason.clubId, club.id))
-      .innerJoin(season, eq(teamSeason.seasonId, season.id))
+      .from(season)
+      .leftJoin(league, eq(season.leagueId, league.id))
       .leftJoin(
         catalogLabel,
-        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+        and(eq(catalogLabel.entityType, "league"), eq(catalogLabel.entityId, league.id)),
       )
-      .leftJoin(
-        playerClubSeason,
-        and(eq(playerClubSeason.clubId, club.id), eq(playerClubSeason.seasonId, season.id)),
-      )
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .groupBy(teamSeason.id, club.id, season.id, season.label)
-      .orderBy(desc(season.startsOn), asc(club.id));
-
-    return rows
-      .filter((row): row is typeof row & { clubLabel: string } => Boolean(row.clubLabel))
-      .map((row) => ({
-        entityType: "club_season" as const,
-        id: row.id,
-        label: `${row.clubLabel} · ${row.seasonLabel}`,
-        monogram: monogramFromLabel(row.clubLabel),
-        clubId: row.clubId,
-        seasonId: row.seasonId,
-        clubLabel: row.clubLabel,
-        seasonLabel: row.seasonLabel,
-        squadCount: row.squadCount,
-      }));
-  }
-
-  private async listKitRows(
-    query: AdminStamdataQuery,
-    searchPattern: string | null,
-  ): Promise<AdminStamdataRow[]> {
-    const conditions: SQL[] = [];
-
-    if (query.countryId) {
-      conditions.push(eq(club.countryId, query.countryId));
-    }
-    if (query.leagueId) {
-      conditions.push(eq(season.leagueId, query.leagueId));
-    }
-    if (query.seasonId) {
-      conditions.push(eq(kit.seasonId, query.seasonId));
-    }
-    if (query.kitType) {
-      conditions.push(eq(kit.type, query.kitType));
-    }
-
-    if (searchPattern) {
-      const catalogIds = await this.matchingCatalogIds(searchPattern);
-      const searchClauses: SQL[] = [];
-      if (catalogIds.clubs.size > 0) {
-        searchClauses.push(inArray(kit.clubId, [...catalogIds.clubs]));
-      }
-      if (catalogIds.countries.size > 0) {
-        searchClauses.push(inArray(club.countryId, [...catalogIds.countries]));
-      }
-      if (catalogIds.leagues.size > 0) {
-        searchClauses.push(inArray(season.leagueId, [...catalogIds.leagues]));
-      }
-      searchClauses.push(
-        sql`exists (
-          select 1 from ${season}
-          where ${season.id} = ${kit.seasonId}
-          and ${season.label} ilike ${searchPattern}
-        )`,
-      );
-      searchClauses.push(sql`${kit.type}::text ilike ${searchPattern}`);
-      const searchClause = or(...searchClauses);
-      if (searchClause) {
-        conditions.push(searchClause);
-      }
-    }
-
-    const photoCountSql = sql<number>`count(${kitPhoto.id})::int`;
-
-    const rows = await this.db
-      .select({
-        id: kit.id,
-        kitType: kit.type,
-        clubId: kit.clubId,
-        seasonId: kit.seasonId,
-        clubLabel: resolvedEnLabel,
-        seasonLabel: season.label,
-        photoCount: photoCountSql,
-      })
-      .from(kit)
-      .innerJoin(season, eq(kit.seasonId, season.id))
-      .leftJoin(club, eq(kit.clubId, club.id))
-      .leftJoin(
-        catalogLabel,
-        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
-      )
-      .leftJoin(kitPhoto, eq(kitPhoto.kitId, kit.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .groupBy(kit.id, kit.type, kit.clubId, kit.seasonId, season.label, season.startsOn)
-      .orderBy(desc(season.startsOn), asc(kit.type));
-
-    return rows
-      .filter((row) => {
-        const hasPhoto = row.photoCount > 0;
-        if (query.hasPhoto === "true") {
-          return hasPhoto;
-        }
-        if (query.hasPhoto === "false") {
-          return !hasPhoto;
-        }
-        return true;
-      })
-      .map((row) => {
-        const hasPhoto = row.photoCount > 0;
-        const clubName = row.clubLabel ?? "Kit";
-        const label = `${clubName} ${row.kitType}`;
-        return {
-          entityType: "kit" as const,
-          id: row.id,
-          label,
-          clubId: row.clubId ?? undefined,
-          seasonId: row.seasonId,
-          clubLabel: row.clubLabel ?? undefined,
-          seasonLabel: row.seasonLabel,
-          kitType: row.kitType,
-          hasPhoto,
-          photoPath: hasPhoto ? `/admin/catalog/kits/${row.id}/photo` : undefined,
-        };
-      });
+      .where(eq(season.id, latest.id))
+      .groupBy(league.id)
+      .limit(1);
+    return row?.label ?? undefined;
   }
 
   private async listClubSeasons(clubId: string): Promise<Array<{ id: string; label: string }>> {

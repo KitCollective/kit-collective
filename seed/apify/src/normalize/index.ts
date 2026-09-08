@@ -85,6 +85,7 @@ function normalizeClub(raw: TransfermarktRawClub): NormalizedClub {
   if (raw.secondaryColorHex) club.secondaryColorHex = raw.secondaryColorHex;
   if (raw.websiteUrl) club.websiteUrl = raw.websiteUrl;
   if (raw.honours?.length) club.honours = raw.honours.map((row) => ({ ...row }));
+  if (raw.crestBytes) club.crestBytes = raw.crestBytes;
   return club;
 }
 
@@ -119,14 +120,18 @@ function normalizeSeason(season: TransfermarktRawPayload["seasons"][number]): No
 }
 
 export function normalizeTransfermarktPayload(raw: TransfermarktRawPayload): NormalizedFacts {
+  const league: NormalizedFacts["league"] = {
+    externalId: raw.competition.id,
+    name: raw.competition.name,
+    countryIso: raw.competition.country.iso3166,
+    countryExternalId: raw.competition.country.id,
+    countryName: raw.competition.country.name,
+  };
+  if (raw.competition.badgeBytes) {
+    league.badgeBytes = raw.competition.badgeBytes;
+  }
   return {
-    league: {
-      externalId: raw.competition.id,
-      name: raw.competition.name,
-      countryIso: raw.competition.country.iso3166,
-      countryExternalId: raw.competition.country.id,
-      countryName: raw.competition.country.name,
-    },
+    league,
     seasons: raw.seasons.map(normalizeSeason),
     clubs: raw.clubs?.map(normalizeClub),
     nationalTeams: raw.nationalTeams?.map(normalizeNationalTeam),
@@ -167,7 +172,13 @@ function cleanClub(club: TransfermarktRawClub): TransfermarktRawClub {
     primaryColorHex: club.primaryColorHex,
     secondaryColorHex: club.secondaryColorHex,
     websiteUrl: club.websiteUrl,
-    honours: club.honours?.map((row) => ({ ...row })),
+    honours: club.honours?.map((row) => ({
+      seasonLabel: row.seasonLabel,
+      title: row.title,
+      markObjectKey: row.markObjectKey,
+      markBytes: row.markBytes,
+    })),
+    crestBytes: club.crestBytes,
     players: club.players.map(cleanPlayer),
   };
   return cleaned;
@@ -182,7 +193,12 @@ function cleanNationalTeam(team: TransfermarktRawNationalTeam): TransfermarktRaw
     officialName: team.officialName,
     foundedOn: team.foundedOn,
     confederation: team.confederation,
-    honours: team.honours?.map((row) => ({ ...row })),
+    honours: team.honours?.map((row) => ({
+      seasonLabel: row.seasonLabel,
+      title: row.title,
+      markObjectKey: row.markObjectKey,
+      markBytes: row.markBytes,
+    })),
     players: team.players.map(cleanPlayer),
   };
 }
@@ -190,7 +206,10 @@ function cleanNationalTeam(team: TransfermarktRawNationalTeam): TransfermarktRaw
 /** Strip forbidden Transfermarkt fields from a raw payload object (mutates a copy). */
 export function stripForbiddenFields(raw: TransfermarktRawPayload): TransfermarktRawPayload {
   return {
-    competition: { ...raw.competition, country: { ...raw.competition.country } },
+    competition: {
+      ...raw.competition,
+      country: { ...raw.competition.country },
+    },
     seasons: raw.seasons.map((season) => ({
       id: season.id,
       label: season.label,

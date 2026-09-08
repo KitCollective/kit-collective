@@ -186,8 +186,12 @@ Parent club vs loan (club kader) or call-up club (NationalTeam kader). Call-up c
 _Avoid_: trusting Joined / Signed-from columns that show present-day dates on historical kader pages; inventing loan flags when the HTML has none
 
 **Honours**:
-Titles and trophies from Transfermarkt `/erfolge/…` for **Club** and **NationalTeam** (`/erfolge/verein/{id}`) and **Player** (`/erfolge/spieler/{id}`). Stamdata now on those grains (Rich grain) — season + title text as listed. Same noun across side and player. Postgres: **`honour`** table — see `.scratch/football-data-seed/schema-gap.md`.
-_Avoid_: scraping market-value charts as honours; inventing titles not on the page; treating “Teilnehmer” participation rows as wins without keeping the vendor wording; blocking a Club season squad map only because the club Honours page failed when identity facts already landed
+Titles and trophies from Transfermarkt `/erfolge/…` for **Club** and **NationalTeam** (`/erfolge/verein/{id}`) and **Player** (`/erfolge/spieler/{id}`). Stamdata now on those grains (Rich grain) — season + title text as listed, plus the trophy or competition mark when the titles table rendered an image (bytes in the lane object store, `catalog_mark` on the honour row). Same noun across side and player. Postgres: **`honour`** table — see `.scratch/football-data-seed/schema-gap.md`.
+_Avoid_: scraping market-value charts as honours; inventing titles not on the page; treating “Teilnehmer” participation rows as wins without keeping the vendor wording; blocking a Club season squad map only because the club Honours page failed when identity facts already landed; persisting the Transfermarkt image URL on the honour row
+
+**Catalog mark**:
+Club crest, league badge, honour trophy, and national-team mark bytes from the Transfermarkt image CDN. Stamdata now: stored like Player photo (`rights: unresolved`, `visibility: admin_only`). Postgres: **`catalog_mark`**. Object keys are ours (`club/{tmId}/crest`, `league/{code}/badge`, `honour/erfolge/{id}`) — never `tmLogoUrl`. Admin Master Data and club Honours may render them; Expo, Astro, and OG do not until rights are cleared.
+_Avoid_: treating the crest as ADR-0002 “TM branding” drop of a hot-linked URL; inventing SVG crests; using `KitPhoto` as a club mark; serving unresolved marks on collector surfaces
 
 **NationalTeam season**:
 Catalog row that a **NationalTeam** fielded a squad in a **Season** — sibling of `TeamSeason` (club path). Stamdata now for Denmark WC 2010 proof. Postgres: **`national_team_season`** + **`player_national_team_season`** — not a Club row.

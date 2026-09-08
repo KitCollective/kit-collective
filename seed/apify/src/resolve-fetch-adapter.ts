@@ -1,6 +1,6 @@
 import path from "node:path";
 import { resolveTransfermarktTransport } from "@kit/seed-shared";
-import type { FetchAdapter, JerseyNumbersFetcher } from "./fetch/adapter.js";
+import type { CatalogMarksFetcher, FetchAdapter, JerseyNumbersFetcher } from "./fetch/adapter.js";
 import { createApifyFetchAdapter, createLiveApifyFetchAdapter } from "./fetch/apify-adapter.js";
 import { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
 import { createKaderFetchAdapter } from "./fetch/kader-fetch-adapter.js";
@@ -76,6 +76,7 @@ export interface ResolvedFetchAdapter {
    * JSON payload adapters have no `/rueckennummern` source to read.
    */
   jerseyNumbers?: JerseyNumbersFetcher;
+  catalogMarks?: CatalogMarksFetcher;
   close?: () => Promise<void>;
 }
 
@@ -101,7 +102,7 @@ export async function resolveFetchAdapter(): Promise<ResolvedFetchAdapter> {
 
   if (kaderHtmlDir) {
     const adapter = createKaderFetchAdapter({ fixturesDir: kaderHtmlDir });
-    return { adapter, jerseyNumbers: adapter, transport: "fixture" };
+    return { adapter, jerseyNumbers: adapter, catalogMarks: adapter, transport: "fixture" };
   }
 
   if (fetchMode === "apify") {
@@ -139,6 +140,7 @@ export async function resolveFetchAdapter(): Promise<ResolvedFetchAdapter> {
     return {
       adapter,
       jerseyNumbers: adapter,
+      catalogMarks: adapter,
       transport: "proxy",
       close: async () => {
         await close();
@@ -153,5 +155,11 @@ export async function resolveFetchAdapter(): Promise<ResolvedFetchAdapter> {
     cacheDir: kaderCacheDir,
     ...kaderFetchPolicy,
   });
-  return { adapter, jerseyNumbers: adapter, transport: "direct", close: session.close };
+  return {
+    adapter,
+    jerseyNumbers: adapter,
+    catalogMarks: adapter,
+    transport: "direct",
+    close: session.close,
+  };
 }

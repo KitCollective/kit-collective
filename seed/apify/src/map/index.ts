@@ -1,5 +1,6 @@
 import {
   catalogLabel,
+  catalogMark,
   club,
   country,
   type Db,
@@ -17,8 +18,14 @@ import {
   season,
   teamSeason,
 } from "@kit/db";
-import { type CatalogEntityType, countryCodesForIso3166, type LabelLocale } from "@kit/domain";
+import {
+  type CatalogEntityType,
+  type CatalogMarkEntityType,
+  countryCodesForIso3166,
+  type LabelLocale,
+} from "@kit/domain";
 import { and, eq, isNull } from "drizzle-orm";
+import { clubCrestObjectKey, leagueBadgeObjectKey } from "../catalog-mark-cdn.js";
 import { assertFactsSeasonScope } from "../scope-isolation.js";
 import type {
   MapResult,
@@ -626,16 +633,46 @@ async function upsertPlayerClubSeasonRow(
   return { id: row!.id, created: true };
 }
 
+async function upsertCatalogMark(
+  db: Db,
+  entityType: CatalogMarkEntityType,
+  entityId: string,
+  objectKey: string,
+  bytes: Uint8Array,
+  store: PortraitStore,
+): Promise<boolean> {
+  const existing = await db
+    .select({ id: catalogMark.id })
+    .from(catalogMark)
+    .where(and(eq(catalogMark.entityType, entityType), eq(catalogMark.entityId, entityId)))
+    .limit(1);
+  await store.putObject(objectKey, bytes);
+  if (existing[0]) {
+    await db.update(catalogMark).set({ objectKey }).where(eq(catalogMark.id, existing[0].id));
+    return false;
+  }
+  await db.insert(catalogMark).values({
+    entityType,
+    entityId,
+    objectKey,
+    rights: "unresolved",
+    visibility: "admin_only",
+  });
+  return true;
+}
+
 async function upsertHonours(
   db: Db,
   subjectType: "club" | "national_team" | "player",
   subjectId: string,
   rows: NormalizedClub["honours"],
-): Promise<number> {
+  store?: PortraitStore,
+): Promise<{ honours: number; marks: number }> {
   if (!rows?.length) {
-    return 0;
+    return { honours: 0, marks: 0 };
   }
   let created = 0;
+  let marks = 0;
   for (const row of rows) {
     const existing = await db
       .select({ id: honour.id, seasonLabel: honour.seasonLabel })
@@ -647,23 +684,42 @@ async function upsertHonours(
           eq(honour.title, row.title),
         ),
       );
-    if (
-      existing.some(
-        (item: { seasonLabel: string | null }) => (item.seasonLabel ?? null) === row.seasonLabel,
-      )
-    ) {
-      continue;
+    const match = existing.find(
+      (item: { id: string; seasonLabel: string | null }) =>
+        (item.seasonLabel ?? null) === row.seasonLabel,
+    );
+    let honourId: string;
+    if (match) {
+      honourId = match.id;
+    } else {
+      const [inserted] = await db
+        .insert(honour)
+        .values({
+          subjectType,
+          subjectId,
+          seasonLabel: row.seasonLabel,
+          title: row.title,
+          source: "seed",
+        })
+        .returning({ id: honour.id });
+      honourId = inserted!.id;
+      created += 1;
     }
-    await db.insert(honour).values({
-      subjectType,
-      subjectId,
-      seasonLabel: row.seasonLabel,
-      title: row.title,
-      source: "seed",
-    });
-    created += 1;
+    if (row.markBytes && row.markObjectKey && store) {
+      const createdMark = await upsertCatalogMark(
+        db,
+        "honour",
+        honourId,
+        row.markObjectKey,
+        row.markBytes,
+        store,
+      );
+      if (createdMark) {
+        marks += 1;
+      }
+    }
   }
-  return created;
+  return { honours: created, marks };
 }
 
 async function upsertPlayerPhoto(
@@ -852,6 +908,7 @@ function emptyMapResult(): MapResult {
     externalIds: 0,
     honours: 0,
     playerPhotos: 0,
+    catalogMarks: 0,
     nationalTeams: 0,
     nationalTeamSeasons: 0,
     playerNationalTeamSeasons: 0,
@@ -864,6 +921,7 @@ async function mapOneClub(
   leagueCountryId: string,
   leagueCountryIso: string,
   clubData: NormalizedClub,
+  options?: MapFactsOptions,
 ): Promise<string> {
   let countryId = leagueCountryId;
   const clubIso = clubData.countryIso?.toUpperCase();
@@ -884,7 +942,28 @@ async function mapOneClub(
   if (clubResult.created) result.clubs += 1;
   result.catalogLabels += clubResult.labels;
   result.externalIds += clubResult.externalIds;
-  result.honours += await upsertHonours(db, "club", clubResult.id, clubData.honours);
+  const honourResult = await upsertHonours(
+    db,
+    "club",
+    clubResult.id,
+    clubData.honours,
+    options?.portraitStore,
+  );
+  result.honours += honourResult.honours;
+  result.catalogMarks += honourResult.marks;
+  if (clubData.crestBytes && options?.portraitStore) {
+    const createdMark = await upsertCatalogMark(
+      db,
+      "club",
+      clubResult.id,
+      clubCrestObjectKey(clubData.externalId),
+      clubData.crestBytes,
+      options.portraitStore,
+    );
+    if (createdMark) {
+      result.catalogMarks += 1;
+    }
+  }
   return clubResult.id;
 }
 
@@ -963,6 +1042,19 @@ export async function mapFacts(
   if (leagueResult.created) result.leagues += 1;
   result.catalogLabels += leagueResult.labels;
   result.externalIds += leagueResult.externalIds;
+  if (facts.league.badgeBytes && options?.portraitStore) {
+    const createdMark = await upsertCatalogMark(
+      db,
+      "league",
+      leagueResult.id,
+      leagueBadgeObjectKey(facts.league.externalId),
+      facts.league.badgeBytes,
+      options.portraitStore,
+    );
+    if (createdMark) {
+      result.catalogMarks += 1;
+    }
+  }
 
   if (depth === "league") {
     return result;
@@ -970,7 +1062,7 @@ export async function mapFacts(
 
   if (depth === "club") {
     for (const clubData of facts.clubs ?? []) {
-      await mapOneClub(db, result, countryResult.id, facts.league.countryIso, clubData);
+      await mapOneClub(db, result, countryResult.id, facts.league.countryIso, clubData, options);
     }
     return result;
   }
@@ -986,6 +1078,7 @@ export async function mapFacts(
         countryResult.id,
         facts.league.countryIso,
         clubData,
+        options,
       );
 
       const teamSeasonResult = await upsertTeamSeasonRow(db, clubId, seasonResult.id);
@@ -1174,12 +1267,21 @@ async function mapOneNationalTeam(
   result: MapResult,
   countryId: string,
   teamData: NormalizedNationalTeam,
+  options?: MapFactsOptions,
 ): Promise<string> {
   const teamResult = await upsertNationalTeamRow(db, countryId, teamData);
   if (teamResult.created) result.nationalTeams += 1;
   result.catalogLabels += teamResult.labels;
   result.externalIds += teamResult.externalIds;
-  result.honours += await upsertHonours(db, "national_team", teamResult.id, teamData.honours);
+  const honourResult = await upsertHonours(
+    db,
+    "national_team",
+    teamResult.id,
+    teamData.honours,
+    options?.portraitStore,
+  );
+  result.honours += honourResult.honours;
+  result.catalogMarks += honourResult.marks;
   return teamResult.id;
 }
 
@@ -1260,7 +1362,7 @@ export async function mapNationalTeamFacts(
 
   if (depth === "national_team") {
     for (const teamData of facts.nationalTeams ?? []) {
-      await mapOneNationalTeam(db, result, countryResult.id, teamData);
+      await mapOneNationalTeam(db, result, countryResult.id, teamData, options);
     }
     return result;
   }
@@ -1270,7 +1372,13 @@ export async function mapNationalTeamFacts(
     if (seasonResult.created) result.seasons += 1;
 
     for (const teamData of seasonData.nationalTeams) {
-      const nationalTeamId = await mapOneNationalTeam(db, result, countryResult.id, teamData);
+      const nationalTeamId = await mapOneNationalTeam(
+        db,
+        result,
+        countryResult.id,
+        teamData,
+        options,
+      );
 
       const ntsResult = await upsertNationalTeamSeasonRow(db, nationalTeamId, seasonResult.id);
       if (ntsResult.created) result.nationalTeamSeasons += 1;

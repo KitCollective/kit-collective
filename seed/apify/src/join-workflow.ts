@@ -63,6 +63,7 @@ function emptyMapResult(): MapResult {
     externalIds: 0,
     honours: 0,
     playerPhotos: 0,
+    catalogMarks: 0,
     nationalTeams: 0,
     nationalTeamSeasons: 0,
     playerNationalTeamSeasons: 0,
@@ -81,6 +82,7 @@ function addMapResults(target: MapResult, source: MapResult): void {
   target.externalIds += source.externalIds;
   target.honours += source.honours;
   target.playerPhotos += source.playerPhotos;
+  target.catalogMarks += source.catalogMarks;
   target.nationalTeams += source.nationalTeams;
   target.nationalTeamSeasons += source.nationalTeamSeasons;
   target.playerNationalTeamSeasons += source.playerNationalTeamSeasons;

@@ -46,6 +46,8 @@ export interface ClubFactsParse {
 export interface HonourParseRow {
   seasonLabel: string | null;
   title: string;
+  /** Transfermarkt image CDN src when the titles table rendered a trophy or competition mark. */
+  imageSrc?: string;
 }
 
 /**

@@ -1,7 +1,10 @@
 import {
   adminClubIdParamSchema,
   adminClubSeasonParamsSchema,
+  adminHonourIdParamSchema,
   adminKitIdParamSchema,
+  adminLeagueIdParamSchema,
+  adminPlayerIdParamSchema,
   adminSeasonIdParamSchema,
   adminStamdataQuerySchema,
 } from "@kit/api-contract";
@@ -19,11 +22,14 @@ export class AdminCatalogController {
   listStamdata(@Query() query: Record<string, string | string[] | undefined>) {
     const parsed = adminStamdataQuerySchema.safeParse({
       q: typeof query.q === "string" ? query.q : undefined,
-      countryId: typeof query.countryId === "string" ? query.countryId : undefined,
-      leagueId: typeof query.leagueId === "string" ? query.leagueId : undefined,
+      entityType: typeof query.entityType === "string" ? query.entityType : undefined,
+      countryIds: query.countryIds ?? query.countryId,
+      leagueIds: query.leagueIds ?? query.leagueId,
       seasonId: typeof query.seasonId === "string" ? query.seasonId : undefined,
       kitType: typeof query.kitType === "string" ? query.kitType : undefined,
       hasPhoto: typeof query.hasPhoto === "string" ? query.hasPhoto : undefined,
+      limit: typeof query.limit === "string" ? query.limit : undefined,
+      offset: typeof query.offset === "string" ? query.offset : undefined,
     });
     if (!parsed.success) {
       throw new BadRequestException("Invalid stamdata query");
@@ -75,6 +81,75 @@ export class AdminCatalogController {
       parsed.data.seasonId,
       expand,
     );
+  }
+
+  @Get("clubs/:clubId/mark")
+  async getClubMark(@Param() params: Record<string, string>, @Res() reply: FastifyReply) {
+    const parsed = adminClubIdParamSchema.safeParse({ clubId: params.clubId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid club id");
+    }
+    const { bytes, contentType } = await this.adminCatalogService.getCatalogMarkBytes(
+      "club",
+      parsed.data.clubId,
+    );
+    return reply.type(contentType).send(Buffer.from(bytes));
+  }
+
+  @Get("leagues/:leagueId/mark")
+  async getLeagueMark(@Param() params: Record<string, string>, @Res() reply: FastifyReply) {
+    const parsed = adminLeagueIdParamSchema.safeParse({ leagueId: params.leagueId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid league id");
+    }
+    const { bytes, contentType } = await this.adminCatalogService.getCatalogMarkBytes(
+      "league",
+      parsed.data.leagueId,
+    );
+    return reply.type(contentType).send(Buffer.from(bytes));
+  }
+
+  @Get("honours/:honourId/mark")
+  async getHonourMark(@Param() params: Record<string, string>, @Res() reply: FastifyReply) {
+    const parsed = adminHonourIdParamSchema.safeParse({ honourId: params.honourId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid honour id");
+    }
+    const { bytes, contentType } = await this.adminCatalogService.getCatalogMarkBytes(
+      "honour",
+      parsed.data.honourId,
+    );
+    return reply.type(contentType).send(Buffer.from(bytes));
+  }
+
+  @Get("players/:playerId/photo")
+  async getPlayerPhoto(@Param() params: Record<string, string>, @Res() reply: FastifyReply) {
+    const parsed = adminPlayerIdParamSchema.safeParse({ playerId: params.playerId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid player id");
+    }
+    const { bytes, contentType } = await this.adminCatalogService.getPlayerPhotoBytes(
+      parsed.data.playerId,
+    );
+    return reply.type(contentType).send(Buffer.from(bytes));
+  }
+
+  @Get("leagues/:leagueId")
+  getLeagueDrill(@Param() params: Record<string, string>) {
+    const parsed = adminLeagueIdParamSchema.safeParse({ leagueId: params.leagueId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid league id");
+    }
+    return this.adminCatalogService.getLeagueDrill(parsed.data.leagueId);
+  }
+
+  @Get("players/:playerId")
+  getPlayerDrill(@Param() params: Record<string, string>) {
+    const parsed = adminPlayerIdParamSchema.safeParse({ playerId: params.playerId });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid player id");
+    }
+    return this.adminCatalogService.getPlayerDrill(parsed.data.playerId);
   }
 
   @Get("clubs/:clubId")

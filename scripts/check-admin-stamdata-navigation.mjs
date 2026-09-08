@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Ratchet (KIT-39): fail CI when admin stamdata row navigation or drill routes
+ * Ratchet (KIT-39): fail CI when admin Master Data row navigation or drill routes
  * do not cover every entity type the list API can emit, or when Data table pages
  * drop the table header on loading/empty instead of replacing only the body.
  */
@@ -9,15 +9,15 @@ import { readFileSync } from "node:fs";
 const violations = [];
 
 const catalogSource = readFileSync("packages/api-contract/src/admin/catalog.ts", "utf8");
-const stamdataSource = readFileSync("apps/admin/src/pages/StamdataPage.tsx", "utf8");
+const masterDataSource = readFileSync("apps/admin/src/pages/MasterDataPage.tsx", "utf8");
 const appSource = readFileSync("apps/admin/src/App.tsx", "utf8");
 
-const openRowStart = stamdataSource.indexOf("function openRow");
-const openRowEnd = stamdataSource.indexOf("function handleRowKeyDown", openRowStart);
+const openRowStart = masterDataSource.indexOf("function openRow");
+const openRowEnd = masterDataSource.indexOf("function handleRowKeyDown", openRowStart);
 if (openRowStart === -1 || openRowEnd === -1) {
-  violations.push("apps/admin/src/pages/StamdataPage.tsx: function openRow not found");
+  violations.push("apps/admin/src/pages/MasterDataPage.tsx: function openRow not found");
 } else {
-  const openRowBody = stamdataSource.slice(openRowStart, openRowEnd);
+  const openRowBody = masterDataSource.slice(openRowStart, openRowEnd);
 
   const entityTypesMatch = catalogSource.match(
     /ADMIN_STAMDATA_LIST_ENTITY_TYPES\s*=\s*\[([\s\S]*?)\]\s*as const/,
@@ -35,7 +35,7 @@ if (openRowStart === -1 || openRowEnd === -1) {
       );
       if (!navigates) {
         violations.push(
-          `apps/admin/src/pages/StamdataPage.tsx: openRow missing navigate() for "${entityType}"`,
+          `apps/admin/src/pages/MasterDataPage.tsx: openRow missing navigate() for "${entityType}"`,
         );
       }
     }
@@ -44,6 +44,8 @@ if (openRowStart === -1 || openRowEnd === -1) {
 
 const requiredRoutes = [
   { pattern: "/stamdata/clubs/:clubId", label: "club drill" },
+  { pattern: "/stamdata/leagues/:leagueId", label: "league drill" },
+  { pattern: "/stamdata/players/:playerId", label: "player drill" },
   { pattern: "/stamdata/seasons/:seasonId", label: "season drill" },
   { pattern: "/stamdata/kits/:kitId", label: "kit drill" },
   { pattern: "/stamdata/club-seasons/:clubId/:seasonId", label: "club-season drill" },
@@ -56,9 +58,11 @@ for (const route of requiredRoutes) {
 }
 
 const dataTablePages = [
-  "apps/admin/src/pages/StamdataPage.tsx",
+  "apps/admin/src/pages/MasterDataPage.tsx",
   "apps/admin/src/pages/CollectorsPage.tsx",
   "apps/admin/src/pages/ClubDrillPage.tsx",
+  "apps/admin/src/pages/LeagueDrillPage.tsx",
+  "apps/admin/src/pages/PlayerDrillPage.tsx",
 ];
 
 for (const pagePath of dataTablePages) {

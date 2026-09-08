@@ -494,7 +494,8 @@ export function parseHonoursHtml(html: string): HonourParseRow[] {
   $(honourTables($))
     .find("tr")
     .each((_, row) => {
-      const cells = $(row)
+      const $row = $(row);
+      const cells = $row
         .find("td")
         .toArray()
         .map((cell) => $(cell).text().replace(/\s+/g, " ").trim())
@@ -529,7 +530,12 @@ export function parseHonoursHtml(html: string): HonourParseRow[] {
         return;
       }
       seen.add(key);
-      rows.push({ seasonLabel, title });
+      const imageSrc = $row.find("img").first().attr("src")?.trim();
+      const parsed: HonourParseRow = { seasonLabel, title };
+      if (imageSrc) {
+        parsed.imageSrc = imageSrc;
+      }
+      rows.push(parsed);
     });
 
   return rows;

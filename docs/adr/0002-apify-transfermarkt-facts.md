@@ -7,3 +7,5 @@ Research (`catalog-seed-sources.md`) forbids Transfermarkt bots: ToS §11.1, res
 Mitigations that stay locked: a separate seed repo (not Nest at request time); facts only (no market value, agent PII, or TM branding); our UUID is PK; their id hangs on `ExternalId`; re-run the mapper, do not reshape Nest.
 
 Status: accepted. Live *transport* (Store actor vs kader HTML) is superseded by ADR-0015. Facts-only, ExternalId, and “not Nest” still hold. Supersedes the seed-sources “do not scrape Transfermarkt” recommendation for this pipeline only.
+
+`tmLogoUrl` as a **persisted product URL** stays dropped. Club crests, league badges, and honour trophies may be stored as **admin-only object-store bytes** (`catalog_mark`, `rights: unresolved`, `visibility: admin_only`) the same way player portraits are — never hot-linked, never on collector / OG surfaces until rights are cleared.

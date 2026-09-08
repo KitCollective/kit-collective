@@ -31,6 +31,7 @@ export {
   resolveBulkStateDir,
 } from "./bulk-checkpoint.js";
 export type {
+  CatalogMarksFetcher,
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,

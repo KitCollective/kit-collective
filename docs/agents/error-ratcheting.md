@@ -112,7 +112,7 @@ catches it in the API tests and the container smoke test.
 
 ### Admin stamdata navigation ratchet (KIT-39)
 
-`scripts/check-admin-stamdata-navigation.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`) fails when `apps/admin/src/pages/StamdataPage.tsx` `openRow` does not call `navigate(` for every `ADMIN_STAMDATA_LIST_ENTITY_TYPES` value (scoped to the `openRow` function body, not render-time branches), when `apps/admin/src/App.tsx` omits a drill route for club, season, kit, or club-season rows, or when an admin Data table page (`StamdataPage`, `CollectorsPage`) replaces the whole table (including `<thead>`) on loading/empty instead of only the `<tbody>` body. Prevents repeating the KIT-39 checker fails (plain club/season rows were a silent no-op on click; Stamdata loading/empty dropped the table header). Tighten only.
+`scripts/check-admin-stamdata-navigation.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`) fails when `apps/admin/src/pages/MasterDataPage.tsx` `openRow` does not call `navigate(` for every `ADMIN_STAMDATA_LIST_ENTITY_TYPES` value (scoped to the `openRow` function body, not render-time branches), when `apps/admin/src/App.tsx` omits a drill route for club, league, player, season, kit, or club-season rows, or when an admin Data table page (`MasterDataPage`, `CollectorsPage`, `ClubDrillPage`, `LeagueDrillPage`, `PlayerDrillPage`) replaces the whole table (including `<thead>`) on loading/empty instead of only the `<tbody>` body. Prevents repeating the KIT-39 checker fails (plain club/season rows were a silent no-op on click; Master Data loading/empty dropped the table header). Tighten only.
 
 ### Admin design-token ratchet (KIT-39)
 
