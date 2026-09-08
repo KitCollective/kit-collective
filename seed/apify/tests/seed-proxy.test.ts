@@ -37,11 +37,22 @@ function unblockerOptions(overrides: Partial<ReturnType<typeof resolveSiteUnbloc
 }
 
 function headersOfCall(fetchMock: ReturnType<typeof vi.fn>, index: number): Record<string, string> {
-  const init = fetchMock.mock.calls[index]?.[1] as { headers: Record<string, string> } | undefined;
-  if (!init) {
+  const init = fetchMock.mock.calls[index]?.[1];
+  if (!init || typeof init !== "object" || !("headers" in init)) {
     throw new Error(`no proxy fetch recorded at call ${index}`);
   }
-  return init.headers;
+  const headers = init.headers;
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) {
+    throw new Error(`proxy fetch at call ${index} has no headers`);
+  }
+  const record: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value !== "string") {
+      throw new Error(`proxy fetch at call ${index} header ${key} is not a string`);
+    }
+    record[key] = value;
+  }
+  return record;
 }
 
 describe("resolveSeedProxyConfig", () => {

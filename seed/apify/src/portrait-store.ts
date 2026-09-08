@@ -43,7 +43,7 @@ export function createMirrorPortraitStore(
         try {
           await store.putObject(key, bytes);
         } catch (error: unknown) {
-          failures.push(`${name}: ${(error as Error).message}`);
+          failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
 

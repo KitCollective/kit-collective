@@ -213,8 +213,16 @@ describe("a spent Site Unblocker plan", () => {
 
     // Every URL the run touched went to the injected proxy transport and nowhere else.
     for (const call of fetchMock.mock.calls) {
-      const init = call[1] as { dispatcher?: { kind?: string } };
-      expect(init.dispatcher?.kind).toBe("proxy-agent");
+      const init = call[1];
+      if (!init || typeof init !== "object" || !("dispatcher" in init)) {
+        throw new Error("proxy fetch must pass a dispatcher");
+      }
+      const dispatcher = init.dispatcher;
+      const kind =
+        dispatcher && typeof dispatcher === "object" && "kind" in dispatcher
+          ? dispatcher.kind
+          : undefined;
+      expect(kind).toBe("proxy-agent");
     }
   });
 });
