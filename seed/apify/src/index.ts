@@ -4,6 +4,7 @@ export type {
   FetchClubSeasonParams,
   FetchLeagueParams,
   FetchLeagueSeasonParams,
+  JerseyNumbersFetcher,
   ListClubSeasonPairsParams,
 } from "./fetch/adapter.js";
 export {
@@ -14,10 +15,18 @@ export {
 } from "./fetch/apify-adapter.js";
 export { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
 export {
+  type JerseyNumberParse,
+  type JerseyNumberParseRow,
+  type JerseyNumberParseWarning,
+  parseJerseyNumbersHtml,
+} from "./fetch/jersey-numbers-parser.js";
+export {
   createKaderFetchAdapter,
+  playerJerseyNumbersUrl,
   TransfermarktHttpError,
 } from "./fetch/kader-fetch-adapter.js";
 export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
+export { widenSeasonLabel } from "./fetch/season-label.js";
 export {
   createTransfermarktRequestDelay,
   createTransfermarktRetryFetch,
@@ -40,7 +49,7 @@ export {
 } from "./join-workflow.js";
 export { parseLane, resolveDatabaseUrl } from "./lane.js";
 export { mapFacts } from "./map/index.js";
-export { normalize, stripForbiddenFields } from "./normalize/index.js";
+export { normalize, normalizePlayerJerseyNumbers, stripForbiddenFields } from "./normalize/index.js";
 export type {
   HierarchyGrain,
   LeagueGrain,
@@ -62,6 +71,8 @@ export {
 export { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 export {
   type ClubSeasonFailure,
+  type ExecuteHierarchyGrainOptions,
+  executeHierarchyGrain,
   parseCliArgs,
   type RunHierarchyGrainOptions,
   type RunHierarchyGrainResult,
@@ -88,10 +99,14 @@ export {
 export { filterSeasons } from "./season-range.js";
 export { isClubSeasonAlreadySeeded } from "./seeded.js";
 export type {
+  JerseyNumberSide,
   Lane,
   MapResult,
   NormalizedFacts,
+  NormalizedJerseyNumber,
+  NormalizedPlayerJerseyNumbers,
   RunSeedCliInput,
   TransfermarktRawPayload,
+  TransfermarktRawPlayerJerseyNumbers,
 } from "./types.js";
 export { TM_SYSTEM } from "./types.js";

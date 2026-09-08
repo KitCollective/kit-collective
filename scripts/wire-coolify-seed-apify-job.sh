@@ -47,12 +47,22 @@ DEST_UUID="$(request GET /destinations | jq -r '.[0].uuid')"
 
 # Image is built from seed/coolify/Dockerfile.remote at deploy time (inline compose build);
 # the running container only executes the prebuilt Kader CLI (no pnpm install or tsc).
+COMPETITION="${SEED_COMPETITION:-superligaen}"
+FROM_SEASON="${SEED_FROM_SEASON:-2014/15}"
+TO_SEASON="${SEED_TO_SEASON:-2015/16}"
+
+# Coolify 4.3 compose interpolation does not substitute ${SEED_*} in `command`
+# (they stay empty → CLI usage error → exited in seconds). Bake argv here.
+# Container env still carries the same names for logs and later FK jobs.
 DOCKERFILE_INLINE="$(<"$ROOT/seed/coolify/Dockerfile.remote")"
 COMPOSE_BODY="$(jq -n \
   --arg seed_lane "$LANE" \
   --arg git_repository "$GIT_REPOSITORY" \
   --arg git_ref "$GIT_REF" \
   --arg dockerfile_inline "$DOCKERFILE_INLINE" \
+  --arg competition "$COMPETITION" \
+  --arg from_season "$FROM_SEASON" \
+  --arg to_season "$TO_SEASON" \
   '{
   services: {
     "seed-apify-job": {
@@ -67,22 +77,23 @@ COMPOSE_BODY="$(jq -n \
       image: "kit-collective-seed:latest",
       restart: "no",
       mem_limit: "512m",
+      healthcheck: { disable: true },
       environment: {
         SEED_LANE: $seed_lane,
         DATABASE_URL: "${DATABASE_URL}",
         SEED_PROXY_URL: "${SEED_PROXY_URL}",
         SEED_REQUIRE_PROXY: "true",
         APIFY_TOKEN: "${APIFY_TOKEN:-}",
-        SEED_COMPETITION: "${SEED_COMPETITION}",
-        SEED_FROM_SEASON: "${SEED_FROM_SEASON}",
-        SEED_TO_SEASON: "${SEED_TO_SEASON}"
+        SEED_COMPETITION: $competition,
+        SEED_FROM_SEASON: $from_season,
+        SEED_TO_SEASON: $to_season
       },
       command: [
         "node",
         "seed/apify/dist/cli.js",
-        "${SEED_COMPETITION}",
-        "${SEED_FROM_SEASON}",
-        "${SEED_TO_SEASON}",
+        $competition,
+        $from_season,
+        $to_season,
         $seed_lane
       ]
     }
@@ -113,7 +124,7 @@ CREATE_PAYLOAD="$(jq -n \
     name: $name,
     description: $description,
     docker_compose_raw: $docker_compose_raw,
-    instant_deploy: true,
+    instant_deploy: false,
     is_container_label_escape_enabled: false
   }')"
 
@@ -131,9 +142,9 @@ BULK_ENVS="$(jq -n \
   --arg proxy_url "$SEED_PROXY_URL" \
   --arg apify_token "${APIFY_TOKEN:-}" \
   --arg seed_lane "$LANE" \
-  --arg competition "${SEED_COMPETITION:-superligaen}" \
-  --arg from_season "${SEED_FROM_SEASON:-2014/15}" \
-  --arg to_season "${SEED_TO_SEASON:-2015/16}" \
+  --arg competition "$COMPETITION" \
+  --arg from_season "$FROM_SEASON" \
+  --arg to_season "$TO_SEASON" \
   '{
     data: [
       {key: "DATABASE_URL", value: $database_url, is_literal: true, is_preview: false},
@@ -150,6 +161,7 @@ BULK_ENVS="$(jq -n \
 request PATCH "/services/${SERVICE_UUID}/envs/bulk" "$BULK_ENVS" >/dev/null
 
 echo "service_uuid=${SERVICE_UUID}"
+echo "wire-coolify-seed-apify-job: argv ${COMPETITION} ${FROM_SEASON} ${TO_SEASON} ${LANE} git=${GIT_REF}"
 echo "wire-coolify-seed-apify-job: service ${SERVICE_UUID} on ${LANE} (one-shot, resource-limited)"
 echo "wire-coolify-seed-apify-job: start the run via Coolify MCP control (not REST start):"
 echo "  bash seed/coolify/start-apify-job.sh ${SERVICE_UUID} start"

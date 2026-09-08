@@ -6,6 +6,8 @@ import {
   resolveSeasonRef,
   searchQueryForCompetition,
 } from "@kit/seed-shared";
+import { describeSeedError, safeSeedUrl, seedProgress } from "../progress.js";
+import type { TransfermarktRawPlayerJerseyNumbers } from "../types.js";
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,
@@ -24,10 +26,17 @@ import type {
   FetchClubSeasonParams,
   FetchNationalTeamParams,
   FetchNationalTeamSeasonParams,
+  JerseyNumbersFetcher,
   ListClubSeasonPairsParams,
 } from "./adapter.js";
 import { competitionSearchUrl, parseCompetitionSearchHtml } from "./competition-search.js";
-import { createKaderHtmlLiveCache, wrapFetchHtmlWithKaderCache } from "./kader-html-live-cache.js";
+import { parseJerseyNumbersHtml } from "./jersey-numbers-parser.js";
+import {
+  createKaderBytesLiveCache,
+  createKaderHtmlLiveCache,
+  wrapFetchBytesWithKaderCache,
+  wrapFetchHtmlWithKaderCache,
+} from "./kader-html-live-cache.js";
 import {
   type KaderParseWarning,
   parseClubFactsHtml,
@@ -37,28 +46,41 @@ import {
   parsePlayerProfileHtml,
 } from "./kader-html-parser.js";
 import { createKaderHtmlStore, type KaderHtmlStore } from "./kader-html-store.js";
+import { isPlaceholderPortraitBytes, isPlaceholderPortraitUrl } from "./portrait-placeholder.js";
 import { labelToStartYear } from "./season-label.js";
 import { resolveProfiles } from "./squad-profile-hop.js";
+import { TransfermarktHttpError, TransfermarktWafChallengeError } from "./transfermarkt-errors.js";
 import {
-  createTransfermarktRequestDelay,
+  classifyTransfermarktFailure,
+  createAdaptiveTransfermarktDelay,
   createTransfermarktRetryFetch,
+  createTransfermarktThrottleState,
   DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS,
   DEFAULT_TRANSFERMARKT_RETRY_BASE_DELAY_MS,
   DEFAULT_TRANSFERMARKT_RETRY_MAX_ATTEMPTS,
   type TransfermarktClock,
   type TransfermarktSleep,
 } from "./transfermarkt-fetch-policy.js";
-import { createTransfermarktRateLimitGuard } from "./transfermarkt-rate-limit.js";
+import {
+  createTransfermarktCircuitState,
+  createTransfermarktRateLimitGuard,
+  TransfermarktCircuitOpenError,
+} from "./transfermarkt-rate-limit.js";
+import { directTransfermarktRequestHeaders } from "./transfermarkt-session.js";
 
 export interface KaderFetchAdapterOptions {
   /** Directory of recorded Transfermarkt HTML fixtures (hermetic / CI mode). */
   fixturesDir?: string;
   /** Directory for caching live Transfermarkt HTML between retries. */
   cacheDir?: string;
-  /** Optional HTTP client for live fetch. Defaults to global fetch. */
+  /** Optional HTML client for live fetch. Defaults to a cookie-keeping session. */
   fetchHtml?: (url: string) => Promise<string>;
+  /** Optional binary client for portrait bytes. Defaults to the same session. */
+  fetchBytes?: (url: string) => Promise<Uint8Array>;
   /** Milliseconds to wait between live Transfermarkt GETs. Set 0 to disable. */
   requestDelayMs?: number;
+  /** Ceiling the adaptive throttle may back off to after retryable failures. */
+  maxDelayMs?: number;
   /** Retry attempts per URL for HTTP 403/429 before counting a circuit failure. */
   retryMaxAttempts?: number;
   /** Base delay in ms for exponential backoff between 403/429 retries. */
@@ -90,6 +112,11 @@ export function playerProfileUrl(playerId: string): string {
   return `https://www.transfermarkt.com/-/profil/spieler/${playerId}`;
 }
 
+/** Career squad-number history. Not the profile page's current shirt number. */
+export function playerJerseyNumbersUrl(playerId: string): string {
+  return `https://www.transfermarkt.com/-/rueckennummern/spieler/${playerId}`;
+}
+
 export function clubFactsUrl(clubId: string): string {
   return `https://www.transfermarkt.com/-/datenfakten/verein/${clubId}`;
 }
@@ -98,30 +125,27 @@ export function clubHonoursUrl(clubId: string): string {
   return `https://www.transfermarkt.com/-/erfolge/verein/${clubId}`;
 }
 
-export class TransfermarktHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly url: string,
-  ) {
-    super(`Transfermarkt HTTP ${status} for ${url}`);
-    this.name = "TransfermarktHttpError";
-  }
+export {
+  directTransfermarktRequestHeaders,
+  TransfermarktHttpError,
+  TransfermarktWafChallengeError,
+};
+
+/**
+ * There is no implicit transport. A live adapter used to fall back to a bare session on
+ * this machine's IP whenever a caller forgot to wire one, which is the same silent direct
+ * GET `resolveTransfermarktTransport` refuses. The caller names the transport or gets none.
+ */
+function missingTransportFetch(kind: "fetchHtml" | "fetchBytes"): (url: string) => never {
+  return () => {
+    throw new Error(
+      `createKaderFetchAdapter needs an explicit ${kind} for live mode. Resolve the transport through resolveTransfermarktTransport (or pass fixturesDir) instead of falling back to this machine's IP.`,
+    );
+  };
 }
 
-async function defaultFetchHtml(url: string): Promise<string> {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-  });
-
-  if (!response.ok) {
-    throw new TransfermarktHttpError(response.status, url);
-  }
-
-  return response.text();
-}
+/** Portrait bytes ride the direct connection by design (ADR-0043) — the CDN is not WAF'd. */
+const PORTRAIT_CDN_HOST_SUFFIX = ".transfermarkt.technology";
 
 async function fetchOptionalHtml(
   fetchHtml: (url: string) => Promise<string>,
@@ -130,7 +154,7 @@ async function fetchOptionalHtml(
   try {
     return await fetchHtml(url);
   } catch (error) {
-    if (error instanceof TransfermarktHttpError && error.status === 404) {
+    if (classifyTransfermarktFailure(error) === "missing") {
       return undefined;
     }
     throw error;
@@ -151,6 +175,7 @@ interface KaderHtmlClient {
   fetchClubFacts(clubId: string): Promise<ReturnType<typeof parseClubFactsHtml> | undefined>;
   fetchClubHonours(clubId: string): Promise<ReturnType<typeof parseHonoursHtml>>;
   fetchPortrait(playerId: string, src?: string): Promise<Uint8Array | undefined>;
+  fetchJerseyNumbers(playerId: string): Promise<TransfermarktRawPlayerJerseyNumbers>;
 }
 
 function createKaderHtmlClient(
@@ -160,6 +185,7 @@ function createKaderHtmlClient(
   loadFactsHtml: (clubId: string) => Promise<string | undefined>,
   loadHonoursHtml: (clubId: string) => Promise<string | undefined>,
   loadPortrait: (playerId: string, src?: string) => Promise<Uint8Array | undefined>,
+  loadJerseyNumbersHtml: (playerId: string) => Promise<string>,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
 ): KaderHtmlClient {
   const competitionCache = new Map<string, ActorSeasonClubRow[]>();
@@ -208,7 +234,35 @@ function createKaderHtmlClient(
     },
 
     async fetchPortrait(playerId, src) {
-      return loadPortrait(playerId, src);
+      if (src && isPlaceholderPortraitUrl(src)) {
+        seedProgress(`portrait hole player ${playerId} default silhouette ${safeSeedUrl(src)}`);
+        return undefined;
+      }
+      const bytes = await loadPortrait(playerId, src);
+      if (bytes && isPlaceholderPortraitBytes(bytes)) {
+        seedProgress(`portrait hole player ${playerId} default silhouette bytes`);
+        return undefined;
+      }
+      return bytes;
+    },
+
+    async fetchJerseyNumbers(playerId) {
+      const parsed = parseJerseyNumbersHtml(await loadJerseyNumbersHtml(playerId), playerId);
+      for (const warning of parsed.warnings) {
+        if (warning.kind !== "missing_number") {
+          seedProgress(`jersey warning player ${playerId} ${warning.kind}`);
+        }
+      }
+      return {
+        playerExternalId: playerId,
+        rows: parsed.rows.map((row) => ({
+          seasonLabel: row.seasonLabel,
+          sideExternalId: row.sideExternalId,
+          sideName: row.sideName,
+          side: row.side,
+          jerseyNumber: row.squadNumber,
+        })),
+      };
     },
   };
 }
@@ -379,8 +433,12 @@ function createAdapterFromClient(
   listSeasons: (competition: string) => Promise<number[]>,
   onProfileFetch?: (playerId: string) => void,
   onProfileHole?: (playerId: string, error: unknown) => void,
-): FetchAdapter {
+): FetchAdapter & JerseyNumbersFetcher {
   return {
+    async fetchPlayerJerseyNumbers(playerExternalId) {
+      return client.fetchJerseyNumbers(playerExternalId);
+    },
+
     async fetchLeague(params) {
       return mapLeagueToPayload(params.competition);
     },
@@ -437,7 +495,7 @@ function createFixturesAdapter(
   onProfileFetch?: (playerId: string) => void,
   onProfileHole?: (playerId: string, error: unknown) => void,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
-): FetchAdapter {
+): FetchAdapter & JerseyNumbersFetcher {
   const client = createKaderHtmlClient(
     (competition, season) => store.loadCompetitionSeason(competition, season),
     (clubId, season) => store.loadKader(clubId, season),
@@ -445,6 +503,7 @@ function createFixturesAdapter(
     (clubId) => store.loadClubFacts(clubId),
     (clubId) => store.loadClubHonours(clubId),
     (playerId) => store.loadPortrait(playerId),
+    (playerId) => store.loadJerseyNumbers(playerId),
     onMissingJerseyNumber,
   );
 
@@ -486,12 +545,50 @@ function createIdentityResolver(
   };
 }
 
+/**
+ * The direct connection may only reach the image CDN. Transfermarkt's own hosts sit behind
+ * the WAF, and a portrait `src` is vendor-controlled, so anything else is a hole rather
+ * than a bare GET from our IP while the HTML rides the proxy.
+ */
+function isPortraitCdnUrl(src: string): boolean {
+  try {
+    const host = new URL(src).hostname.toLowerCase();
+    return host.endsWith(PORTRAIT_CDN_HOST_SUFFIX);
+  } catch {
+    return false;
+  }
+}
+
+/** A missing portrait is a hole on that player, never a failed club-season. */
+async function fetchPortraitBytes(
+  fetchBytes: (url: string) => Promise<Uint8Array>,
+  src: string | undefined,
+): Promise<Uint8Array | undefined> {
+  if (!src || !/^https?:\/\//i.test(src)) {
+    return undefined;
+  }
+  if (!isPortraitCdnUrl(src)) {
+    seedProgress(`portrait hole ${safeSeedUrl(src)} not the image CDN`);
+    return undefined;
+  }
+  try {
+    return await fetchBytes(src);
+  } catch (error: unknown) {
+    if (error instanceof TransfermarktCircuitOpenError) {
+      throw error;
+    }
+    seedProgress(`portrait hole ${safeSeedUrl(src)} ${describeSeedError(error)}`);
+    return undefined;
+  }
+}
+
 function createLiveAdapter(
   fetchHtml: (url: string) => Promise<string>,
+  fetchBytes: (url: string) => Promise<Uint8Array>,
   onProfileFetch?: (playerId: string) => void,
   onProfileHole?: (playerId: string, error: unknown) => void,
   onMissingJerseyNumber?: (warning: KaderParseWarning) => void,
-): FetchAdapter {
+): FetchAdapter & JerseyNumbersFetcher {
   const identityFor = createIdentityResolver(fetchHtml);
   const client = createKaderHtmlClient(
     async (competition, season) => {
@@ -503,20 +600,16 @@ function createLiveAdapter(
     async (playerId) => fetchHtml(playerProfileUrl(playerId)),
     async (clubId) => fetchOptionalHtml(fetchHtml, clubFactsUrl(clubId)),
     async (clubId) => fetchOptionalHtml(fetchHtml, clubHonoursUrl(clubId)),
-    async (_playerId, src) => {
-      if (!src || !/^https?:\/\//i.test(src)) {
-        return undefined;
-      }
-      const response = await fetch(src);
-      if (!response.ok) {
-        return undefined;
-      }
-      return new Uint8Array(await response.arrayBuffer());
-    },
+    async (_playerId, src) => fetchPortraitBytes(fetchBytes, src),
+    async (playerId) => fetchHtml(playerJerseyNumbersUrl(playerId)),
     onMissingJerseyNumber,
   );
 
   return {
+    async fetchPlayerJerseyNumbers(playerExternalId) {
+      return client.fetchJerseyNumbers(playerExternalId);
+    },
+
     async fetchLeague(params) {
       const identity = await identityFor(params.competition);
       return mapLeagueToPayload(params.competition, identity);
@@ -582,30 +675,67 @@ function createLiveAdapter(
   };
 }
 
-function buildLiveFetchHtml(options: KaderFetchAdapterOptions): (url: string) => Promise<string> {
-  const baseFetch = options.fetchHtml ?? defaultFetchHtml;
-  const cachedFetch = options.cacheDir
-    ? wrapFetchHtmlWithKaderCache(baseFetch, createKaderHtmlLiveCache(options.cacheDir))
-    : baseFetch;
+interface LiveTransport {
+  fetchHtml: (url: string) => Promise<string>;
+  fetchBytes: (url: string) => Promise<Uint8Array>;
+}
 
-  const retriedFetch = createTransfermarktRetryFetch(cachedFetch, {
+/**
+ * One stack for every Transfermarkt GET: retry on transient upstream errors, shared
+ * adaptive throttle, shared block circuit. Portrait bytes ride the same rails so images
+ * cannot burst past the pacing the HTML fetch just backed off to.
+ *
+ * The disk cache wraps that whole stack from the outside. Inside it, a fully cached re-run
+ * still paid pacing, backoff, and the circuit gate for reads that never touch the network —
+ * 94 s of sleep for zero requests on one club-season.
+ */
+function buildLiveTransport(options: KaderFetchAdapterOptions): LiveTransport {
+  const throttleState = createTransfermarktThrottleState(
+    options.requestDelayMs ?? DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS,
+    options.maxDelayMs,
+  );
+  const circuitState = createTransfermarktCircuitState();
+  const retryOptions = {
     maxAttempts: options.retryMaxAttempts ?? DEFAULT_TRANSFERMARKT_RETRY_MAX_ATTEMPTS,
     baseDelayMs: options.retryBaseDelayMs ?? DEFAULT_TRANSFERMARKT_RETRY_BASE_DELAY_MS,
     sleep: options.sleep,
-  });
+  };
 
-  const delayedFetch = createTransfermarktRequestDelay(retriedFetch, {
-    delayMs: options.requestDelayMs ?? DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS,
-    sleep: options.sleep,
-    clock: options.clock,
-  });
+  function wrap<T>(cached: (url: string) => Promise<T>): (url: string) => Promise<T> {
+    const retried = createTransfermarktRetryFetch(cached, retryOptions);
+    const paced = createAdaptiveTransfermarktDelay(retried, {
+      state: throttleState,
+      sleep: options.sleep,
+      clock: options.clock,
+    });
+    return createTransfermarktRateLimitGuard(paced, {
+      stopAfter: options.rateLimitStopAfter,
+      state: circuitState,
+    }).fetchHtml;
+  }
 
-  return createTransfermarktRateLimitGuard(delayedFetch, {
-    stopAfter: options.rateLimitStopAfter,
-  }).fetchHtml;
+  const baseHtml = options.fetchHtml ?? missingTransportFetch("fetchHtml");
+  const baseBytes = options.fetchBytes ?? missingTransportFetch("fetchBytes");
+
+  if (!options.cacheDir) {
+    return { fetchHtml: wrap(baseHtml), fetchBytes: wrap(baseBytes) };
+  }
+
+  return {
+    fetchHtml: wrapFetchHtmlWithKaderCache(
+      wrap(baseHtml),
+      createKaderHtmlLiveCache(options.cacheDir),
+    ),
+    fetchBytes: wrapFetchBytesWithKaderCache(
+      wrap(baseBytes),
+      createKaderBytesLiveCache(options.cacheDir),
+    ),
+  };
 }
 
-export function createKaderFetchAdapter(options: KaderFetchAdapterOptions = {}): FetchAdapter {
+export function createKaderFetchAdapter(
+  options: KaderFetchAdapterOptions = {},
+): FetchAdapter & JerseyNumbersFetcher {
   if (options.fixturesDir) {
     const store = createKaderHtmlStore(options.fixturesDir);
     return createFixturesAdapter(
@@ -616,9 +746,10 @@ export function createKaderFetchAdapter(options: KaderFetchAdapterOptions = {}):
     );
   }
 
-  const fetchHtml = buildLiveFetchHtml(options);
+  const transport = buildLiveTransport(options);
   return createLiveAdapter(
-    fetchHtml,
+    transport.fetchHtml,
+    transport.fetchBytes,
     options.onProfileFetch,
     options.onProfileHole,
     options.onMissingJerseyNumber,

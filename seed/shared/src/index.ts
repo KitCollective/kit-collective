@@ -18,6 +18,11 @@ export {
   catalogCompetitionIdentity,
   resolveCompetition,
 } from "./competitions.js";
+export {
+  DEFAULT_IMAGE_CONTENT_TYPE,
+  detectImageContentType,
+  imageContentTypeOrDefault,
+} from "./image-content-type.js";
 export type {
   JoinClubScope,
   JoinNationalTeamScope,

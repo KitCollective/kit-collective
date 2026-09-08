@@ -56,13 +56,79 @@ describe("resolveTransfermarktTransport", () => {
     );
   });
 
-  it("defaults to direct on Desktop even when SEED_PROXY_URL is set", () => {
+  it("defaults to proxy whenever SEED_PROXY_URL is configured, Desktop included", () => {
     expect(resolveTransfermarktTransport({ SEED_PROXY_URL: PROXY_URL })).toEqual({
-      mode: "direct",
+      mode: "proxy",
+      proxyUrl: PROXY_URL,
     });
   });
 
-  it("defaults to direct when env is empty", () => {
-    expect(resolveTransfermarktTransport({})).toEqual({ mode: "direct" });
+  it("keeps SEED_TM_TRANSPORT=direct as the opt-out from the configured proxy", () => {
+    expect(
+      resolveTransfermarktTransport({
+        SEED_PROXY_URL: PROXY_URL,
+        SEED_TM_TRANSPORT: "direct",
+      }),
+    ).toEqual({ mode: "direct" });
+  });
+
+  it("refuses a blank SEED_PROXY_URL rather than reading it as direct", () => {
+    expect(() => resolveTransfermarktTransport({ SEED_PROXY_URL: "   " })).toThrow(
+      /SEED_PROXY_URL is missing/,
+    );
+  });
+
+  it("refuses to fetch at all when no transport is configured", () => {
+    expect(() => resolveTransfermarktTransport({})).toThrow(
+      /Refusing to fetch from this machine's IP by default/,
+    );
+  });
+
+  it("refuses when the operator forgot --env-file and only unrelated names survive", () => {
+    expect(() =>
+      resolveTransfermarktTransport({
+        // The realistic Desktop miss: SEED_PROXY_URL never reached the process.
+        SEED_PROXY_GEO: "Germany",
+        SEED_PROXY_HEADLESS: "auto",
+        DATABASE_URL: "postgres://lane",
+      }),
+    ).toThrow(/Refusing to fetch from this machine's IP by default/);
+  });
+
+  it("names direct in the refusal so the opt-in is discoverable", () => {
+    expect(() => resolveTransfermarktTransport({})).toThrow(/SEED_TM_TRANSPORT=direct/);
+  });
+
+  it.each(["proxi", "unblocker", "decodo", "site-unblocker", "false"])(
+    "refuses the mistyped SEED_TM_TRANSPORT=%j instead of picking a transport",
+    (value) => {
+      expect(() =>
+        resolveTransfermarktTransport({ SEED_TM_TRANSPORT: value, SEED_PROXY_URL: PROXY_URL }),
+      ).toThrow(/is not a transport/);
+    },
+  );
+
+  it("never returns direct unless direct was asked for by name", () => {
+    const envs: Array<Record<string, string | undefined>> = [
+      {},
+      { SEED_PROXY_URL: "" },
+      { SEED_PROXY_URL: "   " },
+      { SEED_REQUIRE_PROXY: "false" },
+      { SEED_TM_TRANSPORT: "" },
+      { SEED_TM_TRANSPORT: "proxy" },
+      { SEED_TM_TRANSPORT: "typo" },
+      { SEED_PROXY_URL: PROXY_URL },
+      { SEED_PROXY_URL: PROXY_URL, SEED_REQUIRE_PROXY: "true" },
+    ];
+
+    for (const env of envs) {
+      let resolved: ReturnType<typeof resolveTransfermarktTransport> | undefined;
+      try {
+        resolved = resolveTransfermarktTransport(env);
+      } catch {
+        resolved = undefined;
+      }
+      expect(resolved?.mode, `env ${JSON.stringify(env)} resolved to direct`).not.toBe("direct");
+    }
   });
 });

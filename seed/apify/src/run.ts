@@ -1,4 +1,4 @@
-import { createDb, SEED_CREATE_DB_OPTIONS } from "@kit/db";
+import { createDb, type Db, SEED_CREATE_DB_OPTIONS } from "@kit/db";
 import { resolveSeasonRef, type SeedScope } from "@kit/seed-shared";
 import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
@@ -6,6 +6,7 @@ import { mapFacts, mapNationalTeamFacts, type PortraitStore } from "./map/index.
 import { normalize } from "./normalize/index.js";
 import { type HierarchyGrain, type ParsedSeedCli, parseSeedApifyCli } from "./parse-cli.js";
 import { resolvePortraitStoreFromEnv } from "./portrait-store.js";
+import { describeSeedError, seedProgress } from "./progress.js";
 import { rejectNationalTeamApifyScope } from "./reject-national-team-scope.js";
 import { filterFactsToClubSeason } from "./scope/club-season.js";
 import {
@@ -53,6 +54,17 @@ export interface RunHierarchyGrainOptions {
   lane: Lane;
   fetchAdapter: FetchAdapter;
   databaseUrl?: string;
+  portraitStore?: PortraitStore;
+}
+
+/** Same grain options minus the connection: bulk runs share one pool across many grains. */
+export interface ExecuteHierarchyGrainOptions {
+  kind: HierarchyGrain["kind"];
+  competition?: string;
+  nationalTeamRef?: string;
+  season?: string;
+  clubExternalId?: string;
+  fetchAdapter: FetchAdapter;
   portraitStore?: PortraitStore;
 }
 
@@ -135,6 +147,155 @@ async function expandScope(
   });
 }
 
+export async function executeHierarchyGrain(
+  db: Db,
+  options: ExecuteHierarchyGrainOptions,
+): Promise<RunHierarchyGrainResult> {
+  if (options.kind === "national_team") {
+    if (!options.nationalTeamRef?.trim()) {
+      throw new Error("national_team grain requires national team ref");
+    }
+    const raw = await options.fetchAdapter.fetchNationalTeam({
+      nationalTeamRef: options.nationalTeamRef,
+    });
+    const facts = normalize(raw);
+    const summary = await mapNationalTeamFacts(db, facts, { depth: "national_team" });
+    return { summary };
+  }
+
+  if (options.kind === "national_team_season") {
+    if (!options.nationalTeamRef?.trim() || !options.season?.trim()) {
+      throw new Error("national_team_season grain requires national team ref and season");
+    }
+    const seasonLabel = options.season.trim();
+    const raw = await options.fetchAdapter.fetchNationalTeamSeason({
+      nationalTeamRef: options.nationalTeamRef,
+      season: seasonLabel,
+    });
+    const facts = normalize(raw);
+    const summary = await mapNationalTeamFacts(db, facts, {
+      depth: "national_team_season",
+      allowedSeasonLabels: new Set([seasonLabel]),
+      portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
+    });
+    return { summary };
+  }
+
+  if (options.kind === "national_team_proof") {
+    if (!options.nationalTeamRef?.trim() || !options.season?.trim()) {
+      throw new Error("national_team_proof grain requires national team ref and season");
+    }
+    const seasonLabel = options.season.trim();
+    const summary = emptyMapResult();
+    const entityRaw = await options.fetchAdapter.fetchNationalTeam({
+      nationalTeamRef: options.nationalTeamRef,
+    });
+    addMapResults(
+      summary,
+      await mapNationalTeamFacts(db, normalize(entityRaw), { depth: "national_team" }),
+    );
+    const seasonRaw = await options.fetchAdapter.fetchNationalTeamSeason({
+      nationalTeamRef: options.nationalTeamRef,
+      season: seasonLabel,
+    });
+    addMapResults(
+      summary,
+      await mapNationalTeamFacts(db, normalize(seasonRaw), {
+        depth: "national_team_season",
+        allowedSeasonLabels: new Set([seasonLabel]),
+        portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
+      }),
+    );
+    return { summary };
+  }
+
+  if (!options.competition?.trim()) {
+    throw new Error(`${options.kind} grain requires competition`);
+  }
+
+  if (options.kind === "league") {
+    const raw = await options.fetchAdapter.fetchLeague({
+      competition: options.competition,
+    });
+    const facts = normalize(raw);
+    const summary = await mapFacts(db, facts, { depth: "league" });
+    return { summary };
+  }
+
+  if (options.kind === "league_season") {
+    if (!options.season?.trim()) {
+      throw new Error("league_season grain requires season");
+    }
+    const seasonLabel = resolveSeasonRef(options.competition, options.season);
+    const raw = await options.fetchAdapter.fetchLeagueSeason({
+      competition: options.competition,
+      season: seasonLabel,
+    });
+    const facts = normalize(raw);
+    const summary = await mapFacts(db, facts, {
+      depth: "league_season",
+      allowedSeasonLabels: new Set([seasonLabel]),
+    });
+    return { summary };
+  }
+
+  if (options.kind === "club") {
+    if (!options.clubExternalId?.trim()) {
+      throw new Error("club grain requires club id");
+    }
+    const raw = await options.fetchAdapter.fetchClub({
+      competition: options.competition,
+      clubExternalId: options.clubExternalId,
+    });
+    const facts = normalize(raw);
+    const summary = await mapFacts(db, facts, { depth: "club" });
+    return { summary };
+  }
+
+  if (options.kind === "club_season") {
+    if (!options.clubExternalId?.trim() || !options.season?.trim()) {
+      throw new Error("club_season grain requires club id and season");
+    }
+    const seasonLabel = resolveSeasonRef(options.competition, options.season);
+    const raw = await options.fetchAdapter.fetchClubSeason({
+      competition: options.competition,
+      clubExternalId: options.clubExternalId,
+      season: seasonLabel,
+    });
+    const facts = normalize(raw);
+    const summary = await mapFacts(db, facts, {
+      allowedSeasonLabels: new Set([seasonLabel]),
+      portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
+    });
+    return { summary };
+  }
+
+  if (options.kind === "club_proof") {
+    if (!options.season?.trim()) {
+      throw new Error("club_proof grain requires season");
+    }
+    const seasonLabel = resolveSeasonRef(options.competition, options.season);
+    const leagueSeason = await options.fetchAdapter.fetchLeagueSeason({
+      competition: options.competition,
+      season: seasonLabel,
+    });
+    const clubs = leagueSeason.seasons[0]?.clubs ?? [];
+    const summary = emptyMapResult();
+    for (const clubRow of clubs) {
+      const raw = await options.fetchAdapter.fetchClub({
+        competition: options.competition,
+        clubExternalId: clubRow.id,
+      });
+      const facts = normalize(raw);
+      addMapResults(summary, await mapFacts(db, facts, { depth: "club" }));
+    }
+    return { summary };
+  }
+
+  const _exhaustive: never = options.kind;
+  return _exhaustive;
+}
+
 export async function runHierarchyGrain(
   options: RunHierarchyGrainOptions,
 ): Promise<RunHierarchyGrainResult> {
@@ -143,149 +304,7 @@ export async function runHierarchyGrain(
   const { db, pool } = createDb(databaseUrl, SEED_CREATE_DB_OPTIONS);
 
   try {
-    if (options.kind === "national_team") {
-      if (!options.nationalTeamRef?.trim()) {
-        throw new Error("national_team grain requires national team ref");
-      }
-      const raw = await options.fetchAdapter.fetchNationalTeam({
-        nationalTeamRef: options.nationalTeamRef,
-      });
-      const facts = normalize(raw);
-      const summary = await mapNationalTeamFacts(db, facts, { depth: "national_team" });
-      return { summary };
-    }
-
-    if (options.kind === "national_team_season") {
-      if (!options.nationalTeamRef?.trim() || !options.season?.trim()) {
-        throw new Error("national_team_season grain requires national team ref and season");
-      }
-      const seasonLabel = options.season.trim();
-      const raw = await options.fetchAdapter.fetchNationalTeamSeason({
-        nationalTeamRef: options.nationalTeamRef,
-        season: seasonLabel,
-      });
-      const facts = normalize(raw);
-      const summary = await mapNationalTeamFacts(db, facts, {
-        depth: "national_team_season",
-        allowedSeasonLabels: new Set([seasonLabel]),
-        portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
-      });
-      return { summary };
-    }
-
-    if (options.kind === "national_team_proof") {
-      if (!options.nationalTeamRef?.trim() || !options.season?.trim()) {
-        throw new Error("national_team_proof grain requires national team ref and season");
-      }
-      const seasonLabel = options.season.trim();
-      const summary = emptyMapResult();
-      const entityRaw = await options.fetchAdapter.fetchNationalTeam({
-        nationalTeamRef: options.nationalTeamRef,
-      });
-      addMapResults(
-        summary,
-        await mapNationalTeamFacts(db, normalize(entityRaw), { depth: "national_team" }),
-      );
-      const seasonRaw = await options.fetchAdapter.fetchNationalTeamSeason({
-        nationalTeamRef: options.nationalTeamRef,
-        season: seasonLabel,
-      });
-      addMapResults(
-        summary,
-        await mapNationalTeamFacts(db, normalize(seasonRaw), {
-          depth: "national_team_season",
-          allowedSeasonLabels: new Set([seasonLabel]),
-          portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
-        }),
-      );
-      return { summary };
-    }
-
-    if (!options.competition?.trim()) {
-      throw new Error(`${options.kind} grain requires competition`);
-    }
-
-    if (options.kind === "league") {
-      const raw = await options.fetchAdapter.fetchLeague({
-        competition: options.competition,
-      });
-      const facts = normalize(raw);
-      const summary = await mapFacts(db, facts, { depth: "league" });
-      return { summary };
-    }
-
-    if (options.kind === "league_season") {
-      if (!options.season?.trim()) {
-        throw new Error("league_season grain requires season");
-      }
-      const seasonLabel = resolveSeasonRef(options.competition, options.season);
-      const raw = await options.fetchAdapter.fetchLeagueSeason({
-        competition: options.competition,
-        season: seasonLabel,
-      });
-      const facts = normalize(raw);
-      const summary = await mapFacts(db, facts, {
-        depth: "league_season",
-        allowedSeasonLabels: new Set([seasonLabel]),
-      });
-      return { summary };
-    }
-
-    if (options.kind === "club") {
-      if (!options.clubExternalId?.trim()) {
-        throw new Error("club grain requires club id");
-      }
-      const raw = await options.fetchAdapter.fetchClub({
-        competition: options.competition,
-        clubExternalId: options.clubExternalId,
-      });
-      const facts = normalize(raw);
-      const summary = await mapFacts(db, facts, { depth: "club" });
-      return { summary };
-    }
-
-    if (options.kind === "club_season") {
-      if (!options.clubExternalId?.trim() || !options.season?.trim()) {
-        throw new Error("club_season grain requires club id and season");
-      }
-      const seasonLabel = resolveSeasonRef(options.competition, options.season);
-      const raw = await options.fetchAdapter.fetchClubSeason({
-        competition: options.competition,
-        clubExternalId: options.clubExternalId,
-        season: seasonLabel,
-      });
-      const facts = normalize(raw);
-      const summary = await mapFacts(db, facts, {
-        allowedSeasonLabels: new Set([seasonLabel]),
-        portraitStore: options.portraitStore ?? resolvePortraitStoreFromEnv(),
-      });
-      return { summary };
-    }
-
-    if (options.kind === "club_proof") {
-      if (!options.season?.trim()) {
-        throw new Error("club_proof grain requires season");
-      }
-      const seasonLabel = resolveSeasonRef(options.competition, options.season);
-      const leagueSeason = await options.fetchAdapter.fetchLeagueSeason({
-        competition: options.competition,
-        season: seasonLabel,
-      });
-      const clubs = leagueSeason.seasons[0]?.clubs ?? [];
-      const summary = emptyMapResult();
-      for (const clubRow of clubs) {
-        const raw = await options.fetchAdapter.fetchClub({
-          competition: options.competition,
-          clubExternalId: clubRow.id,
-        });
-        const facts = normalize(raw);
-        addMapResults(summary, await mapFacts(db, facts, { depth: "club" }));
-      }
-      return { summary };
-    }
-
-    const _exhaustive: never = options.kind;
-    return _exhaustive;
+    return await executeHierarchyGrain(db, options);
   } finally {
     await pool.end();
   }
@@ -301,6 +320,7 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
   const competition = options.scope.competition;
 
   const pairs = await expandScope(options.scope, options.fetchAdapter);
+  seedProgress(`walk ${pairs.length} club-season pairs`);
   const inScopeSeasonLabels = resolveScopeSeasonLabels(options.scope);
   assertPairsInScope(pairs, inScopeSeasonLabels);
 
@@ -325,11 +345,13 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
       );
 
       if (alreadySeeded) {
+        seedProgress(`skip already-seeded ${pair.clubExternalId} ${pair.seasonLabel}`);
         summary.skipped += 1;
         continue;
       }
 
       try {
+        seedProgress(`kader ${pair.clubExternalId} ${pair.seasonLabel}`);
         const raw = await options.fetchAdapter.fetchClubSeason({
           competition,
           clubExternalId: pair.clubExternalId,
@@ -343,10 +365,12 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
           clubExternalId: pair.clubExternalId,
         });
         if (scopedFacts.seasons.length === 0) {
+          const error = `did not contain club ${pair.clubExternalId} for season ${pair.seasonLabel}`;
+          seedProgress(`fail ${error}`);
           summary.failures.push({
             clubExternalId: pair.clubExternalId,
             season: pair.seasonLabel,
-            error: `did not contain club ${pair.clubExternalId} for season ${pair.seasonLabel}`,
+            error,
           });
           continue;
         }
@@ -360,7 +384,8 @@ export async function runSeed(options: RunSeedOptions): Promise<RunSeedResult> {
         if (error instanceof SeedScopeIsolationError) {
           throw error;
         }
-        const message = error instanceof Error ? error.message : String(error);
+        const message = describeSeedError(error);
+        seedProgress(`fail ${pair.clubExternalId} ${pair.seasonLabel} ${message}`);
         summary.failures.push({
           clubExternalId: pair.clubExternalId,
           season: pair.seasonLabel,
