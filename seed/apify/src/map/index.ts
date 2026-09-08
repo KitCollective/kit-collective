@@ -61,6 +61,19 @@ async function findEntityId(db: Db, value: string): Promise<string | undefined> 
   return row[0]?.entityId;
 }
 
+async function findEntity(
+  db: Db,
+  value: string,
+): Promise<{ entityId: string; entityType: string } | undefined> {
+  const row = await db
+    .select({ entityId: externalId.entityId, entityType: externalId.entityType })
+    .from(externalId)
+    .where(and(eq(externalId.system, TM_SYSTEM), eq(externalId.value, value)))
+    .limit(1);
+
+  return row[0];
+}
+
 async function linkExternalId(
   db: Db,
   entityType: (typeof externalId.$inferInsert)["entityType"],
