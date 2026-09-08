@@ -348,6 +348,13 @@ export const playerJerseyNumber = pgTable(
     seasonLabel: text("season_label"),
     clubId: uuid("club_id").references(() => club.id),
     nationalTeamId: uuid("national_team_id").references(() => nationalTeam.id),
+    /**
+     * Vendor id of the side the number was worn for, kept even when that club or national
+     * team is not seeded yet. A career page names far more sides than a lane holds, so
+     * this is both the row discriminator and the key a later run joins the FK on.
+     */
+    sideExternalId: text("side_external_id"),
+    sideName: text("side_name"),
     squadNumber: integer("squad_number"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -355,6 +362,7 @@ export const playerJerseyNumber = pgTable(
     uniqueIndex("player_jersey_number_upsert_unique").on(
       table.playerId,
       sql`COALESCE(${table.seasonLabel}, '')`,
+      sql`COALESCE(${table.sideExternalId}, '')`,
       sql`COALESCE(${table.clubId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       sql`COALESCE(${table.nationalTeamId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       sql`COALESCE(${table.squadNumber}, -1)`,

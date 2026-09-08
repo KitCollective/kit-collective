@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { runBulkFromCli } from "./bulk.js";
 import { createDefaultFkRunner } from "./fk-runner.js";
+import { runJerseyNumbersFromCli } from "./jersey-numbers.js";
 import { runClubJoinWorkflow, runNationalTeamJoinWorkflow } from "./join-workflow.js";
 import { describeSeedError, seedProgress } from "./progress.js";
 import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
@@ -18,6 +19,10 @@ async function main() {
     seedProgress(`cli grain ${parsed.grain.kind} lane=${parsed.lane}`);
   } else if (parsed.mode === "bulk") {
     seedProgress(`cli bulk ${parsed.bulk.command} lane=${parsed.lane}`);
+  } else if (parsed.mode === "jersey-numbers") {
+    seedProgress(
+      `cli jersey-numbers ${parsed.playerExternalIds.length || "backfill"} lane=${parsed.lane}`,
+    );
   } else {
     seedProgress(`cli walk lane=${parsed.lane}`);
   }
@@ -104,6 +109,22 @@ async function main() {
           2,
         ),
       );
+      return;
+    }
+
+    if (parsed.mode === "jersey-numbers") {
+      const fetcher = resolved.jerseyNumbers;
+      if (!fetcher) {
+        throw new Error(
+          "jersey-numbers needs the Transfermarkt HTML transport. Unset SEED_FETCH=apify and SEED_APIFY_FIXTURE.",
+        );
+      }
+      const result = await runJerseyNumbersFromCli({
+        playerExternalIds: parsed.playerExternalIds,
+        lane: parsed.lane,
+        fetcher,
+      });
+      console.log(JSON.stringify({ ok: true, command: "jersey-numbers", ...result }, null, 2));
       return;
     }
 
