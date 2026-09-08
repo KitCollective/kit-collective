@@ -73,6 +73,24 @@ export {
   TransfermarktCircuitOpenError,
 } from "./fetch/transfermarkt-rate-limit.js";
 export {
+  createInMemoryJerseyCheckpoint,
+  createJsonlJerseyCheckpoint,
+  DEFAULT_JERSEY_CONCURRENCY,
+  JERSEY_BACKFILL_PLAN_ID,
+  type JerseyCheckpoint,
+  type JerseyCheckpointRecord,
+  type JerseyNumbersCliResult,
+  type JerseyNumbersFailure,
+  type JerseyNumbersSummary,
+  jerseyCheckpointPath,
+  listLanePlayerExternalIds,
+  type RunJerseyNumbersCliOptions,
+  type RunJerseyNumbersOptions,
+  resolveJerseyConcurrency,
+  runJerseyNumbers,
+  runJerseyNumbersFromCli,
+} from "./jersey-numbers.js";
+export {
   type FkJoinRunner,
   type FkJoinRunResult,
   type JoinWorkflowSummary,
@@ -80,14 +98,19 @@ export {
   runNationalTeamJoinWorkflow,
 } from "./join-workflow.js";
 export { parseLane, resolveDatabaseUrl } from "./lane.js";
-export { mapFacts } from "./map/index.js";
-export { normalize, normalizePlayerJerseyNumbers, stripForbiddenFields } from "./normalize/index.js";
+export { type JerseyNumberMapResult, mapFacts, mapPlayerJerseyNumbers } from "./map/index.js";
+export {
+  normalize,
+  normalizePlayerJerseyNumbers,
+  stripForbiddenFields,
+} from "./normalize/index.js";
 export type {
   HierarchyGrain,
   LeagueGrain,
   LeagueSeasonGrain,
   ParsedBulkCli,
   ParsedGrainCli,
+  ParsedJerseyNumbersCli,
   ParsedJoinCli,
   ParsedSeedCli,
   ParsedWalkCli,
