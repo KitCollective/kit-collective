@@ -81,7 +81,11 @@ export {
 } from "./join-workflow.js";
 export { parseLane, resolveDatabaseUrl } from "./lane.js";
 export { mapFacts } from "./map/index.js";
-export { normalize, normalizePlayerJerseyNumbers, stripForbiddenFields } from "./normalize/index.js";
+export {
+  normalize,
+  normalizePlayerJerseyNumbers,
+  stripForbiddenFields,
+} from "./normalize/index.js";
 export type {
   HierarchyGrain,
   LeagueGrain,
