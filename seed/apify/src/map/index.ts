@@ -10,6 +10,7 @@ import {
   nationalTeamSeason,
   player,
   playerClubSeason,
+  playerNationality,
   playerNationalTeamSeason,
   playerPhoto,
   season,
@@ -22,6 +23,7 @@ import type {
   MapResult,
   NormalizedClub,
   NormalizedFacts,
+  NormalizedNationality,
   NormalizedNationalTeam,
   NormalizedPlayer,
   NormalizedSeason,
@@ -250,18 +252,23 @@ function playerBodyPatch(
   primaryCountryId: string | undefined,
 ): {
   dateOfBirth?: string;
+  placeOfBirth?: string;
   heightCm?: number;
   preferredFoot?: NormalizedPlayer["preferredFoot"];
   primaryCountryId?: string;
 } {
   const patch: {
     dateOfBirth?: string;
+    placeOfBirth?: string;
     heightCm?: number;
     preferredFoot?: NormalizedPlayer["preferredFoot"];
     primaryCountryId?: string;
   } = {};
   if (playerData.dateOfBirth !== undefined) {
     patch.dateOfBirth = playerData.dateOfBirth;
+  }
+  if (playerData.placeOfBirth !== undefined) {
+    patch.placeOfBirth = playerData.placeOfBirth;
   }
   if (playerData.heightCm !== undefined) {
     patch.heightCm = playerData.heightCm;
@@ -289,6 +296,70 @@ function playerClubSeasonPatch(
   return patch;
 }
 
+async function existingLabelText(
+  db: Db,
+  entityType: CatalogEntityType,
+  entityIdValue: string,
+  locale: LabelLocale,
+): Promise<string | undefined> {
+  const row = await db
+    .select({ text: catalogLabel.text })
+    .from(catalogLabel)
+    .where(
+      and(
+        eq(catalogLabel.entityType, entityType),
+        eq(catalogLabel.entityId, entityIdValue),
+        eq(catalogLabel.locale, locale),
+        eq(catalogLabel.kind, "label"),
+      ),
+    )
+    .limit(1);
+  return row[0]?.text;
+}
+
+/**
+ * One display `label` per club and locale; the official name is always an `alias`.
+ *
+ * The Club grain passes the official name as the display name because the honours and
+ * facts pages carry nothing shorter. Overwriting the label with it would flip-flop the
+ * collector-facing name between grains, so a fallback name yields to a stored label and
+ * lands as the alias instead.
+ */
+async function upsertClubLabels(
+  db: Db,
+  clubIdValue: string,
+  clubData: NormalizedClub,
+): Promise<number> {
+  const stored = await existingLabelText(db, "club", clubIdValue, clubData.nameLocale);
+  const yieldToStored = Boolean(clubData.nameIsOfficialFallback && stored);
+  const displayName = yieldToStored ? stored : clubData.name;
+
+  let labels = 0;
+  if (
+    !yieldToStored &&
+    (await upsertCatalogLabel(db, "club", clubIdValue, clubData.nameLocale, clubData.name))
+  ) {
+    labels += 1;
+  }
+
+  if (clubData.officialName && clubData.officialName !== displayName) {
+    if (
+      await upsertCatalogLabel(
+        db,
+        "club",
+        clubIdValue,
+        clubData.nameLocale,
+        clubData.officialName,
+        "alias",
+      )
+    ) {
+      labels += 1;
+    }
+  }
+
+  return labels;
+}
+
 async function upsertClubRow(
   db: Db,
   countryId: string,
@@ -300,27 +371,7 @@ async function upsertClubRow(
     if (Object.keys(facts).length > 0) {
       await db.update(club).set(facts).where(eq(club.id, byExternal));
     }
-    let labels = (await upsertCatalogLabel(
-      db,
-      "club",
-      byExternal,
-      clubData.nameLocale,
-      clubData.name,
-    ))
-      ? 1
-      : 0;
-    if (clubData.officialName && clubData.officialName !== clubData.name) {
-      labels += (await upsertCatalogLabel(
-        db,
-        "club",
-        byExternal,
-        clubData.nameLocale,
-        clubData.officialName,
-        "alias",
-      ))
-        ? 1
-        : 0;
-    }
+    const labels = await upsertClubLabels(db, byExternal, clubData);
     return { id: byExternal, created: false, labels, externalIds: 0 };
   }
 
@@ -330,12 +381,7 @@ async function upsertClubRow(
     .returning({ id: club.id });
   const id = row!.id;
   await linkExternalId(db, "club", id, clubData.externalId);
-  let labels = 1;
-  await upsertCatalogLabel(db, "club", id, clubData.nameLocale, clubData.name);
-  if (clubData.officialName && clubData.officialName !== clubData.name) {
-    await upsertCatalogLabel(db, "club", id, clubData.nameLocale, clubData.officialName, "alias");
-    labels += 1;
-  }
+  const labels = await upsertClubLabels(db, id, clubData);
   return { id, created: true, labels, externalIds: 1 };
 }
 
@@ -362,6 +408,102 @@ async function upsertTeamSeasonRow(
   return { id: row!.id, created: true };
 }
 
+interface ResolvedNationality {
+  countryId: string;
+  sortOrder: number;
+}
+
+/**
+ * Citizenships in source order, primary first.
+ *
+ * `nationalityIso` is the one `player.primary_country_id` points at, so it always leads:
+ * a squad row and the profile page it was merged with can disagree about the full list,
+ * and slot 0 must stay the primary citizenship. Payloads that carry only the primary
+ * (recorded fixtures, the FK grains) still yield exactly one entry.
+ */
+function playerNationalityList(playerData: NormalizedPlayer): NormalizedNationality[] {
+  const listed = playerData.nationalities ?? [];
+  const primaryIso = playerData.nationalityIso;
+  if (!primaryIso) {
+    return listed;
+  }
+  const secondary = listed.filter((row) => row.iso?.toUpperCase() !== primaryIso.toUpperCase());
+  return [{ name: playerData.nationalityName ?? primaryIso, iso: primaryIso }, ...secondary];
+}
+
+/**
+ * Upsert one Country per citizenship, keeping the source order as `sortOrder`.
+ *
+ * A citizenship whose flag did not resolve to an ISO code has no Country to link and is
+ * dropped, so `sortOrder` can skip a slot rather than renumber the ones that resolved.
+ */
+async function resolvePlayerNationalities(
+  db: Db,
+  result: MapResult,
+  playerData: NormalizedPlayer,
+): Promise<ResolvedNationality[]> {
+  const resolved: ResolvedNationality[] = [];
+  const seenCountryIds = new Set<string>();
+
+  for (const [sortOrder, nationality] of playerNationalityList(playerData).entries()) {
+    if (!nationality.iso) {
+      continue;
+    }
+    const countryResult = await upsertCountry(
+      db,
+      nationality.iso,
+      `country-${nationality.iso.toLowerCase()}`,
+      nationality.name || nationality.iso,
+    );
+    if (countryResult.created) result.countries += 1;
+    result.catalogLabels += countryResult.labels;
+    result.externalIds += countryResult.externalIds;
+
+    if (seenCountryIds.has(countryResult.id)) {
+      continue;
+    }
+    seenCountryIds.add(countryResult.id);
+    resolved.push({ countryId: countryResult.id, sortOrder });
+  }
+
+  return resolved;
+}
+
+async function upsertPlayerNationalityRows(
+  db: Db,
+  playerId: string,
+  nationalities: readonly ResolvedNationality[],
+): Promise<void> {
+  for (const nationality of nationalities) {
+    const existing = await db
+      .select({ id: playerNationality.id, sortOrder: playerNationality.sortOrder })
+      .from(playerNationality)
+      .where(
+        and(
+          eq(playerNationality.playerId, playerId),
+          eq(playerNationality.countryId, nationality.countryId),
+        ),
+      )
+      .limit(1);
+
+    if (existing[0]) {
+      if (existing[0].sortOrder !== nationality.sortOrder) {
+        await db
+          .update(playerNationality)
+          .set({ sortOrder: nationality.sortOrder })
+          .where(eq(playerNationality.id, existing[0].id));
+      }
+      continue;
+    }
+
+    await db.insert(playerNationality).values({
+      playerId,
+      countryId: nationality.countryId,
+      sortOrder: nationality.sortOrder,
+    });
+  }
+}
+
 async function upsertPlayerRow(
   db: Db,
   playerData: NormalizedPlayer,
@@ -373,20 +515,24 @@ async function upsertPlayerRow(
     if (Object.keys(body).length > 0) {
       await db.update(player).set(body).where(eq(player.id, byExternal));
     }
-    const labelChanged = await upsertCatalogLabel(
+    let labels = (await upsertCatalogLabel(
       db,
       "player",
       byExternal,
       playerData.nameLocale,
       playerData.name,
-    );
-    return { id: byExternal, created: false, labels: labelChanged ? 1 : 0, externalIds: 0 };
+    ))
+      ? 1
+      : 0;
+    labels += await upsertFullNameAlias(db, byExternal, playerData);
+    return { id: byExternal, created: false, labels, externalIds: 0 };
   }
 
   const [row] = await db
     .insert(player)
     .values({
       dateOfBirth: playerData.dateOfBirth,
+      placeOfBirth: playerData.placeOfBirth,
       heightCm: playerData.heightCm,
       preferredFoot: playerData.preferredFoot,
       primaryCountryId,
@@ -395,7 +541,28 @@ async function upsertPlayerRow(
   const id = row!.id;
   await linkExternalId(db, "player", id, playerData.externalId);
   await upsertCatalogLabel(db, "player", id, playerData.nameLocale, playerData.name);
-  return { id, created: true, labels: 1, externalIds: 1 };
+  const aliases = await upsertFullNameAlias(db, id, playerData);
+  return { id, created: true, labels: 1 + aliases, externalIds: 1 };
+}
+
+/** The profile page's full name is an alias, never the display label. */
+async function upsertFullNameAlias(
+  db: Db,
+  playerIdValue: string,
+  playerData: NormalizedPlayer,
+): Promise<number> {
+  if (!playerData.fullName || playerData.fullName === playerData.name) {
+    return 0;
+  }
+  const created = await upsertCatalogLabel(
+    db,
+    "player",
+    playerIdValue,
+    playerData.fullNameLocale ?? playerData.nameLocale,
+    playerData.fullName,
+    "alias",
+  );
+  return created ? 1 : 0;
 }
 
 async function upsertPlayerClubSeasonRow(
@@ -568,24 +735,13 @@ async function mapOnePlayer(
   playerData: NormalizedPlayer,
   options?: MapFactsOptions,
 ): Promise<void> {
-  let primaryCountryId: string | undefined;
-  if (playerData.nationalityIso) {
-    const nationality = await upsertCountry(
-      db,
-      playerData.nationalityIso,
-      `country-${playerData.nationalityIso.toLowerCase()}`,
-      playerData.nationalityName ?? playerData.nationalityIso,
-    );
-    if (nationality.created) result.countries += 1;
-    result.catalogLabels += nationality.labels;
-    result.externalIds += nationality.externalIds;
-    primaryCountryId = nationality.id;
-  }
+  const nationalities = await resolvePlayerNationalities(db, result, playerData);
 
-  const playerResult = await upsertPlayerRow(db, playerData, primaryCountryId);
+  const playerResult = await upsertPlayerRow(db, playerData, nationalities[0]?.countryId);
   if (playerResult.created) result.players += 1;
   result.catalogLabels += playerResult.labels;
   result.externalIds += playerResult.externalIds;
+  await upsertPlayerNationalityRows(db, playerResult.id, nationalities);
 
   if (seasonId) {
     const pcsResult = await upsertPlayerClubSeasonRow(
@@ -874,19 +1030,7 @@ async function mapOneNationalTeamPlayer(
   playerData: NormalizedPlayer,
   options?: MapFactsOptions,
 ): Promise<void> {
-  let primaryCountryId: string | undefined;
-  if (playerData.nationalityIso) {
-    const nationality = await upsertCountry(
-      db,
-      playerData.nationalityIso,
-      `country-${playerData.nationalityIso.toLowerCase()}`,
-      playerData.nationalityName ?? playerData.nationalityIso,
-    );
-    if (nationality.created) result.countries += 1;
-    result.catalogLabels += nationality.labels;
-    result.externalIds += nationality.externalIds;
-    primaryCountryId = nationality.id;
-  }
+  const nationalities = await resolvePlayerNationalities(db, result, playerData);
 
   let callUpClubId: string | undefined;
   if (playerData.callUpClubExternalId) {
@@ -896,10 +1040,11 @@ async function mapOneNationalTeamPlayer(
     }
   }
 
-  const playerResult = await upsertPlayerRow(db, playerData, primaryCountryId);
+  const playerResult = await upsertPlayerRow(db, playerData, nationalities[0]?.countryId);
   if (playerResult.created) result.players += 1;
   result.catalogLabels += playerResult.labels;
   result.externalIds += playerResult.externalIds;
+  await upsertPlayerNationalityRows(db, playerResult.id, nationalities);
 
   if (seasonId) {
     const pntsResult = await upsertPlayerNationalTeamSeasonRow(
