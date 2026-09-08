@@ -38,6 +38,8 @@ describe("catalog mark CDN keys", () => {
   });
 
   it("drops URLs that are not the Transfermarkt image CDN", () => {
-    expect(catalogMarkObjectKeyFromCdnUrl("https://example.test/erfolge/tiny/6.png")).toBeUndefined();
+    expect(
+      catalogMarkObjectKeyFromCdnUrl("https://example.test/erfolge/tiny/6.png"),
+    ).toBeUndefined();
   });
 });

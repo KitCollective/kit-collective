@@ -32,6 +32,7 @@ function FilterCombobox({
 }) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const selected = new Set(selectedIds);
@@ -62,6 +63,7 @@ function FilterCombobox({
     }
 
     document.addEventListener("pointerdown", onPointerDown);
+    searchRef.current?.focus();
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
@@ -94,23 +96,23 @@ function FilterCombobox({
               <SearchGlyph />
             </span>
             <input
+              ref={searchRef}
               className="filter-search"
               type="search"
               value={query}
               placeholder={searchPlaceholder}
               onChange={(event) => setQuery(event.target.value)}
               aria-label={searchPlaceholder}
-              autoFocus
             />
           </label>
-          <ul className="filter-option-list" id={listId} role="listbox" aria-multiselectable="true">
+          <ul className="filter-option-list" id={listId}>
             {visible.length === 0 ? (
               <li className="filter-option-empty">No matches</li>
             ) : (
               visible.map((option) => {
                 const isSelected = selected.has(option.id);
                 return (
-                  <li key={option.id} role="option" aria-selected={isSelected}>
+                  <li key={option.id}>
                     <button
                       type="button"
                       className="filter-option"
@@ -303,7 +305,12 @@ function SearchGlyph() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="7" cy="7" r="4.25" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10.5 10.5 13.25 13.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M10.5 10.5 13.25 13.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

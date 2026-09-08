@@ -1,9 +1,5 @@
 import type { AdminSquadPlayer } from "@kit/api-contract";
-import {
-  compareSquadOrder,
-  type SquadPositionGroup,
-  squadPositionGroup,
-} from "@kit/domain";
+import { compareSquadOrder, type SquadPositionGroup, squadPositionGroup } from "@kit/domain";
 
 export const SQUAD_GROUP_LABELS: Record<SquadPositionGroup, string> = {
   goalkeeper: "Goalkeepers",

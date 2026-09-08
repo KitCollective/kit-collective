@@ -940,7 +940,11 @@ export class AdminCatalogService {
       .from(catalogMark)
       .where(and(eq(catalogMark.entityType, entityType), inArray(catalogMark.entityId, ids)));
     const toPath =
-      entityType === "club" ? clubMarkPath : entityType === "league" ? leagueMarkPath : honourMarkPath;
+      entityType === "club"
+        ? clubMarkPath
+        : entityType === "league"
+          ? leagueMarkPath
+          : honourMarkPath;
     for (const row of rows) {
       paths.set(row.entityId, toPath(row.entityId));
     }

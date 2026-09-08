@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { runBulkFromCli } from "./bulk.js";
+import { runCatalogMarksFromCli } from "./catalog-marks.js";
 import { createDefaultFkRunner } from "./fk-runner.js";
 import { runJerseyNumbersFromCli } from "./jersey-numbers.js";
-import { runCatalogMarksFromCli } from "./catalog-marks.js";
 import { runClubJoinWorkflow, runNationalTeamJoinWorkflow } from "./join-workflow.js";
 import { describeSeedError, seedProgress } from "./progress.js";
 import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";

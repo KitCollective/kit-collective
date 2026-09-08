@@ -248,7 +248,9 @@ export function ClubDrillPage() {
               {routedClub.stadiumCapacity !== null ? (
                 <div>
                   <dt>Capacity</dt>
-                  <dd className="type-mono">{routedClub.stadiumCapacity.toLocaleString("en-GB")}</dd>
+                  <dd className="type-mono">
+                    {routedClub.stadiumCapacity.toLocaleString("en-GB")}
+                  </dd>
                 </div>
               ) : null}
               {routedClub.websiteUrl ? (
@@ -342,25 +344,25 @@ export function ClubDrillPage() {
           </button>
         </div>
         {tab === "honours" ? null : (
-        <div className="field season-field">
-          <label htmlFor="club-season">Season</label>
-          <select
-            id="club-season"
-            value={routedClub ? seasonId : ""}
-            disabled={!routedClub || routedClub.seasons.length === 0}
-            onChange={(event) => setSeasonId(event.target.value)}
-          >
-            {routedClub && routedClub.seasons.length > 0 ? (
-              routedClub.seasons.map((season) => (
-                <option key={season.id} value={season.id}>
-                  {season.label}
-                </option>
-              ))
-            ) : (
-              <option value="">No seasons</option>
-            )}
-          </select>
-        </div>
+          <div className="field season-field">
+            <label htmlFor="club-season">Season</label>
+            <select
+              id="club-season"
+              value={routedClub ? seasonId : ""}
+              disabled={!routedClub || routedClub.seasons.length === 0}
+              onChange={(event) => setSeasonId(event.target.value)}
+            >
+              {routedClub && routedClub.seasons.length > 0 ? (
+                routedClub.seasons.map((season) => (
+                  <option key={season.id} value={season.id}>
+                    {season.label}
+                  </option>
+                ))
+              ) : (
+                <option value="">No seasons</option>
+              )}
+            </select>
+          </div>
         )}
       </div>
 

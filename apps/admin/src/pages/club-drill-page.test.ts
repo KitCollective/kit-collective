@@ -14,7 +14,7 @@ describe("Admin club drill honours", () => {
     expect(page).toContain("club-tab-honours");
     expect(page).toContain("No honours");
     expect(page).toContain("row.markPath");
-    expect(page).toContain("tab === \"honours\" ? null");
+    expect(page).toContain('tab === "honours" ? null');
     expect(page).not.toContain("tmLogoUrl");
   });
 

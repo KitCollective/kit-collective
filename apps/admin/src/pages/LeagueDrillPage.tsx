@@ -42,11 +42,7 @@ export function LeagueDrillPage() {
             <div>
               <dt>Mark</dt>
               <dd>
-                <CatalogMark
-                  markPath={league.markPath}
-                  monogram={league.monogram}
-                  token={token}
-                />
+                <CatalogMark markPath={league.markPath} monogram={league.monogram} token={token} />
               </dd>
             </div>
           </dl>

@@ -1,5 +1,5 @@
-import type { HonourParseRow } from "./actor-types.js";
 import type { TransfermarktRawPayload, TransfermarktRawPlayerJerseyNumbers } from "../types.js";
+import type { HonourParseRow } from "./actor-types.js";
 
 export interface ClubSeasonPair {
   clubExternalId: string;

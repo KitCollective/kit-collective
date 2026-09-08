@@ -25,6 +25,7 @@ import {
   type LabelLocale,
 } from "@kit/domain";
 import { and, eq, isNull } from "drizzle-orm";
+import { clubCrestObjectKey, leagueBadgeObjectKey } from "../catalog-mark-cdn.js";
 import { assertFactsSeasonScope } from "../scope-isolation.js";
 import type {
   MapResult,
@@ -37,7 +38,6 @@ import type {
   NormalizedSeason,
 } from "../types.js";
 import { TM_SYSTEM } from "../types.js";
-import { clubCrestObjectKey, leagueBadgeObjectKey } from "../catalog-mark-cdn.js";
 
 export type MapDepth =
   | "league"

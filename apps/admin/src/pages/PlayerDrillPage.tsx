@@ -46,11 +46,7 @@ export function PlayerDrillPage() {
             <div>
               <dt>Mark</dt>
               <dd>
-                <CatalogMark
-                  markPath={player.markPath}
-                  monogram={player.monogram}
-                  token={token}
-                />
+                <CatalogMark markPath={player.markPath} monogram={player.monogram} token={token} />
               </dd>
             </div>
           </dl>
@@ -73,12 +69,14 @@ export function PlayerDrillPage() {
               {player.clubSeasons.length === 0 ? (
                 <tr>
                   <td colSpan={3}>
-                    <div className="empty-state data-table-empty">No club seasons on this player.</div>
+                    <div className="empty-state data-table-empty">
+                      No club seasons on this player.
+                    </div>
                   </td>
                 </tr>
               ) : (
-                player.clubSeasons.map((row, index) => (
-                  <tr key={`${row.clubLabel}:${row.seasonLabel}:${index}`}>
+                player.clubSeasons.map((row) => (
+                  <tr key={`${row.clubLabel}:${row.seasonLabel}:${row.squadNumber ?? ""}`}>
                     <td className="data-table-primary">{row.clubLabel}</td>
                     <td className="data-table-mono">{row.seasonLabel}</td>
                     <td className="data-table-mono data-table-numeric">{row.squadNumber ?? "—"}</td>

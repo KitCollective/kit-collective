@@ -47,7 +47,9 @@ describe("adminClubSeasonDrillSchema", () => {
       clubLabel: "FC Copenhagen",
       seasonLabel: "2024/25",
       squadCount: 1,
-      squad: [{ id: ids.player, label: "Player One", squadNumber: 10, position: "Central Midfield" }],
+      squad: [
+        { id: ids.player, label: "Player One", squadNumber: 10, position: "Central Midfield" },
+      ],
       kits: [
         {
           id: ids.kit,

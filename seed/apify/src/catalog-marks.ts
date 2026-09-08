@@ -123,7 +123,10 @@ export async function backfillCatalogMarks(options: {
 
   /** Same trophy/logo URL is reused across clubs; cache holes so a 404 is not re-fetched. */
   const cdnCache = new Map<string, Uint8Array | null>();
-  const fetchCachedCdn = async (src: string, objectKey: string): Promise<Uint8Array | undefined> => {
+  const fetchCachedCdn = async (
+    src: string,
+    objectKey: string,
+  ): Promise<Uint8Array | undefined> => {
     if (cdnCache.has(objectKey)) {
       return cdnCache.get(objectKey) ?? undefined;
     }
@@ -186,7 +189,8 @@ export async function backfillCatalogMarks(options: {
       for (const parsedRow of parsed) {
         summary.honoursVisited += 1;
         const match = unmarkedHonours.find(
-          (row) => row.title === parsedRow.title && (row.seasonLabel ?? null) === parsedRow.seasonLabel,
+          (row) =>
+            row.title === parsedRow.title && (row.seasonLabel ?? null) === parsedRow.seasonLabel,
         );
         if (!match || !parsedRow.imageSrc) {
           continue;

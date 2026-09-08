@@ -38,7 +38,7 @@ describe("Admin Master Data chrome", () => {
     expect(filters).toContain("Search leagues");
     expect(filters).toContain("sheet-panel--end");
     expect(filters).toContain("filter-combobox-trigger");
-    expect(filters).toContain("aria-multiselectable");
+    expect(filters).toContain("aria-pressed");
     expect(filters).toContain("Any country");
     expect(filters).toContain("Any league");
     expect(filters).toContain("sheet-panel-header");

@@ -16,9 +16,7 @@ export function CatalogMark({ markPath, monogram, token, size = "md" }: CatalogM
           path={markPath}
           token={token}
           alt=""
-          fallback={
-            <span aria-hidden="true">{monogram}</span>
-          }
+          fallback={<span aria-hidden="true">{monogram}</span>}
         />
       </span>
     );

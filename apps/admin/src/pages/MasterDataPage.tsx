@@ -87,14 +87,16 @@ export function MasterDataPage() {
     }),
     [filters, search, table, page],
   );
+  const listScope = `${table}:${search}:${JSON.stringify(filters)}`;
 
   useEffect(() => {
     setSearchPlaceholder(tableSearchPlaceholder(table));
   }, [setSearchPlaceholder, table]);
 
   useEffect(() => {
+    void listScope;
     setPage(0);
-  }, [search, table, filters]);
+  }, [listScope]);
 
   useEffect(() => {
     if (!token) {

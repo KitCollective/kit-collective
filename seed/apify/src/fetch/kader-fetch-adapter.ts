@@ -6,13 +6,13 @@ import {
   resolveSeasonRef,
   searchQueryForCompetition,
 } from "@kit/seed-shared";
-import { describeSeedError, safeSeedUrl, seedProgress } from "../progress.js";
-import type { TransfermarktRawHonour, TransfermarktRawPlayerJerseyNumbers } from "../types.js";
 import {
   catalogMarkObjectKeyFromCdnUrl,
   clubCrestCdnUrl,
   leagueBadgeCdnUrl,
 } from "../catalog-mark-cdn.js";
+import { describeSeedError, safeSeedUrl, seedProgress } from "../progress.js";
+import type { TransfermarktRawHonour, TransfermarktRawPlayerJerseyNumbers } from "../types.js";
 import {
   expandSeasonStartYears,
   mapClubSeasonToPayload,

@@ -31,13 +31,13 @@ export {
   resolveBulkStateDir,
 } from "./bulk-checkpoint.js";
 export type {
+  CatalogMarksFetcher,
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,
   FetchLeagueParams,
   FetchLeagueSeasonParams,
   JerseyNumbersFetcher,
-  CatalogMarksFetcher,
   ListClubSeasonPairsParams,
 } from "./fetch/adapter.js";
 export {
