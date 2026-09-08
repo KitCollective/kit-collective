@@ -1,0 +1,10 @@
+{
+  "id": "big-five-recent",
+  "entries": [
+    { "competition": "GB1", "fromSeason": "2024/25", "toSeason": "2025/26" },
+    { "competition": "ES1", "fromSeason": "2024/25", "toSeason": "2025/26" },
+    { "competition": "IT1", "fromSeason": "2024/25", "toSeason": "2025/26" },
+    { "competition": "L1", "fromSeason": "2024/25", "toSeason": "2025/26" },
+    { "competition": "FR1", "fromSeason": "2024/25", "toSeason": "2025/26" }
+  ]
+}

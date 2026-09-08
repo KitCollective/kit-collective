@@ -8,6 +8,7 @@
     "test": "turbo run test --concurrency=1",
     "test:factory-scripts": "node --test scripts/tests/land-policy.test.mjs",
     "check:factory-ci-tests": "node scripts/check-factory-ci-tests.mjs",
+    "seed:bulk": "node --env-file=.env seed/apify/scripts/seed-bulk.mjs",
     "lint": "biome lint .",
     "lint:anti-slop": "oxlint",
     "format": "biome check --write .",

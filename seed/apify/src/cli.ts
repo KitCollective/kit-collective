@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { runBulkFromCli } from "./bulk.js";
 import { createDefaultFkRunner } from "./fk-runner.js";
 import { runClubJoinWorkflow, runNationalTeamJoinWorkflow } from "./join-workflow.js";
 import { describeSeedError, seedProgress } from "./progress.js";
@@ -15,6 +16,8 @@ async function main() {
     );
   } else if (parsed.mode === "grain") {
     seedProgress(`cli grain ${parsed.grain.kind} lane=${parsed.lane}`);
+  } else if (parsed.mode === "bulk") {
+    seedProgress(`cli bulk ${parsed.bulk.command} lane=${parsed.lane}`);
   } else {
     seedProgress(`cli walk lane=${parsed.lane}`);
   }
@@ -101,6 +104,16 @@ async function main() {
           2,
         ),
       );
+      return;
+    }
+
+    if (parsed.mode === "bulk") {
+      const result = await runBulkFromCli({
+        request: parsed.bulk,
+        lane: parsed.lane,
+        fetchAdapter: resolved.adapter,
+      });
+      console.log(JSON.stringify({ ok: true, mode: "bulk", ...result }, null, 2));
       return;
     }
 
