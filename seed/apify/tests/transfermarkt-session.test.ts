@@ -25,7 +25,12 @@ function response(
     ok: status >= 200 && status < 300,
     headers: { getSetCookie: () => init.setCookie ?? [] },
     text: async () => init.body ?? "<html>ok</html>",
-    arrayBuffer: async () => (init.bytes ?? new Uint8Array([1, 2, 3])).buffer as ArrayBuffer,
+    arrayBuffer: async (): Promise<ArrayBuffer> => {
+      const bytes = init.bytes ?? new Uint8Array([1, 2, 3]);
+      const copy = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(copy).set(bytes);
+      return copy;
+    },
   };
 }
 
