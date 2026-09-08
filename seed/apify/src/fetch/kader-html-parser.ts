@@ -143,7 +143,7 @@ export function parseCapacity(raw: string): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
-function parseJerseyNumber(raw: string | undefined): number | null | undefined {
+export function parseJerseyNumber(raw: string | undefined): number | null | undefined {
   if (raw === undefined) {
     return undefined;
   }
@@ -201,7 +201,9 @@ export function parseKaderHtml(
     const $row = $(row);
     const inlineRows = $row.find("table.inline-table tr");
     const positionText = inlineRows.eq(1).find("td").first().text().trim();
-    const portraitSrc = $row.find("img.bilderrahmen-fixed").first().attr("src")?.trim();
+    // Lazy cadre tables keep a 1x1 GIF in `src` and the real portrait URL in `data-src`.
+    const $portrait = $row.find("img.bilderrahmen-fixed").first();
+    const portraitSrc = $portrait.attr("data-src")?.trim() || $portrait.attr("src")?.trim();
 
     const flag = $row
       .find("img[title], img[data-iso]")

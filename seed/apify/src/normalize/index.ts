@@ -1,13 +1,16 @@
 import type {
   NormalizedClub,
   NormalizedFacts,
+  NormalizedJerseyNumber,
   NormalizedNationalTeam,
   NormalizedPlayer,
+  NormalizedPlayerJerseyNumbers,
   NormalizedSeason,
   TransfermarktRawClub,
   TransfermarktRawNationalTeam,
   TransfermarktRawPayload,
   TransfermarktRawPlayer,
+  TransfermarktRawPlayerJerseyNumbers,
 } from "../types.js";
 import { seedLabelLocale } from "./seed-label-locale.js";
 
@@ -42,10 +45,18 @@ function normalizePlayer(raw: TransfermarktRawPlayer): NormalizedPlayer {
     nameLocale: seedLabelLocale(raw.name),
     squadNumber: raw.jerseyNumber,
   };
+  if (raw.fullName && raw.fullName !== raw.name) {
+    player.fullName = raw.fullName;
+    player.fullNameLocale = seedLabelLocale(raw.fullName);
+  }
   if (raw.position) player.position = raw.position;
   if (raw.dateOfBirth) player.dateOfBirth = raw.dateOfBirth;
+  if (raw.placeOfBirth) player.placeOfBirth = raw.placeOfBirth;
   if (raw.nationalityIso) player.nationalityIso = raw.nationalityIso;
   if (raw.nationalityName) player.nationalityName = raw.nationalityName;
+  if (raw.nationalities?.length) {
+    player.nationalities = raw.nationalities.map((row) => ({ ...row }));
+  }
   if (raw.heightCm !== undefined) player.heightCm = raw.heightCm;
   if (raw.preferredFoot) player.preferredFoot = raw.preferredFoot;
   if (raw.portraitBytes) player.portraitBytes = raw.portraitBytes;
@@ -66,6 +77,7 @@ function normalizeClub(raw: TransfermarktRawClub): NormalizedClub {
   };
   if (raw.country?.name) club.countryName = raw.country.name;
   if (raw.officialName) club.officialName = raw.officialName;
+  if (raw.nameIsOfficialFallback) club.nameIsOfficialFallback = true;
   if (raw.foundedOn) club.foundedOn = raw.foundedOn;
   if (raw.stadiumName) club.stadiumName = raw.stadiumName;
   if (raw.stadiumCapacity !== undefined) club.stadiumCapacity = raw.stadiumCapacity;
@@ -125,11 +137,14 @@ function cleanPlayer(player: TransfermarktRawPlayer): TransfermarktRawPlayer {
   return {
     id: player.id,
     name: player.name,
+    fullName: player.fullName,
     jerseyNumber: player.jerseyNumber,
     position: player.position,
     dateOfBirth: player.dateOfBirth,
+    placeOfBirth: player.placeOfBirth,
     nationalityIso: player.nationalityIso,
     nationalityName: player.nationalityName,
+    nationalities: player.nationalities?.map((row) => ({ ...row })),
     heightCm: player.heightCm,
     preferredFoot: player.preferredFoot,
     portraitBytes: player.portraitBytes,
@@ -145,6 +160,7 @@ function cleanClub(club: TransfermarktRawClub): TransfermarktRawClub {
     country: club.country ? { iso3166: club.country.iso3166, name: club.country.name } : undefined,
     kind: club.kind,
     officialName: club.officialName,
+    nameIsOfficialFallback: club.nameIsOfficialFallback,
     foundedOn: club.foundedOn,
     stadiumName: club.stadiumName,
     stadiumCapacity: club.stadiumCapacity,
@@ -192,4 +208,39 @@ export function stripForbiddenFields(raw: TransfermarktRawPayload): Transfermark
 export function normalize(raw: TransfermarktRawPayload): NormalizedFacts {
   const stripped = stripForbiddenFields(raw);
   return normalizeTransfermarktPayload(stripped);
+}
+
+/**
+ * Jersey history rows, deduplicated on the storage key.
+ *
+ * The career page repeats a season/side pair once per number worn, which is real data, but
+ * it also repeats the *same* number when a side appears under two competitions in one
+ * season. Those extra rows are indistinguishable in Postgres, so they are collapsed here
+ * rather than left to be swallowed by the unique index.
+ */
+export function normalizePlayerJerseyNumbers(
+  raw: TransfermarktRawPlayerJerseyNumbers,
+): NormalizedPlayerJerseyNumbers {
+  const rows: NormalizedJerseyNumber[] = [];
+  const seen = new Set<string>();
+
+  for (const row of raw.rows) {
+    const key = `${row.seasonLabel}|${row.sideExternalId}|${row.jerseyNumber ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    const normalized: NormalizedJerseyNumber = {
+      seasonLabel: row.seasonLabel,
+      sideExternalId: row.sideExternalId,
+      side: row.side,
+      squadNumber: row.jerseyNumber,
+    };
+    if (row.sideName) {
+      normalized.sideName = row.sideName;
+    }
+    rows.push(normalized);
+  }
+
+  return { playerExternalId: raw.playerExternalId, rows };
 }

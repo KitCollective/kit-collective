@@ -1,4 +1,5 @@
 import { HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { imageContentTypeOrDefault } from "@kit/seed-shared";
 import type { ObjectStoreAdapter } from "./types.js";
 
 /** R2 / S3-compatible object store using AWS SigV4 (not HTTP Basic). */
@@ -31,7 +32,8 @@ export function createR2ObjectStore(): ObjectStoreAdapter {
           Bucket: bucket,
           Key: key,
           Body: bytes,
-          ContentType: "image/jpeg",
+          // Portraits and archive kit shots arrive as WebP or PNG under `.jpg` keys.
+          ContentType: imageContentTypeOrDefault(bytes),
         }),
       );
     },

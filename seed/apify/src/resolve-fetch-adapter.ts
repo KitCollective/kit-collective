@@ -1,5 +1,6 @@
+import path from "node:path";
 import { resolveTransfermarktTransport } from "@kit/seed-shared";
-import type { FetchAdapter } from "./fetch/adapter.js";
+import type { FetchAdapter, JerseyNumbersFetcher } from "./fetch/adapter.js";
 import { createApifyFetchAdapter, createLiveApifyFetchAdapter } from "./fetch/apify-adapter.js";
 import { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
 import { createKaderFetchAdapter } from "./fetch/kader-fetch-adapter.js";
@@ -10,13 +11,32 @@ import {
   parsePositiveIntEnv,
 } from "./fetch/transfermarkt-fetch-policy.js";
 import { DEFAULT_TRANSFERMARKT_RATE_LIMIT_STOP_AFTER } from "./fetch/transfermarkt-rate-limit.js";
+import { createTransfermarktSession } from "./fetch/transfermarkt-session.js";
 import { createProxyFetchHtml } from "./proxy-config.js";
 
-function resolveKaderFetchPolicyFromEnv(env: NodeJS.ProcessEnv = process.env) {
+/** Cache is on by default: a re-run should cost Transfermarkt nothing. */
+export const DEFAULT_KADER_CACHE_DIR = "seed/apify/.cache/transfermarkt";
+
+export function resolveKaderCacheDir(env: NodeJS.ProcessEnv = process.env): string {
+  return env.SEED_KADER_CACHE?.trim() || DEFAULT_KADER_CACHE_DIR;
+}
+
+/**
+ * Through Site Unblocker, Transfermarkt never sees our IP and Decodo's own edge advertises
+ * `ratelimit-limit: 200`, so the pacing that protects a direct laptop IP only slows bulk down.
+ */
+export const DEFAULT_PROXY_TRANSFERMARKT_REQUEST_DELAY_MS = 250;
+
+export function resolveKaderFetchPolicyFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  transportMode: "direct" | "proxy" = "direct",
+) {
   return {
     requestDelayMs: parsePositiveIntEnv(
       env.SEED_TRANSFERMARKT_REQUEST_DELAY_MS,
-      DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS,
+      transportMode === "proxy"
+        ? DEFAULT_PROXY_TRANSFERMARKT_REQUEST_DELAY_MS
+        : DEFAULT_TRANSFERMARKT_REQUEST_DELAY_MS,
     ),
     retryMaxAttempts: Math.max(
       1,
@@ -41,8 +61,21 @@ function resolveKaderFetchPolicyFromEnv(env: NodeJS.ProcessEnv = process.env) {
 
 export type SeedFetchMode = "kader" | "apify";
 
+/**
+ * What actually carries this run. `fixture` and `apify` never reach Transfermarkt, so the
+ * transport policy is not consulted for them — reporting the label from here keeps the CLI
+ * from re-deriving it and tripping the fail-closed refusal on an offline run.
+ */
+export type ResolvedTransportLabel = "fixture" | "apify" | "proxy" | "direct";
+
 export interface ResolvedFetchAdapter {
   adapter: FetchAdapter;
+  transport: ResolvedTransportLabel;
+  /**
+   * Present only on the Transfermarkt HTML transports. The Apify actor and the recorded
+   * JSON payload adapters have no `/rueckennummern` source to read.
+   */
+  jerseyNumbers?: JerseyNumbersFetcher;
   close?: () => Promise<void>;
 }
 
@@ -63,19 +96,23 @@ export async function resolveFetchAdapter(): Promise<ResolvedFetchAdapter> {
   const fetchMode = resolveFetchMode();
 
   if (fixturePath) {
-    return { adapter: createFixtureFetchAdapter(fixturePath) };
+    return { adapter: createFixtureFetchAdapter(fixturePath), transport: "fixture" };
   }
 
   if (kaderHtmlDir) {
-    return { adapter: createKaderFetchAdapter({ fixturesDir: kaderHtmlDir }) };
+    const adapter = createKaderFetchAdapter({ fixturesDir: kaderHtmlDir });
+    return { adapter, jerseyNumbers: adapter, transport: "fixture" };
   }
 
   if (fetchMode === "apify") {
     if (recordingsDir) {
-      return { adapter: createApifyFetchAdapter({ recordingsDir, actorId }) };
+      return { adapter: createApifyFetchAdapter({ recordingsDir, actorId }), transport: "apify" };
     }
     if (apifyToken) {
-      return { adapter: createLiveApifyFetchAdapter({ token: apifyToken, actorId }) };
+      return {
+        adapter: createLiveApifyFetchAdapter({ token: apifyToken, actorId }),
+        transport: "apify",
+      };
     }
     throw new Error(
       "SEED_FETCH=apify requires SEED_APIFY_RECORDINGS (recorded actor datasets) or APIFY_TOKEN (live Apify fetch).",
@@ -83,25 +120,38 @@ export async function resolveFetchAdapter(): Promise<ResolvedFetchAdapter> {
   }
 
   const transport = resolveTransfermarktTransport(process.env);
-  const kaderCacheDir = process.env.SEED_KADER_CACHE?.trim() || undefined;
-  const kaderFetchPolicy = resolveKaderFetchPolicyFromEnv();
+  const kaderCacheDir = resolveKaderCacheDir();
+  const kaderFetchPolicy = resolveKaderFetchPolicyFromEnv(process.env, transport.mode);
+
+  const session = createTransfermarktSession({
+    cookieFile: path.join(kaderCacheDir, "session-cookies.json"),
+  });
 
   if (transport.mode === "proxy") {
+    // Proxy carries the WAF'd HTML; portrait bytes come off the image CDN directly.
     const { fetchHtml, close } = createProxyFetchHtml(transport.proxyUrl);
+    const adapter = createKaderFetchAdapter({
+      fetchHtml,
+      fetchBytes: session.fetchBytes,
+      cacheDir: kaderCacheDir,
+      ...kaderFetchPolicy,
+    });
     return {
-      adapter: createKaderFetchAdapter({
-        fetchHtml,
-        cacheDir: kaderCacheDir,
-        ...kaderFetchPolicy,
-      }),
-      close,
+      adapter,
+      jerseyNumbers: adapter,
+      transport: "proxy",
+      close: async () => {
+        await close();
+        await session.close();
+      },
     };
   }
 
-  return {
-    adapter: createKaderFetchAdapter({
-      cacheDir: kaderCacheDir,
-      ...kaderFetchPolicy,
-    }),
-  };
+  const adapter = createKaderFetchAdapter({
+    fetchHtml: session.fetchHtml,
+    fetchBytes: session.fetchBytes,
+    cacheDir: kaderCacheDir,
+    ...kaderFetchPolicy,
+  });
+  return { adapter, jerseyNumbers: adapter, transport: "direct", close: session.close };
 }

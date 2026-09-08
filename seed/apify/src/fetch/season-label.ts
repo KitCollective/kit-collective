@@ -20,6 +20,29 @@ export function labelToStartYear(label: string): number {
   throw new Error(`Invalid season label: ${label}`);
 }
 
+/**
+ * Widen a Transfermarkt career-table season label to our `YYYY/YY` form.
+ *
+ * Career tables (`/rueckennummern`, `/erfolge`) write the season two-digit — `25/26`,
+ * and the 1990s as `91/92` — while `season.label` in Postgres is always four-digit.
+ * Returns `undefined` for anything that is not a season label.
+ */
+export function widenSeasonLabel(label: string): string | undefined {
+  const trimmed = label.trim();
+
+  if (/^\d{4}\/\d{2}$/.test(trimmed) || /^\d{4}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const shortSplit = /^(\d{2})\/(\d{2})$/.exec(trimmed);
+  if (!shortSplit?.[1]) {
+    return undefined;
+  }
+  const twoDigit = Number.parseInt(shortSplit[1], 10);
+  const startYear = twoDigit >= 50 ? 1900 + twoDigit : 2000 + twoDigit;
+  return startYearToLabel(startYear);
+}
+
 /** Calendar bounds for a split-year season starting in `startYear`. */
 export function seasonCalendarBounds(startYear: number): {
   startDate: string;

@@ -1,16 +1,31 @@
 #!/usr/bin/env node
 import { createDefaultFkRunner } from "./fk-runner.js";
 import { runClubJoinWorkflow, runNationalTeamJoinWorkflow } from "./join-workflow.js";
+import { describeSeedError, seedProgress } from "./progress.js";
 import { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 import { parseCliArgs, runHierarchyGrain, runSeed } from "./run.js";
 
 async function main() {
   const parsed = parseCliArgs(process.argv);
+  if (parsed.mode === "join") {
+    seedProgress(
+      parsed.scope.path === "club"
+        ? `cli join club ${parsed.scope.competition} ${parsed.scope.season} lane=${parsed.scope.lane}`
+        : `cli join national-team ${parsed.scope.nationalTeamRef} ${parsed.scope.season} lane=${parsed.scope.lane}`,
+    );
+  } else if (parsed.mode === "grain") {
+    seedProgress(`cli grain ${parsed.grain.kind} lane=${parsed.lane}`);
+  } else {
+    seedProgress(`cli walk lane=${parsed.lane}`);
+  }
+
   let resolved: ResolvedFetchAdapter;
   try {
     resolved = await resolveFetchAdapter();
+    seedProgress(`fetch transport=${resolved.transport}`);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = describeSeedError(error);
+    seedProgress(`fail adapter ${message}`);
     console.error(message);
     process.exit(1);
   }
@@ -102,7 +117,8 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = describeSeedError(error);
+  seedProgress(`fail ${message}`);
   console.error(message);
   process.exit(1);
 });

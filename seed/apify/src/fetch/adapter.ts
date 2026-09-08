@@ -1,4 +1,4 @@
-import type { TransfermarktRawPayload } from "../types.js";
+import type { TransfermarktRawPayload, TransfermarktRawPlayerJerseyNumbers } from "../types.js";
 
 export interface ClubSeasonPair {
   clubExternalId: string;
@@ -56,6 +56,17 @@ export interface FetchAdapter {
   fetchNationalTeamSeason(params: FetchNationalTeamSeasonParams): Promise<TransfermarktRawPayload>;
   fetchClubSeason(params: FetchClubSeasonParams): Promise<TransfermarktRawPayload>;
   listClubSeasonPairs(params: ListClubSeasonPairsParams): Promise<ClubSeasonPair[]>;
+}
+
+/**
+ * Career squad-number history for one player.
+ *
+ * Kept off `FetchAdapter` on purpose: `/rueckennummern/spieler/{id}` is addressed by
+ * player id alone and belongs to no competition walk, and the Apify and fixture-payload
+ * adapters have no source for it. Transports that can serve it widen their return type.
+ */
+export interface JerseyNumbersFetcher {
+  fetchPlayerJerseyNumbers(playerExternalId: string): Promise<TransfermarktRawPlayerJerseyNumbers>;
 }
 
 /** @deprecated Use FetchClubSeasonParams */

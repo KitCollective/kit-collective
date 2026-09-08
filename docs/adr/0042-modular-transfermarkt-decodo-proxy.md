@@ -8,5 +8,5 @@ Live Transfermarkt HTTP transport is one module: `resolveTransfermarktTransport`
 
 Decodo Site Unblocker (ADR-0017) remains the Coolify TM proxy vendor. `POST /v2/scrape` stays out. Nest still never hits Transfermarkt.
 
-Status: accepted.
+Status: accepted, superseded in part by ADR-0043 — the Desktop default is now the proxy whenever `SEED_PROXY_URL` is set, with `SEED_TM_TRANSPORT=direct` as the opt-out.
 Supersedes: CONTEXT **Seed proxy** and ADR-0017 only on “`kc_seed_mcp` / any process with `SEED_PROXY_URL` set always uses Decodo”. Local grain uses the local IP unless `SEED_TM_TRANSPORT=proxy`.

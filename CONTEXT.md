@@ -222,8 +222,8 @@ Football Data Seed issues stay `ready-for-human` only. Not `ready-for-agent`. Pl
 _Avoid_: `ready-for-agent` on this project's slices; PI dispatch on Football Data Seed; treating this label here as a missing-info wait
 
 **Seed run**:
-One sentence that starts the full ingest for a Seed scope into a lane’s Postgres. Composes Hierarchy grains. Lives in the Join workflow milestone (Cross MCP wraps it). Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
-_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad; treating the Seed run as the first Football Data Seed accept
+One sentence that starts the full ingest for a Seed scope into a lane’s Postgres. Composes Hierarchy grains. Lives in the Join workflow milestone. Desktop operator path is `/seed-run` over the `seed-apify` CLI (grains and `join`). Cross MCP wraps the same CLI later. Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
+_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad; treating the Seed run as the first Football Data Seed accept; calling Coolify `control` or Seed MCP to ingest when the CLI is available
 
 **Competition query**:
 The operator names a league in natural language (`Premier League`, `La Liga i Spanien`, `tyrkiske Superliga`). The Seed job resolves that to a Transfermarkt competition (id + slug + country): catalog alias first, otherwise a Transfermarkt search. Country words disambiguate. Then the existing walk: Competition season page → clubs → kader → numbers.
@@ -266,7 +266,7 @@ The live Transfermarkt path: HTTP GET of the Competition season page and each cl
 _Avoid_: calling this a Nest scraper; treating Cheerio as anti-bot; fetching a player profile page when the kader row already has id and number
 
 **Seed proxy**:
-Outbound HTTP(S) proxy used **only for Transfermarkt**. Policy module: `resolveTransfermarktTransport` (ADR-0042). Coolify / server (`SEED_REQUIRE_PROXY`) injects Decodo (`SEED_PROXY_URL` — residential or Site Unblocker `unblock.decodo.com`) and fail-closes without it. Desktop / local live Kader uses the machine’s own IP by default, even when `SEED_PROXY_URL` is in env; opt in with `SEED_TM_TRANSPORT=proxy`. Football Kit Archive / listing HTTP must **not** use Decodo (ADR-0041).
+Outbound HTTP(S) proxy used **only for Transfermarkt**. Policy module: `resolveTransfermarktTransport` (ADR-0042, ADR-0043). Setting `SEED_PROXY_URL` makes Decodo Site Unblocker (`unblock.decodo.com`) the transport everywhere, **Desktop included** — the machine IP could not hold a bulk run and the AWS WAF only yields to the Unblocker's rendered pass. `SEED_TM_TRANSPORT=direct` is the opt-out; Coolify / server (`SEED_REQUIRE_PROXY`) still fail-closes without a URL. Portrait bytes stay on the direct connection to the image CDN. Football Kit Archive / listing HTTP must **not** use Decodo (ADR-0041).
 _Avoid_: pointing Decodo at Football Kit Archive; treating a Desktop `.env` `SEED_PROXY_URL` as mandatory for local TM; Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
 
 **Opt-in Apify**:
