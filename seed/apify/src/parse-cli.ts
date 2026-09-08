@@ -84,7 +84,51 @@ export type ParsedBulkCli = {
   lane: ResolvedSeedLane;
 };
 
-export type ParsedSeedCli = ParsedWalkCli | ParsedGrainCli | ParsedJoinCli | ParsedBulkCli;
+export type ParsedJerseyNumbersCli = {
+  mode: "jersey-numbers";
+  /** Empty means the whole-lane checkpointed backfill. */
+  playerExternalIds: string[];
+  lane: ResolvedSeedLane;
+};
+
+export type ParsedSeedCli =
+  | ParsedWalkCli
+  | ParsedGrainCli
+  | ParsedJoinCli
+  | ParsedBulkCli
+  | ParsedJerseyNumbersCli;
+
+function parseJerseyNumbersArgv(argv: string[]): ParsedJerseyNumbersCli {
+  const laneArg = argv.at(-1);
+  const laneResult = resolveSeedLane(
+    laneArg === "development" || laneArg === "staging" || laneArg === "production"
+      ? laneArg
+      : undefined,
+  );
+  if (!laneResult.ok) {
+    throw new Error(laneResult.error);
+  }
+  const positional = laneArg && laneArg === laneResult.lane ? argv.slice(0, -1) : argv;
+
+  const first = positional[0]?.trim();
+  if (first === "backfill") {
+    if (positional.length !== 1) {
+      throw new Error("Expected: jersey-numbers backfill [lane]");
+    }
+    return { mode: "jersey-numbers", playerExternalIds: [], lane: laneResult.lane };
+  }
+
+  const playerExternalIds = positional.map((arg) => arg.trim()).filter(Boolean);
+  if (playerExternalIds.length === 0) {
+    throw new Error("Expected: jersey-numbers backfill [lane] | jersey-numbers <playerId…> [lane]");
+  }
+  for (const id of playerExternalIds) {
+    if (!/^\d+$/.test(id)) {
+      throw new Error(`jersey-numbers expects Transfermarkt player ids, got '${id}'`);
+    }
+  }
+  return { mode: "jersey-numbers", playerExternalIds, lane: laneResult.lane };
+}
 
 function parseGrainArgv(argv: string[]): ParsedGrainCli {
   const grainKind = argv[0];
@@ -376,6 +420,9 @@ export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {
   }
   if (cleaned[0] === "bulk") {
     return parseBulkArgv(cleaned.slice(1));
+  }
+  if (cleaned[0] === "jersey-numbers" || cleaned[0] === "jersey_numbers") {
+    return parseJerseyNumbersArgv(cleaned.slice(1));
   }
 
   const result = parseSeedScopeArgv(cleaned);

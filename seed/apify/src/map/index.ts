@@ -10,6 +10,7 @@ import {
   nationalTeamSeason,
   player,
   playerClubSeason,
+  playerJerseyNumber,
   playerNationality,
   playerNationalTeamSeason,
   playerPhoto,
@@ -26,6 +27,7 @@ import type {
   NormalizedNationality,
   NormalizedNationalTeam,
   NormalizedPlayer,
+  NormalizedPlayerJerseyNumbers,
   NormalizedSeason,
 } from "../types.js";
 import { TM_SYSTEM } from "../types.js";
@@ -676,6 +678,152 @@ async function upsertPlayerPhoto(
     visibility: "admin_only",
   });
   return true;
+}
+
+export interface JerseyNumberMapResult {
+  /** False when the lane holds no player for that Transfermarkt id — nothing was written. */
+  playerFound: boolean;
+  parsedRows: number;
+  created: number;
+  /** Rows the unique index already held. A second run over the same player is all `existing`. */
+  existing: number;
+  clubLinked: number;
+  nationalTeamLinked: number;
+  /** Rows whose side is not seeded: `side_external_id` kept, both FKs null. */
+  sideUnresolved: number;
+  seasonLinked: number;
+  missingNumber: number;
+  /** Page called the side a national team but our `external_id` says club, or the reverse. */
+  sideKindMismatch: number;
+}
+
+function emptyJerseyNumberMapResult(): JerseyNumberMapResult {
+  return {
+    playerFound: false,
+    parsedRows: 0,
+    created: 0,
+    existing: 0,
+    clubLinked: 0,
+    nationalTeamLinked: 0,
+    sideUnresolved: 0,
+    seasonLinked: 0,
+    missingNumber: 0,
+    sideKindMismatch: 0,
+  };
+}
+
+/**
+ * The `season` row this career row belongs to, or `undefined`.
+ *
+ * `season.label` is not unique — one label exists per seeded league — so the label alone
+ * cannot pick a row. The side's own season membership disambiguates: a club season is the
+ * one that club has a `team_season` for, a national side the one it has a
+ * `national_team_season` for. No membership means the season stays unresolved and only
+ * `season_label` carries the season.
+ */
+async function findSideSeasonId(
+  db: Db,
+  side: { kind: "club" | "national_team"; id: string },
+  seasonLabel: string,
+): Promise<string | undefined> {
+  if (side.kind === "club") {
+    const rows = await db
+      .select({ id: season.id })
+      .from(season)
+      .innerJoin(teamSeason, eq(teamSeason.seasonId, season.id))
+      .where(and(eq(season.label, seasonLabel), eq(teamSeason.clubId, side.id)))
+      .limit(1);
+    return rows[0]?.id;
+  }
+
+  const rows = await db
+    .select({ id: season.id })
+    .from(season)
+    .innerJoin(nationalTeamSeason, eq(nationalTeamSeason.seasonId, season.id))
+    .where(and(eq(season.label, seasonLabel), eq(nationalTeamSeason.nationalTeamId, side.id)))
+    .limit(1);
+  return rows[0]?.id;
+}
+
+/**
+ * Persist one player's career squad-number history.
+ *
+ * Idempotent through the `player_jersey_number` unique index: a repeat run conflicts on
+ * every row and creates none. A row whose club or national side is not seeded still lands
+ * — `side_external_id` keeps the vendor identity so a later run can attach the FK — because
+ * a career page names far more sides than a lane holds.
+ */
+export async function mapPlayerJerseyNumbers(
+  db: Db,
+  history: NormalizedPlayerJerseyNumbers,
+): Promise<JerseyNumberMapResult> {
+  const result = emptyJerseyNumberMapResult();
+  result.parsedRows = history.rows.length;
+
+  const playerEntity = await findEntity(db, history.playerExternalId);
+  if (!playerEntity || playerEntity.entityType !== "player") {
+    return result;
+  }
+  result.playerFound = true;
+
+  const sideCache = new Map<string, { kind: "club" | "national_team"; id: string } | null>();
+
+  for (const row of history.rows) {
+    if (row.squadNumber === null) {
+      result.missingNumber += 1;
+    }
+
+    let side = sideCache.get(row.sideExternalId);
+    if (side === undefined) {
+      const entity = await findEntity(db, row.sideExternalId);
+      side =
+        entity?.entityType === "club" || entity?.entityType === "national_team"
+          ? { kind: entity.entityType, id: entity.entityId }
+          : null;
+      sideCache.set(row.sideExternalId, side);
+    }
+
+    if (!side) {
+      result.sideUnresolved += 1;
+    } else {
+      if (side.kind !== row.side) {
+        result.sideKindMismatch += 1;
+      }
+      if (side.kind === "club") {
+        result.clubLinked += 1;
+      } else {
+        result.nationalTeamLinked += 1;
+      }
+    }
+
+    const seasonId = side ? await findSideSeasonId(db, side, row.seasonLabel) : undefined;
+    if (seasonId) {
+      result.seasonLinked += 1;
+    }
+
+    const inserted = await db
+      .insert(playerJerseyNumber)
+      .values({
+        playerId: playerEntity.entityId,
+        seasonId: seasonId ?? null,
+        seasonLabel: row.seasonLabel,
+        clubId: side?.kind === "club" ? side.id : null,
+        nationalTeamId: side?.kind === "national_team" ? side.id : null,
+        sideExternalId: row.sideExternalId,
+        sideName: row.sideName ?? null,
+        squadNumber: row.squadNumber,
+      })
+      .onConflictDoNothing()
+      .returning({ id: playerJerseyNumber.id });
+
+    if (inserted.length > 0) {
+      result.created += 1;
+    } else {
+      result.existing += 1;
+    }
+  }
+
+  return result;
 }
 
 function emptyMapResult(): MapResult {

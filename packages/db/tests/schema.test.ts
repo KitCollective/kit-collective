@@ -324,6 +324,48 @@ describe("stamdata schema", () => {
     ]);
   });
 
+  it("keeps a jersey history row for a side that is not seeded, and rejects a repeat of it", async () => {
+    const player = await pool.query<{ id: string }>(
+      `INSERT INTO player DEFAULT VALUES RETURNING id`,
+    );
+    const playerId = player.rows[0]?.id;
+    expect(playerId).toBeTruthy();
+
+    const insertUnseededSide = () =>
+      pool.query(
+        `INSERT INTO player_jersey_number
+           (player_id, season_label, side_external_id, side_name, squad_number)
+         VALUES ($1, '2003/04', '699', 'Helsingborgs IF', 11)`,
+        [playerId],
+      );
+
+    await insertUnseededSide();
+    // Vendor identity is the discriminator when both FKs are null, so the repeat conflicts.
+    await expect(insertUnseededSide()).rejects.toThrow();
+
+    // Same season and number, different side: a mid-season transfer, not a duplicate.
+    await pool.query(
+      `INSERT INTO player_jersey_number
+         (player_id, season_label, side_external_id, side_name, squad_number)
+       VALUES ($1, '2003/04', '678', 'Aarhus GF', 11)`,
+      [playerId],
+    );
+
+    // Same season and side, different number: a national side listing two caps numbers.
+    await pool.query(
+      `INSERT INTO player_jersey_number
+         (player_id, season_label, side_external_id, side_name, squad_number)
+       VALUES ($1, '2003/04', '678', 'Aarhus GF', 23)`,
+      [playerId],
+    );
+
+    const { rows } = await pool.query<{ n: string }>(
+      `SELECT count(*) AS n FROM player_jersey_number WHERE player_id = $1`,
+      [playerId],
+    );
+    expect(Number(rows[0]?.n)).toBe(3);
+  });
+
   it("rejects duplicate honour rows for the same subject, season label, and title", async () => {
     const country = await pool.query<{ id: string }>(
       `INSERT INTO country (iso3166) VALUES ('NO') RETURNING id`,

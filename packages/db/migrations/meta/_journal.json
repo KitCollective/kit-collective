@@ -218,6 +218,13 @@
       "when": 1788526400000,
       "tag": "0030_player_nationality",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788536400000,
+      "tag": "0031_jersey_number_vendor_side",
+      "breakpoints": true
     }
   ]
 }
