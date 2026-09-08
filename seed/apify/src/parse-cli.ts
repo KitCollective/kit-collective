@@ -6,6 +6,7 @@ import {
   type ResolvedSeedLane,
   resolveSeedLane,
 } from "@kit/seed-shared";
+import { type BulkCliRequest, synthesizeBulkPlanId } from "./bulk.js";
 
 export type LeagueGrain = {
   kind: "league";
@@ -77,7 +78,17 @@ export type ParsedJoinCli = {
   scope: JoinScope;
 };
 
-export type ParsedSeedCli = ParsedWalkCli | ParsedGrainCli | ParsedJoinCli;
+export type ParsedBulkCli = {
+  mode: "bulk";
+  bulk: BulkCliRequest;
+  lane: ResolvedSeedLane;
+};
+
+export type ParsedSeedCli =
+  | ParsedWalkCli
+  | ParsedGrainCli
+  | ParsedJoinCli
+  | ParsedBulkCli;
 
 function parseGrainArgv(argv: string[]): ParsedGrainCli {
   const grainKind = argv[0];
@@ -300,6 +311,65 @@ function parseJoinArgv(argv: string[]): ParsedJoinCli {
   throw new Error("Expected join subcommand: sentence | club | national-team");
 }
 
+function parseBulkArgv(argv: string[]): ParsedBulkCli {
+  const subcommand = argv[0];
+
+  if (subcommand === "plan") {
+    if (argv.length < 2 || argv.length > 3) {
+      throw new Error("Expected: bulk plan <plan.json> [lane]");
+    }
+    const planFile = argv[1]?.trim();
+    if (!planFile) {
+      throw new Error("bulk plan requires a plan file path");
+    }
+    const laneResult = resolveSeedLane(argv[2]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return { mode: "bulk", bulk: { command: "run-plan-file", planFile }, lane: laneResult.lane };
+  }
+
+  if (subcommand === "status") {
+    if (argv.length !== 2) {
+      throw new Error("Expected: bulk status <plan-id-or-file>");
+    }
+    const target = argv[1]?.trim();
+    if (!target) {
+      throw new Error("bulk status requires a plan id or plan file path");
+    }
+    const laneResult = resolveSeedLane(undefined);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return { mode: "bulk", bulk: { command: "status", target }, lane: laneResult.lane };
+  }
+
+  if (argv.length < 3 || argv.length > 4) {
+    throw new Error("Expected: bulk <competition> <from-season> <to-season> [lane]");
+  }
+  const competition = argv[0]?.trim();
+  const fromSeason = argv[1]?.trim();
+  const toSeason = argv[2]?.trim();
+  if (!competition || !fromSeason || !toSeason) {
+    throw new Error("bulk requires competition, from-season, and to-season");
+  }
+  const laneResult = resolveSeedLane(argv[3]);
+  if (!laneResult.ok) {
+    throw new Error(laneResult.error);
+  }
+  return {
+    mode: "bulk",
+    bulk: {
+      command: "run",
+      plan: {
+        id: synthesizeBulkPlanId(competition, fromSeason, toSeason),
+        entries: [{ competition, fromSeason, toSeason }],
+      },
+    },
+    lane: laneResult.lane,
+  };
+}
+
 export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {
   const cleaned = argv.filter((arg) => arg !== "--");
   if (cleaned[0] === "grain") {
@@ -307,6 +377,9 @@ export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {
   }
   if (cleaned[0] === "join") {
     return parseJoinArgv(cleaned.slice(1));
+  }
+  if (cleaned[0] === "bulk") {
+    return parseBulkArgv(cleaned.slice(1));
   }
 
   const result = parseSeedScopeArgv(cleaned);
