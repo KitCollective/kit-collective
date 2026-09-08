@@ -57,7 +57,8 @@ function FilterCombobox({
     }
 
     function onPointerDown(event: PointerEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+      const target = event.target;
+      if (rootRef.current && target instanceof Node && !rootRef.current.contains(target)) {
         setOpen(false);
       }
     }
