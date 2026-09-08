@@ -235,6 +235,32 @@ export const player = pgTable("player", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Every citizenship a player holds, in source order.
+ *
+ * `player.primary_country_id` stays the single denormalized pointer to the main
+ * citizenship. This table records the full set, so it carries `sort_order` (source page
+ * order, 0 is the primary one) instead of an `is_primary` boolean that could contradict
+ * `player.primary_country_id`.
+ */
+export const playerNationality = pgTable(
+  "player_nationality",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => player.id),
+    countryId: uuid("country_id")
+      .notNull()
+      .references(() => country.id),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("player_nationality_player_country_unique").on(table.playerId, table.countryId),
+  ],
+);
+
 export const playerClubSeason = pgTable(
   "player_club_season",
   {
@@ -799,6 +825,7 @@ export const countryRelations = relations(country, ({ many }) => ({
   clubs: many(club),
   nationalTeams: many(nationalTeam),
   players: many(player),
+  playerNationalities: many(playerNationality),
 }));
 
 export const nationalTeamRelations = relations(nationalTeam, ({ one, many }) => ({
@@ -864,10 +891,16 @@ export const playerRelations = relations(player, ({ one, many }) => ({
     fields: [player.primaryCountryId],
     references: [country.id],
   }),
+  nationalities: many(playerNationality),
   clubSeasons: many(playerClubSeason),
   nationalTeamSeasons: many(playerNationalTeamSeason),
   jerseyNumbers: many(playerJerseyNumber),
   photos: many(playerPhoto),
+}));
+
+export const playerNationalityRelations = relations(playerNationality, ({ one }) => ({
+  player: one(player, { fields: [playerNationality.playerId], references: [player.id] }),
+  country: one(country, { fields: [playerNationality.countryId], references: [country.id] }),
 }));
 
 export const playerNationalTeamSeasonRelations = relations(playerNationalTeamSeason, ({ one }) => ({
