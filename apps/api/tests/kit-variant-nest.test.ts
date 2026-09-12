@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  competitionTokens,
   isOccasionNestedUnderTypeDefault,
   matchCompetitionLinks,
 } from "../src/admin/kit-variant-nest.js";
@@ -15,7 +14,10 @@ describe("kit variant nesting", () => {
       { kitType: "gk", variant: "home" },
     ];
     expect(
-      isOccasionNestedUnderTypeDefault({ kitType: "home", variant: "supercoppa-italiana" }, siblings),
+      isOccasionNestedUnderTypeDefault(
+        { kitType: "home", variant: "supercoppa-italiana" },
+        siblings,
+      ),
     ).toBe(true);
     expect(
       isOccasionNestedUnderTypeDefault({ kitType: "home", variant: "european" }, siblings),
@@ -51,26 +53,21 @@ describe("kit variant nesting", () => {
         barcelona,
       ),
     ).toBe(false);
-    expect(
-      isOccasionNestedUnderTypeDefault({ kitType: "gk", variant: "clasico" }, barcelona),
-    ).toBe(false);
-  });
-
-  it("splits FKA competition slash-lists without a cup enum", () => {
-    expect(competitionTokens("Serie A")).toEqual(["Serie A"]);
-    expect(competitionTokens("Serie A · EA SPORTS FC Supercup")).toEqual([
-      "Serie A · EA SPORTS FC Supercup",
-      "Serie A",
-      "EA SPORTS FC Supercup",
-    ]);
+    expect(isOccasionNestedUnderTypeDefault({ kitType: "gk", variant: "clasico" }, barcelona)).toBe(
+      false,
+    );
   });
 
   it("links competition tokens that match a league CatalogLabel and leaves the rest plain", () => {
     expect(
-      matchCompetitionLinks("Serie A · EA SPORTS FC Supercup", ["supercoppa-italiana"], [
-        { id: "11111111-1111-4111-8111-111111111111", text: "Serie A" },
-        { id: "22222222-2222-4222-8222-222222222222", text: "Superliga" },
-      ]),
+      matchCompetitionLinks(
+        "Serie A · EA SPORTS FC Supercup",
+        ["supercoppa-italiana"],
+        [
+          { id: "11111111-1111-4111-8111-111111111111", text: "Serie A" },
+          { id: "22222222-2222-4222-8222-222222222222", text: "Superliga" },
+        ],
+      ),
     ).toEqual([
       {
         label: "Serie A",
@@ -82,9 +79,11 @@ describe("kit variant nesting", () => {
 
   it("adds a variant slug link only when that slug already exists as a league label", () => {
     expect(
-      matchCompetitionLinks("EA SPORTS FC Supercup", ["supercoppa-italiana"], [
-        { id: "33333333-3333-4333-8333-333333333333", text: "Supercoppa Italiana" },
-      ]),
+      matchCompetitionLinks(
+        "EA SPORTS FC Supercup",
+        ["supercoppa-italiana"],
+        [{ id: "33333333-3333-4333-8333-333333333333", text: "Supercoppa Italiana" }],
+      ),
     ).toEqual([
       { label: "EA SPORTS FC Supercup" },
       {

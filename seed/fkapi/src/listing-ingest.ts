@@ -1,9 +1,13 @@
+import type { SeedScope } from "@kit/seed-shared";
+import {
+  type FkListingKitJson,
+  WAYBACK_CDX_ORIGIN,
+  WAYBACK_USER_AGENT,
+} from "./listing-kit-source.js";
 import { runFkSeed } from "./mapper.js";
 import { normalizeRawKit } from "./normalize.js";
 import { createR2ObjectStore } from "./object-store.js";
-import type { FkListingKitJson } from "./listing-kit-source.js";
 import type { FkFetchAdapter, FkRawKit, ObjectStoreAdapter, SeedRunResult } from "./types.js";
-import type { SeedScope } from "@kit/seed-shared";
 
 export type FkListingIngestInput = {
   scope: SeedScope;
@@ -18,9 +22,6 @@ export type FkListingIngestRunnerOptions = {
   fetchImpl?: typeof fetch;
 };
 
-const ARCHIVE_USER_AGENT =
-  "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)";
-const WAYBACK_ORIGIN = "https://web.archive.org";
 const WAYBACK_ID_RE = /\/web\/(\d+)id_\/(https?:\/\/\S+)$/;
 
 function isArchiveImageBytes(bytes: Uint8Array): boolean {
@@ -37,7 +38,7 @@ function isArchiveImageBytes(bytes: Uint8Array): boolean {
 }
 
 function waybackIdUrl(timestamp: string, original: string): string {
-  return `${WAYBACK_ORIGIN}/web/${timestamp}id_/${original}`;
+  return `${WAYBACK_CDX_ORIGIN}/web/${timestamp}id_/${original}`;
 }
 
 function unwrapWaybackOriginal(url: string): string | undefined {
@@ -54,7 +55,7 @@ async function tryDownloadArchiveImage(
 ): Promise<Uint8Array | undefined> {
   const response = await fetchImpl(url, {
     headers: {
-      "user-agent": ARCHIVE_USER_AGENT,
+      "user-agent": WAYBACK_USER_AGENT,
       accept: "image/*,*/*;q=0.8",
     },
   });
@@ -69,14 +70,14 @@ async function latestCdxTimestamp(
   original: string,
   fetchImpl: typeof fetch,
 ): Promise<string | undefined> {
-  const cdxUrl = new URL("/cdx/search/cdx", WAYBACK_ORIGIN);
+  const cdxUrl = new URL("/cdx/search/cdx", WAYBACK_CDX_ORIGIN);
   cdxUrl.searchParams.set("url", original);
   cdxUrl.searchParams.set("output", "json");
   cdxUrl.searchParams.set("filter", "statuscode:200");
   cdxUrl.searchParams.set("collapse", "digest");
 
   const response = await fetchImpl(cdxUrl, {
-    headers: { "user-agent": ARCHIVE_USER_AGENT },
+    headers: { "user-agent": WAYBACK_USER_AGENT },
   });
   if (!response.ok) {
     return undefined;
