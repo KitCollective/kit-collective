@@ -49,7 +49,7 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
   if (raw.imageBytes instanceof Uint8Array) {
     imageBytes = raw.imageBytes;
   } else if (Array.isArray(raw.imageBytes)) {
-    imageBytes = Uint8Array.from(raw.imageBytes as number[]);
+    imageBytes = bytesFromUnknownList(raw.imageBytes);
   }
 
   let additionalImageBytes: Uint8Array[] | undefined;
@@ -58,8 +58,11 @@ export function normalizeRawKit(raw: Record<string, unknown>): FkRawKit | null {
     for (const item of raw.additionalImageBytes) {
       if (item instanceof Uint8Array && item.length > 0) {
         extras.push(item);
-      } else if (Array.isArray(item)) {
-        extras.push(Uint8Array.from(item as number[]));
+      } else {
+        const parsed = bytesFromUnknownList(item);
+        if (parsed) {
+          extras.push(parsed);
+        }
       }
     }
     if (extras.length > 0) {
@@ -131,6 +134,21 @@ function asString(value: unknown): string | undefined {
 
 function asOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function bytesFromUnknownList(value: unknown): Uint8Array | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const bytes = new Uint8Array(value.length);
+  for (let i = 0; i < value.length; i++) {
+    const n = value[i];
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 0 || n > 255) {
+      return undefined;
+    }
+    bytes[i] = n;
+  }
+  return bytes;
 }
 
 function asColorHex(value: unknown): string | undefined {
