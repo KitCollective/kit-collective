@@ -285,7 +285,7 @@ Status: `locked` (Gap 2026-08-23: collection home regions = 3a. Gap 2026-08-28: 
 | --- | --- |
 | App header | Wordmark left (`kitcollective-wordmark-black.svg`, min 96px wide). Search field fills the remaining width between the wordmark and trailing actions (leading search icon, 48px tall pill — not a 28rem cap). Trailing Icon buttons 44×44: pin, notifications, help, waffle (places). Profile action: 32px circular monogram from the operator email + chevron; menu is email + Sign out — not the KC monogram. Pin / notifications / help are chrome-only this gap (empty menus; no pin API, no inbox, no help center). Header row 64px. No “+ New”. No Sign out as a text Button in the header. No lockup in the header (lockup is login). |
 | Waffle places | Two tiles, icon above title: Master Data \| User Data. Routes stay `/stamdata` and `/collectors`. |
-| Toolbar | Entity switcher in one underline tablist (same Top tabs anatomy as club drill). Master Data: **Clubs** \| **Leagues** \| **Players**. The tab hairline spans the tab group only — not the full toolbar width. Filters is a rounded **Icon button** beside the tablist (opens a right **Sheet**; pressed when catalog filters are on). Search lives in the app header, not here. Pagination footer under the table: `caption` record count (page range) on the left, Previous / Next on the right. |
+| Toolbar | Entity switcher in one underline tablist (Top tabs). Master Data: **Clubs** \| **Leagues** \| **Players**. The tab hairline spans the tab group only — not the full toolbar width. Filters is a rounded **Icon button** beside the tablist (opens a right **Sheet**; pressed when catalog filters are on). Search lives in the app header, not here. Pagination footer under the table: `caption` record count (page range) on the left, Previous / Next on the right. Club drill records use Chip pills, not this underline. |
 | Body | Data table, full remaining width |
 | Drill | Full page replacing the table, with back |
 | Confirm | Sheet/dialog over the drill (Take-down, demote) |
@@ -589,11 +589,11 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Variants**: None. Emphasis comes from context, not a color variant. Do not add `primary` Icon button.
 
-**States**: Rest, pressed, focus, disabled.
+**States**: Rest, pressed, focus, disabled, busy. Busy (admin Fetch kits): the sync icon spins; reduced-motion = no spin, dim only.
 
-**Accessibility**: Accessible name required (e.g. “Luk”, “Kamera”, admin “Back”). Hit target ≥ 44×44 on `mobile`. On `admin`, icon actions may be **32×32** if the accessible name is present (visible tooltip or `aria-label`). Icon is not the only meaning — name is.
+**Accessibility**: Accessible name required (e.g. “Luk”, “Kamera”, admin “Back”, admin “Fetch kits”). Hit target ≥ 44×44 on `mobile`. On `admin`, icon actions may be **32×32** if the accessible name is present (visible tooltip or `aria-label`). Toolbar Filters and club drill Fetch kits are **44×44** pills. Icon is not the only meaning — name is.
 
-**Composition**: Header trailing actions (collection home: capture “Tilføj trøje”; conversation: overflow “Detaljer”). Conversation back. Camera shutter chrome, admin header back, admin header cluster (pin, notifications, help, waffle). Message composer: attach image; send may sit on `fill.primary` with name “Send” — that is composer-only, not a general `primary` Icon button variant. Waffle is the admin place switcher this gap (two tiles: Master Data, User Data). Not a substitute for Tab bar Add. Not a substitute for the Profile action.
+**Composition**: Header trailing actions (collection home: capture “Tilføj trøje”; conversation: overflow “Detaljer”). Conversation back. Camera shutter chrome, admin header back, admin header cluster (pin, notifications, help, waffle). Message composer: attach image; send may sit on `fill.primary` with name “Send” — that is composer-only, not a general `primary` Icon button variant. Waffle is the admin place switcher this gap (two tiles: Master Data, User Data). Admin Master Data Filters and club drill **Fetch kits** sit as 44×44 `radius.pill` Icon buttons beside a labelled control. Fetch kits uses `fill.secondary` (same as Chip rest), not `surface` on `canvas`. Not a substitute for Tab bar Add. Not a substitute for the Profile action.
 
 **Unsupported**: Icon-only control without a name. Emoji as the icon. 32×32 icon actions on `mobile`.
 
@@ -700,9 +700,9 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **States**: Rest, pressed, selected, disabled, focus. Selected = `fill.primary` + `content.inverse`. Not the wash.
 
-**Accessibility**: Role radio for `single-select` and `shortcut`; checkbox for `filter`. Name = label. Hit target ≥ 44 tall. Admin chip labels in English. **Tilpas** is not a Chip — it is `tertiary` text (“Tilpas”), named “Tilpas genveje”.
+**Accessibility**: Role radio for `single-select` and `shortcut`; checkbox for `filter`. Name = label. Hit target ≥ 44 tall. Admin chip labels in English. **Tilpas** is not a Chip — it is `tertiary` text (“Tilpas”), named “Tilpas genveje”. Club drill Players | Jerseys | Honours is Chip **visual** with tab/tablist (panels switch), not radio.
 
-**Composition**: Horizontal row with `space.gap.sm` (collection: scroll horizontally if needed). Confirm Chip groups. User Data toolbar still uses entity Chips (Users, Jerseys). Master Data uses Top tabs, not Chips; Filters is an Icon button that opens the right Filters Sheet (pressed when catalog filters are on, not for header search alone). Collection home: `shortcut` chips **under** the header, then Tilpas. Hide the **entire** chip row (Alle, genveje, Tilpas) when the collection is empty. Owner `mobile` collection only — not public Astro.
+**Composition**: Horizontal row with `space.gap.sm` (collection: scroll horizontally if needed). Confirm Chip groups. User Data toolbar still uses entity Chips (Users, Jerseys). Club drill records switcher uses Chip `single-select` pills (Players | Jerseys | Honours). Master Data uses Top tabs, not Chips; Filters is an Icon button that opens the right Filters Sheet (pressed when catalog filters are on, not for header search alone). Collection home: `shortcut` chips **under** the header, then Tilpas. Hide the **entire** chip row (Alle, genveje, Tilpas) when the collection is empty. Owner `mobile` collection only — not public Astro.
 
 **Unsupported**: Chip as a primary CTA. Kit-type chips (Hjemme/Ude/Tredje) on Samling. Encoding type with wash variant 2/3. Emoji. Plus control to add a genvej (plus is capture). Auto-selecting a chip after Gem (Alle stays selected). Star ratings or a fifth “God” scale for condition — Confirm uses Ny / Brugt / Slidt. A “Mere” chip that dumps leftover kit types onto another tab — Keeper and Special stay in the type group.
 
@@ -916,7 +916,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Properties**: `title`, `body` (optional), `diagram` (optional), `action` (optional). `variant`.
 
-**Variants**: `collection` (title + diagram + one hug `primary` under the title; no body). `inbox` (title + body; no action this gap — honest empty). `table` (admin; no create control — optional `tertiary` “Clear filters” only).
+**Variants**: `collection` (title + diagram + one hug `primary` under the title; no body). `inbox` (title + body; no action this gap — honest empty). `table` (admin; no create control — optional `tertiary` “Clear filters” only). Club drill Jerseys empty is the exception: `primary` **Fetch kits** under the body, not “+ New”.
 
 **States**: Rest. `collection` diagram may loop a quiet translate; reduced-motion = still. Do not animate other emptiness.
 
@@ -1195,11 +1195,11 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Top tabs
 
-**Purpose**: Two-to-three-item underline control. Unused for admin **place** switching (waffle: Master Data | User Data). Master Data table switcher **Clubs** | **Leagues** | **Players**. Club-drill Players | Jerseys. **Indbakke Beskeder | Aktivitet** on `mobile`.
+**Purpose**: Two-to-three-item underline control. Unused for admin **place** switching (waffle: Master Data | User Data). Master Data table switcher **Clubs** | **Leagues** | **Players**. **Indbakke Beskeder | Aktivitet** on `mobile`. Club drill Players | Jerseys | Honours is Chip pills, not Top tabs.
 
 **Anatomy**: Horizontal text tabs. Active: `content.primary` plus a **2px** `fill.primary` underline. Inactive: `content.secondary`. No pill fill. No icons required. Hairline under the row (`border.subtle`).
 
-**Properties**: `items`: two (club drill, Indbakke) or three (Master Data tables). `active`. `onChange`. Labels: English on `admin`; Danish on Indbakke (**Beskeder** | **Aktivitet**).
+**Properties**: `items`: two (Indbakke) or three (Master Data tables). `active`. `onChange`. Labels: English on `admin`; Danish on Indbakke (**Beskeder** | **Aktivitet**).
 
 **Variants**: None.
 
@@ -1207,11 +1207,11 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Accessibility**: Role tab/tablist. Keyboard: Left/Right between tabs. Hit target ≥ 44 tall.
 
-**Composition**: Not for waffle places. Club drill reuses this underline anatomy for Players | Jerseys, with a native Season `<select>` on the right of that row. Master Data list reuses it for Clubs | Leagues | Players. Indbakke: under the **Indbakke** title, above the list. Does not replace mobile Tab bar. Does not contain a “+ New” control.
+**Composition**: Not for waffle places. Master Data list reuses it for Clubs | Leagues | Players. Indbakke: under the **Indbakke** title, above the list. Does not replace mobile Tab bar. Does not contain a “+ New” control. Club drill does not use this primitive.
 
-**Unsupported**: Pill tabs. Four “metric table” pills. Icons-only tabs. Using Tab bar on `admin`. A third waffle place in this gap. Using Top tabs for Master Data | User Data. Chip `shortcut` as Beskeder | Aktivitet.
+**Unsupported**: Pill tabs. Four “metric table” pills. Icons-only tabs. Using Tab bar on `admin`. A third waffle place in this gap. Using Top tabs for Master Data | User Data. Chip `shortcut` as Beskeder | Aktivitet. Club drill Players | Jerseys | Honours as underline Top tabs.
 
-**Example** *(not a rule)*: Indbakke: Beskeder underlined black; Aktivitet muted. Master Data: Clubs | Leagues | Players. Stamdata club drill: Players | Jerseys.
+**Example** *(not a rule)*: Indbakke: Beskeder underlined black; Aktivitet muted. Master Data: Clubs | Leagues | Players.
 
 **Code**: `apps/mobile/src/components/top-tabs.tsx`. The underline travels with `motion.fast` when the active tab changes.
 
@@ -1377,9 +1377,11 @@ Flag missing context; do not invent patterns.
 
 **Composition**: Icon button “Back” + `title` + evidence (KitPhoto or UserJersey photos, not 4:5 collection grid as the page layout) + meta (`type.body` / `type.caption`). User drill: promote/demote as Button `secondary` (disabled with helper text for self or last admin). UserJersey drill: Take-down as Button `destructive`. Both destructive paths open Sheet `confirm` before the mutation. Squad on a **club–season** drill is count + expand, not a global Players table.
 
-**Club drill**: identity/details strip with Mark `lg` (72px) on the **left** as the crest — no invented crest asset, `object-fit: contain` inside the slot. The strip is a `summary-panel` with `space.inset.lg` padding. Facts sit to the right in two `type.caption` (13px) rows of four columns: **Current league** (latest season’s league), Country, Kind on the first row; Founded, Stadium, Capacity, Website on the second (Website may span two columns). Valid from / Valid to / Successor only when set, on that second row. Below: underline tabs **Players** | **Jerseys** | **Honours** (same Top tabs anatomy). A native labelled Season `<select>` aligns to the **right** of that tab row on Players and Jerseys only — Honours is not season-scoped. The Data table under Players lists that club’s squad for the selected season, grouped **Goalkeepers → Defenders → Midfielders → Attackers** (then Other), sorted by squad number inside each group; columns #, Name, Position. Jerseys list kits for the selected season. Honours lists titles (Mark, Season, Title); the Mark is the stored trophy or competition badge when `catalog_mark` exists, otherwise the letter monogram. Keep `<thead>` on loading and empty. Jersey rows open kit drill. Squad player rows do not navigate (player drill is the Master Data Players table). Honour rows do not navigate.
+**Club drill**: identity/details strip with Mark `lg` (72px) on the **left** as the crest — no invented crest asset, `object-fit: contain` inside the slot. The strip is a `summary-panel` with `space.inset.lg` padding. Facts sit to the right in two `type.caption` (13px) rows of four columns: **Current league** (latest season’s league), Country, Kind on the first row; Founded, Stadium, Capacity, Website on the second (Website may span two columns). Valid from / Valid to / Successor only when set, on that second row. Below: Chip `single-select` pills **Players** | **Jerseys** | **Honours** (full rounded sides, selected = `fill.primary` + `content.inverse`; tab/tablist a11y). A native labelled Season `<select>` aligns to the **right** of that chip row on Players and Jerseys only — Honours is not season-scoped. A 44×44 pill Icon button (sync, `fill.secondary`, not white-on-canvas) sits in the same row as that select on Players and Jerseys so the row does not hop (accessible name **Fetch kits**; busy/spin while listing ingest runs). Honours has neither Season nor Fetch. Empty **No jerseys** uses labelled Button `primary` **Fetch kits** under the body (one primary in that region; **Fetching…** while busy). Success and failure use Banner (`success` / `danger`) and then reload the club-season drill. Not “+ New”. Not a search field — the club is already selected. The Data table under Players lists that club’s squad for the selected season, grouped **Goalkeepers → Defenders → Midfielders → Attackers** (then Other), sorted by squad number inside each group; columns #, Name, Position. Jerseys list kits for the selected season. Honours lists titles (Mark, Season, Title); the Mark is the stored trophy or competition badge when `catalog_mark` exists, otherwise the letter monogram. Keep `<thead>` on loading and empty. Loading body is eight 48px rows of flat `fill.secondary` placeholders (opacity pulse on existing tokens, not a skeleton wash); facts/rows fade in together when the season JSON lands. `prefers-reduced-motion` keeps the placeholders still. Jersey thumbs prefetch and reuse the authenticated blob cache. Repeating a season is instant from the club–season cache. Jersey rows open kit drill. Squad player rows do not navigate (player drill is the Master Data Players table). Honour rows do not navigate.
 
-**Unsupported**: Editing CatalogLabel or Kit identity. Setting `rights: public`. Bulk take-down. Demoting self or the last admin. Showing KitPhoto on a collector-facing surface from this page. Left sidebar. “+ New”. Invented crest artwork. Chip-tabs or waffle tiles for Players | Jerseys | Honours. Using the mobile Select field (facet picker) as the season control — club drill uses a native labelled `<select>`. Hot-linking Transfermarkt mark URLs.
+**Kit drill**: Two columns (`repeat(auto-fit, minmax(20rem, 1fr))`): left is identity then facts; right is photos. Identity row: Back (to the club when `clubId` is set) + Mark `lg` crest + linked club name (`title`) with `type · season` (`mono`, `content.secondary`) under it — season is not a link. Then a two-column fact grid with `caption` labels **above** values (`label` 600): Team (link to club drill), Season, Type, Design, Colors (16px `radius.xs` swatches from kit hex, then names), Brand, Sponsor, Competition, Release date, and Description full-width when present. Right: first archive KitPhoto as a large flat (`object-fit: contain`, full column width, max-height 480px); remaining photos as 72px thumbs (same size as Mark `lg`) that select the large image (`aria-pressed`). Loading: keep the two-column geometry with flat `fill.secondary` placeholders (opacity pulse on existing tokens, not a skeleton wash); facts fade in together when the drill JSON lands; photos fade in when bytes arrive. `prefers-reduced-motion` keeps the placeholders still. Not a 4:5 collection grid. Not a horizontal equal-size strip. Not ratings. Not hot-linked CDN URLs. **Supersedes** the strip-then-`summary-panel` kit drill layout and the side-by-side label/value fact list.
+
+**Unsupported**: Editing CatalogLabel or Kit identity. Setting `rights: public`. Bulk take-down. Demoting self or the last admin. Showing KitPhoto on a collector-facing surface from this page. Left sidebar. “+ New”. Invented crest artwork. Underline Top tabs or waffle tiles for Players | Jerseys | Honours. A hopping text Button `secondary` **Fetch kits** beside Season. Using the mobile Select field (facet picker) as the season control — club drill uses a native labelled `<select>`. Hot-linking Transfermarkt mark URLs.
 
 Flag missing context; do not invent patterns.
 

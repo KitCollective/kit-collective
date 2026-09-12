@@ -1,16 +1,20 @@
 import {
   type AdminClubDrill,
   type AdminClubSeasonDrill,
+  type AdminClubSeasonKitsFetch,
   adminClubDrillSchema,
   adminClubSeasonDrillSchema,
+  adminClubSeasonKitsFetchSchema,
 } from "@kit/api-contract";
 import { Fragment, type KeyboardEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
+import { loadAuthenticatedBlob } from "../components/authenticated-image-cache.js";
 import { BackLink } from "../components/BackLink.js";
 import { CatalogMark } from "../components/CatalogMark.js";
+import { peekClubSeasonDrill, putClubSeasonDrill } from "./club-season-cache.js";
 import { groupSquadPlayers } from "./club-drill-squad.js";
 import {
   isClubSeasonExpandPending,
@@ -53,6 +57,97 @@ function websiteHref(url: string): string | undefined {
   return undefined;
 }
 
+function adminRequestMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error) || error.message.length === 0) {
+    return fallback;
+  }
+  try {
+    const body: unknown = JSON.parse(error.message);
+    if (!body || typeof body !== "object" || !("message" in body)) {
+      return error.message;
+    }
+    const message = body.message;
+    if (typeof message === "string" && message.length > 0) {
+      return message;
+    }
+    if (Array.isArray(message)) {
+      const first = message.find((entry) => typeof entry === "string");
+      if (typeof first === "string") {
+        return first;
+      }
+    }
+  } catch {
+    return error.message;
+  }
+  return error.message;
+}
+
+function ClubTableSkeleton({ tab }: { tab: ClubTab }) {
+  const rows = [0, 1, 2, 3, 4, 5, 6, 7];
+  if (tab === "players") {
+    return (
+      <>
+        {rows.map((row) => (
+          <tr key={row} className="data-table-skel-row" aria-hidden="true">
+            <td className="data-table-numeric">
+              <span className="kit-skel kit-skel--cell-sm" />
+            </td>
+            <td>
+              <span className="kit-skel kit-skel--cell" />
+            </td>
+            <td>
+              <span className="kit-skel kit-skel--cell" />
+            </td>
+          </tr>
+        ))}
+      </>
+    );
+  }
+  if (tab === "honours") {
+    return (
+      <>
+        {rows.map((row) => (
+          <tr key={row} className="data-table-skel-row" aria-hidden="true">
+            <td className="data-table-mark">
+              <span className="thumb-slot">
+                <span className="kit-skel kit-skel--slot" />
+              </span>
+            </td>
+            <td>
+              <span className="kit-skel kit-skel--cell-sm" />
+            </td>
+            <td>
+              <span className="kit-skel kit-skel--cell" />
+            </td>
+          </tr>
+        ))}
+      </>
+    );
+  }
+  return (
+    <>
+      {rows.map((row) => (
+        <tr key={row} className="data-table-skel-row" aria-hidden="true">
+          <td className="data-table-mark">
+            <span className="thumb-slot">
+              <span className="kit-skel kit-skel--slot" />
+            </span>
+          </td>
+          <td>
+            <span className="kit-skel kit-skel--cell" />
+          </td>
+          <td>
+            <span className="kit-skel kit-skel--cell-sm" />
+          </td>
+          <td>
+            <span className="kit-skel kit-skel--cell-sm" />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 export function ClubDrillPage() {
   const { clubId } = useParams();
   const { token } = useAuth();
@@ -64,6 +159,8 @@ export function ClubDrillPage() {
   const [seasonLoading, setSeasonLoading] = useState(false);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [fetchingKits, setFetchingKits] = useState(false);
 
   useEffect(() => {
     if (!token || !clubId) {
@@ -104,7 +201,14 @@ export function ClubDrillPage() {
       return;
     }
     let cancelled = false;
-    setSeasonLoading(true);
+    const cached = peekClubSeasonDrill(clubId, seasonId);
+    if (cached) {
+      setSeasonDrill(cached);
+      setSeasonLoading(false);
+    } else {
+      setSeasonDrill(null);
+      setSeasonLoading(true);
+    }
     apiFetch<AdminClubSeasonDrill>(
       `/admin/catalog/club-seasons/${clubId}/${seasonId}?expand=true`,
       { token },
@@ -113,7 +217,9 @@ export function ClubDrillPage() {
         if (cancelled) {
           return;
         }
-        setSeasonDrill(adminClubSeasonDrillSchema.parse(body));
+        const parsed = adminClubSeasonDrillSchema.parse(body);
+        putClubSeasonDrill(parsed);
+        setSeasonDrill(parsed);
         setFocusedRowIndex(0);
         setError(null);
       })
@@ -122,7 +228,7 @@ export function ClubDrillPage() {
           return;
         }
         setSeasonDrill(null);
-        setError(fetchError instanceof Error ? fetchError.message : "Failed to load season");
+        setError(adminRequestMessage(fetchError, "Failed to load season"));
       })
       .finally(() => {
         if (!cancelled) {
@@ -134,14 +240,74 @@ export function ClubDrillPage() {
     };
   }, [token, clubId, seasonId, club]);
 
+  useEffect(() => {
+    if (!token || !seasonDrill) {
+      return;
+    }
+    for (const kit of seasonDrill.kits) {
+      if (kit.photoPath) {
+        void loadAuthenticatedBlob(kit.photoPath, token);
+      }
+    }
+  }, [seasonDrill, token]);
+
+  useEffect(() => {
+    if (!token || !club?.honours) {
+      return;
+    }
+    if (club.markPath) {
+      void loadAuthenticatedBlob(club.markPath, token);
+    }
+    for (const honour of club.honours) {
+      if (honour.markPath) {
+        void loadAuthenticatedBlob(honour.markPath, token);
+      }
+    }
+  }, [club, token]);
+
   const routedClub = club && clubId && club.id === clubId ? club : null;
   const players = seasonDrill?.squad ?? [];
   const jerseys = seasonDrill?.kits ?? [];
   const honours = routedClub?.honours ?? [];
+  const tableLoading =
+    tab === "honours" ? !routedClub && !error : seasonLoading || (!routedClub && !error);
   const rows = tab === "players" ? players : tab === "jerseys" ? jerseys : honours;
   const columnCount = tab === "players" ? 3 : tab === "jerseys" ? 4 : 3;
   const squadGroups = tab === "players" ? groupSquadPlayers(players) : [];
   const website = routedClub?.websiteUrl ? websiteHref(routedClub.websiteUrl) : undefined;
+  const canFetchKits = Boolean(token && clubId && seasonId && routedClub && !fetchingKits);
+
+  async function fetchKits() {
+    if (!token || !clubId || !seasonId || fetchingKits) {
+      return;
+    }
+    const fetchClubId = clubId;
+    const fetchSeasonId = seasonId;
+    setFetchingKits(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const body = await apiFetch<AdminClubSeasonKitsFetch>(
+        `/admin/catalog/clubs/${fetchClubId}/seasons/${fetchSeasonId}/kits/fetch`,
+        { method: "POST", token },
+      );
+      const parsed = adminClubSeasonKitsFetchSchema.parse(body);
+      const drill = await apiFetch<AdminClubSeasonDrill>(
+        `/admin/catalog/club-seasons/${fetchClubId}/${fetchSeasonId}?expand=true`,
+        { token },
+      );
+      const parsedDrill = adminClubSeasonDrillSchema.parse(drill);
+      putClubSeasonDrill(parsedDrill);
+      setSeasonDrill(parsedDrill);
+      setFocusedRowIndex(0);
+      setNotice(`Fetched ${parsed.kitsUpserted} kits (${parsed.photosWritten} photos).`);
+    } catch (fetchError) {
+      setNotice(null);
+      setError(adminRequestMessage(fetchError, "Failed to fetch kits"));
+    } finally {
+      setFetchingKits(false);
+    }
+  }
 
   function openJersey(kitId: string) {
     navigate(`/stamdata/kits/${kitId}`);
@@ -205,7 +371,11 @@ export function ClubDrillPage() {
         <h2>{routedClub?.label ?? "Club"}</h2>
       </div>
 
-      {error ? <div className="banner-error">{error}</div> : null}
+      {error ? (
+        <div className="banner-error">{error}</div>
+      ) : notice ? (
+        <div className="banner-success">{notice}</div>
+      ) : null}
 
       {routedClub ? (
         <section className="summary-panel identity-strip">
@@ -292,14 +462,14 @@ export function ClubDrillPage() {
 
       <div className="drill-toolbar">
         <div
-          className="drill-tabs"
+          className="chip-group toolbar-chips drill-tabs"
           role="tablist"
           aria-label="Club records"
           onKeyDown={handleTabKeyDown}
         >
           <button
             type="button"
-            className="top-tab"
+            className="chip"
             role="tab"
             id="club-tab-players"
             aria-selected={tab === "players"}
@@ -314,7 +484,7 @@ export function ClubDrillPage() {
           </button>
           <button
             type="button"
-            className="top-tab"
+            className="chip"
             role="tab"
             id="club-tab-jerseys"
             aria-selected={tab === "jerseys"}
@@ -329,7 +499,7 @@ export function ClubDrillPage() {
           </button>
           <button
             type="button"
-            className="top-tab"
+            className="chip"
             role="tab"
             id="club-tab-honours"
             aria-selected={tab === "honours"}
@@ -346,27 +516,50 @@ export function ClubDrillPage() {
         {tab === "honours" ? null : (
           <div className="field season-field">
             <label htmlFor="club-season">Season</label>
-            <select
-              id="club-season"
-              value={routedClub ? seasonId : ""}
-              disabled={!routedClub || routedClub.seasons.length === 0}
-              onChange={(event) => setSeasonId(event.target.value)}
-            >
-              {routedClub && routedClub.seasons.length > 0 ? (
-                routedClub.seasons.map((season) => (
-                  <option key={season.id} value={season.id}>
-                    {season.label}
-                  </option>
-                ))
-              ) : (
-                <option value="">No seasons</option>
-              )}
-            </select>
+            <div className="season-field-row">
+              <select
+                id="club-season"
+                value={routedClub ? seasonId : ""}
+                disabled={!routedClub || routedClub.seasons.length === 0 || fetchingKits}
+                onChange={(event) => setSeasonId(event.target.value)}
+              >
+                {routedClub && routedClub.seasons.length > 0 ? (
+                  routedClub.seasons.map((season) => (
+                    <option key={season.id} value={season.id}>
+                      {season.label}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No seasons</option>
+                )}
+              </select>
+              <button
+                type="button"
+                className={
+                  fetchingKits
+                    ? "icon-btn icon-btn--toolbar icon-btn--sync icon-btn--busy"
+                    : "icon-btn icon-btn--toolbar icon-btn--sync"
+                }
+                disabled={!canFetchKits}
+                aria-busy={fetchingKits}
+                aria-label={fetchingKits ? "Fetching kits" : "Fetch kits"}
+                onClick={() => {
+                  void fetchKits();
+                }}
+              >
+                <SyncIcon />
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="data-table-wrap" id="club-tabpanel" role="tabpanel">
+      <div
+        className="data-table-wrap"
+        id="club-tabpanel"
+        role="tabpanel"
+        aria-busy={tableLoading}
+      >
         <table className="data-table">
           <thead>
             {tab === "players" ? (
@@ -396,14 +589,10 @@ export function ClubDrillPage() {
               </tr>
             )}
           </thead>
-          <tbody>
+          <tbody className={tableLoading ? undefined : "data-table-body--ready"}>
             {tab === "honours" ? (
               !routedClub && !error ? (
-                <tr>
-                  <td colSpan={columnCount}>
-                    <div className="empty-state data-table-empty">Loading…</div>
-                  </td>
-                </tr>
+                <ClubTableSkeleton tab="honours" />
               ) : honours.length === 0 ? (
                 <tr>
                   <td colSpan={columnCount}>
@@ -429,11 +618,7 @@ export function ClubDrillPage() {
                 ))
               )
             ) : seasonLoading || (!routedClub && !error) ? (
-              <tr>
-                <td colSpan={columnCount}>
-                  <div className="empty-state data-table-empty">Loading…</div>
-                </td>
-              </tr>
+              <ClubTableSkeleton tab={tab} />
             ) : !seasonId ? (
               <tr>
                 <td colSpan={columnCount}>
@@ -456,6 +641,17 @@ export function ClubDrillPage() {
                       <>
                         <h2>No jerseys</h2>
                         <p>No kits are recorded for this season.</p>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-primary--auto"
+                          disabled={!canFetchKits}
+                          aria-busy={fetchingKits}
+                          onClick={() => {
+                            void fetchKits();
+                          }}
+                        >
+                          {fetchingKits ? "Fetching…" : "Fetch kits"}
+                        </button>
                       </>
                     )}
                   </div>
@@ -492,7 +688,11 @@ export function ClubDrillPage() {
                   <td className="data-table-mark">
                     {jersey.hasPhoto && jersey.photoPath && token ? (
                       <span className="thumb-slot">
-                        <AuthenticatedImage path={jersey.photoPath} token={token} />
+                        <AuthenticatedImage
+                          path={jersey.photoPath}
+                          token={token}
+                          fallback={<span className="kit-skel kit-skel--slot" aria-hidden />}
+                        />
                       </span>
                     ) : (
                       <span className="thumb-slot" aria-hidden />
@@ -500,7 +700,11 @@ export function ClubDrillPage() {
                   </td>
                   <td className="data-table-primary">{jersey.label}</td>
                   <td className="data-table-mono">{jersey.kitType}</td>
-                  <td className="data-table-meta">{jersey.hasPhoto ? "—" : "No photo"}</td>
+                  <td className="data-table-meta">
+                    {jersey.variantCount > 0
+                      ? `${jersey.variantCount} variant${jersey.variantCount === 1 ? "" : "s"}`
+                      : (jersey.variant ?? (jersey.hasPhoto ? "—" : "No photo"))}
+                  </td>
                 </tr>
               ))
             )}
@@ -508,5 +712,40 @@ export function ClubDrillPage() {
         </table>
       </div>
     </div>
+  );
+}
+
+function SyncIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M3 8a5 5 0 0 1 8.5-3.5L13 6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13 3.5V6h-2.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13 8a5 5 0 0 1-8.5 3.5L3 10"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M3 12.5V10h2.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
