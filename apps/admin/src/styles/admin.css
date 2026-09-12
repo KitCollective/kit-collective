@@ -1461,7 +1461,9 @@ img.monogram-slot {
 }
 
 .kit-competition-list {
-  font-weight: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
 }
 
 .kit-facts dd {
@@ -1470,8 +1472,9 @@ img.monogram-slot {
   align-items: center;
   gap: var(--space-gap-sm);
   margin: 0;
-  font-weight: 600;
-  line-height: 24px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
   overflow-wrap: anywhere;
 }
 
@@ -1556,11 +1559,9 @@ img.monogram-slot {
 
 .kit-drill-variants h3 {
   margin: 0;
-  font-family: var(--font-heading);
   font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 24px;
+  font-weight: 500;
+  line-height: 20px;
 }
 
 .jersey-photo-grid {
