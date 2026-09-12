@@ -6,5 +6,7 @@ We still do **not** vendor sunr4y/fkapi as the Join origin. Direct footballkitar
 
 Join CLI: `FKAPI_BASE_URL` → live adapter; else `SEED_FK_FETCH=fixture` → committed proof kits; else throw. No silent fixture default.
 
+Staff ingest is the same origin: `POST /ingest` (Bearer `FK_LISTING_INGEST_TOKEN`), not a second host and not sunr4y/fkapi. `GET /kits` and `GET /health` stay unauthenticated so Join CLI does not break.
+
 Status: accepted.
 Supersedes: CONTEXT **FK after facts** “this factory does not host sunr4y/fkapi” as the reason the operator must supply a public URL — that URL does not exist. Proof Join may still run on fixtures until listing HTTP returns kits.

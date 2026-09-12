@@ -9,6 +9,7 @@ import { AdminCatalogController } from "./admin-catalog.controller.js";
 import { ADMIN_OBJECT_STORE, AdminCatalogService } from "./admin-catalog.service.js";
 import { AdminCollectionController } from "./admin-collection.controller.js";
 import { AdminCollectionService } from "./admin-collection.service.js";
+import { createHttpFkListingIngestClient, FK_LISTING_INGEST } from "./fk-listing-ingest.js";
 
 @Module({
   imports: [IdentityModule, CollectionModule, BillingModule],
@@ -25,6 +26,10 @@ import { AdminCollectionService } from "./admin-collection.service.js";
     {
       provide: ADMIN_OBJECT_STORE,
       useFactory: () => AdminCatalogService.objectStoreFactory(),
+    },
+    {
+      provide: FK_LISTING_INGEST,
+      useFactory: () => createHttpFkListingIngestClient(),
     },
   ],
 })

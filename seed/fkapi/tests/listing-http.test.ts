@@ -60,6 +60,19 @@ describe("FK listing HTTP", () => {
     }
   });
 
+  it("disables Node’s 5-minute request timeout so Wayback ingest can finish", async () => {
+    const server = startFkListingHttpServer({
+      env: { PORT: "0", FK_LISTING_BIND: "127.0.0.1" },
+    });
+    try {
+      await listeningPort(server);
+      expect(server.requestTimeout).toBe(0);
+      expect(server.headersTimeout).toBe(0);
+    } finally {
+      server.close();
+    }
+  });
+
   it("GET /kits without query returns 400 not empty kits", async () => {
     const server = startFkListingHttpServer({
       env: { PORT: "0", FK_LISTING_BIND: "127.0.0.1" },
@@ -180,5 +193,142 @@ describe("Coolify FK listing host", () => {
     expect(wire).not.toMatch(/\{key: "SEED_PROXY_URL"/);
     expect(readRepo("seed/fkapi/src/listing-kit-source.ts")).toMatch(/web\.archive\.org/);
     expect(readRepo("seed/fkapi/src/listing-http.ts")).not.toMatch(/SEED_PROXY_URL/);
+    expect(readRepo("seed/fkapi/src/listing-http.ts")).toMatch(/FK_LISTING_INGEST_TOKEN/);
+    expect(compose).toMatch(/DATABASE_URL/);
+    expect(compose).toMatch(/R2_ENDPOINT/);
+    expect(compose).toMatch(/FK_LISTING_INGEST_TOKEN/);
+    expect(compose).not.toMatch(/^\s+DATABASE_URL:/m);
+    expect(compose).not.toMatch(/^\s+FK_LISTING_INGEST_TOKEN:/m);
+    expect(compose).not.toMatch(/^\s+FK_LIVE_BROWSER:/m);
+    expect(readRepo("seed/fkapi/src/listing-kit-source.ts")).not.toMatch(
+      /listing-live-playwright|connectOverCDP|FK_LIVE_BROWSER/,
+    );
+  });
+});
+
+describe("FK listing ingest HTTP", () => {
+  const sampleKits = [
+    {
+      id: "fc-copenhagen-2010-11-home-kit",
+      clubTransfermarktId: "190",
+      seasonTransfermarktId: "2010/11",
+      seasonLabel: "2010/11",
+      type: "home",
+      manufacturerName: "Kappa",
+    },
+  ];
+
+  it("POST /ingest without a bearer returns 401 when a token is configured", async () => {
+    const server = startFkListingHttpServer({
+      env: {
+        PORT: "0",
+        FK_LISTING_BIND: "127.0.0.1",
+        FK_LISTING_INGEST_TOKEN: "ingest-secret",
+      },
+    });
+    try {
+      const port = await listeningPort(server);
+      const response = await fetch(
+        `http://127.0.0.1:${port}/ingest?clubTransfermarktId=190&season=2010%2F11`,
+        { method: "POST" },
+      );
+      expect(response.status).toBe(401);
+    } finally {
+      server.close();
+    }
+  });
+
+  it("POST /ingest without FK_LISTING_INGEST_TOKEN returns 503", async () => {
+    const server = startFkListingHttpServer({
+      env: { PORT: "0", FK_LISTING_BIND: "127.0.0.1" },
+    });
+    try {
+      const port = await listeningPort(server);
+      const response = await fetch(
+        `http://127.0.0.1:${port}/ingest?clubTransfermarktId=190&season=2010%2F11`,
+        { method: "POST", headers: { authorization: "Bearer ingest-secret" } },
+      );
+      expect(response.status).toBe(503);
+    } finally {
+      server.close();
+    }
+  });
+
+  it("POST /ingest fails closed when the kit source cannot load live kits", async () => {
+    const loadKits: FkListingKitSource = async () => ({
+      ok: false,
+      error: "no Football Kit Archive slug for clubTransfermarktId=99999",
+    });
+    const server = startFkListingHttpServer({
+      env: {
+        PORT: "0",
+        FK_LISTING_BIND: "127.0.0.1",
+        FK_LISTING_INGEST_TOKEN: "ingest-secret",
+      },
+      loadKits,
+      runIngest: async () => {
+        throw new Error("must not ingest");
+      },
+    });
+    try {
+      const port = await listeningPort(server);
+      const response = await fetch(
+        `http://127.0.0.1:${port}/ingest?clubTransfermarktId=99999&season=2010%2F11`,
+        { method: "POST", headers: { authorization: "Bearer ingest-secret" } },
+      );
+      expect(response.status).toBe(502);
+      const body = await response.json();
+      expect(body).toEqual({
+        error: "no Football Kit Archive slug for clubTransfermarktId=99999",
+        scope: {
+          kind: "club",
+          competition: "superligaen",
+          clubExternalId: "99999",
+          season: "2010/11",
+        },
+      });
+    } finally {
+      server.close();
+    }
+  });
+
+  it("POST /ingest runs the mapper for the club season scope", async () => {
+    const loadKits: FkListingKitSource = async () => ({
+      ok: true,
+      kits: sampleKits,
+    });
+    let ingested: { clubExternalId?: string; season?: string; kitIds: string[] } | undefined;
+    const server = startFkListingHttpServer({
+      env: {
+        PORT: "0",
+        FK_LISTING_BIND: "127.0.0.1",
+        FK_LISTING_INGEST_TOKEN: "ingest-secret",
+      },
+      loadKits,
+      runIngest: async ({ scope, kits }) => {
+        ingested = {
+          clubExternalId: scope.kind === "club" ? scope.clubExternalId : undefined,
+          season: scope.kind === "club" ? scope.season : undefined,
+          kitIds: kits.map((kit) => kit.id),
+        };
+        return { kitsUpserted: kits.length, photosWritten: 0 };
+      },
+    });
+    try {
+      const port = await listeningPort(server);
+      const response = await fetch(
+        `http://127.0.0.1:${port}/ingest?clubTransfermarktId=190&season=2010%2F11&clubLabel=FC%20Copenhagen`,
+        { method: "POST", headers: { authorization: "Bearer ingest-secret" } },
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ kitsUpserted: 1, photosWritten: 0 });
+      expect(ingested).toEqual({
+        clubExternalId: "190",
+        season: "2010/11",
+        kitIds: ["fc-copenhagen-2010-11-home-kit"],
+      });
+    } finally {
+      server.close();
+    }
   });
 });

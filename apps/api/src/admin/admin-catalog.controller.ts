@@ -3,15 +3,33 @@ import {
   adminClubSeasonParamsSchema,
   adminHonourIdParamSchema,
   adminKitIdParamSchema,
+  adminKitPhotoParamsSchema,
   adminLeagueIdParamSchema,
   adminPlayerIdParamSchema,
   adminSeasonIdParamSchema,
   adminStamdataQuerySchema,
 } from "@kit/api-contract";
-import { BadRequestException, Controller, Get, Param, Query, Res, UseGuards } from "@nestjs/common";
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
 import type { FastifyReply } from "fastify";
 import { AdminAuthGuard } from "./admin-auth.guard.js";
 import { AdminCatalogService } from "./admin-catalog.service.js";
+
+function sendPrivateBytes(reply: FastifyReply, bytes: Uint8Array, contentType: string) {
+  return reply
+    .header("cache-control", "private, max-age=3600")
+    .type(contentType)
+    .send(Buffer.from(bytes));
+}
 
 @Controller("admin/catalog")
 @UseGuards(AdminAuthGuard)
@@ -51,6 +69,22 @@ export class AdminCatalogController {
     return this.adminCatalogService.getKitDrill(parsed.data.kitId);
   }
 
+  @Get("kits/:kitId/photos/:photoId")
+  async getKitPhotoById(@Param() params: Record<string, string>, @Res() reply: FastifyReply) {
+    const parsed = adminKitPhotoParamsSchema.safeParse({
+      kitId: params.kitId,
+      photoId: params.photoId,
+    });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid kit photo");
+    }
+    const { bytes, contentType } = await this.adminCatalogService.getKitPhotoBytes(
+      parsed.data.kitId,
+      parsed.data.photoId,
+    );
+    return sendPrivateBytes(reply, bytes, contentType);
+  }
+
   @Get("kits/:kitId/photo")
   async getKitPhoto(@Param() params: Record<string, string>, @Res() reply: FastifyReply) {
     const parsed = adminKitIdParamSchema.safeParse({ kitId: params.kitId });
@@ -60,7 +94,7 @@ export class AdminCatalogController {
     const { bytes, contentType } = await this.adminCatalogService.getKitPhotoBytes(
       parsed.data.kitId,
     );
-    return reply.type(contentType).send(Buffer.from(bytes));
+    return sendPrivateBytes(reply, bytes, contentType);
   }
 
   @Get("club-seasons/:clubId/:seasonId")
@@ -83,6 +117,19 @@ export class AdminCatalogController {
     );
   }
 
+  @Post("clubs/:clubId/seasons/:seasonId/kits/fetch")
+  @HttpCode(200)
+  fetchClubSeasonKits(@Param() params: Record<string, string>) {
+    const parsed = adminClubSeasonParamsSchema.safeParse({
+      clubId: params.clubId,
+      seasonId: params.seasonId,
+    });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid club season");
+    }
+    return this.adminCatalogService.fetchClubSeasonKits(parsed.data.clubId, parsed.data.seasonId);
+  }
+
   @Get("clubs/:clubId/mark")
   async getClubMark(@Param() params: Record<string, string>, @Res() reply: FastifyReply) {
     const parsed = adminClubIdParamSchema.safeParse({ clubId: params.clubId });
@@ -93,7 +140,7 @@ export class AdminCatalogController {
       "club",
       parsed.data.clubId,
     );
-    return reply.type(contentType).send(Buffer.from(bytes));
+    return sendPrivateBytes(reply, bytes, contentType);
   }
 
   @Get("leagues/:leagueId/mark")
@@ -106,7 +153,7 @@ export class AdminCatalogController {
       "league",
       parsed.data.leagueId,
     );
-    return reply.type(contentType).send(Buffer.from(bytes));
+    return sendPrivateBytes(reply, bytes, contentType);
   }
 
   @Get("honours/:honourId/mark")
@@ -119,7 +166,7 @@ export class AdminCatalogController {
       "honour",
       parsed.data.honourId,
     );
-    return reply.type(contentType).send(Buffer.from(bytes));
+    return sendPrivateBytes(reply, bytes, contentType);
   }
 
   @Get("players/:playerId/photo")
@@ -131,7 +178,7 @@ export class AdminCatalogController {
     const { bytes, contentType } = await this.adminCatalogService.getPlayerPhotoBytes(
       parsed.data.playerId,
     );
-    return reply.type(contentType).send(Buffer.from(bytes));
+    return sendPrivateBytes(reply, bytes, contentType);
   }
 
   @Get("leagues/:leagueId")

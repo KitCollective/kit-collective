@@ -1,6 +1,7 @@
 import {
   type AdminClubDrill,
   type AdminClubSeasonDrill,
+  type AdminClubSeasonKitsFetch,
   type AdminFilterOptions,
   type AdminKitDrill,
   type AdminLeagueDrill,
@@ -24,6 +25,7 @@ import {
   catalogMark,
   club,
   country,
+  externalId,
   honour,
   kit,
   kitPhoto,
@@ -35,12 +37,31 @@ import {
   teamSeason,
 } from "@kit/db";
 import { compareSquadOrder, KIT_TYPES } from "@kit/domain";
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { and, asc, desc, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { createMemoryObjectStore } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { DB } from "../db/db.module.js";
+import { FK_LISTING_INGEST, type FkListingIngestClient } from "./fk-listing-ingest.js";
+import { isOccasionNestedUnderTypeDefault, matchCompetitionLinks } from "./kit-variant-nest.js";
 
 export const ADMIN_OBJECT_STORE = Symbol("ADMIN_OBJECT_STORE");
 
@@ -74,6 +95,16 @@ const resolvedEnLabel = sql<string | null>`coalesce(
   max(case when ${catalogLabel.locale} = 'en' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
   max(case when ${catalogLabel.locale} = 'mul' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end)
 )`;
+
+function dateOnly(value: unknown): string | undefined {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  return undefined;
+}
 
 const DEFAULT_PAGE_SIZE = 50;
 
@@ -140,6 +171,7 @@ export class AdminCatalogService {
   constructor(
     @Inject(DB) private readonly db: Db,
     @Inject(ADMIN_OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
+    @Inject(FK_LISTING_INGEST) private readonly fkListingIngest: FkListingIngestClient,
   ) {}
 
   static objectStoreFactory(): ObjectStoreAdapter {
@@ -214,48 +246,128 @@ export class AdminCatalogService {
       .select({
         id: kit.id,
         kitType: kit.type,
-        clubLabel: resolvedEnLabel,
+        variant: kit.variant,
+        clubId: kit.clubId,
+        manufacturerId: kit.manufacturerId,
+        sponsorName: kit.sponsorName,
+        design: kit.design,
+        colorNames: kit.colorNames,
+        primaryColorHex: kit.primaryColorHex,
+        secondaryColorHex: kit.secondaryColorHex,
+        competition: kit.competition,
+        releasedOn: kit.releasedOn,
+        description: kit.description,
+        seasonId: kit.seasonId,
         seasonLabel: season.label,
-        photoId: kitPhoto.id,
       })
       .from(kit)
       .innerJoin(season, eq(kit.seasonId, season.id))
-      .leftJoin(club, eq(kit.clubId, club.id))
-      .leftJoin(
-        catalogLabel,
-        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
-      )
-      .leftJoin(kitPhoto, eq(kitPhoto.kitId, kit.id))
       .where(eq(kit.id, kitId))
-      .groupBy(kit.id, kit.type, season.label, kitPhoto.id)
       .limit(1);
 
     if (!row) {
       throw new NotFoundException("Kit not found");
     }
 
-    const label = `${row.clubLabel ?? "Kit"} ${row.kitType}`;
-    const hasPhoto = Boolean(row.photoId);
+    const clubLabel = row.clubId ? await this.entityLabel("club", row.clubId) : undefined;
+    const clubMarkPath = row.clubId
+      ? (await this.catalogMarkPaths("club", [row.clubId])).get(row.clubId)
+      : undefined;
+    const brandLabel = row.manufacturerId
+      ? await this.entityLabel("manufacturer", row.manufacturerId)
+      : undefined;
+    const photos = await this.db
+      .select({ id: kitPhoto.id })
+      .from(kitPhoto)
+      .where(eq(kitPhoto.kitId, kitId))
+      .orderBy(asc(kitPhoto.createdAt), asc(kitPhoto.objectKey));
+
+    const photoRows = photos.map((photo) => ({
+      id: photo.id,
+      path: `/admin/catalog/kits/${row.id}/photos/${photo.id}`,
+    }));
+    const hasPhoto = photoRows.length > 0;
+    const variant = row.variant ?? undefined;
+    const label = variant
+      ? `${clubLabel ?? "Kit"} ${row.kitType} ${variant}`
+      : `${clubLabel ?? "Kit"} ${row.kitType}`;
+    const competition = row.competition ?? undefined;
+    const competitions = await this.competitionLinks(competition, variant ? [variant] : []);
+    const competitionHref = competitions.find((row) => row.href)?.href;
+
+    let parentKit: { id: string; label: string } | undefined;
+    let variants: {
+      id: string;
+      variant: string;
+      label: string;
+      competition?: string;
+      competitionHref?: string;
+      competitions?: { label: string; href?: string }[];
+      hasPhoto: boolean;
+      photoPath?: string;
+    }[] = [];
+
+    if (row.clubId) {
+      if (variant) {
+        parentKit = await this.findTypeDefaultKit(row.clubId, row.seasonId, row.kitType, clubLabel);
+      } else {
+        variants = await this.listTypeOccasionKits(
+          row.clubId,
+          row.seasonId,
+          row.kitType,
+          clubLabel,
+        );
+      }
+    }
 
     return adminKitDrillSchema.parse({
       id: row.id,
       label,
       kitType: row.kitType,
-      clubLabel: row.clubLabel ?? undefined,
+      variant,
+      clubId: row.clubId ?? undefined,
+      clubLabel,
+      clubMonogram: clubLabel ? monogramFromLabel(clubLabel) : undefined,
+      clubMarkPath,
       seasonLabel: row.seasonLabel,
+      brandLabel,
+      sponsorName: row.sponsorName ?? undefined,
+      design: row.design ?? undefined,
+      colorNames: row.colorNames ?? undefined,
+      primaryColorHex: row.primaryColorHex ?? undefined,
+      secondaryColorHex: row.secondaryColorHex ?? undefined,
+      competition,
+      competitionHref,
+      competitions,
+      releasedOn: dateOnly(row.releasedOn),
+      description: row.description ?? undefined,
       hasPhoto,
       photoPath: hasPhoto ? `/admin/catalog/kits/${row.id}/photo` : undefined,
+      photos: photoRows,
+      parentKit,
+      variants,
     });
   }
 
-  async getKitPhotoBytes(kitId: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-    const [photo] = await this.db
+  async getKitPhotoBytes(
+    kitId: string,
+    photoId?: string,
+  ): Promise<{ bytes: Uint8Array; contentType: string }> {
+    const photos = await this.db
       .select({
+        id: kitPhoto.id,
         objectKey: kitPhoto.objectKey,
       })
       .from(kitPhoto)
-      .where(eq(kitPhoto.kitId, kitId))
+      .where(
+        photoId
+          ? and(eq(kitPhoto.kitId, kitId), eq(kitPhoto.id, photoId))
+          : eq(kitPhoto.kitId, kitId),
+      )
+      .orderBy(asc(kitPhoto.createdAt), asc(kitPhoto.objectKey))
       .limit(1);
+
+    const photo = photos[0];
 
     if (!photo) {
       throw new NotFoundException("Kit photo not found");
@@ -267,6 +379,28 @@ export class AdminCatalogService {
     }
 
     return { bytes, contentType: sniffImageContentType(bytes) };
+  }
+
+  private async entityLabel(
+    entityType: "club" | "manufacturer",
+    entityId: string,
+  ): Promise<string | undefined> {
+    const labels = await this.db
+      .select({
+        text: catalogLabel.text,
+        locale: catalogLabel.locale,
+      })
+      .from(catalogLabel)
+      .where(
+        and(
+          eq(catalogLabel.entityType, entityType),
+          eq(catalogLabel.entityId, entityId),
+          eq(catalogLabel.kind, "label"),
+        ),
+      );
+    const en = labels.find((label) => label.locale === "en");
+    const mul = labels.find((label) => label.locale === "mul");
+    return en?.text ?? mul?.text ?? labels[0]?.text;
   }
 
   async getCatalogMarkBytes(
@@ -315,6 +449,89 @@ export class AdminCatalogService {
     seasonId: string,
     expandSquad = false,
   ): Promise<AdminClubSeasonDrill> {
+    const clubQuery = this.db
+      .select({
+        clubLabel: resolvedEnLabel,
+      })
+      .from(club)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+      )
+      .where(eq(club.id, clubId))
+      .groupBy(club.id)
+      .limit(1);
+
+    const seasonQuery = this.db
+      .select({
+        seasonLabel: season.label,
+      })
+      .from(season)
+      .where(eq(season.id, seasonId))
+      .limit(1);
+
+    const countQuery = this.db
+      .select({
+        squadCount: sql<number>`count(${playerClubSeason.id})::int`,
+      })
+      .from(playerClubSeason)
+      .where(and(eq(playerClubSeason.clubId, clubId), eq(playerClubSeason.seasonId, seasonId)));
+
+    const [[clubRow], [seasonRow], [countRow], kits, players] = await Promise.all([
+      clubQuery,
+      seasonQuery,
+      countQuery,
+      this.listClubSeasonKits(clubId, seasonId),
+      expandSquad
+        ? this.db
+            .select({
+              id: player.id,
+              label: resolvedEnLabel,
+              squadNumber: playerClubSeason.squadNumber,
+              position: playerClubSeason.position,
+            })
+            .from(playerClubSeason)
+            .innerJoin(player, eq(playerClubSeason.playerId, player.id))
+            .leftJoin(
+              catalogLabel,
+              and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
+            )
+            .where(
+              and(eq(playerClubSeason.clubId, clubId), eq(playerClubSeason.seasonId, seasonId)),
+            )
+            .groupBy(player.id, playerClubSeason.squadNumber, playerClubSeason.position)
+            .orderBy(asc(playerClubSeason.squadNumber), asc(player.id))
+        : Promise.resolve(null),
+    ]);
+
+    if (!clubRow?.clubLabel || !seasonRow) {
+      throw new NotFoundException("Club season not found");
+    }
+
+    const squad = players
+      ? players
+          .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+          .map((row) => ({
+            id: row.id,
+            label: row.label,
+            squadNumber: row.squadNumber,
+            position: row.position,
+          }))
+          .sort(compareSquadOrder)
+      : undefined;
+
+    return adminClubSeasonDrillSchema.parse({
+      clubId,
+      seasonId,
+      clubLabel: clubRow.clubLabel,
+      seasonLabel: seasonRow.seasonLabel,
+      squadCount: countRow?.squadCount ?? 0,
+      squad,
+      kits,
+    });
+  }
+
+  async fetchClubSeasonKits(clubId: string, seasonId: string): Promise<AdminClubSeasonKitsFetch> {
     const [clubRow] = await this.db
       .select({
         clubLabel: resolvedEnLabel,
@@ -340,53 +557,26 @@ export class AdminCatalogService {
       throw new NotFoundException("Club season not found");
     }
 
-    const [countRow] = await this.db
-      .select({
-        squadCount: sql<number>`count(${playerClubSeason.id})::int`,
-      })
-      .from(playerClubSeason)
-      .where(and(eq(playerClubSeason.clubId, clubId), eq(playerClubSeason.seasonId, seasonId)));
+    const [tm] = await this.db
+      .select({ value: externalId.value })
+      .from(externalId)
+      .where(
+        and(
+          eq(externalId.entityType, "club"),
+          eq(externalId.entityId, clubId),
+          eq(externalId.system, "transfermarkt"),
+        ),
+      )
+      .limit(1);
 
-    let squad: AdminClubSeasonDrill["squad"];
-    if (expandSquad) {
-      const players = await this.db
-        .select({
-          id: player.id,
-          label: resolvedEnLabel,
-          squadNumber: playerClubSeason.squadNumber,
-          position: playerClubSeason.position,
-        })
-        .from(playerClubSeason)
-        .innerJoin(player, eq(playerClubSeason.playerId, player.id))
-        .leftJoin(
-          catalogLabel,
-          and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
-        )
-        .where(and(eq(playerClubSeason.clubId, clubId), eq(playerClubSeason.seasonId, seasonId)))
-        .groupBy(player.id, playerClubSeason.squadNumber, playerClubSeason.position)
-        .orderBy(asc(playerClubSeason.squadNumber), asc(player.id));
-
-      squad = players
-        .filter((row): row is typeof row & { label: string } => Boolean(row.label))
-        .map((row) => ({
-          id: row.id,
-          label: row.label,
-          squadNumber: row.squadNumber,
-          position: row.position,
-        }))
-        .sort(compareSquadOrder);
+    if (!tm?.value) {
+      throw new UnprocessableEntityException("Club has no Transfermarkt id");
     }
 
-    const kits = await this.listClubSeasonKits(clubId, seasonId);
-
-    return adminClubSeasonDrillSchema.parse({
-      clubId,
-      seasonId,
-      clubLabel: clubRow.clubLabel,
+    return this.fkListingIngest.ingestClubSeason({
+      clubTransfermarktId: tm.value,
       seasonLabel: seasonRow.seasonLabel,
-      squadCount: countRow?.squadCount ?? 0,
-      squad,
-      kits,
+      clubLabel: clubRow.clubLabel,
     });
   }
 
@@ -1056,6 +1246,7 @@ export class AdminCatalogService {
       .select({
         id: kit.id,
         kitType: kit.type,
+        variant: kit.variant,
         clubLabel: resolvedEnLabel,
         photoCount: photoCountSql,
       })
@@ -1067,19 +1258,120 @@ export class AdminCatalogService {
       )
       .leftJoin(kitPhoto, eq(kitPhoto.kitId, kit.id))
       .where(and(eq(kit.clubId, clubId), eq(kit.seasonId, seasonId)))
-      .groupBy(kit.id, kit.type)
-      .orderBy(asc(kit.type));
+      .groupBy(kit.id, kit.type, kit.variant)
+      .orderBy(asc(kit.type), asc(kit.variant));
 
-    return rows.map((row) => {
+    return rows
+      .filter((row) => !isOccasionNestedUnderTypeDefault(row, rows))
+      .map((row) => {
+        const hasPhoto = row.photoCount > 0;
+        const clubName = row.clubLabel ?? "Kit";
+        const variant = row.variant ?? undefined;
+        const variantCount = variant
+          ? 0
+          : rows.filter((other) => other.kitType === row.kitType && other.variant).length;
+        return {
+          id: row.id,
+          label: variant ? `${clubName} ${row.kitType} ${variant}` : `${clubName} ${row.kitType}`,
+          kitType: row.kitType,
+          variant,
+          variantCount,
+          hasPhoto,
+          photoPath: hasPhoto ? `/admin/catalog/kits/${row.id}/photo` : undefined,
+        };
+      });
+  }
+
+  private async findTypeDefaultKit(
+    clubId: string,
+    seasonId: string,
+    kitType: (typeof KIT_TYPES)[number],
+    clubLabel: string | undefined,
+  ): Promise<{ id: string; label: string } | undefined> {
+    const [row] = await this.db
+      .select({ id: kit.id })
+      .from(kit)
+      .where(
+        and(
+          eq(kit.clubId, clubId),
+          eq(kit.seasonId, seasonId),
+          eq(kit.type, kitType),
+          isNull(kit.variant),
+        ),
+      )
+      .limit(1);
+    if (!row) {
+      return undefined;
+    }
+    return {
+      id: row.id,
+      label: `${clubLabel ?? "Kit"} ${kitType}`,
+    };
+  }
+
+  private async listTypeOccasionKits(
+    clubId: string,
+    seasonId: string,
+    kitType: (typeof KIT_TYPES)[number],
+    clubLabel: string | undefined,
+  ) {
+    const photoCountSql = sql<number>`count(${kitPhoto.id})::int`;
+    const rows = await this.db
+      .select({
+        id: kit.id,
+        variant: kit.variant,
+        competition: kit.competition,
+        photoCount: photoCountSql,
+      })
+      .from(kit)
+      .leftJoin(kitPhoto, eq(kitPhoto.kitId, kit.id))
+      .where(
+        and(
+          eq(kit.clubId, clubId),
+          eq(kit.seasonId, seasonId),
+          eq(kit.type, kitType),
+          isNotNull(kit.variant),
+        ),
+      )
+      .groupBy(kit.id, kit.variant, kit.competition)
+      .orderBy(asc(kit.variant));
+
+    const leagues = await this.leagueLabelRows();
+    const listed = [];
+    for (const row of rows) {
+      const variant = row.variant;
+      if (!variant) {
+        continue;
+      }
       const hasPhoto = row.photoCount > 0;
-      const clubName = row.clubLabel ?? "Kit";
-      return {
+      const competition = row.competition ?? undefined;
+      const competitions = matchCompetitionLinks(competition, [variant], leagues);
+      listed.push({
         id: row.id,
-        label: `${clubName} ${row.kitType}`,
-        kitType: row.kitType,
+        variant,
+        label: `${clubLabel ?? "Kit"} ${kitType} ${variant}`,
+        competition,
+        competitionHref: competitions.find((link) => link.href)?.href,
+        competitions,
         hasPhoto,
         photoPath: hasPhoto ? `/admin/catalog/kits/${row.id}/photo` : undefined,
-      };
-    });
+      });
+    }
+    return listed;
+  }
+
+  private async competitionLinks(raw?: string, extraLookup: string[] = []) {
+    return matchCompetitionLinks(raw, extraLookup, await this.leagueLabelRows());
+  }
+
+  private async leagueLabelRows() {
+    return this.db
+      .select({ id: league.id, text: catalogLabel.text })
+      .from(league)
+      .innerJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "league"), eq(catalogLabel.entityId, league.id)),
+      )
+      .where(eq(catalogLabel.kind, "label"));
   }
 }
