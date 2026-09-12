@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { mapFkaTypeLabel, parseFkaKitPageHtml, parseFkaSeasonIndexKitUrls } from "../src/listing-fka-html.js";
+import {
+  mapFkaTypeLabel,
+  parseFkaKitPageHtml,
+  parseFkaSeasonIndexKitUrls,
+} from "../src/listing-fka-html.js";
 
 const fixtureHtml = readFileSync(
   join(
