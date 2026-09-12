@@ -78,7 +78,10 @@ describe("hydrateListingKitBytes", () => {
       async (input) => {
         const url = String(input);
         if (url === extra) {
-          return new Response(extraJpeg, { status: 200, headers: { "content-type": "image/jpeg" } });
+          return new Response(extraJpeg, {
+            status: 200,
+            headers: { "content-type": "image/jpeg" },
+          });
         }
         return new Response(jpeg, { status: 200, headers: { "content-type": "image/jpeg" } });
       },

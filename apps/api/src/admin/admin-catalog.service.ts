@@ -37,17 +37,31 @@ import {
   teamSeason,
 } from "@kit/db";
 import { compareSquadOrder, KIT_TYPES } from "@kit/domain";
-import { Inject, Injectable, NotFoundException, UnprocessableEntityException } from "@nestjs/common";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from "@nestjs/common";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { createMemoryObjectStore } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
 import { DB } from "../db/db.module.js";
 import { FK_LISTING_INGEST, type FkListingIngestClient } from "./fk-listing-ingest.js";
-import {
-  isOccasionNestedUnderTypeDefault,
-  matchCompetitionLinks,
-} from "./kit-variant-nest.js";
+import { isOccasionNestedUnderTypeDefault, matchCompetitionLinks } from "./kit-variant-nest.js";
 
 export const ADMIN_OBJECT_STORE = Symbol("ADMIN_OBJECT_STORE");
 
@@ -295,12 +309,7 @@ export class AdminCatalogService {
 
     if (row.clubId) {
       if (variant) {
-        parentKit = await this.findTypeDefaultKit(
-          row.clubId,
-          row.seasonId,
-          row.kitType,
-          clubLabel,
-        );
+        parentKit = await this.findTypeDefaultKit(row.clubId, row.seasonId, row.kitType, clubLabel);
       } else {
         variants = await this.listTypeOccasionKits(
           row.clubId,
@@ -351,7 +360,9 @@ export class AdminCatalogService {
       })
       .from(kitPhoto)
       .where(
-        photoId ? and(eq(kitPhoto.kitId, kitId), eq(kitPhoto.id, photoId)) : eq(kitPhoto.kitId, kitId),
+        photoId
+          ? and(eq(kitPhoto.kitId, kitId), eq(kitPhoto.id, photoId))
+          : eq(kitPhoto.kitId, kitId),
       )
       .orderBy(asc(kitPhoto.createdAt), asc(kitPhoto.objectKey))
       .limit(1);
@@ -485,7 +496,9 @@ export class AdminCatalogService {
               catalogLabel,
               and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
             )
-            .where(and(eq(playerClubSeason.clubId, clubId), eq(playerClubSeason.seasonId, seasonId)))
+            .where(
+              and(eq(playerClubSeason.clubId, clubId), eq(playerClubSeason.seasonId, seasonId)),
+            )
             .groupBy(player.id, playerClubSeason.squadNumber, playerClubSeason.position)
             .orderBy(asc(playerClubSeason.squadNumber), asc(player.id))
         : Promise.resolve(null),

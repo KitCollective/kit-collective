@@ -43,7 +43,9 @@ describe("Wayback FK listing kit source", () => {
         }
         if (
           url.includes("id_/https://www.footballkitarchive.com/fc-copenhagen-2010-11-home-kit/") ||
-          url.includes("id_/https://www.footballkitarchive.com/fc-copenhagen-2010-11-european-home-kit/")
+          url.includes(
+            "id_/https://www.footballkitarchive.com/fc-copenhagen-2010-11-european-home-kit/",
+          )
         ) {
           return new Response(homeHtml, { status: 200, headers: { "content-type": "text/html" } });
         }

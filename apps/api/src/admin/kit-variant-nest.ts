@@ -1,5 +1,3 @@
-/** Occasion kits nest under the type-default when one exists. No cup-name enum. */
-
 export type KitNestIdentity = {
   kitType: string;
   variant?: string | null;
@@ -42,8 +40,7 @@ export function matchCompetitionLinks(
         .map((part) => part.trim())
         .filter(Boolean)
     : [];
-  const displayTokens =
-    parts.length > 1 ? parts : raw?.trim() ? [raw.trim()] : [];
+  const displayTokens = parts.length > 1 ? parts : raw?.trim() ? [raw.trim()] : [];
   const seen = new Set<string>();
   const links: { label: string; href?: string }[] = [];
   for (const token of displayTokens) {
@@ -68,22 +65,4 @@ export function matchCompetitionLinks(
     links.push({ label: hit.text, href: `/stamdata/leagues/${hit.id}` });
   }
   return links;
-}
-
-export function competitionTokens(raw: string): string[] {
-  const seen = new Set<string>();
-  const tokens: string[] = [];
-  for (const part of [raw, ...raw.split(/[/·|,]+/)]) {
-    const token = part.trim();
-    if (!token) {
-      continue;
-    }
-    const key = token.toLowerCase();
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    tokens.push(token);
-  }
-  return tokens;
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { adminClubDrillSchema, adminClubSeasonDrillSchema, adminClubSeasonKitsFetchSchema, adminKitDrillSchema } from "../src/index.js";
+import {
+  adminClubDrillSchema,
+  adminClubSeasonDrillSchema,
+  adminClubSeasonKitsFetchSchema,
+  adminKitDrillSchema,
+} from "../src/index.js";
 
 const ids = {
   club: "550e8400-e29b-41d4-a716-446655440010",
@@ -95,9 +100,7 @@ describe("adminKitDrillSchema", () => {
       description: "Monochrome club crest.",
       hasPhoto: true,
       photoPath: `/admin/catalog/kits/${ids.kit}/photo`,
-      photos: [
-        { id: ids.kit, path: `/admin/catalog/kits/${ids.kit}/photos/${ids.kit}` },
-      ],
+      photos: [{ id: ids.kit, path: `/admin/catalog/kits/${ids.kit}/photos/${ids.kit}` }],
       variants: [
         {
           id: ids.variantKit,

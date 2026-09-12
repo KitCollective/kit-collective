@@ -11,7 +11,7 @@ import {
 } from "./listing-fka-slugs.js";
 
 export const WAYBACK_CDX_ORIGIN = "https://web.archive.org";
-const WAYBACK_USER_AGENT =
+export const WAYBACK_USER_AGENT =
   "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)";
 const WAYBACK_TRANSIENT_STATUSES = new Set([429, 502, 503, 504]);
 const WAYBACK_CDX_ATTEMPTS = 3;
@@ -129,7 +129,11 @@ async function fetchWayback(
   attempts = 1,
 ): Promise<Response> {
   let response = await fetchImpl(url, { headers: waybackHeaders() });
-  for (let attempt = 1; attempt < attempts && WAYBACK_TRANSIENT_STATUSES.has(response.status); attempt += 1) {
+  for (
+    let attempt = 1;
+    attempt < attempts && WAYBACK_TRANSIENT_STATUSES.has(response.status);
+    attempt += 1
+  ) {
     await sleep(200 * attempt);
     response = await fetchImpl(url, { headers: waybackHeaders() });
   }
@@ -181,9 +185,7 @@ export function createWaybackFkListingKitSource(
       parseCdx(await readJson(cdxResponse)).filter((row) => {
         try {
           const pathname = new URL(row.original).pathname;
-          return (
-            pathname.includes(`/${slug}-${seasonKey}-`) && isFkaKitDetailPath(pathname)
-          );
+          return pathname.includes(`/${slug}-${seasonKey}-`) && isFkaKitDetailPath(pathname);
         } catch {
           return false;
         }
@@ -292,9 +294,7 @@ export function createWaybackFkListingKitSource(
         pathname = undefined;
       }
       const stem = pathname ? fkaKitPathStem(pathname) : undefined;
-      const classified = stem
-        ? classifyFkaKitStem(stem, `${slug}-${seasonKey}`)
-        : undefined;
+      const classified = stem ? classifyFkaKitStem(stem, `${slug}-${seasonKey}`) : undefined;
       const identity = classified ?? {
         type: parsed.type,
         variant: parsed.variant ?? null,

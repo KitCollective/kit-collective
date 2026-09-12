@@ -1,4 +1,8 @@
-import { classifyFkaKitRemainder, fkaTypeLabelRemainder, isFkaKitDetailPath } from "./listing-fka-slugs.js";
+import {
+  classifyFkaKitRemainder,
+  fkaTypeLabelRemainder,
+  isFkaKitDetailPath,
+} from "./listing-fka-slugs.js";
 import type { KitType } from "./types.js";
 
 export type ParsedFkaKitPage = {
@@ -121,7 +125,9 @@ function extraImageUrls(html: string): string[] {
   const source = endMatch >= 0 ? rest.slice(0, endMatch) : rest;
   const urls: string[] = [];
   const seen = new Set<string>();
-  for (const match of source.matchAll(/href=["'](https:\/\/cdn\.footballkitarchive\.com\/[^"']+)["']/gi)) {
+  for (const match of source.matchAll(
+    /href=["'](https:\/\/cdn\.footballkitarchive\.com\/[^"']+)["']/gi,
+  )) {
     const url = match[1];
     if (!url || url.includes("-small.") || seen.has(url)) {
       continue;
@@ -139,7 +145,10 @@ function primaryImageUrl(html: string): string | undefined {
   return topImageUrl(html) ?? ogImageUrl(html);
 }
 
-function uniqueImageList(primary: string | undefined, extras: string[]): {
+function uniqueImageList(
+  primary: string | undefined,
+  extras: string[],
+): {
   imageUrl?: string;
   extraImageUrls: string[];
 } {
@@ -169,9 +178,7 @@ export function hexFromFkaColorNames(colorNames: string): {
     .split("/")
     .map((part) => part.trim().toLowerCase())
     .filter((part) => part.length > 0);
-  const hexes = parts
-    .map((name) => COLOR_HEX[name])
-    .filter((hex): hex is string => Boolean(hex));
+  const hexes = parts.map((name) => COLOR_HEX[name]).filter((hex): hex is string => Boolean(hex));
   return {
     primaryColorHex: hexes[0],
     secondaryColorHex: hexes[1],
@@ -189,7 +196,8 @@ function kitDescription(html: string): string | undefined {
   return text.length > 0 ? text : undefined;
 }
 
-const BRAND_IN_DESCRIPTION = /\b(nike|adidas|puma|kappa|umbro|hummel|joma|macron|castore|new balance)\b/i;
+const BRAND_IN_DESCRIPTION =
+  /\b(nike|adidas|puma|kappa|umbro|hummel|joma|macron|castore|new balance)\b/i;
 
 function enrichFromDescription(
   facts: {
@@ -213,7 +221,9 @@ function enrichFromDescription(
     }
   }
   if (!next.sponsorName) {
-    const sponsor = description.match(/\bsponsor(?:ed)?(?:\s+by)?\s+([A-Z][A-Za-z0-9&.\- ]{1,40})/i);
+    const sponsor = description.match(
+      /\bsponsor(?:ed)?(?:\s+by)?\s+([A-Z][A-Za-z0-9&.\- ]{1,40})/i,
+    );
     if (sponsor?.[1]) {
       next.sponsorName = sponsor[1].trim().replace(/\s+on the chest.*$/i, "");
     }
