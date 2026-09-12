@@ -232,6 +232,20 @@
       "when": 1788546400000,
       "tag": "0032_catalog_mark",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788630000000,
+      "tag": "0033_kit_fka_facts",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788640000000,
+      "tag": "0034_kit_variant",
+      "breakpoints": true
     }
   ]
 }

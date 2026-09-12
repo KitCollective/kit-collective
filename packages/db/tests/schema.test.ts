@@ -179,7 +179,17 @@ describe("stamdata schema", () => {
   it("adds kit colour columns", async () => {
     const columns = await columnNames(pool, "kit");
     expect(columns).toEqual(
-      expect.arrayContaining(["primary_color_hex", "secondary_color_hex", "sponsor_name"]),
+      expect.arrayContaining([
+        "primary_color_hex",
+        "secondary_color_hex",
+        "sponsor_name",
+        "design",
+        "color_names",
+        "competition",
+        "released_on",
+        "description",
+        "variant",
+      ]),
     );
   });
 

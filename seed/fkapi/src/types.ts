@@ -8,15 +8,23 @@ export type FkRawKit = {
   seasonTransfermarktId: string;
   seasonLabel: string;
   type: KitType;
+  /** Open FKA remainder (european, supercoppa-italiana, home-v2). Null on the league default. */
+  variant?: string;
   manufacturerName?: string;
   labelEn?: string;
   sponsorName?: string;
   primaryColorHex?: string;
   secondaryColorHex?: string;
+  design?: string;
+  colorNames?: string;
+  competition?: string;
+  releasedOn?: string;
+  description?: string;
   imageBytes?: Uint8Array;
+  additionalImageBytes?: Uint8Array[];
 };
 
-export type KitType = "home" | "away" | "third" | "gk" | "special";
+export type KitType = "home" | "away" | "third" | "fourth" | "gk" | "special";
 
 export type { SeedScope as FkFetchScope } from "@kit/seed-shared";
 
