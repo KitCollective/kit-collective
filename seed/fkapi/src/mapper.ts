@@ -104,14 +104,29 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
         nationalTeamId,
         seasonId,
         type: rawKit.type,
+        variant: rawKit.variant ?? null,
         manufacturerId,
         sponsorName: rawKit.sponsorName ?? null,
         primaryColorHex: rawKit.primaryColorHex ?? null,
         secondaryColorHex: rawKit.secondaryColorHex ?? null,
+        design: rawKit.design ?? null,
+        colorNames: rawKit.colorNames ?? null,
+        competition: rawKit.competition ?? null,
+        releasedOn: rawKit.releasedOn ?? null,
+        description: rawKit.description ?? null,
       });
       kitsUpserted += 1;
 
-      photosWritten += await writeArchivePhoto(options.objectStore, pool, kitId, rawKit.imageBytes);
+      const photos = [rawKit.imageBytes, ...(rawKit.additionalImageBytes ?? [])];
+      for (const [index, bytes] of photos.entries()) {
+        photosWritten += await writeArchivePhoto(
+          options.objectStore,
+          pool,
+          kitId,
+          bytes,
+          index,
+        );
+      }
     }
 
     return { kitsUpserted, photosWritten };
@@ -125,8 +140,9 @@ async function writeArchivePhoto(
   pool: Pool,
   kitId: string,
   imageBytes: Uint8Array,
+  index: number,
 ): Promise<number> {
-  const objectKey = `kit/${kitId}/archive.jpg`;
+  const objectKey = index === 0 ? `kit/${kitId}/archive.jpg` : `kit/${kitId}/archive-${index}.jpg`;
   await objectStore.putObject(objectKey, imageBytes);
   const exists = await objectStore.objectExists(objectKey);
   if (!exists) {
@@ -347,6 +363,78 @@ async function findKitByFkId(pool: Pool, fkId: string): Promise<{ entityId: stri
   return result.rows[0] ? { entityId: result.rows[0].entity_id } : undefined;
 }
 
+async function findKitBySideSeasonTypeVariant(
+  pool: Pool,
+  input: Pick<UpsertKitInput, "clubId" | "nationalTeamId" | "seasonId" | "type" | "variant">,
+): Promise<{ entityId: string } | undefined> {
+  const result = await pool.query<{ id: string }>(
+    `SELECT id FROM kit
+     WHERE season_id = $1 AND type = $2
+       AND COALESCE(variant, '') = COALESCE($3, '')
+       AND (
+         ($4::uuid IS NOT NULL AND club_id = $4)
+         OR ($5::uuid IS NOT NULL AND national_team_id = $5)
+       )
+     ORDER BY id
+     LIMIT 1`,
+    [input.seasonId, input.type, input.variant, input.clubId, input.nationalTeamId],
+  );
+  return result.rows[0] ? { entityId: result.rows[0].id } : undefined;
+}
+
+async function ensureKitExternalId(pool: Pool, kitId: string, fkId: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO external_id (entity_type, entity_id, system, value)
+     VALUES ('kit', $1, $2, $3)
+     ON CONFLICT (system, value) DO NOTHING`,
+    [kitId, EXTERNAL_SYSTEM_FKAPI, fkId],
+  );
+}
+
+async function collapseDuplicateTypeVariantKits(
+  pool: Pool,
+  input: Pick<UpsertKitInput, "clubId" | "nationalTeamId" | "seasonId" | "type" | "variant">,
+  survivorId: string,
+): Promise<void> {
+  const duplicates = await pool.query<{ id: string }>(
+    `SELECT id FROM kit
+     WHERE season_id = $1 AND type = $2 AND id <> $3
+       AND COALESCE(variant, '') = COALESCE($4, '')
+       AND (
+         ($5::uuid IS NOT NULL AND club_id = $5)
+         OR ($6::uuid IS NOT NULL AND national_team_id = $6)
+       )`,
+    [
+      input.seasonId,
+      input.type,
+      survivorId,
+      input.variant,
+      input.clubId,
+      input.nationalTeamId,
+    ],
+  );
+  const duplicateIds = duplicates.rows.map((row) => row.id);
+  if (duplicateIds.length === 0) {
+    return;
+  }
+
+  await pool.query(
+    `UPDATE user_jersey SET catalog_kit_id = $1 WHERE catalog_kit_id = ANY($2::uuid[])`,
+    [survivorId, duplicateIds],
+  );
+  await pool.query(
+    `UPDATE vision_log SET suggested_catalog_kit_id = $1
+     WHERE suggested_catalog_kit_id = ANY($2::uuid[])`,
+    [survivorId, duplicateIds],
+  );
+  await pool.query(`DELETE FROM kit_photo WHERE kit_id = ANY($1::uuid[])`, [duplicateIds]);
+  await pool.query(
+    `DELETE FROM external_id WHERE entity_type = 'kit' AND entity_id = ANY($1::uuid[])`,
+    [duplicateIds],
+  );
+  await pool.query(`DELETE FROM kit WHERE id = ANY($1::uuid[])`, [duplicateIds]);
+}
+
 async function upsertManufacturer(pool: Pool, name: string): Promise<string> {
   const existing = await pool.query<{ id: string }>(
     `SELECT m.id FROM manufacturer m
@@ -383,56 +471,78 @@ type UpsertKitInput = {
   nationalTeamId: string | null;
   seasonId: string;
   type: FkRawKit["type"];
+  variant: string | null;
   manufacturerId: string | null;
   sponsorName: string | null;
   primaryColorHex: string | null;
   secondaryColorHex: string | null;
+  design: string | null;
+  colorNames: string | null;
+  competition: string | null;
+  releasedOn: string | null;
+  description: string | null;
 };
 
 async function upsertKit(pool: Pool, input: UpsertKitInput): Promise<string> {
-  const existing = await findKitByFkId(pool, input.fkId);
+  let existing = await findKitByFkId(pool, input.fkId);
+  if (!existing) {
+    existing = await findKitBySideSeasonTypeVariant(pool, input);
+  }
 
   if (existing) {
     await pool.query(
-      `UPDATE kit SET club_id = $1, national_team_id = $2, season_id = $3, type = $4,
-       manufacturer_id = $5, sponsor_name = $6, primary_color_hex = $7, secondary_color_hex = $8
-       WHERE id = $9`,
+      `UPDATE kit SET club_id = $1, national_team_id = $2, season_id = $3, type = $4, variant = $5,
+       manufacturer_id = $6, sponsor_name = $7, primary_color_hex = $8, secondary_color_hex = $9,
+       design = $10, color_names = $11, competition = $12, released_on = $13, description = $14
+       WHERE id = $15`,
       [
         input.clubId,
         input.nationalTeamId,
         input.seasonId,
         input.type,
+        input.variant,
         input.manufacturerId,
         input.sponsorName,
         input.primaryColorHex,
         input.secondaryColorHex,
+        input.design,
+        input.colorNames,
+        input.competition,
+        input.releasedOn,
+        input.description,
         existing.entityId,
       ],
     );
+    await ensureKitExternalId(pool, existing.entityId, input.fkId);
+    await collapseDuplicateTypeVariantKits(pool, input, existing.entityId);
     return existing.entityId;
   }
 
   const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO kit (club_id, national_team_id, season_id, type, manufacturer_id, sponsor_name, primary_color_hex, secondary_color_hex)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    `INSERT INTO kit (club_id, national_team_id, season_id, type, variant, manufacturer_id, sponsor_name,
+      primary_color_hex, secondary_color_hex, design, color_names, competition, released_on, description)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
     [
       input.clubId,
       input.nationalTeamId,
       input.seasonId,
       input.type,
+      input.variant,
       input.manufacturerId,
       input.sponsorName,
       input.primaryColorHex,
       input.secondaryColorHex,
+      input.design,
+      input.colorNames,
+      input.competition,
+      input.releasedOn,
+      input.description,
     ],
   );
   const kitId = inserted.rows[0]!.id;
 
-  await pool.query(
-    `INSERT INTO external_id (entity_type, entity_id, system, value)
-     VALUES ('kit', $1, $2, $3)`,
-    [kitId, EXTERNAL_SYSTEM_FKAPI, input.fkId],
-  );
+  await ensureKitExternalId(pool, kitId, input.fkId);
+  await collapseDuplicateTypeVariantKits(pool, input, kitId);
 
   return kitId;
 }

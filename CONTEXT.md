@@ -214,8 +214,8 @@ Shirt sponsor name from Football Kit Archive when the source exposes it. Stamdat
 _Avoid_: inventing a new sponsor column; dropping sponsor because FKApi lacks it; treating a training-kit sponsor as the match-kit sponsor; routing FKA through Decodo to scrape sponsor
 
 **Kit type (FK)**:
-Our `kit.type` enum is `home`, `away`, `third`, `gk`, `special`. FKApi `Type_K` is richer (categories match / prematch / training / travel / jacket). Proof keeps match-category types normalized into our enum; drops training, anthem, track, rain; Champions League / European variant kits are later leverage (keep one base type per side+season unless Join workflow names them).
-_Avoid_: storing Track/Training as `special`; treating CL Home as a second `home` row on the proof accept; inventing types not in `@kit/domain`
+Our `kit.type` enum is closed: `home`, `away`, `third`, `fourth`, `gk`, `special`. `kit.variant` is an open slug from the Football Kit Archive URL remainder (`european`, `supercoppa-italiana`, `v2`, `clasico`) and **null** on the league default of that type. Identity is `(side, season, type, variant)` with null-safe variant. Cup, anniversary, Clásico, Super Cup, and Champions League / European match kits stay **own rows with own photos** — never dumped onto league Home. Admin club Jerseys lists the type-default (and GK slots / occasion-only specials that have no type-default). Occasion kits of the same type nest as a **Variants** section on that default’s kit drill, with a link to the variant kit. `kit.competition` slash-lists become per-token links when the token matches a league CatalogLabel (NFKD, alphanumeric); unmatched tokens stay plain text. Do not invent a Super Coppa league from FKA copy. Training, anthem, track, rain, pre-match, pre-season, travel, bench, warm-up still drop. Stem wins over HTML Type when two kits share Type but differ in URL (`uefa-super-cup` vs `uefa-super-cup-1`). Multiple `gk` rows per side+season are allowed (`gk` + `home` / `away` / `fourth` / `1`).
+_Avoid_: storing Track/Training as `special`; merging two homes that differ only by variant; inventing a cup enum; listing Super Cup Home as a peer jersey when league Home exists; inventing types not in `@kit/domain`; changing collector Confirm chips in this slice; treating a missing Wayback snapshot as a parser bug
 
 **Tournament squad**:
 A competition-specific NationalTeam roster (e.g. World Cup 2010 final 23) as distinct from the calendar-year NationalTeam kader on Transfermarkt. Hierarchy proof still uses the NT season grain; the WC-only cut stays open until a clean vendor page is confirmed.
@@ -294,7 +294,7 @@ An unstyled HTML page on Nest (`GET /v1/catalog/peek`) so Nicklas can open a URL
 _Avoid_: building the product admin; `/to-design`; treating `GET /v1/catalog/stats` JSON as the peek; hot-linking KitPhoto bytes
 
 **Admin SPA**:
-The Vite + React operator surface (`apps/admin`). Same Identity as Expo. Chrome in English. CatalogLabel in this surface is requested as `en` (fallback `mul` → `en`). Never indexed. KitPhoto may render here; never on Expo, Astro, or OG.
+The Vite + React operator surface (`apps/admin`). Same Identity as Expo. Chrome in English. CatalogLabel in this surface is requested as `en` (fallback `mul` → `en`). Never indexed. KitPhoto may render here; never on Expo, Astro, or OG. Club drill Jerseys can **Fetch kits** for the selected season through listing ingest (FK after facts). Kit drill shows a club crest, linked club name, season · type kicker, and FKA facts on the left and a large archive flat plus thumbs on the right.
 _Avoid_: Catalog peek as the product admin; a second login product; Expo as the operator UI; Danish chrome as the admin default; dash.better-auth.com as staff chrome
 
 **Identity**:
