@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { getApiBase, joinApiPath } from "../api/client.js";
+import { loadAuthenticatedBlob, peekAuthenticatedBlob } from "./authenticated-image-cache.js";
 
 type AuthenticatedImageProps = {
   path: string;
@@ -16,41 +16,34 @@ export function AuthenticatedImage({
   className,
   fallback,
 }: AuthenticatedImageProps) {
-  const [src, setSrc] = useState<string | null>(null);
+  const [src, setSrc] = useState<string | null>(() => peekAuthenticatedBlob(path, token));
+  const [fadeIn, setFadeIn] = useState(false);
 
   useEffect(() => {
-    let objectUrl: string | null = null;
     let cancelled = false;
-
-    fetch(joinApiPath(getApiBase(), path), {
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to load image");
-        }
-        return response.blob();
-      })
-      .then((blob) => {
+    const cached = peekAuthenticatedBlob(path, token);
+    if (cached) {
+      setSrc(cached);
+      setFadeIn(false);
+      return;
+    }
+    setSrc(null);
+    setFadeIn(false);
+    loadAuthenticatedBlob(path, token)
+      .then((objectUrl) => {
         if (cancelled) {
           return;
         }
-        objectUrl = URL.createObjectURL(blob);
         setSrc(objectUrl);
+        setFadeIn(true);
       })
       .catch(() => {
         if (!cancelled) {
           setSrc(null);
         }
       });
-
     return () => {
       cancelled = true;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
     };
   }, [path, token]);
 
@@ -58,5 +51,6 @@ export function AuthenticatedImage({
     return fallback ?? <span className={className ?? "thumb-slot"} aria-hidden />;
   }
 
-  return <img src={src} alt={alt} className={className} />;
+  const imageClass = [className, fadeIn ? "auth-image-in" : null].filter(Boolean).join(" ");
+  return <img src={src} alt={alt} className={imageClass} />;
 }
