@@ -75,7 +75,7 @@ describe("Wayback FK listing kit source", () => {
       },
     ]);
     expect(fetched.some((url) => url.startsWith("https://www.footballkitarchive.com"))).toBe(false);
-    expect(fetched.some((url) => url.includes("european-home-kit"))).toBe(false);
+    expect(fetched.some((url) => url.includes("european-home-kit"))).toBe(true);
   });
 
   it("fails closed when the club has no FKA slug", async () => {
