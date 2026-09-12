@@ -92,15 +92,70 @@ export const adminFilterOptionsSchema = z
 
 export type AdminFilterOptions = z.infer<typeof adminFilterOptionsSchema>;
 
+export const adminCompetitionLinkSchema = z
+  .object({
+    label: z.string().min(1),
+    href: z.string().optional(),
+  })
+  .strict();
+
+export type AdminCompetitionLink = z.infer<typeof adminCompetitionLinkSchema>;
+
+export const adminKitVariantRefSchema = z
+  .object({
+    id: z.string().uuid(),
+    variant: z.string().min(1),
+    label: z.string().min(1),
+    competition: z.string().optional(),
+    competitionHref: z.string().optional(),
+    competitions: z.array(adminCompetitionLinkSchema).optional(),
+    hasPhoto: z.boolean(),
+    photoPath: z.string().optional(),
+  })
+  .strict();
+
+export type AdminKitVariantRef = z.infer<typeof adminKitVariantRefSchema>;
+
 export const adminKitDrillSchema = z
   .object({
     id: z.string().uuid(),
     label: z.string().min(1),
     kitType: z.enum(KIT_TYPES),
+    variant: z.string().min(1).optional(),
+    clubId: z.string().uuid().optional(),
     clubLabel: z.string().optional(),
+    clubMonogram: z.string().min(1).max(3).optional(),
+    clubMarkPath: z.string().optional(),
     seasonLabel: z.string().min(1),
+    brandLabel: z.string().optional(),
+    sponsorName: z.string().optional(),
+    design: z.string().optional(),
+    colorNames: z.string().optional(),
+    primaryColorHex: z.string().optional(),
+    secondaryColorHex: z.string().optional(),
+    competition: z.string().optional(),
+    competitionHref: z.string().optional(),
+    competitions: z.array(adminCompetitionLinkSchema).optional(),
+    releasedOn: z.string().optional(),
+    description: z.string().optional(),
     hasPhoto: z.boolean(),
     photoPath: z.string().optional(),
+    photos: z.array(
+      z
+        .object({
+          id: z.string().uuid(),
+          path: z.string().min(1),
+        })
+        .strict(),
+    ),
+    parentKit: z
+      .object({
+        id: z.string().uuid(),
+        label: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+    variants: z.array(adminKitVariantRefSchema),
   })
   .strict();
 
@@ -122,6 +177,8 @@ export const adminClubSeasonKitSchema = z
     id: z.string().uuid(),
     label: z.string().min(1),
     kitType: z.enum(KIT_TYPES),
+    variant: z.string().min(1).optional(),
+    variantCount: z.number().int().nonnegative(),
     hasPhoto: z.boolean(),
     photoPath: z.string().optional(),
   })
@@ -152,6 +209,15 @@ export const adminClubSeasonParamsSchema = z
 
 export type AdminClubSeasonParams = z.infer<typeof adminClubSeasonParamsSchema>;
 
+export const adminClubSeasonKitsFetchSchema = z
+  .object({
+    kitsUpserted: z.number().int().nonnegative(),
+    photosWritten: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type AdminClubSeasonKitsFetch = z.infer<typeof adminClubSeasonKitsFetchSchema>;
+
 export const adminKitIdParamSchema = z
   .object({
     kitId: z.string().uuid(),
@@ -159,6 +225,15 @@ export const adminKitIdParamSchema = z
   .strict();
 
 export type AdminKitIdParam = z.infer<typeof adminKitIdParamSchema>;
+
+export const adminKitPhotoParamsSchema = z
+  .object({
+    kitId: z.string().uuid(),
+    photoId: z.string().uuid(),
+  })
+  .strict();
+
+export type AdminKitPhotoParams = z.infer<typeof adminKitPhotoParamsSchema>;
 
 export const adminClubSeasonOptionSchema = z
   .object({

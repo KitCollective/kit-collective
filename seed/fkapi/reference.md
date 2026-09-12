@@ -5,7 +5,7 @@
 **Postgres landing:** [`.scratch/football-data-seed/schema-gap.md`](../../.scratch/football-data-seed/schema-gap.md)  
 **Forbidden (ADR-0002):** market value, agent PII, vendor branding (brand/club logos, FKA page URLs as product assets).  
 **Rule:** FK after facts — Club or NationalTeam + Season rows must exist before kit map.  
-**Transport lock:** **No Seed proxy / Decodo** on Football Kit Archive or FKApi. Decodo is Transfermarkt-only. Live FK uses `FKAPI_BASE_URL` (+ token) or another non-Decodo path.  
+**Transport lock:** **No Seed proxy / Decodo** on Football Kit Archive or FKApi. Decodo is Transfermarkt-only. Coolify listing HTTP is Wayback (ADR-0041). Live FK uses `FKAPI_BASE_URL` (+ token) or fixtures — never Decodo.  
 **Breadth for first proof:** kits for Superliga 2010/11 clubs (e.g. FCK TM `190`) and Denmark men World Cup 2010 (TM NT `3436`, FKA `denmark-kits`), after those facts exist.
 
 This file is the seed-module interface for FK kit grains. Not Nest OpenAPI. Not `/v1` seed.
@@ -74,9 +74,10 @@ FKApi `Type_K` is richer (categories: `match`, `prematch`, `training`, `travel`,
 | Home | `home` | keep |
 | Away | `away` | keep |
 | Third | `third` | keep |
-| GK Home, GK Away, GK 1… | `gk` | keep |
-| Special | `special` | keep |
-| Champions League Home (+ V2), European Away, CL GK | base type | later leverage — CL duplicate |
+| Fourth | `fourth` | keep |
+| GK Home, GK Away, GK 1… | `gk` + remainder | keep |
+| Special | `special` + remainder | keep (occasion-only stems) |
+| Champions League Home (+ V2), European Away, CL GK, Super Cup homes | base type + `kit.variant` | keep — own row |
 | Training, Anthem, Track, Rain | — | drop for proof |
 
 Full mapping: [fk-field-catalog.md](../../.scratch/football-data-seed/fk-field-catalog.md).

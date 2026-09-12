@@ -5,8 +5,15 @@
 # Origin for FKAPI_BASE_URL (no /kits suffix). Not sunr4y/fkapi.
 # Not docker-compose.fkapi-job.yml (that job ingest kit identity + archive bytes).
 #
+# GET /kits and GET /health stay unauthenticated (Join CLI).
+# POST /ingest (Admin Fetch kits) needs Coolify env names (values in the same lane as Admin, not this file):
+#   DATABASE_URL
+#   R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+#   FK_LISTING_INGEST_TOKEN
+# Production-lane ingest is refused by the seed mapper.
+#
 # Do not set the Seed proxy env, Decodo, or Coolify API names on this process.
-# Decodo stays Transfermarkt-only. Host API credentials stay on the wire script.
+# Decodo stays Transfermarkt-only. This host is Wayback listing ingest (ADR-0041).
 
 services:
   seed-fk-listing:
