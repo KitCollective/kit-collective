@@ -294,7 +294,7 @@ An unstyled HTML page on Nest (`GET /v1/catalog/peek`) so Nicklas can open a URL
 _Avoid_: building the product admin; `/to-design`; treating `GET /v1/catalog/stats` JSON as the peek; hot-linking KitPhoto bytes
 
 **Admin SPA**:
-The Vite + React operator surface (`apps/admin`). Same Identity as Expo. Chrome in English. CatalogLabel in this surface is requested as `en` (fallback `mul` → `en`). Never indexed. KitPhoto may render here; never on Expo, Astro, or OG.
+The Vite + React operator surface (`apps/admin`). Same Identity as Expo. Chrome in English. CatalogLabel in this surface is requested as `en` (fallback `mul` → `en`). Never indexed. KitPhoto may render here; never on Expo, Astro, or OG. Club drill Jerseys can **Fetch kits** for the selected season; kit drill nests occasion kits as Variants.
 _Avoid_: Catalog peek as the product admin; a second login product; Expo as the operator UI; Danish chrome as the admin default; dash.better-auth.com as staff chrome
 
 **Identity**:

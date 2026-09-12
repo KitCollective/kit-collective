@@ -11,11 +11,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
-import { loadAuthenticatedBlob } from "../components/authenticated-image-cache.js";
+import { prefetchAuthenticatedBlobs } from "../components/authenticated-image-cache.js";
 import { BackLink } from "../components/BackLink.js";
 import { CatalogMark } from "../components/CatalogMark.js";
-import { peekClubSeasonDrill, putClubSeasonDrill } from "./club-season-cache.js";
 import { groupSquadPlayers } from "./club-drill-squad.js";
+import { peekClubSeasonDrill, putClubSeasonDrill } from "./club-season-cache.js";
 import {
   isClubSeasonExpandPending,
   isClubSeasonReadyToExpand,
@@ -88,7 +88,7 @@ function ClubTableSkeleton({ tab }: { tab: ClubTab }) {
     return (
       <>
         {rows.map((row) => (
-          <tr key={row} className="data-table-skel-row" aria-hidden="true">
+          <tr key={row} className="data-table-skel-row">
             <td className="data-table-numeric">
               <span className="kit-skel kit-skel--cell-sm" />
             </td>
@@ -107,7 +107,7 @@ function ClubTableSkeleton({ tab }: { tab: ClubTab }) {
     return (
       <>
         {rows.map((row) => (
-          <tr key={row} className="data-table-skel-row" aria-hidden="true">
+          <tr key={row} className="data-table-skel-row">
             <td className="data-table-mark">
               <span className="thumb-slot">
                 <span className="kit-skel kit-skel--slot" />
@@ -127,7 +127,7 @@ function ClubTableSkeleton({ tab }: { tab: ClubTab }) {
   return (
     <>
       {rows.map((row) => (
-        <tr key={row} className="data-table-skel-row" aria-hidden="true">
+        <tr key={row} className="data-table-skel-row">
           <td className="data-table-mark">
             <span className="thumb-slot">
               <span className="kit-skel kit-skel--slot" />
@@ -244,25 +244,20 @@ export function ClubDrillPage() {
     if (!token || !seasonDrill) {
       return;
     }
-    for (const kit of seasonDrill.kits) {
-      if (kit.photoPath) {
-        void loadAuthenticatedBlob(kit.photoPath, token);
-      }
-    }
+    prefetchAuthenticatedBlobs(
+      seasonDrill.kits.map((kit) => kit.photoPath),
+      token,
+    );
   }, [seasonDrill, token]);
 
   useEffect(() => {
     if (!token || !club?.honours) {
       return;
     }
-    if (club.markPath) {
-      void loadAuthenticatedBlob(club.markPath, token);
-    }
-    for (const honour of club.honours) {
-      if (honour.markPath) {
-        void loadAuthenticatedBlob(honour.markPath, token);
-      }
-    }
+    prefetchAuthenticatedBlobs(
+      [club.markPath, ...club.honours.map((honour) => honour.markPath)],
+      token,
+    );
   }, [club, token]);
 
   const routedClub = club && clubId && club.id === clubId ? club : null;
@@ -554,12 +549,7 @@ export function ClubDrillPage() {
         )}
       </div>
 
-      <div
-        className="data-table-wrap"
-        id="club-tabpanel"
-        role="tabpanel"
-        aria-busy={tableLoading}
-      >
+      <div className="data-table-wrap" id="club-tabpanel" role="tabpanel" aria-busy={tableLoading}>
         <table className="data-table">
           <thead>
             {tab === "players" ? (

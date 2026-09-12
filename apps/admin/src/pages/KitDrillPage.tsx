@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "../api/client.js";
 import { useAuth } from "../auth/AuthProvider.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
-import { loadAuthenticatedBlob } from "../components/authenticated-image-cache.js";
+import { prefetchAuthenticatedBlobs } from "../components/authenticated-image-cache.js";
 import { BackLink } from "../components/BackLink.js";
 import { CatalogMark } from "../components/CatalogMark.js";
 
@@ -53,7 +53,7 @@ function CompetitionLinks({
   return (
     <span className="kit-competition-list">
       {rows.map((row, index) => (
-        <span key={`${row.label}-${index}`}>
+        <span key={`${row.href ?? "plain"}:${row.label}`}>
           {index > 0 ? <span aria-hidden> · </span> : null}
           {row.href ? (
             <Link
@@ -169,17 +169,14 @@ export function KitDrillPage() {
     if (!token || !kit) {
       return;
     }
-    if (kit.clubMarkPath) {
-      void loadAuthenticatedBlob(kit.clubMarkPath, token);
-    }
-    for (const photo of kit.photos) {
-      void loadAuthenticatedBlob(photo.path, token);
-    }
-    for (const row of kit.variants) {
-      if (row.photoPath) {
-        void loadAuthenticatedBlob(row.photoPath, token);
-      }
-    }
+    prefetchAuthenticatedBlobs(
+      [
+        kit.clubMarkPath,
+        ...kit.photos.map((photo) => photo.path),
+        ...kit.variants.map((row) => row.photoPath),
+      ],
+      token,
+    );
   }, [kit, token]);
 
   const photos = kit?.photos ?? [];
@@ -227,7 +224,11 @@ export function KitDrillPage() {
               <Fact label="Season" value={kit.seasonLabel} />
               <Fact label="Type" value={kit.kitType} />
               {kit.parentKit ? (
-                <Fact label="Part of" value={kit.parentKit.label} href={`/stamdata/kits/${kit.parentKit.id}`} />
+                <Fact
+                  label="Part of"
+                  value={kit.parentKit.label}
+                  href={`/stamdata/kits/${kit.parentKit.id}`}
+                />
               ) : null}
               {kit.variant ? <Fact label="Variant" value={kit.variant} /> : null}
               <Fact label="Design" value={kit.design} />

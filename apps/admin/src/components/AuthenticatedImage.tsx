@@ -1,8 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import {
-  loadAuthenticatedBlob,
-  peekAuthenticatedBlob,
-} from "./authenticated-image-cache.js";
+import { loadAuthenticatedBlob, peekAuthenticatedBlob } from "./authenticated-image-cache.js";
 
 type AuthenticatedImageProps = {
   path: string;

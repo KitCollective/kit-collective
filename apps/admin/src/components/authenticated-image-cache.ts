@@ -46,6 +46,17 @@ export function loadAuthenticatedBlob(path: string, token: string): Promise<stri
   return request;
 }
 
+export function prefetchAuthenticatedBlobs(
+  paths: Array<string | undefined | null>,
+  token: string,
+): void {
+  for (const path of paths) {
+    if (path) {
+      void loadAuthenticatedBlob(path, token);
+    }
+  }
+}
+
 export function clearAuthenticatedBlobCache(): void {
   for (const url of blobUrls.values()) {
     URL.revokeObjectURL(url);
