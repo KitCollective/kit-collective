@@ -42,25 +42,15 @@ export function resolveFkaTeamSlug(scope: SeedScope, clubLabel?: string): string
   return undefined;
 }
 
+const DROPPED_REMAINDER =
+  /(?:^|-)(training|traning|anthem|track|rain|pre-match|pre-season|preseason|travel|bench|warm-up|warmup)(?:-|$)/;
+
 export function isDroppedFkaKitPath(pathname: string): boolean {
   const lower = pathname.toLowerCase();
   if (/-kits\/?$/.test(lower)) {
     return true;
   }
-  return (
-    lower.includes("-training") ||
-    lower.includes("-traning") ||
-    lower.includes("-anthem") ||
-    lower.includes("-track") ||
-    lower.includes("-rain") ||
-    lower.includes("-pre-match") ||
-    lower.includes("-pre-season") ||
-    lower.includes("-preseason") ||
-    lower.includes("-travel") ||
-    lower.includes("-bench") ||
-    lower.includes("-warm-up") ||
-    lower.includes("-warmup")
-  );
+  return DROPPED_REMAINDER.test(lower);
 }
 
 /** Stem shared by `/…-home-kit/` and `/…-home-kit/354421/`. */
@@ -135,9 +125,6 @@ export function collapseFkaKitSnapshots<T extends FkaKitSnapshot>(rows: T[]): T[
   return [...latest.values()];
 }
 
-const DROPPED_REMAINDER =
-  /(?:^|-)(training|traning|anthem|track|rain|pre-match|pre-season|preseason|travel|bench|warm-up|warmup)(?:-|$)/;
-
 export function fkaTypeLabelRemainder(label: string): string {
   return label
     .trim()
@@ -152,7 +139,10 @@ export function fkaTypeLabelRemainder(label: string): string {
 export function classifyFkaKitRemainder(
   remainder: string,
 ): { type: KitType; variant: string | null } | undefined {
-  const normalized = remainder.trim().toLowerCase().replaceAll(/^-+|-+$/g, "");
+  const normalized = remainder
+    .trim()
+    .toLowerCase()
+    .replaceAll(/^-+|-+$/g, "");
   if (!normalized || DROPPED_REMAINDER.test(normalized)) {
     return undefined;
   }

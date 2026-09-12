@@ -295,7 +295,9 @@ describe("FK seed mapper", () => {
       competition: string | null;
       released_on: string | null;
       description: string | null;
-    }>(`SELECT design, color_names, competition, released_on::text, description FROM kit WHERE design = 'Stripes'`);
+    }>(
+      `SELECT design, color_names, competition, released_on::text, description FROM kit WHERE design = 'Stripes'`,
+    );
     expect(facts.rows[0]).toMatchObject({
       design: "Stripes",
       color_names: "Red / Black / White",
@@ -383,11 +385,15 @@ describe("FK seed mapper", () => {
       `INSERT INTO kit (club_id, season_id, type) VALUES ($1, $2, 'home') RETURNING id`,
       [clubId, seasonId],
     );
+    const slugKitId = slugKit.rows[0]?.id;
+    const numberedKitId = numberedKit.rows[0]?.id;
+    expect(slugKitId).toBeDefined();
+    expect(numberedKitId).toBeDefined();
     await pool.query(
       `INSERT INTO external_id (entity_type, entity_id, system, value)
        VALUES ('kit', $1, $2, 'ac-milan-2025-26-home-kit'),
               ('kit', $3, $2, '354421')`,
-      [slugKit.rows[0]!.id, EXTERNAL_SYSTEM_FKAPI, numberedKit.rows[0]!.id],
+      [slugKitId, EXTERNAL_SYSTEM_FKAPI, numberedKitId],
     );
 
     const fetchAdapter: FkFetchAdapter = {
@@ -422,7 +428,7 @@ describe("FK seed mapper", () => {
       [clubId, seasonId],
     );
     expect(kits.rows).toHaveLength(1);
-    expect(kits.rows[0]?.id).toBe(numberedKit.rows[0]!.id);
+    expect(kits.rows[0]?.id).toBe(numberedKitId);
     expect(kits.rows[0]?.type).toBe("home");
   });
 

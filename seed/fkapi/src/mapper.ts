@@ -119,13 +119,7 @@ export async function runFkSeed(options: MapperOptions): Promise<SeedRunResult> 
 
       const photos = [rawKit.imageBytes, ...(rawKit.additionalImageBytes ?? [])];
       for (const [index, bytes] of photos.entries()) {
-        photosWritten += await writeArchivePhoto(
-          options.objectStore,
-          pool,
-          kitId,
-          bytes,
-          index,
-        );
+        photosWritten += await writeArchivePhoto(options.objectStore, pool, kitId, bytes, index);
       }
     }
 
@@ -404,14 +398,7 @@ async function collapseDuplicateTypeVariantKits(
          ($5::uuid IS NOT NULL AND club_id = $5)
          OR ($6::uuid IS NOT NULL AND national_team_id = $6)
        )`,
-    [
-      input.seasonId,
-      input.type,
-      survivorId,
-      input.variant,
-      input.clubId,
-      input.nationalTeamId,
-    ],
+    [input.seasonId, input.type, survivorId, input.variant, input.clubId, input.nationalTeamId],
   );
   const duplicateIds = duplicates.rows.map((row) => row.id);
   if (duplicateIds.length === 0) {

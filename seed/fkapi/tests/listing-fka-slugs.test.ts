@@ -67,9 +67,10 @@ describe("FKA club slugs", () => {
     expect(classifyFkaKitRemainder("gk-fourth")).toEqual({ type: "gk", variant: "fourth" });
     expect(classifyFkaKitRemainder("training")).toBeUndefined();
     expect(classifyFkaKitRemainder("champions-league-training")).toBeUndefined();
-    expect(
-      classifyFkaKitStem("ac-milan-2025-26-european-home-kit", "ac-milan-2025-26"),
-    ).toEqual({ type: "home", variant: "european" });
+    expect(classifyFkaKitStem("ac-milan-2025-26-european-home-kit", "ac-milan-2025-26")).toEqual({
+      type: "home",
+      variant: "european",
+    });
     expect(isDroppedFkaKitPath("/fc-copenhagen-2010-11-european-home-kit/")).toBe(false);
     expect(isDroppedFkaKitPath("/fc-copenhagen-2010-11-training-kit/")).toBe(true);
   });
