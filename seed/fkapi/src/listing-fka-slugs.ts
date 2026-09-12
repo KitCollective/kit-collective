@@ -45,6 +45,20 @@ export function resolveFkaTeamSlug(scope: SeedScope, clubLabel?: string): string
 const DROPPED_REMAINDER =
   /(?:^|-)(training|traning|anthem|track|rain|pre-match|pre-season|preseason|travel|bench|warm-up|warmup)(?:-|$)/;
 
+function closedKitType(value: string | undefined): KitType | undefined {
+  if (
+    value === "home" ||
+    value === "away" ||
+    value === "third" ||
+    value === "fourth" ||
+    value === "gk" ||
+    value === "special"
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
 export function isDroppedFkaKitPath(pathname: string): boolean {
   const lower = pathname.toLowerCase();
   if (/-kits\/?$/.test(lower)) {
@@ -150,12 +164,14 @@ export function classifyFkaKitRemainder(
     return { type: "gk", variant: normalized === "gk" ? null : normalized.slice(3) };
   }
   const startsWithBase = normalized.match(/^(home|away|third|fourth|special)(?:-(.+))?$/);
-  if (startsWithBase?.[1]) {
-    return { type: startsWithBase[1] as KitType, variant: startsWithBase[2] ?? null };
+  const startType = closedKitType(startsWithBase?.[1]);
+  if (startType) {
+    return { type: startType, variant: startsWithBase?.[2] ?? null };
   }
   const endsWithBase = normalized.match(/^(.*)-(home|away|third|fourth)$/);
-  if (endsWithBase?.[1] && endsWithBase[2]) {
-    return { type: endsWithBase[2] as KitType, variant: endsWithBase[1] };
+  const endType = closedKitType(endsWithBase?.[2]);
+  if (endsWithBase?.[1] && endType) {
+    return { type: endType, variant: endsWithBase[1] };
   }
   return { type: "special", variant: normalized };
 }
