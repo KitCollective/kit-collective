@@ -189,6 +189,22 @@ describe("Vision Matcher jersey cap", () => {
     await db.insert(teamSeason).values({ clubId: CLUB_ID, seasonId: SEASON_ID });
     await db.insert(catalogLabel).values([
       {
+        entityType: "country",
+        entityId: insertedCountry.id,
+        locale: "da",
+        kind: "label",
+        text: "Danmark",
+        source: "seed",
+      },
+      {
+        entityType: "league",
+        entityId: insertedLeague.id,
+        locale: "da",
+        kind: "label",
+        text: "Superligaen",
+        source: "seed",
+      },
+      {
         entityType: "club",
         entityId: CLUB_ID,
         locale: "da",
