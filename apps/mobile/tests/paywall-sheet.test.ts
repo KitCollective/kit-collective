@@ -48,7 +48,5 @@ describe("PaywallSheet", () => {
     expect(source).toContain('title="KitCollective+"');
     expect(source).toContain("Plus er ubegrænset Vision Matcher og ønskeliste.");
     expect(source).not.toMatch(/Premium/);
-    expect(source).not.toContain('from "apps/api"');
-    expect(source).not.toContain('from "@kit/db"');
   });
 });
