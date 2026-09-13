@@ -90,9 +90,7 @@ UNCERTAINTY
 
 export function identityVisionUserPrompt(photoCount: number): string {
   const photos =
-    photoCount === 1
-      ? "this jersey photo"
-      : `these ${photoCount} jersey photos of the SAME shirt`;
+    photoCount === 1 ? "this jersey photo" : `these ${photoCount} jersey photos of the SAME shirt`;
 
   return `Analyze ${photos}. Merge all angles into one JSON object.
 

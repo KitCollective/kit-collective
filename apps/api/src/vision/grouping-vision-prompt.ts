@@ -25,9 +25,7 @@ export function groupingVisionUserPrompt(
     priorGroups.length === 0
       ? ""
       : `Existing shirts (keep these photoIds together; you may ADD new photos to them; do not split them):
-${priorGroups
-  .map((group, index) => `${index + 1}. ${group.photoIds.join(", ")}`)
-  .join("\n")}
+${priorGroups.map((group, index) => `${index + 1}. ${group.photoIds.join(", ")}`).join("\n")}
 
 Assign every NEW photo to an existing group or a new group. Return the complete groups (existing photoIds plus any new ones).
 

@@ -1,15 +1,15 @@
-import type { VisionGroupingPhotoInput, VisionIdentityPhotoInput } from "./vision.adapter.js";
 import {
-  IDENTITY_VISION_SYSTEM_PROMPT,
-  identityVisionRefinementUserPrompt,
-  identityVisionUserPrompt,
-  type IdentityRefinementCandidate,
-} from "./identity-vision-prompt.js";
-import {
-  groupingVisionUserPrompt,
   GROUPING_VISION_SYSTEM_PROMPT,
   type GroupingPriorGroup,
+  groupingVisionUserPrompt,
 } from "./grouping-vision-prompt.js";
+import {
+  IDENTITY_VISION_SYSTEM_PROMPT,
+  type IdentityRefinementCandidate,
+  identityVisionRefinementUserPrompt,
+  identityVisionUserPrompt,
+} from "./identity-vision-prompt.js";
+import type { VisionGroupingPhotoInput, VisionIdentityPhotoInput } from "./vision.adapter.js";
 
 export const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 export const OPENROUTER_VISION_MODEL = "google/gemini-2.5-flash-lite";
@@ -64,12 +64,12 @@ export function resolveVisionTransport(): VisionTransport {
   return "noop";
 }
 
+export { GROUPING_VISION_SYSTEM_PROMPT, groupingVisionPrompt } from "./grouping-vision-prompt.js";
 export {
   IDENTITY_VISION_SYSTEM_PROMPT,
   identityVisionPrompt,
   identityVisionUserPrompt,
 } from "./identity-vision-prompt.js";
-export { groupingVisionPrompt, GROUPING_VISION_SYSTEM_PROMPT } from "./grouping-vision-prompt.js";
 
 function jpegDataUrl(bytes: Uint8Array): string {
   return `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}`;
@@ -84,10 +84,7 @@ function openrouterProvider(): OpenRouterChatBody["provider"] {
   };
 }
 
-function chatBody(
-  content: OpenRouterChatContent[],
-  system?: string,
-): OpenRouterChatBody {
+function chatBody(content: OpenRouterChatContent[], system?: string): OpenRouterChatBody {
   const messages: OpenRouterChatMessage[] = [];
   if (system) {
     messages.push({ role: "system", content: system });

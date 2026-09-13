@@ -247,19 +247,12 @@ export function useConfirmVision({
     };
   }, [accessToken, draftId, onCatalogMiss, photoFingerprint, setJobId, setSelectedSeasonLabel]);
 
-  const otherDraftKeys = sessionDrafts
-    .filter((entry) => entry.id !== draftId && entry.photos.length > 0)
-    .map((entry) => `${entry.id}:${draftPhotoFingerprint(entry) ?? ""}`)
-    .join("|");
-
   useEffect(() => {
     if (!accessToken) {
       return;
     }
 
-    const others = sessionDrafts.filter(
-      (entry) => entry.id !== draftId && entry.photos.length > 0,
-    );
+    const others = sessionDrafts.filter((entry) => entry.id !== draftId && entry.photos.length > 0);
     if (others.length === 0) {
       return;
     }
@@ -298,7 +291,7 @@ export function useConfirmVision({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, applySuggestions, draftId, otherDraftKeys, sessionDrafts]);
+  }, [accessToken, applySuggestions, draftId, sessionDrafts]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !polling) {

@@ -1,13 +1,10 @@
 import type { Db } from "@kit/db";
-import {
-  decodeGroupingVisionGroups,
-  groupingVisionPrompt,
-} from "./grouping-vision-prompt.js";
+import { decodeGroupingVisionGroups, groupingVisionPrompt } from "./grouping-vision-prompt.js";
 import {
   decodeIdentityVisionHints,
+  type IdentityRefinementCandidate,
   identityVisionPrompt,
   identityVisionRefinementUserPrompt,
-  type IdentityRefinementCandidate,
 } from "./identity-vision-prompt.js";
 import { NoopVisionAdapter } from "./noop-vision.adapter.js";
 import {
@@ -250,7 +247,9 @@ export class GeminiVisionAdapter implements VisionAdapter {
     signal: AbortSignal,
   ): Promise<string | null> {
     const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
-      { text: `${identityVisionPrompt(photos.length)}\n\n${identityVisionRefinementUserPrompt(candidates)}` },
+      {
+        text: `${identityVisionPrompt(photos.length)}\n\n${identityVisionRefinementUserPrompt(candidates)}`,
+      },
     ];
 
     for (const photo of photos) {
