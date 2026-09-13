@@ -44,6 +44,7 @@ export class MatchService {
         id: userJersey.id,
         userId: userJersey.userId,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
         size: userJersey.size,
@@ -62,6 +63,7 @@ export class MatchService {
     const jersey: WishlistMatchJersey = {
       ownerUserId: savedJersey.userId,
       clubId: savedJersey.clubId,
+      nationalTeamId: savedJersey.nationalTeamId,
       seasonId: savedJersey.seasonId,
       type: savedJersey.type,
       size: savedJersey.size,
@@ -74,6 +76,7 @@ export class MatchService {
       .select({
         userId: wishlistEntry.userId,
         clubId: wishlistEntry.clubId,
+        nationalTeamId: wishlistEntry.nationalTeamId,
         seasonId: wishlistEntry.seasonId,
         type: wishlistEntry.type,
         size: wishlistEntry.size,
@@ -96,6 +99,7 @@ export class MatchService {
 
       const criteria: WishlistMatchCriteria = {
         clubId: row.clubId,
+        nationalTeamId: row.nationalTeamId,
         seasonId: row.seasonId,
         type: row.type,
         size: row.size,
@@ -117,6 +121,7 @@ export class MatchService {
         id: userJersey.id,
         userId: userJersey.userId,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
         size: userJersey.size,
@@ -138,6 +143,7 @@ export class MatchService {
       id: row.id,
       ownerUserId: row.userId,
       clubId: row.clubId,
+      nationalTeamId: row.nationalTeamId,
       seasonId: row.seasonId,
       type: row.type,
       size: row.size,

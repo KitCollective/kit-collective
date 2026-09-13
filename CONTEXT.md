@@ -87,8 +87,8 @@ Catalog truth for a shirt design (club / season / type). Not a user’s copy.
 _Avoid_: shirt as catalog, jersey for the catalog row
 
 **UserJersey**:
-A collector’s owned instance of a Kit, with photos and personal fields.
-_Avoid_: Kit (for a copy), collection item
+A collector’s owned instance of a Kit, with photos and personal fields. Points at a Club **or** a NationalTeam (siblings — exactly one), plus season. Not a Club row with `kind: national`.
+_Avoid_: Kit (for a copy), collection item; stuffing a national side into `clubId`
 
 **UserJerseyPhoto**:
 One photo on a UserJersey. Four universal roles (`front` | `back` | `left` | `right` — Forside /
@@ -102,12 +102,12 @@ Locale + kind name for stamdata. The English seed string is not the Danish UI na
 _Avoid_: hardcoding English as the UI label
 
 **Vision suggestion**:
-Gemini 2.5 Flash-Lite output (OpenRouter via `OPENROUTER_VISION_API_KEY`, pinned to Google, or direct `GEMINI_API_KEY`). Identity prompt uses Huddle kit-type / badge / omit discipline, per-field confidence, and clubHintAlts (local name / abbreviation). Nest is the catalog judge: manufacturer+sponsor Kit-hit first; CatalogLabel label+alias and compact sponsor/manufacturer spellings (same diacritic fold on retrieve as on score); unique type/colours among N hits lock without a second Vision call; missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is only a Club row (Save FK); NationalTeam kits still lock season/type/catalogKitId. Zero or many remaining hits omit season/type; many hits may take one second look with catalog facts (still Google-pin, max two Vision calls). Grouping maps photoIds into UserJersey drafts (max ten photos per copy), incrementally as unbound photos land, with prior groups kept intact. Identity jobs for bound rings run in parallel (Vision worker concurrency 8). Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers; Vision never silently assigns Photo roles.
+Gemini 2.5 Flash-Lite output (OpenRouter via `OPENROUTER_VISION_API_KEY`, pinned to Google, or direct `GEMINI_API_KEY`). Identity prompt uses Huddle kit-type / badge / omit discipline, per-field confidence, and clubHintAlts (local name / abbreviation). Nest is the catalog judge: manufacturer+sponsor Kit-hit first; CatalogLabel label+alias and compact sponsor/manufacturer spellings (same diacritic fold on retrieve as on score); unique type/colours among N hits lock without a second Vision call; missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is only a Club row; NationalTeam kits set `suggestions.nationalTeamId` (never a NationalTeam UUID in `clubId`) and still lock season/type/catalogKitId. Zero or many remaining hits omit season/type; many hits may take one second look with catalog facts (still Google-pin, max two Vision calls). Grouping maps photoIds into UserJersey drafts (max ten photos per copy), incrementally as unbound photos land, with prior groups kept intact. Identity jobs for bound rings run in parallel (Vision worker concurrency 8). Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers; Vision never silently assigns Photo roles.
 _Avoid_: raw model names as foreign keys; auto-committing Photo roles; sending collector photos to non-Google OpenRouter providers; using the factory `OPENROUTER_API_KEY` for Vision; inventing sleeve patches or treating crest years as pads; Eve or pgvector on the collector Vision path; dumping the catalog into the VLM
 
 **Save**:
-Must not wait on Vision, kit completeness, or manufacturer.
-_Avoid_: blocking save on inference
+Must not wait on Vision, kit completeness, or manufacturer. Required side is Club **or** NationalTeam (xor) plus season, type, size, condition, ≥1 photo.
+_Avoid_: blocking save on inference; requiring `clubId` when the copy is a national shirt
 
 **Lane**:
 One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects.
@@ -358,8 +358,8 @@ Compass tab (slot 2). Home is a magazine of shelves (clubs, åbne for bud, colle
 _Avoid_: Discovery as the place name; find-in-own-collection as Søg's primary job; limiting Søg to åben-for-bud rows only; Trøjer|Katalog|Samlere as three equal home tabs; paywalling Søg browse in this feature; showing a blocked peer in results; treating prototype A (grid-only) or B (mode tabs) as the locked home
 
 **Søg catalog drill**:
-A stamdata landing under Søg for Club, Kit, or Player only in this feature: identity chrome plus a grid of non-private UserJersey copies that match that grain. Kit means catalog shirt design (club · season · type), not one UserJersey. Kit drill lists only copies with `catalogKitId`. League, Season, and NationalTeam are not own landings yet — typeahead may filter the jersey home. Not Admin. Not Astro. Not own Samling.
-_Avoid_: League/Season/NationalTeam landings in this feature; treating the drill as a KitPhoto gallery; serving archive bytes on the drill; conflating Kit drill with UserJersey detail; inventing an "unknown Kit" bucket for null catalogKitId
+A stamdata landing under Søg for Club, NationalTeam, Kit, or Player: identity chrome plus a grid of non-private UserJersey copies that match that grain. Kit means catalog shirt design (side · season · type), not one UserJersey. Kit drill lists only copies with `catalogKitId`. NationalTeam is a sibling of Club (identity + jersey grid) — not stuffed into the Club drill. League and Season are not own landings — typeahead may filter the jersey home. Not Admin. Not Astro. Not own Samling.
+_Avoid_: League/Season landings in this feature; treating Club search as the only name for a national side; treating the drill as a KitPhoto gallery; serving archive bytes on the drill; conflating Kit drill with UserJersey detail; inventing an "unknown Kit" bucket for null catalogKitId
 
 **UserJersey detail**:
 Full-screen view of one UserJersey. Immersive photo stage (pager) with meta and actions in a bottom sheet — not hero+strip as the primary layout. **Own**: Privat and åben for bud switches, edit via Confirm UI (patch), delete. **Foreign**: owner → Peer Profil, Favorit, Send bud CTA when åben for bud (separate stack screen). Overflow Rapportér / Blokér. Not the Send bud form itself. Not a Søg catalog drill.
@@ -370,7 +370,7 @@ A saved foreign UserJersey — another collector's shirt on the Profil favorites
 _Avoid_: marketplace listing chrome; owner handle on the favorite tile; treating Favorit as Ønske
 
 **Wishlist**:
-A collector's structured want: catalog facets combined with AND. V1 facets are club, season, type (at least one set) and optional size. Not a saved UserJersey and not a Kit row. This increment's Entitlement gate is Wishlist CRUD plus match-job and match-push — not Søg or Send bud.
+A collector's structured want: catalog facets combined with AND. V1 facets are club **or** NationalTeam (xor), season, type (at least one set) and optional size. Not a saved UserJersey and not a Kit row. This increment's Entitlement gate is Wishlist CRUD plus match-job and match-push — not Søg or Send bud.
 _Avoid_: Favorit as the want list; free-text wish; a Kit as the only shape; paywalling Indbakke in this increment; player or country facets in v1
 
 **Ønske**:

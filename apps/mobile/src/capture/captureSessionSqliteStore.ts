@@ -24,6 +24,8 @@ type DraftRow = {
   session_id: string;
   club_id: string | null;
   club_label: string | null;
+  national_team_id: string | null;
+  national_team_label: string | null;
   season_id: string | null;
   kit_type: string | null;
   size: string | null;
@@ -162,6 +164,8 @@ function readDraft(row: DraftRow, photos: CaptureSessionPhoto[]): CaptureJerseyD
     id: row.id,
     clubId: row.club_id,
     clubLabel: row.club_label,
+    nationalTeamId: row.national_team_id ?? null,
+    nationalTeamLabel: row.national_team_label ?? null,
     seasonId: row.season_id,
     kitType: readKitType(row.kit_type),
     size: readJerseySize(row.size),
@@ -224,17 +228,20 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         for (const [index, draft] of state.drafts.entries()) {
           draftDb.runSync(
             `INSERT INTO capture_session_draft (
-               id, session_id, club_id, club_label, season_id, season_label,
+               id, session_id, club_id, club_label, national_team_id, national_team_label,
+               season_id, season_label,
                kit_type, size, condition,
                kit_type_selected, size_selected, condition_selected,
                notes, player_name, player_id, player_number,
                badge_enabled, badge_id, badge_label, sort_order, updated_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               draft.id,
               sessionId,
               draft.clubId,
               draft.clubLabel,
+              draft.nationalTeamId,
+              draft.nationalTeamLabel,
               draft.seasonId,
               draft.seasonLabel,
               draft.kitType,

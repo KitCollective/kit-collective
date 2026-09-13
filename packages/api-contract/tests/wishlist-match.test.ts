@@ -17,6 +17,7 @@ const baseJersey = {
   id: JERSEY,
   ownerUserId: PEER,
   clubId: CLUB,
+  nationalTeamId: null,
   seasonId: SEASON,
   type: "home" as const,
   size: "m" as const,
@@ -27,15 +28,47 @@ const baseJersey = {
 
 describe("matchesWishlistFacets", () => {
   it("requires every set facet (AND)", () => {
-    const criteria = { clubId: CLUB, seasonId: SEASON, type: "home" as const, size: "m" as const };
+    const criteria = {
+      clubId: CLUB,
+      nationalTeamId: null,
+      seasonId: SEASON,
+      type: "home" as const,
+      size: "m" as const,
+    };
     expect(matchesWishlistFacets(criteria, baseJersey)).toBe(true);
     expect(matchesWishlistFacets(criteria, { ...baseJersey, type: "away" })).toBe(false);
   });
 
-  it("treats unset facets as wildcards", () => {
+  it("AND-matches nationalTeamId independently of clubId", () => {
+    const ntJersey = {
+      ...baseJersey,
+      clubId: null,
+      nationalTeamId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    };
     expect(
-      matchesWishlistFacets({ clubId: CLUB, seasonId: null, type: null, size: null }, baseJersey),
+      matchesWishlistFacets(
+        {
+          clubId: null,
+          nationalTeamId: ntJersey.nationalTeamId,
+          seasonId: null,
+          type: null,
+          size: null,
+        },
+        ntJersey,
+      ),
     ).toBe(true);
+    expect(
+      matchesWishlistFacets(
+        {
+          clubId: null,
+          nationalTeamId: ntJersey.nationalTeamId,
+          seasonId: null,
+          type: null,
+          size: null,
+        },
+        baseJersey,
+      ),
+    ).toBe(false);
   });
 });
 
@@ -64,7 +97,7 @@ describe("isWishlistMatchCandidate", () => {
 describe("findFirstWishlistMatch", () => {
   it("returns the first eligible peer match", () => {
     const matched = findFirstWishlistMatch(
-      { clubId: CLUB, seasonId: SEASON, type: "home", size: null },
+      { clubId: CLUB, nationalTeamId: null, seasonId: SEASON, type: "home", size: null },
       OWNER,
       [baseJersey],
     );
@@ -80,6 +113,8 @@ describe("wishlistEntrySchema match field", () => {
       meta: "F.C. København",
       clubId: CLUB,
       clubLabel: "F.C. København",
+      nationalTeamId: null,
+      nationalTeamLabel: null,
       seasonId: null,
       seasonLabel: null,
       type: null,
@@ -98,6 +133,8 @@ describe("wishlistEntrySchema match field", () => {
       meta: "F.C. København",
       clubId: CLUB,
       clubLabel: "F.C. København",
+      nationalTeamId: null,
+      nationalTeamLabel: null,
       seasonId: null,
       seasonLabel: null,
       type: null,

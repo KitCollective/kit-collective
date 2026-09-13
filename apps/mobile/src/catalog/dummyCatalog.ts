@@ -22,6 +22,7 @@ export type CatalogPickerRow = {
   id: string;
   label: string;
   meta?: string;
+  kind?: "club" | "national_team";
 };
 
 const FCK_ID = "11111111-1111-4111-8111-111111111111";
@@ -184,6 +185,7 @@ export function searchDummyClubs(query: string): CatalogPickerRow[] {
     id: club.id,
     label: club.label,
     meta: club.country,
+    kind: "club" as const,
   }));
 }
 

@@ -27,7 +27,7 @@ describe("checkMobileWishlistUiEvidence", () => {
   it("fails when EmptyState body is empty", () => {
     const violations = checkMobileWishlistUiEvidence({
       sheetSource:
-        'body="" SeasonPickerOverlay FacetPickerOverlay borderSubtle wishlist-sheet-logic',
+        'body="" SeasonPickerOverlay ClubPickerOverlay borderSubtle wishlist-sheet-logic',
       logicExists: true,
       testExists: true,
       logicSource: logicFixture,

@@ -29,6 +29,7 @@ export function parseConfidences(raw: string | null | undefined): VisionFieldCon
     return {
       overall: parsed.overall,
       club: typeof parsed.club === "number" ? parsed.club : undefined,
+      nationalTeam: typeof parsed.nationalTeam === "number" ? parsed.nationalTeam : undefined,
       season: typeof parsed.season === "number" ? parsed.season : undefined,
       kitType: typeof parsed.kitType === "number" ? parsed.kitType : undefined,
       player: typeof parsed.player === "number" ? parsed.player : undefined,
@@ -163,6 +164,10 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     confidences?.club ?? confidences?.overall,
     Boolean(result.clubId),
   );
+  const nationalTeamGate = resolveFieldGate(
+    confidences?.nationalTeam ?? confidences?.overall,
+    Boolean(result.nationalTeamId),
+  );
   const seasonGate = resolveFieldGate(
     confidences?.season ?? confidences?.overall,
     Boolean(result.seasonId),
@@ -189,6 +194,13 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     suggestions.clubId = result.clubId;
     if (clubGate === "preselect") {
       fieldPreselect.club = true;
+    }
+  }
+
+  if (nationalTeamGate !== "omit" && result.nationalTeamId) {
+    suggestions.nationalTeamId = result.nationalTeamId;
+    if (nationalTeamGate === "preselect") {
+      fieldPreselect.nationalTeam = true;
     }
   }
 
@@ -229,6 +241,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
 
   const hasSuggestion = Boolean(
     suggestions.clubId ||
+      suggestions.nationalTeamId ||
       suggestions.seasonId ||
       suggestions.type ||
       suggestions.catalogKitId ||
@@ -253,6 +266,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
 
   const preselect = Boolean(
     fieldPreselect.club ||
+      fieldPreselect.nationalTeam ||
       fieldPreselect.season ||
       fieldPreselect.type ||
       fieldPreselect.player ||

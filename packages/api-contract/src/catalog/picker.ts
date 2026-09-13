@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { catalogSideKindSchema } from "./side.js";
+
+export { type CatalogSideKind, catalogSideKindSchema } from "./side.js";
 
 const PICKER_LABEL_LOCALES = ["da", "en", "sv", "no", "mul"] as const;
 
@@ -7,10 +10,19 @@ export const catalogPickerItemSchema = z
   .object({
     id: z.string().uuid(),
     label: z.string().min(1),
+    kind: catalogSideKindSchema.optional(),
   })
   .strict();
 
 export type CatalogPickerItem = z.infer<typeof catalogPickerItemSchema>;
+
+export const catalogSidePickerItemSchema = catalogPickerItemSchema
+  .extend({
+    kind: catalogSideKindSchema,
+  })
+  .strict();
+
+export type CatalogSidePickerItem = z.infer<typeof catalogSidePickerItemSchema>;
 
 export const catalogPickerSearchQuerySchema = z
   .object({
@@ -31,7 +43,7 @@ export type CatalogPickerClubIdParam = z.infer<typeof catalogPickerClubIdParamSc
 
 export const catalogClubSearchResponseSchema = z
   .object({
-    clubs: z.array(catalogPickerItemSchema),
+    clubs: z.array(catalogSidePickerItemSchema),
   })
   .strict();
 

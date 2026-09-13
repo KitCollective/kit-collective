@@ -72,15 +72,15 @@ export function ClubPickerOverlay({
   return (
     <CatalogPickerModal
       visible={visible}
-      title="Vælg klub"
-      searchPlaceholder="Søg klub"
+      title="Vælg klub eller landshold"
+      searchPlaceholder="Søg klub eller landshold"
       query={query}
       onQueryChange={setQuery}
       items={items}
       selectedId={selectedClubId}
       loading={loading}
       errorMessage={errorMessage}
-      emptyMessage="Ingen klubber matcher."
+      emptyMessage="Ingen klubber eller landshold matcher."
       onSelect={(item) => {
         onSelect(item);
         onDismiss();

@@ -99,15 +99,15 @@ Product rules live in the PRD. Implementation shape:
 Photos (gallery-first on first session, CameraView on repeat)
     → local draft (expo-sqlite) on every shot / pick
     → Nest Vision worker fired at first photo (do not await)
-    → Confirm screen: club search + club-scoped season + type/size/condition chips
+    → Confirm screen: side search (Club or NationalTeam) + side-scoped season + type/size/condition chips
     → Save (local-complete counts; upload may finish later)
     → "New jersey" | "Same club"
 ```
 
 - **New jersey:** empty identity. Inter must not become Barça.
-- **Same club:** prefill club only. Season / type / condition are not sticky.
+- **Same club:** prefill the saved side only (Club or NationalTeam). Season / type / condition are not sticky.
 - Nameset, patch, purchase, authenticity = “More details”, off the 45s clock.
-- Save **must succeed** with club + season + type + size + condition + ≥1 photo. Missing kit row / manufacturer / patch is not an error.
+- Save **must succeed** with a catalog side (Club xor NationalTeam) + season + type + size + condition + ≥1 photo. Missing kit row / manufacturer / patch is not an error.
 - Catalog miss on club or season → upgrade CTA, draft kept.
 - Expo Web: gallery-first, no 45s promise.
 
@@ -125,7 +125,7 @@ Photo entity (MVP): `role`, `source`, dimensions, URIs. Vacant OCR envelope (`oc
 | Fallback | Direct `GEMINI_API_KEY`. Unset both → noop |
 | Do not use | non-Google OpenRouter hosts for collector photos; `gpt-4o-mini` for images (tile pricing); reasoning models on the hot path; Eve / pgvector on collector Vision |
 | Timeout | 15 s wall for identity (first look + optional second look), fail open |
-| Judge | Nest Kit-hit on manufacturer+sponsor. CatalogLabel label+alias and compact spellings (same diacritic fold on retrieve as on score). Unique kit, or unique type/colours among N, locks catalog UUID/season/type. Missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is a Club row only. Else omit; N>1 may one second look with catalog facts |
+| Judge | Nest Kit-hit on manufacturer+sponsor. CatalogLabel label+alias and compact spellings (same diacritic fold on retrieve as on score). Unique kit, or unique type/colours among N, locks catalog UUID/season/type. Missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is a Club row only; NationalTeam kits set `nationalTeamId`. Else omit; N>1 may one second look with catalog facts |
 | Output | Structured JSON → map to catalog UUIDs in Nest. Grouping jobs return photoId groups (incremental prior groups allowed); identity jobs return club/season/type |
 | Auto-fill | ≥70% **and** catalog hit → pre-select on confirm. 50–69% → show as suggestion. Else ignore. Grouping ≥70% pre-binds via bind reducers; Vision never auto-commits Photo roles |
 | Logging | `vision_raw`, confidences, latency, model, user action (accepted / edited / ignored). **No embedding / pgvector** |

@@ -3,6 +3,7 @@ import type { KitType } from "@kit/domain";
 export type VisionFieldConfidences = {
   overall: number;
   club?: number;
+  nationalTeam?: number;
   season?: number;
   kitType?: number;
   player?: number;
@@ -11,6 +12,7 @@ export type VisionFieldConfidences = {
 
 export type VisionInferenceResult = {
   clubId?: string;
+  nationalTeamId?: string;
   seasonId?: string;
   catalogKitId?: string;
   type?: KitType;

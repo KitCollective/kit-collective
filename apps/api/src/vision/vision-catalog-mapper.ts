@@ -20,6 +20,7 @@ import {
   type CatalogSideMatch,
   catalogClubIdForSave,
   catalogHintSearchNeedles,
+  catalogNationalTeamIdForSave,
   collectClubHints,
   compactCatalogHint,
   type ObservableKitHit,
@@ -74,7 +75,8 @@ export class VisionCatalogMapper {
     });
 
     const clubId = catalogClubIdForSave(locked, sideMatch);
-    const playerScope = playerScopeFor(locked, clubId, sideMatch);
+    const nationalTeamId = catalogNationalTeamIdForSave(locked, sideMatch);
+    const playerScope = playerScopeFor(locked, clubId, nationalTeamId, sideMatch);
     const playerMatch =
       playerScope && locked?.seasonId
         ? await this.resolvePlayer(
@@ -89,7 +91,7 @@ export class VisionCatalogMapper {
       ? await this.resolvePatch(locked.seasonId, hints.patchHint)
       : null;
 
-    if (!clubId && !locked && !playerMatch && !patchMatch) {
+    if (!clubId && !nationalTeamId && !locked && !playerMatch && !patchMatch) {
       if (hints.clubHint || hints.clubHintAlts?.length) {
         return {
           clubHint: collectClubHints(hints)[0],
@@ -102,6 +104,7 @@ export class VisionCatalogMapper {
 
     return {
       clubId,
+      nationalTeamId,
       seasonId: locked?.seasonId,
       catalogKitId: locked?.kitId,
       type: locked?.type,
@@ -110,7 +113,8 @@ export class VisionCatalogMapper {
       patchId: patchMatch?.patchId,
       clubHint: hints.clubHint,
       confidences: this.buildConfidences(hints, {
-        club: clubMatchScore(sideMatch, locked),
+        club: clubId ? clubMatchScore(sideMatch, locked) : undefined,
+        nationalTeam: nationalTeamId ? clubMatchScore(sideMatch, locked) : undefined,
         season: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         kitType: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         player: playerMatch?.score,
@@ -410,6 +414,7 @@ export class VisionCatalogMapper {
     hints: IdentityVisionHints,
     match: {
       club?: number;
+      nationalTeam?: number;
       season?: number;
       kitType?: number;
       player?: number;
@@ -419,6 +424,7 @@ export class VisionCatalogMapper {
   ): VisionFieldConfidences {
     const fields = hints.fieldConfidence;
     const club = combineModelAndMatchConfidence(fields?.club, match.club);
+    const nationalTeam = combineModelAndMatchConfidence(fields?.club, match.nationalTeam);
     const season = match.kitLocked
       ? CATALOG_KIT_LOCK_CONFIDENCE
       : combineModelAndMatchConfidence(fields?.season, match.season);
@@ -427,7 +433,7 @@ export class VisionCatalogMapper {
       : combineModelAndMatchConfidence(fields?.kitType, match.kitType);
     const player = combineModelAndMatchConfidence(fields?.player, match.player);
     const badge = combineModelAndMatchConfidence(fields?.badge, match.badge);
-    const fieldScores = [club, season, kitType, player, badge].filter(
+    const fieldScores = [club, nationalTeam, season, kitType, player, badge].filter(
       (score): score is number => typeof score === "number",
     );
     const overallFromFields =
@@ -439,6 +445,7 @@ export class VisionCatalogMapper {
     return {
       overall: modelOverall > 0 ? modelOverall : overallFromFields,
       club,
+      nationalTeam,
       season,
       kitType,
       player,
@@ -457,6 +464,7 @@ function kitSideEquals(side: CatalogSideMatch | null): SQL | undefined {
 function playerScopeFor(
   locked: ObservableKitHit | null,
   clubId: string | undefined,
+  nationalTeamId: string | undefined,
   sideMatch: CatalogSideMatch | null,
 ): { kind: CatalogSideKind; id: string } | undefined {
   if (locked?.nationalTeamId) {
@@ -468,6 +476,9 @@ function playerScopeFor(
   if (clubId) {
     return { kind: "club", id: clubId };
   }
+  if (nationalTeamId) {
+    return { kind: "national_team", id: nationalTeamId };
+  }
   if (sideMatch) {
     return { kind: sideMatch.kind, id: sideMatch.id };
   }
@@ -478,10 +489,13 @@ function clubMatchScore(
   sideMatch: CatalogSideMatch | null,
   locked: ObservableKitHit | null,
 ): number | undefined {
-  if (sideMatch?.kind === "club") {
+  if (sideMatch) {
     return sideMatch.score;
   }
-  return locked?.clubId ? CATALOG_KIT_LOCK_CONFIDENCE : undefined;
+  if (locked?.clubId || locked?.nationalTeamId) {
+    return CATALOG_KIT_LOCK_CONFIDENCE;
+  }
+  return undefined;
 }
 
 function idsForEntityType(

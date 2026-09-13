@@ -5,11 +5,13 @@ import { fetchClubSeasons } from "@/api/catalog";
 import { fetchVisionJob, startVisionSuggest } from "@/api/vision";
 import {
   applyIdentitySuggestion,
+  catalogSideId,
   selectDraftKitType,
   setDraftBadge,
-  setDraftClub,
+  setDraftCatalogSide,
   setDraftPlayer,
   setDraftSeason,
+  suggestedCatalogSideId,
 } from "@/capture/captureSession";
 import type { CaptureJerseyDraft, CaptureSessionMutator } from "@/capture/captureSessionTypes";
 import {
@@ -157,8 +159,9 @@ export function useConfirmVision({
           setSelectedSeasonLabel(suggestions.seasonLabel);
         }
 
-        if (!confirmSeasonWasEdited() && suggestions.clubId && accessToken && fieldPreselect.club) {
-          await fetchClubSeasons(accessToken, suggestions.clubId);
+        const suggestedSideId = suggestedCatalogSideId(suggestions, fieldPreselect);
+        if (!confirmSeasonWasEdited() && accessToken && suggestedSideId) {
+          await fetchClubSeasons(accessToken, suggestedSideId);
         }
 
         const suggestOnlyJob = buildSuggestOnlyVisionJob(job, {
@@ -344,7 +347,18 @@ export function useConfirmVision({
     mutate((current) => {
       let next = current;
       if (suggestions.clubId && suggestions.clubLabel) {
-        next = setDraftClub(next, next.activeDraftId, suggestions.clubId, suggestions.clubLabel);
+        next = setDraftCatalogSide(next, next.activeDraftId, {
+          id: suggestions.clubId,
+          label: suggestions.clubLabel,
+          kind: "club",
+        });
+      }
+      if (suggestions.nationalTeamId && suggestions.nationalTeamLabel) {
+        next = setDraftCatalogSide(next, next.activeDraftId, {
+          id: suggestions.nationalTeamId,
+          label: suggestions.nationalTeamLabel,
+          kind: "national_team",
+        });
       }
       if (suggestions.seasonId) {
         next = setDraftSeason(next, next.activeDraftId, suggestions.seasonId);
@@ -371,8 +385,9 @@ export function useConfirmVision({
       return next;
     });
 
-    if (suggestions.clubId) {
-      await fetchClubSeasons(accessToken, suggestions.clubId);
+    const sideId = catalogSideId(suggestions);
+    if (sideId) {
+      await fetchClubSeasons(accessToken, sideId);
     }
     setSuggestion(null);
     setApplied(true);

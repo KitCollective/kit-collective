@@ -56,13 +56,13 @@ Import repo → normalized JSON → mapper → **our** tables. Re-run mapper; do
 | Entity | What it is |
 | --- | --- |
 | `User` | Our account. **Email + password is always available (mandatory path).** Apple / Google (and later Facebook) are extra identities on the same user. Role `user` \| `admin` |
-| **`UserJersey`** | Their copy. Points at `clubId`, `seasonId`, optional `kitId` |
+| **`UserJersey`** | Their copy. Points at `clubId` **or** `nationalTeamId` (xor), `seasonId`, optional `kitId` |
 | `UserJerseyPhoto` | Their photos. `role` is `front` \| `back` \| `left` \| `right` \| `other` (Andet); `other` may repeat and may carry a free `label` (Beskrivelse). At most ten per UserJersey. Source camera\|gallery. Bytes in **R2** `user/{userId}/{jerseyId}/…`; row holds the key |
 | `UserJerseyPatch` | Pads actually on this copy (confirmed) |
 | `JerseyDraft` | Local sqlite ↔ server, same id |
 | `VisionLog` | Suggestion + whether they accepted/edited/ignored |
 
-Required on Save: `clubId`, `seasonId`, `type`, `size`, `condition`, ≥1 photo (max 10). Universal roles are unique; `other` is not.  
+Required on Save: `clubId` **xor** `nationalTeamId`, `seasonId`, `type`, `size`, `condition`, ≥1 photo (max 10). Universal roles are unique; `other` is not.  
 Optional: `kitId`, player print, patches, purchase, authenticity (default `unknown`).
 
 Vision may **suggest** `kitId` / player. It does not create catalog rows.
@@ -76,7 +76,7 @@ Vision may **suggest** `kitId` / player. It does not create catalog rows.
 | Example | Inter home 23/24 (Nike, …) | Mikkel’s Inter 23/24, size L, Lautaro 10, his photos |
 | Photos | Archive reference, admin-only until rights OK | User’s own — these are the product images |
 | Pads | Candidates for that season/kit | What is sewn on his shirt |
-| Missing row | Save still works (`kitId` null) | Cannot save without club + season |
+| Missing row | Save still works (`kitId` null) | Cannot save without a catalog side (Club or NationalTeam) + season |
 | Who writes | Seed mapper + admin + propose | The collector |
 
 Wishlist and public Astro pages join **user jerseys** to **kits/clubs**. They never show unresolved archive files as OG images.

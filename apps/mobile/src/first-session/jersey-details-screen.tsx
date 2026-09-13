@@ -35,6 +35,7 @@ import {
   bindUnboundPhotoToDraft,
   canAddPhotoToDraft,
   canSave,
+  catalogSideId,
   changeDraftPhotoRole,
   discardUnboundPhoto,
   getDraft,
@@ -46,10 +47,11 @@ import {
   selectDraftKitType,
   selectDraftSize,
   setActiveDraft,
-  setDraftClub,
+  setDraftCatalogSide,
   setDraftNotes,
   setDraftPhotoLabel,
   setDraftSeason,
+  suggestedCatalogSideId,
   switchSingleToBulkBind,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
@@ -152,6 +154,9 @@ export function JerseyDetailsScreen({
   });
 
   const draft = state ? getDraft(state, state.activeDraftId) : null;
+  const clubId = draft?.clubId;
+  const nationalTeamId = draft?.nationalTeamId;
+  const seasonId = draft?.seasonId;
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const isBulk = state?.branch === "bulk";
@@ -251,16 +256,17 @@ export function JerseyDetailsScreen({
   }, [lightboxRole, lightboxSourceUri]);
 
   useEffect(() => {
-    if (!accessToken || !draft?.clubId) {
+    const sideId = catalogSideId({ clubId, nationalTeamId });
+    if (!accessToken || !sideId) {
       return;
     }
 
     let cancelled = false;
-    void fetchClubSeasons(accessToken, draft.clubId).then((response) => {
+    void fetchClubSeasons(accessToken, sideId).then((response) => {
       if (!cancelled) {
         setSeasonResults(response.seasons);
-        if (draft.seasonId) {
-          const match = response.seasons.find((season) => season.id === draft.seasonId);
+        if (seasonId) {
+          const match = response.seasons.find((season) => season.id === seasonId);
           if (match) {
             setSelectedSeasonLabel(match.label);
           }
@@ -271,7 +277,7 @@ export function JerseyDetailsScreen({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, draft?.clubId, draft?.seasonId]);
+  }, [accessToken, clubId, nationalTeamId, seasonId]);
 
   const runClubSearch = useCallback(
     async (query: string) => {
@@ -362,8 +368,9 @@ export function JerseyDetailsScreen({
         setSelectedSeasonLabel(suggestions.seasonLabel);
       }
 
-      if (!seasonManuallySet.current && suggestions.clubId && accessToken && fieldPreselect.club) {
-        const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
+      const suggestedSideId = suggestedCatalogSideId(suggestions, fieldPreselect);
+      if (!seasonManuallySet.current && accessToken && suggestedSideId) {
+        const seasons = await fetchClubSeasons(accessToken, suggestedSideId);
         setSeasonResults(seasons.seasons);
       }
 
@@ -556,7 +563,7 @@ export function JerseyDetailsScreen({
     clubManuallySet.current = true;
     seasonManuallySet.current = false;
     setSelectedSeasonLabel(null);
-    mutate((current) => setDraftClub(current, current.activeDraftId, club.id, club.label));
+    mutate((current) => setDraftCatalogSide(current, current.activeDraftId, club));
     setClubSheetOpen(false);
     setSeasonSheetOpen(true);
 
@@ -585,7 +592,19 @@ export function JerseyDetailsScreen({
       let next = current;
       if (suggestions.clubId && suggestions.clubLabel) {
         clubManuallySet.current = true;
-        next = setDraftClub(next, next.activeDraftId, suggestions.clubId, suggestions.clubLabel);
+        next = setDraftCatalogSide(next, next.activeDraftId, {
+          id: suggestions.clubId,
+          label: suggestions.clubLabel,
+          kind: "club",
+        });
+      }
+      if (suggestions.nationalTeamId && suggestions.nationalTeamLabel) {
+        clubManuallySet.current = true;
+        next = setDraftCatalogSide(next, next.activeDraftId, {
+          id: suggestions.nationalTeamId,
+          label: suggestions.nationalTeamLabel,
+          kind: "national_team",
+        });
       }
       if (suggestions.seasonId) {
         seasonManuallySet.current = true;
@@ -601,8 +620,9 @@ export function JerseyDetailsScreen({
       return next;
     });
 
-    if (suggestions.clubId) {
-      const seasons = await fetchClubSeasons(accessToken, suggestions.clubId);
+    const sideId = catalogSideId(suggestions);
+    if (sideId) {
+      const seasons = await fetchClubSeasons(accessToken, sideId);
       setSeasonResults(seasons.seasons);
     }
 
@@ -758,7 +778,7 @@ export function JerseyDetailsScreen({
 
     if (
       !accessToken ||
-      !draft.clubId ||
+      (!draft.clubId && !draft.nationalTeamId) ||
       !draft.seasonId ||
       !draft.kitType ||
       !draft.size ||
@@ -790,7 +810,7 @@ export function JerseyDetailsScreen({
 
       const response = await saveUserJersey(accessToken, {
         draftId: draft.id,
-        clubId: draft.clubId,
+        ...(draft.clubId ? { clubId: draft.clubId } : { nationalTeamId: draft.nationalTeamId! }),
         seasonId: draft.seasonId,
         catalogKitId: null,
         type: draft.kitType,
@@ -819,7 +839,8 @@ export function JerseyDetailsScreen({
           const resolved = resolveVisionSaveAction({
             status: job.status,
             suggestions: job.suggestions,
-            selectedClubId: draft.clubId,
+            selectedClubId: draft.clubId ?? undefined,
+            selectedNationalTeamId: draft.nationalTeamId ?? undefined,
             selectedSeasonId: draft.seasonId,
             selectedKitType: draft.kitType,
           });
@@ -886,7 +907,11 @@ export function JerseyDetailsScreen({
     ...otherPhotos.map((photo) => photo.uri),
   ];
   const selectedClub =
-    draft.clubId && draft.clubLabel ? { id: draft.clubId, label: draft.clubLabel } : null;
+    draft.clubId && draft.clubLabel
+      ? { id: draft.clubId, label: draft.clubLabel }
+      : draft.nationalTeamId && draft.nationalTeamLabel
+        ? { id: draft.nationalTeamId, label: draft.nationalTeamLabel }
+        : null;
   const selectedSeason =
     draft.seasonId && selectedSeasonLabel
       ? { id: draft.seasonId, label: selectedSeasonLabel }
@@ -1030,7 +1055,7 @@ export function JerseyDetailsScreen({
         <View style={styles.section}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Klub</Text>
           <ListRow
-            title={selectedClub?.label ?? "Vælg klub"}
+            title={selectedClub?.label ?? "Vælg klub eller landshold"}
             onPress={openClubSheet}
             selected={selectedClub !== null}
           />
@@ -1136,11 +1161,15 @@ export function JerseyDetailsScreen({
         />
       </ButtonDock>
 
-      <Sheet visible={clubSheetOpen} title="Vælg klub" onDismiss={() => setClubSheetOpen(false)}>
+      <Sheet
+        visible={clubSheetOpen}
+        title="Vælg klub eller landshold"
+        onDismiss={() => setClubSheetOpen(false)}
+      >
         <SearchField
           variant="catalog"
-          accessibilityLabel="Søg klub"
-          placeholder="Søg klub"
+          accessibilityLabel="Søg klub eller landshold"
+          placeholder="Søg klub eller landshold"
           value={clubQuery}
           onChangeText={setClubQuery}
           onClear={() => setClubQuery("")}

@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { fetchClubSeasons } from "@/api/catalog";
 import { useAuth } from "@/auth/AuthProvider";
-import { canSave } from "@/capture/captureSession";
+import { canSave, catalogSideId } from "@/capture/captureSession";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { saveConfirmJersey } from "@/capture/saveConfirmJersey";
 import { showSaveFailureToast } from "@/capture/saveFailureToast";
@@ -29,6 +29,9 @@ export function useConfirmSave(options: {
 
   const draft =
     state?.drafts.find((entry) => entry.id === state.activeDraftId) ?? state?.drafts[0] ?? null;
+  const clubId = draft?.clubId;
+  const nationalTeamId = draft?.nationalTeamId;
+  const seasonId = draft?.seasonId;
   const isBulk = state?.branch === "bulk";
 
   useFocusEffect(
@@ -38,17 +41,18 @@ export function useConfirmSave(options: {
   );
 
   useEffect(() => {
-    if (!accessToken || !draft?.clubId) {
+    const sideId = catalogSideId({ clubId, nationalTeamId });
+    if (!accessToken || !sideId) {
       return;
     }
 
     let cancelled = false;
-    void fetchClubSeasons(accessToken, draft.clubId).then((response) => {
+    void fetchClubSeasons(accessToken, sideId).then((response) => {
       if (cancelled) {
         return;
       }
-      if (draft.seasonId) {
-        const match = response.seasons.find((season) => season.id === draft.seasonId);
+      if (seasonId) {
+        const match = response.seasons.find((season) => season.id === seasonId);
         if (match) {
           setSelectedSeasonLabel(match.label);
         }
@@ -58,7 +62,7 @@ export function useConfirmSave(options: {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, draft?.clubId, draft?.seasonId]);
+  }, [accessToken, clubId, nationalTeamId, seasonId]);
 
   const handleSave = async () => {
     if (!draft || !options.sessionId || !state) {

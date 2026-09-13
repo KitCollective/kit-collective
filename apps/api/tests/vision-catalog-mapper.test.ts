@@ -332,6 +332,7 @@ describe("VisionCatalogMapper", () => {
     await pool.end();
 
     expect(mapped?.clubId).toBeUndefined();
+    expect(mapped?.nationalTeamId).toBe(fixture.nationalTeamId);
     expect(mapped?.catalogKitId).toBe(fixture.kitId);
     expect(mapped?.seasonId).toBe(fixture.seasonId);
     expect(mapped?.type).toBe("home");
@@ -360,6 +361,7 @@ describe("VisionCatalogMapper", () => {
     await pool.end();
 
     expect(mapped?.clubId).toBeUndefined();
+    expect(mapped?.nationalTeamId).toBe(fixture.nationalTeamId);
     expect(mapped?.catalogKitId).toBe(fixture.kitId);
   });
 });

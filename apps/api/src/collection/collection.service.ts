@@ -9,6 +9,7 @@ import {
   type CollectionDiscoverHome,
   type CollectionDiscoverHomeClub,
   type CollectionDiscoverHomeCollector,
+  type CollectionDiscoverHomeNationalTeam,
   type CollectionDiscoverJerseys,
   type CollectionDiscoverTypeahead,
   type CollectionDiscoverTypeaheadKit,
@@ -60,11 +61,12 @@ import {
   conversationParticipant,
   jerseyDraft,
   kit,
+  nationalTeam,
   patch,
   player,
   playerClubSeason,
+  playerNationalTeamSeason,
   season,
-  teamSeason,
   user,
   userJersey,
   userJerseyFavorite,
@@ -95,6 +97,12 @@ import { MatchQueueService } from "../match/match-queue.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
 import { VisionService } from "../vision/vision.service.js";
 import { VisionQueueService } from "../vision/vision-queue.service.js";
+import {
+  assertSeasonLinkedToSide,
+  discoverJerseySideFromLabels,
+  resolveCatalogJerseySide,
+  uniqueNonNullIds,
+} from "./catalog-side.js";
 import { CollectionShortcutsService } from "./collection-shortcuts.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "./object-store.js";
 import { PhotoDerivativeQueueService } from "./photo-derivative-queue.service.js";
@@ -216,8 +224,9 @@ export class CollectionService {
       .select({
         id: userJersey.id,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
-        countryId: club.countryId,
+        countryId: sql<string>`coalesce(${club.countryId}, ${nationalTeam.countryId})`,
         leagueId: season.leagueId,
         catalogKitId: userJersey.catalogKitId,
         playerId: userJersey.playerId,
@@ -230,7 +239,8 @@ export class CollectionService {
       })
       .from(userJersey)
       .innerJoin(season, eq(userJersey.seasonId, season.id))
-      .innerJoin(club, eq(userJersey.clubId, club.id))
+      .leftJoin(club, eq(userJersey.clubId, club.id))
+      .leftJoin(nationalTeam, eq(userJersey.nationalTeamId, nationalTeam.id))
       .where(and(...filterConditions))
       .orderBy(desc(userJersey.createdAt));
 
@@ -238,7 +248,8 @@ export class CollectionService {
       return collectionJerseysSchema.parse({ jerseys: [] });
     }
 
-    const clubIds = [...new Set(rows.map((row) => row.clubId))];
+    const clubIds = uniqueNonNullIds(rows.map((row) => row.clubId));
+    const nationalTeamIds = uniqueNonNullIds(rows.map((row) => row.nationalTeamId));
     const countryIds = [...new Set(rows.map((row) => row.countryId))];
     const leagueIds = [
       ...new Set(
@@ -246,11 +257,19 @@ export class CollectionService {
       ),
     ];
     const jerseyIds = rows.map((row) => row.id);
-    const squadScopeKeys = rows.map((row) => `${row.clubId}:${row.seasonId}`);
-    const uniqueSquadScopes = [...new Set(squadScopeKeys)];
+    const squadScopes = rows.map((row) =>
+      row.clubId
+        ? { kind: "club" as const, clubId: row.clubId, seasonId: row.seasonId }
+        : {
+            kind: "national_team" as const,
+            nationalTeamId: row.nationalTeamId!,
+            seasonId: row.seasonId,
+          },
+    );
 
     const [
       clubLabels,
+      nationalTeamLabels,
       countryLabels,
       leagueLabels,
       photosByJersey,
@@ -259,24 +278,25 @@ export class CollectionService {
       patchesByJersey,
     ] = await Promise.all([
       this.resolveEntityLabels("club", clubIds, locale),
+      this.resolveEntityLabels("national_team", nationalTeamIds, locale),
       this.resolveEntityLabels("country", countryIds, locale),
       this.resolveEntityLabels("league", leagueIds, locale),
       this.loadPhotosForJerseys(jerseyIds),
-      this.loadSquadPlayersForScopes(
-        uniqueSquadScopes.map((key) => {
-          const [clubId, seasonId] = key.split(":");
-          return { clubId: clubId!, seasonId: seasonId! };
-        }),
-        locale,
-      ),
+      this.loadSquadPlayersForScopes(squadScopes, locale),
       this.loadPlayerFieldsForJerseys(rows, locale),
       this.loadPatchesForJerseys(jerseyIds, locale),
     ]);
 
     const jerseys: CollectionJersey[] = rows.map((row) => {
-      const clubLabel = clubLabels.get(row.clubId);
-      if (!clubLabel) {
+      const clubLabel = row.clubId ? (clubLabels.get(row.clubId) ?? null) : null;
+      const nationalTeamLabel = row.nationalTeamId
+        ? (nationalTeamLabels.get(row.nationalTeamId) ?? null)
+        : null;
+      if (row.clubId && !clubLabel) {
         throw new NotFoundException(`Club label missing for jersey ${row.id}`);
+      }
+      if (row.nationalTeamId && !nationalTeamLabel) {
+        throw new NotFoundException(`National team label missing for jersey ${row.id}`);
       }
 
       const countryLabel = countryLabels.get(row.countryId);
@@ -300,6 +320,7 @@ export class CollectionService {
       return {
         id: row.id,
         clubId: row.clubId,
+        nationalTeamId: row.nationalTeamId,
         seasonId: row.seasonId,
         countryId: row.countryId,
         leagueId,
@@ -310,8 +331,14 @@ export class CollectionService {
         countryLabel,
         leagueLabel,
         clubLabel,
+        nationalTeamLabel,
         seasonLabel: row.seasonLabel,
-        squadPlayers: squadPlayersByScope.get(`${row.clubId}:${row.seasonId}`) ?? [],
+        squadPlayers:
+          squadPlayersByScope.get(
+            row.clubId
+              ? `club:${row.clubId}:${row.seasonId}`
+              : `nt:${row.nationalTeamId}:${row.seasonId}`,
+          ) ?? [],
         playerId: row.playerId ?? null,
         playerLabel: playerFields?.label ?? null,
         playerNumber: playerFields?.number ?? null,
@@ -488,6 +515,7 @@ export class CollectionService {
         createdAt: conversationMessage.createdAt,
         ownerId: userJersey.userId,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         type: userJersey.type,
         seasonLabel: season.label,
       })
@@ -513,8 +541,12 @@ export class CollectionService {
       return collectionActivitySchema.parse({ items: [] });
     }
 
-    const clubIds = [...new Set(visibleBidRows.map((row) => row.clubId))];
-    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const clubIds = uniqueNonNullIds(visibleBidRows.map((row) => row.clubId));
+    const nationalTeamIds = uniqueNonNullIds(visibleBidRows.map((row) => row.nationalTeamId));
+    const [clubLabels, nationalTeamLabels] = await Promise.all([
+      this.resolveEntityLabels("club", clubIds, locale),
+      this.resolveEntityLabels("national_team", nationalTeamIds, locale),
+    ]);
 
     const senderIds = [...new Set(visibleBidRows.map((row) => row.senderId))];
     const senderRows =
@@ -531,8 +563,8 @@ export class CollectionService {
         throw new NotFoundException("Bid message missing amount or status");
       }
 
-      const clubLabel = clubLabels.get(row.clubId);
-      if (!clubLabel) {
+      const side = discoverJerseySideFromLabels(row, clubLabels, nationalTeamLabels);
+      if (!side) {
         throw new NotFoundException("Club label missing for activity");
       }
 
@@ -542,7 +574,7 @@ export class CollectionService {
       }
 
       const viewerIsOwner = row.ownerId === userId;
-      const kitLine = `${clubLabel} · ${row.seasonLabel} · ${KIT_TYPE_LABELS_DA[row.type]}`;
+      const kitLine = `${side.clubLabel} · ${row.seasonLabel} · ${KIT_TYPE_LABELS_DA[row.type]}`;
 
       const latest = latestByConversation.get(row.conversationId);
       const lastReadAt = lastReadByConversation.get(row.conversationId);
@@ -611,6 +643,7 @@ export class CollectionService {
     const [jerseyRow] = await this.db
       .select({
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         type: userJersey.type,
         seasonLabel: season.label,
       })
@@ -621,11 +654,11 @@ export class CollectionService {
 
     let jerseyContext: CollectionConversationDetail["jerseyContext"];
     if (jerseyRow) {
-      const clubLabels = await this.resolveEntityLabels("club", [jerseyRow.clubId], locale);
-      const clubLabel = clubLabels.get(jerseyRow.clubId);
-      if (clubLabel) {
+      const { clubLabels, nationalTeamLabels } = await this.loadSideLabels([jerseyRow], locale);
+      const side = discoverJerseySideFromLabels(jerseyRow, clubLabels, nationalTeamLabels);
+      if (side) {
         jerseyContext = {
-          clubLabel,
+          clubLabel: side.clubLabel,
           seasonLabel: jerseyRow.seasonLabel,
           type: jerseyRow.type,
         };
@@ -942,6 +975,7 @@ export class CollectionService {
       .select({
         id: userJersey.id,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
         seasonLabel: season.label,
@@ -957,30 +991,7 @@ export class CollectionService {
       return collectionPeerJerseysSchema.parse({ jerseys: [] });
     }
 
-    const clubIds = [...new Set(rows.map((row) => row.clubId))];
-    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
-    const photosByJersey = await this.loadPhotosForJerseys(rows.map((row) => row.id));
-
-    const jerseys = rows.flatMap((row) => {
-      const clubLabel = clubLabels.get(row.clubId);
-      const photos = photosByJersey.get(row.id);
-      if (!clubLabel || !photos || photos.length === 0) {
-        return [];
-      }
-
-      return [
-        {
-          id: row.id,
-          clubId: row.clubId,
-          seasonId: row.seasonId,
-          type: row.type,
-          clubLabel,
-          seasonLabel: row.seasonLabel,
-          ownerHandle: row.ownerHandle,
-          photos,
-        },
-      ];
-    });
+    const jerseys = await this.decorateDiscoverJerseys(rows, locale);
 
     return collectionPeerJerseysSchema.parse({ jerseys });
   }
@@ -1063,43 +1074,20 @@ export class CollectionService {
       throw new NotFoundException("UserJersey not found");
     }
 
-    const [clubRow] = await this.db
-      .select({ id: club.id, countryId: club.countryId })
-      .from(club)
-      .where(eq(club.id, body.clubId))
-      .limit(1);
+    const side = await resolveCatalogJerseySide(this.db, {
+      clubId: body.clubId,
+      nationalTeamId: body.nationalTeamId,
+    });
+    await assertSeasonLinkedToSide(this.db, side, body.seasonId);
 
-    if (!clubRow) {
-      throw new BadRequestException("clubId is not a catalog club");
-    }
-
-    const [seasonRow] = await this.db
-      .select({ id: season.id, leagueId: season.leagueId })
-      .from(season)
-      .where(eq(season.id, body.seasonId))
-      .limit(1);
-
-    if (!seasonRow) {
-      throw new BadRequestException("seasonId is not a catalog season");
-    }
-
-    const [teamSeasonRow] = await this.db
-      .select({ id: teamSeason.id })
-      .from(teamSeason)
-      .where(and(eq(teamSeason.clubId, body.clubId), eq(teamSeason.seasonId, body.seasonId)))
-      .limit(1);
-
-    if (!teamSeasonRow) {
-      throw new BadRequestException("clubId and seasonId are not linked in TeamSeason");
-    }
-
-    await this.assertOptionalPlayerScoped(body.clubId, body.seasonId, body.playerId);
+    await this.assertOptionalPlayerScoped(side, body.seasonId, body.playerId);
     await this.assertOptionalPatchesScoped(body.seasonId, body.patchIds);
 
     await this.db
       .update(userJersey)
       .set({
-        clubId: body.clubId,
+        clubId: side.clubId,
+        nationalTeamId: side.nationalTeamId,
         seasonId: body.seasonId,
         playerId: body.playerId ?? null,
         catalogKitId: body.catalogKitId ?? null,
@@ -1226,6 +1214,7 @@ export class CollectionService {
         id: userJersey.id,
         ownerId: userJersey.userId,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
         seasonLabel: season.label,
@@ -1249,19 +1238,18 @@ export class CollectionService {
       return collectionDiscoverJerseysSchema.parse({ jerseys: [] });
     }
 
-    const clubIds = [...new Set(visibleRows.map((row) => row.clubId))];
-    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
+    const { clubLabels, nationalTeamLabels } = await this.loadSideLabels(visibleRows, locale);
     const normalizedQuery = query?.trim().toLowerCase() ?? "";
 
     const filteredRows = visibleRows.filter((row) => {
-      const clubLabel = clubLabels.get(row.clubId);
-      if (!clubLabel) {
+      const side = discoverJerseySideFromLabels(row, clubLabels, nationalTeamLabels);
+      if (!side) {
         return false;
       }
       if (!normalizedQuery) {
         return true;
       }
-      const haystack = `${clubLabel} ${row.seasonLabel}`.toLowerCase();
+      const haystack = `${side.clubLabel} ${row.seasonLabel}`.toLowerCase();
       return haystack.includes(normalizedQuery);
     });
 
@@ -1272,19 +1260,18 @@ export class CollectionService {
     const photosByJersey = await this.loadPhotosForJerseys(filteredRows.map((row) => row.id));
 
     const jerseys = filteredRows.flatMap((row) => {
-      const clubLabel = clubLabels.get(row.clubId);
+      const side = discoverJerseySideFromLabels(row, clubLabels, nationalTeamLabels);
       const photos = photosByJersey.get(row.id);
-      if (!clubLabel || !photos || photos.length === 0) {
+      if (!side || !photos || photos.length === 0) {
         return [];
       }
 
       return [
         {
           id: row.id,
-          clubId: row.clubId,
+          ...side,
           seasonId: row.seasonId,
           type: row.type,
-          clubLabel,
           seasonLabel: row.seasonLabel,
           ownerHandle: row.ownerHandle,
           photos,
@@ -1300,6 +1287,7 @@ export class CollectionService {
       .select({
         id: userJersey.id,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
         seasonLabel: season.label,
@@ -1314,24 +1302,28 @@ export class CollectionService {
       return collectionShowcaseJerseysSchema.parse({ jerseys: [] });
     }
 
-    const clubIds = [...new Set(rows.map((row) => row.clubId))];
-    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
-    const photosByJersey = await this.loadPhotosForJerseys(
-      rows.map((row) => row.id),
-      "showcase",
-    );
+    const clubIds = uniqueNonNullIds(rows.map((row) => row.clubId));
+    const nationalTeamIds = uniqueNonNullIds(rows.map((row) => row.nationalTeamId));
+    const [clubLabels, nationalTeamLabels, photosByJersey] = await Promise.all([
+      this.resolveEntityLabels("club", clubIds, locale),
+      this.resolveEntityLabels("national_team", nationalTeamIds, locale),
+      this.loadPhotosForJerseys(
+        rows.map((row) => row.id),
+        "showcase",
+      ),
+    ]);
 
     const jerseys = rows.flatMap((row) => {
-      const clubLabel = clubLabels.get(row.clubId);
+      const side = discoverJerseySideFromLabels(row, clubLabels, nationalTeamLabels);
       const photos = photosByJersey.get(row.id);
-      if (!clubLabel || !photos || photos.length === 0) {
+      if (!side || !photos || photos.length === 0) {
         return [];
       }
 
       return [
         {
           id: row.id,
-          clubLabel,
+          clubLabel: side.clubLabel,
           seasonLabel: row.seasonLabel,
           type: row.type,
           photos,
@@ -1349,6 +1341,7 @@ export class CollectionService {
         id: userJersey.id,
         ownerId: userJersey.userId,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
         biddingEnabled: userJersey.biddingEnabled,
@@ -1367,39 +1360,28 @@ export class CollectionService {
       return collectionDiscoverHomeSchema.parse({});
     }
 
-    const clubIds = [...new Set(visibleRows.map((row) => row.clubId))];
-    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
-    const photosByJersey = await this.loadPhotosForJerseys(visibleRows.map((row) => row.id));
-
-    const moreJerseys = visibleRows.flatMap((row) => {
-      const clubLabel = clubLabels.get(row.clubId);
-      const photos = photosByJersey.get(row.id);
-      if (!clubLabel || !photos || photos.length === 0) {
-        return [];
-      }
-
-      return [
-        {
-          id: row.id,
-          clubId: row.clubId,
-          seasonId: row.seasonId,
-          type: row.type,
-          clubLabel,
-          seasonLabel: row.seasonLabel,
-          ownerHandle: row.ownerHandle,
-          photos,
-        },
-      ];
-    });
+    const moreJerseys = await this.decorateDiscoverJerseys(visibleRows, locale);
 
     const clubs: CollectionDiscoverHomeClub[] = [];
     const seenClubs = new Set<string>();
+    const nationalTeams: CollectionDiscoverHomeNationalTeam[] = [];
+    const seenNationalTeams = new Set<string>();
     for (const jersey of moreJerseys) {
-      if (seenClubs.has(jersey.clubId)) {
+      if (jersey.clubId) {
+        if (seenClubs.has(jersey.clubId)) {
+          continue;
+        }
+        seenClubs.add(jersey.clubId);
+        clubs.push({ clubId: jersey.clubId, clubLabel: jersey.clubLabel });
         continue;
       }
-      seenClubs.add(jersey.clubId);
-      clubs.push({ clubId: jersey.clubId, clubLabel: jersey.clubLabel });
+      if (jersey.nationalTeamId && !seenNationalTeams.has(jersey.nationalTeamId)) {
+        seenNationalTeams.add(jersey.nationalTeamId);
+        nationalTeams.push({
+          nationalTeamId: jersey.nationalTeamId,
+          nationalTeamLabel: jersey.clubLabel,
+        });
+      }
     }
 
     const openForBid = moreJerseys.filter((jersey) => {
@@ -1423,6 +1405,7 @@ export class CollectionService {
 
     return collectionDiscoverHomeSchema.parse({
       ...(clubs.length > 0 ? { clubs } : {}),
+      ...(nationalTeams.length > 0 ? { nationalTeams } : {}),
       ...(openForBid.length > 0 ? { openForBid } : {}),
       ...(collectors.length > 0 ? { collectors } : {}),
       ...(moreJerseys.length > 0 ? { moreJerseys } : {}),
@@ -1431,7 +1414,7 @@ export class CollectionService {
 
   async discoverCatalogDrill(
     userId: string,
-    kind: "club" | "player" | "kit",
+    kind: "club" | "national_team" | "player" | "kit",
     entityId: string,
     locale: LabelLocale = "da",
   ): Promise<CollectionDiscoverCatalogDrill> {
@@ -1446,6 +1429,7 @@ export class CollectionService {
       id: userJersey.id,
       ownerId: userJersey.userId,
       clubId: userJersey.clubId,
+      nationalTeamId: userJersey.nationalTeamId,
       seasonId: userJersey.seasonId,
       type: userJersey.type,
       seasonLabel: season.label,
@@ -1461,55 +1445,56 @@ export class CollectionService {
             .innerJoin(user, eq(userJersey.userId, user.id))
             .where(and(baseWhere, eq(userJersey.clubId, entityId)))
             .orderBy(desc(userJersey.updatedAt))
-        : kind === "player"
+        : kind === "national_team"
           ? await this.db
               .select(drillSelect)
               .from(userJersey)
               .innerJoin(season, eq(userJersey.seasonId, season.id))
               .innerJoin(user, eq(userJersey.userId, user.id))
-              .innerJoin(
-                playerClubSeason,
-                and(
-                  eq(playerClubSeason.clubId, userJersey.clubId),
-                  eq(playerClubSeason.seasonId, userJersey.seasonId),
-                  eq(playerClubSeason.playerId, entityId),
-                ),
-              )
-              .where(baseWhere)
+              .where(and(baseWhere, eq(userJersey.nationalTeamId, entityId)))
               .orderBy(desc(userJersey.updatedAt))
-          : await this.db
-              .select(drillSelect)
-              .from(userJersey)
-              .innerJoin(season, eq(userJersey.seasonId, season.id))
-              .innerJoin(user, eq(userJersey.userId, user.id))
-              .where(and(baseWhere, eq(userJersey.catalogKitId, entityId)))
-              .orderBy(desc(userJersey.updatedAt));
+          : kind === "player"
+            ? await this.db
+                .select(drillSelect)
+                .from(userJersey)
+                .innerJoin(season, eq(userJersey.seasonId, season.id))
+                .innerJoin(user, eq(userJersey.userId, user.id))
+                .leftJoin(
+                  playerClubSeason,
+                  and(
+                    eq(playerClubSeason.clubId, userJersey.clubId),
+                    eq(playerClubSeason.seasonId, userJersey.seasonId),
+                    eq(playerClubSeason.playerId, entityId),
+                  ),
+                )
+                .leftJoin(
+                  playerNationalTeamSeason,
+                  and(
+                    eq(playerNationalTeamSeason.nationalTeamId, userJersey.nationalTeamId),
+                    eq(playerNationalTeamSeason.seasonId, userJersey.seasonId),
+                    eq(playerNationalTeamSeason.playerId, entityId),
+                  ),
+                )
+                .where(
+                  and(
+                    baseWhere,
+                    or(
+                      sql`${playerClubSeason.playerId} IS NOT NULL`,
+                      sql`${playerNationalTeamSeason.playerId} IS NOT NULL`,
+                    ),
+                  ),
+                )
+                .orderBy(desc(userJersey.updatedAt))
+            : await this.db
+                .select(drillSelect)
+                .from(userJersey)
+                .innerJoin(season, eq(userJersey.seasonId, season.id))
+                .innerJoin(user, eq(userJersey.userId, user.id))
+                .where(and(baseWhere, eq(userJersey.catalogKitId, entityId)))
+                .orderBy(desc(userJersey.updatedAt));
 
     const visibleRows = rows.filter((row) => !blockedPeerIds.has(row.ownerId));
-    const clubIds = [...new Set(visibleRows.map((row) => row.clubId))];
-    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
-    const photosByJersey = await this.loadPhotosForJerseys(visibleRows.map((row) => row.id));
-
-    const jerseys = visibleRows.flatMap((row) => {
-      const clubLabel = clubLabels.get(row.clubId);
-      const photos = photosByJersey.get(row.id);
-      if (!clubLabel || !photos || photos.length === 0) {
-        return [];
-      }
-
-      return [
-        {
-          id: row.id,
-          clubId: row.clubId,
-          seasonId: row.seasonId,
-          type: row.type,
-          clubLabel,
-          seasonLabel: row.seasonLabel,
-          ownerHandle: row.ownerHandle,
-          photos,
-        },
-      ];
-    });
+    const jerseys = await this.decorateDiscoverJerseys(visibleRows, locale);
 
     return collectionDiscoverCatalogDrillSchema.parse({
       kind,
@@ -1544,6 +1529,28 @@ export class CollectionService {
       return clubLabel ? [{ clubId, clubLabel }] : [];
     });
 
+    const nationalTeamMatches = await this.db
+      .selectDistinct({ entityId: catalogLabel.entityId })
+      .from(catalogLabel)
+      .where(
+        and(
+          eq(catalogLabel.entityType, "national_team"),
+          sql`${catalogLabel.text} ilike ${pattern}`,
+        ),
+      );
+    const nationalTeamIds = nationalTeamMatches.map((row) => row.entityId);
+    const nationalTeamLabels = await this.resolveEntityLabels(
+      "national_team",
+      nationalTeamIds,
+      locale,
+    );
+    const nationalTeams: CollectionDiscoverHomeNationalTeam[] = nationalTeamIds.flatMap(
+      (nationalTeamId) => {
+        const nationalTeamLabel = nationalTeamLabels.get(nationalTeamId);
+        return nationalTeamLabel ? [{ nationalTeamId, nationalTeamLabel }] : [];
+      },
+    );
+
     const playerMatches = await this.db
       .selectDistinct({ entityId: catalogLabel.entityId })
       .from(catalogLabel)
@@ -1561,23 +1568,35 @@ export class CollectionService {
       .select({
         id: kit.id,
         clubId: kit.clubId,
+        nationalTeamId: kit.nationalTeamId,
         type: kit.type,
         seasonLabel: season.label,
       })
       .from(kit)
       .innerJoin(season, eq(kit.seasonId, season.id));
-    const kitClubIds = [...new Set(kitRows.flatMap((row) => (row.clubId ? [row.clubId] : [])))];
-    const kitClubLabels = await this.resolveEntityLabels("club", kitClubIds, locale);
-    const kitClubSearchTexts = await this.resolveEntitySearchTexts("club", kitClubIds);
+    const kitClubIds = uniqueNonNullIds(kitRows.map((row) => row.clubId));
+    const kitNationalTeamIds = uniqueNonNullIds(kitRows.map((row) => row.nationalTeamId));
+    const [kitClubLabels, kitNationalTeamLabels, kitClubSearchTexts, kitNationalTeamSearchTexts] =
+      await Promise.all([
+        this.resolveEntityLabels("club", kitClubIds, locale),
+        this.resolveEntityLabels("national_team", kitNationalTeamIds, locale),
+        this.resolveEntitySearchTexts("club", kitClubIds),
+        this.resolveEntitySearchTexts("national_team", kitNationalTeamIds),
+      ]);
     const kits: CollectionDiscoverTypeaheadKit[] = kitRows.flatMap((row) => {
-      if (!row.clubId) {
+      const sideLabel = row.clubId
+        ? kitClubLabels.get(row.clubId)
+        : row.nationalTeamId
+          ? kitNationalTeamLabels.get(row.nationalTeamId)
+          : undefined;
+      if (!sideLabel) {
         return [];
       }
-      const clubLabel = kitClubLabels.get(row.clubId);
-      if (!clubLabel) {
-        return [];
-      }
-      const searchTexts = kitClubSearchTexts.get(row.clubId) ?? [];
+      const searchTexts = row.clubId
+        ? (kitClubSearchTexts.get(row.clubId) ?? [])
+        : row.nationalTeamId
+          ? (kitNationalTeamSearchTexts.get(row.nationalTeamId) ?? [])
+          : [];
       if (
         !typeaheadTextMatches(
           [...searchTexts, row.seasonLabel, KIT_TYPE_LABELS_DA[row.type]],
@@ -1589,7 +1608,7 @@ export class CollectionService {
       return [
         {
           kitId: row.id,
-          label: `${clubLabel} ${row.seasonLabel} ${KIT_TYPE_LABELS_DA[row.type]}`,
+          label: `${sideLabel} ${row.seasonLabel} ${KIT_TYPE_LABELS_DA[row.type]}`,
         },
       ];
     });
@@ -1615,6 +1634,7 @@ export class CollectionService {
         id: userJersey.id,
         ownerId: userJersey.userId,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
         seasonLabel: season.label,
@@ -1626,43 +1646,30 @@ export class CollectionService {
       .where(and(ne(userJersey.userId, userId), eq(userJersey.private, false)))
       .orderBy(desc(userJersey.updatedAt));
     const visibleJerseyRows = jerseyRows.filter((row) => !blockedPeerIds.has(row.ownerId));
-    const jerseyClubIds = [...new Set(visibleJerseyRows.map((row) => row.clubId))];
-    const jerseyClubLabels = await this.resolveEntityLabels("club", jerseyClubIds, locale);
-    const jerseyClubSearchTexts = await this.resolveEntitySearchTexts("club", jerseyClubIds);
-    const matchingJerseyRows = visibleJerseyRows.filter((row) => {
-      const clubLabel = jerseyClubLabels.get(row.clubId);
-      if (!clubLabel) {
-        return false;
-      }
-      const searchTexts = jerseyClubSearchTexts.get(row.clubId) ?? [];
+    const decoratedJerseys = await this.decorateDiscoverJerseys(visibleJerseyRows, locale);
+    const jerseyClubIds = uniqueNonNullIds(visibleJerseyRows.map((row) => row.clubId));
+    const jerseyNationalTeamIds = uniqueNonNullIds(
+      visibleJerseyRows.map((row) => row.nationalTeamId),
+    );
+    const [jerseyClubSearchTexts, jerseyNationalTeamSearchTexts] = await Promise.all([
+      this.resolveEntitySearchTexts("club", jerseyClubIds),
+      this.resolveEntitySearchTexts("national_team", jerseyNationalTeamIds),
+    ]);
+    const jerseys = decoratedJerseys.filter((jersey) => {
+      const searchTexts = jersey.clubId
+        ? (jerseyClubSearchTexts.get(jersey.clubId) ?? [])
+        : jersey.nationalTeamId
+          ? (jerseyNationalTeamSearchTexts.get(jersey.nationalTeamId) ?? [])
+          : [];
       return typeaheadTextMatches(
-        [...searchTexts, row.seasonLabel, row.ownerHandle],
+        [...searchTexts, jersey.clubLabel, jersey.seasonLabel, jersey.ownerHandle],
         normalizedQuery,
       );
-    });
-    const photosByJersey = await this.loadPhotosForJerseys(matchingJerseyRows.map((row) => row.id));
-    const jerseys = matchingJerseyRows.flatMap((row) => {
-      const clubLabel = jerseyClubLabels.get(row.clubId);
-      const photos = photosByJersey.get(row.id);
-      if (!clubLabel || !photos || photos.length === 0) {
-        return [];
-      }
-      return [
-        {
-          id: row.id,
-          clubId: row.clubId,
-          seasonId: row.seasonId,
-          type: row.type,
-          clubLabel,
-          seasonLabel: row.seasonLabel,
-          ownerHandle: row.ownerHandle,
-          photos,
-        },
-      ];
     });
 
     return collectionDiscoverTypeaheadSchema.parse({
       ...(clubs.length > 0 ? { clubs } : {}),
+      ...(nationalTeams.length > 0 ? { nationalTeams } : {}),
       ...(kits.length > 0 ? { kits } : {}),
       ...(players.length > 0 ? { players } : {}),
       ...(collectors.length > 0 ? { collectors } : {}),
@@ -1680,6 +1687,7 @@ export class CollectionService {
         id: userJersey.id,
         userId: userJersey.userId,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         type: userJersey.type,
         seasonLabel: season.label,
@@ -1702,9 +1710,9 @@ export class CollectionService {
       throw new NotFoundException("UserJersey not found");
     }
 
-    const clubLabels = await this.resolveEntityLabels("club", [row.clubId], locale);
-    const clubLabel = clubLabels.get(row.clubId);
-    if (!clubLabel) {
+    const { clubLabels, nationalTeamLabels } = await this.loadSideLabels([row], locale);
+    const side = discoverJerseySideFromLabels(row, clubLabels, nationalTeamLabels);
+    if (!side) {
       throw new NotFoundException("Club label missing");
     }
 
@@ -1724,10 +1732,9 @@ export class CollectionService {
 
     return collectionPeerJerseySchema.parse({
       id: row.id,
-      clubId: row.clubId,
+      ...side,
       seasonId: row.seasonId,
       type: row.type,
-      clubLabel,
       seasonLabel: row.seasonLabel,
       ownerHandle: row.ownerHandle,
       ownerId: row.userId,
@@ -1743,6 +1750,7 @@ export class CollectionService {
       .select({
         userJerseyId: userJerseyFavorite.userJerseyId,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         type: userJersey.type,
         seasonLabel: season.label,
       })
@@ -1756,14 +1764,18 @@ export class CollectionService {
       return collectionFavoritesSchema.parse({ favorites: [] });
     }
 
-    const clubIds = [...new Set(rows.map((row) => row.clubId))];
-    const clubLabels = await this.resolveEntityLabels("club", clubIds, locale);
-    const photosByJersey = await this.loadPhotosForJerseys(rows.map((row) => row.userJerseyId));
+    const clubIds = uniqueNonNullIds(rows.map((row) => row.clubId));
+    const nationalTeamIds = uniqueNonNullIds(rows.map((row) => row.nationalTeamId));
+    const [clubLabels, nationalTeamLabels, photosByJersey] = await Promise.all([
+      this.resolveEntityLabels("club", clubIds, locale),
+      this.resolveEntityLabels("national_team", nationalTeamIds, locale),
+      this.loadPhotosForJerseys(rows.map((row) => row.userJerseyId)),
+    ]);
 
     const favorites = rows.flatMap((row) => {
-      const clubLabel = clubLabels.get(row.clubId);
+      const side = discoverJerseySideFromLabels(row, clubLabels, nationalTeamLabels);
       const photos = photosByJersey.get(row.userJerseyId);
-      if (!clubLabel || !photos || photos.length === 0) {
+      if (!side || !photos || photos.length === 0) {
         return [];
       }
 
@@ -1771,7 +1783,7 @@ export class CollectionService {
         {
           userJerseyId: row.userJerseyId,
           photoUrl: photos[0]?.photoUrl,
-          clubLabel,
+          clubLabel: side.clubLabel,
           seasonLabel: row.seasonLabel,
           type: row.type,
         },
@@ -1995,7 +2007,7 @@ export class CollectionService {
   async saveJersey(
     userId: string,
     rawBody: unknown,
-    locale: LabelLocale = "da",
+    _locale: LabelLocale = "da",
   ): Promise<CollectionSaveResponse> {
     const parsed = collectionSaveRequestSchema.safeParse(rawBody);
     if (!parsed.success) {
@@ -2015,44 +2027,21 @@ export class CollectionService {
       }
     }
 
-    const [clubRow] = await this.db
-      .select({ id: club.id, countryId: club.countryId })
-      .from(club)
-      .where(eq(club.id, body.clubId))
-      .limit(1);
+    const side = await resolveCatalogJerseySide(this.db, {
+      clubId: body.clubId,
+      nationalTeamId: body.nationalTeamId,
+    });
+    await assertSeasonLinkedToSide(this.db, side, body.seasonId);
 
-    if (!clubRow) {
-      throw new BadRequestException("clubId is not a catalog club");
-    }
-
-    const [seasonRow] = await this.db
-      .select({ id: season.id, label: season.label, leagueId: season.leagueId })
-      .from(season)
-      .where(eq(season.id, body.seasonId))
-      .limit(1);
-
-    if (!seasonRow) {
-      throw new BadRequestException("seasonId is not a catalog season");
-    }
-
-    const [teamSeasonRow] = await this.db
-      .select({ id: teamSeason.id })
-      .from(teamSeason)
-      .where(and(eq(teamSeason.clubId, body.clubId), eq(teamSeason.seasonId, body.seasonId)))
-      .limit(1);
-
-    if (!teamSeasonRow) {
-      throw new BadRequestException("clubId and seasonId are not linked in TeamSeason");
-    }
-
-    await this.assertOptionalPlayerScoped(body.clubId, body.seasonId, body.playerId);
+    await this.assertOptionalPlayerScoped(side, body.seasonId, body.playerId);
     await this.assertOptionalPatchesScoped(body.seasonId, body.patchIds);
 
     const [insertedJersey] = await this.db
       .insert(userJersey)
       .values({
         userId,
-        clubId: body.clubId,
+        clubId: side.clubId,
+        nationalTeamId: side.nationalTeamId,
         seasonId: body.seasonId,
         playerId: body.playerId ?? null,
         catalogKitId: body.catalogKitId ?? null,
@@ -2064,6 +2053,7 @@ export class CollectionService {
       .returning({
         id: userJersey.id,
         clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
         seasonId: userJersey.seasonId,
         catalogKitId: userJersey.catalogKitId,
         type: userJersey.type,
@@ -2084,7 +2074,7 @@ export class CollectionService {
       );
     }
 
-    const photos = await this.persistPhotos(userId, insertedJersey.id, body.photos);
+    await this.persistPhotos(userId, insertedJersey.id, body.photos);
 
     const firstPhoto = body.photos[0];
     let effectiveVisionJobId = body.visionJobId ?? null;
@@ -2108,6 +2098,7 @@ export class CollectionService {
         effectiveVisionJobId,
         insertedJersey.id,
         body.clubId,
+        body.nationalTeamId,
         body.seasonId,
         body.type,
       );
@@ -2132,72 +2123,8 @@ export class CollectionService {
 
     this.matchQueueService.enqueueFromSave(insertedJersey.id, userId);
 
-    let leagueLabel: string | null = null;
-    if (seasonRow.leagueId) {
-      const leagueLabels = await this.resolveEntityLabels("league", [seasonRow.leagueId], locale);
-      leagueLabel = leagueLabels.get(seasonRow.leagueId) ?? null;
-      if (!leagueLabel) {
-        throw new BadRequestException("seasonId league has no resolved label");
-      }
-    }
-
-    const squadPlayersByScope = await this.loadSquadPlayersForScopes(
-      [{ clubId: body.clubId, seasonId: body.seasonId }],
-      locale,
-    );
-
-    const playerFieldsByJersey = await this.loadPlayerFieldsForJerseys(
-      [
-        {
-          id: insertedJersey.id,
-          clubId: insertedJersey.clubId,
-          seasonId: insertedJersey.seasonId,
-          playerId: body.playerId ?? null,
-        },
-      ],
-      locale,
-    );
-    const patchesByJersey = await this.loadPatchesForJerseys([insertedJersey.id], locale);
-    const playerFields = playerFieldsByJersey.get(insertedJersey.id);
-
-    const clubLabels = await this.resolveEntityLabels("club", [body.clubId], locale);
-    const clubLabel = clubLabels.get(body.clubId);
-    if (!clubLabel) {
-      throw new BadRequestException("clubId has no resolved label");
-    }
-
-    const countryLabels = await this.resolveEntityLabels("country", [clubRow.countryId], locale);
-    const countryLabel = countryLabels.get(clubRow.countryId);
-    if (!countryLabel) {
-      throw new BadRequestException("clubId country has no resolved label");
-    }
-
-    const jersey: CollectionJersey = {
-      id: insertedJersey.id,
-      clubId: insertedJersey.clubId,
-      seasonId: insertedJersey.seasonId,
-      countryId: clubRow.countryId,
-      leagueId: seasonRow.leagueId,
-      catalogKitId: insertedJersey.catalogKitId,
-      type: insertedJersey.type,
-      size: insertedJersey.size,
-      condition: insertedJersey.condition,
-      countryLabel,
-      leagueLabel,
-      clubLabel,
-      seasonLabel: seasonRow.label,
-      squadPlayers: squadPlayersByScope.get(`${body.clubId}:${body.seasonId}`) ?? [],
-      playerId: body.playerId ?? null,
-      playerLabel: playerFields?.label ?? null,
-      playerNumber: playerFields?.number ?? null,
-      patches: patchesByJersey.get(insertedJersey.id) ?? [],
-      photos,
-      biddingEnabled: false,
-      private: false,
-    };
-
     return collectionSaveResponseSchema.parse({
-      jersey,
+      jersey: await this.loadOwnJerseyOrThrow(userId, insertedJersey.id),
       visionJobId: effectiveVisionJobId ?? undefined,
     });
   }
@@ -2361,7 +2288,7 @@ export class CollectionService {
   }
 
   private async resolveCatalogDrillTitle(
-    kind: "club" | "player" | "kit",
+    kind: "club" | "national_team" | "player" | "kit",
     entityId: string,
     locale: LabelLocale,
   ): Promise<string | undefined> {
@@ -2375,6 +2302,18 @@ export class CollectionService {
         return undefined;
       }
       return (await this.resolveEntityLabels("club", [entityId], locale)).get(entityId);
+    }
+
+    if (kind === "national_team") {
+      const [nationalTeamRow] = await this.db
+        .select({ id: nationalTeam.id })
+        .from(nationalTeam)
+        .where(eq(nationalTeam.id, entityId))
+        .limit(1);
+      if (!nationalTeamRow) {
+        return undefined;
+      }
+      return (await this.resolveEntityLabels("national_team", [entityId], locale)).get(entityId);
     }
 
     if (kind === "player") {
@@ -2393,6 +2332,7 @@ export class CollectionService {
       .select({
         id: kit.id,
         clubId: kit.clubId,
+        nationalTeamId: kit.nationalTeamId,
         type: kit.type,
         seasonLabel: season.label,
       })
@@ -2400,20 +2340,39 @@ export class CollectionService {
       .innerJoin(season, eq(kit.seasonId, season.id))
       .where(eq(kit.id, entityId))
       .limit(1);
-    if (!kitRow?.clubId) {
+    if (!kitRow) {
       return undefined;
     }
-    const clubLabel = (await this.resolveEntityLabels("club", [kitRow.clubId], locale)).get(
-      kitRow.clubId,
-    );
-    if (!clubLabel) {
+    const sideLabel = kitRow.clubId
+      ? (await this.resolveEntityLabels("club", [kitRow.clubId], locale)).get(kitRow.clubId)
+      : kitRow.nationalTeamId
+        ? (await this.resolveEntityLabels("national_team", [kitRow.nationalTeamId], locale)).get(
+            kitRow.nationalTeamId,
+          )
+        : undefined;
+    if (!sideLabel) {
       return undefined;
     }
-    return `${clubLabel} ${kitRow.seasonLabel} ${KIT_TYPE_LABELS_DA[kitRow.type]}`;
+    return `${sideLabel} ${kitRow.seasonLabel} ${KIT_TYPE_LABELS_DA[kitRow.type]}`;
+  }
+
+  private async loadSideLabels(
+    rows: Array<{ clubId: string | null; nationalTeamId?: string | null }>,
+    locale: LabelLocale,
+  ): Promise<{ clubLabels: Map<string, string>; nationalTeamLabels: Map<string, string> }> {
+    const [clubLabels, nationalTeamLabels] = await Promise.all([
+      this.resolveEntityLabels("club", uniqueNonNullIds(rows.map((row) => row.clubId)), locale),
+      this.resolveEntityLabels(
+        "national_team",
+        uniqueNonNullIds(rows.map((row) => row.nationalTeamId)),
+        locale,
+      ),
+    ]);
+    return { clubLabels, nationalTeamLabels };
   }
 
   private async resolveEntityLabels(
-    entityType: "country" | "league" | "club" | "player" | "patch",
+    entityType: "country" | "league" | "club" | "national_team" | "player" | "patch",
     entityIds: string[],
     locale: LabelLocale,
   ): Promise<Map<string, string>> {
@@ -2451,7 +2410,7 @@ export class CollectionService {
   }
 
   private async resolveEntitySearchTexts(
-    entityType: "country" | "league" | "club" | "player",
+    entityType: "country" | "league" | "club" | "national_team" | "player",
     entityIds: string[],
   ): Promise<Map<string, string[]>> {
     if (entityIds.length === 0) {
@@ -2482,7 +2441,10 @@ export class CollectionService {
   }
 
   private async loadSquadPlayersForScopes(
-    scopes: Array<{ clubId: string; seasonId: string }>,
+    scopes: Array<
+      | { kind: "club"; clubId: string; seasonId: string }
+      | { kind: "national_team"; nationalTeamId: string; seasonId: string }
+    >,
     locale: LabelLocale,
   ): Promise<Map<string, CollectionJersey["squadPlayers"]>> {
     const playersByScope = new Map<string, CollectionJersey["squadPlayers"]>();
@@ -2491,37 +2453,24 @@ export class CollectionService {
       return playersByScope;
     }
 
-    const scopeConditions = scopes.map((scope) =>
-      and(eq(playerClubSeason.clubId, scope.clubId), eq(playerClubSeason.seasonId, scope.seasonId)),
+    const clubScopes = scopes.filter(
+      (scope): scope is { kind: "club"; clubId: string; seasonId: string } => scope.kind === "club",
+    );
+    const nationalTeamScopes = scopes.filter(
+      (scope): scope is { kind: "national_team"; nationalTeamId: string; seasonId: string } =>
+        scope.kind === "national_team",
     );
 
-    const rows = await this.db
-      .select({
-        playerId: playerClubSeason.playerId,
-        clubId: playerClubSeason.clubId,
-        seasonId: playerClubSeason.seasonId,
-        label: catalogLabel.text,
-        labelLocale: catalogLabel.locale,
-        labelKind: catalogLabel.kind,
-      })
-      .from(playerClubSeason)
-      .leftJoin(
-        catalogLabel,
-        and(
-          eq(catalogLabel.entityType, "player"),
-          eq(catalogLabel.entityId, playerClubSeason.playerId),
-        ),
-      )
-      .where(scopeConditions.length === 1 ? scopeConditions[0]! : or(...scopeConditions));
-
-    for (const scope of scopes) {
-      const scopeKey = `${scope.clubId}:${scope.seasonId}`;
-      const scopeRows = rows.filter(
-        (row) => row.clubId === scope.clubId && row.seasonId === scope.seasonId,
-      );
+    const resolvePlayers = (
+      scopeRows: Array<{
+        playerId: string;
+        label: string | null;
+        labelLocale: string | null;
+        labelKind: string | null;
+      }>,
+    ): CollectionJersey["squadPlayers"] => {
       const playerIds = [...new Set(scopeRows.map((row) => row.playerId))];
       const squadPlayers: CollectionJersey["squadPlayers"] = [];
-
       for (const playerId of playerIds) {
         const playerLabels = scopeRows.filter((row) => row.playerId === playerId && row.label);
         const resolved =
@@ -2530,17 +2479,130 @@ export class CollectionService {
           playerLabels.find((row) => row.labelLocale === "mul" && row.labelKind === "label")
             ?.label ??
           playerLabels.find((row) => row.labelLocale === "en" && row.labelKind === "label")?.label;
-
         if (resolved) {
           squadPlayers.push({ id: playerId, label: resolved });
         }
       }
-
       squadPlayers.sort((left, right) => left.label.localeCompare(right.label, "da"));
-      playersByScope.set(scopeKey, squadPlayers);
+      return squadPlayers;
+    };
+
+    if (clubScopes.length > 0) {
+      const scopeConditions = clubScopes.map((scope) =>
+        and(
+          eq(playerClubSeason.clubId, scope.clubId),
+          eq(playerClubSeason.seasonId, scope.seasonId),
+        ),
+      );
+      const rows = await this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          clubId: playerClubSeason.clubId,
+          seasonId: playerClubSeason.seasonId,
+          label: catalogLabel.text,
+          labelLocale: catalogLabel.locale,
+          labelKind: catalogLabel.kind,
+        })
+        .from(playerClubSeason)
+        .leftJoin(
+          catalogLabel,
+          and(
+            eq(catalogLabel.entityType, "player"),
+            eq(catalogLabel.entityId, playerClubSeason.playerId),
+          ),
+        )
+        .where(scopeConditions.length === 1 ? scopeConditions[0]! : or(...scopeConditions));
+
+      for (const scope of clubScopes) {
+        playersByScope.set(
+          `club:${scope.clubId}:${scope.seasonId}`,
+          resolvePlayers(
+            rows.filter((row) => row.clubId === scope.clubId && row.seasonId === scope.seasonId),
+          ),
+        );
+      }
+    }
+
+    if (nationalTeamScopes.length > 0) {
+      const scopeConditions = nationalTeamScopes.map((scope) =>
+        and(
+          eq(playerNationalTeamSeason.nationalTeamId, scope.nationalTeamId),
+          eq(playerNationalTeamSeason.seasonId, scope.seasonId),
+        ),
+      );
+      const rows = await this.db
+        .select({
+          playerId: playerNationalTeamSeason.playerId,
+          nationalTeamId: playerNationalTeamSeason.nationalTeamId,
+          seasonId: playerNationalTeamSeason.seasonId,
+          label: catalogLabel.text,
+          labelLocale: catalogLabel.locale,
+          labelKind: catalogLabel.kind,
+        })
+        .from(playerNationalTeamSeason)
+        .leftJoin(
+          catalogLabel,
+          and(
+            eq(catalogLabel.entityType, "player"),
+            eq(catalogLabel.entityId, playerNationalTeamSeason.playerId),
+          ),
+        )
+        .where(scopeConditions.length === 1 ? scopeConditions[0]! : or(...scopeConditions));
+
+      for (const scope of nationalTeamScopes) {
+        playersByScope.set(
+          `nt:${scope.nationalTeamId}:${scope.seasonId}`,
+          resolvePlayers(
+            rows.filter(
+              (row) =>
+                row.nationalTeamId === scope.nationalTeamId && row.seasonId === scope.seasonId,
+            ),
+          ),
+        );
+      }
     }
 
     return playersByScope;
+  }
+
+  private async decorateDiscoverJerseys(
+    rows: Array<{
+      id: string;
+      clubId: string | null;
+      nationalTeamId: string | null;
+      seasonId: string;
+      type: CollectionDiscoverJerseys["jerseys"][number]["type"];
+      seasonLabel: string;
+      ownerHandle: string;
+    }>,
+    locale: LabelLocale,
+  ) {
+    const clubIds = uniqueNonNullIds(rows.map((row) => row.clubId));
+    const nationalTeamIds = uniqueNonNullIds(rows.map((row) => row.nationalTeamId));
+    const [clubLabels, nationalTeamLabels, photosByJersey] = await Promise.all([
+      this.resolveEntityLabels("club", clubIds, locale),
+      this.resolveEntityLabels("national_team", nationalTeamIds, locale),
+      this.loadPhotosForJerseys(rows.map((row) => row.id)),
+    ]);
+
+    return rows.flatMap((row) => {
+      const side = discoverJerseySideFromLabels(row, clubLabels, nationalTeamLabels);
+      const photos = photosByJersey.get(row.id);
+      if (!side || !photos || photos.length === 0) {
+        return [];
+      }
+      return [
+        {
+          id: row.id,
+          ...side,
+          seasonId: row.seasonId,
+          type: row.type,
+          seasonLabel: row.seasonLabel,
+          ownerHandle: row.ownerHandle,
+          photos,
+        },
+      ];
+    });
   }
 
   private async loadPhotosForJerseys(
@@ -2659,7 +2721,7 @@ export class CollectionService {
   }
 
   private async assertOptionalPlayerScoped(
-    clubId: string,
+    side: Awaited<ReturnType<typeof resolveCatalogJerseySide>>,
     seasonId: string,
     playerId: string | null | undefined,
   ): Promise<void> {
@@ -2677,20 +2739,39 @@ export class CollectionService {
       throw new BadRequestException("playerId is not catalog truth");
     }
 
+    if (side.kind === "club") {
+      const [scopedRow] = await this.db
+        .select({ id: playerClubSeason.id })
+        .from(playerClubSeason)
+        .where(
+          and(
+            eq(playerClubSeason.playerId, playerId),
+            eq(playerClubSeason.clubId, side.clubId),
+            eq(playerClubSeason.seasonId, seasonId),
+          ),
+        )
+        .limit(1);
+
+      if (!scopedRow) {
+        throw new BadRequestException("playerId is not on this club season");
+      }
+      return;
+    }
+
     const [scopedRow] = await this.db
-      .select({ id: playerClubSeason.id })
-      .from(playerClubSeason)
+      .select({ id: playerNationalTeamSeason.id })
+      .from(playerNationalTeamSeason)
       .where(
         and(
-          eq(playerClubSeason.playerId, playerId),
-          eq(playerClubSeason.clubId, clubId),
-          eq(playerClubSeason.seasonId, seasonId),
+          eq(playerNationalTeamSeason.playerId, playerId),
+          eq(playerNationalTeamSeason.nationalTeamId, side.nationalTeamId),
+          eq(playerNationalTeamSeason.seasonId, seasonId),
         ),
       )
       .limit(1);
 
     if (!scopedRow) {
-      throw new BadRequestException("playerId is not on this club season");
+      throw new BadRequestException("playerId is not on this national team season");
     }
   }
 
@@ -2713,7 +2794,13 @@ export class CollectionService {
   }
 
   private async loadPlayerFieldsForJerseys(
-    rows: Array<{ id: string; clubId: string; seasonId: string; playerId: string | null }>,
+    rows: Array<{
+      id: string;
+      clubId: string | null;
+      nationalTeamId?: string | null;
+      seasonId: string;
+      playerId: string | null;
+    }>,
     locale: LabelLocale,
   ): Promise<Map<string, { label: string; number: string | null }>> {
     const playerIds = [
@@ -2726,15 +2813,26 @@ export class CollectionService {
     }
 
     const labels = await this.resolveEntityLabels("player", playerIds, locale);
-    const squadRows = await this.db
-      .select({
-        playerId: playerClubSeason.playerId,
-        clubId: playerClubSeason.clubId,
-        seasonId: playerClubSeason.seasonId,
-        squadNumber: playerClubSeason.squadNumber,
-      })
-      .from(playerClubSeason)
-      .where(inArray(playerClubSeason.playerId, playerIds));
+    const [clubSquadRows, nationalTeamSquadRows] = await Promise.all([
+      this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          clubId: playerClubSeason.clubId,
+          seasonId: playerClubSeason.seasonId,
+          squadNumber: playerClubSeason.squadNumber,
+        })
+        .from(playerClubSeason)
+        .where(inArray(playerClubSeason.playerId, playerIds)),
+      this.db
+        .select({
+          playerId: playerNationalTeamSeason.playerId,
+          nationalTeamId: playerNationalTeamSeason.nationalTeamId,
+          seasonId: playerNationalTeamSeason.seasonId,
+          squadNumber: playerNationalTeamSeason.squadNumber,
+        })
+        .from(playerNationalTeamSeason)
+        .where(inArray(playerNationalTeamSeason.playerId, playerIds)),
+    ]);
 
     for (const row of rows) {
       if (!row.playerId) {
@@ -2746,12 +2844,19 @@ export class CollectionService {
         continue;
       }
 
-      const squad = squadRows.find(
-        (entry) =>
-          entry.playerId === row.playerId &&
-          entry.clubId === row.clubId &&
-          entry.seasonId === row.seasonId,
-      );
+      const squad = row.clubId
+        ? clubSquadRows.find(
+            (entry) =>
+              entry.playerId === row.playerId &&
+              entry.clubId === row.clubId &&
+              entry.seasonId === row.seasonId,
+          )
+        : nationalTeamSquadRows.find(
+            (entry) =>
+              entry.playerId === row.playerId &&
+              entry.nationalTeamId === row.nationalTeamId &&
+              entry.seasonId === row.seasonId,
+          );
 
       fieldsByJersey.set(row.id, {
         label,

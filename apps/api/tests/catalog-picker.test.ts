@@ -141,6 +141,7 @@ describe("Catalog picker /v1", () => {
       {
         id: insertedClub!.id,
         label: "F.C. København",
+        kind: "club",
       },
     ]);
     expect(JSON.stringify(body)).not.toMatch(/kit_photo|object_key|http/i);
@@ -239,6 +240,7 @@ describe("Catalog picker /v1", () => {
       {
         id: insertedNationalTeam!.id,
         label: "Danmark",
+        kind: "national_team",
       },
     ]);
   });

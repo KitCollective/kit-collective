@@ -246,6 +246,13 @@
       "when": 1788640000000,
       "tag": "0034_kit_variant",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788720000000,
+      "tag": "0035_user_jersey_national_team_side",
+      "breakpoints": true
     }
   ]
 }
