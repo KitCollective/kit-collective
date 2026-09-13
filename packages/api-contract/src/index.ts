@@ -320,6 +320,7 @@ export {
   type VisionGroupingSuggestRequest,
   visionGroupingGroupSchema,
   visionGroupingPhotoSchema,
+  visionGroupingPriorGroupSchema,
   visionGroupingSuggestionsSchema,
   visionGroupingSuggestRequestSchema,
 } from "./collection/vision-grouping.js";

@@ -10,12 +10,28 @@ export const visionGroupingPhotoSchema = z
   })
   .strict();
 
+export const visionGroupingPriorGroupSchema = z
+  .object({
+    photoIds: z.array(z.string().uuid()).min(1),
+  })
+  .strict();
+
 export const visionGroupingSuggestRequestSchema = z
   .object({
     sessionId: z.string().uuid().optional(),
-    photos: z.array(visionGroupingPhotoSchema).min(2),
+    photos: z.array(visionGroupingPhotoSchema).min(1),
+    priorGroups: z.array(visionGroupingPriorGroupSchema).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.photos.length < 2 && (value.priorGroups?.length ?? 0) === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Grouping needs at least two photos, or one new photo plus priorGroups",
+        path: ["photos"],
+      });
+    }
+  });
 
 export const visionGroupingGroupSchema = z
   .object({

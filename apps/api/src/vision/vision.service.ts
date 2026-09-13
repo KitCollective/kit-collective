@@ -42,6 +42,7 @@ export type VisionJobPayload = {
   sessionId?: string;
   identityPhotos?: VisionIdentityPhotoInput[];
   groupingPhotos?: VisionGroupingPhotoInput[];
+  groupingPriorGroups?: Array<{ photoIds: string[] }>;
 };
 
 @Injectable()
@@ -134,7 +135,9 @@ export class VisionService {
       if (!this.adapter.inferGrouping || photos.length < 2) {
         status = "noop";
       } else {
-        const result = await this.adapter.inferGrouping(photos);
+        const result = await this.adapter.inferGrouping(photos, {
+          priorGroups: payload.groupingPriorGroups,
+        });
         const resolved = resolveGroupingStatus(result);
         status = resolved.status;
         if (resolved.result) {

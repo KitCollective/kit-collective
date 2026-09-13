@@ -773,8 +773,30 @@ export function shouldStartGroupingJob(state: CaptureSessionState): boolean {
   if (state.branch !== "bulk") {
     return false;
   }
+  if (state.groupingDesignGap || state.pendingGrouping) {
+    return false;
+  }
+  if (state.unboundUris.length >= 2) {
+    return true;
+  }
+  return state.unboundUris.length >= 1 && state.drafts.some((draft) => draft.photos.length > 0);
+}
 
-  return state.unboundUris.length === state.orderedUris.length && state.unboundUris.length >= 2;
+export function groupingPriorGroups(state: CaptureSessionState): Array<{ photoIds: string[] }> {
+  return state.drafts
+    .map((draft) => ({
+      photoIds: draft.photos
+        .map((photo) => photo.photoId ?? state.photoIdByUri?.[photo.uri])
+        .filter((photoId): photoId is string => Boolean(photoId)),
+    }))
+    .filter((group) => group.photoIds.length > 0);
+}
+
+export function unboundGroupingFingerprint(state: CaptureSessionState): string {
+  return state.unboundUris
+    .map((uri) => state.photoIdByUri?.[uri] ?? uri)
+    .sort()
+    .join(",");
 }
 
 export function uriForPhotoId(state: CaptureSessionState, photoId: string): string | null {

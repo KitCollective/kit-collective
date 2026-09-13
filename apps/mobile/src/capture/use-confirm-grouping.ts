@@ -6,14 +6,16 @@ import {
   acceptPendingGrouping,
   applyGroupingSuggestion,
   dismissPendingGrouping,
+  groupingPriorGroups,
   sessionPhotoIds,
   shouldStartGroupingJob,
+  unboundGroupingFingerprint,
 } from "@/capture/captureSession";
 import type { CaptureSessionMutator, CaptureSessionState } from "@/capture/captureSessionTypes";
 import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { motion } from "@/theme/tokens";
 
-const GROUPING_TIMEOUT_MS = 12_000;
+const GROUPING_TIMEOUT_MS = 15_000;
 const GROUPING_POLL_INTERVAL_MS = 2_000;
 
 type UseConfirmGroupingOptions = {
@@ -35,7 +37,7 @@ export function useConfirmGrouping({
   const [polling, setPolling] = useState(false);
   const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
-  const startAttempted = useRef(false);
+  const startedFingerprint = useRef<string | null>(null);
 
   const fadeInSuggestion = useCallback(() => {
     suggestionOpacity.setValue(reduceMotion ? 1 : 0);
@@ -76,11 +78,18 @@ export function useConfirmGrouping({
   );
 
   useEffect(() => {
-    if (!accessToken || !sessionId || !state || startAttempted.current) {
+    if (!accessToken || !sessionId || !state) {
       return;
     }
 
     if (!shouldStartGroupingJob(state)) {
+      return;
+    }
+
+    const fingerprint = `${unboundGroupingFingerprint(state)}|${groupingPriorGroups(state)
+      .map((group) => group.photoIds.join("-"))
+      .join(";")}`;
+    if (startedFingerprint.current === fingerprint) {
       return;
     }
 
@@ -96,18 +105,23 @@ export function useConfirmGrouping({
         );
 
         const filtered = photos.filter((photo) => photo.photoId.length > 0);
-        if (filtered.length < 2) {
+        const priorGroups = groupingPriorGroups(state);
+        if (filtered.length < 2 && priorGroups.length === 0) {
+          return;
+        }
+        if (filtered.length === 0) {
           return;
         }
 
         const nextJobId = await startVisionGroupingSuggest(accessToken, {
           sessionId,
           photos: filtered,
+          priorGroups: priorGroups.length > 0 ? priorGroups : undefined,
         });
         if (cancelled) {
           return;
         }
-        startAttempted.current = true;
+        startedFingerprint.current = fingerprint;
         setJobId(nextJobId);
         setPolling(true);
       } catch {

@@ -1,18 +1,30 @@
 import type { Db } from "@kit/db";
-import { catalogLabel, club, kit, patch, playerClubSeason, season, teamSeason } from "@kit/db";
-import type { KitType } from "@kit/domain";
+import {
+  catalogLabel,
+  club,
+  kit,
+  manufacturer,
+  patch,
+  playerClubSeason,
+  season,
+} from "@kit/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
-import { computeOverallConfidence } from "./vision-confidence.js";
+import { combineModelAndMatchConfidence, computeOverallConfidence } from "./vision-confidence.js";
+import {
+  CATALOG_KIT_LOCK_CONFIDENCE,
+  type ObservableKitHit,
+  pickRefinedKit,
+  pickUniqueKitByObservables,
+  resolveObservableKitLock,
+  scoreLabelMatch,
+} from "./vision-kit-lock.js";
 
-export type VisionCatalogHints = {
-  clubHint?: string;
-  seasonHint?: string;
-  kitType?: KitType;
-  playerNumberHint?: string;
-  playerHint?: string;
-  patchHint?: string;
-  confidence?: number;
+export type VisionCatalogHints = IdentityVisionHints;
+
+export type VisionMapOptions = {
+  amongKitIds?: string[];
 };
 
 type ClubMatch = {
@@ -31,75 +43,47 @@ type PlayerMatch = {
   score: number;
 };
 
-type SeasonMatch = {
-  seasonId: string;
-  score: number;
-};
-
-function normalizeHint(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function scoreLabelMatch(label: string, hint: string): number {
-  const normalizedLabel = normalizeHint(label);
-  const normalizedHint = normalizeHint(hint);
-
-  if (normalizedLabel === normalizedHint) {
-    return 95;
-  }
-  if (normalizedLabel.startsWith(normalizedHint) || normalizedHint.startsWith(normalizedLabel)) {
-    return 85;
-  }
-  if (normalizedLabel.includes(normalizedHint) || normalizedHint.includes(normalizedLabel)) {
-    return 70;
-  }
-
-  return 0;
-}
-
 export class VisionCatalogMapper {
   constructor(private readonly db: Db) {}
 
-  async mapHints(hints: VisionCatalogHints): Promise<VisionInferenceResult | null> {
+  async mapHints(
+    hints: VisionCatalogHints,
+    options: VisionMapOptions = {},
+  ): Promise<VisionInferenceResult | null> {
     const clubMatch = hints.clubHint ? await this.resolveClub(hints.clubHint) : null;
-    const seasonMatch =
-      clubMatch && hints.seasonHint
-        ? await this.resolveSeason(clubMatch.clubId, hints.seasonHint)
-        : null;
+    const hits = await this.listObservableKitHits(hints, clubMatch?.clubId);
 
-    let catalogKitId: string | undefined;
-    if (clubMatch && seasonMatch && hints.kitType) {
-      catalogKitId = await this.resolveCatalogKit(
-        clubMatch.clubId,
-        seasonMatch.seasonId,
-        hints.kitType,
-      );
-    }
+    const locked = options.amongKitIds?.length
+      ? pickRefinedKit(hits, options.amongKitIds, hints.seasonHint, hints.kitType)
+      : (() => {
+          const lock = resolveObservableKitLock(hits, clubMatch?.clubId);
+          if (lock.status === "unique") {
+            return lock.kit;
+          }
+          if (lock.status === "ambiguous") {
+            return pickUniqueKitByObservables(lock.kits, hints.kitType, hints.colorHint);
+          }
+          return null;
+        })();
+
+    const clubId = locked?.clubId ?? clubMatch?.clubId ?? undefined;
+    const seasonId = locked?.seasonId;
+    const type = locked?.type;
+    const catalogKitId = locked?.kitId;
 
     const playerMatch =
-      clubMatch && seasonMatch
-        ? await this.resolvePlayer(
-            clubMatch.clubId,
-            seasonMatch.seasonId,
-            hints.playerNumberHint,
-            hints.playerHint,
-          )
+      clubId && seasonId
+        ? await this.resolvePlayer(clubId, seasonId, hints.playerNumberHint, hints.playerHint)
         : null;
 
-    const patchMatch = seasonMatch
-      ? await this.resolvePatch(seasonMatch.seasonId, hints.patchHint)
-      : null;
-
-    const clubId = clubMatch?.clubId;
-    const seasonId = seasonMatch?.seasonId;
-    const type = hints.kitType;
+    const patchMatch = seasonId ? await this.resolvePatch(seasonId, hints.patchHint) : null;
 
     if (!clubId && !seasonId && !type && !playerMatch && !patchMatch) {
       if (hints.clubHint) {
         return {
           clubHint: hints.clubHint,
           visionRaw: JSON.stringify(hints),
-          confidences: this.buildConfidences(hints.confidence, {}),
+          confidences: this.buildConfidences(hints, {}),
         };
       }
       return null;
@@ -114,14 +98,79 @@ export class VisionCatalogMapper {
       playerNumber: playerMatch?.playerNumber,
       patchId: patchMatch?.patchId,
       clubHint: hints.clubHint,
-      confidences: this.buildConfidences(hints.confidence, {
-        club: clubMatch?.score,
-        season: seasonMatch?.score,
-        kitType: type ? 70 : undefined,
+      confidences: this.buildConfidences(hints, {
+        club: clubMatch?.score ?? (locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined),
+        season: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
+        kitType: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         player: playerMatch?.score,
         badge: patchMatch?.score,
+        kitLocked: Boolean(locked),
       }),
     };
+  }
+
+  async listObservableKitHits(
+    hints: VisionCatalogHints,
+    clubId?: string,
+  ): Promise<ObservableKitHit[]> {
+    const manufacturerHint = hints.manufacturerHint?.trim();
+    const sponsorHint = hints.sponsorHint?.trim();
+    if (!manufacturerHint) {
+      return [];
+    }
+    if (!sponsorHint && !clubId) {
+      return [];
+    }
+
+    const manufacturerPattern = `%${manufacturerHint}%`;
+    const sponsorPattern = sponsorHint ? `%${sponsorHint}%` : undefined;
+
+    const rows = await this.db
+      .select({
+        kitId: kit.id,
+        clubId: kit.clubId,
+        seasonId: kit.seasonId,
+        type: kit.type,
+        sponsorName: kit.sponsorName,
+        manufacturerText: catalogLabel.text,
+        seasonLabel: season.label,
+        colorNames: kit.colorNames,
+      })
+      .from(kit)
+      .innerJoin(manufacturer, eq(kit.manufacturerId, manufacturer.id))
+      .innerJoin(catalogLabel, eq(catalogLabel.entityId, manufacturer.id))
+      .innerJoin(season, eq(kit.seasonId, season.id))
+      .where(
+        and(
+          eq(catalogLabel.entityType, "manufacturer"),
+          sql`${catalogLabel.text} ilike ${manufacturerPattern}`,
+          sponsorPattern
+            ? sql`${kit.sponsorName} ilike ${sponsorPattern}`
+            : eq(kit.clubId, clubId!),
+        ),
+      )
+      .limit(40);
+
+    return rows
+      .filter((row) => {
+        if (scoreLabelMatch(row.manufacturerText ?? "", manufacturerHint) <= 0) {
+          return false;
+        }
+        if (sponsorHint) {
+          return scoreLabelMatch(row.sponsorName ?? "", sponsorHint) > 0;
+        }
+        return true;
+      })
+      .map((row) => ({
+        kitId: row.kitId,
+        clubId: row.clubId,
+        seasonId: row.seasonId,
+        seasonLabel: row.seasonLabel,
+        type: row.type,
+        manufacturer: row.manufacturerText,
+        sponsor: row.sponsorName ?? sponsorHint ?? "",
+        colorNames: row.colorNames,
+      }));
   }
 
   private async resolveClub(hint: string): Promise<ClubMatch | null> {
@@ -157,41 +206,6 @@ export class VisionCatalogMapper {
       .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
 
     return scored[0] ?? null;
-  }
-
-  private async resolveSeason(clubId: string, hint: string): Promise<SeasonMatch | null> {
-    const pattern = `%${hint.trim()}%`;
-
-    const seasonRows = await this.db
-      .select({ seasonId: season.id, label: season.label })
-      .from(teamSeason)
-      .innerJoin(season, eq(teamSeason.seasonId, season.id))
-      .where(and(eq(teamSeason.clubId, clubId), sql`${season.label} ilike ${pattern}`))
-      .limit(10);
-
-    const scored = seasonRows
-      .map((row: { seasonId: string; label: string | null }) => ({
-        seasonId: row.seasonId,
-        score: scoreLabelMatch(row.label ?? "", hint),
-      }))
-      .filter((row: { score: number }) => row.score > 0)
-      .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
-
-    return scored[0] ?? null;
-  }
-
-  private async resolveCatalogKit(
-    clubId: string,
-    seasonId: string,
-    kitType: KitType,
-  ): Promise<string | undefined> {
-    const [row] = await this.db
-      .select({ id: kit.id })
-      .from(kit)
-      .where(and(eq(kit.clubId, clubId), eq(kit.seasonId, seasonId), eq(kit.type, kitType)))
-      .limit(1);
-
-    return row?.id;
   }
 
   private async resolvePlayer(
@@ -310,35 +324,42 @@ export class VisionCatalogMapper {
   }
 
   private buildConfidences(
-    modelConfidence: number | undefined,
-    fields: {
+    hints: IdentityVisionHints,
+    match: {
       club?: number;
       season?: number;
       kitType?: number;
       player?: number;
       badge?: number;
+      kitLocked?: boolean;
     },
   ): VisionFieldConfidences {
-    const fieldScores = [
-      fields.club,
-      fields.season,
-      fields.kitType,
-      fields.player,
-      fields.badge,
-    ].filter((score): score is number => typeof score === "number");
+    const fields = hints.fieldConfidence;
+    const club = combineModelAndMatchConfidence(fields?.club, match.club);
+    const season = match.kitLocked
+      ? CATALOG_KIT_LOCK_CONFIDENCE
+      : combineModelAndMatchConfidence(fields?.season, match.season);
+    const kitType = match.kitLocked
+      ? CATALOG_KIT_LOCK_CONFIDENCE
+      : combineModelAndMatchConfidence(fields?.kitType, match.kitType);
+    const player = combineModelAndMatchConfidence(fields?.player, match.player);
+    const badge = combineModelAndMatchConfidence(fields?.badge, match.badge);
+    const fieldScores = [club, season, kitType, player, badge].filter(
+      (score): score is number => typeof score === "number",
+    );
     const overallFromFields =
       fieldScores.length > 0
         ? Math.round(fieldScores.reduce((sum, score) => sum + score, 0) / fieldScores.length)
         : 0;
-    const modelOverall = computeOverallConfidence(modelConfidence);
+    const modelOverall = computeOverallConfidence(hints.confidence);
 
     return {
       overall: modelOverall > 0 ? modelOverall : overallFromFields,
-      club: fields.club,
-      season: fields.season,
-      kitType: fields.kitType,
-      player: fields.player,
-      badge: fields.badge,
+      club,
+      season,
+      kitType,
+      player,
+      badge,
     };
   }
 }

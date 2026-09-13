@@ -52,6 +52,26 @@ export function computeOverallConfidence(modelConfidence: number | undefined): n
   return Math.round(modelConfidence * 100);
 }
 
+/**
+ * Catalog ILIKE scores must not inflate a weak model guess into a preselect.
+ * Missing model score keeps the match score (legacy overall-only payloads).
+ */
+export function combineModelAndMatchConfidence(
+  model01: number | undefined,
+  matchScore: number | undefined,
+): number | undefined {
+  if (model01 === undefined) {
+    return matchScore;
+  }
+
+  const modelPct = computeOverallConfidence(model01);
+  if (matchScore === undefined) {
+    return modelPct;
+  }
+
+  return Math.min(modelPct, matchScore);
+}
+
 export function shouldPreselect(confidences: VisionFieldConfidences | null): boolean {
   if (!confidences) {
     return false;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  combineModelAndMatchConfidence,
   computeOverallConfidence,
   parseConfidences,
   resolveFieldGate,
@@ -79,6 +80,13 @@ describe("vision-confidence", () => {
     expect(miss.status).toBe("ready");
     expect(miss.catalogMiss).toBe(true);
     expect(miss.suggestions?.clubId).toBeUndefined();
+  });
+
+  it("caps a catalog match by the model's field confidence", () => {
+    expect(combineModelAndMatchConfidence(0.45, 95)).toBe(45);
+    expect(combineModelAndMatchConfidence(0.95, 70)).toBe(70);
+    expect(combineModelAndMatchConfidence(undefined, 95)).toBe(95);
+    expect(combineModelAndMatchConfidence(0, 95)).toBe(0);
   });
 
   it("round-trips confidences JSON", () => {
