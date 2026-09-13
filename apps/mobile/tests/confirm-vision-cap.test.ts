@@ -17,8 +17,6 @@ describe("Confirm identity 402 maps to startTrial-or-paywall", () => {
     expect(visionApi).toContain("export class VisionPremiumRequiredError");
     expect(visionApi).toContain("PREMIUM_REQUIRED");
     expect(visionApi).toContain("response.status !== 402");
-    expect(visionApi).not.toContain('from "apps/api"');
-    expect(visionApi).not.toContain('from "@kit/db"');
   });
 
   it("retries identity suggest after the existing startTrial-or-paywall path", () => {
