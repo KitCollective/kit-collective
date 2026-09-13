@@ -16,6 +16,8 @@ export type CaptureJerseyDraft = {
   id: string;
   clubId: string | null;
   clubLabel: string | null;
+  nationalTeamId: string | null;
+  nationalTeamLabel: string | null;
   seasonId: string | null;
   kitType: KitType | null;
   size: JerseySize | null;

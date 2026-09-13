@@ -19,6 +19,7 @@ import {
   league,
   manufacturer,
   nationalTeam,
+  nationalTeamSeason,
   player,
   playerClubSeason,
   season,
@@ -200,6 +201,7 @@ export class CatalogService {
             .select({
               id: club.id,
               label: resolvedLabel(),
+              kind: sql<"club">`'club'`,
             })
             .from(club)
             .leftJoin(
@@ -216,6 +218,7 @@ export class CatalogService {
             .select({
               id: nationalTeam.id,
               label: resolvedLabel(),
+              kind: sql<"national_team">`'national_team'`,
             })
             .from(nationalTeam)
             .leftJoin(
@@ -229,8 +232,10 @@ export class CatalogService {
             .groupBy(nationalTeam.id);
 
     const clubs = [...clubRows, ...nationalTeamRows]
-      .filter((row): row is typeof row & { label: string } => Boolean(row.label))
-      .map((row) => ({ id: row.id, label: row.label }))
+      .filter((row): row is typeof row & { label: string; kind: "club" | "national_team" } =>
+        Boolean(row.label),
+      )
+      .map((row) => ({ id: row.id, label: row.label, kind: row.kind }))
       .sort((a, b) => a.label.localeCompare(b.label, locale));
 
     return catalogClubSearchResponseSchema.parse({ clubs });
@@ -331,19 +336,37 @@ export class CatalogService {
       .limit(1);
 
     if (nationalTeamRow) {
-      const rows = await this.db
-        .selectDistinct({
-          id: season.id,
-          label: season.label,
-          startsOn: season.startsOn,
-        })
-        .from(kit)
-        .innerJoin(season, eq(kit.seasonId, season.id))
-        .where(eq(kit.nationalTeamId, clubId))
-        .orderBy(desc(season.startsOn));
+      const [seasonLinkRows, kitRows] = await Promise.all([
+        this.db
+          .select({
+            id: season.id,
+            label: season.label,
+            startsOn: season.startsOn,
+          })
+          .from(nationalTeamSeason)
+          .innerJoin(season, eq(nationalTeamSeason.seasonId, season.id))
+          .where(eq(nationalTeamSeason.nationalTeamId, clubId)),
+        this.db
+          .selectDistinct({
+            id: season.id,
+            label: season.label,
+            startsOn: season.startsOn,
+          })
+          .from(kit)
+          .innerJoin(season, eq(kit.seasonId, season.id))
+          .where(eq(kit.nationalTeamId, clubId)),
+      ]);
+
+      const seasonsById = new Map<string, { id: string; label: string; startsOn: string }>();
+      for (const row of [...seasonLinkRows, ...kitRows]) {
+        seasonsById.set(row.id, row);
+      }
+      const seasons = [...seasonsById.values()].sort((left, right) =>
+        right.startsOn.localeCompare(left.startsOn),
+      );
 
       return catalogClubSeasonsResponseSchema.parse({
-        seasons: rows.map((row) => ({ id: row.id, label: row.label })),
+        seasons: seasons.map((row) => ({ id: row.id, label: row.label })),
       });
     }
 

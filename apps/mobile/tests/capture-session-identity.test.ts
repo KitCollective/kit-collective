@@ -81,6 +81,32 @@ describe("applyIdentitySuggestion", () => {
     expect(draft.condition).toBeNull();
   });
 
+  it("preselects a national team without stuffing it into clubId", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+    const NT = "550e8400-e29b-41d4-a716-446655440005";
+
+    const applied = applyIdentitySuggestion(
+      session,
+      draftId,
+      {
+        nationalTeamId: NT,
+        nationalTeamLabel: "Danmark",
+        seasonId: UUID_B,
+        type: "home",
+      },
+      {
+        fieldPreselect: { nationalTeam: true, season: true, type: true },
+      },
+    );
+
+    const draft = getActiveDraft(applied);
+    expect(draft.clubId).toBeNull();
+    expect(draft.nationalTeamId).toBe(NT);
+    expect(draft.nationalTeamLabel).toBe("Danmark");
+    expect(draft.seasonId).toBe(UUID_B);
+  });
+
   it("preselects player and badge when flagged in fieldPreselect", () => {
     const session = createCaptureSession([URI_FRONT]);
     const draftId = getActiveDraft(session).id;

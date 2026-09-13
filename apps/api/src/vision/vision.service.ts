@@ -7,7 +7,13 @@ import {
   type VisionUserAction,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { catalogLabel, playerClubSeason, season, visionLog } from "@kit/db";
+import {
+  catalogLabel,
+  playerClubSeason,
+  playerNationalTeamSeason,
+  season,
+  visionLog,
+} from "@kit/db";
 import type { KitType, LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -109,6 +115,7 @@ export class VisionService {
         .set({
           status,
           suggestedClubId: result?.clubId ?? null,
+          suggestedNationalTeamId: result?.nationalTeamId ?? null,
           suggestedSeasonId: result?.seasonId ?? null,
           suggestedCatalogKitId: result?.catalogKitId ?? null,
           suggestedType: result?.type ?? null,
@@ -202,6 +209,7 @@ export class VisionService {
     preselect?: boolean;
     fieldPreselect?: {
       club?: boolean;
+      nationalTeam?: boolean;
       season?: boolean;
       type?: boolean;
       player?: boolean;
@@ -218,6 +226,7 @@ export class VisionService {
         kind: visionLog.kind,
         status: visionLog.status,
         suggestedClubId: visionLog.suggestedClubId,
+        suggestedNationalTeamId: visionLog.suggestedNationalTeamId,
         suggestedSeasonId: visionLog.suggestedSeasonId,
         suggestedCatalogKitId: visionLog.suggestedCatalogKitId,
         suggestedType: visionLog.suggestedType,
@@ -268,6 +277,7 @@ export class VisionService {
     const clubHint = parseClubHintFromVisionRaw(row.visionRaw);
     const resolved = resolveIdentityJob({
       clubId: row.suggestedClubId ?? undefined,
+      nationalTeamId: row.suggestedNationalTeamId ?? undefined,
       seasonId: row.suggestedSeasonId ?? undefined,
       catalogKitId: row.suggestedCatalogKitId ?? undefined,
       type: row.suggestedType ?? undefined,
@@ -279,6 +289,9 @@ export class VisionService {
 
     const clubLabel = row.suggestedClubId
       ? await this.resolveEntityLabel("club", row.suggestedClubId, locale)
+      : undefined;
+    const nationalTeamLabel = row.suggestedNationalTeamId
+      ? await this.resolveEntityLabel("national_team", row.suggestedNationalTeamId, locale)
       : undefined;
     const seasonLabel = row.suggestedSeasonId
       ? await this.resolveSeasonLabel(row.suggestedSeasonId)
@@ -293,35 +306,49 @@ export class VisionService {
     const suggestions: VisionSuggestions = {
       ...resolved.suggestions,
       clubLabel: clubLabel ?? undefined,
+      nationalTeamLabel: nationalTeamLabel ?? undefined,
       seasonLabel: seasonLabel ?? undefined,
       playerLabel: playerLabel ?? undefined,
       patchLabel: patchLabel ?? undefined,
     };
 
-    if (
-      suggestions.playerId &&
-      !suggestions.playerNumber &&
-      row.suggestedClubId &&
-      row.suggestedSeasonId
-    ) {
-      const [squadRow] = await this.db
-        .select({ squadNumber: playerClubSeason.squadNumber })
-        .from(playerClubSeason)
-        .where(
-          and(
-            eq(playerClubSeason.playerId, suggestions.playerId),
-            eq(playerClubSeason.clubId, row.suggestedClubId),
-            eq(playerClubSeason.seasonId, row.suggestedSeasonId),
-          ),
-        )
-        .limit(1);
-      if (squadRow?.squadNumber != null) {
-        suggestions.playerNumber = String(squadRow.squadNumber);
+    if (suggestions.playerId && !suggestions.playerNumber && row.suggestedSeasonId) {
+      if (row.suggestedClubId) {
+        const [squadRow] = await this.db
+          .select({ squadNumber: playerClubSeason.squadNumber })
+          .from(playerClubSeason)
+          .where(
+            and(
+              eq(playerClubSeason.playerId, suggestions.playerId),
+              eq(playerClubSeason.clubId, row.suggestedClubId),
+              eq(playerClubSeason.seasonId, row.suggestedSeasonId),
+            ),
+          )
+          .limit(1);
+        if (squadRow?.squadNumber != null) {
+          suggestions.playerNumber = String(squadRow.squadNumber);
+        }
+      } else if (row.suggestedNationalTeamId) {
+        const [squadRow] = await this.db
+          .select({ squadNumber: playerNationalTeamSeason.squadNumber })
+          .from(playerNationalTeamSeason)
+          .where(
+            and(
+              eq(playerNationalTeamSeason.playerId, suggestions.playerId),
+              eq(playerNationalTeamSeason.nationalTeamId, row.suggestedNationalTeamId),
+              eq(playerNationalTeamSeason.seasonId, row.suggestedSeasonId),
+            ),
+          )
+          .limit(1);
+        if (squadRow?.squadNumber != null) {
+          suggestions.playerNumber = String(squadRow.squadNumber);
+        }
       }
     }
 
     const hasSuggestions = Boolean(
       suggestions.clubId ||
+        suggestions.nationalTeamId ||
         suggestions.seasonId ||
         suggestions.type ||
         suggestions.catalogKitId ||
@@ -341,7 +368,7 @@ export class VisionService {
   }
 
   private async resolveEntityLabel(
-    entityType: "club" | "player" | "patch",
+    entityType: "club" | "national_team" | "player" | "patch",
     entityId: string,
     locale: LabelLocale,
   ): Promise<string | null> {
@@ -404,7 +431,8 @@ export class VisionService {
     userId: string,
     jobId: string,
     userJerseyId: string,
-    selectedClubId: string,
+    selectedClubId: string | undefined,
+    selectedNationalTeamId: string | undefined,
     selectedSeasonId: string,
     selectedKitType: KitType,
   ): Promise<void> {
@@ -417,6 +445,7 @@ export class VisionService {
       status: job.status,
       suggestions: job.suggestions,
       selectedClubId,
+      selectedNationalTeamId,
       selectedSeasonId,
       selectedKitType: selectedKitType,
     });

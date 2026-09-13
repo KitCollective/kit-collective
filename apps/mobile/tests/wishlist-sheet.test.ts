@@ -1,6 +1,7 @@
 import type { WishlistEntry } from "@kit/api-contract";
 import { describe, expect, it } from "vitest";
 import {
+  applyWishlistSideSelection,
   buildWishlistWritePayload,
   canSaveWishlistEntry,
   emptyWishlistCriteria,
@@ -25,6 +26,8 @@ const baseEntry = {
   meta: "F.C. København · 2023/24 · Hjemme · M",
   clubId: UUID,
   clubLabel: "F.C. København",
+  nationalTeamId: null,
+  nationalTeamLabel: null,
   seasonId: UUID_B,
   seasonLabel: "2023/24",
   type: "home" as const,
@@ -51,12 +54,18 @@ describe("WISHLIST_AND_HELPER_COPY", () => {
 });
 
 describe("hasWishlistCriterion", () => {
-  it("requires at least one of club, season, or type", () => {
+  it("requires at least one of club, national team, season, or type", () => {
     expect(hasWishlistCriterion(emptyWishlistCriteria())).toBe(false);
     expect(
       hasWishlistCriterion({
         ...emptyWishlistCriteria(),
         club: { id: UUID, label: "FCK" },
+      }),
+    ).toBe(true);
+    expect(
+      hasWishlistCriterion({
+        ...emptyWishlistCriteria(),
+        nationalTeam: { id: UUID, label: "Danmark" },
       }),
     ).toBe(true);
     expect(
@@ -97,6 +106,7 @@ describe("buildWishlistWritePayload", () => {
     expect(
       buildWishlistWritePayload({
         club: { id: UUID, label: "FCK" },
+        nationalTeam: null,
         season: { id: UUID_B, label: "2023/24" },
         type: "home",
         size: "m",
@@ -108,15 +118,53 @@ describe("buildWishlistWritePayload", () => {
       size: "m",
     });
   });
+
+  it("maps a national team side without clubId", () => {
+    expect(
+      buildWishlistWritePayload({
+        club: null,
+        nationalTeam: { id: UUID, label: "Danmark" },
+        season: null,
+        type: null,
+        size: null,
+      }),
+    ).toEqual({
+      nationalTeamId: UUID,
+    });
+  });
 });
 
 describe("seedCriteriaForEdit", () => {
   it("seeds form pickers from an existing entry", () => {
     expect(seedCriteriaForEdit(baseEntry)).toEqual({
       club: { id: UUID, label: "F.C. København" },
+      nationalTeam: null,
       season: { id: UUID_B, label: "2023/24" },
       type: "home",
       size: "m",
+    });
+  });
+});
+
+describe("applyWishlistSideSelection", () => {
+  it("clears the opposite side when picking a national team", () => {
+    expect(
+      applyWishlistSideSelection(
+        {
+          club: { id: UUID, label: "FCK" },
+          nationalTeam: null,
+          season: { id: UUID_B, label: "2023/24" },
+          type: null,
+          size: null,
+        },
+        { id: UUID_B, label: "Danmark", kind: "national_team" },
+      ),
+    ).toEqual({
+      club: null,
+      nationalTeam: { id: UUID_B, label: "Danmark" },
+      season: null,
+      type: null,
+      size: null,
     });
   });
 });

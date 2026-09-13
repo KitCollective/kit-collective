@@ -265,7 +265,7 @@ function CollectionHome() {
             <View style={{ width: tileWidth }}>
               <JerseyTile
                 photoSource={photoSource}
-                clubLabel={item.clubLabel}
+                clubLabel={item.clubLabel ?? item.nationalTeamLabel ?? ""}
                 seasonLabel={item.seasonLabel}
                 typeLabel={KIT_TYPE_LABELS_DA[item.type]}
                 onPress={() => openJerseyDetail(item.id)}

@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { fetchClubSeasons } from "@/api/catalog";
 import { useAuth } from "@/auth/AuthProvider";
-import { canSave } from "@/capture/captureSession";
+import { canSave, catalogSideId } from "@/capture/captureSession";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { saveConfirmJersey } from "@/capture/saveConfirmJersey";
 import { showSaveFailureToast } from "@/capture/saveFailureToast";
@@ -38,17 +38,19 @@ export function useConfirmSave(options: {
   );
 
   useEffect(() => {
-    if (!accessToken || !draft?.clubId) {
+    const sideId = catalogSideId(draft ?? {});
+    if (!accessToken || !sideId) {
       return;
     }
 
     let cancelled = false;
-    void fetchClubSeasons(accessToken, draft.clubId).then((response) => {
+    void fetchClubSeasons(accessToken, sideId).then((response) => {
       if (cancelled) {
         return;
       }
-      if (draft.seasonId) {
-        const match = response.seasons.find((season) => season.id === draft.seasonId);
+      const seasonId = draft?.seasonId;
+      if (seasonId) {
+        const match = response.seasons.find((season) => season.id === seasonId);
         if (match) {
           setSelectedSeasonLabel(match.label);
         }
@@ -58,7 +60,7 @@ export function useConfirmSave(options: {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, draft?.clubId, draft?.seasonId]);
+  }, [accessToken, draft?.clubId, draft?.nationalTeamId, draft?.seasonId]);
 
   const handleSave = async () => {
     if (!draft || !options.sessionId || !state) {

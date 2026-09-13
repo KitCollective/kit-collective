@@ -44,7 +44,7 @@ describe("collectionDiscoverTypeaheadSchema", () => {
     expect(collectionDiscoverTypeaheadSchema.parse({})).toEqual({});
   });
 
-  it("rejects League or NationalTeam landings", () => {
+  it("rejects League landings", () => {
     expect(() =>
       collectionDiscoverTypeaheadSchema.parse({
         leagues: [{ id: jersey.clubId, label: "Superligaen" }],

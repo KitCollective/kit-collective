@@ -61,9 +61,10 @@ export async function fetchDiscoverHome(accessToken: string): Promise<Collection
 
 const CATALOG_DRILL_SEGMENTS: Record<
   CollectionDiscoverCatalogDrill["kind"],
-  "clubs" | "players" | "kits"
+  "clubs" | "national-teams" | "players" | "kits"
 > = {
   club: "clubs",
+  national_team: "national-teams",
   player: "players",
   kit: "kits",
 };

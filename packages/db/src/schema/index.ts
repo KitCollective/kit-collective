@@ -29,6 +29,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   boolean,
+  check,
   date,
   index,
   integer,
@@ -593,30 +594,41 @@ export const patch = pgTable("patch", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const userJersey = pgTable("user_jersey", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => user.id),
-  clubId: uuid("club_id")
-    .notNull()
-    .references(() => club.id),
-  seasonId: uuid("season_id")
-    .notNull()
-    .references(() => season.id),
-  playerId: uuid("player_id").references(() => player.id),
-  catalogKitId: uuid("catalog_kit_id").references(() => kit.id),
-  type: kitTypeEnum("type").notNull(),
-  size: jerseySizeEnum("size").notNull(),
-  condition: jerseyConditionEnum("condition").notNull(),
-  authenticity: authenticityEnum("authenticity").notNull().default("unknown"),
-  notes: text("notes"),
-  draftId: uuid("draft_id"),
-  biddingEnabled: boolean("bidding_enabled").notNull().default(false),
-  private: boolean("private").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const userJersey = pgTable(
+  "user_jersey",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    clubId: uuid("club_id").references(() => club.id),
+    nationalTeamId: uuid("national_team_id").references(() => nationalTeam.id),
+    seasonId: uuid("season_id")
+      .notNull()
+      .references(() => season.id),
+    playerId: uuid("player_id").references(() => player.id),
+    catalogKitId: uuid("catalog_kit_id").references(() => kit.id),
+    type: kitTypeEnum("type").notNull(),
+    size: jerseySizeEnum("size").notNull(),
+    condition: jerseyConditionEnum("condition").notNull(),
+    authenticity: authenticityEnum("authenticity").notNull().default("unknown"),
+    notes: text("notes"),
+    draftId: uuid("draft_id"),
+    biddingEnabled: boolean("bidding_enabled").notNull().default(false),
+    private: boolean("private").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      "user_jersey_side_xor",
+      sql`(
+        (${table.clubId} IS NOT NULL AND ${table.nationalTeamId} IS NULL)
+        OR (${table.clubId} IS NULL AND ${table.nationalTeamId} IS NOT NULL)
+      )`,
+    ),
+  ],
+);
 
 export const userJerseyPatch = pgTable(
   "user_jersey_patch",
@@ -751,6 +763,7 @@ export const visionLog = pgTable("vision_log", {
   kind: visionJobKindEnum("kind").notNull().default("identity"),
   status: visionJobStatusEnum("status").notNull().default("pending"),
   suggestedClubId: uuid("suggested_club_id").references(() => club.id),
+  suggestedNationalTeamId: uuid("suggested_national_team_id").references(() => nationalTeam.id),
   suggestedSeasonId: uuid("suggested_season_id").references(() => season.id),
   suggestedCatalogKitId: uuid("suggested_catalog_kit_id").references(() => kit.id),
   suggestedType: kitTypeEnum("suggested_type"),
@@ -815,18 +828,28 @@ export const collectionShortcut = pgTable("collection_shortcut", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const wishlistEntry = pgTable("wishlist_entry", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => user.id),
-  clubId: uuid("club_id").references(() => club.id),
-  seasonId: uuid("season_id").references(() => season.id),
-  type: kitTypeEnum("type"),
-  size: jerseySizeEnum("size"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const wishlistEntry = pgTable(
+  "wishlist_entry",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id),
+    clubId: uuid("club_id").references(() => club.id),
+    nationalTeamId: uuid("national_team_id").references(() => nationalTeam.id),
+    seasonId: uuid("season_id").references(() => season.id),
+    type: kitTypeEnum("type"),
+    size: jerseySizeEnum("size"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      "wishlist_entry_side_xor",
+      sql`NOT (${table.clubId} IS NOT NULL AND ${table.nationalTeamId} IS NOT NULL)`,
+    ),
+  ],
+);
 
 export const entitlement = pgTable(
   "entitlement",
@@ -1024,12 +1047,20 @@ export const collectionShortcutRelations = relations(collectionShortcut, ({ one 
 export const wishlistEntryRelations = relations(wishlistEntry, ({ one }) => ({
   user: one(user, { fields: [wishlistEntry.userId], references: [user.id] }),
   club: one(club, { fields: [wishlistEntry.clubId], references: [club.id] }),
+  nationalTeam: one(nationalTeam, {
+    fields: [wishlistEntry.nationalTeamId],
+    references: [nationalTeam.id],
+  }),
   season: one(season, { fields: [wishlistEntry.seasonId], references: [season.id] }),
 }));
 
 export const userJerseyRelations = relations(userJersey, ({ one, many }) => ({
   user: one(user, { fields: [userJersey.userId], references: [user.id] }),
   club: one(club, { fields: [userJersey.clubId], references: [club.id] }),
+  nationalTeam: one(nationalTeam, {
+    fields: [userJersey.nationalTeamId],
+    references: [nationalTeam.id],
+  }),
   season: one(season, { fields: [userJersey.seasonId], references: [season.id] }),
   player: one(player, { fields: [userJersey.playerId], references: [player.id] }),
   catalogKit: one(kit, { fields: [userJersey.catalogKitId], references: [kit.id] }),
@@ -1064,6 +1095,10 @@ export const visionLogRelations = relations(visionLog, ({ one }) => ({
     references: [userJersey.id],
   }),
   suggestedClub: one(club, { fields: [visionLog.suggestedClubId], references: [club.id] }),
+  suggestedNationalTeam: one(nationalTeam, {
+    fields: [visionLog.suggestedNationalTeamId],
+    references: [nationalTeam.id],
+  }),
   suggestedSeason: one(season, {
     fields: [visionLog.suggestedSeasonId],
     references: [season.id],

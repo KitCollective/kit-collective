@@ -14,7 +14,7 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { SelectField } from "@/components/catalog-ui";
 import { Chip } from "@/components/chip";
-import { FacetPickerOverlay } from "@/components/facet-picker-overlay";
+import { ClubPickerOverlay } from "@/components/club-picker-overlay";
 import { ScreenHeader } from "@/components/screen-header";
 import { SeasonPickerOverlay } from "@/components/season-picker-overlay";
 import { Button, EmptyState, IconButton } from "@/components/ui";
@@ -26,6 +26,7 @@ import { space } from "@/theme/tokens";
 import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 import {
+  applyWishlistSideSelection,
   buildWishlistWritePayload,
   canSaveWishlistEntry,
   emptyWishlistCriteria,
@@ -42,6 +43,7 @@ import {
   WISHLIST_TYPE_OPTIONS,
   type WishlistCriteria,
   type WishlistSheetMode,
+  wishlistSideId,
 } from "./wishlist-sheet-logic";
 
 export function WishlistScreen() {
@@ -110,13 +112,14 @@ export function WishlistScreen() {
   );
 
   const openSeasonPicker = async () => {
-    if (!criteria.club) {
+    const sideId = wishlistSideId(criteria);
+    if (!sideId) {
       return;
     }
 
     setSeasonPickerOpen(true);
     if (seasonOptions.length === 0) {
-      await loadSeasonOptions(criteria.club.id);
+      await loadSeasonOptions(sideId);
     }
   };
 
@@ -144,6 +147,7 @@ export function WishlistScreen() {
 
     setEditingEntryId(null);
     setCriteria(emptyWishlistCriteria());
+    setSeasonOptions([]);
     setMode("form");
   };
 
@@ -154,16 +158,21 @@ export function WishlistScreen() {
     }
 
     setEditingEntryId(entry.id);
-    setCriteria(seedCriteriaForEdit(entry));
+    const nextCriteria = seedCriteriaForEdit(entry);
+    setCriteria(nextCriteria);
     setMode("form");
+    const sideId = wishlistSideId(nextCriteria);
+    if (sideId) {
+      await loadSeasonOptions(sideId);
+    }
   };
 
-  const handleClubSelected = async (club: { id: string; label: string }) => {
-    setCriteria((current) => ({
-      ...current,
-      club: { id: club.id, label: club.label },
-      season: null,
-    }));
+  const handleClubSelected = async (club: {
+    id: string;
+    label: string;
+    kind?: "club" | "national_team";
+  }) => {
+    setCriteria((current) => applyWishlistSideSelection(current, club));
     setClubPickerOpen(false);
     setSeasonPickerOpen(true);
     await loadSeasonOptions(club.id);
@@ -313,15 +322,17 @@ export function WishlistScreen() {
             </Text>
 
             <View style={styles.field}>
-              <Text style={[typography.label, { color: theme.contentPrimary }]}>Klub</Text>
+              <Text style={[typography.label, { color: theme.contentPrimary }]}>
+                Klub eller landshold
+              </Text>
               <SelectField
-                value={criteria.club?.label ?? null}
-                placeholder="Vælg klub"
+                value={criteria.club?.label ?? criteria.nationalTeam?.label ?? null}
+                placeholder="Vælg klub eller landshold"
                 onPress={() => setClubPickerOpen(true)}
               />
             </View>
 
-            {criteria.club ? (
+            {wishlistSideId(criteria) ? (
               <View style={styles.field}>
                 <Text style={[typography.label, { color: theme.contentPrimary }]}>Sæson</Text>
                 <SelectField
@@ -385,18 +396,16 @@ export function WishlistScreen() {
       </View>
 
       {clubPickerOpen && accessToken ? (
-        <FacetPickerOverlay
+        <ClubPickerOverlay
           visible={clubPickerOpen}
-          facetKind="club"
           accessToken={accessToken}
-          selectedId={criteria.club?.id ?? null}
-          mostUsed={[]}
+          selectedClubId={wishlistSideId(criteria)}
           onSelect={(item) => void handleClubSelected(item)}
           onDismiss={() => setClubPickerOpen(false)}
         />
       ) : null}
 
-      {seasonPickerOpen && accessToken && criteria.club ? (
+      {seasonPickerOpen && accessToken && wishlistSideId(criteria) ? (
         <SeasonPickerOverlay
           visible={seasonPickerOpen}
           seasons={seasonOptions}

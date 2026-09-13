@@ -19,6 +19,8 @@ export function dataRequiredFilledCount(draft: CaptureJerseyDraft): number {
   let filled = 0;
   if (draft.clubId) {
     filled += 1;
+  } else if (draft.nationalTeamId) {
+    filled += 1;
   }
   if (draft.seasonId) {
     filled += 1;
@@ -59,7 +61,7 @@ export function sectionProgressTone(filled: number, required: number): SectionPr
 
 export function dataSectionFacts(draft: CaptureJerseyDraft): ConfirmSectionFact[] {
   return [
-    { key: "club", placeholder: "Klub", value: draft.clubLabel },
+    { key: "club", placeholder: "Klub", value: draft.clubLabel ?? draft.nationalTeamLabel },
     { key: "season", placeholder: "Sæson", value: draft.seasonLabel },
     {
       key: "type",

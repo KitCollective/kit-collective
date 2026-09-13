@@ -4,7 +4,7 @@ import type { PhotoRole } from "@kit/domain";
 import { saveUserJersey, updateUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction } from "@/api/vision";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
-import { addJerseyDraft, removeDraft } from "@/capture/captureSession";
+import { addJerseyDraft, hasCatalogSide, removeDraft } from "@/capture/captureSession";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -46,7 +46,7 @@ export async function saveConfirmJersey(input: {
 
   if (
     !input.accessToken ||
-    !input.draft.clubId ||
+    !hasCatalogSide(input.draft) ||
     !input.draft.seasonId ||
     !input.draft.kitType ||
     !input.draft.size ||
@@ -58,7 +58,9 @@ export async function saveConfirmJersey(input: {
   try {
     if (input.editJerseyId) {
       await updateUserJersey(input.accessToken, input.editJerseyId, {
-        clubId: input.draft.clubId,
+        ...(input.draft.clubId
+          ? { clubId: input.draft.clubId }
+          : { nationalTeamId: input.draft.nationalTeamId! }),
         seasonId: input.draft.seasonId,
         catalogKitId: null,
         type: input.draft.kitType,
@@ -83,7 +85,9 @@ export async function saveConfirmJersey(input: {
 
     const response = await saveUserJersey(input.accessToken, {
       draftId: input.draft.id,
-      clubId: input.draft.clubId,
+      ...(input.draft.clubId
+        ? { clubId: input.draft.clubId }
+        : { nationalTeamId: input.draft.nationalTeamId! }),
       seasonId: input.draft.seasonId,
       catalogKitId: null,
       type: input.draft.kitType,
@@ -114,7 +118,8 @@ export async function saveConfirmJersey(input: {
         const resolved = resolveVisionSaveAction({
           status: job.status,
           suggestions: job.suggestions,
-          selectedClubId: input.draft.clubId,
+          selectedClubId: input.draft.clubId ?? undefined,
+          selectedNationalTeamId: input.draft.nationalTeamId ?? undefined,
           selectedSeasonId: input.draft.seasonId,
           selectedKitType: input.draft.kitType,
         });
@@ -135,8 +140,10 @@ export async function saveConfirmJersey(input: {
     markJerseySaved();
 
     const savedClub = input.draft.clubLabel
-      ? { id: input.draft.clubId, label: input.draft.clubLabel }
-      : null;
+      ? { id: input.draft.clubId!, label: input.draft.clubLabel }
+      : input.draft.nationalTeamLabel && input.draft.nationalTeamId
+        ? { id: input.draft.nationalTeamId, label: input.draft.nationalTeamLabel }
+        : null;
 
     if (input.branch === "bulk") {
       const nextState = input.mutate((current) => {

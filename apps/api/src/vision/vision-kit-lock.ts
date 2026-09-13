@@ -306,6 +306,17 @@ export function catalogClubIdForSave(
   return sideMatch?.kind === "club" ? sideMatch.id : undefined;
 }
 
+/** NationalTeam UUID for Save FK — never stuffed into clubId. */
+export function catalogNationalTeamIdForSave(
+  locked: ObservableKitHit | null,
+  sideMatch: CatalogSideMatch | null,
+): string | undefined {
+  if (locked) {
+    return locked.nationalTeamId ?? undefined;
+  }
+  return sideMatch?.kind === "national_team" ? sideMatch.id : undefined;
+}
+
 const COLOR_TOKEN =
   /\b(white|weiss|weiß|hvid|black|navy|red|blue|green|yellow|gold|orange|purple|pink|grey|gray|teal|maroon|claret|amber|silver|cream|ivory)\b/g;
 

@@ -22,6 +22,13 @@ function filterSuggestOnlyFields(
     }
   }
 
+  if (suggestions.nationalTeamId && !fieldPreselect.nationalTeam && !manualEdits.club) {
+    filtered.nationalTeamId = suggestions.nationalTeamId;
+    if (suggestions.nationalTeamLabel) {
+      filtered.nationalTeamLabel = suggestions.nationalTeamLabel;
+    }
+  }
+
   if (suggestions.seasonId && !fieldPreselect.season && !manualEdits.season) {
     filtered.seasonId = suggestions.seasonId;
     if (suggestions.seasonLabel) {

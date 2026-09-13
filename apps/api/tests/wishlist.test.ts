@@ -14,6 +14,7 @@ import {
   createDb,
   entitlement,
   league,
+  nationalTeam,
   resetDatabase,
   season,
   teamSeason,
@@ -366,5 +367,48 @@ describe("Wishlist /v1", () => {
     });
 
     expect([403, 404]).toContain(patchResponse.statusCode);
+  });
+
+  it("creates a national-team wishlist row without clubId", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "NO" })
+      .returning({ id: country.id });
+    const [insertedNationalTeam] = await db
+      .insert(nationalTeam)
+      .values({ countryId: insertedCountry!.id, gender: "men" })
+      .returning({ id: nationalTeam.id });
+    await db.insert(catalogLabel).values({
+      entityType: "national_team",
+      entityId: insertedNationalTeam!.id,
+      locale: "da",
+      kind: "label",
+      text: "Danmark",
+      source: "seed",
+    });
+    await pool.end();
+
+    const session = await registerSession(app, "wishlist-nt@example.com");
+    await startTrial(app, session.accessToken);
+
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/wishlist/entries",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        nationalTeamId: insertedNationalTeam!.id,
+      },
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    const created = wishlistEntrySchema.parse(JSON.parse(createResponse.body));
+    expect(created.clubId).toBeNull();
+    expect(created.nationalTeamId).toBe(insertedNationalTeam!.id);
+    expect(created.nationalTeamLabel).toBe("Danmark");
+    expect(created.name).toBe("Danmark");
   });
 });

@@ -1,4 +1,4 @@
-import type { CatalogPickerItem, WishlistEntry } from "@kit/api-contract";
+import { type CatalogPickerItem, catalogSideId, type WishlistEntry } from "@kit/api-contract";
 import type { JerseySize, KitType } from "@kit/domain";
 import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 
@@ -6,6 +6,7 @@ export type WishlistSheetMode = "list" | "form";
 
 export type WishlistCriteria = {
   club: CatalogPickerItem | null;
+  nationalTeam: CatalogPickerItem | null;
   season: CatalogPickerItem | null;
   type: KitType | null;
   size: JerseySize | null;
@@ -13,6 +14,7 @@ export type WishlistCriteria = {
 
 const EMPTY_CRITERIA: WishlistCriteria = {
   club: null,
+  nationalTeam: null,
   season: null,
   type: null,
   size: null,
@@ -29,8 +31,20 @@ export function emptyWishlistCriteria(): WishlistCriteria {
   return { ...EMPTY_CRITERIA };
 }
 
+export function wishlistSideId(criteria: WishlistCriteria): string | null {
+  return catalogSideId({
+    clubId: criteria.club?.id,
+    nationalTeamId: criteria.nationalTeam?.id,
+  });
+}
+
 export function hasWishlistCriterion(criteria: WishlistCriteria): boolean {
-  return criteria.club !== null || criteria.season !== null || criteria.type !== null;
+  return (
+    criteria.club !== null ||
+    criteria.nationalTeam !== null ||
+    criteria.season !== null ||
+    criteria.type !== null
+  );
 }
 
 export function canSaveWishlistEntry(criteria: WishlistCriteria, saving: boolean): boolean {
@@ -39,12 +53,14 @@ export function canSaveWishlistEntry(criteria: WishlistCriteria, saving: boolean
 
 export function buildWishlistWritePayload(criteria: WishlistCriteria): {
   clubId?: string;
+  nationalTeamId?: string;
   seasonId?: string;
   type?: KitType;
   size?: JerseySize;
 } {
   const payload: {
     clubId?: string;
+    nationalTeamId?: string;
     seasonId?: string;
     type?: KitType;
     size?: JerseySize;
@@ -52,6 +68,9 @@ export function buildWishlistWritePayload(criteria: WishlistCriteria): {
 
   if (criteria.club) {
     payload.clubId = criteria.club.id;
+  }
+  if (criteria.nationalTeam) {
+    payload.nationalTeamId = criteria.nationalTeam.id;
   }
   if (criteria.season) {
     payload.seasonId = criteria.season.id;
@@ -70,12 +89,37 @@ export function seedCriteriaForEdit(entry: WishlistEntry): WishlistCriteria {
   return {
     club:
       entry.clubId !== null ? { id: entry.clubId, label: entry.clubLabel ?? entry.clubId } : null,
+    nationalTeam:
+      entry.nationalTeamId !== null
+        ? { id: entry.nationalTeamId, label: entry.nationalTeamLabel ?? entry.nationalTeamId }
+        : null,
     season:
       entry.seasonId !== null
         ? { id: entry.seasonId, label: entry.seasonLabel ?? entry.seasonId }
         : null,
     type: entry.type,
     size: entry.size,
+  };
+}
+
+export function applyWishlistSideSelection(
+  current: WishlistCriteria,
+  side: CatalogPickerItem & { kind?: "club" | "national_team" },
+): WishlistCriteria {
+  if (side.kind === "national_team") {
+    return {
+      ...current,
+      club: null,
+      nationalTeam: { id: side.id, label: side.label },
+      season: null,
+    };
+  }
+
+  return {
+    ...current,
+    club: { id: side.id, label: side.label },
+    nationalTeam: null,
+    season: null,
   };
 }
 
@@ -100,7 +144,7 @@ export function resolveWishlistEmptyTitle(): string {
 }
 
 export function resolveWishlistEmptyBody(): string {
-  return "Tilføj en ønskerække med klub, sæson eller type.";
+  return "Tilføj en ønskerække med klub, landshold, sæson eller type.";
 }
 
 export const WISHLIST_TYPE_OPTIONS = KIT_TYPE_LABELS_DA;

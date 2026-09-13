@@ -9,6 +9,7 @@ import {
   branchFromPhotoCount,
   canAddPhotoToDraft,
   canSave,
+  catalogSideId,
   changeDraftPhotoRole,
   createCaptureSession,
   createMemoryCaptureSessionStore,
@@ -26,10 +27,12 @@ import {
   setActiveDraft,
   setDraftBadge,
   setDraftBadgeEnabled,
+  setDraftCatalogSide,
   setDraftClub,
   setDraftNotes,
   setDraftPhotoLabel,
   setDraftSeason,
+  suggestedCatalogSideId,
   switchSingleToBulkBind,
   unbindPhoto,
   upsertDraftPhoto,
@@ -320,6 +323,48 @@ describe("setDraftClub", () => {
 
     next = setDraftClub(next, draftId, "660e8400-e29b-41d4-a716-446655440002");
     expect(getDraft(next, draftId).seasonId).toBeNull();
+  });
+});
+
+describe("setDraftCatalogSide", () => {
+  it("stores a national team and clears the club XOR", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    let next = setDraftClub(session, draftId, UUID, "F.C. København");
+    next = setDraftSeason(next, draftId, UUID_B);
+    next = setDraftCatalogSide(next, draftId, {
+      id: "660e8400-e29b-41d4-a716-446655440002",
+      label: "Danmark",
+      kind: "national_team",
+    });
+
+    const draft = getDraft(next, draftId);
+    expect(draft.clubId).toBeNull();
+    expect(draft.nationalTeamId).toBe("660e8400-e29b-41d4-a716-446655440002");
+    expect(draft.nationalTeamLabel).toBe("Danmark");
+    expect(draft.seasonId).toBeNull();
+    expect(catalogSideId(draft)).toBe("660e8400-e29b-41d4-a716-446655440002");
+  });
+});
+
+describe("suggestedCatalogSideId", () => {
+  it("returns club when that field is preselected", () => {
+    expect(
+      suggestedCatalogSideId(
+        { clubId: UUID, nationalTeamId: UUID_B },
+        { club: true, nationalTeam: true },
+      ),
+    ).toBe(UUID);
+  });
+
+  it("returns national team when club is not preselected", () => {
+    expect(
+      suggestedCatalogSideId(
+        { clubId: UUID, nationalTeamId: UUID_B },
+        { club: false, nationalTeam: true },
+      ),
+    ).toBe(UUID_B);
   });
 });
 

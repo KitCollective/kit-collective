@@ -248,7 +248,9 @@ export function deriveMostUsedFacets(
 
   if (kind === "club") {
     for (const jersey of ownerJerseys) {
-      bump(jersey.clubId, jersey.clubLabel);
+      if (jersey.clubId && jersey.clubLabel) {
+        bump(jersey.clubId, jersey.clubLabel);
+      }
     }
   }
 

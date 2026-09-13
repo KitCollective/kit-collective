@@ -38,6 +38,7 @@ export const visionSuggestRequestSchema = z
 export const visionFieldPreselectSchema = z
   .object({
     club: z.boolean().optional(),
+    nationalTeam: z.boolean().optional(),
     season: z.boolean().optional(),
     type: z.boolean().optional(),
     player: z.boolean().optional(),
@@ -54,10 +55,12 @@ export const visionSuggestResponseSchema = z
 export const visionSuggestionsSchema = z
   .object({
     clubId: z.string().uuid().optional(),
+    nationalTeamId: z.string().uuid().optional(),
     seasonId: z.string().uuid().optional(),
     catalogKitId: z.string().uuid().optional(),
     type: z.enum(KIT_TYPES).optional(),
     clubLabel: z.string().min(1).optional(),
+    nationalTeamLabel: z.string().min(1).optional(),
     seasonLabel: z.string().min(1).optional(),
     playerId: z.string().uuid().optional(),
     playerLabel: z.string().min(1).optional(),
@@ -90,6 +93,7 @@ export const visionLogRequestSchema = z
     jobId: z.string().uuid(),
     action: z.enum(VISION_USER_ACTIONS),
     clubId: z.string().uuid().optional(),
+    nationalTeamId: z.string().uuid().optional(),
     seasonId: z.string().uuid().optional(),
     catalogKitId: z.string().uuid().nullable().optional(),
     type: z.enum(KIT_TYPES).optional(),

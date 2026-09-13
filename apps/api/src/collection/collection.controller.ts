@@ -187,6 +187,21 @@ export class CollectionController {
     );
   }
 
+  @Get("collection/discover/national-teams/:nationalTeamId")
+  @UseGuards(JwtAuthGuard)
+  discoverNationalTeamDrill(
+    @CurrentUser() user: JwtPayload,
+    @Param("nationalTeamId") nationalTeamId: string,
+    @Headers("accept-language") acceptLanguage?: string,
+  ) {
+    return this.collectionService.discoverCatalogDrill(
+      user.sub,
+      "national_team",
+      nationalTeamId,
+      resolveLocale(acceptLanguage),
+    );
+  }
+
   @Get("collection/discover/players/:playerId")
   @UseGuards(JwtAuthGuard)
   discoverPlayerDrill(

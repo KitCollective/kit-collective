@@ -1,10 +1,12 @@
 import { JERSEY_CONDITIONS, JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
 import { z } from "zod";
+import { catalogSideXorIssue } from "../catalog/side.js";
 import { collectionJerseySchema } from "./save.js";
 
 export const collectionJerseyUpdateSchema = z
   .object({
-    clubId: z.string().uuid(),
+    clubId: z.string().uuid().optional(),
+    nationalTeamId: z.string().uuid().optional(),
     seasonId: z.string().uuid(),
     catalogKitId: z.string().uuid().nullable().optional(),
     type: z.enum(KIT_TYPES),
@@ -13,7 +15,10 @@ export const collectionJerseyUpdateSchema = z
     playerId: z.string().uuid().nullable().optional(),
     patchIds: z.array(z.string().uuid()).max(1).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((body, ctx) => {
+    catalogSideXorIssue(ctx, body.clubId, body.nationalTeamId, true);
+  });
 
 export const collectionJerseyUpdateResponseSchema = z
   .object({

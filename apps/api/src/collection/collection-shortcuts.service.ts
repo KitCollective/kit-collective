@@ -14,8 +14,10 @@ import {
   collectionShortcut,
   country,
   league,
+  nationalTeam,
   player,
   playerClubSeason,
+  playerNationalTeamSeason,
   season,
   userJersey,
 } from "@kit/db";
@@ -27,7 +29,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { and, asc, count, eq, exists, inArray, type SQL } from "drizzle-orm";
+import { and, asc, count, eq, exists, inArray, or, type SQL } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 
 type ShortcutFacets = {
@@ -237,12 +239,25 @@ export class CollectionShortcutsService {
 
     if (facets.countryId) {
       conditions.push(
-        exists(
-          this.db
-            .select({ id: club.id })
-            .from(club)
-            .where(and(eq(club.id, userJersey.clubId), eq(club.countryId, facets.countryId))),
-        ),
+        or(
+          exists(
+            this.db
+              .select({ id: club.id })
+              .from(club)
+              .where(and(eq(club.id, userJersey.clubId), eq(club.countryId, facets.countryId))),
+          ),
+          exists(
+            this.db
+              .select({ id: nationalTeam.id })
+              .from(nationalTeam)
+              .where(
+                and(
+                  eq(nationalTeam.id, userJersey.nationalTeamId),
+                  eq(nationalTeam.countryId, facets.countryId),
+                ),
+              ),
+          ),
+        ) as SQL,
       );
     }
 
@@ -263,18 +278,32 @@ export class CollectionShortcutsService {
 
     if (facets.playerId) {
       conditions.push(
-        exists(
-          this.db
-            .select({ id: playerClubSeason.id })
-            .from(playerClubSeason)
-            .where(
-              and(
-                eq(playerClubSeason.playerId, facets.playerId),
-                eq(playerClubSeason.clubId, userJersey.clubId),
-                eq(playerClubSeason.seasonId, userJersey.seasonId),
+        or(
+          exists(
+            this.db
+              .select({ id: playerClubSeason.id })
+              .from(playerClubSeason)
+              .where(
+                and(
+                  eq(playerClubSeason.playerId, facets.playerId),
+                  eq(playerClubSeason.clubId, userJersey.clubId),
+                  eq(playerClubSeason.seasonId, userJersey.seasonId),
+                ),
               ),
-            ),
-        ),
+          ),
+          exists(
+            this.db
+              .select({ id: playerNationalTeamSeason.id })
+              .from(playerNationalTeamSeason)
+              .where(
+                and(
+                  eq(playerNationalTeamSeason.playerId, facets.playerId),
+                  eq(playerNationalTeamSeason.nationalTeamId, userJersey.nationalTeamId),
+                  eq(playerNationalTeamSeason.seasonId, userJersey.seasonId),
+                ),
+              ),
+          ),
+        ) as SQL,
       );
     }
 

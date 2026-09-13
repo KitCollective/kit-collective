@@ -31,7 +31,7 @@ export function canSave(draft: CaptureJerseyDraft): boolean {
   if (!draft.editJerseyId && draft.photos.length === 0) {
     return false;
   }
-  if (!draft.clubId || !draft.seasonId) {
+  if (!hasCatalogSide(draft) || !draft.seasonId) {
     return false;
   }
   if (!draft.kitTypeSelected || !draft.sizeSelected || !draft.conditionSelected) {
@@ -62,6 +62,8 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
     id,
     clubId: null,
     clubLabel: null,
+    nationalTeamId: null,
+    nationalTeamLabel: null,
     seasonId: null,
     seasonLabel: null,
     kitType: null,
@@ -378,28 +380,79 @@ export function bindUnboundPhotoToDraft(
   return bindPhoto(state, uri, draftId, targetRole, source);
 }
 
+export function hasCatalogSide(draft: CaptureJerseyDraft): boolean {
+  return Boolean(draft.clubId) !== Boolean(draft.nationalTeamId);
+}
+
+export { catalogSideId } from "@kit/api-contract";
+
+export function suggestedCatalogSideId(
+  suggestions: { clubId?: string | null; nationalTeamId?: string | null },
+  fieldPreselect: { club?: boolean; nationalTeam?: boolean },
+): string | null {
+  if (fieldPreselect.club && suggestions.clubId) {
+    return suggestions.clubId;
+  }
+  if (fieldPreselect.nationalTeam && suggestions.nationalTeamId) {
+    return suggestions.nationalTeamId;
+  }
+  return null;
+}
+
+function sideDependentFields(draft: CaptureJerseyDraft, changed: boolean) {
+  return {
+    seasonId: changed ? null : draft.seasonId,
+    seasonLabel: changed ? null : draft.seasonLabel,
+    playerId: changed ? null : draft.playerId,
+    playerName: changed ? "" : draft.playerName,
+    playerNumber: changed ? "" : draft.playerNumber,
+    badgeEnabled: changed ? false : draft.badgeEnabled,
+    badgeId: changed ? null : draft.badgeId,
+    badgeLabel: changed ? null : draft.badgeLabel,
+  };
+}
+
 export function setDraftClub(
   state: CaptureSessionState,
   draftId: string,
   clubId: string,
   clubLabel?: string | null,
 ): CaptureSessionState {
-  return updateDraft(state, draftId, (draft) => {
-    const clubChanged = draft.clubId !== clubId;
-    return {
-      ...draft,
-      clubId,
-      clubLabel: clubLabel ?? draft.clubLabel,
-      seasonId: clubChanged ? null : draft.seasonId,
-      seasonLabel: clubChanged ? null : draft.seasonLabel,
-      playerId: clubChanged ? null : draft.playerId,
-      playerName: clubChanged ? "" : draft.playerName,
-      playerNumber: clubChanged ? "" : draft.playerNumber,
-      badgeEnabled: clubChanged ? false : draft.badgeEnabled,
-      badgeId: clubChanged ? null : draft.badgeId,
-      badgeLabel: clubChanged ? null : draft.badgeLabel,
-    };
-  });
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    clubId,
+    clubLabel: clubLabel ?? draft.clubLabel,
+    nationalTeamId: null,
+    nationalTeamLabel: null,
+    ...sideDependentFields(draft, draft.clubId !== clubId),
+  }));
+}
+
+export function setDraftNationalTeam(
+  state: CaptureSessionState,
+  draftId: string,
+  nationalTeamId: string,
+  nationalTeamLabel?: string | null,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    clubId: null,
+    clubLabel: null,
+    nationalTeamId,
+    nationalTeamLabel: nationalTeamLabel ?? draft.nationalTeamLabel,
+    ...sideDependentFields(draft, draft.nationalTeamId !== nationalTeamId),
+  }));
+}
+
+export function setDraftCatalogSide(
+  state: CaptureSessionState,
+  draftId: string,
+  item: { id: string; label: string; kind?: "club" | "national_team" },
+): CaptureSessionState {
+  if (item.kind === "national_team") {
+    return setDraftNationalTeam(state, draftId, item.id, item.label);
+  }
+  return setDraftClub(state, draftId, item.id, item.label);
 }
 
 export function setDraftSeason(
@@ -693,8 +746,10 @@ function serializableState(state: CaptureSessionState): CaptureSessionState {
 export function createEditCaptureSession(
   jersey: {
     id: string;
-    clubId: string;
-    clubLabel: string;
+    clubId: string | null;
+    clubLabel: string | null;
+    nationalTeamId?: string | null;
+    nationalTeamLabel?: string | null;
     seasonId: string;
     type: KitType;
     size: JerseySize;
@@ -708,6 +763,8 @@ export function createEditCaptureSession(
     id: draftId,
     clubId: jersey.clubId,
     clubLabel: jersey.clubLabel,
+    nationalTeamId: jersey.nationalTeamId ?? null,
+    nationalTeamLabel: jersey.nationalTeamLabel ?? null,
     seasonId: jersey.seasonId,
     kitType: jersey.type,
     size: jersey.size,
@@ -909,6 +966,8 @@ export function sessionPhotoIds(state: CaptureSessionState): string[] {
 export type IdentitySuggestionInput = {
   clubId?: string;
   clubLabel?: string;
+  nationalTeamId?: string;
+  nationalTeamLabel?: string;
   seasonId?: string;
   seasonLabel?: string;
   type?: KitType;
@@ -921,6 +980,7 @@ export type IdentitySuggestionInput = {
 
 export type IdentityFieldPreselect = {
   club?: boolean;
+  nationalTeam?: boolean;
   season?: boolean;
   type?: boolean;
   player?: boolean;
@@ -948,7 +1008,24 @@ export function applyIdentitySuggestion(
   let next = state;
 
   if (!manual.club && options.fieldPreselect.club && suggestions.clubId && suggestions.clubLabel) {
-    next = setDraftClub(next, draftId, suggestions.clubId, suggestions.clubLabel);
+    next = setDraftCatalogSide(next, draftId, {
+      id: suggestions.clubId,
+      label: suggestions.clubLabel,
+      kind: "club",
+    });
+  }
+
+  if (
+    !manual.club &&
+    options.fieldPreselect.nationalTeam &&
+    suggestions.nationalTeamId &&
+    suggestions.nationalTeamLabel
+  ) {
+    next = setDraftCatalogSide(next, draftId, {
+      id: suggestions.nationalTeamId,
+      label: suggestions.nationalTeamLabel,
+      kind: "national_team",
+    });
   }
 
   if (!manual.season && options.fieldPreselect.season && suggestions.seasonId) {

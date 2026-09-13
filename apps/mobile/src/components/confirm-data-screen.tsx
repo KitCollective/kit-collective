@@ -5,10 +5,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/auth/AuthProvider";
 import {
+  catalogSideId,
   selectDraftKitType,
   setDraftBadge,
   setDraftBadgeEnabled,
-  setDraftClub,
+  setDraftCatalogSide,
   setDraftPlayer,
   setDraftSeason,
 } from "@/capture/captureSession";
@@ -61,11 +62,13 @@ export function ConfirmDataScreen() {
 
   const fadeDockScrollPadding =
     BUTTON_DOCK_FADE_SCROLL_PADDING + Math.max(insets.bottom, space.insetMd);
+  const sideId = catalogSideId(draft);
+  const sideLabel = draft.clubLabel ?? draft.nationalTeamLabel;
   const clubCountry = draft.clubId ? dummyClubById(draft.clubId)?.country : null;
   const seasonValue =
     draft.seasonLabel ??
-    (draft.clubId && draft.seasonId
-      ? (dummySeasonsForClub(draft.clubId).find((row) => row.id === draft.seasonId)?.label ?? null)
+    (sideId && draft.seasonId
+      ? (dummySeasonsForClub(sideId).find((row) => row.id === draft.seasonId)?.label ?? null)
       : null);
   const playerMeta = draft.playerNumber ? `Nr. ${draft.playerNumber}` : null;
   const seasonBadges = dummyBadgesForSeason(draft.clubId ?? "", draft.seasonId);
@@ -79,19 +82,19 @@ export function ConfirmDataScreen() {
       >
         <View style={styles.section}>
           <CatalogSelectRow
-            placeholder="Vælg klub"
-            value={draft.clubLabel}
+            placeholder="Vælg klub eller landshold"
+            value={sideLabel}
             meta={clubCountry}
             onPress={() => setOpenPicker("club")}
           />
-          {draft.clubId ? (
+          {sideId ? (
             <CatalogSelectRow
               placeholder="Vælg sæson"
               value={seasonValue}
               onPress={() => setOpenPicker("season")}
             />
           ) : null}
-          {draft.clubId ? (
+          {sideId ? (
             <>
               <CatalogSelectRow
                 placeholder="Vælg spiller"
@@ -192,18 +195,18 @@ export function ConfirmDataScreen() {
       <ClubPickerOverlay
         visible={openPicker === "club"}
         accessToken={accessToken}
-        selectedClubId={draft.clubId}
+        selectedClubId={sideId}
         onSelect={(club) => {
           markConfirmClubEdited();
           clearConfirmSeasonEdited();
-          mutate((current) => setDraftClub(current, current.activeDraftId, club.id, club.label));
+          mutate((current) => setDraftCatalogSide(current, current.activeDraftId, club));
         }}
         onDismiss={() => setOpenPicker(null)}
       />
 
       <SeasonPickerOverlay
         visible={openPicker === "season"}
-        clubId={draft.clubId}
+        clubId={sideId}
         selectedId={draft.seasonId}
         onSelect={(season) => {
           markConfirmSeasonEdited();
@@ -216,7 +219,7 @@ export function ConfirmDataScreen() {
 
       <PlayerPickerOverlay
         visible={openPicker === "player"}
-        clubId={draft.clubId}
+        clubId={sideId}
         seasonId={draft.seasonId}
         selectedId={draft.playerId}
         onSelect={(player) => {

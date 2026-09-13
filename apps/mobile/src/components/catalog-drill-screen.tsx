@@ -30,20 +30,29 @@ export function CatalogDrillScreen({
 }) {
   const params = useLocalSearchParams<{
     clubId?: string;
+    nationalTeamId?: string;
     playerId?: string;
     kitId?: string;
     label?: string;
   }>();
   const entityId =
-    kind === "club" ? params.clubId : kind === "player" ? params.playerId : params.kitId;
+    kind === "club"
+      ? params.clubId
+      : kind === "national_team"
+        ? params.nationalTeamId
+        : kind === "player"
+          ? params.playerId
+          : params.kitId;
   const fallbackTitle =
     typeof params.label === "string" && params.label.trim()
       ? params.label
       : kind === "club"
         ? "Klub"
-        : kind === "player"
-          ? "Spiller"
-          : "Kit";
+        : kind === "national_team"
+          ? "Landshold"
+          : kind === "player"
+            ? "Spiller"
+            : "Kit";
   const router = useRouter();
   const { accessToken } = useAuth();
   const { width } = useWindowDimensions();
