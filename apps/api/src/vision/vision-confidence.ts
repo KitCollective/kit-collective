@@ -118,14 +118,34 @@ export function parseClubHintFromVisionRaw(raw: string | null | undefined): stri
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (isRecord(parsed) && typeof parsed.clubHint === "string") {
-      return parsed.clubHint;
+    if (!isRecord(parsed)) {
+      return undefined;
+    }
+    const clubHint = nonemptyString(parsed.clubHint);
+    if (clubHint) {
+      return clubHint;
+    }
+    if (Array.isArray(parsed.clubHintAlts)) {
+      for (const alt of parsed.clubHintAlts) {
+        const hint = nonemptyString(alt);
+        if (hint) {
+          return hint;
+        }
+      }
     }
   } catch {
     return undefined;
   }
 
   return undefined;
+}
+
+function nonemptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function hadClubCatalogHint(result: VisionInferenceResult): boolean {
+  return Boolean(result.clubHint?.trim() || parseClubHintFromVisionRaw(result.visionRaw));
 }
 
 export function resolveIdentityJob(result: VisionInferenceResult | null): ResolvedIdentityJob {
@@ -160,7 +180,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     Boolean(result.patchId),
   );
 
-  const catalogMiss = Boolean(result.clubHint && !result.clubId);
+  const catalogMiss = Boolean(hadClubCatalogHint(result) && !result.clubId && !result.catalogKitId);
 
   const suggestions: VisionSuggestions = {};
   const fieldPreselect: VisionFieldPreselect = {};

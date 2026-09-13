@@ -11,6 +11,7 @@ export type IdentityFieldConfidence = {
 
 export type IdentityVisionHints = {
   clubHint?: string;
+  clubHintAlts?: string[];
   seasonHint?: string;
   kitType?: KitType;
   playerHint?: string;
@@ -37,6 +38,7 @@ Think like Football Kit Archive or Classic Football Shirts. Output JSON only —
 
 CLUB
 - Identify the club or national team. Use a commonly known English name ("Rangers FC", "Liverpool FC", "RB Leipzig", "Denmark").
+- Add 1–3 alternate names in clubHintAlts: local-language name, abbreviation, or nickname ("FCK", "FC København", "Copenhagen"). Do not invent alts you cannot support.
 - Use crest, collar tags, and known templates. Do not invent a club with no visual clue.
 
 KIT TYPE (home | away | third | fourth | gk | special)
@@ -96,6 +98,7 @@ export function identityVisionUserPrompt(photoCount: number): string {
 
 {
   "clubHint": "Rangers FC" | null,
+  "clubHintAlts": ["Rangers"] | [],
   "seasonHint": "2019/20" | null,
   "kitType": "home"|"away"|"third"|"fourth"|"gk"|"special"|null,
   "playerHint": "Morelos" | null,
@@ -117,6 +120,7 @@ export function identityVisionUserPrompt(photoCount: number): string {
 
 Rules:
 - All images are one shirt. Combine crest, back print, sleeves, and labels.
+- clubHintAlts: 0–3 alternate club or national-team names. [] if none.
 - kitType values are lowercase exactly as above.
 - badges: [] if no sleeve/chest patch is visible. Each visible patch: {"position":"right_sleeve"|"left_sleeve"|"front"|"other","category":"competition"|"league"|"partner"|"captain"|"unknown","nameText":"..."}.
 - Omit patchHint when badges is []. Do not invent pads.
@@ -187,6 +191,24 @@ function normalizeKitType(value: unknown): KitType | undefined {
     return lowered;
   }
   return undefined;
+}
+
+function decodeStringList(value: unknown, max = 3): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const items: string[] = [];
+  for (const entry of value) {
+    const text = nonemptyString(entry);
+    if (!text) {
+      continue;
+    }
+    items.push(text);
+    if (items.length >= max) {
+      break;
+    }
+  }
+  return items.length > 0 ? items : undefined;
 }
 
 function nonemptyString(value: unknown): string | undefined {
@@ -311,6 +333,7 @@ export function decodeIdentityVisionHints(text: string | null): IdentityVisionHi
 
     const hints: IdentityVisionHints = {};
     const clubHint = nonemptyString(parsed.clubHint) ?? nonemptyString(parsed.clubText);
+    const clubHintAlts = decodeStringList(parsed.clubHintAlts);
     const seasonHint = nonemptyString(parsed.seasonHint) ?? nonemptyString(parsed.seasonText);
     const kitType = normalizeKitType(parsed.kitType);
     const playerHint = nonemptyString(parsed.playerHint) ?? nonemptyString(parsed.playerNameText);
@@ -328,6 +351,7 @@ export function decodeIdentityVisionHints(text: string | null): IdentityVisionHi
     );
 
     if (clubHint) hints.clubHint = clubHint;
+    if (clubHintAlts) hints.clubHintAlts = clubHintAlts;
     if (seasonHint) hints.seasonHint = seasonHint;
     if (kitType) hints.kitType = kitType;
     if (playerHint) hints.playerHint = playerHint;
@@ -341,6 +365,7 @@ export function decodeIdentityVisionHints(text: string | null): IdentityVisionHi
 
     if (
       !hints.clubHint &&
+      !hints.clubHintAlts &&
       !hints.seasonHint &&
       !hints.kitType &&
       !hints.playerHint &&

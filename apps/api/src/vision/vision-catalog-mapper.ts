@@ -1,15 +1,30 @@
 import type { Db } from "@kit/db";
-import { catalogLabel, club, kit, manufacturer, patch, playerClubSeason, season } from "@kit/db";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import {
+  catalogLabel,
+  club,
+  kit,
+  manufacturer,
+  nationalTeam,
+  patch,
+  playerClubSeason,
+  playerNationalTeamSeason,
+  season,
+} from "@kit/db";
+import { and, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
 import { combineModelAndMatchConfidence, computeOverallConfidence } from "./vision-confidence.js";
 import {
   CATALOG_KIT_LOCK_CONFIDENCE,
+  type CatalogSideKind,
+  type CatalogSideMatch,
+  catalogClubIdForSave,
+  catalogHintSearchNeedles,
+  collectClubHints,
+  compactCatalogHint,
   type ObservableKitHit,
-  pickRefinedKit,
-  pickUniqueKitByObservables,
-  resolveObservableKitLock,
+  pickBestCatalogSide,
+  pickLockedKit,
   scoreLabelMatch,
 } from "./vision-kit-lock.js";
 
@@ -17,11 +32,6 @@ export type VisionCatalogHints = IdentityVisionHints;
 
 export type VisionMapOptions = {
   amongKitIds?: string[];
-};
-
-type ClubMatch = {
-  clubId: string;
-  score: number;
 };
 
 type PatchMatch = {
@@ -35,6 +45,17 @@ type PlayerMatch = {
   score: number;
 };
 
+type SquadRow = {
+  playerId: string;
+  squadNumber: number | null;
+};
+
+const KIT_HIT_LIMIT = 40;
+const SIDE_LABEL_LIMIT = 40;
+const PLAYER_LABEL_LIMIT = 20;
+const PATCH_LABEL_LIMIT = 10;
+const SQUAD_NUMBER_MATCH_SCORE = 90;
+
 export class VisionCatalogMapper {
   constructor(private readonly db: Db) {}
 
@@ -42,38 +63,36 @@ export class VisionCatalogMapper {
     hints: VisionCatalogHints,
     options: VisionMapOptions = {},
   ): Promise<VisionInferenceResult | null> {
-    const clubMatch = hints.clubHint ? await this.resolveClub(hints.clubHint) : null;
-    const hits = await this.listObservableKitHits(hints, clubMatch?.clubId);
+    const sideMatch = await this.resolveSide(hints);
+    const hits = await this.listObservableKitHits(hints, sideMatch);
+    const locked = pickLockedKit(hits, {
+      amongKitIds: options.amongKitIds,
+      sideId: sideMatch?.id,
+      seasonHint: hints.seasonHint,
+      kitType: hints.kitType,
+      colorHint: hints.colorHint,
+    });
 
-    const locked = options.amongKitIds?.length
-      ? pickRefinedKit(hits, options.amongKitIds, hints.seasonHint, hints.kitType)
-      : (() => {
-          const lock = resolveObservableKitLock(hits, clubMatch?.clubId);
-          if (lock.status === "unique") {
-            return lock.kit;
-          }
-          if (lock.status === "ambiguous") {
-            return pickUniqueKitByObservables(lock.kits, hints.kitType, hints.colorHint);
-          }
-          return null;
-        })();
-
-    const clubId = locked?.clubId ?? clubMatch?.clubId ?? undefined;
-    const seasonId = locked?.seasonId;
-    const type = locked?.type;
-    const catalogKitId = locked?.kitId;
-
+    const clubId = catalogClubIdForSave(locked, sideMatch);
+    const playerScope = playerScopeFor(locked, clubId, sideMatch);
     const playerMatch =
-      clubId && seasonId
-        ? await this.resolvePlayer(clubId, seasonId, hints.playerNumberHint, hints.playerHint)
+      playerScope && locked?.seasonId
+        ? await this.resolvePlayer(
+            playerScope.kind,
+            playerScope.id,
+            locked.seasonId,
+            hints.playerNumberHint,
+            hints.playerHint,
+          )
         : null;
+    const patchMatch = locked?.seasonId
+      ? await this.resolvePatch(locked.seasonId, hints.patchHint)
+      : null;
 
-    const patchMatch = seasonId ? await this.resolvePatch(seasonId, hints.patchHint) : null;
-
-    if (!clubId && !seasonId && !type && !playerMatch && !patchMatch) {
-      if (hints.clubHint) {
+    if (!clubId && !locked && !playerMatch && !patchMatch) {
+      if (hints.clubHint || hints.clubHintAlts?.length) {
         return {
-          clubHint: hints.clubHint,
+          clubHint: collectClubHints(hints)[0],
           visionRaw: JSON.stringify(hints),
           confidences: this.buildConfidences(hints, {}),
         };
@@ -83,15 +102,15 @@ export class VisionCatalogMapper {
 
     return {
       clubId,
-      seasonId,
-      catalogKitId,
-      type,
+      seasonId: locked?.seasonId,
+      catalogKitId: locked?.kitId,
+      type: locked?.type,
       playerId: playerMatch?.playerId,
       playerNumber: playerMatch?.playerNumber,
       patchId: patchMatch?.patchId,
       clubHint: hints.clubHint,
       confidences: this.buildConfidences(hints, {
-        club: clubMatch?.score ?? (locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined),
+        club: clubMatchScore(sideMatch, locked),
         season: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         kitType: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         player: playerMatch?.score,
@@ -103,24 +122,28 @@ export class VisionCatalogMapper {
 
   async listObservableKitHits(
     hints: VisionCatalogHints,
-    clubId?: string,
+    sideMatch?: CatalogSideMatch | null,
   ): Promise<ObservableKitHit[]> {
     const manufacturerHint = hints.manufacturerHint?.trim();
     const sponsorHint = hints.sponsorHint?.trim();
     if (!manufacturerHint) {
       return [];
     }
-    if (!sponsorHint && !clubId) {
+    const side = sideMatch === undefined ? await this.resolveSide(hints) : sideMatch;
+    if (!sponsorHint && !side) {
       return [];
     }
 
-    const manufacturerPattern = `%${manufacturerHint}%`;
-    const sponsorPattern = sponsorHint ? `%${sponsorHint}%` : undefined;
+    const manufacturerClause = hintMatchSql(catalogLabel.text, [manufacturerHint]);
+    if (!manufacturerClause) {
+      return [];
+    }
 
     const rows = await this.db
       .select({
         kitId: kit.id,
         clubId: kit.clubId,
+        nationalTeamId: kit.nationalTeamId,
         seasonId: kit.seasonId,
         type: kit.type,
         sponsorName: kit.sponsorName,
@@ -135,102 +158,100 @@ export class VisionCatalogMapper {
       .where(
         and(
           eq(catalogLabel.entityType, "manufacturer"),
-          sql`${catalogLabel.text} ilike ${manufacturerPattern}`,
-          sponsorPattern
-            ? sql`${kit.sponsorName} ilike ${sponsorPattern}`
-            : eq(kit.clubId, clubId!),
+          manufacturerClause,
+          sponsorHint ? hintMatchSql(kit.sponsorName, [sponsorHint]) : kitSideEquals(side),
         ),
       )
-      .limit(40);
+      .limit(KIT_HIT_LIMIT);
 
-    return rows
-      .filter((row) => {
-        if (scoreLabelMatch(row.manufacturerText ?? "", manufacturerHint) <= 0) {
-          return false;
-        }
-        if (sponsorHint) {
-          return scoreLabelMatch(row.sponsorName ?? "", sponsorHint) > 0;
-        }
-        return true;
-      })
-      .map((row) => ({
-        kitId: row.kitId,
-        clubId: row.clubId,
-        seasonId: row.seasonId,
-        seasonLabel: row.seasonLabel,
-        type: row.type,
-        manufacturer: row.manufacturerText,
-        sponsor: row.sponsorName ?? sponsorHint ?? "",
-        colorNames: row.colorNames,
-      }));
+    return rows.flatMap((row) => {
+      if (scoreLabelMatch(row.manufacturerText ?? "", manufacturerHint) <= 0) {
+        return [];
+      }
+      if (sponsorHint && scoreLabelMatch(row.sponsorName ?? "", sponsorHint) <= 0) {
+        return [];
+      }
+      return [
+        {
+          kitId: row.kitId,
+          clubId: row.clubId,
+          nationalTeamId: row.nationalTeamId,
+          seasonId: row.seasonId,
+          seasonLabel: row.seasonLabel,
+          type: row.type,
+          manufacturer: row.manufacturerText,
+          sponsor: row.sponsorName ?? sponsorHint ?? "",
+          colorNames: row.colorNames,
+        },
+      ];
+    });
   }
 
-  private async resolveClub(hint: string): Promise<ClubMatch | null> {
-    const pattern = `%${hint.trim()}%`;
+  private async resolveSide(hints: VisionCatalogHints): Promise<CatalogSideMatch | null> {
+    const hintTexts = collectClubHints(hints);
+    const sideClause =
+      hintTexts.length > 0 ? hintMatchSql(catalogLabel.text, hintTexts) : undefined;
+    if (!sideClause) {
+      return null;
+    }
 
     const labelRows = await this.db
       .selectDistinct({
+        entityType: catalogLabel.entityType,
         entityId: catalogLabel.entityId,
         text: catalogLabel.text,
+        kind: catalogLabel.kind,
       })
       .from(catalogLabel)
-      .where(and(eq(catalogLabel.entityType, "club"), sql`${catalogLabel.text} ilike ${pattern}`))
-      .limit(20);
+      .where(and(inArray(catalogLabel.entityType, ["club", "national_team"]), sideClause))
+      .limit(SIDE_LABEL_LIMIT);
 
     if (labelRows.length === 0) {
       return null;
     }
 
-    const clubIds = labelRows.map((row) => row.entityId);
-    const existingClubs = await this.db
-      .select({ id: club.id })
-      .from(club)
-      .where(inArray(club.id, clubIds));
+    const clubIds = idsForEntityType(labelRows, "club");
+    const nationalTeamIds = idsForEntityType(labelRows, "national_team");
+    const [existingClubs, existingNationalTeams] = await Promise.all([
+      this.existingIds(club, clubIds),
+      this.existingIds(nationalTeam, nationalTeamIds),
+    ]);
 
-    const validClubIds = new Set(existingClubs.map((row) => row.id));
-    const scored = labelRows
-      .filter((row: { entityId: string }) => validClubIds.has(row.entityId))
-      .map((row: { entityId: string; text: string | null }) => ({
-        clubId: row.entityId,
-        score: scoreLabelMatch(row.text ?? "", hint),
-      }))
-      .filter((row: { score: number }) => row.score > 0)
-      .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
+    return pickBestCatalogSide(
+      labelRows,
+      hintTexts,
+      new Set(existingClubs),
+      new Set(existingNationalTeams),
+    );
+  }
 
-    return scored[0] ?? null;
+  private async existingIds(
+    table: typeof club | typeof nationalTeam,
+    ids: string[],
+  ): Promise<string[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const rows = await this.db.select({ id: table.id }).from(table).where(inArray(table.id, ids));
+    return rows.map((row) => row.id);
   }
 
   private async resolvePlayer(
-    clubId: string,
+    sideKind: CatalogSideKind,
+    sideId: string,
     seasonId: string,
     numberHint?: string,
     nameHint?: string,
   ): Promise<PlayerMatch | null> {
-    if (numberHint?.trim()) {
-      const parsedNumber = Number.parseInt(numberHint.trim(), 10);
-      if (!Number.isNaN(parsedNumber)) {
-        const [row] = await this.db
-          .select({
-            playerId: playerClubSeason.playerId,
-            squadNumber: playerClubSeason.squadNumber,
-          })
-          .from(playerClubSeason)
-          .where(
-            and(
-              eq(playerClubSeason.clubId, clubId),
-              eq(playerClubSeason.seasonId, seasonId),
-              eq(playerClubSeason.squadNumber, parsedNumber),
-            ),
-          )
-          .limit(1);
-
-        if (row) {
-          return {
-            playerId: row.playerId,
-            playerNumber: String(row.squadNumber ?? parsedNumber),
-            score: 90,
-          };
-        }
+    const parsedNumber = parseSquadNumber(numberHint);
+    if (parsedNumber !== undefined) {
+      const row = await this.findSquadByNumber(sideKind, sideId, seasonId, parsedNumber);
+      if (row) {
+        return {
+          playerId: row.playerId,
+          playerNumber: String(row.squadNumber ?? parsedNumber),
+          score: SQUAD_NUMBER_MATCH_SCORE,
+        };
       }
     }
 
@@ -238,48 +259,121 @@ export class VisionCatalogMapper {
       return null;
     }
 
-    const pattern = `%${nameHint.trim()}%`;
+    const nameClause = hintMatchSql(catalogLabel.text, [nameHint]);
+    if (!nameClause) {
+      return null;
+    }
+
     const labelRows = await this.db
       .selectDistinct({
         entityId: catalogLabel.entityId,
         text: catalogLabel.text,
       })
       .from(catalogLabel)
-      .where(and(eq(catalogLabel.entityType, "player"), sql`${catalogLabel.text} ilike ${pattern}`))
-      .limit(20);
+      .where(and(eq(catalogLabel.entityType, "player"), nameClause))
+      .limit(PLAYER_LABEL_LIMIT);
 
     if (labelRows.length === 0) {
       return null;
     }
 
-    const playerIds = labelRows.map((row) => row.entityId);
-    const scopedRows = await this.db
-      .select({
-        playerId: playerClubSeason.playerId,
-        squadNumber: playerClubSeason.squadNumber,
-      })
-      .from(playerClubSeason)
-      .where(
-        and(
-          eq(playerClubSeason.clubId, clubId),
-          eq(playerClubSeason.seasonId, seasonId),
-          inArray(playerClubSeason.playerId, playerIds),
-        ),
-      );
+    const scopedRows = await this.listSquadByPlayerIds(
+      sideKind,
+      sideId,
+      seasonId,
+      labelRows.map((row) => row.entityId),
+    );
 
-    const scored = scopedRows
-      .map((row) => {
-        const label = labelRows.find((entry) => entry.entityId === row.playerId)?.text ?? "";
-        return {
+    return (
+      bestScored(
+        scopedRows.map((row) => ({
           playerId: row.playerId,
           playerNumber: row.squadNumber ? String(row.squadNumber) : undefined,
-          score: scoreLabelMatch(label, nameHint),
-        };
-      })
-      .filter((row) => row.score > 0)
-      .sort((a, b) => b.score - a.score);
+          score: scoreLabelMatch(
+            labelRows.find((entry) => entry.entityId === row.playerId)?.text ?? "",
+            nameHint,
+          ),
+        })),
+      ) ?? null
+    );
+  }
 
-    return scored[0] ?? null;
+  private async findSquadByNumber(
+    sideKind: CatalogSideKind,
+    sideId: string,
+    seasonId: string,
+    squadNumber: number,
+  ): Promise<SquadRow | undefined> {
+    if (sideKind === "club") {
+      const [row] = await this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          squadNumber: playerClubSeason.squadNumber,
+        })
+        .from(playerClubSeason)
+        .where(
+          and(
+            eq(playerClubSeason.clubId, sideId),
+            eq(playerClubSeason.seasonId, seasonId),
+            eq(playerClubSeason.squadNumber, squadNumber),
+          ),
+        )
+        .limit(1);
+      return row;
+    }
+
+    const [row] = await this.db
+      .select({
+        playerId: playerNationalTeamSeason.playerId,
+        squadNumber: playerNationalTeamSeason.squadNumber,
+      })
+      .from(playerNationalTeamSeason)
+      .where(
+        and(
+          eq(playerNationalTeamSeason.nationalTeamId, sideId),
+          eq(playerNationalTeamSeason.seasonId, seasonId),
+          eq(playerNationalTeamSeason.squadNumber, squadNumber),
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
+  private async listSquadByPlayerIds(
+    sideKind: CatalogSideKind,
+    sideId: string,
+    seasonId: string,
+    playerIds: string[],
+  ): Promise<SquadRow[]> {
+    if (sideKind === "club") {
+      return this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          squadNumber: playerClubSeason.squadNumber,
+        })
+        .from(playerClubSeason)
+        .where(
+          and(
+            eq(playerClubSeason.clubId, sideId),
+            eq(playerClubSeason.seasonId, seasonId),
+            inArray(playerClubSeason.playerId, playerIds),
+          ),
+        );
+    }
+
+    return this.db
+      .select({
+        playerId: playerNationalTeamSeason.playerId,
+        squadNumber: playerNationalTeamSeason.squadNumber,
+      })
+      .from(playerNationalTeamSeason)
+      .where(
+        and(
+          eq(playerNationalTeamSeason.nationalTeamId, sideId),
+          eq(playerNationalTeamSeason.seasonId, seasonId),
+          inArray(playerNationalTeamSeason.playerId, playerIds),
+        ),
+      );
   }
 
   private async resolvePatch(seasonId: string, hint?: string): Promise<PatchMatch | null> {
@@ -287,7 +381,11 @@ export class VisionCatalogMapper {
       return null;
     }
 
-    const pattern = `%${hint.trim()}%`;
+    const patchClause = hintMatchSql(catalogLabel.text, [hint]);
+    if (!patchClause) {
+      return null;
+    }
+
     const labelRows = await this.db
       .selectDistinct({
         entityId: catalogLabel.entityId,
@@ -295,24 +393,17 @@ export class VisionCatalogMapper {
       })
       .from(catalogLabel)
       .innerJoin(patch, eq(patch.id, catalogLabel.entityId))
-      .where(
-        and(
-          eq(catalogLabel.entityType, "patch"),
-          eq(patch.seasonId, seasonId),
-          sql`${catalogLabel.text} ilike ${pattern}`,
-        ),
-      )
-      .limit(10);
+      .where(and(eq(catalogLabel.entityType, "patch"), eq(patch.seasonId, seasonId), patchClause))
+      .limit(PATCH_LABEL_LIMIT);
 
-    const scored = labelRows
-      .map((row) => ({
-        patchId: row.entityId,
-        score: scoreLabelMatch(row.text ?? "", hint),
-      }))
-      .filter((row) => row.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    return scored[0] ?? null;
+    return (
+      bestScored(
+        labelRows.map((row) => ({
+          patchId: row.entityId,
+          score: scoreLabelMatch(row.text ?? "", hint),
+        })),
+      ) ?? null
+    );
   }
 
   private buildConfidences(
@@ -354,4 +445,85 @@ export class VisionCatalogMapper {
       badge,
     };
   }
+}
+
+function kitSideEquals(side: CatalogSideMatch | null): SQL | undefined {
+  if (!side) {
+    return undefined;
+  }
+  return side.kind === "club" ? eq(kit.clubId, side.id) : eq(kit.nationalTeamId, side.id);
+}
+
+function playerScopeFor(
+  locked: ObservableKitHit | null,
+  clubId: string | undefined,
+  sideMatch: CatalogSideMatch | null,
+): { kind: CatalogSideKind; id: string } | undefined {
+  if (locked?.nationalTeamId) {
+    return { kind: "national_team", id: locked.nationalTeamId };
+  }
+  if (locked?.clubId) {
+    return { kind: "club", id: locked.clubId };
+  }
+  if (clubId) {
+    return { kind: "club", id: clubId };
+  }
+  if (sideMatch) {
+    return { kind: sideMatch.kind, id: sideMatch.id };
+  }
+  return undefined;
+}
+
+function clubMatchScore(
+  sideMatch: CatalogSideMatch | null,
+  locked: ObservableKitHit | null,
+): number | undefined {
+  if (sideMatch?.kind === "club") {
+    return sideMatch.score;
+  }
+  return locked?.clubId ? CATALOG_KIT_LOCK_CONFIDENCE : undefined;
+}
+
+function idsForEntityType(
+  rows: Array<{ entityType: string; entityId: string }>,
+  entityType: string,
+): string[] {
+  return rows.filter((row) => row.entityType === entityType).map((row) => row.entityId);
+}
+
+function parseSquadNumber(numberHint?: string): number | undefined {
+  if (!numberHint?.trim()) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(numberHint.trim(), 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function bestScored<T extends { score: number }>(items: T[]): T | undefined {
+  return items.filter((row) => row.score > 0).sort((left, right) => right.score - left.score)[0];
+}
+
+function hintMatchSql(column: SQLWrapper, hints: string[]): SQL | undefined {
+  const needles = [...new Set(hints.flatMap((hint) => catalogHintSearchNeedles(hint)))];
+  if (needles.length === 0) {
+    return undefined;
+  }
+  const clauses: SQL[] = needles.map((needle) => sql`${column} ilike ${`%${needle}%`}`);
+  const compacts = [
+    ...new Set(hints.map((hint) => compactCatalogHint(hint)).filter((value) => value.length >= 3)),
+  ];
+  for (const compact of compacts) {
+    clauses.push(sql`${compactCatalogColumnSql(column)} = ${compact}`);
+    clauses.push(sql`${compactCatalogColumnSql(column)} like ${`%${compact}%`}`);
+  }
+  return or(...clauses);
+}
+
+/** Same compact as `compactCatalogHint`: NFD + ø→o / æ→ae, then strip non-alphanumerics. */
+function compactCatalogColumnSql(column: SQLWrapper): SQL {
+  const combiningMarks = "[\u0300-\u036f]";
+  const folded = sql`replace(replace(replace(replace(replace(replace(replace(
+    regexp_replace(normalize(lower(coalesce(${column}, '')), NFD), ${combiningMarks}, '', 'g'),
+    'æ', 'ae'), 'ø', 'o'), 'å', 'a'), 'ä', 'a'), 'ö', 'o'), 'ü', 'u'), 'ß', 'ss')`;
+  return sql`regexp_replace(${folded}, '[^a-z0-9]', '', 'g')`;
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   combineModelAndMatchConfidence,
   computeOverallConfidence,
+  parseClubHintFromVisionRaw,
   parseConfidences,
   resolveFieldGate,
   resolveIdentityJob,
@@ -80,6 +81,30 @@ describe("vision-confidence", () => {
     expect(miss.status).toBe("ready");
     expect(miss.catalogMiss).toBe(true);
     expect(miss.suggestions?.clubId).toBeUndefined();
+  });
+
+  it("flags catalog miss when only clubHintAlts are present", () => {
+    expect(parseClubHintFromVisionRaw(JSON.stringify({ clubHintAlts: ["FCK"] }))).toBe("FCK");
+    const miss = resolveIdentityJob({
+      visionRaw: JSON.stringify({ clubHintAlts: ["Unknown FC"] }),
+      confidences: { overall: 80 },
+    });
+    expect(miss.status).toBe("ready");
+    expect(miss.catalogMiss).toBe(true);
+  });
+
+  it("does not flag catalog miss when a NationalTeam kit locked without a Club UUID", () => {
+    const locked = resolveIdentityJob({
+      clubHint: "Denmark",
+      catalogKitId: "00000000-0000-0000-0000-000000000003",
+      seasonId: "00000000-0000-0000-0000-000000000002",
+      type: "home",
+      confidences: { overall: 80, club: 90, season: 95, kitType: 95 },
+    });
+
+    expect(locked.catalogMiss).toBe(false);
+    expect(locked.suggestions?.catalogKitId).toBe("00000000-0000-0000-0000-000000000003");
+    expect(locked.suggestions?.clubId).toBeUndefined();
   });
 
   it("caps a catalog match by the model's field confidence", () => {

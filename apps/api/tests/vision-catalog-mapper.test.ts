@@ -9,6 +9,7 @@ import {
   kit,
   league,
   manufacturer,
+  nationalTeam,
   patch,
   player,
   playerClubSeason,
@@ -259,6 +260,108 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.catalogKitId).toBe(fixture.kits[0]!.kitId);
     expect(mapped?.seasonId).toBe(fixture.kits[0]!.seasonId);
   });
+
+  it("maps a club from a CatalogLabel alias and from clubHintAlts", async () => {
+    const fixture = await insertClubWithKits(
+      [{ label: "2024/25", type: "home", manufacturer: "Adidas", sponsor: "Carlsberg" }],
+      {
+        clubLabel: "F.C. København",
+        aliases: ["FCK", "FC Copenhagen"],
+      },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const mapper = new VisionCatalogMapper(db);
+    const viaAlias = await mapper.mapHints({
+      clubHint: "FCK",
+      manufacturerHint: "Adidas",
+      sponsorHint: "Carlsberg",
+    });
+    const viaAlt = await mapper.mapHints({
+      clubHint: "Copenhagen Football Club",
+      clubHintAlts: ["FCK"],
+      manufacturerHint: "Adidas",
+      sponsorHint: "Carlsberg",
+    });
+    const viaFoldedOfficial = await mapper.mapHints({
+      clubHint: "FC Kobenhavn",
+      manufacturerHint: "Adidas",
+      sponsorHint: "Carlsberg",
+    });
+    await pool.end();
+
+    expect(viaAlias?.clubId).toBe(fixture.clubId);
+    expect(viaAlias?.catalogKitId).toBe(fixture.kits[0]!.kitId);
+    expect(viaAlt?.clubId).toBe(fixture.clubId);
+    expect(viaAlt?.catalogKitId).toBe(fixture.kits[0]!.kitId);
+    expect(viaFoldedOfficial?.clubId).toBe(fixture.clubId);
+    expect(viaFoldedOfficial?.catalogKitId).toBe(fixture.kits[0]!.kitId);
+  });
+
+  it("locks a kit when the sponsor spelling differs only by spacing", async () => {
+    const fixture = await insertClubWithKits([
+      { label: "2019/20", type: "home", manufacturer: "Hummel", sponsor: "32Red" },
+    ]);
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(db).mapHints({
+      clubHint: "Rangers FC",
+      manufacturerHint: "Hummel",
+      sponsorHint: "32 Red",
+    });
+    await pool.end();
+
+    expect(mapped?.catalogKitId).toBe(fixture.kits[0]!.kitId);
+  });
+
+  it("locks a unique NationalTeam kit without treating the side as a Club UUID", async () => {
+    const fixture = await insertNationalTeamWithKit({
+      teamLabel: "Denmark",
+      aliases: ["Danmark"],
+      manufacturer: "Adidas",
+      seasonLabel: "2010",
+    });
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(db).mapHints({
+      clubHint: "Denmark",
+      manufacturerHint: "Adidas",
+      kitType: "home",
+      fieldConfidence: { club: 0.9, kitType: 0.8 },
+    });
+    await pool.end();
+
+    expect(mapped?.clubId).toBeUndefined();
+    expect(mapped?.catalogKitId).toBe(fixture.kitId);
+    expect(mapped?.seasonId).toBe(fixture.seasonId);
+    expect(mapped?.type).toBe("home");
+  });
+
+  it("does not fill a Club UUID when a NationalTeam kit locks beside a Club side match", async () => {
+    const fixture = await insertNationalTeamWithKit({
+      teamLabel: "Danmark",
+      manufacturer: "Adidas",
+      sponsor: "VisitDenmark",
+      seasonLabel: "2010",
+    });
+    await insertClubWithKits(
+      [{ label: "2024/25", type: "home", manufacturer: "Hummel", sponsor: "Carlsberg" }],
+      { clubLabel: "Denmark" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(db).mapHints({
+      clubHint: "Denmark",
+      manufacturerHint: "Adidas",
+      sponsorHint: "VisitDenmark",
+      kitType: "home",
+      fieldConfidence: { club: 0.9, kitType: 0.8 },
+    });
+    await pool.end();
+
+    expect(mapped?.clubId).toBeUndefined();
+    expect(mapped?.catalogKitId).toBe(fixture.kitId);
+  });
 });
 
 type KitSpec = {
@@ -269,7 +372,12 @@ type KitSpec = {
   colorNames?: string;
 };
 
-async function insertClubWithKits(specs: KitSpec[]) {
+type ClubLabelOptions = {
+  clubLabel?: string;
+  aliases?: string[];
+};
+
+async function insertClubWithKits(specs: KitSpec[], options: ClubLabelOptions = {}) {
   const { db, pool } = createDb(DATABASE_URL);
   const [insertedCountry] = await db
     .insert(country)
@@ -283,14 +391,25 @@ async function insertClubWithKits(specs: KitSpec[]) {
     .insert(club)
     .values({ countryId: insertedCountry!.id, kind: "club" })
     .returning({ id: club.id });
+  const clubLabel = options.clubLabel ?? "Rangers FC";
   await db.insert(catalogLabel).values({
     entityType: "club",
     entityId: insertedClub!.id,
     locale: "en",
     kind: "label",
-    text: "Rangers FC",
+    text: clubLabel,
     source: "seed",
   });
+  for (const alias of options.aliases ?? []) {
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "en",
+      kind: "alias",
+      text: alias,
+      source: "seed",
+    });
+  }
 
   const kits: Array<{ kitId: string; seasonId: string }> = [];
   for (const spec of specs) {
@@ -336,4 +455,78 @@ async function insertClubWithKits(specs: KitSpec[]) {
 
   await pool.end();
   return { clubId: insertedClub!.id, leagueId: insertedLeague!.id, kits };
+}
+
+async function insertNationalTeamWithKit(spec: {
+  teamLabel: string;
+  aliases?: string[];
+  manufacturer: string;
+  sponsor?: string;
+  seasonLabel: string;
+}) {
+  const { db, pool } = createDb(DATABASE_URL);
+  const [insertedCountry] = await db
+    .insert(country)
+    .values({ iso3166: "DK" })
+    .returning({ id: country.id });
+  const [insertedTeam] = await db
+    .insert(nationalTeam)
+    .values({ countryId: insertedCountry!.id, gender: "men" })
+    .returning({ id: nationalTeam.id });
+  await db.insert(catalogLabel).values({
+    entityType: "national_team",
+    entityId: insertedTeam!.id,
+    locale: "en",
+    kind: "label",
+    text: spec.teamLabel,
+    source: "seed",
+  });
+  for (const alias of spec.aliases ?? []) {
+    await db.insert(catalogLabel).values({
+      entityType: "national_team",
+      entityId: insertedTeam!.id,
+      locale: "da",
+      kind: "alias",
+      text: alias,
+      source: "seed",
+    });
+  }
+  const year = spec.seasonLabel.slice(0, 4);
+  const [insertedSeason] = await db
+    .insert(season)
+    .values({
+      label: spec.seasonLabel,
+      startsOn: `${year}-01-01`,
+      endsOn: `${year}-12-31`,
+      calendarKind: "calendar",
+    })
+    .returning({ id: season.id });
+  const [insertedManufacturer] = await db
+    .insert(manufacturer)
+    .values({})
+    .returning({ id: manufacturer.id });
+  await db.insert(catalogLabel).values({
+    entityType: "manufacturer",
+    entityId: insertedManufacturer!.id,
+    locale: "en",
+    kind: "label",
+    text: spec.manufacturer,
+    source: "seed",
+  });
+  const [insertedKit] = await db
+    .insert(kit)
+    .values({
+      nationalTeamId: insertedTeam!.id,
+      seasonId: insertedSeason!.id,
+      type: "home",
+      manufacturerId: insertedManufacturer!.id,
+      sponsorName: spec.sponsor ?? null,
+    })
+    .returning({ id: kit.id });
+  await pool.end();
+  return {
+    nationalTeamId: insertedTeam!.id,
+    kitId: insertedKit!.id,
+    seasonId: insertedSeason!.id,
+  };
 }

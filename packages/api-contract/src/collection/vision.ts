@@ -76,7 +76,7 @@ export const visionJobResponseSchema = z
     preselect: z.boolean().optional(),
     /** Per-field preselect: ≥70% + catalog hit for that field. */
     fieldPreselect: visionFieldPreselectSchema.optional(),
-    /** True when the model hinted a club but the catalog mapper found no club row. */
+    /** True when the model hinted a club (`clubHint` or `clubHintAlts`) but the catalog mapper found neither a Club nor a Kit. */
     catalogMiss: z.boolean().optional(),
     suggestions: visionSuggestionsSchema.optional(),
     grouping: visionGroupingSuggestionsSchema.optional(),

@@ -28,6 +28,7 @@ describe("identity vision prompt (Huddle-strength)", () => {
   it("asks for per-field confidence and omit-empty patchHint", () => {
     const user = identityVisionUserPrompt(4);
     expect(user).toContain('"kitType": "home"|"away"|"third"|"fourth"|"gk"|"special"|null');
+    expect(user).toContain('"clubHintAlts"');
     expect(user).toContain('"club"');
     expect(user).toContain('"season"');
     expect(user).toContain('"badge"');
@@ -50,6 +51,7 @@ describe("identity vision prompt (Huddle-strength)", () => {
     const decoded = decodeIdentityVisionHints(
       JSON.stringify({
         clubHint: "RB Leipzig",
+        clubHintAlts: ["RasenBallsport Leipzig", "RBL", ""],
         seasonHint: "2019/20",
         kitType: "home",
         manufacturerHint: "Nike",
@@ -68,6 +70,7 @@ describe("identity vision prompt (Huddle-strength)", () => {
     );
 
     expect(decoded?.clubHint).toBe("RB Leipzig");
+    expect(decoded?.clubHintAlts).toEqual(["RasenBallsport Leipzig", "RBL"]);
     expect(decoded?.seasonHint).toBe("2019/20");
     expect(decoded?.kitType).toBe("home");
     expect(decoded?.patchHint).toBeUndefined();
