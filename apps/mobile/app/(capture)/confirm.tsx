@@ -72,6 +72,7 @@ export default function ConfirmScreen() {
     accessToken,
     sessionId,
     draft,
+    sessionDrafts: state?.drafts ?? [],
     mutate,
     reduceMotion,
     jobId: visionJobId,

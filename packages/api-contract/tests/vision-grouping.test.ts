@@ -27,6 +27,15 @@ describe("vision grouping contract", () => {
     expect(visionGroupingSuggestRequestSchema.parse(request)).toEqual(request);
   });
 
+  it("parses grouping suggest request with priorGroups for an incremental pass", () => {
+    const request: VisionGroupingSuggestRequest = {
+      sessionId: "55555555-5555-5555-5555-555555555555",
+      photos: [{ photoId: PHOTO_C, contentBase64: "ghi789" }],
+      priorGroups: [{ photoIds: [PHOTO_A, PHOTO_B] }],
+    };
+    expect(visionGroupingSuggestRequestSchema.parse(request)).toEqual(request);
+  });
+
   it("parses grouping job response with photoId groups", () => {
     const job: VisionJobResponse = {
       jobId: JOB_ID,

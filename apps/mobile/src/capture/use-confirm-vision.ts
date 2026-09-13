@@ -26,7 +26,7 @@ import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
 import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
 import { motion } from "@/theme/tokens";
 
-const VISION_TIMEOUT_MS = 12_000;
+const VISION_TIMEOUT_MS = 15_000;
 const VISION_POLL_INTERVAL_MS = 2_000;
 const VISION_IDENTITY_DEBOUNCE_MS = 500;
 
@@ -34,6 +34,7 @@ type UseConfirmVisionOptions = {
   accessToken: string | null;
   sessionId: string | undefined;
   draft: CaptureJerseyDraft | null;
+  sessionDrafts?: CaptureJerseyDraft[];
   mutate: CaptureSessionMutator;
   reduceMotion: boolean;
   jobId: string | null;
@@ -71,6 +72,7 @@ export function useConfirmVision({
   accessToken,
   sessionId,
   draft,
+  sessionDrafts = [],
   mutate,
   reduceMotion,
   jobId,
@@ -84,6 +86,7 @@ export function useConfirmVision({
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const appliedJobId = useRef<string | null>(null);
   const startAttempted = useRef(false);
+  const startedOthersRef = useRef(new Set<string>());
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const prevScopeRef = useRef<{ draftId: string | null; photoFingerprint: string | null }>({
@@ -104,17 +107,17 @@ export function useConfirmVision({
   }, [reduceMotion, suggestionOpacity]);
 
   const applySuggestions = useCallback(
-    async (job: VisionJobResponse) => {
+    async (job: VisionJobResponse, targetDraftId?: string) => {
       if (job.status !== "ready" || !sessionId) {
         return;
       }
 
-      const currentDraft = draftRef.current;
-      if (!currentDraft) {
+      const currentDraftId = targetDraftId ?? draftRef.current?.id;
+      if (!currentDraftId) {
         return;
       }
 
-      onCatalogMiss?.(job.catalogMiss === true);
+      onCatalogMiss?.(job.catalogMiss === true && currentDraftId === draftRef.current?.id);
 
       if (job.catalogMiss && !job.suggestions) {
         return;
@@ -125,8 +128,10 @@ export function useConfirmVision({
       const shouldPreselect = hasPreselectFields(fieldPreselect);
 
       if (!shouldPreselect && suggestions) {
-        setSuggestion(job);
-        fadeInSuggestion();
+        if (currentDraftId === draftRef.current?.id) {
+          setSuggestion(job);
+          fadeInSuggestion();
+        }
         return;
       }
 
@@ -136,7 +141,7 @@ export function useConfirmVision({
 
       if (suggestions) {
         mutate((current) =>
-          applyIdentitySuggestion(current, current.activeDraftId, suggestions, {
+          applyIdentitySuggestion(current, currentDraftId, suggestions, {
             fieldPreselect,
             manualEdits: {
               club: confirmClubWasEdited(),
@@ -164,13 +169,17 @@ export function useConfirmVision({
           badge: confirmBadgeWasEdited(),
         });
         if (suggestOnlyJob) {
-          setSuggestion(suggestOnlyJob);
-          fadeInSuggestion();
+          if (currentDraftId === draftRef.current?.id) {
+            setSuggestion(suggestOnlyJob);
+            fadeInSuggestion();
+          }
           return;
         }
 
-        setApplied(true);
-        fadeInSuggestion();
+        if (currentDraftId === draftRef.current?.id) {
+          setApplied(true);
+          fadeInSuggestion();
+        }
       }
     },
     [accessToken, fadeInSuggestion, mutate, onCatalogMiss, sessionId, setSelectedSeasonLabel],
@@ -237,6 +246,52 @@ export function useConfirmVision({
       clearTimeout(timer);
     };
   }, [accessToken, draftId, onCatalogMiss, photoFingerprint, setJobId, setSelectedSeasonLabel]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    const others = sessionDrafts.filter((entry) => entry.id !== draftId && entry.photos.length > 0);
+    if (others.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      await Promise.all(
+        others.map(async (other) => {
+          const key = `${other.id}:${draftPhotoFingerprint(other) ?? ""}`;
+          if (startedOthersRef.current.has(key)) {
+            return;
+          }
+          startedOthersRef.current.add(key);
+          try {
+            const payload = await buildIdentitySuggestRequest(other);
+            const otherJobId = await startVisionSuggest(accessToken, payload);
+            const startedAt = Date.now();
+            while (!cancelled && Date.now() - startedAt < VISION_TIMEOUT_MS) {
+              const job = await fetchVisionJob(accessToken, otherJobId);
+              if (job.status === "pending") {
+                await new Promise((resolve) => setTimeout(resolve, VISION_POLL_INTERVAL_MS));
+                continue;
+              }
+              if (job.status === "ready") {
+                await applySuggestions(job, other.id);
+              }
+              return;
+            }
+          } catch {
+            startedOthersRef.current.delete(key);
+          }
+        }),
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, applySuggestions, draftId, sessionDrafts]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !polling) {

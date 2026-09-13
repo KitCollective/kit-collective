@@ -102,8 +102,8 @@ Locale + kind name for stamdata. The English seed string is not the Danish UI na
 _Avoid_: hardcoding English as the UI label
 
 **Vision suggestion**:
-Gemini output. May suggest identity fields (club, season, kit type) and bulk photoId groups into UserJersey drafts. Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers; Vision never silently assigns Photo roles.
-_Avoid_: raw model names as foreign keys; auto-committing Photo roles; OpenRouter for collector photos
+Gemini 2.5 Flash-Lite output (OpenRouter via `OPENROUTER_VISION_API_KEY`, pinned to Google, or direct `GEMINI_API_KEY`). Identity prompt uses Huddle kit-type / badge / omit discipline and per-field confidence. Nest is the catalog judge: manufacturer+sponsor Kit-hit first; unique type/colours among N hits lock without a second Vision call; missing sponsor still locks a unique manufacturer kit on that club. Zero or many remaining hits omit season/type; many hits may take one second look with catalog facts (still Google-pin, max two Vision calls). Grouping maps photoIds into UserJersey drafts (max ten photos per copy), incrementally as unbound photos land, with prior groups kept intact. Identity jobs for bound rings run in parallel (Vision worker concurrency 8). Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers; Vision never silently assigns Photo roles.
+_Avoid_: raw model names as foreign keys; auto-committing Photo roles; sending collector photos to non-Google OpenRouter providers; using the factory `OPENROUTER_API_KEY` for Vision; inventing sleeve patches or treating crest years as pads; Eve or pgvector on the collector Vision path; dumping the catalog into the VLM
 
 **Save**:
 Must not wait on Vision, kit completeness, or manufacturer.

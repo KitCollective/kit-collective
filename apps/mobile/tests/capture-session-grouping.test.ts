@@ -4,8 +4,8 @@ import {
   createCaptureSession,
   createMemoryCaptureSessionStore,
   dismissPendingGrouping,
-  getActiveDraft,
   getDraft,
+  groupingPriorGroups,
   reloadCaptureSession,
   sessionPhotoIds,
   shouldStartGroupingJob,
@@ -26,7 +26,7 @@ describe("grouping session", () => {
     }
   });
 
-  it("starts grouping only for bulk sessions with all photos unbound", () => {
+  it("starts grouping for bulk sessions with at least two unbound photos", () => {
     const bulk = createCaptureSession(BULK_URIS);
     expect(shouldStartGroupingJob(bulk)).toBe(true);
 
@@ -34,9 +34,8 @@ describe("grouping session", () => {
     expect(shouldStartGroupingJob(single)).toBe(false);
   });
 
-  it("skips grouping when a single-shirt dump already has bound photos", () => {
+  it("starts an incremental grouping job for leftover unbound photos after a bind", () => {
     const session = createCaptureSession(BULK_URIS);
-    const draftId = getActiveDraft(session).id;
     const bound = applyGroupingSuggestion(
       session,
       {
@@ -45,8 +44,8 @@ describe("grouping session", () => {
       { preselect: true },
     );
 
-    expect(shouldStartGroupingJob(bound)).toBe(false);
-    expect(getDraft(bound, draftId).photos.length).toBeGreaterThan(0);
+    expect(shouldStartGroupingJob(bound)).toBe(true);
+    expect(groupingPriorGroups(bound)[0]?.photoIds).toHaveLength(1);
   });
 
   it("preselect mode binds via existing bind reducers without assigning roles", () => {

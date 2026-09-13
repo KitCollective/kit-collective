@@ -121,16 +121,17 @@ Photo entity (MVP): `role`, `source`, dimensions, URIs. Vacant OCR envelope (`oc
 
 | Item | Lock |
 | --- | --- |
-| Worker | Gemini 2.5 Flash-Lite (paid API) |
-| Fallback | OpenAI `gpt-4.1-nano` |
-| Do not use | `gpt-4o-mini` for images (tile pricing), reasoning models on the hot path |
-| Timeout | 8–12 s, fail open |
-| Output | Structured JSON → map to catalog UUIDs in Nest. Grouping jobs return photoId groups; identity jobs return club/season/type |
+| Worker | Gemini 2.5 Flash-Lite via OpenRouter, pinned to Google (`google-ai-studio` + `google-vertex`, `data_collection: deny`, latency sort) |
+| Fallback | Direct `GEMINI_API_KEY`. Unset both → noop |
+| Do not use | non-Google OpenRouter hosts for collector photos; `gpt-4o-mini` for images (tile pricing); reasoning models on the hot path; Eve / pgvector on collector Vision |
+| Timeout | 15 s wall for identity (first look + optional second look), fail open |
+| Judge | Nest Kit-hit on manufacturer+sponsor. Unique kit, or unique type/colours among N, locks catalog UUID/season/type. Missing sponsor still locks a unique manufacturer kit on that club. Else omit; N>1 may one second look with catalog facts |
+| Output | Structured JSON → map to catalog UUIDs in Nest. Grouping jobs return photoId groups (incremental prior groups allowed); identity jobs return club/season/type |
 | Auto-fill | ≥70% **and** catalog hit → pre-select on confirm. 50–69% → show as suggestion. Else ignore. Grouping ≥70% pre-binds via bind reducers; Vision never auto-commits Photo roles |
 | Logging | `vision_raw`, confidences, latency, model, user action (accepted / edited / ignored). **No embedding / pgvector** |
 | Cost (order of mag.) | ~$0.0004 / 1600² image; ~$0.0009 / 3-image jersey |
 
-Port from Huddle: prompt shape, ID match, confidence gates. Do **not** port the 4-step wizard or kit-template embeddings.
+Port from Huddle: prompt shape (home = club colours, empty badges, per-field confidence, omit rather than invent), ID match, confidence gates. Do **not** port the 4-step wizard or kit-template embeddings.
 
 ---
 
@@ -197,7 +198,7 @@ See [data-model](./data-model.md). Short version:
 - **Jobs (locked):** wishlist match, push, vision, seed imports — **BullMQ** (`@nestjs/bullmq`), **worker in the same Nest process**. Redis is required ([Nest queues](https://docs.nestjs.com/techniques/queues); [BullMQ installation](https://docs.bullmq.io/guide/introduction): Redis 6.2+, 7+ recommended, `maxmemory-policy noeviction`).
   - One Redis **per lane** (same isolation as Postgres). Do not use Coolify’s internal Redis for app jobs. Staging must not share production Redis.
   - Cap each Redis: `maxmemory 256mb`, `maxmemory-policy noeviction`. At this job volume that is headroom, not a squeeze.
-  - Vision still fail-open 8–12 s on the request path; the worker is the retry/backoff, not a blocker on Save.
+  - Vision still fail-open (15 s identity wall) on the request path; the worker is the retry/backoff, not a blocker on Save.
   - `@nestjs/schedule` may enqueue repeatable work; it is not a substitute for the queue.
   - **Rejected:** `@nestjs/bull` (legacy), a second Nest “worker” container, Redis without a memory cap.
   - **CX33 stays.** Two capped Redis instances are ~0.3–0.5 GB together — not a SKU bump. See [server-stack](./server-stack.md).

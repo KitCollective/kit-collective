@@ -138,6 +138,7 @@ export class VisionController {
       kind: "grouping",
       sessionId: body.sessionId,
       groupingPhotos,
+      groupingPriorGroups: body.priorGroups,
     });
 
     return visionSuggestResponseSchema.parse({ jobId });
