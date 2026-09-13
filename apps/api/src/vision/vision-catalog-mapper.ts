@@ -1,13 +1,5 @@
 import type { Db } from "@kit/db";
-import {
-  catalogLabel,
-  club,
-  kit,
-  manufacturer,
-  patch,
-  playerClubSeason,
-  season,
-} from "@kit/db";
+import { catalogLabel, club, kit, manufacturer, patch, playerClubSeason, season } from "@kit/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";

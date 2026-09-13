@@ -47,7 +47,9 @@ describe("vision kit lock", () => {
   });
 
   it("dedupes the same kit id from multiple manufacturer labels", () => {
-    expect(resolveObservableKitLock([rangersHome, { ...rangersHome, manufacturer: "hummel" }])).toEqual({
+    expect(
+      resolveObservableKitLock([rangersHome, { ...rangersHome, manufacturer: "hummel" }]),
+    ).toEqual({
       status: "unique",
       kit: rangersHome,
     });
@@ -106,9 +108,9 @@ describe("vision kit lock", () => {
       type: "home" as const,
       colorNames: "navy",
     };
-    expect(pickUniqueKitByObservables([whiteHome, navyHome], "home", "white with red trim")).toEqual(
-      whiteHome,
-    );
+    expect(
+      pickUniqueKitByObservables([whiteHome, navyHome], "home", "white with red trim"),
+    ).toEqual(whiteHome);
     expect(scoreColorMatch("navy", "white with red trim")).toBe(0);
   });
 });
