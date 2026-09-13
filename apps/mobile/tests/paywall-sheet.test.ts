@@ -42,4 +42,13 @@ describe("PaywallSheet", () => {
     expect(source).toContain("webUnavailableMessage");
     expect(source).not.toContain("29 kr");
   });
+
+  it("titles the Sheet KitCollective+ with a Danish Plus body", () => {
+    const source = readFileSync(paywallPath, "utf8");
+    expect(source).toContain('title="KitCollective+"');
+    expect(source).toContain("Plus er ubegrænset Vision Matcher og ønskeliste.");
+    expect(source).not.toMatch(/Premium/);
+    expect(source).not.toContain('from "apps/api"');
+    expect(source).not.toContain('from "@kit/db"');
+  });
 });
