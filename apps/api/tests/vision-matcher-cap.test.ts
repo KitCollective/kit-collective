@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   billingPaywallErrorSchema,
+  billingStartTrialResponseSchema,
   collectionDiscoverJerseysSchema,
   collectionSaveResponseSchema,
   identityMeSchema,
@@ -352,7 +353,7 @@ describe("Vision Matcher jersey cap", () => {
       headers: { authorization: `Bearer ${session.accessToken}` },
     });
     expect(trial.statusCode).toBe(200);
-    const trialBody = JSON.parse(trial.body) as { source: string; expires: string };
+    const trialBody = billingStartTrialResponseSchema.parse(JSON.parse(trial.body));
     expect(trialBody.source).toBe("trial");
     expect(trialBody.expires).toBeTruthy();
 
