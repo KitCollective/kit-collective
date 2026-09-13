@@ -1,6 +1,7 @@
 import type { Db } from "@kit/db";
 import { BullModule } from "@nestjs/bullmq";
 import { Module } from "@nestjs/common";
+import { BillingModule } from "../billing/billing.module.js";
 import { DB } from "../db/db.module.js";
 import { IdentityModule } from "../identity/identity.module.js";
 import { AnonymousVisionUserService } from "./anonymous-vision-user.service.js";
@@ -28,7 +29,7 @@ const bullImports = hasRedisConfig()
 const bullProviders = hasRedisConfig() ? [VisionProcessor] : [];
 
 @Module({
-  imports: [...bullImports, IdentityModule],
+  imports: [...bullImports, IdentityModule, BillingModule],
   controllers: [VisionController],
   providers: [
     VisionService,

@@ -171,6 +171,8 @@ export {
   IAP_PLATFORMS,
   type IapPlatform,
   OFFER_PRODUCT_IDS,
+  VISION_MATCHER_JERSEY_CAP,
+  VISION_MATCHER_WINDOW_DAYS,
 } from "./billing.js";
 export {
   countryCodesForIso3166,

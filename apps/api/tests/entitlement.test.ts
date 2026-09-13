@@ -83,6 +83,7 @@ describe("entitlement and Nest-trial", () => {
         source: null,
         expires: null,
         trialUsed: false,
+        visionMatcher: { used: 0, cap: 10, remaining: 10, unlimited: false },
       }),
     );
   });

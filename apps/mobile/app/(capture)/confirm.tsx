@@ -40,7 +40,7 @@ export default function ConfirmScreen() {
     sessionId: string;
     editJerseyId?: string;
   }>();
-  const { accessToken } = useAuth();
+  const { accessToken, requestPremiumAccess } = useAuth();
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const [catalogMiss, setCatalogMiss] = useState(false);
   const {
@@ -79,6 +79,7 @@ export default function ConfirmScreen() {
     setJobId: setVisionJobId,
     setSelectedSeasonLabel,
     onCatalogMiss: setCatalogMiss,
+    onPremiumRequired: requestPremiumAccess,
   });
   const photos = useConfirmPhotos({
     sessionId,

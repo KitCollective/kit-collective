@@ -24,6 +24,32 @@ describe("entitlementSchema", () => {
     });
   });
 
+  it("accepts visionMatcher usage on GET session entitlement", () => {
+    expect(
+      entitlementSchema.parse({
+        live: false,
+        source: null,
+        expires: null,
+        trialUsed: false,
+        visionMatcher: { used: 3, cap: 10, remaining: 7, unlimited: false },
+      }),
+    ).toMatchObject({
+      visionMatcher: { used: 3, cap: 10, remaining: 7, unlimited: false },
+    });
+  });
+
+  it("marks live entitlement as unlimited Vision Matcher", () => {
+    expect(
+      entitlementSchema.parse({
+        live: true,
+        source: "comp",
+        expires: "2026-09-02T12:00:00.000Z",
+        trialUsed: false,
+        visionMatcher: { used: 11, cap: 10, remaining: 10, unlimited: true },
+      }).visionMatcher,
+    ).toEqual({ used: 11, cap: 10, remaining: 10, unlimited: true });
+  });
+
   it("accepts live trial entitlement", () => {
     expect(
       entitlementSchema.parse({

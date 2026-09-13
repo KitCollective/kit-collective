@@ -2,7 +2,7 @@ import type { VisionFieldPreselect, VisionJobResponse } from "@kit/api-contract"
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated } from "react-native";
 import { fetchClubSeasons } from "@/api/catalog";
-import { fetchVisionJob, startVisionSuggest } from "@/api/vision";
+import { fetchVisionJob, startVisionSuggest, VisionPremiumRequiredError } from "@/api/vision";
 import {
   applyIdentitySuggestion,
   catalogSideId,
@@ -43,6 +43,7 @@ type UseConfirmVisionOptions = {
   setJobId: (jobId: string | null) => void;
   setSelectedSeasonLabel: (label: string | null) => void;
   onCatalogMiss?: (miss: boolean) => void;
+  onPremiumRequired?: () => Promise<boolean>;
 };
 
 function hasPreselectFields(fieldPreselect: VisionFieldPreselect | undefined): boolean {
@@ -81,6 +82,7 @@ export function useConfirmVision({
   setJobId,
   setSelectedSeasonLabel,
   onCatalogMiss,
+  onPremiumRequired,
 }: UseConfirmVisionOptions) {
   const [polling, setPolling] = useState(false);
   const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
@@ -233,8 +235,17 @@ export function useConfirmVision({
         startAttempted.current = true;
         try {
           const payload = await buildIdentitySuggestRequest(currentDraft);
-          const nextJobId = await startVisionSuggest(accessToken, payload);
-          if (!cancelled) {
+          const nextJobId = await startVisionSuggest(accessToken, payload).catch(async (error) => {
+            if (!(error instanceof VisionPremiumRequiredError)) {
+              throw error;
+            }
+            const granted = (await onPremiumRequired?.()) === true;
+            if (!granted) {
+              return null;
+            }
+            return startVisionSuggest(accessToken, payload);
+          });
+          if (!cancelled && nextJobId) {
             setJobId(nextJobId);
             setPolling(true);
           }
@@ -248,7 +259,15 @@ export function useConfirmVision({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [accessToken, draftId, onCatalogMiss, photoFingerprint, setJobId, setSelectedSeasonLabel]);
+  }, [
+    accessToken,
+    draftId,
+    onCatalogMiss,
+    onPremiumRequired,
+    photoFingerprint,
+    setJobId,
+    setSelectedSeasonLabel,
+  ]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -271,7 +290,21 @@ export function useConfirmVision({
           startedOthersRef.current.add(key);
           try {
             const payload = await buildIdentitySuggestRequest(other);
-            const otherJobId = await startVisionSuggest(accessToken, payload);
+            const otherJobId = await startVisionSuggest(accessToken, payload).catch(
+              async (error) => {
+                if (!(error instanceof VisionPremiumRequiredError)) {
+                  throw error;
+                }
+                const granted = (await onPremiumRequired?.()) === true;
+                if (!granted) {
+                  return null;
+                }
+                return startVisionSuggest(accessToken, payload);
+              },
+            );
+            if (!otherJobId) {
+              return;
+            }
             const startedAt = Date.now();
             while (!cancelled && Date.now() - startedAt < VISION_TIMEOUT_MS) {
               const job = await fetchVisionJob(accessToken, otherJobId);
@@ -294,7 +327,7 @@ export function useConfirmVision({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, applySuggestions, draftId, sessionDrafts]);
+  }, [accessToken, applySuggestions, draftId, onPremiumRequired, sessionDrafts]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !polling) {

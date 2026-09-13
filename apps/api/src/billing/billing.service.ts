@@ -1,5 +1,6 @@
 import {
   type BillingStartTrialResponse,
+  billingPaywallErrorSchema,
   billingStartTrialResponseSchema,
   type Entitlement,
   entitlementSchema,
@@ -14,19 +15,27 @@ import {
   type OfferPatchRequest,
   offerPatchRequestSchema,
   offerSchema,
+  type VisionMatcherUsage,
+  visionMatcherUsageSchema,
 } from "@kit/api-contract";
-import { entitlement, offer } from "@kit/db";
-import { entitlementSourceForIapPlatform } from "@kit/domain";
+import { entitlement, offer, visionLog } from "@kit/db";
+import {
+  entitlementSourceForIapPlatform,
+  VISION_MATCHER_JERSEY_CAP,
+  VISION_MATCHER_WINDOW_DAYS,
+} from "@kit/domain";
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from "@nestjs/common";
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { DB, type DbToken } from "../db/db.module.js";
 import {
   IAP_VERIFIER,
@@ -47,26 +56,42 @@ function isEntitlementLive(source: string | null, expires: Date | null): boolean
   return expires.getTime() > Date.now();
 }
 
-function toEntitlementView(row: {
-  source: "iap_apple" | "iap_google" | "trial" | "comp" | null;
-  expires: Date | null;
-  trialUsed: boolean;
-}): Entitlement {
-  return entitlementSchema.parse({
-    live: isEntitlementLive(row.source, row.expires),
-    source: row.source,
-    expires: row.expires ? row.expires.toISOString() : null,
-    trialUsed: row.trialUsed,
+function toVisionMatcherUsage(used: number, live: boolean): VisionMatcherUsage {
+  return visionMatcherUsageSchema.parse({
+    used,
+    cap: VISION_MATCHER_JERSEY_CAP,
+    remaining: live ? VISION_MATCHER_JERSEY_CAP : Math.max(0, VISION_MATCHER_JERSEY_CAP - used),
+    unlimited: live,
   });
 }
 
-const inactiveEntitlement = (): Entitlement =>
-  entitlementSchema.parse({
-    live: false,
-    source: null,
-    expires: null,
-    trialUsed: false,
+function toEntitlementView(
+  row: {
+    source: "iap_apple" | "iap_google" | "trial" | "comp" | null;
+    expires: Date | null;
+    trialUsed: boolean;
+  },
+  used: number,
+): Entitlement {
+  const live = isEntitlementLive(row.source, row.expires);
+  return entitlementSchema.parse({
+    live,
+    source: row.source,
+    expires: row.expires ? row.expires.toISOString() : null,
+    trialUsed: row.trialUsed,
+    visionMatcher: toVisionMatcherUsage(used, live),
   });
+}
+
+function throwPremiumRequired(): never {
+  throw new HttpException(
+    billingPaywallErrorSchema.parse({
+      code: "PREMIUM_REQUIRED",
+      message: "Premium is required",
+    }),
+    HttpStatus.PAYMENT_REQUIRED,
+  );
+}
 
 function toOfferView(row: {
   monthProductId: string;
@@ -123,6 +148,7 @@ export class BillingService {
   }
 
   async getEntitlementForUser(userId: string): Promise<Entitlement> {
+    const used = await this.countVisionMatcherUsed(userId);
     const [row] = await this.db
       .select()
       .from(entitlement)
@@ -130,10 +156,83 @@ export class BillingService {
       .limit(1);
 
     if (!row) {
-      return inactiveEntitlement();
+      return entitlementSchema.parse({
+        live: false,
+        source: null,
+        expires: null,
+        trialUsed: false,
+        visionMatcher: toVisionMatcherUsage(used, false),
+      });
     }
 
-    return toEntitlementView(row);
+    return toEntitlementView(row, used);
+  }
+
+  async canEnqueueIdentityVision(userId: string, draftId?: string): Promise<boolean> {
+    const entitlementView = await this.getEntitlementForUser(userId);
+    if (entitlementView.live) {
+      return true;
+    }
+
+    const counted = await this.listCountedIdentityDraftKeys(userId);
+    if (draftId && counted.draftIds.has(draftId)) {
+      return true;
+    }
+
+    return counted.used < VISION_MATCHER_JERSEY_CAP;
+  }
+
+  async assertIdentityVisionAllowed(userId: string, draftId?: string): Promise<void> {
+    if (await this.canEnqueueIdentityVision(userId, draftId)) {
+      return;
+    }
+
+    throwPremiumRequired();
+  }
+
+  private async countVisionMatcherUsed(userId: string): Promise<number> {
+    return (await this.listCountedIdentityDraftKeys(userId)).used;
+  }
+
+  private async listCountedIdentityDraftKeys(userId: string): Promise<{
+    used: number;
+    draftIds: Set<string>;
+  }> {
+    const windowStart = new Date(Date.now() - VISION_MATCHER_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const rows = await this.db
+      .select({ draftId: visionLog.draftId })
+      .from(visionLog)
+      .where(
+        and(
+          eq(visionLog.userId, userId),
+          eq(visionLog.kind, "identity"),
+          eq(visionLog.status, "ready"),
+          gt(visionLog.createdAt, windowStart),
+        ),
+      );
+
+    const draftIds = new Set<string>();
+    let nullDraftCount = 0;
+    for (const row of rows) {
+      if (row.draftId) {
+        draftIds.add(row.draftId);
+      } else {
+        nullDraftCount += 1;
+      }
+    }
+
+    return { used: draftIds.size + nullDraftCount, draftIds };
+  }
+
+  private async toView(
+    userId: string,
+    row: {
+      source: "iap_apple" | "iap_google" | "trial" | "comp" | null;
+      expires: Date | null;
+      trialUsed: boolean;
+    },
+  ): Promise<Entitlement> {
+    return toEntitlementView(row, await this.countVisionMatcherUsed(userId));
   }
 
   async grantComp(userId: string, body: GrantCompRequest): Promise<Entitlement> {
@@ -161,7 +260,7 @@ export class BillingService {
         throw new NotFoundException("Entitlement not found");
       }
 
-      return grantCompResponseSchema.parse(toEntitlementView(updated));
+      return grantCompResponseSchema.parse(await this.toView(userId, updated));
     }
 
     const [created] = await this.db
@@ -178,7 +277,7 @@ export class BillingService {
       throw new ServiceUnavailableException("Could not grant comp");
     }
 
-    return grantCompResponseSchema.parse(toEntitlementView(created));
+    return grantCompResponseSchema.parse(await this.toView(userId, created));
   }
 
   async startTrial(userId: string): Promise<BillingStartTrialResponse> {
@@ -219,7 +318,7 @@ export class BillingService {
         throw new NotFoundException("Entitlement not found");
       }
 
-      return toEntitlementView(updated);
+      return this.toView(userId, updated);
     }
 
     const [created] = await this.db
@@ -236,7 +335,7 @@ export class BillingService {
       throw new ServiceUnavailableException("Could not start trial");
     }
 
-    return billingStartTrialResponseSchema.parse(toEntitlementView(created));
+    return billingStartTrialResponseSchema.parse(await this.toView(userId, created));
   }
 
   async verifyPurchase(userId: string, rawBody: unknown): Promise<Entitlement> {
@@ -313,7 +412,7 @@ export class BillingService {
         throw new NotFoundException("Entitlement not found");
       }
 
-      return toEntitlementView(updated);
+      return this.toView(userId, updated);
     }
 
     const [created] = await this.db
@@ -330,6 +429,6 @@ export class BillingService {
       throw new ServiceUnavailableException("Could not persist entitlement");
     }
 
-    return toEntitlementView(created);
+    return this.toView(userId, created);
   }
 }

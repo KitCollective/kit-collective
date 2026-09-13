@@ -24,6 +24,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import type { FastifyRequest } from "fastify";
+import { BillingService } from "../billing/billing.service.js";
 import { CurrentUser } from "../identity/current-user.decorator.js";
 import type { JwtPayload } from "../identity/identity.service.js";
 import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
@@ -61,6 +62,7 @@ export class VisionController {
     private readonly visionQueueService: VisionQueueService,
     private readonly anonymousVisionUserService: AnonymousVisionUserService,
     private readonly unsignedVisionThrottleService: UnsignedVisionThrottleService,
+    private readonly billingService: BillingService,
   ) {}
 
   @Post("collection/vision/suggest")
@@ -71,6 +73,7 @@ export class VisionController {
     @Body() rawBody: unknown,
   ): Promise<VisionSuggestResponse> {
     const body = visionSuggestRequestSchema.parse(rawBody);
+    await this.billingService.assertIdentityVisionAllowed(user.sub, body.draftId);
     const identityPhotos = body.photos.map((photo) => ({
       role: photo.role,
       bytes: decodeBase64Photo(photo.contentBase64),
