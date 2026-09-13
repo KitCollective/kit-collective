@@ -17,7 +17,7 @@ export type VisionInferenceResult = {
   playerId?: string;
   playerNumber?: string;
   patchId?: string;
-  /** Raw model club hint — used to detect catalog miss when clubId is absent. */
+  /** Raw model club hint — used to detect catalog miss when clubId and catalogKitId are absent. */
   clubHint?: string;
   visionRaw?: string;
   confidences?: VisionFieldConfidences;
