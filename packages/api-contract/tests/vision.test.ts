@@ -1,5 +1,6 @@
 import {
   UNSIGNED_VISION_SUGGEST_CAP,
+  VISION_MATCHER_JERSEY_CAP,
   type VisionJobResponse,
   type VisionLogRequest,
   type VisionSuggestRequest,
@@ -65,5 +66,9 @@ describe("vision contract", () => {
 
   it("exports unsigned vision suggest cap", () => {
     expect(UNSIGNED_VISION_SUGGEST_CAP).toBe(20);
+  });
+
+  it("exports signed-in Vision Matcher jersey cap", () => {
+    expect(VISION_MATCHER_JERSEY_CAP).toBe(10);
   });
 });

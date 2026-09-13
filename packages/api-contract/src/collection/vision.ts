@@ -1,4 +1,4 @@
-import { KIT_TYPES, PHOTO_ROLES } from "@kit/domain";
+import { KIT_TYPES, PHOTO_ROLES, VISION_MATCHER_JERSEY_CAP } from "@kit/domain";
 import { z } from "zod";
 import {
   VISION_JOB_KINDS,
@@ -20,6 +20,8 @@ export const VISION_CONFIDENCE_SUGGEST = 50;
 
 /** Coarse per-IP cap for unsigned first-session Vision suggest (in-memory throttle). */
 export const UNSIGNED_VISION_SUGGEST_CAP = 20;
+
+export { VISION_MATCHER_JERSEY_CAP };
 
 export const visionSuggestPhotoSchema = z
   .object({

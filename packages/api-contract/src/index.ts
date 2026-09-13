@@ -116,6 +116,8 @@ export {
   iapPlatformSchema,
   iapRestoreRequestSchema,
   iapVerifyRequestSchema,
+  type VisionMatcherUsage,
+  visionMatcherUsageSchema,
 } from "./billing/entitlement.js";
 export {
   type Offer,
@@ -301,6 +303,7 @@ export {
   VISION_CONFIDENCE_SUGGEST,
   VISION_JOB_KINDS,
   VISION_JOB_STATUSES,
+  VISION_MATCHER_JERSEY_CAP,
   VISION_USER_ACTIONS,
   type VisionFieldPreselect,
   type VisionJobKind,

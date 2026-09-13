@@ -92,6 +92,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { and, asc, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { BillingService } from "../billing/billing.service.js";
 import { DB } from "../db/db.module.js";
 import { MatchQueueService } from "../match/match-queue.service.js";
 import { ModerationService } from "../moderation/moderation.service.js";
@@ -195,6 +196,7 @@ export class CollectionService {
     @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
     private readonly visionQueueService: VisionQueueService,
     private readonly visionService: VisionService,
+    private readonly billingService: BillingService,
     private readonly matchQueueService: MatchQueueService,
     private readonly shortcutsService: CollectionShortcutsService,
     private readonly moderationService: ModerationService,
@@ -2084,12 +2086,15 @@ export class CollectionService {
       !(body.draftId && (await this.visionService.findActiveJobForDraft(userId, body.draftId)));
 
     if (shouldEnqueueVision) {
-      const firstPhotoBytes = decodeBase64Photo(firstPhoto.contentBase64);
-      effectiveVisionJobId = await this.visionQueueService.enqueueFromSave(
-        userId,
-        firstPhotoBytes,
-        body.draftId,
-      );
+      const allowed = await this.billingService.canEnqueueIdentityVision(userId, body.draftId);
+      if (allowed) {
+        const firstPhotoBytes = decodeBase64Photo(firstPhoto.contentBase64);
+        effectiveVisionJobId = await this.visionQueueService.enqueueFromSave(
+          userId,
+          firstPhotoBytes,
+          body.draftId,
+        );
+      }
     }
 
     if (effectiveVisionJobId) {

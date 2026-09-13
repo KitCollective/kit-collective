@@ -1,4 +1,5 @@
 import {
+  billingPaywallErrorSchema,
   type VisionJobResponse,
   type VisionLogRequest,
   type VisionSuggestRequest,
@@ -20,6 +21,25 @@ async function requestJson(path: string, init: RequestInit = {}): Promise<Respon
   });
 }
 
+export class VisionPremiumRequiredError extends Error {
+  constructor() {
+    super("Premium is required");
+    this.name = "VisionPremiumRequiredError";
+  }
+}
+
+async function throwIfPremiumRequired(response: Response): Promise<void> {
+  if (response.status !== 402) {
+    return;
+  }
+
+  const body = await response.json().catch(() => null);
+  const parsed = billingPaywallErrorSchema.safeParse(body);
+  if (parsed.success && parsed.data.code === "PREMIUM_REQUIRED") {
+    throw new VisionPremiumRequiredError();
+  }
+}
+
 export async function startVisionSuggest(
   accessToken: string,
   payload: VisionSuggestRequest,
@@ -32,6 +52,8 @@ export async function startVisionSuggest(
     },
     body: JSON.stringify(payload),
   });
+
+  await throwIfPremiumRequired(response);
 
   if (!response.ok) {
     throw new Error("Kunne ikke starte Vision");
