@@ -154,6 +154,9 @@ export function JerseyDetailsScreen({
   });
 
   const draft = state ? getDraft(state, state.activeDraftId) : null;
+  const clubId = draft?.clubId;
+  const nationalTeamId = draft?.nationalTeamId;
+  const seasonId = draft?.seasonId;
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const isBulk = state?.branch === "bulk";
@@ -253,16 +256,17 @@ export function JerseyDetailsScreen({
   }, [lightboxRole, lightboxSourceUri]);
 
   useEffect(() => {
-    if (!accessToken || !(draft?.clubId || draft?.nationalTeamId)) {
+    const sideId = catalogSideId({ clubId, nationalTeamId });
+    if (!accessToken || !sideId) {
       return;
     }
 
     let cancelled = false;
-    void fetchClubSeasons(accessToken, catalogSideId(draft)!).then((response) => {
+    void fetchClubSeasons(accessToken, sideId).then((response) => {
       if (!cancelled) {
         setSeasonResults(response.seasons);
-        if (draft.seasonId) {
-          const match = response.seasons.find((season) => season.id === draft.seasonId);
+        if (seasonId) {
+          const match = response.seasons.find((season) => season.id === seasonId);
           if (match) {
             setSelectedSeasonLabel(match.label);
           }
@@ -273,7 +277,7 @@ export function JerseyDetailsScreen({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, draft?.clubId, draft?.nationalTeamId, draft?.seasonId]);
+  }, [accessToken, clubId, nationalTeamId, seasonId]);
 
   const runClubSearch = useCallback(
     async (query: string) => {

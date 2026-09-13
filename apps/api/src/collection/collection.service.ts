@@ -1994,7 +1994,7 @@ export class CollectionService {
   async saveJersey(
     userId: string,
     rawBody: unknown,
-    locale: LabelLocale = "da",
+    _locale: LabelLocale = "da",
   ): Promise<CollectionSaveResponse> {
     const parsed = collectionSaveRequestSchema.safeParse(rawBody);
     if (!parsed.success) {

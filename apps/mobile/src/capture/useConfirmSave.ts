@@ -29,6 +29,9 @@ export function useConfirmSave(options: {
 
   const draft =
     state?.drafts.find((entry) => entry.id === state.activeDraftId) ?? state?.drafts[0] ?? null;
+  const clubId = draft?.clubId;
+  const nationalTeamId = draft?.nationalTeamId;
+  const seasonId = draft?.seasonId;
   const isBulk = state?.branch === "bulk";
 
   useFocusEffect(
@@ -38,7 +41,7 @@ export function useConfirmSave(options: {
   );
 
   useEffect(() => {
-    const sideId = catalogSideId(draft ?? {});
+    const sideId = catalogSideId({ clubId, nationalTeamId });
     if (!accessToken || !sideId) {
       return;
     }
@@ -48,7 +51,6 @@ export function useConfirmSave(options: {
       if (cancelled) {
         return;
       }
-      const seasonId = draft?.seasonId;
       if (seasonId) {
         const match = response.seasons.find((season) => season.id === seasonId);
         if (match) {
@@ -60,7 +62,7 @@ export function useConfirmSave(options: {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, draft?.clubId, draft?.nationalTeamId, draft?.seasonId]);
+  }, [accessToken, clubId, nationalTeamId, seasonId]);
 
   const handleSave = async () => {
     if (!draft || !options.sessionId || !state) {
