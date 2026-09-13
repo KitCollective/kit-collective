@@ -1647,12 +1647,25 @@ export class CollectionService {
       .orderBy(desc(userJersey.updatedAt));
     const visibleJerseyRows = jerseyRows.filter((row) => !blockedPeerIds.has(row.ownerId));
     const decoratedJerseys = await this.decorateDiscoverJerseys(visibleJerseyRows, locale);
-    const jerseys = decoratedJerseys.filter((jersey) =>
-      typeaheadTextMatches(
-        [jersey.clubLabel, jersey.seasonLabel, jersey.ownerHandle],
-        normalizedQuery,
-      ),
+    const jerseyClubIds = uniqueNonNullIds(visibleJerseyRows.map((row) => row.clubId));
+    const jerseyNationalTeamIds = uniqueNonNullIds(
+      visibleJerseyRows.map((row) => row.nationalTeamId),
     );
+    const [jerseyClubSearchTexts, jerseyNationalTeamSearchTexts] = await Promise.all([
+      this.resolveEntitySearchTexts("club", jerseyClubIds),
+      this.resolveEntitySearchTexts("national_team", jerseyNationalTeamIds),
+    ]);
+    const jerseys = decoratedJerseys.filter((jersey) => {
+      const searchTexts = jersey.clubId
+        ? (jerseyClubSearchTexts.get(jersey.clubId) ?? [])
+        : jersey.nationalTeamId
+          ? (jerseyNationalTeamSearchTexts.get(jersey.nationalTeamId) ?? [])
+          : [];
+      return typeaheadTextMatches(
+        [...searchTexts, jersey.clubLabel, jersey.seasonLabel, jersey.ownerHandle],
+        normalizedQuery,
+      );
+    });
 
     return collectionDiscoverTypeaheadSchema.parse({
       ...(clubs.length > 0 ? { clubs } : {}),
