@@ -50,6 +50,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
 
+function groupingEntries(parsed: unknown): unknown[] | null {
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  if (isRecord(parsed) && Array.isArray(parsed.groups)) {
+    return parsed.groups;
+  }
+  return null;
+}
+
 function groupingConfidencePct(value: unknown): number {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return 0;
@@ -73,7 +83,8 @@ export function decodeGroupingVisionGroups(
 
   try {
     const parsed: unknown = JSON.parse(text);
-    if (!isRecord(parsed) || !Array.isArray(parsed.groups)) {
+    const entries = groupingEntries(parsed);
+    if (!entries) {
       return null;
     }
 
@@ -81,7 +92,7 @@ export function decodeGroupingVisionGroups(
     const seen = new Set<string>();
     const groups: Array<{ photoIds: string[]; confidence: number }> = [];
 
-    for (const entry of parsed.groups) {
+    for (const entry of entries) {
       if (!isRecord(entry) || !Array.isArray(entry.photoIds)) {
         continue;
       }
