@@ -15,6 +15,7 @@ type ConfirmVisionSlotProps = {
   suggestionOpacity: Animated.Value;
   onApplySuggestion: () => void;
   onDismissSuggestion: () => void;
+  onQuotaPress?: () => void;
 };
 
 /** Renders the single Vision slot below Confirm's photo sandbox. */
@@ -26,6 +27,7 @@ export function ConfirmVisionSlot({
   suggestionOpacity,
   onApplySuggestion,
   onDismissSuggestion,
+  onQuotaPress,
 }: ConfirmVisionSlotProps) {
   if (groupingMessage) {
     return (
@@ -55,7 +57,7 @@ export function ConfirmVisionSlot({
       );
     }
 
-    return <ConfirmVisionBanner state={bannerState} />;
+    return <ConfirmVisionBanner state={bannerState} onQuotaPress={onQuotaPress} />;
   }
 
   const message = [

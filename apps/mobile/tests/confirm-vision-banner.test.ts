@@ -5,9 +5,13 @@ import {
   CONFIRM_VISION_BANNER_COPY,
   type ConfirmVisionBannerInput,
   resolveConfirmVisionBannerState,
+  visionMatcherRemainingToOutOfQuota,
 } from "../src/capture/confirmVisionBanner";
 
+const bannerModulePath = join(__dirname, "../src/capture/confirmVisionBanner.ts");
 const componentPath = join(__dirname, "../src/components/confirm-vision-banner.tsx");
+const slotPath = join(__dirname, "../src/components/confirm-vision-slot.tsx");
+const confirmScreenPath = join(__dirname, "../app/(capture)/confirm.tsx");
 
 const baseInput: ConfirmVisionBannerInput = {
   activated: true,
@@ -42,12 +46,60 @@ describe("resolveConfirmVisionBannerState", () => {
   });
 });
 
+describe("visionMatcherRemainingToOutOfQuota", () => {
+  it("is out of quota only when remaining is 0 and usage is not unlimited", () => {
+    expect(
+      visionMatcherRemainingToOutOfQuota({
+        used: 10,
+        cap: 10,
+        remaining: 0,
+        unlimited: false,
+      }),
+    ).toBe(true);
+    expect(
+      visionMatcherRemainingToOutOfQuota({
+        used: 10,
+        cap: 10,
+        remaining: 0,
+        unlimited: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("is in quota when remaining is above 0", () => {
+    expect(
+      visionMatcherRemainingToOutOfQuota({
+        used: 3,
+        cap: 10,
+        remaining: 7,
+        unlimited: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("is in quota when session usage is missing", () => {
+    expect(visionMatcherRemainingToOutOfQuota(undefined)).toBe(false);
+    expect(visionMatcherRemainingToOutOfQuota(null)).toBe(false);
+  });
+
+  it("uses the Vision Matcher jersey cap of 10, not a leftover 5", () => {
+    const moduleSource = readFileSync(bannerModulePath, "utf8");
+    expect(moduleSource).toContain("VISION_MATCHER_JERSEY_CAP");
+    expect(moduleSource).not.toContain(">5 uploads");
+  });
+});
+
 describe("CONFIRM_VISION_BANNER_COPY", () => {
   it("uses the collector-facing Danish-first strings for each state", () => {
     expect(CONFIRM_VISION_BANNER_COPY.inactive).toBe("AI Analyzer er ikke aktiveret");
-    expect(CONFIRM_VISION_BANNER_COPY["out-of-quota"]).toBe("AI Analyzer er ude af forbrug");
+    expect(CONFIRM_VISION_BANNER_COPY["out-of-quota"]).toBe("Vision Matcher er ude af forbrug");
     expect(CONFIRM_VISION_BANNER_COPY.analyzing).toBe("AI Vision analyserer …");
     expect(CONFIRM_VISION_BANNER_COPY.success).toBe("AI Vision udfyldte trøjens data");
+  });
+
+  it("names Vision Matcher in the quota sentence and does not invent n/10 remaining copy", () => {
+    expect(CONFIRM_VISION_BANNER_COPY["out-of-quota"]).toContain("Vision Matcher");
+    expect(CONFIRM_VISION_BANNER_COPY["out-of-quota"]).not.toMatch(/\d+\s*\/\s*10/);
   });
 });
 
@@ -92,5 +144,47 @@ describe("ConfirmVisionBanner chrome", () => {
     expect(source).toContain("state: ConfirmVisionBannerState");
     expect(source).not.toContain("saveEnabled");
     expect(source).not.toContain("handleSave");
+  });
+
+  it("makes the out-of-quota Banner a quota button when onQuotaPress is provided", () => {
+    expect(source).toContain("Pressable");
+    expect(source).toContain("onQuotaPress");
+    expect(source).toContain('state === "out-of-quota"');
+    expect(source).toContain('"button"');
+    expect(source).toContain("minHeight: 44");
+    expect(source).not.toContain("PaywallCard");
+    expect(source).not.toContain("PaywallSheet");
+  });
+});
+
+describe("ConfirmVisionSlot", () => {
+  const slotSource = readFileSync(slotPath, "utf8");
+
+  it("forwards onQuotaPress to ConfirmVisionBanner", () => {
+    expect(slotSource).toContain("onQuotaPress");
+    expect(slotSource).toContain("<ConfirmVisionBanner");
+    expect(slotSource).toContain("onQuotaPress={onQuotaPress}");
+    expect(slotSource).not.toContain("PaywallCard");
+  });
+});
+
+describe("Confirm screen Vision Matcher quota wiring", () => {
+  const confirmScreen = readFileSync(confirmScreenPath, "utf8");
+
+  it("maps session visionMatcher remaining onto the existing out-of-quota Banner", () => {
+    expect(confirmScreen).toContain("entitlement");
+    expect(confirmScreen).toContain("visionMatcherRemainingToOutOfQuota");
+    expect(confirmScreen).toContain("entitlement?.visionMatcher");
+    expect(confirmScreen).toContain("resolveConfirmVisionBannerState");
+    expect(confirmScreen).toContain("onQuotaPress");
+    expect(confirmScreen).toContain("requestPremiumAccess");
+  });
+
+  it("does not disable Gem from Vision Matcher remaining", () => {
+    expect(confirmScreen).toContain("disabled={!saveEnabled}");
+    expect(confirmScreen).not.toMatch(/remaining\s*===\s*0/);
+    expect(confirmScreen).not.toContain("PaywallCard");
+    expect(confirmScreen).toContain('from "@/auth/AuthProvider"');
+    expect(confirmScreen).toContain('from "@/capture/confirmVisionBanner"');
   });
 });
