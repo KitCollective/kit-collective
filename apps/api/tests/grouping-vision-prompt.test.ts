@@ -5,6 +5,7 @@ import {
   groupingVisionUserPrompt,
   MAX_PHOTOS_PER_GROUP,
 } from "../src/vision/grouping-vision-prompt.js";
+import { resolveGroupingStatus } from "../src/vision/vision-grouping-confidence.js";
 
 const PHOTO_A = "11111111-1111-4111-8111-111111111111";
 const PHOTO_B = "22222222-2222-4222-8222-222222222222";
@@ -47,5 +48,28 @@ describe("grouping vision prompt", () => {
     expect(decoded?.[1]?.photoIds).toEqual([PHOTO_C]);
     expect(decoded?.[1]?.confidence).toBe(80);
     expect(decoded?.[2]?.photoIds).toHaveLength(MAX_PHOTOS_PER_GROUP);
+  });
+
+  it("decodes a top-level JSON array of groups with known photoIds and scaled confidence", () => {
+    const decoded = decodeGroupingVisionGroups(
+      JSON.stringify([{ photoIds: [PHOTO_A, PHOTO_B], confidence: 0.85 }]),
+      [PHOTO_A, PHOTO_B, PHOTO_C],
+    );
+
+    expect(decoded).toEqual([{ photoIds: [PHOTO_A, PHOTO_B], confidence: 85 }]);
+  });
+
+  it("scales 0–1 array confidence and maps decode to ready grouping status", () => {
+    const decoded = decodeGroupingVisionGroups(
+      JSON.stringify([{ photoIds: [PHOTO_A, PHOTO_B], confidence: 0.9 }]),
+      [PHOTO_A, PHOTO_B, PHOTO_C],
+    );
+
+    expect(decoded).toEqual([{ photoIds: [PHOTO_A, PHOTO_B], confidence: 90 }]);
+
+    const resolved = resolveGroupingStatus(decoded ? { groups: decoded } : null);
+    expect(resolved.status).toBe("ready");
+    expect(resolved.result).not.toBeNull();
+    expect(resolved.overallConfidence).toBe(90);
   });
 });
