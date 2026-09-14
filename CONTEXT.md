@@ -105,6 +105,18 @@ _Avoid_: hardcoding English as the UI label
 Gemini 2.5 Flash-Lite output (OpenRouter via `OPENROUTER_VISION_API_KEY`, pinned to Google, or direct `GEMINI_API_KEY`). Identity prompt uses Huddle kit-type / badge / omit discipline, per-field confidence, and clubHintAlts (local name / abbreviation). Nest is the catalog judge: manufacturer+sponsor Kit-hit first; CatalogLabel label+alias and compact sponsor/manufacturer spellings (same diacritic fold on retrieve as on score); unique type/colours among N hits lock without a second Vision call; missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is only a Club row; NationalTeam kits set `suggestions.nationalTeamId` (never a NationalTeam UUID in `clubId`) and still lock season/type/catalogKitId. Zero or many remaining hits omit season/type; many hits may take one second look with catalog facts (still Google-pin, max two Vision calls). Grouping maps photoIds into UserJersey drafts (max ten photos per copy), incrementally as unbound photos land, with prior groups kept intact. Identity jobs for bound rings run in parallel (Vision worker concurrency 8). Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers; Vision never silently assigns Photo roles.
 _Avoid_: raw model names as foreign keys; auto-committing Photo roles; sending collector photos to non-Google OpenRouter providers; using the factory `OPENROUTER_API_KEY` for Vision; inventing sleeve patches or treating crest years as pads; Eve or pgvector on the collector Vision path; dumping the catalog into the VLM
 
+**Vision label**:
+Save-time snapshot on an identity Vision Matcher job: suggested versus selected Club xor NationalTeam, season, type, catalogKitId, player, and patch. The supervised example. Later UserJersey edits are not this snapshot. May point at UserJerseyPhoto keys in lane R2; bytes stay there.
+_Avoid_: scoring the live UserJersey row as the label; grouping bind as a label this increment; exporting photos to a vendor training bucket; sending the pair to Google so Gemini retrains
+
+**Vision eval**:
+Nest scores the Vision label at Save — per-field hit, `user_action`, and class (`accepted` | `alias` | `coverage` | `model` | `transport`). Staff Admin lists rows. A factory eval-agent aggregates and drafts Vision improve proposals. Not a collector surface. Not a second Gemini call per Save.
+_Avoid_: live Gemini as the score; mixing grouping quality into identity scores; CI fake adapters as this eval; valuation as the noun
+
+**Vision improve**:
+Staff-gated proposal rows in Postgres, shown in the Admin Data table: CatalogLabel alias, identity prompt, or seed backlog. Staff applies. Not an auto-write of Club, Kit, or season. Vertex fine-tune of Gemini is a later increment.
+_Avoid_: auto-committing stamdata from collector Saves; CLIP / pgvector / Eve on this path; OpenRouter as the learner; Hugging Face as this increment; a new Confirm chrome; a /to-design for this table if the stamdata Data table is reused
+
 **Save**:
 Must not wait on Vision, kit completeness, or manufacturer. Required side is Club **or** NationalTeam (xor) plus season, type, size, condition, ≥1 photo.
 _Avoid_: blocking save on inference; requiring `clubId` when the copy is a national shirt
