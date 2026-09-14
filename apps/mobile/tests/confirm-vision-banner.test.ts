@@ -184,7 +184,7 @@ describe("Confirm screen Vision Matcher quota wiring", () => {
     expect(confirmScreen).toContain("disabled={!saveEnabled}");
     expect(confirmScreen).not.toMatch(/remaining\s*===\s*0/);
     expect(confirmScreen).not.toContain("PaywallCard");
-    expect(confirmScreen).toContain("from \"@/auth/AuthProvider\"");
-    expect(confirmScreen).toContain("from \"@/capture/confirmVisionBanner\"");
+    expect(confirmScreen).toContain('from "@/auth/AuthProvider"');
+    expect(confirmScreen).toContain('from "@/capture/confirmVisionBanner"');
   });
 });
