@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   CONFIRM_VISION_BANNER_COPY,
   type ConfirmVisionBannerState,
@@ -11,6 +11,7 @@ import { useTheme } from "@/theme/use-theme";
 
 type ConfirmVisionBannerProps = {
   state: ConfirmVisionBannerState;
+  onQuotaPress?: () => void;
 };
 
 type VisionBannerToneStyle = {
@@ -59,21 +60,20 @@ function getVisionBannerToneStyle(
   }
 }
 
-export function ConfirmVisionBanner({ state }: ConfirmVisionBannerProps) {
+export function ConfirmVisionBanner({ state, onQuotaPress }: ConfirmVisionBannerProps) {
   const theme = useTheme();
   const typography = useTypography();
   const tone = getVisionBannerToneStyle(theme, state);
   const message = CONFIRM_VISION_BANNER_COPY[state];
   const isAnalyzing = state === "analyzing";
+  const isQuotaButton = state === "out-of-quota" && onQuotaPress != null;
+  const bannerStyle = [
+    styles.banner,
+    { backgroundColor: tone.background, borderColor: tone.border },
+  ];
 
-  return (
-    <View
-      accessible
-      accessibilityRole={isAnalyzing ? "progressbar" : "text"}
-      accessibilityLabel={message}
-      accessibilityState={isAnalyzing ? { busy: true } : undefined}
-      style={[styles.banner, { backgroundColor: tone.background, borderColor: tone.border }]}
-    >
+  const body = (
+    <>
       <Ionicons
         name="sparkles"
         size={20}
@@ -93,6 +93,31 @@ export function ConfirmVisionBanner({ state }: ConfirmVisionBannerProps) {
         ) : null}
       </View>
       {isAnalyzing ? <ActivityIndicator size="small" color={theme.info} /> : null}
+    </>
+  );
+
+  if (isQuotaButton) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={message}
+        onPress={onQuotaPress}
+        style={bannerStyle}
+      >
+        {body}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View
+      accessible
+      accessibilityRole={isAnalyzing ? "progressbar" : "text"}
+      accessibilityLabel={message}
+      accessibilityState={isAnalyzing ? { busy: true } : undefined}
+      style={bannerStyle}
+    >
+      {body}
     </View>
   );
 }
@@ -104,6 +129,7 @@ const styles = StyleSheet.create({
     gap: space.gapSm,
     borderWidth: 1,
     borderRadius: radius.md,
+    minHeight: 44,
     // Shorter than the Banner default inset.md so the strip sits lighter above the
     // Data/Detaljer cards while staying comfortably legible.
     padding: space.insetSm,

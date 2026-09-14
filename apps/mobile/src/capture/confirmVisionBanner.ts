@@ -1,3 +1,6 @@
+import type { VisionMatcherUsage } from "@kit/api-contract";
+import { VISION_MATCHER_JERSEY_CAP } from "@kit/domain";
+
 /**
  * AI Vision Analyzer banner state for the Confirm hub.
  *
@@ -7,19 +10,35 @@
  *
  * Save never waits on Vision (lock): this state only drives chrome — it must never
  * gate `saveEnabled` or the fade **Gem** dock.
+ *
+ * Quota is GET session `visionMatcher.remaining` against `VISION_MATCHER_JERSEY_CAP`
+ * (10), not a leftover 5-upload cap. Clients read usage from session entitlement.
  */
 export type ConfirmVisionBannerState = "inactive" | "out-of-quota" | "analyzing" | "success";
 
 export type ConfirmVisionBannerInput = {
   /** Vision entitlement present for this collector (token / feature available). */
   activated: boolean;
-  /** Freemium quota exhausted (>5 uploads on the free tier). */
+  /** Freemium quota exhausted (`remaining === 0` and not unlimited). */
   outOfQuota: boolean;
   /** A Vision suggest job is in flight for the active jersey. */
   analyzing: boolean;
   /** Vision filled the Data fields for us (high-confidence pre-select applied). */
   succeeded: boolean;
 };
+
+/**
+ * Maps GET session Vision Matcher usage onto the existing out-of-quota Banner flag.
+ * Missing usage stays in-quota so Confirm does not invent a spent state.
+ */
+export function visionMatcherRemainingToOutOfQuota(
+  usage: VisionMatcherUsage | null | undefined,
+): boolean {
+  if (!usage || usage.unlimited) {
+    return false;
+  }
+  return usage.remaining === 0 && usage.cap === VISION_MATCHER_JERSEY_CAP;
+}
 
 /**
  * One banner state at a time (Banner lock: "One banner at a time").
@@ -53,7 +72,7 @@ export function resolveConfirmVisionBannerState(
  */
 export const CONFIRM_VISION_BANNER_COPY: Record<ConfirmVisionBannerState, string> = {
   inactive: "AI Analyzer er ikke aktiveret",
-  "out-of-quota": "AI Analyzer er ude af forbrug",
+  "out-of-quota": "Vision Matcher er ude af forbrug",
   analyzing: "AI Vision analyserer …",
   success: "AI Vision udfyldte trøjens data",
 };

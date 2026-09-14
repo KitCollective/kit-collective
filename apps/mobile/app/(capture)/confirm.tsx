@@ -12,6 +12,10 @@ import {
   detailsRequiredFilledCount,
   detailsSectionFacts,
 } from "@/capture/confirmSectionProgress";
+import {
+  resolveConfirmVisionBannerState,
+  visionMatcherRemainingToOutOfQuota,
+} from "@/capture/confirmVisionBanner";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmGrouping } from "@/capture/use-confirm-grouping";
@@ -40,7 +44,7 @@ export default function ConfirmScreen() {
     sessionId: string;
     editJerseyId?: string;
   }>();
-  const { accessToken, requestPremiumAccess } = useAuth();
+  const { accessToken, requestPremiumAccess, entitlement } = useAuth();
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const [catalogMiss, setCatalogMiss] = useState(false);
   const {
@@ -132,6 +136,15 @@ export default function ConfirmScreen() {
 
   const activeJerseyIndex = state?.drafts.findIndex((entry) => entry.id === draft.id) ?? 0;
   const activeTabLabel = `Trøje ${activeJerseyIndex + 1}`;
+  const outOfQuota = visionMatcherRemainingToOutOfQuota(entitlement?.visionMatcher);
+  const bannerState = grouping.analyzing
+    ? "analyzing"
+    : resolveConfirmVisionBannerState({
+        activated: Boolean(accessToken),
+        outOfQuota,
+        analyzing: vision.bannerState === "analyzing",
+        succeeded: vision.bannerState === "success",
+      });
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -172,7 +185,7 @@ export default function ConfirmScreen() {
         </View>
 
         <ConfirmVisionSlot
-          bannerState={grouping.analyzing ? "analyzing" : vision.bannerState}
+          bannerState={bannerState}
           suggestion={vision.suggestion}
           groupingMessage={grouping.groupingMessage}
           catalogMiss={catalogMiss}
@@ -185,6 +198,9 @@ export default function ConfirmScreen() {
           onDismissSuggestion={
             grouping.groupingMessage ? grouping.dismissSuggestion : vision.dismissSuggestion
           }
+          onQuotaPress={() => {
+            void requestPremiumAccess();
+          }}
         />
 
         <View style={styles.hubSpacer} />
