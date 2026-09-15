@@ -42,6 +42,19 @@ describe("vision contract", () => {
     expect(parsed.suggestions?.clubLabel).toBe("F.C. København");
   });
 
+  it("parses job response with catalogMiss hint labels and catalogLikely false", () => {
+    const job: VisionJobResponse = {
+      jobId: "22222222-2222-2222-2222-222222222222",
+      status: "ready",
+      catalogMiss: true,
+      catalogLikely: false,
+      suggestions: {
+        nationalTeamLabel: "Argentina",
+      },
+    };
+    expect(visionJobResponseSchema.parse(job)).toEqual(job);
+  });
+
   it("parses job response with preselect flag", () => {
     const job: VisionJobResponse = {
       jobId: "22222222-2222-2222-2222-222222222222",

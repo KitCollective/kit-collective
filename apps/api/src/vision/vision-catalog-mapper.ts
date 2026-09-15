@@ -431,7 +431,10 @@ export class VisionCatalogMapper {
   ): VisionFieldConfidences {
     const fields = hints.fieldConfidence;
     const club = combineModelAndMatchConfidence(fields?.club, match.club);
-    const nationalTeam = combineModelAndMatchConfidence(fields?.club, match.nationalTeam);
+    const nationalTeam = combineModelAndMatchConfidence(
+      fields?.nationalTeam ?? fields?.club,
+      match.nationalTeam,
+    );
     const season = match.kitLocked
       ? CATALOG_KIT_LOCK_CONFIDENCE
       : combineModelAndMatchConfidence(fields?.season, match.season);

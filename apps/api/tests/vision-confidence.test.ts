@@ -84,6 +84,34 @@ describe("vision-confidence", () => {
     expect(miss.status).toBe("ready");
     expect(miss.catalogMiss).toBe(true);
     expect(miss.suggestions?.clubId).toBeUndefined();
+    expect(miss.suggestions?.clubLabel).toBe("Unknown FC");
+    expect(miss.catalogLikely).toBeUndefined();
+  });
+
+  it("returns nationalTeamLabel and catalogLikely false when Argentina misses catalog", () => {
+    const miss = resolveIdentityJob({
+      clubHint: "Argentina",
+      visionRaw: JSON.stringify({ clubHint: "Argentina", kitHitCount: 0 }),
+      confidences: { overall: 80, club: 80 },
+    });
+
+    expect(miss.status).toBe("ready");
+    expect(miss.catalogMiss).toBe(true);
+    expect(miss.catalogLikely).toBe(false);
+    expect(miss.suggestions?.nationalTeamLabel).toBe("Argentina");
+    expect(miss.suggestions?.clubLabel).toBeUndefined();
+    expect(miss.suggestions?.nationalTeamId).toBeUndefined();
+  });
+
+  it("returns nationalTeamLabel when Italy misses catalog", () => {
+    const miss = resolveIdentityJob({
+      clubHint: "Italy",
+      confidences: { overall: 75 },
+    });
+
+    expect(miss.catalogMiss).toBe(true);
+    expect(miss.catalogLikely).toBe(false);
+    expect(miss.suggestions?.nationalTeamLabel).toBe("Italy");
   });
 
   it("flags catalog miss when only clubHintAlts are present", () => {

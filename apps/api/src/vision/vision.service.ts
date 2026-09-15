@@ -236,6 +236,7 @@ export class VisionService {
       badge?: boolean;
     };
     catalogMiss?: boolean;
+    catalogLikely?: boolean;
     suggestions?: VisionSuggestions;
     grouping?: VisionGroupingSuggestions;
   } | null> {
@@ -373,7 +374,12 @@ export class VisionService {
         suggestions.type ||
         suggestions.catalogKitId ||
         suggestions.playerId ||
-        suggestions.patchId,
+        suggestions.patchId ||
+        suggestions.clubLabel ||
+        suggestions.nationalTeamLabel ||
+        suggestions.seasonLabel ||
+        suggestions.playerLabel ||
+        suggestions.patchLabel,
     );
 
     return {
@@ -383,6 +389,7 @@ export class VisionService {
       preselect: resolved.preselect,
       fieldPreselect: resolved.fieldPreselect,
       catalogMiss: resolved.catalogMiss || undefined,
+      catalogLikely: resolved.catalogLikely,
       suggestions: hasSuggestions ? suggestions : undefined,
     };
   }

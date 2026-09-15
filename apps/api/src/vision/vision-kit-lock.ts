@@ -51,6 +51,79 @@ const CLUB_STOP_TOKENS = new Set([
   "football",
 ]);
 
+/** Country / NT names the VLM uses for national-team shirts (cellar corpus + common sides). */
+const NATIONAL_TEAM_HINT_TOKENS = new Set([
+  "argentina",
+  "armenia",
+  "austria",
+  "belgium",
+  "brazil",
+  "brasilien",
+  "croatia",
+  "kroatien",
+  "czech",
+  "tjekkiet",
+  "denmark",
+  "danmark",
+  "england",
+  "english",
+  "france",
+  "frankrig",
+  "germany",
+  "tyskland",
+  "greece",
+  "graekenland",
+  "hungary",
+  "ungarn",
+  "ireland",
+  "irland",
+  "italy",
+  "italien",
+  "japan",
+  "netherlands",
+  "holland",
+  "norway",
+  "norge",
+  "poland",
+  "polen",
+  "portugal",
+  "romania",
+  "rumanien",
+  "saudi",
+  "scotland",
+  "skotland",
+  "serbia",
+  "serbien",
+  "spain",
+  "spanien",
+  "sweden",
+  "sverige",
+  "switzerland",
+  "schweiz",
+  "turkey",
+  "tyrkiet",
+  "ukraine",
+  "usa",
+  "america",
+]);
+
+export function isLikelyNationalTeamHint(hints: string[]): boolean {
+  for (const hint of hints) {
+    const tokens = significantCatalogTokens(hint);
+    if (tokens.length === 0) {
+      continue;
+    }
+    if (tokens.every((token) => NATIONAL_TEAM_HINT_TOKENS.has(token))) {
+      return true;
+    }
+    const compact = compactCatalogHint(hint);
+    if (compact.length >= 3 && NATIONAL_TEAM_HINT_TOKENS.has(compact)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const DIACRITIC_FOLD: Record<string, string> = {
   æ: "ae",
   ø: "o",
@@ -195,7 +268,7 @@ export function pickBestCatalogSide(
     }
   }
 
-  return uniqueTopCatalogSide([...bestByEntity.values()]);
+  return uniqueTopCatalogSide([...bestByEntity.values()], hints);
 }
 
 function catalogSideKind(
@@ -213,16 +286,26 @@ function catalogSideKind(
   return null;
 }
 
-function uniqueTopCatalogSide(matches: CatalogSideMatch[]): CatalogSideMatch | null {
+function uniqueTopCatalogSide(
+  matches: CatalogSideMatch[],
+  hints: string[] = [],
+): CatalogSideMatch | null {
   const ranked = [...matches].sort((left, right) => right.score - left.score);
   const best = ranked[0];
   if (!best) {
     return null;
   }
-  if (ranked.some((match, index) => index > 0 && match.score === best.score)) {
-    return null;
+  const tied = ranked.filter((match) => match.score === best.score);
+  if (tied.length === 1) {
+    return best;
   }
-  return best;
+  if (isLikelyNationalTeamHint(hints)) {
+    const nationalTeam = tied.find((match) => match.kind === "national_team");
+    if (nationalTeam) {
+      return nationalTeam;
+    }
+  }
+  return null;
 }
 
 function onlyHit(hits: ObservableKitHit[]): ObservableKitHit | undefined {

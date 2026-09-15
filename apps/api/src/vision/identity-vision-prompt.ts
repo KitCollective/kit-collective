@@ -3,6 +3,7 @@ import { KIT_TYPES } from "@kit/domain";
 
 export type IdentityFieldConfidence = {
   club?: number;
+  nationalTeam?: number;
   season?: number;
   kitType?: number;
   player?: number;
