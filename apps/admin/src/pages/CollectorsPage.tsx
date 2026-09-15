@@ -672,8 +672,7 @@ export function CollectorsPage() {
                   <div className="empty-state data-table-empty">
                     <h2>No Vision improve yet</h2>
                     <p>
-                      Alias, coverage, and model proposals from collector Save will appear
-                      here.
+                      Alias, coverage, and model proposals from collector Save will appear here.
                     </p>
                   </div>
                 </td>
@@ -744,49 +743,49 @@ export function CollectorsPage() {
               visionImprove.rows
                 .filter((row) => row.status === "proposed")
                 .map((row: AdminVisionImproveRow, rowIndex) => {
-                const pending = pendingImproveId === row.id;
-                return (
-                  <tr
-                    key={row.id}
-                    tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
-                    onFocus={() => setFocusedRowIndex(rowIndex)}
-                  >
-                    <td className="data-table-mono">{row.fingerprint}</td>
-                    <td className="data-table-mono data-table-numeric">{row.count}</td>
-                    <td>{formatIdentityLabels(row.suggested)}</td>
-                    <td>{formatIdentityLabels(row.selected)}</td>
-                    <td className="data-table-meta">{formatAuthDateTime(row.lastSeenAt)}</td>
-                    <td className="data-table-row-actions">
-                      <div className="data-table-row-actions-cluster">
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          disabled={pendingImproveId !== null}
-                          aria-busy={pending}
-                          aria-label={`Apply ${row.fingerprint}`}
-                          onClick={() => {
-                            void mutateVisionImprove(row.id, "apply");
-                          }}
-                        >
-                          Apply
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-tertiary"
-                          disabled={pendingImproveId !== null}
-                          aria-busy={pending}
-                          aria-label={`Dismiss ${row.fingerprint}`}
-                          onClick={() => {
-                            void mutateVisionImprove(row.id, "dismiss");
-                          }}
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
+                  const pending = pendingImproveId === row.id;
+                  return (
+                    <tr
+                      key={row.id}
+                      tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
+                      onFocus={() => setFocusedRowIndex(rowIndex)}
+                    >
+                      <td className="data-table-mono">{row.fingerprint}</td>
+                      <td className="data-table-mono data-table-numeric">{row.count}</td>
+                      <td>{formatIdentityLabels(row.suggested)}</td>
+                      <td>{formatIdentityLabels(row.selected)}</td>
+                      <td className="data-table-meta">{formatAuthDateTime(row.lastSeenAt)}</td>
+                      <td className="data-table-row-actions">
+                        <div className="data-table-row-actions-cluster">
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={pendingImproveId !== null}
+                            aria-busy={pending}
+                            aria-label={`Apply ${row.fingerprint}`}
+                            onClick={() => {
+                              void mutateVisionImprove(row.id, "apply");
+                            }}
+                          >
+                            Apply
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-tertiary"
+                            disabled={pendingImproveId !== null}
+                            aria-busy={pending}
+                            aria-label={`Dismiss ${row.fingerprint}`}
+                            onClick={() => {
+                              void mutateVisionImprove(row.id, "dismiss");
+                            }}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
             ) : jerseys ? (
               jerseys.rows.map((row, rowIndex) => (
                 <tr
