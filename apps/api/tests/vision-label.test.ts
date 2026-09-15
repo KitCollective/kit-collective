@@ -148,11 +148,43 @@ async function insertCatalog() {
   ]);
   await db.insert(catalogLabel).values([
     {
+      entityType: "country",
+      entityId: insertedCountry.id,
+      locale: "da",
+      kind: "label",
+      text: "Danmark",
+      source: "seed",
+    },
+    {
+      entityType: "league",
+      entityId: insertedLeague.id,
+      locale: "da",
+      kind: "label",
+      text: "Superligaen",
+      source: "seed",
+    },
+    {
+      entityType: "club",
+      entityId: CLUB_A,
+      locale: "da",
+      kind: "label",
+      text: "Rangers FC",
+      source: "seed",
+    },
+    {
       entityType: "club",
       entityId: CLUB_A,
       locale: "en",
       kind: "label",
       text: "Rangers FC",
+      source: "seed",
+    },
+    {
+      entityType: "club",
+      entityId: CLUB_B,
+      locale: "da",
+      kind: "label",
+      text: "F.C. København",
       source: "seed",
     },
     {
