@@ -8,6 +8,7 @@ import {
 } from "@kit/api-contract";
 import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
+import { collectClubHints, isLikelyNationalTeamHint } from "./vision-kit-lock.js";
 
 export function serializeConfidences(confidences: VisionFieldConfidences): string {
   return JSON.stringify(confidences);
@@ -109,6 +110,8 @@ export type ResolvedIdentityJob = {
   suggestions?: VisionSuggestions;
   fieldPreselect?: VisionFieldPreselect;
   catalogMiss: boolean;
+  /** False when a national-team hint missed catalog coverage; omit when side likely exists. */
+  catalogLikely?: boolean;
   /** Raw model side hint(s) when catalogMiss — non-id seeds for Confirm search. */
   clubHint?: string;
   nationalTeamHint?: string;
@@ -241,8 +244,45 @@ function nonemptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function hadClubCatalogHint(result: VisionInferenceResult): boolean {
-  return Boolean(result.clubHint?.trim() || parseClubHintFromVisionRaw(result.visionRaw));
+function sideHintsFromResult(result: VisionInferenceResult): string[] {
+  const fromRaw = parseClubHintFromVisionRaw(result.visionRaw);
+  return collectClubHints({
+    clubHint: result.clubHint ?? fromRaw,
+    clubHintAlts: parseClubHintAltsFromVisionRaw(result.visionRaw),
+  });
+}
+
+function hadSideCatalogHint(result: VisionInferenceResult): boolean {
+  return sideHintsFromResult(result).length > 0;
+}
+
+export function parseClubHintAltsFromVisionRaw(raw: string | null | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || !Array.isArray(parsed.clubHintAlts)) {
+      return [];
+    }
+    return parsed.clubHintAlts
+      .map((alt) => (typeof alt === "string" && alt.trim() ? alt.trim() : undefined))
+      .filter((alt): alt is string => Boolean(alt));
+  } catch {
+    return [];
+  }
+}
+
+export function catalogMissSideLabels(result: VisionInferenceResult): VisionSuggestions {
+  const hints = sideHintsFromResult(result);
+  const primary = hints[0];
+  if (!primary) {
+    return {};
+  }
+  if (isLikelyNationalTeamHint(hints)) {
+    return { nationalTeamLabel: primary };
+  }
+  return { clubLabel: primary };
 }
 
 export function resolveIdentityJob(result: VisionInferenceResult | null): ResolvedIdentityJob {
@@ -282,7 +322,11 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     Boolean(result.patchId),
   );
 
-  const catalogMiss = Boolean(hadClubCatalogHint(result) && !result.clubId && !result.catalogKitId);
+  const catalogMiss = Boolean(
+    hadSideCatalogHint(result) && !result.clubId && !result.nationalTeamId && !result.catalogKitId,
+  );
+  const catalogLikely =
+    catalogMiss && isLikelyNationalTeamHint(sideHintsFromResult(result)) ? false : undefined;
   const catalogMissHints = catalogMiss ? resolveCatalogMissHints(result) : {};
 
   const suggestions: VisionSuggestions = {};
@@ -347,7 +391,12 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
       suggestions.patchId,
   );
 
-  if (!hasSuggestion && !catalogMiss) {
+  const missLabels = catalogMiss && !hasSuggestion ? catalogMissSideLabels(result) : {};
+  const hasMissLabel = Boolean(missLabels.clubLabel || missLabels.nationalTeamLabel);
+  const mergedSuggestions = hasSuggestion ? suggestions : hasMissLabel ? missLabels : undefined;
+  const hasAnySuggestion = hasSuggestion || hasMissLabel;
+
+  if (!hasAnySuggestion && !catalogMiss) {
     return {
       status: "noop",
       catalogMiss,
@@ -372,10 +421,11 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
   );
 
   return {
-    status: hasSuggestion || catalogMiss ? "ready" : "noop",
-    suggestions: hasSuggestion ? suggestions : undefined,
+    status: hasAnySuggestion || catalogMiss ? "ready" : "noop",
+    suggestions: mergedSuggestions,
     fieldPreselect: hasSuggestion ? fieldPreselect : undefined,
     catalogMiss,
+    catalogLikely,
     clubHint: catalogMissHints.clubHint,
     nationalTeamHint: catalogMissHints.nationalTeamHint,
     preselect,

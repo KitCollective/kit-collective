@@ -5,6 +5,7 @@ import {
   catalogHintSearchNeedles,
   collectClubHints,
   compactCatalogHint,
+  isLikelyNationalTeamHint,
   pickBestCatalogSide,
   pickLockedKit,
   pickRefinedKit,
@@ -183,6 +184,13 @@ describe("vision kit lock", () => {
     ).toEqual(rangersHome);
   });
 
+  it("detects likely national-team hints for country names", () => {
+    expect(isLikelyNationalTeamHint(["Argentina"])).toBe(true);
+    expect(isLikelyNationalTeamHint(["Italy"])).toBe(true);
+    expect(isLikelyNationalTeamHint(["Rangers FC"])).toBe(false);
+    expect(isLikelyNationalTeamHint(["FC Copenhagen"])).toBe(false);
+  });
+
   it("collects clubHint and alts without empty strings", () => {
     expect(
       collectClubHints({
@@ -206,7 +214,7 @@ describe("vision kit lock", () => {
     ).toEqual({ id: "nt-1", kind: "national_team", score: 95 });
   });
 
-  it("omits a Club/NationalTeam side when official labels tie", () => {
+  it("prefers NationalTeam when official labels tie on a country hint", () => {
     expect(
       pickBestCatalogSide(
         [
@@ -214,6 +222,20 @@ describe("vision kit lock", () => {
           { entityId: "club-1", entityType: "club", text: "Denmark", kind: "label" },
         ],
         ["Denmark"],
+        new Set(["club-1"]),
+        new Set(["nt-1"]),
+      ),
+    ).toEqual({ id: "nt-1", kind: "national_team", score: 95 });
+  });
+
+  it("omits a Club/NationalTeam side when official labels tie on a non-country hint", () => {
+    expect(
+      pickBestCatalogSide(
+        [
+          { entityId: "nt-1", entityType: "national_team", text: "Rangers FC", kind: "label" },
+          { entityId: "club-1", entityType: "club", text: "Rangers FC", kind: "label" },
+        ],
+        ["Rangers FC"],
         new Set(["club-1"]),
         new Set(["nt-1"]),
       ),

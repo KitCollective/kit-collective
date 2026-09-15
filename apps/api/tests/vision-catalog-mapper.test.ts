@@ -18,6 +18,7 @@ import {
   teamSeason,
 } from "@kit/db";
 import { beforeEach, describe, expect, it } from "vitest";
+import { resolveIdentityJob } from "../dist/vision/vision-confidence.js";
 import { VisionCatalogMapper } from "../src/vision/vision-catalog-mapper.js";
 
 const migrationsFolder = path.join(
@@ -417,6 +418,30 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.catalogKitId).toBe(fixture.kitId);
     expect(mapped?.seasonId).toBe(fixture.seasonId);
     expect(mapped?.type).toBe("home");
+  });
+
+  it("returns nationalTeamLabel path when Argentina is missing from catalog", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(db).mapHints({
+      clubHint: "Argentina",
+      manufacturerHint: "Adidas",
+      kitType: "home",
+      seasonHint: "2006",
+      fieldConfidence: { club: 0.85, kitType: 0.7, season: 0.6 },
+    });
+    await pool.end();
+
+    expect(mapped?.nationalTeamId).toBeUndefined();
+    expect(mapped?.clubId).toBeUndefined();
+    expect(mapped?.clubHint).toBe("Argentina");
+    expect(mapped?.kitHitCount).toBe(0);
+
+    expect(mapped).toBeDefined();
+    // SAFETY: expect(mapped).toBeDefined() above narrows mapped to non-null in this test branch.
+    const resolved = resolveIdentityJob(mapped as NonNullable<typeof mapped>);
+    expect(resolved.catalogMiss).toBe(true);
+    expect(resolved.catalogLikely).toBe(false);
+    expect(resolved.suggestions?.nationalTeamLabel).toBe("Argentina");
   });
 
   it("does not fill a Club UUID when a NationalTeam kit locks beside a Club side match", async () => {

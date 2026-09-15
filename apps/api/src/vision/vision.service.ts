@@ -236,6 +236,7 @@ export class VisionService {
       badge?: boolean;
     };
     catalogMiss?: boolean;
+    catalogLikely?: boolean;
     clubHint?: string;
     nationalTeamHint?: string;
     suggestions?: VisionSuggestions;
@@ -375,7 +376,12 @@ export class VisionService {
         suggestions.type ||
         suggestions.catalogKitId ||
         suggestions.playerId ||
-        suggestions.patchId,
+        suggestions.patchId ||
+        suggestions.clubLabel ||
+        suggestions.nationalTeamLabel ||
+        suggestions.seasonLabel ||
+        suggestions.playerLabel ||
+        suggestions.patchLabel,
     );
 
     return {
@@ -385,6 +391,7 @@ export class VisionService {
       preselect: resolved.preselect,
       fieldPreselect: resolved.fieldPreselect,
       catalogMiss: resolved.catalogMiss || undefined,
+      catalogLikely: resolved.catalogLikely,
       clubHint: resolved.clubHint,
       nationalTeamHint: resolved.nationalTeamHint,
       suggestions: hasSuggestions ? suggestions : undefined,
