@@ -7,6 +7,7 @@ import {
   BadRequestException,
   Controller,
   Get,
+  HttpCode,
   Param,
   Post,
   Query,
@@ -49,6 +50,7 @@ export class AdminVisionController {
   }
 
   @Post("improve/:id/apply")
+  @HttpCode(200)
   applyImprove(@Param() params: Record<string, string>) {
     const parsed = adminVisionImproveIdParamSchema.safeParse({ id: params.id });
     if (!parsed.success) {
@@ -58,6 +60,7 @@ export class AdminVisionController {
   }
 
   @Post("improve/:id/dismiss")
+  @HttpCode(200)
   dismissImprove(@Param() params: Record<string, string>) {
     const parsed = adminVisionImproveIdParamSchema.safeParse({ id: params.id });
     if (!parsed.success) {
