@@ -60,6 +60,20 @@ describe("vision-confidence", () => {
     expect(badgeSuggest.suggestions?.patchId).toBe("00000000-0000-0000-0000-000000000005");
   });
 
+  it("suggests kit type without catalogKitId when type is a free enum", () => {
+    const typed = resolveIdentityJob({
+      clubId: "00000000-0000-0000-0000-000000000001",
+      seasonId: "00000000-0000-0000-0000-000000000002",
+      type: "away",
+      confidences: { overall: 80, club: 80, season: 55, kitType: 55 },
+    });
+
+    expect(typed.status).toBe("ready");
+    expect(typed.suggestions?.type).toBe("away");
+    expect(typed.suggestions?.catalogKitId).toBeUndefined();
+    expect(typed.suggestions?.seasonId).toBe("00000000-0000-0000-0000-000000000002");
+  });
+
   it("marks ready with per-field preselect and suggest-only fields", () => {
     const highClub = resolveIdentityJob({
       clubId: "00000000-0000-0000-0000-000000000001",
