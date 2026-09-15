@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { searchCatalogClubs } from "@/api/catalog";
-import { type CatalogPickerRow, searchDummyClubs } from "@/catalog/dummyCatalog";
 import { formatCatalogMissSheetMessage } from "@/capture/catalogMissHint";
+import { type CatalogPickerRow, searchDummyClubs } from "@/catalog/dummyCatalog";
 import { CatalogPickerModal } from "@/components/catalog-picker-modal";
 
 type ClubPickerOverlayProps = {
@@ -95,9 +95,7 @@ export function ClubPickerOverlay({
       selectedId={selectedClubId}
       loading={loading}
       errorMessage={errorMessage}
-      noticeMessage={
-        catalogMissHint ? formatCatalogMissSheetMessage(catalogMissHint) : null
-      }
+      noticeMessage={catalogMissHint ? formatCatalogMissSheetMessage(catalogMissHint) : null}
       emptyMessage="Ingen klubber eller landshold matcher."
       onSelect={(item) => {
         onSelect(item);

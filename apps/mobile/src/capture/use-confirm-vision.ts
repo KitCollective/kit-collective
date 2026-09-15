@@ -14,6 +14,7 @@ import {
   suggestedCatalogSideId,
 } from "@/capture/captureSession";
 import type { CaptureJerseyDraft, CaptureSessionMutator } from "@/capture/captureSessionTypes";
+import { resolveVisionCatalogMissHint } from "@/capture/catalogMissHint";
 import {
   confirmBadgeWasEdited,
   confirmClubWasEdited,
@@ -22,7 +23,6 @@ import {
   confirmSeasonWasEdited,
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
-import { resolveVisionCatalogMissHint } from "@/capture/catalogMissHint";
 import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
 import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
 import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
