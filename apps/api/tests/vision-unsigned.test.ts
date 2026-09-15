@@ -189,6 +189,7 @@ describe("Unsigned Vision /v1", () => {
     expect(job.status).toBe("ready");
     expect(job.suggestions?.clubId).toBe(CLUB_ID);
     expect(job.suggestions?.seasonId).toBe(SEASON_ID);
+    expect(job.suggestions?.type).toBe("home");
     expect(job.suggestions?.clubLabel).toBe("F.C. København");
     expect(job.suggestions?.seasonLabel).toBe("2023/24");
   });
