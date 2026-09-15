@@ -237,6 +237,8 @@ export class VisionService {
     };
     catalogMiss?: boolean;
     catalogLikely?: boolean;
+    clubHint?: string;
+    nationalTeamHint?: string;
     suggestions?: VisionSuggestions;
     grouping?: VisionGroupingSuggestions;
   } | null> {
@@ -390,6 +392,8 @@ export class VisionService {
       fieldPreselect: resolved.fieldPreselect,
       catalogMiss: resolved.catalogMiss || undefined,
       catalogLikely: resolved.catalogLikely,
+      clubHint: resolved.clubHint,
+      nationalTeamHint: resolved.nationalTeamHint,
       suggestions: hasSuggestions ? suggestions : undefined,
     };
   }

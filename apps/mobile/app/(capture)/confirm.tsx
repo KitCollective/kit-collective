@@ -123,6 +123,9 @@ export default function ConfirmScreen() {
       params: {
         sessionId,
         ...(editJerseyId ? { editJerseyId } : {}),
+        ...(section === "data" && vision.catalogMissHint
+          ? { visionSideHint: vision.catalogMissHint }
+          : {}),
       },
     });
   };
@@ -189,6 +192,7 @@ export default function ConfirmScreen() {
           suggestion={vision.suggestion}
           groupingMessage={grouping.groupingMessage}
           catalogMiss={catalogMiss}
+          catalogMissHint={vision.catalogMissHint}
           suggestionOpacity={
             grouping.groupingMessage ? grouping.suggestionOpacity : vision.suggestionOpacity
           }

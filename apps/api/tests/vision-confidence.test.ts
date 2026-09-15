@@ -7,6 +7,7 @@ import {
   parseConfidences,
   parseVisionEvalHints,
   parseZeroKitHits,
+  resolveCatalogMissHints,
   resolveFieldGate,
   resolveIdentityJob,
   serializeConfidences,
@@ -83,6 +84,7 @@ describe("vision-confidence", () => {
 
     expect(miss.status).toBe("ready");
     expect(miss.catalogMiss).toBe(true);
+    expect(miss.clubHint).toBe("Unknown FC");
     expect(miss.suggestions?.clubId).toBeUndefined();
     expect(miss.suggestions?.clubLabel).toBe("Unknown FC");
     expect(miss.catalogLikely).toBeUndefined();
@@ -112,6 +114,25 @@ describe("vision-confidence", () => {
     expect(miss.catalogMiss).toBe(true);
     expect(miss.catalogLikely).toBe(false);
     expect(miss.suggestions?.nationalTeamLabel).toBe("Italy");
+  });
+
+  it("surfaces nationalTeamHint when national-team confidence leads", () => {
+    const miss = resolveIdentityJob({
+      clubHint: "Argentina",
+      confidences: { overall: 80, club: 70, nationalTeam: 85 },
+    });
+
+    expect(miss.catalogMiss).toBe(true);
+    expect(miss.nationalTeamHint).toBe("Argentina");
+    expect(miss.clubHint).toBeUndefined();
+  });
+
+  it("resolveCatalogMissHints prefers visionRaw alts when clubHint is absent", () => {
+    expect(
+      resolveCatalogMissHints({
+        visionRaw: JSON.stringify({ clubHintAlts: ["FC Barcelona"] }),
+      }),
+    ).toEqual({ clubHint: "FC Barcelona" });
   });
 
   it("flags catalog miss when only clubHintAlts are present", () => {

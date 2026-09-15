@@ -1,7 +1,7 @@
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CatalogPickerRow } from "@/catalog/dummyCatalog";
-import { ListRow, SearchField } from "@/components/catalog-ui";
+import { Banner, ListRow, SearchField } from "@/components/catalog-ui";
 import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -18,6 +18,7 @@ type CatalogPickerModalProps = {
   selectedId: string | null;
   loading?: boolean;
   errorMessage?: string | null;
+  noticeMessage?: string | null;
   emptyMessage?: string;
   searchable?: boolean;
   onSelect: (item: CatalogPickerRow) => void;
@@ -38,6 +39,7 @@ export function CatalogPickerModal({
   selectedId,
   loading = false,
   errorMessage = null,
+  noticeMessage = null,
   emptyMessage = "Ingen resultater.",
   searchable = true,
   onSelect,
@@ -83,6 +85,8 @@ export function CatalogPickerModal({
               onClear={() => onQueryChange("")}
             />
           ) : null}
+
+          {noticeMessage ? <Banner tone="info" message={noticeMessage} /> : null}
 
           {errorMessage ? (
             <Text style={[typography.body, { color: theme.danger }]}>{errorMessage}</Text>

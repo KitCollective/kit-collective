@@ -1,6 +1,7 @@
 import type { VisionJobResponse } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { Animated, StyleSheet, View } from "react-native";
+import { formatCatalogMissBannerMessage } from "@/capture/catalogMissHint";
 import type { ConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
 import { Banner } from "@/components/catalog-ui";
 import { ConfirmVisionBanner } from "@/components/confirm-vision-banner";
@@ -12,6 +13,7 @@ type ConfirmVisionSlotProps = {
   suggestion: VisionJobResponse | null;
   groupingMessage?: string | null;
   catalogMiss?: boolean;
+  catalogMissHint?: string | null;
   suggestionOpacity: Animated.Value;
   onApplySuggestion: () => void;
   onDismissSuggestion: () => void;
@@ -24,6 +26,7 @@ export function ConfirmVisionSlot({
   suggestion,
   groupingMessage,
   catalogMiss = false,
+  catalogMissHint = null,
   suggestionOpacity,
   onApplySuggestion,
   onDismissSuggestion,
@@ -51,7 +54,7 @@ export function ConfirmVisionSlot({
       return (
         <Banner
           tone="info"
-          message="Klubben findes ikke i kataloget endnu. Dit draft bliver gemt."
+          message={formatCatalogMissBannerMessage(catalogMissHint)}
           action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
         />
       );
