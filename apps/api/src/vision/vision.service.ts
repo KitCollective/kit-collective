@@ -1,6 +1,7 @@
 import {
   classifyVisionEval,
   resolveVisionSaveAction,
+  type VisionEvalEntityHints,
   type VisionGroupingSuggestions,
   type VisionJobKind,
   type VisionJobStatus,
@@ -16,7 +17,7 @@ import {
   userJerseyPhoto,
   visionLog,
 } from "@kit/db";
-import type { KitType, LabelLocale } from "@kit/domain";
+import type { KitType, LabelKind, LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
@@ -506,7 +507,7 @@ export class VisionService {
       .where(eq(userJerseyPhoto.userJerseyId, userJerseyId));
     const photoKeys = photoRows.map((photo) => photo.objectKey);
 
-    const selectedLabelTexts = await this.loadSelectedLabelTexts(selected);
+    const selectedCatalogLabels = await this.loadSelectedCatalogLabels(selected);
     const clubHint = parseClubHintFromVisionRaw(row.visionRaw);
     const resolved = resolveIdentityJob({
       clubId: row.suggestedClubId ?? undefined,
@@ -543,8 +544,8 @@ export class VisionService {
       },
       catalogMiss: resolved.catalogMiss,
       zeroKitHits: parseZeroKitHits(row.visionRaw),
-      hints: parseVisionEvalHints(row.visionRaw),
-      selectedLabelTexts,
+      entityHints: parseVisionEvalHints(row.visionRaw),
+      selectedCatalogLabels,
     });
 
     await this.db
@@ -566,25 +567,12 @@ export class VisionService {
       .where(and(eq(visionLog.id, jobId), isNull(visionLog.evalClass)));
   }
 
-  private async loadSelectedLabelTexts(selected: {
+  private async loadSelectedCatalogLabels(selected: {
     clubId?: string;
     nationalTeamId?: string;
-    seasonId: string;
-    type: KitType;
-    catalogKitId?: string | null;
     playerId?: string;
     patchId?: string;
-  }): Promise<string[]> {
-    const texts: string[] = [selected.type];
-    const [seasonRow] = await this.db
-      .select({ label: season.label })
-      .from(season)
-      .where(eq(season.id, selected.seasonId))
-      .limit(1);
-    if (seasonRow?.label) {
-      texts.push(seasonRow.label);
-    }
-
+  }): Promise<VisionEvalEntityHints> {
     const entityIds: Array<{
       entityType: "club" | "national_team" | "player" | "patch";
       entityId: string;
@@ -603,25 +591,44 @@ export class VisionService {
     }
 
     if (entityIds.length === 0) {
-      return texts;
+      return {};
     }
 
+    const catalogKinds: LabelKind[] = ["label", "alias"];
     const rows = await this.db
-      .select({ text: catalogLabel.text })
+      .select({
+        entityType: catalogLabel.entityType,
+        text: catalogLabel.text,
+      })
       .from(catalogLabel)
       .where(
-        inArray(
-          catalogLabel.entityId,
-          entityIds.map((entity) => entity.entityId),
+        and(
+          inArray(
+            catalogLabel.entityType,
+            entityIds.map((entity) => entity.entityType),
+          ),
+          inArray(
+            catalogLabel.entityId,
+            entityIds.map((entity) => entity.entityId),
+          ),
+          inArray(catalogLabel.kind, catalogKinds),
         ),
       );
 
+    const grouped: VisionEvalEntityHints = {};
     for (const row of rows) {
-      if (row.text?.trim()) {
-        texts.push(row.text.trim());
+      const text = row.text?.trim();
+      if (!text) {
+        continue;
+      }
+      if (row.entityType === "club" || row.entityType === "national_team") {
+        grouped.side = [...(grouped.side ?? []), text];
+      } else if (row.entityType === "player") {
+        grouped.player = [...(grouped.player ?? []), text];
+      } else if (row.entityType === "patch") {
+        grouped.patch = [...(grouped.patch ?? []), text];
       }
     }
-
-    return texts;
+    return grouped;
   }
 }

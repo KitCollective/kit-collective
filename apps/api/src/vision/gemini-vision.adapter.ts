@@ -27,6 +27,7 @@ import type {
   VisionInferenceResult,
 } from "./vision.adapter.js";
 import { VisionCatalogMapper } from "./vision-catalog-mapper.js";
+import { encodeVisionEvalRaw } from "./vision-confidence.js";
 
 const GEMINI_MODEL = "gemini-2.5-flash-lite";
 const GEMINI_TIMEOUT_MS = 15_000;
@@ -130,7 +131,7 @@ export class GeminiVisionAdapter implements VisionAdapter {
 
       return {
         ...mapped,
-        visionRaw: JSON.stringify(structured),
+        visionRaw: encodeVisionEvalRaw(structured, mapped.kitHitCount),
         latencyMs: Date.now() - started,
         model: transport === "openrouter" ? OPENROUTER_VISION_MODEL : GEMINI_MODEL,
       };

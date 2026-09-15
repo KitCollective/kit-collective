@@ -47,12 +47,7 @@ export const adminVisionLabelRowSchema = z
     model: z.string().min(1).nullable().optional(),
     photoKeys: z.array(z.string().min(1)),
   })
-  .strict()
-  .superRefine((row, ctx) => {
-    if ("visionRaw" in row) {
-      ctx.addIssue({ code: "custom", message: "visionRaw must not be returned" });
-    }
-  });
+  .strict();
 
 export type AdminVisionLabelIdentity = z.infer<typeof adminVisionLabelIdentitySchema>;
 export type AdminVisionLabelRow = z.infer<typeof adminVisionLabelRowSchema>;

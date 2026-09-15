@@ -347,6 +347,7 @@ export {
   VISION_EVAL_CLASSES,
   VISION_EVAL_FIELD_HIT_KEYS,
   type VisionEvalClass,
+  type VisionEvalEntityHints,
   type VisionEvalFieldHits,
   type VisionEvalIdentityFields,
 } from "./collection/vision-eval.js";

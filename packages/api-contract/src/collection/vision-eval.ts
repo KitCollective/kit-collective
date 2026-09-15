@@ -26,14 +26,20 @@ export type VisionEvalIdentityFields = {
   patchId?: string;
 };
 
+export type VisionEvalEntityHints = {
+  side?: string[];
+  player?: string[];
+  patch?: string[];
+};
+
 export type ClassifyVisionEvalInput = {
   status: VisionJobStatus;
   suggested?: VisionSuggestions | VisionEvalIdentityFields;
   selected: VisionEvalIdentityFields & { seasonId: string; type: KitType };
   catalogMiss?: boolean;
   zeroKitHits?: boolean;
-  hints?: string[];
-  selectedLabelTexts?: string[];
+  entityHints?: VisionEvalEntityHints;
+  selectedCatalogLabels?: VisionEvalEntityHints;
 };
 
 export type ClassifyVisionEvalResult = {
@@ -124,18 +130,32 @@ function anyIdentitySuggestionDiffers(
   return false;
 }
 
-function hintMatchesSelectedLabels(hints: string[], selectedLabelTexts: string[]): boolean {
+function entityHintMatchesLabels(
+  hints: string[] | undefined,
+  selectedLabels: string[] | undefined,
+): boolean {
+  if (!hints?.length || !selectedLabels?.length) {
+    return false;
+  }
   for (const hint of hints) {
     if (!hint.trim()) {
       continue;
     }
-    for (const label of selectedLabelTexts) {
+    for (const label of selectedLabels) {
       if (catalogHintCompactMatches(hint, label)) {
         return true;
       }
     }
   }
   return false;
+}
+
+function suggestedUuidEmptyOrDifferent(
+  suggested: string | undefined,
+  selected: string | undefined,
+): boolean {
+  const suggestedId = nonemptyId(suggested);
+  return !suggestedId || suggestedId !== nonemptyId(selected);
 }
 
 function suggestedSideId(suggested: VisionEvalIdentityFields): string | undefined {
@@ -176,6 +196,38 @@ function fieldHitsFor(
   };
 }
 
+function allIdentityFieldHits(fieldHits: VisionEvalFieldHits): boolean {
+  return VISION_EVAL_FIELD_HIT_KEYS.every((key) => fieldHits[key]);
+}
+
+function aliasFromEntityHints(
+  input: ClassifyVisionEvalInput,
+  suggested: VisionEvalIdentityFields,
+): boolean {
+  const hints = input.entityHints ?? {};
+  const labels = input.selectedCatalogLabels ?? {};
+
+  if (
+    entityHintMatchesLabels(hints.side, labels.side) &&
+    suggestedUuidEmptyOrDifferent(suggestedSideId(suggested), selectedSideId(input.selected))
+  ) {
+    return true;
+  }
+  if (
+    entityHintMatchesLabels(hints.player, labels.player) &&
+    suggestedUuidEmptyOrDifferent(suggested.playerId, input.selected.playerId)
+  ) {
+    return true;
+  }
+  if (
+    entityHintMatchesLabels(hints.patch, labels.patch) &&
+    suggestedUuidEmptyOrDifferent(suggested.patchId, input.selected.patchId)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Scores a Vision label at Save. Deterministic — no VLM.
  * Priority: transport > model > alias > coverage > accepted.
@@ -192,15 +244,11 @@ export function classifyVisionEval(input: ClassifyVisionEvalInput): ClassifyVisi
     return { evalClass: "model", fieldHits };
   }
 
-  if (hintMatchesSelectedLabels(input.hints ?? [], input.selectedLabelTexts ?? [])) {
-    const suggestedId = suggestedSideId(suggested);
-    const selectedId = selectedSideId(input.selected);
-    if (!suggestedId || suggestedId !== selectedId) {
-      return { evalClass: "alias", fieldHits };
-    }
+  if (aliasFromEntityHints(input, suggested)) {
+    return { evalClass: "alias", fieldHits };
   }
 
-  if (coverageMiss(input, suggested)) {
+  if (coverageMiss(input, suggested) || !allIdentityFieldHits(fieldHits)) {
     return { evalClass: "coverage", fieldHits };
   }
 

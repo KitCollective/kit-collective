@@ -79,8 +79,26 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.seasonId).toBe(fixture.kits[0]!.seasonId);
     expect(mapped?.catalogKitId).toBe(fixture.kits[0]!.kitId);
     expect(mapped?.type).toBe("home");
+    expect(mapped?.kitHitCount).toBe(1);
     expect(mapped?.confidences?.season).toBe(95);
     expect(mapped?.confidences?.kitType).toBe(95);
+  });
+
+  it("persists kitHitCount 0 on catalog-miss visionRaw", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(db).mapHints({
+      clubHint: "Zyx Unknown",
+      kitType: "home",
+      seasonHint: "2023/24",
+    });
+    await pool.end();
+
+    expect(mapped?.clubId).toBeUndefined();
+    expect(mapped?.kitHitCount).toBe(0);
+    expect(JSON.parse(mapped?.visionRaw ?? "{}")).toMatchObject({
+      clubHint: "Zyx Unknown",
+      kitHitCount: 0,
+    });
   });
 
   it("omits season and type when manufacturer+sponsor hits more than one kit of the same type", async () => {

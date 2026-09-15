@@ -1,6 +1,7 @@
 import {
   VISION_CONFIDENCE_PRESELECT,
   VISION_CONFIDENCE_SUGGEST,
+  type VisionEvalEntityHints,
   type VisionFieldPreselect,
   type VisionJobStatus,
   type VisionSuggestions,
@@ -141,44 +142,51 @@ export function parseClubHintFromVisionRaw(raw: string | null | undefined): stri
   return undefined;
 }
 
-export function parseVisionEvalHints(raw: string | null | undefined): string[] {
+export function parseVisionEvalHints(raw: string | null | undefined): VisionEvalEntityHints {
   if (!raw) {
-    return [];
+    return {};
   }
 
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isRecord(parsed)) {
-      return [];
+      return {};
     }
 
-    const hints: string[] = [];
+    const side: string[] = [];
     const clubHint = nonemptyString(parsed.clubHint);
     if (clubHint) {
-      hints.push(clubHint);
+      side.push(clubHint);
     }
     if (Array.isArray(parsed.clubHintAlts)) {
       for (const alt of parsed.clubHintAlts) {
         const hint = nonemptyString(alt);
         if (hint) {
-          hints.push(hint);
+          side.push(hint);
         }
       }
     }
-    for (const key of ["seasonHint", "playerHint", "patchHint"] as const) {
-      const hint = nonemptyString(parsed[key]);
-      if (hint) {
-        hints.push(hint);
-      }
+
+    const hints: VisionEvalEntityHints = {};
+    if (side.length > 0) {
+      hints.side = side;
     }
-    const kitType = nonemptyString(parsed.kitType);
-    if (kitType) {
-      hints.push(kitType);
+    const playerHint = nonemptyString(parsed.playerHint);
+    if (playerHint) {
+      hints.player = [playerHint];
+    }
+    const patchHint = nonemptyString(parsed.patchHint);
+    if (patchHint) {
+      hints.patch = [patchHint];
     }
     return hints;
   } catch {
-    return [];
+    return {};
   }
+}
+
+export function encodeVisionEvalRaw(hints: object, kitHitCount?: number): string {
+  return JSON.stringify(kitHitCount === undefined ? hints : { ...hints, kitHitCount });
 }
 
 export function parseZeroKitHits(raw: string | null | undefined): boolean {

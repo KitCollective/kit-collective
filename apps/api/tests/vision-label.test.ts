@@ -416,6 +416,22 @@ describe("Vision labels /v1", () => {
     expect(row.selected.clubId).toBe(CLUB_B);
   });
 
+  it("labels coverage when catalogMiss kitType and seasonHint match type/season label, not CatalogLabel", async () => {
+    const { row } = await gemAndLabel("vision-label-coverage-kittype@example.com", CLUB_B, {
+      clubHint: "Zyx Unknown",
+      visionRaw: JSON.stringify({
+        clubHint: "Zyx Unknown",
+        kitType: "home",
+        seasonHint: "2023/24",
+      }),
+      confidences: { overall: 80, club: 80 },
+    });
+    expect(row.class).toBe("coverage");
+    expect(row.selected.clubId).toBe(CLUB_B);
+    expect(row.selected.type).toBe("home");
+    expect(row.selected.seasonLabel).toBe("2023/24");
+  });
+
   it("labels model when suggested club UUID differs from selected", async () => {
     const { row } = await gemAndLabel("vision-label-model@example.com", CLUB_B, {
       clubId: CLUB_A,
