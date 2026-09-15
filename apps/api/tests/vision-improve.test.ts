@@ -342,6 +342,23 @@ describe("Vision improve /v1", () => {
     return { session, jobId, saved };
   }
 
+  it("returns clubHint on GET job when catalogMiss has no catalog ids", async () => {
+    adapter.identity = {
+      clubHint: "FC Barcelona",
+      visionRaw: JSON.stringify({ clubHint: "FC Barcelona", kitType: "third" }),
+      confidences: { overall: 80, club: 80 },
+    };
+    const session = await registerSession(app, "vision-catalog-miss-hint@example.com");
+    const suggest = await suggestIdentity(app, session.accessToken);
+    expect(suggest.statusCode).toBe(202);
+    const { jobId } = visionSuggestResponseSchema.parse(suggest.json());
+    const job = await waitForSignedJob(app, session.accessToken, jobId);
+    expect(job.status).toBe("ready");
+    expect(job.catalogMiss).toBe(true);
+    expect(job.clubHint).toBe("FC Barcelona");
+    expect(job.suggestions).toBeUndefined();
+  });
+
   it("returns 401 without a session and 403 for a collector", async () => {
     const unauthGet = await app.inject({ method: "GET", url: "/v1/admin/vision/improve" });
     expect(unauthGet.statusCode).toBe(401);
