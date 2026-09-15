@@ -24,6 +24,7 @@ import {
   PREFERRED_FOOT,
   USER_LOCALES,
   USER_ROLES,
+  VISION_EVAL_CLASSES,
 } from "@kit/domain";
 import { relations, sql } from "drizzle-orm";
 import {
@@ -85,6 +86,7 @@ export const authenticityEnum = pgEnum("authenticity", AUTHENTICITY_VALUES);
 export const visionJobStatusEnum = pgEnum("vision_job_status", VISION_JOB_STATUSES);
 export const visionJobKindEnum = pgEnum("vision_job_kind", ["identity", "grouping"] as const);
 export const visionUserActionEnum = pgEnum("vision_user_action", VISION_USER_ACTIONS);
+export const visionEvalClassEnum = pgEnum("vision_eval_class", VISION_EVAL_CLASSES);
 export const messageKindEnum = pgEnum("message_kind", MESSAGE_KINDS);
 export const bidStatusEnum = pgEnum("bid_status", BID_STATUSES);
 
@@ -769,6 +771,16 @@ export const visionLog = pgTable("vision_log", {
   suggestedType: kitTypeEnum("suggested_type"),
   suggestedPlayerId: uuid("suggested_player_id").references(() => player.id),
   suggestedPatchId: uuid("suggested_patch_id").references(() => patch.id),
+  selectedClubId: uuid("selected_club_id").references(() => club.id),
+  selectedNationalTeamId: uuid("selected_national_team_id").references(() => nationalTeam.id),
+  selectedSeasonId: uuid("selected_season_id").references(() => season.id),
+  selectedType: kitTypeEnum("selected_type"),
+  selectedCatalogKitId: uuid("selected_catalog_kit_id").references(() => kit.id),
+  selectedPlayerId: uuid("selected_player_id").references(() => player.id),
+  selectedPatchId: uuid("selected_patch_id").references(() => patch.id),
+  evalClass: visionEvalClassEnum("eval_class"),
+  fieldHits: text("field_hits"),
+  photoKeys: text("photo_keys"),
   visionRaw: text("vision_raw"),
   confidences: text("confidences"),
   groupingResult: text("grouping_result"),
@@ -1113,6 +1125,27 @@ export const visionLogRelations = relations(visionLog, ({ one }) => ({
   }),
   suggestedPatch: one(patch, {
     fields: [visionLog.suggestedPatchId],
+    references: [patch.id],
+  }),
+  selectedClub: one(club, { fields: [visionLog.selectedClubId], references: [club.id] }),
+  selectedNationalTeam: one(nationalTeam, {
+    fields: [visionLog.selectedNationalTeamId],
+    references: [nationalTeam.id],
+  }),
+  selectedSeason: one(season, {
+    fields: [visionLog.selectedSeasonId],
+    references: [season.id],
+  }),
+  selectedCatalogKit: one(kit, {
+    fields: [visionLog.selectedCatalogKitId],
+    references: [kit.id],
+  }),
+  selectedPlayer: one(player, {
+    fields: [visionLog.selectedPlayerId],
+    references: [player.id],
+  }),
+  selectedPatch: one(patch, {
+    fields: [visionLog.selectedPatchId],
     references: [patch.id],
   }),
 }));

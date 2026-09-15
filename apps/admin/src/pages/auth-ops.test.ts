@@ -38,4 +38,22 @@ describe("Admin Auth ops chrome", () => {
     expect(drill).toContain("Auth events");
     expect(drill).not.toContain("/admin/auth/security");
   });
+
+  it("keeps Vision labels under User Data chips with class and user_action filters", () => {
+    const collectors = readFileSync(join(here, "CollectorsPage.tsx"), "utf8");
+    const shell = readFileSync(join(here, "../components/AdminShell.tsx"), "utf8");
+
+    expect(collectors).toContain("Vision labels");
+    expect(collectors).toContain('"vision-labels"');
+    expect(collectors).toContain("/admin/vision/labels");
+    expect(collectors).toContain('params.set("class"');
+    expect(collectors).toContain('params.set("user_action"');
+    expect(collectors).toContain("No Vision labels yet");
+    expect(collectors).not.toContain("<iframe");
+
+    expect(shell).toContain('label: "Master Data"');
+    expect(shell).toContain('label: "User Data"');
+    expect(shell.match(/label: "/g)?.length).toBe(2);
+    expect(shell).not.toContain("Vision labels");
+  });
 });

@@ -137,6 +137,10 @@ export type OcrStatus = (typeof OCR_STATUSES)[number];
 export const AUTHENTICITY_VALUES = ["unknown", "genuine", "replica"] as const;
 export type Authenticity = (typeof AUTHENTICITY_VALUES)[number];
 
+/** Nest Vision eval class at Save — not a collector surface, not a second Gemini call. */
+export const VISION_EVAL_CLASSES = ["accepted", "alias", "coverage", "model", "transport"] as const;
+export type VisionEvalClass = (typeof VISION_EVAL_CLASSES)[number];
+
 /** Danish chip labels for kit type (UI only — stored values are KIT_TYPES). */
 export const KIT_TYPE_LABELS_DA: Record<KitType, string> = {
   home: "Hjemme",

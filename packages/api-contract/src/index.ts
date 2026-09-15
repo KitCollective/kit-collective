@@ -102,6 +102,21 @@ export {
   adminCollectorUserSchema,
 } from "./admin/collectors.js";
 export {
+  type AdminVisionLabelFieldHits,
+  type AdminVisionLabelIdentity,
+  type AdminVisionLabelList,
+  type AdminVisionLabelQuery,
+  type AdminVisionLabelRow,
+  type AdminVisionLabels,
+  adminVisionLabelIdentitySchema,
+  adminVisionLabelListSchema,
+  adminVisionLabelQuerySchema,
+  adminVisionLabelRowSchema,
+  adminVisionLabelsSchema,
+  visionEvalClassSchema,
+  visionEvalFieldHitsSchema,
+} from "./admin/vision-labels.js";
+export {
   type BillingIapResponse,
   type BillingStartTrialResponse,
   billingIapResponseSchema,
@@ -323,6 +338,18 @@ export {
   visionSuggestRequestSchema,
   visionSuggestResponseSchema,
 } from "./collection/vision.js";
+export {
+  type ClassifyVisionEvalInput,
+  type ClassifyVisionEvalResult,
+  catalogHintCompactMatches,
+  classifyVisionEval,
+  compactCatalogHint,
+  VISION_EVAL_CLASSES,
+  VISION_EVAL_FIELD_HIT_KEYS,
+  type VisionEvalClass,
+  type VisionEvalFieldHits,
+  type VisionEvalIdentityFields,
+} from "./collection/vision-eval.js";
 export {
   type VisionGroupingGroup,
   type VisionGroupingPhoto,

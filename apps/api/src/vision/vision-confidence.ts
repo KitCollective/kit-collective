@@ -141,6 +141,69 @@ export function parseClubHintFromVisionRaw(raw: string | null | undefined): stri
   return undefined;
 }
 
+export function parseVisionEvalHints(raw: string | null | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      return [];
+    }
+
+    const hints: string[] = [];
+    const clubHint = nonemptyString(parsed.clubHint);
+    if (clubHint) {
+      hints.push(clubHint);
+    }
+    if (Array.isArray(parsed.clubHintAlts)) {
+      for (const alt of parsed.clubHintAlts) {
+        const hint = nonemptyString(alt);
+        if (hint) {
+          hints.push(hint);
+        }
+      }
+    }
+    for (const key of ["seasonHint", "playerHint", "patchHint"] as const) {
+      const hint = nonemptyString(parsed[key]);
+      if (hint) {
+        hints.push(hint);
+      }
+    }
+    const kitType = nonemptyString(parsed.kitType);
+    if (kitType) {
+      hints.push(kitType);
+    }
+    return hints;
+  } catch {
+    return [];
+  }
+}
+
+export function parseZeroKitHits(raw: string | null | undefined): boolean {
+  if (!raw) {
+    return false;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      return false;
+    }
+    if (typeof parsed.kitHitCount === "number") {
+      return parsed.kitHitCount === 0;
+    }
+    if (Array.isArray(parsed.kitHits)) {
+      return parsed.kitHits.length === 0;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
 function nonemptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
