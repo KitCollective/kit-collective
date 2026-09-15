@@ -277,14 +277,12 @@ export class VisionCatalogMapper {
         .innerJoin(season, eq(teamSeason.seasonId, season.id))
         .where(eq(teamSeason.clubId, playerScope.id));
 
-      return (
-        bestScored(
-          rows.map((row) => ({
-            seasonId: row.seasonId,
-            score: scoreLabelMatch(row.label, seasonHint),
-          })),
-        ) ?? null
-      ) as { seasonId: string; score: number } | null;
+      return (bestScored(
+        rows.map((row) => ({
+          seasonId: row.seasonId,
+          score: scoreLabelMatch(row.label, seasonHint),
+        })),
+      ) ?? null) as { seasonId: string; score: number } | null;
     }
 
     const rows = await this.db
@@ -293,14 +291,12 @@ export class VisionCatalogMapper {
       .innerJoin(season, eq(nationalTeamSeason.seasonId, season.id))
       .where(eq(nationalTeamSeason.nationalTeamId, playerScope.id));
 
-    return (
-      bestScored(
-        rows.map((row) => ({
-          seasonId: row.seasonId,
-          score: scoreLabelMatch(row.label, seasonHint),
-        })),
-      ) ?? null
-    ) as { seasonId: string; score: number } | null;
+    return (bestScored(
+      rows.map((row) => ({
+        seasonId: row.seasonId,
+        score: scoreLabelMatch(row.label, seasonHint),
+      })),
+    ) ?? null) as { seasonId: string; score: number } | null;
   }
 
   private async resolvePlayer(
