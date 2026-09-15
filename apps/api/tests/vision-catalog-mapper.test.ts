@@ -374,6 +374,7 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.kitHitCount).toBe(0);
 
     expect(mapped).toBeDefined();
+    // SAFETY: expect(mapped).toBeDefined() above narrows mapped to non-null in this test branch.
     const resolved = resolveIdentityJob(mapped as NonNullable<typeof mapped>);
     expect(resolved.catalogMiss).toBe(true);
     expect(resolved.catalogLikely).toBe(false);
