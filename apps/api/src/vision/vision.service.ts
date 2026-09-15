@@ -1,8 +1,10 @@
 import {
   classifyVisionEval,
+  proposeVisionImprove,
   resolveVisionSaveAction,
   type VisionEvalEntityHints,
   type VisionGroupingSuggestions,
+  type VisionImproveProposal,
   type VisionJobKind,
   type VisionJobStatus,
   type VisionSuggestions,
@@ -15,11 +17,12 @@ import {
   playerNationalTeamSeason,
   season,
   userJerseyPhoto,
+  visionImprove,
   visionLog,
 } from "@kit/db";
 import type { KitType, LabelKind, LabelLocale } from "@kit/domain";
-import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import type {
   VisionAdapter,
@@ -45,6 +48,16 @@ import {
 
 export const VISION_QUEUE_NAME = "vision";
 
+export type PersistVisionLabelSelected = {
+  clubId?: string;
+  nationalTeamId?: string;
+  seasonId: string;
+  type: KitType;
+  catalogKitId?: string | null;
+  playerId?: string;
+  patchId?: string;
+};
+
 export type VisionJobPayload = {
   jobId: string;
   userId: string;
@@ -58,6 +71,8 @@ export type VisionJobPayload = {
 
 @Injectable()
 export class VisionService {
+  private readonly logger = new Logger(VisionService.name);
+
   constructor(
     @Inject(DB) private readonly db: Db,
     @Inject(VISION_ADAPTER) private readonly adapter: VisionAdapter,
@@ -466,15 +481,7 @@ export class VisionService {
     userId: string,
     jobId: string,
     userJerseyId: string,
-    selected: {
-      clubId?: string;
-      nationalTeamId?: string;
-      seasonId: string;
-      type: KitType;
-      catalogKitId?: string | null;
-      playerId?: string;
-      patchId?: string;
-    },
+    selected: PersistVisionLabelSelected,
   ): Promise<void> {
     const [row] = await this.db
       .select({
@@ -565,6 +572,62 @@ export class VisionService {
         updatedAt: new Date(),
       })
       .where(and(eq(visionLog.id, jobId), isNull(visionLog.evalClass)));
+
+    const proposal = proposeVisionImprove({
+      evalClass: scored.evalClass,
+      suggested: {
+        clubId: row.suggestedClubId ?? undefined,
+        nationalTeamId: row.suggestedNationalTeamId ?? undefined,
+        seasonId: row.suggestedSeasonId ?? undefined,
+        type: row.suggestedType ?? undefined,
+        catalogKitId: row.suggestedCatalogKitId ?? undefined,
+        playerId: row.suggestedPlayerId ?? undefined,
+        patchId: row.suggestedPatchId ?? undefined,
+      },
+      selected: {
+        clubId: selected.clubId,
+        nationalTeamId: selected.nationalTeamId,
+        seasonId: selected.seasonId,
+        type: selected.type,
+        catalogKitId: selected.catalogKitId ?? undefined,
+        playerId: selected.playerId,
+        patchId: selected.patchId,
+      },
+      entityHints: parseVisionEvalHints(row.visionRaw),
+      selectedCatalogLabels,
+    });
+    if (proposal) {
+      try {
+        await this.upsertVisionImprove(proposal);
+      } catch (error) {
+        this.logger.error(
+          "Vision improve upsert failed after Vision label persist",
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    }
+  }
+
+  private async upsertVisionImprove(proposal: VisionImproveProposal): Promise<void> {
+    await this.db
+      .insert(visionImprove)
+      .values({
+        kind: proposal.kind,
+        status: "proposed",
+        count: 1,
+        fingerprint: proposal.fingerprint,
+        text: proposal.text ?? null,
+        entityType: proposal.entityType ?? null,
+        entityId: proposal.entityId ?? null,
+        field: proposal.field ?? null,
+      })
+      .onConflictDoUpdate({
+        target: visionImprove.fingerprint,
+        set: {
+          count: sql`${visionImprove.count} + 1`,
+          updatedAt: new Date(),
+        },
+      });
   }
 
   private async loadSelectedCatalogLabels(selected: {

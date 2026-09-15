@@ -141,6 +141,36 @@ export type Authenticity = (typeof AUTHENTICITY_VALUES)[number];
 export const VISION_EVAL_CLASSES = ["accepted", "alias", "coverage", "model", "transport"] as const;
 export type VisionEvalClass = (typeof VISION_EVAL_CLASSES)[number];
 
+/** Staff-gated Vision improve proposal kind — CatalogLabel alias, seed backlog, or prompt ticket. */
+export const VISION_IMPROVE_KINDS = ["alias", "seed", "prompt"] as const;
+export type VisionImproveKind = (typeof VISION_IMPROVE_KINDS)[number];
+
+/** Vision improve lifecycle. New upserts are proposed; seed/prompt Apply is noted only. */
+export const VISION_IMPROVE_STATUSES = ["proposed", "applied", "dismissed", "noted"] as const;
+export type VisionImproveStatus = (typeof VISION_IMPROVE_STATUSES)[number];
+
+/** Catalog-ish entity a Vision improve row points at. Not a UserJersey FK. */
+export const VISION_IMPROVE_ENTITY_TYPES = [
+  "club",
+  "national_team",
+  "season",
+  "kit",
+  "player",
+  "patch",
+] as const;
+export type VisionImproveEntityType = (typeof VISION_IMPROVE_ENTITY_TYPES)[number];
+
+/** Identity field the eval class blamed. Same keys as Vision eval field hits. */
+export const VISION_IMPROVE_FIELDS = [
+  "side",
+  "season",
+  "type",
+  "catalogKitId",
+  "player",
+  "patch",
+] as const;
+export type VisionImproveField = (typeof VISION_IMPROVE_FIELDS)[number];
+
 /** Danish chip labels for kit type (UI only — stored values are KIT_TYPES). */
 export const KIT_TYPE_LABELS_DA: Record<KitType, string> = {
   home: "Hjemme",

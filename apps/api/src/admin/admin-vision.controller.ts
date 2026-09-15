@@ -1,5 +1,18 @@
-import { adminVisionLabelQuerySchema } from "@kit/api-contract";
-import { BadRequestException, Controller, Get, Query, UseGuards } from "@nestjs/common";
+import {
+  adminVisionImproveIdParamSchema,
+  adminVisionImproveQuerySchema,
+  adminVisionLabelQuerySchema,
+} from "@kit/api-contract";
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
 import { AdminAuthGuard } from "./admin-auth.guard.js";
 import { AdminVisionService } from "./admin-vision.service.js";
 
@@ -21,5 +34,38 @@ export class AdminVisionController {
       throw new BadRequestException("Invalid vision labels query");
     }
     return this.adminVisionService.listLabels(parsed.data);
+  }
+
+  @Get("improve")
+  listImprove(@Query() query: Record<string, string | string[] | undefined>) {
+    const parsed = adminVisionImproveQuerySchema.safeParse({
+      status: typeof query.status === "string" ? query.status : undefined,
+      limit: typeof query.limit === "string" ? query.limit : undefined,
+      offset: typeof query.offset === "string" ? query.offset : undefined,
+    });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid vision improve query");
+    }
+    return this.adminVisionService.listImprove(parsed.data);
+  }
+
+  @Post("improve/:id/apply")
+  @HttpCode(200)
+  applyImprove(@Param() params: Record<string, string>) {
+    const parsed = adminVisionImproveIdParamSchema.safeParse({ id: params.id });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid vision improve id");
+    }
+    return this.adminVisionService.applyImprove(parsed.data.id);
+  }
+
+  @Post("improve/:id/dismiss")
+  @HttpCode(200)
+  dismissImprove(@Param() params: Record<string, string>) {
+    const parsed = adminVisionImproveIdParamSchema.safeParse({ id: params.id });
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid vision improve id");
+    }
+    return this.adminVisionService.dismissImprove(parsed.data.id);
   }
 }

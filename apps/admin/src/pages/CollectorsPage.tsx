@@ -4,6 +4,8 @@ import {
   type AdminCollectorJerseyIndexRow,
   type AdminCollectorList,
   type AdminCollectorRow,
+  type AdminVisionImproveRow,
+  type AdminVisionImproves,
   type AdminVisionLabelFieldHits,
   type AdminVisionLabelIdentity,
   type AdminVisionLabelRow,
@@ -12,6 +14,8 @@ import {
   adminAuthEventsSchema,
   adminCollectorJerseyIndexSchema,
   adminCollectorListSchema,
+  adminVisionImproveRowSchema,
+  adminVisionImprovesSchema,
   adminVisionLabelsSchema,
   authSecurityDetectionsSchema,
   VISION_EVAL_CLASSES,
@@ -34,6 +38,7 @@ const USER_DATA_TABLES = [
   "auth-events",
   "auth-security",
   "vision-labels",
+  "vision-improve",
 ] as const;
 
 const FIELD_HIT_ORDER = VISION_EVAL_FIELD_HIT_KEYS;
@@ -52,6 +57,8 @@ function tableLabel(table: UserDataTable): string {
       return "Auth security";
     case "vision-labels":
       return "Vision labels";
+    case "vision-improve":
+      return "Vision improve";
     default: {
       const exhaustive: never = table;
       return exhaustive;
@@ -71,6 +78,8 @@ function tableSearchPlaceholder(table: UserDataTable): string {
       return "Search Auth security";
     case "vision-labels":
       return "Search Vision labels";
+    case "vision-improve":
+      return "Search Vision improve";
     default: {
       const exhaustive: never = table;
       return exhaustive;
@@ -90,6 +99,8 @@ function columnCount(table: UserDataTable): number {
       return 4;
     case "vision-labels":
       return 7;
+    case "vision-improve":
+      return 6;
     default: {
       const exhaustive: never = table;
       return exhaustive;
@@ -147,11 +158,13 @@ export function CollectorsPage() {
   const [authEvents, setAuthEvents] = useState<AdminAuthEvents | null>(null);
   const [authSecurity, setAuthSecurity] = useState<AuthSecurityDetections | null>(null);
   const [visionLabels, setVisionLabels] = useState<AdminVisionLabels | null>(null);
+  const [visionImprove, setVisionImprove] = useState<AdminVisionImproves | null>(null);
   const [classFilter, setClassFilter] = useState<VisionEvalClass | "">("");
   const [userActionFilter, setUserActionFilter] = useState<VisionUserAction | "">("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
+  const [pendingImproveId, setPendingImproveId] = useState<string | null>(null);
 
   const query = useMemo(() => ({ q: search.trim() || undefined }), [search]);
 
@@ -177,6 +190,7 @@ export function CollectorsPage() {
       setAuthEvents(null);
       setAuthSecurity(null);
       setVisionLabels(null);
+      setVisionImprove(null);
     }
 
     let request: Promise<void>;
@@ -216,7 +230,7 @@ export function CollectorsPage() {
         clearTables();
         setAuthSecurity(authSecurityDetectionsSchema.parse(body));
       });
-    } else {
+    } else if (table === "vision-labels") {
       const params = new URLSearchParams();
       if (classFilter) {
         params.set("class", classFilter);
@@ -234,6 +248,17 @@ export function CollectorsPage() {
           setVisionLabels(adminVisionLabelsSchema.parse(body));
         },
       );
+    } else if (table === "vision-improve") {
+      request = apiFetch<AdminVisionImproves>("/admin/vision/improve", { token }).then((body) => {
+        if (cancelled) {
+          return;
+        }
+        clearTables();
+        setVisionImprove(adminVisionImprovesSchema.parse(body));
+      });
+    } else {
+      const exhaustive: never = table;
+      request = Promise.reject(new Error(`Unknown user data table: ${exhaustive}`));
     }
 
     request
@@ -253,6 +278,7 @@ export function CollectorsPage() {
         setAuthEvents(null);
         setAuthSecurity(null);
         setVisionLabels(null);
+        setVisionImprove(null);
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load user data");
       })
       .finally(() => {
@@ -354,6 +380,13 @@ export function CollectorsPage() {
       const total = authSecurity?.detections.length ?? 0;
       return `${total} detections`;
     }
+    if (table === "vision-improve") {
+      if (!visionImprove) {
+        return "0 vision improve";
+      }
+      const proposedCount = visionImprove.rows.filter((row) => row.status === "proposed").length;
+      return `${proposedCount} vision improve`;
+    }
     if (!visionLabels) {
       return "0 vision labels";
     }
@@ -365,6 +398,42 @@ export function CollectorsPage() {
     setClassFilter("");
     setUserActionFilter("");
     setFocusedRowIndex(0);
+  }
+
+  async function mutateVisionImprove(id: string, action: "apply" | "dismiss") {
+    if (!token) {
+      return;
+    }
+    setPendingImproveId(id);
+    setError(null);
+    try {
+      const body = await apiFetch(`/admin/vision/improve/${id}/${action}`, {
+        token,
+        method: "POST",
+      });
+      if (body !== undefined) {
+        adminVisionImproveRowSchema.parse(body);
+      }
+      setVisionImprove((current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          total: Math.max(0, current.total - 1),
+          rows: current.rows.filter((row) => row.id !== id),
+        };
+      });
+    } catch (mutateError) {
+      setError(
+        mutateError instanceof Error
+          ? mutateError.message
+          : action === "apply"
+            ? "Failed to apply Vision improve"
+            : "Failed to dismiss Vision improve",
+      );
+    } finally {
+      setPendingImproveId(null);
+    }
   }
 
   return (
@@ -500,6 +569,17 @@ export function CollectorsPage() {
                 <th scope="col">User</th>
                 <th scope="col">When</th>
               </tr>
+            ) : table === "vision-improve" ? (
+              <tr>
+                <th scope="col">Fingerprint</th>
+                <th className="data-table-numeric" scope="col">
+                  Count
+                </th>
+                <th scope="col">Suggested</th>
+                <th scope="col">Selected</th>
+                <th scope="col">Last seen</th>
+                <th scope="col">Actions</th>
+              </tr>
             ) : (
               <tr>
                 <th scope="col">Class</th>
@@ -584,6 +664,19 @@ export function CollectorsPage() {
                   </div>
                 </td>
               </tr>
+            ) : table === "vision-improve" &&
+              (!visionImprove ||
+                visionImprove.rows.filter((row) => row.status === "proposed").length === 0) ? (
+              <tr>
+                <td colSpan={columns}>
+                  <div className="empty-state data-table-empty">
+                    <h2>No Vision improve yet</h2>
+                    <p>
+                      Alias, coverage, and model proposals from collector Save will appear here.
+                    </p>
+                  </div>
+                </td>
+              </tr>
             ) : table === "user" && users ? (
               users.rows.map((row, rowIndex) => (
                 <tr
@@ -646,6 +739,53 @@ export function CollectorsPage() {
                   <td className="data-table-meta">{formatFieldHits(row.fieldHits)}</td>
                 </tr>
               ))
+            ) : table === "vision-improve" && visionImprove ? (
+              visionImprove.rows
+                .filter((row) => row.status === "proposed")
+                .map((row: AdminVisionImproveRow, rowIndex) => {
+                  const pending = pendingImproveId === row.id;
+                  return (
+                    <tr
+                      key={row.id}
+                      tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
+                      onFocus={() => setFocusedRowIndex(rowIndex)}
+                    >
+                      <td className="data-table-mono">{row.fingerprint}</td>
+                      <td className="data-table-mono data-table-numeric">{row.count}</td>
+                      <td>{formatIdentityLabels(row.suggested)}</td>
+                      <td>{formatIdentityLabels(row.selected)}</td>
+                      <td className="data-table-meta">{formatAuthDateTime(row.lastSeenAt)}</td>
+                      <td className="data-table-row-actions">
+                        <div className="data-table-row-actions-cluster">
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={pendingImproveId !== null}
+                            aria-busy={pending}
+                            aria-label={`Apply ${row.fingerprint}`}
+                            onClick={() => {
+                              void mutateVisionImprove(row.id, "apply");
+                            }}
+                          >
+                            Apply
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-tertiary"
+                            disabled={pendingImproveId !== null}
+                            aria-busy={pending}
+                            aria-label={`Dismiss ${row.fingerprint}`}
+                            onClick={() => {
+                              void mutateVisionImprove(row.id, "dismiss");
+                            }}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
             ) : jerseys ? (
               jerseys.rows.map((row, rowIndex) => (
                 <tr
