@@ -233,6 +233,18 @@ jobs:
       - name: Test factory CI wiring ratchet logic
         run: node --test scripts/tests/check-factory-ci-tests.test.mjs
 
+      - name: Check factory locks
+        run: node scripts/tests/check-factory-locks.mjs
+
+      - name: Test factory lock ratchet logic
+        run: node --test scripts/tests/check-factory-locks.test.mjs
+
+      - name: Check ratchet script paths
+        run: node scripts/tests/check-ratchet-script-paths.mjs
+
+      - name: Test ratchet script path registry logic
+        run: node --test scripts/tests/check-ratchet-script-paths.test.mjs
+
       - name: Check signal-up create contract
         run: node scripts/tests/check-signal-up-create-contract.mjs
 

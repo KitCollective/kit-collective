@@ -12,7 +12,13 @@ import { fileURLToPath } from "node:url";
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 export const PACKAGE_JSON_PATH = "package.json";
 
-export const FACTORY_NODE_TEST_NEEDLES = ["land-policy", "migration-prefix"];
+export const FACTORY_NODE_TEST_NEEDLES = [
+  "land-policy",
+  "migration-prefix",
+  "check-factory-locks",
+  "check-ratchet-script-paths",
+  "check-signal-up-create-contract",
+];
 
 export const MOBILE_CHECK_NEEDLES = [
   "check:mobile-tab-bar",

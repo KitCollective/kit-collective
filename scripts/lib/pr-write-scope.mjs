@@ -21,9 +21,11 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/check-migration-prefixes.mjs",
   "scripts/lib/migration-prefix.mjs",
   "scripts/tests/check-migration-prefixes.test.mjs",
+  "scripts/check-mobile-add-camera-resume.mjs",
   "scripts/check-mobile-add-confirm-redirect.mjs",
   "scripts/check-mobile-add-form-wiring.mjs",
   "scripts/check-mobile-add-upload-files.mjs",
+  "scripts/check-mobile-capture-dead-exports.mjs",
   "scripts/check-mobile-collection-ui-evidence.mjs",
   "scripts/check-mobile-drag-reorder.mjs",
   "scripts/check-mobile-design-tokens.mjs",
@@ -58,6 +60,12 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/tests/check-mobile-paywall-iap.test.mjs",
   "scripts/tests/check-pr-write-scope.test.mjs",
   "scripts/tests/check-factory-ci-tests.test.mjs",
+  "scripts/tests/check-factory-locks.mjs",
+  "scripts/tests/check-factory-locks.test.mjs",
+  "scripts/tests/check-ratchet-script-paths.mjs",
+  "scripts/tests/check-ratchet-script-paths.test.mjs",
+  "scripts/tests/check-signal-up-create-contract.mjs",
+  "scripts/tests/check-signal-up-create-contract.test.mjs",
 ]);
 
 /**
