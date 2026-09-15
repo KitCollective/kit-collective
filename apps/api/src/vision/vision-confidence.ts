@@ -109,10 +109,34 @@ export type ResolvedIdentityJob = {
   suggestions?: VisionSuggestions;
   fieldPreselect?: VisionFieldPreselect;
   catalogMiss: boolean;
+  /** Raw model side hint(s) when catalogMiss — non-id seeds for Confirm search. */
+  clubHint?: string;
+  nationalTeamHint?: string;
   /** Overall preselect for legacy clients — true when any field preselects. */
   preselect: boolean;
   storedResult: VisionInferenceResult | null;
 };
+
+export function resolveCatalogMissHints(result: VisionInferenceResult): {
+  clubHint?: string;
+  nationalTeamHint?: string;
+} {
+  const hint = result.clubHint?.trim() || parseClubHintFromVisionRaw(result.visionRaw);
+  if (!hint) {
+    return {};
+  }
+
+  const clubConfidence = result.confidences?.club;
+  const nationalTeamConfidence = result.confidences?.nationalTeam;
+  if (
+    nationalTeamConfidence !== undefined &&
+    (clubConfidence === undefined || nationalTeamConfidence >= clubConfidence)
+  ) {
+    return { nationalTeamHint: hint };
+  }
+
+  return { clubHint: hint };
+}
 
 export function parseClubHintFromVisionRaw(raw: string | null | undefined): string | undefined {
   if (!raw) {
@@ -258,6 +282,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
   );
 
   const catalogMiss = Boolean(hadClubCatalogHint(result) && !result.clubId && !result.catalogKitId);
+  const catalogMissHints = catalogMiss ? resolveCatalogMissHints(result) : {};
 
   const suggestions: VisionSuggestions = {};
   const fieldPreselect: VisionFieldPreselect = {};
@@ -350,6 +375,8 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     suggestions: hasSuggestion ? suggestions : undefined,
     fieldPreselect: hasSuggestion ? fieldPreselect : undefined,
     catalogMiss,
+    clubHint: catalogMissHints.clubHint,
+    nationalTeamHint: catalogMissHints.nationalTeamHint,
     preselect,
     storedResult: result,
   };

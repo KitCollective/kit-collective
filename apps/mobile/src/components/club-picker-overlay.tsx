@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { searchCatalogClubs } from "@/api/catalog";
 import { type CatalogPickerRow, searchDummyClubs } from "@/catalog/dummyCatalog";
+import { formatCatalogMissSheetMessage } from "@/capture/catalogMissHint";
 import { CatalogPickerModal } from "@/components/catalog-picker-modal";
 
 type ClubPickerOverlayProps = {
   visible: boolean;
   accessToken?: string | null;
   selectedClubId: string | null;
+  initialQuery?: string | null;
+  catalogMissHint?: string | null;
   onSelect: (club: CatalogPickerRow) => void;
   onDismiss: () => void;
 };
@@ -20,6 +23,8 @@ export function ClubPickerOverlay({
   visible,
   accessToken,
   selectedClubId,
+  initialQuery = null,
+  catalogMissHint = null,
   onSelect,
   onDismiss,
 }: ClubPickerOverlayProps) {
@@ -62,6 +67,16 @@ export function ClubPickerOverlay({
       return;
     }
 
+    if (initialQuery?.trim()) {
+      setQuery(initialQuery.trim());
+    }
+  }, [initialQuery, visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       void runSearch(query);
     }, 300);
@@ -80,6 +95,9 @@ export function ClubPickerOverlay({
       selectedId={selectedClubId}
       loading={loading}
       errorMessage={errorMessage}
+      noticeMessage={
+        catalogMissHint ? formatCatalogMissSheetMessage(catalogMissHint) : null
+      }
       emptyMessage="Ingen klubber eller landshold matcher."
       onSelect={(item) => {
         onSelect(item);

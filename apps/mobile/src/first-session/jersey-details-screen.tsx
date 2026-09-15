@@ -55,6 +55,11 @@ import {
   switchSingleToBulkBind,
   upsertDraftPhoto,
 } from "@/capture/captureSession";
+import {
+  formatCatalogMissBannerMessage,
+  formatCatalogMissSheetMessage,
+  resolveVisionCatalogMissHint,
+} from "@/capture/catalogMissHint";
 import { resolveConfirmBanner } from "@/capture/confirmBanner";
 import { resolveConfirmLightboxUri, resolveConfirmStripUri } from "@/capture/confirmPhotoUri";
 import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
@@ -125,6 +130,7 @@ export function JerseyDetailsScreen({
   const [loadingSeasons, setLoadingSeasons] = useState(false);
   const [saving, setSaving] = useState(false);
   const [catalogMiss, setCatalogMiss] = useState(false);
+  const [catalogMissHint, setCatalogMissHint] = useState<string | null>(null);
   const [searchError, setSearchError] = useState(false);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const [visionPolling, setVisionPolling] = useState(false);
@@ -337,6 +343,7 @@ export function JerseyDetailsScreen({
       if (job.status !== "ready" || !job.suggestions) {
         if (job.catalogMiss) {
           setCatalogMiss(true);
+          setCatalogMissHint(resolveVisionCatalogMissHint(job));
         }
         return;
       }
@@ -414,6 +421,7 @@ export function JerseyDetailsScreen({
       kitTypeManuallySet.current = false;
       setSelectedSeasonLabel(null);
       setCatalogMiss(false);
+      setCatalogMissHint(null);
     } else if (!photosChanged) {
       return;
     } else {
@@ -423,6 +431,7 @@ export function JerseyDetailsScreen({
       visionStartAttempted.current = false;
       appliedVisionJobId.current = null;
       setCatalogMiss(false);
+      setCatalogMissHint(null);
     }
 
     let cancelled = false;
@@ -483,6 +492,7 @@ export function JerseyDetailsScreen({
           appliedVisionJobId.current = job.jobId;
           if (job.catalogMiss) {
             setCatalogMiss(true);
+            setCatalogMissHint(resolveVisionCatalogMissHint(job));
           }
           if (job.suggestions) {
             await applyVisionSuggestions(job);
@@ -552,9 +562,8 @@ export function JerseyDetailsScreen({
   };
 
   const openClubSheet = () => {
-    setClubQuery("");
+    setClubQuery(catalogMissHint ?? "");
     setClubResults([]);
-    setCatalogMiss(false);
     setSearchError(false);
     setClubSheetOpen(true);
   };
@@ -564,6 +573,8 @@ export function JerseyDetailsScreen({
     seasonManuallySet.current = false;
     setSelectedSeasonLabel(null);
     mutate((current) => setDraftCatalogSide(current, current.activeDraftId, club));
+    setCatalogMiss(false);
+    setCatalogMissHint(null);
     setClubSheetOpen(false);
     setSeasonSheetOpen(true);
 
@@ -1047,7 +1058,7 @@ export function JerseyDetailsScreen({
         {activeBanner === "catalogMiss" ? (
           <Banner
             tone="info"
-            message="Klubben findes ikke i kataloget endnu. Dit draft bliver gemt."
+            message={formatCatalogMissBannerMessage(catalogMissHint)}
             action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
           />
         ) : null}
@@ -1178,7 +1189,7 @@ export function JerseyDetailsScreen({
         {catalogMiss ? (
           <Banner
             tone="info"
-            message="Klubben findes ikke i kataloget endnu."
+            message={formatCatalogMissSheetMessage(catalogMissHint)}
             action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
           />
         ) : null}

@@ -22,6 +22,7 @@ import {
   confirmSeasonWasEdited,
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
+import { resolveVisionCatalogMissHint } from "@/capture/catalogMissHint";
 import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
 import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
 import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
@@ -63,7 +64,9 @@ function hasSuggestFields(job: VisionJobResponse): boolean {
       job.suggestions?.type ||
       job.suggestions?.playerId ||
       job.suggestions?.patchId ||
-      job.catalogMiss,
+      job.catalogMiss ||
+      job.clubHint ||
+      job.nationalTeamHint,
   );
 }
 
@@ -87,6 +90,7 @@ export function useConfirmVision({
   const [polling, setPolling] = useState(false);
   const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
   const [applied, setApplied] = useState(false);
+  const [catalogMissHint, setCatalogMissHint] = useState<string | null>(null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const appliedJobId = useRef<string | null>(null);
   const startAttempted = useRef(false);
@@ -121,7 +125,12 @@ export function useConfirmVision({
         return;
       }
 
-      onCatalogMiss?.(job.catalogMiss === true && currentDraftId === draftRef.current?.id);
+      const isActiveDraft = currentDraftId === draftRef.current?.id;
+      onCatalogMiss?.(job.catalogMiss === true && isActiveDraft);
+
+      if (job.catalogMiss && isActiveDraft) {
+        setCatalogMissHint(resolveVisionCatalogMissHint(job));
+      }
 
       if (job.catalogMiss && !job.suggestions) {
         return;
@@ -212,6 +221,7 @@ export function useConfirmVision({
       appliedJobId.current = null;
       resetConfirmManualEdits();
       setSelectedSeasonLabel(null);
+      setCatalogMissHint(null);
       onCatalogMiss?.(false);
     } else if (!photosChanged) {
       return;
@@ -222,6 +232,7 @@ export function useConfirmVision({
       setApplied(false);
       startAttempted.current = false;
       appliedJobId.current = null;
+      setCatalogMissHint(null);
       onCatalogMiss?.(false);
     }
 
@@ -424,11 +435,13 @@ export function useConfirmVision({
     }
     setSuggestion(null);
     setApplied(true);
+    setCatalogMissHint(null);
     onCatalogMiss?.(false);
   }, [accessToken, mutate, onCatalogMiss, setSelectedSeasonLabel, suggestion]);
 
   return {
     suggestion,
+    catalogMissHint,
     suggestionOpacity,
     bannerState: resolveConfirmVisionBannerState({
       activated: Boolean(accessToken),

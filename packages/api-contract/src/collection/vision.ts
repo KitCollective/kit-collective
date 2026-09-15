@@ -83,6 +83,10 @@ export const visionJobResponseSchema = z
     fieldPreselect: visionFieldPreselectSchema.optional(),
     /** True when the model hinted a club (`clubHint` or `clubHintAlts`) but the catalog mapper found neither a Club nor a Kit. */
     catalogMiss: z.boolean().optional(),
+    /** Raw model club hint when `catalogMiss` — editable search seed, not a catalog id. */
+    clubHint: z.string().min(1).optional(),
+    /** Raw model national-team hint when `catalogMiss` — editable search seed, not a catalog id. */
+    nationalTeamHint: z.string().min(1).optional(),
     suggestions: visionSuggestionsSchema.optional(),
     grouping: visionGroupingSuggestionsSchema.optional(),
   })

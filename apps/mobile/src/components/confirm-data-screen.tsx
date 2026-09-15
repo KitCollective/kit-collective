@@ -43,9 +43,10 @@ export function ConfirmDataScreen() {
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
-  const { sessionId, editJerseyId } = useLocalSearchParams<{
+  const { sessionId, editJerseyId, visionSideHint } = useLocalSearchParams<{
     sessionId: string;
     editJerseyId?: string;
+    visionSideHint?: string;
   }>();
   const { accessToken } = useAuth();
   const { state, isSessionResolved, mutate, draft, handleCommitDrill } = useConfirmSave({
@@ -196,6 +197,8 @@ export function ConfirmDataScreen() {
         visible={openPicker === "club"}
         accessToken={accessToken}
         selectedClubId={sideId}
+        initialQuery={visionSideHint ?? null}
+        catalogMissHint={visionSideHint ?? null}
         onSelect={(club) => {
           markConfirmClubEdited();
           clearConfirmSeasonEdited();
