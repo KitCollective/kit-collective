@@ -5,10 +5,12 @@ import {
   kit,
   manufacturer,
   nationalTeam,
+  nationalTeamSeason,
   patch,
   playerClubSeason,
   playerNationalTeamSeason,
   season,
+  teamSeason,
 } from "@kit/db";
 import { and, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { IdentityVisionHints } from "./identity-vision-prompt.js";
@@ -61,6 +63,15 @@ const PLAYER_LABEL_LIMIT = 20;
 const PATCH_LABEL_LIMIT = 10;
 const SQUAD_NUMBER_MATCH_SCORE = 90;
 
+/**
+ * Intentional omit cases (QA scoring):
+ * - Blank shirt back → VLM omits playerHint/playerNumberHint → no player suggestion.
+ * - seasonHint with no teamSeason/nationalTeamSeason row for the scoped side → no seasonId.
+ * - Model per-field confidence below suggest threshold → resolveIdentityJob omits that field.
+ * - Missing manufacturerHint → no observable kit hits → no catalogKitId lock.
+ * - Ambiguous manufacturer+sponsor hits → omit catalogKitId until refinement or type/colour lock.
+ * - Empty badges[] → decodeIdentityVisionHints drops patchHint.
+ */
 export class VisionCatalogMapper {
   constructor(private readonly db: Db) {}
 
@@ -81,19 +92,23 @@ export class VisionCatalogMapper {
     const clubId = catalogClubIdForSave(locked, sideMatch);
     const nationalTeamId = catalogNationalTeamIdForSave(locked, sideMatch);
     const playerScope = playerScopeFor(locked, clubId, nationalTeamId, sideMatch);
+    const hintSeason =
+      locked?.seasonId === undefined
+        ? await this.resolveSeasonFromHint(playerScope, hints.seasonHint)
+        : null;
+    const seasonId = locked?.seasonId ?? hintSeason?.seasonId;
+    const type = locked?.type ?? hints.kitType;
     const playerMatch =
-      playerScope && locked?.seasonId
+      playerScope && seasonId
         ? await this.resolvePlayer(
             playerScope.kind,
             playerScope.id,
-            locked.seasonId,
+            seasonId,
             hints.playerNumberHint,
             hints.playerHint,
           )
         : null;
-    const patchMatch = locked?.seasonId
-      ? await this.resolvePatch(locked.seasonId, hints.patchHint)
-      : null;
+    const patchMatch = seasonId ? await this.resolvePatch(seasonId, hints.patchHint) : null;
 
     if (!clubId && !nationalTeamId && !locked && !playerMatch && !patchMatch) {
       if (hints.clubHint || hints.clubHintAlts?.length) {
@@ -110,9 +125,9 @@ export class VisionCatalogMapper {
     return {
       clubId,
       nationalTeamId,
-      seasonId: locked?.seasonId,
+      seasonId,
       catalogKitId: locked?.kitId,
-      type: locked?.type,
+      type,
       playerId: playerMatch?.playerId,
       playerNumber: playerMatch?.playerNumber,
       patchId: patchMatch?.patchId,
@@ -122,7 +137,7 @@ export class VisionCatalogMapper {
       confidences: this.buildConfidences(hints, {
         club: clubId ? clubMatchScore(sideMatch, locked) : undefined,
         nationalTeam: nationalTeamId ? clubMatchScore(sideMatch, locked) : undefined,
-        season: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
+        season: locked ? CATALOG_KIT_LOCK_CONFIDENCE : hintSeason?.score,
         kitType: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         player: playerMatch?.score,
         badge: patchMatch?.score,
@@ -245,6 +260,47 @@ export class VisionCatalogMapper {
     }
     const rows = await this.db.select({ id: table.id }).from(table).where(inArray(table.id, ids));
     return rows.map((row) => row.id);
+  }
+
+  private async resolveSeasonFromHint(
+    playerScope: { kind: CatalogSideKind; id: string } | undefined,
+    seasonHint?: string,
+  ): Promise<{ seasonId: string; score: number } | null> {
+    if (!playerScope || !seasonHint?.trim()) {
+      return null;
+    }
+
+    if (playerScope.kind === "club") {
+      const rows = await this.db
+        .select({ seasonId: teamSeason.seasonId, label: season.label })
+        .from(teamSeason)
+        .innerJoin(season, eq(teamSeason.seasonId, season.id))
+        .where(eq(teamSeason.clubId, playerScope.id));
+
+      return (
+        bestScored(
+          rows.map((row) => ({
+            seasonId: row.seasonId,
+            score: scoreLabelMatch(row.label, seasonHint),
+          })),
+        ) ?? null
+      );
+    }
+
+    const rows = await this.db
+      .select({ seasonId: nationalTeamSeason.seasonId, label: season.label })
+      .from(nationalTeamSeason)
+      .innerJoin(season, eq(nationalTeamSeason.seasonId, season.id))
+      .where(eq(nationalTeamSeason.nationalTeamId, playerScope.id));
+
+    return (
+      bestScored(
+        rows.map((row) => ({
+          seasonId: row.seasonId,
+          score: scoreLabelMatch(row.label, seasonHint),
+        })),
+      ) ?? null
+    );
   }
 
   private async resolvePlayer(

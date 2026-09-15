@@ -268,9 +268,10 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     confidences?.season ?? confidences?.overall,
     Boolean(result.seasonId),
   );
+  /** kitType is a free enum when catalogKitId is absent — still gate on model confidence. */
   const typeGate = resolveFieldGate(
     confidences?.kitType ?? confidences?.overall,
-    Boolean(result.catalogKitId),
+    Boolean(result.type),
   );
   const playerGate = resolveFieldGate(
     confidences?.player ?? confidences?.overall,
@@ -308,7 +309,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     }
   }
 
-  if (typeGate !== "omit" && result.type && result.catalogKitId) {
+  if (typeGate !== "omit" && result.type) {
     suggestions.type = result.type;
     if (typeGate === "preselect") {
       fieldPreselect.type = true;

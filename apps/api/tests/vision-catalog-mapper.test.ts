@@ -101,7 +101,7 @@ describe("VisionCatalogMapper", () => {
     });
   });
 
-  it("omits season and type when manufacturer+sponsor hits more than one kit of the same type", async () => {
+  it("omits catalogKitId but still maps season and type from hints when manufacturer+sponsor hits more than one kit of the same type", async () => {
     const fixture = await insertClubWithKits([
       { label: "2019/20", type: "home", manufacturer: "Hummel", sponsor: "32Red" },
       { label: "2020/21", type: "home", manufacturer: "Hummel", sponsor: "32Red" },
@@ -118,8 +118,8 @@ describe("VisionCatalogMapper", () => {
       fieldConfidence: { club: 0.9, season: 0.85, kitType: 0.8 },
     });
     expect(mapped?.clubId).toBe(fixture.clubId);
-    expect(mapped?.seasonId).toBeUndefined();
-    expect(mapped?.type).toBeUndefined();
+    expect(mapped?.seasonId).toBe(fixture.kits[1]!.seasonId);
+    expect(mapped?.type).toBe("home");
     expect(mapped?.catalogKitId).toBeUndefined();
 
     const hits = await mapper.listObservableKitHits({
@@ -132,8 +132,8 @@ describe("VisionCatalogMapper", () => {
     expect(hits).toHaveLength(2);
   });
 
-  it("omits season even when the label matches, if manufacturer and sponsor are missing", async () => {
-    await insertClubWithKits([
+  it("maps season and kit type from VLM hints when club matches but kit is not locked", async () => {
+    const fixture = await insertClubWithKits([
       { label: "2023/24", type: "home", manufacturer: "Adidas", sponsor: "Carlsberg" },
     ]);
 
@@ -142,13 +142,76 @@ describe("VisionCatalogMapper", () => {
       clubHint: "Rangers FC",
       seasonHint: "2023/24",
       kitType: "home",
+      fieldConfidence: { club: 0.9, season: 0.65, kitType: 0.8 },
+    });
+    await pool.end();
+
+    expect(mapped?.clubId).toBe(fixture.clubId);
+    expect(mapped?.seasonId).toBe(fixture.kits[0]!.seasonId);
+    expect(mapped?.type).toBe("home");
+    expect(mapped?.catalogKitId).toBeUndefined();
+    expect(mapped?.confidences?.season).toBe(65);
+    expect(mapped?.confidences?.kitType).toBe(80);
+  });
+
+  it("maps player from squad when season is hint-mapped without a kit lock", async () => {
+    const fixture = await insertClubWithKits([
+      { label: "2023/24", type: "home", manufacturer: "Adidas", sponsor: "Carlsberg" },
+    ]);
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    await db.insert(playerClubSeason).values({
+      playerId: insertedPlayer!.id,
+      clubId: fixture.clubId,
+      seasonId: fixture.kits[0]!.seasonId,
+      squadNumber: 10,
+    });
+    await db.insert(catalogLabel).values({
+      entityType: "player",
+      entityId: insertedPlayer!.id,
+      locale: "da",
+      kind: "label",
+      text: "Jonas Wind",
+      source: "seed",
+    });
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Rangers FC",
+      seasonHint: "2023/24",
+      kitType: "home",
+      playerNumberHint: "10",
+      fieldConfidence: { club: 0.9, season: 0.65, kitType: 0.8, player: 0.75 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.clubId).toBe(fixture.clubId);
+    expect(mapped?.seasonId).toBe(fixture.kits[0]!.seasonId);
+    expect(mapped?.type).toBe("home");
+    expect(mapped?.playerId).toBe(insertedPlayer!.id);
+    expect(mapped?.playerNumber).toBe("10");
+    expect(mapped?.catalogKitId).toBeUndefined();
+  });
+
+  it("omits season when the hint does not match a teamSeason row for the club", async () => {
+    await insertClubWithKits([
+      { label: "2023/24", type: "home", manufacturer: "Adidas", sponsor: "Carlsberg" },
+    ]);
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(db).mapHints({
+      clubHint: "Rangers FC",
+      seasonHint: "2099/00",
+      kitType: "home",
       fieldConfidence: { club: 0.9, season: 0.9, kitType: 0.9 },
     });
     await pool.end();
 
     expect(mapped?.clubId).toBeDefined();
     expect(mapped?.seasonId).toBeUndefined();
-    expect(mapped?.type).toBeUndefined();
+    expect(mapped?.type).toBe("home");
     expect(mapped?.catalogKitId).toBeUndefined();
   });
 
