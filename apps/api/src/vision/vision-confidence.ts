@@ -1,10 +1,12 @@
 import {
   VISION_CONFIDENCE_PRESELECT,
   VISION_CONFIDENCE_SUGGEST,
+  type VisionEvalEntityHints,
   type VisionFieldPreselect,
   type VisionJobStatus,
   type VisionSuggestions,
 } from "@kit/api-contract";
+import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
 
 export function serializeConfidences(confidences: VisionFieldConfidences): string {
@@ -139,6 +141,76 @@ export function parseClubHintFromVisionRaw(raw: string | null | undefined): stri
   }
 
   return undefined;
+}
+
+export function parseVisionEvalHints(raw: string | null | undefined): VisionEvalEntityHints {
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      return {};
+    }
+
+    const side: string[] = [];
+    const clubHint = nonemptyString(parsed.clubHint);
+    if (clubHint) {
+      side.push(clubHint);
+    }
+    if (Array.isArray(parsed.clubHintAlts)) {
+      for (const alt of parsed.clubHintAlts) {
+        const hint = nonemptyString(alt);
+        if (hint) {
+          side.push(hint);
+        }
+      }
+    }
+
+    const hints: VisionEvalEntityHints = {};
+    if (side.length > 0) {
+      hints.side = side;
+    }
+    const playerHint = nonemptyString(parsed.playerHint);
+    if (playerHint) {
+      hints.player = [playerHint];
+    }
+    const patchHint = nonemptyString(parsed.patchHint);
+    if (patchHint) {
+      hints.patch = [patchHint];
+    }
+    return hints;
+  } catch {
+    return {};
+  }
+}
+
+export function encodeVisionEvalRaw(hints: IdentityVisionHints, kitHitCount?: number): string {
+  return JSON.stringify(kitHitCount === undefined ? hints : { ...hints, kitHitCount });
+}
+
+export function parseZeroKitHits(raw: string | null | undefined): boolean {
+  if (!raw) {
+    return false;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      return false;
+    }
+    if (typeof parsed.kitHitCount === "number") {
+      return parsed.kitHitCount === 0;
+    }
+    if (Array.isArray(parsed.kitHits)) {
+      return parsed.kitHits.length === 0;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
 }
 
 function nonemptyString(value: unknown): string | undefined {

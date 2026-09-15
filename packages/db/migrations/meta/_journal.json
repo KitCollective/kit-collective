@@ -253,6 +253,13 @@
       "when": 1788720000000,
       "tag": "0035_user_jersey_national_team_side",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788800000000,
+      "tag": "0036_vision_log_label",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,8 @@ export type VisionInferenceResult = {
   patchId?: string;
   /** Raw model club hint — used to detect catalog miss when clubId and catalogKitId are absent. */
   clubHint?: string;
+  /** Observable manufacturer+sponsor kit hits used at map time. */
+  kitHitCount?: number;
   visionRaw?: string;
   confidences?: VisionFieldConfidences;
   latencyMs?: number;

@@ -1,5 +1,7 @@
 import {
+  classifyVisionEval,
   resolveVisionSaveAction,
+  type VisionEvalEntityHints,
   type VisionGroupingSuggestions,
   type VisionJobKind,
   type VisionJobStatus,
@@ -12,11 +14,12 @@ import {
   playerClubSeason,
   playerNationalTeamSeason,
   season,
+  userJerseyPhoto,
   visionLog,
 } from "@kit/db";
-import type { KitType, LabelLocale } from "@kit/domain";
+import type { KitType, LabelKind, LabelLocale } from "@kit/domain";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 import type {
   VisionAdapter,
@@ -28,6 +31,8 @@ import { VISION_ADAPTER } from "./vision.adapter.js";
 import {
   parseClubHintFromVisionRaw,
   parseConfidences,
+  parseVisionEvalHints,
+  parseZeroKitHits,
   resolveIdentityJob,
   serializeConfidences,
 } from "./vision-confidence.js";
@@ -437,7 +442,7 @@ export class VisionService {
     selectedKitType: KitType,
   ): Promise<void> {
     const job = await this.getJob(userId, jobId);
-    if (!job) {
+    if (!job || job.kind === "grouping") {
       return;
     }
 
@@ -451,5 +456,179 @@ export class VisionService {
     });
 
     await this.logUserAction(userId, jobId, resolved.action, userJerseyId);
+  }
+
+  /**
+   * Snapshots suggested versus selected identity fields on the job after UserJersey commit.
+   * Later PATCH of the live UserJersey must not rewrite this row (evalClass already set).
+   */
+  async persistVisionLabelAtSave(
+    userId: string,
+    jobId: string,
+    userJerseyId: string,
+    selected: {
+      clubId?: string;
+      nationalTeamId?: string;
+      seasonId: string;
+      type: KitType;
+      catalogKitId?: string | null;
+      playerId?: string;
+      patchId?: string;
+    },
+  ): Promise<void> {
+    const [row] = await this.db
+      .select({
+        id: visionLog.id,
+        userId: visionLog.userId,
+        kind: visionLog.kind,
+        status: visionLog.status,
+        evalClass: visionLog.evalClass,
+        suggestedClubId: visionLog.suggestedClubId,
+        suggestedNationalTeamId: visionLog.suggestedNationalTeamId,
+        suggestedSeasonId: visionLog.suggestedSeasonId,
+        suggestedCatalogKitId: visionLog.suggestedCatalogKitId,
+        suggestedType: visionLog.suggestedType,
+        suggestedPlayerId: visionLog.suggestedPlayerId,
+        suggestedPatchId: visionLog.suggestedPatchId,
+        visionRaw: visionLog.visionRaw,
+        confidences: visionLog.confidences,
+      })
+      .from(visionLog)
+      .where(eq(visionLog.id, jobId))
+      .limit(1);
+
+    if (!row || row.userId !== userId || row.kind !== "identity" || row.evalClass) {
+      return;
+    }
+
+    const photoRows = await this.db
+      .select({ objectKey: userJerseyPhoto.objectKey })
+      .from(userJerseyPhoto)
+      .where(eq(userJerseyPhoto.userJerseyId, userJerseyId));
+    const photoKeys = photoRows.map((photo) => photo.objectKey);
+
+    const selectedCatalogLabels = await this.loadSelectedCatalogLabels(selected);
+    const clubHint = parseClubHintFromVisionRaw(row.visionRaw);
+    const resolved = resolveIdentityJob({
+      clubId: row.suggestedClubId ?? undefined,
+      nationalTeamId: row.suggestedNationalTeamId ?? undefined,
+      seasonId: row.suggestedSeasonId ?? undefined,
+      catalogKitId: row.suggestedCatalogKitId ?? undefined,
+      type: row.suggestedType ?? undefined,
+      playerId: row.suggestedPlayerId ?? undefined,
+      patchId: row.suggestedPatchId ?? undefined,
+      clubHint,
+      confidences: parseConfidences(row.confidences) ?? undefined,
+      visionRaw: row.visionRaw ?? undefined,
+    });
+
+    const scored = classifyVisionEval({
+      status: row.status,
+      suggested: {
+        clubId: row.suggestedClubId ?? undefined,
+        nationalTeamId: row.suggestedNationalTeamId ?? undefined,
+        seasonId: row.suggestedSeasonId ?? undefined,
+        type: row.suggestedType ?? undefined,
+        catalogKitId: row.suggestedCatalogKitId ?? undefined,
+        playerId: row.suggestedPlayerId ?? undefined,
+        patchId: row.suggestedPatchId ?? undefined,
+      },
+      selected: {
+        clubId: selected.clubId,
+        nationalTeamId: selected.nationalTeamId,
+        seasonId: selected.seasonId,
+        type: selected.type,
+        catalogKitId: selected.catalogKitId ?? undefined,
+        playerId: selected.playerId,
+        patchId: selected.patchId,
+      },
+      catalogMiss: resolved.catalogMiss,
+      zeroKitHits: parseZeroKitHits(row.visionRaw),
+      entityHints: parseVisionEvalHints(row.visionRaw),
+      selectedCatalogLabels,
+    });
+
+    await this.db
+      .update(visionLog)
+      .set({
+        selectedClubId: selected.clubId ?? null,
+        selectedNationalTeamId: selected.nationalTeamId ?? null,
+        selectedSeasonId: selected.seasonId,
+        selectedType: selected.type,
+        selectedCatalogKitId: selected.catalogKitId ?? null,
+        selectedPlayerId: selected.playerId ?? null,
+        selectedPatchId: selected.patchId ?? null,
+        evalClass: scored.evalClass,
+        fieldHits: JSON.stringify(scored.fieldHits),
+        photoKeys: JSON.stringify(photoKeys),
+        userJerseyId,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(visionLog.id, jobId), isNull(visionLog.evalClass)));
+  }
+
+  private async loadSelectedCatalogLabels(selected: {
+    clubId?: string;
+    nationalTeamId?: string;
+    playerId?: string;
+    patchId?: string;
+  }): Promise<VisionEvalEntityHints> {
+    const entityIds: Array<{
+      entityType: "club" | "national_team" | "player" | "patch";
+      entityId: string;
+    }> = [];
+    if (selected.clubId) {
+      entityIds.push({ entityType: "club", entityId: selected.clubId });
+    }
+    if (selected.nationalTeamId) {
+      entityIds.push({ entityType: "national_team", entityId: selected.nationalTeamId });
+    }
+    if (selected.playerId) {
+      entityIds.push({ entityType: "player", entityId: selected.playerId });
+    }
+    if (selected.patchId) {
+      entityIds.push({ entityType: "patch", entityId: selected.patchId });
+    }
+
+    if (entityIds.length === 0) {
+      return {};
+    }
+
+    const catalogKinds: LabelKind[] = ["label", "alias"];
+    const rows = await this.db
+      .select({
+        entityType: catalogLabel.entityType,
+        text: catalogLabel.text,
+      })
+      .from(catalogLabel)
+      .where(
+        and(
+          inArray(
+            catalogLabel.entityType,
+            entityIds.map((entity) => entity.entityType),
+          ),
+          inArray(
+            catalogLabel.entityId,
+            entityIds.map((entity) => entity.entityId),
+          ),
+          inArray(catalogLabel.kind, catalogKinds),
+        ),
+      );
+
+    const grouped: VisionEvalEntityHints = {};
+    for (const row of rows) {
+      const text = row.text?.trim();
+      if (!text) {
+        continue;
+      }
+      if (row.entityType === "club" || row.entityType === "national_team") {
+        grouped.side = [...(grouped.side ?? []), text];
+      } else if (row.entityType === "player") {
+        grouped.player = [...(grouped.player ?? []), text];
+      } else if (row.entityType === "patch") {
+        grouped.patch = [...(grouped.patch ?? []), text];
+      }
+    }
+    return grouped;
   }
 }

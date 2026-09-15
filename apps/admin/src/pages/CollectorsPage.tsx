@@ -4,11 +4,21 @@ import {
   type AdminCollectorJerseyIndexRow,
   type AdminCollectorList,
   type AdminCollectorRow,
+  type AdminVisionLabelFieldHits,
+  type AdminVisionLabelIdentity,
+  type AdminVisionLabelRow,
+  type AdminVisionLabels,
   type AuthSecurityDetections,
   adminAuthEventsSchema,
   adminCollectorJerseyIndexSchema,
   adminCollectorListSchema,
+  adminVisionLabelsSchema,
   authSecurityDetectionsSchema,
+  VISION_EVAL_CLASSES,
+  VISION_EVAL_FIELD_HIT_KEYS,
+  VISION_USER_ACTIONS,
+  type VisionEvalClass,
+  type VisionUserAction,
 } from "@kit/api-contract";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -18,7 +28,15 @@ import { useAdminChrome } from "../components/AdminShell.js";
 import { AuthenticatedImage } from "../components/AuthenticatedImage.js";
 import { formatAuthDateTime, formatAuthEventKind } from "./auth-event-labels.js";
 
-const USER_DATA_TABLES = ["user", "jersey", "auth-events", "auth-security"] as const;
+const USER_DATA_TABLES = [
+  "user",
+  "jersey",
+  "auth-events",
+  "auth-security",
+  "vision-labels",
+] as const;
+
+const FIELD_HIT_ORDER = VISION_EVAL_FIELD_HIT_KEYS;
 
 type UserDataTable = (typeof USER_DATA_TABLES)[number];
 
@@ -32,6 +50,8 @@ function tableLabel(table: UserDataTable): string {
       return "Auth events";
     case "auth-security":
       return "Auth security";
+    case "vision-labels":
+      return "Vision labels";
     default: {
       const exhaustive: never = table;
       return exhaustive;
@@ -49,6 +69,8 @@ function tableSearchPlaceholder(table: UserDataTable): string {
       return "Search Auth events";
     case "auth-security":
       return "Search Auth security";
+    case "vision-labels":
+      return "Search Vision labels";
     default: {
       const exhaustive: never = table;
       return exhaustive;
@@ -66,11 +88,53 @@ function columnCount(table: UserDataTable): number {
       return 4;
     case "auth-security":
       return 4;
+    case "vision-labels":
+      return 7;
     default: {
       const exhaustive: never = table;
       return exhaustive;
     }
   }
+}
+
+function titleCaseToken(value: string): string {
+  return value.slice(0, 1).toUpperCase() + value.slice(1);
+}
+
+function formatEvalClass(value: VisionEvalClass): string {
+  return titleCaseToken(value);
+}
+
+function formatUserAction(value: VisionUserAction | null): string {
+  return value == null ? "—" : titleCaseToken(value);
+}
+
+function formatIdentityLabels(identity: AdminVisionLabelIdentity): string {
+  const parts = [
+    identity.clubLabel,
+    identity.nationalTeamLabel,
+    identity.seasonLabel,
+    identity.type,
+    identity.catalogKitLabel,
+    identity.playerLabel,
+    identity.patchLabel,
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" · ") : "—";
+}
+
+function formatFieldHits(hits: AdminVisionLabelFieldHits): string {
+  const labels = FIELD_HIT_ORDER.filter((key) => hits[key]).map((key) =>
+    key === "catalogKitId" ? "kit" : key,
+  );
+  return labels.length > 0 ? labels.join(" · ") : "—";
+}
+
+function formatHitRateCaption(caption: string): string {
+  return caption.startsWith("Hit rate") ? caption : `Hit rate ${caption}`;
+}
+
+function formatLatency(latencyMs: number | null | undefined): string {
+  return latencyMs == null ? "—" : `${latencyMs} ms`;
 }
 
 export function CollectorsPage() {
@@ -82,6 +146,9 @@ export function CollectorsPage() {
   const [jerseys, setJerseys] = useState<AdminCollectorJerseyIndex | null>(null);
   const [authEvents, setAuthEvents] = useState<AdminAuthEvents | null>(null);
   const [authSecurity, setAuthSecurity] = useState<AuthSecurityDetections | null>(null);
+  const [visionLabels, setVisionLabels] = useState<AdminVisionLabels | null>(null);
+  const [classFilter, setClassFilter] = useState<VisionEvalClass | "">("");
+  const [userActionFilter, setUserActionFilter] = useState<VisionUserAction | "">("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
@@ -109,6 +176,7 @@ export function CollectorsPage() {
       setJerseys(null);
       setAuthEvents(null);
       setAuthSecurity(null);
+      setVisionLabels(null);
     }
 
     let request: Promise<void>;
@@ -140,7 +208,7 @@ export function CollectorsPage() {
         clearTables();
         setAuthEvents(adminAuthEventsSchema.parse(body));
       });
-    } else {
+    } else if (table === "auth-security") {
       request = apiFetch<AuthSecurityDetections>("/admin/auth/security", { token }).then((body) => {
         if (cancelled) {
           return;
@@ -148,6 +216,24 @@ export function CollectorsPage() {
         clearTables();
         setAuthSecurity(authSecurityDetectionsSchema.parse(body));
       });
+    } else {
+      const params = new URLSearchParams();
+      if (classFilter) {
+        params.set("class", classFilter);
+      }
+      if (userActionFilter) {
+        params.set("user_action", userActionFilter);
+      }
+      const visionSuffix = params.toString() ? `?${params.toString()}` : "";
+      request = apiFetch<AdminVisionLabels>(`/admin/vision/labels${visionSuffix}`, { token }).then(
+        (body) => {
+          if (cancelled) {
+            return;
+          }
+          clearTables();
+          setVisionLabels(adminVisionLabelsSchema.parse(body));
+        },
+      );
     }
 
     request
@@ -166,6 +252,7 @@ export function CollectorsPage() {
         setJerseys(null);
         setAuthEvents(null);
         setAuthSecurity(null);
+        setVisionLabels(null);
         setError(fetchError instanceof Error ? fetchError.message : "Failed to load user data");
       })
       .finally(() => {
@@ -176,7 +263,7 @@ export function CollectorsPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, query, table]);
+  }, [token, query, table, classFilter, userActionFilter]);
 
   function openUser(row: AdminCollectorRow) {
     navigate(`/collectors/${row.id}`);
@@ -263,9 +350,22 @@ export function CollectorsPage() {
       const total = authEvents?.events.length ?? 0;
       return `${total} auth events`;
     }
-    const total = authSecurity?.detections.length ?? 0;
-    return `${total} detections`;
+    if (table === "auth-security") {
+      const total = authSecurity?.detections.length ?? 0;
+      return `${total} detections`;
+    }
+    if (!visionLabels) {
+      return "0 vision labels";
+    }
+    return `${visionLabels.total} vision labels · ${formatHitRateCaption(visionLabels.hitRateCaption)}`;
   })();
+  const visionFiltersActive = classFilter !== "" || userActionFilter !== "";
+
+  function clearVisionFilters() {
+    setClassFilter("");
+    setUserActionFilter("");
+    setFocusedRowIndex(0);
+  }
 
   return (
     <div className="list-page">
@@ -296,6 +396,66 @@ export function CollectorsPage() {
             Offers
           </button>
         </fieldset>
+        {table === "vision-labels" ? (
+          <>
+            <fieldset className="chip-group toolbar-chips">
+              <legend className="chip-group-legend">Class</legend>
+              <button
+                type="button"
+                className="chip"
+                aria-pressed={classFilter === ""}
+                onClick={() => {
+                  setClassFilter("");
+                  setFocusedRowIndex(0);
+                }}
+              >
+                All classes
+              </button>
+              {VISION_EVAL_CLASSES.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="chip"
+                  aria-pressed={classFilter === value}
+                  onClick={() => {
+                    setClassFilter(value);
+                    setFocusedRowIndex(0);
+                  }}
+                >
+                  {formatEvalClass(value)}
+                </button>
+              ))}
+            </fieldset>
+            <fieldset className="chip-group toolbar-chips">
+              <legend className="chip-group-legend">User action</legend>
+              <button
+                type="button"
+                className="chip"
+                aria-pressed={userActionFilter === ""}
+                onClick={() => {
+                  setUserActionFilter("");
+                  setFocusedRowIndex(0);
+                }}
+              >
+                All actions
+              </button>
+              {VISION_USER_ACTIONS.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="chip"
+                  aria-pressed={userActionFilter === value}
+                  onClick={() => {
+                    setUserActionFilter(value);
+                    setFocusedRowIndex(0);
+                  }}
+                >
+                  {formatUserAction(value)}
+                </button>
+              ))}
+            </fieldset>
+          </>
+        ) : null}
         <span className="record-count">{recordCount}</span>
       </div>
 
@@ -333,12 +493,24 @@ export function CollectorsPage() {
                 <th scope="col">Provider</th>
                 <th scope="col">When</th>
               </tr>
-            ) : (
+            ) : table === "auth-security" ? (
               <tr>
                 <th scope="col">Kind</th>
                 <th scope="col">Summary</th>
                 <th scope="col">User</th>
                 <th scope="col">When</th>
+              </tr>
+            ) : (
+              <tr>
+                <th scope="col">Class</th>
+                <th scope="col">User action</th>
+                <th scope="col">Suggested</th>
+                <th scope="col">Selected</th>
+                <th className="data-table-numeric" scope="col">
+                  Latency
+                </th>
+                <th scope="col">Model</th>
+                <th scope="col">Field hits</th>
               </tr>
             )}
           </thead>
@@ -388,6 +560,30 @@ export function CollectorsPage() {
                   </div>
                 </td>
               </tr>
+            ) : table === "vision-labels" && (!visionLabels || visionLabels.rows.length === 0) ? (
+              <tr>
+                <td colSpan={columns}>
+                  <div className="empty-state data-table-empty">
+                    <h2>
+                      {visionFiltersActive ? "No Vision labels match" : "No Vision labels yet"}
+                    </h2>
+                    <p>
+                      {visionFiltersActive
+                        ? "Try a different class or user action, or clear your filters."
+                        : "Identity Vision labels from collector Save will appear here."}
+                    </p>
+                    {visionFiltersActive ? (
+                      <button
+                        type="button"
+                        className="btn btn-tertiary"
+                        onClick={clearVisionFilters}
+                      >
+                        Clear filters
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
             ) : table === "user" && users ? (
               users.rows.map((row, rowIndex) => (
                 <tr
@@ -430,6 +626,24 @@ export function CollectorsPage() {
                   <td>{row.summary}</td>
                   <td className="data-table-mono">{row.userId ?? "—"}</td>
                   <td className="data-table-meta">{formatAuthDateTime(row.detectedAt)}</td>
+                </tr>
+              ))
+            ) : table === "vision-labels" && visionLabels ? (
+              visionLabels.rows.map((row: AdminVisionLabelRow, rowIndex) => (
+                <tr
+                  key={row.jobId}
+                  tabIndex={rowIndex === focusedRowIndex ? 0 : -1}
+                  onFocus={() => setFocusedRowIndex(rowIndex)}
+                >
+                  <td className="data-table-primary">{formatEvalClass(row.class)}</td>
+                  <td className="data-table-mono">{formatUserAction(row.userAction)}</td>
+                  <td>{formatIdentityLabels(row.suggested)}</td>
+                  <td>{formatIdentityLabels(row.selected)}</td>
+                  <td className="data-table-mono data-table-numeric">
+                    {formatLatency(row.latencyMs)}
+                  </td>
+                  <td className="data-table-mono">{row.model ?? "—"}</td>
+                  <td className="data-table-meta">{formatFieldHits(row.fieldHits)}</td>
                 </tr>
               ))
             ) : jerseys ? (

@@ -89,6 +89,7 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { and, asc, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
@@ -191,6 +192,8 @@ function decodeBase64Photo(contentBase64: string, maxBytes?: number): Uint8Array
 
 @Injectable()
 export class CollectionService {
+  private readonly logger = new Logger(CollectionService.name);
+
   constructor(
     @Inject(DB) private readonly db: Db,
     @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
@@ -2107,6 +2110,27 @@ export class CollectionService {
         body.seasonId,
         body.type,
       );
+      try {
+        await this.visionService.persistVisionLabelAtSave(
+          userId,
+          effectiveVisionJobId,
+          insertedJersey.id,
+          {
+            clubId: body.clubId,
+            nationalTeamId: body.nationalTeamId,
+            seasonId: body.seasonId,
+            type: body.type,
+            catalogKitId: body.catalogKitId,
+            playerId: body.playerId,
+            patchId: body.patchIds?.[0],
+          },
+        );
+      } catch (error) {
+        this.logger.error(
+          "Vision label persist failed after UserJersey commit",
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
     }
 
     if (body.draftId) {

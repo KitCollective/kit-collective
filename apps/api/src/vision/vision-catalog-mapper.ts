@@ -13,7 +13,11 @@ import {
 import { and, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
-import { combineModelAndMatchConfidence, computeOverallConfidence } from "./vision-confidence.js";
+import {
+  combineModelAndMatchConfidence,
+  computeOverallConfidence,
+  encodeVisionEvalRaw,
+} from "./vision-confidence.js";
 import {
   CATALOG_KIT_LOCK_CONFIDENCE,
   type CatalogSideKind,
@@ -95,7 +99,8 @@ export class VisionCatalogMapper {
       if (hints.clubHint || hints.clubHintAlts?.length) {
         return {
           clubHint: collectClubHints(hints)[0],
-          visionRaw: JSON.stringify(hints),
+          kitHitCount: hits.length,
+          visionRaw: encodeVisionEvalRaw(hints, hits.length),
           confidences: this.buildConfidences(hints, {}),
         };
       }
@@ -112,6 +117,8 @@ export class VisionCatalogMapper {
       playerNumber: playerMatch?.playerNumber,
       patchId: patchMatch?.patchId,
       clubHint: hints.clubHint,
+      kitHitCount: hits.length,
+      visionRaw: encodeVisionEvalRaw(hints, hits.length),
       confidences: this.buildConfidences(hints, {
         club: clubId ? clubMatchScore(sideMatch, locked) : undefined,
         nationalTeam: nationalTeamId ? clubMatchScore(sideMatch, locked) : undefined,

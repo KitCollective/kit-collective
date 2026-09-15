@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   combineModelAndMatchConfidence,
   computeOverallConfidence,
+  encodeVisionEvalRaw,
   parseClubHintFromVisionRaw,
   parseConfidences,
+  parseVisionEvalHints,
+  parseZeroKitHits,
   resolveFieldGate,
   resolveIdentityJob,
   serializeConfidences,
@@ -118,5 +121,35 @@ describe("vision-confidence", () => {
     const original = { overall: 80, club: 85, season: 70 };
     const serialized = serializeConfidences(original);
     expect(parseConfidences(serialized)).toEqual(original);
+  });
+
+  it("parses entity hints without kitType or seasonHint", () => {
+    const hints = parseVisionEvalHints(
+      JSON.stringify({
+        clubHint: "Zyx Unknown",
+        clubHintAlts: ["ZYX"],
+        playerHint: "Jonas Wind",
+        patchHint: "Superligaen",
+        kitType: "home",
+        seasonHint: "2023/24",
+      }),
+    );
+    expect(hints).toEqual({
+      side: ["Zyx Unknown", "ZYX"],
+      player: ["Jonas Wind"],
+      patch: ["Superligaen"],
+    });
+  });
+
+  it("round-trips kitHitCount 0 through encodeVisionEvalRaw and parseZeroKitHits", () => {
+    const raw = encodeVisionEvalRaw({ clubHint: "FCK" }, 0);
+    expect(parseZeroKitHits(raw)).toBe(true);
+    expect(JSON.parse(raw)).toMatchObject({ clubHint: "FCK", kitHitCount: 0 });
+  });
+
+  it("does not treat missing kitHitCount as zero kit hits", () => {
+    const raw = encodeVisionEvalRaw({ clubHint: "FCK" });
+    expect(parseZeroKitHits(raw)).toBe(false);
+    expect(JSON.parse(raw)).not.toHaveProperty("kitHitCount");
   });
 });
