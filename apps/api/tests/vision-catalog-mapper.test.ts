@@ -373,7 +373,8 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.clubHint).toBe("Argentina");
     expect(mapped?.kitHitCount).toBe(0);
 
-    const resolved = resolveIdentityJob(mapped!);
+    expect(mapped).toBeDefined();
+    const resolved = resolveIdentityJob(mapped as NonNullable<typeof mapped>);
     expect(resolved.catalogMiss).toBe(true);
     expect(resolved.catalogLikely).toBe(false);
     expect(resolved.suggestions?.nationalTeamLabel).toBe("Argentina");

@@ -298,10 +298,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
   );
 
   const catalogMiss = Boolean(
-    hadSideCatalogHint(result) &&
-      !result.clubId &&
-      !result.nationalTeamId &&
-      !result.catalogKitId,
+    hadSideCatalogHint(result) && !result.clubId && !result.nationalTeamId && !result.catalogKitId,
   );
   const catalogLikely =
     catalogMiss && isLikelyNationalTeamHint(sideHintsFromResult(result)) ? false : undefined;
@@ -370,11 +367,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
 
   const missLabels = catalogMiss && !hasSuggestion ? catalogMissSideLabels(result) : {};
   const hasMissLabel = Boolean(missLabels.clubLabel || missLabels.nationalTeamLabel);
-  const mergedSuggestions = hasSuggestion
-    ? suggestions
-    : hasMissLabel
-      ? missLabels
-      : undefined;
+  const mergedSuggestions = hasSuggestion ? suggestions : hasMissLabel ? missLabels : undefined;
   const hasAnySuggestion = hasSuggestion || hasMissLabel;
 
   if (!hasAnySuggestion && !catalogMiss) {
