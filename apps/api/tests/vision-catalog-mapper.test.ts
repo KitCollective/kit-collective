@@ -101,7 +101,7 @@ describe("VisionCatalogMapper", () => {
     });
   });
 
-  it("omits season and type when manufacturer+sponsor hits more than one kit of the same type", async () => {
+  it("omits catalogKitId but still maps season and type from hints when manufacturer+sponsor hits more than one kit of the same type", async () => {
     const fixture = await insertClubWithKits([
       { label: "2019/20", type: "home", manufacturer: "Hummel", sponsor: "32Red" },
       { label: "2020/21", type: "home", manufacturer: "Hummel", sponsor: "32Red" },
@@ -118,8 +118,8 @@ describe("VisionCatalogMapper", () => {
       fieldConfidence: { club: 0.9, season: 0.85, kitType: 0.8 },
     });
     expect(mapped?.clubId).toBe(fixture.clubId);
-    expect(mapped?.seasonId).toBeUndefined();
-    expect(mapped?.type).toBeUndefined();
+    expect(mapped?.seasonId).toBe(fixture.kits[1]!.seasonId);
+    expect(mapped?.type).toBe("home");
     expect(mapped?.catalogKitId).toBeUndefined();
 
     const hits = await mapper.listObservableKitHits({
