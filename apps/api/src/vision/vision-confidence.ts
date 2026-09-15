@@ -6,6 +6,7 @@ import {
   type VisionJobStatus,
   type VisionSuggestions,
 } from "@kit/api-contract";
+import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
 
 export function serializeConfidences(confidences: VisionFieldConfidences): string {
@@ -185,7 +186,7 @@ export function parseVisionEvalHints(raw: string | null | undefined): VisionEval
   }
 }
 
-export function encodeVisionEvalRaw(hints: object, kitHitCount?: number): string {
+export function encodeVisionEvalRaw(hints: IdentityVisionHints, kitHitCount?: number): string {
   return JSON.stringify(kitHitCount === undefined ? hints : { ...hints, kitHitCount });
 }
 
