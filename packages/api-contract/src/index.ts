@@ -102,6 +102,34 @@ export {
   adminCollectorUserSchema,
 } from "./admin/collectors.js";
 export {
+  type AdminVisionImproveApplyResponse,
+  type AdminVisionImproveDismissResponse,
+  type AdminVisionImproveIdParam,
+  type AdminVisionImproveList,
+  type AdminVisionImproveQuery,
+  type AdminVisionImproveRow,
+  type AdminVisionImproves,
+  adminVisionImproveApplyResponseSchema,
+  adminVisionImproveDismissResponseSchema,
+  adminVisionImproveIdParamSchema,
+  adminVisionImproveListSchema,
+  adminVisionImproveQuerySchema,
+  adminVisionImproveRowSchema,
+  adminVisionImprovesSchema,
+  VISION_IMPROVE_ENTITY_TYPES,
+  VISION_IMPROVE_FIELDS,
+  VISION_IMPROVE_KINDS,
+  VISION_IMPROVE_STATUSES,
+  type VisionImproveEntityType,
+  type VisionImproveField,
+  type VisionImproveKind,
+  type VisionImproveStatus,
+  visionImproveEntityTypeSchema,
+  visionImproveFieldSchema,
+  visionImproveKindSchema,
+  visionImproveStatusSchema,
+} from "./admin/vision-improve.js";
+export {
   type AdminVisionLabelFieldHits,
   type AdminVisionLabelIdentity,
   type AdminVisionLabelList,
@@ -362,6 +390,15 @@ export {
   visionGroupingSuggestionsSchema,
   visionGroupingSuggestRequestSchema,
 } from "./collection/vision-grouping.js";
+export {
+  aliasLocaleForHint,
+  buildVisionImproveFingerprint,
+  proposeVisionImprove,
+  type VisionImproveFingerprintParts,
+  type VisionImproveProposal,
+  type VisionImproveProposeInput,
+  visionImproveKindForEvalClass,
+} from "./collection/vision-improve.js";
 export {
   resolveVisionSaveAction,
   type VisionSaveActionInput,

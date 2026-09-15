@@ -56,4 +56,22 @@ describe("Admin Auth ops chrome", () => {
     expect(shell.match(/label: "/g)?.length).toBe(2);
     expect(shell).not.toContain("Vision labels");
   });
+
+  it("keeps Vision improve under User Data chips, not a third waffle tile", () => {
+    const collectors = readFileSync(join(here, "CollectorsPage.tsx"), "utf8");
+    const shell = readFileSync(join(here, "../components/AdminShell.tsx"), "utf8");
+
+    expect(collectors).toContain("Vision improve");
+    expect(collectors).toContain('"vision-improve"');
+    expect(collectors).toContain("/admin/vision/improve");
+    expect(collectors).toContain("Apply");
+    expect(collectors).toContain("Dismiss");
+    expect(collectors).toContain("No Vision improve yet");
+    expect(collectors).not.toContain("<iframe");
+
+    expect(shell).toContain('label: "Master Data"');
+    expect(shell).toContain('label: "User Data"');
+    expect(shell.match(/label: "/g)?.length).toBe(2);
+    expect(shell).not.toContain("Vision improve");
+  });
 });

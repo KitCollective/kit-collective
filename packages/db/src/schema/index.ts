@@ -25,6 +25,10 @@ import {
   USER_LOCALES,
   USER_ROLES,
   VISION_EVAL_CLASSES,
+  VISION_IMPROVE_ENTITY_TYPES,
+  VISION_IMPROVE_FIELDS,
+  VISION_IMPROVE_KINDS,
+  VISION_IMPROVE_STATUSES,
 } from "@kit/domain";
 import { relations, sql } from "drizzle-orm";
 import {
@@ -87,6 +91,13 @@ export const visionJobStatusEnum = pgEnum("vision_job_status", VISION_JOB_STATUS
 export const visionJobKindEnum = pgEnum("vision_job_kind", ["identity", "grouping"] as const);
 export const visionUserActionEnum = pgEnum("vision_user_action", VISION_USER_ACTIONS);
 export const visionEvalClassEnum = pgEnum("vision_eval_class", VISION_EVAL_CLASSES);
+export const visionImproveKindEnum = pgEnum("vision_improve_kind", VISION_IMPROVE_KINDS);
+export const visionImproveStatusEnum = pgEnum("vision_improve_status", VISION_IMPROVE_STATUSES);
+export const visionImproveEntityTypeEnum = pgEnum(
+  "vision_improve_entity_type",
+  VISION_IMPROVE_ENTITY_TYPES,
+);
+export const visionImproveFieldEnum = pgEnum("vision_improve_field", VISION_IMPROVE_FIELDS);
 export const messageKindEnum = pgEnum("message_kind", MESSAGE_KINDS);
 export const bidStatusEnum = pgEnum("bid_status", BID_STATUSES);
 
@@ -790,6 +801,27 @@ export const visionLog = pgTable("vision_log", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const visionImprove = pgTable(
+  "vision_improve",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: visionImproveKindEnum("kind").notNull(),
+    status: visionImproveStatusEnum("status").notNull().default("proposed"),
+    count: integer("count").notNull().default(1),
+    fingerprint: text("fingerprint").notNull(),
+    text: text("text"),
+    entityType: visionImproveEntityTypeEnum("entity_type"),
+    entityId: uuid("entity_id"),
+    field: visionImproveFieldEnum("field"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("vision_improve_fingerprint_unique").on(table.fingerprint),
+    index("vision_improve_status_idx").on(table.status),
+  ],
+);
 
 export const jerseyDraft = pgTable(
   "jersey_draft",

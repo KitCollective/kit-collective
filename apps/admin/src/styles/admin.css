@@ -782,6 +782,18 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+.data-table td.data-table-row-actions {
+  height: auto;
+  min-height: 48px;
+}
+
+.data-table-row-actions-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-gap-sm);
+}
+
 .data-table tbody tr[tabindex]:nth-child(odd) {
   background: var(--fill-secondary);
 }

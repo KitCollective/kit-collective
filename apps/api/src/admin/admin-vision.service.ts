@@ -1,12 +1,19 @@
 import {
+  type AdminVisionImproveList,
+  type AdminVisionImproveQuery,
+  type AdminVisionImproveRow,
   type AdminVisionLabelList,
   type AdminVisionLabelQuery,
+  adminVisionImproveListSchema,
+  adminVisionImproveRowSchema,
   adminVisionLabelListSchema,
+  aliasLocaleForHint,
   visionEvalFieldHitsSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { catalogLabel, season, visionLog } from "@kit/db";
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import { catalogLabel, season, visionImprove, visionLog } from "@kit/db";
+import type { CatalogEntityType, VisionImproveEntityType, VisionImproveStatus } from "@kit/domain";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { and, count, desc, eq, inArray, isNotNull, type SQL } from "drizzle-orm";
 import { DB } from "../db/db.module.js";
 
@@ -65,6 +72,32 @@ type IdentityIds = {
   seasonId: string | null;
   playerId: string | null;
   patchId: string | null;
+};
+
+type ApplyAliasCatalogLabelInput = {
+  text: string | null;
+  entityType: VisionImproveEntityType | null;
+  entityId: string | null;
+};
+
+type VisionImproveTableRow = {
+  id: string;
+  kind: AdminVisionImproveRow["kind"];
+  status: VisionImproveStatus;
+  count: number;
+  fingerprint: string;
+  text: string | null;
+  entityType: VisionImproveEntityType | null;
+  entityId: string | null;
+  field: AdminVisionImproveRow["field"] | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type ImproveIdentitySource = {
+  text: string | null;
+  entityType: VisionImproveEntityType | null;
+  entityId: string | null;
 };
 
 @Injectable()
@@ -171,6 +204,157 @@ export class AdminVisionService {
         };
       }),
     });
+  }
+
+  async listImprove(query: AdminVisionImproveQuery): Promise<AdminVisionImproveList> {
+    const limit = query.limit ?? 50;
+    const offset = query.offset ?? 0;
+    const status: VisionImproveStatus = query.status ?? "proposed";
+    const [filtered] = await this.db
+      .select({ total: count() })
+      .from(visionImprove)
+      .where(eq(visionImprove.status, status));
+    const rows = await this.db
+      .select()
+      .from(visionImprove)
+      .where(eq(visionImprove.status, status))
+      .orderBy(desc(visionImprove.updatedAt))
+      .limit(limit)
+      .offset(offset);
+    const labels = await this.loadImproveSelectedLabels(rows);
+    return adminVisionImproveListSchema.parse({
+      total: Number(filtered?.total ?? 0),
+      rows: rows.map((row) => this.toImproveRow(row, labels)),
+    });
+  }
+
+  async applyImprove(id: string): Promise<AdminVisionImproveRow> {
+    const row = await this.requireImprove(id);
+    if (row.kind === "alias") {
+      await this.applyAliasCatalogLabel(row);
+      return this.setImproveStatus(id, "applied");
+    }
+    return this.setImproveStatus(id, "noted");
+  }
+
+  async dismissImprove(id: string): Promise<AdminVisionImproveRow> {
+    await this.requireImprove(id);
+    return this.setImproveStatus(id, "dismissed");
+  }
+
+  private async requireImprove(id: string) {
+    const [row] = await this.db
+      .select()
+      .from(visionImprove)
+      .where(eq(visionImprove.id, id))
+      .limit(1);
+    if (!row) {
+      throw new NotFoundException("Vision improve not found");
+    }
+    return row;
+  }
+
+  private async setImproveStatus(
+    id: string,
+    status: VisionImproveStatus,
+  ): Promise<AdminVisionImproveRow> {
+    const [updated] = await this.db
+      .update(visionImprove)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(visionImprove.id, id))
+      .returning();
+    if (!updated) {
+      throw new NotFoundException("Vision improve not found");
+    }
+    const labels = await this.loadImproveSelectedLabels([updated]);
+    return this.toImproveRow(updated, labels);
+  }
+
+  private async applyAliasCatalogLabel(row: ApplyAliasCatalogLabelInput): Promise<void> {
+    const aliasText = row.text?.trim();
+    const entityType = row.entityType;
+    const entityId = row.entityId;
+    if (!aliasText || !entityType || !entityId) {
+      throw new BadRequestException("Alias improve needs text, entity type, and entity id");
+    }
+    if (!isCatalogLabelEntityType(entityType)) {
+      throw new BadRequestException("Alias apply needs Club or NationalTeam CatalogLabel");
+    }
+    const existing = await this.db
+      .select({ id: catalogLabel.id })
+      .from(catalogLabel)
+      .where(
+        and(
+          eq(catalogLabel.entityType, entityType),
+          eq(catalogLabel.entityId, entityId),
+          eq(catalogLabel.kind, "alias"),
+          eq(catalogLabel.text, aliasText),
+        ),
+      )
+      .limit(1);
+    if (existing.length > 0) {
+      return;
+    }
+    await this.db.insert(catalogLabel).values({
+      entityType,
+      entityId,
+      locale: aliasLocaleForHint(aliasText),
+      kind: "alias",
+      text: aliasText,
+      source: "admin",
+    });
+  }
+
+  private toImproveRow(
+    row: VisionImproveTableRow,
+    labels: Map<string, string>,
+  ): AdminVisionImproveRow {
+    const lastSeenAt = row.updatedAt.toISOString();
+    return adminVisionImproveRowSchema.parse({
+      id: row.id,
+      kind: row.kind,
+      status: row.status,
+      count: row.count,
+      fingerprint: row.fingerprint,
+      ...(row.text ? { text: row.text } : {}),
+      ...(row.entityType ? { entityType: row.entityType } : {}),
+      ...(row.entityId ? { entityId: row.entityId } : {}),
+      ...(row.field ? { field: row.field } : {}),
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: lastSeenAt,
+      suggested: improveSuggestedIdentity(row),
+      selected: improveSelectedIdentity(row, labels),
+      lastSeenAt,
+    });
+  }
+
+  private async loadImproveSelectedLabels(
+    rows: Array<{ entityType: VisionImproveEntityType | null; entityId: string | null }>,
+  ): Promise<Map<string, string>> {
+    const labels = new Map<string, string>();
+    const byType = new Map<VisionImproveEntityType, string[]>();
+    for (const row of rows) {
+      if (!row.entityType || !row.entityId) {
+        continue;
+      }
+      const current = byType.get(row.entityType) ?? [];
+      current.push(row.entityId);
+      byType.set(row.entityType, current);
+    }
+    for (const entityType of ["club", "national_team", "player", "patch"] as const) {
+      await this.loadCatalogLabels(labels, entityType, uniqueIds(byType.get(entityType) ?? []));
+    }
+    const seasonIds = uniqueIds(byType.get("season") ?? []);
+    if (seasonIds.length > 0) {
+      const seasonRows = await this.db
+        .select({ id: season.id, label: season.label })
+        .from(season)
+        .where(inArray(season.id, seasonIds));
+      for (const seasonRow of seasonRows) {
+        labels.set(`season:${seasonRow.id}`, seasonRow.label);
+      }
+    }
+    return labels;
   }
 
   private toIdentity(
@@ -288,4 +472,74 @@ function labelPair(
 ) {
   const label = labels.get(`${entityType}:${entityId}`);
   return label ? { [field]: label } : {};
+}
+
+function isCatalogLabelEntityType(
+  entityType: VisionImproveEntityType,
+): entityType is CatalogEntityType & ("club" | "national_team" | "player" | "patch") {
+  return (
+    entityType === "club" ||
+    entityType === "national_team" ||
+    entityType === "player" ||
+    entityType === "patch"
+  );
+}
+
+function improveSuggestedIdentity(row: ImproveIdentitySource) {
+  if (!row.text) {
+    return {};
+  }
+  return identityFromEntity(row.entityType, undefined, row.text);
+}
+
+function improveSelectedIdentity(row: ImproveIdentitySource, labels: Map<string, string>) {
+  if (!row.entityType || !row.entityId) {
+    return {};
+  }
+  const label = labels.get(`${row.entityType}:${row.entityId}`);
+  return identityFromEntity(row.entityType, row.entityId, label);
+}
+
+function identityFromEntity(
+  entityType: VisionImproveEntityType | null,
+  entityId: string | undefined,
+  label: string | undefined,
+) {
+  if (entityType === "club") {
+    return {
+      ...(entityId ? { clubId: entityId } : {}),
+      ...(label ? { clubLabel: label } : {}),
+    };
+  }
+  if (entityType === "national_team") {
+    return {
+      ...(entityId ? { nationalTeamId: entityId } : {}),
+      ...(label ? { nationalTeamLabel: label } : {}),
+    };
+  }
+  if (entityType === "season") {
+    return {
+      ...(entityId ? { seasonId: entityId } : {}),
+      ...(label ? { seasonLabel: label } : {}),
+    };
+  }
+  if (entityType === "kit") {
+    return {
+      ...(entityId ? { catalogKitId: entityId } : {}),
+      ...(label ? { catalogKitLabel: label } : {}),
+    };
+  }
+  if (entityType === "player") {
+    return {
+      ...(entityId ? { playerId: entityId } : {}),
+      ...(label ? { playerLabel: label } : {}),
+    };
+  }
+  if (entityType === "patch") {
+    return {
+      ...(entityId ? { patchId: entityId } : {}),
+      ...(label ? { patchLabel: label } : {}),
+    };
+  }
+  return label ? { clubLabel: label } : {};
 }
