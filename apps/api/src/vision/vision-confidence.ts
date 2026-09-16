@@ -129,12 +129,7 @@ export function resolveCatalogMissHints(result: VisionInferenceResult): {
     return {};
   }
 
-  const clubConfidence = result.confidences?.club;
-  const nationalTeamConfidence = result.confidences?.nationalTeam;
-  if (
-    nationalTeamConfidence !== undefined &&
-    (clubConfidence === undefined || nationalTeamConfidence >= clubConfidence)
-  ) {
+  if (isLikelyNationalTeamHint([hint])) {
     return { nationalTeamHint: hint };
   }
 

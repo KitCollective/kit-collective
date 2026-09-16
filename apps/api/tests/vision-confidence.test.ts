@@ -130,7 +130,7 @@ describe("vision-confidence", () => {
     expect(miss.suggestions?.nationalTeamLabel).toBe("Italy");
   });
 
-  it("surfaces nationalTeamHint when national-team confidence leads", () => {
+  it("surfaces nationalTeamHint for country names regardless of confidence ordering", () => {
     const miss = resolveIdentityJob({
       clubHint: "Argentina",
       confidences: { overall: 80, club: 70, nationalTeam: 85 },
@@ -139,6 +139,24 @@ describe("vision-confidence", () => {
     expect(miss.catalogMiss).toBe(true);
     expect(miss.nationalTeamHint).toBe("Argentina");
     expect(miss.clubHint).toBeUndefined();
+  });
+
+  it("routes club catalogMiss hints to clubHint even when national-team confidence leads", () => {
+    expect(
+      resolveCatalogMissHints({
+        clubHint: "FC Barcelona",
+        confidences: { overall: 80, club: 70, nationalTeam: 85 },
+      }),
+    ).toEqual({ clubHint: "FC Barcelona" });
+
+    const miss = resolveIdentityJob({
+      clubHint: "FC Barcelona",
+      confidences: { overall: 80, club: 70, nationalTeam: 85 },
+    });
+
+    expect(miss.catalogMiss).toBe(true);
+    expect(miss.clubHint).toBe("FC Barcelona");
+    expect(miss.nationalTeamHint).toBeUndefined();
   });
 
   it("resolveCatalogMissHints prefers visionRaw alts when clubHint is absent", () => {
