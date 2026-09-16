@@ -88,7 +88,7 @@ describe("vision-confidence", () => {
     expect(typed.suggestions?.catalogKitId).toBeUndefined();
   });
 
-  it("suggests catalog-mapped player when model player confidence is low but match score is strong", () => {
+  it("suggests mapped playerId using overall when stored player confidence is below suggest", () => {
     const playerMapped = resolveIdentityJob({
       clubId: "00000000-0000-0000-0000-000000000001",
       seasonId: "00000000-0000-0000-0000-000000000002",
