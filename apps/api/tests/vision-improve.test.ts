@@ -359,6 +359,24 @@ describe("Vision improve /v1", () => {
     expect(job.suggestions).toBeUndefined();
   });
 
+  it("returns type on GET job when kitType field confidence is below suggest but overall is high", async () => {
+    adapter.identity = {
+      clubId: CLUB_B,
+      seasonId: SEASON_ID,
+      type: "away",
+      confidences: { overall: 80, club: 80, season: 55, kitType: 45 },
+    };
+    const session = await registerSession(app, "vision-type-gate-fallback@example.com");
+    const suggest = await suggestIdentity(app, session.accessToken);
+    expect(suggest.statusCode).toBe(202);
+    const { jobId } = visionSuggestResponseSchema.parse(suggest.json());
+    const job = await waitForSignedJob(app, session.accessToken, jobId);
+    expect(job.status).toBe("ready");
+    expect(job.suggestions?.type).toBe("away");
+    expect(job.suggestions?.clubId).toBe(CLUB_B);
+    expect(job.suggestions?.seasonId).toBe(SEASON_ID);
+  });
+
   it("returns 401 without a session and 403 for a collector", async () => {
     const unauthGet = await app.inject({ method: "GET", url: "/v1/admin/vision/improve" });
     expect(unauthGet.statusCode).toBe(401);

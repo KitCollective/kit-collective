@@ -75,6 +75,33 @@ describe("vision-confidence", () => {
     expect(typed.suggestions?.seasonId).toBe("00000000-0000-0000-0000-000000000002");
   });
 
+  it("suggests hint-only kit type using overall when kitType field score is below suggest", () => {
+    const typed = resolveIdentityJob({
+      clubId: "00000000-0000-0000-0000-000000000001",
+      seasonId: "00000000-0000-0000-0000-000000000002",
+      type: "away",
+      confidences: { overall: 80, club: 80, season: 55, kitType: 45 },
+    });
+
+    expect(typed.status).toBe("ready");
+    expect(typed.suggestions?.type).toBe("away");
+    expect(typed.suggestions?.catalogKitId).toBeUndefined();
+  });
+
+  it("suggests catalog-mapped player when model player confidence is low but match score is strong", () => {
+    const playerMapped = resolveIdentityJob({
+      clubId: "00000000-0000-0000-0000-000000000001",
+      seasonId: "00000000-0000-0000-0000-000000000002",
+      playerId: "00000000-0000-0000-0000-000000000004",
+      playerNumber: "10",
+      confidences: { overall: 80, club: 80, season: 55, player: 30 },
+    });
+
+    expect(playerMapped.status).toBe("ready");
+    expect(playerMapped.suggestions?.playerId).toBe("00000000-0000-0000-0000-000000000004");
+    expect(playerMapped.suggestions?.playerNumber).toBe("10");
+  });
+
   it("marks ready with per-field preselect and suggest-only fields", () => {
     const highClub = resolveIdentityJob({
       clubId: "00000000-0000-0000-0000-000000000001",
@@ -173,11 +200,12 @@ describe("vision-confidence", () => {
     expect(locked.suggestions?.clubId).toBeUndefined();
   });
 
-  it("caps a catalog match by the model's field confidence", () => {
-    expect(combineModelAndMatchConfidence(0.45, 95)).toBe(45);
-    expect(combineModelAndMatchConfidence(0.95, 70)).toBe(70);
+  it("sustains strong catalog match scores when the model under-reports the field", () => {
+    expect(combineModelAndMatchConfidence(0.45, 95)).toBe(95);
+    expect(combineModelAndMatchConfidence(0.95, 70)).toBe(95);
     expect(combineModelAndMatchConfidence(undefined, 95)).toBe(95);
-    expect(combineModelAndMatchConfidence(0, 95)).toBe(0);
+    expect(combineModelAndMatchConfidence(0, 95)).toBe(95);
+    expect(combineModelAndMatchConfidence(0.45, 40)).toBe(40);
   });
 
   it("round-trips confidences JSON", () => {
