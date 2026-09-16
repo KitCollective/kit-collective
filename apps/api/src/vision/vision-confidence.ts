@@ -338,11 +338,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     Boolean(result.type),
   );
   const playerGate = resolveFieldGate(
-    resolveGateConfidence(
-      confidences?.player,
-      confidences?.overall,
-      Boolean(result.playerId),
-    ),
+    resolveGateConfidence(confidences?.player, confidences?.overall, Boolean(result.playerId)),
     Boolean(result.playerId),
   );
   const badgeGate = resolveFieldGate(
