@@ -67,7 +67,8 @@ const SQUAD_NUMBER_MATCH_SCORE = 90;
  * Intentional omit cases (QA scoring):
  * - Blank shirt back → VLM omits playerHint/playerNumberHint → no player suggestion.
  * - seasonHint with no teamSeason/nationalTeamSeason row for the scoped side → no seasonId.
- * - Model per-field confidence below suggest threshold → resolveIdentityJob omits that field.
+ * - Model per-field confidence below suggest threshold → resolveIdentityJob omits that field,
+ *   except hint-only kit type and catalog-mapped playerId may fall back to overall / match score.
  * - Missing manufacturerHint → no observable kit hits → no catalogKitId lock.
  * - Ambiguous manufacturer+sponsor hits → omit catalogKitId until refinement or type/colour lock.
  * - Empty badges[] → decodeIdentityVisionHints drops patchHint.

@@ -57,8 +57,10 @@ export function computeOverallConfidence(modelConfidence: number | undefined): n
 }
 
 /**
- * Catalog ILIKE scores must not inflate a weak model guess into a preselect.
+ * Blend model field confidence with catalog match scores.
  * Missing model score keeps the match score (legacy overall-only payloads).
+ * Strong catalog matches (≥ suggest) sustain the field when the model under-reports.
+ * Weak catalog matches still cap via min() so fuzzy ILIKE cannot inflate guesses.
  */
 export function combineModelAndMatchConfidence(
   model01: number | undefined,

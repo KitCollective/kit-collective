@@ -359,12 +359,14 @@ describe("Vision improve /v1", () => {
     expect(job.suggestions).toBeUndefined();
   });
 
-  it("returns type on GET job when kitType field confidence is below suggest but overall is high", async () => {
+  it("returns type and playerId on GET job when per-field confidence is below suggest", async () => {
     adapter.identity = {
       clubId: CLUB_B,
       seasonId: SEASON_ID,
       type: "away",
-      confidences: { overall: 80, club: 80, season: 55, kitType: 45 },
+      playerId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      playerNumber: "10",
+      confidences: { overall: 80, club: 80, season: 55, kitType: 45, player: 30 },
     };
     const session = await registerSession(app, "vision-type-gate-fallback@example.com");
     const suggest = await suggestIdentity(app, session.accessToken);
@@ -375,6 +377,24 @@ describe("Vision improve /v1", () => {
     expect(job.suggestions?.type).toBe("away");
     expect(job.suggestions?.clubId).toBe(CLUB_B);
     expect(job.suggestions?.seasonId).toBe(SEASON_ID);
+    expect(job.suggestions?.playerId).toBe("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+    expect(job.suggestions?.playerNumber).toBe("10");
+  });
+
+  it("omits player on GET job when adapter returns no playerId (blank back)", async () => {
+    adapter.identity = {
+      clubId: CLUB_B,
+      seasonId: SEASON_ID,
+      type: "home",
+      confidences: { overall: 90, club: 90, season: 90, kitType: 90 },
+    };
+    const session = await registerSession(app, "vision-blank-back@example.com");
+    const suggest = await suggestIdentity(app, session.accessToken);
+    expect(suggest.statusCode).toBe(202);
+    const { jobId } = visionSuggestResponseSchema.parse(suggest.json());
+    const job = await waitForSignedJob(app, session.accessToken, jobId);
+    expect(job.status).toBe("ready");
+    expect(job.suggestions?.playerId).toBeUndefined();
   });
 
   it("returns 401 without a session and 403 for a collector", async () => {
