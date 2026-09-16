@@ -73,6 +73,11 @@ export function combineModelAndMatchConfidence(
     return modelPct;
   }
 
+  // Strong catalog evidence sustains suggest/preselect when the model under-reports the field.
+  if (matchScore >= VISION_CONFIDENCE_SUGGEST) {
+    return Math.max(modelPct, matchScore);
+  }
+
   return Math.min(modelPct, matchScore);
 }
 
@@ -103,6 +108,24 @@ export function resolveFieldGate(
   }
 
   return "omit";
+}
+
+function resolveGateConfidence(
+  fieldScore: number | undefined,
+  overall: number | undefined,
+  allowOverallFallback: boolean,
+): number | undefined {
+  if (
+    allowOverallFallback &&
+    fieldScore !== undefined &&
+    fieldScore < VISION_CONFIDENCE_SUGGEST &&
+    overall !== undefined &&
+    overall >= VISION_CONFIDENCE_SUGGEST
+  ) {
+    return overall;
+  }
+
+  return fieldScore ?? overall;
 }
 
 export type ResolvedIdentityJob = {
@@ -303,13 +326,21 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     confidences?.season ?? confidences?.overall,
     Boolean(result.seasonId),
   );
-  /** kitType is a free enum when catalogKitId is absent — still gate on model confidence. */
+  /** kitType is a free enum when catalogKitId is absent — fall back to overall when field score is weak. */
   const typeGate = resolveFieldGate(
-    confidences?.kitType ?? confidences?.overall,
+    resolveGateConfidence(
+      confidences?.kitType,
+      confidences?.overall,
+      Boolean(result.type && !result.catalogKitId),
+    ),
     Boolean(result.type),
   );
   const playerGate = resolveFieldGate(
-    confidences?.player ?? confidences?.overall,
+    resolveGateConfidence(
+      confidences?.player,
+      confidences?.overall,
+      Boolean(result.playerId),
+    ),
     Boolean(result.playerId),
   );
   const badgeGate = resolveFieldGate(
