@@ -151,7 +151,7 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.seasonId).toBe(fixture.kits[0]!.seasonId);
     expect(mapped?.type).toBe("home");
     expect(mapped?.catalogKitId).toBeUndefined();
-    expect(mapped?.confidences?.season).toBe(65);
+    expect(mapped?.confidences?.season).toBe(95);
     expect(mapped?.confidences?.kitType).toBe(80);
   });
 
