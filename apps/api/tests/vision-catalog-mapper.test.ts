@@ -17,7 +17,8 @@ import {
   season,
   teamSeason,
 } from "@kit/db";
-import { beforeEach, describe, expect, it } from "vitest";
+import { Logger } from "@nestjs/common";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveIdentityJob } from "../dist/vision/vision-confidence.js";
 import { VisionCatalogMapper } from "../src/vision/vision-catalog-mapper.js";
 
@@ -55,6 +56,10 @@ function resolveLocalApiTestDatabaseUrl(): string {
 const DATABASE_URL = resolveLocalApiTestDatabaseUrl();
 
 describe("VisionCatalogMapper", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(async () => {
     await resetDatabase(DATABASE_URL, migrationsFolder);
   });
@@ -470,6 +475,238 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.nationalTeamId).toBe(fixture.nationalTeamId);
     expect(mapped?.catalogKitId).toBe(fixture.kitId);
   });
+
+  it("maps a surname hint when the player is on the same club in a different season than the locked kit", async () => {
+    const fixture = await insertClubWithKits(
+      [
+        { label: "2012/13", type: "away", manufacturer: "Nike", sponsor: "Jeep" },
+        { label: "2015/16", type: "home", manufacturer: "Adidas", sponsor: "Jeep" },
+      ],
+      { clubLabel: "Juventus" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const dybalaId = await insertPlayerWithLabel(db, "Paulo Dybala");
+    await db.insert(playerClubSeason).values({
+      playerId: dybalaId,
+      clubId: fixture.clubId,
+      seasonId: fixture.kits[1]!.seasonId,
+      squadNumber: 21,
+    });
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Juventus",
+      manufacturerHint: "Nike",
+      sponsorHint: "Jeep",
+      playerHint: "Dybala",
+      playerNumberHint: "21",
+      fieldConfidence: { club: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.catalogKitId).toBe(fixture.kits[0]!.kitId);
+    expect(mapped?.seasonId).toBe(fixture.kits[0]!.seasonId);
+    expect(mapped?.playerId).toBe(dybalaId);
+    expect(mapped?.playerNumber).toBe("21");
+    expect(mapped).toBeDefined();
+    if (!mapped) {
+      return;
+    }
+
+    const resolved = resolveIdentityJob(mapped);
+    expect(resolved.suggestions?.playerId).toBe(dybalaId);
+    expect(resolved.suggestions?.playerNumber).toBe("21");
+  });
+
+  it("maps a unique global CatalogLabel name when the player has no squad row on the suggested club", async () => {
+    const fixture = await insertClubWithKits(
+      [{ label: "2012/13", type: "away", manufacturer: "Nike", sponsor: "Jeep" }],
+      { clubLabel: "Juventus" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const dybalaId = await insertPlayerWithLabel(db, "Paulo Dybala");
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Juventus",
+      manufacturerHint: "Nike",
+      sponsorHint: "Jeep",
+      playerHint: "Dybala",
+      fieldConfidence: { club: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.clubId).toBe(fixture.clubId);
+    expect(mapped?.playerId).toBe(dybalaId);
+    expect(mapped?.playerNumber).toBeUndefined();
+  });
+
+  it("omits player and warns when the name matches two catalog players", async () => {
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+    const fixture = await insertClubWithKits(
+      [{ label: "2012/13", type: "away", manufacturer: "Nike", sponsor: "Jeep" }],
+      { clubLabel: "Juventus" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    await insertPlayerWithLabel(db, "Paulo Dybala");
+    await insertPlayerWithLabel(db, "Mario Dybala");
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Juventus",
+      manufacturerHint: "Nike",
+      sponsorHint: "Jeep",
+      playerHint: "Dybala",
+      fieldConfidence: { club: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.playerId).toBeUndefined();
+    expect(mapped?.playerNumber).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+    const message = String(warn.mock.calls[0]?.[0] ?? "");
+    expect(message).toContain("Dybala");
+    expect(message).toContain("club");
+    expect(message).toContain(fixture.kits[0]!.seasonId);
+  });
+
+  it("omits player when only a number hint exists and that number is not on the scoped season", async () => {
+    const fixture = await insertClubWithKits(
+      [
+        { label: "2012/13", type: "away", manufacturer: "Nike", sponsor: "Jeep" },
+        { label: "2015/16", type: "home", manufacturer: "Adidas", sponsor: "Jeep" },
+      ],
+      { clubLabel: "Juventus" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const dybalaId = await insertPlayerWithLabel(db, "Paulo Dybala");
+    await db.insert(playerClubSeason).values({
+      playerId: dybalaId,
+      clubId: fixture.clubId,
+      seasonId: fixture.kits[1]!.seasonId,
+      squadNumber: 21,
+    });
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Juventus",
+      manufacturerHint: "Nike",
+      sponsorHint: "Jeep",
+      playerNumberHint: "21",
+      fieldConfidence: { club: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.catalogKitId).toBe(fixture.kits[0]!.kitId);
+    expect(mapped?.playerId).toBeUndefined();
+    expect(mapped?.playerNumber).toBeUndefined();
+  });
+
+  it("does not map a season-squad number when playerHint names a different player", async () => {
+    const fixture = await insertClubWithKits(
+      [
+        { label: "2012/13", type: "away", manufacturer: "Nike", sponsor: "Jeep" },
+        { label: "2015/16", type: "home", manufacturer: "Adidas", sponsor: "Jeep" },
+      ],
+      { clubLabel: "Juventus" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const buffonId = await insertPlayerWithLabel(db, "Gianluigi Buffon");
+    const dybalaId = await insertPlayerWithLabel(db, "Paulo Dybala");
+    await db.insert(playerClubSeason).values({
+      playerId: buffonId,
+      clubId: fixture.clubId,
+      seasonId: fixture.kits[0]!.seasonId,
+      squadNumber: 21,
+    });
+    await db.insert(playerClubSeason).values({
+      playerId: dybalaId,
+      clubId: fixture.clubId,
+      seasonId: fixture.kits[1]!.seasonId,
+      squadNumber: 21,
+    });
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Juventus",
+      manufacturerHint: "Nike",
+      sponsorHint: "Jeep",
+      playerHint: "Dybala",
+      playerNumberHint: "21",
+      fieldConfidence: { club: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.playerId).toBe(dybalaId);
+    expect(mapped?.playerId).not.toBe(buffonId);
+    expect(mapped?.playerNumber).toBe("21");
+  });
+
+  it("maps a unique club player by name when season is not resolved", async () => {
+    const fixture = await insertClubWithKits([
+      { label: "2023/24", type: "home", manufacturer: "Adidas", sponsor: "Carlsberg" },
+    ]);
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const dybalaId = await insertPlayerWithLabel(db, "Paulo Dybala");
+    await db.insert(playerClubSeason).values({
+      playerId: dybalaId,
+      clubId: fixture.clubId,
+      seasonId: fixture.kits[0]!.seasonId,
+      squadNumber: 21,
+    });
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Rangers FC",
+      seasonHint: "2099/00",
+      kitType: "home",
+      playerHint: "Dybala",
+      playerNumberHint: "21",
+      fieldConfidence: { club: 0.9, season: 0.9, kitType: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.clubId).toBe(fixture.clubId);
+    expect(mapped?.seasonId).toBeUndefined();
+    expect(mapped?.playerId).toBe(dybalaId);
+    expect(mapped?.playerNumber).toBe("21");
+  });
+
+  it("omits player when playerHint is blank", async () => {
+    const fixture = await insertClubWithKits(
+      [{ label: "2012/13", type: "away", manufacturer: "Nike", sponsor: "Jeep" }],
+      { clubLabel: "Juventus" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    await insertPlayerWithLabel(db, "Paulo Dybala");
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Juventus",
+      manufacturerHint: "Nike",
+      sponsorHint: "Jeep",
+      playerHint: "   ",
+      fieldConfidence: { club: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.clubId).toBe(fixture.clubId);
+    expect(mapped?.playerId).toBeUndefined();
+  });
 });
 
 type KitSpec = {
@@ -484,6 +721,22 @@ type ClubLabelOptions = {
   clubLabel?: string;
   aliases?: string[];
 };
+
+async function insertPlayerWithLabel(
+  db: ReturnType<typeof createDb>["db"],
+  text: string,
+): Promise<string> {
+  const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+  await db.insert(catalogLabel).values({
+    entityType: "player",
+    entityId: insertedPlayer!.id,
+    locale: "en",
+    kind: "label",
+    text,
+    source: "seed",
+  });
+  return insertedPlayer!.id;
+}
 
 async function insertClubWithKits(specs: KitSpec[], options: ClubLabelOptions = {}) {
   const { db, pool } = createDb(DATABASE_URL);
