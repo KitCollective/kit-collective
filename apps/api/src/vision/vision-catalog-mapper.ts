@@ -7,11 +7,13 @@ import {
   nationalTeam,
   nationalTeamSeason,
   patch,
+  player,
   playerClubSeason,
   playerNationalTeamSeason,
   season,
   teamSeason,
 } from "@kit/db";
+import { Logger } from "@nestjs/common";
 import { and, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
@@ -74,6 +76,8 @@ const SQUAD_NUMBER_MATCH_SCORE = 90;
  * - Empty badges[] → decodeIdentityVisionHints drops patchHint.
  */
 export class VisionCatalogMapper {
+  private readonly logger = new Logger(VisionCatalogMapper.name);
+
   constructor(private readonly db: Db) {}
 
   async mapHints(
@@ -100,14 +104,8 @@ export class VisionCatalogMapper {
     const seasonId = locked?.seasonId ?? hintSeason?.seasonId;
     const type = locked?.type ?? hints.kitType;
     const playerMatch =
-      playerScope && seasonId
-        ? await this.resolvePlayer(
-            playerScope.kind,
-            playerScope.id,
-            seasonId,
-            hints.playerNumberHint,
-            hints.playerHint,
-          )
+      playerScope || hints.playerHint?.trim()
+        ? await this.resolvePlayer(playerScope, seasonId, hints.playerNumberHint, hints.playerHint)
         : null;
     const patchMatch = seasonId ? await this.resolvePatch(seasonId, hints.patchHint) : null;
 
@@ -305,16 +303,21 @@ export class VisionCatalogMapper {
   }
 
   private async resolvePlayer(
-    sideKind: CatalogSideKind,
-    sideId: string,
-    seasonId: string,
+    playerScope: { kind: CatalogSideKind; id: string } | undefined,
+    seasonId: string | undefined,
     numberHint?: string,
     nameHint?: string,
   ): Promise<PlayerMatch | null> {
     const parsedNumber = parseSquadNumber(numberHint);
-    if (parsedNumber !== undefined) {
+    const trimmedName = nameHint?.trim() ?? "";
+    const namedPlayers = trimmedName ? await this.findNamedPlayers(trimmedName) : [];
+    const namedById = new Map(namedPlayers.map((row) => [row.playerId, row]));
+    const sideKind = playerScope?.kind;
+    const sideId = playerScope?.id;
+
+    if (parsedNumber !== undefined && sideKind && sideId && seasonId) {
       const row = await this.findSquadByNumber(sideKind, sideId, seasonId, parsedNumber);
-      if (row) {
+      if (row && (!trimmedName || namedById.has(row.playerId))) {
         return {
           playerId: row.playerId,
           playerNumber: String(row.squadNumber ?? parsedNumber),
@@ -323,13 +326,69 @@ export class VisionCatalogMapper {
       }
     }
 
-    if (!nameHint?.trim()) {
+    if (!trimmedName) {
       return null;
     }
 
+    if (namedPlayers.length === 0) {
+      this.warnPlayerMiss(trimmedName, numberHint, sideKind, seasonId);
+      return null;
+    }
+
+    const candidateIds = namedPlayers.map((row) => row.playerId);
+    if (sideKind && sideId && seasonId) {
+      const scopedRows = await this.listSquadByPlayerIds(sideKind, sideId, seasonId, candidateIds);
+      const seasonMatch = bestScored(
+        scopedRows.map((row) => ({
+          playerId: row.playerId,
+          playerNumber: row.squadNumber ? String(row.squadNumber) : undefined,
+          score: namedById.get(row.playerId)?.score ?? 0,
+        })),
+      );
+      if (seasonMatch) {
+        return seasonMatch;
+      }
+    }
+
+    if (sideKind && sideId) {
+      const sideRows = await this.listSquadOnSide(sideKind, sideId, candidateIds);
+      const sidePlayerIds = [...new Set(sideRows.map((row) => row.playerId))];
+      const uniqueSidePlayerId = sidePlayerIds.length === 1 ? sidePlayerIds[0] : undefined;
+      if (uniqueSidePlayerId) {
+        return {
+          playerId: uniqueSidePlayerId,
+          playerNumber: playerNumberFromHintOrSquad(
+            parsedNumber,
+            sideRows.filter((row) => row.playerId === uniqueSidePlayerId),
+          ),
+          score: namedById.get(uniqueSidePlayerId)?.score ?? 0,
+        };
+      }
+      if (sidePlayerIds.length > 1) {
+        this.warnPlayerMiss(trimmedName, numberHint, sideKind, seasonId);
+        return null;
+      }
+    }
+
+    const uniqueGlobal = namedPlayers.length === 1 ? namedPlayers[0] : undefined;
+    if (uniqueGlobal) {
+      return {
+        playerId: uniqueGlobal.playerId,
+        playerNumber: parsedNumber !== undefined ? String(parsedNumber) : undefined,
+        score: uniqueGlobal.score,
+      };
+    }
+
+    this.warnPlayerMiss(trimmedName, numberHint, sideKind, seasonId);
+    return null;
+  }
+
+  private async findNamedPlayers(
+    nameHint: string,
+  ): Promise<Array<{ playerId: string; score: number }>> {
     const nameClause = hintMatchSql(catalogLabel.text, [nameHint]);
     if (!nameClause) {
-      return null;
+      return [];
     }
 
     const labelRows = await this.db
@@ -338,31 +397,33 @@ export class VisionCatalogMapper {
         text: catalogLabel.text,
       })
       .from(catalogLabel)
+      .innerJoin(player, eq(player.id, catalogLabel.entityId))
       .where(and(eq(catalogLabel.entityType, "player"), nameClause))
       .limit(PLAYER_LABEL_LIMIT);
 
-    if (labelRows.length === 0) {
-      return null;
+    const bestByPlayer = new Map<string, number>();
+    for (const row of labelRows) {
+      const score = scoreLabelMatch(row.text ?? "", nameHint);
+      if (score <= 0) {
+        continue;
+      }
+      const current = bestByPlayer.get(row.entityId) ?? 0;
+      if (score > current) {
+        bestByPlayer.set(row.entityId, score);
+      }
     }
 
-    const scopedRows = await this.listSquadByPlayerIds(
-      sideKind,
-      sideId,
-      seasonId,
-      labelRows.map((row) => row.entityId),
-    );
+    return [...bestByPlayer.entries()].map(([playerId, score]) => ({ playerId, score }));
+  }
 
-    return (
-      bestScored(
-        scopedRows.map((row) => ({
-          playerId: row.playerId,
-          playerNumber: row.squadNumber ? String(row.squadNumber) : undefined,
-          score: scoreLabelMatch(
-            labelRows.find((entry) => entry.entityId === row.playerId)?.text ?? "",
-            nameHint,
-          ),
-        })),
-      ) ?? null
+  private warnPlayerMiss(
+    nameHint: string,
+    numberHint: string | undefined,
+    sideKind: CatalogSideKind | undefined,
+    seasonId: string | undefined,
+  ): void {
+    this.logger.warn(
+      `Vision player catalog miss: hint=${nameHint} number=${numberHint?.trim() || "none"} side=${sideKind ?? "none"} season=${seasonId ?? "none"}`,
     );
   }
 
@@ -413,6 +474,9 @@ export class VisionCatalogMapper {
     seasonId: string,
     playerIds: string[],
   ): Promise<SquadRow[]> {
+    if (playerIds.length === 0) {
+      return [];
+    }
     if (sideKind === "club") {
       return this.db
         .select({
@@ -439,6 +503,40 @@ export class VisionCatalogMapper {
         and(
           eq(playerNationalTeamSeason.nationalTeamId, sideId),
           eq(playerNationalTeamSeason.seasonId, seasonId),
+          inArray(playerNationalTeamSeason.playerId, playerIds),
+        ),
+      );
+  }
+
+  private async listSquadOnSide(
+    sideKind: CatalogSideKind,
+    sideId: string,
+    playerIds: string[],
+  ): Promise<SquadRow[]> {
+    if (playerIds.length === 0) {
+      return [];
+    }
+    if (sideKind === "club") {
+      return this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          squadNumber: playerClubSeason.squadNumber,
+        })
+        .from(playerClubSeason)
+        .where(
+          and(eq(playerClubSeason.clubId, sideId), inArray(playerClubSeason.playerId, playerIds)),
+        );
+    }
+
+    return this.db
+      .select({
+        playerId: playerNationalTeamSeason.playerId,
+        squadNumber: playerNationalTeamSeason.squadNumber,
+      })
+      .from(playerNationalTeamSeason)
+      .where(
+        and(
+          eq(playerNationalTeamSeason.nationalTeamId, sideId),
           inArray(playerNationalTeamSeason.playerId, playerIds),
         ),
       );
@@ -578,6 +676,21 @@ function parseSquadNumber(numberHint?: string): number | undefined {
   }
   const parsed = Number.parseInt(numberHint.trim(), 10);
   return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function playerNumberFromHintOrSquad(
+  parsedNumber: number | undefined,
+  rows: SquadRow[],
+): string | undefined {
+  if (parsedNumber !== undefined) {
+    return String(parsedNumber);
+  }
+  const numbers = [
+    ...new Set(
+      rows.map((row) => row.squadNumber).filter((value): value is number => value != null),
+    ),
+  ];
+  return numbers.length === 1 ? String(numbers[0]) : undefined;
 }
 
 function bestScored<T extends { score: number }>(items: T[]): T | undefined {
