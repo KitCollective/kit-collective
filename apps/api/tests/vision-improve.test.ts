@@ -16,6 +16,8 @@ import {
   createDb,
   kit,
   league,
+  player,
+  playerClubSeason,
   resetDatabase,
   season,
   teamSeason,
@@ -48,6 +50,7 @@ const ANONYMOUS_VISION_USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLUB_A = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const CLUB_B = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const SEASON_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const PLAYER_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const ALIAS_FINGERPRINT = `alias:club:${CLUB_B}:side:fck`;
 const MISSING_IMPROVE_ID = "550e8400-e29b-41d4-a716-446655440099";
 
@@ -140,6 +143,13 @@ async function insertCatalog() {
     { clubId: CLUB_A, seasonId: SEASON_ID },
     { clubId: CLUB_B, seasonId: SEASON_ID },
   ]);
+  await db.insert(player).values({ id: PLAYER_ID });
+  await db.insert(playerClubSeason).values({
+    playerId: PLAYER_ID,
+    clubId: CLUB_B,
+    seasonId: SEASON_ID,
+    squadNumber: 10,
+  });
   await db.insert(catalogLabel).values([
     {
       entityType: "country",
@@ -357,6 +367,44 @@ describe("Vision improve /v1", () => {
     expect(job.catalogMiss).toBe(true);
     expect(job.clubHint).toBe("FC Barcelona");
     expect(job.suggestions).toBeUndefined();
+  });
+
+  it("returns type and playerId on GET job when per-field confidence is below suggest", async () => {
+    adapter.identity = {
+      clubId: CLUB_B,
+      seasonId: SEASON_ID,
+      type: "away",
+      playerId: PLAYER_ID,
+      playerNumber: "10",
+      confidences: { overall: 80, club: 80, season: 55, kitType: 45, player: 30 },
+    };
+    const session = await registerSession(app, "vision-type-gate-fallback@example.com");
+    const suggest = await suggestIdentity(app, session.accessToken);
+    expect(suggest.statusCode).toBe(202);
+    const { jobId } = visionSuggestResponseSchema.parse(suggest.json());
+    const job = await waitForSignedJob(app, session.accessToken, jobId);
+    expect(job.status).toBe("ready");
+    expect(job.suggestions?.type).toBe("away");
+    expect(job.suggestions?.clubId).toBe(CLUB_B);
+    expect(job.suggestions?.seasonId).toBe(SEASON_ID);
+    expect(job.suggestions?.playerId).toBe(PLAYER_ID);
+    expect(job.suggestions?.playerNumber).toBe("10");
+  });
+
+  it("omits player on GET job when adapter returns no playerId (blank back)", async () => {
+    adapter.identity = {
+      clubId: CLUB_B,
+      seasonId: SEASON_ID,
+      type: "home",
+      confidences: { overall: 90, club: 90, season: 90, kitType: 90 },
+    };
+    const session = await registerSession(app, "vision-blank-back@example.com");
+    const suggest = await suggestIdentity(app, session.accessToken);
+    expect(suggest.statusCode).toBe(202);
+    const { jobId } = visionSuggestResponseSchema.parse(suggest.json());
+    const job = await waitForSignedJob(app, session.accessToken, jobId);
+    expect(job.status).toBe("ready");
+    expect(job.suggestions?.playerId).toBeUndefined();
   });
 
   it("returns 401 without a session and 403 for a collector", async () => {
