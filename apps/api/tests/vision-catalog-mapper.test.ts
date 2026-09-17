@@ -510,8 +510,12 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.seasonId).toBe(fixture.kits[0]!.seasonId);
     expect(mapped?.playerId).toBe(dybalaId);
     expect(mapped?.playerNumber).toBe("21");
+    expect(mapped).toBeDefined();
+    if (!mapped) {
+      return;
+    }
 
-    const resolved = resolveIdentityJob(mapped as NonNullable<typeof mapped>);
+    const resolved = resolveIdentityJob(mapped);
     expect(resolved.suggestions?.playerId).toBe(dybalaId);
     expect(resolved.suggestions?.playerNumber).toBe("21");
   });
