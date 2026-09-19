@@ -36,6 +36,7 @@ import {
   UnprocessableEntityException,
 } from "@nestjs/common";
 import { and, eq, gt } from "drizzle-orm";
+import { entitlementGateIsOff } from "../config/entitlement-gate.js";
 import { DB, type DbToken } from "../db/db.module.js";
 import {
   IAP_VERIFIER,
@@ -154,6 +155,16 @@ export class BillingService {
       .from(entitlement)
       .where(eq(entitlement.userId, userId))
       .limit(1);
+
+    if (entitlementGateIsOff()) {
+      return entitlementSchema.parse({
+        live: true,
+        source: row?.source ?? "comp",
+        expires: null,
+        trialUsed: row?.trialUsed ?? false,
+        visionMatcher: toVisionMatcherUsage(used, true),
+      });
+    }
 
     if (!row) {
       return entitlementSchema.parse({

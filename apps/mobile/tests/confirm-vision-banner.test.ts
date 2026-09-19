@@ -146,6 +146,11 @@ describe("ConfirmVisionBanner chrome", () => {
     expect(source).not.toContain("handleSave");
   });
 
+  it("does not take grouping copy — identity analyzing keeps the locked sentence", () => {
+    expect(source).not.toContain("analyzingMessage");
+    expect(source).toContain("CONFIRM_VISION_BANNER_COPY[state]");
+  });
+
   it("makes the out-of-quota Banner a quota button when onQuotaPress is provided", () => {
     expect(source).toContain("Pressable");
     expect(source).toContain("onQuotaPress");
@@ -165,6 +170,10 @@ describe("ConfirmVisionSlot", () => {
     expect(slotSource).toContain("<ConfirmVisionBanner");
     expect(slotSource).toContain("onQuotaPress={onQuotaPress}");
     expect(slotSource).not.toContain("PaywallCard");
+  });
+
+  it("does not accept grouping analyzing copy on the Vision slot", () => {
+    expect(slotSource).not.toContain("analyzingMessage");
   });
 });
 

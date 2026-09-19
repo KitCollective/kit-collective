@@ -1,16 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyFillOrderToDraft,
   applyGroupingSuggestion,
   createCaptureSession,
   createMemoryCaptureSessionStore,
   dismissPendingGrouping,
+  ensureSessionPhotoIds,
   getDraft,
+  groupingJobFingerprint,
   groupingPriorGroups,
+  isUuid,
   reloadCaptureSession,
   sessionPhotoIds,
   shouldStartGroupingJob,
   unbindPhoto,
 } from "../src/capture/captureSession";
+import {
+  groupingStripUris,
+  groupingViewerRoles,
+  isGroupingWait,
+} from "../src/capture/groupingReveal";
+import {
+  buildGroupingSuggestRequest,
+  closeGroupingRun,
+  shouldBeginGroupingStart,
+} from "../src/capture/groupingSuggestRequest";
 
 const BULK_URIS = Array.from({ length: 11 }, (_, index) => `file:///photos/bulk-${index}.jpg`);
 
@@ -26,9 +40,106 @@ describe("grouping session", () => {
     }
   });
 
+  it("assigns UUID photoIds that grouping Vision will accept", () => {
+    const session = createCaptureSession(
+      Array.from({ length: 7 }, (_, index) => `file:///photos/three-shirts-${index}.jpg`),
+    );
+    const ids = Object.values(session.photoIdByUri ?? {});
+    expect(ids).toHaveLength(7);
+    expect(ids.every((photoId) => isUuid(photoId))).toBe(true);
+    expect(
+      buildGroupingSuggestRequest({
+        sessionId: session.sessionId,
+        photos: ids.slice(0, 2).map((photoId) => ({ photoId, contentBase64: "abc" })),
+        priorGroups: [],
+      }),
+    ).not.toBeNull();
+  });
+
+  it("backfills missing photoIds instead of posting empty grouping keys", () => {
+    const session = createCaptureSession(
+      Array.from({ length: 4 }, (_, index) => `file:///photos/dump-${index}.jpg`),
+    );
+    const stripped = { ...session, photoIdByUri: {} };
+    const next = ensureSessionPhotoIds(stripped);
+
+    expect(Object.keys(next.photoIdByUri ?? {})).toHaveLength(4);
+    expect(Object.values(next.photoIdByUri ?? {}).every((photoId) => isUuid(photoId))).toBe(true);
+  });
+
+  it("retries grouping after Fast Refresh drops analyzing but keeps the started key", () => {
+    expect(
+      shouldBeginGroupingStart({
+        jobKey: "photos|",
+        analyzing: false,
+        failed: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldBeginGroupingStart({
+        jobKey: "photos|",
+        analyzing: true,
+        failed: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldBeginGroupingStart({
+        jobKey: "photos|",
+        analyzing: false,
+        failed: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not restart grouping after a timeout close", () => {
+    const close = closeGroupingRun("timeout");
+    expect(close.failed).toBe(true);
+    expect(close.analyzing).toBe(false);
+    expect(
+      shouldBeginGroupingStart({
+        jobKey: "photos|",
+        analyzing: close.analyzing,
+        failed: close.failed,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not build a grouping POST when photoIds are not UUIDs", () => {
+    expect(
+      buildGroupingSuggestRequest({
+        sessionId: "capture-not-a-uuid",
+        photos: [
+          { photoId: "capture-1", contentBase64: "abc" },
+          { photoId: "capture-2", contentBase64: "def" },
+        ],
+        priorGroups: [],
+      }),
+    ).toBeNull();
+  });
+
+  it("keeps groupingJobFingerprint stable when only draft identity fields persist", () => {
+    const session = createCaptureSession(
+      Array.from({ length: 7 }, (_, index) => `file:///photos/three-shirts-${index}.jpg`),
+    );
+    const before = groupingJobFingerprint(session);
+    const persisted = {
+      ...session,
+      drafts: session.drafts.map((draft) => ({ ...draft, notes: "persist" })),
+    };
+
+    expect(before).toBeTruthy();
+    expect(groupingJobFingerprint(persisted)).toBe(before);
+  });
+
   it("starts grouping for bulk sessions with at least two unbound photos", () => {
     const bulk = createCaptureSession(BULK_URIS);
     expect(shouldStartGroupingJob(bulk)).toBe(true);
+
+    const sevenShirtDump = createCaptureSession(
+      Array.from({ length: 7 }, (_, index) => `file:///photos/three-shirts-${index}.jpg`),
+    );
+    expect(sevenShirtDump.branch).toBe("bulk");
+    expect(shouldStartGroupingJob(sevenShirtDump)).toBe(true);
 
     const single = createCaptureSession([BULK_URIS[0]!]);
     expect(shouldStartGroupingJob(single)).toBe(false);
@@ -48,6 +159,56 @@ describe("grouping session", () => {
     expect(groupingPriorGroups(bound)[0]?.photoIds).toHaveLength(1);
   });
 
+  it("keeps the grouping wait canvas empty until a photo occupies a role", () => {
+    const empty = {
+      front: undefined,
+      back: undefined,
+      left: undefined,
+      right: undefined,
+      other: undefined,
+    };
+    expect(groupingViewerRoles(empty, true)).toEqual([]);
+    expect(isGroupingWait(empty, true)).toBe(true);
+    expect(groupingViewerRoles({ ...empty, front: "file:///a.jpg" }, true)).toEqual(["front"]);
+    expect(isGroupingWait({ ...empty, front: "file:///a.jpg" }, true)).toBe(false);
+    expect(
+      groupingViewerRoles({ ...empty, front: "file:///a.jpg", back: "file:///b.jpg" }, true),
+    ).toEqual(["front", "back"]);
+    expect(groupingViewerRoles(empty, false)).toEqual(["front", "back", "left", "right", "other"]);
+  });
+
+  it("lets rolling uris own the grouping strip so a late bind cannot empty Forside", () => {
+    const rolling = groupingStripUris(["file:///a.jpg", "file:///b.jpg"]);
+    expect(rolling.front).toBe("file:///a.jpg");
+    expect(rolling.back).toBe("file:///b.jpg");
+
+    const bound = groupingStripUris(["file:///a.jpg"]);
+    expect(bound.front).toBe("file:///a.jpg");
+    expect(bound.back).toBeUndefined();
+  });
+
+  it("can bind one grouping photo at a time so Confirm can reveal them in sequence", () => {
+    const session = createCaptureSession(BULK_URIS);
+    const first = session.photoIdByUri![BULK_URIS[0]!]!;
+    const second = session.photoIdByUri![BULK_URIS[1]!]!;
+
+    const afterFirst = applyGroupingSuggestion(
+      session,
+      { groups: [{ photoIds: [first] }] },
+      { preselect: true },
+    );
+    expect(afterFirst.unboundUris).toHaveLength(BULK_URIS.length - 1);
+    expect(getDraft(afterFirst, afterFirst.drafts[0]!.id).photos).toHaveLength(1);
+
+    const afterSecond = applyGroupingSuggestion(
+      afterFirst,
+      { groups: [{ photoIds: [first, second] }] },
+      { preselect: true },
+    );
+    expect(afterSecond.unboundUris).toHaveLength(BULK_URIS.length - 2);
+    expect(getDraft(afterSecond, afterSecond.drafts[0]!.id).photos).toHaveLength(2);
+  });
+
   it("preselect mode binds via existing bind reducers without assigning roles", () => {
     const session = createCaptureSession(BULK_URIS);
     const groupA = [session.photoIdByUri![BULK_URIS[0]!]!, session.photoIdByUri![BULK_URIS[1]!]!];
@@ -64,6 +225,10 @@ describe("grouping session", () => {
     expect(
       getDraft(applied, applied.drafts[0]!.id).photos.every((photo) => photo.role === null),
     ).toBe(true);
+
+    const filled = applyFillOrderToDraft(applied, applied.drafts[0]!.id);
+    expect(getDraft(filled, filled.drafts[0]!.id).photos[0]?.role).toBe("front");
+    expect(getDraft(filled, filled.drafts[0]!.id).photos[1]?.role).toBe("back");
   });
 
   it("pending mode does not move unbound photos until accept", () => {

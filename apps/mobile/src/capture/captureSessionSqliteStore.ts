@@ -234,7 +234,7 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
                kit_type_selected, size_selected, condition_selected,
                notes, player_name, player_id, player_number,
                badge_enabled, badge_id, badge_label, sort_order, updated_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               draft.id,
               sessionId,

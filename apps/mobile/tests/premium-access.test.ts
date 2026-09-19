@@ -34,4 +34,33 @@ describe("resolvePremiumAccessIntent", () => {
       }),
     ).toBe("paywall");
   });
+
+  it("returns live when the local Entitlement gate is off", () => {
+    expect(
+      resolvePremiumAccessIntent(
+        {
+          live: false,
+          source: null,
+          expires: null,
+          trialUsed: true,
+        },
+        "off",
+      ),
+    ).toBe("live");
+  });
+
+  it("ignores the Entitlement gate off flag in a release build", () => {
+    expect(
+      resolvePremiumAccessIntent(
+        {
+          live: false,
+          source: null,
+          expires: null,
+          trialUsed: true,
+        },
+        "off",
+        false,
+      ),
+    ).toBe("paywall");
+  });
 });

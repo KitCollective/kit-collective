@@ -84,6 +84,7 @@ export default function ConfirmScreen() {
     setSelectedSeasonLabel,
     onCatalogMiss: setCatalogMiss,
     onPremiumRequired: requestPremiumAccess,
+    deferIdentity: grouping.blocksIdentity,
   });
   const photos = useConfirmPhotos({
     sessionId,
@@ -140,14 +141,12 @@ export default function ConfirmScreen() {
   const activeJerseyIndex = state?.drafts.findIndex((entry) => entry.id === draft.id) ?? 0;
   const activeTabLabel = `Trøje ${activeJerseyIndex + 1}`;
   const outOfQuota = visionMatcherRemainingToOutOfQuota(entitlement?.visionMatcher);
-  const bannerState = grouping.analyzing
-    ? "analyzing"
-    : resolveConfirmVisionBannerState({
-        activated: Boolean(accessToken),
-        outOfQuota,
-        analyzing: vision.bannerState === "analyzing",
-        succeeded: vision.bannerState === "success",
-      });
+  const bannerState = resolveConfirmVisionBannerState({
+    activated: Boolean(accessToken),
+    outOfQuota,
+    analyzing: vision.bannerState === "analyzing",
+    succeeded: vision.bannerState === "success",
+  });
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -167,6 +166,7 @@ export default function ConfirmScreen() {
             activeDraftId={state.activeDraftId}
             onSelectDraft={handleSelectDraft}
             onAddJersey={handleAddJersey}
+            analyzing={grouping.blocksIdentity}
           />
         ) : null}
 
@@ -174,38 +174,47 @@ export default function ConfirmScreen() {
           <ConfirmPhotoViewer
             photoUris={photos.photoUris}
             onPressRole={photos.handlePhotoSlotPress}
+            analyzing={grouping.blocksIdentity}
+            rollingUris={grouping.rollingUris}
+            homecoming={grouping.homecoming}
           />
 
           {state ? (
             <UnboundPhotosRow
-              uris={state.unboundUris}
+              uris={state.unboundUris.filter((uri) => !grouping.hiddenSandboxUris.includes(uri))}
               activeTabLabel={activeTabLabel}
               onPressPhoto={photos.bindUnboundPhoto}
               onDiscardPhoto={photos.discardUnboundPhoto}
               onUpload={() => void photos.uploadToSandbox()}
+              analyzing={grouping.blocksIdentity}
+              gatheringUris={grouping.gatheringUris}
             />
           ) : null}
         </View>
 
-        <ConfirmVisionSlot
-          bannerState={bannerState}
-          suggestion={vision.suggestion}
-          groupingMessage={grouping.groupingMessage}
-          catalogMiss={catalogMiss}
-          catalogMissHint={vision.catalogMissHint}
-          suggestionOpacity={
-            grouping.groupingMessage ? grouping.suggestionOpacity : vision.suggestionOpacity
-          }
-          onApplySuggestion={() =>
-            grouping.groupingMessage ? grouping.applySuggestion() : void vision.applySuggestion()
-          }
-          onDismissSuggestion={
-            grouping.groupingMessage ? grouping.dismissSuggestion : vision.dismissSuggestion
-          }
-          onQuotaPress={() => {
-            void requestPremiumAccess();
-          }}
-        />
+        {grouping.blocksIdentity ? (
+          <View style={styles.visionSlotReserve} accessibilityElementsHidden />
+        ) : (
+          <ConfirmVisionSlot
+            bannerState={bannerState}
+            suggestion={vision.suggestion}
+            groupingMessage={grouping.groupingMessage}
+            catalogMiss={catalogMiss}
+            catalogMissHint={vision.catalogMissHint}
+            suggestionOpacity={
+              grouping.groupingMessage ? grouping.suggestionOpacity : vision.suggestionOpacity
+            }
+            onApplySuggestion={() =>
+              grouping.groupingMessage ? grouping.applySuggestion() : void vision.applySuggestion()
+            }
+            onDismissSuggestion={
+              grouping.groupingMessage ? grouping.dismissSuggestion : vision.dismissSuggestion
+            }
+            onQuotaPress={() => {
+              void requestPremiumAccess();
+            }}
+          />
+        )}
 
         <View style={styles.hubSpacer} />
 
@@ -285,5 +294,10 @@ const styles = StyleSheet.create({
   sectionPair: {
     flexDirection: "column",
     gap: space.gapMd,
+  },
+  // Matches ConfirmVisionBanner minHeight so hiding it during grouping
+  // does not collapse the column and hop Data/Detaljer.
+  visionSlotReserve: {
+    minHeight: 44,
   },
 });
