@@ -21,8 +21,8 @@ New Linear issue only. Do not dual-label with `signal-up`.
 
 **Required**
 
-- Status = `dispatch.state`
-- Labels: `proposal` + `needs-triage`
+- Status = Linear **Triage** (the state, not the label group)
+- Label: `proposal` only (do not also apply `needs-triage` while the Triage group is exclusive)
 - At most **one** proposal per implement run
 
 **Allowed optional**

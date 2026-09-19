@@ -1,0 +1,22 @@
+{
+  "clubId": "191",
+  "season": 2015,
+  "squads": [
+    {
+      "playerId": "22221",
+      "playerName": "Kevin Jakobsen",
+      "shirtNumber": 7,
+      "clubId": "191",
+      "clubName": "Brondby IF",
+      "season": 2015
+    },
+    {
+      "playerId": "99999",
+      "playerName": "Rasmus Hojlund",
+      "shirtNumber": null,
+      "clubId": "191",
+      "clubName": "Brondby IF",
+      "season": 2015
+    }
+  ]
+}

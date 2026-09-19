@@ -1,0 +1,254 @@
+/** Catalog entity types that carry human-readable names via CatalogLabel. */
+export const CATALOG_ENTITY_TYPES = [
+  "country",
+  "league",
+  "club",
+  "national_team",
+  "manufacturer",
+  "patch",
+  "player",
+] as const;
+
+export type CatalogEntityType = (typeof CATALOG_ENTITY_TYPES)[number];
+
+/** Entities that can be referenced by ExternalId. */
+export const EXTERNAL_ID_ENTITY_TYPES = [
+  "country",
+  "league",
+  "club",
+  "national_team",
+  "player",
+  "kit",
+] as const;
+
+export type ExternalIdEntityType = (typeof EXTERNAL_ID_ENTITY_TYPES)[number];
+
+export const LABEL_LOCALES = ["da", "en", "sv", "no", "mul"] as const;
+export type LabelLocale = (typeof LABEL_LOCALES)[number];
+
+export const LABEL_KINDS = ["label", "alias"] as const;
+export type LabelKind = (typeof LABEL_KINDS)[number];
+
+export const LABEL_SOURCES = ["seed", "admin"] as const;
+export type LabelSource = (typeof LABEL_SOURCES)[number];
+
+export const KIT_TYPES = ["home", "away", "third", "fourth", "gk", "special"] as const;
+export type KitType = (typeof KIT_TYPES)[number];
+
+export const CLUB_KINDS = ["club", "farm", "dissolved"] as const;
+export type ClubKind = (typeof CLUB_KINDS)[number];
+
+export const CALENDAR_KINDS = ["split_year", "calendar"] as const;
+export type CalendarKind = (typeof CALENDAR_KINDS)[number];
+
+export const NATIONAL_TEAM_GENDERS = ["men", "women"] as const;
+export type NationalTeamGender = (typeof NATIONAL_TEAM_GENDERS)[number];
+
+export const KIT_PHOTO_RIGHTS = ["unresolved", "cleared"] as const;
+export type KitPhotoRights = (typeof KIT_PHOTO_RIGHTS)[number];
+
+export const KIT_PHOTO_VISIBILITY = ["admin_only", "public"] as const;
+export type KitPhotoVisibility = (typeof KIT_PHOTO_VISIBILITY)[number];
+
+/** Closed set for Player.preferred_foot from Transfermarkt kader / profile. */
+export const PREFERRED_FOOT = ["left", "right", "both"] as const;
+export type PreferredFoot = (typeof PREFERRED_FOOT)[number];
+
+/** Polymorphic subject for Honour rows (club, national team, or player). */
+export const HONOUR_SUBJECT_TYPES = ["club", "national_team", "player"] as const;
+export type HonourSubjectType = (typeof HONOUR_SUBJECT_TYPES)[number];
+
+/**
+ * Stamdata identity marks stored as object-store bytes (club crest, league badge,
+ * honour trophy, national-team mark). Player portraits stay on `player_photo`.
+ */
+export const CATALOG_MARK_ENTITY_TYPES = ["club", "league", "honour", "national_team"] as const;
+export type CatalogMarkEntityType = (typeof CATALOG_MARK_ENTITY_TYPES)[number];
+
+export {
+  compareSquadOrder,
+  SQUAD_POSITION_GROUPS,
+  type SquadPositionGroup,
+  squadPositionGroup,
+} from "./squad-position.js";
+
+export const USER_ROLES = ["user", "admin"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+/** Closed set for UserJersey.size — stored value, not free text. */
+export const JERSEY_SIZES = ["xs", "s", "m", "l", "xl", "xxl"] as const;
+export type JerseySize = (typeof JERSEY_SIZES)[number];
+
+/** Closed set for UserJersey.condition — stored value, not free text. */
+export const JERSEY_CONDITIONS = ["new", "used", "worn"] as const;
+export type JerseyCondition = (typeof JERSEY_CONDITIONS)[number];
+
+export {
+  isUniversalPhotoRole,
+  type JerseyPhotoInput,
+  type JerseyPhotoValidationError,
+  MAX_USER_JERSEY_PHOTOS,
+  PHOTO_ROLE_LABELS_DA,
+  PHOTO_ROLES,
+  type PhotoRole,
+  UNIVERSAL_PHOTO_ROLES,
+  type UniversalPhotoRole,
+  validateJerseyPhotos,
+} from "./photo-roles.js";
+
+export {
+  COLLECTOR_PHOTO_VARIANTS,
+  type CollectorPhotoVariant,
+  centerCrop4x5Rect,
+  gridPhotoObjectKey,
+  isCollectorPhotoVariant,
+  isLegacyPhotoObjectKey,
+  isReservedPhotoVariant,
+  LIGHTBOX_MAX_EDGE_OTHER,
+  LIGHTBOX_MAX_EDGE_UNIVERSAL,
+  legacyPhotoObjectKey,
+  legacyPhotoObjectKeyFromPrefix,
+  lightboxMaxEdgeForRole,
+  lightboxObjectKey,
+  MAX_ORIGINAL_PHOTO_BYTES_OTHER,
+  MAX_ORIGINAL_PHOTO_BYTES_UNIVERSAL,
+  MAX_SAVE_PHOTO_BYTES_OTHER,
+  MAX_SAVE_PHOTO_BYTES_UNIVERSAL,
+  maxOriginalPhotoBytesForRole,
+  maxSavePhotoBytesForRole,
+  originalObjectKey,
+  type PhotoVariantQuery,
+  photoObjectKeysForDeletion,
+  photoPrefix,
+  photoPrefixFromStoredObjectKey,
+  RESERVED_PHOTO_VARIANTS,
+  type ReservedPhotoVariant,
+  STRIP_VARIANT_WIDTH,
+  stripObjectKey,
+  variantObjectKey,
+} from "./photo-variants.js";
+
+export const PHOTO_SOURCES = ["gallery", "camera"] as const;
+export type PhotoSource = (typeof PHOTO_SOURCES)[number];
+
+export const OCR_STATUSES = ["none"] as const;
+export type OcrStatus = (typeof OCR_STATUSES)[number];
+
+export const AUTHENTICITY_VALUES = ["unknown", "genuine", "replica"] as const;
+export type Authenticity = (typeof AUTHENTICITY_VALUES)[number];
+
+/** Nest Vision eval class at Save — not a collector surface, not a second Gemini call. */
+export const VISION_EVAL_CLASSES = ["accepted", "alias", "coverage", "model", "transport"] as const;
+export type VisionEvalClass = (typeof VISION_EVAL_CLASSES)[number];
+
+/** Staff-gated Vision improve proposal kind — CatalogLabel alias, seed backlog, or prompt ticket. */
+export const VISION_IMPROVE_KINDS = ["alias", "seed", "prompt"] as const;
+export type VisionImproveKind = (typeof VISION_IMPROVE_KINDS)[number];
+
+/** Vision improve lifecycle. New upserts are proposed; seed/prompt Apply is noted only. */
+export const VISION_IMPROVE_STATUSES = ["proposed", "applied", "dismissed", "noted"] as const;
+export type VisionImproveStatus = (typeof VISION_IMPROVE_STATUSES)[number];
+
+/** Catalog-ish entity a Vision improve row points at. Not a UserJersey FK. */
+export const VISION_IMPROVE_ENTITY_TYPES = [
+  "club",
+  "national_team",
+  "season",
+  "kit",
+  "player",
+  "patch",
+] as const;
+export type VisionImproveEntityType = (typeof VISION_IMPROVE_ENTITY_TYPES)[number];
+
+/** Identity field the eval class blamed. Same keys as Vision eval field hits. */
+export const VISION_IMPROVE_FIELDS = [
+  "side",
+  "season",
+  "type",
+  "catalogKitId",
+  "player",
+  "patch",
+] as const;
+export type VisionImproveField = (typeof VISION_IMPROVE_FIELDS)[number];
+
+/** Danish chip labels for kit type (UI only — stored values are KIT_TYPES). */
+export const KIT_TYPE_LABELS_DA: Record<KitType, string> = {
+  home: "Hjemme",
+  away: "Ude",
+  third: "Tredje",
+  fourth: "Fjerde",
+  gk: "Keeper",
+  special: "Special",
+};
+
+/** Danish chip labels for jersey size (UI only). */
+export const JERSEY_SIZE_LABELS_DA: Record<JerseySize, string> = {
+  xs: "XS",
+  s: "S",
+  m: "M",
+  l: "L",
+  xl: "XL",
+  xxl: "XXL",
+};
+
+/** Danish chip labels for jersey condition (UI only). */
+export const JERSEY_CONDITION_LABELS_DA: Record<JerseyCondition, string> = {
+  new: "Ny",
+  used: "Brugt",
+  worn: "Slidt",
+};
+
+export {
+  ENTITLEMENT_SOURCES,
+  type EntitlementSource,
+  entitlementSourceForIapPlatform,
+  IAP_PLATFORMS,
+  type IapPlatform,
+  OFFER_PRODUCT_IDS,
+  VISION_MATCHER_JERSEY_CAP,
+  VISION_MATCHER_WINDOW_DAYS,
+} from "./billing.js";
+export {
+  countryCodesForIso3166,
+  EUROPEAN_COUNTRIES,
+  type EuropeanCountry,
+  europeanCountryByIso3166,
+} from "./countries.js";
+export {
+  AUTH_EVENT_KINDS,
+  type AuthEventKind,
+  HANDLE_MAX_LENGTH,
+  HANDLE_MIN_LENGTH,
+  HANDLE_PATTERN,
+  HANDLE_STATUSES,
+  type HandleStatus,
+} from "./identity.js";
+export {
+  COUNTRY_LABEL_TO_ISO3166,
+  formatProfileLocationCaption,
+  formatProfileLocationMeta,
+  POPULAR_CITIES_BY_ISO3166,
+  popularCitiesForCountry,
+  popularCitiesForCountryLabel,
+} from "./location.js";
+export {
+  APPEARANCE_MODES,
+  type AppearanceMode,
+  USER_LOCALES,
+  type UserLocale,
+} from "./prefs.js";
+export {
+  buildWishlistAndMeta,
+  buildWishlistAutoName,
+  hasWishlistCriterion,
+  resolveWishlistSizeLabel,
+  resolveWishlistTypeLabel,
+  type WishlistCriteriaLabels,
+} from "./wishlist.js";
+export {
+  findFirstWishlistMatch,
+  isWishlistMatchCandidate,
+  matchesWishlistFacets,
+  type WishlistMatchCriteria,
+  type WishlistMatchJersey,
+} from "./wishlist-match.js";

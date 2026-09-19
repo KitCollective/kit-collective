@@ -25,7 +25,7 @@ Use this file when writing specs (`to-spec`). If a spec fights a lock below, cha
 | Database | Self-hosted Postgres | — | No Neon. No pgvector in MVP. |
 | ORM | Drizzle | `packages/db` | Schema lives here. **Only `apps/api` imports it.** |
 | Monorepo | pnpm workspaces + Turborepo | repo root | One git repo. |
-| Compute | Hetzner **CX33** (4 vCPU / 8 GB / 80 GB), **Nürnberg** | — | Coolify + Nest + Postgres + Redis. See [server-stack](./server-stack.md). |
+| Compute | Hetzner **CX33** (4 vCPU / 8 GB / 80 GB), **Helsinki** | — | Coolify + Nest + Postgres + Redis. See [server-stack](./server-stack.md). |
 | Object storage | **Cloudflare R2** (S3 API) | — | User photos + admin-only kit archive bytes. **Not** on the CX33 disk. |
 | Jobs | **BullMQ** via `@nestjs/bullmq`, worker in the same Nest process | `apps/api` | Wishlist, push, Vision, seed. Redis beside Nest per lane. See §9. |
 
@@ -78,7 +78,7 @@ One deployable. Modules = domains, not “helpers”.
 
 | Module | Owns |
 | --- | --- |
-| `Identity` | **Email + password (mandatory).** Apple + Google social. Facebook later if we add it. Verify email. Roles `user` / `admin`. Apple required because we offer social. |
+| `Identity` | **Email + password (mandatory).** Better Auth embedded in this module against our `User` (ADR-0035, ADR-0037). Social: Google + Facebook. Verify email. Password reset. Roles `user` / `admin`. Apple later — not required to offer Google/Facebook (ADR-0038). |
 | `Catalog` | country, league, club, national team, season, kit, manufacturer, player, patch, `CatalogLabel`, `ExternalId`, propose queue |
 | `Collection` | user jersey, photos, drafts sync, visibility, listing status |
 | `Vision` | Gemini worker, nano fallback, suggestion log |
@@ -99,15 +99,15 @@ Product rules live in the PRD. Implementation shape:
 Photos (gallery-first on first session, CameraView on repeat)
     → local draft (expo-sqlite) on every shot / pick
     → Nest Vision worker fired at first photo (do not await)
-    → Confirm screen: club search + club-scoped season + type/size/condition chips
+    → Confirm screen: side search (Club or NationalTeam) + side-scoped season + type/size/condition chips
     → Save (local-complete counts; upload may finish later)
     → "New jersey" | "Same club"
 ```
 
 - **New jersey:** empty identity. Inter must not become Barça.
-- **Same club:** prefill club only. Season / type / condition are not sticky.
+- **Same club:** prefill the saved side only (Club or NationalTeam). Season / type / condition are not sticky.
 - Nameset, patch, purchase, authenticity = “More details”, off the 45s clock.
-- Save **must succeed** with club + season + type + size + condition + ≥1 photo. Missing kit row / manufacturer / patch is not an error.
+- Save **must succeed** with a catalog side (Club xor NationalTeam) + season + type + size + condition + ≥1 photo. Missing kit row / manufacturer / patch is not an error.
 - Catalog miss on club or season → upgrade CTA, draft kept.
 - Expo Web: gallery-first, no 45s promise.
 
@@ -121,22 +121,25 @@ Photo entity (MVP): `role`, `source`, dimensions, URIs. Vacant OCR envelope (`oc
 
 | Item | Lock |
 | --- | --- |
-| Worker | Gemini 2.5 Flash-Lite (paid API) |
-| Fallback | OpenAI `gpt-4.1-nano` |
-| Do not use | `gpt-4o-mini` for images (tile pricing), reasoning models on the hot path |
-| Timeout | 8–12 s, fail open |
-| Output | Structured JSON → map to catalog UUIDs in Nest |
-| Auto-fill | ≥70% **and** catalog hit → pre-select on confirm. 50–69% → show as suggestion. Else ignore |
+| Worker | Gemini 2.5 Flash-Lite via OpenRouter, pinned to Google (`google-ai-studio` + `google-vertex`, `data_collection: deny`, latency sort) |
+| Fallback | Direct `GEMINI_API_KEY`. Unset both → noop |
+| Do not use | non-Google OpenRouter hosts for collector photos; `gpt-4o-mini` for images (tile pricing); reasoning models on the hot path; Eve / pgvector on collector Vision |
+| Timeout | 15 s wall for identity (first look + optional second look), fail open |
+| Judge | Nest Kit-hit on manufacturer+sponsor. CatalogLabel label+alias and compact spellings (same diacritic fold on retrieve as on score). Unique kit, or unique type/colours among N, locks catalog UUID/season/type. Missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is a Club row only; NationalTeam kits set `nationalTeamId`. Else omit; N>1 may one second look with catalog facts |
+| Output | Structured JSON → map to catalog UUIDs in Nest. Grouping jobs return photoId groups (incremental prior groups allowed); identity jobs return club/season/type |
+| Auto-fill | ≥70% **and** catalog hit → pre-select on confirm. 50–69% → show as suggestion. Else ignore. Grouping ≥70% pre-binds via bind reducers; Vision never auto-commits Photo roles |
 | Logging | `vision_raw`, confidences, latency, model, user action (accepted / edited / ignored). **No embedding / pgvector** |
 | Cost (order of mag.) | ~$0.0004 / 1600² image; ~$0.0009 / 3-image jersey |
 
-Port from Huddle: prompt shape, ID match, confidence gates. Do **not** port the 4-step wizard or kit-template embeddings.
+Port from Huddle: prompt shape (home = club colours, empty badges, per-field confidence, omit rather than invent), ID match, confidence gates. Do **not** port the 4-step wizard or kit-template embeddings.
 
 ---
 
 ## 7. Catalog seed — two git repos, deep spec handoff
 
 The product monorepo (`kit-collective`) does **not** scrape and does **not** contain Apify/FKApi fetch code. Stamdata is two **separate GitHub repos**. Create them when we leave restructuring — not inside this monorepo.
+
+> **Interim exception (ADR 0001):** until `kit-collective-seed-fkapi` exists on GitHub, FK seed CLI lives at `seed/fkapi/` in this monorepo. It uses `DATABASE_URL` only (no `@kit/db`). Move out and delete the folder when the standalone repo is created. Apify seed is **not** interim — still a separate future repo.
 
 | Repo | Learns | Writes into KitCollective |
 | --- | --- | --- |
@@ -186,16 +189,16 @@ See [data-model](./data-model.md). Short version:
 
 ## 9. Auth, billing, files, jobs
 
-- **Auth:** our own Nest `Identity` module, **Passport** (`@nestjs/passport` + JWT). **Email + password is the default and always offered.** Social: Sign in with Apple + Google in MVP; Facebook is optional later (same `Identity` table, extra provider). Not Clerk. Not Better Auth (Nest adapter is community; Fastify support is beta — we locked Fastify). Apple is mandatory because we offer third-party login. Admin = same user, `admin` role.
+- **Auth:** Nest `Identity` embeds **Better Auth** (library) against our Postgres `User` row (same UUID). **Email + password is the default and always offered.** Session is a **revocable Bearer** (Better Auth Bearer plugin + DB session), not a stateless JWT (ADR-0036). Social: Google + Facebook (Expo native idToken; Admin same Identity). Apple later. Verified social email auto-links (ADR-0038). Staff never uses `dash.better-auth.com` — `dash` + `sentinel` are adapters that feed Auth events / Auth security into Admin SPA (ADR-0035). Fastify stays; Better Auth is not a second public `/api/auth` contract. Not Clerk. Admin = same User, `admin` role (ADR-0018).
 - **Billing:** digital sub **in the Expo iOS/Android apps = IAP** (Apple/Google are merchant of record; Restore purchases required). Nest stores `Entitlement` after server-side receipt validation. **Stripe is not a substitute inside the store binaries.** Stripe is a later/optional web checkout (`Entitlement.source = stripe`) if we sell outside the stores — same 29 kr product, two pipes. Do not spec Stripe-only MVP if the first clients are App Store / Play.
 - **Files:** both classes live in **R2**, never on the CX33 disk and never as bytea in Postgres. Postgres stores the object key + metadata only.
-  - `UserJerseyPhoto` → `user/{userId}/{jerseyId}/{photoId}.jpg` (front/back ~1600 px, label ~2400 px). Served via short-lived signed URLs after visibility checks.
+  - `UserJerseyPhoto` → `user/{userId}/{jerseyId}/{photoId}.jpg` (front/back/left/right ~1600 px, other ~2400 px). Served via short-lived signed URLs after visibility checks.
   - `KitPhoto` → `kit/{kitId}/{photoId}.jpg`. Seed mapper writes. `rights: unresolved`, `admin_only`. **Do not** put this prefix on a public CDN or use it as OG.
   - One R2 bucket **per GitHub lane** (`development` / `staging` / `production`). Staging must not read production keys.
 - **Jobs (locked):** wishlist match, push, vision, seed imports — **BullMQ** (`@nestjs/bullmq`), **worker in the same Nest process**. Redis is required ([Nest queues](https://docs.nestjs.com/techniques/queues); [BullMQ installation](https://docs.bullmq.io/guide/introduction): Redis 6.2+, 7+ recommended, `maxmemory-policy noeviction`).
   - One Redis **per lane** (same isolation as Postgres). Do not use Coolify’s internal Redis for app jobs. Staging must not share production Redis.
   - Cap each Redis: `maxmemory 256mb`, `maxmemory-policy noeviction`. At this job volume that is headroom, not a squeeze.
-  - Vision still fail-open 8–12 s on the request path; the worker is the retry/backoff, not a blocker on Save.
+  - Vision still fail-open (15 s identity wall) on the request path; the worker is the retry/backoff, not a blocker on Save.
   - `@nestjs/schedule` may enqueue repeatable work; it is not a substitute for the queue.
   - **Rejected:** `@nestjs/bull` (legacy), a second Nest “worker” container, Redis without a memory cap.
   - **CX33 stays.** Two capped Redis instances are ~0.3–0.5 GB together — not a SKU bump. See [server-stack](./server-stack.md).
@@ -227,12 +230,12 @@ Compute and object storage: [server-stack](./server-stack.md). Inventory: [ops-e
 
 | App | Runtime |
 | --- | --- |
-| `apps/api` | Long-running Node on **Hetzner CX33 Nürnberg**, Coolify + Docker. Own Postgres + Redis beside it. **`api.kitcollective.app`** |
+| `apps/api` | Long-running Node on **Hetzner CX33 Helsinki**, Coolify + Docker. Own Postgres + Redis beside it. **`api.kitcollective.app`** |
 | `apps/web` | Astro on Pages / Workers. **`kitcollective.app`** (www → apex). Read Nest. |
 | `apps/admin` | Static SPA behind auth. **`admin.kitcollective.app`**. Never indexed. |
-| `apps/mobile` | EAS Build / Submit. Channels: `development` / `staging` / `production`. |
+| `apps/mobile` | EAS Build / Submit. **Project id `ddddf92b-e7cd-4ec5-b07c-643106041550`.** Channels: `development` / `staging` / `production`. One Expo project; do not `eas init` a second id. |
 | Files | **Cloudflare R2.** Nest is the only writer/reader of secrets. |
-| Email | **AWS SES** from Nest, **EU region** (pick at provision — Frankfurt `eu-central-1` is the usual pair with Nürnberg). Verify-email first; match mail later. How templates/from-address work is Notify-spec, not a lock now. |
+| Email | **AWS SES** from Nest, **EU region** (pick at provision — Frankfurt `eu-central-1` is the usual pair with Helsinki). Verify-email first; match mail later. How templates/from-address work is Notify-spec, not a lock now. |
 
 Three deploy loops, one repo. Path-filtered CI.
 

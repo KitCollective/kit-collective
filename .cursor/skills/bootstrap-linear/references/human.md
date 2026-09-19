@@ -4,7 +4,7 @@ Values come from `factory.config.json`.
 
 1. Create a Linear workspace named `product.name` (API cannot).
 2. Point Cursor’s Linear integration at that workspace.
-3. Enable the Cursor agent so issues can be **delegated** to `linear.delegateAgentName`.
+3. Connect Cursor’s Linear integration (needed for Automations status triggers). Do **not** use Assignee → Agents → Cursor as dispatch — that starts a Cloud Agent. Assignee stays the human; Agent stays empty.
 4. Put an admin API key in `.env` as `LINEAR_API_KEY` (never commit).
 5. Confirm Linear tools in this chat report workspace `product.name`.
 

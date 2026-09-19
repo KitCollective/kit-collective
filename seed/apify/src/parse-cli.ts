@@ -1,0 +1,459 @@
+import {
+  type JoinScope,
+  type ParsedSeedScope,
+  parseJoinSentence,
+  parseSeedScopeArgv,
+  type ResolvedSeedLane,
+  resolveSeedLane,
+} from "@kit/seed-shared";
+import { type BulkCliRequest, synthesizeBulkPlanId } from "./bulk.js";
+
+export type LeagueGrain = {
+  kind: "league";
+  competition: string;
+};
+
+export type LeagueSeasonGrain = {
+  kind: "league_season";
+  competition: string;
+  season: string;
+};
+
+export type ClubGrain = {
+  kind: "club";
+  competition: string;
+  clubExternalId: string;
+};
+
+export type ClubSeasonGrain = {
+  kind: "club_season";
+  competition: string;
+  clubExternalId: string;
+  season: string;
+};
+
+export type ClubProofGrain = {
+  kind: "club_proof";
+  competition: string;
+  season: string;
+};
+
+export type NationalTeamGrain = {
+  kind: "national_team";
+  nationalTeamRef: string;
+};
+
+export type NationalTeamSeasonGrain = {
+  kind: "national_team_season";
+  nationalTeamRef: string;
+  season: string;
+};
+
+export type NationalTeamProofGrain = {
+  kind: "national_team_proof";
+  nationalTeamRef: string;
+  season: string;
+};
+
+export type HierarchyGrain =
+  | LeagueGrain
+  | LeagueSeasonGrain
+  | ClubGrain
+  | ClubSeasonGrain
+  | ClubProofGrain
+  | NationalTeamGrain
+  | NationalTeamSeasonGrain
+  | NationalTeamProofGrain;
+
+export type ParsedWalkCli = ParsedSeedScope & { mode: "walk" };
+
+export type ParsedGrainCli = {
+  mode: "grain";
+  grain: HierarchyGrain;
+  lane: ResolvedSeedLane;
+};
+
+export type ParsedJoinCli = {
+  mode: "join";
+  scope: JoinScope;
+};
+
+export type ParsedBulkCli = {
+  mode: "bulk";
+  bulk: BulkCliRequest;
+  lane: ResolvedSeedLane;
+};
+
+export type ParsedJerseyNumbersCli = {
+  mode: "jersey-numbers";
+  /** Empty means the whole-lane checkpointed backfill. */
+  playerExternalIds: string[];
+  lane: ResolvedSeedLane;
+};
+
+export type ParsedCatalogMarksCli = {
+  mode: "catalog-marks";
+  lane: ResolvedSeedLane;
+};
+
+export type ParsedSeedCli =
+  | ParsedWalkCli
+  | ParsedGrainCli
+  | ParsedJoinCli
+  | ParsedBulkCli
+  | ParsedJerseyNumbersCli
+  | ParsedCatalogMarksCli;
+
+function parseJerseyNumbersArgv(argv: string[]): ParsedJerseyNumbersCli {
+  const laneArg = argv.at(-1);
+  const laneResult = resolveSeedLane(
+    laneArg === "development" || laneArg === "staging" || laneArg === "production"
+      ? laneArg
+      : undefined,
+  );
+  if (!laneResult.ok) {
+    throw new Error(laneResult.error);
+  }
+  const positional = laneArg && laneArg === laneResult.lane ? argv.slice(0, -1) : argv;
+
+  const first = positional[0]?.trim();
+  if (first === "backfill") {
+    if (positional.length !== 1) {
+      throw new Error("Expected: jersey-numbers backfill [lane]");
+    }
+    return { mode: "jersey-numbers", playerExternalIds: [], lane: laneResult.lane };
+  }
+
+  const playerExternalIds = positional.map((arg) => arg.trim()).filter(Boolean);
+  if (playerExternalIds.length === 0) {
+    throw new Error("Expected: jersey-numbers backfill [lane] | jersey-numbers <playerId…> [lane]");
+  }
+  for (const id of playerExternalIds) {
+    if (!/^\d+$/.test(id)) {
+      throw new Error(`jersey-numbers expects Transfermarkt player ids, got '${id}'`);
+    }
+  }
+  return { mode: "jersey-numbers", playerExternalIds, lane: laneResult.lane };
+}
+
+function parseGrainArgv(argv: string[]): ParsedGrainCli {
+  const grainKind = argv[0];
+  if (grainKind === "league") {
+    if (argv.length < 2 || argv.length > 3) {
+      throw new Error("Expected: grain league <competition> [lane]");
+    }
+    const competition = argv[1]?.trim();
+    if (!competition) {
+      throw new Error("league grain requires competition");
+    }
+    const laneResult = resolveSeedLane(argv[2]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "league", competition },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "league-season" || grainKind === "league_season") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: grain league-season <competition> <season> [lane]");
+    }
+    const competition = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!competition || !season) {
+      throw new Error("league-season grain requires competition and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "league_season", competition, season },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "club") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: grain club <competition> <clubId> [lane]");
+    }
+    const competition = argv[1]?.trim();
+    const clubExternalId = argv[2]?.trim();
+    if (!competition || !clubExternalId) {
+      throw new Error("club grain requires competition and club id");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "club", competition, clubExternalId },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "club-season" || grainKind === "club_season") {
+    if (argv.length < 4 || argv.length > 5) {
+      throw new Error("Expected: grain club-season <competition> <clubId> <season> [lane]");
+    }
+    const competition = argv[1]?.trim();
+    const clubExternalId = argv[2]?.trim();
+    const season = argv[3]?.trim();
+    if (!competition || !clubExternalId || !season) {
+      throw new Error("club-season grain requires competition, club id, and season");
+    }
+    const laneResult = resolveSeedLane(argv[4]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "club_season", competition, clubExternalId, season },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "club-proof" || grainKind === "club_proof") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: grain club-proof <competition> <season> [lane]");
+    }
+    const competition = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!competition || !season) {
+      throw new Error("club-proof grain requires competition and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "club_proof", competition, season },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "national-team" || grainKind === "national_team") {
+    if (argv.length < 2 || argv.length > 3) {
+      throw new Error("Expected: grain national-team <ntRef> [lane]");
+    }
+    const nationalTeamRef = argv[1]?.trim();
+    if (!nationalTeamRef) {
+      throw new Error("national-team grain requires national team ref");
+    }
+    const laneResult = resolveSeedLane(argv[2]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "national_team", nationalTeamRef },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "national-team-season" || grainKind === "national_team_season") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: grain national-team-season <ntRef> <season> [lane]");
+    }
+    const nationalTeamRef = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!nationalTeamRef || !season) {
+      throw new Error("national-team-season grain requires national team ref and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "national_team_season", nationalTeamRef, season },
+      lane: laneResult.lane,
+    };
+  }
+
+  if (grainKind === "national-team-proof" || grainKind === "national_team_proof") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: grain national-team-proof <ntRef> <season> [lane]");
+    }
+    const nationalTeamRef = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!nationalTeamRef || !season) {
+      throw new Error("national-team-proof grain requires national team ref and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "grain",
+      grain: { kind: "national_team_proof", nationalTeamRef, season },
+      lane: laneResult.lane,
+    };
+  }
+
+  throw new Error(
+    "Expected grain kind: league | league-season | club | club-season | club-proof | national-team | national-team-season | national-team-proof",
+  );
+}
+
+function parseJoinArgv(argv: string[]): ParsedJoinCli {
+  const subcommand = argv[0];
+  if (subcommand === "sentence") {
+    if (argv.length < 2) {
+      throw new Error('Expected: join sentence "<natural language>"');
+    }
+    const sentence = argv.slice(1).join(" ").trim();
+    const parsed = parseJoinSentence(sentence);
+    if (!parsed.ok) {
+      throw new Error(parsed.error);
+    }
+    return { mode: "join", scope: parsed.scope };
+  }
+
+  if (subcommand === "club") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: join club <competition> <season> [lane]");
+    }
+    const competition = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!competition || !season) {
+      throw new Error("join club requires competition and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "join",
+      scope: { path: "club", competition, season, lane: laneResult.lane },
+    };
+  }
+
+  if (subcommand === "national-team" || subcommand === "national_team") {
+    if (argv.length < 3 || argv.length > 4) {
+      throw new Error("Expected: join national-team <ntRef> <season> [lane]");
+    }
+    const nationalTeamRef = argv[1]?.trim();
+    const season = argv[2]?.trim();
+    if (!nationalTeamRef || !season) {
+      throw new Error("join national-team requires national team ref and season");
+    }
+    const laneResult = resolveSeedLane(argv[3]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return {
+      mode: "join",
+      scope: { path: "national_team", nationalTeamRef, season, lane: laneResult.lane },
+    };
+  }
+
+  throw new Error("Expected join subcommand: sentence | club | national-team");
+}
+
+function parseBulkArgv(argv: string[]): ParsedBulkCli {
+  const subcommand = argv[0];
+
+  if (subcommand === "plan") {
+    if (argv.length < 2 || argv.length > 3) {
+      throw new Error("Expected: bulk plan <plan.json> [lane]");
+    }
+    const planFile = argv[1]?.trim();
+    if (!planFile) {
+      throw new Error("bulk plan requires a plan file path");
+    }
+    const laneResult = resolveSeedLane(argv[2]);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return { mode: "bulk", bulk: { command: "run-plan-file", planFile }, lane: laneResult.lane };
+  }
+
+  if (subcommand === "status") {
+    if (argv.length !== 2) {
+      throw new Error("Expected: bulk status <plan-id-or-file>");
+    }
+    const target = argv[1]?.trim();
+    if (!target) {
+      throw new Error("bulk status requires a plan id or plan file path");
+    }
+    const laneResult = resolveSeedLane(undefined);
+    if (!laneResult.ok) {
+      throw new Error(laneResult.error);
+    }
+    return { mode: "bulk", bulk: { command: "status", target }, lane: laneResult.lane };
+  }
+
+  if (argv.length < 3 || argv.length > 4) {
+    throw new Error("Expected: bulk <competition> <from-season> <to-season> [lane]");
+  }
+  const competition = argv[0]?.trim();
+  const fromSeason = argv[1]?.trim();
+  const toSeason = argv[2]?.trim();
+  if (!competition || !fromSeason || !toSeason) {
+    throw new Error("bulk requires competition, from-season, and to-season");
+  }
+  const laneResult = resolveSeedLane(argv[3]);
+  if (!laneResult.ok) {
+    throw new Error(laneResult.error);
+  }
+  return {
+    mode: "bulk",
+    bulk: {
+      command: "run",
+      plan: {
+        id: synthesizeBulkPlanId(competition, fromSeason, toSeason),
+        entries: [{ competition, fromSeason, toSeason }],
+      },
+    },
+    lane: laneResult.lane,
+  };
+}
+
+function parseCatalogMarksArgv(argv: string[]): ParsedCatalogMarksCli {
+  const laneArg = argv.at(-1);
+  const laneResult = resolveSeedLane(
+    laneArg === "development" || laneArg === "staging" || laneArg === "production"
+      ? laneArg
+      : undefined,
+  );
+  if (!laneResult.ok) {
+    throw new Error(laneResult.error);
+  }
+  const positional = laneArg && laneArg === laneResult.lane ? argv.slice(0, -1) : argv;
+  if (positional.length === 0 || (positional.length === 1 && positional[0] === "backfill")) {
+    return { mode: "catalog-marks", lane: laneResult.lane };
+  }
+  throw new Error("Expected: catalog-marks backfill [lane]");
+}
+
+export function parseSeedApifyCli(argv: string[]): ParsedSeedCli {
+  const cleaned = argv.filter((arg) => arg !== "--");
+  if (cleaned[0] === "grain") {
+    return parseGrainArgv(cleaned.slice(1));
+  }
+  if (cleaned[0] === "join") {
+    return parseJoinArgv(cleaned.slice(1));
+  }
+  if (cleaned[0] === "bulk") {
+    return parseBulkArgv(cleaned.slice(1));
+  }
+  if (cleaned[0] === "jersey-numbers" || cleaned[0] === "jersey_numbers") {
+    return parseJerseyNumbersArgv(cleaned.slice(1));
+  }
+  if (cleaned[0] === "catalog-marks" || cleaned[0] === "catalog_marks") {
+    return parseCatalogMarksArgv(cleaned.slice(1));
+  }
+
+  const result = parseSeedScopeArgv(cleaned);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  return { mode: "walk", ...result.parsed };
+}

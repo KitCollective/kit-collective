@@ -8,11 +8,11 @@ Control plane: [`WORKFLOW.md`](./WORKFLOW.md) + [`factory.config.json`](./factor
 
 ## Factory (Linear + Cursor)
 
-Linear is the board. Cursor Cloud Agents execute. Config is `factory.config.json` (copy `factory.config.example.json` on a new repo). See `docs/agents/template.md`.
+Linear is the board. The PI worker (Compose + `gh` + Linear CLI) is the runtime. Cursor Cloud Agents are not factory dispatch. Config is `factory.config.json` (copy `factory.config.example.json` on a new repo). See `docs/agents/template.md`.
 
 1. Create a Linear workspace named in `product.name` (API cannot do this).
 2. Connect Cursor’s Linear integration to that workspace.
-3. Enable the Cursor agent so issues can be **delegated**.
+3. Connect Cursor’s Linear integration (Automations status triggers). Do **not** dispatch by setting Assignee → Agents → Cursor.
 4. Put an admin Linear API key in `.env` as `LINEAR_API_KEY` (see `.env.example`).
 5. Run bootstrap:
 
@@ -23,15 +23,15 @@ node scripts/bootstrap-linear.mjs
 node scripts/generate-harness-docs.mjs
 ```
 
-6. Wire Cursor Automations from `docs/agents/automations.md`.
+6. Wire Cursor Automations from `docs/agents/automations.md`. Re-paste planner, implement, and checker Instruction after contract changes.
 
-Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → delegate to Cursor.
+Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked). `/signal-up` files into Linear **Triage**.
 
-Working skills: `.cursor/skills/`. Domain helpers: `.cursor/agents/`.
+Working skills: `.cursor/skills/` (Expo/EAS vendor pack: `.cursor/skills/expo/`). Domain helpers: `.cursor/agents/`.
 
 ## Dispatch
 
-An issue runs only when it is in `dispatch.state`, **delegated** to `linear.delegateAgentName`, and not blocked. Among those, planner claims in Linear priority order (`dispatch.priorityOrder`).
+An issue runs only when it is in `dispatch.state`, labelled **`ready-for-agent`**, and not blocked. Linear Agent stays empty. Among those, planner claims in Linear priority order (`dispatch.priorityOrder`).
 
 ## Lanes
 

@@ -1,0 +1,3 @@
+interface:
+  display_name: "Area design-system"
+  short_description: "Load the collector design lock on demand from Frontend"

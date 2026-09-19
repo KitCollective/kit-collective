@@ -1,0 +1,1454 @@
+# Design system
+
+AI-ready visual and interaction lock for in-scope surfaces.
+Agents apply this file. Flag missing context; do not invent values, tokens, variants, or rules.
+
+**Surfaces in scope**: `mobile` (deep), `web` (thin, share/OG), `admin` (operator dashboard). `api` is out of this lock.
+**Modes**: Lock 2026-08-22. Gap 2026-08-23 (`admin`). Gap 2026-08-23 (`mobile` collection chrome + brand type). Gap 2026-08-23 (`mobile` Tilføj trøje Confirm — one screen, not Stamdata/Detaljer tabs). Gap 2026-08-24 (brand kit SVG files + admin header/login/favicon placement). Gap 2026-08-28 (`mobile` Indbakke — slot 4 envelope, Beskeder | Aktivitet, thread, send-bud). Gap 2026-08-28 (`mobile` own Profil — identity, favorites, settings under Profil, Switch, Avatar, log-out Sheet). Gap 2026-09-04 (`mobile` collection empty: title + shirt diagram + hug `Tilføj trøje`; tab bar Lunar capsule — compact height `space.inset.lg × 2 + space.inset.md`, center plus CTA is a solid oval and the active well is a contained wider-than-tall glass background that follows a swipe, magnifies only while dragged, then hops to the nearest place, `radius.pill`, `space.inset.md` sides, `space.inset.lg` bottom). Gap 2026-09-04 (`mobile` well travel hard-clamped to the first and last place — no overshoot; capture Chooser is a Sheet `form` from the plus with single-choice icon + title + helper rows, nothing preselected, and a Næste / Annuller dock — one face shared with the post-Save re-entry, not a full-screen place). Gap 2026-09-05 (`mobile` bottom navigation switched to Expo Router `NativeTabs` — native system Liquid Glass; five labelled tabs in order Samling · Indbakke · Søg **center** · Ønsker · Profil; capture moved to the Samling header action, no center-plus tab; Ønsker is now its own tab; the native bar stays on detail drills (native default, no hide-on-drill) and the capture flow moved to a `(capture)` modal group over the tabs — **supersedes** the 2026-09-04 Lunar capsule + well + center-plus entries). Gap 2026-09-05 (`mobile` Tilføj trøje Chooser — the single-choice + Næste / Annuller dock is replaced by **direct-action rows**: each row commits its source on tap with a trailing `chevron`, no commit button and no “vælg en mulighed” caption; the row **Upload filer** is renamed **Upload billeder** and the caption is trimmed; the top-left Luk chrome button is dropped in favour of a footer `tertiary` **Annuller**; the system picker launches only after the Sheet's Modal has fully dismissed — **supersedes** the 2026-09-04 single-choice / Næste Chooser entry). Gap 2026-09-05 (`mobile` Confirm redesign — Photo lightbox + fade Button dock + one-layer club/season pickers). Gap 2026-09-05 (`mobile` photo roles — four universal Confirm slots Forside / Bagside / Venstre / Højre plus many optional Andet photos with a free Beskrivelse, max 10 photos per jersey; repeat camera is shoot-first with a filmstrip, no role overlay; gallery branch ≤10 → one jersey, >10 → bulk; **supersedes** “roles stay three” and the same-day deferred photo-role row). Gap 2026-09-05 (`mobile` Confirm Data/Detaljer drills — **supersedes** the same-day Identitet/Tilstand cards: the Confirm hub keeps photos, Vision, and **Gem**; two Chooser-style rows (**Data**, **Detaljer**) lead with a 44px progress donut (`fill.primary` on `fill.secondary` track) and a trailing chevron; **Data** is a stack page for club, season, kit type, optional player/batch/notes; **Detaljer** is a stack page for size and condition; each drill has chevron-back left of the title and **Gem** in a fade dock; not tabs and not a numbered stepper). Gap 2026-09-06 (`mobile` Confirm hub chrome — pinned **Bekræft** title with inverted fade/blur; jersey index squares with a leading circular add; framed photo viewer with on-image role captions; unbound strip below the viewer, no **Flere trøjer i denne upload**). Gap 2026-09-06 (`mobile` Confirm photos — recategorise is tap + lightbox only; long-press drag is out — **supersedes** the same-day drag-swap lock). Gap 2026-09-06 (`mobile` Confirm Data/Detaljer hub cards — each section is its own bordered box; the 44px donut shows `n/n` in `type.monoSm` and strokes `warning` while incomplete then `fill.primary` when complete; the caption swaps to a one-line filled overview; optional **Noter** moves onto the **Detaljer** drill — **supersedes** the same-day hub Noter field and the hairline-grouped pair of rows). Gap 2026-09-06 (`mobile` Confirm Data/Detaljer facts — **supersedes** the same-day bordered boxes and one-line ` · ` caption: no outer card; a wrapping row of compact `radius.pill` capsules (`captionSm`) shows each field; filled = `fill.secondary` + `content.primary`; empty = dashed `border.subtle` + placeholder (`Klub` / `Sæson` / `Type` / `Spiller` / `Størrelse` / `Stand`); Spiller is optional preview, not a Save-required hub field). Gap 2026-09-06 (`mobile` Confirm Detaljer drill — size and condition sit unframed on canvas, no `surface` group or hairline; **Noter** uses the same `type.label` heading as Størrelse / Stand, with muted **Valgfrit** (`caption` / `content.muted`) beside the title, not as helper under the box). Gap 2026-09-06 (`mobile` Confirm hub Data/Detaljer boxed again — **supersedes** the same-day facts gap for **row chrome** only: hub **Data** and **Detaljer** are each their own `surface` bordered box (`border.subtle`, `radius.md`); fact capsules stay inside; Detaljer drill size/condition stay unframed). Gap 2026-09-06 (`mobile` Confirm hub Data/Detaljer last in the column — **supersedes** the same-day boxed-again **placement** only: the two cards sit just above fade **Gem**, equal height, side-by-side (`flexDirection: row`, `alignItems: stretch`); a flex spacer holds them down when the photo belts are short; they remain the last scrolled block when the belts grow). Gap 2026-09-06 (`mobile` Confirm hub Data/Detaljer stacked full width — **supersedes** the same-day side-by-side **layout** only: the two cards are full-width and **stacked** in a column just above fade **Gem**, sharing one `minHeight` (measured to the taller **Data** card) so they read as an equal pair; the shorter **Detaljer** card centres its content in that height; each card is one vertically-centred row of donut + title/capsules column + trailing chevron, so both donuts and both chevrons align as a pair; the flex spacer and bottom-anchoring are unchanged. Also: **no** Save-block helper string over the hub **Gem** (the donuts + dashed capsules carry the missing-field signal; enablement unchanged); and the sandbox strip tucks under the photo viewer at `space.gapMd` instead of the column's `space.gapLg`). Gap 2026-09-06 (`mobile` Confirm hub exit — the pinned **Bekræft** header gains a top-left circular **Luk** (X) chrome button (`withAlpha(content.primary, 0.06)` disc, `radius.pill`, hit 44) beside the title; tapping it `router.replace`s to `/(tabs)/collection`, dismissing the `(capture)` modal to Samling, and the local draft persists — no discard prompt). Gap 2026-09-06 (`mobile` Confirm **AI Vision Analyzer banner** — a persistent status strip in the Vision slot under the sandbox, above the flex spacer and the Data/Detaljer cards, with four states `inactive` / `out-of-quota` / `analyzing` / `success`: a static AI icon (`sparkles`) leads the `type.body` text; `analyzing` adds a trailing `ActivityIndicator` and a light-blue skeleton tint composed from the `info` token via `withAlpha` (no invented hex); `success` uses the Banner `success` tone (green) — sanctioned here because Banner already locks `tone: success`, and it is **not** the donut, which stays "never `success` green". **Flagged gaps** (do not silently resolve): the Banner primitive locks a plain `fill.secondary` background with no leading icon, no trailing accessory, and no neutral tone — this banner needs a leading-icon + trailing-accessory + `info`-tint variant, and a neutral `inactive` (`border.subtle`) state; and the Danish-first copy `AI Vision analyserer …` is provisional pending a locked product string. The banner never gates **Gem** — Save never waits on Vision). Gap 2026-09-06 (`mobile` **Toast** — a new animated bottom-anchored feedback primitive, one global `ToastHost` mounted at the app root above the tabs and the `(capture)` modal group. It floats above the current screen's bottom chrome (native tab bar or a Button dock) using safe-area insets plus a reserved dock-clearance height, slides up + fades in with Reanimated (opacity-only under reduced motion), auto-dismisses per toast, stacks newest-at-bottom with a cap of 3, and swipe-dismisses. Tone maps to the locked `danger` / `warning` / `info` / `success` tokens (accent border + leading Ionicon, never color alone); chrome is composed from `surface.raised` + `radius.md` + the `elevation.overlay` whisper shadow. The **save-failure** path (`Kunne ikke gemme trøjen` + **Prøv igen**) now fires a `danger` toast instead of the inline `danger` Banner on Confirm and first-session details. **Flagged gaps** (do not silently resolve): (1) the Banner primitive is locked as persistent/until-dismissed and its **Unsupported** line forbids "a toast on top of **Gemt**" — that bars a *success* toast over the saved state; this gap adds an explicit allowance for an **error** toast for *save failure*, which is a different surface and not the success-over-Gemt case; and (2) there is no discrete dock-height token, so the toast reuses `BUTTON_DOCK_FADE_SCROLL_PADDING` (+ safe-area bottom) as the Confirm dock clearance and `tabBarContentInset` for the native tab bar — flag if the lock wants a named dock-height token). Gap 2026-09-06 (`mobile` **Toast → standard library** — **supersedes** the same-day bespoke Toast host: the hand-rolled Reanimated-in-`Modal` `ToastHost` would not render at runtime in Expo Go, so it is replaced by **`react-native-toast-message@2.5.0`** (pure-JS, no native module / config plugin / rebuild — safe in Expo Go and dev clients). A small custom `error` config renderer keeps the app danger chrome (`fill.secondary` bg, 1px `danger` border, `alert-circle`, **Prøv igen**). Two hosts mount at the app root and inside the `(capture)` fullScreenModal group (library ref-priority stack routes to the topmost), bottom-anchored via `useSafeAreaInsets` + dock clearance. **Accepted deviations** from the bespoke lock (chose reliability over pixel-match): single visible toast (no 3-deep stack), library-default swipe + spring/fade motion instead of the tuned slide-up. Save stays fire-and-forget). Gap 2026-09-06 (`mobile` **Capture loading transition + single Confirm exit** — two fixes to the capture flow's navigation seams. (1) The Upload billeder branch no longer opens the system picker inline over a blank Samling: it pushes a `(capture)/loading` route (fade, same as the camera screen) that shows a canvas + centred `ActivityIndicator` + one Danish caption (`Åbner dine billeder …`, then `Forbereder trøjen …`), launches the picker only after the native-stack **`transitionEnd`** enter event fires (the canonical "this screen is fully presented and top-most" signal; reduced motion enters with `animation: "none"` and uses a double-`requestAnimationFrame` paint tick instead, plus a last-resort timeout backstop) — **not** inline on mount and **not** on an `InteractionManager` tick, which clears before the native modal presentation finishes so the picker opened while Samling was still the top view controller. That keeps the "picker only after the Chooser Sheet's Modal dismissed" invariant *and* makes the loading screen the visible top surface before the OS picker presents on top of it — and then **replaces itself** with Confirm on a pick (single same-stack transition) or **dismisses** the modal on cancel. It is not the branded splash plate and not the Vision analysing screen, and Save never waits on it. (2) Confirm's **Luk** and the redirect-away effect now share one guarded `router.dismissTo("/(tabs)/collection")` (idempotent via an `exitedRef`), **superseding** the same-day Luk `router.replace` — a `replace` from inside the fullScreenModal stacked a fresh tabs screen on top of the closing modal, so exit double-hopped; `dismissTo` pops the modal to Samling in one transition. The drills' redirect-away uses the same `dismissTo`. **Flagged gap** (do not silently resolve): the loading captions `Åbner dine billeder …` / `Forbereder trøjen …` are provisional pending a locked product string). Gap 2026-09-13 (`mobile` Confirm + Søg NationalTeam sibling — catalog picker and Confirm Data treat Club and NationalTeam as siblings, not a Club kind. Overlay title/placeholder is **Vælg klub eller landshold** / **Søg klub eller landshold**; hub capsule placeholder stays **Klub** (side name, including Danmark, sits in that slot). Save-required side is Club xor NationalTeam. Søg typeahead and catalog drill include NationalTeam as its own landing (identity + UserJersey grid), sibling of Club. **Flagged**: Confirm hi-fi still shows club-only picker chrome; do not invent a second Data row or a Landshold chip group. Samling tile `heading-sm` stays the side label.) Light is the default canvas. Dark is a full token mode on `mobile` and `web` that follows the system appearance. `admin` is **light only** this gap — do not invent a dark admin canvas.
+**Owner**: Nicklas
+
+**Taste (locked)**: Vinted for layout and scanability (grid, short captions, search, chips, tab bar) — not for marketplace mechanics. Uber Base for grayscale structure, components, and quiet motion — not for copying UberMove or importing Base Web. One cyan→violet identity wash as garnish, Premier League Fantasy–adjacent, never as chrome that competes with a jersey photo.
+
+**Taste (`admin`, locked this gap)**: Same Base grayscale family, operator density. Uber Base dashboard (top search, Filters, hairline table) is the north star — not Vinted’s collection grid, not Catalog peek, not Base Web as a dependency, not a “+ New” create affordance in this increment. Place switching is the waffle: two tiles, icon above title (**Master Data** | **User Data**), not underline tabs. Photos are evidence (32px square thumb in Kit and UserJersey rows, full image on drill), not the layout. Chrome in English (ADR-0019).
+
+**Anti-references**: Shirt Squad field wizards; Vinted buy/sell/price/boost/teal CTA; newbie primary/secondary palettes; emoji as icons; archive `KitPhoto` JPEGs as club marks; Fantasy-style gradient fills behind product photos; 4:5 tile grid as the admin home.
+
+## Goals
+
+Status: `locked`
+
+**Problem**: Collectors have no serious place to register and scan a football-shirt collection. Operators have Catalog peek without photos, users, or navigation. Implementing agents have no visual lock, so they invent taste. Collectors fail as slow capture and noisy chrome; operators fail as a spreadsheet the agent styled.
+
+**Audience**: Nordic collectors (Denmark first, then Sweden and Norway) on `mobile` and `web`. Staff access on `admin`. Implementing agents composing Expo, Astro, and Admin SPA screens.
+
+**Outcomes**: Jersey #2 in under 45 seconds. The collection scans as a photo grid, not a spreadsheet. A public Astro link looks like the same product when pasted into a Facebook group. On `admin`, an operator can search and filter stamdata, see KitPhoto, and take down one UserJersey without invented chrome. Missing decisions are flagged, not filled with taste.
+
+**Evidence**: Product PRD (`.scratch/Business/PRD.md`) UX principles; registration-speed research (`.scratch/Research/jersey-registration-speed.md`); lock interview (Vinted IA + Base grayscale + one wash); Gap 2026-08-23 (Uber Base dashboard refs + grill: Staff access, Take-down, ADR-0018, ADR-0019); Gap 2026-08-23 brand book v1.0 (`.scratch/collection-main-screen/claude-design/KitCollective-brand-book-v1.html`) for type families and scale; collection 3a artifact for Samling chrome (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`); Gap 2026-08-23 Tilføj trøje hi-fi (`.scratch/jersey-upload/claude-design/`) for capture spine only — Confirm body is this file, not the Stamdata/Detaljer tabs in that artifact; Gap 2026-08-28 Indbakke hi-fi (`.scratch/inbox/claude-design/KitCollective-indbakke.html`, frames 4a–4i) for inbox chrome only — throwaway `apps/mobile/src/prototype-inbox/` is not the contract; Gap 2026-08-28 own Profil hi-fi (`.scratch/profile-settings/claude-design/KitCollective-profil.html`, frames 5a–5o) for own-collector Profil chrome only — throwaway `apps/mobile/src/prototype-profile/` is not the contract. Wireframe PNGs in that folder are IA only.
+
+**Priorities**: On `mobile` / `web`: owned photo and capture speed over catalog completeness. On `admin`: scannable rows over photo-as-layout. All surfaces: grayscale chrome over a mascot brand hue. Data marks over decoration.
+
+**Constraints**: No archive kit renders in Expo, Astro, or OG until rights are resolved. KitPhoto may render on `admin` only. No emoji as illustration. Clients do not import `apps/api` or `packages/db`. `mobile` / `web` copy is Danish-first; `admin` chrome is English; CatalogLabel follows the surface locale (`da` on Expo/Astro, `en` on admin), never the English seed string as the Danish name. Hit targets ≥ 44×44 on `mobile`. On `admin`: table row 48px; icon actions 32×32 with an accessible name; toolbar primary/destructive 44×44. WCAG AA for text and essential controls. `prefers-reduced-motion` has a still equivalent. `admin` is light only.
+
+**Non-goals**: A component library for its own sake. Cloning Uber or Vinted branding. Importing Base Web. Price, buy/sell, or marketplace listing UI. Serving `KitPhoto` to collectors. A “+ New” catalog-create control in this admin increment. Inventing a second mark or a mascot. Danish chrome as the admin default.
+
+Flag missing context; do not invent priorities.
+
+## Principles
+
+Status: `locked`
+
+**Jersey first**: The collector’s photo is the interface; chrome is grayscale scaffolding.
+- **When it collides**: On `mobile` and `web`, identity wash, badges, and metadata yield to the photo. On `admin`, this principle yields to **Rows first**.
+- **Follow**: A collection card where the jersey fills the tile; club is `heading-sm`, season · type is `mono` under it.
+- **Violate**: A Fantasy-style gradient fill behind the jersey photo.
+- **Goal it serves**: Scanable collection; photo as product image.
+
+**Fast capture**: One confirm screen beats a complete wizard.
+- **When it collides**: Extra fields yield to time-to-Save. A cleaner-looking second tab yields if it hides a field Save requires.
+- **Follow**: Confirm hub shows a pinned **Bekræft** header, jersey index with add after the last jersey, a horizontal photo strip, then two drill rows; club search, club-scoped season, and kit-type chips live on **Data**; size, condition, and optional **Noter** live on **Detaljer**. Optional player / notes sit off the required path and never block **Gem**. Save does not wait on Vision.
+- **Violate**: Stamdata | Detaljer tabs on Confirm. A Shirt Squad–style twelve-step form before the row exists. Star ratings for condition. A “Brug” tap on every high-confidence Vision hit.
+- **Goal it serves**: Jersey #2 in under 45 seconds.
+
+**Structure without a mascot color**: Black, white, and gray carry hierarchy. One identity wash is garnish only.
+- **When it collides**: “Make it more branded” yields to grayscale UI. Gradients never encode status or fill a primary CTA.
+- **Follow**: Primary **Save** is black on light / white on dark.
+- **Violate**: A cyan primary button, or three washes used as success / warning / info.
+- **Goal it serves**: Quiet, Base-like structure; identity without a newbie palette.
+
+**Marks from data**: Country / league / club / player use a licensed mark when one exists; otherwise a monogram. Never emoji.
+- **When it collides**: An empty slot stays a monogram. Agents flag missing assets; they do not invent crests.
+- **Follow**: A club row with a crest or the letters from `CatalogLabel` on a gray tile.
+- **Violate**: ⚽, a made-up shield, or an archive kit JPEG used as a club logo.
+- **Goal it serves**: Catalog truth in the UI; no decoration pretending to be stamdata.
+
+**Rows first** (`admin` only): The table is the interface; photos are evidence.
+- **When it collides**: Jersey first yields on `admin`. 4:5 collection layout does not come across. A missing thumb is an empty 32px slot, not an invented crest and not a stretched archive JPEG as a club mark.
+- **Follow**: A Kit or UserJersey row with primary label, meta columns, and a 32px square thumb; full photo on drill.
+- **Violate**: Admin home as a two-column 4:5 grid of archive `KitPhoto` tiles.
+- **Goal it serves**: Operator can scan stamdata and collectors without invented dashboard chrome.
+
+Flag missing context; do not invent new rules.
+
+## Scope
+
+Status: `locked`
+
+**Included** (surface → depth):
+- `mobile` (Expo, iOS/Android): collection grid, empty state, add / confirm / Save, gallery-first onboarding and camera-on-repeat, search as its own place (Søg tab, not in the collection header), genveje chips + Tilpas (Sheet manager, not a tab), Indbakke (Beskeder | Aktivitet, conversation, Detaljer, empty), Send bud from another collector’s UserJersey (under Søg), own Profil (identity card, unique username, About me, location country → city search / popular / free tag, favorites as other collectors’ UserJerseys, settings hub, cookies, log out), native tab bar (Samling · Indbakke · Søg · Ønsker · Profil) with capture as the Samling header action, not a tab. Capture Photo slots on Confirm: four universal roles (Forside / Bagside / Venstre / Højre) plus many optional Andet photos (free Beskrivelse), max 10 photos per UserJersey.
+- `web` (Astro): public collection page, single UserJersey page, Open Graph image and title — same tokens so a shared link is recognisably KitCollective. Thin: no login mutations, no capture UI.
+- `admin` (Vite + React SPA): email/password login (same Identity); waffle places **Master Data** | **User Data** (routes `/stamdata`, `/collectors`); search + Filters control; hairline data table with pagination; 32px square thumb on Kit and UserJersey rows; Mark/monogram on club, league, player, season, and user identity rows; row drill; Take-down confirm; promote/demote with last-admin and self-demote guards. English chrome. Light only. KitPhoto may render here.
+
+**Excluded** (with reason):
+- `api` and catalog peek (`GET /v1/catalog/peek`): unstyled Nest HTML, not product UI (ADR-0016). Peek is not retired by this gap.
+- Marketplace listing chrome (price, buy, boost, ratings on cards): product is a catalog, not Vinted-the-marketplace. Bid amounts live in Indbakke / Send bud, never as overlay on a Samling tile. Own Profil does not host “my listings”, payments, postage, help, about, or legal as primary places.
+- Collector **gender** as a profile field: nothing in the product uses it this gap. Birthday stays.
+- Archive `KitPhoto` bytes on Expo, Astro, or OG: `admin_only` until rights are resolved.
+- Emoji as icons or category marks.
+- Importing Base Web. Cloning Michelangelo Studio as a full product (sidebar, “+ New”, metric table pills). Admin header cluster (search + pin + notifications + help + waffle + profile) is owner-directed from Michelangelo Studio this gap.
+- Bulk row actions and a “+ New” catalog-create control.
+- Zebra-striped tables. 4:5 collection grid as the admin home.
+
+**Deferred** (with reason):
+- `admin` dark mode: this gap is light only; flag, do not invent.
+- Scoped staff roles UI (moderator who cannot see everything).
+- Catalog writes (labels, Kit create/edit, `rights: public`).
+- IAP paywall. **Ønsker is now its own native tab** (slot 4; Indbakke is slot 2). The Ønsker screen reuses List-row manage rows and the existing pickers — do not invent a new wishlist-row primitive. Do not add a sixth tab (Android caps at five).
+- Other-collector Profil depth beyond the Detaljer stub (handle + jersey count + city). Own Profil is in scope this gap; do not copy own settings onto the other collector.
+- Android-specific Message composer chrome (Material field / FAB send). One composer contract; OS keyboard is the platform exception.
+- Expo Web as a first-class surface. Indbakke wide layout (4i) is the token/layout rule if a host is ≥1024 wide; it does not make Expo Web first-class.
+- KC mark on **Profil** header (not locked; flag, do not invent).
+- Identity wash variants 2 and 3: no named job yet.
+- Player portraits, league badges, and club crests as shipped artwork: UI slot is locked; assets are not.
+
+Flag missing context; do not expand scope.
+
+## Architecture
+
+Status: `locked`
+
+**Layers**: foundations → tokens → components → patterns.
+
+**Naming**: Purpose-encoded. Semantic tokens in UI (`color.content.primary`, `space.inset.md`). Primitives (`gray.0`, `gray.100`) only inside token files. Do not name tokens after hex or after Uber/Vinted.
+
+**Source of truth** per decision type:
+- What a thing *is* (Kit, UserJersey, CatalogLabel, Save): `CONTEXT.md`.
+- Visual and interaction rules: this file.
+- Machine-readable tokens for agents that look for Google Labs `DESIGN.md`: repo-root `DESIGN.md` (YAML front matter). Same values as this file; **this file wins** on conflict.
+- Why a hard-to-reverse product trade-off exists: `docs/adr/`.
+- Uber Base and Vinted: references for taste, not dependencies and not copy-paste APIs.
+
+**Placement rule**: A new visual decision lands in the lowest layer that can express it. A one-off screen color is a missing token — flag it. A new button look is a missing component variant — flag it. Admin-only density and page regions live under Foundations → Layout / Spacing as surface-specific usage, not a second design system and not a new layer. Do not add a layer.
+
+Flag missing context; do not invent layers.
+
+## Ownership
+
+Status: `locked`
+
+**Visual direction**: Nicklas (including Admin SPA).
+**Tokens / foundations**: Nicklas.
+**Components**: Nicklas (new primitives and variants).
+**Review / escalation**: Agents apply this file and flag gaps. Unresolved visual disagreement goes to Nicklas, not a new principle in a PR. Admin dark mode and “+ New” are out of this gap — flag them; do not invent. Admin Data table zebra follows Base Data Table (`fill.secondary` / `surface`).
+
+Route requests. Do not assign authority.
+
+## Foundations
+
+### Color
+
+Status: `locked`
+
+**Purpose**: Grayscale structure so jersey photos dominate. Status color is functional. Identity wash is garnish, not a brand primary.
+
+**Roles**:
+| Role | Meaning |
+| --- | --- |
+| `canvas` | App/page background |
+| `surface` | Cards, fields, sheets |
+| `surface.raised` | Overlay sheet sitting on a scrim |
+| `content.primary` | Titles, primary labels, primary icon |
+| `content.secondary` | Captions, helper text |
+| `content.muted` | Placeholder, de-emphasized meta |
+| `content.inverse` | Text on primary fill or on dark photo scrims |
+| `border.subtle` | Card edge, input outline |
+| `border.strong` | High-emphasis hairline (selected card, if a line is used) |
+| `fill.primary` | Primary button fill (black on light, white on dark) |
+| `fill.secondary` | Secondary / quiet fill |
+| `danger` | Destructive or invalid. Never the only error signal |
+| `warning` | Caution that is not data-loss |
+| `success` | Completed, saved, matched |
+| `info` | Neutral system notice (not the identity wash) |
+| `identity.wash` | Single cyan→violet gradient garnish |
+| `scrim` | Dim behind sheets |
+
+**Usage**: Select semantic roles in UI. Primary actions use `fill.primary`, never `identity.wash`. Selected chips use `fill.primary` / inverse content or a strong border — not a wash. Vision suggestions use existing surface + content roles; do not invent a “AI purple”.
+
+**Relationships**: Elevation uses `surface` / `surface.raised` plus scrim, not a random lighter hex. Focus uses the border/focus foundation, not the wash.
+
+**Constraints**: Text and essential controls meet WCAG AA against their surface. Color is never the only error or selected signal. `identity.wash` is forbidden: behind a jersey photo, on body text, on a primary CTA, as success/warning/danger/info. Wash variants 2 and 3 are deferred. `admin` uses the **light** aliases only — do not apply dark semantic aliases on that surface. Own Profil dark (hi-fi 5o) uses **these** dark aliases — do not copy the artifact hex `#0B0B0B` / `#1C1C1C` / `#2E2E2E` as new tokens.
+
+**Example** *(not a rule)*: Collection screen `canvas`; jersey tile `surface` with photo full-bleed inside the radius; caption `content.secondary`; **Save** `fill.primary`. Admin table: Base Data Table zebra (`fill.secondary` / `surface`); hover is one shade darker (`border.subtle` on a gray row, `fill.secondary` on a white row). Not `identity.wash`.
+
+**Exceptions**: Photo pixels are not tokens. A user JPEG may be any color; chrome around it stays grayscale.
+
+**Primitive values** (light):
+| Primitive | Value |
+| --- | --- |
+| `black` | `#000000` |
+| `gray.0` | `#FFFFFF` |
+| `gray.50` | `#F4F4F4` |
+| `gray.100` | `#E8E8E8` |
+| `gray.400` | `#6B6B6B` |
+| `gray.600` | `#5E5E5E` |
+| `gray.900` | `#000000` |
+| `danger.500` | `#B42318` |
+| `warning.500` | `#F5A623` |
+| `success.500` | `#0E8345` |
+| `info.500` | `#276EF1` |
+| `identity.wash.start` | `#00D4F5` |
+| `identity.wash.end` | `#6B2FFF` |
+
+**Semantic aliases (light)**: `canvas` → `gray.0`; `surface` → `gray.0`; `surface.raised` → `gray.0`; `content.primary` → `black`; `content.secondary` → `gray.600`; `content.muted` → `gray.400`; `content.inverse` → `gray.0`; `border.subtle` → `gray.100`; `border.strong` → `gray.900`; `fill.primary` → `black`; `fill.secondary` → `gray.50`; `scrim` → `black` at 40% opacity.
+
+**Semantic aliases (dark)**: `canvas` → `gray.900`; `surface` → `#1A1A1A`; `surface.raised` → `#2A2A2A`; `content.primary` → `gray.0`; `content.secondary` → `#C2C2C2`; `content.muted` → `#8A8A8A`; `content.inverse` → `gray.900`; `border.subtle` → `#333333`; `border.strong` → `gray.0`; `fill.primary` → `gray.0`; `fill.secondary` → `#2A2A2A`; `scrim` → `gray.900` at 60% opacity. Status primitives stay the same hues; check AA on the dark surface and flag if a control fails.
+
+`identity.wash`: linear gradient `start` → `end`, used at low opacity (about 12–24% fill) or as a thin (2px) rule / header strip. Never opaque full-bleed on a content card that holds a jersey photo.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Radius
+
+Status: `locked`
+
+**Purpose**: Two families so surfaces feel like Base cards and actions feel tappable, without rounding the jersey into a pill.
+
+**Scale**:
+| Token | Value | Use |
+| --- | --- | --- |
+| `radius.xs` | 4px | Tiny nested tags only |
+| `radius.sm` | 8px | Buttons; nested surfaces inside a card |
+| `radius.md` | 12px | Default cards, photo tiles, banners |
+| `radius.lg` | 16px | Sheets, dialogs, large containers |
+| `radius.pill` | 999px | Chips, search field |
+
+**Usage**: Photo tiles and collection cards use `radius.md`, not pill. Buttons use `radius.sm` (rectangular 8px), not pill. Chips and search use `radius.pill`. Nested child radius shrinks one step (card `md` → nested `sm`). Admin table thumbs use `radius.sm` (32×32), not `radius.md` and not pill.
+
+**Relationships**: Layout clips the photo to the tile radius. Border follows the same radius.
+
+**Constraints**: Do not use 0px on interactive elements. Do not put `radius.pill` on a jersey photo tile.
+
+**Example** *(not a rule)*: A collection tile at `radius.md` containing a full-bleed photo; a dock **Save** button at `radius.sm`.
+
+**Exceptions**: System sheets may use the platform’s own top-corner radius. Match `radius.lg` when we draw the sheet ourselves.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Motion
+
+Status: `locked`
+
+**Purpose**: Quiet confirmation that something happened. Never celebration, never decoration.
+
+**Scale** (Base-adjacent):
+| Token | Duration | Use |
+| --- | --- | --- |
+| `motion.fast` | 200ms | Pressed/hover color, chip select |
+| `motion.base` | 300ms | Sheet present, tab content fade |
+| `motion.slow` | 400ms | Rare: large contextual reveal (empty → first tile) |
+| Easing | `cubic-bezier(0.4, 0, 0.2, 1)` | Default in/out |
+
+**Usage**: Animate opacity and transform only. Stack push/pop uses the platform push (`animation: default`) from `stackScreenMotion` so every **drill** feels the same; reduced-motion is a fade with no travel. Parent overview **index** screens use `animation: none` (`stackRouteMotion`) so a tab jump after a finger-swipe does not play a second sideshift behind the pager. Tap on the bottom nav has no extra animation (the OS owns the switch). On the five **parent overview** homes only, a horizontal pager follows the finger between places; those homes are prefetched so the destination is already painted. After the finger lifts, the row settles with `motion.base` (no bounce), then `router.navigate` hops the Liquid Glass pill. Native tab `contentStyle` is canvas so attach is not a white React Navigation flash. All five overview homes stay mounted in each pager (changing pager children snaps native to index 0). On blur, neighbour pages stay in the tree on the same render — a `useEffect` hold is one frame too late and paints the host page while NativeTabs still shows the outgoing tab. After `PLACE_PAGER_HOLD_AFTER_BLUR_MS` (450) the outgoing pager parks on its host page off-screen. InteractionManager is too early for that park. Indbakke’s Beskeder | Aktivitet consume that swipe until the inner edge, then the pager continues to Søg or Samling. Other moments that earn motion: shutter feedback, sheet present/dismiss, Vision suggestion fade-in, Top tabs underline, and the collection empty shirt diagram. No bounce, no confetti. No auto-playing loops on load except a loading indicator and the collection empty diagram (transform only; reduced-motion = still).
+
+**Relationships**: Reduced-motion still states use the same layouts at rest.
+
+**Constraints**: `prefers-reduced-motion: reduce` → durations ~0 / no transform travel. Shutter may keep a one-frame highlight. Loading indicators may remain if they are the only progress signal.
+
+**Example** *(not a rule)*: Capture full-screen modal covers the tabs in `motion.base`; Vision chips fade in with `motion.fast` when the suggestion arrives.
+
+**Exceptions**: Platform keyboard and system share sheets use OS motion.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Layout
+
+Status: `locked` (Gap 2026-08-23: collection home regions = 3a. Gap 2026-08-28: Indbakke regions = 4a–4i. Gap 2026-08-28: own Profil regions = 5a–5o). Chip row = genveje (Chip / Collection shortcuts). Brand-book Hjemme/Ude on Samling is **not** layout.
+
+**Purpose**: A Vinted-like scan of owned jerseys on `mobile` / `web`. Add is capture, not a listing. Public web is the same product at read-only depth. `admin` is a Base dashboard: table, search, filters; photos are evidence, not the layout. Indbakke is collector-to-collector messages on `mobile`, not a marketplace inbox.
+
+**Regions (mobile)**:
+| Region | Meaning |
+| --- | --- |
+| Screen | Full viewport plus safe-area insets |
+| Header | **Overview title is one recurring role** across the five parent places (Samling · Indbakke · Søg · Ønsker · Profil): title in `display` 28, via `ScreenHeader` (`CollectionHeader` matches it). Collection home: **Samling** (`display` 28) + count (`mono`) + capture Icon button (`add`, “Tilføj trøje”) top-right. No search, no profile, no wordmark, no KC mark. Indbakke list: **Indbakke** (`display` 28) only — no bell. Conversation: back + handle (`heading-sm`) + optional jersey context (`mono`) + overflow. Detaljer / Send bud / own-Profil drills: back + `title` 24 (drills stay `title`). Own Profil **home**: **Profil** (`display` 28) only — no KC mark, no bell |
+| Body | Collection grid or confirm form. Chip row **under** the header when the collection is not empty (Collection shortcuts). Grid scrolls; last rows must clear the native tab bar. Indbakke: underline tabs then Thread row list, Activity cards, or Empty state `inbox`. Conversation: message column (dates, Bid cards, Chat bubbles) then Message composer. Detaljer and own Profil: grouped lists on `fill.secondary` canvas; groups on `surface`, `radius.md`, hairline `border.subtle` between rows |
+| Footer actions | Primary/secondary buttons for the current task; pinned **Button dock** at the bottom on login, register, confirm, and Cookie-indstillinger. Empty collection uses the Empty state hug action under the title — not a dock. Conversation uses Message composer, not Button dock. Send bud uses an in-body `primary` (not a dock). Own Profil home has no dock — last group clears the Tab bar |
+| Tab bar | Floating bright-glass capsule `space.inset.md` from the sides and `space.inset.lg` from the bottom, `radius.pill`. Five icon-only slots (Tab bar). Content may show through behind it. Not a full-width labeled dock |
+
+**Usage (mobile)**: Collection body is a **two-column** photo grid on phone. Jersey photos on tiles are cropped **4:5**. Caption under the photo: club (`heading-sm`) then season · type (`mono`). **Search is not in the collection header** — it is the Søg place (compass slot). Collection chips are **genveje**, not kit type (kit type stays on Confirm). **Tilføj trøje** (raised plus) opens the photo flow (gallery-first on first session, camera-first on repeat), not the overview, not “new shortcut”, and not a marketplace compose screen. “Same club” vs “New jersey” is a choice after Save, not inherited identity on **New**. Other collector screens (Søg, Indbakke, Profil, Detaljer, Send bud) use `title` 24 in the header unless a later lock says otherwise. Conversation header is the other collector’s handle, not `title`. Genveje manager is a **Sheet**, not a titled full-screen place.
+
+**Indbakke (phone)**: Two underline tabs **Beskeder** | **Aktivitet** (Top tabs anatomy, Danish labels). One conversation model behind both — unread is shared. The native Tab bar **stays** on Samtale and Detaljer (native default — no hide-on-drill). Send bud is a Søg-stack screen: the Søg tab is the active place, not Indbakke.
+
+**Own Profil (phone)**: Canvas `fill.secondary`. The native Tab bar stays on Profil home (Profil tab selected) **and on every drill off home** (native default — no hide-on-drill). Grouped lists match Detaljer: `surface` groups, `radius.md`, hairline rows. Identity card is a `surface` group, not a List row.
+
+**Indbakke (wide, ≥1024)**: Same tokens. Left column ~360px = list + Beskeder | Aktivitet. Remaining width = conversation. Selected Thread row: `fill.secondary` plus a 2px `fill.primary` leading edge. Not a new desktop product. Expo Web remains deferred as a first-class surface — apply this only when a host actually presents Indbakke at that width.
+
+**Usage (web)**:
+| Surface | Rule |
+| --- | --- |
+| Single UserJersey | Centered column, max-width **640px** |
+| Collection | Centered column, max-width **960px** |
+| Collection columns | 2 below 768px; 3 from 768px; 4 from 1024px; never more than 4 |
+| Open Graph | Canvas **1200×630**. User photo dominates. Club + season as text. Compact wordmark or KC mark allowed with the wash strip (Logo). `identity.wash` only as a thin top strip, never behind the jersey |
+
+**Regions (admin)**:
+| Region | Meaning |
+| --- | --- |
+| App header | Wordmark left (`kitcollective-wordmark-black.svg`, min 96px wide). Search field fills the remaining width between the wordmark and trailing actions (leading search icon, 48px tall pill — not a 28rem cap). Trailing Icon buttons 44×44: pin, notifications, help, waffle (places). Profile action: 32px circular monogram from the operator email + chevron; menu is email + Sign out — not the KC monogram. Pin / notifications / help are chrome-only this gap (empty menus; no pin API, no inbox, no help center). Header row 64px. No “+ New”. No Sign out as a text Button in the header. No lockup in the header (lockup is login). |
+| Waffle places | Two tiles, icon above title: Master Data \| User Data. Routes stay `/stamdata` and `/collectors`. |
+| Toolbar | Entity switcher in one underline tablist (Top tabs). Master Data: **Clubs** \| **Leagues** \| **Players**. The tab hairline spans the tab group only — not the full toolbar width. Filters is a rounded **Icon button** beside the tablist (opens a right **Sheet**; pressed when catalog filters are on). Search lives in the app header, not here. Pagination footer under the table: `caption` record count (page range) on the left, Previous / Next on the right. Club drill records use Chip pills, not this underline. |
+| Body | Data table, full remaining width |
+| Drill | Full page replacing the table, with back |
+| Confirm | Sheet/dialog over the drill (Take-down, demote) |
+| Login | Centered `surface` card, max-width **400px**. Lockup (`kitcollective-lockup-black.svg`, min 132px wide) above the Sign in heading. Not the wordmark (wordmark is app header). Not white variants (`admin` is light only). |
+
+**Usage (admin)**: Desktop-first. Page inset `space.inset.lg` (24px). Content is **full width** of the viewport minus inset — not the Astro 960px column. Table row height **48px**. Hairline row dividers (`border.subtle`). Rows use Base Data Table zebra: odd rows `fill.secondary`, even rows `surface`. Hover is one shade darker (`border.subtle` on a gray row, `fill.secondary` on a white row). Selected/focus also use that darker fill plus `border.focus`. Kit and UserJersey rows include a **32×32** square thumb (`radius.sm`); missing photo = empty 32px slot, not a crest invented from `KitPhoto`. Club, season, and user identity rows use Mark/monogram, not a KitPhoto thumb. Click row → full-page drill with back. Take-down and demote confirm in a Sheet (`confirm`) over that page. Below **1024px**: table scrolls horizontally; do not invent a phone admin layout. No split-view detail pane. No bulk checkboxes.
+
+**Relationships**: Grid gap is `space.gap.md`. Page inset is `space.inset.md` on `mobile` / `web` and `space.inset.lg` on `admin`. Cards use `radius.md` and `surface`. Type roles from Typography. Logo placement from Logo. Admin table cells use `type.body` for header and cells (header is the same size, bolder). Meta and season/ID cells stay `body` size in `mono` or `content.secondary`. The native tab bar is the OS system bar (the platform owns its material and elevation), not a layer on our Elevation scale.
+
+**Constraints**: No price, buy, boost, or ratings on a collection card. Bid amounts belong on Activity card, Bid card, and Send bud only. The Samling capture button is capture, never “new shortcut”. Safe-area insets are required on `mobile`. Body must reserve space for the native tab bar + inset so tiles are not hidden (via `tabBarContentInset`) — do not invent a named pixel token for that reserve; flag if a host needs a named constant. Content must reflow; do not hard-code a pixel width for the **mobile** grid (columns are 2, tiles flex). Do not invent a fifth desktop column. Do not invent an admin split-view, “+ New”, or a 4:5 admin home. Brand-book mocks with a wordmark **collection** header or labeled flush tabs are **not** Samling layout. `admin` header uses wordmark-black (Logo).
+
+**Example** *(not a rule)*: iPhone Samling: “Samling” + “8” + bell; two 4:5 tiles per row; glass pill overlapping the bottom of the grid. Astro collection at 800px viewport shows two columns inside 960px. Admin Stamdata at 1280px: full-width table of kits with 32px thumbs, Filters in the toolbar, click a row to a drill page.
+
+**Exceptions**: Confirm/Save is a single column. Camera session is full-bleed preview with three slots overlaid, not a grid. Capture does not crop while shooting. OG letterboxes a 4:5 photo on 1200×630 — do not crop the jersey to 16:9. Admin login is a centered 400px card, not full-width. Public Astro has no tab bar. Own-Profil drills keep the native Tab bar (native default — home and drills both show it).
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Typography
+
+Status: `locked` (Gap 2026-08-23: brand families). Do not take chips or labeled tabs from the brand book’s in-book app mocks.
+
+**Purpose**: Product type, not system UI. Headings carry the KitCollective voice; body stays readable and secondary to the jersey photo. No UberMove.
+
+**Families** (load as webfonts on `mobile`, `web`, and `admin`; system-ui is fallback only):
+| Job | Family | Weights |
+| --- | --- | --- |
+| Headings and logo | **Archivo** | 400 (wordmark “Kit” only), 600 (UI headings), 700 (KC mark) |
+| Body, labels, buttons | **IBM Plex Sans** | 400, 500 |
+| Season, size, IDs, counts | **IBM Plex Mono** | 400, 500 |
+
+Do not mix a heading role onto Plex Sans. Do not set body copy in Archivo. Do not use Mono for paragraphs.
+
+**Roles**:
+| Role | Family | Size | Weight | Line-height | Tracking | Use |
+| --- | --- | --- | --- | --- | --- | --- |
+| `display` | Archivo | **32px** (default); **28px** on collection home “Samling” | 600 | 37px (32); 34px (28) | −3% | Rare large heading; collection home title |
+| `title` | Archivo | 24px | 600 | 29px | −2% | Other screen titles (Søg, Indbakke, Detaljer, Send bud, Profil, Genveje, Ny genvej) |
+| `section` | Archivo | 20px | 600 | 25px | −2% | Mid headings (picker title if not using `title`; empty-state title) |
+| `heading-sm` | Archivo | 15px | 600 | 20px | −2% | Club name on a Jersey tile; collector handle on Thread row, conversation header, and Detaljer stub |
+| `body` | IBM Plex Sans | 16px | 400 | 25px | 0 | Paragraphs, empty-state body, helper copy, Chat bubble text, thread snippet (one line, truncate) |
+| `label` | IBM Plex Sans | 13px–16px | 500 | 18px (13) / 20px (16) | 0–0.01em | Buttons (16), chips (14), field labels (13) |
+| `caption` | IBM Plex Sans | 12px–13px | 400 | 18px | 0 | Non-data meta (not admin table headers) |
+| `mono` | IBM Plex Mono | 12px–14px | 400 | 18px (12) / 20px (14) | 0 | Season, kit type, size, collection count, IDs, relative time on Thread row and bubbles |
+
+There is no extra 14px admin-only family. Admin uses the same roles; chrome in English.
+
+**Usage**: One role per line of UI text. Collection tile is **two lines**: `heading-sm` club, then `mono` season · type. Do not join club and season into one `caption` string. Do not use `caption` as a button label. Do not use `display`/`title` inside a tile. On `admin`, table headers and cells share `body` size; headers use `label` weight (500). Season/ID/count cells use `mono` at that size. Bid **amount** on Activity card, Bid card, and Send bud field uses `mono` at **20px** / 24 line-height — not a new family, not Archivo, not a marketplace overlay on a tile.
+
+**Relationships**: Title + supporting line stacks use `space.gap.sm`. Count beside “Samling” is `mono` 13px, muted. Label sits in buttons/chips with `space.inset` from Spacing. Wordmark and KC mark construction lives in the brand book; **where they appear** is Foundations → Logo.
+
+**Constraints**: Body is at least 16px on `mobile` (`body`). Body and label follow Dynamic Type / font scaling; display/title/heading-sm may scale but must not blow the tab bar or two-column grid. Text is never the only state signal. WCAG AA against the surface. Brand book accent `#1F5EFF` is **not** a type color and is **not** this gap’s primary CTA — primary fill stays black.
+
+**Example** *(not a rule)*: Collection home: Archivo `display` 28 “Samling” + Plex Mono “8”. Tile: Archivo `heading-sm` “F.C. København”; Mono “2023/24 · Hjemme”. Empty state title: `section`. Form helper: `body` or `caption`.
+
+**Exceptions**: Legal / App Store fine print may use `caption`. System share sheets use OS type. If a webfont fails to load, fall back to system-ui with the same sizes — do not invent a fourth family.
+
+**Source**: Brand book v1.0 §06. In-book app mocks that still show kit-type chips or a wordmark collection header are **not** type or layout rules.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Logo
+
+Status: `locked` (Gap 2026-08-24: kit files + placements). Construction is brand kit v1.0 (`kitcollective-*.svg`). Do not invent a stacked variant, a compact file, a second mark, or a mascot. Do not rename kit files.
+
+**Purpose**: Recognise KitCollective on entry, share, and system chrome. Collection scanning stays jersey-first — the product name in the Samling header is the screen title, not the brand lockup. Catalog **Mark** (club/season crest or letter monogram) is stamdata, not this logo.
+
+**Files** (kit names; black = `#0A0A0A` on light, white = `#FFFFFF` on dark):
+| File | Role | Use |
+| --- | --- | --- |
+| `kitcollective-lockup-black.svg` | Lockup (KC plate + wordmark). Primary. | Login, onboarding, splash on a **light** canvas. Min 132px wide. |
+| `kitcollective-lockup-white.svg` | Lockup on dark | Same jobs on a **dark** canvas (`mobile` / `web` only). Never on `admin`. |
+| `kitcollective-wordmark-black.svg` | Wordmark (name only) | App header, navigation, narrow chrome on **light**. `admin` header. Min 96px wide. OG wash strip when a wordmark is needed — same file at chrome size; there is no separate compact file. |
+| `kitcollective-wordmark-white.svg` | Wordmark on dark | Same jobs on **dark**. Never on `admin`. |
+| `kitcollective-monogram-black.svg` | Filled KC plate. Default square mark. | Favicon, avatar, stamp on light. OG when a square mark fits. |
+| `kitcollective-monogram-white.svg` | Filled KC plate on dark | Same on dark. Never on `admin`. |
+| `kitcollective-monogram-outline.svg` | Outline KC plate | Light surfaces only, when filled is too heavy. Not used on `admin` this gap. |
+| `kitcollective-favicon.svg` | Favicon (filled black plate) | Browser tab icon. `admin`: `/assets/kitcollective-favicon.svg`. |
+| `kitcollective-appicon-ios-dark.svg` | iOS app icon (standard) | Home screen / App Store dark. |
+| `kitcollective-appicon-ios-light.svg` | iOS app icon (light/tinted) | iOS light / tinted appearance. |
+| `kitcollective-appicon-android-round.svg` | Android round | Adaptive / round Play icon. |
+
+**Hosts**: `apps/admin/public/assets/` (admin). `apps/mobile/assets/brand/` (Expo). `apps/web` does not exist this gap — do not invent a fourth brand package.
+
+**Usage**:
+- `admin` header: **wordmark-black**. Not lockup. Not the string “KitCollective Admin”.
+- `admin` login: **lockup-black** above Sign in. Not wordmark.
+- `admin` favicon: **favicon**.
+- `admin` operator profile: circular letters from the operator **email**, not the KC monogram.
+- Club / season / user identity rows: catalog **Mark** / letter monogram from stamdata. Never the product logo. Never emoji. Never `KitPhoto` as a crest. Honour rows use the same Mark `md` slot (trophy or competition badge when stored).
+- Collector Samling header: **Samling + count + capture (Tilføj trøje)** — no wordmark, no KC monogram, no lockup. Tab bar has no logo. Jersey tiles have no logo.
+- Splash / onboarding / mobile login (when wired): lockup; black on light canvas, white on dark.
+- Share / Open Graph: jersey dominates; wordmark or filled monogram in the wash strip only.
+- Store / home-screen icons: appicon files. Kit README also names `store-square`; that file is **not** in the SVG kit — flag; do not invent it.
+- Primary CTA fill stays black, never a logo color. Brand-book in-book mocks with a wordmark **collection** header are **not** a Samling placement rule.
+
+**Relationships**: Type families from Typography (Archivo 400/600/700). Identity wash may sit as a thin OG top strip with the wordmark or monogram; wash never behind the jersey photo. Catalog **Mark** is the Mark component, not Logo.
+
+**Constraints**: Colour is `#0A0A0A` or `#FFFFFF` only — never grey, never `#1F5EFF`, never wash. Clear-space: half the plate height on every side. Do not stretch, rotate, add shadow, or place the logo on a busy jersey photo without a dark layer. Contrast AA on canvas. `admin` is light only — **do not use white wordmark, white lockup, or white monogram there**. Do not mix product logo and catalog Mark. SVG text is live Archivo; inline the mark on HTML so the page webfont applies (`<img>` will fall back to system sans).
+
+**Example** *(not a rule)*: Admin header: wordmark-black at 20px height. Admin login: lockup-black at ~220px wide above “Sign in”. Collection home: “Samling” `display` 28, no logo.
+
+**Exceptions**: System share chrome uses OS type around our preview. Store icon may be the appicon / filled monogram alone. KC monogram on collector **Profil** header is **deferred** — flag; do not invent. Kit PNG folder (pixel-perfect Archivo) was not in the provided kit copy — flag if a host cannot use live-text SVG (Expo app icons, favicon at 16px).
+
+**Source**: Brand kit v1.0 README + `svg/kitcollective-*.svg`. Brand book v1.0 §01–04 for construction. Placement: this gap. 3a artifact for “no logo on Samling header”.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Spacing
+
+Status: `locked`
+
+**Purpose**: One rhythm for padding, gaps, and insets so screens do not invent local spacing.
+
+**Scale**: `4 / 8 / 12 / 16 / 24 / 32 / 48`.
+
+**Roles** (prefer these in UI; primitives only in token files):
+| Token | Value | Use |
+| --- | --- | --- |
+| `space.inset.sm` | 8px | Compact padding (chips, caption inset, admin table cells) |
+| `space.inset.md` | 16px | Default screen and card padding |
+| `space.inset.lg` | 24px | Generous padding (empty state, confirm sections, **admin page inset**) |
+| `space.gap.sm` | 8px | Tight stacks (title + caption) |
+| `space.gap.md` | 12px | Collection grid gap; form groups |
+| `space.gap.lg` | 16px | Between sections |
+
+**Usage**: Padding and gap come from the scale. Do not mix ad-hoc pixels with tokens on the same screen. Two densities, **one scale**: `mobile` / `web` confirm uses the small end of the same scale; `admin` table cells use `space.inset.sm` / `space.gap.sm` and the page uses `space.inset.lg`. Do not add `space.compact.*` tokens.
+
+**Relationships**: Layout gutters use `space.inset.md` and `space.gap.md` on `mobile` / `web`, and `space.inset.lg` on `admin` pages. Typography line-boxes sit inside spacing, not the other way around.
+
+**Constraints**: Primary hit targets ≥ 44×44 on `mobile`. On `admin`: table row **48px**; toolbar primary/destructive **44×44**; icon actions **32×32** with an accessible name. Compact density is usage of this scale, not one-off tighter padding and not a second token set.
+
+**Example** *(not a rule)*: Collection grid uses `space.inset.md` page padding and `space.gap.md` between tiles. Admin Stamdata uses `space.inset.lg` page padding and `space.inset.sm` inside table cells.
+
+**Exceptions**: Platform sheets may use safe-area insets outside the scale.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Elevation
+
+Status: `locked`
+
+**Purpose**: Depth means “this is an overlay task”, not decoration. Cards stay flat so photos read as the surface.
+
+**Levels**:
+| Level | Token | Treatment |
+| --- | --- | --- |
+| Canvas | `elevation.canvas` | No shadow |
+| Card | `elevation.card` | No shadow. Edge is `border.subtle` |
+| Overlay | `elevation.overlay` | `scrim` + `surface.raised` sheet. Optional whisper shadow `0 4px 16px` at 12% black |
+
+**Usage**: Collection tiles stay at card (flat). Confirm, club search, and permission pre-prompts use overlay. Admin Take-down / demote use overlay (dialog) over the drill page. The native tab bar is the OS system bar — the platform owns its material (Liquid Glass on iOS 26); it is not one of our elevation levels and needs no scrim or focus trap. Do not invent a fourth elevation level. Do not raise a tile or table row on press with a drop shadow.
+
+**Relationships**: Overlay uses `color.scrim` and `color.surface.raised`. Motion `motion.base` for present/dismiss.
+
+**Constraints**: Overlay must dim the canvas and trap focus until dismissed. Elevation is not a brand flourish.
+
+**Example** *(not a rule)*: Club search is a sheet over the confirm screen; the grid behind is dimmed and inert.
+
+**Exceptions**: Camera preview is full-screen, not an elevated card.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Border
+
+Status: `locked`
+
+**Purpose**: Hairlines separate flat surfaces. Focus is a ring, not a wash. Error is a line **and** text.
+
+**Roles**:
+| Token | Treatment | Use |
+| --- | --- | --- |
+| `border.subtle` | 1px `color.border.subtle` | Cards, text fields, photo tiles |
+| `border.strong` | 1px `color.border.strong` | Selected card or selected chip when fill is not used |
+| `border.focus` | 2px `color.fill.primary`, 2px offset | Keyboard / accessibility focus |
+| `border.danger` | 1px `color.danger` | Invalid field; must pair with helper text |
+| Divider | 1px `border.subtle` | Two list groups with no heading between them |
+
+**Usage**: Prefer space over dividers inside a single form group. Do not use `identity.wash` as a focus or selected ring. `border.strong` aliases `gray.900` on light and `gray.0` on dark unless a dedicated primitive is added later — do not invent a new hex.
+
+**Relationships**: Radius follows the control. Focus ring is drawn outside the pill/card radius.
+
+**Constraints**: Focus is always visible for keyboard and accessibility focus. Color is never the only error signal. Dividers do not replace headings.
+
+**Example** *(not a rule)*: Search field: `border.subtle` at rest, `border.focus` on focus, `border.danger` plus “Klub er påkrævet” when Save is blocked on club.
+
+**Exceptions**: Hairline may be omitted on a photo tile if the photo’s edge reads against `canvas`; if contrast fails, keep `border.subtle`. Flag rather than inventing a thicker stroke.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+## Tokens
+
+Status: `locked` for foundations in this file. Component tokens are not used.
+
+**Layers**: primitive → semantic. No component-token layer.
+
+**Naming**: `color.{role}`, `type.{role}`, `space.inset|gap.{sm|md|lg}`, `radius.{step}`, `motion.{step}`, `elevation.{level}`. Purpose-encoded. Do not name after hex, Uber, or Vinted.
+
+**Modes**: `light` (default), `dark` (system) on `mobile` and `web`. `admin` is **light only** — do not select dark aliases there.
+
+**References**: Semantic color aliases primitives. `identity.wash` references `identity.wash.start` and `identity.wash.end`. Type roles alias the brand families in Typography (Archivo / IBM Plex Sans / IBM Plex Mono), not system UI as the primary family. UI must not reference primitives.
+
+**Usage**: Select semantic tokens in UI; primitives only inside token files.
+
+| Token | Role | References | Surfaces |
+| --- | --- | --- | --- |
+| `color.canvas` | Page background | gray.0 / gray.900 | mobile, web; admin light only (gray.0) |
+| `color.surface` | Card / field | see Color | mobile, web, admin |
+| `color.fill.primary` | Primary button | black / gray.0 | mobile, web, admin (light: black) |
+| `color.fill.secondary` | Quiet fill / admin row hover | gray.50 / #2A2A2A | mobile, web, admin |
+| `color.identity.wash` | Garnish gradient | start → end | mobile, web (empty, share header, thin rule, OG strip). Not a table treatment on admin |
+| `type.display` / `type.title` / `type.section` / `type.heading-sm` | Heading roles | Archivo 600; see Typography | mobile, web, admin |
+| `type.body` / `type.label` / `type.caption` | Body / label / meta | IBM Plex Sans; see Typography | mobile, web, admin |
+| `type.mono` | Data (season, count, ID) | IBM Plex Mono; see Typography | mobile, web, admin |
+| `space.inset.md` / `space.gap.md` | Default padding / grid gap | 16px / 12px | mobile, web |
+| `space.inset.lg` / `space.inset.sm` | Admin page inset / table cell inset | 24px / 8px | admin |
+| `radius.md` | Cards / photo tiles | 12px | mobile, web |
+| `radius.sm` | Buttons, nested, admin thumbs | 8px | mobile, web, admin |
+| `radius.pill` | Chips / search field | 999px | mobile, web, admin |
+| `elevation.card` | Flat tile | border only | mobile, web |
+| `elevation.overlay` | Sheet | scrim + raised surface | mobile, admin (confirm dialog) |
+| `border.focus` | Focus ring | 2px fill.primary, 2px offset | mobile, web, admin |
+| `motion.fast` / `motion.base` | Quiet UI | 200ms / 300ms | mobile, web, admin |
+
+Flag missing context; do not invent tokens or values.
+
+## Components
+
+Status: `locked` for the inventory below (v1 + admin gap + inbox gap + Profil gap). A primitive not listed: **flag**. Do not invent components or variants.
+
+**Inventory (v1)**: Button, Button dock, Icon button, Search field, Text field, Select field, Chip, Jersey tile, Mark, List row, Photo slot, Empty state, Sheet, Tab bar, Banner.
+
+**Inventory (admin gap)**: Data table. Place switching is the waffle (two tiles), not Top tabs. Plus existing Button, Icon button, Search field, Text field, Chip, Mark, Empty state (`table`), Sheet, Banner.
+
+**Inventory (inbox gap)**: Thread row, Activity card, Chat bubble, Bid card, Message composer. Empty state `inbox`. Top tabs underline reused for Beskeder | Aktivitet (Danish). Tab bar: envelope (Indbakke) tab + unread count badge.
+
+**Inventory (Profil gap)**: Switch, Avatar. List row leading/trailing slots as locked below. Own Profil composition is Pattern **Own Profil**.
+
+**Inventory (Confirm redesign gap)**: Photo lightbox. Plus the Button dock `fade` variant and the Data/Detaljer drill rows with a token-composed progress donut (Pattern **Confirm and Save**). The donut is not a new inventory primitive — 44px ring, `fill.secondary` track, `warning` stroke while incomplete, `fill.primary` when filled/required, `type.monoSm` `n/n` in the centre. Never `success` green.
+
+**Inventory (photo-role gap)**: No new primitive. Photo slot `confirm-strip` carries the four universal roles plus Andet thumbs. Repeat-camera filmstrip is Capture-session composition (small 4:5 thumbs, no role), not a new component. `camera-overlay` Photo slot variant is **superseded** — do not put role slots on `CameraView`.
+
+**Inventory (Toast gap 2026-09-06)**: Toast (Component **Toast**). Bottom-anchored feedback that floats above the dock / native tab bar; `danger` for save failures. Now the standard **`react-native-toast-message`** library (adopted 2026-09-06 for Expo Go runtime reliability) with a custom `error` renderer that keeps the app's danger/content/`fill.secondary` tokens — see Toast § **Deviation** for the accepted gaps versus the original bespoke lock.
+
+**Deferred primitives**: Checkbox, paywall card, wishlist row. Thread row / Detaljer still use a 44px circular **initial** on `fill.secondary` — that is not Avatar and not a new Mark `kind`. Admin Profile action stays a 32px operator monogram — not Avatar. Do not invent a Filter primitive (use Button + Chip in Sheet). Do not invent an admin checkbox column.
+
+A primitive not listed: **flag**. Do not invent components or variants.
+
+### Button
+
+**Purpose**: Commit an action the user asked for.
+
+**Anatomy**: Label (required). Leading icon (optional). No subtitle inside the button.
+
+**Properties**: `variant`: `primary` | `secondary` | `tertiary` | `destructive`. `width`: `hug` (default) | `fill`. `size`: `md` (default) | `sm`. `disabled`, `loading`.
+
+**Variants**: `primary` = the one action that moves the task forward (`fill.primary`, `content.inverse`, `radius.sm`). `secondary` = alternative on the same surface (`fill.secondary` or outline `border.subtle` on `surface`). `tertiary` = low-emphasis, often inline (no fill). `destructive` = data-loss (`danger` fill, `content.inverse`). One `primary` per visible region. Dock primaries use `width.fill` with min hit target ≥ 48×48 on `mobile`. Inline and banner actions stay `width.hug`.
+
+**States**: Rest, pressed, focus, disabled, loading (label stays; ignore a second submit).
+
+**Accessibility**: Visible label. Focus = `border.focus`. Disabled is not the only explanation — pair with helper text when Save is blocked. Hit target ≥ 44×44 on `mobile` and for admin toolbar primary/destructive. Contrast AA.
+
+**Composition**: Footer actions (via **Button dock**), empty-state action (`collection` = hug under the title), inline in confirm. Bid card: `primary` Accepter + `secondary` Afvis side by side (one bud, not two primaries). Destructive confirms in a Sheet when the cost is high. Collector Log ud and Slet min konto use Sheet `confirm`, not a full-screen place. Camera chrome and banner inline actions stay `width.hug` — not docked, not side-by-side primaries on phone. Admin Filters is a Chip in the entity Chip group, not a `secondary` Button; drill footer: `destructive` Take-down (never equal to a `primary` on the same row).
+
+**Unsupported**: Two primaries in one region. Primary + destructive as equal side-by-side choices. `identity.wash` as button fill. Teal or cyan CTA. “+ New” as the admin toolbar primary.
+
+**Example** *(not a rule)*: Confirm footer dock: `primary` “Gem” (`width.fill`), or “Gem og næste” when more unsaved jerseys remain; `tertiary` “Annuller” stacked below when present. Admin drill: `destructive` “Take down” opens Sheet `confirm`.
+
+**Code**: `apps/mobile` — `Button`, `ButtonDock` in `src/components/ui.tsx`.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Button dock
+
+**Purpose**: Pin footer actions to the bottom of the screen with safe-area padding.
+
+**Anatomy**: Top edge is either a hairline `border.subtle` (default) or a soft top **fade/blur** scrim when the dock floats over scrolling content (see Variants). Vertical stack (`space.gap.md`). One `primary` `width.fill` at top of stack. Optional `secondary` `width.fill` next (Cookie-indstillinger only). Tertiary paths below. Optional helper text above the primary when Save is blocked.
+
+**Properties**: None beyond children.
+
+**Variants**: `border` (default — static footers: login, register, Cookie-indstillinger). `fade` (Confirm — the dock floats over the scrolling form: a **short** (`space.inset.md`) continuous canvas gradient over light blur from the surface to transparent, **no** hard hairline and **no** stepped opacity bands). The Confirm hub title uses the same scrim inverted. Scroll padding clears the title block **and** the scrim so the jersey index is not under the fade. Reduced-motion keeps the scrim static; never an animated blur.
+
+**States**: None.
+
+**Accessibility**: Safe-area insets on `mobile`. Helper text explains blocks — disabled primary is not the only signal. The `primary` keeps WCAG AA contrast over content showing through the `fade`.
+
+**Composition**: Login, register, confirm, Cookie-indstillinger. Not camera chrome, inline banner actions, or empty collection (that action sits under the Empty state title).
+
+**Unsupported**: Side-by-side primaries on phone. Hugging centered pill as the only primary on these docked screens.
+
+**Example** *(not a rule)*: Login dock: fill “Log ind” + tertiary “Opret konto” below. Cookies: fill “Acceptér alle” + `secondary` “Kun nødvendige” + tertiary “Bekræft mine valg”.
+
+**Code**: `apps/mobile` — `ButtonDock` in `src/components/ui.tsx`; fade/blur scrim in `src/components/fade-scrim.tsx`.
+
+### Icon button
+
+**Purpose**: Compact action when a visible text label would not fit.
+
+**Anatomy**: Single icon. No caption inside the control.
+
+**Properties**: `name` (accessible string, required). `icon`. `disabled`.
+
+**Variants**: None. Emphasis comes from context, not a color variant. Do not add `primary` Icon button.
+
+**States**: Rest, pressed, focus, disabled, busy. Busy (admin Fetch kits): the sync icon spins; reduced-motion = no spin, dim only.
+
+**Accessibility**: Accessible name required (e.g. “Luk”, “Kamera”, admin “Back”, admin “Fetch kits”). Hit target ≥ 44×44 on `mobile`. On `admin`, icon actions may be **32×32** if the accessible name is present (visible tooltip or `aria-label`). Toolbar Filters and club drill Fetch kits are **44×44** pills. Icon is not the only meaning — name is.
+
+**Composition**: Header trailing actions (collection home: capture “Tilføj trøje”; conversation: overflow “Detaljer”). Conversation back. Camera shutter chrome, admin header back, admin header cluster (pin, notifications, help, waffle). Message composer: attach image; send may sit on `fill.primary` with name “Send” — that is composer-only, not a general `primary` Icon button variant. Waffle is the admin place switcher this gap (two tiles: Master Data, User Data). Admin Master Data Filters and club drill **Fetch kits** sit as 44×44 `radius.pill` Icon buttons beside a labelled control. Fetch kits uses `fill.secondary` (same as Chip rest), not `surface` on `canvas`. Not a substitute for Tab bar Add. Not a substitute for the Profile action.
+
+**Unsupported**: Icon-only control without a name. Emoji as the icon. 32×32 icon actions on `mobile`.
+
+**Example** *(not a rule)*: Capture header “Luk” to abandon a draft (confirm in Sheet if photos exist).
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Search field
+
+**Purpose**: Filter a collection, find a catalog club, find a city on Min lokation, or filter an admin table by typed query.
+
+**Anatomy**: Leading search icon (decorative). Field. Optional clear control (Icon button). Visible label or `accessibilityLabel` (required).
+
+**Properties**: `value`, `placeholder` (not a label substitute), `onSubmit` / live filter. Collection search may filter as you type. Club search queries catalog IDs, never free-text club as truth. City search stores a tag (popular city or free tag), not a Places ID. Admin search matches CatalogLabel aliases in every locale; displayed labels stay `en` on this surface.
+
+**Variants**: `collection` (Søg place — filter owned jerseys). `catalog` (club pick on confirm). `city` (Min lokation city search — query is a tag, not Places chrome). `admin` (app header). Same chrome; different data. Do not add a header-search variant on collection home.
+
+**States**: Rest, focus, disabled, empty. Error is rare; if the query cannot run, use Banner, not a red search field.
+
+**Accessibility**: Label associated. Hit target ≥ 44 tall. Keyboard: search / default.
+
+**Composition**: Søg place, Confirm/Data full-screen catalog picker (club / season / player), Min lokation city screen, or admin app header (leading icon, pill that fills the header center column). **Not** the collection home header. Uses `radius.pill`, `border.subtle`, `type.body`. Admin header search is not capped at the 28rem toolbar max. City focus uses `border.strong` (same as Send bud amount) — not wash.
+
+**Unsupported**: Land → league → club hierarchy instead of search. Free-text club saved as catalog truth. Wash fill inside the field. Google Places / “use my location” chrome on Min lokation.
+
+**Example** *(not a rule)*: Confirm overlay labelled “Vælg klub eller landshold”, placeholder “Søg klub eller landshold”. Admin header placeholder “Search”. Min lokation placeholder “Søg efter by”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Text field
+
+**Purpose**: Collect a short string we actually store (optional Noter on the Confirm **Detaljer** drill; unique username and About me on Rediger profil; email and password on Admin SPA login). Not for club, season, type, size, or condition.
+
+**Anatomy**: Visible label (required). Field. Hint (optional). Error (optional; replaces hint when invalid). On Confirm **Detaljer**, **Noter** uses the same `type.label` heading as Størrelse / Stand; optional **Valgfrit** is `caption` / `content.muted` beside that heading — not a helper under the box. Username helpers on Rediger profil stay under the field.
+
+**Properties**: `value`, `placeholder` (not a label substitute), `optional`, `error`, `disabled`, platform keyboard hint. `type`: text | email | password as the platform allows.
+
+**Variants**: Single-line default. Multiline for notes and About me.
+
+**States**: Rest, focus, disabled, error. Empty is a value, not a special chrome.
+
+**Accessibility**: Label associated. Error = `border.danger` **plus** text, announced when it appears. Admin login labels in English.
+
+**Composition**: Stacks on the Confirm **Data** drill with `space.gap.md`. Optional custom name on Ny genvej (Sheet). Rediger profil: username and About me (multiline for About me). Username helper — three caption states, never `success` green and never a green check:
+
+| State | When | Caption role |
+| --- | --- | --- |
+| Yours | The value is this collector’s current username | `content.secondary` — *example*: “Dit brugernavn — unikt og følger dig rundt.” |
+| Available | Typed value is free | Same role, short confirmation — *example*: “Ledigt.” |
+| Taken | Typed value belongs to someone else | `danger` plus text — *example*: “er optaget.” Color is not the only signal. |
+
+Admin login card: email then password, then `primary` Sign in. Does not sit inside a Button. Not for catalog identity (club/season) — that is Search field or Select field.
+
+**Unsupported**: Placeholder-only labels. Using Text field for catalog identity (club/season). Validating empty fields on every keystroke before blur/Save. Encoding “available” with `success` fill, a teal check, or any green chrome.
+
+**Example** *(not a rule)*: Label “Noter”, optional, body keyboard. Admin: “Email”, “Password”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Select field
+
+**Purpose**: Show a chosen catalog facet (or “unset”) and open a searchable picker. Not a free-text identity field.
+
+**Anatomy**: Visible label (`type.label` 13). Tappable row, height **52px**. Value or placeholder (`type.body`). Trailing chevron. No inline dropdown menu.
+
+**Properties**: `label` (required). `value` optional (CatalogLabel / id). `placeholder`. `facet`: `country` | `league` | `club` | `player`. `onPress` opens the facet picker. `disabled`.
+
+**Variants**: None. Facet is data, not a visual variant.
+
+**States**: Rest, pressed, focus, disabled, empty (placeholder). Empty is allowed until Gem — Gem stays disabled until at least one facet is set.
+
+**Accessibility**: Label associated. Name = label + current value or “ikke valgt”. Hit target = full 52px row (≥ 44).
+
+**Composition**: Ny genvej body inside the Genveje Sheet. Press → full-screen facet picker (Search field + List row + Mark). Not used for kit type / size / condition (those are Chip `single-select`).
+
+**Unsupported**: Typing a club name as catalog truth. Native `<select>` / spinner as the product picker. Opening Genveje from the tab-bar plus.
+
+**Example** *(not a rule)*: Label “Klub”, value “F.C. København”, chevron.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Chip
+
+**Purpose**: Pick one value from a small closed set (type, size, condition), toggle an admin filter, or select one collection **genvej**.
+
+**Anatomy**: Label (`type.label`, 14px on collection chips). Optional leading Mark (not emoji). No photo inside a chip.
+
+**Properties**: `label` (required). `selected`. `disabled`. `onPress`.
+
+**Variants**:
+| Variant | Need |
+| --- | --- |
+| `single-select` | Confirm: type / size / condition. One per group |
+| `filter` | Admin Filters Sheet. More than one may be on |
+| `shortcut` | Collection home genveje. **Exactly one** selected. First chip is **Alle** (locked, not deletable) |
+
+**States**: Rest, pressed, selected, disabled, focus. Selected = `fill.primary` + `content.inverse`. Not the wash.
+
+**Accessibility**: Role radio for `single-select` and `shortcut`; checkbox for `filter`. Name = label. Hit target ≥ 44 tall. Admin chip labels in English. **Tilpas** is not a Chip — it is `tertiary` text (“Tilpas”), named “Tilpas genveje”. Club drill Players | Jerseys | Honours is Chip **visual** with tab/tablist (panels switch), not radio.
+
+**Composition**: Horizontal row with `space.gap.sm` (collection: scroll horizontally if needed). Confirm Chip groups. User Data toolbar still uses entity Chips (Users, Jerseys). Club drill records switcher uses Chip `single-select` pills (Players | Jerseys | Honours). Master Data uses Top tabs, not Chips; Filters is an Icon button that opens the right Filters Sheet (pressed when catalog filters are on, not for header search alone). Collection home: `shortcut` chips **under** the header, then Tilpas. Hide the **entire** chip row (Alle, genveje, Tilpas) when the collection is empty. Owner `mobile` collection only — not public Astro.
+
+**Unsupported**: Chip as a primary CTA. Kit-type chips (Hjemme/Ude/Tredje) on Samling. Encoding type with wash variant 2/3. Emoji. Plus control to add a genvej (plus is capture). Auto-selecting a chip after Gem (Alle stays selected). Star ratings or a fifth “God” scale for condition — Confirm uses Ny / Brugt / Slidt. A “Mere” chip that dumps leftover kit types onto another tab — Keeper and Special stay in the type group.
+
+**Example** *(not a rule)*: Confirm: “Ny” / “Brugt” / “Slidt”. Samling: “Alle” selected, then “Superliga”, “FCK”; trailing “Tilpas”. Admin Filters: “Has photo” as `filter`.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Jersey tile
+
+**Purpose**: Show one UserJersey in a collection as a photo-first card.
+
+**Anatomy**: Photo (required to *display*; placeholder Mark/monogram only if the row has no photo yet — Save still requires at least one photo). Caption stack: club (`type.heading-sm`) then season · type (`type.mono`). No price. No buy. No ratings.
+
+**Properties**: `photo` (user JPEG). `clubLabel`, `seasonLabel` from resolved `CatalogLabel`. `onPress` opens detail. Crop **4:5**.
+
+**Variants**: `mobile-grid` and `web-grid` share anatomy; column count comes from Layout.
+
+**States**: Rest, pressed, focus. No hover-elevation. Loading photo: flat `fill.secondary` placeholder, not a skeleton wash.
+
+**Accessibility**: Name = club + season (and type if shown). Photo is informative; do not hide caption. Hit target = whole tile.
+
+**Composition**: Collection grid, Astro collection, and own-Profil **Favoritter** (two-column, same 4:5 crop and caption). Not used as the capture preview. Favorites tiles do **not** show owner handle, heart overlay, or price — owner lives on the jersey detail.
+
+**Unsupported**: Price, boost, marketplace footer. `identity.wash` behind the photo. Archive `KitPhoto`. Crop to 1:1 or 16:9 on the tile. Admin home or admin table rows (those use Data table thumbs).
+
+**Example** *(not a rule)*: 4:5 FCK 2023/24 home photo; club “F.C. København”; mono “2023/24 · Hjemme”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Mark
+
+**Purpose**: Identify a stamdata entity beside its label without using emoji or invented artwork.
+
+**Anatomy**: Square or circular image slot. If no licensed asset: gray `fill.secondary` tile + one or two letters from `CatalogLabel` (`type.label` or `type.caption`).
+
+**Properties**: `kind`: `country` | `league` | `club` | `player` | `honour`. `asset` optional. `label` required for fallback letters and accessible name.
+
+**Variants**: None beyond `kind` (slot meaning). Sizes: `sm` 24px (chip), `md` 32px (list row), `lg` 72px (admin club/league identity strip only). Do not invent more sizes.
+
+**States**: Rest only. Missing asset is fallback, not an error state.
+
+**Accessibility**: Name = entity label. Fallback letters are visible text or a labelled graphic. Decorative only when the adjacent text already names the entity — then hide the mark from the accessibility tree and keep the name on the row.
+
+**Composition**: Leading slot on List row; optional on Chip. Not a replacement for Jersey tile photo.
+
+**Unsupported**: Emoji. Made-up crests. Archive kit JPEG as club logo. Player portrait when no approved asset.
+
+**Example** *(not a rule)*: Club row with crest if licensed; otherwise “FC” on gray.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Avatar
+
+**Purpose**: Show the signed-in collector’s identity photo on own Profil.
+
+**Anatomy**: Circle. Photo fills the circle (cover crop) when present. Fallback: one or two letters from the username on `fill.secondary` (`type.label` or `type.heading-sm` by size). No KC monogram. No club Mark.
+
+**Properties**: `uri` optional. `initials` required for fallback and accessible name. `size`: `lg` | `md`.
+
+**Variants**: None beyond size.
+| Size | Diameter | Where |
+| --- | --- | --- |
+| `lg` | 64px | Own Profil identity card (home) |
+| `md` | 56px | Rediger profil “Skift foto” row |
+
+**States**: Rest, pressed (when the control changes the photo), focus. Missing photo is fallback, not an error.
+
+**Accessibility**: Name = the collector’s username (or “Profilfoto” when the control is “Skift foto”). Hit target ≥ 44 — the `md`/`lg` circle is large enough; the whole “Skift foto” row is the control on edit. Color is not the only identity signal (initials remain).
+
+**Composition**: Own Profil identity card and Rediger profil photo row. Photo pick uses the platform picker; do not invent a crop editor this gap. Not a replacement for Jersey tile, Mark, Thread row initial, or the admin 32px operator monogram.
+
+**Unsupported**: KC monogram as a collector face. Square crop. A third size. Using Avatar for the other collector on Detaljer / Thread row (that 44px initial stays). Using Avatar as a club/country Mark.
+
+**Example** *(not a rule)*: Home card: 64px photo of the collector, handle `eskou` beside it. No photo: “E” on `fill.secondary`.
+
+**Code**: Unmapped. Flag. Throwaway `prototype-profile/` is not the host API.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Switch
+
+**Purpose**: A binary preference the collector can change (show city, a notification category, a privacy toggle, an optional cookie category).
+
+**Anatomy**: Track 52×32 (`radius.pill`). Thumb 28px circle inset 2px. No label on the control — the adjacent List row title is the name.
+
+**Properties**: `on` (boolean). `disabled`.
+
+**Variants**: None.
+
+**States**:
+| State | Track | Thumb |
+| --- | --- | --- |
+| Off | `border.subtle` (`gray.100` light; dark `border.subtle`) | `surface` |
+| On | `fill.primary` | `content.inverse` |
+| Disabled | Same fills at 40% opacity | Same; control does not toggle |
+
+**Accessibility**: Role switch. Name = the row title (plus essential helper). The **row** is the hit target (≥ 44 tall), not only the 52×32 track. Thumb position is the non-color on/off cue. Focus uses `border.focus` on the row. Reduced motion: snap, no travel.
+
+**Composition**: Trailing on a settings List row. Row press toggles. Do not pair a Switch with a chevron on the same row. Necessary cookies are **not** a Switch — they use `mono` meta “Altid aktive”. Master push off dims sibling rows to 40% opacity (pattern), it does not invent a Switch variant.
+
+**Unsupported**: Teal / wash / success-green track. Checkbox as a stand-in. A dead Switch for necessary cookies. Two Switches as equal primary actions in one row. Encoding on/off with color alone.
+
+**Example** *(not a rule)*: “Vis by på profil” with helper “Slået fra vises kun landet på din profil.” Track on = black, thumb white.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### List row
+
+**Purpose**: Show one catalog or settings item and let the user select, toggle, or navigate.
+
+**Anatomy**: Leading slot (optional). Title (`type.body` or `type.label`). Optional helper under the title (`type.caption` / `content.secondary`). Optional `mono` meta. One trailing slot. Hairline `border.subtle` between rows in a group. Default row height 56; 64 when title + meta both show (e.g. Favoritter).
+
+**Properties**: `title` (required). `meta` optional (`type.mono` or `caption`). `helper` optional. `onPress` or `selected`. Optional `tone`: `neutral` (default) | `danger` (`danger` on icon and title; never color alone).
+
+**Leading** (exactly one):
+| Value | Use |
+| --- | --- |
+| `none` | Default settings drills, language/city rows, cookie categories |
+| `mark` | Catalog club / facet picker |
+| `icon` | Own Profil home: Favoritter, Indstillinger, Cookie-indstillinger. Line icon, optical size ~22, `content.primary`. App Ionicons family (`@expo/vector-icons`) — flag the host set; do not invent a new icon family |
+| `avatar` | Rediger profil “Skift foto” (`Avatar` `md`) |
+| `handle` | `manage` drag-handle only |
+
+**Trailing** (exactly one — never Switch + chevron):
+| Value | Use |
+| --- | --- |
+| `chevron` | `navigate` drills |
+| `switch` | Binary preference; the row is the hit target (Switch) |
+| `check` | Selected item in a single-choice list (language, appearance, selected city). Check uses `fill.primary`, not `success` green. No chevron on the selected row |
+| `action` | Tertiary text in the trailing slot — *example*: “Skift” on e-mail / telefon. Not a new primitive |
+| `none` | Non-drilling status — *example*: Google “Tilknyttet”; necessary cookies “Altid aktive” is `meta`, not a Switch |
+| `manage` | Edit + delete Icon buttons (Genveje only) |
+
+`mono` meta such as “Nuværende”, “Bekræftet”, “Altid aktive”, or a current value (“Dansk”) may sit **before** `chevron` when the row is still a drill. Meta + `check` together is allowed (selected city “Valgt” may be the check alone). Meta + `switch` is not — helper text goes under the title.
+
+**Variants**: `select` (club search / facet picker / language / appearance / city). `navigate` (Detaljer stub; own Profil settings and location). `toggle` is **not** a variant — use `navigate`-shaped chrome with trailing `switch`. `manage` (Genveje). `danger` (Detaljer Rapportér / Blokér / Slet samtale; own Profil Log ud in the hub — `icon` + label, no chevron).
+
+**States**: Rest, pressed, selected, disabled, focus. List loading is list-level, not a row variant. Disabled `toggle` rows (master push off) use 40% opacity on the sibling group — pattern, not a row variant.
+
+**Accessibility**: Name = title + essential meta + helper. Chevron decorative when the row is the control. Switch name = row title. `action` “Skift” is named with the field (“Skift e-mail”). Height ≥ 44 on `mobile`. `manage`: drag-handle named “Flyt”; edit and delete are Icon buttons with names; count is `type.mono` and included in the name.
+
+**Composition**: Lives in a list inside a Sheet, a full-screen facet picker, or a grouped `surface` on `fill.secondary`. Empty list uses Empty state. `manage` only in the Genveje Sheet. `icon` leading only on own Profil home rows named above.
+
+**Unsupported**: Multiple primary actions in one row **except** `manage` (edit + delete are explicit). Switch + chevron. Row as a form (username / About me are Text fields). Price as meta. Using `manage` on confirm club search. Using List row for Beskeder threads (that is Thread row). Leading Mark as a collector face (that is Avatar). Success-green check for selected language.
+
+**Example** *(not a rule)*: Club search: Mark + “F.C. København” + meta “Superliga” + chevron. Profil home: heart `icon` + “Favoritter” + meta “4 trøjer” + chevron. Language: “Dansk” + `check`. “Vis by på profil” + helper + `switch`.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Photo slot
+
+**Purpose**: Capture or assign one UserJersey photo with a role, or add another photo under the per-jersey cap.
+
+**Anatomy**: 4:5 preview (thumbnail). Role caption: on the Confirm hub viewer it is a compact `captionSm` pill (`radius.pill`, `fill.primary` / `content.inverse`) in the **top-left** of the preview — not a full-width scrim bar. Other hosts keep the caption under the thumb. Optional empty dashed `border.subtle` when vacant.
+
+**Properties**: `role`: `front` | `back` | `left` | `right` | `other` (Andet). Universal roles are unique on one jersey. `other` is **not** unique — many Andet photos may sit on the same jersey. `uri` optional. `caption` optional (Andet only: the free Beskrivelse; empty caption displays **Andet**). `onPress`: an **empty** universal or **Tilføj foto** slot opens the picker directly; a **filled** `confirm-strip` slot opens the **Photo lightbox** (Erstat / Slet / Skift rolle).
+
+**Variants**: `confirm-strip` (thumbnails on Confirm). The former `camera-overlay` variant is **superseded** — repeat camera has no role slots on the viewfinder.
+
+**States**: Empty, filled, focus. At least one filled photo required to Save; filling all four universal roles is recommended, not required. A jersey holds **at most 10** photos (universal + Andet combined).
+
+**Accessibility**: Name includes the Danish role (“Forside”, “Bagside”, “Venstre”, “Højre”). Andet name is the Beskrivelse when set, otherwise “Andet”. Empty universal slot says it is empty. Trailing add slot name is “Tilføj foto, tom”. Hit target ≥ 44.
+
+**Composition**: Confirm strip only (Pattern **Confirm and Save**). Gallery-first onboarding and shoot-first camera fill roles in order Forside → Bagside → Venstre → Højre; leftover photos become unlabeled Andet. A filled slot opens the Photo lightbox rather than silently re-picking. **Tilføj foto** always adds an Andet photo (even when a universal slot is still empty). There is no **Mærke** slot.
+
+**Unsupported**: Emoji placeholders. Using ImagePicker camera as the primary repeat path (in-app `CameraView` is the repeat path). Blocking Save on all four universal slots or on an Andet Beskrivelse. Role slots overlaid on `CameraView`. A fifth fixed “Andet” slot that is always empty-and-unique. More than 10 photos on one jersey. A closed enum of Andet kinds (vaskemærke is a suggestion, not a role).
+
+**Example** *(not a rule)*: Strip shows Forside filled, Bagside / Venstre / Højre empty, one Andet thumb captioned “Vaskemærke”, then a dashed Tilføj foto.
+
+**Code**: `apps/mobile` — `PhotoSlot` in `src/components/photo-slot.tsx`.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Photo lightbox
+
+**Purpose**: Open one captured UserJersey photo full-size from a filled Photo slot on Confirm, so the collector can preview it and fix a wrong upload — replace, delete, or re-assign its role (and, for Andet, write a Beskrivelse) — instead of a silent re-pick.
+
+**Anatomy**: Scrim (modal, `theme.scrim`). One large **4:5** preview centred (`radius.md`). Header row with the Sheet-style circular **Luk** chrome button top-left (`withAlpha(content.primary, ~0.06)`). Below the preview: `tertiary` **Erstat**; **Skift rolle** as Chip `single-select` over the five choices **Forside / Bagside / Venstre / Højre / Andet**; when **Andet** is selected, a Text field **Beskrivelse** (placeholder `f.eks. Vaskemærke`) plus three suggestion chips (**Vaskemærke**, **ID-kode**, **Slitage**) that fill the field — shortcuts, not a closed enum; then a spatially separated `destructive` **Slet**.
+
+**Properties**: `uri` (required). `role` (`front` | `back` | `left` | `right` | `other`). `label` (string, Andet only; may be empty). `onReplace`. `onChangeRole`. `onChangeLabel`. `onDelete`. `onDismiss`.
+
+**Variants**: None — a single full-size viewer. Not a multi-photo swipe pager (that is UserJersey detail).
+
+**States**: Rest; presenting; dismissed. Slet removes the photo and closes; a universal slot returns to empty, an Andet thumb leaves the strip. The action is reversible by re-adding. Changing to a **universal** role that is already filled **swaps** the two photos. Changing to **Andet** never swaps — the photo joins the Andet group (until the jersey is at 10). Empty Beskrivelse is allowed; the strip then shows “Andet”.
+
+**Accessibility**: Accessible name = the Danish role, or the Beskrivelse / “Andet”. Scrim dim + focus trap; Escape/back/scrim dismisses. Hit targets ≥ 44. **Slet** uses `danger` and is separated from Erstat so it is not a mis-tap. Reduced motion = instant present, no travel. Suggestion chips name the string they insert.
+
+**Composition**: Opened from a filled `confirm-strip` Photo slot on Confirm. Reuses Chip `single-select` for Skift rolle, Chip (same primitive) as Beskrivelse shortcuts, Text field for the free label, and the Sheet chrome-button token for Luk. Not on Samling tiles; not on the UserJersey detail immersive pager. There is no **Mærke** chip — existing Mærke photos show as Andet with Beskrivelse “Mærke”.
+
+**Unsupported**: A multi-photo swipe gallery here (that is UserJersey detail). A sixth PhotoRole chip. Treating suggestion chips as domain roles. Requiring Beskrivelse before Luk or Gem. A silent replace with no preview. Slet without a way back (leave the slot empty, not a hard destroy of the session). Role-change after every camera shutter (categorisation is this lightbox, on Confirm).
+
+**Code**: `apps/mobile` — `PhotoLightbox` in `src/components/photo-lightbox.tsx`.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Empty state
+
+**Purpose**: Explain an empty collection, an empty Indbakke, or an empty admin table and the next useful action when there is one.
+
+**Anatomy**: Title (`type.section` on `mobile`; `type.title` if a host already mapped collection empty to title — do not invent a third size). Optional one-sentence body (`type.body`) — omitted on `collection`. Optional shirt diagram above the title (`collection` only; the app’s Ionicons family via `@expo/vector-icons`, not an illustration library). Optional thin `identity.wash` rule above the title (garnish). Optional Button.
+
+**Properties**: `title`, `body` (optional), `diagram` (optional), `action` (optional). `variant`.
+
+**Variants**: `collection` (title + diagram + one hug `primary` under the title; no body). `inbox` (title + body; no action this gap — honest empty). `table` (admin; no create control — optional `tertiary` “Clear filters” only). Club drill Jerseys empty is the exception: `primary` **Fetch kits** under the body, not “+ New”.
+
+**States**: Rest. `collection` diagram may loop a quiet translate; reduced-motion = still. Do not animate other emptiness.
+
+**Accessibility**: Text is meaning; wash is decorative. Action uses Button when present. Admin copy in English. `inbox` copy in Danish.
+
+**Composition**: `collection` replaces the grid **and** hides the genveje chip row. `inbox` replaces the Beskeder (and Aktivitet) list; Tab bar stays. `table` replaces the Data table body when there are zero rows.
+
+**Unsupported**: Sarcasm. Three actions. Empty state used for Save errors (that is Banner). Full-bleed wash background. Illustration libraries or emoji. Docked `width.fill` primary on `collection`. `table` variant with a `primary` “+ New” / Add kit. Fake threads to avoid emptiness. `inbox` with a `primary` that invents “start a chat” with no recipient.
+
+**Example** *(not a rule)*: “Ingen trøjer endnu” + shirt diagram + hug `primary` “Tilføj trøje”. Indbakke: “Ingen beskeder endnu” + “Når en anden samler byder på en af dine trøjer, starter samtalen her.” Admin: “No kits match” + `tertiary` “Clear filters”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Sheet
+
+**Purpose**: Focused overlay task over the current screen (club search, more details, Genveje, admin Filters, destructive confirm including collector log out and delete account).
+
+**Anatomy**: Scrim. Raised surface (`radius.lg` on the sheet). Grab/handle (mobile) — wide, low-opacity bar. **Header row** at the very top: a light, circular, obviously-tappable chrome button pinned to the sheet’s **top-left** — 44×44, `radius.pill`, a soft translucent neutral surface (`withAlpha(content.primary, ~0.06)`) with the glyph in `content.primary`. That button is the **close X** (“Luk”) on a root sheet, or a **back chevron** (“Tilbage”) on a sub-page. Optional trailing **header action** on the top-right of the same row (e.g. an “Opgrader” pill); when unused the row is just the circular button. All sheet content starts **below** the header row: Title (or the title-slot node) first, then Body, then optional footer Buttons. No control is pinned to the top-right by default.
+
+**Properties**: `title`, `children`, `onDismiss`, optional `sentence`, `titleContent` (a node that replaces the plain title as the first content row below the header), `headerAction` (trailing header-row node), `onBack` (sub-page back handler — turns the top-left button into the “Tilbage” chevron), `hideChrome` (omit the top-left circular button — only the capture Chooser, which carries a footer **Annuller**), `onModalHide` (fires after the Modal has fully left the screen; used to present a system picker).
+
+**Variants**: `form` (club search / more details / admin Filters / **Genveje** / capture **Chooser**). `confirm` (destructive Take-down or demote; collector **Log ud** and **Slet min konto** — not a full-screen place). `door` (collector **Login / Opret** identity — near-full height). Admin Filters on `admin` use a **right sheet** (full viewport height, slides from the trailing edge). **Login** is the general term (Danish-natural), not “Log ind”.
+
+**States**: Presenting, rest, dismissed. Focus trapped while open.
+
+**Accessibility**: Title is the accessible name. Scrim dim + focus trap. Escape/back dismisses when the task is cancellable. The circular chrome button is present by default, pinned to the **top-left**: **Luk** (X) on a root sheet, **Tilbage** (chevron) on a sub-page (`onBack`). It may be **omitted only** on a Sheet that carries its own footer cancel (the capture Chooser: rows are the commit, footer `tertiary` **Annuller** cancels); swipe-down and scrim still dismiss. **Drag-down anywhere on the sheet dismisses** on `mobile` (velocity or distance, with rubberband + settle spring) — this is the default gesture, not just the handle. When the body scrolls (keyboard open / small screens), the drag engages only once the inner ScrollView is **at the top** and the finger keeps going down; otherwise the ScrollView scrolls normally (pan + native scroll compose simultaneously, on the UI thread). Tap-outside (scrim) also dismisses. `motion.base`; reduced-motion = instant present, no travel. Admin titles in English.
+
+**Composition**: `elevation.overlay`. Contains Search field, List row, Text field, Select field, or Chip groups. Does not contain Tab bar or Top tabs. Admin Filters: a right sheet. Country and League are searchable **multi-select** dropdowns (closed trigger + open menu with Text field search). Footer hugs: tertiary Clear, tertiary Cancel, primary Apply. Admin confirm: title, consequence sentence, `destructive` + `tertiary` Cancel. Collector confirm: same anatomy — title, consequence sentence, dock `destructive` (Log ud / Slet min konto) + `tertiary` Annuller. Genveje: list and Ny genvej **share one Sheet** (body swaps; titles “Genveje” / “Ny genvej”). Facet pick is a **full-screen overlay** on top of that Sheet (Search field + List row), not a second Sheet. Collector identity door: sheet fills almost to the top (safe-area inset). The header row holds **only** the circular close button (top-left). The **Login/Opret switcher is the first content row below the header** (`titleContent`) — segments **Login** and **Opret** side by side (`type.title`, `space.gap*` between them): the active mode is `content.primary`, the inactive mode is **muted** (`content.muted`). Grayscale carries the state — **no underline, no indicator rule**, a clean word switch. No sentence line. The collector switches mode three ways — **tap** the muted segment, **swipe horizontally** on the body, or the bottom swap link — and all three run the **same** face transition: a `translateX` + opacity crossfade of the form, on the UI thread, interruptible, <300ms, ease-out/spring. Under `prefers-reduced-motion` the translation drops and only opacity crossfades. The horizontal swipe uses `activeOffsetX` (and fails on vertical intent) so it never fights the vertical drag-to-dismiss or the body ScrollView; an interrupted swipe continues from its current position and hands velocity to the settle spring. **One face per mode** — E-mail and Adgangskode Text fields stack together (register adds Gentag adgangskode; login shows Glemt adgangskode?), then `primary` submit (**Login** in login mode, **Opret konto** in register mode), then splitter “eller”, then the social row. No “Log ind med e-mail” / step 1-2 chrome. Social providers (Google / Facebook) are icon buttons that **fill the row width equally** as one centered cluster. The swap link is a `tertiary` pinned to the bottom of the sheet body — **Ny her? Opret konto** in login mode, **Har du en konto? Login** in register mode. **Glemt adgangskode?** opens a **page-in-a-sheet** (not a route push): the sheet content swaps in place to a **Nulstil adgangskode** page (info line, E-mail field, `primary` **Send link** calling the same reset API as `/(auth)/reset`, then a confirmation line). This is the shared **sub-page pattern** — the top-left circular button becomes the **back chevron** (“Tilbage”, `onBack`) and the **Nulstil adgangskode** title sits below the header; pressing it returns to the login/register face. That page transition animates too (slide + opacity; reduced-motion = opacity only). The `/(auth)/reset` route stays for deep links. Apple is not a provider this gap (contract `identityLinkedProviderSchema` = google/facebook only) — a third Apple button needs a contract + auth-wiring + lock change, not a UI edit.
+
+**Unsupported**: Full-screen **place** for Genveje (it is a Sheet over Samling, not a sixth tab). Full-screen **place** for Log ud or Slet min konto (both are Sheet `confirm`). Nested **Sheets** more than one deep — flag. Wash as scrim. Using Sheet as the admin drill (drill is a full page). The Samling capture button opening the **Genveje** Sheet (it opens the capture Chooser Sheet — see Patterns → Capture session).
+
+**Example** *(not a rule)*: “Vælg klub” with Search field + List rows. Genveje Sheet: manage rows + `primary` “Tilføj”. Admin: “Take down this jersey?” with `destructive` “Take down”. Collector: “Log ud af KitCollective?” + “Din samling og dine favoritter bliver gemt.” + `destructive` “Log ud” + `tertiary` “Annuller”.
+
+**Code**: Unmapped. Flag. Platform sheet OK if tokens (radius, colors) still apply.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Tab bar
+
+Status: `locked` (Gap 2026-09-05: switched to Expo Router `NativeTabs` — native system Liquid Glass. **Supersedes** the 2026-09-04 Lunar floating capsule + draggable magnifying well + center-plus CTA, and the 2026-08-28 hide-on-drill rule).
+
+**Purpose**: Switch the app’s five primary collector places using the **native system tab bar**, so iOS 26 renders true Liquid Glass for free. Capture is **not** a tab — it is the Samling header action (Patterns → Capture session).
+
+**Anatomy**: `NativeTabs` from `expo-router/unstable-native-tabs`. The OS draws the bar: iOS 26+ = Liquid Glass derived from the content behind it; iOS 18 and earlier = system blur; Android = Material bottom bar. It is a **full-width system bar**, not a floating capsule. Five tabs, left → right, each an icon **+ Danish label** (native HIG):
+
+| # | Icon (template 22pt / meaning) | Label (da) | Route | Place |
+| --- | --- | --- | --- | --- |
+| 1 | grid (Samling) | Samling | `collection` | Own collection (app home after login) |
+| 2 | envelope (Indbakke) | Indbakke | `inbox` | Messages (Beskeder \| Aktivitet) + unread badge |
+| 3 | search (Søg) | Søg | `search` | Search place — **center tab** |
+| 4 | bookmark (Ønsker) | Ønsker | `wishlist` | Wishlist place — its own tab |
+| 5 | person (Profil) | Profil | `profile` | Profile place |
+
+Søg is the **center** tab (slot 3 of five). Labels are shown. Selected vs unselected is the **system indicator** (iOS 26 Liquid Glass selection pill) — do not paint a custom well or background oval. Icons render as **22pt template images** (`TAB_BAR_ICON_SIZE`) because NativeTabs has no SF `pointSize`; they stay slightly under the iOS 26 system default. `tintColor` still tints them.
+
+**Parent overview swipe**: On the five tab **index** screens only (not drills), a Reanimated row follows the finger between Samling → Indbakke → Søg → Ønsker → Profil (not `PagerView` — NativeTabs attach remounts that native pager). Neighbour overviews are **prefetched** when the tab shell mounts (and hydrated from that cache on remount) so a swipe does not cold-start a spinner. Copies in the pager **read that cache**; only the focused tab's own home hits the network (`useIsPlaceHomeLive`). The Liquid Glass pill hops when the page settles (the OS does not let JS drive it mid-drag). Overview chrome uses `useStableSafeAreaInsets` (module-level max of nested NativeTabs insets so a pre-attach 34 does not win over a bounded 83). `tabBarContentInset` does not add the tab bar height twice when the inset is already bounded. The outgoing pager keeps its five homes mounted on the blur frame and only parks on its host page off-screen after `PLACE_PAGER_HOLD_AFTER_BLUR_MS`. Indbakke is a nested pager: Beskeder | Aktivitet consume the swipe until that edge, then the outer pager continues. Reduced motion and wide layout: tap only, no travel.
+
+**Unread**:
+- **Thread row / Activity card**: unchanged (unread uses `fill.secondary`; read Activity card uses hairline `border.subtle` on `surface`).
+- **Indbakke tab badge**: integer unread count via `NativeTabs.Trigger.Badge` on the `inbox` tab. Hidden at `0`. The system renders the badge — a platform (red) badge is acceptable now the bar is native; do not fight the OS with a custom badge primitive.
+- **Samling header**: the old bell/notification affordance is replaced by the **capture** button (see Capture).
+
+**Tint**: `tintColor` (selected icon) and `labelStyle.color` resolve per appearance with `DynamicColorIOS` on iOS (Liquid Glass has no JS color-scheme callback) and a resolved token on Android. On iOS 26 the bar background is OS-derived: `backgroundColor` / `blurEffect` props have no effect there — make the content behind the bar read correctly instead.
+
+**Capture**: The center plus/CTA is gone. Capture is the **top-right header button on Samling** — Icon button `add`, accessible name “Tilføj trøje” — which opens the capture Chooser Sheet (Patterns → Capture session). Premium-gated with `requestPremiumAccess`, exactly as before.
+
+**Hide behavior**: The native bar **stays** on ordinary detail screens (Samtale, Detaljer, jersey Detaljer, every own-Profil drill). This is the native default and is intentional — we do **not** hide-on-drill, because `NativeTabs` hiding remounts the navigator and drops screen state. The bar is only absent where the route lives **outside** the tabs: the **capture flow** runs in its own `(capture)` group as a **full-screen modal** over the tabs (capture · confirm · post-Save) — not an iOS page sheet with Samling showing behind rounded corners — so capture has no tab bar.
+
+**Accessibility**: Native tab/tablist semantics come from the platform. Each tab carries a Danish label. The Indbakke badge conveys unread; row/card fill remains the non-color unread signal.
+
+**Composition**: `mobile` collector chrome only. Public Astro and `admin` do not use it. Screens still pad scroll content to clear the native bar via `tabBarContentInset(safeAreaBottom)`; `FlatList` auto-inset support is limited, so keep the explicit bottom inset.
+
+**Unsupported**: A custom floating capsule or a draggable / magnifying “well” (superseded — the OS owns the bar now). A center plus / FAB as a tab or inside the bar. Capture as a tab (`add` / `capture` trigger). Reordering Søg out of the center. Hiding the bar on ordinary detail drills via a remount hack. “Discovery” as the product name for slot 3 (label is Søg). A sixth tab (Android caps at five). Icon-only with no labels. Use on `admin` (Top tabs).
+
+**Example** *(not a rule)*: On Indbakke, the envelope tab is selected with a Liquid Glass pill and a badge “2”; the other four sit muted. On Samling, the grid tab is selected and the capture button sits at the top-right of the header.
+
+**Code**: `apps/mobile/app/(tabs)/_layout.tsx` (`NativeTabs`). Icons: `apps/mobile/src/components/tab-bar-icon.tsx`. Stack motion: `apps/mobile/src/navigation/stack-motion.ts`. Parent swipe: `apps/mobile/src/navigation/place-swipe.ts`. Overview prefetch: `apps/mobile/src/navigation/place-overview-cache.ts` + `place-overview-prefetch.ts`. Capture button: `apps/mobile/src/components/collection-header.tsx`. Ratchet: `scripts/check-mobile-tab-bar.mjs`.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Thread row
+
+**Purpose**: One conversation in Beskeder. Navigate to Samtale.
+
+**Anatomy**: Leading 44×44 circular initial on `fill.secondary` (first letter of handle, Archivo 600). Handle (`heading-sm`). Snippet (`body`, one line, truncate). Relative time (`mono`, `content.muted`). No trailing chevron required.
+
+**Properties**: `handle` (required). `snippet` (required). `time` (required). `unread` (boolean). `onPress`.
+
+**Variants**: None. Unread vs read is a state, not a variant.
+
+**States**: Read (canvas/`surface` row). Unread (`fill.secondary` row; snippet `content.primary` weight 500). Pressed, focus. Wide selected: unread/read fill plus 2px `fill.primary` leading edge (Layout ≥1024).
+
+**Accessibility**: Name = handle + snippet + time; include “ulæst” when `unread`. Hit target ≥ 44 tall (row padding 14/20 in 4a is the example, not a token). Color fill is not the only unread signal (weight on the snippet).
+
+**Composition**: Beskeder list under Top tabs. Empty list uses Empty state `inbox`. Do not use List row here.
+
+**Unsupported**: Price as snippet. Jersey photo as the leading slot. Heart/wishlist chrome. Badge count on the row (count lives on the Tab bar envelope).
+
+**Example** *(not a rule)*: `mikkel_fck` + “Hey — den hænger stadig…” + “2 t” on `fill.secondary`.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Activity card
+
+**Purpose**: One bid or thread event in Aktivitet. Tap opens the same conversation as the matching Thread row.
+
+**Anatomy**: Title (`body` / `label`). Kit line (`mono`: club · season · type). Amount (`mono` 20px) in the **card body**, never over a jersey photo. Status (`mono`, `content.muted`: e.g. Afventer). Source handle. Trailing chevron (tap affordance). Optional jersey thumb is not required this gap — flag if a host adds one.
+
+**Properties**: `title`, `kitLine`, `amount`, `status`, `fromHandle`, `unread`, `onPress`.
+
+**Variants**: None. Event kind is copy, not a color variant.
+
+**States**: Unread = `fill.secondary` fill. Read = `surface` + hairline `border.subtle`. Pressed, focus.
+
+**Accessibility**: Name = title + amount + status + handle. Chevron decorative. Hit target ≥ 44. Amount is text, not color-only.
+
+**Composition**: Aktivitet list. Same unread model as Thread row. Last cards clear the Tab bar.
+
+**Unsupported**: Amount as overlay on a 4:5 tile. Buy / boost / ratings. A second inbox with a different unread count. Wash as unread.
+
+**Example** *(not a rule)*: “Nyt bud på din trøje” + “FC København · 2024/25 · Hjemme” + “500 kr” + “Afventer” + “fra mikkel_fck”.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Chat bubble
+
+**Purpose**: One message in a conversation.
+
+**Anatomy**: Body (`body`). Timestamp below (`mono`, `content.muted`). Optional 4:5 image (`radius.md`) instead of or with text. No handle next to the bubble (handle is the conversation header).
+
+**Properties**: `role`: `incoming` | `outgoing`. `text` optional. `image` optional. `time` required. At least one of `text` or `image`.
+
+**Variants**: `incoming` = left, `fill.secondary` (dark mode: the dark `fill.secondary` alias — do not invent `#1C1C1C`). `outgoing` = right, `fill.primary` + `content.inverse`. Image follows the same alignment as its `role`.
+
+**States**: Rest, focus. Sending/failed: flag — do not invent a third fill.
+
+**Accessibility**: Name = text or “Billede” + time + “sendt” / “modtaget”. Image needs a short accessible description when the host has one; otherwise “Billede”. Contrast AA on both fills.
+
+**Composition**: Conversation column with centered date (`mono`, `content.muted`) and Bid cards. Message composer below. Max width ~280–300px in 4c is an example, not a token — flag if a host needs a named max.
+
+**Unsupported**: Left = me. Teal bubbles. Wash bubbles. System copy in a bubble (that is Bid card or centered date). Monogram glued to every bubble.
+
+**Example** *(not a rule)*: Left gray “Hey — den hænger stadig…”; right black “500 er lidt lavt…”; right 4:5 neck label photo.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Bid card
+
+**Purpose**: A bud as a timeline object in the thread — communication, not checkout.
+
+**Anatomy**: Body sentence (`body`). Amount (`mono` 20px) + status (`mono`, `content.muted`). Incoming **pending** only: Button `primary` **Accepter** + Button `secondary` **Afvis**, side by side, each ≥ 44 tall. Card on `surface` + `border.subtle` + `radius.md`. Align start (left), not centered.
+
+**Properties**: `body`, `amount`, `status`: `pending` | `accepted` | `declined`. `incomingPending` (boolean). `onAccept`, `onDecline` when `incomingPending`.
+
+**Variants**: None. Status is copy + which buttons show, not a wash.
+
+**States**: Pending (buttons if incoming). Accepted / declined (no buttons). Pressed/focus on buttons only.
+
+**Accessibility**: Name = body + amount + status. Buttons named “Accepter” / “Afvis”. Two actions here are accept vs decline of **one** bud — not two primaries for unrelated tasks. Reduced-motion: no travel on status change.
+
+**Composition**: Conversation column. Creating a bud uses Send bud (under Søg), not this card’s footer.
+
+**Unsupported**: Payment sheet. “Køb nu”. Amount on a Samling tile. Outgoing pending showing Accepter/Afvis for the sender. Help link.
+
+**Example** *(not a rule)*: “mikkel_fck bød på din FC København 2024/25 Hjemme.” + “500 kr” + “Afventer” + Accepter / Afvis.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Message composer
+
+**Purpose**: Reply with text and/or a photo at the bottom of Samtale.
+
+**Anatomy**: Optional reply-to line (`body`/`caption`, truncate) + dismiss Icon button. Row: attach Icon button (name “Tilføj billede”) + Text field (placeholder “Skriv en besked”, `fill.secondary`, `radius.sm`, height ≥ 44) + send control (44×44, `radius.sm`, `fill.primary`, icon, name “Send”).
+
+**Properties**: `value`, `replyTo` optional, `onDismissReply`, `onAttach`, `onSend`, `disabledSend` when empty and no pending image.
+
+**Variants**: None. Do not add an Android Material variant this gap.
+
+**States**: Rest, focus on the field (`border.strong` / `border.focus`, not wash). Disabled send when there is nothing to send. Keyboard open: composer stays above the OS keyboard; Tab bar is already hidden.
+
+**Accessibility**: Field has a visible placeholder and an accessible name (“Besked”). Send disabled is not the only explanation. Hit targets ≥ 44. Contrast AA on the send fill.
+
+**Composition**: Pinned to the conversation footer (safe-area). Not Button dock. Not on Indbakke list.
+
+**Unsupported**: Teal send. Wash focus. Showing the Tab bar behind the composer. A second primary next to Send.
+
+**Example** *(not a rule)*: Reply-to “Hey — den hænger stadig…” with dismiss; empty field; black send.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Banner
+
+**Purpose**: Persistent or until-dismissed system feedback for a task failure or blocker (Save failed, catalog miss).
+
+**Anatomy**: Body text (`type.body`). Optional title. Optional tertiary action. Not a stack of toasts.
+
+**Properties**: `tone`: `danger` | `warning` | `info` | `success`. `message` (required). `action` optional.
+
+**Variants**: Tone only. Never use `identity.wash` as tone.
+
+**States**: Visible, dismissed. Do not auto-hide a Save error before the user can read it.
+
+**Accessibility**: Announced when it appears. Tone is not the only signal (text + optional icon that is not emoji). Contrast AA.
+
+**Composition**: Top of the current screen or confirm, below the header. One banner at a time.
+
+**Unsupported**: Toast rain on every chip tap. Vision “still loading” as danger. Blocking Save with a banner instead of keeping the draft.
+
+**Example** *(not a rule)*: `warning` “Klubben findes ikke i kataloget endnu” + draft kept; upgrade CTA is a Button, not a chip wash.
+
+**Code**: Unmapped. Flag.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Toast
+
+**Purpose**: Transient, animated feedback for an action that has already run — e.g. a save failure. Distinct from Banner (persistent, top of the current screen): a toast is bottom-anchored, auto-dismisses, and is fire-and-forget (Save never waits on it). Not for a blocker the collector must resolve inline — that stays a Banner or a `border.danger` field.
+
+**Implementation (Standard library, 2026-09-06)**: The bespoke `ToastHost` was replaced by **`react-native-toast-message@2.5.0`** — a pure-JS library that renders reliably in **Expo Go** (no native module, no config plugin, no rebuild), after the hand-rolled Reanimated-in-`Modal` host would not render at runtime. Our `error` type is a small custom config renderer that keeps the app's own chrome, so it still reads as ours. See the **Deviation** note below for what changed versus the original lock.
+
+**Anatomy**: One `type.body` line (`content.primary`) with a leading `danger` Ionicon (`alert-circle`) and a trailing **Prøv igen** action (`type.label`, `danger`-colored, hit ≥ 44). Chrome composes `fill.secondary` background, `radius.md`, a 1px `danger` accent border, and a whisper drop shadow — the same tokens as the danger Banner. No scrim, no focus trap.
+
+**Properties**: Shown via `Toast.show({ type: 'error', text1, props: { onRetry } })`. `type` selects the config renderer (`error` = danger chrome). `text1` is the message. `props.onRetry` powers the Prøv igen action. `position: 'bottom'`.
+
+**Placement**: Two `<Toast config={toastConfig} />` hosts, both bottom-anchored: one at the app root (`app/_layout.tsx`, after the navigators — **not** inside a React Native Modal) for tabs / first-session, and one inside the `(capture)` group (`app/(capture)/_layout.tsx`) because that group is a `fullScreenModal` native surface the root host cannot cover. The library's ref-priority stack routes each `Toast.show` to the topmost mounted host. `bottomOffset` derives from `useSafeAreaInsets` (+ dock clearance) so the toast clears the native tab bar / fade **Gem** dock.
+
+**Motion**: The library's default spring in / fade out, accepted as part of the standard-library deviation below.
+
+**Accessibility**: `accessibilityRole="alert"` on the card; tone is never the only signal (icon + text). Contrast AA on the `fill.secondary` surface.
+
+**Unsupported**: A toast on top of **Gemt** (a *success* toast over the saved state stays unsupported — see Confirm and Save §). Using a toast as the only surface for a blocker the collector must fix (that is Banner / field error). A hardcoded nav-bar or dock height (use insets).
+
+**Example** *(not a rule)*: Save fails → an `error` toast “Kunne ikke gemme trøjen” with a **Prøv igen** action floats above the fade **Gem** dock, then auto-dismisses. Fire-and-forget — Save never waits on it.
+
+**Deviation (accepted 2026-09-06)**: We chose the standard library's behavior over pixel-matching the original bespoke lock, in exchange for runtime reliability in Expo Go. Accepted gaps versus the first lock: **single visible toast** (the library shows one at a time — no 3-deep newest-at-bottom stack), **no swipe-to-dismiss stack semantics** (library default swipe only), and the **motion** is the library's default rather than the tuned slide-up. The danger chrome (tokens, border, icon, Prøv igen) is preserved.
+
+**Code**: `apps/mobile/src/components/toast-config.tsx` (custom `error` renderer), `apps/mobile/src/capture/saveFailureToast.ts` (`showSaveFailureToast`), hosts in `app/_layout.tsx` + `app/(capture)/_layout.tsx`. Library: `react-native-toast-message`.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Data table
+
+**Purpose**: Scan stamdata or collectors as rows, not as a photo grid.
+
+**Anatomy**: Column headers use the **same size** as body cells, at a **bolder weight** (Base Data Table). Rows **48px** tall. Sticky header on scroll. **32×32** square thumb (`radius.sm`) on Kit and UserJersey rows; empty 32px slot when no photo. Club, season, and user identity rows use Mark/monogram instead of a KitPhoto thumb. Primary cell `type.body`. Season/ID/count cells `mono` at body size. Row divider `border.subtle`. Odd data rows `fill.secondary`, even data rows `surface` (zebra). No checkbox column.
+
+**Properties**: `columns` (header + cell). `rows`. `onRowActivate` (required: opens drill). `selectedRowId` optional. Thumb URI required for Kit and UserJersey rows (empty slot if missing bytes).
+
+**Variants**: `stamdata` and `collectors` share anatomy; columns differ. Do not add a third visual variant.
+
+**States**: Rest (zebra), hover (row one shade darker: `border.subtle` on a gray row, `fill.secondary` on a white row), selected (same darker fill), focus (row + `border.focus`), empty (body replaced by Empty state `table`), loading (keep header; do not invent a skeleton wash). Column header hover may darken that header cell; do not invent sort chevrons until a column has a sort affordance.
+
+**Accessibility**: Role table (or grid if the host requires it for keyboard). Row is the control; Enter/Space activates drill. Tab moves to the table; arrow keys move between rows. Color is not the only selected signal (hover/selected fill plus focus ring). Thumbs have empty alt when decorative next to a text name; if the thumb is the only photo cue, name the row including “photo” / “no photo”.
+
+**Composition**: Admin shell body. Does not wrap Jersey tiles. Filters live in the toolbar Sheet, not as extra header widgets besides sort — flag a sort affordance if a column needs it rather than inventing a new primitive.
+
+**Unsupported**: Bulk checkboxes. Batch action bars. 4:5 tiles. “+ New” in the table header. Archive JPEG as a club Mark. Stretching the thumb to 4:5. Importing Base Web.
+
+**Example** *(not a rule)*: Master Data clubs: Mark, name (`en` CatalogLabel), country. Click opens club drill. Pagination Previous / Next under the table.
+
+**Code**: Unmapped until `apps/admin` exists. Flag; do not invent a host API.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Top tabs
+
+**Purpose**: Two-to-three-item underline control. Unused for admin **place** switching (waffle: Master Data | User Data). Master Data table switcher **Clubs** | **Leagues** | **Players**. **Indbakke Beskeder | Aktivitet** on `mobile`. Club drill Players | Jerseys | Honours is Chip pills, not Top tabs.
+
+**Anatomy**: Horizontal text tabs. Active: `content.primary` plus a **2px** `fill.primary` underline. Inactive: `content.secondary`. No pill fill. No icons required. Hairline under the row (`border.subtle`).
+
+**Properties**: `items`: two (Indbakke) or three (Master Data tables). `active`. `onChange`. Labels: English on `admin`; Danish on Indbakke (**Beskeder** | **Aktivitet**).
+
+**Variants**: None.
+
+**States**: Active, inactive, focus, hover. Underline moves with `motion.fast`; reduced-motion = instant, no travel.
+
+**Accessibility**: Role tab/tablist. Keyboard: Left/Right between tabs. Hit target ≥ 44 tall.
+
+**Composition**: Not for waffle places. Master Data list reuses it for Clubs | Leagues | Players. Indbakke: under the **Indbakke** title, above the list. Does not replace mobile Tab bar. Does not contain a “+ New” control. Club drill does not use this primitive.
+
+**Unsupported**: Pill tabs. Four “metric table” pills. Icons-only tabs. Using Tab bar on `admin`. A third waffle place in this gap. Using Top tabs for Master Data | User Data. Chip `shortcut` as Beskeder | Aktivitet. Club drill Players | Jerseys | Honours as underline Top tabs.
+
+**Example** *(not a rule)*: Indbakke: Beskeder underlined black; Aktivitet muted. Master Data: Clubs | Leagues | Players.
+
+**Code**: `apps/mobile/src/components/top-tabs.tsx`. The underline travels with `motion.fast` when the active tab changes.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+## Patterns
+
+Status: `locked` for the compositions below. Other compositions: flag.
+
+### Collection grid
+
+**Purpose**: Scan owned jerseys.
+
+**Composition**: Header (Samling + count + capture button; no Search field) + Chip `shortcut` row + Tilpas (hidden when empty) + two-column Jersey tiles (`space.gap.md`, `space.inset.md`) + native Tab bar. Empty collection uses Empty state `collection` instead of the grid **and** instead of the chip row.
+
+**Unsupported**: Marketplace card extras. One-column gallery of uncropped 16:9 photos. Wash behind tiles. Kit-type chips on this screen. Search field in this header.
+
+Flag missing context; do not invent patterns.
+
+### Collection shortcuts (genveje)
+
+**Purpose**: Filter the owner’s collection to a saved AND of catalog facets, without putting kit type on Samling.
+
+**Composition**:
+1. Chip row: **Alle** (default, always first, always remains selected after creating a genvej) + zero or more named shortcuts. Trailing **Tilpas** text, never a plus.
+2. Hide the whole row when the collection has zero jerseys.
+3. Tilpas opens Sheet `form` **Genveje**: List row `manage` (drag-handle, name, count, edit, delete) + footer `primary` **Tilføj**. Reorder affordance is the drag-handle; do not treat the throwaway prototype’s up/down buttons as the lock.
+4. Tilføj / edit swaps the **same** Sheet body to **Ny genvej**: Select fields for country, league, club, player; optional Text field for a custom name; helper that facets combine with **AND** (`type.body` or `caption`). Default name = labels of set facets. `primary` **Gem** disabled until at least one facet is set.
+5. Each Select field opens a **full-screen** searchable picker (back + close): Search field, optional “Mest brugte”, List row `select` + Mark. One overlay on the Sheet — not a nested Sheet.
+6. After Gem: dismiss form (back to list or close); **Alle stays the active chip**. Do not auto-select the new shortcut.
+7. Active shortcut filters the grid: all set facets must match (AND). Alle shows the full collection.
+
+**Unsupported**: Opening this flow from tab-bar plus. Kit type as a Samling chip. Auto-focusing the new chip. Public Astro genveje. A sixth tab named Genveje.
+
+Flag missing context; do not invent patterns.
+
+### Inbox
+
+**Purpose**: Collector-to-collector messages. A bud creates a thread; it is not checkout.
+
+**Composition**:
+1. Header title **Indbakke** (`display` 28 — the recurring overview title). No Samling bell here.
+2. Top tabs **Beskeder** | **Aktivitet** (shared unread model — one conversation behind both).
+3. Beskeder: Thread rows. Aktivitet: Activity cards. Either empty: Empty state `inbox` (no fake rows).
+4. Tab bar visible; Indbakke tab selected; badge = unread conversation count.
+5. Tap row or card → Samtale (Tab bar hides). Overflow on Samtale → Detaljer (Tab bar stays hidden).
+6. Wide ≥1024: list column + conversation (Layout). Same components.
+
+**Unsupported**: Marketplace listing UI. Two unread models. Heart/Ønske as this place. Help. Prototype switcher chrome.
+
+Flag missing context; do not invent patterns.
+
+### Conversation
+
+**Purpose**: Read and reply in one thread, including bud accept/decline.
+
+**Composition**: Back (to Indbakke) + handle (`heading-sm`) + optional one-line jersey context (`mono`: club · season · type) + overflow Icon button “Detaljer”. Column: centered dates, Bid cards, Chat bubbles (`incoming` left = them, `outgoing` right = me). Message composer pinned. No Tab bar. Dark mode uses the same roles (4d) — not a third palette.
+
+**Unsupported**: Left = me. Tab bar. Payment. Wash bubbles. Inventing a profile beyond the Detaljer stub.
+
+Flag missing context; do not invent patterns.
+
+### Conversation details
+
+**Purpose**: Profile stub and safety actions for one thread.
+
+**Composition**: Canvas `fill.secondary`. Groups on `surface`, `radius.md`. First group: List row `navigate` (44 circular initial + handle + `mono` “{n} trøjer · {city}” + chevron) — stub only. Second group: List row `danger` Rapportér, Blokér. Third group: List row `danger` Slet samtale (alone). Helper caption: blocking hides the thread for both; delete removes it only for you. No Help. No Tab bar.
+
+**Unsupported**: Help. A fourth group of settings. Inventing jersey count/city if the host has no data — flag.
+
+Flag missing context; do not invent patterns.
+
+### Own Profil
+
+**Purpose**: Own-collector identity, favorites, and settings live under the Profil tab — list + drill, not a control panel and not a marketplace account hub.
+
+**Composition**:
+1. **Home (5a)** — Header title **Profil** (`display` 28 — the recurring overview title). Canvas `fill.secondary`. Three `surface` groups (`radius.md`):
+   - Identity card: Avatar `lg` + username (`heading-sm`) + location `mono` (`{city} · {country}` when “Vis by” is on; country only when off) + Button `secondary` **Rediger profil** (hit target ≥ 44; do not copy the hi-fi’s 36px height). The card is not a List row.
+   - Favoritter: List row `navigate`, leading `icon`, meta `{n} trøjer`, trailing `chevron`.
+   - Indstillinger + Cookie-indstillinger: two `navigate` rows, leading `icon`, trailing `chevron`.
+   Nothing else on home: no debug line, no balance, no orders, no Help, no legal. Last group clears the Tab bar. Tab bar **visible**; person slot selected.
+2. **Rediger profil** — Back + title + trailing `primary` text **Gem**. Canvas `fill.secondary`. “Skift foto”: List row leading `avatar` `md`. Text field username (helper states locked on Text field). Text field About me (multiline). Location row `navigate` (title “Min lokation”, meta city/country). “Vis by på profil”: trailing `switch` + helper under the title. Tab bar hidden. No gender field.
+3. **Min lokation** — Country list first (fixture list this gap; live geocoding is not in this lock). Current country: `mono` meta “Nuværende” + `chevron`. No flags, no map. Then city: Search field `city` + “Populære byer · {country}”. Selected city: trailing `check` (no chevron). No match: one `navigate` row **Brug «{query}»** with helper that it saves as a free tag — not an error. Tab bar hidden.
+4. **Favoritter** — Back + title. Two-column Jersey tiles (same 4:5 + caption as Samling). No price, no heart overlay, no owner handle on the tile. Empty: Empty state with honest body; **flag** the action if the host needs one — do not invent a `primary` that starts a chat. Tab bar hidden.
+5. **Indstillinger hub** — Back + title. Four groups with `mono` section labels:
+   - Profiloplysninger / Kontoindstillinger (`navigate`)
+   - Push-notifikationer / E-mail-notifikationer (`navigate`)
+   - Sprog (meta current language + `chevron`) / Mørk tilstand (meta current appearance + `chevron`)
+   - Privatlivsindstillinger (`navigate`) + List row `danger` **Log ud** (icon + label, no chevron)
+   Tab bar hidden.
+6. **Leaves** — Account (email/phone with trailing `action` “Skift”; birthday as a value + `chevron`; linked accounts; Skift adgangskode; Slet min konto). Push (grouped switches; master “Slå push til” in its **own last group**; off dims the other groups to 40%). Email (Nyheder off by default; high-priority on). Privacy (switches + one `navigate` “Administrer kontodata”). Sprog and Mørk tilstand are the **same** `select` list: selected row trailing `check` in `fill.primary`, unselected rows `chevron` or empty — do not show the word “Valgt” and a chevron together. Appearance options: System / Light / Dark (hub meta “Systemindstilling” when system). Daily-limit and birthday **picker chrome** are not locked — flag; do not invent a calendar or stepper.
+7. **Log ud / Slet min konto** — Sheet `confirm` (`radius.lg`, scrim). Title + consequence + dock `destructive` + `tertiary` Annuller. Not a full-screen place.
+8. **Cookie-indstillinger** — Grouped consent: necessary = `mono` “Altid aktive” (no Switch). Analysis and marketing = Switch. Button dock: `primary` **Acceptér alle**, `secondary` **Kun nødvendige**, `tertiary` **Bekræft mine valg**. No legal essay. Tab bar hidden.
+
+**Unsupported**: Marketplace account chrome (listings, payments, postage, Help, About, legal as primary rows). Gender. Control-panel accordions (prototype C). Hero + Sheet (prototype B). Tab bar on drills. KC monogram as Avatar. `#0B0B0B` as a new dark canvas. Success-green uniqueness. Prototype switcher. Copying `prototype-profile/` as the host API. Other-collector Profil (still the Detaljer stub).
+
+Flag missing context; do not invent patterns.
+
+### Send bid
+
+**Purpose**: Start a bud on **another** collector’s UserJersey. Lands as a message in their Indbakke.
+
+**Composition**: Lives under **Søg** (compass is the active Tab bar place). Back + title **Send bud**. 4:5 photo (`radius.md`) + club (`heading-sm`) + season · type (`mono`) + owner initial + handle. Text field “Dit bud” with `kr` suffix, focus `border.strong`. Helper: last bid on that jersey when known (`mono`). Button `primary` **Send bud**. Caption: the owner gets a message; this is not a purchase. Tab bar visible.
+
+**Unsupported**: Entry from **own** Samling tiles. Price overlay on the photo. Cart. “Køb nu”. Wash focus. Starting Send bud from Indbakke as a compose-to-nobody control. Entry from a foreign Profil: flag (not locked).
+
+Flag missing context; do not invent patterns.
+
+### Confirm and Save
+
+**Purpose**: Attach photos to catalog identity and save without a wizard. Jersey #2 stays under 45 seconds because Save-required fields are two taps away (hub row → drill), and nothing Save does not require sits in front of **Gem**.
+
+**Composition** (one scrolling **hub** column, `mobile` only; same hub for a single jersey and for each active jersey in bulk). A pinned **Bekræft** header (`title`) sits in its own top chrome with the inverted fade/blur scrim; there is no subtitle. A top-left circular **Luk** (X) chrome button (the Sheet/lightbox idiom — `withAlpha(content.primary, 0.06)` disc, `radius.pill`, hit 44, accessible name **Luk**) sits in that header beside the title, above the scrim; tapping it dismisses the whole `(capture)` modal back to Samling. **Single exit** (Gap 2026-09-06): **Luk** and the redirect-away effect (Confirm-with-a-gone-session, and the same effect on the Data/Detaljer drills) share **one** guarded `router.dismissTo("/(tabs)/collection")` — idempotent via an `exitedRef` so a Luk press can never race the redirect into two navigations — which pops the fullScreenModal to Samling in a single transition. **Not** `router.replace`: replacing from inside the modal stacked a fresh tabs screen on top of the closing modal, which the collector saw as a double hop / intermediate flash. The in-progress draft persists (plain exit, no discard prompt) — capture already persists the draft after each pick/shot. Jersey index + trailing add is the first scrolled block, then the photo strip, then the sandbox strip (unbound thumbs + **Upload**). Vision (if any) follows the sandbox. **Data** and **Detaljer** sit last in the hub column, just above the fade **Gem** dock: a flex spacer (`flexGrow: 1`) holds them there when the photo belts are short; when the belts grow, they remain the last scrolled block and do not overlap **Gem**. They are two **full-width** bordered `surface` boxes (`border.subtle`, `radius.md`) **stacked** in one column (`flexDirection: column`, `gap`), **not** two half-width side-by-side columns — two separate cards, not one hairline-grouped pair. Both cards share one `minHeight` (measured to the taller **Data** card) so they read as an equal, matched pair; the shorter **Detaljer** card centres its content in that shared height rather than truncating or hiding **Spiller**. Fact capsules sit inside each card. Each card is one horizontal, vertically-centred row: a leading 44px progress donut, a middle column of title over a wrapping row of compact field capsules, and a trailing `chevron-forward`. Because both rows are vertically centred inside equal-height cards, the two donuts share a left x and the two chevrons share a right x — aligned as a pair. The donut track is `fill.secondary`; the arc is `warning` while any required step is missing and `fill.primary` when the section is complete; `type.monoSm` `n/n` sits in the centre (`content.primary`). Capsules are `radius.pill` + `captionSm` — **not** Chip (Chip stays the picker on the drill, hit 44). Filled capsules use `fill.secondary` / `content.primary` and show the value. Empty capsules use a dashed `border.subtle` and the field name as placeholder so missing optional **Spiller** is visible without blocking **Gem**. Data facts: Klub, Sæson, Type, Spiller. Detaljer facts: Størrelse, Stand. The whole block is one press to the drill. This is grouping for scanability, **not** a numbered stepper and **not** tabs:
+
+1. **Jersey index** (always visible): circular tabs (`radius.pill`, hit target 44) numbered 1, 2, … then a trailing circular add (`fill.secondary`, plus icon) immediately after the **last** jersey in the same horizontal group — not pinned to the screen’s trailing edge. The group scrolls together. Rest = `fill.secondary` / `content.primary` (quiet gray next to black — not `danger` / `warning` / `info`). Selected = `fill.primary` / `content.inverse`. A small `captionSm` badge on the circle shows that jersey’s photo count (hidden at 0). Add creates the next jersey (jersey 1 already exists) and flips a single session into bulk. Then the **photo viewer**: larger 4:5 Photo slots (`space.inset.lg × 6` wide) in a horizontal scroll — **no** outer frame; the photos and the scroll are the chrome. Role is a top-left pill badge **on** the image (`captionSm`, `fill.primary`). Tapping a **filled** slot opens the **Photo lightbox** (Erstat / Slet / Skift rolle, plus Beskrivelse when Andet); an **empty** slot opens the picker for that role (or binds the first unbound photo in bulk). Binding an 11th photo onto this jersey is refused with helper text — the photo stays in the unbound strip (bulk) or is not taken (camera shutter off at 10). **Unbound photos** (sandbox) sit in a second unframed strip **under** the viewer — always shown, and tucked close to the viewer (a tighter `space.gapMd` between the two strips than the hub column's `space.gapLg`) so it reads as attached to the photos, not floating mid-column. Tap a thumb to bind onto the active jersey. A `close-circle` icon flush to the thumb’s **top-right corner** (`danger` on a `surface` disc; accessible name **Fjern foto n fra sandkassen**) removes it from the session — not a text pill and not inset from the edge. Trailing dashed **Upload** opens Photos or Files. No “Uredigerede” heading. There is no Mærke slot.
+2. Vision suggestion on this jersey — club, season, kit type — and, on bulk dumps with every photo still unbound, a **grouping** suggestion that proposes photoId groups as UserJersey drafts. High confidence **pre-selects** identity fields on the **Data** drill and pre-binds grouping via the same bind reducers as a tap. Low confidence: a quiet strip with **Brug** + dismiss (single-jersey grouping only; multi-jersey suggest-only is a `/to-design` gap — do not invent Confirm tabs). **Grouping in-flight** (Gap 2026-09-19): on a 4+ unbound dump while grouping is analyzing, unmount the AI Vision Analyzer banner (keep a 44px spacer so the hub does not jump) and replace empty Photo slots with a wait canvas — same 4:5 viewer size, **no** slot frames, a small hop plus rotating copy (**Forsøger at gruppere dine trøjer** / **Du kan starte grupperingen selv**). Not a blocking analysing screen; **Gem** stays the dock. Do not pre-guess empty jersey tabs. As groups land, sandbox thumbs gather per jersey then stay gone; occupied slots roll out in sequence (first photo fade, later roll); the traveling tab pill animates 3→2→1. High-confidence grouping bind uses the same bind reducers as a tap, then **fill-order** on that draft so empty universal slots receive bound photos in picker order — the occupied strip can reveal. Collector can still **Erstat** / **Skift rolle** in the Photo lightbox. Identity Vision waits until grouping closes (timeout/error/skip fail-open: no retry loop). `prefers-reduced-motion` holds the hop still and shows one wait line without opacity cycling. Failure: wait chrome clears; human bind remains. Save never waits. Vision may suggest groups but does **not** let the VLM invent Photo slot roles; fill-order after bind is picker order into empty universals, not auto-commit of left/right from print. **AI Vision Analyzer banner** (Gap 2026-09-06): the Vision slot holds a persistent status strip when no interactive suggestion strip is showing. It composes the accepted Banner extension (`border` 1, `radius.md`, reduced `space.inset.sm`) with a static AI icon (`sparkles`) on the left of the `type.body` text and, while analysing, a trailing `ActivityIndicator`. Four states: **inactive** (“AI Analyzer er ikke aktiveret”, neutral `border.subtle`), **out-of-quota** (“AI Analyzer er ude af forbrug”, `warning`), **analyzing** (“AI Vision analyserer …”, `info` border + a light-blue tint composed from `info` via `withAlpha`, spinner right, skeleton bars — the in-flight skeleton, never a blocking screen), and **success** (“AI Vision udfyldte trøjens data”, Banner `success` tone / green). The success green is the Banner primitive's own `tone: success` and is **distinct** from the donut, which stays “never `success` green”. The interactive **Brug** / dismiss suggestion strip and this status banner never stack — the slot shows one or the other. The banner is chrome only: it never gates **Gem** (Save never waits). While grouping is analyzing, this banner is unmounted (spacer only) and returns when grouping closes.
+3. **Data** row → stack page (native back swipe + `chevron-back` left of the title). Required: **Vælg klub eller landshold** then **Vælg sæson** (same `CatalogSelectRow` layout: Mark when set, placeholder when empty, trailing chevron). Optional **Vælg spiller** (name + `Nr. n` meta) after a side is set. Kit type Chip `single-select` (Hjemme / Ude / Tredje / **Fjerde** / Keeper / Special). Optional **Badge** Switch (`Switch` primitive): off hides chips; on reveals Chip `single-select` of sleeve patches for the chosen season (domestic league + Champions League in the dummy fixture). No Batch. No Noter on this drill. No free-text club. Club / NationalTeam / season / player open a **full-screen** picker (`CatalogPickerModal`: Luk X top-left, title beside it, Search field, List row + Mark) — **not** a Sheet. Only one picker at a time; choosing a side reveals the season row, it does not stack a second overlay on a closing picker. Fade **Gem** dock commits the capture session and pops back to the hub — it is **not** jersey Save, stays enabled, and does not show “Tilføj mindst ét foto.”
+4. **Detaljer** row → stack page (same back chrome). Always required for jersey Save: size (XS–XXL) and condition (Ny / Brugt / Slidt) Chip `single-select` groups, each with a `type.label` heading, sitting freely on canvas — no `surface` group, no hairline box around the pair. Thumb-reach; not free text; not stars. Optional **Noter** Text field below those chips. Fade **Gem** dock is the same drill commit as Data (session persist + back to hub), not jersey Save.
+5. Optional **Noter** Text field on the **Detaljer** drill, below size and condition. Multiline. Heading matches Størrelse / Stand (`type.label`) with muted **Valgfrit** beside the title. Does not block **Gem**. Not on the hub and not on **Data**.
+6. Button dock (`fade` variant) on the **hub**: one `primary` **Gem** (`width.fill`); the form scrolls softly under it — no hard hairline over the scroll. Disabled until photo + Club or NationalTeam + season + type + size + condition are set. **No** Save-block helper string sits over the hub **Gem** — the **Data** / **Detaljer** donuts (`warning` arc + `n/n`) and dashed empty capsules already surface what is missing, so a disabled **Gem** does not read as a dead black button. When more than one unsaved jersey remains in the session, the label is **Gem og næste**; the enablement rule does not change. Drill docks (Data / Detaljer) use the same fade **Gem** chrome but always enabled: they persist the session and return to the hub.
+
+**Bulk chrome**: jersey index + add-after-last is always on the hub (single and bulk). The **sandbox** strip sits under the viewer and is **always** visible: unbound thumbs (tap binds onto the active jersey) plus a trailing dashed **Upload** tile that opens the Photos/Files picker (`pickUploadFiles`). Each sandbox thumb has a compact `danger` close icon that drops the photo from the session. The strip does not hide when empty — Upload remains. Each jersey still caps at 10 photos. Do not ship a thinner bulk form that drops size or condition. A cellar dump of many jerseys (tens or ~100) is this chrome — there is **no** session-wide photo cap.
+
+**Defaults**: “Ny trøje” does not inherit club or NationalTeam. “Samme klub” prefills the saved side only — not season, type, or condition. Size is not a sticky default in this gap (measure first; flag if an agent wants last-used size).
+
+**Unsupported**: Stamdata | Detaljer (or any Confirm tabs). Admin Top tabs reused on Confirm. A numbered stepper or wizard chrome (the two rows are grouping, not “trin 1 / trin 2”). Promoting player print onto the Confirm **hub**. A hard-bordered Button dock edge fighting the scrolling form (use the `fade` variant). Stepped opacity bands on the fade scrim. Title **Bekræft og gem** or a subtitle under **Bekræft**. Pill tabs “Trøje *n* · count” or a text “+ trøje”. A leading plus (add stays after the last jersey in the group). Square jersey index tabs (they are `radius.pill`). A plus pinned to the screen’s trailing edge. A border frame around the photo strip. A full-width scrim bar for the role label (use the top-left pill). Hiding the sandbox when it has no thumbs (Upload stays). A text **Fjern** pill on sandbox thumbs (use the `danger` close icon). Inset padding on that close icon (it sits flush in the thumb’s top-right corner). Long-press drag between viewer and sandbox (tap a sandbox thumb to bind; an empty viewer slot binds the first unbound photo in bulk; lightbox **Skift rolle** / **Slet** on a filled slot). An **Uredigerede** heading above the viewer. **Flere trøjer i denne upload** as a separate link (the circular add is that escape). A silent photo replace with no Photo lightbox preview. Stacking a season or player picker on top of a still-open club picker — or using a Sheet for those Confirm pickers (they are full-screen `CatalogPickerModal`). Shirt Squad field completeness before the row exists. Prefilling club on “Ny trøje”. Free-text club. Blocking on manufacturer, `catalogKitId`, or kit completeness. Star ratings for condition. A “Mere” type chip that hides Keeper/Special. Identity-wash or success-green donut strokes. **Noter** on the Confirm hub or on **Data**. A `surface` group or hairline box around size and condition on the **Detaljer** drill. **Valgfrit** as helper under the Noter box (it sits muted beside the heading). Unboxing the hub **Data** / **Detaljer** rows. Grouping those two hub rows into one hairline pair. Stacking those hub cards with mismatched heights, or pinning them under the sandbox with no spacer so they sit mid-screen when the photo belts are short. Two half-width side-by-side Data/Detaljer columns on the phone hub (`flexDirection: row`) — they stack full width and share one `minHeight`, because narrow half-width columns force **Data**'s four capsules to wrap into a cramped tower. A Save-block helper string stacked over the hub **Gem** (the donuts and dashed capsules carry that signal). A wide `space.gapLg` gap between the photo viewer and the sandbox strip (they sit tight at `space.gapMd`). A Confirm hub with no way out (the top-left **Luk** dismisses the capture modal to Samling). A one-line ` · ` caption that hides empty fields (especially optional Spiller). Chip `single-select` as the hub fact preview (capsules are read-only and compact). Player print / nameset fields on the Confirm hub — the Spiller capsule is optional preview only. Vision as grouping. An extra **Brug** on every high-confidence hit. Two different Save-enablement rules for single vs bulk. Green success confetti; a toast on top of **Gemt** (this still bars a *success* toast over the saved state; it does **not** bar the **error** toast for a *save failure*, which is allowed — Components → Toast, Gap 2026-09-06). A Mærke slot or a unique fifth Andet slot. Requiring all four universal photos or an Andet Beskrivelse to Save. Auto-chunking every ten photos into a jersey. Five empty bouncing Photo slots as grouping in-flight chrome (use the wait canvas). Role overlay on the repeat camera. Silently dropping an 11th photo.
+
+**Example** *(not a rule)*: Pinned **Bekræft**, circle **1** with a small “3”, plus immediately after it in the same row, unframed photo strip with Forside/Bagside/Venstre captions on the photos, Data and Detaljer stacked full width as an equal-height pair just above **Gem**, Data donut at 3/3 after Vision pre-selected F.C. København / 2023/24 / Hjemme, collector opens Detaljer, taps L and Brugt, **Gem** enables. Spiller and Badge stay optional on Data. Noter sits on Detaljer. The Data facts read FC Barcelona, 2023/24, Hjemme as filled capsules and Spiller as a dashed placeholder until a player is chosen.
+
+Flag missing context; do not invent patterns.
+
+### Capture session
+
+**Purpose**: Fill Photo slots, then land on Confirm and Save. The Samling **capture header button** starts this flow; it is not a tab named Add.
+
+**Composition**:
+
+1. **Chooser** (after the Samling capture button): a Sheet `form` over the current place, title **Tilføj trøje**, not a full-screen place. One short caption under the title, trimmed to the essential: up to three photos become one jersey; four or more land as unbound. Body is a **direct-action** List row group — each row is a leading line icon, a title, a helper sentence, and a trailing `chevron` marking a step forward: **Upload billeder** (system picker: iOS Photos and Files / Android gallery and documents) and **Tag billede** (in-app `CameraView` on repeat; gallery-first remains true for the first session). **Tapping a row is the commit** — it starts that source directly, so there is **no** `Næste` button, no preselect/`check` state, and no “vælg en mulighed” caption. The top-left **Luk** chrome button is **omitted** on this Sheet; a single `tertiary` `width.fill` **Annuller** in the footer cancels instead. Swipe-down and the scrim also dismiss without starting a session. The system picker launches **only after** the Sheet's Modal has fully dismissed (iOS `Modal.onDismiss`) — presenting it over a still-closing Modal makes iOS flash and cancel it and drops the collector on a blank screen. **Loading transition** (Gap 2026-09-06): the Upload billeder branch does **not** open the picker inline over Samling. After the Chooser Modal dismisses it pushes a `(capture)/loading` route (a canvas screen with a centred `ActivityIndicator` and one Danish caption — `Åbner dine billeder …` while the picker opens, then `Forbereder trøjen …` while the session is built), launches the picker from that route only after the native-stack **`transitionEnd`** enter event fires — the canonical "this screen is fully presented and top-most" signal (reduced motion enters with `animation: "none"`, so it uses a double-`requestAnimationFrame` paint tick plus a last-resort timeout backstop instead). It is **not** launched inline on mount and **not** on an `InteractionManager.runAfterInteractions` tick — that clears when JS interaction handles drain, before the native modal presentation completes, so iOS presented the picker over the still-presenting modal and the collector saw the picker *before* the loading screen. Then it **replaces itself with Confirm** on a pick (single same-stack transition) or **dismisses** the `(capture)` modal on cancel. It is a lightweight token-composed surface — not the branded splash plate, not the Vision analysing screen — and Save never waits on it. Tag billede keeps going straight to the camera screen, which already owns its gallery-first/camera transition.
+
+This is the **only** Chooser face. The post-Save “Samme klub” / “Ny trøje” paths land back on Samling and re-present the same Sheet with the club prefilled — they do not route to a place. One host at the app root (above **both** the tabs and the `(capture)` group) owns it, so the Samling capture button and the post-Save re-entry cannot drift and never stack two Sheets deep. A Confirm screen whose session is gone redirects to Samling, not to a Chooser place. Steps 2–4 below run inside the `(capture)` group as a **full-screen modal** (`presentation: "fullScreenModal"`) over the tabs — edge to edge, not an iOS page sheet — so capture / confirm / bulk-bind have **no** tab bar.
+2. **System picker**: the OS screen, not an in-app camera roll. iOS may show numbered ordered selection; Android typically does not — bind and Confirm must not assume the collector saw 1, 2, 3. Confirm the pick with **Brug *n* billeder**.
+3. **Branch**: three photos or fewer → Confirm and Save for one UserJersey (picker order fills Forside, Bagside, Venstre, Højre when those slots are empty; leftover photos become unlabeled Andet). Four or more → bulk bind first (unbound strip under the viewer + jersey index), then grouping in-flight chrome, then the same Confirm body per active jersey. Do not auto-chunk every ten photos. Per-jersey cap stays 10 after bind; the session itself has no photo cap (a ~100-jersey cellar dump is valid bulk).
+4. **Repeat camera**: shoot-first. One `CameraView`, shutter, count `n/10` (`type.caption` / `type.mono`), gallery as text/tertiary escape. **No role overlay** on the viewfinder. Under the shutter, a filmstrip of this session’s shots — small 4:5 thumbs (`radius.md`), no role caption, horizontal scroll if needed, hit target ≥ 44 tall. **Fortsæt** (disabled at 0 photos) lands on Confirm, where strip + lightbox assign roles with the same fill order as the picker. Shutter disables at 10 with helper **Du kan højst have 10 fotos på én trøje.** Persist the draft locally after each shot or pick. Camera does not guess Venstre/Højre and does not prompt for a role after each shutter.
+
+**Unsupported**: System camera one-shot as the repeat primary path. Asking camera + photos + push on first launch. A custom product photo grid as the picker. Groups-of-three or groups-of-ten as the product. Role slots, role chips, or a post-shutter role prompt on `CameraView`. Showing the Tab bar during the capture session itself (steps 2–4 live in the `(capture)` full-screen modal over the tabs; step 1 is the Chooser Sheet sitting over the current place, so the native bar stays behind that scrim). Presenting Confirm as an iOS page sheet (`presentation: "modal"`) so Samling shows behind rounded corners — use `fullScreenModal`. A full-screen place named Add as the Chooser (or a `(tabs)/add` route). A separate `Næste` commit dock or a preselected/`check` row on the Chooser (rows commit directly on tap). Launching the system picker while the Chooser Sheet's Modal is still on screen — it must fully dismiss first, or iOS cancels the picker and drops the collector on a blank screen. A second Chooser face for the post-Save re-entry. `selectionLimit: 10` on the OS picker as a stand-in for the per-jersey cap (the picker is the session dump; the cap is Confirm / bind / shutter).
+
+Flag missing context; do not invent patterns.
+
+### Admin shell
+
+**Purpose**: Operator chrome for scanning master data or user data.
+
+**Composition**: App header (wordmark-black + Search field `admin` with leading icon + Icon buttons pin / notifications / help / waffle + Profile action) + toolbar (underline tabs for Master Data tables + Filters Icon button) + Data table with pagination footer (or Empty state `table`). Pagination footer: `caption` record count on the left, Previous / Next on the right. Waffle opens exactly two tiles, icon above title: **Master Data** (`/stamdata`) and **User Data** (`/collectors`). Master Data tabs: Clubs, Leagues, Players. Filters opens a right Sheet (pressed when catalog filters are on). User Data toolbar chips: Users, Jerseys — Chip language until that place is restyled. Profile action is a 32px circular monogram from operator email + chevron; menu is email + Sign out — not a User avatar primitive and not the KC monogram. Pin / notifications / help open empty menus this gap. Filters Sheet `form` contains searchable multi-select dropdowns (country; league when the active table is Clubs or Players). Login is a separate centered 400px card (lockup-black + Text field email/password + Button `primary` “Sign in”) — not this shell.
+
+**Unsupported**: “+ New”. Bulk checkboxes. Bottom Tab bar. Split-view detail. Zebra. Danish chrome. Dark canvas. Peek HTML as a pane inside the shell.
+
+Flag missing context; do not invent patterns.
+
+### Admin drill
+
+**Purpose**: Show one row’s evidence and the allowed mutations.
+
+**Composition**: Icon button “Back” + `title` + evidence (KitPhoto or UserJersey photos, not 4:5 collection grid as the page layout) + meta (`type.body` / `type.caption`). User drill: promote/demote as Button `secondary` (disabled with helper text for self or last admin). UserJersey drill: Take-down as Button `destructive`. Both destructive paths open Sheet `confirm` before the mutation. Squad on a **club–season** drill is count + expand, not a global Players table.
+
+**Club drill**: identity/details strip with Mark `lg` (72px) on the **left** as the crest — no invented crest asset, `object-fit: contain` inside the slot. The strip is a `summary-panel` with `space.inset.lg` padding. Facts sit to the right in two `type.caption` (13px) rows of four columns: **Current league** (latest season’s league), Country, Kind on the first row; Founded, Stadium, Capacity, Website on the second (Website may span two columns). Valid from / Valid to / Successor only when set, on that second row. Below: Chip `single-select` pills **Players** | **Jerseys** | **Honours** (full rounded sides, selected = `fill.primary` + `content.inverse`; tab/tablist a11y). A native labelled Season `<select>` aligns to the **right** of that chip row on Players and Jerseys only — Honours is not season-scoped. A 44×44 pill Icon button (sync, `fill.secondary`, not white-on-canvas) sits in the same row as that select on Players and Jerseys so the row does not hop (accessible name **Fetch kits**; busy/spin while listing ingest runs). Honours has neither Season nor Fetch. Empty **No jerseys** uses labelled Button `primary` **Fetch kits** under the body (one primary in that region; **Fetching…** while busy). Success and failure use Banner (`success` / `danger`) and then reload the club-season drill. Not “+ New”. Not a search field — the club is already selected. The Data table under Players lists that club’s squad for the selected season, grouped **Goalkeepers → Defenders → Midfielders → Attackers** (then Other), sorted by squad number inside each group; columns #, Name, Position. Jerseys list kits for the selected season. Honours lists titles (Mark, Season, Title); the Mark is the stored trophy or competition badge when `catalog_mark` exists, otherwise the letter monogram. Keep `<thead>` on loading and empty. Loading body is eight 48px rows of flat `fill.secondary` placeholders (opacity pulse on existing tokens, not a skeleton wash); facts/rows fade in together when the season JSON lands. `prefers-reduced-motion` keeps the placeholders still. Jersey thumbs prefetch and reuse the authenticated blob cache. Repeating a season is instant from the club–season cache. Jersey rows open kit drill. Squad player rows do not navigate (player drill is the Master Data Players table). Honour rows do not navigate.
+
+**Kit drill**: Two columns (`repeat(auto-fit, minmax(20rem, 1fr))`): left is identity then facts; right is photos. Identity row: Back (to the club when `clubId` is set) + Mark `lg` crest + linked club name (`title`) with `type · season` (`mono`, `content.secondary`) under it — season is not a link. Then a two-column fact grid with `caption` labels **above** values (`label` 600): Team (link to club drill), Season, Type, Design, Colors (16px `radius.xs` swatches from kit hex, then names), Brand, Sponsor, Competition, Release date, and Description full-width when present. Right: first archive KitPhoto as a large flat (`object-fit: contain`, full column width, max-height 480px); remaining photos as 72px thumbs (same size as Mark `lg`) that select the large image (`aria-pressed`). Loading: keep the two-column geometry with flat `fill.secondary` placeholders (opacity pulse on existing tokens, not a skeleton wash); facts fade in together when the drill JSON lands; photos fade in when bytes arrive. `prefers-reduced-motion` keeps the placeholders still. Not a 4:5 collection grid. Not a horizontal equal-size strip. Not ratings. Not hot-linked CDN URLs. **Supersedes** the strip-then-`summary-panel` kit drill layout and the side-by-side label/value fact list.
+
+**Unsupported**: Editing CatalogLabel or Kit identity. Setting `rights: public`. Bulk take-down. Demoting self or the last admin. Showing KitPhoto on a collector-facing surface from this page. Left sidebar. “+ New”. Invented crest artwork. Underline Top tabs or waffle tiles for Players | Jerseys | Honours. A hopping text Button `secondary` **Fetch kits** beside Season. Using the mobile Select field (facet picker) as the season control — club drill uses a native labelled `<select>`. Hot-linking Transfermarkt mark URLs.
+
+Flag missing context; do not invent patterns.
+
+## Design–code alignment
+
+Status: `thin` — `apps/admin` is not scaffolded; mobile/web mappings may still be thin. Mapping is “flag until named”, not a license to invent APIs.
+
+| Decision | Surface | Code name | Notes / exceptions |
+| --- | --- | --- | --- |
+| Color / type / space tokens | mobile | *unmapped* | Expo: load Archivo + IBM Plex Sans + IBM Plex Mono; sizes in Typography. Flag host file until named |
+| Color / type / space tokens | web | *unmapped* | CSS variables on Astro; same families |
+| Color / type / space tokens | admin | *unmapped* | Vite + React; light aliases only; same families — flag until named |
+| Button … Banner | mobile | *unmapped* | One component per inventory name |
+| Data table, Top tabs | admin | *unmapped* | Do not reuse Tab bar or Jersey tile |
+| Jersey tile | web | *unmapped* | Same 4:5 crop and caption rules |
+| Identity wash | mobile, web | *unmapped* | Gradient; never on `KitPhoto` or jersey photo |
+| Tab bar | mobile | `app/(tabs)/_layout.tsx` | `NativeTabs` (native system Liquid Glass); five labelled tabs Samling · Indbakke · Søg (center) · Ønsker · Profil; Indbakke `NativeTabs.Trigger.Badge` = `unreadCount`; capture is the Samling header button (`src/components/collection-header.tsx`) → capture Chooser Sheet (`src/components/capture-source-sheet.tsx`); bar stays on detail drills (native default); capture flow in the `(capture)` full-screen modal (`app/_layout.tsx` `presentation: "fullScreenModal"`). Ratchet: `scripts/check-mobile-tab-bar.mjs` |
+| Thread row … Message composer | mobile | *unmapped* | Inbox gap primitives; throwaway `src/prototype-inbox/` is not the host API |
+| Switch, Avatar | mobile | *unmapped* | Profil gap primitives; throwaway `src/prototype-profile/` is not the host API |
+| Photo slot | mobile | `src/components/photo-slot.tsx` | `confirm-strip` only this gap; `camera-overlay` superseded |
+| Photo lightbox | mobile | `src/components/photo-lightbox.tsx` | Confirm photo-role gap; Skift rolle is five chips + Andet Beskrivelse; opened from a filled `confirm-strip` Photo slot |
+| Catalog picker modal | mobile | `src/components/catalog-picker-modal.tsx` | Full-screen club / season / player picker (Luk X + Search + List row). Club/season/player overlays wrap it. Dummy fixture in `src/catalog/dummyCatalog.ts`; matching stamdata rows are upserted by `packages/db` `seedDevCatalog` until live Transfermarkt ingest is populated |
+| Catalog peek | api | `GET /v1/catalog/peek` | Not in this system |
+| OG canvas | web | *unmapped* | 1200×630; letterbox 4:5; wash top strip only |
+| KitPhoto render | admin | *unmapped* | 32px table thumb + drill; never Expo/Astro/OG |
+| Logo files | admin | `public/assets/kitcollective-*.svg` | Wordmark-black in header (`BrandLogo`); lockup-black on login; favicon. White variants not used (light only). |
+| Logo files | mobile | `assets/brand/kitcollective-*.svg` | Files landed. Login/splash/icon wiring flagged: Expo icons need PNG; no `react-native-svg` this gap. |
+| Logo files | web | *no host* | `apps/web` does not exist this gap. OG placement is locked; do not invent a web app to hold the files. |
+
+**Behavior parity**: Save, gallery-first vs camera-repeat, and “no archive renders” on collector surfaces are product rules (`CONTEXT.md` + this file), not platform exceptions. Admin may render KitPhoto. Staff access, Take-down, and English chrome are product rules, not visual exceptions.
+
+**Collection chrome source**: The 3a artifact (`.scratch/collection-main-screen/claude-design/KitCollective-samling-og-genveje-3a.html`) is the visual reference for Samling chrome **except** Genveje is a **Sheet**, not a full-screen place. Brand book v1.0 is type + logo construction only. Tilføj trøje hi-fi (`.scratch/jersey-upload/claude-design/`) is capture-spine evidence (chooser, OS picker, bind, Gemt). **Confirm body is this file** — do not copy Stamdata | Detaljer tabs, star condition, or a “Mere” type chip from that artifact. Indbakke hi-fi (`.scratch/inbox/claude-design/KitCollective-indbakke.html`, frames 4a–4i) is the visual reference for inbox chrome; wireframe PNGs in that folder are IA only. Own Profil hi-fi (`.scratch/profile-settings/claude-design/KitCollective-profil.html`, frames 5a–5o) is the visual reference for own-collector Profil chrome; wireframe PNGs in that folder are IA only. `apps/mobile/src/prototype/`, `apps/mobile/src/prototype-inbox/`, and `apps/mobile/src/prototype-profile/` are throwaway evidence of feel — not a host contract and not copy-paste UI.
+
+**Supported exceptions**: System photo picker, system share sheet, OS keyboard. Fonts: brand webfonts first; system-ui fallback if load fails. Native sheet chrome if colors and radius still match. Admin 32×32 icon actions (named). Admin light-only. Genveje manager uses platform Sheet; facet picker may be a full-screen overlay.
+
+Flag missing context; do not invent APIs or behavior.
+
+## Using this file
+
+1. Read Goals, Principles, and Scope before any screen.
+2. Choose existing tokens and components. Compose patterns only as documented.
+3. If the screen needs a decision this file does not contain: **flag it**. Do not fill the gap with taste.
+4. Platform exceptions live in Design–code alignment, not as one-off values in a component.
+5. Root `DESIGN.md` is the token snapshot (Google Labs format). Do not treat it as a second set of product rules.
+
+Flag missing context; do not invent values, tokens, variants, or rules.
+
+## Deferred
+
+| Area | Why now | Revisit when |
+| --- | --- | --- |
+| Design–code host names | `apps/admin` is not scaffolded; mobile/web mappings may still be thin | First slice on that surface maps tokens here |
+| Admin dark mode | Light-only this gap | A later Gap pass if operators need it |
+| Scoped staff-role chrome | Binary `role=admin` only | When permissions exist |
+| Catalog-create / “+ New” | Seed remains the stamdata writer | A later admin mutation feature |
+| KC mark on Profil header | Not chosen this gap | A later collector-chrome pass |
+| Wash variants 2–3 | No named job | A taxonomy (e.g. kit type) needs distinction |
+| Crest / badge / portrait files | Rights and assets missing | Stamdata has approved marks |
+| Adopt / Evolve roadmap areas | First lock | A later Gap pass |
+| Expo Web as first-class | Degraded by stack lock | If Expo Web ships as a real surface — 4i layout already exists |
+| Ønske place **content** and **placement** | Slot 4 is Indbakke; list/row UI not locked; no Profil-vs-Søg home | Wishlist feature slice |
+| Other-collector Profil beyond Detaljer stub | Handle + count + city only | A later other-collector slice |
+| Collector gender field | Excluded this gap; nothing in the product uses it | If a slice needs gender as data |
+| Daily-limit and birthday picker chrome | Values/rows locked; calendar/stepper not drawn | Account / push feature slice |
+| Empty Favoritter action | Honest empty body locked; CTA not drawn | If Favoritter can be zero at ship |
+| Android Message composer chrome | One iOS-adjacent contract; OS keyboard is the exception | If Android send/attach must diverge |
+| Tab-badge overflow (99+) | Integer count locked; cap not chosen | If unread can exceed two digits |
+| Sticky last-used size on Confirm | Wrong-default risk; no telemetry | After cellar sessions show the same collector reuses size |
+| Nameset / patch / player-print controls | Optional Spiller on Data is session-local; nameset/patch UI is not | Nameset / patch feature slice |
+| UserJersey detail Andet caption chrome | Detail is the immersive pager, not the Confirm strip; Danish role / Beskrivelse **strings** are reused, but pager caption layout is not drawn this gap | A later own-detail slice that shows per-photo captions |
