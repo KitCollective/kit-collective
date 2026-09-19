@@ -234,7 +234,9 @@ describe("Confirm chrome", () => {
     expect(grouping).not.toContain("confirm.grouping");
     expect(grouping).toContain("shouldBeginGroupingStart");
     expect(confirmVision).toContain("deferIdentity");
-    expect(confirmVision).toContain("if (deferIdentity || !accessToken || !draftId || !photoFingerprint)");
+    expect(confirmVision).toContain(
+      "if (deferIdentity || !accessToken || !draftId || !photoFingerprint)",
+    );
 
     expect(confirm).not.toContain("ConfirmPhotoRecategorize");
     expect(confirm).not.toContain("applyConfirmPhotoOccupancy");
@@ -244,10 +246,7 @@ describe("Confirm chrome", () => {
       join(__dirname, "../src/components/confirm-photo-viewer.tsx"),
       "utf8",
     );
-    const photoSlot = readFileSync(
-      join(__dirname, "../src/components/photo-slot.tsx"),
-      "utf8",
-    );
+    const photoSlot = readFileSync(join(__dirname, "../src/components/photo-slot.tsx"), "utf8");
     expect(viewer).toContain("ScrollView");
     expect(viewer).not.toContain("borderWidth");
     expect(viewer).toContain("analyzing");

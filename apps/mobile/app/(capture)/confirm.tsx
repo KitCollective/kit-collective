@@ -181,9 +181,7 @@ export default function ConfirmScreen() {
 
           {state ? (
             <UnboundPhotosRow
-              uris={state.unboundUris.filter(
-                (uri) => !grouping.hiddenSandboxUris.includes(uri),
-              )}
+              uris={state.unboundUris.filter((uri) => !grouping.hiddenSandboxUris.includes(uri))}
               activeTabLabel={activeTabLabel}
               onPressPhoto={photos.bindUnboundPhoto}
               onDiscardPhoto={photos.discardUnboundPhoto}

@@ -174,13 +174,7 @@ describe("grouping session", () => {
     expect(
       groupingViewerRoles({ ...empty, front: "file:///a.jpg", back: "file:///b.jpg" }, true),
     ).toEqual(["front", "back"]);
-    expect(groupingViewerRoles(empty, false)).toEqual([
-      "front",
-      "back",
-      "left",
-      "right",
-      "other",
-    ]);
+    expect(groupingViewerRoles(empty, false)).toEqual(["front", "back", "left", "right", "other"]);
   });
 
   it("lets rolling uris own the grouping strip so a late bind cannot empty Forside", () => {

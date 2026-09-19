@@ -14,12 +14,12 @@ import {
   setActiveDraft,
   uriForPhotoId,
 } from "@/capture/captureSession";
+import type { CaptureSessionMutator, CaptureSessionState } from "@/capture/captureSessionTypes";
 import {
   buildGroupingSuggestRequest,
   closeGroupingRun,
   shouldBeginGroupingStart,
 } from "@/capture/groupingSuggestRequest";
-import type { CaptureSessionMutator, CaptureSessionState } from "@/capture/captureSessionTypes";
 import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { motion } from "@/theme/tokens";
 
@@ -39,10 +39,7 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function urisFromPhotoIds(
-  state: CaptureSessionState | null,
-  photoIds: string[],
-): string[] {
+function urisFromPhotoIds(state: CaptureSessionState | null, photoIds: string[]): string[] {
   if (!state) {
     return [];
   }
@@ -83,6 +80,7 @@ export function useConfirmGrouping({
   const jobKey = state ? groupingJobFingerprint(state) : null;
 
   useEffect(() => {
+    void sessionId;
     startedFingerprint.current = null;
     failedFingerprints.current.clear();
     appliedJobId.current = null;
@@ -138,10 +136,7 @@ export function useConfirmGrouping({
         return;
       }
 
-      const revealSlice = (
-        slice: Array<{ photoIds: string[] }>,
-        activateIndex: number,
-      ) => {
+      const revealSlice = (slice: Array<{ photoIds: string[] }>, activateIndex: number) => {
         mutate((current) => {
           let next = applyGroupingSuggestion(current, { groups: slice }, { preselect: true });
           const target = next.drafts[activateIndex];
@@ -276,7 +271,9 @@ export function useConfirmGrouping({
         );
         const photos = prepared
           .filter(
-            (result): result is PromiseFulfilledResult<{ photoId: string; contentBase64: string }> =>
+            (
+              result,
+            ): result is PromiseFulfilledResult<{ photoId: string; contentBase64: string }> =>
               result.status === "fulfilled",
           )
           .map((result) => result.value);
@@ -302,7 +299,7 @@ export function useConfirmGrouping({
         }
       }
     })();
-  }, [accessToken, analyzing, applyGroupingClose, jobKey, sessionId]);
+  }, [accessToken, analyzing, applyGroupingClose, jobKey, mutate, sessionId]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !analyzing) {

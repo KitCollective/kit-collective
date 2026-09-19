@@ -178,10 +178,7 @@ export function JerseyTabBar({
           </Animated.View>
         </View>
 
-        <Animated.View
-          key="add-jersey"
-          layout={reduceMotion ? undefined : stripLayout()}
-        >
+        <Animated.View key="add-jersey" layout={reduceMotion ? undefined : stripLayout()}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tilføj trøje"

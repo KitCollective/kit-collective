@@ -47,8 +47,9 @@ export function shouldBeginGroupingStart(input: {
   return Boolean(input.jobKey) && !input.analyzing && !input.failed;
 }
 
-export function closeGroupingRun(
-  reason: "timeout" | "error" | "skip" | "complete",
-): { analyzing: false; failed: boolean } {
+export function closeGroupingRun(reason: "timeout" | "error" | "skip" | "complete"): {
+  analyzing: false;
+  failed: boolean;
+} {
   return { analyzing: false, failed: reason !== "complete" };
 }

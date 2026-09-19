@@ -60,10 +60,7 @@ function getVisionBannerToneStyle(
   }
 }
 
-export function ConfirmVisionBanner({
-  state,
-  onQuotaPress,
-}: ConfirmVisionBannerProps) {
+export function ConfirmVisionBanner({ state, onQuotaPress }: ConfirmVisionBannerProps) {
   const theme = useTheme();
   const typography = useTypography();
   const tone = getVisionBannerToneStyle(theme, state);

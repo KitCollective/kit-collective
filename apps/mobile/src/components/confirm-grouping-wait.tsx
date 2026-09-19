@@ -42,13 +42,7 @@ export function ConfirmGroupingWait() {
       return;
     }
 
-    hop.set(
-      withRepeat(
-        withTiming(HOP, { duration: motion.base, easing: LOCK_EASE }),
-        -1,
-        true,
-      ),
-    );
+    hop.set(withRepeat(withTiming(HOP, { duration: motion.base, easing: LOCK_EASE }), -1, true));
 
     let swapTimer: ReturnType<typeof setTimeout> | undefined;
     const cycle = setInterval(() => {
@@ -101,12 +95,7 @@ export function ConfirmGroupingWait() {
         </View>
       ) : (
         <Animated.Text
-          style={[
-            typography.caption,
-            styles.line,
-            { color: theme.contentSecondary },
-            lineStyle,
-          ]}
+          style={[typography.caption, styles.line, { color: theme.contentSecondary }, lineStyle]}
         >
           {GROUPING_WAIT_LINES[lineIndex]}
         </Animated.Text>

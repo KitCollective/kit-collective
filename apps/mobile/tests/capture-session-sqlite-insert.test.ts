@@ -9,8 +9,7 @@ const storeSource = readFileSync(
 
 function listedInserts(source: string): { table: string; columns: number; values: number }[] {
   const inserts: { table: string; columns: number; values: number }[] = [];
-  const pattern =
-    /INSERT INTO ([a-z_]+) \(([\s\S]*?)\)\s*VALUES \(([\s\S]*?)\)/g;
+  const pattern = /INSERT INTO ([a-z_]+) \(([\s\S]*?)\)\s*VALUES \(([\s\S]*?)\)/g;
   for (const match of source.matchAll(pattern)) {
     const table = match[1];
     const columnList = match[2];

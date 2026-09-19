@@ -34,9 +34,7 @@ export function isGroupingWait(
  * Grouping strip is only the rolling uris. Bound thumbnails must not leak
  * extra roles — that remounts the whole row and unfolds every slot at once.
  */
-export function groupingStripUris(
-  rollingUris: string[],
-): Record<PhotoRole, string | undefined> {
+export function groupingStripUris(rollingUris: string[]): Record<PhotoRole, string | undefined> {
   const next = { ...EMPTY_SLOT_URIS };
   for (const [index, uri] of rollingUris.entries()) {
     const role = PHOTO_ROLES[index];

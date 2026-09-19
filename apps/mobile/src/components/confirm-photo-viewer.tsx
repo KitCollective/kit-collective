@@ -48,9 +48,7 @@ export function ConfirmPhotoViewer({
               uri={slotUris[role]}
               width={CONFIRM_VIEWER_WIDTH}
               labelPlacement={analyzing ? "none" : "overlay"}
-              enter={
-                analyzing ? (homecoming || index === 0 ? "fade" : "roll") : undefined
-              }
+              enter={analyzing ? (homecoming || index === 0 ? "fade" : "roll") : undefined}
               analyzing={analyzing}
               onPress={() => onPressRole(role)}
             />

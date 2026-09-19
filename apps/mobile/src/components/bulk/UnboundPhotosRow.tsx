@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, type ComponentProps } from "react";
+import { type ComponentProps, useEffect } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
+  cancelAnimation,
   Easing,
   FadeOut,
   LinearTransition,
-  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -108,7 +108,16 @@ function UnboundPhotoThumb({
         withTiming(0, { duration: GATHER_FADE_MS, easing: LOCK_EASE }),
       ),
     );
-  }, [gatherDelayMs, gatherTranslateX, gathering, opacity, reduceMotion, scale, translateX, translateY]);
+  }, [
+    gatherDelayMs,
+    gatherTranslateX,
+    gathering,
+    opacity,
+    reduceMotion,
+    scale,
+    translateX,
+    translateY,
+  ]);
 
   const gatherStyle = useAnimatedStyle(() => ({
     transform: [
@@ -152,10 +161,7 @@ function UnboundPhotoThumb({
           />
         </Pressable>
         {analyzing && !gathering ? (
-          <ConfirmAnalyzingPulse
-            color={withAlpha(theme.canvas, 0.6)}
-            style={styles.thumbPulse}
-          />
+          <ConfirmAnalyzingPulse color={withAlpha(theme.canvas, 0.6)} style={styles.thumbPulse} />
         ) : null}
         <Pressable
           accessibilityRole="button"

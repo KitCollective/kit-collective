@@ -2,10 +2,7 @@ import type { PhotoRole } from "@kit/domain";
 import { PHOTO_ROLE_LABELS_DA } from "@kit/domain";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, FadeOut, Keyframe } from "react-native-reanimated";
-import {
-  ConfirmAnalyzingPulse,
-  SKELETON_BONE_ALPHA,
-} from "@/components/confirm-analyzing-pulse";
+import { ConfirmAnalyzingPulse, SKELETON_BONE_ALPHA } from "@/components/confirm-analyzing-pulse";
 import { useTypography } from "@/theme/brand-fonts";
 import { motion, radius, space, withAlpha } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
@@ -101,103 +98,105 @@ export function PhotoSlot({
 
   return (
     <Animated.View
-      exiting={!reduceMotion && analyzing ? FadeOut.duration(motion.fast).easing(LOCK_EASE) : undefined}
-    >
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={
-        isAdd
-          ? "Tilføj foto, tom"
-          : isEmpty
-            ? `${roleLabel}, tom`
-            : selected
-              ? `${roleLabel}, valgt`
-              : roleLabel
+      exiting={
+        !reduceMotion && analyzing ? FadeOut.duration(motion.fast).easing(LOCK_EASE) : undefined
       }
-      accessibilityHint={isEmpty || isAdd ? "Tilføj foto" : "Erstat foto"}
-      accessibilityState={analyzing ? { busy: true } : undefined}
-      onPress={onPress}
-      style={({ pressed }) => [styles.slot, { width: slotWidth }, pressed && styles.slotPressed]}
     >
-      {hideChrome ? (
-        <Animated.View
-          entering={!reduceMotion && enter === "roll" ? SLOT_ROLL_ENTERING : undefined}
-          style={[
-            styles.previewWrap,
-            styles.groupingPreview,
-            { width: slotWidth, height: slotHeight },
-          ]}
-        >
-          {isEmpty || enter === "fade" ? (
-            <ConfirmAnalyzingPulse
-              color={withAlpha(theme.fillPrimary, SKELETON_BONE_ALPHA)}
-              style={styles.slotPulse}
-            />
-          ) : null}
-          {uri ? (
-            <Animated.Image
-              entering={!reduceMotion && enter === "fade" ? SLOT_FADE_ENTERING : undefined}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          isAdd
+            ? "Tilføj foto, tom"
+            : isEmpty
+              ? `${roleLabel}, tom`
+              : selected
+                ? `${roleLabel}, valgt`
+                : roleLabel
+        }
+        accessibilityHint={isEmpty || isAdd ? "Tilføj foto" : "Erstat foto"}
+        accessibilityState={analyzing ? { busy: true } : undefined}
+        onPress={onPress}
+        style={({ pressed }) => [styles.slot, { width: slotWidth }, pressed && styles.slotPressed]}
+      >
+        {hideChrome ? (
+          <Animated.View
+            entering={!reduceMotion && enter === "roll" ? SLOT_ROLL_ENTERING : undefined}
+            style={[
+              styles.previewWrap,
+              styles.groupingPreview,
+              { width: slotWidth, height: slotHeight },
+            ]}
+          >
+            {isEmpty || enter === "fade" ? (
+              <ConfirmAnalyzingPulse
+                color={withAlpha(theme.fillPrimary, SKELETON_BONE_ALPHA)}
+                style={styles.slotPulse}
+              />
+            ) : null}
+            {uri ? (
+              <Animated.Image
+                entering={!reduceMotion && enter === "fade" ? SLOT_FADE_ENTERING : undefined}
+                source={{ uri }}
+                style={{ width: slotWidth, height: slotHeight }}
+                accessibilityIgnoresInvertColors
+              />
+            ) : null}
+          </Animated.View>
+        ) : isEmpty ? (
+          <View
+            style={[
+              styles.emptyPreview,
+              {
+                width: slotWidth,
+                height: slotHeight,
+                backgroundColor: theme.surface,
+                opacity: isOverlay ? 0.75 : 1,
+                borderColor: theme.borderSubtle,
+                justifyContent: "center",
+              },
+              selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
+            ]}
+          >
+            {placement === "overlay" ? (
+              overlayBadge
+            ) : (
+              <Text
+                style={[
+                  typography.caption,
+                  { color: isOverlay ? theme.contentInverse : theme.contentMuted },
+                ]}
+              >
+                {isAdd ? "+" : "Tom"}
+              </Text>
+            )}
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.previewWrap,
+              {
+                width: slotWidth,
+                height: slotHeight,
+                backgroundColor: theme.fillSecondary,
+                borderColor: theme.borderSubtle,
+              },
+              selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
+            ]}
+          >
+            <Image
               source={{ uri }}
               style={{ width: slotWidth, height: slotHeight }}
               accessibilityIgnoresInvertColors
             />
-          ) : null}
-        </Animated.View>
-      ) : isEmpty ? (
-        <View
-          style={[
-            styles.emptyPreview,
-            {
-              width: slotWidth,
-              height: slotHeight,
-              backgroundColor: theme.surface,
-              opacity: isOverlay ? 0.75 : 1,
-              borderColor: theme.borderSubtle,
-              justifyContent: "center",
-            },
-            selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
-          ]}
-        >
-          {placement === "overlay" ? (
-            overlayBadge
-          ) : (
-            <Text
-              style={[
-                typography.caption,
-                { color: isOverlay ? theme.contentInverse : theme.contentMuted },
-              ]}
-            >
-              {isAdd ? "+" : "Tom"}
-            </Text>
-          )}
-        </View>
-      ) : (
-        <View
-          style={[
-            styles.previewWrap,
-            {
-              width: slotWidth,
-              height: slotHeight,
-              backgroundColor: theme.fillSecondary,
-              borderColor: theme.borderSubtle,
-            },
-            selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
-          ]}
-        >
-          <Image
-            source={{ uri }}
-            style={{ width: slotWidth, height: slotHeight }}
-            accessibilityIgnoresInvertColors
-          />
-          {overlayBadge}
-        </View>
-      )}
-      {placement === "below" ? (
-        <Text style={[typography.labelSm, { color: belowLabelColor, textAlign: "center" }]}>
-          {roleLabel}
-        </Text>
-      ) : null}
-    </Pressable>
+            {overlayBadge}
+          </View>
+        )}
+        {placement === "below" ? (
+          <Text style={[typography.labelSm, { color: belowLabelColor, textAlign: "center" }]}>
+            {roleLabel}
+          </Text>
+        ) : null}
+      </Pressable>
     </Animated.View>
   );
 }
