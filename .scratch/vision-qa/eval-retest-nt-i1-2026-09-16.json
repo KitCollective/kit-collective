@@ -1,0 +1,100 @@
+{
+  "ranAt": "2026-09-16T23:20+01",
+  "nationalTeamsCatalog": 145,
+  "KIT-249": "PASS",
+  "scored": {
+    "j14-argentina-home-2006": {
+      "mapped_nt": true,
+      "nt_id": "53d7aff7-d0c1-43f9-aa91-3cfd95e75c38",
+      "nt_label": "Argentina",
+      "hint": null,
+      "catalogMiss": null,
+      "verdict": "PASS",
+      "file": "IMG_5790.jpg"
+    },
+    "j2-italy-blue-home": {
+      "mapped_nt": true,
+      "nt_id": "e03f8d91-5d0d-4743-b417-356db8a06e2b",
+      "nt_label": "Italien",
+      "hint": null,
+      "catalogMiss": null,
+      "verdict": "PASS"
+    }
+  },
+  "results": [
+    {
+      "jerseyId": "j14-argentina-home-2006",
+      "file": "IMG_5790.jpg",
+      "expectClub": "Argentina",
+      "expectNT": true,
+      "status": "noop",
+      "catalogMiss": null,
+      "catalogLikely": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "fieldPreselect": null,
+      "preselect": null,
+      "jobId": "57d91556-58b6-4ae4-83ce-2dfc581c09cb",
+      "secs": 4.2,
+      "topKeys": [
+        "jobId",
+        "kind",
+        "status"
+      ]
+    },
+    {
+      "jerseyId": "j2-italy-blue-home",
+      "file": "155CCAF9-0C8D-4833-8279-C813A0155479.jpg",
+      "expectClub": "Italy",
+      "expectNT": true,
+      "status": "ready",
+      "catalogMiss": null,
+      "catalogLikely": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {
+        "nationalTeamId": "e03f8d91-5d0d-4743-b417-356db8a06e2b",
+        "type": "home",
+        "nationalTeamLabel": "Italien"
+      },
+      "fieldPreselect": {
+        "nationalTeam": true,
+        "type": true
+      },
+      "preselect": true,
+      "jobId": "a73403a8-8d6d-4593-b1d0-ff2ac0fbe63a",
+      "secs": 3.4,
+      "topKeys": [
+        "fieldPreselect",
+        "jobId",
+        "kind",
+        "preselect",
+        "status",
+        "suggestions"
+      ]
+    }
+  ],
+  "argentinaRetries": [
+    {
+      "file": "IMG_5790.jpg",
+      "angle": "front",
+      "status": "ready",
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {
+        "nationalTeamId": "53d7aff7-d0c1-43f9-aa91-3cfd95e75c38",
+        "type": "home",
+        "nationalTeamLabel": "Argentina"
+      },
+      "fieldPreselect": {
+        "nationalTeam": true,
+        "type": true
+      },
+      "preselect": true,
+      "jobId": "fdb5f5b5-20df-49dc-a4ad-41a9d9638773",
+      "secs": 6.9
+    }
+  ]
+}
