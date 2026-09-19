@@ -129,8 +129,8 @@ export function FirstSessionChooserScreen({
 
       <View style={styles.body}>
         <Text style={[typography.body, { color: theme.contentMuted }]}>
-          Få billeder bliver én trøje. Mange billeder lander som uredigerede, som du binder til
-          trøjer.
+          Op til tre billeder bliver én trøje. Fire eller flere lander som uredigerede, som du
+          binder til trøjer.
         </Text>
 
         <View style={styles.actions}>

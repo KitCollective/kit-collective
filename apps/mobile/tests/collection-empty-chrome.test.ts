@@ -183,7 +183,10 @@ describe("Native tab bar chrome", () => {
   it("opens the capture chooser as a Sheet with direct-action rows", () => {
     const sheet = readFileSync(sheetPath, "utf8");
 
-    expect(sheet).toContain('title="Tilføj trøje"');
+    // Caption names the 1–3 / 4+ branch (docs/design-system.md Capture session).
+    expect(sheet).toContain(
+      "Op til tre billeder bliver én trøje. Fire eller flere lander som uredigerede.",
+    );
     // Rows are direct actions (role button), not a radio group.
     expect(sheet).toContain('accessibilityRole="button"');
     // Each choice carries a title, a helper sentence, a leading icon, and a trailing chevron.

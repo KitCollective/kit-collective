@@ -57,7 +57,7 @@ export function CaptureSourceSheet({
     <Sheet
       visible={visible}
       title="Tilføj trøje"
-      sentence="Få billeder bliver én trøje. Mange lander som uredigerede."
+      sentence="Op til tre billeder bliver én trøje. Fire eller flere lander som uredigerede."
       onDismiss={onDismiss}
       onModalHide={onModalHide}
       hideChrome
