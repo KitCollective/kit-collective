@@ -173,6 +173,7 @@ describe("first-session visual host chrome", () => {
     const chooser = readFirstSession("chooser-screen.tsx");
 
     expect(chooser).toContain("Tilføj trøje");
+    expect(chooser).toContain("Op til tre billeder bliver én trøje");
     expect(chooser).toContain("Upload filer");
     expect(chooser).toContain("Tag billede");
     expect(chooser).toContain("pickUploadFiles");
