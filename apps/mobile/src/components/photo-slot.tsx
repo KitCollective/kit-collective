@@ -1,12 +1,38 @@
 import type { PhotoRole } from "@kit/domain";
 import { PHOTO_ROLE_LABELS_DA } from "@kit/domain";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { Easing, FadeOut, Keyframe } from "react-native-reanimated";
+import {
+  ConfirmAnalyzingPulse,
+  SKELETON_BONE_ALPHA,
+} from "@/components/confirm-analyzing-pulse";
 import { useTypography } from "@/theme/brand-fonts";
-import { radius, space } from "@/theme/tokens";
+import { motion, radius, space, withAlpha } from "@/theme/tokens";
+import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
+const LOCK_EASE = Easing.bezier(0.4, 0, 0.2, 1);
+
+const SLOT_FADE_ENTERING = new Keyframe({
+  0: { opacity: 0 },
+  100: { opacity: 1, easing: LOCK_EASE },
+}).duration(motion.slow);
+
+const SLOT_ROLL_ENTERING = new Keyframe({
+  0: {
+    opacity: 0,
+    transform: [{ translateX: -space.insetMd }],
+  },
+  100: {
+    opacity: 1,
+    transform: [{ translateX: 0 }],
+    easing: LOCK_EASE,
+  },
+}).duration(motion.slow);
+
 type PhotoSlotVariant = "confirm-strip" | "camera-overlay" | "add";
-type PhotoSlotLabelPlacement = "below" | "overlay";
+type PhotoSlotLabelPlacement = "below" | "overlay" | "none";
+type PhotoSlotEnter = "fade" | "roll";
 
 type PhotoSlotProps = {
   role: PhotoRole;
@@ -16,6 +42,8 @@ type PhotoSlotProps = {
   selected?: boolean;
   width?: number;
   labelPlacement?: PhotoSlotLabelPlacement;
+  enter?: PhotoSlotEnter;
+  analyzing?: boolean;
   onPress: () => void;
 };
 
@@ -41,10 +69,13 @@ export function PhotoSlot({
   selected = false,
   width,
   labelPlacement,
+  enter,
+  analyzing = false,
   onPress,
 }: PhotoSlotProps) {
   const theme = useTheme();
   const typography = useTypography();
+  const reduceMotion = useReduceMotion();
   const isAdd = variant === "add";
   const roleLabel = isAdd
     ? "Tilføj foto"
@@ -57,6 +88,7 @@ export function PhotoSlot({
   const slotHeight = photoSlotHeight(slotWidth);
   const placement = labelPlacement ?? "below";
   const belowLabelColor = isOverlay ? theme.contentInverse : theme.contentPrimary;
+  const hideChrome = placement === "none";
   const overlayBadge =
     placement === "overlay" ? (
       <View
@@ -68,6 +100,9 @@ export function PhotoSlot({
     ) : null;
 
   return (
+    <Animated.View
+      exiting={!reduceMotion && analyzing ? FadeOut.duration(motion.fast).easing(LOCK_EASE) : undefined}
+    >
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
@@ -80,10 +115,35 @@ export function PhotoSlot({
               : roleLabel
       }
       accessibilityHint={isEmpty || isAdd ? "Tilføj foto" : "Erstat foto"}
+      accessibilityState={analyzing ? { busy: true } : undefined}
       onPress={onPress}
       style={({ pressed }) => [styles.slot, { width: slotWidth }, pressed && styles.slotPressed]}
     >
-      {isEmpty ? (
+      {hideChrome ? (
+        <Animated.View
+          entering={!reduceMotion && enter === "roll" ? SLOT_ROLL_ENTERING : undefined}
+          style={[
+            styles.previewWrap,
+            styles.groupingPreview,
+            { width: slotWidth, height: slotHeight },
+          ]}
+        >
+          {isEmpty || enter === "fade" ? (
+            <ConfirmAnalyzingPulse
+              color={withAlpha(theme.fillPrimary, SKELETON_BONE_ALPHA)}
+              style={styles.slotPulse}
+            />
+          ) : null}
+          {uri ? (
+            <Animated.Image
+              entering={!reduceMotion && enter === "fade" ? SLOT_FADE_ENTERING : undefined}
+              source={{ uri }}
+              style={{ width: slotWidth, height: slotHeight }}
+              accessibilityIgnoresInvertColors
+            />
+          ) : null}
+        </Animated.View>
+      ) : isEmpty ? (
         <View
           style={[
             styles.emptyPreview,
@@ -138,6 +198,7 @@ export function PhotoSlot({
         </Text>
       ) : null}
     </Pressable>
+    </Animated.View>
   );
 }
 
@@ -154,6 +215,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
   },
+  groupingPreview: {
+    borderWidth: 0,
+    backgroundColor: "transparent",
+  },
   emptyPreview: {
     borderRadius: radius.md,
     borderWidth: 1,
@@ -168,5 +233,9 @@ const styles = StyleSheet.create({
     left: space.insetSm,
     borderRadius: radius.pill,
     paddingHorizontal: space.insetSm,
+    zIndex: 1,
+  },
+  slotPulse: {
+    borderRadius: radius.md,
   },
 });

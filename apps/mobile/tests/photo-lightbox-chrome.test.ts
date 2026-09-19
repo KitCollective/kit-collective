@@ -60,7 +60,7 @@ describe("Confirm photo slot behaviour", () => {
     expect(source).toContain("Tilføj foto");
     expect(source).toContain("photoSlotHeight");
     expect(source).toContain("(width * 5) / 4");
-    expect(viewer).toContain('labelPlacement="overlay"');
+    expect(viewer).toContain('labelPlacement={analyzing ? "none" : "overlay"}');
     expect(viewer).toContain("CONFIRM_VIEWER_WIDTH");
     expect(source).toContain("overlayBadge");
     expect(source).not.toContain("overlayBar");

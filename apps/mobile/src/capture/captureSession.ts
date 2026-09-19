@@ -8,17 +8,42 @@ import type {
   CaptureSessionStore,
 } from "./captureSessionTypes";
 
-function createId(): string {
+const UUID_V4 =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Grouping Vision rejects non-UUID photo/session ids — never emit `capture-…`. */
+export function createCaptureSessionId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
   }
-  return `capture-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  const version = bytes[6] ?? 0;
+  const variant = bytes[8] ?? 0;
+  bytes[6] = (version & 0x0f) | 0x40;
+  bytes[8] = (variant & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function isUuid(value: string): boolean {
+  return UUID_V4.test(value);
 }
 
 export type { CaptureBranch, CaptureJerseyDraft, CaptureSessionState, CaptureSessionStore };
 
+/** One shirt is front/back plus one extra. Four or more start unbound so grouping can split jerseys. */
+const SINGLE_BRANCH_MAX_PHOTOS = 3;
+
 export function branchFromPhotoCount(count: number): CaptureBranch {
-  return count > MAX_USER_JERSEY_PHOTOS ? "bulk" : "single";
+  return count > SINGLE_BRANCH_MAX_PHOTOS ? "bulk" : "single";
 }
 
 export function canAddPhotoToDraft(draft: CaptureJerseyDraft): boolean {
@@ -84,7 +109,7 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
 }
 
 function createPhotoId(): string {
-  return createId();
+  return createCaptureSessionId();
 }
 
 function photoIdForUri(state: CaptureSessionState, uri: string): string {
@@ -99,6 +124,23 @@ function photoIdForUri(state: CaptureSessionState, uri: string): string {
 
 function photoIdsForUris(uris: string[]): Record<string, string> {
   return Object.fromEntries(uris.map((uri) => [uri, createPhotoId()]));
+}
+
+/** Persist missing photoIds so grouping can POST UUID keys, not empty strings. */
+export function ensureSessionPhotoIds(state: CaptureSessionState): CaptureSessionState {
+  const photoIdByUri = { ...(state.photoIdByUri ?? {}) };
+  let changed = false;
+  const uris = new Set([...state.orderedUris, ...state.unboundUris]);
+  for (const uri of uris) {
+    if (!photoIdByUri[uri] || !isUuid(photoIdByUri[uri]!)) {
+      photoIdByUri[uri] = createPhotoId();
+      changed = true;
+    }
+  }
+  if (!changed) {
+    return state;
+  }
+  return withState(state, { ...state, photoIdByUri });
 }
 
 function withPhotoId(
@@ -161,8 +203,8 @@ export function createCaptureSession(
   options?: { store?: CaptureSessionStore; sessionId?: string; photoSource?: PhotoSource },
 ): CaptureSessionState {
   const branch = branchFromPhotoCount(orderedUris.length);
-  const draftId = createId();
-  const sessionId = options?.sessionId ?? createId();
+  const draftId = createCaptureSessionId();
+  const sessionId = options?.sessionId ?? createCaptureSessionId();
   const photoSource = options?.photoSource ?? "gallery";
 
   const draft =
@@ -194,8 +236,8 @@ export function createCaptureSessionFromPhotos(
 ): CaptureSessionState {
   const orderedUris = photos.map((photo) => photo.uri);
   const branch = branchFromPhotoCount(orderedUris.length);
-  const draftId = createId();
-  const sessionId = options?.sessionId ?? createId();
+  const draftId = createCaptureSessionId();
+  const sessionId = options?.sessionId ?? createCaptureSessionId();
 
   const draft =
     branch === "single"
@@ -270,9 +312,11 @@ export function appendUnboundPhotos(
     return state;
   }
 
+  const orderedUris = [...state.orderedUris, ...nextUris];
   return withState(state, {
     ...state,
-    orderedUris: [...state.orderedUris, ...nextUris],
+    branch: branchFromPhotoCount(orderedUris.length) === "bulk" ? "bulk" : state.branch,
+    orderedUris,
     unboundUris: [...state.unboundUris, ...nextUris],
     photoIdByUri: {
       ...state.photoIdByUri,
@@ -300,7 +344,7 @@ export function unbindPhoto(state: CaptureSessionState, uri: string): CaptureSes
 }
 
 export function addJerseyDraft(state: CaptureSessionState): CaptureSessionState {
-  const draftId = createId();
+  const draftId = createCaptureSessionId();
   return withState(state, {
     ...state,
     drafts: [...state.drafts, createEmptyDraft(draftId)],
@@ -721,21 +765,31 @@ export function appendUnassignedCameraShotToSession(
 }
 
 /** Apply Forside → Bagside → Venstre → Højre → Andet fill order before Confirm. */
-export function applyFillOrderToActiveDraft(state: CaptureSessionState): CaptureSessionState {
-  const draft = getActiveDraft(state);
+export function applyFillOrderToDraft(
+  state: CaptureSessionState,
+  draftId: string,
+): CaptureSessionState {
+  const draft = getDraft(state, draftId);
   if (draft.photos.length === 0 || draft.photos.every((photo) => photo.role !== null)) {
     return state;
   }
 
   const assigned = assignPhotosFillOrderPreservingSource(draft.photos);
-  const next = updateDraft(state, state.activeDraftId, (current) => ({
+  const next = updateDraft(state, draftId, (current) => ({
     ...current,
     photos: assigned,
   }));
+  if (draftId !== next.activeDraftId) {
+    return next;
+  }
   return {
     ...next,
     orderedUris: assigned.map((photo) => photo.uri),
   };
+}
+
+export function applyFillOrderToActiveDraft(state: CaptureSessionState): CaptureSessionState {
+  return applyFillOrderToDraft(state, state.activeDraftId);
 }
 
 function serializableState(state: CaptureSessionState): CaptureSessionState {
@@ -758,7 +812,7 @@ export function createEditCaptureSession(
   sessionId: string,
   store?: CaptureSessionStore,
 ): CaptureSessionState {
-  const draftId = createId();
+  const draftId = createCaptureSessionId();
   const draft: CaptureJerseyDraft = {
     id: draftId,
     clubId: jersey.clubId,
@@ -837,6 +891,17 @@ export function shouldStartGroupingJob(state: CaptureSessionState): boolean {
     return true;
   }
   return state.unboundUris.length >= 1 && state.drafts.some((draft) => draft.photos.length > 0);
+}
+
+/** Stable key for one grouping request. Unrelated Confirm persists must not change this. */
+export function groupingJobFingerprint(state: CaptureSessionState): string | null {
+  if (!shouldStartGroupingJob(state)) {
+    return null;
+  }
+
+  return `${unboundGroupingFingerprint(state)}|${groupingPriorGroups(state)
+    .map((group) => group.photoIds.join("-"))
+    .join(";")}`;
 }
 
 export function groupingPriorGroups(state: CaptureSessionState): Array<{ photoIds: string[] }> {

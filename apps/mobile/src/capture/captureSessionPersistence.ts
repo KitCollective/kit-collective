@@ -3,6 +3,7 @@ import {
   appendUnassignedCameraShotToSession,
   applyFillOrderToActiveDraft,
   createCaptureSessionFromPhotos,
+  createCaptureSessionId,
   getActiveDraft,
   reloadCaptureSession,
   setDraftClub,
@@ -23,13 +24,6 @@ export type PrefilledClub = {
   label: string;
 };
 
-function createSessionId(): string {
-  if (typeof globalThis.crypto?.randomUUID === "function") {
-    return globalThis.crypto.randomUUID();
-  }
-  return `capture-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 function sqliteStore(sessionId: string): CaptureSessionStore {
   const { createSqliteCaptureSessionStore } = require("./captureSessionSqliteStore") satisfies {
     createSqliteCaptureSessionStore: (id: string) => CaptureSessionStore;
@@ -49,7 +43,7 @@ function persistCaptureSessionFromPhotos(
     store?: CaptureSessionStore;
   },
 ): string {
-  const sessionId = options?.sessionId ?? createSessionId();
+  const sessionId = options?.sessionId ?? createCaptureSessionId();
   const store = sessionStore(sessionId, options?.store);
   let state = createCaptureSessionFromPhotos(photos, {
     store,
@@ -84,9 +78,9 @@ export function persistCameraShotInSession(
   const source = photo.source ?? options?.photoSource ?? "camera";
 
   if (!sessionId) {
-    const newSessionId = createSessionId();
+    const newSessionId = createCaptureSessionId();
     persistCaptureSessionFromPhotos(
-      [{ photoId: createSessionId(), uri: photo.uri, role: null, source }],
+      [{ photoId: createCaptureSessionId(), uri: photo.uri, role: null, source }],
       {
         sessionId: newSessionId,
         prefilledClub: options?.prefilledClub,

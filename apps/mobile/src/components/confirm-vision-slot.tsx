@@ -60,7 +60,12 @@ export function ConfirmVisionSlot({
       );
     }
 
-    return <ConfirmVisionBanner state={bannerState} onQuotaPress={onQuotaPress} />;
+    return (
+      <ConfirmVisionBanner
+        state={bannerState}
+        onQuotaPress={onQuotaPress}
+      />
+    );
   }
 
   const message = [

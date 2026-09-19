@@ -45,6 +45,8 @@ type UseConfirmVisionOptions = {
   setSelectedSeasonLabel: (label: string | null) => void;
   onCatalogMiss?: (miss: boolean) => void;
   onPremiumRequired?: () => Promise<boolean>;
+  /** Hold identity until grouping has bound drafts (or failed). */
+  deferIdentity?: boolean;
 };
 
 function hasPreselectFields(fieldPreselect: VisionFieldPreselect | undefined): boolean {
@@ -86,6 +88,7 @@ export function useConfirmVision({
   setSelectedSeasonLabel,
   onCatalogMiss,
   onPremiumRequired,
+  deferIdentity = false,
 }: UseConfirmVisionOptions) {
   const [polling, setPolling] = useState(false);
   const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
@@ -203,14 +206,14 @@ export function useConfirmVision({
   const photoFingerprint = draftPhotoFingerprint(draft);
 
   useEffect(() => {
+    if (deferIdentity || !accessToken || !draftId || !photoFingerprint) {
+      return;
+    }
+
     const prev = prevScopeRef.current;
     const draftChanged = prev.draftId !== draftId;
     const photosChanged = prev.photoFingerprint !== photoFingerprint;
     prevScopeRef.current = { draftId, photoFingerprint };
-
-    if (!accessToken || !draftId || !photoFingerprint) {
-      return;
-    }
 
     if (draftChanged) {
       setJobId(null);
@@ -272,6 +275,7 @@ export function useConfirmVision({
     };
   }, [
     accessToken,
+    deferIdentity,
     draftId,
     onCatalogMiss,
     onPremiumRequired,
@@ -281,7 +285,7 @@ export function useConfirmVision({
   ]);
 
   useEffect(() => {
-    if (!accessToken) {
+    if (deferIdentity || !accessToken) {
       return;
     }
 
@@ -338,7 +342,7 @@ export function useConfirmVision({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, applySuggestions, draftId, onPremiumRequired, sessionDrafts]);
+  }, [accessToken, applySuggestions, deferIdentity, draftId, onPremiumRequired, sessionDrafts]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !polling) {

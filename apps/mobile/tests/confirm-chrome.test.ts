@@ -6,6 +6,12 @@ import {
   openConfirmSheet,
   shouldOpenSeasonAfterClubDismiss,
 } from "../src/capture/confirmSheet";
+import {
+  SANDBOX_GATHER_STAGGER_MS,
+  SANDBOX_THUMB_STEP,
+  sandboxGatherDelayMs,
+  sandboxGatherTranslateX,
+} from "../src/capture/sandboxGather";
 
 const confirmPath = join(__dirname, "../app/(capture)/confirm.tsx");
 const dataScreenPath = join(__dirname, "../src/components/confirm-data-screen.tsx");
@@ -15,6 +21,7 @@ const hubHeaderPath = join(__dirname, "../src/components/confirm-hub-header.tsx"
 const confirmExitPath = join(__dirname, "../src/capture/use-confirm-exit.ts");
 const confirmPhotosPath = join(__dirname, "../src/capture/use-confirm-photos.ts");
 const confirmVisionPath = join(__dirname, "../src/capture/use-confirm-vision.ts");
+const confirmGroupingPath = join(__dirname, "../src/capture/use-confirm-grouping.ts");
 const jerseyTabBarPath = join(__dirname, "../src/components/bulk/JerseyTabBar.tsx");
 const captureLayoutPath = join(__dirname, "../app/(capture)/_layout.tsx");
 const pickerModalPath = join(__dirname, "../src/components/catalog-picker-modal.tsx");
@@ -60,6 +67,13 @@ describe("Confirm chrome", () => {
     expect(confirm).toContain("JerseyTabBar");
     expect(confirm).toContain("ConfirmPhotoViewer");
     expect(confirm).toContain("UnboundPhotosRow");
+    expect(confirm).toContain("deferIdentity: grouping.blocksIdentity");
+    expect(confirm).not.toContain("GROUPING_ANALYZING_COPY");
+    expect(confirm).not.toContain("analyzingMessage");
+    expect(confirm).toContain("analyzing={grouping.blocksIdentity}");
+    expect(confirm).toContain("grouping.blocksIdentity");
+    expect(confirm).toContain("homecoming={grouping.homecoming}");
+    expect(confirm).toContain("visionSlotReserve");
     expect(confirm).toContain("onDiscardPhoto");
     expect(confirm).toContain("onUpload");
     expect(confirmPhotos).toContain("pickUploadFiles");
@@ -98,13 +112,36 @@ describe("Confirm chrome", () => {
       jerseyTabs.indexOf('accessibilityLabel="Tilføj trøje"'),
     );
     expect(jerseyTabs.indexOf('accessibilityLabel="Tilføj trøje"')).toBeLessThan(
-      jerseyTabs.indexOf("</ScrollView>"),
+      jerseyTabs.indexOf("</Animated.ScrollView>"),
     );
     expect(jerseyTabs).not.toContain("flex: 1");
     expect(jerseyTabs).toContain("radius.pill");
     expect(jerseyTabs).toContain("theme.fillSecondary");
     expect(jerseyTabs).not.toContain("theme.danger");
     expect(jerseyTabs).not.toContain("theme.warning");
+    expect(jerseyTabs).toContain("Keyframe");
+    expect(jerseyTabs).toContain("LinearTransition");
+    expect(jerseyTabs).toContain("scale: 0.95");
+    expect(jerseyTabs).toContain("scale: 0.97");
+    expect(jerseyTabs).toContain("Easing.bezier(0.4, 0, 0.2, 1)");
+    expect(jerseyTabs).toContain("useReduceMotion");
+    expect(jerseyTabs).toContain("motion.slow");
+    expect(jerseyTabs).not.toContain("motion.fast");
+    expect(jerseyTabs).toContain('key="add-jersey"');
+    expect(jerseyTabs).toContain("analyzing");
+    expect(jerseyTabs).toContain("jerseyTabPillX");
+    expect(jerseyTabs).toContain("JERSEY_TAB_STEP");
+    expect(jerseyTabs).toContain("withTiming");
+    expect(jerseyTabs).toContain("translateX");
+    expect(jerseyTabs).toContain("inverseRow");
+    expect(jerseyTabs).toContain("-pillX.get()");
+    expect(jerseyTabs).toContain('overflow: "hidden"');
+    expect(jerseyTabs).not.toContain("grouping-skeleton-");
+    expect(jerseyTabs).not.toContain("ConfirmAnalyzingPulse");
+    expect(jerseyTabs).toContain("paddingTop: BADGE_OUTSET");
+    expect(jerseyTabs).toContain("top: -BADGE_OUTSET");
+    expect(jerseyTabs).not.toContain("theme.info");
+    expect(jerseyTabs).not.toContain("theme.success");
 
     const unboundRow = readFileSync(
       join(__dirname, "../src/components/bulk/UnboundPhotosRow.tsx"),
@@ -124,6 +161,80 @@ describe("Confirm chrome", () => {
     expect(unboundRow).not.toContain("ConfirmPhotoSlotAnchor");
     expect(unboundRow).not.toContain("Tryk og hold");
     expect(unboundRow).not.toContain("confirm-photo-recategorize");
+    expect(unboundRow).toContain("FadeOut");
+    expect(unboundRow).toContain("LinearTransition");
+    expect(unboundRow).toContain("useReduceMotion");
+    expect(unboundRow).toContain("motion.slow");
+    expect(unboundRow).not.toContain("motion.fast");
+    expect(unboundRow).toContain("gatheringUris");
+    expect(unboundRow).toContain("sandboxGatherTranslateX");
+    expect(unboundRow).toContain("@/capture/sandboxGather");
+    expect(unboundRow).toContain("withTiming");
+    expect(unboundRow).toContain("withTiming(0.95");
+    expect(unboundRow).toContain("analyzing");
+    expect(unboundRow).toContain("ConfirmAnalyzingPulse");
+    expect(unboundRow).toContain("Grupperer fotoet");
+    expect(unboundRow).not.toContain("thumbSkeleton");
+    expect(unboundRow).toContain("withAlpha(theme.canvas, 0.6)");
+    expect(unboundRow).not.toContain("travel=");
+    expect(unboundRow).toContain("SANDBOX_GATHER_LIFT");
+    expect(unboundRow).toContain("sandboxGatherDelayMs");
+    expect(unboundRow).not.toContain("theme.info");
+
+    const analyzingPulse = readFileSync(
+      join(__dirname, "../src/components/confirm-analyzing-pulse.tsx"),
+      "utf8",
+    );
+    expect(analyzingPulse).toContain('pointerEvents="none"');
+    expect(analyzingPulse).toContain("withRepeat");
+    expect(analyzingPulse).toContain("useReduceMotion");
+    expect(analyzingPulse).toContain("ANALYZING_PULSE_MS = motion.slow * 5");
+    expect(analyzingPulse).toContain("Easing.bezier(0.4, 0, 0.6, 1)");
+    expect(analyzingPulse).toContain("SKELETON_BONE_ALPHA = 0.18");
+    expect(analyzingPulse).toContain("REST_OPACITY = 1");
+    expect(analyzingPulse).toContain("MID_OPACITY = 0.55");
+    expect(analyzingPulse).not.toContain("translateX");
+    expect(analyzingPulse).not.toContain("ANALYZING_SHIMMER_MS");
+
+    const grouping = readFileSync(confirmGroupingPath, "utf8");
+    expect(grouping).not.toContain("GROUPING_ANALYZING_COPY");
+    expect(grouping).toContain("GROUPING_TAB_STAGGER_MS = motion.slow");
+    expect(grouping).toContain("GROUPING_GATHER_MS = motion.slow + motion.base");
+    expect(grouping).toContain("GROUPING_FIRST_ROLL_MS = motion.slow");
+    expect(grouping).toContain("setRollingUris(gatherUris.slice(0, 1))");
+    expect(grouping).toContain("GROUPING_SLOT_ROLL_MS = motion.slow");
+    expect(grouping).toContain("gatherUris.slice(0, shown + 1)");
+    expect(grouping).toContain("for (let shown = 1; shown < gatherUris.length");
+    const shownLoop = grouping.indexOf("for (let shown = 1; shown < gatherUris.length");
+    const bindAfterHold = grouping.indexOf("revealSlice([...prior, { photoIds }], groupIndex)");
+    expect(shownLoop).toBeGreaterThan(-1);
+    expect(bindAfterHold).toBeGreaterThan(shownLoop);
+    expect(grouping.slice(shownLoop, bindAfterHold)).not.toContain("revealSlice");
+    expect(grouping).toContain("GROUPING_SLOT_POP_MS = motion.slow");
+    expect(grouping).toContain("GROUPING_SLOT_HOLD_MS = motion.slow + motion.base");
+    expect(grouping).toContain("GROUPING_REVEAL_SETTLE_MS = motion.base");
+    expect(grouping).toContain("GROUPING_RETURN_MS = motion.slow");
+    expect(grouping).toContain("setHomecoming");
+    expect(grouping).toContain("activateGroup");
+    expect(grouping).toContain("setGatheringUris");
+    expect(grouping).not.toContain("photoIds.slice(0, photoIndex + 1)");
+    expect(confirm).toContain("gatheringUris={grouping.gatheringUris}");
+    expect(confirm).toContain("hiddenSandboxUris");
+    expect(grouping).toContain("setHiddenSandboxUris");
+    expect(confirm).toContain("rollingUris={grouping.rollingUris}");
+    expect(grouping).toContain("setAnalyzing(true)");
+    expect(grouping).toContain("blocksIdentity");
+    expect(grouping).toContain("applyFillOrderToDraft");
+    expect(grouping).toContain("if (!accessToken || !sessionId)");
+    expect(grouping).toContain("ensureSessionPhotoIds");
+    expect(grouping).toContain("buildGroupingSuggestRequest");
+    expect(grouping).toContain("Promise.allSettled");
+    expect(grouping).toContain("closeGroupingRun");
+    expect(grouping).toContain('applyGroupingClose("timeout"');
+    expect(grouping).not.toContain("confirm.grouping");
+    expect(grouping).toContain("shouldBeginGroupingStart");
+    expect(confirmVision).toContain("deferIdentity");
+    expect(confirmVision).toContain("if (deferIdentity || !accessToken || !draftId || !photoFingerprint)");
 
     expect(confirm).not.toContain("ConfirmPhotoRecategorize");
     expect(confirm).not.toContain("applyConfirmPhotoOccupancy");
@@ -133,8 +244,46 @@ describe("Confirm chrome", () => {
       join(__dirname, "../src/components/confirm-photo-viewer.tsx"),
       "utf8",
     );
+    const photoSlot = readFileSync(
+      join(__dirname, "../src/components/photo-slot.tsx"),
+      "utf8",
+    );
     expect(viewer).toContain("ScrollView");
     expect(viewer).not.toContain("borderWidth");
+    expect(viewer).toContain("analyzing");
+    expect(viewer).toContain("groupingStripUris");
+    expect(viewer).toContain("groupingViewerRoles");
+    expect(viewer).toContain("isGroupingWait");
+    expect(viewer).toContain("ConfirmGroupingWait");
+    expect(viewer).toContain("rollingUris");
+    expect(viewer).toContain('labelPlacement={analyzing ? "none" : "overlay"}');
+    expect(viewer).toContain("homecoming");
+    expect(viewer).toContain("slotUris[role] ?? role");
+    expect(viewer).not.toContain("analyzing ? (slotUris[role] ?? role) : role");
+
+    const groupingWait = readFileSync(
+      join(__dirname, "../src/components/confirm-grouping-wait.tsx"),
+      "utf8",
+    );
+    expect(groupingWait).toContain("Forsøger at gruppere dine trøjer");
+    expect(groupingWait).toContain("Du kan starte grupperingen selv");
+    expect(groupingWait).toContain("CONFIRM_VIEWER_WIDTH");
+    expect(groupingWait).toContain("(CONFIRM_VIEWER_WIDTH * 5) / 4");
+    expect(groupingWait).toContain("GROUPING_WAIT_CYCLE_MS = motion.slow * 5");
+    expect(groupingWait).toContain("translateY");
+    expect(groupingWait).not.toContain("theme.info");
+    expect(photoSlot).toContain("ConfirmAnalyzingPulse");
+    expect(photoSlot).not.toContain("skeletonStack");
+    expect(photoSlot).toContain("SKELETON_BONE_ALPHA");
+    expect(photoSlot).toContain("withAlpha(theme.fillPrimary, SKELETON_BONE_ALPHA)");
+    expect(photoSlot).not.toContain("travel=");
+    expect(photoSlot).toContain("theme.surface");
+    expect(photoSlot).toContain("SLOT_FADE_ENTERING");
+    expect(photoSlot).toContain("SLOT_ROLL_ENTERING");
+    expect(photoSlot).toContain("FadeOut");
+    expect(photoSlot).not.toContain("scale: 0.95");
+    expect(photoSlot).toContain("motion.slow");
+    expect(photoSlot).not.toContain("theme.info");
 
     expect(layout).toContain('name="confirm-data"');
     expect(layout).toContain('name="confirm-details"');
@@ -269,6 +418,15 @@ describe("Confirm chrome", () => {
     expect(pickerModal).toContain('name="Luk"');
     expect(pickerModal).toContain('icon="close"');
     expect(pickerModal).toContain("SearchField");
+  });
+
+  it("gathers sandbox thumbs toward the first photo of the jersey", () => {
+    const uris = ["a", "b", "c"];
+    expect(sandboxGatherTranslateX(uris, ["b", "c"], "b")).toBe(0);
+    expect(sandboxGatherTranslateX(uris, ["b", "c"], "c")).toBe(-SANDBOX_THUMB_STEP);
+    expect(sandboxGatherTranslateX(uris, ["b", "c"], "a")).toBe(0);
+    expect(sandboxGatherDelayMs(0)).toBe(0);
+    expect(sandboxGatherDelayMs(2)).toBe(SANDBOX_GATHER_STAGGER_MS * 2);
   });
 
   it("keeps player print off the main confirm column", () => {
