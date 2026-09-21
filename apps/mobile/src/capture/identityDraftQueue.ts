@@ -5,15 +5,41 @@ export function identityRunKey(draft: CaptureJerseyDraft): string {
   return `${draft.id}:${draftPhotoFingerprint(draft) ?? ""}`;
 }
 
-/** Confirm tabs are `drafts` order — jersey 1, then 2, then 3. Skip empty drafts. */
-export function orderedIdentityDrafts(
-  drafts: ReadonlyArray<CaptureJerseyDraft>,
-): CaptureJerseyDraft[] {
-  return drafts.filter((draft) => draft.photos.length > 0);
+function draftHasFrontAndBack(draft: CaptureJerseyDraft): boolean {
+  const roles = new Set(draft.photos.map((photo) => photo.role ?? "front"));
+  return roles.has("front") && roles.has("back");
 }
 
-export function identityQueueFingerprint(drafts: ReadonlyArray<CaptureJerseyDraft>): string {
-  return orderedIdentityDrafts(drafts)
+/**
+ * A bound draft is ready for identity when it has front+back, or when grouping
+ * is not in flight (so a single-photo shirt still identifies after grouping settles).
+ */
+export function isDraftReadyForIdentityJob(
+  draft: CaptureJerseyDraft,
+  groupingInFlight: boolean,
+): boolean {
+  if (draft.photos.length === 0) {
+    return false;
+  }
+  if (groupingInFlight) {
+    return draftHasFrontAndBack(draft);
+  }
+  return true;
+}
+
+/** Confirm tabs are `drafts` order — jersey 1, then 2, then 3. Skip empty / not-ready drafts. */
+export function orderedIdentityDrafts(
+  drafts: ReadonlyArray<CaptureJerseyDraft>,
+  groupingInFlight = false,
+): CaptureJerseyDraft[] {
+  return drafts.filter((draft) => isDraftReadyForIdentityJob(draft, groupingInFlight));
+}
+
+export function identityQueueFingerprint(
+  drafts: ReadonlyArray<CaptureJerseyDraft>,
+  groupingInFlight = false,
+): string {
+  return orderedIdentityDrafts(drafts, groupingInFlight)
     .map((draft) => identityRunKey(draft))
     .join("|");
 }
@@ -25,8 +51,11 @@ export function identityQueueFingerprint(drafts: ReadonlyArray<CaptureJerseyDraf
 export function nextQueuedIdentityDraft(
   drafts: ReadonlyArray<CaptureJerseyDraft>,
   startedKeys: ReadonlySet<string>,
+  groupingInFlight = false,
 ): CaptureJerseyDraft | undefined {
-  return orderedIdentityDrafts(drafts).find((draft) => !startedKeys.has(identityRunKey(draft)));
+  return orderedIdentityDrafts(drafts, groupingInFlight).find(
+    (draft) => !startedKeys.has(identityRunKey(draft)),
+  );
 }
 
 export const IDENTITY_TIMEOUT_ERROR = "IDENTITY_TIMEOUT";

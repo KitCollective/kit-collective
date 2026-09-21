@@ -63,6 +63,8 @@ type UseConfirmVisionOptions = {
   onPremiumRequired?: () => Promise<boolean>;
   /** Hold identity until grouping has bound drafts (or failed). */
   deferIdentity?: boolean;
+  /** Per-draft photo-set readiness: wait for front+back while grouping is in flight. */
+  groupingInFlight?: boolean;
 };
 
 function hasPreselectFields(fieldPreselect: VisionFieldPreselect | undefined): boolean {
@@ -105,6 +107,7 @@ export function useConfirmVision({
   onCatalogMiss,
   onPremiumRequired,
   deferIdentity = false,
+  groupingInFlight = false,
 }: UseConfirmVisionOptions) {
   const [polling, setPolling] = useState(false);
   const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
@@ -119,6 +122,8 @@ export function useConfirmVision({
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const wasDeferredRef = useRef(deferIdentity);
+  const groupingInFlightRef = useRef(groupingInFlight);
+  groupingInFlightRef.current = groupingInFlight;
   const prevQueueFingerprintRef = useRef<string | null>(null);
   const identityLoopActiveRef = useRef(false);
   const identityKickAgainRef = useRef(false);
@@ -240,7 +245,7 @@ export function useConfirmVision({
   applySuggestionsRef.current = applySuggestions;
 
   const draftId = draft?.id ?? null;
-  const queueFingerprint = identityQueueFingerprint(sessionDrafts);
+  const queueFingerprint = identityQueueFingerprint(sessionDrafts, groupingInFlight);
 
   useEffect(() => {
     setPolling(inFlightDraftId !== null && inFlightDraftId === draftId);
@@ -294,6 +299,7 @@ export function useConfirmVision({
       const next = nextQueuedIdentityDraft(
         sessionDraftsRef.current,
         startedIdentityKeysRef.current,
+        groupingInFlightRef.current,
       );
       if (!next) {
         return false;
@@ -395,7 +401,11 @@ export function useConfirmVision({
             !identityUnmountedRef.current &&
             (identityKickAgainRef.current ||
               Boolean(
-                nextQueuedIdentityDraft(sessionDraftsRef.current, startedIdentityKeysRef.current),
+                nextQueuedIdentityDraft(
+                  sessionDraftsRef.current,
+                  startedIdentityKeysRef.current,
+                  groupingInFlightRef.current,
+                ),
               ))
           ) {
             identityKickAgainRef.current = false;

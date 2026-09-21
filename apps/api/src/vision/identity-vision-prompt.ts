@@ -40,7 +40,7 @@ Think like Football Kit Archive or Classic Football Shirts. Output JSON only —
 CLUB
 - Identify the club or national team. Use a commonly known English name ("Rangers FC", "Liverpool FC", "RB Leipzig", "Denmark").
 - Add 1–3 alternate names in clubHintAlts: local-language name, abbreviation, or nickname ("LFC", "Liverpool FC", "the Reds"). Do not invent alts you cannot support.
-- Use crest, collar tags, and known templates. Do not invent a club with no visual clue.
+- Front-heavy cues decide club, season, and kit type: crest, chest sponsor, league patch, and collar motto. Use those, plus collar tags and known templates. Do not invent a club with no visual clue.
 - Identify only what is visible in THESE photos. Do not reuse a previous shirt's club, sponsor, player, or colours.
 
 KIT TYPE (home | away | third | fourth | gk | special)
@@ -76,8 +76,13 @@ Never report 0.95 on a one-year guess you cannot corroborate.
 If two adjacent seasons are plausible and sponsor+manufacturer+template do not lock one year, keep season confidence ≤ 0.50.
 
 PLAYER
-- Fill playerHint / playerNumberHint only from a visible back print.
+- Fill playerHint / playerNumberHint only from a visible back print (name and number). Do not infer the player from the front crest or sponsor.
 - Blank back → omit both, player confidence 0.
+
+PHOTO ROLES / MERGE
+- Front photo: crest, chest sponsor, league patch, collar motto → club + season + type.
+- Back photo: name and number → player.
+- Return one JSON that combines those cues. When a front photo is present, do not identify the club from the back alone. A crest-less back (plain colour, name/number only) must not override a visible front crest, sponsor, or motto.
 
 PATCHES / BADGES (critical)
 - patchHint is a sleeve or chest PATCH: league, UCL/EL/Conference, charity, captain. Not the crest. Not the manufacturer logo. Not the main chest sponsor.
@@ -111,14 +116,42 @@ export function identityPhotoFingerprint(photos: Array<{ bytes: Uint8Array }>): 
     .join("|");
 }
 
-export function identityVisionUserPrompt(photoCount: number, photoFingerprint?: string): string {
+export function identityVisionPhotoRoles(photos: Array<{ role?: string }>): string[] | undefined {
+  const roles = photos.map((photo) => photo.role).filter((role): role is string => Boolean(role));
+  return roles.length > 0 ? roles : undefined;
+}
+
+function photoRolesOrderLine(photoCount: number, roles?: readonly string[]): string {
+  if (photoCount < 2 || !roles || roles.length === 0) {
+    return "";
+  }
+  if (roles.includes("front") && roles.includes("back")) {
+    return `\nPhoto roles in order: front, then back.\n`;
+  }
+  return `\nPhoto roles in order: ${roles.join(", ")}.\n`;
+}
+
+function photoRolesMergeRules(photoCount: number): string {
+  if (photoCount < 2) {
+    return "";
+  }
+  return `- PHOTO ROLES / MERGE: Front = crest, chest sponsor, league patch, collar motto → clubHint, seasonHint, kitType. Back = name and number print → playerHint, playerNumberHint. Merge into one JSON. Do not identify the club from the back alone when a front photo is present. Do not let a crest-less back override a front crest.
+`;
+}
+
+export function identityVisionUserPrompt(
+  photoCount: number,
+  photoFingerprint?: string,
+  roles?: readonly string[],
+): string {
   const photos =
     photoCount === 1 ? "this jersey photo" : `these ${photoCount} jersey photos of the SAME shirt`;
   const fingerprintLine = photoFingerprint
     ? `\nPhoto fingerprint: ${photoFingerprint}. Trust these pixels over any prior shirt.\n`
     : "";
+  const rolesLine = photoRolesOrderLine(photoCount, roles);
 
-  return `Analyze ${photos}. Merge all angles into one JSON object.${fingerprintLine}
+  return `Analyze ${photos}. Merge all angles into one JSON object.${fingerprintLine}${rolesLine}
 
 {
   "clubHint": "Rangers FC" | null,
@@ -144,7 +177,7 @@ export function identityVisionUserPrompt(photoCount: number, photoFingerprint?: 
 
 Rules:
 - All images are one shirt. Combine crest, back print, sleeves, and labels.
-- Date seasonHint from THIS shirt's template, graphic, and chest sponsor. Do not reuse a remembered year.
+${photoRolesMergeRules(photoCount)}- Date seasonHint from THIS shirt's template, graphic, and chest sponsor. Do not reuse a remembered year.
 - clubHintAlts: 0–3 alternate club or national-team names. [] if none.
 - kitType values are lowercase exactly as above.
 - badges: [] if no sleeve/chest patch is visible. Each visible patch: {"position":"right_sleeve"|"left_sleeve"|"front"|"other","category":"competition"|"league"|"partner"|"captain"|"unknown","nameText":"..."}.
@@ -154,8 +187,12 @@ Rules:
 }
 
 /** Combined prompt for Gemini generateContent (no system role). */
-export function identityVisionPrompt(photoCount: number, photoFingerprint?: string): string {
-  return `${IDENTITY_VISION_SYSTEM_PROMPT}\n\n${identityVisionUserPrompt(photoCount, photoFingerprint)}`;
+export function identityVisionPrompt(
+  photoCount: number,
+  photoFingerprint?: string,
+  roles?: readonly string[],
+): string {
+  return `${IDENTITY_VISION_SYSTEM_PROMPT}\n\n${identityVisionUserPrompt(photoCount, photoFingerprint, roles)}`;
 }
 
 export type IdentityRefinementCandidate = {
