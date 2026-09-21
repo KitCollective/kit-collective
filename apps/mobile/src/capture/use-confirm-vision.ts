@@ -412,10 +412,7 @@ export function useConfirmVision({
             !identityUnmountedRef.current &&
             (identityKickAgainRef.current ||
               Boolean(
-                nextQueuedIdentityDraft(
-                  sessionDraftsRef.current,
-                  startedIdentityKeysRef.current,
-                ),
+                nextQueuedIdentityDraft(sessionDraftsRef.current, startedIdentityKeysRef.current),
               ))
           ) {
             identityKickAgainRef.current = false;

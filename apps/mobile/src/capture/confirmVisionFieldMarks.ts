@@ -40,10 +40,7 @@ function isVisionDataField(key: string): key is VisionDataField {
   return (VISION_DATA_FIELDS as readonly string[]).includes(key);
 }
 
-function fieldWasSuggested(
-  field: VisionDataField,
-  input: ConfirmVisionFieldMarkInput,
-): boolean {
+function fieldWasSuggested(field: VisionDataField, input: ConfirmVisionFieldMarkInput): boolean {
   const preselect = input.fieldPreselect ?? {};
   const suggestions = input.suggestions;
 

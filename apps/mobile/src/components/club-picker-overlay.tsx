@@ -2,10 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { searchCatalogClubs } from "@/api/catalog";
 import { formatCatalogMissSheetMessage } from "@/capture/catalogMissHint";
 import type { CatalogPickerRow } from "@/catalog/catalogPickerRow";
-import {
-  CATALOG_SEARCH_ERROR_MESSAGE,
-  resolveClubPickerRows,
-} from "@/catalog/liveCatalogPicker";
+import { CATALOG_SEARCH_ERROR_MESSAGE, resolveClubPickerRows } from "@/catalog/liveCatalogPicker";
 import { CatalogPickerModal } from "@/components/catalog-picker-modal";
 
 type ClubPickerOverlayProps = {
@@ -111,9 +108,7 @@ export function ClubPickerOverlay({
       errorMessage={errorMessage}
       noticeMessage={catalogMissHint ? formatCatalogMissSheetMessage(catalogMissHint) : null}
       emptyMessage={
-        !accessToken
-          ? "Log ind for at søge i kataloget."
-          : "Ingen klubber eller landshold matcher."
+        !accessToken ? "Log ind for at søge i kataloget." : "Ingen klubber eller landshold matcher."
       }
       onSelect={(item) => {
         onSelect(item);

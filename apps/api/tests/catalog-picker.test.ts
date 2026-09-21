@@ -92,9 +92,7 @@ describe("Catalog picker /v1", () => {
     expect(response.statusCode).toBe(200);
     const body = catalogClubSearchResponseSchema.parse(JSON.parse(response.body));
     expect(Array.isArray(body.clubs)).toBe(true);
-    expect(body.clubs.some((row) => row.id === "11111111-1111-4111-8111-111111111111")).toBe(
-      false,
-    );
+    expect(body.clubs.some((row) => row.id === "11111111-1111-4111-8111-111111111111")).toBe(false);
   });
 
   it("rejects unauthenticated club seasons with 401", async () => {

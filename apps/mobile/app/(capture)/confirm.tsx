@@ -143,8 +143,7 @@ export default function ConfirmScreen() {
   const activeJerseyIndex = state?.drafts.findIndex((entry) => entry.id === draft.id) ?? 0;
   const activeTabLabel = `Trøje ${activeJerseyIndex + 1}`;
   const showSuggestionSlot =
-    !grouping.blocksIdentity &&
-    Boolean(grouping.groupingMessage || vision.suggestion?.suggestions);
+    !grouping.blocksIdentity && Boolean(grouping.groupingMessage || vision.suggestion?.suggestions);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
