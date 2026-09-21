@@ -4,6 +4,7 @@ import {
   decodeIdentityVisionHints,
   type IdentityRefinementCandidate,
   identityPhotoFingerprint,
+  identityVisionPhotoRoles,
   identityVisionPrompt,
   identityVisionRefinementUserPrompt,
 } from "./identity-vision-prompt.js";
@@ -231,7 +232,13 @@ export class GeminiVisionAdapter implements VisionAdapter {
     signal: AbortSignal,
   ): Promise<string | null> {
     const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
-      { text: identityVisionPrompt(photos.length, identityPhotoFingerprint(photos)) },
+      {
+        text: identityVisionPrompt(
+          photos.length,
+          identityPhotoFingerprint(photos),
+          identityVisionPhotoRoles(photos),
+        ),
+      },
     ];
 
     for (const photo of photos) {
@@ -256,7 +263,11 @@ export class GeminiVisionAdapter implements VisionAdapter {
   ): Promise<string | null> {
     const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
       {
-        text: `${identityVisionPrompt(photos.length, identityPhotoFingerprint(photos))}\n\n${identityVisionRefinementUserPrompt(candidates)}`,
+        text: `${identityVisionPrompt(
+          photos.length,
+          identityPhotoFingerprint(photos),
+          identityVisionPhotoRoles(photos),
+        )}\n\n${identityVisionRefinementUserPrompt(candidates)}`,
       },
     ];
 

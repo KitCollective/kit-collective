@@ -89,6 +89,7 @@ export default function ConfirmScreen() {
       groupingInFlight: grouping.blocksIdentity,
       boundDraftCount: (state?.drafts ?? []).filter((entry) => entry.photos.length > 0).length,
     }),
+    groupingInFlight: grouping.blocksIdentity,
   });
   const photos = useConfirmPhotos({
     sessionId,
