@@ -1,3 +1,4 @@
+import { isDevCatalogFixtureId } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
   catalogLabel,
@@ -34,6 +35,7 @@ import {
   type ObservableKitHit,
   pickBestCatalogSide,
   pickLockedKit,
+  reconcileHintSeasonWithSquad,
   scoreLabelMatch,
 } from "./vision-kit-lock.js";
 
@@ -69,6 +71,8 @@ const SQUAD_NUMBER_MATCH_SCORE = 90;
  * Intentional omit cases (QA scoring):
  * - Blank shirt back → VLM omits playerHint/playerNumberHint → no player suggestion.
  * - seasonHint with no teamSeason/nationalTeamSeason row for the scoped side → no seasonId.
+ * - Named player/number not on the hinted season, two+ squad seasons remain → omit seasonId.
+ * - TeamSeason string match is not kit-lock confidence.
  * - Model per-field confidence below suggest threshold → resolveIdentityJob omits that field,
  *   except hint-only kit type and catalog-mapped playerId may fall back to overall / match score.
  * - Missing manufacturerHint → no observable kit hits → no catalogKitId lock.
@@ -101,12 +105,20 @@ export class VisionCatalogMapper {
       locked?.seasonId === undefined
         ? await this.resolveSeasonFromHint(playerScope, hints.seasonHint)
         : null;
-    const seasonId = locked?.seasonId ?? hintSeason?.seasonId;
+    let seasonId = locked?.seasonId ?? hintSeason?.seasonId;
     const type = locked?.type ?? hints.kitType;
     const playerMatch =
       playerScope || hints.playerHint?.trim()
         ? await this.resolvePlayer(playerScope, seasonId, hints.playerNumberHint, hints.playerHint)
         : null;
+    if (!locked && playerMatch && playerScope) {
+      const squadSeasonIds = await this.listPlayerSeasonIds(
+        playerScope,
+        playerMatch.playerId,
+        parseSquadNumber(hints.playerNumberHint) ?? parseSquadNumber(playerMatch.playerNumber),
+      );
+      seasonId = reconcileHintSeasonWithSquad(seasonId, squadSeasonIds);
+    }
     const patchMatch = seasonId ? await this.resolvePatch(seasonId, hints.patchHint) : null;
 
     if (!clubId && !nationalTeamId && !locked && !playerMatch && !patchMatch) {
@@ -136,7 +148,6 @@ export class VisionCatalogMapper {
       confidences: this.buildConfidences(hints, {
         club: clubId ? clubMatchScore(sideMatch, locked) : undefined,
         nationalTeam: nationalTeamId ? clubMatchScore(sideMatch, locked) : undefined,
-        season: locked ? CATALOG_KIT_LOCK_CONFIDENCE : hintSeason?.score,
         kitType: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         player: playerMatch?.score,
         badge: patchMatch?.score,
@@ -235,8 +246,10 @@ export class VisionCatalogMapper {
       return null;
     }
 
-    const clubIds = idsForEntityType(labelRows, "club");
-    const nationalTeamIds = idsForEntityType(labelRows, "national_team");
+    const clubIds = idsForEntityType(labelRows, "club").filter((id) => !isDevCatalogFixtureId(id));
+    const nationalTeamIds = idsForEntityType(labelRows, "national_team").filter(
+      (id) => !isDevCatalogFixtureId(id),
+    );
     const [existingClubs, existingNationalTeams] = await Promise.all([
       this.existingIds(club, clubIds),
       this.existingIds(nationalTeam, nationalTeamIds),
@@ -506,6 +519,51 @@ export class VisionCatalogMapper {
           inArray(playerNationalTeamSeason.playerId, playerIds),
         ),
       );
+  }
+
+  private async listPlayerSeasonIds(
+    playerScope: { kind: CatalogSideKind; id: string },
+    playerId: string,
+    squadNumber?: number,
+  ): Promise<string[]> {
+    const withNumber = await this.listPlayerSeasonRows(playerScope, playerId, squadNumber);
+    if (withNumber.length > 0 || squadNumber === undefined) {
+      return [...new Set(withNumber.map((row) => row.seasonId))];
+    }
+    const unnumbered = await this.listPlayerSeasonRows(playerScope, playerId);
+    return [...new Set(unnumbered.map((row) => row.seasonId))];
+  }
+
+  private async listPlayerSeasonRows(
+    playerScope: { kind: CatalogSideKind; id: string },
+    playerId: string,
+    squadNumber?: number,
+  ): Promise<Array<{ seasonId: string }>> {
+    if (playerScope.kind === "club") {
+      const filters = [
+        eq(playerClubSeason.clubId, playerScope.id),
+        eq(playerClubSeason.playerId, playerId),
+      ];
+      if (squadNumber !== undefined) {
+        filters.push(eq(playerClubSeason.squadNumber, squadNumber));
+      }
+      return this.db
+        .select({ seasonId: playerClubSeason.seasonId })
+        .from(playerClubSeason)
+        .where(and(...filters));
+    }
+
+    const filters = [
+      eq(playerNationalTeamSeason.nationalTeamId, playerScope.id),
+      eq(playerNationalTeamSeason.playerId, playerId),
+    ];
+    if (squadNumber !== undefined) {
+      filters.push(eq(playerNationalTeamSeason.squadNumber, squadNumber));
+    }
+    return this.db
+      .select({ seasonId: playerNationalTeamSeason.seasonId })
+      .from(playerNationalTeamSeason)
+      .where(and(...filters));
   }
 
   private async listSquadOnSide(

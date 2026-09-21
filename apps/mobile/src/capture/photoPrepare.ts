@@ -208,6 +208,11 @@ async function readPreparedDevicePhoto(
   purpose: PhotoPreparePurpose,
   adapter: PhotoManipulatorAdapter,
 ): Promise<PreparedPhoto> {
+  // Identity must re-read disk. Expo ImagePicker can reuse a URI after a new pick;
+  // a cached JPEG from the previous shirt would replay the wrong club.
+  if (purpose === "visionIdentity") {
+    return prepareDevicePhoto(uri, role, purpose, adapter);
+  }
   const key = cacheKey(uri, role, purpose);
   let pending = prepareCache.get(key);
   if (!pending) {

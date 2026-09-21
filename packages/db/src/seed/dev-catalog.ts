@@ -14,8 +14,9 @@ import {
 import { seedEuropeanCountries } from "./european-countries.js";
 
 /**
- * Confirm/Data picker fixture. IDs must stay in lockstep with
- * `apps/mobile/src/catalog/dummyCatalog.ts`. Not Transfermarkt catalog truth.
+ * Local empty-DB Confirm picker fixture. Live pickers omit these IDs
+ * (`DEV_CATALOG_FIXTURE_IDS` in `@kit/api-contract`) so they do not duplicate
+ * scraped stamdata. Not Transfermarkt catalog truth.
  */
 const SUPERLIGA_ID = "77777771-7771-4771-8771-777777777771";
 const PREMIER_LEAGUE_ID = "77777772-7772-4772-8772-777777777772";

@@ -146,4 +146,29 @@ describe("openrouter vision transport", () => {
     expect(body.provider.only).toEqual([...OPENROUTER_VISION_PROVIDERS]);
     expect(body.provider.allow_fallbacks).toBe(false);
   });
+
+  it("changes identity user text when photo bytes change", () => {
+    const first = buildOpenRouterIdentityBody([
+      { role: "front", bytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]) },
+    ]);
+    const second = buildOpenRouterIdentityBody([
+      { role: "front", bytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xe1]) },
+    ]);
+    const firstUser = first.messages.find((message) => message.role === "user");
+    const secondUser = second.messages.find((message) => message.role === "user");
+    expect(firstUser?.role).toBe("user");
+    expect(secondUser?.role).toBe("user");
+    if (firstUser?.role !== "user" || secondUser?.role !== "user") {
+      throw new Error("expected user messages");
+    }
+    const firstText = firstUser.content.find((part) => part.type === "text");
+    const secondText = secondUser.content.find((part) => part.type === "text");
+    expect(firstText?.type).toBe("text");
+    expect(secondText?.type).toBe("text");
+    if (firstText?.type !== "text" || secondText?.type !== "text") {
+      throw new Error("expected text parts");
+    }
+    expect(firstText.text).toContain("Photo fingerprint:");
+    expect(firstText.text).not.toEqual(secondText.text);
+  });
 });

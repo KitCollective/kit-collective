@@ -469,3 +469,24 @@ export function pickRefinedKit(
   }
   return onlyHit(scoped) ?? null;
 }
+
+/**
+ * Visual seasonHint maps onto TeamSeason even when no Kit row exists.
+ * A squad for the named player may reject an impossible year; two remaining
+ * seasons omit rather than keep the wrong hint.
+ */
+export function reconcileHintSeasonWithSquad(
+  hintedSeasonId: string | undefined,
+  squadSeasonIds: readonly string[],
+): string | undefined {
+  if (squadSeasonIds.length === 0) {
+    return hintedSeasonId;
+  }
+  if (hintedSeasonId && squadSeasonIds.includes(hintedSeasonId)) {
+    return hintedSeasonId;
+  }
+  if (squadSeasonIds.length === 1) {
+    return squadSeasonIds[0];
+  }
+  return undefined;
+}

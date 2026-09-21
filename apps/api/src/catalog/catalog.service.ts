@@ -7,6 +7,8 @@ import {
   catalogClubSeasonsResponseSchema,
   catalogFacetSearchResponseSchema,
   catalogStatsSchema,
+  isDevCatalogFixtureId,
+  omitDevCatalogFixtureRows,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
@@ -20,8 +22,10 @@ import {
   manufacturer,
   nationalTeam,
   nationalTeamSeason,
+  patch,
   player,
   playerClubSeason,
+  playerNationalTeamSeason,
   season,
   teamSeason,
   user,
@@ -163,7 +167,8 @@ export class CatalogService {
   }
 
   async searchClubs(query: string, locale: LabelLocale): Promise<CatalogClubSearchResponse> {
-    const pattern = `%${query}%`;
+    const trimmed = query.trim();
+    const pattern = trimmed.length > 0 ? `%${trimmed}%` : `%`;
 
     const matches = await this.db
       .selectDistinct({
@@ -231,12 +236,14 @@ export class CatalogService {
             .where(inArray(nationalTeam.id, nationalTeamIds))
             .groupBy(nationalTeam.id);
 
-    const clubs = [...clubRows, ...nationalTeamRows]
-      .filter((row): row is typeof row & { label: string; kind: "club" | "national_team" } =>
-        Boolean(row.label),
-      )
-      .map((row) => ({ id: row.id, label: row.label, kind: row.kind }))
-      .sort((a, b) => a.label.localeCompare(b.label, locale));
+    const clubs = omitDevCatalogFixtureRows(
+      [...clubRows, ...nationalTeamRows]
+        .filter((row): row is typeof row & { label: string; kind: "club" | "national_team" } =>
+          Boolean(row.label),
+        )
+        .map((row) => ({ id: row.id, label: row.label, kind: row.kind }))
+        .sort((a, b) => a.label.localeCompare(b.label, locale)),
+    ).slice(0, 80);
 
     return catalogClubSearchResponseSchema.parse({ clubs });
   }
@@ -249,8 +256,130 @@ export class CatalogService {
     return this.searchFacetEntities("league", query, locale);
   }
 
-  async searchPlayers(query: string, locale: LabelLocale): Promise<CatalogFacetSearchResponse> {
+  async searchPlayers(
+    query: string,
+    locale: LabelLocale,
+    scope?: { clubId?: string; seasonId?: string },
+  ): Promise<CatalogFacetSearchResponse> {
+    if (scope?.clubId) {
+      if (isDevCatalogFixtureId(scope.clubId)) {
+        return catalogFacetSearchResponseSchema.parse({ items: [] });
+      }
+      return this.searchSquadPlayers(scope.clubId, scope.seasonId, query, locale);
+    }
     return this.searchFacetEntities("player", query, locale);
+  }
+
+  private async searchSquadPlayers(
+    clubId: string,
+    seasonId: string | undefined,
+    query: string,
+    locale: LabelLocale,
+  ): Promise<CatalogFacetSearchResponse> {
+    const [clubRow] = await this.db
+      .select({ id: club.id })
+      .from(club)
+      .where(eq(club.id, clubId))
+      .limit(1);
+
+    if (clubRow) {
+      const conditions = [eq(playerClubSeason.clubId, clubId)];
+      if (seasonId) {
+        conditions.push(eq(playerClubSeason.seasonId, seasonId));
+      }
+
+      const rows = await this.db
+        .select({
+          id: player.id,
+          label: this.resolvedPickerLabel(locale),
+          squadNumber: sql<number | null>`max(${playerClubSeason.squadNumber})`,
+        })
+        .from(playerClubSeason)
+        .innerJoin(player, eq(player.id, playerClubSeason.playerId))
+        .leftJoin(
+          catalogLabel,
+          and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
+        )
+        .where(and(...conditions))
+        .groupBy(player.id);
+
+      return this.toSquadPickerItems(rows, query, locale);
+    }
+
+    const [nationalTeamRow] = await this.db
+      .select({ id: nationalTeam.id })
+      .from(nationalTeam)
+      .where(eq(nationalTeam.id, clubId))
+      .limit(1);
+
+    if (nationalTeamRow) {
+      const conditions = [eq(playerNationalTeamSeason.nationalTeamId, clubId)];
+      if (seasonId) {
+        conditions.push(eq(playerNationalTeamSeason.seasonId, seasonId));
+      }
+
+      const rows = await this.db
+        .select({
+          id: player.id,
+          label: this.resolvedPickerLabel(locale),
+          squadNumber: sql<number | null>`max(${playerNationalTeamSeason.squadNumber})`,
+        })
+        .from(playerNationalTeamSeason)
+        .innerJoin(player, eq(player.id, playerNationalTeamSeason.playerId))
+        .leftJoin(
+          catalogLabel,
+          and(eq(catalogLabel.entityType, "player"), eq(catalogLabel.entityId, player.id)),
+        )
+        .where(and(...conditions))
+        .groupBy(player.id);
+
+      return this.toSquadPickerItems(rows, query, locale);
+    }
+
+    return catalogFacetSearchResponseSchema.parse({ items: [] });
+  }
+
+  private resolvedPickerLabel(locale: LabelLocale) {
+    return sql<string | null>`coalesce(
+      max(case when ${catalogLabel.locale} = ${locale} and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+      max(case when ${catalogLabel.locale} = 'mul' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+      max(case when ${catalogLabel.locale} = 'en' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end)
+    )`;
+  }
+
+  private toSquadPickerItems(
+    rows: { id: string; label: string | null; squadNumber: number | null }[],
+    query: string,
+    locale: LabelLocale,
+  ): CatalogFacetSearchResponse {
+    const trimmed = query.trim().toLowerCase();
+    const items = rows
+      .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+      .map((row) => {
+        const item: { id: string; label: string; meta?: string } = {
+          id: row.id,
+          label: row.label,
+        };
+        if (row.squadNumber != null) {
+          item.meta = `Nr. ${row.squadNumber}`;
+        }
+        return item;
+      })
+      .filter((item) => {
+        if (!trimmed) {
+          return true;
+        }
+        return (
+          item.label.toLowerCase().includes(trimmed) ||
+          (item.meta?.toLowerCase().includes(trimmed) ?? false)
+        );
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, locale))
+      .slice(0, 80);
+
+    return catalogFacetSearchResponseSchema.parse({
+      items: omitDevCatalogFixtureRows(items),
+    });
   }
 
   private async searchFacetEntities(
@@ -298,10 +427,12 @@ export class CatalogService {
       .where(inArray(baseTable.id, entityIds))
       .groupBy(baseTable.id);
 
-    const items = rows
-      .filter((row): row is typeof row & { label: string } => Boolean(row.label))
-      .map((row) => ({ id: row.id, label: row.label }))
-      .sort((a, b) => a.label.localeCompare(b.label, locale));
+    const items = omitDevCatalogFixtureRows(
+      rows
+        .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+        .map((row) => ({ id: row.id, label: row.label }))
+        .sort((a, b) => a.label.localeCompare(b.label, locale)),
+    );
 
     return catalogFacetSearchResponseSchema.parse({ items });
   }
@@ -371,5 +502,36 @@ export class CatalogService {
     }
 
     return catalogClubSeasonsResponseSchema.parse({ seasons: [] });
+  }
+
+  async getSeasonPatches(
+    seasonId: string,
+    locale: LabelLocale = "da",
+  ): Promise<CatalogFacetSearchResponse> {
+    const rows = await this.db
+      .select({
+        id: patch.id,
+        label: sql<string | null>`coalesce(
+          max(case when ${catalogLabel.locale} = ${locale} and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+          max(case when ${catalogLabel.locale} = 'mul' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+          max(case when ${catalogLabel.locale} = 'en' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end)
+        )`,
+      })
+      .from(patch)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "patch"), eq(catalogLabel.entityId, patch.id)),
+      )
+      .where(eq(patch.seasonId, seasonId))
+      .groupBy(patch.id);
+
+    const items = omitDevCatalogFixtureRows(
+      rows
+        .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+        .map((row) => ({ id: row.id, label: row.label }))
+        .sort((a, b) => a.label.localeCompare(b.label, locale)),
+    );
+
+    return catalogFacetSearchResponseSchema.parse({ items });
   }
 }

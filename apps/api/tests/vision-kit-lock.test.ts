@@ -10,6 +10,7 @@ import {
   pickLockedKit,
   pickRefinedKit,
   pickUniqueKitByObservables,
+  reconcileHintSeasonWithSquad,
   resolveObservableKitLock,
   scoreColorMatch,
   scoreLabelMatch,
@@ -260,5 +261,27 @@ describe("vision kit lock", () => {
     expect(catalogClubIdForSave(rangersHome, { id: "other-club", kind: "club", score: 70 })).toBe(
       rangersHome.clubId,
     );
+  });
+});
+
+describe("reconcileHintSeasonWithSquad", () => {
+  const season2122 = "11111111-1111-4111-8111-111111111111";
+  const season2425 = "22222222-2222-4222-8222-222222222222";
+  const season2526 = "33333333-3333-4333-8333-333333333333";
+
+  it("keeps a visual year when the player has no squad rows yet", () => {
+    expect(reconcileHintSeasonWithSquad(season2425, [])).toBe(season2425);
+  });
+
+  it("keeps the hinted year when the player actually played that season", () => {
+    expect(reconcileHintSeasonWithSquad(season2425, [season2425, season2526])).toBe(season2425);
+  });
+
+  it("moves to the only squad season when the hinted year is impossible", () => {
+    expect(reconcileHintSeasonWithSquad(season2122, [season2425])).toBe(season2425);
+  });
+
+  it("omits season when the hint is impossible and two squad seasons remain", () => {
+    expect(reconcileHintSeasonWithSquad(season2122, [season2425, season2526])).toBeUndefined();
   });
 });

@@ -1,0 +1,82 @@
+{
+  "ranAt": "2026-09-21T17:30+01",
+  "expected": {
+    "club": "Toulouse FC",
+    "season": "2024/25",
+    "type": "home",
+    "player": "Rasmus Nicolaisen",
+    "number": "2",
+    "brand": "Nike",
+    "sponsor": "LP Promotion",
+    "fka": "https://www.footballkitarchive.com/toulouse-fc-2024-25-home-kit/",
+    "notes": "Purple sash home; Debout Toujours; Ligue 1 McDonalds sleeve; signed #2 back"
+  },
+  "identity": [
+    {
+      "tag": "photo1_frontish",
+      "role": "front",
+      "file": "photo1.jpg",
+      "attempt": 3,
+      "status": "noop",
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "jobId": "0aa83fb2-09b1-496d-9285-74c10a1e07f0",
+      "secs": 7.9
+    },
+    {
+      "tag": "photo2_detail",
+      "role": "other",
+      "file": "photo2.jpg",
+      "attempt": 3,
+      "status": "noop",
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "jobId": "454c8165-d736-4fe1-9d84-71391606ad3f",
+      "secs": 7.9
+    },
+    {
+      "tag": "photo3_back",
+      "role": "back",
+      "file": "photo3.jpg",
+      "attempt": 3,
+      "status": "ready",
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true,
+        "player": true
+      },
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {
+        "clubId": "d2f8cdba-0afc-43d0-b77a-75e8a7ed198a",
+        "seasonId": "fdcb81ce-8398-495d-9369-5ed0cae3e703",
+        "type": "home",
+        "clubLabel": "RSC Anderlecht",
+        "seasonLabel": "2019/20",
+        "playerId": "05525b5a-cd27-42d5-8294-518da5a06653",
+        "playerLabel": "Rasmus Nicolaisen"
+      },
+      "jobId": "584b2687-1b71-45dd-9409-119dedc328d1",
+      "secs": 11.4
+    }
+  ],
+  "grouping": {
+    "status": "noop",
+    "groups": null,
+    "jobId": "27c62850-a750-4a41-b45b-7c92752fa03e",
+    "secs": 7.8,
+    "rawKeys": [
+      "jobId",
+      "kind",
+      "status"
+    ]
+  }
+}

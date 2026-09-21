@@ -233,8 +233,22 @@ export function parseVisionEvalHints(raw: string | null | undefined): VisionEval
   }
 }
 
-export function encodeVisionEvalRaw(hints: IdentityVisionHints, kitHitCount?: number): string {
-  return JSON.stringify(kitHitCount === undefined ? hints : { ...hints, kitHitCount });
+export type VisionEvalPhotoMeta = {
+  photoCount: number;
+  photoBytes: number[];
+  photoFingerprint: string;
+};
+
+export function encodeVisionEvalRaw(
+  hints: IdentityVisionHints,
+  kitHitCount?: number,
+  photos?: VisionEvalPhotoMeta,
+): string {
+  return JSON.stringify({
+    ...hints,
+    ...(kitHitCount === undefined ? {} : { kitHitCount }),
+    ...(photos ?? {}),
+  });
 }
 
 export function parseZeroKitHits(raw: string | null | undefined): boolean {

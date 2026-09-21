@@ -16,6 +16,7 @@ import {
   resolveConfirmVisionBannerState,
   visionMatcherRemainingToOutOfQuota,
 } from "@/capture/confirmVisionBanner";
+import { shouldHoldIdentityForGrouping } from "@/capture/identityDraftQueue";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmGrouping } from "@/capture/use-confirm-grouping";
@@ -84,7 +85,10 @@ export default function ConfirmScreen() {
     setSelectedSeasonLabel,
     onCatalogMiss: setCatalogMiss,
     onPremiumRequired: requestPremiumAccess,
-    deferIdentity: grouping.blocksIdentity,
+    deferIdentity: shouldHoldIdentityForGrouping({
+      groupingInFlight: grouping.blocksIdentity,
+      boundDraftCount: (state?.drafts ?? []).filter((entry) => entry.photos.length > 0).length,
+    }),
   });
   const photos = useConfirmPhotos({
     sessionId,
