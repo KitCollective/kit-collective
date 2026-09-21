@@ -1,0 +1,38 @@
+# 24/7 Seed MCP HTTP service (Coolify application, not a one-shot job).
+#
+# Restart unless-stopped. Cursor id kc_seed_mcp. Path /mcp on PORT 8787.
+# Unique hostname vs Coolify MCP — Coolify assigns the FQDN; do not hardcode one.
+#
+# Required:
+#   SEED_MCP_TOKEN — bearer ingest token (fail closed). Different secret from the Coolify API token.
+# Join runs inside this process, so mem_limit is at least 1g.
+
+services:
+  seed-mcp:
+    build:
+      context: ../..
+      dockerfile: seed/coolify/Dockerfile
+    image: kit-collective-seed:latest
+    restart: unless-stopped
+    mem_limit: 2048m
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      SEED_MCP_TOKEN: ${SEED_MCP_TOKEN:?SEED_MCP_TOKEN is required}
+      SEED_FK_FETCH: ${SEED_FK_FETCH:-fixture}
+      DATABASE_URL: ${DATABASE_URL:-}
+      SEED_STAGING_DATABASE_URL: ${SEED_STAGING_DATABASE_URL:-}
+      SEED_PROXY_URL: ${SEED_PROXY_URL:-}
+      SEED_REQUIRE_PROXY: ${SEED_REQUIRE_PROXY:-true}
+      APIFY_TOKEN: ${APIFY_TOKEN:-}
+      FKAPI_BASE_URL: ${FKAPI_BASE_URL:-}
+      FKAPI_TOKEN: ${FKAPI_TOKEN:-}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_ENDPOINT: ${R2_ENDPOINT:-}
+    command:
+      - node
+      - seed/mcp/dist/http.js
