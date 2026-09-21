@@ -8,6 +8,7 @@ import {
   catalogPickerClubIdParamSchema,
   catalogPickerItemSchema,
   catalogPickerSearchQuerySchema,
+  catalogPickerSeasonIdParamSchema,
   catalogPlayerSearchQuerySchema,
 } from "../src/catalog/picker.js";
 
@@ -91,6 +92,17 @@ describe("catalogPickerClubIdParamSchema", () => {
 
   it("rejects a malformed club id", () => {
     expect(() => catalogPickerClubIdParamSchema.parse({ clubId: "not-a-uuid" })).toThrow();
+  });
+});
+
+describe("catalogPickerSeasonIdParamSchema", () => {
+  it("accepts a UUID season id", () => {
+    const payload = { seasonId: "660e8400-e29b-41d4-a716-446655440001" };
+    expect(catalogPickerSeasonIdParamSchema.parse(payload)).toEqual(payload);
+  });
+
+  it("rejects a malformed season id", () => {
+    expect(() => catalogPickerSeasonIdParamSchema.parse({ seasonId: "not-a-uuid" })).toThrow();
   });
 });
 

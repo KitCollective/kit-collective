@@ -147,6 +147,7 @@ describe("live catalog picker isolation", () => {
     expect(seasonPicker).not.toContain("dummyCatalog");
 
     expect(dataScreen).toContain("fetchClubSeasons");
+    expect(dataScreen).toContain("fetchSeasonPatches");
     expect(dataScreen).not.toContain("dummyCatalog");
     expect(dataScreen).toContain("accessToken={accessToken}");
 

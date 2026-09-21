@@ -1,6 +1,5 @@
 import { JERSEY_CONDITION_LABELS_DA, JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
 import type { CaptureJerseyDraft } from "./captureSessionTypes";
-import type { ConfirmVisionFieldMark } from "./confirmVisionFieldMarks";
 
 /** Club, season, and kit type must be set before Save. Player and badge do not block. */
 export const DATA_REQUIRED_COUNT = 3;
@@ -14,8 +13,6 @@ export type ConfirmSectionFact = {
   key: string;
   placeholder: string;
   value: string | null;
-  /** Quiet Vision mark on Data capsules only. Detaljer never set this. */
-  visionMark?: ConfirmVisionFieldMark;
 };
 
 export function dataRequiredFilledCount(draft: CaptureJerseyDraft): number {

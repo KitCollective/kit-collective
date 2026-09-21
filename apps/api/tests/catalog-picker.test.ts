@@ -15,6 +15,7 @@ import {
   kit,
   league,
   nationalTeam,
+  patch,
   player,
   playerClubSeason,
   playerNationalTeamSeason,
@@ -394,6 +395,70 @@ describe("Catalog picker /v1", () => {
       { id: newerSeason!.id, label: "2023/24" },
       { id: olderSeason!.id, label: "2022/23" },
     ]);
+  });
+
+  it("rejects unauthenticated season patches with 401", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/catalog/seasons/550e8400-e29b-41d4-a716-446655440000/patches",
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("lists live sleeve patches for a season", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "DK" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2023/24",
+        startsOn: "2023-07-01",
+        endsOn: "2024-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    const [insertedPatch] = await db
+      .insert(patch)
+      .values({ seasonId: insertedSeason!.id, leagueId: insertedLeague!.id })
+      .returning({ id: patch.id });
+
+    await db.insert(catalogLabel).values({
+      entityType: "patch",
+      entityId: insertedPatch!.id,
+      locale: "da",
+      kind: "label",
+      text: "Superligaen",
+      source: "seed",
+    });
+
+    await pool.end();
+
+    const session = await registerCollector(app, "patches@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/catalog/seasons/${insertedSeason!.id}/patches`,
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = catalogFacetSearchResponseSchema.parse(JSON.parse(response.body));
+    expect(body.items).toEqual([{ id: insertedPatch!.id, label: "Superligaen" }]);
   });
 
   it("scopes player search to a club squad and season number", async () => {

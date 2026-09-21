@@ -1,28 +1,36 @@
 import type { VisionJobResponse } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { Animated, StyleSheet, View } from "react-native";
+import { formatCatalogMissBannerMessage } from "@/capture/catalogMissHint";
+import type { ConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
 import { Banner } from "@/components/catalog-ui";
+import { ConfirmVisionBanner } from "@/components/confirm-vision-banner";
 import { Button } from "@/components/ui";
 import { space } from "@/theme/tokens";
 
 type ConfirmVisionSlotProps = {
+  bannerState: ConfirmVisionBannerState;
   suggestion: VisionJobResponse | null;
   groupingMessage?: string | null;
+  catalogMiss?: boolean;
+  catalogMissHint?: string | null;
   suggestionOpacity: Animated.Value;
   onApplySuggestion: () => void;
   onDismissSuggestion: () => void;
+  onQuotaPress?: () => void;
 };
 
-/**
- * Interactive Brug/Luk only. Identity status lives on the Data row
- * (skeleton + field marks) — not a persistent analyzer Banner.
- */
+/** Renders the single Vision slot below Confirm's photo sandbox. */
 export function ConfirmVisionSlot({
+  bannerState,
   suggestion,
   groupingMessage,
+  catalogMiss = false,
+  catalogMissHint = null,
   suggestionOpacity,
   onApplySuggestion,
   onDismissSuggestion,
+  onQuotaPress,
 }: ConfirmVisionSlotProps) {
   if (groupingMessage) {
     return (
@@ -42,7 +50,17 @@ export function ConfirmVisionSlot({
   }
 
   if (!suggestion?.suggestions) {
-    return null;
+    if (catalogMiss) {
+      return (
+        <Banner
+          tone="info"
+          message={formatCatalogMissBannerMessage(catalogMissHint)}
+          action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
+        />
+      );
+    }
+
+    return <ConfirmVisionBanner state={bannerState} onQuotaPress={onQuotaPress} />;
   }
 
   const message = [

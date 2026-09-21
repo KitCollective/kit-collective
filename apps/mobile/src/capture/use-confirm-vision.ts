@@ -24,7 +24,6 @@ import {
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
 import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
-import type { ConfirmVisionFieldMarkInput } from "@/capture/confirmVisionFieldMarks";
 import {
   identityQueueFingerprint,
   identityRunKey,
@@ -111,9 +110,6 @@ export function useConfirmVision({
   const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
   const [applied, setApplied] = useState(false);
   const [catalogMissHint, setCatalogMissHint] = useState<string | null>(null);
-  const [identitySnapshot, setIdentitySnapshot] = useState<IdentityFieldSnapshot | null>(null);
-  const [dataReviewed, setDataReviewed] = useState(false);
-  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const appliedJobId = useRef<string | null>(null);
   const snapshotsByDraftRef = useRef(new Map<string, IdentityFieldSnapshot>());
@@ -165,11 +161,6 @@ export function useConfirmVision({
         catalogMiss: job.catalogMiss === true,
       };
       snapshotsByDraftRef.current.set(currentDraftId, snapshot);
-      if (isActiveDraft) {
-        setIdentitySnapshot(snapshot);
-        setDataReviewed(false);
-        setSuggestionDismissed(false);
-      }
 
       if (job.catalogMiss && isActiveDraft) {
         setCatalogMissHint(resolveVisionCatalogMissHint(job));
@@ -252,8 +243,6 @@ export function useConfirmVision({
   const queueFingerprint = identityQueueFingerprint(sessionDrafts);
 
   useEffect(() => {
-    const stored = draftId ? snapshotsByDraftRef.current.get(draftId) : undefined;
-    setIdentitySnapshot(stored ?? null);
     setPolling(inFlightDraftId !== null && inFlightDraftId === draftId);
   }, [draftId, inFlightDraftId]);
 
@@ -320,9 +309,6 @@ export function useConfirmVision({
         setApplied(false);
         appliedJobId.current = null;
         setCatalogMissHint(null);
-        setIdentitySnapshot(null);
-        setDataReviewed(false);
-        setSuggestionDismissed(false);
         resetConfirmManualEdits();
         setSelectedSeasonLabel(null);
         onCatalogMiss?.(false);
@@ -331,9 +317,6 @@ export function useConfirmVision({
       const settleIdle = () => {
         const snapshot = identitySettledSnapshot();
         snapshotsByDraftRef.current.set(next.id, snapshot);
-        if (syncChrome()) {
-          setIdentitySnapshot(snapshot);
-        }
       };
       const startedAt = Date.now();
       const remaining = () => remainingIdentityBudget(startedAt, VISION_TIMEOUT_MS);
@@ -544,25 +527,8 @@ export function useConfirmVision({
     setSuggestion(null);
     setApplied(true);
     setCatalogMissHint(null);
-    setSuggestionDismissed(false);
     onCatalogMiss?.(false);
   }, [accessToken, mutate, onCatalogMiss, setSelectedSeasonLabel, suggestion]);
-
-  const fieldMarkInput: ConfirmVisionFieldMarkInput = {
-    identityCompleted: identitySnapshot !== null,
-    analyzing: polling || inFlightDraftId === draftId,
-    reviewed: dataReviewed,
-    catalogMiss: identitySnapshot?.catalogMiss ?? false,
-    dismissed: suggestionDismissed,
-    fieldPreselect: identitySnapshot?.fieldPreselect,
-    suggestions: identitySnapshot?.suggestions ?? null,
-    edited: {
-      club: confirmClubWasEdited(),
-      season: confirmSeasonWasEdited(),
-      type: confirmKitTypeWasEdited(),
-      player: confirmPlayerWasEdited(),
-    },
-  };
 
   return {
     suggestion,
@@ -574,12 +540,9 @@ export function useConfirmVision({
       analyzing: polling,
       succeeded: applied,
     }),
-    fieldMarkInput,
-    markDataReviewed: () => setDataReviewed(true),
     applySuggestion,
     dismissSuggestion: () => {
       setSuggestion(null);
-      setSuggestionDismissed(true);
     },
   };
 }

@@ -81,3 +81,13 @@ export async function fetchClubSeasons(accessToken: string, clubId: string) {
 
   return catalogClubSeasonsResponseSchema.parse(await response.json());
 }
+
+export async function fetchSeasonPatches(accessToken: string, seasonId: string) {
+  const response = await authGet(`/v1/catalog/seasons/${seasonId}/patches`, accessToken);
+
+  if (!response.ok) {
+    throw new Error("Kunne ikke hente badges");
+  }
+
+  return catalogFacetSearchResponseSchema.parse(await response.json());
+}

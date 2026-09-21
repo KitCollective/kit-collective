@@ -72,6 +72,14 @@ export const catalogPickerClubIdParamSchema = z
 
 export type CatalogPickerClubIdParam = z.infer<typeof catalogPickerClubIdParamSchema>;
 
+export const catalogPickerSeasonIdParamSchema = z
+  .object({
+    seasonId: z.string().uuid(),
+  })
+  .strict();
+
+export type CatalogPickerSeasonIdParam = z.infer<typeof catalogPickerSeasonIdParamSchema>;
+
 export const catalogClubSearchResponseSchema = z
   .object({
     clubs: z.array(catalogSidePickerItemSchema),

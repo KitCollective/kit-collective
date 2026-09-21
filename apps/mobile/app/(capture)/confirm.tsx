@@ -12,7 +12,10 @@ import {
   detailsRequiredFilledCount,
   detailsSectionFacts,
 } from "@/capture/confirmSectionProgress";
-import { attachConfirmVisionFieldMarks } from "@/capture/confirmVisionFieldMarks";
+import {
+  resolveConfirmVisionBannerState,
+  visionMatcherRemainingToOutOfQuota,
+} from "@/capture/confirmVisionBanner";
 import { shouldHoldIdentityForGrouping } from "@/capture/identityDraftQueue";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
@@ -42,8 +45,9 @@ export default function ConfirmScreen() {
     sessionId: string;
     editJerseyId?: string;
   }>();
-  const { accessToken, requestPremiumAccess } = useAuth();
+  const { accessToken, requestPremiumAccess, entitlement } = useAuth();
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
+  const [catalogMiss, setCatalogMiss] = useState(false);
   const {
     state,
     isSessionResolved,
@@ -79,6 +83,7 @@ export default function ConfirmScreen() {
     jobId: visionJobId,
     setJobId: setVisionJobId,
     setSelectedSeasonLabel,
+    onCatalogMiss: setCatalogMiss,
     onPremiumRequired: requestPremiumAccess,
     deferIdentity: shouldHoldIdentityForGrouping({
       groupingInFlight: grouping.blocksIdentity,
@@ -118,9 +123,6 @@ export default function ConfirmScreen() {
     if (!sessionId) {
       return;
     }
-    if (section === "data") {
-      vision.markDataReviewed();
-    }
     router.push({
       pathname: section === "data" ? "/(capture)/confirm-data" : "/(capture)/confirm-details",
       params: {
@@ -142,8 +144,13 @@ export default function ConfirmScreen() {
 
   const activeJerseyIndex = state?.drafts.findIndex((entry) => entry.id === draft.id) ?? 0;
   const activeTabLabel = `Trøje ${activeJerseyIndex + 1}`;
-  const showSuggestionSlot =
-    !grouping.blocksIdentity && Boolean(grouping.groupingMessage || vision.suggestion?.suggestions);
+  const outOfQuota = visionMatcherRemainingToOutOfQuota(entitlement?.visionMatcher);
+  const bannerState = resolveConfirmVisionBannerState({
+    activated: Boolean(accessToken),
+    outOfQuota,
+    analyzing: vision.bannerState === "analyzing",
+    succeeded: vision.bannerState === "success",
+  });
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -189,10 +196,15 @@ export default function ConfirmScreen() {
           ) : null}
         </View>
 
-        {showSuggestionSlot ? (
+        {grouping.blocksIdentity ? (
+          <View style={styles.visionSlotReserve} accessibilityElementsHidden />
+        ) : (
           <ConfirmVisionSlot
+            bannerState={bannerState}
             suggestion={vision.suggestion}
             groupingMessage={grouping.groupingMessage}
+            catalogMiss={catalogMiss}
+            catalogMissHint={vision.catalogMissHint}
             suggestionOpacity={
               grouping.groupingMessage ? grouping.suggestionOpacity : vision.suggestionOpacity
             }
@@ -202,18 +214,20 @@ export default function ConfirmScreen() {
             onDismissSuggestion={
               grouping.groupingMessage ? grouping.dismissSuggestion : vision.dismissSuggestion
             }
+            onQuotaPress={() => {
+              void requestPremiumAccess();
+            }}
           />
-        ) : null}
+        )}
 
         <View style={styles.hubSpacer} />
 
         <View style={styles.sectionPair}>
           <ConfirmSectionRow
             title="Data"
-            facts={attachConfirmVisionFieldMarks(dataSectionFacts(draft), vision.fieldMarkInput)}
+            facts={dataSectionFacts(draft)}
             filled={dataRequiredFilledCount(draft)}
             required={DATA_REQUIRED_COUNT}
-            loading={vision.fieldMarkInput.analyzing}
             minHeight={sectionMinHeight}
             onMeasureHeight={setDataSectionHeight}
             onPress={() => openSection("data")}
@@ -284,5 +298,10 @@ const styles = StyleSheet.create({
   sectionPair: {
     flexDirection: "column",
     gap: space.gapMd,
+  },
+  // Matches ConfirmVisionBanner minHeight so hiding it during grouping
+  // does not collapse the column and hop Data/Detaljer.
+  visionSlotReserve: {
+    minHeight: 44,
   },
 });

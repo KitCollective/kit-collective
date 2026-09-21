@@ -22,6 +22,7 @@ import {
   manufacturer,
   nationalTeam,
   nationalTeamSeason,
+  patch,
   player,
   playerClubSeason,
   playerNationalTeamSeason,
@@ -501,5 +502,36 @@ export class CatalogService {
     }
 
     return catalogClubSeasonsResponseSchema.parse({ seasons: [] });
+  }
+
+  async getSeasonPatches(
+    seasonId: string,
+    locale: LabelLocale = "da",
+  ): Promise<CatalogFacetSearchResponse> {
+    const rows = await this.db
+      .select({
+        id: patch.id,
+        label: sql<string | null>`coalesce(
+          max(case when ${catalogLabel.locale} = ${locale} and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+          max(case when ${catalogLabel.locale} = 'mul' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end),
+          max(case when ${catalogLabel.locale} = 'en' and ${catalogLabel.kind} = 'label' then ${catalogLabel.text} end)
+        )`,
+      })
+      .from(patch)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "patch"), eq(catalogLabel.entityId, patch.id)),
+      )
+      .where(eq(patch.seasonId, seasonId))
+      .groupBy(patch.id);
+
+    const items = omitDevCatalogFixtureRows(
+      rows
+        .filter((row): row is typeof row & { label: string } => Boolean(row.label))
+        .map((row) => ({ id: row.id, label: row.label }))
+        .sort((a, b) => a.label.localeCompare(b.label, locale)),
+    );
+
+    return catalogFacetSearchResponseSchema.parse({ items });
   }
 }
