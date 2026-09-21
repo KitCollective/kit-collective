@@ -261,4 +261,19 @@ describe("vision-confidence", () => {
     expect(parseZeroKitHits(raw)).toBe(false);
     expect(JSON.parse(raw)).not.toHaveProperty("kitHitCount");
   });
+
+  it("records photoCount and fingerprint next to hints", () => {
+    const raw = encodeVisionEvalRaw({ clubHint: "Toulouse" }, 1, {
+      photoCount: 3,
+      photoBytes: [1200, 1300, 1400],
+      photoFingerprint: "1200:ffd8ffe0|1300:ffd8ffe0|1400:ffd8ffe0",
+    });
+    expect(JSON.parse(raw)).toMatchObject({
+      clubHint: "Toulouse",
+      kitHitCount: 1,
+      photoCount: 3,
+      photoBytes: [1200, 1300, 1400],
+      photoFingerprint: "1200:ffd8ffe0|1300:ffd8ffe0|1400:ffd8ffe0",
+    });
+  });
 });

@@ -1,13 +1,14 @@
+import type { CatalogPickerItem } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA, KIT_TYPES } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fetchClubSeasons } from "@/api/catalog";
 import { useAuth } from "@/auth/AuthProvider";
 import {
   catalogSideId,
   selectDraftKitType,
-  setDraftBadge,
   setDraftBadgeEnabled,
   setDraftCatalogSide,
   setDraftPlayer,
@@ -23,7 +24,6 @@ import {
 } from "@/capture/confirmManualEdits";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmSave } from "@/capture/useConfirmSave";
-import { dummyBadgesForSeason, dummyClubById, dummySeasonsForClub } from "@/catalog/dummyCatalog";
 import { CatalogSelectRow } from "@/components/catalog-select-row";
 import { Chip } from "@/components/chip";
 import { ClubPickerOverlay } from "@/components/club-picker-overlay";
@@ -56,6 +56,50 @@ export function ConfirmDataScreen() {
   useConfirmExit(sessionId, state, isSessionResolved);
 
   const [openPicker, setOpenPicker] = useState<DataPickerKind | null>(null);
+  const [liveSeasons, setLiveSeasons] = useState<CatalogPickerItem[]>([]);
+  const [seasonsLoading, setSeasonsLoading] = useState(false);
+  const [seasonsError, setSeasonsError] = useState<string | null>(null);
+  const sideId = catalogSideId({
+    clubId: draft?.clubId ?? null,
+    nationalTeamId: draft?.nationalTeamId ?? null,
+  });
+
+  useEffect(() => {
+    if (!accessToken || !sideId) {
+      setLiveSeasons([]);
+      setSeasonsLoading(false);
+      setSeasonsError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLiveSeasons([]);
+    setSeasonsLoading(true);
+    setSeasonsError(null);
+    void fetchClubSeasons(accessToken, sideId)
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        setLiveSeasons(response.seasons);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setLiveSeasons([]);
+        setSeasonsError("Kunne ikke hente sæsoner.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSeasonsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, sideId]);
 
   if (!sessionId || !draft) {
     return null;
@@ -63,16 +107,10 @@ export function ConfirmDataScreen() {
 
   const fadeDockScrollPadding =
     BUTTON_DOCK_FADE_SCROLL_PADDING + Math.max(insets.bottom, space.insetMd);
-  const sideId = catalogSideId(draft);
   const sideLabel = draft.clubLabel ?? draft.nationalTeamLabel;
-  const clubCountry = draft.clubId ? dummyClubById(draft.clubId)?.country : null;
   const seasonValue =
-    draft.seasonLabel ??
-    (sideId && draft.seasonId
-      ? (dummySeasonsForClub(sideId).find((row) => row.id === draft.seasonId)?.label ?? null)
-      : null);
+    draft.seasonLabel ?? liveSeasons.find((season) => season.id === draft.seasonId)?.label ?? null;
   const playerMeta = draft.playerNumber ? `Nr. ${draft.playerNumber}` : null;
-  const seasonBadges = dummyBadgesForSeason(draft.clubId ?? "", draft.seasonId);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -85,7 +123,6 @@ export function ConfirmDataScreen() {
           <CatalogSelectRow
             placeholder="Vælg klub eller landshold"
             value={sideLabel}
-            meta={clubCountry}
             onPress={() => setOpenPicker("club")}
           />
           {sideId ? (
@@ -160,31 +197,9 @@ export function ConfirmDataScreen() {
             </View>
           </Pressable>
           {draft.badgeEnabled ? (
-            seasonBadges.length > 0 ? (
-              <View style={styles.chipRow}>
-                {seasonBadges.map((badge) => (
-                  <Chip
-                    key={badge.id}
-                    label={badge.label}
-                    selected={draft.badgeId === badge.id}
-                    accessibilityRole="radio"
-                    onPress={() => {
-                      markConfirmBadgeEdited();
-                      mutate((current) =>
-                        setDraftBadge(current, current.activeDraftId, {
-                          id: badge.id,
-                          label: badge.label,
-                        }),
-                      );
-                    }}
-                  />
-                ))}
-              </View>
-            ) : (
-              <Text style={[typography.caption, { color: theme.contentMuted }]}>
-                Vælg en sæson for at se badges.
-              </Text>
-            )
+            <Text style={[typography.caption, { color: theme.contentMuted }]}>
+              Vælg en sæson for at se badges.
+            </Text>
           ) : null}
         </View>
       </ScrollView>
@@ -209,8 +224,11 @@ export function ConfirmDataScreen() {
 
       <SeasonPickerOverlay
         visible={openPicker === "season"}
+        seasons={liveSeasons}
         clubId={sideId}
         selectedId={draft.seasonId}
+        loading={seasonsLoading}
+        errorMessage={seasonsError}
         onSelect={(season) => {
           markConfirmSeasonEdited();
           mutate((current) =>
@@ -222,6 +240,7 @@ export function ConfirmDataScreen() {
 
       <PlayerPickerOverlay
         visible={openPicker === "player"}
+        accessToken={accessToken}
         clubId={sideId}
         seasonId={draft.seasonId}
         selectedId={draft.playerId}

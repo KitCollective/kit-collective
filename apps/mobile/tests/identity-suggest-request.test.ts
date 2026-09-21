@@ -12,7 +12,9 @@ describe("identitySuggestRequest seam", () => {
     const source = readFileSync(identitySuggestRequestPath, "utf8");
 
     expect(source).toContain("export async function buildIdentitySuggestRequest");
-    expect(source).toContain("draft.photos.map");
+    expect(source).toContain("for (const photo of draft.photos)");
+    expect(source).not.toContain("Promise.all");
+    expect(source).toContain("IDENTITY_PHOTOS_EMPTY");
     expect(source).toContain('"visionIdentity"');
     expect(source).toContain("draftId: draft.id");
     expect(source).toContain('role ?? "front"');

@@ -67,13 +67,16 @@ describe("Confirm chrome", () => {
     expect(confirm).toContain("JerseyTabBar");
     expect(confirm).toContain("ConfirmPhotoViewer");
     expect(confirm).toContain("UnboundPhotosRow");
-    expect(confirm).toContain("deferIdentity: grouping.blocksIdentity");
+    expect(confirm).toContain("deferIdentity: shouldHoldIdentityForGrouping");
+    expect(confirm).toContain("groupingInFlight: grouping.blocksIdentity");
     expect(confirm).not.toContain("GROUPING_ANALYZING_COPY");
     expect(confirm).not.toContain("analyzingMessage");
     expect(confirm).toContain("analyzing={grouping.blocksIdentity}");
     expect(confirm).toContain("grouping.blocksIdentity");
     expect(confirm).toContain("homecoming={grouping.homecoming}");
-    expect(confirm).toContain("visionSlotReserve");
+    expect(confirm).not.toContain("visionSlotReserve");
+    expect(confirm).not.toContain("ConfirmVisionBanner");
+    expect(confirm).toContain("loading={vision.fieldMarkInput.analyzing}");
     expect(confirm).toContain("onDiscardPhoto");
     expect(confirm).toContain("onUpload");
     expect(confirmPhotos).toContain("pickUploadFiles");
@@ -216,6 +219,7 @@ describe("Confirm chrome", () => {
     expect(grouping).toContain("GROUPING_RETURN_MS = motion.slow");
     expect(grouping).toContain("setHomecoming");
     expect(grouping).toContain("activateGroup");
+    expect(grouping).toContain("const first = current.drafts[0]");
     expect(grouping).toContain("setGatheringUris");
     expect(grouping).not.toContain("photoIds.slice(0, photoIndex + 1)");
     expect(confirm).toContain("gatheringUris={grouping.gatheringUris}");
@@ -234,9 +238,28 @@ describe("Confirm chrome", () => {
     expect(grouping).not.toContain("confirm.grouping");
     expect(grouping).toContain("shouldBeginGroupingStart");
     expect(confirmVision).toContain("deferIdentity");
-    expect(confirmVision).toContain(
-      "if (deferIdentity || !accessToken || !draftId || !photoFingerprint)",
+    expect(confirmVision).toContain("shouldAttemptIdentityQueue");
+    expect(confirmVision).toContain("nextQueuedIdentityDraft");
+    expect(confirmVision).toContain("identityLoopActiveRef");
+    expect(confirmVision).toContain("identityKickAgainRef");
+    expect(confirmVision).toContain("launchIdentityLoop");
+    expect(confirmVision).not.toContain("skipNewDrafts");
+    expect(confirm).toContain("shouldHoldIdentityForGrouping");
+    expect(confirmVision).toContain("shouldSyncIdentityChrome");
+    expect(confirmVision).toContain("raceWithTimeout");
+    expect(confirmVision).toContain("identitySettledSnapshot");
+    expect(confirmVision).not.toContain("setActiveDraft(current, next.id)");
+    expect(confirmVision).not.toContain("startedIdentityKeysRef.current.delete");
+    expect(confirmVision).not.toContain("Promise.all(");
+    expect(confirmVision).toContain("groupingJustClosed");
+    expect(confirmVision).toContain("fieldMarkInput");
+    expect(confirmVision).toContain("markDataReviewed");
+    expect(confirmVision).not.toContain(
+      "setIdentitySnapshot({ fieldPreselect: {}, suggestions: null, catalogMiss: false })",
     );
+    expect(confirmVision).toContain("VISION_TIMEOUT_MS = 45_000");
+    expect(confirmVision).toContain("await applySuggestions(job, inFlightDraftId)");
+    expect(confirmVision).not.toContain("await applySuggestions(job);");
 
     expect(confirm).not.toContain("ConfirmPhotoRecategorize");
     expect(confirm).not.toContain("applyConfirmPhotoOccupancy");
@@ -299,19 +322,21 @@ describe("Confirm chrome", () => {
     expect(dataScreen).toContain("Vælg sæson");
     expect(dataScreen).toContain('accessibilityLabel="Badge"');
     expect(dataScreen).toContain("SwitchControl");
-    expect(dataScreen).toContain("dummyBadgesForSeason");
+    expect(dataScreen).not.toContain("dummyBadgesForSeason");
+    expect(dataScreen).not.toContain("dummyCatalog");
     expect(dataScreen).not.toContain('label="Noter"');
     expect(dataScreen).not.toContain("Batch");
 
     expect(confirm).not.toContain('label="Noter"');
     expect(confirm).toContain("dataSectionFacts");
+    expect(confirm).toContain("attachConfirmVisionFieldMarks");
     expect(confirm).toContain("detailsSectionFacts");
     expect(confirm).toContain("sectionPair");
     expect(confirm).toContain("hubSpacer");
     // The standalone Vision skeleton was folded into the AI Vision Analyzer banner,
     // which owns the Vision slot under the sandbox.
     expect(confirm).toContain("ConfirmVisionSlot");
-    expect(confirmVision).toContain("resolveConfirmVisionBannerState");
+    expect(confirm).not.toContain("resolveConfirmVisionBannerState");
     expect(confirm).not.toContain("groupHairline");
     // The Data/Detaljer rows are no longer wrapped in outer boxes — the row owns its border.
     expect(confirm).not.toContain("sectionGroup");
@@ -344,15 +369,12 @@ describe("Confirm chrome", () => {
 
     const photoIdx = confirm.indexOf("ConfirmPhotoViewer");
     const sandboxIdx = confirm.indexOf("<UnboundPhotosRow");
-    const visionBannerIdx = confirm.indexOf("<ConfirmVisionSlot");
     const spacerIdx = confirm.indexOf("hubSpacer");
     const pairIdx = confirm.indexOf("sectionPair");
     const dataIdx = confirm.indexOf('title="Data"');
     expect(photoIdx).toBeGreaterThan(-1);
     expect(sandboxIdx).toBeGreaterThan(photoIdx);
-    // Vision banner reads as "we analysed these photos": under the sandbox, above the spacer.
-    expect(visionBannerIdx).toBeGreaterThan(sandboxIdx);
-    expect(spacerIdx).toBeGreaterThan(visionBannerIdx);
+    expect(spacerIdx).toBeGreaterThan(sandboxIdx);
     expect(pairIdx).toBeGreaterThan(spacerIdx);
     expect(dataIdx).toBeGreaterThan(pairIdx);
 
@@ -389,6 +411,13 @@ describe("Confirm chrome", () => {
     expect(sectionRow).toContain('alignItems: "center"');
     expect(sectionRow).toContain("minHeight");
     expect(sectionRow).toContain("onMeasureHeight");
+    expect(sectionRow).toContain("eye-outline");
+    expect(sectionRow).toContain("visionMark");
+    expect(sectionRow).toContain("ConfirmAnalyzingPulse");
+    expect(sectionRow).toContain("DATA_SKELETON_WIDTHS");
+    expect(sectionRow).toContain("analyserer");
+    expect(sectionRow).not.toContain("theme.success");
+    expect(sectionRow).not.toContain("theme.info");
 
     const donut = readFileSync(
       join(__dirname, "../src/components/confirm-progress-donut.tsx"),
@@ -410,6 +439,7 @@ describe("Confirm chrome", () => {
     expect(dataScreen).toContain("PlayerPickerOverlay");
     expect(dataScreen).toContain("CatalogSelectRow");
     expect(dataScreen).toContain("useState<DataPickerKind | null>");
+    expect(dataScreen).toContain("fetchClubSeasons");
     expect(dataScreen).not.toContain("<Sheet");
     expect(dataScreen).not.toContain("pendingSeasonAfterClub");
 

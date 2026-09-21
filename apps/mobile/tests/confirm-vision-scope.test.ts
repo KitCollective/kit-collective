@@ -12,6 +12,7 @@ import {
 import {
   confirmVisionScopeFromDraft,
   draftPhotoFingerprint,
+  shouldAttemptIdentityStart,
   shouldResetConfirmVision,
 } from "../src/capture/confirmVisionScope";
 
@@ -105,5 +106,35 @@ describe("shouldResetConfirmVision", () => {
     const after = confirmVisionScopeFromDraft(getActiveDraft(withBack));
 
     expect(shouldResetConfirmVision(before, after)).toBe(true);
+  });
+});
+
+describe("shouldAttemptIdentityStart", () => {
+  const ready = {
+    deferIdentity: false,
+    hasAccessToken: true,
+    draftId: UUID,
+    photoFingerprint: URI_FRONT,
+    groupingJustClosed: false,
+    draftChanged: false,
+    photosChanged: false,
+  };
+
+  it("starts on first mount of a draft with photos", () => {
+    expect(shouldAttemptIdentityStart({ ...ready, draftChanged: true })).toBe(true);
+  });
+
+  it("starts when grouping closes on the same draft and photos", () => {
+    expect(shouldAttemptIdentityStart({ ...ready, groupingJustClosed: true })).toBe(true);
+  });
+
+  it("does not start while grouping still blocks identity", () => {
+    expect(
+      shouldAttemptIdentityStart({ ...ready, deferIdentity: true, groupingJustClosed: false }),
+    ).toBe(false);
+  });
+
+  it("does not restart on an unrelated Confirm re-render", () => {
+    expect(shouldAttemptIdentityStart(ready)).toBe(false);
   });
 });

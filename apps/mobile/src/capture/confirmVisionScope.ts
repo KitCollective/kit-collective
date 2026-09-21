@@ -32,3 +32,19 @@ export function shouldResetConfirmVision(
 ): boolean {
   return previous.draftId !== next.draftId || previous.photoFingerprint !== next.photoFingerprint;
 }
+
+/** Identity starts after grouping closes even when the same draft and photos remain. */
+export function shouldAttemptIdentityStart(input: {
+  deferIdentity: boolean;
+  hasAccessToken: boolean;
+  draftId: string | null;
+  photoFingerprint: string | null;
+  groupingJustClosed: boolean;
+  draftChanged: boolean;
+  photosChanged: boolean;
+}): boolean {
+  if (input.deferIdentity || !input.hasAccessToken || !input.draftId || !input.photoFingerprint) {
+    return false;
+  }
+  return input.draftChanged || input.photosChanged || input.groupingJustClosed;
+}

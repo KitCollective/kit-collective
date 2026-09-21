@@ -1403,7 +1403,7 @@ Status: `thin` — `apps/admin` is not scaffolded; mobile/web mappings may still
 | Switch, Avatar | mobile | *unmapped* | Profil gap primitives; throwaway `src/prototype-profile/` is not the host API |
 | Photo slot | mobile | `src/components/photo-slot.tsx` | `confirm-strip` only this gap; `camera-overlay` superseded |
 | Photo lightbox | mobile | `src/components/photo-lightbox.tsx` | Confirm photo-role gap; Skift rolle is five chips + Andet Beskrivelse; opened from a filled `confirm-strip` Photo slot |
-| Catalog picker modal | mobile | `src/components/catalog-picker-modal.tsx` | Full-screen club / season / player picker (Luk X + Search + List row). Club/season/player overlays wrap it. Dummy fixture in `src/catalog/dummyCatalog.ts`; matching stamdata rows are upserted by `packages/db` `seedDevCatalog` until live Transfermarkt ingest is populated |
+| Catalog picker modal | mobile | `src/components/catalog-picker-modal.tsx` | Full-screen club / season / player picker (Luk X + Search + List row). Club/season/player overlays wrap it. Rows come from live Nest `/v1/catalog/*` stamdata; historical `seedDevCatalog` fixture IDs are omitted so they do not duplicate scraped clubs |
 | Catalog peek | api | `GET /v1/catalog/peek` | Not in this system |
 | OG canvas | web | *unmapped* | 1200×630; letterbox 4:5; wash top strip only |
 | KitPhoto render | admin | *unmapped* | 32px table thumb + drill; never Expo/Astro/OG |

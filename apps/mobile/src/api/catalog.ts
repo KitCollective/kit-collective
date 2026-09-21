@@ -46,8 +46,23 @@ export async function searchCatalogLeagues(accessToken: string, query: string, l
   return catalogFacetSearchResponseSchema.parse(await response.json());
 }
 
-export async function searchCatalogPlayers(accessToken: string, query: string, locale = "da") {
-  const params = new URLSearchParams({ q: query, locale });
+export async function searchCatalogPlayers(
+  accessToken: string,
+  query: string,
+  locale = "da",
+  scope?: { clubId?: string; seasonId?: string },
+) {
+  const params = new URLSearchParams({ locale });
+  const trimmed = query.trim();
+  if (trimmed) {
+    params.set("q", trimmed);
+  }
+  if (scope?.clubId) {
+    params.set("clubId", scope.clubId);
+  }
+  if (scope?.seasonId) {
+    params.set("seasonId", scope.seasonId);
+  }
   const response = await authGet(`/v1/catalog/players/search?${params}`, accessToken);
 
   if (!response.ok) {

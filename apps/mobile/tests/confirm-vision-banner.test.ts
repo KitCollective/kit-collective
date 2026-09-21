@@ -165,11 +165,11 @@ describe("ConfirmVisionBanner chrome", () => {
 describe("ConfirmVisionSlot", () => {
   const slotSource = readFileSync(slotPath, "utf8");
 
-  it("forwards onQuotaPress to ConfirmVisionBanner", () => {
-    expect(slotSource).toContain("onQuotaPress");
-    expect(slotSource).toContain("<ConfirmVisionBanner");
-    expect(slotSource).toContain("onQuotaPress={onQuotaPress}");
-    expect(slotSource).not.toContain("PaywallCard");
+  it("does not mount the analyzer status Banner", () => {
+    expect(slotSource).not.toContain("ConfirmVisionBanner");
+    expect(slotSource).not.toContain("bannerState");
+    expect(slotSource).not.toContain("onQuotaPress");
+    expect(slotSource).not.toContain("catalogMiss");
   });
 
   it("does not accept grouping analyzing copy on the Vision slot", () => {
@@ -180,13 +180,11 @@ describe("ConfirmVisionSlot", () => {
 describe("Confirm screen Vision Matcher quota wiring", () => {
   const confirmScreen = readFileSync(confirmScreenPath, "utf8");
 
-  it("maps session visionMatcher remaining onto the existing out-of-quota Banner", () => {
-    expect(confirmScreen).toContain("entitlement");
-    expect(confirmScreen).toContain("visionMatcherRemainingToOutOfQuota");
-    expect(confirmScreen).toContain("entitlement?.visionMatcher");
-    expect(confirmScreen).toContain("resolveConfirmVisionBannerState");
-    expect(confirmScreen).toContain("onQuotaPress");
-    expect(confirmScreen).toContain("requestPremiumAccess");
+  it("does not show the analyzer Banner — identity status lives on Data", () => {
+    expect(confirmScreen).not.toContain("ConfirmVisionBanner");
+    expect(confirmScreen).not.toContain("resolveConfirmVisionBannerState");
+    expect(confirmScreen).not.toContain("onQuotaPress");
+    expect(confirmScreen).toContain("loading={vision.fieldMarkInput.analyzing}");
   });
 
   it("does not disable Gem from Vision Matcher remaining", () => {
@@ -194,6 +192,6 @@ describe("Confirm screen Vision Matcher quota wiring", () => {
     expect(confirmScreen).not.toMatch(/remaining\s*===\s*0/);
     expect(confirmScreen).not.toContain("PaywallCard");
     expect(confirmScreen).toContain('from "@/auth/AuthProvider"');
-    expect(confirmScreen).toContain('from "@/capture/confirmVisionBanner"');
+    expect(confirmScreen).toContain("requestPremiumAccess");
   });
 });

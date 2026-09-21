@@ -11,6 +11,7 @@ export const catalogPickerItemSchema = z
     id: z.string().uuid(),
     label: z.string().min(1),
     kind: catalogSideKindSchema.optional(),
+    meta: z.string().min(1).optional(),
   })
   .strict();
 
@@ -32,6 +33,36 @@ export const catalogPickerSearchQuerySchema = z
   .strict();
 
 export type CatalogPickerSearchQuery = z.infer<typeof catalogPickerSearchQuerySchema>;
+
+/** Club/NT picker may open with an empty query and list a capped live page. */
+export const catalogClubSearchQuerySchema = z
+  .object({
+    q: z.string().trim().optional().default(""),
+    locale: z.enum(PICKER_LABEL_LOCALES).default("da"),
+  })
+  .strict();
+
+export type CatalogClubSearchQuery = z.infer<typeof catalogClubSearchQuerySchema>;
+
+/** Player search: `q` is required unless the query is scoped to a club. */
+export const catalogPlayerSearchQuerySchema = z
+  .object({
+    q: z.string().trim().optional().default(""),
+    locale: z.enum(PICKER_LABEL_LOCALES).default("da"),
+    clubId: z.string().uuid().optional(),
+    seasonId: z.string().uuid().optional(),
+  })
+  .strict()
+  .refine((data) => Boolean(data.clubId) || data.q.length >= 1, {
+    message: "Query required unless clubId is set",
+    path: ["q"],
+  })
+  .refine((data) => !data.seasonId || Boolean(data.clubId), {
+    message: "seasonId requires clubId",
+    path: ["seasonId"],
+  });
+
+export type CatalogPlayerSearchQuery = z.infer<typeof catalogPlayerSearchQuerySchema>;
 
 export const catalogPickerClubIdParamSchema = z
   .object({

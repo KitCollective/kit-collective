@@ -81,6 +81,25 @@ describe("applyIdentitySuggestion", () => {
     expect(draft.condition).toBeNull();
   });
 
+  it("writes the season label onto the draft so Data can show it", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    const applied = applyIdentitySuggestion(
+      session,
+      draftId,
+      {
+        seasonId: UUID_B,
+        seasonLabel: "2021/22",
+      },
+      { fieldPreselect: { season: true } },
+    );
+
+    const draft = getActiveDraft(applied);
+    expect(draft.seasonId).toBe(UUID_B);
+    expect(draft.seasonLabel).toBe("2021/22");
+  });
+
   it("preselects a national team without stuffing it into clubId", () => {
     const session = createCaptureSession([URI_FRONT]);
     const draftId = getActiveDraft(session).id;

@@ -6,6 +6,7 @@ import {
 import {
   IDENTITY_VISION_SYSTEM_PROMPT,
   type IdentityRefinementCandidate,
+  identityPhotoFingerprint,
   identityVisionRefinementUserPrompt,
   identityVisionUserPrompt,
 } from "./identity-vision-prompt.js";
@@ -104,7 +105,10 @@ export function buildOpenRouterIdentityBody(
   photos: VisionIdentityPhotoInput[],
 ): OpenRouterChatBody {
   const content: OpenRouterChatContent[] = [
-    { type: "text", text: identityVisionUserPrompt(photos.length) },
+    {
+      type: "text",
+      text: identityVisionUserPrompt(photos.length, identityPhotoFingerprint(photos)),
+    },
   ];
   for (const photo of photos) {
     if (photo.role) {

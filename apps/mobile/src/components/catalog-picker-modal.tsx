@@ -1,6 +1,6 @@
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CatalogPickerRow } from "@/catalog/dummyCatalog";
+import type { CatalogPickerRow } from "@/catalog/catalogPickerRow";
 import { Banner, ListRow, SearchField } from "@/components/catalog-ui";
 import { IconButton } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";

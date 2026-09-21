@@ -4,6 +4,8 @@ import {
   catalogFacetSearchResponseSchema,
   catalogPickerClubIdParamSchema,
   catalogPickerSearchQuerySchema,
+  catalogClubSearchQuerySchema,
+  catalogPlayerSearchQuerySchema,
 } from "@kit/api-contract";
 import {
   BadRequestException,
@@ -35,7 +37,7 @@ export class CatalogController {
   @Get("clubs/search")
   @UseGuards(JwtAuthGuard)
   async searchClubs(@Query() query: Record<string, string | string[] | undefined>) {
-    const parsed = catalogPickerSearchQuerySchema.safeParse({
+    const parsed = catalogClubSearchQuerySchema.safeParse({
       q: typeof query.q === "string" ? query.q : undefined,
       locale: typeof query.locale === "string" ? query.locale : undefined,
     });
@@ -77,14 +79,19 @@ export class CatalogController {
   @Get("players/search")
   @UseGuards(JwtAuthGuard)
   async searchPlayers(@Query() query: Record<string, string | string[] | undefined>) {
-    const parsed = catalogPickerSearchQuerySchema.safeParse({
+    const parsed = catalogPlayerSearchQuerySchema.safeParse({
       q: typeof query.q === "string" ? query.q : undefined,
       locale: typeof query.locale === "string" ? query.locale : undefined,
+      clubId: typeof query.clubId === "string" ? query.clubId : undefined,
+      seasonId: typeof query.seasonId === "string" ? query.seasonId : undefined,
     });
     if (!parsed.success) {
       throw new BadRequestException("Invalid search query");
     }
-    const body = await this.catalogService.searchPlayers(parsed.data.q, parsed.data.locale);
+    const body = await this.catalogService.searchPlayers(parsed.data.q, parsed.data.locale, {
+      clubId: parsed.data.clubId,
+      seasonId: parsed.data.seasonId,
+    });
     return catalogFacetSearchResponseSchema.parse(body);
   }
 

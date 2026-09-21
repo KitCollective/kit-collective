@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
+  catalogFacetSearchResponseSchema,
   identitySessionSchema,
 } from "@kit/api-contract";
 import {
@@ -14,6 +15,9 @@ import {
   kit,
   league,
   nationalTeam,
+  player,
+  playerClubSeason,
+  playerNationalTeamSeason,
   resetDatabase,
   season,
   teamSeason,
@@ -72,6 +76,25 @@ describe("Catalog picker /v1", () => {
     });
 
     expect(response.statusCode).toBe(401);
+  });
+
+  it("lists live clubs when the picker opens without a query", async () => {
+    const session = await registerCollector(app, "empty-club-search@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/catalog/clubs/search?locale=da",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = catalogClubSearchResponseSchema.parse(JSON.parse(response.body));
+    expect(Array.isArray(body.clubs)).toBe(true);
+    expect(body.clubs.some((row) => row.id === "11111111-1111-4111-8111-111111111111")).toBe(
+      false,
+    );
   });
 
   it("rejects unauthenticated club seasons with 401", async () => {
@@ -373,5 +396,282 @@ describe("Catalog picker /v1", () => {
       { id: newerSeason!.id, label: "2023/24" },
       { id: olderSeason!.id, label: "2022/23" },
     ]);
+  });
+
+  it("scopes player search to a club squad and season number", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "DK" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    const [otherClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    const [seasonOne] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2023/24",
+        startsOn: "2023-07-01",
+        endsOn: "2024-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    const [seasonTwo] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2024/25",
+        startsOn: "2024-07-01",
+        endsOn: "2025-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    const [squadPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    const [otherPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    const [olderOnlyPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+
+    await db.insert(catalogLabel).values([
+      {
+        entityType: "player",
+        entityId: squadPlayer!.id,
+        locale: "da",
+        kind: "label",
+        text: "Jonas Wind",
+        source: "seed",
+      },
+      {
+        entityType: "player",
+        entityId: otherPlayer!.id,
+        locale: "da",
+        kind: "label",
+        text: "Rasmus Falk",
+        source: "seed",
+      },
+      {
+        entityType: "player",
+        entityId: olderOnlyPlayer!.id,
+        locale: "da",
+        kind: "label",
+        text: "Pierre Bengtsson",
+        source: "seed",
+      },
+    ]);
+
+    await db.insert(playerClubSeason).values([
+      {
+        playerId: squadPlayer!.id,
+        clubId: insertedClub!.id,
+        seasonId: seasonTwo!.id,
+        squadNumber: 23,
+      },
+      {
+        playerId: olderOnlyPlayer!.id,
+        clubId: insertedClub!.id,
+        seasonId: seasonOne!.id,
+        squadNumber: 3,
+      },
+      {
+        playerId: otherPlayer!.id,
+        clubId: otherClub!.id,
+        seasonId: seasonTwo!.id,
+        squadNumber: 33,
+      },
+    ]);
+
+    await pool.end();
+
+    const session = await registerCollector(app, "squad@example.com");
+
+    const squadResponse = await app.inject({
+      method: "GET",
+      url: `/v1/catalog/players/search?clubId=${insertedClub!.id}&seasonId=${seasonTwo!.id}`,
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(squadResponse.statusCode).toBe(200);
+    const squadBody = catalogFacetSearchResponseSchema.parse(JSON.parse(squadResponse.body));
+    expect(squadBody.items).toEqual([
+      {
+        id: squadPlayer!.id,
+        label: "Jonas Wind",
+        meta: "Nr. 23",
+      },
+    ]);
+    expect(JSON.stringify(squadBody)).not.toMatch(/kit_photo|object_key|http/i);
+
+    const filteredResponse = await app.inject({
+      method: "GET",
+      url: `/v1/catalog/players/search?q=23&clubId=${insertedClub!.id}&seasonId=${seasonTwo!.id}`,
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+    const filteredBody = catalogFacetSearchResponseSchema.parse(JSON.parse(filteredResponse.body));
+    expect(filteredBody.items.map((row) => row.label)).toEqual(["Jonas Wind"]);
+
+    const unscopedResponse = await app.inject({
+      method: "GET",
+      url: "/v1/catalog/players/search?q=falk",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+    const unscopedBody = catalogFacetSearchResponseSchema.parse(JSON.parse(unscopedResponse.body));
+    expect(unscopedBody.items).toEqual([
+      {
+        id: otherPlayer!.id,
+        label: "Rasmus Falk",
+      },
+    ]);
+  });
+
+  it("scopes player search to a national-team kader", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "DK" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedNationalTeam] = await db
+      .insert(nationalTeam)
+      .values({ countryId: insertedCountry!.id, gender: "men" })
+      .returning({ id: nationalTeam.id });
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2024",
+        startsOn: "2024-01-01",
+        endsOn: "2024-12-31",
+        calendarKind: "calendar",
+      })
+      .returning({ id: season.id });
+
+    const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+
+    await db.insert(catalogLabel).values({
+      entityType: "player",
+      entityId: insertedPlayer!.id,
+      locale: "da",
+      kind: "label",
+      text: "Christian Eriksen",
+      source: "seed",
+    });
+
+    await db.insert(playerNationalTeamSeason).values({
+      playerId: insertedPlayer!.id,
+      nationalTeamId: insertedNationalTeam!.id,
+      seasonId: insertedSeason!.id,
+      squadNumber: 10,
+    });
+
+    await pool.end();
+
+    const session = await registerCollector(app, "nt-squad@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/catalog/players/search?clubId=${insertedNationalTeam!.id}`,
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = catalogFacetSearchResponseSchema.parse(JSON.parse(response.body));
+    expect(body.items).toEqual([
+      {
+        id: insertedPlayer!.id,
+        label: "Christian Eriksen",
+        meta: "Nr. 10",
+      },
+    ]);
+  });
+
+  it("omits historical picker seed clubs from search so scraped stamdata is not duplicated", async () => {
+    const fixtureClubId = "11111111-1111-4111-8111-111111111111";
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "DK" })
+      .returning({ id: country.id });
+
+    const [scrapedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    const [fixtureClub] = await db
+      .insert(club)
+      .values({
+        id: fixtureClubId,
+        countryId: insertedCountry!.id,
+        kind: "club",
+      })
+      .returning({ id: club.id });
+    expect(fixtureClub!.id).toBe(fixtureClubId);
+
+    await db.insert(catalogLabel).values([
+      {
+        entityType: "club",
+        entityId: scrapedClub!.id,
+        locale: "da",
+        kind: "label",
+        text: "F.C. København",
+        source: "seed",
+      },
+      {
+        entityType: "club",
+        entityId: fixtureClubId,
+        locale: "da",
+        kind: "label",
+        text: "F.C. København",
+        source: "seed",
+      },
+    ]);
+
+    await pool.end();
+
+    const session = await registerCollector(app, "omit-fixture@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/catalog/clubs/search?q=københavn&locale=da",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = catalogClubSearchResponseSchema.parse(JSON.parse(response.body));
+    expect(body.clubs.some((row) => row.id === scrapedClub!.id)).toBe(true);
+    expect(body.clubs.some((row) => row.id === fixtureClubId)).toBe(false);
   });
 });

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { searchCatalogClubs } from "@/api/catalog";
 import { formatCatalogMissSheetMessage } from "@/capture/catalogMissHint";
-import { type CatalogPickerRow, searchDummyClubs } from "@/catalog/dummyCatalog";
+import type { CatalogPickerRow } from "@/catalog/catalogPickerRow";
+import {
+  CATALOG_SEARCH_ERROR_MESSAGE,
+  resolveClubPickerRows,
+} from "@/catalog/liveCatalogPicker";
 import { CatalogPickerModal } from "@/components/catalog-picker-modal";
 
 type ClubPickerOverlayProps = {
@@ -13,11 +17,6 @@ type ClubPickerOverlayProps = {
   onSelect: (club: CatalogPickerRow) => void;
   onDismiss: () => void;
 };
-
-function mergeClubRows(live: CatalogPickerRow[], dummy: CatalogPickerRow[]): CatalogPickerRow[] {
-  const seen = new Set(live.map((row) => row.id));
-  return [...live, ...dummy.filter((row) => !seen.has(row.id))];
-}
 
 export function ClubPickerOverlay({
   visible,
@@ -31,16 +30,20 @@ export function ClubPickerOverlay({
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [items, setItems] = useState<CatalogPickerRow[]>(() => searchDummyClubs(""));
+  const [items, setItems] = useState<CatalogPickerRow[]>([]);
 
   const runSearch = useCallback(
     async (nextQuery: string) => {
-      const dummy = searchDummyClubs(nextQuery);
       const trimmed = nextQuery.trim();
 
-      if (!accessToken || trimmed.length < 2) {
-        setItems(dummy);
-        setErrorMessage(null);
+      if (!accessToken) {
+        const resolved = resolveClubPickerRows({
+          authenticated: false,
+          live: null,
+          liveFailed: false,
+        });
+        setItems(resolved.items);
+        setErrorMessage(resolved.errorMessage);
         return;
       }
 
@@ -48,10 +51,21 @@ export function ClubPickerOverlay({
       setErrorMessage(null);
       try {
         const response = await searchCatalogClubs(accessToken, trimmed, "da");
-        setItems(mergeClubRows(response.clubs, dummy));
+        const resolved = resolveClubPickerRows({
+          authenticated: true,
+          live: response.clubs,
+          liveFailed: false,
+        });
+        setItems(resolved.items);
+        setErrorMessage(resolved.errorMessage);
       } catch {
-        setItems(dummy);
-        setErrorMessage("Kunne ikke søge i kataloget. Viser testdata.");
+        const resolved = resolveClubPickerRows({
+          authenticated: true,
+          live: null,
+          liveFailed: true,
+        });
+        setItems(resolved.items);
+        setErrorMessage(resolved.errorMessage ?? CATALOG_SEARCH_ERROR_MESSAGE);
       } finally {
         setLoading(false);
       }
@@ -62,7 +76,7 @@ export function ClubPickerOverlay({
   useEffect(() => {
     if (!visible) {
       setQuery("");
-      setItems(searchDummyClubs(""));
+      setItems([]);
       setErrorMessage(null);
       return;
     }
@@ -96,7 +110,11 @@ export function ClubPickerOverlay({
       loading={loading}
       errorMessage={errorMessage}
       noticeMessage={catalogMissHint ? formatCatalogMissSheetMessage(catalogMissHint) : null}
-      emptyMessage="Ingen klubber eller landshold matcher."
+      emptyMessage={
+        !accessToken
+          ? "Log ind for at søge i kataloget."
+          : "Ingen klubber eller landshold matcher."
+      }
       onSelect={(item) => {
         onSelect(item);
         onDismiss();

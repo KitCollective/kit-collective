@@ -181,6 +181,8 @@ export {
   type CatalogPickerClubIdParam,
   type CatalogPickerItem,
   type CatalogPickerSearchQuery,
+  type CatalogClubSearchQuery,
+  type CatalogPlayerSearchQuery,
   type CatalogSideKind,
   type CatalogSidePickerItem,
   catalogClubSearchResponseSchema,
@@ -189,9 +191,16 @@ export {
   catalogPickerClubIdParamSchema,
   catalogPickerItemSchema,
   catalogPickerSearchQuerySchema,
+  catalogClubSearchQuerySchema,
+  catalogPlayerSearchQuerySchema,
   catalogSideKindSchema,
   catalogSidePickerItemSchema,
 } from "./catalog/picker.js";
+export {
+  DEV_CATALOG_FIXTURE_IDS,
+  isDevCatalogFixtureId,
+  omitDevCatalogFixtureRows,
+} from "./catalog/devFixtureIds.js";
 export { catalogSideId, catalogSideXorIssue } from "./catalog/side.js";
 export {
   type CatalogStats,

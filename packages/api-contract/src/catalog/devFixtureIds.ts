@@ -1,0 +1,46 @@
+/**
+ * Historical Confirm/Data picker seed (`seedDevCatalog`). Omit from live picker
+ * results so fixture FCK/Brøndby/… do not duplicate scraped stamdata.
+ */
+export const DEV_CATALOG_FIXTURE_IDS: ReadonlySet<string> = new Set([
+  "11111111-1111-4111-8111-111111111111",
+  "22222222-2222-4222-8222-222222222222",
+  "33333333-3333-4333-8333-333333333333",
+  "44444444-4444-4444-8444-444444444444",
+  "55555555-5555-4555-8555-555555555555",
+  "66666666-6666-4666-8666-666666666666",
+  "77777771-7771-4771-8771-777777777771",
+  "77777772-7772-4772-8772-777777777772",
+  "77777773-7773-4773-8773-777777777773",
+  "77777774-7774-4774-8774-777777777774",
+  "aaaaaaa1-aaa1-4aa1-8aa1-111111111111",
+  "aaaaaaa2-aaa2-4aa2-8aa2-111111111111",
+  "aaaaaaa3-aaa3-4aa3-8aa3-111111111111",
+  "aaaaaaa1-aaa1-4aa1-8aa1-222222222222",
+  "aaaaaaa2-aaa2-4aa2-8aa2-222222222222",
+  "aaaaaaa1-aaa1-4aa1-8aa1-333333333333",
+  "aaaaaaa1-aaa1-4aa1-8aa1-444444444444",
+  "aaaaaaa2-aaa2-4aa2-8aa2-444444444444",
+  "aaaaaaa1-aaa1-4aa1-8aa1-555555555555",
+  "aaaaaaa2-aaa2-4aa2-8aa2-555555555555",
+  "aaaaaaa1-aaa1-4aa1-8aa1-666666666666",
+  "b1111111-b111-4111-8111-111111111111",
+  "b1111112-b112-4112-8112-111111111111",
+  "b1111113-b113-4113-8113-111111111111",
+  "b2222221-b221-4221-8221-222222222222",
+  "b2222222-b222-4222-8222-222222222222",
+  "b3333331-b331-4331-8331-333333333333",
+  "b4444441-b441-4441-8441-444444444444",
+  "b4444442-b442-4442-8442-444444444444",
+  "b5555551-b551-4551-8551-555555555555",
+  "b5555552-b552-4552-8552-555555555555",
+  "b6666661-b661-4661-8661-666666666666",
+]);
+
+export function isDevCatalogFixtureId(id: string): boolean {
+  return DEV_CATALOG_FIXTURE_IDS.has(id);
+}
+
+export function omitDevCatalogFixtureRows<T extends { id: string }>(rows: T[]): T[] {
+  return rows.filter((row) => !DEV_CATALOG_FIXTURE_IDS.has(row.id));
+}
