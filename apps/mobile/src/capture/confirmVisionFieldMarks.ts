@@ -37,7 +37,7 @@ export type ConfirmVisionFieldMarkInput = {
 };
 
 function isVisionDataField(key: string): key is VisionDataField {
-  return (VISION_DATA_FIELDS as readonly string[]).includes(key);
+  return VISION_DATA_FIELDS.some((field) => field === key);
 }
 
 function fieldWasSuggested(field: VisionDataField, input: ConfirmVisionFieldMarkInput): boolean {
