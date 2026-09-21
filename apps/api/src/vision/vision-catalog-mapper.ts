@@ -1,4 +1,4 @@
-import { isDevCatalogFixtureId } from "@kit/api-contract";
+import { isDevCatalogFixtureId, VISION_CONFIDENCE_SUGGEST } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
   catalogLabel,
@@ -35,6 +35,7 @@ import {
   type ObservableKitHit,
   pickBestCatalogSide,
   pickLockedKit,
+  reconcileHintClubWithCareer,
   reconcileHintSeasonWithSquad,
   scoreLabelMatch,
 } from "./vision-kit-lock.js";
@@ -89,8 +90,8 @@ export class VisionCatalogMapper {
     options: VisionMapOptions = {},
   ): Promise<VisionInferenceResult | null> {
     const sideMatch = await this.resolveSide(hints);
-    const hits = await this.listObservableKitHits(hints, sideMatch);
-    const locked = pickLockedKit(hits, {
+    let hits = await this.listObservableKitHits(hints, sideMatch);
+    let locked = pickLockedKit(hits, {
       amongKitIds: options.amongKitIds,
       sideId: sideMatch?.id,
       seasonHint: hints.seasonHint,
@@ -98,7 +99,7 @@ export class VisionCatalogMapper {
       colorHint: hints.colorHint,
     });
 
-    const clubId = catalogClubIdForSave(locked, sideMatch);
+    let clubId = catalogClubIdForSave(locked, sideMatch);
     const nationalTeamId = catalogNationalTeamIdForSave(locked, sideMatch);
     const playerScope = playerScopeFor(locked, clubId, nationalTeamId, sideMatch);
     const hintSeason =
@@ -106,7 +107,6 @@ export class VisionCatalogMapper {
         ? await this.resolveSeasonFromHint(playerScope, hints.seasonHint)
         : null;
     let seasonId = locked?.seasonId ?? hintSeason?.seasonId;
-    const type = locked?.type ?? hints.kitType;
     const playerMatch =
       playerScope || hints.playerHint?.trim()
         ? await this.resolvePlayer(playerScope, seasonId, hints.playerNumberHint, hints.playerHint)
@@ -119,6 +119,22 @@ export class VisionCatalogMapper {
       );
       seasonId = reconcileHintSeasonWithSquad(seasonId, squadSeasonIds);
     }
+
+    const careerClub = await this.applyPlayerCareerClubConstraint({
+      hints,
+      options,
+      playerMatch,
+      nationalTeamId,
+      clubId,
+      seasonId,
+      locked,
+    });
+    clubId = careerClub.clubId;
+    seasonId = careerClub.seasonId;
+    locked = careerClub.locked;
+    hits = careerClub.hits ?? hits;
+    const type = locked?.type ?? hints.kitType;
+
     const patchMatch = seasonId ? await this.resolvePatch(seasonId, hints.patchHint) : null;
 
     if (!clubId && !nationalTeamId && !locked && !playerMatch && !patchMatch) {
@@ -146,7 +162,7 @@ export class VisionCatalogMapper {
       kitHitCount: hits.length,
       visionRaw: encodeVisionEvalRaw(hints, hits.length),
       confidences: this.buildConfidences(hints, {
-        club: clubId ? clubMatchScore(sideMatch, locked) : undefined,
+        club: clubId ? clubScoreForMappedClub(sideMatch, locked, clubId) : undefined,
         nationalTeam: nationalTeamId ? clubMatchScore(sideMatch, locked) : undefined,
         kitType: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         player: playerMatch?.score,
@@ -154,6 +170,151 @@ export class VisionCatalogMapper {
         kitLocked: Boolean(locked),
       }),
     };
+  }
+
+  private async applyPlayerCareerClubConstraint(input: {
+    hints: VisionCatalogHints;
+    options: VisionMapOptions;
+    playerMatch: PlayerMatch | null;
+    nationalTeamId: string | undefined;
+    clubId: string | undefined;
+    seasonId: string | undefined;
+    locked: ObservableKitHit | null;
+  }): Promise<{
+    clubId: string | undefined;
+    seasonId: string | undefined;
+    locked: ObservableKitHit | null;
+    hits?: ObservableKitHit[];
+  }> {
+    const { hints, options, playerMatch, nationalTeamId } = input;
+    let { clubId, seasonId, locked } = input;
+    if (!playerMatch || playerMatch.score < VISION_CONFIDENCE_SUGGEST || nationalTeamId) {
+      return { clubId, seasonId, locked };
+    }
+
+    const careerRows = await this.listPlayerClubCareer(playerMatch.playerId);
+    const careerClubIds = [...new Set(careerRows.map((row) => row.clubId))];
+    const hintedClubId = clubId;
+    const reconciled = reconcileHintClubWithCareer(hintedClubId, careerClubIds);
+    if (!reconciled.conflict) {
+      return { clubId, seasonId, locked };
+    }
+
+    this.logger.warn(
+      `Vision player-club career conflict: player=${playerMatch.playerId} hintedClub=${hintedClubId ?? "none"}`,
+    );
+
+    if (locked && hintedClubId && locked.clubId === hintedClubId) {
+      locked = null;
+    }
+    if (
+      seasonId &&
+      !careerRows.some((row) => row.seasonId === seasonId && row.clubId !== hintedClubId)
+    ) {
+      seasonId = undefined;
+    }
+
+    clubId = reconciled.clubId;
+    if (!clubId) {
+      clubId = await this.pickCareerClubFromHints(careerClubIds, hints);
+    }
+
+    if (clubId) {
+      const seasonsAtClub = careerRows
+        .filter((row) => row.clubId === clubId)
+        .map((row) => row.seasonId);
+      seasonId = reconcileHintSeasonWithSquad(
+        seasonId && seasonsAtClub.includes(seasonId) ? seasonId : undefined,
+        seasonsAtClub,
+      );
+    }
+
+    const careerHits = await this.listCareerObservableKitHits(hints, careerClubIds, clubId);
+    const remappedLock = pickLockedKit(careerHits, {
+      amongKitIds: options.amongKitIds,
+      sideId: clubId,
+      seasonHint: hints.seasonHint,
+      kitType: hints.kitType,
+      colorHint: hints.colorHint,
+    });
+    if (remappedLock) {
+      locked = remappedLock;
+      clubId = remappedLock.clubId ?? clubId;
+      seasonId = remappedLock.seasonId;
+    }
+
+    return { clubId, seasonId, locked, hits: careerHits };
+  }
+
+  private async listPlayerClubCareer(
+    playerId: string,
+  ): Promise<Array<{ clubId: string; seasonId: string }>> {
+    return this.db
+      .select({
+        clubId: playerClubSeason.clubId,
+        seasonId: playerClubSeason.seasonId,
+      })
+      .from(playerClubSeason)
+      .where(eq(playerClubSeason.playerId, playerId));
+  }
+
+  private async pickCareerClubFromHints(
+    careerClubIds: string[],
+    hints: VisionCatalogHints,
+  ): Promise<string | undefined> {
+    if (careerClubIds.length === 0) {
+      return undefined;
+    }
+    const hintTexts = collectClubHints(hints);
+    if (hintTexts.length === 0) {
+      return undefined;
+    }
+
+    const labelRows = await this.db
+      .selectDistinct({
+        entityId: catalogLabel.entityId,
+        text: catalogLabel.text,
+      })
+      .from(catalogLabel)
+      .where(
+        and(eq(catalogLabel.entityType, "club"), inArray(catalogLabel.entityId, careerClubIds)),
+      );
+
+    const bestByClub = new Map<string, number>();
+    for (const row of labelRows) {
+      let score = 0;
+      for (const hint of hintTexts) {
+        score = Math.max(score, scoreLabelMatch(row.text ?? "", hint));
+      }
+      if (score <= 0) {
+        continue;
+      }
+      const current = bestByClub.get(row.entityId) ?? 0;
+      if (score > current) {
+        bestByClub.set(row.entityId, score);
+      }
+    }
+
+    const ranked = [...bestByClub.entries()].sort((left, right) => right[1] - left[1]);
+    const best = ranked[0];
+    if (!best) {
+      return undefined;
+    }
+    const tied = ranked.filter((entry) => entry[1] === best[1]);
+    return tied.length === 1 ? best[0] : undefined;
+  }
+
+  private async listCareerObservableKitHits(
+    hints: VisionCatalogHints,
+    careerClubIds: readonly string[],
+    remappedClubId: string | undefined,
+  ): Promise<ObservableKitHit[]> {
+    const sponsorHint = hints.sponsorHint?.trim();
+    const side: CatalogSideMatch | null = remappedClubId
+      ? { id: remappedClubId, kind: "club", score: 0 }
+      : null;
+    const listed = await this.listObservableKitHits(hints, sponsorHint ? null : side);
+    return listed.filter((hit) => hit.clubId != null && careerClubIds.includes(hit.clubId));
   }
 
   async listObservableKitHits(
@@ -719,6 +880,17 @@ function clubMatchScore(
     return CATALOG_KIT_LOCK_CONFIDENCE;
   }
   return undefined;
+}
+
+function clubScoreForMappedClub(
+  sideMatch: CatalogSideMatch | null,
+  locked: ObservableKitHit | null,
+  clubId: string,
+): number | undefined {
+  if (sideMatch?.kind === "club" && sideMatch.id === clubId) {
+    return clubMatchScore(sideMatch, locked);
+  }
+  return clubMatchScore(null, locked);
 }
 
 function idsForEntityType(

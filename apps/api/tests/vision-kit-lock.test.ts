@@ -10,6 +10,7 @@ import {
   pickLockedKit,
   pickRefinedKit,
   pickUniqueKitByObservables,
+  reconcileHintClubWithCareer,
   reconcileHintSeasonWithSquad,
   resolveObservableKitLock,
   scoreColorMatch,
@@ -283,5 +284,46 @@ describe("reconcileHintSeasonWithSquad", () => {
 
   it("omits season when the hint is impossible and two squad seasons remain", () => {
     expect(reconcileHintSeasonWithSquad(season2122, [season2425, season2526])).toBeUndefined();
+  });
+});
+
+describe("reconcileHintClubWithCareer", () => {
+  const toulouse = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const midtjylland = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const anderlecht = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  it("keeps the hinted club when the player has no career rows yet", () => {
+    expect(reconcileHintClubWithCareer(anderlecht, [])).toEqual({
+      clubId: anderlecht,
+      conflict: false,
+    });
+  });
+
+  it("keeps the hinted club when it is already in the player's career", () => {
+    expect(reconcileHintClubWithCareer(toulouse, [toulouse, midtjylland])).toEqual({
+      clubId: toulouse,
+      conflict: false,
+    });
+  });
+
+  it("keeps an absent club hint without marking a conflict", () => {
+    expect(reconcileHintClubWithCareer(undefined, [toulouse, midtjylland])).toEqual({
+      clubId: undefined,
+      conflict: false,
+    });
+  });
+
+  it("remaps to the only career club when the hint is outside that career", () => {
+    expect(reconcileHintClubWithCareer(anderlecht, [toulouse])).toEqual({
+      clubId: toulouse,
+      conflict: true,
+    });
+  });
+
+  it("omits club when the hint is outside a two-club career", () => {
+    expect(reconcileHintClubWithCareer(anderlecht, [toulouse, midtjylland])).toEqual({
+      clubId: undefined,
+      conflict: true,
+    });
   });
 });

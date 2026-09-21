@@ -645,6 +645,154 @@ describe("VisionCatalogMapper", () => {
     expect(mapped?.playerNumber).toBeUndefined();
   });
 
+  it("does not preselect Anderlecht when Nicolaisen's career is Toulouse and Midtjylland", async () => {
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+    const anderlecht = await insertClubWithKits(
+      [{ label: "2019/20", type: "home", manufacturer: "Adidas", sponsor: "DVV" }],
+      { clubLabel: "RSC Anderlecht" },
+    );
+    const toulouse = await insertClubWithKits(
+      [{ label: "2024/25", type: "home", manufacturer: "Nike", sponsor: "Caisse d'Epargne" }],
+      { clubLabel: "Toulouse FC" },
+    );
+    const midtjylland = await insertClubWithKits(
+      [{ label: "2022/23", type: "home", manufacturer: "Puma", sponsor: "Detoyato" }],
+      { clubLabel: "FC Midtjylland" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const nicolaisenId = await insertPlayerWithLabel(db, "Nicolaisen");
+    await db.insert(playerClubSeason).values([
+      {
+        playerId: nicolaisenId,
+        clubId: toulouse.clubId,
+        seasonId: toulouse.kits[0]!.seasonId,
+        squadNumber: 2,
+      },
+      {
+        playerId: nicolaisenId,
+        clubId: midtjylland.clubId,
+        seasonId: midtjylland.kits[0]!.seasonId,
+        squadNumber: 2,
+      },
+    ]);
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "RSC Anderlecht",
+      seasonHint: "2019/20",
+      kitType: "home",
+      playerHint: "Nicolaisen",
+      playerNumberHint: "2",
+      fieldConfidence: { club: 0.95, season: 0.9, kitType: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.playerId).toBe(nicolaisenId);
+    expect(mapped?.clubId).not.toBe(anderlecht.clubId);
+    expect(mapped?.clubId).toBeUndefined();
+    expect(mapped?.clubHint).toBe("RSC Anderlecht");
+    expect(mapped?.catalogKitId).not.toBe(anderlecht.kits[0]!.kitId);
+    expect(warn).toHaveBeenCalled();
+    const message = String(warn.mock.calls[0]?.[0] ?? "");
+    expect(message).toContain("player-club career conflict");
+    expect(message).toContain(nicolaisenId);
+    expect(message).toContain(anderlecht.clubId);
+
+    expect(mapped).toBeDefined();
+    if (!mapped) {
+      return;
+    }
+    const resolved = resolveIdentityJob(mapped);
+    expect(resolved.suggestions?.clubId).not.toBe(anderlecht.clubId);
+    expect(resolved.suggestions?.playerId).toBe(nicolaisenId);
+  });
+
+  it("still maps a career club when the hint names that club", async () => {
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+    const toulouse = await insertClubWithKits(
+      [{ label: "2024/25", type: "home", manufacturer: "Nike", sponsor: "Caisse d'Epargne" }],
+      { clubLabel: "Toulouse FC" },
+    );
+    const midtjylland = await insertClubWithKits(
+      [{ label: "2022/23", type: "home", manufacturer: "Puma", sponsor: "Detoyato" }],
+      { clubLabel: "FC Midtjylland" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const nicolaisenId = await insertPlayerWithLabel(db, "Nicolaisen");
+    await db.insert(playerClubSeason).values([
+      {
+        playerId: nicolaisenId,
+        clubId: toulouse.clubId,
+        seasonId: toulouse.kits[0]!.seasonId,
+        squadNumber: 2,
+      },
+      {
+        playerId: nicolaisenId,
+        clubId: midtjylland.clubId,
+        seasonId: midtjylland.kits[0]!.seasonId,
+        squadNumber: 2,
+      },
+    ]);
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "Toulouse FC",
+      playerHint: "Nicolaisen",
+      playerNumberHint: "2",
+      fieldConfidence: { club: 0.95, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.playerId).toBe(nicolaisenId);
+    expect(mapped?.clubId).toBe(toulouse.clubId);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("remaps a unique career club when the hinted club is outside that career", async () => {
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+    const anderlecht = await insertClubWithKits(
+      [{ label: "2019/20", type: "home", manufacturer: "Adidas", sponsor: "DVV" }],
+      { clubLabel: "RSC Anderlecht" },
+    );
+    const toulouse = await insertClubWithKits(
+      [{ label: "2024/25", type: "home", manufacturer: "Nike", sponsor: "Caisse d'Epargne" }],
+      { clubLabel: "Toulouse FC" },
+    );
+
+    const { db, pool } = createDb(DATABASE_URL);
+    const nicolaisenId = await insertPlayerWithLabel(db, "Nicolaisen");
+    await db.insert(playerClubSeason).values({
+      playerId: nicolaisenId,
+      clubId: toulouse.clubId,
+      seasonId: toulouse.kits[0]!.seasonId,
+      squadNumber: 2,
+    });
+    await pool.end();
+
+    const { db: mapperDb, pool: mapperPool } = createDb(DATABASE_URL);
+    const mapped = await new VisionCatalogMapper(mapperDb).mapHints({
+      clubHint: "RSC Anderlecht",
+      seasonHint: "2019/20",
+      kitType: "home",
+      playerHint: "Nicolaisen",
+      fieldConfidence: { club: 0.95, season: 0.9, kitType: 0.9, player: 1 },
+    });
+    await mapperPool.end();
+
+    expect(mapped?.playerId).toBe(nicolaisenId);
+    expect(mapped?.clubId).toBe(toulouse.clubId);
+    expect(mapped?.clubId).not.toBe(anderlecht.clubId);
+    expect(warn).toHaveBeenCalled();
+    const message = String(warn.mock.calls[0]?.[0] ?? "");
+    expect(message).toContain("player-club career conflict");
+    expect(message).toContain(nicolaisenId);
+    expect(message).toContain(anderlecht.clubId);
+  });
+
   it("omits player and warns when the name matches two catalog players", async () => {
     const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
     const fixture = await insertClubWithKits(

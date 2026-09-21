@@ -490,3 +490,26 @@ export function reconcileHintSeasonWithSquad(
   }
   return undefined;
 }
+
+/**
+ * Club UUID from side match or kit lock, constrained to the player's
+ * `player_club_season` career. Empty career keeps the hint (no squad rows yet).
+ */
+export function reconcileHintClubWithCareer(
+  hintedClubId: string | undefined,
+  careerClubIds: readonly string[],
+): { clubId: string | undefined; conflict: boolean } {
+  if (careerClubIds.length === 0) {
+    return { clubId: hintedClubId, conflict: false };
+  }
+  if (!hintedClubId) {
+    return { clubId: undefined, conflict: false };
+  }
+  if (careerClubIds.includes(hintedClubId)) {
+    return { clubId: hintedClubId, conflict: false };
+  }
+  if (careerClubIds.length === 1) {
+    return { clubId: careerClubIds[0], conflict: true };
+  }
+  return { clubId: undefined, conflict: true };
+}
