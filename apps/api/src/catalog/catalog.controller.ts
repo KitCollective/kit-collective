@@ -1,10 +1,10 @@
 import {
+  catalogClubSearchQuerySchema,
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
   catalogFacetSearchResponseSchema,
   catalogPickerClubIdParamSchema,
   catalogPickerSearchQuerySchema,
-  catalogClubSearchQuerySchema,
   catalogPlayerSearchQuerySchema,
 } from "@kit/api-contract";
 import {

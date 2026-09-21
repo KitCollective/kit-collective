@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { ConfirmSectionFact } from "../src/capture/confirmSectionProgress";
 import {
   attachConfirmVisionFieldMarks,
-  resolveConfirmVisionFieldMark,
   type ConfirmVisionFieldMarkInput,
+  resolveConfirmVisionFieldMark,
 } from "../src/capture/confirmVisionFieldMarks";
 
 const idle: ConfirmVisionFieldMarkInput = {

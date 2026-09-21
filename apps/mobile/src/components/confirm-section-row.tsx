@@ -3,11 +3,8 @@ import type { LayoutChangeEvent } from "react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ConfirmSectionFact } from "@/capture/confirmSectionProgress";
 import type { ConfirmVisionFieldMark } from "@/capture/confirmVisionFieldMarks";
+import { ConfirmAnalyzingPulse, SKELETON_BONE_ALPHA } from "@/components/confirm-analyzing-pulse";
 import { ConfirmProgressDonut } from "@/components/confirm-progress-donut";
-import {
-  ConfirmAnalyzingPulse,
-  SKELETON_BONE_ALPHA,
-} from "@/components/confirm-analyzing-pulse";
 import { useTypography } from "@/theme/brand-fonts";
 import type { ThemeColors } from "@/theme/tokens";
 import { radius, space, withAlpha } from "@/theme/tokens";

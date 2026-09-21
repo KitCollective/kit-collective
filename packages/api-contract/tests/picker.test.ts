@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { omitDevCatalogFixtureRows } from "../src/catalog/devFixtureIds.js";
 import {
+  catalogClubSearchQuerySchema,
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
   catalogFacetSearchResponseSchema,
   catalogPickerClubIdParamSchema,
   catalogPickerItemSchema,
   catalogPickerSearchQuerySchema,
-  catalogClubSearchQuerySchema,
   catalogPlayerSearchQuerySchema,
 } from "../src/catalog/picker.js";
-import { omitDevCatalogFixtureRows } from "../src/catalog/devFixtureIds.js";
 
 describe("catalogPickerItemSchema", () => {
   it("accepts id and label only", () => {

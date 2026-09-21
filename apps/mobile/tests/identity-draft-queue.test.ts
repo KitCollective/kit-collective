@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createCaptureSession, getActiveDraft, addJerseyDraft } from "../src/capture/captureSession";
-import { bindUnboundPhotoToDraft } from "../src/capture/captureSession";
+import {
+  addJerseyDraft,
+  bindUnboundPhotoToDraft,
+  createCaptureSession,
+  getActiveDraft,
+} from "../src/capture/captureSession";
 import {
   IDENTITY_TIMEOUT_ERROR,
   identityRunKey,
@@ -19,13 +23,21 @@ const URI_B = "file:///photos/b.jpg";
 const URI_C = "file:///photos/c.jpg";
 const URI_D = "file:///photos/d.jpg";
 
+function draftAt(drafts: ReturnType<typeof createCaptureSession>["drafts"], index: number) {
+  const draft = drafts[index];
+  if (!draft) {
+    throw new Error(`expected draft at ${index}`);
+  }
+  return draft;
+}
+
 function threeJerseySession() {
   let session = createCaptureSession([URI_A, URI_B, URI_C, URI_D]);
   const first = getActiveDraft(session).id;
   session = addJerseyDraft(session);
-  const second = session.drafts[1]!.id;
+  const second = draftAt(session.drafts, 1).id;
   session = addJerseyDraft(session);
-  const third = session.drafts[2]!.id;
+  const third = draftAt(session.drafts, 2).id;
   session = bindUnboundPhotoToDraft(session, URI_A, first);
   session = bindUnboundPhotoToDraft(session, URI_B, second);
   session = bindUnboundPhotoToDraft(session, URI_C, third);
@@ -43,8 +55,8 @@ describe("orderedIdentityDrafts", () => {
 describe("nextQueuedIdentityDraft", () => {
   it("starts at jersey 1 even when jersey 3 is the only one already started", () => {
     const { session, first, third } = threeJerseySession();
-    const started = new Set([identityRunKey(session.drafts[2]!)]);
-    expect(session.drafts[2]!.id).toBe(third);
+    const started = new Set([identityRunKey(draftAt(session.drafts, 2))]);
+    expect(draftAt(session.drafts, 2).id).toBe(third);
 
     const next = nextQueuedIdentityDraft(session.drafts, started);
     expect(next?.id).toBe(first);
@@ -55,18 +67,24 @@ describe("nextQueuedIdentityDraft", () => {
     const started = new Set<string>();
     const one = nextQueuedIdentityDraft(session.drafts, started);
     expect(one?.id).toBe(first);
-    started.add(identityRunKey(one!));
+    if (!one) {
+      throw new Error("expected jersey 1");
+    }
+    started.add(identityRunKey(one));
     const two = nextQueuedIdentityDraft(session.drafts, started);
     expect(two?.id).toBe(second);
-    started.add(identityRunKey(two!));
+    if (!two) {
+      throw new Error("expected jersey 2");
+    }
+    started.add(identityRunKey(two));
     const three = nextQueuedIdentityDraft(session.drafts, started);
     expect(three?.id).toBe(third);
   });
 
   it("moves to jersey 2 after jersey 1 was attempted, even when that attempt failed", () => {
     const { session, first, second } = threeJerseySession();
-    const started = new Set([identityRunKey(session.drafts[0]!)]);
-    expect(session.drafts[0]!.id).toBe(first);
+    const started = new Set([identityRunKey(draftAt(session.drafts, 0))]);
+    expect(draftAt(session.drafts, 0).id).toBe(first);
     expect(nextQueuedIdentityDraft(session.drafts, started)?.id).toBe(second);
   });
 });
@@ -80,7 +98,9 @@ describe("shouldSyncIdentityChrome", () => {
 
 describe("raceWithTimeout", () => {
   it("rejects hanging work so jersey 1 cannot block 2 and 3", async () => {
-    await expect(raceWithTimeout(new Promise(() => {}), 20)).rejects.toThrow(IDENTITY_TIMEOUT_ERROR);
+    await expect(raceWithTimeout(new Promise(() => {}), 20)).rejects.toThrow(
+      IDENTITY_TIMEOUT_ERROR,
+    );
   });
 
   it("counts photo prepare against the same budget as poll", () => {
@@ -147,14 +167,14 @@ describe("shouldAttemptIdentityQueue", () => {
 
 describe("shouldHoldIdentityForGrouping", () => {
   it("releases identity as soon as the first grouped jersey has photos", () => {
-    expect(
-      shouldHoldIdentityForGrouping({ groupingInFlight: true, boundDraftCount: 0 }),
-    ).toBe(true);
-    expect(
-      shouldHoldIdentityForGrouping({ groupingInFlight: true, boundDraftCount: 1 }),
-    ).toBe(false);
-    expect(
-      shouldHoldIdentityForGrouping({ groupingInFlight: false, boundDraftCount: 0 }),
-    ).toBe(false);
+    expect(shouldHoldIdentityForGrouping({ groupingInFlight: true, boundDraftCount: 0 })).toBe(
+      true,
+    );
+    expect(shouldHoldIdentityForGrouping({ groupingInFlight: true, boundDraftCount: 1 })).toBe(
+      false,
+    );
+    expect(shouldHoldIdentityForGrouping({ groupingInFlight: false, boundDraftCount: 0 })).toBe(
+      false,
+    );
   });
 });
