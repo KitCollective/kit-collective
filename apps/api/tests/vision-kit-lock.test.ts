@@ -146,6 +146,16 @@ describe("vision kit lock", () => {
     expect(scoreLabelMatch("2019/20", "20192021")).toBe(0);
   });
 
+  it("scores a one-letter surname OCR miss", () => {
+    expect(scoreLabelMatch("Nicolaisen", "NICOLASEN")).toBe(80);
+    expect(scoreLabelMatch("Rasmus Nicolaisen", "NICOLASEN")).toBe(80);
+  });
+
+  it("joins a surname the model split across a line break", () => {
+    expect(scoreLabelMatch("Nicolaisen", "NICOLAI\nSEN")).toBe(95);
+    expect(scoreLabelMatch("Rasmus Nicolaisen", "NICOLAI\nSEN")).toBe(70);
+  });
+
   it("builds ILIKE needles that include compact sponsor spellings", () => {
     expect(catalogHintSearchNeedles("32 Red")).toEqual(expect.arrayContaining(["32 Red", "32red"]));
     expect(catalogHintSearchNeedles("Rangers FC")).toContain("Rangers FC");

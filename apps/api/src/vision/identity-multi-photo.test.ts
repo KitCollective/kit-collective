@@ -47,6 +47,30 @@ describe("identity multi-photo job", () => {
     expect(Buffer.from(back.bytes).toString()).toBe("BACK-PRINT");
   });
 
+  it("keeps a detail crop after front and back so the surname still reaches identity", () => {
+    const frontBase64 = Buffer.from("FRONT-CREST").toString("base64");
+    const backBase64 = Buffer.from("BACK-PRINT").toString("base64");
+    const detailBase64 = Buffer.from("NUMBER-CROP").toString("base64");
+    const photos = identityPhotosFromSuggestRequest([
+      { role: "front", contentBase64: frontBase64 },
+      { role: "other", contentBase64: detailBase64 },
+      { role: "back", contentBase64: backBase64 },
+    ]);
+
+    expect(photos.map((photo) => photo.role)).toEqual(["front", "back", "other"]);
+  });
+
+  it("keeps extra angles when the shirt has no back photo yet", () => {
+    const frontBase64 = Buffer.from("FRONT-CREST").toString("base64");
+    const detailBase64 = Buffer.from("NUMBER-CROP").toString("base64");
+    const photos = identityPhotosFromSuggestRequest([
+      { role: "front", contentBase64: frontBase64 },
+      { role: "other", contentBase64: detailBase64 },
+    ]);
+
+    expect(photos.map((photo) => photo.role)).toEqual(["front", "other"]);
+  });
+
   it("teaches joint infer: front-heavy club/season/type, back print for player, one JSON", () => {
     const system = IDENTITY_VISION_SYSTEM_PROMPT;
     expect(system).toMatch(/crest/i);
@@ -73,6 +97,8 @@ describe("identity multi-photo job", () => {
     expect(user).toMatch(/do not identify the club from the back alone/i);
     expect(user.indexOf("front")).toBeLessThan(user.indexOf("back"));
     expect(user).toContain("Photo fingerprint: 12:ffd8ffe0");
+    expect(user).toMatch(/seasonHint from the front/i);
+    expect(user).toMatch(/must not change seasonHint/i);
   });
 
   it("sends two OpenRouter images with role: front and role: back text parts", () => {

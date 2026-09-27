@@ -10,6 +10,7 @@ import {
   identityVisionPhotoRoles,
   identityVisionRefinementUserPrompt,
   identityVisionUserPrompt,
+  identitySquadSeasonUserPrompt,
 } from "./identity-vision-prompt.js";
 import type { VisionGroupingPhotoInput, VisionIdentityPhotoInput } from "./vision.adapter.js";
 
@@ -130,6 +131,22 @@ export function buildOpenRouterIdentityRefinementBody(
 ): OpenRouterChatBody {
   const content: OpenRouterChatContent[] = [
     { type: "text", text: identityVisionRefinementUserPrompt(candidates) },
+  ];
+  for (const photo of photos) {
+    if (photo.role) {
+      content.push({ type: "text", text: `role: ${photo.role}` });
+    }
+    content.push({ type: "image_url", image_url: { url: jpegDataUrl(photo.bytes) } });
+  }
+  return chatBody(content, IDENTITY_VISION_SYSTEM_PROMPT);
+}
+
+export function buildOpenRouterSquadSeasonBody(
+  photos: VisionIdentityPhotoInput[],
+  seasonLabels: readonly string[],
+): OpenRouterChatBody {
+  const content: OpenRouterChatContent[] = [
+    { type: "text", text: identitySquadSeasonUserPrompt(seasonLabels) },
   ];
   for (const photo of photos) {
     if (photo.role) {

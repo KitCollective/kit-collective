@@ -3,8 +3,10 @@ import {
   decodeIdentityVisionHints,
   IDENTITY_VISION_SYSTEM_PROMPT,
   identityPhotoFingerprint,
+  identitySquadSeasonUserPrompt,
   identityVisionRefinementUserPrompt,
   identityVisionUserPrompt,
+  pickAllowedSeasonHint,
 } from "../src/vision/identity-vision-prompt.js";
 import { buildOpenRouterIdentityBody } from "../src/vision/openrouter-vision.js";
 
@@ -40,6 +42,12 @@ describe("identity vision prompt (Huddle-strength)", () => {
     expect(system).toMatch(/similar-colou?red older shirt/i);
     expect(system).toMatch(/Never default every shirt to 2019\/20 or 2021\/22/);
     expect(identityVisionUserPrompt(2)).toMatch(/Date seasonHint from THIS shirt/i);
+    expect(identityVisionUserPrompt(2, undefined, ["front", "back"])).toMatch(
+      /seasonHint from the front/i,
+    );
+    expect(identityVisionUserPrompt(2, undefined, ["front", "back"])).toMatch(
+      /must not change seasonHint/i,
+    );
   });
 
   it("puts a unique photo fingerprint in the user prompt so completions cannot be reused across shirts", () => {
@@ -195,5 +203,16 @@ describe("identity vision prompt (Huddle-strength)", () => {
     expect(prompt).toMatch(/white with red trim/);
     expect(prompt.toLowerCase()).not.toMatch(/wrong year/);
     expect(prompt.toLowerCase()).not.toMatch(/you guessed/);
+  });
+
+  it("asks the second look to pick a season from the player's club career", () => {
+    const prompt = identitySquadSeasonUserPrompt(["2024/25", "2025/26"]);
+    expect(prompt).toContain("2024/25");
+    expect(prompt).toContain("2025/26");
+    expect(prompt).toMatch(/FRONT/i);
+    expect(prompt).toMatch(/impossible/i);
+    expect(pickAllowedSeasonHint("2024/25", ["2024/25", "2025/26"])).toBe("2024/25");
+    expect(pickAllowedSeasonHint("2021/22", ["2024/25", "2025/26"])).toBeUndefined();
+    expect(pickAllowedSeasonHint(undefined, ["2024/25"])).toBeUndefined();
   });
 });

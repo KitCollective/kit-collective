@@ -135,7 +135,7 @@ const DIACRITIC_FOLD: Record<string, string> = {
 };
 
 export function normalizeHint(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim().toLowerCase().replace(/[\r\n]+/g, "");
 }
 
 function foldCatalogHint(value: string): string {
@@ -205,7 +205,55 @@ export function scoreLabelMatch(label: string, hint: string): number {
     return 70;
   }
 
+  if (isOneEditSurnameMiss(compactLabel, compactHint)) {
+    return 80;
+  }
+  for (const token of significantCatalogTokens(label)) {
+    if (isOneEditSurnameMiss(compactCatalogHint(token), compactHint)) {
+      return 80;
+    }
+  }
+
   return scoreTokenOverlap(label, hint);
+}
+
+/** OCR often drops one letter in a long back-print surname (NICOLASEN / Nicolaisen). */
+function isOneEditSurnameMiss(left: string, right: string): boolean {
+  if (left.length < 8 || right.length < 8) {
+    return false;
+  }
+  if (left === right) {
+    return false;
+  }
+  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  if (longer.length - shorter.length > 1) {
+    return false;
+  }
+  if (longer.length === shorter.length) {
+    let diffs = 0;
+    for (let index = 0; index < shorter.length; index += 1) {
+      if (shorter[index] !== longer[index]) {
+        diffs += 1;
+        if (diffs > 1) {
+          return false;
+        }
+      }
+    }
+    return diffs === 1;
+  }
+  let shortIndex = 0;
+  let skipped = false;
+  for (let longIndex = 0; longIndex < longer.length; longIndex += 1) {
+    if (shortIndex < shorter.length && shorter[shortIndex] === longer[longIndex]) {
+      shortIndex += 1;
+      continue;
+    }
+    if (skipped) {
+      return false;
+    }
+    skipped = true;
+  }
+  return true;
 }
 
 function scoreTokenOverlap(label: string, hint: string): number {

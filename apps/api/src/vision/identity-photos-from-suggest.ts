@@ -19,7 +19,8 @@ export function decodeBase64Photo(contentBase64: string): Uint8Array {
 
 /**
  * Map an identity suggest payload to infer inputs. Caps at 8 (prompt 1–8 photos).
- * Order: front, back, then other roles so crest/sponsor lead the VLM context.
+ * Order: front, back, then other roles. Detail crops stay — the surname is often
+ * only on that crop. The prompt dates season from the front.
  */
 export function identityPhotosFromSuggestRequest(
   photos: Array<{ role: string; contentBase64: string }>,
