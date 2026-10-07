@@ -217,6 +217,10 @@ export function useConfirmGrouping({
         activateGroup(0);
       }
       await wait(GROUPING_REVEAL_SETTLE_MS);
+      mutate((current) => {
+        const first = current.drafts[0];
+        return first ? setActiveDraft(current, first.id) : current;
+      });
       setSuggestion(null);
     },
     [fadeInSuggestion, mutate, reduceMotion],

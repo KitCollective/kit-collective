@@ -1093,7 +1093,7 @@ export function applyIdentitySuggestion(
   }
 
   if (!manual.season && options.fieldPreselect.season && suggestions.seasonId) {
-    next = setDraftSeason(next, draftId, suggestions.seasonId);
+    next = setDraftSeason(next, draftId, suggestions.seasonId, suggestions.seasonLabel);
   }
 
   if (!manual.type && options.fieldPreselect.type && suggestions.type) {

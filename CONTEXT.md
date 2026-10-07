@@ -12,12 +12,12 @@ Linear. Status + `ready-for-agent` + blockers decide what runs. Implement and fa
 _Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
-PI worker: Compose + `gh` + Linear CLI. Empty `.pi/mcp.json` — Linear MCP is not on the box.
-_Avoid_: Cursor Cloud Agents as dispatch, Linear MCP as the worker runtime
+Desktop `/issue-session`, started by the approver for named issues. No dispatch worker runs; the PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`).
+_Avoid_: assuming a planner claims `ready-for-agent` issues by itself, Cursor Cloud Agents as dispatch
 
 **Product MCP**:
-Coolify MCP and `kc_seed_mcp` are Desktop or Cloud Agent wiring. Not default PI-worker MCP.
-_Avoid_: installing Coolify or Seed MCP on the PI worker as factory dispatch
+Coolify MCP and `kc_seed_mcp` are Desktop or Cloud Agent wiring.
+_Avoid_: treating Coolify or Seed MCP as factory dispatch
 
 **Kickoff**:
 `/to-spec` for a new Linear project + milestones. No issues yet.
@@ -102,7 +102,7 @@ Locale + kind name for stamdata. The English seed string is not the Danish UI na
 _Avoid_: hardcoding English as the UI label
 
 **Vision suggestion**:
-Gemini 2.5 Flash-Lite output (OpenRouter via `OPENROUTER_VISION_API_KEY`, pinned to Google, or direct `GEMINI_API_KEY`). Identity prompt uses Huddle kit-type / badge / omit discipline, per-field confidence, and clubHintAlts (local name / abbreviation). Nest is the catalog judge: manufacturer+sponsor Kit-hit first; CatalogLabel label+alias and compact sponsor/manufacturer spellings (same diacritic fold on retrieve as on score); unique type/colours among N hits lock without a second Vision call; missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is only a Club row; NationalTeam kits set `suggestions.nationalTeamId` (never a NationalTeam UUID in `clubId`) and still lock season/type/catalogKitId. Zero or many remaining hits omit season/type; many hits may take one second look with catalog facts (still Google-pin, max two Vision calls). Grouping maps photoIds into UserJersey drafts (max ten photos per copy), incrementally as unbound photos land, with prior groups kept intact. Identity jobs for bound rings run in parallel (Vision worker concurrency 8). Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers, then fill-order on that draft so empty universal slots receive bound photos in picker order. Vision never lets the VLM invent Photo roles; the collector still owns Erstat / Skift rolle.
+Gemini 2.5 Flash-Lite output (OpenRouter via `OPENROUTER_VISION_API_KEY`, pinned to Google, or direct `GEMINI_API_KEY`). Identity prompt uses Huddle kit-type / badge / omit discipline, per-field confidence, clubHintAlts, and season-from-this-shirt graphic/sponsor (not a remembered older kit). When a front photo is present, seasonHint is dated from the front; the back print fills player only and must not change season. Detail crops stay in the infer so a surname the back slot cropped away can still map the player. Nest is the catalog judge: manufacturer+sponsor Kit-hit first; CatalogLabel label+alias and compact sponsor/manufacturer spellings (same diacritic fold on retrieve as on score); unique type/colours among N hits lock without a second Vision call; missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is only a Club row; NationalTeam kits set `suggestions.nationalTeamId` (never a NationalTeam UUID in `clubId`) and still lock season/type/catalogKitId. Unique kit hit locks season/type/catalogKitId. Missing Kit rows do not omit a visual seasonHint — map it onto TeamSeason for that side at model confidence (never kit-lock 95 from a year-string match). A squad row for the named player/number may reject an impossible year; two remaining squad seasons omit season rather than keep the wrong hint. A mapped playerId with sufficient confidence constrains club (and season) candidates to that player's `player_club_season` career; a conflicting clubHint is not preselected (remap to the best career club or catalogMiss-style). Many remaining kit hits omit catalogKitId and may take one second look with catalog facts (still Google-pin, max two Vision calls). Grouping maps photoIds into UserJersey drafts (max ten photos per copy), incrementally as unbound photos land, with prior groups kept intact. Identity jobs for bound rings queue sequentially 1→2→3 as soon as the first grouped jersey has photos (Vision worker concurrency 8). A detail crop stays in the infer so the back print can map a player. When that player's career rejects the hinted year and more than one squad season remains, one second look picks the season from those labels using the front. Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers, then fill-order on that draft so empty universal slots receive bound photos in picker order. Vision never lets the VLM invent Photo roles; the collector still owns Erstat / Skift rolle.
 _Avoid_: raw model names as foreign keys; auto-committing Photo roles; sending collector photos to non-Google OpenRouter providers; using the factory `OPENROUTER_API_KEY` for Vision; inventing sleeve patches or treating crest years as pads; Eve or pgvector on the collector Vision path; dumping the catalog into the VLM
 
 **Vision label**:
@@ -436,6 +436,10 @@ _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authe
 **Take-down**:
 Removing one UserJersey and its UserJerseyPhoto bytes. The User remains. Not a Kit delete. Not a hide flag.
 _Avoid_: unpublish; soft-hide without a column; deleting the collector by default
+
+**Signal**:
+One dated piece of raw evidence about collectors or the market (a quote, a review, a metric shift, a Vision eval result). Lives in Notion, owned by Nicklas. Not `signal-up`, which is an agent filing an out-of-scope finding as a Linear Triage issue. A `signal-up` issue may be the source of a Signal, never the reverse.
+_Avoid_: calling a `signal-up` issue a Signal; a Signal as a ticket or a spec; rewriting the quote into an opinion; names or profiles of private persons on a Signal
 
 **Role subagent**:
 Implement-phase craft owner spawned by the implement lead when the slice needs that craft. v1 roles: **Frontend**, **Backend**, **DevOps**. Stack-named helpers (`react-expo`, `backend-nest`, `db-drizzle`, `ui-ux`) are aliases of those roles.

@@ -175,20 +175,31 @@ export {
   billingPaywallErrorSchema,
 } from "./billing/paywall.js";
 export {
+  DEV_CATALOG_FIXTURE_IDS,
+  isDevCatalogFixtureId,
+  omitDevCatalogFixtureRows,
+} from "./catalog/devFixtureIds.js";
+export {
+  type CatalogClubSearchQuery,
   type CatalogClubSearchResponse,
   type CatalogClubSeasonsResponse,
   type CatalogFacetSearchResponse,
   type CatalogPickerClubIdParam,
   type CatalogPickerItem,
   type CatalogPickerSearchQuery,
+  type CatalogPickerSeasonIdParam,
+  type CatalogPlayerSearchQuery,
   type CatalogSideKind,
   type CatalogSidePickerItem,
+  catalogClubSearchQuerySchema,
   catalogClubSearchResponseSchema,
   catalogClubSeasonsResponseSchema,
   catalogFacetSearchResponseSchema,
   catalogPickerClubIdParamSchema,
   catalogPickerItemSchema,
   catalogPickerSearchQuerySchema,
+  catalogPickerSeasonIdParamSchema,
+  catalogPlayerSearchQuerySchema,
   catalogSideKindSchema,
   catalogSidePickerItemSchema,
 } from "./catalog/picker.js";

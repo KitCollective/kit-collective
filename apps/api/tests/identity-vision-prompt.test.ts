@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   decodeIdentityVisionHints,
   IDENTITY_VISION_SYSTEM_PROMPT,
+  identityPhotoFingerprint,
+  identitySquadSeasonUserPrompt,
   identityVisionRefinementUserPrompt,
   identityVisionUserPrompt,
+  pickAllowedSeasonHint,
 } from "../src/vision/identity-vision-prompt.js";
 import { buildOpenRouterIdentityBody } from "../src/vision/openrouter-vision.js";
 
@@ -23,6 +26,39 @@ describe("identity vision prompt (Huddle-strength)", () => {
     expect(system).toMatch(/commemorative/i);
     expect(system).toMatch(/manufacturer/i);
     expect(system).toMatch(/null/i);
+  });
+
+  it("does not use FCK as the clubHintAlts example", () => {
+    expect(IDENTITY_VISION_SYSTEM_PROMPT).not.toMatch(/\bFCK\b/);
+    expect(IDENTITY_VISION_SYSTEM_PROMPT).not.toContain("FC København");
+    expect(IDENTITY_VISION_SYSTEM_PROMPT).toContain("LFC");
+    expect(IDENTITY_VISION_SYSTEM_PROMPT).toMatch(/these photos/i);
+  });
+
+  it("dates season from this shirt's graphic and sponsor, not a remembered older kit", () => {
+    const system = IDENTITY_VISION_SYSTEM_PROMPT;
+    expect(system).toMatch(/unique graphic/i);
+    expect(system).toMatch(/diagonal sash|marble|gradient/i);
+    expect(system).toMatch(/similar-colou?red older shirt/i);
+    expect(system).toMatch(/Never default every shirt to 2019\/20 or 2021\/22/);
+    expect(identityVisionUserPrompt(2)).toMatch(/Date seasonHint from THIS shirt/i);
+    expect(identityVisionUserPrompt(2, undefined, ["front", "back"])).toMatch(
+      /seasonHint from the front/i,
+    );
+    expect(identityVisionUserPrompt(2, undefined, ["front", "back"])).toMatch(
+      /must not change seasonHint/i,
+    );
+  });
+
+  it("puts a unique photo fingerprint in the user prompt so completions cannot be reused across shirts", () => {
+    const a = identityVisionUserPrompt(1, "12:ffd8ffe0");
+    const b = identityVisionUserPrompt(1, "99:deadbeef");
+    expect(a).toContain("Photo fingerprint: 12:ffd8ffe0");
+    expect(b).toContain("Photo fingerprint: 99:deadbeef");
+    expect(a).not.toEqual(b);
+    expect(identityPhotoFingerprint([{ bytes: Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]) }])).toBe(
+      "4:ffd8ffe0",
+    );
   });
 
   it("asks for per-field confidence and omit-empty patchHint", () => {
@@ -167,5 +203,16 @@ describe("identity vision prompt (Huddle-strength)", () => {
     expect(prompt).toMatch(/white with red trim/);
     expect(prompt.toLowerCase()).not.toMatch(/wrong year/);
     expect(prompt.toLowerCase()).not.toMatch(/you guessed/);
+  });
+
+  it("asks the second look to pick a season from the player's club career", () => {
+    const prompt = identitySquadSeasonUserPrompt(["2024/25", "2025/26"]);
+    expect(prompt).toContain("2024/25");
+    expect(prompt).toContain("2025/26");
+    expect(prompt).toMatch(/FRONT/i);
+    expect(prompt).toMatch(/impossible/i);
+    expect(pickAllowedSeasonHint("2024/25", ["2024/25", "2025/26"])).toBe("2024/25");
+    expect(pickAllowedSeasonHint("2021/22", ["2024/25", "2025/26"])).toBeUndefined();
+    expect(pickAllowedSeasonHint(undefined, ["2024/25"])).toBeUndefined();
   });
 });

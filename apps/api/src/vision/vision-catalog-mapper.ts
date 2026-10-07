@@ -1,3 +1,4 @@
+import { isDevCatalogFixtureId, VISION_CONFIDENCE_SUGGEST } from "@kit/api-contract";
 import type { Db } from "@kit/db";
 import {
   catalogLabel,
@@ -34,6 +35,8 @@ import {
   type ObservableKitHit,
   pickBestCatalogSide,
   pickLockedKit,
+  reconcileHintClubWithCareer,
+  reconcileHintSeasonWithSquad,
   scoreLabelMatch,
 } from "./vision-kit-lock.js";
 
@@ -69,6 +72,8 @@ const SQUAD_NUMBER_MATCH_SCORE = 90;
  * Intentional omit cases (QA scoring):
  * - Blank shirt back → VLM omits playerHint/playerNumberHint → no player suggestion.
  * - seasonHint with no teamSeason/nationalTeamSeason row for the scoped side → no seasonId.
+ * - Named player/number not on the hinted season, two+ squad seasons remain → omit seasonId.
+ * - TeamSeason string match is not kit-lock confidence.
  * - Model per-field confidence below suggest threshold → resolveIdentityJob omits that field,
  *   except hint-only kit type and catalog-mapped playerId may fall back to overall / match score.
  * - Missing manufacturerHint → no observable kit hits → no catalogKitId lock.
@@ -85,8 +90,8 @@ export class VisionCatalogMapper {
     options: VisionMapOptions = {},
   ): Promise<VisionInferenceResult | null> {
     const sideMatch = await this.resolveSide(hints);
-    const hits = await this.listObservableKitHits(hints, sideMatch);
-    const locked = pickLockedKit(hits, {
+    let hits = await this.listObservableKitHits(hints, sideMatch);
+    let locked = pickLockedKit(hits, {
       amongKitIds: options.amongKitIds,
       sideId: sideMatch?.id,
       seasonHint: hints.seasonHint,
@@ -94,19 +99,42 @@ export class VisionCatalogMapper {
       colorHint: hints.colorHint,
     });
 
-    const clubId = catalogClubIdForSave(locked, sideMatch);
+    let clubId = catalogClubIdForSave(locked, sideMatch);
     const nationalTeamId = catalogNationalTeamIdForSave(locked, sideMatch);
     const playerScope = playerScopeFor(locked, clubId, nationalTeamId, sideMatch);
     const hintSeason =
       locked?.seasonId === undefined
         ? await this.resolveSeasonFromHint(playerScope, hints.seasonHint)
         : null;
-    const seasonId = locked?.seasonId ?? hintSeason?.seasonId;
-    const type = locked?.type ?? hints.kitType;
+    let seasonId = locked?.seasonId ?? hintSeason?.seasonId;
     const playerMatch =
       playerScope || hints.playerHint?.trim()
         ? await this.resolvePlayer(playerScope, seasonId, hints.playerNumberHint, hints.playerHint)
         : null;
+    if (!locked && playerMatch && playerScope) {
+      const squadSeasonIds = await this.listPlayerSeasonIds(
+        playerScope,
+        playerMatch.playerId,
+        parseSquadNumber(hints.playerNumberHint) ?? parseSquadNumber(playerMatch.playerNumber),
+      );
+      seasonId = reconcileHintSeasonWithSquad(seasonId, squadSeasonIds);
+    }
+
+    const careerClub = await this.applyPlayerCareerClubConstraint({
+      hints,
+      options,
+      playerMatch,
+      nationalTeamId,
+      clubId,
+      seasonId,
+      locked,
+    });
+    clubId = careerClub.clubId;
+    seasonId = careerClub.seasonId;
+    locked = careerClub.locked;
+    hits = careerClub.hits ?? hits;
+    const type = locked?.type ?? hints.kitType;
+
     const patchMatch = seasonId ? await this.resolvePatch(seasonId, hints.patchHint) : null;
 
     if (!clubId && !nationalTeamId && !locked && !playerMatch && !patchMatch) {
@@ -134,15 +162,159 @@ export class VisionCatalogMapper {
       kitHitCount: hits.length,
       visionRaw: encodeVisionEvalRaw(hints, hits.length),
       confidences: this.buildConfidences(hints, {
-        club: clubId ? clubMatchScore(sideMatch, locked) : undefined,
+        club: clubId ? clubScoreForMappedClub(sideMatch, locked, clubId) : undefined,
         nationalTeam: nationalTeamId ? clubMatchScore(sideMatch, locked) : undefined,
-        season: locked ? CATALOG_KIT_LOCK_CONFIDENCE : hintSeason?.score,
         kitType: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         player: playerMatch?.score,
         badge: patchMatch?.score,
         kitLocked: Boolean(locked),
       }),
     };
+  }
+
+  private async applyPlayerCareerClubConstraint(input: {
+    hints: VisionCatalogHints;
+    options: VisionMapOptions;
+    playerMatch: PlayerMatch | null;
+    nationalTeamId: string | undefined;
+    clubId: string | undefined;
+    seasonId: string | undefined;
+    locked: ObservableKitHit | null;
+  }): Promise<{
+    clubId: string | undefined;
+    seasonId: string | undefined;
+    locked: ObservableKitHit | null;
+    hits?: ObservableKitHit[];
+  }> {
+    const { hints, options, playerMatch, nationalTeamId } = input;
+    let { clubId, seasonId, locked } = input;
+    if (!playerMatch || playerMatch.score < VISION_CONFIDENCE_SUGGEST || nationalTeamId) {
+      return { clubId, seasonId, locked };
+    }
+
+    const careerRows = await this.listPlayerClubCareer(playerMatch.playerId);
+    const careerClubIds = [...new Set(careerRows.map((row) => row.clubId))];
+    const hintedClubId = clubId;
+    const reconciled = reconcileHintClubWithCareer(hintedClubId, careerClubIds);
+    if (!reconciled.conflict) {
+      return { clubId, seasonId, locked };
+    }
+
+    this.logger.warn(
+      `Vision player-club career conflict: player=${playerMatch.playerId} hintedClub=${hintedClubId ?? "none"}`,
+    );
+
+    if (locked && hintedClubId && locked.clubId === hintedClubId) {
+      locked = null;
+    }
+    if (
+      seasonId &&
+      !careerRows.some((row) => row.seasonId === seasonId && row.clubId !== hintedClubId)
+    ) {
+      seasonId = undefined;
+    }
+
+    clubId = reconciled.clubId;
+    if (!clubId) {
+      clubId = await this.pickCareerClubFromHints(careerClubIds, hints);
+    }
+
+    if (clubId) {
+      const seasonsAtClub = careerRows
+        .filter((row) => row.clubId === clubId)
+        .map((row) => row.seasonId);
+      seasonId = reconcileHintSeasonWithSquad(
+        seasonId && seasonsAtClub.includes(seasonId) ? seasonId : undefined,
+        seasonsAtClub,
+      );
+    }
+
+    const careerHits = await this.listCareerObservableKitHits(hints, careerClubIds, clubId);
+    const remappedLock = pickLockedKit(careerHits, {
+      amongKitIds: options.amongKitIds,
+      sideId: clubId,
+      seasonHint: hints.seasonHint,
+      kitType: hints.kitType,
+      colorHint: hints.colorHint,
+    });
+    if (remappedLock) {
+      locked = remappedLock;
+      clubId = remappedLock.clubId ?? clubId;
+      seasonId = remappedLock.seasonId;
+    }
+
+    return { clubId, seasonId, locked, hits: careerHits };
+  }
+
+  private async listPlayerClubCareer(
+    playerId: string,
+  ): Promise<Array<{ clubId: string; seasonId: string }>> {
+    return this.db
+      .select({
+        clubId: playerClubSeason.clubId,
+        seasonId: playerClubSeason.seasonId,
+      })
+      .from(playerClubSeason)
+      .where(eq(playerClubSeason.playerId, playerId));
+  }
+
+  private async pickCareerClubFromHints(
+    careerClubIds: string[],
+    hints: VisionCatalogHints,
+  ): Promise<string | undefined> {
+    if (careerClubIds.length === 0) {
+      return undefined;
+    }
+    const hintTexts = collectClubHints(hints);
+    if (hintTexts.length === 0) {
+      return undefined;
+    }
+
+    const labelRows = await this.db
+      .selectDistinct({
+        entityId: catalogLabel.entityId,
+        text: catalogLabel.text,
+      })
+      .from(catalogLabel)
+      .where(
+        and(eq(catalogLabel.entityType, "club"), inArray(catalogLabel.entityId, careerClubIds)),
+      );
+
+    const bestByClub = new Map<string, number>();
+    for (const row of labelRows) {
+      let score = 0;
+      for (const hint of hintTexts) {
+        score = Math.max(score, scoreLabelMatch(row.text ?? "", hint));
+      }
+      if (score <= 0) {
+        continue;
+      }
+      const current = bestByClub.get(row.entityId) ?? 0;
+      if (score > current) {
+        bestByClub.set(row.entityId, score);
+      }
+    }
+
+    const ranked = [...bestByClub.entries()].sort((left, right) => right[1] - left[1]);
+    const best = ranked[0];
+    if (!best) {
+      return undefined;
+    }
+    const tied = ranked.filter((entry) => entry[1] === best[1]);
+    return tied.length === 1 ? best[0] : undefined;
+  }
+
+  private async listCareerObservableKitHits(
+    hints: VisionCatalogHints,
+    careerClubIds: readonly string[],
+    remappedClubId: string | undefined,
+  ): Promise<ObservableKitHit[]> {
+    const sponsorHint = hints.sponsorHint?.trim();
+    const side: CatalogSideMatch | null = remappedClubId
+      ? { id: remappedClubId, kind: "club", score: 0 }
+      : null;
+    const listed = await this.listObservableKitHits(hints, sponsorHint ? null : side);
+    return listed.filter((hit) => hit.clubId != null && careerClubIds.includes(hit.clubId));
   }
 
   async listObservableKitHits(
@@ -235,8 +407,10 @@ export class VisionCatalogMapper {
       return null;
     }
 
-    const clubIds = idsForEntityType(labelRows, "club");
-    const nationalTeamIds = idsForEntityType(labelRows, "national_team");
+    const clubIds = idsForEntityType(labelRows, "club").filter((id) => !isDevCatalogFixtureId(id));
+    const nationalTeamIds = idsForEntityType(labelRows, "national_team").filter(
+      (id) => !isDevCatalogFixtureId(id),
+    );
     const [existingClubs, existingNationalTeams] = await Promise.all([
       this.existingIds(club, clubIds),
       this.existingIds(nationalTeam, nationalTeamIds),
@@ -386,7 +560,7 @@ export class VisionCatalogMapper {
   private async findNamedPlayers(
     nameHint: string,
   ): Promise<Array<{ playerId: string; score: number }>> {
-    const nameClause = hintMatchSql(catalogLabel.text, [nameHint]);
+    const nameClause = playerHintMatchSql(catalogLabel.text, [nameHint]);
     if (!nameClause) {
       return [];
     }
@@ -508,6 +682,51 @@ export class VisionCatalogMapper {
       );
   }
 
+  private async listPlayerSeasonIds(
+    playerScope: { kind: CatalogSideKind; id: string },
+    playerId: string,
+    squadNumber?: number,
+  ): Promise<string[]> {
+    const withNumber = await this.listPlayerSeasonRows(playerScope, playerId, squadNumber);
+    if (withNumber.length > 0 || squadNumber === undefined) {
+      return [...new Set(withNumber.map((row) => row.seasonId))];
+    }
+    const unnumbered = await this.listPlayerSeasonRows(playerScope, playerId);
+    return [...new Set(unnumbered.map((row) => row.seasonId))];
+  }
+
+  private async listPlayerSeasonRows(
+    playerScope: { kind: CatalogSideKind; id: string },
+    playerId: string,
+    squadNumber?: number,
+  ): Promise<Array<{ seasonId: string }>> {
+    if (playerScope.kind === "club") {
+      const filters = [
+        eq(playerClubSeason.clubId, playerScope.id),
+        eq(playerClubSeason.playerId, playerId),
+      ];
+      if (squadNumber !== undefined) {
+        filters.push(eq(playerClubSeason.squadNumber, squadNumber));
+      }
+      return this.db
+        .select({ seasonId: playerClubSeason.seasonId })
+        .from(playerClubSeason)
+        .where(and(...filters));
+    }
+
+    const filters = [
+      eq(playerNationalTeamSeason.nationalTeamId, playerScope.id),
+      eq(playerNationalTeamSeason.playerId, playerId),
+    ];
+    if (squadNumber !== undefined) {
+      filters.push(eq(playerNationalTeamSeason.squadNumber, squadNumber));
+    }
+    return this.db
+      .select({ seasonId: playerNationalTeamSeason.seasonId })
+      .from(playerNationalTeamSeason)
+      .where(and(...filters));
+  }
+
   private async listSquadOnSide(
     sideKind: CatalogSideKind,
     sideId: string,
@@ -617,6 +836,31 @@ export class VisionCatalogMapper {
       badge,
     };
   }
+
+  /** Season labels on this player's rows at the club, oldest first. */
+  async listPlayerClubSeasonLabels(playerId: string, clubId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ label: season.label, startsOn: season.startsOn })
+      .from(playerClubSeason)
+      .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+      .where(and(eq(playerClubSeason.playerId, playerId), eq(playerClubSeason.clubId, clubId)))
+      .orderBy(season.startsOn);
+    return [...new Set(rows.map((row) => row.label))];
+  }
+
+  async seasonIdForPlayerClubLabel(
+    playerId: string,
+    clubId: string,
+    label: string,
+  ): Promise<string | undefined> {
+    const wanted = label.trim().toLowerCase();
+    const rows = await this.db
+      .select({ seasonId: playerClubSeason.seasonId, label: season.label })
+      .from(playerClubSeason)
+      .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+      .where(and(eq(playerClubSeason.playerId, playerId), eq(playerClubSeason.clubId, clubId)));
+    return rows.find((row) => row.label.trim().toLowerCase() === wanted)?.seasonId;
+  }
 }
 
 function kitSideEquals(side: CatalogSideMatch | null): SQL | undefined {
@@ -661,6 +905,17 @@ function clubMatchScore(
     return CATALOG_KIT_LOCK_CONFIDENCE;
   }
   return undefined;
+}
+
+function clubScoreForMappedClub(
+  sideMatch: CatalogSideMatch | null,
+  locked: ObservableKitHit | null,
+  clubId: string,
+): number | undefined {
+  if (sideMatch?.kind === "club" && sideMatch.id === clubId) {
+    return clubMatchScore(sideMatch, locked);
+  }
+  return clubMatchScore(null, locked);
 }
 
 function idsForEntityType(
@@ -711,6 +966,26 @@ function hintMatchSql(column: SQLWrapper, hints: string[]): SQL | undefined {
     clauses.push(sql`${compactCatalogColumnSql(column)} like ${`%${compact}%`}`);
   }
   return or(...clauses);
+}
+
+/** Prefix on compact surnames so a one-letter OCR miss still retrieves the CatalogLabel row. */
+function playerHintMatchSql(column: SQLWrapper, hints: string[]): SQL | undefined {
+  const exact = hintMatchSql(column, hints);
+  const prefixes = [
+    ...new Set(
+      hints
+        .map((hint) => compactCatalogHint(hint))
+        .filter((compact) => compact.length >= 8)
+        .map((compact) => compact.slice(0, 6)),
+    ),
+  ];
+  if (prefixes.length === 0) {
+    return exact;
+  }
+  const prefixClauses = prefixes.map(
+    (prefix) => sql`${compactCatalogColumnSql(column)} like ${`${prefix}%`}`,
+  );
+  return exact ? or(exact, ...prefixClauses) : or(...prefixClauses);
 }
 
 /** Same compact as `compactCatalogHint`: NFD + ø→o / æ→ae, then strip non-alphanumerics. */

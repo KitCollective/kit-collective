@@ -10,6 +10,8 @@ import {
   pickLockedKit,
   pickRefinedKit,
   pickUniqueKitByObservables,
+  reconcileHintClubWithCareer,
+  reconcileHintSeasonWithSquad,
   resolveObservableKitLock,
   scoreColorMatch,
   scoreLabelMatch,
@@ -144,6 +146,16 @@ describe("vision kit lock", () => {
     expect(scoreLabelMatch("2019/20", "20192021")).toBe(0);
   });
 
+  it("scores a one-letter surname OCR miss", () => {
+    expect(scoreLabelMatch("Nicolaisen", "NICOLASEN")).toBe(80);
+    expect(scoreLabelMatch("Rasmus Nicolaisen", "NICOLASEN")).toBe(80);
+  });
+
+  it("joins a surname the model split across a line break", () => {
+    expect(scoreLabelMatch("Nicolaisen", "NICOLAI\nSEN")).toBe(95);
+    expect(scoreLabelMatch("Rasmus Nicolaisen", "NICOLAI\nSEN")).toBe(70);
+  });
+
   it("builds ILIKE needles that include compact sponsor spellings", () => {
     expect(catalogHintSearchNeedles("32 Red")).toEqual(expect.arrayContaining(["32 Red", "32red"]));
     expect(catalogHintSearchNeedles("Rangers FC")).toContain("Rangers FC");
@@ -260,5 +272,68 @@ describe("vision kit lock", () => {
     expect(catalogClubIdForSave(rangersHome, { id: "other-club", kind: "club", score: 70 })).toBe(
       rangersHome.clubId,
     );
+  });
+});
+
+describe("reconcileHintSeasonWithSquad", () => {
+  const season2122 = "11111111-1111-4111-8111-111111111111";
+  const season2425 = "22222222-2222-4222-8222-222222222222";
+  const season2526 = "33333333-3333-4333-8333-333333333333";
+
+  it("keeps a visual year when the player has no squad rows yet", () => {
+    expect(reconcileHintSeasonWithSquad(season2425, [])).toBe(season2425);
+  });
+
+  it("keeps the hinted year when the player actually played that season", () => {
+    expect(reconcileHintSeasonWithSquad(season2425, [season2425, season2526])).toBe(season2425);
+  });
+
+  it("moves to the only squad season when the hinted year is impossible", () => {
+    expect(reconcileHintSeasonWithSquad(season2122, [season2425])).toBe(season2425);
+  });
+
+  it("omits season when the hint is impossible and two squad seasons remain", () => {
+    expect(reconcileHintSeasonWithSquad(season2122, [season2425, season2526])).toBeUndefined();
+  });
+});
+
+describe("reconcileHintClubWithCareer", () => {
+  const toulouse = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const midtjylland = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const anderlecht = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+  it("keeps the hinted club when the player has no career rows yet", () => {
+    expect(reconcileHintClubWithCareer(anderlecht, [])).toEqual({
+      clubId: anderlecht,
+      conflict: false,
+    });
+  });
+
+  it("keeps the hinted club when it is already in the player's career", () => {
+    expect(reconcileHintClubWithCareer(toulouse, [toulouse, midtjylland])).toEqual({
+      clubId: toulouse,
+      conflict: false,
+    });
+  });
+
+  it("keeps an absent club hint without marking a conflict", () => {
+    expect(reconcileHintClubWithCareer(undefined, [toulouse, midtjylland])).toEqual({
+      clubId: undefined,
+      conflict: false,
+    });
+  });
+
+  it("remaps to the only career club when the hint is outside that career", () => {
+    expect(reconcileHintClubWithCareer(anderlecht, [toulouse])).toEqual({
+      clubId: toulouse,
+      conflict: true,
+    });
+  });
+
+  it("omits club when the hint is outside a two-club career", () => {
+    expect(reconcileHintClubWithCareer(anderlecht, [toulouse, midtjylland])).toEqual({
+      clubId: undefined,
+      conflict: true,
+    });
   });
 });

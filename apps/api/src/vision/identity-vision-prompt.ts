@@ -39,13 +39,15 @@ Think like Football Kit Archive or Classic Football Shirts. Output JSON only —
 
 CLUB
 - Identify the club or national team. Use a commonly known English name ("Rangers FC", "Liverpool FC", "RB Leipzig", "Denmark").
-- Add 1–3 alternate names in clubHintAlts: local-language name, abbreviation, or nickname ("FCK", "FC København", "Copenhagen"). Do not invent alts you cannot support.
-- Use crest, collar tags, and known templates. Do not invent a club with no visual clue.
+- Add 1–3 alternate names in clubHintAlts: local-language name, abbreviation, or nickname ("LFC", "Liverpool FC", "the Reds"). Do not invent alts you cannot support.
+- Front-heavy cues decide club, season, and kit type: crest, chest sponsor, league patch, and collar motto. Use those, plus collar tags and known templates. Do not invent a club with no visual clue.
+- When a front photo is present, date seasonHint from the front only. A back name/number print must not change seasonHint.
+- Identify only what is visible in THESE photos. Do not reuse a previous shirt's club, sponsor, player, or colours.
 
 KIT TYPE (home | away | third | fourth | gk | special)
 Decide in this order:
 1. gk — fluorescent / keeper-only template, clearly not the outfield set.
-2. home — the club's traditional primary colours. White CAN be home (Real Madrid, FC København, Germany, RB Leipzig 2019/20 white home). A white or unusual shirt is NOT automatically away.
+2. home — the club's traditional primary colours. White CAN be home (Real Madrid, Germany, RB Leipzig 2019/20 white home). A white or unusual shirt is NOT automatically away.
    Before choosing away, decide the club's usual home palette. If this shirt matches that palette (including white-home clubs with coloured trim), kitType is home. Only choose away when the shirt clearly contrasts with that home identity.
 3. away — a relatively clean, neutral contrast to home (simple white/black/navy/yellow) when home is already a different colour.
 4. third / fourth — experimental colour or graphic (teal, purple, neon, marble, camo) that is not a typical away.
@@ -56,23 +58,32 @@ A patterned or tonal-print white shirt in the club's home colours is still home 
 If you still choose away on a predominantly white/light shirt, cap kitType confidence at 0.45 unless you can name the club's actual home as a clearly different colour.
 
 SEASON
-Give a single most likely season as "2019/20" (start year / next). Use:
-- Manufacturer + chest sponsor together (Hummel+32Red is not Castore; Nike+Standard Chartered years differ).
-- Collar, sleeve cut, side panels, and template family.
+Date the shirt from what is on the photos — manufacturer template (collar, sleeve cut, side panels), the unique graphic (diagonal sash, marble, gradient, commemorative crest years), and manufacturer + chest sponsor together. That is how an archive identifies a kit. Do not pick a year because a similar-coloured older shirt exists in memory.
+
+You MUST attempt a single season as "2024/25" (start year / next) when sponsor, template, or graphic gives a basis. A distinctive chest sponsor plus manufacturer (Nike + LP Promotion, Adidas + Unibet) belongs to specific years — use those years, not a generic recent season.
+
+Schema examples like "2019/20" are format only. Never default every shirt to 2019/20 or 2021/22.
+
+Also use:
 - Crest commemorative years: a founding year plus an anniversary year (e.g. 1892 and 2017, "125 YEARS") dates the kit to that anniversary season (2017/18), not the year before.
 - Wash labels and size tags only as weak supporting evidence — never identify the club from a wash tag alone if other photos show the crest.
 
 Season confidence:
-- 0.90–1.0 only with distinctive, corroborating evidence (sponsor+manufacturer+crest years).
+- 0.90–1.0 only with distinctive, corroborating evidence (sponsor+manufacturer+graphic).
 - 0.60–0.80 fairly sure.
 - 0.20–0.50 a weak but useful guess.
-- Omit seasonHint and set season confidence 0 when you have no meaningful basis.
+- Omit seasonHint and set season confidence 0 when you have no visual basis.
 Never report 0.95 on a one-year guess you cannot corroborate.
 If two adjacent seasons are plausible and sponsor+manufacturer+template do not lock one year, keep season confidence ≤ 0.50.
 
 PLAYER
-- Fill playerHint / playerNumberHint only from a visible back print.
+- Fill playerHint / playerNumberHint only from a visible back print (name and number). Do not infer the player from the front crest or sponsor. Do not let the back print change clubHint, seasonHint, or kitType when a front photo is present.
 - Blank back → omit both, player confidence 0.
+
+PHOTO ROLES / MERGE
+- Front photo: crest, chest sponsor, league patch, collar motto → club + season + type.
+- Back photo: name and number → player.
+- Return one JSON that combines those cues. When a front photo is present, do not identify the club from the back alone. A crest-less back (plain colour, name/number only) must not override a visible front crest, sponsor, or motto.
 
 PATCHES / BADGES (critical)
 - patchHint is a sleeve or chest PATCH: league, UCL/EL/Conference, charity, captain. Not the crest. Not the manufacturer logo. Not the main chest sponsor.
@@ -91,11 +102,57 @@ UNCERTAINTY
 - Omit a field (or use null) and set that field's confidence to 0 rather than hallucinate.
 - Conservative empty is better than a confident wrong season, kit type, or pad.`;
 
-export function identityVisionUserPrompt(photoCount: number): string {
+/** Length + JPEG SOI prefix so two shirts cannot share an OpenRouter prompt hash. */
+export function identityPhotoFingerprint(photos: Array<{ bytes: Uint8Array }>): string {
+  return photos
+    .map((photo) => {
+      const bytes = photo.bytes;
+      const take = Math.min(8, bytes.byteLength);
+      let head = "";
+      for (let i = 0; i < take; i += 1) {
+        head += (bytes[i] ?? 0).toString(16).padStart(2, "0");
+      }
+      return `${bytes.byteLength}:${head}`;
+    })
+    .join("|");
+}
+
+export function identityVisionPhotoRoles(photos: Array<{ role?: string }>): string[] | undefined {
+  const roles = photos.map((photo) => photo.role).filter((role): role is string => Boolean(role));
+  return roles.length > 0 ? roles : undefined;
+}
+
+function photoRolesOrderLine(photoCount: number, roles?: readonly string[]): string {
+  if (photoCount < 2 || !roles || roles.length === 0) {
+    return "";
+  }
+  if (roles.includes("front") && roles.includes("back")) {
+    return `\nPhoto roles in order: front, then back.\n`;
+  }
+  return `\nPhoto roles in order: ${roles.join(", ")}.\n`;
+}
+
+function photoRolesMergeRules(photoCount: number): string {
+  if (photoCount < 2) {
+    return "";
+  }
+  return `- PHOTO ROLES / MERGE: Front = crest, chest sponsor, league patch, collar motto → clubHint, seasonHint, kitType. Back = name and number print → playerHint, playerNumberHint. Merge into one JSON. Date seasonHint from the front when a front photo is present. A back print must not change seasonHint. Do not identify the club from the back alone when a front photo is present. Do not let a crest-less back override a front crest.
+`;
+}
+
+export function identityVisionUserPrompt(
+  photoCount: number,
+  photoFingerprint?: string,
+  roles?: readonly string[],
+): string {
   const photos =
     photoCount === 1 ? "this jersey photo" : `these ${photoCount} jersey photos of the SAME shirt`;
+  const fingerprintLine = photoFingerprint
+    ? `\nPhoto fingerprint: ${photoFingerprint}. Trust these pixels over any prior shirt.\n`
+    : "";
+  const rolesLine = photoRolesOrderLine(photoCount, roles);
 
-  return `Analyze ${photos}. Merge all angles into one JSON object.
+  return `Analyze ${photos}. Merge all angles into one JSON object.${fingerprintLine}${rolesLine}
 
 {
   "clubHint": "Rangers FC" | null,
@@ -121,6 +178,7 @@ export function identityVisionUserPrompt(photoCount: number): string {
 
 Rules:
 - All images are one shirt. Combine crest, back print, sleeves, and labels.
+${photoRolesMergeRules(photoCount)}- Date seasonHint from THIS shirt's template, graphic, and chest sponsor. Do not reuse a remembered year.
 - clubHintAlts: 0–3 alternate club or national-team names. [] if none.
 - kitType values are lowercase exactly as above.
 - badges: [] if no sleeve/chest patch is visible. Each visible patch: {"position":"right_sleeve"|"left_sleeve"|"front"|"other","category":"competition"|"league"|"partner"|"captain"|"unknown","nameText":"..."}.
@@ -130,8 +188,12 @@ Rules:
 }
 
 /** Combined prompt for Gemini generateContent (no system role). */
-export function identityVisionPrompt(photoCount: number): string {
-  return `${IDENTITY_VISION_SYSTEM_PROMPT}\n\n${identityVisionUserPrompt(photoCount)}`;
+export function identityVisionPrompt(
+  photoCount: number,
+  photoFingerprint?: string,
+  roles?: readonly string[],
+): string {
+  return `${IDENTITY_VISION_SYSTEM_PROMPT}\n\n${identityVisionUserPrompt(photoCount, photoFingerprint, roles)}`;
 }
 
 export type IdentityRefinementCandidate = {
@@ -161,6 +223,32 @@ ${lines.join("\n")}
 Return JSON only with seasonHint and kitType from that list. Do not invent a season or type that is not listed. Do not copy a catalog year you cannot see on the shirt.
 
 {"seasonHint":"2019/20"|null,"kitType":"home"|"away"|"third"|"fourth"|"gk"|"special"|null,"confidence":{"season":0.0,"kitType":0.0,"overall":0.0}}`;
+}
+
+/**
+ * Second look when a mapped player's career rejected the hinted year and more
+ * than one squad season remains. The model must pick from those labels.
+ */
+export function identitySquadSeasonUserPrompt(seasonLabels: readonly string[]): string {
+  const lines = seasonLabels.map((label) => `- ${label}`);
+  return `The catalog career of the player at this club is only these seasons:
+${lines.join("\n")}
+
+A year outside that list is impossible. Look at the FRONT graphic, chest sponsor, and template. Return seasonHint as exactly one of those labels, or null if the front does not distinguish them.
+
+{"seasonHint":${seasonLabels.map((label) => `"${label}"`).join("|")}|null}`;
+}
+
+/** Keeps a second-look season only when it is one of the player's club seasons. */
+export function pickAllowedSeasonHint(
+  seasonHint: string | undefined,
+  allowedLabels: readonly string[],
+): string | undefined {
+  const hint = seasonHint?.trim().toLowerCase();
+  if (!hint) {
+    return undefined;
+  }
+  return allowedLabels.find((label) => label.trim().toLowerCase() === hint);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

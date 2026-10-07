@@ -252,4 +252,23 @@ describe("scheduleDevicePhotoPrepare", () => {
     expect(base64).toBe("ZmFrZS1qcGVn");
     expect(adapter.calls).toHaveLength(1);
   });
+
+  it("re-reads visionIdentity bytes instead of replaying a cached shirt", async () => {
+    const adapter = createFakeAdapter({ width: 1200, height: 900 });
+    scheduleDevicePhotoPrepare("file:///photos/picker.jpg", "front", "visionIdentity", adapter);
+    await readPreparedDevicePhotoBase64(
+      "file:///photos/picker.jpg",
+      "front",
+      "visionIdentity",
+      adapter,
+    );
+    await readPreparedDevicePhotoBase64(
+      "file:///photos/picker.jpg",
+      "front",
+      "visionIdentity",
+      adapter,
+    );
+
+    expect(adapter.calls.length).toBeGreaterThanOrEqual(2);
+  });
 });

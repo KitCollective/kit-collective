@@ -3,14 +3,19 @@ import { decodeGroupingVisionGroups, groupingVisionPrompt } from "./grouping-vis
 import {
   decodeIdentityVisionHints,
   type IdentityRefinementCandidate,
+  identityPhotoFingerprint,
+  identitySquadSeasonUserPrompt,
+  identityVisionPhotoRoles,
   identityVisionPrompt,
   identityVisionRefinementUserPrompt,
+  pickAllowedSeasonHint,
 } from "./identity-vision-prompt.js";
 import { NoopVisionAdapter } from "./noop-vision.adapter.js";
 import {
   buildOpenRouterGroupingBody,
   buildOpenRouterIdentityBody,
   buildOpenRouterIdentityRefinementBody,
+  buildOpenRouterSquadSeasonBody,
   extractOpenRouterMessageText,
   OPENROUTER_CHAT_URL,
   OPENROUTER_VISION_MODEL,
@@ -78,19 +83,25 @@ export class GeminiVisionAdapter implements VisionAdapter {
 
   async infer(photos: VisionIdentityPhotoInput[]): Promise<VisionInferenceResult | null> {
     const transport = resolveVisionTransport();
-    if (transport === "noop" || photos.length === 0) {
+    const usable = photos.filter((photo) => photo.bytes.byteLength >= 32);
+    if (transport === "noop" || usable.length === 0) {
       return null;
     }
 
     const started = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+    const photoMeta = {
+      photoCount: usable.length,
+      photoBytes: usable.map((photo) => photo.bytes.byteLength),
+      photoFingerprint: identityPhotoFingerprint(usable),
+    };
 
     try {
       const text =
         transport === "openrouter"
-          ? await this.completeOpenRouter(buildOpenRouterIdentityBody(photos), controller.signal)
-          : await this.completeGeminiDirect(photos, controller.signal);
+          ? await this.completeOpenRouter(buildOpenRouterIdentityBody(usable), controller.signal)
+          : await this.completeGeminiDirect(usable, controller.signal);
 
       const structured = decodeIdentityVisionHints(text);
       if (!structured) {
@@ -104,10 +115,10 @@ export class GeminiVisionAdapter implements VisionAdapter {
           const refineText =
             transport === "openrouter"
               ? await this.completeOpenRouter(
-                  buildOpenRouterIdentityRefinementBody(photos, candidates),
+                  buildOpenRouterIdentityRefinementBody(usable, candidates),
                   controller.signal,
                 )
-              : await this.completeGeminiRefinement(photos, candidates, controller.signal);
+              : await this.completeGeminiRefinement(usable, candidates, controller.signal);
           const refined = decodeIdentityVisionHints(refineText);
           if (refined) {
             const second = await this.mapper.mapHints(
@@ -122,6 +133,20 @@ export class GeminiVisionAdapter implements VisionAdapter {
               mapped = second;
             }
           }
+        } else if (mapped?.playerId && mapped.clubId && !mapped.seasonId) {
+          try {
+            const squadController = new AbortController();
+            const squadTimeout = setTimeout(() => squadController.abort(), GEMINI_TIMEOUT_MS);
+            mapped = await this.refineSquadSeason(
+              mapped,
+              usable,
+              transport,
+              squadController.signal,
+            );
+            clearTimeout(squadTimeout);
+          } catch {
+            // A failed second look must keep the mapped player and club.
+          }
         }
       }
 
@@ -131,7 +156,7 @@ export class GeminiVisionAdapter implements VisionAdapter {
 
       return {
         ...mapped,
-        visionRaw: encodeVisionEvalRaw(structured, mapped.kitHitCount),
+        visionRaw: encodeVisionEvalRaw(structured, mapped.kitHitCount, photoMeta),
         latencyMs: Date.now() - started,
         model: transport === "openrouter" ? OPENROUTER_VISION_MODEL : GEMINI_MODEL,
       };
@@ -196,6 +221,7 @@ export class GeminiVisionAdapter implements VisionAdapter {
     body: ReturnType<
       | typeof buildOpenRouterIdentityBody
       | typeof buildOpenRouterIdentityRefinementBody
+      | typeof buildOpenRouterSquadSeasonBody
       | typeof buildOpenRouterGroupingBody
     >,
     signal: AbortSignal,
@@ -224,7 +250,13 @@ export class GeminiVisionAdapter implements VisionAdapter {
     signal: AbortSignal,
   ): Promise<string | null> {
     const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
-      { text: identityVisionPrompt(photos.length) },
+      {
+        text: identityVisionPrompt(
+          photos.length,
+          identityPhotoFingerprint(photos),
+          identityVisionPhotoRoles(photos),
+        ),
+      },
     ];
 
     for (const photo of photos) {
@@ -242,6 +274,71 @@ export class GeminiVisionAdapter implements VisionAdapter {
     return this.fetchGeminiGenerateContent(parts, signal);
   }
 
+  private async refineSquadSeason(
+    mapped: VisionInferenceResult,
+    photos: VisionIdentityPhotoInput[],
+    transport: ReturnType<typeof resolveVisionTransport>,
+    signal: AbortSignal,
+  ): Promise<VisionInferenceResult> {
+    const playerId = mapped.playerId;
+    const clubId = mapped.clubId;
+    if (!playerId || !clubId) {
+      return mapped;
+    }
+    const labels = await this.mapper.listPlayerClubSeasonLabels(playerId, clubId);
+    if (labels.length < 2) {
+      return mapped;
+    }
+    const refineText =
+      transport === "openrouter"
+        ? await this.completeOpenRouter(buildOpenRouterSquadSeasonBody(photos, labels), signal)
+        : await this.completeGeminiSquadSeason(photos, labels, signal);
+    const refined = decodeIdentityVisionHints(refineText);
+    const picked = pickAllowedSeasonHint(refined?.seasonHint, labels);
+    if (!picked) {
+      return mapped;
+    }
+    const seasonId = await this.mapper.seasonIdForPlayerClubLabel(playerId, clubId, picked);
+    if (!seasonId) {
+      return mapped;
+    }
+    return {
+      ...mapped,
+      seasonId,
+      confidences: {
+        overall: mapped.confidences?.overall ?? 80,
+        club: mapped.confidences?.club,
+        nationalTeam: mapped.confidences?.nationalTeam,
+        season: 80,
+        kitType: mapped.confidences?.kitType,
+        player: mapped.confidences?.player,
+        badge: mapped.confidences?.badge,
+      },
+    };
+  }
+
+  private async completeGeminiSquadSeason(
+    photos: VisionIdentityPhotoInput[],
+    seasonLabels: readonly string[],
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+      { text: identitySquadSeasonUserPrompt(seasonLabels) },
+    ];
+    for (const photo of photos) {
+      if (photo.role) {
+        parts.push({ text: `role: ${photo.role}` });
+      }
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: Buffer.from(photo.bytes).toString("base64"),
+        },
+      });
+    }
+    return this.fetchGeminiGenerateContent(parts, signal);
+  }
+
   private async completeGeminiRefinement(
     photos: VisionIdentityPhotoInput[],
     candidates: IdentityRefinementCandidate[],
@@ -249,7 +346,11 @@ export class GeminiVisionAdapter implements VisionAdapter {
   ): Promise<string | null> {
     const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
       {
-        text: `${identityVisionPrompt(photos.length)}\n\n${identityVisionRefinementUserPrompt(candidates)}`,
+        text: `${identityVisionPrompt(
+          photos.length,
+          identityPhotoFingerprint(photos),
+          identityVisionPhotoRoles(photos),
+        )}\n\n${identityVisionRefinementUserPrompt(candidates)}`,
       },
     ];
 

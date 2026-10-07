@@ -5,9 +5,13 @@ import { FK_LISTING_INGEST_TIMEOUT_MS } from "./admin/fk-listing-ingest.js";
 import { AppModule } from "./app.module.js";
 import { isCorsOriginAllowed } from "./config/cors-origins.js";
 import { apiListenHost } from "./config/listen-host.js";
+import { VISION_JSON_BODY_LIMIT_BYTES } from "./vision/vision-http-limits.js";
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({ bodyLimit: VISION_JSON_BODY_LIMIT_BYTES }),
+  );
   app.enableCors({
     origin: (origin, callback) => {
       callback(null, isCorsOriginAllowed(origin));
