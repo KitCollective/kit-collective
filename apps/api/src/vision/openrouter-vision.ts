@@ -7,10 +7,10 @@ import {
   IDENTITY_VISION_SYSTEM_PROMPT,
   type IdentityRefinementCandidate,
   identityPhotoFingerprint,
+  identitySquadSeasonUserPrompt,
   identityVisionPhotoRoles,
   identityVisionRefinementUserPrompt,
   identityVisionUserPrompt,
-  identitySquadSeasonUserPrompt,
 } from "./identity-vision-prompt.js";
 import type { VisionGroupingPhotoInput, VisionIdentityPhotoInput } from "./vision.adapter.js";
 

@@ -291,10 +291,7 @@ export class GeminiVisionAdapter implements VisionAdapter {
     }
     const refineText =
       transport === "openrouter"
-        ? await this.completeOpenRouter(
-            buildOpenRouterSquadSeasonBody(photos, labels),
-            signal,
-          )
+        ? await this.completeOpenRouter(buildOpenRouterSquadSeasonBody(photos, labels), signal)
         : await this.completeGeminiSquadSeason(photos, labels, signal);
     const refined = decodeIdentityVisionHints(refineText);
     const picked = pickAllowedSeasonHint(refined?.seasonHint, labels);

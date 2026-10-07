@@ -135,7 +135,10 @@ const DIACRITIC_FOLD: Record<string, string> = {
 };
 
 export function normalizeHint(value: string): string {
-  return value.trim().toLowerCase().replace(/[\r\n]+/g, "");
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\r\n]+/g, "");
 }
 
 function foldCatalogHint(value: string): string {
