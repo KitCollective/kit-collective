@@ -88,14 +88,14 @@ GitHub: make the `Device flows` status required on `development` for PRs that to
 
 Not used today. The reset and the fixed Vision also work on a lane, for a hosted runner later. That lane's API then needs `E2E_TEST_DATA_TOKEN` (24 characters or more; its presence switches `POST /v1/e2e/test-data` on), `E2E_TEST_DATA_LANE` (`staging` or `development`; `production` is refused), `PRODUCTION_DATABASE_URL` (refused by identity), `E2E_COLLECTOR_EMAIL`, `E2E_COLLECTOR_PASSWORD`, `E2E_PEER_EMAIL`, `E2E_PEER_PASSWORD` and `VISION_FIXED_FOR_TEST_COLLECTOR=on`. Its catalog must have these sides with a linked season, by label or alias: clubs FC København, Brøndby IF, AGF, OB, FC Midtjylland, AaB; national team Danmark. The command names any that are missing and writes nothing. With database access the same routine runs as `pnpm --filter @kit/api e2e:test-data`.
 
-## Known blocker: the iOS app has never been built
+## Known blocker: Xcode 27
 
-Found while building KIT-267 (2026-10-07), filed as KIT-268: there was no native iOS build of the app before this, on EAS or locally, and it does not build as the repository stands.
+Found while building KIT-267 (2026-10-07), filed as KIT-268: there was no native iOS build of the app before this, on EAS or locally.
 
-1. `react-native-iap` 12 depends on the `RCT-Folly` pod. The precompiled React Native dependencies do not ship it, so `pod install` fails. With `RCT_USE_RN_DEP=0` (dependencies from source) `pod install` succeeds.
-2. With dependencies from source, `expo-modules-jsi` 57.0.8 is compiled on the machine and fails on Xcode 26.3 (Swift 6.2.4) in `RuntimeScheduler.h`; its changelog says the annotation was added for Xcode 27.
+- Fixed here: `react-native-iap` 12 depended on the `RCT-Folly` pod, which the precompiled React Native dependencies do not ship, so `pod install` failed. The app is on `react-native-iap` 16 (StoreKit 2, Nitro), and `pod install` resolves with the defaults.
+- Open: `expo-modules-jsi` (every 57.x release) is compiled on the machine and fails on Xcode 26.3 (Swift 6.2.4) in `RuntimeScheduler.h`. It needs Xcode 27.
 
-Until one of these is resolved (Xcode 27 on the Mac, or `react-native-iap` moved to a version that supports the precompiled core), `build-local.sh` cannot produce the app and no flow has been run on a simulator. The flows, `testID`s and scripts are written against the code, not yet against a running app.
+Until Xcode 27 is on the Mac, `build-local.sh` cannot produce the app and no flow has been run on a simulator. The flows, `testID`s and scripts are written against the code, not yet against a running app. The purchase path on `react-native-iap` 16 is typechecked only; it has not made a purchase.
 
 ## Reading the result
 
