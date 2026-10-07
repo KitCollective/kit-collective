@@ -8,7 +8,8 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "pnpm build && vitest run",
     "start": "node dist/main.js",
-    "dev": "node --watch dist/main.js"
+    "dev": "node --watch dist/main.js",
+    "e2e:test-data": "node dist/e2e/run-test-data.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",

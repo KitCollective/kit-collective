@@ -5,7 +5,7 @@ import { BillingModule } from "../billing/billing.module.js";
 import { DB } from "../db/db.module.js";
 import { IdentityModule } from "../identity/identity.module.js";
 import { AnonymousVisionUserService } from "./anonymous-vision-user.service.js";
-import { createGeminiVisionAdapter } from "./gemini-vision.adapter.js";
+import { createVisionAdapter } from "./create-vision.adapter.js";
 import { UnsignedVisionThrottleService } from "./unsigned-vision-throttle.service.js";
 import { VISION_ADAPTER } from "./vision.adapter.js";
 import { VisionController } from "./vision.controller.js";
@@ -39,7 +39,7 @@ const bullProviders = hasRedisConfig() ? [VisionProcessor] : [];
     ...bullProviders,
     {
       provide: VISION_ADAPTER,
-      useFactory: (db: Db) => createGeminiVisionAdapter(db),
+      useFactory: (db: Db) => createVisionAdapter(db),
       inject: [DB],
     },
   ],
