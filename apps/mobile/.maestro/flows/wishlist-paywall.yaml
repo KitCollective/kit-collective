@@ -1,0 +1,28 @@
+# Ønske for a Collector with no live Entitlement: Tilføj opens the paywall Sheet.
+appId: app.kitcollective.mobile
+name: wishlist-paywall
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_PEER_EMAIL}
+      PASSWORD: ${MAESTRO_PEER_PASSWORD}
+- startRecording: kc__wishlist-paywall
+- tapOn: Ønsker
+- extendedWaitUntil:
+    visible:
+      id: wishlist-add
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__wishlist-paywall__01-wishlist
+- tapOn:
+    id: wishlist-add
+- extendedWaitUntil:
+    visible:
+      id: paywall-sheet
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__wishlist-paywall__02-paywall
+- stopRecording

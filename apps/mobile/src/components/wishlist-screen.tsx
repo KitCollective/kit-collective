@@ -244,6 +244,7 @@ export function WishlistScreen() {
                 action={
                   <Button
                     label="Tilføj"
+                    testID="wishlist-add"
                     variant="primary"
                     width="fill"
                     onPress={() => void openCreateForm()}
@@ -308,6 +309,7 @@ export function WishlistScreen() {
                 </ScrollView>
                 <Button
                   label="Tilføj"
+                  testID="wishlist-add"
                   variant="primary"
                   width="fill"
                   onPress={() => void openCreateForm()}

@@ -69,6 +69,7 @@ export function AuthFace({
         {showThrottleBanner ? <AuthThrottleBanner /> : null}
         <LabeledField
           label="E-mail"
+          testID="door-email"
           value={email}
           onChangeText={onEmailChange}
           autoCapitalize="none"
@@ -78,6 +79,7 @@ export function AuthFace({
         />
         <LabeledField
           label="Adgangskode"
+          testID="door-password"
           value={password}
           onChangeText={onPasswordChange}
           autoCapitalize="none"
@@ -110,6 +112,7 @@ export function AuthFace({
         {error ? <ErrorText message={error} /> : null}
         <Button
           label={doorPasswordSubmitLabel(mode)}
+          testID="door-submit"
           variant="primary"
           width="fill"
           loading={loading}
@@ -212,6 +215,7 @@ function ErrorText({ message }: { message: string }) {
 
 function LabeledField({
   label,
+  testID,
   value,
   onChangeText,
   helper,
@@ -222,6 +226,7 @@ function LabeledField({
   placeholder,
 }: {
   label: string;
+  testID?: string;
   value: string;
   onChangeText: (value: string) => void;
   helper?: string;
@@ -239,6 +244,7 @@ function LabeledField({
       <Text style={[typography.label, { color: theme.contentPrimary }]}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
+        testID={testID}
         autoCapitalize={autoCapitalize}
         autoComplete={autoComplete}
         keyboardType={keyboardType}

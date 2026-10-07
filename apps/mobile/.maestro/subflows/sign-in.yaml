@@ -1,0 +1,31 @@
+# Cold start, known test data, signed in. Callers pass EMAIL and PASSWORD.
+appId: app.kitcollective.mobile
+---
+- runScript:
+    file: ../scripts/reset-test-data.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: splash-login
+    timeout: 30000
+- tapOn:
+    id: splash-login
+- tapOn:
+    id: door-email
+- inputText: ${EMAIL}
+- tapOn:
+    id: door-password
+- inputText: ${PASSWORD}
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000

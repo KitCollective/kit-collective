@@ -43,3 +43,16 @@ test("signs the AWS List Objects example with a sorted query", () => {
     /Signature=34b48302e7b5fa45bde8084f4b7868a86f0a534bc59db6670ed5711ef69dc6f7$/,
   );
 });
+
+test("reads keys and the continuation token from a ListObjectsV2 page", async () => {
+  const { parseListObjects } = await import("../e2e/r2.mjs");
+  const page = parseListObjects(
+    `<?xml version="1.0"?><ListBucketResult><IsTruncated>true</IsTruncated>` +
+      `<Contents><Key>e2e/abc/collection/01-samling.png</Key><Size>1</Size></Contents>` +
+      `<Contents><Key>e2e/abc/a&amp;b.png</Key></Contents>` +
+      `<NextContinuationToken>tok/1==</NextContinuationToken></ListBucketResult>`,
+  );
+  assert.deepEqual(page.keys, ["e2e/abc/collection/01-samling.png", "e2e/abc/a&b.png"]);
+  assert.equal(page.nextToken, "tok/1==");
+  assert.equal(parseListObjects("<ListBucketResult/>").nextToken, undefined);
+});

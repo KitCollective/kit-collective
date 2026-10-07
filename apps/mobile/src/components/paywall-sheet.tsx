@@ -36,7 +36,7 @@ export function PaywallSheet({
 
   return (
     <Sheet visible={visible} title="KitCollective+" onDismiss={onDismiss}>
-      <View style={styles.body}>
+      <View style={styles.body} testID="paywall-sheet">
         <Text style={[typography.body, { color: theme.contentSecondary }]}>
           Plus er ubegrænset Vision Matcher og ønskeliste.
         </Text>

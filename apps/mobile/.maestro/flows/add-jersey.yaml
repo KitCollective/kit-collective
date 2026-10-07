@@ -1,0 +1,25 @@
+# Tilføj trøje from the gallery, with the fixed Vision suggestion, through Save.
+appId: app.kitcollective.mobile
+name: add-jersey
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- addMedia:
+    - ../fixtures/shirt-back.jpg
+    - ../fixtures/shirt-front.jpg
+- startRecording: kc__add-jersey
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__add-jersey__01-source-sheet
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos

@@ -19,7 +19,7 @@ import {
   wishlistEntry,
 } from "@kit/db";
 import { gridPhotoObjectKey, photoPrefixFromStoredObjectKey } from "@kit/domain";
-import { hash } from "bcryptjs";
+import bcrypt from "bcryptjs";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
 import { writeStripAndLightboxVariants } from "../collection/photo-derivatives.js";
@@ -131,7 +131,7 @@ export async function applyTestData(input: {
     accounts.map(async (account) => ({
       ...account,
       email: account.email.toLowerCase(),
-      passwordHash: await hash(account.password, 12),
+      passwordHash: await bcrypt.hash(account.password, 12),
     })),
   );
 

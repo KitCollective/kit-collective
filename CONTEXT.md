@@ -125,6 +125,22 @@ _Avoid_: blocking save on inference; requiring `clubId` when the copy is a natio
 One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects.
 _Avoid_: environment as a synonym without saying which object
 
+**Device flow**:
+A Maestro flow under `apps/mobile/.maestro/flows/` that drives the iOS Simulator build through one Collector journey and takes a named screenshot at every meaningful step, plus one recording. Five exist: first session, Tilføj trøje, Samling, Søg and bud, Ønske and paywall. A red Device flow blocks a PR.
+_Avoid_: e2e test as a synonym for an API integration test; worker browser screenshots as evidence for a mobile slice; a flow that needs a manual step
+
+**Test Collector**:
+The Collector the Device flows sign in as on staging, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and meets the paywall. Both have fixed ids and are reset before every flow; nothing else on the lane is written.
+_Avoid_: a real Collector's account in a flow; a lane-wide Vision switch; a fourth lane for tests
+
+**Evidence run**:
+The screenshots and recordings of one Device flow run for one commit, in lane R2 under `e2e/<sha>/`, kept 30 days. "Before" for a PR is the latest passed `development` Evidence run at or before the PR's merge base; "after" is the PR head.
+_Avoid_: committing screenshots to git; comparing against `staging` or an arbitrary older run
+
+**Design finding**:
+What the review reports for a step whose screenshot differs from "before": the change was not asked for by the issue, or it breaks a named rule in `docs/design-system.md`. Advisory: it goes into `### Review feedback`, it does not fail the check, and the reviewer never edits UI.
+_Avoid_: failing a PR on a model's opinion; a suggestion without the "opinion" label; a design-lock break with no rule cited
+
 **Football Data Seed**:
 The Linear project for vendor ingest: Transfermarkt hierarchy, then Football Kit Archive hierarchy, then Join workflow, then Cross MCP. Successor to KitCollective Seed. Still the one seed board beside the KitCollective product project.
 _Avoid_: a third Linear project; filing fetch tickets on the product board; keeping KitCollective Seed alive beside this one

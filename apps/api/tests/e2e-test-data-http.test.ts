@@ -7,6 +7,8 @@ import { Test } from "@nestjs/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
+import { OBJECT_STORE } from "../dist/collection/collection.service.js";
+import type { ObjectStoreAdapter } from "../dist/collection/object-store.js";
 import { TEST_COLLECTOR_ID } from "../dist/e2e/test-data.fixture.js";
 import { insertFixtureCatalog } from "./helpers/e2e-fixture-catalog.js";
 
@@ -102,5 +104,64 @@ describe("POST /v1/e2e/test-data", () => {
     expect(await collectorJerseys()).toHaveLength(4);
     expect((await post(TOKEN)).statusCode).toBe(204);
     expect(await collectorJerseys()).toHaveLength(4);
+  });
+});
+
+describe("GET /v1/e2e/evidence", () => {
+  let app: NestFastifyApplication;
+  const sha = "0123456789abcdef0123456789abcdef01234567";
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
+
+  const get = (path: string) => app.inject({ method: "GET", url: `/v1/e2e/evidence/${path}` });
+
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DATABASE_URL;
+    delete process.env.R2_ENDPOINT;
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app.setGlobalPrefix("v1");
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    const store = app.get<ObjectStoreAdapter>(OBJECT_STORE);
+    await store.putObject(`e2e/${sha}/collection/01-samling.png`, png);
+    await store.putObject(`e2e/${sha}/collection/video.mp4`, Uint8Array.from([1, 2, 3]));
+    await store.putObject("user/someone/jersey/photo/grid.jpg", Uint8Array.from([9]));
+  });
+
+  afterAll(async () => {
+    await app.close();
+    delete process.env.E2E_TEST_DATA_TOKEN;
+  });
+
+  beforeEach(() => {
+    process.env.E2E_TEST_DATA_TOKEN = TOKEN;
+  });
+
+  it("serves a stored screenshot and recording without a session", async () => {
+    const screenshot = await get(`${sha}/collection/01-samling.png`);
+    expect(screenshot.statusCode).toBe(200);
+    expect(screenshot.headers["content-type"]).toBe("image/png");
+    expect(new Uint8Array(screenshot.rawPayload)).toEqual(png);
+
+    const video = await get(`${sha}/collection/video.mp4`);
+    expect(video.statusCode).toBe(200);
+    expect(video.headers["content-type"]).toBe("video/mp4");
+  });
+
+  it("serves nothing outside the evidence prefix", async () => {
+    for (const path of [
+      `${sha}/collection/missing.png`,
+      `${sha}/collection/01-samling.jpg`,
+      "..%2F..%2Fuser/someone/jersey/photo/grid.jpg",
+      `${sha}/../../user/someone/jersey/photo/grid.jpg`,
+      "not-a-sha/collection/01-samling.png",
+    ]) {
+      expect((await get(path)).statusCode, path).toBe(404);
+    }
+  });
+
+  it("does not exist on a lane without a test-data token", async () => {
+    delete process.env.E2E_TEST_DATA_TOKEN;
+    expect((await get(`${sha}/collection/01-samling.png`)).statusCode).toBe(404);
   });
 });

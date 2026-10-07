@@ -198,6 +198,7 @@ function SearchHome() {
           onChangeText={setQuery}
           placeholder="Søg"
           accessibilityLabel="Søg"
+          testID="search-input"
           onClear={() => setQuery("")}
         />
       </View>

@@ -226,6 +226,7 @@ export default function ConfirmScreen() {
         <View style={styles.sectionPair}>
           <ConfirmSectionRow
             title="Data"
+            testID="confirm-section-data"
             facts={dataSectionFacts(draft)}
             filled={dataRequiredFilledCount(draft)}
             required={DATA_REQUIRED_COUNT}
@@ -235,6 +236,7 @@ export default function ConfirmScreen() {
           />
           <ConfirmSectionRow
             title="Detaljer"
+            testID="confirm-section-details"
             facts={detailsSectionFacts(draft)}
             filled={detailsRequiredFilledCount(draft)}
             required={DETAILS_REQUIRED_COUNT}
@@ -250,6 +252,7 @@ export default function ConfirmScreen() {
       <ButtonDock variant="fade">
         <Button
           label={saveLabel}
+          testID="confirm-save"
           variant="primary"
           width="fill"
           loading={saving}

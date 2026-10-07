@@ -3,11 +3,15 @@ import type { Db } from "@kit/db";
 import {
   Controller,
   ForbiddenException,
+  Get,
+  Header,
   Headers,
   HttpCode,
   Inject,
   NotFoundException,
+  Param,
   Post,
+  StreamableFile,
   UnauthorizedException,
 } from "@nestjs/common";
 import { OBJECT_STORE } from "../collection/collection.service.js";
@@ -17,6 +21,15 @@ import { applyTestData } from "./test-data.js";
 import { readTestDataConfig, type TestDataConfig } from "./test-data-config.js";
 
 const MIN_TOKEN_LENGTH = 24;
+const EVIDENCE_SHA = /^[0-9a-f]{40}$/;
+const EVIDENCE_NAME = /^[a-z0-9-]+$/;
+const EVIDENCE_FILE = /^([a-z0-9-]+)\.(png|mp4)$/;
+const EVIDENCE_CONTENT_TYPES = { png: "image/png", mp4: "video/mp4" } as const;
+
+function laneToken(): string {
+  const token = process.env.E2E_TEST_DATA_TOKEN?.trim() ?? "";
+  return token.length < MIN_TOKEN_LENGTH ? "" : token;
+}
 
 function tokensMatch(given: string, expected: string): boolean {
   const a = Buffer.from(given);
@@ -25,9 +38,10 @@ function tokensMatch(given: string, expected: string): boolean {
 }
 
 /**
- * Resets the two device-flow test Collectors before a Maestro run (KIT-267).
- * The route answers 404 unless the lane sets `E2E_TEST_DATA_TOKEN`, which only
- * staging does.
+ * Device-flow support on the staging lane (KIT-267): resets the two test
+ * Collectors before a Maestro run, and serves the stored screenshots and
+ * recordings so a PR comment and a Linear issue can link them. Every route
+ * answers 404 unless the lane sets `E2E_TEST_DATA_TOKEN`, which only staging does.
  */
 @Controller("e2e")
 export class E2eController {
@@ -39,8 +53,8 @@ export class E2eController {
   @Post("test-data")
   @HttpCode(204)
   async resetTestData(@Headers("authorization") authorization?: string): Promise<void> {
-    const expected = process.env.E2E_TEST_DATA_TOKEN?.trim() ?? "";
-    if (expected.length < MIN_TOKEN_LENGTH) {
+    const expected = laneToken();
+    if (!expected) {
       throw new NotFoundException();
     }
     const given = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
@@ -58,5 +72,29 @@ export class E2eController {
       objectStore: this.objectStore,
       credentials: config.credentials,
     });
+  }
+
+  /**
+   * Public on purpose: GitHub and Linear fetch these without a session. Only
+   * `e2e/<sha>/<flow>/<step>.png|video.mp4` is reachable, and those objects show
+   * the test Collectors only.
+   */
+  @Get("evidence/:sha/:flow/:file")
+  @Header("cache-control", "public, max-age=86400")
+  async evidence(
+    @Param("sha") sha: string,
+    @Param("flow") flow: string,
+    @Param("file") file: string,
+  ): Promise<StreamableFile> {
+    const name = EVIDENCE_FILE.exec(file);
+    if (!laneToken() || !EVIDENCE_SHA.test(sha) || !EVIDENCE_NAME.test(flow) || !name) {
+      throw new NotFoundException();
+    }
+    const bytes = await this.objectStore.getObject(`e2e/${sha}/${flow}/${file}`);
+    if (!bytes) {
+      throw new NotFoundException();
+    }
+    const extension = name[2] === "mp4" ? "mp4" : "png";
+    return new StreamableFile(bytes, { type: EVIDENCE_CONTENT_TYPES[extension] });
   }
 }
