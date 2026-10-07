@@ -5,7 +5,9 @@
 
 # Agent workflow
 
-Linear is the control plane. The PI worker (Compose + `gh` + Linear CLI) is the runtime. Cursor Cloud Agents are not factory dispatch. Linear MCP is not installed on kit-harness (empty `.pi/mcp.json`).
+Linear is the control plane. The runtime is Desktop `/issue-session`, started by the approver for named issues. Cursor Cloud Agents are not factory dispatch.
+
+**No dispatch worker runs.** The PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`). Where this file says "the worker", "Pi", planner claim, Idle timeout or Auto-merge, it describes that archived worker: the status and comment contract still holds, but a person or an `/issue-session` performs the step, and nothing claims a `ready-for-agent` issue by itself.
 This file is the contract. The worker and skills must follow it, not a one-off prompt.
 
 Load `factory.config.json` (product, team, states, lanes, approver, helper dir).

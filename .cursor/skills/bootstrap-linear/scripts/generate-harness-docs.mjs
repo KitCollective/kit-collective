@@ -62,6 +62,8 @@ When two docs disagree, resolve in this order rather than following whichever yo
 4. **\`${specs}/<effort>/spec.md\`** — what one effort set out to build, frozen at write time. Specs go stale; treat them as intent, not as truth.
 5. **The Linear issue** — tickets are subordinate to their spec.
 
+**Notion is outside this order.** The planning workspace in Notion (Signals, Features, roadmap, decisions) is ${approver}'s planning surface and input to \`/grill-with-docs\` and \`/to-spec\`. It has no authority over code, and agents do not act on it directly.
+
 **Code is evidence, not authority** — if the code contradicts \`CONTEXT.md\` or \`docs/design-system.md\`, one of them is a bug; say which rather than silently following the code.
 
 If you find a genuine contradiction, surface it instead of picking a side quietly.
@@ -150,9 +152,9 @@ Throwaway design question: \`/prototype\`. Visual lock: \`/to-design\`. Cited pr
 
 \`/grill-with-docs\` → \`/to-design\` (when UI needs shared rules) → \`/to-spec\` → \`/to-tickets\` → planner claims (\`${dispatch}\` + \`ready-for-agent\` + unblocked) → \`/implement\` (\`/tdd\`) → checker → Auto-merge or ${approver} to Merging → \`/land\` into \`${integration}\`. Milestone complete → staging. See \`docs/agents/planning-stack.md\`.
 
-**Runtime**: PI worker (Compose + \`gh\` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and \`kc_seed_mcp\` are Desktop / Cloud Agent wiring.
+**Runtime**: Desktop \`/issue-session\`, started by ${approver} for named issues. No dispatch worker runs: the PI worker was archived on 2026-09-01 (\`docs/agents/pi-harness-archived.md\`), so nothing claims \`${dispatch}\` + \`ready-for-agent\` by itself. Worker-only steps in \`WORKFLOW.md\` and \`docs/agents/automations.md\` describe the archived worker. Coolify MCP and \`kc_seed_mcp\` are Desktop / Cloud Agent wiring.
 
-Linear Agent stays empty (Cursor skip). One role comment per factory transition. Checker pass ticks description AC. Auto-merge without Pi.
+Linear Agent stays empty (Cursor skip). One role comment per factory transition. Checker pass ticks description AC.
 
 ## How work enters the factory
 
@@ -179,12 +181,12 @@ Linear. Status + \`ready-for-agent\` + blockers decide what runs. Implement and 
 _Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
-PI worker: Compose + \`gh\` + Linear CLI. Empty \`.pi/mcp.json\` — Linear MCP is not on the box.
-_Avoid_: Cursor Cloud Agents as dispatch, Linear MCP as the worker runtime
+Desktop \`/issue-session\`, started by the approver for named issues. No dispatch worker runs; the PI worker was archived on 2026-09-01 (\`docs/agents/pi-harness-archived.md\`).
+_Avoid_: assuming a planner claims \`ready-for-agent\` issues by itself, Cursor Cloud Agents as dispatch
 
 **Product MCP**:
-Coolify MCP and \`kc_seed_mcp\` are Desktop or Cloud Agent wiring. Not default PI-worker MCP.
-_Avoid_: installing Coolify or Seed MCP on the PI worker as factory dispatch
+Coolify MCP and \`kc_seed_mcp\` are Desktop or Cloud Agent wiring.
+_Avoid_: treating Coolify or Seed MCP as factory dispatch
 
 **Kickoff**:
 \`/to-spec\` for a new Linear project + milestones. No issues yet.
