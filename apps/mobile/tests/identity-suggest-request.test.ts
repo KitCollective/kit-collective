@@ -8,6 +8,7 @@ import {
 import {
   buildIdentitySuggestRequest,
   IDENTITY_PHOTOS_EMPTY,
+  identitySuggestPhotosFromPrepared,
 } from "../src/capture/identitySuggestRequest";
 
 const identitySuggestRequestPath = join(__dirname, "../src/capture/identitySuggestRequest.ts");
@@ -82,6 +83,20 @@ describe("buildIdentitySuggestRequest", () => {
     expect(request.photos).toEqual([
       { role: "front", contentBase64: FRONT_BYTES },
       { role: "back", contentBase64: BACK_BYTES },
+    ]);
+  });
+
+  it("keeps a detail crop when front and back are both present", () => {
+    expect(
+      identitySuggestPhotosFromPrepared([
+        { role: "front", contentBase64: FRONT_BYTES },
+        { role: "other", contentBase64: "toulouse-number-crop-bytes-xxxxxxxx" },
+        { role: "back", contentBase64: BACK_BYTES },
+      ]),
+    ).toEqual([
+      { role: "front", contentBase64: FRONT_BYTES },
+      { role: "back", contentBase64: BACK_BYTES },
+      { role: "other", contentBase64: "toulouse-number-crop-bytes-xxxxxxxx" },
     ]);
   });
 

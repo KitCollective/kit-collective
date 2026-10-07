@@ -36,13 +36,15 @@ async function defaultReadPreparedPhotoBase64(
 export function identitySuggestPhotosFromPrepared(
   photos: Array<{ role: PhotoRole | null; contentBase64: string }>,
 ): Array<{ role: PhotoRole; contentBase64: string }> {
-  return photos
+  const prepared = photos
     .filter((photo) => photo.contentBase64.length >= 32)
     .map((photo, index) => ({
       role: photoRoleForVision(photo.role),
       contentBase64: photo.contentBase64,
       index,
-    }))
+    }));
+
+  return prepared
     .sort((left, right) => {
       const rankDelta = IDENTITY_PHOTO_ROLE_RANK[left.role] - IDENTITY_PHOTO_ROLE_RANK[right.role];
       return rankDelta !== 0 ? rankDelta : left.index - right.index;

@@ -41,6 +41,7 @@ CLUB
 - Identify the club or national team. Use a commonly known English name ("Rangers FC", "Liverpool FC", "RB Leipzig", "Denmark").
 - Add 1–3 alternate names in clubHintAlts: local-language name, abbreviation, or nickname ("LFC", "Liverpool FC", "the Reds"). Do not invent alts you cannot support.
 - Front-heavy cues decide club, season, and kit type: crest, chest sponsor, league patch, and collar motto. Use those, plus collar tags and known templates. Do not invent a club with no visual clue.
+- When a front photo is present, date seasonHint from the front only. A back name/number print must not change seasonHint.
 - Identify only what is visible in THESE photos. Do not reuse a previous shirt's club, sponsor, player, or colours.
 
 KIT TYPE (home | away | third | fourth | gk | special)
@@ -76,7 +77,7 @@ Never report 0.95 on a one-year guess you cannot corroborate.
 If two adjacent seasons are plausible and sponsor+manufacturer+template do not lock one year, keep season confidence ≤ 0.50.
 
 PLAYER
-- Fill playerHint / playerNumberHint only from a visible back print (name and number). Do not infer the player from the front crest or sponsor.
+- Fill playerHint / playerNumberHint only from a visible back print (name and number). Do not infer the player from the front crest or sponsor. Do not let the back print change clubHint, seasonHint, or kitType when a front photo is present.
 - Blank back → omit both, player confidence 0.
 
 PHOTO ROLES / MERGE
@@ -135,7 +136,7 @@ function photoRolesMergeRules(photoCount: number): string {
   if (photoCount < 2) {
     return "";
   }
-  return `- PHOTO ROLES / MERGE: Front = crest, chest sponsor, league patch, collar motto → clubHint, seasonHint, kitType. Back = name and number print → playerHint, playerNumberHint. Merge into one JSON. Do not identify the club from the back alone when a front photo is present. Do not let a crest-less back override a front crest.
+  return `- PHOTO ROLES / MERGE: Front = crest, chest sponsor, league patch, collar motto → clubHint, seasonHint, kitType. Back = name and number print → playerHint, playerNumberHint. Merge into one JSON. Date seasonHint from the front when a front photo is present. A back print must not change seasonHint. Do not identify the club from the back alone when a front photo is present. Do not let a crest-less back override a front crest.
 `;
 }
 
@@ -222,6 +223,32 @@ ${lines.join("\n")}
 Return JSON only with seasonHint and kitType from that list. Do not invent a season or type that is not listed. Do not copy a catalog year you cannot see on the shirt.
 
 {"seasonHint":"2019/20"|null,"kitType":"home"|"away"|"third"|"fourth"|"gk"|"special"|null,"confidence":{"season":0.0,"kitType":0.0,"overall":0.0}}`;
+}
+
+/**
+ * Second look when a mapped player's career rejected the hinted year and more
+ * than one squad season remains. The model must pick from those labels.
+ */
+export function identitySquadSeasonUserPrompt(seasonLabels: readonly string[]): string {
+  const lines = seasonLabels.map((label) => `- ${label}`);
+  return `The catalog career of the player at this club is only these seasons:
+${lines.join("\n")}
+
+A year outside that list is impossible. Look at the FRONT graphic, chest sponsor, and template. Return seasonHint as exactly one of those labels, or null if the front does not distinguish them.
+
+{"seasonHint":${seasonLabels.map((label) => `"${label}"`).join("|")}|null}`;
+}
+
+/** Keeps a second-look season only when it is one of the player's club seasons. */
+export function pickAllowedSeasonHint(
+  seasonHint: string | undefined,
+  allowedLabels: readonly string[],
+): string | undefined {
+  const hint = seasonHint?.trim().toLowerCase();
+  if (!hint) {
+    return undefined;
+  }
+  return allowedLabels.find((label) => label.trim().toLowerCase() === hint);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

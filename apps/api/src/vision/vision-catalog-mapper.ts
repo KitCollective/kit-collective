@@ -560,7 +560,7 @@ export class VisionCatalogMapper {
   private async findNamedPlayers(
     nameHint: string,
   ): Promise<Array<{ playerId: string; score: number }>> {
-    const nameClause = hintMatchSql(catalogLabel.text, [nameHint]);
+    const nameClause = playerHintMatchSql(catalogLabel.text, [nameHint]);
     if (!nameClause) {
       return [];
     }
@@ -836,6 +836,31 @@ export class VisionCatalogMapper {
       badge,
     };
   }
+
+  /** Season labels on this player's rows at the club, oldest first. */
+  async listPlayerClubSeasonLabels(playerId: string, clubId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ label: season.label, startsOn: season.startsOn })
+      .from(playerClubSeason)
+      .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+      .where(and(eq(playerClubSeason.playerId, playerId), eq(playerClubSeason.clubId, clubId)))
+      .orderBy(season.startsOn);
+    return [...new Set(rows.map((row) => row.label))];
+  }
+
+  async seasonIdForPlayerClubLabel(
+    playerId: string,
+    clubId: string,
+    label: string,
+  ): Promise<string | undefined> {
+    const wanted = label.trim().toLowerCase();
+    const rows = await this.db
+      .select({ seasonId: playerClubSeason.seasonId, label: season.label })
+      .from(playerClubSeason)
+      .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+      .where(and(eq(playerClubSeason.playerId, playerId), eq(playerClubSeason.clubId, clubId)));
+    return rows.find((row) => row.label.trim().toLowerCase() === wanted)?.seasonId;
+  }
 }
 
 function kitSideEquals(side: CatalogSideMatch | null): SQL | undefined {
@@ -941,6 +966,26 @@ function hintMatchSql(column: SQLWrapper, hints: string[]): SQL | undefined {
     clauses.push(sql`${compactCatalogColumnSql(column)} like ${`%${compact}%`}`);
   }
   return or(...clauses);
+}
+
+/** Prefix on compact surnames so a one-letter OCR miss still retrieves the CatalogLabel row. */
+function playerHintMatchSql(column: SQLWrapper, hints: string[]): SQL | undefined {
+  const exact = hintMatchSql(column, hints);
+  const prefixes = [
+    ...new Set(
+      hints
+        .map((hint) => compactCatalogHint(hint))
+        .filter((compact) => compact.length >= 8)
+        .map((compact) => compact.slice(0, 6)),
+    ),
+  ];
+  if (prefixes.length === 0) {
+    return exact;
+  }
+  const prefixClauses = prefixes.map(
+    (prefix) => sql`${compactCatalogColumnSql(column)} like ${`${prefix}%`}`,
+  );
+  return exact ? or(exact, ...prefixClauses) : or(...prefixClauses);
 }
 
 /** Same compact as `compactCatalogHint`: NFD + ø→o / æ→ae, then strip non-alphanumerics. */
