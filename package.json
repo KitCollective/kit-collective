@@ -12,6 +12,7 @@
     "lint": "biome lint .",
     "lint:anti-slop": "oxlint",
     "format": "biome check --write .",
+    "prepare": "git config core.hooksPath .githooks || true",
     "format:check": "biome ci .",
     "typecheck": "turbo run typecheck",
     "check:imports": "node scripts/check-import-boundaries.mjs",

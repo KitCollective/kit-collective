@@ -14,6 +14,8 @@ When two docs disagree, resolve in this order rather than following whichever yo
 4. **`.scratch/<effort>/spec.md`** — what one effort set out to build, frozen at write time. Specs go stale; treat them as intent, not as truth.
 5. **The Linear issue** — tickets are subordinate to their spec.
 
+**Notion is outside this order.** The planning workspace in Notion (Signals, Features, roadmap, decisions) is Nicklas's planning surface and input to `/grill-with-docs` and `/to-spec`. It has no authority over code, and agents do not act on it directly.
+
 **Code is evidence, not authority** — if the code contradicts `CONTEXT.md` or `docs/design-system.md`, one of them is a bug; say which rather than silently following the code.
 
 If you find a genuine contradiction, surface it instead of picking a side quietly.
@@ -102,9 +104,9 @@ Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primar
 
 `/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → Auto-merge or Nicklas to Merging → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
 
-**Runtime**: PI worker (Compose + `gh` + Linear CLI). Not Cursor Cloud Agents as dispatch. Linear MCP is not on the box. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring.
+**Runtime**: Desktop `/issue-session`, started by Nicklas for named issues. No dispatch worker runs: the PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`), so nothing claims `Backlog` + `ready-for-agent` by itself. Worker-only steps in `WORKFLOW.md` and `docs/agents/automations.md` describe the archived worker. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring.
 
-Linear Agent stays empty (Cursor skip). One role comment per factory transition. Checker pass ticks description AC. Auto-merge without Pi.
+Linear Agent stays empty (Cursor skip). One role comment per factory transition. Checker pass ticks description AC.
 
 ## How work enters the factory
 

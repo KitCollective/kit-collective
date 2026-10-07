@@ -12,12 +12,12 @@ Linear. Status + `ready-for-agent` + blockers decide what runs. Implement and fa
 _Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
-PI worker: Compose + `gh` + Linear CLI. Empty `.pi/mcp.json` — Linear MCP is not on the box.
-_Avoid_: Cursor Cloud Agents as dispatch, Linear MCP as the worker runtime
+Desktop `/issue-session`, started by the approver for named issues. No dispatch worker runs; the PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`).
+_Avoid_: assuming a planner claims `ready-for-agent` issues by itself, Cursor Cloud Agents as dispatch
 
 **Product MCP**:
-Coolify MCP and `kc_seed_mcp` are Desktop or Cloud Agent wiring. Not default PI-worker MCP.
-_Avoid_: installing Coolify or Seed MCP on the PI worker as factory dispatch
+Coolify MCP and `kc_seed_mcp` are Desktop or Cloud Agent wiring.
+_Avoid_: treating Coolify or Seed MCP as factory dispatch
 
 **Kickoff**:
 `/to-spec` for a new Linear project + milestones. No issues yet.
@@ -436,6 +436,10 @@ _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authe
 **Take-down**:
 Removing one UserJersey and its UserJerseyPhoto bytes. The User remains. Not a Kit delete. Not a hide flag.
 _Avoid_: unpublish; soft-hide without a column; deleting the collector by default
+
+**Signal**:
+One dated piece of raw evidence about collectors or the market (a quote, a review, a metric shift, a Vision eval result). Lives in Notion, owned by Nicklas. Not `signal-up`, which is an agent filing an out-of-scope finding as a Linear Triage issue. A `signal-up` issue may be the source of a Signal, never the reverse.
+_Avoid_: calling a `signal-up` issue a Signal; a Signal as a ticket or a spec; rewriting the quote into an opinion; names or profiles of private persons on a Signal
 
 **Role subagent**:
 Implement-phase craft owner spawned by the implement lead when the slice needs that craft. v1 roles: **Frontend**, **Backend**, **DevOps**. Stack-named helpers (`react-expo`, `backend-nest`, `db-drizzle`, `ui-ux`) are aliases of those roles.
