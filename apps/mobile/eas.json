@@ -15,13 +15,6 @@
     },
     "production": {
       "channel": "production"
-    },
-    "e2e": {
-      "environment": "preview",
-      "distribution": "internal",
-      "ios": {
-        "simulator": true
-      }
     }
   }
 }

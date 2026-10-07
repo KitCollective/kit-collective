@@ -1,6 +1,6 @@
 /**
  * Lane R2 access for device-flow evidence (KIT-267): S3 Signature Version 4
- * over fetch. Dependency-free so it runs on an EAS worker without an install.
+ * over fetch. Dependency-free so it runs from any checkout with plain `node`.
  */
 import { createHash, createHmac } from "node:crypto";
 

@@ -130,11 +130,11 @@ describe("GET /v1/e2e/evidence", () => {
 
   afterAll(async () => {
     await app.close();
-    delete process.env.E2E_TEST_DATA_TOKEN;
+    delete process.env.E2E_EVIDENCE_PUBLIC;
   });
 
   beforeEach(() => {
-    process.env.E2E_TEST_DATA_TOKEN = TOKEN;
+    process.env.E2E_EVIDENCE_PUBLIC = "on";
   });
 
   it("serves a stored screenshot and recording without a session", async () => {
@@ -160,8 +160,8 @@ describe("GET /v1/e2e/evidence", () => {
     }
   });
 
-  it("does not exist on a lane without a test-data token", async () => {
-    delete process.env.E2E_TEST_DATA_TOKEN;
+  it("does not exist on a lane that has not made evidence public", async () => {
+    delete process.env.E2E_EVIDENCE_PUBLIC;
     expect((await get(`${sha}/collection/01-samling.png`)).statusCode).toBe(404);
   });
 });

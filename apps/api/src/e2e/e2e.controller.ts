@@ -26,6 +26,10 @@ const EVIDENCE_NAME = /^[a-z0-9-]+$/;
 const EVIDENCE_FILE = /^([a-z0-9-]+)\.(png|mp4)$/;
 const EVIDENCE_CONTENT_TYPES = { png: "image/png", mp4: "video/mp4" } as const;
 
+function evidenceIsPublic(): boolean {
+  return process.env.E2E_EVIDENCE_PUBLIC?.trim().toLowerCase() === "on";
+}
+
 function laneToken(): string {
   const token = process.env.E2E_TEST_DATA_TOKEN?.trim() ?? "";
   return token.length < MIN_TOKEN_LENGTH ? "" : token;
@@ -38,10 +42,11 @@ function tokensMatch(given: string, expected: string): boolean {
 }
 
 /**
- * Device-flow support on the staging lane (KIT-267): resets the two test
- * Collectors before a Maestro run, and serves the stored screenshots and
- * recordings so a PR comment and a Linear issue can link them. Every route
- * answers 404 unless the lane sets `E2E_TEST_DATA_TOKEN`, which only staging does.
+ * Device-flow support (KIT-267). Both routes answer 404 unless the lane switches
+ * them on, and production never does:
+ * - `E2E_TEST_DATA_TOKEN` switches on the reset of the two test Collectors.
+ * - `E2E_EVIDENCE_PUBLIC=on` switches on serving stored screenshots and
+ *   recordings, so a PR comment and a Linear issue can link them.
  */
 @Controller("e2e")
 export class E2eController {
@@ -87,7 +92,7 @@ export class E2eController {
     @Param("file") file: string,
   ): Promise<StreamableFile> {
     const name = EVIDENCE_FILE.exec(file);
-    if (!laneToken() || !EVIDENCE_SHA.test(sha) || !EVIDENCE_NAME.test(flow) || !name) {
+    if (!evidenceIsPublic() || !EVIDENCE_SHA.test(sha) || !EVIDENCE_NAME.test(flow) || !name) {
       throw new NotFoundException();
     }
     const bytes = await this.objectStore.getObject(`e2e/${sha}/${flow}/${file}`);

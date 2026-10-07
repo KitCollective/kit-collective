@@ -227,6 +227,17 @@ jobs:
       - name: Test setup-coolify-mcp script
         run: node --test scripts/tests/setup-coolify-mcp.test.mjs
 
+      - name: Test device-flow evidence scripts
+        run: >-
+          node --test
+          scripts/tests/e2e-artifacts.test.mjs
+          scripts/tests/e2e-before.test.mjs
+          scripts/tests/e2e-compare.test.mjs
+          scripts/tests/e2e-linear.test.mjs
+          scripts/tests/e2e-r2.test.mjs
+          scripts/tests/e2e-report.test.mjs
+          scripts/tests/e2e-review.test.mjs
+
       - name: Check factory tests are wired on the test job
         run: pnpm check:factory-ci-tests
 

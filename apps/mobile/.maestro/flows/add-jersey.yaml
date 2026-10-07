@@ -1,4 +1,10 @@
 # Tilføj trøje from the gallery, with the fixed Vision suggestion, through Save.
+#
+# Unfinished: the steps after the system photo picker (pick two photos, Bekræft
+# with the Vision suggestion, Detaljer, Gem, Gemt, Samling) can only be written
+# against a running simulator, and the app does not build yet (KIT-268). The
+# testIDs they need are in place: confirm-section-details, detail-size-m,
+# detail-condition-used, confirm-details-save, confirm-save, post-save-to-collection.
 appId: app.kitcollective.mobile
 name: add-jersey
 ---
@@ -23,3 +29,4 @@ name: add-jersey
 - tapOn:
     id: capture-source-gallery
 - tapOn: Fotos
+- stopRecording

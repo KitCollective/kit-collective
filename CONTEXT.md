@@ -126,11 +126,11 @@ One of `development`, `staging`, `production` — git branch, GitHub Environment
 _Avoid_: environment as a synonym without saying which object
 
 **Device flow**:
-A Maestro flow under `apps/mobile/.maestro/flows/` that drives the iOS Simulator build through one Collector journey and takes a named screenshot at every meaningful step, plus one recording. Five exist: first session, Tilføj trøje, Samling, Søg and bud, Ønske and paywall. A red Device flow blocks a PR.
+A Maestro flow under `apps/mobile/.maestro/flows/` that drives the iOS Simulator build through one Collector journey and takes a named screenshot at every meaningful step, plus one recording. Five exist: first session, Tilføj trøje, Samling, Søg and bud, Ønske and paywall. They run on the approver's Mac against a local API, and a red Device flow blocks a PR through the `Device flows` commit status.
 _Avoid_: e2e test as a synonym for an API integration test; worker browser screenshots as evidence for a mobile slice; a flow that needs a manual step
 
 **Test Collector**:
-The Collector the Device flows sign in as on staging, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and meets the paywall. Both have fixed ids and are reset before every flow; nothing else on the lane is written.
+The Collector the Device flows sign in as, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and meets the paywall. Both have fixed ids and are reset before every flow; no other Collector's rows are written.
 _Avoid_: a real Collector's account in a flow; a lane-wide Vision switch; a fourth lane for tests
 
 **Evidence run**:
@@ -138,7 +138,7 @@ The screenshots and recordings of one Device flow run for one commit, in lane R2
 _Avoid_: committing screenshots to git; comparing against `staging` or an arbitrary older run
 
 **Design finding**:
-What the review reports for a step whose screenshot differs from "before": the change was not asked for by the issue, or it breaks a named rule in `docs/design-system.md`. Advisory: it goes into `### Review feedback`, it does not fail the check, and the reviewer never edits UI.
+What the review reports for a step whose screenshot differs from "before": the change was not asked for by the issue, or it breaks a named rule in `docs/design-system.md`. Advisory: it goes into `### Review feedback`, it does not fail the `Device flows` status, and the reviewer never edits UI.
 _Avoid_: failing a PR on a model's opinion; a suggestion without the "opinion" label; a design-lock break with no rule cited
 
 **Football Data Seed**:

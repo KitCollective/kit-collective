@@ -5,13 +5,13 @@
  * base, reviews the steps that differ, and writes the evidence to the PR and
  * the Linear workpad.
  *
- * A red flow blocks through the Maestro job. This script never fails the check
- * over a design finding: findings are advisory.
+ * A red flow blocks through the `Device flows` commit status. This script never
+ * fails over a design finding: findings are advisory.
  *
- * Environment: E2E_SHA, E2E_EVENT (`pull_request` | `push`), E2E_FLOWS_STATUS,
- * E2E_PR_NUMBER, E2E_PR_TITLE, E2E_REPOSITORY, E2E_EVIDENCE_BASE_URL,
- * E2E_GITHUB_TOKEN, LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL and the
- * lane R2 settings.
+ * Started by `apps/mobile/.maestro/run-evidence.sh`. Environment: E2E_SHA,
+ * E2E_EVENT (`pull_request` | `push`), E2E_FLOWS_STATUS, E2E_PR_NUMBER,
+ * E2E_PR_TITLE, E2E_REPOSITORY, E2E_EVIDENCE_BASE_URL, E2E_GITHUB_TOKEN,
+ * LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL and the lane R2 settings.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -33,7 +33,6 @@ import { buildReviewMessages, designExcerpt, issueContract, requestVerdict } fro
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const FACTORY = JSON.parse(readFileSync(join(REPO_ROOT, "factory.config.json"), "utf8"));
 const ANCESTOR_LOOKBACK = 50;
-const HISTORY_DEPTH = 300;
 
 const env = process.env;
 const required = (name) => {
@@ -64,15 +63,7 @@ async function loadScreenshots(runSha) {
 
 async function findBefore() {
   const lane = FACTORY.lanes.integration;
-  // The EAS checkout is shallow; fetch enough history to find the merge base.
-  git(
-    "fetch",
-    "--quiet",
-    `--depth=${HISTORY_DEPTH}`,
-    "origin",
-    `+refs/heads/${lane}:refs/remotes/origin/${lane}`,
-    sha,
-  );
+  git("fetch", "--quiet", "origin", lane);
   const mergeBase = git("merge-base", `origin/${lane}`, sha);
   const ancestors = git("rev-list", "--first-parent", `--max-count=${ANCESTOR_LOOKBACK}`, mergeBase)
     .split("\n")

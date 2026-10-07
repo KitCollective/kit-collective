@@ -15,10 +15,10 @@ When the PR diff touches `apps/mobile`, Expo config, or EAS, Standards must load
 
 When the PR diff touches `apps/mobile/**`, the evidence is the `Device flows` comment on the PR (`docs/agents/device-flows.md`), not worker browser screenshots.
 
-- The `Device flows` check is a required check: a red flow is a fail like any other red check.
+- `Device flows` is a commit status on the PR head, set by the run on the approver's Mac. Red is a fail like any other red check; so is a status that is missing or sits on an older commit than the head.
 - Read every row of the comment. A step marked `changed`, `new` or `removed` that the issue did not ask for is a **Design finding**, and so is a named design-lock break. Put each one in `### Review feedback` with the flow, the step and the rule. Open the before and after images yourself; the review column is advisory and can be wrong in either direction.
 - A step the issue asked to change must show as `changed` with an "asked for" verdict. A UI criterion with no changed step behind it is not proven.
-- No comment on a PR that touches `apps/mobile/**` (check skipped or evidence job failed) is itself a finding: say so, do not pass on tests alone.
+- No comment on a PR that touches `apps/mobile/**` (the flows were not run, or the evidence step failed) is itself a finding: say so, do not pass on tests alone.
 - Suggestions labelled opinion are not findings.
 
 Fetch `get_issue` and `list_comments`. Reuse the existing workpad.

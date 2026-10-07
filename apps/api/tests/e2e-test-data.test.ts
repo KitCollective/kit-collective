@@ -118,6 +118,15 @@ async function snapshot(db: Db, userIds: string[]) {
   };
 }
 
+const SNAPSHOT_KEYS = [
+  "users",
+  "jerseys",
+  "photos",
+  "wishlist",
+  "entitlements",
+  "shortcuts",
+] as const;
+
 /** Row identity and content without the fields a re-run refreshes. */
 function stable(rows: Array<Record<string, unknown>>) {
   return rows.map(({ createdAt: _c, updatedAt: _u, passwordHash: _p, ...rest }) => rest);
@@ -200,7 +209,7 @@ describe("device-flow test data", () => {
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
     const second = await snapshot(db, [TEST_COLLECTOR_ID, TEST_PEER_ID]);
 
-    for (const key of Object.keys(first) as Array<keyof typeof first>) {
+    for (const key of SNAPSHOT_KEYS) {
       expect(stable(second[key])).toEqual(stable(first[key]));
     }
   });
@@ -260,7 +269,7 @@ describe("device-flow test data", () => {
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
     const after = await snapshot(db, [TEST_COLLECTOR_ID, TEST_PEER_ID]);
 
-    for (const key of Object.keys(before) as Array<keyof typeof before>) {
+    for (const key of SNAPSHOT_KEYS) {
       expect(stable(after[key])).toEqual(stable(before[key]));
     }
     expect(await db.select().from(conversation)).toHaveLength(0);

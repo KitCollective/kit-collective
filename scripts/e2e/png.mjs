@@ -1,6 +1,6 @@
 /**
  * Minimal PNG codec for the device-flow comparison (KIT-267). Dependency-free
- * on purpose: the comparison runs on an EAS worker before any install step.
+ * on purpose: the evidence scripts run from any checkout with plain `node`.
  * Decodes 8-bit RGB and RGBA, non-interlaced, which is what the iOS Simulator
  * writes. Anything else is refused so a wrong decode can never read as "same".
  */
