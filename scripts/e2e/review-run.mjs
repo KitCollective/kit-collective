@@ -21,7 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPrefix, runRecordKey, screenshotFromKey } from "./artifacts.mjs";
 import { selectBefore } from "./before.mjs";
-import { compareRuns, stepKey } from "./compare.mjs";
+import { compareRuns, flowOfKey, stepKey } from "./compare.mjs";
 import { fetchIssue, issueIdentifier, updateComment } from "./linear.mjs";
 import { createR2Client, evidenceBucketEnv } from "./r2.mjs";
 import {
@@ -30,7 +30,7 @@ import {
   replaceEvidenceSection,
   upsertPrComment,
 } from "./report.mjs";
-import { buildReviewPrompt, designExcerpt, issueContract, requestVerdict } from "./review.mjs";
+import { buildReviewPrompt, designExcerpt, requestVerdict, reviewContract } from "./review.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const FACTORY = JSON.parse(readFileSync(join(REPO_ROOT, "factory.config.json"), "utf8"));
@@ -83,11 +83,46 @@ async function findBefore() {
   return selectBefore({ ancestors, runs });
 }
 
-async function reviewDifferences(pairs, before, after, description) {
+const reasonOf = (error) => (error instanceof Error ? error.message : String(error));
+
+/**
+ * The PR's Linear issue, and whether it could be read. Linear being down must
+ * not turn a run whose flows passed into an error.
+ */
+async function readIssue(identifier, linearKey) {
+  if (!identifier) {
+    return { issue: null, issueRead: { status: "none" } };
+  }
+  if (!linearKey) {
+    return {
+      issue: null,
+      issueRead: { status: "unread", reason: "E2E_LINEAR_API_KEY is not set" },
+    };
+  }
+  try {
+    const issue = await fetchIssue(linearKey, identifier, FACTORY.agent.workpadHeading);
+    if (!issue?.description.trim()) {
+      const reason = issue ? `${identifier} has no description` : `${identifier} was not found`;
+      return { issue, issueRead: { status: "unread", reason } };
+    }
+    return { issue, issueRead: { status: "read", description: issue.description } };
+  } catch (error) {
+    return { issue: null, issueRead: { status: "unread", reason: reasonOf(error) } };
+  }
+}
+
+async function reviewDifferences(pairs, before, after, issueRead) {
   const reviews = new Map();
   const different = pairs.filter((pair) => pair.status !== "same");
   const model = env.E2E_REVIEW_MODEL?.trim() || "sonnet";
   if (different.length === 0) {
+    return reviews;
+  }
+  const { contract, unavailable } = reviewContract(issueRead);
+  if (unavailable) {
+    for (const pair of different) {
+      reviews.set(stepKey(pair.flow, pair.step), { error: unavailable });
+    }
     return reviews;
   }
   const sections = JSON.parse(
@@ -107,9 +142,7 @@ async function reviewDifferences(pairs, before, after, description) {
           flow: pair.flow,
           step: pair.step,
           status: pair.status,
-          contract: description
-            ? issueContract(description)
-            : "(no Linear issue found for this PR; treat every visible change as not asked for)",
+          contract,
           excerpt: designExcerpt(designSystem, [
             ...sections.always,
             ...(sections.flows[pair.flow] ?? []),
@@ -120,14 +153,14 @@ async function reviewDifferences(pairs, before, after, description) {
       });
       reviews.set(key, { verdict });
     } catch (error) {
-      reviews.set(key, { error: error instanceof Error ? error.message : String(error) });
+      reviews.set(key, { error: reasonOf(error) });
     }
   }
   return reviews;
 }
 
 const after = await loadScreenshots(sha);
-const flows = [...new Set([...after.keys()].map((key) => key.split("/")[0]))].sort();
+const flows = [...new Set([...after.keys()].map(flowOfKey))].sort();
 
 await r2.putObject(
   runRecordKey(sha),
@@ -149,14 +182,15 @@ if (isPullRequest) {
   const title = env.E2E_PR_TITLE ?? "";
   const identifier = issueIdentifier(title, FACTORY.linear.teamKey);
   const linearKey = env.E2E_LINEAR_API_KEY?.trim();
-  // Linear being down must not turn a run whose flows passed into an error.
-  const issue =
-    identifier && linearKey ? await fetchIssue(linearKey, identifier).catch(() => null) : null;
+  const { issue, issueRead } = await readIssue(identifier, linearKey);
+  if (issueRead.status === "unread") {
+    process.stdout.write(`issue not read: ${issueRead.reason}\n`);
+  }
 
   const beforeSha = await findBefore();
   const before = beforeSha ? await loadScreenshots(beforeSha) : new Map();
   const pairs = beforeSha ? compareRuns(before, after) : [];
-  const reviews = await reviewDifferences(pairs, before, after, issue?.description ?? null);
+  const reviews = await reviewDifferences(pairs, before, after, issueRead);
 
   const commentUrl = await upsertPrComment({
     repository: required("E2E_REPOSITORY"),
@@ -180,8 +214,13 @@ if (isPullRequest) {
       evidenceLines({ evidenceBaseUrl, afterSha: sha, flows, commentUrl }),
     );
     if (body) {
-      await updateComment(linearKey, issue.workpad.id, body);
-      process.stdout.write(`updated ${identifier} workpad evidence\n`);
+      // The run is already recorded and commented; a Linear failure here is reported, not fatal.
+      try {
+        await updateComment(linearKey, issue.workpad.id, body);
+        process.stdout.write(`updated ${identifier} workpad evidence\n`);
+      } catch (error) {
+        process.stdout.write(`workpad evidence not updated: ${reasonOf(error)}\n`);
+      }
     }
   }
 }

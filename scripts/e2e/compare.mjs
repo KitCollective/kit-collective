@@ -7,14 +7,17 @@ import { decodePng } from "./png.mjs";
 
 /**
  * A channel may drift this much (0-255) before a pixel counts as different.
- * Absorbs antialiasing and image-decode noise between two runs.
+ * Two runs of one build differ by nothing at all, so this only has to absorb
+ * rounding; a one-step change of a surface token is larger and must show.
  */
-const CHANNEL_TOLERANCE = 16;
+const CHANNEL_TOLERANCE = 3;
 
 /**
- * A step is `changed` when more than this share of the compared pixels differ.
+ * A step is `changed` when more than this many pixels differ. A count, not a
+ * share of the screen: an icon or a short label is a few hundred pixels on a
+ * three-million-pixel screenshot.
  */
-const MAX_DIFF_RATIO = 0.001;
+const MAX_DIFFERING_PIXELS = 24;
 
 /**
  * The top strip is the iOS status bar (clock, battery, signal). It is never app
@@ -33,6 +36,14 @@ export function stepKey(flow, step) {
 }
 
 /**
+ * The flow a step key belongs to.
+ * @param {string} key
+ */
+export function flowOfKey(key) {
+  return key.split(KEY_SEPARATOR)[0];
+}
+
+/**
  * @param {Buffer} beforePng
  * @param {Buffer} afterPng
  */
@@ -40,7 +51,7 @@ export function diffImages(beforePng, afterPng) {
   const before = decodePng(beforePng);
   const after = decodePng(afterPng);
   if (before.width !== after.width || before.height !== after.height) {
-    return { sizeMismatch: true, differingPixels: 0, comparedPixels: 0, ratio: 1 };
+    return { sizeMismatch: true, differingPixels: 0, comparedPixels: 0 };
   }
   const { width, height } = before;
   const firstRow = Math.round(height * IGNORE_TOP_RATIO);
@@ -59,7 +70,6 @@ export function diffImages(beforePng, afterPng) {
     sizeMismatch: false,
     differingPixels,
     comparedPixels,
-    ratio: comparedPixels === 0 ? 0 : differingPixels / comparedPixels,
   };
 }
 
@@ -87,7 +97,7 @@ export function compareRuns(before, after) {
       return { flow, step, status: "removed" };
     }
     const diff = diffImages(beforePng, afterPng);
-    const changed = diff.sizeMismatch || diff.ratio > MAX_DIFF_RATIO;
+    const changed = diff.sizeMismatch || diff.differingPixels > MAX_DIFFERING_PIXELS;
     return { flow, step, status: changed ? "changed" : "same" };
   });
 }

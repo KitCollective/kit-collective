@@ -3,10 +3,9 @@
  * judges against, and the `### Evidence` section of the issue's workpad.
  */
 const LINEAR_GRAPHQL_URL = "https://api.linear.app/graphql";
-const WORKPAD_HEADING = "## Agent Workpad";
 
 /**
- * The issue a PR belongs to, from its title or branch (`KIT-267: …`).
+ * The issue a PR belongs to, from its title (`KIT-267: …`).
  * @param {string} text
  * @param {string} teamKey
  */
@@ -33,9 +32,10 @@ async function linear(apiKey, query, variables) {
 /**
  * @param {string} apiKey
  * @param {string} identifier
+ * @param {string} workpadHeading `agent.workpadHeading` from factory.config.json
  * @returns {Promise<{ description: string, workpad: { id: string, body: string } | null } | null>}
  */
-export async function fetchIssue(apiKey, identifier) {
+export async function fetchIssue(apiKey, identifier, workpadHeading) {
   const data = await linear(
     apiKey,
     "query($id: String!) { issue(id: $id) { description comments(first: 100) { nodes { id body } } } }",
@@ -45,7 +45,7 @@ export async function fetchIssue(apiKey, identifier) {
     return null;
   }
   const workpad = data.issue.comments.nodes.find((comment) =>
-    comment.body.startsWith(WORKPAD_HEADING),
+    comment.body.startsWith(workpadHeading),
   );
   return { description: data.issue.description ?? "", workpad: workpad ?? null };
 }

@@ -1,16 +1,10 @@
+import { isProductionProcess } from "../config/production-process.js";
+
 /**
  * Where the device-flow test data may be written: a non-production lane, or
  * `local` for a disposable database on the machine that runs the flows.
  */
 const ALLOWED_TARGETS = ["staging", "development", "local"] as const;
-
-/**
- * A production process never touches device-flow test data or fixed Vision,
- * whatever its environment says, so a copied env block cannot open the lane.
- */
-export function isProductionProcess(nodeEnv: string | undefined): boolean {
-  return nodeEnv?.trim().toLowerCase() === "production";
-}
 
 export type TestDataGuardInput = {
   databaseUrl: string;

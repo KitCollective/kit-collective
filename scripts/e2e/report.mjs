@@ -2,6 +2,7 @@
  * The device-flow evidence a person reads (KIT-267): one PR comment, updated in
  * place, and the same links under `### Evidence` in the Linear workpad.
  */
+import { stepKey } from "./compare.mjs";
 import { isFinding } from "./review.mjs";
 
 export const COMMENT_MARKER = "<!-- kit-device-flows -->";
@@ -22,9 +23,6 @@ function cell(text) {
 }
 
 function verdictCell(review) {
-  if (!review) {
-    return "Not reviewed.";
-  }
   if (review.error) {
     return `Review unavailable: ${cell(review.error)}`;
   }
@@ -93,7 +91,7 @@ export function renderComment({
       for (const pair of different) {
         const before = pair.status === "new" ? "" : image(beforeSha, pair);
         const after = pair.status === "removed" ? "" : image(afterSha, pair);
-        const review = reviews.get(`${pair.flow}/${pair.step}`);
+        const review = reviews.get(stepKey(pair.flow, pair.step));
         lines.push(
           `| ${pair.flow} / ${pair.step} | ${pair.status} | ${before} | ${after} | ${verdictCell(review)} |`,
         );

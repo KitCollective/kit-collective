@@ -47,6 +47,14 @@ test("a per-channel wobble inside the tolerance is not a difference", () => {
   assert.equal(diffImages(a, b).differingPixels, 0);
 });
 
+test("a one-step tint of the whole screen is a difference on every compared pixel", () => {
+  // A surface token nudged from #F4F4F4 to #FFFFFF moves each channel by 11.
+  const a = image(100, 200, [244, 244, 244]);
+  const b = image(100, 200, [255, 255, 255]);
+  const result = diffImages(a, b);
+  assert.equal(result.differingPixels, result.comparedPixels);
+});
+
 test("a repainted block is counted, outside the ignored top strip only", () => {
   const a = image(100, 200, PAPER);
   // 10x10 block in the status-bar strip (ignored) and a 20x10 block in the body.
@@ -87,14 +95,21 @@ test("compareRuns marks same, changed, new and removed per flow step", () => {
   );
 });
 
-test("tolerance edge: at the ratio it is same, one pixel over it is changed", () => {
-  // 100x200 with a 15px ignored strip leaves 18500 compared pixels; 0.1% is 18.5.
+test("tolerance edge: at the pixel count it is same, one pixel over it is changed", () => {
   const base = image(100, 200, PAPER);
-  const at = image(100, 200, PAPER, [[0, 100, 18, 1, INK]]);
-  const over = image(100, 200, PAPER, [[0, 100, 19, 1, INK]]);
+  const at = image(100, 200, PAPER, [[0, 100, 24, 1, INK]]);
+  const over = image(100, 200, PAPER, [[0, 100, 25, 1, INK]]);
   const key = stepKey("f", "s");
   assert.equal(compareRuns(new Map([[key, base]]), new Map([[key, at]]))[0].status, "same");
   assert.equal(compareRuns(new Map([[key, base]]), new Map([[key, over]]))[0].status, "changed");
+});
+
+test("an icon-sized change on a full-size screenshot is changed", () => {
+  // 18x18 pt at 3x on a 1206x2622 screen: far below any share-of-screen threshold.
+  const key = stepKey("f", "s");
+  const before = new Map([[key, image(1206, 2622, PAPER)]]);
+  const after = new Map([[key, image(1206, 2622, PAPER, [[600, 1300, 54, 54, INK]])]]);
+  assert.equal(compareRuns(before, after)[0].status, "changed");
 });
 
 test("a size mismatch is changed", () => {

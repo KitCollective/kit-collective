@@ -21,7 +21,7 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 | Path | What |
 | --- | --- |
 | `apps/mobile/.maestro/flows/` | the five flows |
-| `apps/mobile/.maestro/subflows/sign-in.yaml` | reset, cold start, sign in |
+| `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (wait for a still screen), `reset-test-data.js` (the reset call) |
 | `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery |
 | `apps/mobile/.maestro/design-sections.json` | which `docs/design-system.md` sections the review reads per flow |
 | `apps/mobile/.maestro/*.sh` | local API, build, run, publish evidence |

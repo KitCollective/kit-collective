@@ -12,10 +12,10 @@ import {
 } from "@nestjs/common";
 import { OBJECT_STORE } from "../collection/collection.service.js";
 import type { ObjectStoreAdapter } from "../collection/object-store.js";
+import { isProductionProcess } from "../config/production-process.js";
 import { DB } from "../db/db.module.js";
 import { applyTestData } from "./test-data.js";
 import { readTestDataConfig, type TestDataConfig } from "./test-data-config.js";
-import { isProductionProcess } from "./test-data-guard.js";
 
 const MIN_TOKEN_LENGTH = 24;
 

@@ -1,6 +1,6 @@
 import type { Db } from "@kit/db";
+import { isProductionProcess } from "../config/production-process.js";
 import { TEST_COLLECTOR_ID } from "../e2e/test-data.fixture.js";
-import { isProductionProcess } from "../e2e/test-data-guard.js";
 import { CollectorScopedVisionAdapter } from "./collector-scoped-vision.adapter.js";
 import { FixedVisionAdapter } from "./fixed-vision.adapter.js";
 import { createGeminiVisionAdapter } from "./gemini-vision.adapter.js";

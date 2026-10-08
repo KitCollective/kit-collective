@@ -8,6 +8,7 @@ import {
   issueContract,
   parseVerdict,
   requestVerdict,
+  reviewContract,
 } from "../e2e/review.mjs";
 
 const ISSUE = `write-scope: apps/mobile/app/(tabs)/wishlist/**
@@ -92,7 +93,19 @@ test("the review prompt names both screenshots for a changed step and one for a 
   assert.match(added, /There is no "before"/);
 });
 
-test("the verdict comes from a headless Claude run that may only read the two screenshots", async () => {
+test("an issue that could not be read gives no contract, so nothing is called not asked for", () => {
+  assert.deepEqual(reviewContract({ status: "read", description: ISSUE }), {
+    contract: issueContract(ISSUE),
+  });
+  // A PR that names no issue is judged with nothing asked for.
+  assert.match(reviewContract({ status: "none" }).contract, /names no Linear issue/);
+  // An outage, a missing key or an empty issue is not "nothing was asked for".
+  const unread = reviewContract({ status: "unread", reason: "Linear answered HTTP 503" });
+  assert.equal(unread.contract, undefined);
+  assert.match(unread.unavailable, /could not be read.*HTTP 503/);
+});
+
+test("the verdict comes from a headless Claude run with the Read tool only, started beside the two screenshots", async () => {
   const calls = [];
   const verdict = await requestVerdict({
     prompt: "p",

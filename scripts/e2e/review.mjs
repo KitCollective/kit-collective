@@ -48,6 +48,26 @@ export function issueContract(description) {
 }
 
 /**
+ * What the reviewer judges a change against. A PR that names no issue is judged
+ * with nothing asked for. An issue that could not be read (no key, an outage,
+ * an empty body) is a different thing: there is no contract, and no step may be
+ * called "not asked for" on the strength of it.
+ * @param {{ status: "read", description: string } | { status: "none" } | { status: "unread", reason: string }} issue
+ * @returns {{ contract: string, unavailable?: undefined } | { unavailable: string, contract?: undefined }}
+ */
+export function reviewContract(issue) {
+  if (issue.status === "read") {
+    return { contract: issueContract(issue.description) };
+  }
+  if (issue.status === "none") {
+    return {
+      contract: "(this PR names no Linear issue; treat every visible change as not asked for)",
+    };
+  }
+  return { unavailable: `the Linear issue could not be read (${issue.reason})` };
+}
+
+/**
  * The named `##`/`###` sections of the design system, in document order.
  * @param {string} markdown
  * @param {string[]} headings

@@ -5,7 +5,7 @@
 # workpad links and the `Device flows` commit status.
 #
 #   apps/mobile/.maestro/local-api.sh     (terminal 1)
-#   apps/mobile/.maestro/build-local.sh   (when apps/mobile changed since the last build)
+#   apps/mobile/.maestro/build-local.sh   (when apps/mobile, packages or the lockfile changed)
 #   apps/mobile/.maestro/run-evidence.sh  (terminal 2)
 #
 # Settings (R2 account keys, E2E_R2_BUCKET, E2E_EVIDENCE_BASE_URL,
@@ -14,7 +14,9 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
-env_file="${E2E_ENV_FILE:-$(cd "$(git -C "$here" rev-parse --git-common-dir)/.." && pwd)/.env}"
+# The main checkout holds .env; a worktree gets no copy. The path is asked for as
+# absolute: in a main checkout git otherwise answers relative to $here, not to the caller.
+env_file="${E2E_ENV_FILE:-$(cd "$(git -C "$here" rev-parse --path-format=absolute --git-common-dir)/.." && pwd)/.env}"
 lane="$(node -p "require(process.argv[1]).lanes.integration" "$root/factory.config.json")"
 repository="$(node -p "require(process.argv[1]).github.ownerRepo" "$root/factory.config.json")"
 sha="$(git -C "$root" rev-parse HEAD)"
