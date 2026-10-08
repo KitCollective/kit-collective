@@ -10,6 +10,15 @@ Datamodel (stamdata-trøje vs bruger-trøje): `.scratch/Architecture/data-model.
 
 ---
 
+## Mission og vision
+
+**Mission:** Give seriøse samlere et ordentligt sted at registrere, overskue og
+genfinde deres samling.
+
+**Vision:** KitCollective er standardkataloget for fodboldtrøjer i Norden.
+
+---
+
 ## Sammenfatning
 
 KitCollective er samlerens katalog over fodboldtrøjer i Norden. Produktet løser
