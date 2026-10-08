@@ -59,6 +59,10 @@ name: first-session
 - inputText: ${MAESTRO_COLLECTOR_PASSWORD}
 - tapOn:
     id: door-submit
+# iOS offers to save the password in a system dialog, in the simulator's language.
+- tapOn:
+    text: "Ikke nu|Not Now"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: collection-add

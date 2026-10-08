@@ -23,6 +23,10 @@ export default function CaptureLoadingRoute() {
   const router = useRouter();
   const navigation = useNavigation<CaptureTransitionNavigation>();
   const reduceMotion = useReduceMotion();
+  // Reduce Motion resolves after mount. Read it through a ref: as an effect dependency its
+  // late change would cancel the scheduled picker, and the run-once guard would never reschedule.
+  const reduceMotionRef = useRef(reduceMotion);
+  reduceMotionRef.current = reduceMotion;
   const params = useLocalSearchParams<{
     prefilledClubId?: string;
     prefilledClubLabel?: string;
@@ -40,7 +44,8 @@ export default function CaptureLoadingRoute() {
 
     let active = true;
     const cleanup = startUploadCaptureWhenPresented({
-      scheduleWhenPresented: (run) => scheduleUploadWhenPresented(navigation, reduceMotion, run),
+      scheduleWhenPresented: (run) =>
+        scheduleUploadWhenPresented(navigation, reduceMotionRef.current, run),
       runPick: () =>
         runUploadCapture(expoUploadFilesAdapter, createPersistedCaptureSession, {
           prefilledClub,
@@ -66,7 +71,7 @@ export default function CaptureLoadingRoute() {
       active = false;
       cleanup();
     };
-  }, [navigation, prefilledClub, reduceMotion, router]);
+  }, [navigation, prefilledClub, router]);
 
   return <CaptureLoadingScreen caption={caption} />;
 }

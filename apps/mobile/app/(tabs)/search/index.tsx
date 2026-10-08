@@ -224,6 +224,7 @@ function SearchHome() {
                   <ListRow
                     key={club.clubId}
                     title={club.clubLabel}
+                    testID="typeahead-club-row"
                     onPress={() => openClubDrill(club)}
                   />
                 ))}

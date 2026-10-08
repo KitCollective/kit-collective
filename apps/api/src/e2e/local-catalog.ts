@@ -33,6 +33,14 @@ export async function insertLocalFixtureCatalog(db: Db): Promise<void> {
   const fixtureLeague = one(
     await db.insert(league).values({ countryId: denmark.id }).returning({ id: league.id }),
   );
+  await db.insert(catalogLabel).values({
+    entityType: "league",
+    entityId: fixtureLeague.id,
+    locale: "da",
+    kind: "label",
+    text: "Superligaen",
+    source: "seed",
+  });
   const seasonIds: string[] = [];
   for (const label of SEASON_LABELS) {
     const startYear = Number(label.slice(0, 4));

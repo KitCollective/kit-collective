@@ -10,6 +10,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # shellcheck source=local.env.sh
 source ./local.env.sh
+# shellcheck source=simulator.sh
+source ./simulator.sh
 
 export MAESTRO_API_URL="$E2E_API_URL"
 export MAESTRO_TEST_DATA_TOKEN="$E2E_TEST_DATA_TOKEN"
@@ -20,13 +22,12 @@ export MAESTRO_PEER_PASSWORD="$E2E_PEER_PASSWORD"
 
 # Reduce Motion stills the looping and entering animations, so a screenshot of
 # the same screen is the same picture every run.
-xcrun simctl spawn booted defaults write com.apple.Accessibility ReduceMotionEnabled -bool YES
-xcrun simctl status_bar booted override --time "9:41" --batteryState charged --batteryLevel 100
+xcrun simctl spawn "$E2E_SIMULATOR_UDID" defaults write com.apple.Accessibility ReduceMotionEnabled -bool YES
+xcrun simctl status_bar "$E2E_SIMULATOR_UDID" override --time "9:41" --batteryState charged --batteryLevel 100
 
 target="${1:-$PWD}"
 if [[ "$target" != /* ]]; then
   target="$PWD/$target"
 fi
 mkdir -p out
-cd out
-maestro test "$target"
+maestro --udid "$E2E_SIMULATOR_UDID" test --test-output-dir "$PWD/out" "$target"

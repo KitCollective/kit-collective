@@ -4,6 +4,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+# shellcheck source=simulator.sh
+source .maestro/simulator.sh
 
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 export EXPO_PUBLIC_API_URL="${E2E_API_URL:-http://localhost:3000}"
@@ -15,4 +17,4 @@ package_json="$(mktemp)"
 cp package.json "$package_json"
 trap 'cp "$package_json" package.json && rm -f "$package_json"' EXIT
 
-CI=1 npx expo run:ios --configuration Release --no-bundler --device "${E2E_SIMULATOR:-iPhone 17}"
+CI=1 npx expo run:ios --configuration Release --no-bundler --device "$E2E_SIMULATOR_UDID"

@@ -26,9 +26,7 @@ name: search-bid
     timeout: 5000
 - takeScreenshot: kc__search-bid__01-typeahead
 - tapOn:
-    text: OB
-    childOf:
-      id: typeahead-clubs
+    id: typeahead-club-row
 - extendedWaitUntil:
     visible:
       id: jersey-tile-e2e00000-0000-4000-8000-000000000105
@@ -51,12 +49,21 @@ name: search-bid
     visible:
       id: bid-amount
     timeout: 15000
-- tapOn:
-    id: bid-amount
-- inputText: "250"
+# The amount field starts underneath the floating tab bar; scroll it clear first,
+# or the tap lands on the Søg tab and pops the stack.
+- scroll
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__search-bid__04-send-bid
+- tapOn:
+    id: bid-amount
+- inputText: "250"
+# The number pad has no return key and covers the form; a tap on the photo dismisses it.
+- tapOn:
+    point: 50%,25%
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__search-bid__05-amount-entered
 - tapOn:
     id: bid-submit
 - extendedWaitUntil:
@@ -65,5 +72,5 @@ name: search-bid
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__search-bid__05-bid-sent
+- takeScreenshot: kc__search-bid__06-bid-sent
 - stopRecording
