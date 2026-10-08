@@ -37,7 +37,9 @@ Flows tap by `testID`, so a copy change does not break a flow. The exceptions, e
 - the app's own upload source sheet option `Fotos` (a system action sheet), by label;
 - the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo;
 - iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
-- Send bud: a tap on the photo, by screen point, to dismiss the number pad that covers the form (KIT-270). When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
+- Send bud: a tap on the photo, by screen point, to dismiss the number pad that covers the form (KIT-270).
+
+When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
 
 ## Run the flows
 
@@ -89,7 +91,7 @@ GitHub access is the `gh` login on the Mac. The review is a headless Claude Code
 
 R2 (Cloudflare dashboard, `kc-e2e-evidence`): public access through the r2.dev address, and one lifecycle rule that deletes objects after 30 days. The bucket holds test Collectors and drawn shirts only.
 
-GitHub: the `Device flows` status is not a required check today, and `development` has no branch protection. It blocks through the checker, which fails a mobile PR whose head has no green `Device flows` status (`.cursor/agents/checker.md`).
+GitHub: `development` has the `lane-development` ruleset (pull request required, `test` required). `Device flows` is not added to it, because a required status cannot be limited to PRs that touch `apps/mobile/**` and would block every other PR. It blocks through the checker, which fails a mobile PR whose head has no green `Device flows` status (`.cursor/agents/checker.md`).
 
 ## Outside the local API
 

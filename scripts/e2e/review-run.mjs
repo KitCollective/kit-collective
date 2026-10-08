@@ -149,7 +149,9 @@ if (isPullRequest) {
   const title = env.E2E_PR_TITLE ?? "";
   const identifier = issueIdentifier(title, FACTORY.linear.teamKey);
   const linearKey = env.E2E_LINEAR_API_KEY?.trim();
-  const issue = identifier && linearKey ? await fetchIssue(linearKey, identifier) : null;
+  // Linear being down must not turn a run whose flows passed into an error.
+  const issue =
+    identifier && linearKey ? await fetchIssue(linearKey, identifier).catch(() => null) : null;
 
   const beforeSha = await findBefore();
   const before = beforeSha ? await loadScreenshots(beforeSha) : new Map();
