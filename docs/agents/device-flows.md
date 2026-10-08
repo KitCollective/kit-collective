@@ -77,9 +77,9 @@ When a mobile slice lands, run it once on `development` (step 3), or the next PR
 | `E2E_R2_BUCKET` | `kc-e2e-evidence`. Required: evidence never goes to a lane bucket (`R2_BUCKET` is not used) |
 | `E2E_EVIDENCE_BASE_URL` | the bucket's public address plus `/e2e`, e.g. `https://pub-….r2.dev/e2e` |
 | `E2E_LINEAR_API_KEY` | reads the issue body, writes the workpad's `### Evidence` |
-| `E2E_REVIEW_API_KEY`, `E2E_REVIEW_MODEL` | OpenRouter key and a vision-capable model id for the review |
+| `E2E_REVIEW_MODEL` | optional: Claude Code model alias for the review (default `sonnet`) |
 
-GitHub access is the `gh` login on the Mac.
+GitHub access is the `gh` login on the Mac. The review is a headless Claude Code run (`claude -p`) on the Mac's Claude subscription, with the Read tool only and no settings or MCP servers; it needs the `claude` CLI signed in, and no API key.
 
 R2 (Cloudflare dashboard, `kc-e2e-evidence`): public access through the r2.dev address, and one lifecycle rule that deletes objects after 30 days. The bucket holds test Collectors and drawn shirts only.
 
@@ -97,6 +97,6 @@ A clean build takes several GB of disk (Xcode DerivedData) on top of a 16 GB sim
 
 ## Reading the result
 
-The `Device flows` status on the PR head is the flows: red means a flow failed, and that blocks. The comment lists only the steps whose screenshot differs from "before" (the latest passed `development` run at or before the merge base), each with before, after and a verdict: what changed, whether the issue asked for it, whether it breaks a named design-system rule, and an optional suggestion labelled as opinion. The verdict is advisory. With no review key set, the comment still shows the pairs and says the review is unavailable.
+The `Device flows` status on the PR head is the flows: red means a flow failed, and that blocks. The comment lists only the steps whose screenshot differs from "before" (the latest passed `development` run at or before the merge base), each with before, after and a verdict: what changed, whether the issue asked for it, whether it breaks a named design-system rule, and an optional suggestion labelled as opinion. The verdict is advisory. When the `claude` CLI is missing or not signed in, the comment still shows the pairs and says the review is unavailable.
 
 Two runs of one commit should compare as `same` on every step. A step that flaps is a flow bug (a missing wait, a loading state, data that is not reset): fix the flow or the test data, do not raise the tolerance.

@@ -11,7 +11,9 @@
  * Started by `apps/mobile/.maestro/run-evidence.sh`. Environment: E2E_SHA,
  * E2E_RUN_ORIGIN (`pr` | `integration`), E2E_FLOWS_STATUS, E2E_PR_NUMBER,
  * E2E_PR_TITLE, E2E_REPOSITORY, E2E_EVIDENCE_BASE_URL, E2E_GITHUB_TOKEN,
- * E2E_LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL, E2E_R2_BUCKET and the R2 account settings.
+ * E2E_LINEAR_API_KEY, E2E_R2_BUCKET, the R2 account settings and, optionally,
+ * E2E_REVIEW_MODEL (a Claude Code model alias, default `sonnet`). The review
+ * runs `claude -p` on the Mac's Claude subscription.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -28,7 +30,7 @@ import {
   replaceEvidenceSection,
   upsertPrComment,
 } from "./report.mjs";
-import { buildReviewMessages, designExcerpt, issueContract, requestVerdict } from "./review.mjs";
+import { buildReviewPrompt, designExcerpt, issueContract, requestVerdict } from "./review.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const FACTORY = JSON.parse(readFileSync(join(REPO_ROOT, "factory.config.json"), "utf8"));
@@ -84,8 +86,7 @@ async function findBefore() {
 async function reviewDifferences(pairs, before, after, description) {
   const reviews = new Map();
   const different = pairs.filter((pair) => pair.status !== "same");
-  const apiKey = env.E2E_REVIEW_API_KEY?.trim();
-  const model = env.E2E_REVIEW_MODEL?.trim();
+  const model = env.E2E_REVIEW_MODEL?.trim() || "sonnet";
   if (different.length === 0) {
     return reviews;
   }
@@ -95,15 +96,14 @@ async function reviewDifferences(pairs, before, after, description) {
   const designSystem = readFileSync(join(REPO_ROOT, "docs/design-system.md"), "utf8");
   for (const pair of different) {
     const key = stepKey(pair.flow, pair.step);
-    if (!apiKey || !model) {
-      reviews.set(key, { error: "E2E_REVIEW_API_KEY or E2E_REVIEW_MODEL is not set" });
-      continue;
-    }
     try {
+      const beforePng = before.get(key) ?? null;
+      const afterPng = after.get(key) ?? null;
       const verdict = await requestVerdict({
-        apiKey,
         model,
-        messages: buildReviewMessages({
+        beforePng,
+        afterPng,
+        prompt: buildReviewPrompt({
           flow: pair.flow,
           step: pair.step,
           status: pair.status,
@@ -114,8 +114,8 @@ async function reviewDifferences(pairs, before, after, description) {
             ...sections.always,
             ...(sections.flows[pair.flow] ?? []),
           ]),
-          beforePng: before.get(key) ?? null,
-          afterPng: after.get(key) ?? null,
+          hasBefore: beforePng !== null,
+          hasAfter: afterPng !== null,
         }),
       });
       reviews.set(key, { verdict });

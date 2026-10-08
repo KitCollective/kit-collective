@@ -3,9 +3,26 @@
  * before/after screenshot pair, the Linear issue's contract and the matching
  * part of `docs/design-system.md`. It flags; it never edits UI, and its
  * findings are advisory.
+ *
+ * The reviewer is a headless Claude Code run (`claude -p`) on the Mac's Claude
+ * subscription: no API key, no model provider of its own.
  */
+import { execFile } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
+const REVIEW_TIMEOUT_MS = 180_000;
+/** With one of these set, `claude` bills an API account instead of the subscription. */
+const API_BILLING_ENV = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"];
+
+function subscriptionEnv(env) {
+  const kept = { ...env };
+  for (const name of API_BILLING_ENV) {
+    delete kept[name];
+  }
+  return kept;
+}
 const ASKED_FOR = ["yes", "no", "unclear"];
 
 /**
@@ -69,41 +86,26 @@ Answer with one JSON object and nothing else:
 A suggestion is your opinion, not a rule. Do not propose code.`;
 
 /**
+ * The whole request as one prompt. The screenshots are files next to the run
+ * (`before.png`, `after.png`), which the reviewer reads itself.
  * @param {{
  *   flow: string, step: string, status: "changed" | "new" | "removed",
- *   contract: string, excerpt: string,
- *   beforePng: Buffer | null, afterPng: Buffer | null,
+ *   contract: string, excerpt: string, hasBefore: boolean, hasAfter: boolean,
  * }} input
  */
-export function buildReviewMessages({
-  flow,
-  step,
-  status,
-  contract,
-  excerpt,
-  beforePng,
-  afterPng,
-}) {
-  const image = (png) => ({
-    type: "image_url",
-    image_url: { url: `data:image/png;base64,${png.toString("base64")}` },
-  });
-  const content = [
-    {
-      type: "text",
-      text: `Flow: ${flow}\nStep: ${step}\nComparison: ${status}\n\n# Issue contract\n\n${contract}\n\n# Design system (excerpt)\n\n${excerpt || "(no matching section)"}`,
-    },
-  ];
-  if (beforePng) {
-    content.push({ type: "text", text: "Before:" }, image(beforePng));
-  }
-  if (afterPng) {
-    content.push({ type: "text", text: "After:" }, image(afterPng));
-  }
+export function buildReviewPrompt({ flow, step, status, contract, excerpt, hasBefore, hasAfter }) {
+  const image = (name, present) =>
+    present
+      ? `Read the image file ${name}.png in the current directory: it is the screen ${name} the change.`
+      : `There is no "${name}" screenshot for this step.`;
   return [
-    { role: "system", content: INSTRUCTIONS },
-    { role: "user", content },
-  ];
+    INSTRUCTIONS,
+    `Flow: ${flow}\nStep: ${step}\nComparison: ${status}`,
+    image("before", hasBefore),
+    image("after", hasAfter),
+    `# Issue contract\n\n${contract}`,
+    `# Design system (excerpt)\n\n${excerpt || "(no matching section)"}`,
+  ].join("\n\n");
 }
 
 /**
@@ -150,19 +152,53 @@ export function isFinding(verdict) {
   return verdict.askedFor === "no" || verdict.designLock.breaks;
 }
 
+function runCommand(command, args, options) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout) => {
+      // A failed run still prints its JSON result; without one, the error stands.
+      if (error && !stdout) {
+        reject(error);
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+}
+
 /**
- * @param {{ apiKey: string, model: string, messages: unknown[] }} input
+ * One headless Claude Code run in an empty directory holding only the two
+ * screenshots. It gets the Read tool and nothing else: no settings, no MCP
+ * servers, no session kept.
+ * @param {{
+ *   prompt: string, beforePng: Buffer | null, afterPng: Buffer | null, model: string,
+ *   run?: (command: string, args: string[], options: object) => Promise<string>,
+ * }} input
  * @returns {Promise<Verdict>}
  */
-export async function requestVerdict({ apiKey, model, messages }) {
-  const response = await fetch(OPENROUTER_CHAT_URL, {
-    method: "POST",
-    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-    body: JSON.stringify({ model, messages, temperature: 0, max_tokens: 700 }),
-  });
-  if (!response.ok) {
-    throw new Error(`The review model answered HTTP ${response.status}`);
+export async function requestVerdict({ prompt, beforePng, afterPng, model, run = runCommand }) {
+  const cwd = mkdtempSync(join(tmpdir(), "kc-device-flow-review-"));
+  try {
+    if (beforePng) {
+      writeFileSync(join(cwd, "before.png"), beforePng);
+    }
+    if (afterPng) {
+      writeFileSync(join(cwd, "after.png"), afterPng);
+    }
+    const args = ["-p", prompt, "--model", model, "--tools", "Read", "--allowedTools", "Read"];
+    args.push("--setting-sources", "", "--strict-mcp-config", "--no-session-persistence");
+    args.push("--output-format", "json");
+    const stdout = await run("claude", args, {
+      cwd,
+      env: subscriptionEnv(process.env),
+      timeout: REVIEW_TIMEOUT_MS,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    const reply = JSON.parse(stdout);
+    if (reply.is_error) {
+      throw new Error(`The Claude review run failed: ${String(reply.result ?? "no message")}`);
+    }
+    return parseVerdict(String(reply.result ?? ""));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
   }
-  const body = await response.json();
-  return parseVerdict(String(body.choices?.[0]?.message?.content ?? ""));
 }
