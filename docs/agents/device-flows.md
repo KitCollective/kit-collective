@@ -76,7 +76,7 @@ When a mobile slice lands, run it once on `development` (step 3), or the next PR
 | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | the R2 account, as the API names them; the key must have read and write on the evidence bucket |
 | `E2E_R2_BUCKET` | `kc-e2e-evidence`. Required: evidence never goes to a lane bucket (`R2_BUCKET` is not used) |
 | `E2E_EVIDENCE_BASE_URL` | the bucket's public address plus `/e2e`, e.g. `https://pub-….r2.dev/e2e` |
-| `LINEAR_API_KEY` | reads the issue body, writes the workpad's `### Evidence` |
+| `E2E_LINEAR_API_KEY` | reads the issue body, writes the workpad's `### Evidence` |
 | `E2E_REVIEW_API_KEY`, `E2E_REVIEW_MODEL` | OpenRouter key and a vision-capable model id for the review |
 
 GitHub access is the `gh` login on the Mac.

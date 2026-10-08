@@ -11,7 +11,7 @@
  * Started by `apps/mobile/.maestro/run-evidence.sh`. Environment: E2E_SHA,
  * E2E_RUN_ORIGIN (`pr` | `integration`), E2E_FLOWS_STATUS, E2E_PR_NUMBER,
  * E2E_PR_TITLE, E2E_REPOSITORY, E2E_EVIDENCE_BASE_URL, E2E_GITHUB_TOKEN,
- * LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL, E2E_R2_BUCKET and the R2 account settings.
+ * E2E_LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL, E2E_R2_BUCKET and the R2 account settings.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -148,7 +148,7 @@ if (isPullRequest) {
   const evidenceBaseUrl = required("E2E_EVIDENCE_BASE_URL");
   const title = env.E2E_PR_TITLE ?? "";
   const identifier = issueIdentifier(title, FACTORY.linear.teamKey);
-  const linearKey = env.LINEAR_API_KEY?.trim();
+  const linearKey = env.E2E_LINEAR_API_KEY?.trim();
   const issue = identifier && linearKey ? await fetchIssue(linearKey, identifier) : null;
 
   const beforeSha = await findBefore();

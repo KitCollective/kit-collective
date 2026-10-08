@@ -9,7 +9,7 @@
 #   apps/mobile/.maestro/run-evidence.sh  (terminal 2)
 #
 # Settings (R2 account keys, E2E_R2_BUCKET, E2E_EVIDENCE_BASE_URL,
-# LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL) are read from the main checkout's .env, or from E2E_ENV_FILE.
+# E2E_LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL) are read from the main checkout's .env, or from E2E_ENV_FILE.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
