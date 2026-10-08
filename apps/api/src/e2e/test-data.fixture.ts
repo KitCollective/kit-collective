@@ -7,7 +7,7 @@ import type { JerseyCondition, JerseySize, KitType, PhotoRole } from "@kit/domai
 export const TEST_COLLECTOR_ID = "e2e00000-0000-4000-8000-000000000001";
 export const TEST_PEER_ID = "e2e00000-0000-4000-8000-000000000002";
 
-export const TEST_COLLECTOR_HANDLE = "e2e_samler";
+export const TEST_COLLECTOR_HANDLE = "e2e_collector";
 export const TEST_PEER_HANDLE = "e2e_peer";
 
 /** Catalog sides the fixture needs, matched on a `catalog_label` label or alias. */

@@ -7,19 +7,19 @@ import {
   replaceEvidenceSection,
 } from "../e2e/report.mjs";
 
-const BASE = "https://api.staging.example/v1/e2e/evidence/";
+const BASE = "https://evidence.example/e2e/";
 const AFTER = "aaaaaaa111111111111111111111111111111111";
 const BEFORE = "bbbbbbb222222222222222222222222222222222";
 
 const pairs = [
-  { flow: "collection", step: "01-samling", status: "same", ratio: 0 },
-  { flow: "collection", step: "02-genvej-filter", status: "changed", ratio: 0.2 },
+  { flow: "collection", step: "01-collection", status: "same", ratio: 0 },
+  { flow: "collection", step: "02-shortcut-filter", status: "changed", ratio: 0.2 },
   { flow: "wishlist-paywall", step: "03-extra", status: "new", ratio: null },
 ];
 
 const reviews = new Map([
   [
-    "collection/02-genvej-filter",
+    "collection/02-shortcut-filter",
     {
       verdict: {
         whatChanged: "The chip row is taller | and darker.",
@@ -47,11 +47,11 @@ test("the comment lists exactly the steps that differ, with before, after and ve
   assert.ok(body.startsWith(COMMENT_MARKER));
   assert.equal(rows.length, 2);
   assert.match(body, /2 steps differ, 1 unchanged/);
-  assert.ok(!body.includes("01-samling"));
+  assert.ok(!body.includes("01-collection"));
   assert.match(
     rows[0],
     new RegExp(
-      `^\\| collection / 02-genvej-filter \\| changed \\| <a href="https://api.staging.example/v1/e2e/evidence/${BEFORE}/collection/02-genvej-filter.png">.*${AFTER}/collection/02-genvej-filter.png`,
+      `^\\| collection / 02-shortcut-filter \\| changed \\| <a href="https://evidence.example/e2e/${BEFORE}/collection/02-shortcut-filter.png">.*${AFTER}/collection/02-shortcut-filter.png`,
     ),
   );
   assert.match(
@@ -65,7 +65,7 @@ test("the comment lists exactly the steps that differ, with before, after and ve
   assert.match(rows[1], /Review unavailable: The review model answered HTTP 500/);
   assert.match(
     body,
-    /\[collection\]\(https:\/\/api\.staging\.example\/v1\/e2e\/evidence\/a{7}1{33}\/collection\/video\.mp4\)/,
+    /\[collection\]\(https:\/\/evidence\.example\/e2e\/a{7}1{33}\/collection\/video\.mp4\)/,
   );
 });
 
@@ -93,7 +93,7 @@ test("workpad evidence lines link every recording and the PR comment", () => {
       commentUrl: "https://github.com/o/r/pull/1#issuecomment-2",
     }),
     [
-      `- Device flow collection (\`aaaaaaa\`): [recording](https://api.staging.example/v1/e2e/evidence/${AFTER}/collection/video.mp4)`,
+      `- Device flow collection (\`aaaaaaa\`): [recording](https://evidence.example/e2e/${AFTER}/collection/video.mp4)`,
       "- Before/after comparison: [PR comment](https://github.com/o/r/pull/1#issuecomment-2)",
     ],
   );

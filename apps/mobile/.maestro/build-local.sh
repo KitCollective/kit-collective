@@ -6,6 +6,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=simulator.sh
 source .maestro/simulator.sh
+# shellcheck source=source-stamp.sh
+source .maestro/source-stamp.sh
+refuse_uncommitted "${app_sources[@]}"
 
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 export EXPO_PUBLIC_API_URL="${E2E_API_URL:-http://localhost:3000}"
@@ -18,3 +21,5 @@ cp package.json "$package_json"
 trap 'cp "$package_json" package.json && rm -f "$package_json"' EXIT
 
 CI=1 npx expo run:ios --configuration Release --no-bundler --device "$E2E_SIMULATOR_UDID"
+mkdir -p "$stamp_dir"
+source_stamp "${app_sources[@]}" > "$stamp_dir/app-$E2E_SIMULATOR_UDID"

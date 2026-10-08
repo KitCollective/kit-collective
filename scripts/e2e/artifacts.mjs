@@ -2,7 +2,7 @@
  * Names and R2 keys for device-flow evidence (KIT-267).
  *
  * A flow writes `kc__<flow>__<step>.png` per screenshot and `kc__<flow>.mp4`
- * per recording. In lane R2 they live at `e2e/<sha>/<flow>/<step>.png` and
+ * per recording. In the evidence bucket they live at `e2e/<sha>/<flow>/<step>.png` and
  * `e2e/<sha>/<flow>/video.mp4`, next to `e2e/<sha>/run.json`.
  */
 import { readdirSync, statSync } from "node:fs";

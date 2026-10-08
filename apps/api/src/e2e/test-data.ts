@@ -298,5 +298,3 @@ export async function applyTestData(input: {
     }
   }
 }
-
-export { type ResolvedSide, resolveCatalogSide } from "./catalog-side.js";

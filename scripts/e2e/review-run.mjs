@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * After a device-flow run (KIT-267): records the run in lane R2, and for a PR
+ * After a device-flow run (KIT-267): records the run in the evidence bucket, and for a PR
  * compares it with the latest passed `development` run at or before the merge
  * base, reviews the steps that differ, and writes the evidence to the PR and
  * the Linear workpad.
@@ -9,9 +9,9 @@
  * fails over a design finding: findings are advisory.
  *
  * Started by `apps/mobile/.maestro/run-evidence.sh`. Environment: E2E_SHA,
- * E2E_EVENT (`pull_request` | `push`), E2E_FLOWS_STATUS, E2E_PR_NUMBER,
+ * E2E_RUN_ORIGIN (`pr` | `integration`), E2E_FLOWS_STATUS, E2E_PR_NUMBER,
  * E2E_PR_TITLE, E2E_REPOSITORY, E2E_EVIDENCE_BASE_URL, E2E_GITHUB_TOKEN,
- * LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL and the lane R2 settings.
+ * LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL, E2E_R2_BUCKET and the R2 account settings.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -45,7 +45,7 @@ const required = (name) => {
 const git = (...args) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" }).trim();
 
 const sha = required("E2E_SHA");
-const isPullRequest = required("E2E_EVENT") === "pull_request";
+const isPullRequest = required("E2E_RUN_ORIGIN") === "pr";
 const flowsStatus = required("E2E_FLOWS_STATUS");
 const r2 = createR2Client(evidenceBucketEnv(env));
 
@@ -134,7 +134,7 @@ await r2.putObject(
   Buffer.from(
     JSON.stringify({
       sha,
-      lane: isPullRequest ? "pr" : "development",
+      origin: isPullRequest ? "pr" : "integration",
       status: flowsStatus === "success" ? "passed" : "failed",
       flows,
       createdAt: new Date().toISOString(),

@@ -78,5 +78,5 @@ name: add-jersey
 # bar has not always noticed the content beneath it, and draws itself two ways.
 - scroll
 - runFlow: ../subflows/settle.yaml
-- takeScreenshot: kc__add-jersey__06-samling
+- takeScreenshot: kc__add-jersey__06-collection
 - stopRecording

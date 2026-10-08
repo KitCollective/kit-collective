@@ -37,8 +37,8 @@ test("other files are not evidence", () => {
 
 test("evidence is keyed by commit, flow and step", () => {
   assert.equal(
-    artifactKey(SHA, { flow: "collection", step: "01-samling", kind: "screenshot" }),
-    `e2e/${SHA}/collection/01-samling.png`,
+    artifactKey(SHA, { flow: "collection", step: "01-collection", kind: "screenshot" }),
+    `e2e/${SHA}/collection/01-collection.png`,
   );
   assert.equal(
     artifactKey(SHA, { flow: "collection", step: null, kind: "video" }),
@@ -48,13 +48,13 @@ test("evidence is keyed by commit, flow and step", () => {
 });
 
 test("a screenshot key maps back to flow and step; other keys do not", () => {
-  assert.deepEqual(screenshotFromKey(SHA, `e2e/${SHA}/collection/01-samling.png`), {
+  assert.deepEqual(screenshotFromKey(SHA, `e2e/${SHA}/collection/01-collection.png`), {
     flow: "collection",
-    step: "01-samling",
+    step: "01-collection",
   });
   assert.equal(screenshotFromKey(SHA, `e2e/${SHA}/collection/video.mp4`), null);
   assert.equal(screenshotFromKey(SHA, `e2e/${SHA}/run.json`), null);
-  assert.equal(screenshotFromKey(SHA, "e2e/other/collection/01-samling.png"), null);
+  assert.equal(screenshotFromKey(SHA, "e2e/other/collection/01-collection.png"), null);
 });
 
 test("findArtifacts walks the roots and keeps the newest copy of a retried step", () => {
@@ -62,8 +62,8 @@ test("findArtifacts walks the roots and keeps the newest copy of a retried step"
   mkdirSync(join(root, "first", "nested"), { recursive: true });
   mkdirSync(join(root, "retry"));
   mkdirSync(join(root, "node_modules"));
-  const old = join(root, "first", "nested", "kc__collection__01-samling.png");
-  const fresh = join(root, "retry", "kc__collection__01-samling.png");
+  const old = join(root, "first", "nested", "kc__collection__01-collection.png");
+  const fresh = join(root, "retry", "kc__collection__01-collection.png");
   writeFileSync(old, "old");
   writeFileSync(fresh, "fresh");
   utimesSync(old, new Date(1_000_000), new Date(1_000_000));
@@ -77,7 +77,7 @@ test("findArtifacts walks the roots and keeps the newest copy of a retried step"
     artifacts.map((artifact) => [artifact.kind, artifact.flow, artifact.step, artifact.path]),
     [
       ["video", "collection", null, join(root, "first", "kc__collection.mp4")],
-      ["screenshot", "collection", "01-samling", fresh],
+      ["screenshot", "collection", "01-collection", fresh],
     ],
   );
 });

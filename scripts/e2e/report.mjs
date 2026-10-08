@@ -8,7 +8,7 @@ export const COMMENT_MARKER = "<!-- kit-device-flows -->";
 const THUMBNAIL_WIDTH = 220;
 
 /**
- * @param {string} baseUrl public evidence base, e.g. `https://api.example/v1/e2e/evidence`
+ * @param {string} baseUrl public evidence base, e.g. `https://pub-xxxx.r2.dev/e2e`
  * @param {string} sha
  * @param {string} flow
  * @param {string} file `<step>.png` or `video.mp4`
@@ -69,7 +69,7 @@ export function renderComment({
   lines.push(
     flowsStatus === "success"
       ? "All flows passed on the iOS Simulator."
-      : `**Flows did not pass (${flowsStatus}).** A red flow blocks; see the check for the failing step.`,
+      : `**Flows did not pass (${flowsStatus}).** A red flow blocks; the recordings below show where each flow stopped.`,
   );
   lines.push("");
   if (!beforeSha) {

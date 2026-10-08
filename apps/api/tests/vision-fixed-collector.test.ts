@@ -13,8 +13,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { createMemoryObjectStore } from "../dist/collection/object-store.js";
 import { DB } from "../dist/db/db.module.js";
+import { resolveCatalogSide } from "../dist/e2e/catalog-side.js";
 import { FIXED_VISION_SUGGESTION, TEST_COLLECTOR_ID } from "../dist/e2e/test-data.fixture.js";
-import { applyTestData, resolveCatalogSide } from "../dist/e2e/test-data.js";
+import { applyTestData } from "../dist/e2e/test-data.js";
 import { CollectorScopedVisionAdapter } from "../dist/vision/collector-scoped-vision.adapter.js";
 import { createVisionAdapter } from "../dist/vision/create-vision.adapter.js";
 import { FixedVisionAdapter } from "../dist/vision/fixed-vision.adapter.js";
@@ -161,6 +162,16 @@ describe("Vision adapter selection", () => {
 
   it("is the live adapter alone unless fixed Vision is switched on", () => {
     delete process.env.VISION_FIXED_FOR_TEST_COLLECTOR;
+    delete process.env.OPENROUTER_VISION_API_KEY;
+    delete process.env.GEMINI_API_KEY;
+    const { db, pool } = createDb(DATABASE_URL);
+    expect(createVisionAdapter(db)).toBeInstanceOf(NoopVisionAdapter);
+    void pool.end();
+  });
+
+  it("stays the live adapter on a production process even when switched on", () => {
+    process.env.VISION_FIXED_FOR_TEST_COLLECTOR = "on";
+    process.env.NODE_ENV = "production";
     delete process.env.OPENROUTER_VISION_API_KEY;
     delete process.env.GEMINI_API_KEY;
     const { db, pool } = createDb(DATABASE_URL);

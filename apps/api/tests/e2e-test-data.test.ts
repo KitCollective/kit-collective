@@ -335,23 +335,23 @@ describe("device-flow test data", () => {
 describe("device-flow test data database guard", () => {
   const staging = "postgresql://kit:secret@203.0.113.7:5432/kitcollective?sslmode=require";
 
-  it("refuses when no lane is declared", () => {
+  it("refuses when no target is declared", () => {
     expect(() => assertTestDataDatabaseAllowed({ databaseUrl: staging })).toThrow(
-      /E2E_TEST_DATA_LANE/,
+      /E2E_TEST_DATA_TARGET/,
     );
   });
 
-  it("refuses the production lane", () => {
+  it("refuses production as the target", () => {
     expect(() =>
-      assertTestDataDatabaseAllowed({ databaseUrl: staging, lane: "production" }),
+      assertTestDataDatabaseAllowed({ databaseUrl: staging, target: "production" }),
     ).toThrow(/production/);
   });
 
-  it("refuses a URL that is the production database, whatever lane is declared", () => {
+  it("refuses a URL that is the production database, whatever target is declared", () => {
     expect(() =>
       assertTestDataDatabaseAllowed({
         databaseUrl: staging,
-        lane: "staging",
+        target: "staging",
         productionDatabaseUrl: "postgres://other:pw@203.0.113.7:5432/kitcollective",
       }),
     ).toThrow(/production/);
@@ -362,22 +362,32 @@ describe("device-flow test data database guard", () => {
       "postgresql://kit:pw@db.production.internal:5432/kitcollective?sslmode=require",
       "postgresql://kit:pw@203.0.113.9:5432/kc_prod?sslmode=require",
     ]) {
-      expect(() => assertTestDataDatabaseAllowed({ databaseUrl, lane: "staging" })).toThrow(
+      expect(() => assertTestDataDatabaseAllowed({ databaseUrl, target: "staging" })).toThrow(
         /production/,
       );
     }
+  });
+
+  it("refuses on a production process, whatever target is declared", () => {
+    expect(() =>
+      assertTestDataDatabaseAllowed({
+        databaseUrl: staging,
+        target: "staging",
+        nodeEnv: "production",
+      }),
+    ).toThrow(/production/);
   });
 
   it("allows staging, and a local test database", () => {
     expect(() =>
       assertTestDataDatabaseAllowed({
         databaseUrl: staging,
-        lane: "staging",
+        target: "staging",
         productionDatabaseUrl: "postgresql://kit:pw@203.0.113.99:5432/kitcollective",
       }),
     ).not.toThrow();
     expect(() =>
-      assertTestDataDatabaseAllowed({ databaseUrl: DATABASE_URL, lane: "test" }),
+      assertTestDataDatabaseAllowed({ databaseUrl: DATABASE_URL, target: "local" }),
     ).not.toThrow();
   });
 });

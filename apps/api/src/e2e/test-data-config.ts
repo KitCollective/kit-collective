@@ -25,7 +25,8 @@ export function readTestDataConfig(env: NodeJS.ProcessEnv): TestDataConfig {
   }
   assertTestDataDatabaseAllowed({
     databaseUrl,
-    lane: env.E2E_TEST_DATA_LANE,
+    target: env.E2E_TEST_DATA_TARGET,
+    nodeEnv: env.NODE_ENV,
     productionDatabaseUrl: env.PRODUCTION_DATABASE_URL?.trim() || undefined,
   });
   const missing = CREDENTIAL_ENV.filter((name) => !env[name]?.trim());

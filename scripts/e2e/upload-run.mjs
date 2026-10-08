@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Uploads a device-flow run's screenshots and recordings to lane R2 (KIT-267).
+ * Uploads a device-flow run's screenshots and recordings to the evidence bucket (KIT-267).
  * Runs right after the flows, pass or fail.
  *
  *   node scripts/e2e/upload-run.mjs <sha> <directory> [<directory> ...]

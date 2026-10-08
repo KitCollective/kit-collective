@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { selectBefore } from "../e2e/before.mjs";
 
-const passed = (sha) => ({ sha, lane: "development", status: "passed" });
+const passed = (sha) => ({ sha, origin: "integration", status: "passed" });
 
 test("before is the merge base when it has a passed development run", () => {
   const before = selectBefore({
@@ -24,8 +24,8 @@ test("a failed run, a PR run or a run after the merge base is never before", () 
   const before = selectBefore({
     ancestors: ["c3", "c2", "c1"],
     runs: [
-      { sha: "c3", lane: "development", status: "failed" },
-      { sha: "c2", lane: "pr", status: "passed" },
+      { sha: "c3", origin: "integration", status: "failed" },
+      { sha: "c2", origin: "pr", status: "passed" },
       passed("c9"),
       passed("c1"),
     ],

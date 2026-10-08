@@ -226,7 +226,6 @@ export default function ConfirmScreen() {
         <View style={styles.sectionPair}>
           <ConfirmSectionRow
             title="Data"
-            testID="confirm-section-data"
             facts={dataSectionFacts(draft)}
             filled={dataRequiredFilledCount(draft)}
             required={DATA_REQUIRED_COUNT}

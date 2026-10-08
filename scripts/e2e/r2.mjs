@@ -1,5 +1,5 @@
 /**
- * Lane R2 access for device-flow evidence (KIT-267): S3 Signature Version 4
+ * R2 access for device-flow evidence (KIT-267): S3 Signature Version 4
  * over fetch. Dependency-free so it runs from any checkout with plain `node`.
  */
 import { createHash, createHmac } from "node:crypto";
@@ -108,7 +108,7 @@ export function evidenceBucketEnv(env) {
 export function createR2Client(env) {
   const missing = R2_ENV.filter((name) => !env[name]?.trim());
   if (missing.length > 0) {
-    throw new Error(`Missing lane R2 settings: ${missing.join(", ")}`);
+    throw new Error(`Missing R2 settings: ${missing.join(", ")}`);
   }
   const endpoint = new URL(env.R2_ENDPOINT.trim());
   const bucket = env.R2_BUCKET.trim();

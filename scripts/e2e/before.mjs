@@ -1,7 +1,7 @@
 /**
  * "Before" selection for the device-flow comparison (KIT-267).
  *
- * @typedef {{ sha: string, lane: "development" | "pr", status: "passed" | "failed" }} RunRecord
+ * @typedef {{ sha: string, origin: "integration" | "pr", status: "passed" | "failed" }} RunRecord
  */
 
 /**
@@ -15,7 +15,7 @@
 export function selectBefore({ ancestors, runs }) {
   const usable = new Set(
     runs
-      .filter((run) => run.lane === "development" && run.status === "passed")
+      .filter((run) => run.origin === "integration" && run.status === "passed")
       .map((run) => run.sha),
   );
   return ancestors.find((sha) => usable.has(sha)) ?? null;

@@ -75,7 +75,7 @@ test("the design excerpt is the named sections with their sub-headings", () => {
 });
 
 test("the review request carries both images for a changed step and one for a new step", () => {
-  const base = { flow: "collection", step: "01-samling", contract: "c", excerpt: "e" };
+  const base = { flow: "collection", step: "01-collection", contract: "c", excerpt: "e" };
   const images = (messages) => messages[1].content.filter((part) => part.type === "image_url");
   const changed = buildReviewMessages({
     ...base,

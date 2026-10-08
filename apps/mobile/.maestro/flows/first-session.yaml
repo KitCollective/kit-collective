@@ -69,5 +69,5 @@ name: first-session
     timeout: 90000
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__first-session__07-samling
+- takeScreenshot: kc__first-session__07-collection
 - stopRecording

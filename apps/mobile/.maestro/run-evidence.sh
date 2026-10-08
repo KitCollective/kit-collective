@@ -1,26 +1,35 @@
 #!/usr/bin/env bash
 # Runs the device flows for the current commit on this Mac and publishes the
-# evidence (KIT-267, ADR-0048): screenshots and recordings to lane R2, and for a
-# PR the before/after comparison, the review, the PR comment, the Linear
+# evidence (KIT-267, ADR-0048): screenshots and recordings to the evidence
+# bucket, and for a PR the before/after comparison, the review, the PR comment, the Linear
 # workpad links and the `Device flows` commit status.
 #
 #   apps/mobile/.maestro/local-api.sh     (terminal 1)
 #   apps/mobile/.maestro/build-local.sh   (when apps/mobile changed since the last build)
 #   apps/mobile/.maestro/run-evidence.sh  (terminal 2)
 #
-# Lane settings (R2_*, E2E_EVIDENCE_BASE_URL, LINEAR_API_KEY, E2E_REVIEW_API_KEY,
-# E2E_REVIEW_MODEL) are read from the main checkout's .env, or from E2E_ENV_FILE.
+# Settings (R2 account keys, E2E_R2_BUCKET, E2E_EVIDENCE_BASE_URL,
+# LINEAR_API_KEY, E2E_REVIEW_API_KEY, E2E_REVIEW_MODEL) are read from the main checkout's .env, or from E2E_ENV_FILE.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(git -C "$here" rev-parse --show-toplevel)"
 env_file="${E2E_ENV_FILE:-$(cd "$(git -C "$here" rev-parse --git-common-dir)/.." && pwd)/.env}"
-lane="$(node -p "require('$root/factory.config.json').lanes.integration")"
-repository="$(node -p "require('$root/factory.config.json').github.ownerRepo")"
+lane="$(node -p "require(process.argv[1]).lanes.integration" "$root/factory.config.json")"
+repository="$(node -p "require(process.argv[1]).github.ownerRepo" "$root/factory.config.json")"
 sha="$(git -C "$root" rev-parse HEAD)"
 
-if [[ -n "$(git -C "$root" status --porcelain -- apps/mobile apps/api packages)" ]]; then
-  echo "Uncommitted changes under apps/ or packages/: evidence is keyed by commit, so commit first." >&2
+# shellcheck source=source-stamp.sh
+source "$here/source-stamp.sh"
+# shellcheck source=simulator.sh
+source "$here/simulator.sh"
+refuse_uncommitted "${app_sources[@]}" "${api_sources[@]}"
+if [[ "$(cat "$stamp_dir/app-$E2E_SIMULATOR_UDID" 2>/dev/null)" != "$(source_stamp "${app_sources[@]}")" ]]; then
+  echo "The app on the simulator was not built from $sha: run build-local.sh first." >&2
+  exit 2
+fi
+if [[ "$(cat "$stamp_dir/api" 2>/dev/null)" != "$(source_stamp "${api_sources[@]}")" ]]; then
+  echo "The local API was not started from $sha: restart local-api.sh first." >&2
   exit 2
 fi
 
@@ -31,30 +40,34 @@ status() {
 rm -rf "$here/out"
 status pending "Running on the iOS Simulator"
 # A run that stops before its verdict must not leave the status pending.
-trap 'code=$?; [[ $code -eq 0 || $code -eq 1 ]] || status error "Evidence run stopped before a verdict"' EXIT
+verdict_written=no
+trap '[[ $verdict_written == yes ]] || status error "Evidence run stopped before a verdict"' EXIT
 flows_status=success
 "$here/run-local.sh" || flows_status=failure
 
 node --env-file="$env_file" "$root/scripts/e2e/upload-run.mjs" "$sha" "$here/out"
 
-# `gh pr view --repo` needs the branch named; without it gh finds no PR.
-branch="$(git -C "$root" branch --show-current)"
-pr_number="$(gh pr view "$branch" --repo "$repository" --json number --jq .number 2>/dev/null || true)"
 export E2E_SHA="$sha" E2E_FLOWS_STATUS="$flows_status" E2E_REPOSITORY="$repository"
-if [[ -n "$pr_number" ]]; then
-  export E2E_EVENT=pull_request E2E_PR_NUMBER="$pr_number"
+# The integration lane is decided first: an open promotion PR has that lane as
+# its head, and its runs are the "before" for later PRs, not PR runs.
+branch="$(git -C "$root" branch --show-current)"
+if [[ "$branch" == "$lane" ]] || git -C "$root" merge-base --is-ancestor "$sha" "origin/$lane"; then
+  export E2E_RUN_ORIGIN=integration
+else
+  # `gh pr view --repo` needs the branch named; without it gh finds no PR.
+  pr_number="$(gh pr view "$branch" --repo "$repository" --json number --jq .number 2>/dev/null || true)"
+  if [[ -z "$pr_number" ]]; then
+    echo "No PR for $branch and $sha is not on origin/$lane: nothing to compare or record." >&2
+    exit 2
+  fi
+  export E2E_RUN_ORIGIN=pr E2E_PR_NUMBER="$pr_number"
   E2E_PR_TITLE="$(gh pr view "$pr_number" --repo "$repository" --json title --jq .title)"
   E2E_GITHUB_TOKEN="$(gh auth token)"
   export E2E_PR_TITLE E2E_GITHUB_TOKEN
-elif git -C "$root" merge-base --is-ancestor "$sha" "origin/$lane"; then
-  # A commit on the integration lane becomes a "before" for later PRs.
-  export E2E_EVENT=push
-else
-  echo "No PR for this branch and $sha is not on origin/$lane: nothing to compare or record." >&2
-  exit 2
 fi
 node --env-file="$env_file" "$root/scripts/e2e/review-run.mjs"
 
+verdict_written=yes
 if [[ "$flows_status" == success ]]; then
   status success "All flows passed"
 else

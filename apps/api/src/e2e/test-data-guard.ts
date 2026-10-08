@@ -1,13 +1,23 @@
 /**
- * Lanes the device-flow test data may be written to. `test` is a disposable
- * local database.
+ * Where the device-flow test data may be written: a non-production lane, or
+ * `local` for a disposable database on the machine that runs the flows.
  */
-const ALLOWED_LANES = ["staging", "development", "test"] as const;
+const ALLOWED_TARGETS = ["staging", "development", "local"] as const;
+
+/**
+ * A production process never touches device-flow test data or fixed Vision,
+ * whatever its environment says, so a copied env block cannot open the lane.
+ */
+export function isProductionProcess(nodeEnv: string | undefined): boolean {
+  return nodeEnv?.trim().toLowerCase() === "production";
+}
 
 export type TestDataGuardInput = {
   databaseUrl: string;
-  /** `E2E_TEST_DATA_LANE`: which lane the caller says this database is. */
-  lane?: string;
+  /** `E2E_TEST_DATA_TARGET`: where the caller says this database is. */
+  target?: string;
+  /** `NODE_ENV` of the calling process. */
+  nodeEnv?: string;
   /** `PRODUCTION_DATABASE_URL`, when the caller's environment knows it. */
   productionDatabaseUrl?: string;
 };
@@ -24,19 +34,25 @@ function target(connectionString: string): { host: string; port: string; databas
 /**
  * Lane database URLs carry no lane marker (an IP and one database name), so the
  * URL alone cannot prove it is not production. The command therefore runs only
- * when the caller declares a non-production lane, and still refuses a URL that
- * names production or equals `PRODUCTION_DATABASE_URL`.
+ * when the caller declares a non-production target, never on a production
+ * process, and still refuses a URL that names production or equals
+ * `PRODUCTION_DATABASE_URL`.
  */
 export function assertTestDataDatabaseAllowed(input: TestDataGuardInput): void {
-  const lane = input.lane?.trim().toLowerCase();
-  if (!lane) {
+  if (isProductionProcess(input.nodeEnv)) {
     throw new Error(
-      `E2E_TEST_DATA_LANE is required (${ALLOWED_LANES.join(", ")}). The test data is never written without a declared lane.`,
+      "Refused: NODE_ENV is production. Device-flow test data is never written to production.",
     );
   }
-  if (!ALLOWED_LANES.some((allowed) => allowed === lane)) {
+  const declared = input.target?.trim().toLowerCase();
+  if (!declared) {
     throw new Error(
-      `Lane '${lane}' is refused: device-flow test data is never written to production. Allowed: ${ALLOWED_LANES.join(", ")}.`,
+      `E2E_TEST_DATA_TARGET is required (${ALLOWED_TARGETS.join(", ")}). The test data is never written without a declared target.`,
+    );
+  }
+  if (!ALLOWED_TARGETS.some((allowed) => allowed === declared)) {
+    throw new Error(
+      `Target '${declared}' is refused: device-flow test data is never written to production. Allowed: ${ALLOWED_TARGETS.join(", ")}.`,
     );
   }
   const database = target(input.databaseUrl);

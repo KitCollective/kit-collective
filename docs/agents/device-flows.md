@@ -7,8 +7,8 @@ Five Maestro flows drive the iOS Simulator build through the Collector journeys,
 | Flow | Signs in as | Steps |
 | --- | --- | --- |
 | `first-session` | signed out, then the Test Collector | splash, onboard (3), door register, door login, Samling |
-| `add-jersey` | Test Collector | source Sheet, gallery, Bekræft with the fixed Vision suggestion, Detaljer, Gemt, Samling |
-| `collection` | Test Collector | Samling, a genvej filter, own UserJersey detail |
+| `add-jersey` | Test Collector | source Sheet, gallery, Bekræft with the fixed Vision suggestion, Detaljer, ready to save, Gemt, Samling |
+| `collection` | Test Collector | Samling, a shortcut filter, own UserJersey detail |
 | `search-bid` | Test Collector | Søg typeahead, catalog drill, the second test Collector's UserJersey, Send bud |
 | `wishlist-paywall` | second test Collector | Ønske, the paywall Sheet |
 
@@ -22,16 +22,16 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 | --- | --- |
 | `apps/mobile/.maestro/flows/` | the five flows |
 | `apps/mobile/.maestro/subflows/sign-in.yaml` | reset, cold start, sign in |
-| `apps/mobile/.maestro/fixtures/` | two drawn shirt photos for the simulator gallery |
+| `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery |
 | `apps/mobile/.maestro/design-sections.json` | which `docs/design-system.md` sections the review reads per flow |
 | `apps/mobile/.maestro/*.sh` | local API, build, run, publish evidence |
-| `apps/api/src/e2e/` | test data, its guard, the reset and evidence routes |
+| `apps/api/src/e2e/` | test data, its guard, the reset route |
 | `apps/api/src/vision/fixed-vision.adapter.ts` | fixed Vision for the Test Collector |
 | `scripts/e2e/` | upload, "before" selection, comparison, review, PR comment, workpad evidence |
 
 ## A flow needs a `testID`
 
-Flows tap by `testID`, so a copy change does not break a flow. The three tab-bar taps are by label because the native tab bar takes no `testID`. When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
+Flows tap by `testID`, so a copy change does not break a flow. The two tab-bar taps, and the system photo picker, are by label because the native tab bar and the picker take no `testID`. When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
 
 ## Run the flows
 
@@ -41,8 +41,8 @@ Everything runs on the approver's Mac. Needs Xcode with an iOS Simulator, CocoaP
 # Terminal 1: local API on a disposable database, fixed Vision, in-memory photos.
 apps/mobile/.maestro/local-api.sh
 
-# When apps/mobile changed since the last build: Release build for this checkout,
-# pointed at the local API, installed on the simulator.
+# When apps/mobile or packages changed since the last build: Release build for
+# this commit, pointed at the local API, installed on the flows' own simulator.
 apps/mobile/.maestro/build-local.sh
 
 # Terminal 2, while iterating: all flows, or one. Output in apps/mobile/.maestro/out/.
@@ -55,15 +55,17 @@ apps/mobile/.maestro/run-evidence.sh
 
 `local-api.sh` drops and recreates `E2E_LOCAL_DATABASE_URL` (default `postgresql://kit:kit@localhost:5432/kit_e2e_test`) and adds the fixture catalog. It never reads a lane `DATABASE_URL`. The values in `local.env.sh` are local-only test values.
 
-`run-evidence.sh` refuses uncommitted changes (evidence is keyed by commit), then:
+The flows own a simulator, "KitCollective Device Flows", created on first use with exactly one photo in its library.
+
+`run-evidence.sh` refuses uncommitted changes, and refuses when the installed app or the running API was not built from this commit's sources (restart `local-api.sh`, rerun `build-local.sh`). Evidence is keyed by commit. Then:
 
 1. sets the `Device flows` commit status to pending and runs the flows;
-2. uploads `kc__*.png` and `kc__*.mp4` to lane R2 under `e2e/<sha>/`, pass or fail;
-3. on a branch with a PR: finds "before", compares, reviews the steps that differ, writes the PR comment and the workpad's `### Evidence`;
-4. on a commit that is on `origin/development`: records the run as a "before" for later PRs;
-5. sets the status to success or failure. Only a failed flow makes it red.
+2. uploads `kc__*.png` and `kc__*.mp4` to the evidence bucket under `e2e/<sha>/`, pass or fail;
+3. on a commit that is on `origin/development` (decided first, so an open promotion PR does not capture the run): records the run as a "before" for later PRs;
+4. otherwise, on a branch with a PR: finds "before", compares, reviews the steps that differ, writes the PR comment and the workpad's `### Evidence`;
+5. sets the status to success or failure. Only a failed flow makes it red; a run that stops before its verdict sets `error`, never leaves `pending`.
 
-When a mobile slice lands, run it once on `development` (step 4), or the next PR has nothing to compare against.
+When a mobile slice lands, run it once on `development` (step 3), or the next PR has nothing to compare against.
 
 ## Settings
 
@@ -71,31 +73,27 @@ When a mobile slice lands, run it once on `development` (step 4), or the next PR
 
 | Variable | Value |
 | --- | --- |
-| `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | the `development` lane bucket, as the API uses them |
-| `E2E_EVIDENCE_BASE_URL` | `<development API URL>/v1/e2e/evidence` |
+| `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | the R2 account, as the API names them; the key must have read and write on the evidence bucket |
+| `E2E_R2_BUCKET` | `kc-e2e-evidence`. Required: evidence never goes to a lane bucket (`R2_BUCKET` is not used) |
+| `E2E_EVIDENCE_BASE_URL` | the bucket's public address plus `/e2e`, e.g. `https://pub-….r2.dev/e2e` |
 | `LINEAR_API_KEY` | reads the issue body, writes the workpad's `### Evidence` |
 | `E2E_REVIEW_API_KEY`, `E2E_REVIEW_MODEL` | OpenRouter key and a vision-capable model id for the review |
 
 GitHub access is the `gh` login on the Mac.
 
-On the `development` lane API (Coolify): `E2E_EVIDENCE_PUBLIC=on`, so the links in the PR comment and in Linear open. Never on production.
-
-R2: one lifecycle rule on the `development` bucket, prefix `e2e/`, delete after 30 days.
+R2 (Cloudflare dashboard, `kc-e2e-evidence`): public access through the r2.dev address, and one lifecycle rule that deletes objects after 30 days. The bucket holds test Collectors and drawn shirts only.
 
 GitHub: make the `Device flows` status required on `development` for PRs that touch `apps/mobile/**` once it has run green.
 
 ## Against a lane instead of a local API
 
-Not used today. The reset and the fixed Vision also work on a lane, for a hosted runner later. That lane's API then needs `E2E_TEST_DATA_TOKEN` (24 characters or more; its presence switches `POST /v1/e2e/test-data` on), `E2E_TEST_DATA_LANE` (`staging` or `development`; `production` is refused), `PRODUCTION_DATABASE_URL` (refused by identity), `E2E_COLLECTOR_EMAIL`, `E2E_COLLECTOR_PASSWORD`, `E2E_PEER_EMAIL`, `E2E_PEER_PASSWORD` and `VISION_FIXED_FOR_TEST_COLLECTOR=on`. Its catalog must have these sides with a linked season, by label or alias: clubs FC København, Brøndby IF, AGF, OB, FC Midtjylland, AaB; national team Danmark. The command names any that are missing and writes nothing. With database access the same routine runs as `pnpm --filter @kit/api e2e:test-data`.
+Not used today. The reset and the fixed Vision also work on a lane, for a hosted runner later. That lane's API then needs `E2E_TEST_DATA_TOKEN` (24 characters or more; its presence switches `POST /v1/e2e/test-data` on), `E2E_TEST_DATA_TARGET` (`staging` or `development`; `production` is refused, and a process with `NODE_ENV=production` answers 404 regardless), `PRODUCTION_DATABASE_URL` (refused by identity), `E2E_COLLECTOR_EMAIL`, `E2E_COLLECTOR_PASSWORD`, `E2E_PEER_EMAIL`, `E2E_PEER_PASSWORD` and `VISION_FIXED_FOR_TEST_COLLECTOR=on`. Its catalog must have these sides with a linked season, by label or alias: clubs FC København, Brøndby IF, AGF, OB, FC Midtjylland, AaB; national team Danmark. The command names any that are missing and writes nothing. With database access the same routine runs as `pnpm --filter @kit/api e2e:test-data`.
 
-## Known blocker: Xcode 27
+## Building the app
 
-Found while building KIT-267 (2026-10-07), filed as KIT-268: there was no native iOS build of the app before this, on EAS or locally.
+`build-local.sh` needs Xcode 27 or newer: `expo-modules-jsi` does not compile on Xcode 26.3. The app is on `react-native-iap` 16 (StoreKit 2, Nitro) because version 12 could not resolve its pods against the precompiled React Native dependencies (KIT-268). The purchase path on version 16 is typechecked and has not made a purchase.
 
-- Fixed here: `react-native-iap` 12 depended on the `RCT-Folly` pod, which the precompiled React Native dependencies do not ship, so `pod install` failed. The app is on `react-native-iap` 16 (StoreKit 2, Nitro), and `pod install` resolves with the defaults.
-- Open: `expo-modules-jsi` (every 57.x release) is compiled on the machine and fails on Xcode 26.3 (Swift 6.2.4) in `RuntimeScheduler.h`. It needs Xcode 27.
-
-Until Xcode 27 is on the Mac, `build-local.sh` cannot produce the app and no flow has been run on a simulator. The flows, `testID`s and scripts are written against the code, not yet against a running app. The purchase path on `react-native-iap` 16 is typechecked only; it has not made a purchase.
+A clean build takes several GB of disk (Xcode DerivedData) on top of a 16 GB simulator runtime.
 
 ## Reading the result
 

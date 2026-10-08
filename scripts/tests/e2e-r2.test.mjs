@@ -48,11 +48,11 @@ test("reads keys and the continuation token from a ListObjectsV2 page", async ()
   const { parseListObjects } = await import("../e2e/r2.mjs");
   const page = parseListObjects(
     `<?xml version="1.0"?><ListBucketResult><IsTruncated>true</IsTruncated>` +
-      `<Contents><Key>e2e/abc/collection/01-samling.png</Key><Size>1</Size></Contents>` +
+      `<Contents><Key>e2e/abc/collection/01-collection.png</Key><Size>1</Size></Contents>` +
       `<Contents><Key>e2e/abc/a&amp;b.png</Key></Contents>` +
       `<NextContinuationToken>tok/1==</NextContinuationToken></ListBucketResult>`,
   );
-  assert.deepEqual(page.keys, ["e2e/abc/collection/01-samling.png", "e2e/abc/a&b.png"]);
+  assert.deepEqual(page.keys, ["e2e/abc/collection/01-collection.png", "e2e/abc/a&b.png"]);
   assert.equal(page.nextToken, "tok/1==");
   assert.equal(parseListObjects("<ListBucketResult/>").nextToken, undefined);
 });

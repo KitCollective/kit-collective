@@ -134,8 +134,8 @@ The Collector the Device flows sign in as, with a Comp Entitlement and fixed Vis
 _Avoid_: a real Collector's account in a flow; a lane-wide Vision switch; a fourth lane for tests
 
 **Evidence run**:
-The screenshots and recordings of one Device flow run for one commit, in lane R2 under `e2e/<sha>/`, kept 30 days. "Before" for a PR is the latest passed `development` Evidence run at or before the PR's merge base; "after" is the PR head.
-_Avoid_: committing screenshots to git; comparing against `staging` or an arbitrary older run
+The screenshots and recordings of one Device flow run for one commit, in the evidence bucket (its own public bucket, never a lane bucket) under `e2e/<sha>/`, kept 30 days. "Before" for a PR is the latest passed `development` Evidence run at or before the PR's merge base; "after" is the PR head.
+_Avoid_: committing screenshots to git; comparing against `staging` or an arbitrary older run; evidence in a lane bucket
 
 **Design finding**:
 What the review reports for a step whose screenshot differs from "before": the change was not asked for by the issue, or it breaks a named rule in `docs/design-system.md`. Advisory: it goes into `### Review feedback`, it does not fail the `Device flows` status, and the reviewer never edits UI.
