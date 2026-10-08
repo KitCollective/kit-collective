@@ -1,0 +1,272 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1786854945555,
+      "tag": "0000_naive_vanisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787368675318,
+      "tag": "0001_abnormal_pandemic",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787450000000,
+      "tag": "0002_vision_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787488430511,
+      "tag": "0003_collection_shortcut",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787490000000,
+      "tag": "0004_collection_shortcut_club_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787500000000,
+      "tag": "0005_collection_shortcut_facets",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787510000000,
+      "tag": "0006_user_handle",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787600000000,
+      "tag": "0007_user_profile_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787610000000,
+      "tag": "0008_bidding_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787620000000,
+      "tag": "0009_user_jersey_favorite",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787630000000,
+      "tag": "0010_conversation_message_media",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787640000000,
+      "tag": "0011_moderation_and_profile_city",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787650000000,
+      "tag": "0012_user_account_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787660000000,
+      "tag": "0013_user_prefs_and_consent",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787670000000,
+      "tag": "0014_user_location",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787680000000,
+      "tag": "0015_entitlement_offer",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788107776299,
+      "tag": "0016_wishlist",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788200000000,
+      "tag": "0017_user_jersey_private",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788250000000,
+      "tag": "0018_auth_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788299000000,
+      "tag": "0019_email_verified_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788350000000,
+      "tag": "0020_auth_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788360000000,
+      "tag": "0021_auth_throttle",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788370000000,
+      "tag": "0022_club_rich_grain",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788380000000,
+      "tag": "0023_european_country_iso_codes",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788390000000,
+      "tag": "0024_kit_colour_grain",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788400000000,
+      "tag": "0025_national_team_grain",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788410000000,
+      "tag": "0026_photo_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788420000000,
+      "tag": "0027_kit_type_fourth",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788430000000,
+      "tag": "0028_vision_grouping",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788516400000,
+      "tag": "0029_player_patch_persist",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788526400000,
+      "tag": "0030_player_nationality",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788536400000,
+      "tag": "0031_jersey_number_vendor_side",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788546400000,
+      "tag": "0032_catalog_mark",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788630000000,
+      "tag": "0033_kit_fka_facts",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788640000000,
+      "tag": "0034_kit_variant",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788720000000,
+      "tag": "0035_user_jersey_national_team_side",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788800000000,
+      "tag": "0036_vision_log_label",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788880000000,
+      "tag": "0037_vision_improve",
+      "breakpoints": true
+    }
+  ]
+}

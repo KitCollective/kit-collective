@@ -1,0 +1,662 @@
+import {
+  type AdminCollectorJerseyDrill,
+  type AdminCollectorJerseyIndex,
+  type AdminCollectorJerseyList,
+  type AdminCollectorList,
+  type AdminCollectorPhotoVariantQuery,
+  type AdminCollectorQuery,
+  type AdminCollectorUser,
+  type AdminRoleUpdateRequest,
+  adminCollectorJerseyDrillSchema,
+  adminCollectorJerseyIndexSchema,
+  adminCollectorJerseyListSchema,
+  adminCollectorListSchema,
+  adminCollectorUserSchema,
+  type Entitlement,
+  type GrantCompRequest,
+  type IdentityRoleErrorCode,
+  identityRoleErrorSchema,
+} from "@kit/api-contract";
+import type { Db } from "@kit/db";
+import {
+  catalogLabel,
+  club,
+  nationalTeam,
+  season,
+  user,
+  userJersey,
+  userJerseyPhoto,
+} from "@kit/db";
+import { photoObjectKeysForDeletion } from "@kit/domain";
+import {
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from "@nestjs/common";
+import { and, asc, count, desc, eq, exists, ilike, inArray, or } from "drizzle-orm";
+import { BillingService } from "../billing/billing.service.js";
+import { OBJECT_STORE } from "../collection/collection.service.js";
+import type { ObjectStoreAdapter } from "../collection/object-store.js";
+import { resolveStoredPhotoBytes } from "../collection/photo-variant-resolve.js";
+import { DB } from "../db/db.module.js";
+
+function pickAdminLabel(
+  rows: Array<{ locale: string | null; kind: string | null; label: string | null }>,
+): string | undefined {
+  return (
+    rows.find((row) => row.locale === "en" && row.kind === "label")?.label ??
+    rows.find((row) => row.locale === "mul" && row.kind === "label")?.label ??
+    rows.find((row) => row.locale === "da" && row.kind === "label")?.label ??
+    undefined
+  );
+}
+
+function throwRoleGuardError(code: IdentityRoleErrorCode, message: string): never {
+  throw new HttpException(
+    {
+      statusCode: HttpStatus.CONFLICT,
+      ...identityRoleErrorSchema.parse({ code, message }),
+    },
+    HttpStatus.CONFLICT,
+  );
+}
+
+function monogramFromEmail(email: string): string {
+  const local = email.split("@")[0] ?? email;
+  const letters = local.replace(/[^a-zA-Z0-9]/g, "");
+  if (letters.length === 0) {
+    return "?";
+  }
+  if (letters.length === 1) {
+    return letters.toUpperCase();
+  }
+  return letters.slice(0, 2).toUpperCase();
+}
+
+@Injectable()
+export class AdminCollectionService {
+  constructor(
+    @Inject(DB) private readonly db: Db,
+    @Inject(OBJECT_STORE) private readonly objectStore: ObjectStoreAdapter,
+    private readonly billingService: BillingService,
+  ) {}
+
+  async listCollectors(query: AdminCollectorQuery): Promise<AdminCollectorList> {
+    const searchPattern = query.q ? `%${query.q}%` : null;
+
+    const userRows = await this.db
+      .select({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+      })
+      .from(user)
+      .where(searchPattern ? ilike(user.email, searchPattern) : undefined)
+      .orderBy(desc(user.createdAt));
+
+    const jerseyCountRows =
+      userRows.length === 0
+        ? []
+        : await this.db
+            .select({
+              userId: userJersey.userId,
+              jerseyCount: count(userJersey.id),
+            })
+            .from(userJersey)
+            .where(
+              inArray(
+                userJersey.userId,
+                userRows.map((row) => row.id),
+              ),
+            )
+            .groupBy(userJersey.userId);
+
+    const countsByUser = new Map(
+      jerseyCountRows.map((row) => [row.userId, Number(row.jerseyCount)]),
+    );
+
+    return adminCollectorListSchema.parse({
+      total: userRows.length,
+      rows: userRows.map((row) => ({
+        id: row.id,
+        email: row.email,
+        role: row.role,
+        jerseyCount: countsByUser.get(row.id) ?? 0,
+        createdAt: row.createdAt.toISOString(),
+        monogram: monogramFromEmail(row.email),
+      })),
+    });
+  }
+
+  async getCollector(userId: string): Promise<AdminCollectorUser> {
+    const [row] = await this.db
+      .select({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+        jerseyCount: count(userJersey.id),
+      })
+      .from(user)
+      .leftJoin(userJersey, eq(userJersey.userId, user.id))
+      .where(eq(user.id, userId))
+      .groupBy(user.id, user.email, user.role, user.createdAt)
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException("User not found");
+    }
+
+    const adminCount = await this.countAdmins();
+    const entitlement = await this.billingService.getEntitlementForUser(userId);
+
+    return adminCollectorUserSchema.parse({
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      jerseyCount: Number(row.jerseyCount),
+      adminCount,
+      createdAt: row.createdAt.toISOString(),
+      monogram: monogramFromEmail(row.email),
+      entitlement,
+    });
+  }
+
+  async grantComp(userId: string, body: GrantCompRequest): Promise<Entitlement> {
+    await this.assertUserExists(userId);
+    return this.billingService.grantComp(userId, body);
+  }
+
+  async listCollectorJerseys(userId: string): Promise<AdminCollectorJerseyList> {
+    await this.assertUserExists(userId);
+
+    const rows = await this.db
+      .select({
+        id: userJersey.id,
+        clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
+        seasonLabel: season.label,
+        type: userJersey.type,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .where(eq(userJersey.userId, userId))
+      .orderBy(desc(userJersey.createdAt));
+
+    if (rows.length === 0) {
+      return adminCollectorJerseyListSchema.parse({ total: 0, rows: [] });
+    }
+
+    const sideLabels = await this.resolveJerseySideLabels(rows);
+    const photoPaths = await this.firstPhotoPathByJersey(
+      rows.map((row) => ({ jerseyId: row.id, userId })),
+    );
+
+    return adminCollectorJerseyListSchema.parse({
+      total: rows.length,
+      rows: rows.map((row) => {
+        const clubLabel = sideLabels.get(row.id);
+        if (!clubLabel) {
+          throw new NotFoundException(`Club label missing for jersey ${row.id}`);
+        }
+        return {
+          id: row.id,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          type: row.type,
+          photoPath: photoPaths.get(row.id),
+        };
+      }),
+    });
+  }
+
+  async listAllJerseys(query: AdminCollectorQuery): Promise<AdminCollectorJerseyIndex> {
+    const searchPattern = query.q ? `%${query.q}%` : null;
+
+    const rows = await this.db
+      .select({
+        id: userJersey.id,
+        userId: userJersey.userId,
+        userEmail: user.email,
+        clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
+        seasonLabel: season.label,
+        type: userJersey.type,
+      })
+      .from(userJersey)
+      .innerJoin(user, eq(userJersey.userId, user.id))
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .where(
+        searchPattern
+          ? or(
+              ilike(user.email, searchPattern),
+              ilike(season.label, searchPattern),
+              exists(
+                this.db
+                  .select({ id: catalogLabel.id })
+                  .from(catalogLabel)
+                  .where(
+                    and(
+                      eq(catalogLabel.entityType, "club"),
+                      eq(catalogLabel.entityId, userJersey.clubId),
+                      ilike(catalogLabel.text, searchPattern),
+                    ),
+                  ),
+              ),
+              exists(
+                this.db
+                  .select({ id: catalogLabel.id })
+                  .from(catalogLabel)
+                  .where(
+                    and(
+                      eq(catalogLabel.entityType, "national_team"),
+                      eq(catalogLabel.entityId, userJersey.nationalTeamId),
+                      ilike(catalogLabel.text, searchPattern),
+                    ),
+                  ),
+              ),
+            )
+          : undefined,
+      )
+      .orderBy(desc(userJersey.createdAt));
+
+    if (rows.length === 0) {
+      return adminCollectorJerseyIndexSchema.parse({ total: 0, rows: [] });
+    }
+
+    const sideLabels = await this.resolveJerseySideLabels(rows);
+    const photoPaths = await this.firstPhotoPathByJersey(
+      rows.map((row) => ({ jerseyId: row.id, userId: row.userId })),
+    );
+
+    return adminCollectorJerseyIndexSchema.parse({
+      total: rows.length,
+      rows: rows.map((row) => {
+        const clubLabel = sideLabels.get(row.id);
+        if (!clubLabel) {
+          throw new NotFoundException(`Club label missing for jersey ${row.id}`);
+        }
+        return {
+          id: row.id,
+          userId: row.userId,
+          userEmail: row.userEmail,
+          clubLabel,
+          seasonLabel: row.seasonLabel,
+          type: row.type,
+          photoPath: photoPaths.get(row.id),
+        };
+      }),
+    });
+  }
+
+  async getCollectorJersey(userId: string, jerseyId: string): Promise<AdminCollectorJerseyDrill> {
+    const [row] = await this.db
+      .select({
+        id: userJersey.id,
+        clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
+        seasonLabel: season.label,
+        type: userJersey.type,
+        size: userJersey.size,
+        condition: userJersey.condition,
+      })
+      .from(userJersey)
+      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException("Jersey not found");
+    }
+
+    const sideLabels = await this.resolveJerseySideLabels([row]);
+    const clubLabel = sideLabels.get(row.id);
+    if (!clubLabel) {
+      throw new NotFoundException(`Club label missing for jersey ${row.id}`);
+    }
+
+    const photoRows = await this.db
+      .select({
+        id: userJerseyPhoto.id,
+        role: userJerseyPhoto.role,
+      })
+      .from(userJerseyPhoto)
+      .where(eq(userJerseyPhoto.userJerseyId, jerseyId))
+      .orderBy(asc(userJerseyPhoto.createdAt));
+
+    return adminCollectorJerseyDrillSchema.parse({
+      id: row.id,
+      clubLabel,
+      seasonLabel: row.seasonLabel,
+      type: row.type,
+      size: row.size,
+      condition: row.condition,
+      photos: photoRows.map((photo) => ({
+        id: photo.id,
+        role: photo.role,
+        photoPath: `/admin/collectors/${userId}/jerseys/${jerseyId}/photos/${photo.id}?variant=grid`,
+      })),
+    });
+  }
+
+  async getCollectorPhotoBytes(
+    userId: string,
+    jerseyId: string,
+    photoId: string,
+    variant?: AdminCollectorPhotoVariantQuery,
+  ): Promise<Uint8Array> {
+    const [row] = await this.db
+      .select({
+        objectKey: userJerseyPhoto.objectKey,
+        jerseyUserId: userJersey.userId,
+        jerseyId: userJersey.id,
+      })
+      .from(userJerseyPhoto)
+      .innerJoin(userJersey, eq(userJerseyPhoto.userJerseyId, userJersey.id))
+      .where(
+        and(
+          eq(userJerseyPhoto.id, photoId),
+          eq(userJersey.id, jerseyId),
+          eq(userJersey.userId, userId),
+        ),
+      )
+      .limit(1);
+
+    if (!row || !row.objectKey.startsWith(`user/${userId}/`)) {
+      throw new NotFoundException("Photo not found");
+    }
+
+    const bytes = await resolveStoredPhotoBytes(this.objectStore, row.objectKey, variant, {
+      allowReservedVariants: true,
+    });
+    if (!bytes) {
+      throw new NotFoundException("Photo bytes missing");
+    }
+
+    return bytes;
+  }
+
+  async takeDownJersey(userId: string, jerseyId: string): Promise<void> {
+    const [jerseyRow] = await this.db
+      .select({ id: userJersey.id })
+      .from(userJersey)
+      .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)))
+      .limit(1);
+
+    if (!jerseyRow) {
+      throw new NotFoundException("Jersey not found");
+    }
+
+    const photoRows = await this.db
+      .select({
+        id: userJerseyPhoto.id,
+        objectKey: userJerseyPhoto.objectKey,
+      })
+      .from(userJerseyPhoto)
+      .where(eq(userJerseyPhoto.userJerseyId, jerseyId));
+
+    const photoBytes = new Map<string, Uint8Array>();
+    const keysToDelete = new Set<string>();
+    for (const photo of photoRows) {
+      if (!photo.objectKey.startsWith(`user/${userId}/${jerseyId}/`)) {
+        throw new InternalServerErrorException("Invalid photo object key");
+      }
+      for (const key of photoObjectKeysForDeletion(photo.objectKey)) {
+        keysToDelete.add(key);
+      }
+    }
+
+    for (const key of keysToDelete) {
+      const bytes = await this.objectStore.getObject(key);
+      if (bytes) {
+        photoBytes.set(key, bytes);
+      }
+    }
+
+    const deletedKeys: string[] = [];
+    try {
+      for (const key of keysToDelete) {
+        if (!(await this.objectStore.objectExists(key))) {
+          continue;
+        }
+        await this.objectStore.deleteObject(key);
+        deletedKeys.push(key);
+      }
+    } catch {
+      for (const key of deletedKeys) {
+        const bytes = photoBytes.get(key);
+        if (bytes) {
+          await this.objectStore.putObject(key, bytes);
+        }
+      }
+      throw new InternalServerErrorException("Failed to delete photo bytes");
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx.delete(userJerseyPhoto).where(eq(userJerseyPhoto.userJerseyId, jerseyId));
+      await tx
+        .delete(userJersey)
+        .where(and(eq(userJersey.id, jerseyId), eq(userJersey.userId, userId)));
+    });
+  }
+
+  async updateUserRole(
+    actorUserId: string,
+    targetUserId: string,
+    body: AdminRoleUpdateRequest,
+  ): Promise<AdminCollectorUser> {
+    const [target] = await this.db
+      .select({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+      })
+      .from(user)
+      .where(eq(user.id, targetUserId))
+      .limit(1);
+
+    if (!target) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (target.id === actorUserId && body.role === "user" && target.role === "admin") {
+      throwRoleGuardError("SELF_DEMOTE", "You cannot demote your own Staff access.");
+    }
+
+    if (target.role === "admin" && body.role === "user") {
+      const adminCount = await this.countAdmins();
+      if (adminCount <= 1) {
+        throwRoleGuardError("LAST_ADMIN_DEMOTE", "At least one Staff access account must remain.");
+      }
+    }
+
+    const [updated] = await this.db
+      .update(user)
+      .set({ role: body.role })
+      .where(eq(user.id, targetUserId))
+      .returning({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+      });
+
+    if (!updated) {
+      throw new NotFoundException("User not found");
+    }
+
+    const [jerseyCountRow] = await this.db
+      .select({ total: count(userJersey.id) })
+      .from(userJersey)
+      .where(eq(userJersey.userId, targetUserId));
+
+    const adminCount = await this.countAdmins();
+    const entitlement = await this.billingService.getEntitlementForUser(targetUserId);
+
+    return adminCollectorUserSchema.parse({
+      id: updated.id,
+      email: updated.email,
+      role: updated.role,
+      jerseyCount: Number(jerseyCountRow?.total ?? 0),
+      adminCount,
+      createdAt: updated.createdAt.toISOString(),
+      monogram: monogramFromEmail(updated.email),
+      entitlement,
+    });
+  }
+
+  private async countAdmins(): Promise<number> {
+    const [adminCount] = await this.db
+      .select({ total: count(user.id) })
+      .from(user)
+      .where(eq(user.role, "admin"));
+    return Number(adminCount?.total ?? 0);
+  }
+
+  private async assertUserExists(userId: string): Promise<void> {
+    const [found] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
+    if (!found) {
+      throw new NotFoundException("User not found");
+    }
+  }
+
+  private async resolveJerseySideLabels(
+    rows: Array<{ id: string; clubId: string | null; nationalTeamId: string | null }>,
+  ): Promise<Map<string, string>> {
+    const clubIds = [
+      ...new Set(rows.map((row) => row.clubId).filter((id): id is string => id !== null)),
+    ];
+    const nationalTeamIds = [
+      ...new Set(rows.map((row) => row.nationalTeamId).filter((id): id is string => id !== null)),
+    ];
+    const [clubLabels, nationalTeamLabels] = await Promise.all([
+      this.resolveClubLabels(clubIds),
+      this.resolveNationalTeamLabels(nationalTeamIds),
+    ]);
+
+    const labels = new Map<string, string>();
+    for (const row of rows) {
+      const label = row.clubId
+        ? clubLabels.get(row.clubId)
+        : row.nationalTeamId
+          ? nationalTeamLabels.get(row.nationalTeamId)
+          : undefined;
+      if (label) {
+        labels.set(row.id, label);
+      }
+    }
+    return labels;
+  }
+
+  private async resolveClubLabels(clubIds: string[]): Promise<Map<string, string>> {
+    if (clubIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .select({
+        clubId: club.id,
+        label: catalogLabel.text,
+        locale: catalogLabel.locale,
+        kind: catalogLabel.kind,
+      })
+      .from(club)
+      .leftJoin(
+        catalogLabel,
+        and(eq(catalogLabel.entityType, "club"), eq(catalogLabel.entityId, club.id)),
+      )
+      .where(inArray(club.id, clubIds));
+
+    const labels = new Map<string, string>();
+
+    for (const clubId of clubIds) {
+      const clubLabels = rows.filter((row) => row.clubId === clubId && row.label);
+      const resolved = pickAdminLabel(clubLabels);
+
+      if (resolved) {
+        labels.set(clubId, resolved);
+      }
+    }
+
+    return labels;
+  }
+
+  private async resolveNationalTeamLabels(nationalTeamIds: string[]): Promise<Map<string, string>> {
+    if (nationalTeamIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .select({
+        nationalTeamId: nationalTeam.id,
+        label: catalogLabel.text,
+        locale: catalogLabel.locale,
+        kind: catalogLabel.kind,
+      })
+      .from(nationalTeam)
+      .leftJoin(
+        catalogLabel,
+        and(
+          eq(catalogLabel.entityType, "national_team"),
+          eq(catalogLabel.entityId, nationalTeam.id),
+        ),
+      )
+      .where(inArray(nationalTeam.id, nationalTeamIds));
+
+    const labels = new Map<string, string>();
+
+    for (const nationalTeamId of nationalTeamIds) {
+      const teamLabels = rows.filter((row) => row.nationalTeamId === nationalTeamId && row.label);
+      const resolved = pickAdminLabel(teamLabels);
+
+      if (resolved) {
+        labels.set(nationalTeamId, resolved);
+      }
+    }
+
+    return labels;
+  }
+
+  private async firstPhotoPathByJersey(
+    jerseyUserPairs: { jerseyId: string; userId: string }[],
+  ): Promise<Map<string, string>> {
+    const paths = new Map<string, string>();
+    if (jerseyUserPairs.length === 0) {
+      return paths;
+    }
+
+    const jerseyIds = jerseyUserPairs.map((item) => item.jerseyId);
+    const userIdByJersey = new Map(jerseyUserPairs.map((item) => [item.jerseyId, item.userId]));
+
+    const photoRows = await this.db
+      .select({
+        id: userJerseyPhoto.id,
+        userJerseyId: userJerseyPhoto.userJerseyId,
+      })
+      .from(userJerseyPhoto)
+      .where(inArray(userJerseyPhoto.userJerseyId, jerseyIds))
+      .orderBy(asc(userJerseyPhoto.createdAt));
+
+    for (const row of photoRows) {
+      const userId = userIdByJersey.get(row.userJerseyId);
+      if (!userId || paths.has(row.userJerseyId)) {
+        continue;
+      }
+      paths.set(
+        row.userJerseyId,
+        `/admin/collectors/${userId}/jerseys/${row.userJerseyId}/photos/${row.id}?variant=grid`,
+      );
+    }
+
+    return paths;
+  }
+}

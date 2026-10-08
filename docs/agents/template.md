@@ -18,4 +18,4 @@ Replace per product:
 - `.cursor/rules/` that encode stack/import laws
 - `CONTEXT.md` / PRD / architecture under `paths.specs`
 
-Then `/bootstrap-linear` and wire automations from `docs/agents/automations.md`.
+Then `/bootstrap-linear`. The live runtime is Desktop `/issue-session`; the PI worker is archived (`docs/agents/pi-harness-archived.md`) and `docs/agents/automations.md` describes it for reference. Cursor Cloud Agents are not dispatch.

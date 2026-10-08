@@ -1,0 +1,4 @@
+{
+  "name": "KitCollective",
+  "install": "bash scripts/setup-coolify-mcp.sh"
+}

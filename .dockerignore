@@ -1,0 +1,21 @@
+# Keep API images free of seed data and dev-only trees.
+seed/
+.scratch/
+.cursor/
+!.cursor/rules/
+!.cursor/rules/*.mdc
+!.cursor/skills/
+!.cursor/skills/**/SKILL.md
+.git/
+.github/
+node_modules/
+**/node_modules/
+**/dist/
+**/*.test.ts
+**/tests/
+**/*.md
+!.pi/**/*.md
+!.cursor/skills/**/SKILL.md
+.env
+.env.*
+!.env.example

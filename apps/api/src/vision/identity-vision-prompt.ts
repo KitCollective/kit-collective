@@ -1,0 +1,473 @@
+import type { KitType } from "@kit/domain";
+import { KIT_TYPES } from "@kit/domain";
+
+export type IdentityFieldConfidence = {
+  club?: number;
+  nationalTeam?: number;
+  season?: number;
+  kitType?: number;
+  player?: number;
+  badge?: number;
+};
+
+export type IdentityVisionHints = {
+  clubHint?: string;
+  clubHintAlts?: string[];
+  seasonHint?: string;
+  kitType?: KitType;
+  playerHint?: string;
+  playerNumberHint?: string;
+  patchHint?: string;
+  manufacturerHint?: string;
+  sponsorHint?: string;
+  colorHint?: string;
+  /** Overall model confidence 0–1. */
+  confidence?: number;
+  /** Per-field model confidence 0–1. */
+  fieldConfidence?: IdentityFieldConfidence;
+};
+
+/**
+ * Huddle identity discipline: one shirt, home = club colours, never invent pads.
+ * KitCollective field names and kit-type enum. Does not ask for embeddings or wizard steps.
+ */
+export const IDENTITY_VISION_SYSTEM_PROMPT = `You are an expert football kit analyst.
+
+You analyze 1–8 photos of the SAME physical football shirt (front, back, sleeves, collar, wash label) and return ONE consolidated JSON object. Merge every angle. Never treat the photos as different shirts.
+
+Think like Football Kit Archive or Classic Football Shirts. Output JSON only — no markdown, no comments.
+
+CLUB
+- Identify the club or national team. Use a commonly known English name ("Rangers FC", "Liverpool FC", "RB Leipzig", "Denmark").
+- Add 1–3 alternate names in clubHintAlts: local-language name, abbreviation, or nickname ("LFC", "Liverpool FC", "the Reds"). Do not invent alts you cannot support.
+- Front-heavy cues decide club, season, and kit type: crest, chest sponsor, league patch, and collar motto. Use those, plus collar tags and known templates. Do not invent a club with no visual clue.
+- When a front photo is present, date seasonHint from the front only. A back name/number print must not change seasonHint.
+- Identify only what is visible in THESE photos. Do not reuse a previous shirt's club, sponsor, player, or colours.
+
+KIT TYPE (home | away | third | fourth | gk | special)
+Decide in this order:
+1. gk — fluorescent / keeper-only template, clearly not the outfield set.
+2. home — the club's traditional primary colours. White CAN be home (Real Madrid, Germany, RB Leipzig 2019/20 white home). A white or unusual shirt is NOT automatically away.
+   Before choosing away, decide the club's usual home palette. If this shirt matches that palette (including white-home clubs with coloured trim), kitType is home. Only choose away when the shirt clearly contrasts with that home identity.
+3. away — a relatively clean, neutral contrast to home (simple white/black/navy/yellow) when home is already a different colour.
+4. third / fourth — experimental colour or graphic (teal, purple, neon, marble, camo) that is not a typical away.
+5. special — explicit anniversary / commemorative kit (years on the crest as a celebration, "125 years" artwork, one-off).
+
+If unsure between away and third for a loud design, prefer third with lower kitType confidence. If unsure between home and away on a white shirt that matches the club's known home, choose home.
+A patterned or tonal-print white shirt in the club's home colours is still home — do not treat a graphic white body as away.
+If you still choose away on a predominantly white/light shirt, cap kitType confidence at 0.45 unless you can name the club's actual home as a clearly different colour.
+
+SEASON
+Date the shirt from what is on the photos — manufacturer template (collar, sleeve cut, side panels), the unique graphic (diagonal sash, marble, gradient, commemorative crest years), and manufacturer + chest sponsor together. That is how an archive identifies a kit. Do not pick a year because a similar-coloured older shirt exists in memory.
+
+You MUST attempt a single season as "2024/25" (start year / next) when sponsor, template, or graphic gives a basis. A distinctive chest sponsor plus manufacturer (Nike + LP Promotion, Adidas + Unibet) belongs to specific years — use those years, not a generic recent season.
+
+Schema examples like "2019/20" are format only. Never default every shirt to 2019/20 or 2021/22.
+
+Also use:
+- Crest commemorative years: a founding year plus an anniversary year (e.g. 1892 and 2017, "125 YEARS") dates the kit to that anniversary season (2017/18), not the year before.
+- Wash labels and size tags only as weak supporting evidence — never identify the club from a wash tag alone if other photos show the crest.
+
+Season confidence:
+- 0.90–1.0 only with distinctive, corroborating evidence (sponsor+manufacturer+graphic).
+- 0.60–0.80 fairly sure.
+- 0.20–0.50 a weak but useful guess.
+- Omit seasonHint and set season confidence 0 when you have no visual basis.
+Never report 0.95 on a one-year guess you cannot corroborate.
+If two adjacent seasons are plausible and sponsor+manufacturer+template do not lock one year, keep season confidence ≤ 0.50.
+
+PLAYER
+- Fill playerHint / playerNumberHint only from a visible back print (name and number). Do not infer the player from the front crest or sponsor. Do not let the back print change clubHint, seasonHint, or kitType when a front photo is present.
+- Blank back → omit both, player confidence 0.
+
+PHOTO ROLES / MERGE
+- Front photo: crest, chest sponsor, league patch, collar motto → club + season + type.
+- Back photo: name and number → player.
+- Return one JSON that combines those cues. When a front photo is present, do not identify the club from the back alone. A crest-less back (plain colour, name/number only) must not override a visible front crest, sponsor, or motto.
+
+PATCHES / BADGES (critical)
+- patchHint is a sleeve or chest PATCH: league, UCL/EL/Conference, charity, captain. Not the crest. Not the manufacturer logo. Not the main chest sponsor.
+- Crest artwork ("125 YEARS", founding years) is not a sleeve patch.
+- Many replica and fan shirts have NO sleeve patches. If none are visible: badges must be [] and you MUST omit patchHint. Do not invent Premier League, Bundesliga, or any competition pad.
+- If badges is [], ignore any patchHint you were tempted to add.
+
+SPONSOR VS BADGE
+- Large chest text/logo → sponsorHint only.
+- Never copy the sponsor into patchHint.
+
+MANUFACTURER
+- Nike, Adidas, Puma, Hummel, Castore, New Balance, etc. Infer from logo or known template with lower confidence if the logo is unclear.
+
+UNCERTAINTY
+- Omit a field (or use null) and set that field's confidence to 0 rather than hallucinate.
+- Conservative empty is better than a confident wrong season, kit type, or pad.`;
+
+/** Length + JPEG SOI prefix so two shirts cannot share an OpenRouter prompt hash. */
+export function identityPhotoFingerprint(photos: Array<{ bytes: Uint8Array }>): string {
+  return photos
+    .map((photo) => {
+      const bytes = photo.bytes;
+      const take = Math.min(8, bytes.byteLength);
+      let head = "";
+      for (let i = 0; i < take; i += 1) {
+        head += (bytes[i] ?? 0).toString(16).padStart(2, "0");
+      }
+      return `${bytes.byteLength}:${head}`;
+    })
+    .join("|");
+}
+
+export function identityVisionPhotoRoles(photos: Array<{ role?: string }>): string[] | undefined {
+  const roles = photos.map((photo) => photo.role).filter((role): role is string => Boolean(role));
+  return roles.length > 0 ? roles : undefined;
+}
+
+function photoRolesOrderLine(photoCount: number, roles?: readonly string[]): string {
+  if (photoCount < 2 || !roles || roles.length === 0) {
+    return "";
+  }
+  if (roles.includes("front") && roles.includes("back")) {
+    return `\nPhoto roles in order: front, then back.\n`;
+  }
+  return `\nPhoto roles in order: ${roles.join(", ")}.\n`;
+}
+
+function photoRolesMergeRules(photoCount: number): string {
+  if (photoCount < 2) {
+    return "";
+  }
+  return `- PHOTO ROLES / MERGE: Front = crest, chest sponsor, league patch, collar motto → clubHint, seasonHint, kitType. Back = name and number print → playerHint, playerNumberHint. Merge into one JSON. Date seasonHint from the front when a front photo is present. A back print must not change seasonHint. Do not identify the club from the back alone when a front photo is present. Do not let a crest-less back override a front crest.
+`;
+}
+
+export function identityVisionUserPrompt(
+  photoCount: number,
+  photoFingerprint?: string,
+  roles?: readonly string[],
+): string {
+  const photos =
+    photoCount === 1 ? "this jersey photo" : `these ${photoCount} jersey photos of the SAME shirt`;
+  const fingerprintLine = photoFingerprint
+    ? `\nPhoto fingerprint: ${photoFingerprint}. Trust these pixels over any prior shirt.\n`
+    : "";
+  const rolesLine = photoRolesOrderLine(photoCount, roles);
+
+  return `Analyze ${photos}. Merge all angles into one JSON object.${fingerprintLine}${rolesLine}
+
+{
+  "clubHint": "Rangers FC" | null,
+  "clubHintAlts": ["Rangers"] | [],
+  "seasonHint": "2019/20" | null,
+  "kitType": "home"|"away"|"third"|"fourth"|"gk"|"special"|null,
+  "playerHint": "Morelos" | null,
+  "playerNumberHint": "20" | null,
+  "patchHint": "UEFA Champions League" | null,
+  "manufacturerHint": "Hummel" | null,
+  "sponsorHint": "32Red" | null,
+  "colorHint": "white with red trim" | null,
+  "badges": [],
+  "confidence": {
+    "club": 0.0,
+    "season": 0.0,
+    "kitType": 0.0,
+    "player": 0.0,
+    "badge": 0.0,
+    "overall": 0.0
+  }
+}
+
+Rules:
+- All images are one shirt. Combine crest, back print, sleeves, and labels.
+${photoRolesMergeRules(photoCount)}- Date seasonHint from THIS shirt's template, graphic, and chest sponsor. Do not reuse a remembered year.
+- clubHintAlts: 0–3 alternate club or national-team names. [] if none.
+- kitType values are lowercase exactly as above.
+- badges: [] if no sleeve/chest patch is visible. Each visible patch: {"position":"right_sleeve"|"left_sleeve"|"front"|"other","category":"competition"|"league"|"partner"|"captain"|"unknown","nameText":"..."}.
+- Omit patchHint when badges is []. Do not invent pads.
+- confidence values are 0–1 (not 0–100). overall is holistic; season must not copy club's score.
+- Omit fields you cannot support. JSON only.`;
+}
+
+/** Combined prompt for Gemini generateContent (no system role). */
+export function identityVisionPrompt(
+  photoCount: number,
+  photoFingerprint?: string,
+  roles?: readonly string[],
+): string {
+  return `${IDENTITY_VISION_SYSTEM_PROMPT}\n\n${identityVisionUserPrompt(photoCount, photoFingerprint, roles)}`;
+}
+
+export type IdentityRefinementCandidate = {
+  seasonLabel: string;
+  type: string;
+  manufacturer: string;
+  sponsor: string;
+  colorNames?: string | null;
+};
+
+/**
+ * Second look when manufacturer+sponsor hits N kits. Catalog facts only —
+ * never "you guessed the wrong year".
+ */
+export function identityVisionRefinementUserPrompt(
+  candidates: IdentityRefinementCandidate[],
+): string {
+  const lines = candidates.map((candidate, index) => {
+    const colors = candidate.colorNames?.trim() ? `; colours: ${candidate.colorNames}` : "";
+    return `${index + 1}. season ${candidate.seasonLabel}, type ${candidate.type}, ${candidate.manufacturer}, sponsor ${candidate.sponsor}${colors}`;
+  });
+
+  return `Look at the photos again. These catalog kits already share manufacturer and sponsor. Pick the one shirt that matches what you see.
+
+${lines.join("\n")}
+
+Return JSON only with seasonHint and kitType from that list. Do not invent a season or type that is not listed. Do not copy a catalog year you cannot see on the shirt.
+
+{"seasonHint":"2019/20"|null,"kitType":"home"|"away"|"third"|"fourth"|"gk"|"special"|null,"confidence":{"season":0.0,"kitType":0.0,"overall":0.0}}`;
+}
+
+/**
+ * Second look when a mapped player's career rejected the hinted year and more
+ * than one squad season remains. The model must pick from those labels.
+ */
+export function identitySquadSeasonUserPrompt(seasonLabels: readonly string[]): string {
+  const lines = seasonLabels.map((label) => `- ${label}`);
+  return `The catalog career of the player at this club is only these seasons:
+${lines.join("\n")}
+
+A year outside that list is impossible. Look at the FRONT graphic, chest sponsor, and template. Return seasonHint as exactly one of those labels, or null if the front does not distinguish them.
+
+{"seasonHint":${seasonLabels.map((label) => `"${label}"`).join("|")}|null}`;
+}
+
+/** Keeps a second-look season only when it is one of the player's club seasons. */
+export function pickAllowedSeasonHint(
+  seasonHint: string | undefined,
+  allowedLabels: readonly string[],
+): string | undefined {
+  const hint = seasonHint?.trim().toLowerCase();
+  if (!hint) {
+    return undefined;
+  }
+  return allowedLabels.find((label) => label.trim().toLowerCase() === hint);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function isKitType(value: unknown): value is KitType {
+  if (typeof value !== "string") {
+    return false;
+  }
+  return KIT_TYPES.some((kitType) => kitType === value);
+}
+
+function normalizeKitType(value: unknown): KitType | undefined {
+  if (isKitType(value)) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const lowered = value.trim().toLowerCase();
+  if (lowered === "goalkeeper") {
+    return "gk";
+  }
+  if (lowered === "special edition") {
+    return "special";
+  }
+  if (isKitType(lowered)) {
+    return lowered;
+  }
+  return undefined;
+}
+
+function decodeStringList(value: unknown, max = 3): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const items: string[] = [];
+  for (const entry of value) {
+    const text = nonemptyString(entry);
+    if (!text) {
+      continue;
+    }
+    items.push(text);
+    if (items.length >= max) {
+      break;
+    }
+  }
+  return items.length > 0 ? items : undefined;
+}
+
+function nonemptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  const lowered = trimmed.toLowerCase();
+  if (lowered === "null" || lowered === "none" || lowered === "n/a" || lowered === "unknown") {
+    return undefined;
+  }
+  return trimmed;
+}
+
+/** Accept 0–1 or Huddle-style 0–100. */
+export function asUnitConfidence(value: unknown): number | undefined {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return undefined;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return Math.min(1, value / 100);
+  }
+  return value;
+}
+
+function firstBadgeName(badges: unknown): string | undefined {
+  if (!Array.isArray(badges)) {
+    return undefined;
+  }
+  for (const entry of badges) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const name = nonemptyString(entry.nameText) ?? nonemptyString(entry.name);
+    if (name) {
+      return name;
+    }
+  }
+  return undefined;
+}
+
+function decodeFieldConfidence(value: unknown): IdentityFieldConfidence | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const fieldConfidence: IdentityFieldConfidence = {
+    club: asUnitConfidence(value.club),
+    season: asUnitConfidence(value.season),
+    kitType: asUnitConfidence(value.kitType),
+    player: asUnitConfidence(value.player),
+    badge: asUnitConfidence(value.badge),
+  };
+  if (
+    fieldConfidence.club === undefined &&
+    fieldConfidence.season === undefined &&
+    fieldConfidence.kitType === undefined &&
+    fieldConfidence.player === undefined &&
+    fieldConfidence.badge === undefined
+  ) {
+    return undefined;
+  }
+  return fieldConfidence;
+}
+
+function looksLightShirtBody(color: string): boolean {
+  return /\bwhite\b|\bweiss\b|\bweiß\b|\bhvid\b|\bsilver\b|\boff-white\b|\blight\s*gr[ae]y\b/.test(
+    color.toLowerCase(),
+  );
+}
+
+/** Models still call white home shirts away; that must not preselect. */
+export function capWhiteAwayKitConfidence(
+  hints: IdentityVisionHints,
+  colorHint?: string,
+): IdentityVisionHints {
+  if (hints.kitType !== "away" || !colorHint || !looksLightShirtBody(colorHint)) {
+    return hints;
+  }
+
+  const kitType = Math.min(hints.fieldConfidence?.kitType ?? 1, 0.45);
+  return {
+    ...hints,
+    fieldConfidence: { ...hints.fieldConfidence, kitType },
+  };
+}
+
+function decodeOverallConfidence(parsed: Record<string, unknown>): number | undefined {
+  if (typeof parsed.confidence === "number") {
+    return asUnitConfidence(parsed.confidence);
+  }
+  if (isRecord(parsed.confidence)) {
+    return asUnitConfidence(parsed.confidence.overall);
+  }
+  return undefined;
+}
+
+/**
+ * Parse model JSON into catalog hints. Empty badges array wins over a hallucinated patchHint.
+ */
+export function decodeIdentityVisionHints(text: string | null): IdentityVisionHints | null {
+  if (!text) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isRecord(parsed)) {
+      return null;
+    }
+
+    const badgesEmpty = Array.isArray(parsed.badges) && parsed.badges.length === 0;
+    const patchFromBadges = badgesEmpty ? undefined : firstBadgeName(parsed.badges);
+    const patchHint = badgesEmpty
+      ? undefined
+      : (patchFromBadges ?? nonemptyString(parsed.patchHint));
+
+    const hints: IdentityVisionHints = {};
+    const clubHint = nonemptyString(parsed.clubHint) ?? nonemptyString(parsed.clubText);
+    const clubHintAlts = decodeStringList(parsed.clubHintAlts);
+    const seasonHint = nonemptyString(parsed.seasonHint) ?? nonemptyString(parsed.seasonText);
+    const kitType = normalizeKitType(parsed.kitType);
+    const playerHint = nonemptyString(parsed.playerHint) ?? nonemptyString(parsed.playerNameText);
+    const playerNumberHint =
+      nonemptyString(parsed.playerNumberHint) ??
+      nonemptyString(parsed.playerNumber) ??
+      (typeof parsed.playerNumber === "number" ? String(parsed.playerNumber) : undefined);
+    const manufacturerHint =
+      nonemptyString(parsed.manufacturerHint) ?? nonemptyString(parsed.manufacturerText);
+    const sponsorHint = nonemptyString(parsed.sponsorHint) ?? nonemptyString(parsed.sponsorText);
+    const colorHint = nonemptyString(parsed.colorHint) ?? nonemptyString(parsed.colorText);
+    const confidence = decodeOverallConfidence(parsed);
+    const fieldConfidence = decodeFieldConfidence(
+      isRecord(parsed.confidence) ? parsed.confidence : parsed.fieldConfidence,
+    );
+
+    if (clubHint) hints.clubHint = clubHint;
+    if (clubHintAlts) hints.clubHintAlts = clubHintAlts;
+    if (seasonHint) hints.seasonHint = seasonHint;
+    if (kitType) hints.kitType = kitType;
+    if (playerHint) hints.playerHint = playerHint;
+    if (playerNumberHint) hints.playerNumberHint = playerNumberHint;
+    if (patchHint) hints.patchHint = patchHint;
+    if (manufacturerHint) hints.manufacturerHint = manufacturerHint;
+    if (sponsorHint) hints.sponsorHint = sponsorHint;
+    if (colorHint) hints.colorHint = colorHint;
+    if (confidence !== undefined) hints.confidence = confidence;
+    if (fieldConfidence) hints.fieldConfidence = fieldConfidence;
+
+    if (
+      !hints.clubHint &&
+      !hints.clubHintAlts &&
+      !hints.seasonHint &&
+      !hints.kitType &&
+      !hints.playerHint &&
+      !hints.playerNumberHint &&
+      !hints.patchHint &&
+      hints.confidence === undefined &&
+      !hints.fieldConfidence
+    ) {
+      return null;
+    }
+
+    return capWhiteAwayKitConfidence(hints, colorHint);
+  } catch {
+    return null;
+  }
+}

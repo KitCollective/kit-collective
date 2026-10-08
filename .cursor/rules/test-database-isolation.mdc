@@ -1,0 +1,13 @@
+---
+description: Tests must not DROP or reset lane Postgres (development/staging/production)
+alwaysApply: true
+---
+
+# Test database isolation
+
+Cloud Agents and Desktop shells inject `DATABASE_URL` as the **shared development lane**. Tests that `DROP SCHEMA` or `resetDatabase` against that URL wipe collector data (KIT-34, KIT-211).
+
+- Never read `process.env.DATABASE_URL` in vitest that resets Postgres. Use `SEED_APIFY_TEST_DATABASE_URL`, `SEED_FKAPI_TEST_DATABASE_URL`, `KIT_DB_TEST_DATABASE_URL`, or `API_TEST_DATABASE_URL` — fallback only `localhost` / `*test*`.
+- Never call `resetDatabase`, `resetTestDatabase`, or `DROP SCHEMA` against CX33 / Coolify lane URLs. Refuse first.
+- Never one-off `ssl: false` migrate/seed scripts against the lane to bypass the TLS guard.
+- Unfiltered `pnpm test` while `DATABASE_URL` is the lane is blocked by hook. Run CI, or point `DATABASE_URL` at `kit_test`, or set the dedicated `*_TEST_DATABASE_URL` vars and filter the package.

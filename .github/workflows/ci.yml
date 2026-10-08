@@ -1,0 +1,292 @@
+name: CI
+
+on:
+  push:
+    branches: [development, staging, production, "cursor/**", "nicklas/**"]
+  pull_request:
+    branches: [development, staging, production]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kit
+          POSTGRES_PASSWORD: kit
+          POSTGRES_DB: kit_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kit -d kit_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+      API_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_api_test
+      SEED_APIFY_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+      SEED_FKAPI_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+      KIT_DB_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+      # CI-only test values — not product defaults. JWT_SECRET is leftover test setup only.
+      JWT_SECRET: ci-test-jwt-secret-not-for-production
+      BETTER_AUTH_SECRET: ci-test-better-auth-secret-not-for-production
+      BETTER_AUTH_URL: http://127.0.0.1:3000
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create API test database
+        run: |
+          PGPASSWORD=kit psql -h localhost -U kit -d kit_test -c "CREATE DATABASE kit_api_test;"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Format and lint
+        run: pnpm format:check
+
+      - name: Lint anti-slop patterns
+        run: pnpm lint:anti-slop
+
+      - name: Check import boundaries
+        run: pnpm check:imports
+
+      - name: Check FK seed test isolation
+        run: pnpm check:seed-fkapi-tests
+
+      - name: Test FK seed test isolation ratchet logic
+        run: node --test scripts/tests/check-seed-fkapi-test-isolation.test.mjs
+
+      - name: Check seed development proof scripts
+        run: pnpm check:seed-development-proof-scripts
+
+      - name: Check seed scope isolation test
+        run: pnpm check:seed-scope-isolation-test
+
+      - name: Check Seed MCP stdio catalog owner
+        run: node scripts/check-seed-mcp-stdio-catalog-owner.mjs
+
+      - name: Test Seed MCP stdio catalog owner ratchet
+        run: node --test scripts/tests/check-seed-mcp-stdio-catalog-owner.test.mjs
+
+      - name: Check seed apify test database isolation
+        run: pnpm check:seed-apify-test-database-isolation
+
+      - name: Check seed fkapi test database isolation
+        run: pnpm check:seed-fkapi-test-database-isolation
+
+      - name: Check kit db test database isolation
+        run: pnpm check:kit-db-test-database-isolation
+
+      - name: Assert seed packages are in workspace and turbo test graph
+        run: |
+          node -e '
+          const { execFileSync } = require("node:child_process");
+          const required = [
+            "@kit/seed-mcp",
+            "@kit/seed-apify",
+            "@kit/seed-fkapi",
+            "@kit/seed-shared",
+          ];
+          const names = new Set(
+            JSON.parse(
+              execFileSync("pnpm", ["list", "-r", "--depth", "-1", "--json"], {
+                encoding: "utf8",
+              }),
+            ).map((pkg) => pkg.name),
+          );
+          const dry = JSON.parse(
+            execFileSync(
+              "pnpm",
+              ["exec", "turbo", "run", "test", "--dry-run=json"],
+              { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+            ),
+          );
+          const taskIds = new Set(dry.tasks.map((task) => task.taskId));
+          const missing = required.filter((name) => !names.has(name));
+          const untested = required.filter(
+            (name) => !taskIds.has(name + "#test"),
+          );
+          if (missing.length > 0 || untested.length > 0) {
+            if (missing.length > 0) {
+              console.error(
+                "Workspace missing seed packages:",
+                missing.join(", "),
+              );
+            }
+            if (untested.length > 0) {
+              console.error(
+                "turbo test graph missing:",
+                untested.map((name) => name + "#test").join(", "),
+              );
+            }
+            process.exit(1);
+          }
+          console.log(
+            "Seed workspace + turbo test graph OK:",
+            required.join(", "),
+          );
+          '
+
+      - name: Check workflow secret logging
+        run: node scripts/check-workflow-secrets.mjs
+
+      - name: Check workflow API boot env
+        run: pnpm check:workflow-api-boot-env
+
+      - name: Check mobile tab bar anatomy
+        run: pnpm check:mobile-tab-bar
+
+      - name: Test mobile tab bar icon ratchet logic
+        run: node --test scripts/tests/check-mobile-tab-bar.test.mjs
+
+      - name: Check mobile profile settings hub
+        run: node scripts/check-mobile-profile-settings-hub.mjs
+
+      - name: Test mobile profile settings hub ratchet logic
+        run: node --test scripts/tests/check-mobile-profile-settings-hub.test.mjs
+
+      - name: Check mobile peer stub typography ratchet
+        run: node scripts/check-mobile-peer-stub-typography.mjs
+
+      - name: Test mobile peer stub typography ratchet logic
+        run: node --test scripts/tests/check-mobile-peer-stub-typography.test.mjs
+
+      - name: Check mobile design tokens
+        run: pnpm check:mobile-design-tokens
+
+      - name: Test mobile design token ratchet logic
+        run: node --test scripts/tests/check-mobile-design-tokens.test.mjs
+
+      - name: Check mobile collection UI evidence
+        run: pnpm check:mobile-collection-ui-evidence
+
+      - name: Test mobile collection UI evidence ratchet logic
+        run: node --test scripts/tests/check-mobile-collection-ui-evidence.test.mjs
+
+      - name: Check mobile wishlist UI evidence
+        run: pnpm --filter @kit/mobile test -- wishlist-ui-evidence
+
+      - name: Check mobile drag-reorder ratchet
+        run: pnpm check:mobile-drag-reorder
+
+      - name: Test mobile drag-reorder ratchet logic
+        run: node --test scripts/tests/check-mobile-drag-reorder.test.mjs
+
+      - name: Check mobile add form-wiring ratchet
+        run: pnpm check:mobile-add-form-wiring
+
+      - name: Test mobile add form-wiring ratchet logic
+        run: node --test scripts/tests/check-mobile-add-form-wiring.test.mjs
+
+      - name: Check mobile add confirm-redirect ratchet
+        run: pnpm check:mobile-add-confirm-redirect
+
+      - name: Test mobile add confirm-redirect ratchet logic
+        run: node --test scripts/tests/check-mobile-add-confirm-redirect.test.mjs
+
+      - name: Check mobile add upload-files ratchet
+        run: pnpm check:mobile-add-upload-files
+
+      - name: Test mobile add upload-files ratchet logic
+        run: node --test scripts/tests/check-mobile-add-upload-files.test.mjs
+
+      - name: Check mobile add camera-resume ratchet
+        run: pnpm check:mobile-add-camera-resume
+
+      - name: Check mobile capture dead-export ratchet
+        run: pnpm check:mobile-capture-dead-exports
+
+      - name: Check mobile paywall IAP ratchet
+        run: node scripts/check-mobile-paywall-iap.mjs
+
+      - name: Test mobile paywall IAP ratchet logic
+        run: node --test scripts/tests/check-mobile-paywall-iap.test.mjs
+
+      - name: Test factory-script land-policy
+        run: pnpm test:factory-scripts
+
+      - name: Test setup-coolify-mcp script
+        run: node --test scripts/tests/setup-coolify-mcp.test.mjs
+
+      - name: Check factory tests are wired on the test job
+        run: pnpm check:factory-ci-tests
+
+      - name: Test factory CI wiring ratchet logic
+        run: node --test scripts/tests/check-factory-ci-tests.test.mjs
+
+      - name: Check signal-up create contract
+        run: node scripts/tests/check-signal-up-create-contract.mjs
+
+      - name: Test signal-up create-contract ratchet logic
+        run: node --test scripts/tests/check-signal-up-create-contract.test.mjs
+
+      - name: Check vision log save-action
+        run: pnpm check:vision-log-save-action
+
+      - name: Check PR write scope
+        run: node scripts/check-pr-write-scope.mjs
+        env:
+          BASE_REF: origin/development
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event_name == 'pull_request' && github.event.pull_request.title || '' }}
+          PR_BODY: ${{ github.event_name == 'pull_request' && github.event.pull_request.body || '' }}
+          PR_HEAD_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || '' }}
+
+      - name: Test PR write-scope ratchet logic
+        run: node --test scripts/tests/check-pr-write-scope.test.mjs
+
+      - name: Test PI CI-sleep hook
+        run: node --test .cursor/hooks/tests/block-pi-ci-sleep.test.mjs
+
+      - name: Check Drizzle migration prefixes
+        run: node scripts/check-migration-prefixes.mjs
+        env:
+          BASE_REF: origin/development
+
+      - name: Test Drizzle migration prefix ratchet
+        run: node --test scripts/tests/check-migration-prefixes.test.mjs
+
+      - name: Test migration-prefix collision hook
+        run: node --test .cursor/hooks/tests/block-migration-prefix-collision.test.mjs
+
+      - name: Test Danish code-identifier hook
+        run: node --test .cursor/hooks/tests/block-danish-code-identifiers.test.mjs
+
+      - name: Test shared-db reset test hook
+        run: node --test .cursor/hooks/tests/block-reset-database-test-on-shared-db.test.mjs
+
+      - name: Check admin stamdata navigation
+        run: node scripts/check-admin-stamdata-navigation.mjs
+
+      - name: Check admin design tokens
+        run: node scripts/check-admin-design-tokens.mjs
+
+      - name: Lint GitHub Actions workflows
+        run: bash scripts/lint-workflows.sh
+
+      - name: Test
+        run: pnpm test
+        env:
+          DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+          JWT_SECRET: ci-test-jwt-secret-not-for-production
+          BETTER_AUTH_SECRET: ci-test-better-auth-secret-not-for-production
+          BETTER_AUTH_URL: http://127.0.0.1:3000

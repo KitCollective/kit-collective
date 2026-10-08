@@ -1,0 +1,22 @@
+{
+  "clubId": "190",
+  "season": 2015,
+  "squads": [
+    {
+      "playerId": "11111",
+      "playerName": "Jonas Wind",
+      "shirtNumber": 23,
+      "clubId": "190",
+      "clubName": "FC Copenhagen",
+      "season": 2015
+    },
+    {
+      "playerId": "11112",
+      "playerName": "Victor Nelsson",
+      "shirtNumber": 4,
+      "clubId": "190",
+      "clubName": "FC Copenhagen",
+      "season": 2015
+    }
+  ]
+}

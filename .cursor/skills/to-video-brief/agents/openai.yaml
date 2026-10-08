@@ -1,0 +1,5 @@
+interface:
+  display_name: "To Video Brief"
+  short_description: "Interview; lock a video brief, then render it"
+policy:
+  allow_implicit_invocation: false

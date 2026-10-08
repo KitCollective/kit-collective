@@ -1,0 +1,13 @@
+# OpenRouter Hy3 for Scout and Gate only
+
+KIT-53 locked factory jobs to Cursor SDK models (`PI_MODEL` Composer, `PI_MODEL_FAST` Grok). Scout and the mechanical half of pre-review are high-token, low-judgment tool calling. Those two Pi subagents use OpenRouter `tencent/hy3` (no-think) via `.pi/agents` frontmatter, not a second implement job model. When Hy3 or OpenRouter is unavailable, `fallbackModels: cursor/composer-2.5` in that frontmatter — never the OpenRouter provider default (Kimi). Prefer Exacto routing when the OpenRouter client allows it; do not block the slice if Pi cannot set provider sort. Every implement job spawns Scout; missing `OPENROUTER_API_KEY` fails the job closed. Payloads are paths, grep snippets, and check names — not whole worktree files, not the workpad, not collector photos (Vision still forbids OpenRouter). Gate reports green or red to the Implement parent (rebase conflict is red; parent resolves). Gate never calls Linear. The parent writes `### Validation` and is the only session that may move to In Review. Helpers inherit the parent. Planner, factory-checker, and land stay on Grok.
+
+Status: accepted
+
+Note (2026-08-30): Pi does not inherit the parent `--model` when a subagent omits `model:`. Unpinned helpers and Slop were billed as OpenRouter `moonshotai/kimi-k2.6` (`KIT-Pi-harness`). Pin those agents to `cursor/composer-2.5`. Do not rewrite the decision above.
+
+Note (2026-08-30, later): OpenRouter workspace guardrail allows only `tencent/hy4-preview`. Scout and Gate pin `openrouter/tencent/hy4-preview` (thinking off, Composer fallback). `tencent/hy3` is ineligible and would Composer-fallback. Do not rewrite the decision above.
+
+Note (2026-08-30, key guardrail): `KIT-Pi-harness` allowlist includes Hy3, MiMo-V2.5-Pro, Hy4 preview, and others. Scout pins `openrouter/tencent/hy3` with fallback `xiaomi/mimo-v2.5-pro` then Composer. Gate pins `openrouter/xiaomi/mimo-v2.5-pro` with fallback `tencent/hy3` then Composer. Hy4 stays on the key as reserve, not the pin. Do not rewrite the decision above.
+
+Note (2026-09-12): Collector Vision may use OpenRouter pinned to Google (ADR-0044). That supersedes the Vision sentence in the decision above. Scout/Gate still must not receive collector photos.

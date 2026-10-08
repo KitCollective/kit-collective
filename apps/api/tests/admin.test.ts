@@ -1,0 +1,624 @@
+import "reflect-metadata";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  adminClubDrillSchema,
+  adminClubSeasonDrillSchema,
+  adminClubSeasonKitsFetchSchema,
+  adminKitDrillSchema,
+  adminStamdataListSchema,
+  collectionJerseysSchema,
+  identitySessionSchema,
+} from "@kit/api-contract";
+import {
+  catalogLabel,
+  catalogMark,
+  club,
+  country,
+  createDb,
+  externalId,
+  kit,
+  kitPhoto,
+  league,
+  player,
+  playerClubSeason,
+  resetDatabase,
+  season,
+  teamSeason,
+  user,
+} from "@kit/db";
+import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
+import { Test } from "@nestjs/testing";
+import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { ADMIN_OBJECT_STORE } from "../dist/admin/admin-catalog.service.js";
+import { FK_LISTING_INGEST } from "../dist/admin/fk-listing-ingest.js";
+import { AppModule } from "../dist/app.module.js";
+import { createMemoryObjectStore } from "../dist/collection/object-store.js";
+
+const migrationsFolder = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../packages/db/migrations",
+);
+
+const DATABASE_URL =
+  process.env.API_TEST_DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_api_test";
+
+const objectStore = createMemoryObjectStore();
+
+const listingIngestCalls: Array<{
+  clubTransfermarktId: string;
+  seasonLabel: string;
+  clubLabel?: string;
+}> = [];
+
+const listingIngest = {
+  async ingestClubSeason(input: {
+    clubTransfermarktId: string;
+    seasonLabel: string;
+    clubLabel?: string;
+  }) {
+    listingIngestCalls.push(input);
+    return { kitsUpserted: 2, photosWritten: 1 };
+  },
+};
+
+async function registerUser(app: NestFastifyApplication, email: string) {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/identity/register",
+    payload: {
+      email,
+      password: "password123",
+    },
+  });
+  return identitySessionSchema.parse(JSON.parse(response.body));
+}
+
+async function promoteToAdmin(email: string) {
+  const { db, pool } = createDb(DATABASE_URL);
+  await db.update(user).set({ role: "admin" }).where(eq(user.email, email.toLowerCase()));
+  await pool.end();
+}
+
+describe("Admin /v1", () => {
+  let app: NestFastifyApplication;
+
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DATABASE_URL;
+    process.env.JWT_SECRET = "test-jwt-secret";
+    await resetDatabase(DATABASE_URL, migrationsFolder);
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(ADMIN_OBJECT_STORE)
+      .useValue(objectStore)
+      .overrideProvider(FK_LISTING_INGEST)
+      .useValue(listingIngest)
+      .compile();
+
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app.setGlobalPrefix("v1");
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it("returns 401 for unauthenticated admin stamdata", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata",
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("returns 403 for collector token on admin stamdata", async () => {
+    const session = await registerUser(app, "collector-admin@example.com");
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+
+  it("lists en labels, alias search, and serves KitPhoto bytes for admin", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "DK" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    await db.insert(catalogLabel).values([
+      {
+        entityType: "club",
+        entityId: insertedClub!.id,
+        locale: "en",
+        kind: "label",
+        text: "FC Copenhagen",
+        source: "seed",
+      },
+      {
+        entityType: "club",
+        entityId: insertedClub!.id,
+        locale: "da",
+        kind: "alias",
+        text: "FCK",
+        source: "seed",
+      },
+      {
+        entityType: "league",
+        entityId: insertedLeague!.id,
+        locale: "en",
+        kind: "label",
+        text: "Superliga",
+        source: "seed",
+      },
+      {
+        entityType: "country",
+        entityId: insertedCountry!.id,
+        locale: "en",
+        kind: "label",
+        text: "Denmark",
+        source: "seed",
+      },
+      {
+        entityType: "country",
+        entityId: insertedCountry!.id,
+        locale: "da",
+        kind: "alias",
+        text: "Danmark",
+        source: "seed",
+      },
+      {
+        entityType: "league",
+        entityId: insertedLeague!.id,
+        locale: "da",
+        kind: "alias",
+        text: "SL",
+        source: "seed",
+      },
+    ]);
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2024/25",
+        startsOn: "2024-07-01",
+        endsOn: "2025-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    await db.insert(teamSeason).values({
+      clubId: insertedClub!.id,
+      seasonId: insertedSeason!.id,
+    });
+
+    const [insertedKit] = await db
+      .insert(kit)
+      .values({
+        clubId: insertedClub!.id,
+        seasonId: insertedSeason!.id,
+        type: "home",
+      })
+      .returning({ id: kit.id });
+
+    const objectKey = `kit/${insertedKit!.id}/photo.jpg`;
+    const photoBytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xd9]);
+    await objectStore.putObject(objectKey, photoBytes);
+
+    await db.insert(kitPhoto).values({
+      kitId: insertedKit!.id,
+      objectKey,
+      rights: "unresolved",
+      visibility: "admin_only",
+    });
+
+    const [insertedPlayer] = await db.insert(player).values({}).returning({ id: player.id });
+    await db.insert(catalogLabel).values({
+      entityType: "player",
+      entityId: insertedPlayer!.id,
+      locale: "en",
+      kind: "label",
+      text: "Player One",
+      source: "seed",
+    });
+    await db.insert(playerClubSeason).values({
+      playerId: insertedPlayer!.id,
+      clubId: insertedClub!.id,
+      seasonId: insertedSeason!.id,
+      squadNumber: 10,
+    });
+
+    const crestKey = "club/190/crest";
+    const crestBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    await objectStore.putObject(crestKey, crestBytes);
+    await db.insert(catalogMark).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      objectKey: crestKey,
+      rights: "unresolved",
+      visibility: "admin_only",
+    });
+
+    await pool.end();
+
+    await registerUser(app, "staff@example.com");
+    await promoteToAdmin("staff@example.com");
+
+    const loginResponse = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "staff@example.com",
+        password: "password123",
+      },
+    });
+    const adminSession = identitySessionSchema.parse(JSON.parse(loginResponse.body));
+    expect(adminSession.user.role).toBe("admin");
+
+    const aliasSearch = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=club&q=FCK",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(aliasSearch.statusCode).toBe(200);
+    const aliasBody = adminStamdataListSchema.parse(JSON.parse(aliasSearch.body));
+    expect(aliasBody.rows.some((row) => row.label.includes("FC Copenhagen"))).toBe(true);
+    const markedClub = aliasBody.rows.find((row) => row.label.includes("FC Copenhagen"));
+    expect(markedClub?.markPath).toBe(`/admin/catalog/clubs/${insertedClub!.id}/mark`);
+
+    const clubMarkResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/mark`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(clubMarkResponse.statusCode).toBe(200);
+    expect(clubMarkResponse.headers["content-type"]).toContain("image/png");
+
+    const countryAliasSearch = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=club&q=Danmark",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(countryAliasSearch.statusCode).toBe(200);
+    const countryAliasBody = adminStamdataListSchema.parse(JSON.parse(countryAliasSearch.body));
+    expect(countryAliasBody.rows.some((row) => row.entityType === "club")).toBe(true);
+
+    const leagueAliasSearch = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=league&q=SL",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(leagueAliasSearch.statusCode).toBe(200);
+    const leagueAliasBody = adminStamdataListSchema.parse(JSON.parse(leagueAliasSearch.body));
+    expect(leagueAliasBody.rows.some((row) => row.entityType === "league")).toBe(true);
+
+    const playerSearch = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=player&q=Player",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(playerSearch.statusCode).toBe(200);
+    const playerBody = adminStamdataListSchema.parse(JSON.parse(playerSearch.body));
+    expect(playerBody.rows.some((row) => row.label === "Player One")).toBe(true);
+
+    const pagedClubs = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=club&limit=1&offset=0",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(pagedClubs.statusCode).toBe(200);
+    const pagedBody = adminStamdataListSchema.parse(JSON.parse(pagedClubs.body));
+    expect(pagedBody.total).toBeGreaterThanOrEqual(1);
+    expect(pagedBody.rows).toHaveLength(1);
+    expect(pagedBody.rows[0]?.entityType).toBe("club");
+
+    const clubDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(clubDrillResponse.statusCode).toBe(200);
+    const clubDrillBody = adminClubDrillSchema.parse(JSON.parse(clubDrillResponse.body));
+    expect(clubDrillBody.label).toBe("FC Copenhagen");
+    expect(clubDrillBody.kind).toBe("club");
+    expect(clubDrillBody.markPath).toBe(`/admin/catalog/clubs/${insertedClub!.id}/mark`);
+    expect(clubDrillBody.honours).toEqual([]);
+    expect(clubDrillBody.seasons.some((season) => season.label === "2024/25")).toBe(true);
+
+    const clubSeasonDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/club-seasons/${insertedClub!.id}/${insertedSeason!.id}?expand=true`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(clubSeasonDrillResponse.statusCode).toBe(200);
+    const clubSeasonBody = adminClubSeasonDrillSchema.parse(
+      JSON.parse(clubSeasonDrillResponse.body),
+    );
+    expect(clubSeasonBody.squadCount).toBe(1);
+    expect(
+      clubSeasonBody.squad?.some((row) => row.label === "Player One" && row.squadNumber === 10),
+    ).toBe(true);
+    expect(clubSeasonBody.kits.some((row) => row.kitType === "home" && row.hasPhoto)).toBe(true);
+
+    const seasonDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/seasons/${insertedSeason!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(seasonDrillResponse.statusCode).toBe(200);
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(listResponse.statusCode).toBe(200);
+    const listBody = adminStamdataListSchema.parse(JSON.parse(listResponse.body));
+    expect(listBody.rows.every((row) => row.entityType === "club")).toBe(true);
+    expect(listBody.rows.some((row) => row.label.includes("FC Copenhagen"))).toBe(true);
+
+    const leagueDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/leagues/${insertedLeague!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(leagueDrillResponse.statusCode).toBe(200);
+
+    const playerDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/players/${insertedPlayer!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(playerDrillResponse.statusCode).toBe(200);
+
+    const drillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/kits/${insertedKit!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(drillResponse.statusCode).toBe(200);
+    const drillBody = adminKitDrillSchema.parse(JSON.parse(drillResponse.body));
+    expect(drillBody.clubLabel).toBe("FC Copenhagen");
+    expect(drillBody.clubId).toBe(insertedClub!.id);
+    expect(drillBody.clubMonogram).toBe("FC");
+
+    const photoResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/kits/${insertedKit!.id}/photo`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(photoResponse.statusCode).toBe(200);
+    expect(photoResponse.headers["cache-control"]).toBe("private, max-age=3600");
+    expect(Buffer.from(photoResponse.rawPayload)).toEqual(Buffer.from(photoBytes));
+
+    const collectorSession = await registerUser(app, "another-collector@example.com");
+    const forbiddenPhoto = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/kits/${insertedKit!.id}/photo`,
+      headers: {
+        authorization: `Bearer ${collectorSession.accessToken}`,
+      },
+    });
+    expect(forbiddenPhoto.statusCode).toBe(403);
+  });
+
+  it("keeps register role=user and lets admin list own collection jerseys", async () => {
+    const collector = await registerUser(app, "dual-role@example.com");
+    expect(collector.user.role).toBe("user");
+
+    await promoteToAdmin("dual-role@example.com");
+    const loginResponse = await app.inject({
+      method: "POST",
+      url: "/v1/identity/login",
+      payload: {
+        email: "dual-role@example.com",
+        password: "password123",
+      },
+    });
+    const adminSession = identitySessionSchema.parse(JSON.parse(loginResponse.body));
+
+    const collectionResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+
+    expect(collectionResponse.statusCode).toBe(200);
+    const jerseys = collectionJerseysSchema.parse(JSON.parse(collectionResponse.body));
+    expect(jerseys).toEqual({ jerseys: [] });
+  });
+
+  it("fetches Football Kit Archive kits for a club season through listing ingest", async () => {
+    listingIngestCalls.length = 0;
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "SE" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2010/11",
+        startsOn: "2010-07-01",
+        endsOn: "2011-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "en",
+      kind: "label",
+      text: "FC Copenhagen",
+      source: "seed",
+    });
+    await db.insert(externalId).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      system: "transfermarkt",
+      value: "190-fetch",
+    });
+    await pool.end();
+
+    const adminSession = await registerUser(app, "kits-fetch-admin@example.com");
+    await promoteToAdmin("kits-fetch-admin@example.com");
+
+    const missing = await app.inject({
+      method: "POST",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/seasons/${insertedSeason!.id}/kits/fetch`,
+    });
+    expect(missing.statusCode).toBe(401);
+
+    const fetched = await app.inject({
+      method: "POST",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/seasons/${insertedSeason!.id}/kits/fetch`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(fetched.statusCode).toBe(200);
+    expect(adminClubSeasonKitsFetchSchema.parse(JSON.parse(fetched.body))).toEqual({
+      kitsUpserted: 2,
+      photosWritten: 1,
+    });
+    expect(listingIngestCalls).toEqual([
+      {
+        clubTransfermarktId: "190-fetch",
+        seasonLabel: "2010/11",
+        clubLabel: "FC Copenhagen",
+      },
+    ]);
+
+    const unknown = await app.inject({
+      method: "POST",
+      url: "/v1/admin/catalog/clubs/550e8400-e29b-41d4-a716-446655440099/seasons/550e8400-e29b-41d4-a716-446655440098/kits/fetch",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(unknown.statusCode).toBe(404);
+  });
+
+  it("refuses kit fetch when the club has no Transfermarkt id", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "NO" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2011/12",
+        startsOn: "2011-07-01",
+        endsOn: "2012-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "en",
+      kind: "label",
+      text: "No TM Club",
+      source: "seed",
+    });
+    await pool.end();
+
+    const adminSession = await registerUser(app, "kits-fetch-no-tm@example.com");
+    await promoteToAdmin("kits-fetch-no-tm@example.com");
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/seasons/${insertedSeason!.id}/kits/fetch`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(JSON.parse(response.body)).toMatchObject({
+      message: "Club has no Transfermarkt id",
+    });
+  });
+});

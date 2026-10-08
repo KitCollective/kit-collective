@@ -1,0 +1,177 @@
+{
+  "ranAt": "2026-09-17T21:45+01",
+  "head": "482bd6d",
+  "KIT-253": "PASS",
+  "note": "Juve back mapped Paulo Dybala after retries (intermittent noop flakes)",
+  "scored": {
+    "juve_back": {
+      "club": true,
+      "season": true,
+      "type": true,
+      "player": true,
+      "playerLabel": "Paulo Dybala",
+      "typeVal": "away",
+      "status": "ready"
+    },
+    "juve_front": {
+      "club": true,
+      "season": true,
+      "type": true,
+      "player": false,
+      "playerLabel": null,
+      "typeVal": "away",
+      "status": "ready"
+    },
+    "arsenal": {
+      "club": true,
+      "season": false,
+      "type": true,
+      "player": false,
+      "playerLabel": null,
+      "typeVal": "home",
+      "status": "ready"
+    },
+    "psg": {
+      "club": true,
+      "season": true,
+      "type": true,
+      "player": false,
+      "playerLabel": null,
+      "typeVal": "away",
+      "status": "ready"
+    },
+    "city": {
+      "club": true,
+      "season": true,
+      "type": true,
+      "player": false,
+      "playerLabel": null,
+      "typeVal": "home",
+      "status": "ready"
+    }
+  },
+  "results": [
+    {
+      "tag": "juve_back",
+      "jerseyId": "j1-juventus-pink-away",
+      "file": "07790B00-08EE-4EB0-ACC9-22E4F761EF66.jpg",
+      "angle": "back",
+      "expectPlayer": "Dybala",
+      "expectType": "away",
+      "status": "noop",
+      "fieldPreselect": null,
+      "suggestions": {},
+      "jobId": "2a8125c6-334f-4f18-adae-c90adbebffd7",
+      "secs": 0.9
+    },
+    {
+      "tag": "juve_front",
+      "jerseyId": "j1-juventus-pink-away",
+      "file": "1C06E22F-FBA4-4EE3-B8B5-A5E4C41C61C1.jpg",
+      "angle": "front",
+      "expectPlayer": "Dybala",
+      "expectType": "away",
+      "status": "ready",
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true
+      },
+      "suggestions": {
+        "clubId": "764918f7-6603-4c18-8d1b-c7e26d665330",
+        "seasonId": "8d3832c9-6e72-4e34-86b3-cab1ce3bc046",
+        "type": "away",
+        "clubLabel": "Juventus FC",
+        "seasonLabel": "2015/16"
+      },
+      "jobId": "62ef7b21-d157-453a-954e-c5bfeabb06fc",
+      "secs": 3.4
+    },
+    {
+      "tag": "arsenal",
+      "jerseyId": "j5-arsenal-red-home-125",
+      "file": "B3EAFB76-FCD3-4EBC-B5AA-21F50D45DC42.jpg",
+      "angle": "front",
+      "expectPlayer": "Henry",
+      "expectType": "home",
+      "status": "ready",
+      "fieldPreselect": {
+        "club": true,
+        "type": true
+      },
+      "suggestions": {
+        "clubId": "a4e0de3e-f499-4e8c-8615-0f90137782bc",
+        "type": "home",
+        "clubLabel": "Arsenal Football Club"
+      },
+      "jobId": "dc496066-94f1-4cf8-b629-3353944a2b60",
+      "secs": 3.3
+    },
+    {
+      "tag": "psg",
+      "jerseyId": "j8-psg-white-jordan",
+      "file": "3F0DDC28-5C7D-4009-A802-0FDCB5027F25.jpg",
+      "angle": "front",
+      "expectPlayer": "Neymar Jr",
+      "expectType": "away",
+      "status": "ready",
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true
+      },
+      "suggestions": {
+        "clubId": "e4b6aab6-3869-44d4-aefc-3aa69fc805d6",
+        "seasonId": "7947b9a3-b408-4d48-b9f6-fc00b4467934",
+        "type": "away",
+        "clubLabel": "Paris Saint-Germain",
+        "seasonLabel": "2019/20"
+      },
+      "jobId": "80efc326-3e2e-45a8-890f-3f0c22055936",
+      "secs": 3.5
+    },
+    {
+      "tag": "city",
+      "jerseyId": "j17-mancity-sky-home",
+      "file": "IMG_9173.jpg",
+      "angle": "front",
+      "expectPlayer": "Haaland",
+      "expectType": "home",
+      "status": "ready",
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true
+      },
+      "suggestions": {
+        "clubId": "5882d356-6045-419d-bdfe-6e3af7a1a37a",
+        "seasonId": "9ff764b4-a0f5-45c2-a976-d3365892e0d1",
+        "type": "home",
+        "clubLabel": "Manchester City",
+        "seasonLabel": "2022/23"
+      },
+      "jobId": "c167d7fd-8a79-4e09-b729-682777239542",
+      "secs": 3.6
+    }
+  ],
+  "type_hits_ready": 4,
+  "juve_back_confirm": {
+    "jobId": "5e792769-4455-43cd-9992-6ab9ad5ff62a",
+    "status": "ready",
+    "suggestions": {
+      "clubId": "764918f7-6603-4c18-8d1b-c7e26d665330",
+      "seasonId": "49795dc2-ffe1-43ad-acb0-4224a399a7ce",
+      "type": "away",
+      "clubLabel": "Juventus FC",
+      "seasonLabel": "2012/13",
+      "playerId": "801b7c97-1eb2-4084-a209-cfc8b3dd0ab8",
+      "playerLabel": "Paulo Dybala"
+    },
+    "fieldPreselect": {
+      "club": true,
+      "season": true,
+      "type": true,
+      "player": true
+    }
+  }
+}

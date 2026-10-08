@@ -1,0 +1,427 @@
+import type { Db } from "@kit/db";
+import { decodeGroupingVisionGroups, groupingVisionPrompt } from "./grouping-vision-prompt.js";
+import {
+  decodeIdentityVisionHints,
+  type IdentityRefinementCandidate,
+  identityPhotoFingerprint,
+  identitySquadSeasonUserPrompt,
+  identityVisionPhotoRoles,
+  identityVisionPrompt,
+  identityVisionRefinementUserPrompt,
+  pickAllowedSeasonHint,
+} from "./identity-vision-prompt.js";
+import { NoopVisionAdapter } from "./noop-vision.adapter.js";
+import {
+  buildOpenRouterGroupingBody,
+  buildOpenRouterIdentityBody,
+  buildOpenRouterIdentityRefinementBody,
+  buildOpenRouterSquadSeasonBody,
+  extractOpenRouterMessageText,
+  OPENROUTER_CHAT_URL,
+  OPENROUTER_VISION_MODEL,
+  openRouterVisionApiKey,
+  openRouterVisionHeaders,
+  resolveVisionTransport,
+} from "./openrouter-vision.js";
+import type {
+  VisionAdapter,
+  VisionGroupingInferenceResult,
+  VisionGroupingOptions,
+  VisionGroupingPhotoInput,
+  VisionIdentityPhotoInput,
+  VisionInferenceResult,
+} from "./vision.adapter.js";
+import { VisionCatalogMapper } from "./vision-catalog-mapper.js";
+import { encodeVisionEvalRaw } from "./vision-confidence.js";
+
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
+const GEMINI_TIMEOUT_MS = 15_000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function extractGeminiText(body: unknown): string | null {
+  if (!isRecord(body)) {
+    return null;
+  }
+
+  const candidates = body.candidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return null;
+  }
+
+  const firstCandidate = candidates[0];
+  if (!isRecord(firstCandidate)) {
+    return null;
+  }
+
+  const content = firstCandidate.content;
+  if (!isRecord(content)) {
+    return null;
+  }
+
+  const parts = content.parts;
+  if (!Array.isArray(parts) || parts.length === 0) {
+    return null;
+  }
+
+  const firstPart = parts[0];
+  if (!isRecord(firstPart) || typeof firstPart.text !== "string") {
+    return null;
+  }
+
+  return firstPart.text;
+}
+
+export class GeminiVisionAdapter implements VisionAdapter {
+  private readonly mapper: VisionCatalogMapper;
+
+  constructor(db: Db) {
+    this.mapper = new VisionCatalogMapper(db);
+  }
+
+  async infer(photos: VisionIdentityPhotoInput[]): Promise<VisionInferenceResult | null> {
+    const transport = resolveVisionTransport();
+    const usable = photos.filter((photo) => photo.bytes.byteLength >= 32);
+    if (transport === "noop" || usable.length === 0) {
+      return null;
+    }
+
+    const started = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+    const photoMeta = {
+      photoCount: usable.length,
+      photoBytes: usable.map((photo) => photo.bytes.byteLength),
+      photoFingerprint: identityPhotoFingerprint(usable),
+    };
+
+    try {
+      const text =
+        transport === "openrouter"
+          ? await this.completeOpenRouter(buildOpenRouterIdentityBody(usable), controller.signal)
+          : await this.completeGeminiDirect(usable, controller.signal);
+
+      const structured = decodeIdentityVisionHints(text);
+      if (!structured) {
+        return null;
+      }
+
+      let mapped = await this.mapper.mapHints(structured);
+      if (!mapped?.catalogKitId) {
+        const candidates = await this.mapper.listObservableKitHits(structured);
+        if (candidates.length > 1) {
+          const refineText =
+            transport === "openrouter"
+              ? await this.completeOpenRouter(
+                  buildOpenRouterIdentityRefinementBody(usable, candidates),
+                  controller.signal,
+                )
+              : await this.completeGeminiRefinement(usable, candidates, controller.signal);
+          const refined = decodeIdentityVisionHints(refineText);
+          if (refined) {
+            const second = await this.mapper.mapHints(
+              {
+                ...structured,
+                seasonHint: refined.seasonHint ?? structured.seasonHint,
+                kitType: refined.kitType ?? structured.kitType,
+              },
+              { amongKitIds: candidates.map((candidate) => candidate.kitId) },
+            );
+            if (second) {
+              mapped = second;
+            }
+          }
+        } else if (mapped?.playerId && mapped.clubId && !mapped.seasonId) {
+          try {
+            const squadController = new AbortController();
+            const squadTimeout = setTimeout(() => squadController.abort(), GEMINI_TIMEOUT_MS);
+            mapped = await this.refineSquadSeason(
+              mapped,
+              usable,
+              transport,
+              squadController.signal,
+            );
+            clearTimeout(squadTimeout);
+          } catch {
+            // A failed second look must keep the mapped player and club.
+          }
+        }
+      }
+
+      if (!mapped) {
+        return null;
+      }
+
+      return {
+        ...mapped,
+        visionRaw: encodeVisionEvalRaw(structured, mapped.kitHitCount, photoMeta),
+        latencyMs: Date.now() - started,
+        model: transport === "openrouter" ? OPENROUTER_VISION_MODEL : GEMINI_MODEL,
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async inferGrouping(
+    photos: VisionGroupingPhotoInput[],
+    options: VisionGroupingOptions = {},
+  ): Promise<VisionGroupingInferenceResult | null> {
+    const transport = resolveVisionTransport();
+    const priorGroups = options.priorGroups ?? [];
+    if (transport === "noop" || photos.length === 0) {
+      return null;
+    }
+    if (photos.length < 2 && priorGroups.length === 0) {
+      return null;
+    }
+
+    const started = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+    try {
+      const text =
+        transport === "openrouter"
+          ? await this.completeOpenRouter(
+              buildOpenRouterGroupingBody(photos, priorGroups),
+              controller.signal,
+            )
+          : await this.completeGeminiGrouping(photos, priorGroups, controller.signal);
+      if (!text) {
+        return null;
+      }
+
+      const allowedPhotoIds = [
+        ...photos.map((photo) => photo.photoId),
+        ...priorGroups.flatMap((group) => group.photoIds),
+      ];
+      const groups = decodeGroupingVisionGroups(text, allowedPhotoIds);
+      if (!groups) {
+        return null;
+      }
+
+      return {
+        groups,
+        latencyMs: Date.now() - started,
+        model: transport === "openrouter" ? OPENROUTER_VISION_MODEL : GEMINI_MODEL,
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async completeOpenRouter(
+    body: ReturnType<
+      | typeof buildOpenRouterIdentityBody
+      | typeof buildOpenRouterIdentityRefinementBody
+      | typeof buildOpenRouterSquadSeasonBody
+      | typeof buildOpenRouterGroupingBody
+    >,
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    const apiKey = openRouterVisionApiKey();
+    if (!apiKey) {
+      return null;
+    }
+
+    const response = await fetch(OPENROUTER_CHAT_URL, {
+      method: "POST",
+      headers: openRouterVisionHeaders(apiKey),
+      signal,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return extractOpenRouterMessageText(await response.json());
+  }
+
+  private async completeGeminiDirect(
+    photos: VisionIdentityPhotoInput[],
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+      {
+        text: identityVisionPrompt(
+          photos.length,
+          identityPhotoFingerprint(photos),
+          identityVisionPhotoRoles(photos),
+        ),
+      },
+    ];
+
+    for (const photo of photos) {
+      if (photo.role) {
+        parts.push({ text: `role: ${photo.role}` });
+      }
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: Buffer.from(photo.bytes).toString("base64"),
+        },
+      });
+    }
+
+    return this.fetchGeminiGenerateContent(parts, signal);
+  }
+
+  private async refineSquadSeason(
+    mapped: VisionInferenceResult,
+    photos: VisionIdentityPhotoInput[],
+    transport: ReturnType<typeof resolveVisionTransport>,
+    signal: AbortSignal,
+  ): Promise<VisionInferenceResult> {
+    const playerId = mapped.playerId;
+    const clubId = mapped.clubId;
+    if (!playerId || !clubId) {
+      return mapped;
+    }
+    const labels = await this.mapper.listPlayerClubSeasonLabels(playerId, clubId);
+    if (labels.length < 2) {
+      return mapped;
+    }
+    const refineText =
+      transport === "openrouter"
+        ? await this.completeOpenRouter(buildOpenRouterSquadSeasonBody(photos, labels), signal)
+        : await this.completeGeminiSquadSeason(photos, labels, signal);
+    const refined = decodeIdentityVisionHints(refineText);
+    const picked = pickAllowedSeasonHint(refined?.seasonHint, labels);
+    if (!picked) {
+      return mapped;
+    }
+    const seasonId = await this.mapper.seasonIdForPlayerClubLabel(playerId, clubId, picked);
+    if (!seasonId) {
+      return mapped;
+    }
+    return {
+      ...mapped,
+      seasonId,
+      confidences: {
+        overall: mapped.confidences?.overall ?? 80,
+        club: mapped.confidences?.club,
+        nationalTeam: mapped.confidences?.nationalTeam,
+        season: 80,
+        kitType: mapped.confidences?.kitType,
+        player: mapped.confidences?.player,
+        badge: mapped.confidences?.badge,
+      },
+    };
+  }
+
+  private async completeGeminiSquadSeason(
+    photos: VisionIdentityPhotoInput[],
+    seasonLabels: readonly string[],
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+      { text: identitySquadSeasonUserPrompt(seasonLabels) },
+    ];
+    for (const photo of photos) {
+      if (photo.role) {
+        parts.push({ text: `role: ${photo.role}` });
+      }
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: Buffer.from(photo.bytes).toString("base64"),
+        },
+      });
+    }
+    return this.fetchGeminiGenerateContent(parts, signal);
+  }
+
+  private async completeGeminiRefinement(
+    photos: VisionIdentityPhotoInput[],
+    candidates: IdentityRefinementCandidate[],
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+      {
+        text: `${identityVisionPrompt(
+          photos.length,
+          identityPhotoFingerprint(photos),
+          identityVisionPhotoRoles(photos),
+        )}\n\n${identityVisionRefinementUserPrompt(candidates)}`,
+      },
+    ];
+
+    for (const photo of photos) {
+      if (photo.role) {
+        parts.push({ text: `role: ${photo.role}` });
+      }
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: Buffer.from(photo.bytes).toString("base64"),
+        },
+      });
+    }
+
+    return this.fetchGeminiGenerateContent(parts, signal);
+  }
+
+  private async completeGeminiGrouping(
+    photos: VisionGroupingPhotoInput[],
+    priorGroups: Array<{ photoIds: string[] }>,
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+      { text: groupingVisionPrompt(photos.length, priorGroups) },
+    ];
+
+    for (const photo of photos) {
+      parts.push({ text: `photoId: ${photo.photoId}` });
+      parts.push({
+        inline_data: {
+          mime_type: "image/jpeg",
+          data: Buffer.from(photo.bytes).toString("base64"),
+        },
+      });
+    }
+
+    return this.fetchGeminiGenerateContent(parts, signal);
+  }
+
+  private async fetchGeminiGenerateContent(
+    parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }>,
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal,
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.1,
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return extractGeminiText(await response.json());
+  }
+}
+
+export function createGeminiVisionAdapter(db: Db): VisionAdapter {
+  if (resolveVisionTransport() === "noop") {
+    return new NoopVisionAdapter();
+  }
+  return new GeminiVisionAdapter(db);
+}

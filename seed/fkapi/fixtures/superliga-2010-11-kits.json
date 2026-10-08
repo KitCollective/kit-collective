@@ -1,0 +1,38 @@
+{
+  "kits": [
+    {
+      "id": "fk-2011-home-190",
+      "clubTransfermarktId": "190",
+      "seasonTransfermarktId": "DK1-2010",
+      "seasonLabel": "2010/11",
+      "type": "home",
+      "manufacturerName": "adidas",
+      "sponsorName": "Carlsberg",
+      "primaryColorHex": "FFFFFF",
+      "secondaryColorHex": "0066B3",
+      "imageBytes": [255, 216, 255, 224]
+    },
+    {
+      "id": "fk-2011-away-190",
+      "clubTransfermarktId": "190",
+      "seasonTransfermarktId": "DK1-2010",
+      "seasonLabel": "2010/11",
+      "type": "away",
+      "manufacturerName": "adidas",
+      "primaryColorHex": "0066B3",
+      "secondaryColorHex": "FFFFFF",
+      "imageBytes": [255, 216, 255, 225]
+    },
+    {
+      "id": "fk-2011-home-191",
+      "clubTransfermarktId": "191",
+      "seasonTransfermarktId": "DK1-2010",
+      "seasonLabel": "2010/11",
+      "type": "home",
+      "manufacturerName": "Nike",
+      "primaryColorHex": "FFD700",
+      "secondaryColorHex": "0066B3",
+      "imageBytes": [255, 216, 255, 226]
+    }
+  ]
+}

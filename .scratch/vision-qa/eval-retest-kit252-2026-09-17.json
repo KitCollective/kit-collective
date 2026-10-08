@@ -1,0 +1,219 @@
+{
+  "ranAt": "2026-09-17T19:20+01",
+  "head": "becbfff KIT-252",
+  "KIT-252": "PARTIAL",
+  "KIT-251_barca_spot": "PASS",
+  "type_hits": 3,
+  "player_hits": 0,
+  "scored": {
+    "j1-juventus-pink-away": {
+      "status": "ready",
+      "club": true,
+      "season": true,
+      "type": true,
+      "player": false,
+      "labels": {
+        "clubLabel": "Juventus FC",
+        "seasonLabel": "2015/16",
+        "type": "away"
+      }
+    },
+    "j5-arsenal-red-home-125": {
+      "status": "ready",
+      "club": true,
+      "season": false,
+      "type": true,
+      "player": false,
+      "labels": {
+        "clubLabel": "Arsenal Football Club",
+        "type": "home"
+      }
+    },
+    "j8-psg-white-jordan": {
+      "status": "ready",
+      "club": true,
+      "season": true,
+      "type": true,
+      "player": false,
+      "labels": {
+        "clubLabel": "Paris Saint-Germain",
+        "seasonLabel": "2019/20",
+        "type": "away"
+      }
+    },
+    "j17-mancity-sky-home": {
+      "status": "noop",
+      "club": false,
+      "season": false,
+      "type": false,
+      "player": false,
+      "labels": {}
+    }
+  },
+  "barca": {
+    "jerseyId": "j10-barca-salmon-third",
+    "file": "4FB86A65-D3A7-44B7-873F-EFA6EA08CD2F.jpg",
+    "expectClub": "FC Barcelona",
+    "expectSeason": "2018/19",
+    "expectType": "third",
+    "expectPlayer": "Messi",
+    "status": "ready",
+    "catalogMiss": true,
+    "clubHint": "FC Barcelona",
+    "nationalTeamHint": null,
+    "fieldPreselect": null,
+    "preselect": false,
+    "suggestions": {},
+    "jobId": "09f9902f-ef88-47b2-8410-f560e8f51529",
+    "secs": 5.5
+  },
+  "results": [
+    {
+      "jerseyId": "j1-juventus-pink-away",
+      "file": "1C06E22F-FBA4-4EE3-B8B5-A5E4C41C61C1.jpg",
+      "expectClub": "Juventus",
+      "expectSeason": "2015/16",
+      "expectType": "away",
+      "expectPlayer": "Dybala",
+      "status": "ready",
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true
+      },
+      "preselect": true,
+      "suggestions": {
+        "clubId": "764918f7-6603-4c18-8d1b-c7e26d665330",
+        "seasonId": "8d3832c9-6e72-4e34-86b3-cab1ce3bc046",
+        "type": "away",
+        "clubLabel": "Juventus FC",
+        "seasonLabel": "2015/16"
+      },
+      "jobId": "fb45e17f-c63b-42be-b44b-671446a330fa",
+      "secs": 4.7
+    },
+    {
+      "jerseyId": "j5-arsenal-red-home-125",
+      "file": "B3EAFB76-FCD3-4EBC-B5AA-21F50D45DC42.jpg",
+      "expectClub": "Arsenal",
+      "expectSeason": "2011/12",
+      "expectType": "home",
+      "expectPlayer": "Henry",
+      "status": "ready",
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "fieldPreselect": {
+        "club": true,
+        "type": true
+      },
+      "preselect": true,
+      "suggestions": {
+        "clubId": "a4e0de3e-f499-4e8c-8615-0f90137782bc",
+        "type": "home",
+        "clubLabel": "Arsenal Football Club"
+      },
+      "jobId": "6e082036-bf7c-4ed9-8b37-0ade058641db",
+      "secs": 3.2
+    },
+    {
+      "jerseyId": "j8-psg-white-jordan",
+      "file": "3F0DDC28-5C7D-4009-A802-0FDCB5027F25.jpg",
+      "expectClub": "Paris Saint-Germain",
+      "expectSeason": "2018/19",
+      "expectType": "away",
+      "expectPlayer": "Neymar Jr",
+      "status": "ready",
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true
+      },
+      "preselect": true,
+      "suggestions": {
+        "clubId": "e4b6aab6-3869-44d4-aefc-3aa69fc805d6",
+        "seasonId": "7947b9a3-b408-4d48-b9f6-fc00b4467934",
+        "type": "away",
+        "clubLabel": "Paris Saint-Germain",
+        "seasonLabel": "2019/20"
+      },
+      "jobId": "3b94156e-91c5-4776-b300-c17b8efa0648",
+      "secs": 3.3
+    },
+    {
+      "jerseyId": "j10-barca-salmon-third",
+      "file": "4FB86A65-D3A7-44B7-873F-EFA6EA08CD2F.jpg",
+      "expectClub": "FC Barcelona",
+      "expectSeason": "2018/19",
+      "expectType": "third",
+      "expectPlayer": "Messi",
+      "status": "ready",
+      "catalogMiss": true,
+      "clubHint": "FC Barcelona",
+      "nationalTeamHint": null,
+      "fieldPreselect": null,
+      "preselect": false,
+      "suggestions": {},
+      "jobId": "09f9902f-ef88-47b2-8410-f560e8f51529",
+      "secs": 5.5
+    },
+    {
+      "tag": "city",
+      "jerseyId": "j17-mancity-sky-home",
+      "file": "IMG_9173.jpg",
+      "angle": "front",
+      "expectPlayer": "Haaland",
+      "expectType": "home",
+      "status": "noop",
+      "fieldPreselect": null,
+      "suggestions": {},
+      "secs": 3.8,
+      "jobId": "a387e790-794d-454c-8ee1-9a0ec84f6129"
+    }
+  ],
+  "extra": [
+    {
+      "tag": "city",
+      "jerseyId": "j17-mancity-sky-home",
+      "file": "IMG_9173.jpg",
+      "angle": "front",
+      "expectPlayer": "Haaland",
+      "expectType": "home",
+      "status": "noop",
+      "fieldPreselect": null,
+      "suggestions": {},
+      "secs": 3.8,
+      "jobId": "a387e790-794d-454c-8ee1-9a0ec84f6129"
+    },
+    {
+      "tag": "juve_back",
+      "jerseyId": "j1-juventus-pink-away",
+      "file": "07790B00-08EE-4EB0-ACC9-22E4F761EF66.jpg",
+      "angle": "back",
+      "expectPlayer": "Dybala",
+      "expectType": "away",
+      "status": "ready",
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true
+      },
+      "suggestions": {
+        "clubId": "764918f7-6603-4c18-8d1b-c7e26d665330",
+        "seasonId": "49795dc2-ffe1-43ad-acb0-4224a399a7ce",
+        "type": "away",
+        "clubLabel": "Juventus FC",
+        "seasonLabel": "2012/13"
+      },
+      "secs": 4.0,
+      "jobId": "22ab299e-7b42-4ec2-8b4a-ffeb58214398"
+    }
+  ],
+  "juve_back_player": false
+}
