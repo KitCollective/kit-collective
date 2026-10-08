@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds the Release simulator app for this checkout, pointed at the local API,
-# and installs it on the booted (or named) simulator (KIT-267).
+# Builds the Release simulator app for this commit, pointed at the local API,
+# and installs it on the flows' own simulator (KIT-267).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

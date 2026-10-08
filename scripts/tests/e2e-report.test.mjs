@@ -12,9 +12,9 @@ const AFTER = "aaaaaaa111111111111111111111111111111111";
 const BEFORE = "bbbbbbb222222222222222222222222222222222";
 
 const pairs = [
-  { flow: "collection", step: "01-collection", status: "same", ratio: 0 },
-  { flow: "collection", step: "02-shortcut-filter", status: "changed", ratio: 0.2 },
-  { flow: "wishlist-paywall", step: "03-extra", status: "new", ratio: null },
+  { flow: "collection", step: "01-collection", status: "same" },
+  { flow: "collection", step: "02-shortcut-filter", status: "changed" },
+  { flow: "wishlist-paywall", step: "03-extra", status: "new" },
 ];
 
 const reviews = new Map([
@@ -29,7 +29,7 @@ const reviews = new Map([
       },
     },
   ],
-  ["wishlist-paywall/03-extra", { error: "The review model answered HTTP 500" }],
+  ["wishlist-paywall/03-extra", { error: "The Claude review run timed out" }],
 ]);
 
 test("the comment lists exactly the steps that differ, with before, after and verdict", () => {
@@ -62,7 +62,7 @@ test("the comment lists exactly the steps that differ, with before, after and ve
   assert.match(rows[0], /_Opinion:_ Keep the old height/);
   // A new step has no before image, and a failed review says so instead of passing silently.
   assert.match(rows[1], /\| new \| {2}\| <a href=/);
-  assert.match(rows[1], /Review unavailable: The review model answered HTTP 500/);
+  assert.match(rows[1], /Review unavailable: The Claude review run timed out/);
   assert.match(
     body,
     /\[collection\]\(https:\/\/evidence\.example\/e2e\/a{7}1{33}\/collection\/video\.mp4\)/,

@@ -7,8 +7,8 @@ import { Test } from "@nestjs/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
+import { insertLocalFixtureCatalog } from "../dist/e2e/local-catalog.js";
 import { TEST_COLLECTOR_ID } from "../dist/e2e/test-data.fixture.js";
-import { insertFixtureCatalog } from "./helpers/e2e-fixture-catalog.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -51,7 +51,7 @@ describe("POST /v1/e2e/test-data", () => {
     const created = createDb(DATABASE_URL);
     db = created.db;
     closePool = () => created.pool.end();
-    await insertFixtureCatalog(db);
+    await insertLocalFixtureCatalog(db);
 
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -73,7 +73,7 @@ describe("POST /v1/e2e/test-data", () => {
     delete process.env.PRODUCTION_DATABASE_URL;
   });
 
-  it("does not exist on a lane without a test-data token", async () => {
+  it("does not exist without a test-data token", async () => {
     delete process.env.E2E_TEST_DATA_TOKEN;
     expect((await post(TOKEN)).statusCode).toBe(404);
     expect(await db.select({ id: user.id }).from(user)).toHaveLength(0);

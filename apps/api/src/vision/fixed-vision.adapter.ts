@@ -18,7 +18,7 @@ const PHOTOS_PER_GROUP = 2;
 /**
  * Vision for the device-flow test Collector (KIT-267): the same suggestion for
  * any photos, no model call. The catalog side comes from the test-data fixture
- * and resolves against this lane's catalog.
+ * and resolves against the catalog at hand.
  */
 export class FixedVisionAdapter implements VisionAdapter {
   constructor(private readonly db: Db) {}

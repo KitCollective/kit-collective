@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Runs the device flows on a local iOS Simulator (KIT-267).
 #   1. .maestro/local-api.sh              (terminal 1: local API on a disposable database)
-#   2. a Release simulator build pointed at http://localhost:3000, installed on the
-#      booted simulator (see docs/agents/device-flows.md)
+#   2. .maestro/build-local.sh            (Release build on the flows' own simulator)
 #   3. .maestro/run-local.sh [flow.yaml]  (terminal 2)
 # Screenshots and recordings land in .maestro/out/.
 set -euo pipefail

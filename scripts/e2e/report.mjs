@@ -13,7 +13,7 @@ const THUMBNAIL_WIDTH = 220;
  * @param {string} flow
  * @param {string} file `<step>.png` or `video.mp4`
  */
-export function evidenceUrl(baseUrl, sha, flow, file) {
+function evidenceUrl(baseUrl, sha, flow, file) {
   return `${baseUrl.replace(/\/+$/, "")}/${sha}/${flow}/${file}`;
 }
 
@@ -74,7 +74,7 @@ export function renderComment({
   lines.push("");
   if (!beforeSha) {
     lines.push(
-      "No passed `development` run at or before this PR's merge base, so there is nothing to compare against. Every step is listed as new on the next comparison.",
+      "No passed `development` run at or before this PR's merge base, so there is nothing to compare against yet.",
       "",
     );
   }

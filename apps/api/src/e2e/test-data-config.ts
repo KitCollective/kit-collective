@@ -14,8 +14,7 @@ export type TestDataConfig = {
 };
 
 /**
- * Lane settings for the device-flow test data, from the environment (lane
- * secrets, never git). Throws before anything is written when the database is
+ * Settings for the device-flow test data, from the environment (never git). Throws before anything is written when the database is
  * refused or a credential is missing.
  */
 export function readTestDataConfig(env: NodeJS.ProcessEnv): TestDataConfig {

@@ -67,7 +67,7 @@ async function resolveFixtureCatalog(db: Db): Promise<Map<string, ResolvedSide>>
   }
   if (missing.length > 0) {
     throw new Error(
-      `Device-flow test data needs these catalog sides with at least one linked season, and this lane has none: ${missing.join(", ")}. Nothing was written.`,
+      `Device-flow test data needs these catalog sides with at least one linked season, and this catalog has none: ${missing.join(", ")}. Nothing was written.`,
     );
   }
   return resolved;
@@ -91,7 +91,7 @@ async function assertIdentityFree(db: Db, credentials: TestDataCredentials): Pro
       .limit(1);
     if (taken) {
       throw new Error(
-        `Refused: the e-mail or handle for test Collector ${handle} belongs to another Collector on this lane. Nothing was written.`,
+        `Refused: the e-mail or handle for test Collector ${handle} belongs to another Collector in this database. Nothing was written.`,
       );
     }
   }
@@ -115,13 +115,8 @@ export async function applyTestData(input: {
   const { db, objectStore, credentials } = input;
   const catalog = await resolveFixtureCatalog(db);
   await assertIdentityFree(db, credentials);
-  const sideOf = (side: FixtureSide): ResolvedSide => {
-    const match = catalog.get(sideKey(side));
-    if (!match) {
-      throw new Error(`Fixture side ${side.label} is not listed in TEST_DATA_CATALOG`);
-    }
-    return match;
-  };
+  // Fixture sides are typed from TEST_DATA_CATALOG, and every one of those resolved above.
+  const sideOf = (side: FixtureSide) => catalog.get(sideKey(side)) as ResolvedSide;
 
   const accounts = [
     { id: TEST_COLLECTOR_ID, handle: TEST_COLLECTOR_HANDLE, ...credentials.collector },

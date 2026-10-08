@@ -162,7 +162,6 @@ export function SplashScreen({ onOpenLogin, onOpenRegister, onContinue }: Splash
             />
             <SplashDockButton
               label={SPLASH_REGISTER_LABEL}
-              testID="splash-register"
               labelColor={color.contentInverse}
               fill={styles.tertiaryInverse}
               interactive={interactive}
@@ -177,7 +176,7 @@ export function SplashScreen({ onOpenLogin, onOpenRegister, onContinue }: Splash
 
 type SplashDockButtonProps = {
   label: string;
-  testID: string;
+  testID?: string;
   labelColor: string;
   fill: StyleProp<ViewStyle>;
   interactive: boolean;

@@ -94,14 +94,13 @@ test("the review prompt names both screenshots for a changed step and one for a 
 
 test("the verdict comes from a headless Claude run that may only read the two screenshots", async () => {
   const calls = [];
-  process.env.ANTHROPIC_API_KEY = "would-bill-an-api-account";
   const verdict = await requestVerdict({
     prompt: "p",
     beforePng: Buffer.from("before"),
     afterPng: Buffer.from("after"),
     model: "sonnet",
     run: async (command, args, options) => {
-      calls.push({ command, args, files: readdirSync(options.cwd).sort(), env: options.env });
+      calls.push({ command, args, files: readdirSync(options.cwd).sort() });
       return JSON.stringify({
         is_error: false,
         result:
@@ -109,11 +108,8 @@ test("the verdict comes from a headless Claude run that may only read the two sc
       });
     },
   });
-  delete process.env.ANTHROPIC_API_KEY;
   assert.equal(verdict.askedFor, "yes");
   assert.equal(calls[0].command, "claude");
-  // The subscription pays, never an API key that happens to be in the environment.
-  assert.equal(calls[0].env.ANTHROPIC_API_KEY, undefined);
   assert.deepEqual(calls[0].files, ["after.png", "before.png"]);
   const args = calls[0].args;
   assert.deepEqual(args.slice(0, 2), ["-p", "p"]);
@@ -122,6 +118,61 @@ test("the verdict comes from a headless Claude run that may only read the two sc
   // No user or project settings, no MCP servers: the run cannot act on anything.
   assert.equal(args[args.indexOf("--setting-sources") + 1], "");
   assert.ok(args.includes("--strict-mcp-config"));
+});
+
+test("a Claude run that dies gives a short reason that never carries the prompt", async () => {
+  const secretPrompt = `contract ${"x".repeat(50_000)}`;
+  const failure = Object.assign(new Error(`Command failed: claude -p ${secretPrompt}`), {
+    killed: true,
+    signal: "SIGTERM",
+  });
+  await assert.rejects(
+    requestVerdict({
+      prompt: secretPrompt,
+      beforePng: null,
+      afterPng: Buffer.from("a"),
+      model: "sonnet",
+      run: async () => {
+        throw failure;
+      },
+    }),
+    (error) => {
+      assert.ok(error.message.length < 200, error.message.slice(0, 80));
+      assert.doesNotMatch(error.message, /contract/);
+      assert.match(error.message, /timed out|SIGTERM/);
+      return true;
+    },
+  );
+});
+
+test("the review run gets a minimal environment, not the runner's secrets", async () => {
+  process.env.R2_SECRET_ACCESS_KEY = "lane-secret";
+  // With an API key in its environment `claude` would bill that account, not the subscription.
+  process.env.ANTHROPIC_API_KEY = "would-bill-an-api-account";
+  process.env.E2E_GITHUB_TOKEN = "gh-token";
+  let seen;
+  await requestVerdict({
+    prompt: "p",
+    beforePng: null,
+    afterPng: Buffer.from("a"),
+    model: "sonnet",
+    run: async (_command, _args, options) => {
+      seen = options.env;
+      return JSON.stringify({
+        is_error: false,
+        result:
+          '{"whatChanged":"x","askedFor":"yes","designLock":{"breaks":false,"rule":null},"suggestion":null}',
+      });
+    },
+  });
+  delete process.env.R2_SECRET_ACCESS_KEY;
+  delete process.env.E2E_GITHUB_TOKEN;
+  delete process.env.ANTHROPIC_API_KEY;
+  assert.equal(seen.ANTHROPIC_API_KEY, undefined);
+  assert.equal(seen.R2_SECRET_ACCESS_KEY, undefined);
+  assert.equal(seen.E2E_GITHUB_TOKEN, undefined);
+  assert.equal(seen.PATH, process.env.PATH);
+  assert.equal(seen.HOME, process.env.HOME);
 });
 
 test("a Claude run that reports an error is a failed review, not a verdict", async () => {

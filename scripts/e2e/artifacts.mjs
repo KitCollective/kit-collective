@@ -8,7 +8,9 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-export const EVIDENCE_PREFIX = "e2e";
+const EVIDENCE_PREFIX = "e2e";
+/** Maestro nests its output a few levels; this stops a walk that went astray. */
+const MAX_DEPTH = 6;
 const NAME = /^kc__([a-z0-9-]+)(?:__([a-z0-9-]+))?\.(png|mp4)$/;
 const SKIPPED_DIRECTORIES = new Set(["node_modules", ".git", "Pods", "DerivedData"]);
 
@@ -69,9 +71,8 @@ export function screenshotFromKey(sha, key) {
  * Evidence files under the given directories. When the same name turns up
  * twice (a retried flow), the newest file wins.
  * @param {string[]} roots
- * @param {number} [maxDepth]
  */
-export function findArtifacts(roots, maxDepth = 6) {
+export function findArtifacts(roots) {
   /** @type {Map<string, { path: string, mtimeMs: number, flow: string, step: string | null, kind: "screenshot" | "video" }>} */
   const found = new Map();
   const walk = (directory, depth) => {
@@ -84,7 +85,7 @@ export function findArtifacts(roots, maxDepth = 6) {
     for (const entry of entries) {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (depth < maxDepth && !SKIPPED_DIRECTORIES.has(entry.name)) {
+        if (depth < MAX_DEPTH && !SKIPPED_DIRECTORIES.has(entry.name)) {
           walk(path, depth + 1);
         }
         continue;

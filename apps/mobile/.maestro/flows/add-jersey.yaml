@@ -34,6 +34,12 @@ name: add-jersey
     visible:
       id: confirm-vision-success
     timeout: 90000
+# The picked photo binds to the Forside slot a moment after the suggestion
+# lands; the slot's label ends in ", tom" until then.
+- extendedWaitUntil:
+    notVisible:
+      text: "Forside, tom"
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__add-jersey__02-confirm

@@ -25,6 +25,7 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { createMemoryObjectStore } from "../dist/collection/object-store.js";
+import { insertLocalFixtureCatalog } from "../dist/e2e/local-catalog.js";
 import {
   TEST_COLLECTOR_ID,
   TEST_DATA_CATALOG,
@@ -32,7 +33,6 @@ import {
 } from "../dist/e2e/test-data.fixture.js";
 import { applyTestData } from "../dist/e2e/test-data.js";
 import { assertTestDataDatabaseAllowed } from "../dist/e2e/test-data-guard.js";
-import { insertFixtureCatalog } from "./helpers/e2e-fixture-catalog.js";
 
 const migrationsFolder = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -149,7 +149,7 @@ describe("device-flow test data", () => {
 
   beforeEach(async () => {
     await resetDatabase(DATABASE_URL, migrationsFolder);
-    await insertFixtureCatalog(db);
+    await insertLocalFixtureCatalog(db);
     await insertBystander(db);
   });
 
@@ -307,7 +307,7 @@ describe("device-flow test data", () => {
     expect(await db.select({ id: user.id }).from(user)).toHaveLength(1);
   });
 
-  it("lets the test Collector sign in with the lane credentials", async () => {
+  it("lets the test Collector sign in with the configured credentials", async () => {
     process.env.DATABASE_URL = DATABASE_URL;
     delete process.env.R2_ENDPOINT;
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });

@@ -13,17 +13,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const REVIEW_TIMEOUT_MS = 180_000;
-/** With one of these set, `claude` bills an API account instead of the subscription. */
-const API_BILLING_ENV = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"];
-
-function subscriptionEnv(env) {
-  const kept = { ...env };
-  for (const name of API_BILLING_ENV) {
-    delete kept[name];
-  }
-  return kept;
-}
+const MAX_REASON_LENGTH = 120;
 const ASKED_FOR = ["yes", "no", "unclear"];
+
+/**
+ * All the review run gets from the runner's environment. Lane secrets, the
+ * GitHub token and any API key stay out, so the run can neither leak them nor
+ * bill an API account instead of the subscription.
+ */
+const CHILD_ENV = ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "TMPDIR"];
+
+function childEnv(env) {
+  return Object.fromEntries(
+    CHILD_ENV.filter((name) => env[name] !== undefined).map((name) => [name, env[name]]),
+  );
+}
 
 /**
  * The parts of a Linear issue body the reviewer judges against: the
@@ -166,9 +170,26 @@ function runCommand(command, args, options) {
 }
 
 /**
+ * Why a run died, without its command line: the message of a failed `execFile`
+ * carries every argument, and the prompt is one of them.
+ */
+function runFailure(error) {
+  if (error?.killed) {
+    return `The Claude review run timed out (${error.signal ?? "killed"})`;
+  }
+  if (error?.code === "ENOENT") {
+    return "The claude CLI is not installed on this machine";
+  }
+  return `The Claude review run stopped (${error?.code ?? "unknown reason"})`;
+}
+
+/**
  * One headless Claude Code run in an empty directory holding only the two
  * screenshots. It gets the Read tool and nothing else: no settings, no MCP
- * servers, no session kept.
+ * servers, no session kept, and a minimal environment. Read is not confined to
+ * that directory, and the reply ends up in a public PR comment, so the prompt
+ * (issue body, design excerpt) is only ever built from the approver's own
+ * branches.
  * @param {{
  *   prompt: string, beforePng: Buffer | null, afterPng: Buffer | null, model: string,
  *   run?: (command: string, args: string[], options: object) => Promise<string>,
@@ -187,15 +208,21 @@ export async function requestVerdict({ prompt, beforePng, afterPng, model, run =
     const args = ["-p", prompt, "--model", model, "--tools", "Read", "--allowedTools", "Read"];
     args.push("--setting-sources", "", "--strict-mcp-config", "--no-session-persistence");
     args.push("--output-format", "json");
-    const stdout = await run("claude", args, {
-      cwd,
-      env: subscriptionEnv(process.env),
-      timeout: REVIEW_TIMEOUT_MS,
-      maxBuffer: 4 * 1024 * 1024,
-    });
+    let stdout;
+    try {
+      stdout = await run("claude", args, {
+        cwd,
+        env: childEnv(process.env),
+        timeout: REVIEW_TIMEOUT_MS,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+    } catch (error) {
+      throw new Error(runFailure(error));
+    }
     const reply = JSON.parse(stdout);
     if (reply.is_error) {
-      throw new Error(`The Claude review run failed: ${String(reply.result ?? "no message")}`);
+      const reason = String(reply.result ?? "no message").slice(0, MAX_REASON_LENGTH);
+      throw new Error(`The Claude review run failed: ${reason}`);
     }
     return parseVerdict(String(reply.result ?? ""));
   } finally {

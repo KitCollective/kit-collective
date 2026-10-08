@@ -31,7 +31,13 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 
 ## A flow needs a `testID`
 
-Flows tap by `testID`, so a copy change does not break a flow. The two tab-bar taps, and the system photo picker, are by label because the native tab bar and the picker take no `testID`. When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
+Flows tap by `testID`, so a copy change does not break a flow. The exceptions, each because the control takes no `testID`:
+
+- the native tab bar: `Søg` and `Ønsker` are tapped by label;
+- the app's own upload source sheet option `Fotos` (a system action sheet), by label;
+- the system photo picker: the first cell and its confirm button, by screen point, on a simulator whose library holds exactly one photo;
+- iOS's "save password" prompt: `Ikke nu` / `Not Now`, by text, when it shows;
+- Send bud: a tap on the photo, by screen point, to dismiss the number pad that covers the form (KIT-270). When a slice adds a control a flow must tap, add the `testID` in the same PR. Adding a `testID` is not a UI change; do not restyle a screen to make a flow pass.
 
 ## Run the flows
 
@@ -57,7 +63,7 @@ apps/mobile/.maestro/run-evidence.sh
 
 The flows own a simulator, "KitCollective Device Flows", created on first use with exactly one photo in its library.
 
-`run-evidence.sh` refuses uncommitted changes, and refuses when the installed app or the running API was not built from this commit's sources (restart `local-api.sh`, rerun `build-local.sh`). Evidence is keyed by commit. Then:
+`run-evidence.sh` refuses uncommitted changes under the app, API and package sources, the flows (`apps/mobile/.maestro`) and the evidence scripts (`scripts/e2e`), and refuses when the installed app or the running API was not built from this commit's sources (restart `local-api.sh`, rerun `build-local.sh`). Evidence is keyed by commit. Then:
 
 1. sets the `Device flows` commit status to pending and runs the flows;
 2. uploads `kc__*.png` and `kc__*.mp4` to the evidence bucket under `e2e/<sha>/`, pass or fail;
@@ -65,7 +71,7 @@ The flows own a simulator, "KitCollective Device Flows", created on first use wi
 4. otherwise, on a branch with a PR: finds "before", compares, reviews the steps that differ, writes the PR comment and the workpad's `### Evidence`;
 5. sets the status to success or failure. Only a failed flow makes it red; a run that stops before its verdict sets `error`, never leaves `pending`.
 
-When a mobile slice lands, run it once on `development` (step 3), or the next PR has nothing to compare against.
+When a mobile slice lands, run it once on `development` (step 3), or the next PR has nothing to compare against. `/land` names this step.
 
 ## Settings
 
@@ -83,11 +89,13 @@ GitHub access is the `gh` login on the Mac. The review is a headless Claude Code
 
 R2 (Cloudflare dashboard, `kc-e2e-evidence`): public access through the r2.dev address, and one lifecycle rule that deletes objects after 30 days. The bucket holds test Collectors and drawn shirts only.
 
-GitHub: make the `Device flows` status required on `development` for PRs that touch `apps/mobile/**` once it has run green.
+GitHub: the `Device flows` status is not a required check today, and `development` has no branch protection. It blocks through the checker, which fails a mobile PR whose head has no green `Device flows` status (`.cursor/agents/checker.md`).
 
-## Against a lane instead of a local API
+## Outside the local API
 
-Not used today. The reset and the fixed Vision also work on a lane, for a hosted runner later. That lane's API then needs `E2E_TEST_DATA_TOKEN` (24 characters or more; its presence switches `POST /v1/e2e/test-data` on), `E2E_TEST_DATA_TARGET` (`staging` or `development`; `production` is refused, and a process with `NODE_ENV=production` answers 404 regardless), `PRODUCTION_DATABASE_URL` (refused by identity), `E2E_COLLECTOR_EMAIL`, `E2E_COLLECTOR_PASSWORD`, `E2E_PEER_EMAIL`, `E2E_PEER_PASSWORD` and `VISION_FIXED_FOR_TEST_COLLECTOR=on`. Its catalog must have these sides with a linked season, by label or alias: clubs FC København, Brøndby IF, AGF, OB, FC Midtjylland, AaB; national team Danmark. The command names any that are missing and writes nothing. With database access the same routine runs as `pnpm --filter @kit/api e2e:test-data`.
+Not used today, and not possible through a deployed API: the API image runs with `NODE_ENV=production` on staging and production alike, and such a process answers 404 on `POST /v1/e2e/test-data` and ignores `VISION_FIXED_FOR_TEST_COLLECTOR`. A hosted runner would need a way to tell staging from production first.
+
+What does work is the command, from a shell with database access and without `NODE_ENV=production`: `pnpm --filter @kit/api e2e:test-data` with `E2E_TEST_DATA_TARGET` (`staging` or `development`; `production` is refused) and the four test Collector credentials. It also refuses a `DATABASE_URL` that names production, or that equals `PRODUCTION_DATABASE_URL` when the shell already has that variable; do not copy a production URL into a lane's environment for this. The catalog must have these sides with a linked season, by label or alias: clubs FC København, Brøndby IF, AGF, OB, FC Midtjylland, AaB; national team Danmark. The command names any that are missing and writes nothing.
 
 ## Building the app
 

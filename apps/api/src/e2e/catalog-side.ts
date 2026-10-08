@@ -9,7 +9,7 @@ export type ResolvedSide = {
 };
 
 /**
- * A fixture side on this lane's catalog: the entity carrying the label (or
+ * A fixture side in this database's catalog: the entity carrying the label (or
  * alias) and its latest linked season. Null when the catalog has no such side.
  */
 export async function resolveCatalogSide(db: Db, side: FixtureSide): Promise<ResolvedSide | null> {

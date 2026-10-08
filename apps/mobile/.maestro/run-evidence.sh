@@ -24,6 +24,7 @@ source "$here/source-stamp.sh"
 # shellcheck source=simulator.sh
 source "$here/simulator.sh"
 refuse_uncommitted "${app_sources[@]}" "${api_sources[@]}"
+refuse_uncommitted_flows
 if [[ "$(cat "$stamp_dir/app-$E2E_SIMULATOR_UDID" 2>/dev/null)" != "$(source_stamp "${app_sources[@]}")" ]]; then
   echo "The app on the simulator was not built from $sha: run build-local.sh first." >&2
   exit 2
@@ -67,10 +68,11 @@ else
 fi
 node --env-file="$env_file" "$root/scripts/e2e/review-run.mjs"
 
-verdict_written=yes
 if [[ "$flows_status" == success ]]; then
   status success "All flows passed"
+  verdict_written=yes
 else
   status failure "A flow failed"
+  verdict_written=yes
   exit 1
 fi

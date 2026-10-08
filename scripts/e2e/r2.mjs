@@ -97,6 +97,11 @@ export function evidenceBucketEnv(env) {
   if (!bucket) {
     throw new Error("E2E_R2_BUCKET is required (the evidence bucket, never a lane bucket)");
   }
+  if (bucket === env.R2_BUCKET?.trim()) {
+    throw new Error(
+      "E2E_R2_BUCKET names the lane bucket (R2_BUCKET). Evidence is public; it never goes there.",
+    );
+  }
   return { ...env, R2_BUCKET: bucket };
 }
 

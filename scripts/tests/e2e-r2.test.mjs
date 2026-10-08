@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
-import { signS3Request } from "../e2e/r2.mjs";
+import { evidenceBucketEnv, parseListObjects, signS3Request } from "../e2e/r2.mjs";
 
 // Worked examples from AWS "Signature Calculations for the Authorization
 // Header" (Signature Version 4, S3). The expected signatures are AWS's.
@@ -44,8 +44,7 @@ test("signs the AWS List Objects example with a sorted query", () => {
   );
 });
 
-test("reads keys and the continuation token from a ListObjectsV2 page", async () => {
-  const { parseListObjects } = await import("../e2e/r2.mjs");
+test("reads keys and the continuation token from a ListObjectsV2 page", () => {
   const page = parseListObjects(
     `<?xml version="1.0"?><ListBucketResult><IsTruncated>true</IsTruncated>` +
       `<Contents><Key>e2e/abc/collection/01-collection.png</Key><Size>1</Size></Contents>` +
@@ -57,10 +56,13 @@ test("reads keys and the continuation token from a ListObjectsV2 page", async ()
   assert.equal(parseListObjects("<ListBucketResult/>").nextToken, undefined);
 });
 
-test("evidence goes to its own bucket, never the lane bucket", async () => {
-  const { evidenceBucketEnv } = await import("../e2e/r2.mjs");
+test("evidence goes to its own bucket, never the lane bucket", () => {
   const env = { R2_BUCKET: "kc-development", R2_ENDPOINT: "https://account.example" };
   assert.throws(() => evidenceBucketEnv(env), /E2E_R2_BUCKET/);
+  assert.throws(
+    () => evidenceBucketEnv({ ...env, E2E_R2_BUCKET: "kc-development" }),
+    /lane bucket/,
+  );
   assert.deepEqual(evidenceBucketEnv({ ...env, E2E_R2_BUCKET: " kc-e2e-evidence " }), {
     ...env,
     E2E_R2_BUCKET: " kc-e2e-evidence ",

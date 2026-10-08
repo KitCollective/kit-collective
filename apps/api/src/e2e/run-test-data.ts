@@ -5,7 +5,7 @@ import { readTestDataConfig } from "./test-data-config.js";
 
 /**
  * `pnpm --filter @kit/api e2e:test-data`: puts the two device-flow test
- * Collectors into their known state on the lane `DATABASE_URL` points at.
+ * Collectors into their known state in the database `DATABASE_URL` points at.
  */
 async function main(): Promise<void> {
   const config = readTestDataConfig(process.env);

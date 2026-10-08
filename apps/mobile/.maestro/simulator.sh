@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# The simulator the device flows own (KIT-267), sourced by build-local.sh and
-# run-local.sh. A dedicated device keeps its photo library to exactly one fixture
+# The simulator the device flows own (KIT-267), sourced by build-local.sh,
+# run-local.sh and run-evidence.sh. A dedicated device keeps its photo library to exactly one fixture
 # photo, so the gallery step picks the same picture on every run.
 E2E_SIMULATOR="${E2E_SIMULATOR:-KitCollective Device Flows}"
 E2E_SIMULATOR_MODEL="${E2E_SIMULATOR_MODEL:-iPhone 17}"

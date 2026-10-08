@@ -19,5 +19,15 @@ refuse_uncommitted() {
   fi
 }
 
+# refuse_uncommitted_flows: the flows and the evidence scripts are not part of a
+# build, but a status and screenshots keyed by a commit must come from that
+# commit's flows too.
+refuse_uncommitted_flows() {
+  if [[ -n "$(git -C "$stamp_root" status --porcelain -- apps/mobile/.maestro scripts/e2e)" ]]; then
+    echo "Uncommitted changes under apps/mobile/.maestro or scripts/e2e: commit first, evidence is keyed by commit." >&2
+    exit 2
+  fi
+}
+
 app_sources=(apps/mobile packages pnpm-lock.yaml)
 api_sources=(apps/api packages pnpm-lock.yaml)

@@ -22,6 +22,11 @@ source "../mobile/.maestro/source-stamp.sh"
 refuse_uncommitted "${api_sources[@]}"
 mkdir -p "$stamp_dir"
 rm -f "$stamp_dir/api"
+# An API already on the port would keep serving its old build under a new stamp.
+if lsof -ti tcp:3000 -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "Port 3000 is in use: stop the running API first." >&2
+  exit 2
+fi
 
 pnpm build
 pnpm e2e:local-database

@@ -9,18 +9,18 @@ import { decodePng } from "./png.mjs";
  * A channel may drift this much (0-255) before a pixel counts as different.
  * Absorbs antialiasing and image-decode noise between two runs.
  */
-export const CHANNEL_TOLERANCE = 16;
+const CHANNEL_TOLERANCE = 16;
 
 /**
  * A step is `changed` when more than this share of the compared pixels differ.
  */
-export const MAX_DIFF_RATIO = 0.001;
+const MAX_DIFF_RATIO = 0.001;
 
 /**
  * The top strip is the iOS status bar (clock, battery, signal). It is never app
  * content and differs between any two runs, so it is not compared.
  */
-export const IGNORE_TOP_RATIO = 0.075;
+const IGNORE_TOP_RATIO = 0.075;
 
 const KEY_SEPARATOR = "/";
 
@@ -64,7 +64,7 @@ export function diffImages(beforePng, afterPng) {
 }
 
 /**
- * @typedef {{ flow: string, step: string, status: "same" | "changed" | "new" | "removed", ratio: number | null }} StepPair
+ * @typedef {{ flow: string, step: string, status: "same" | "changed" | "new" | "removed" }} StepPair
  */
 
 /**
@@ -81,13 +81,13 @@ export function compareRuns(before, after) {
     const beforePng = before.get(key);
     const afterPng = after.get(key);
     if (!beforePng) {
-      return { flow, step, status: "new", ratio: null };
+      return { flow, step, status: "new" };
     }
     if (!afterPng) {
-      return { flow, step, status: "removed", ratio: null };
+      return { flow, step, status: "removed" };
     }
     const diff = diffImages(beforePng, afterPng);
     const changed = diff.sizeMismatch || diff.ratio > MAX_DIFF_RATIO;
-    return { flow, step, status: changed ? "changed" : "same", ratio: diff.ratio };
+    return { flow, step, status: changed ? "changed" : "same" };
   });
 }

@@ -50,9 +50,9 @@ export type VisionGroupingInferenceResult = {
   model?: string;
 };
 
-/** Who the Vision job is for. Absent on calls that carry no Collector. */
+/** Who the Vision job is for. */
 export type VisionCallContext = {
-  userId?: string;
+  userId: string;
 };
 
 export type VisionAdapter = {

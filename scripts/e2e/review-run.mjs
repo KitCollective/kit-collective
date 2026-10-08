@@ -172,7 +172,7 @@ if (isPullRequest) {
   });
   process.stdout.write(`PR comment: ${commentUrl}\n`);
 
-  if (issue?.workpad && linearKey) {
+  if (issue?.workpad) {
     const body = replaceEvidenceSection(
       issue.workpad.body,
       evidenceLines({ evidenceBaseUrl, afterSha: sha, flows, commentUrl }),
