@@ -30,16 +30,20 @@ status() {
 
 rm -rf "$here/out"
 status pending "Running on the iOS Simulator"
+# A run that stops before its verdict must not leave the status pending.
+trap 'code=$?; [[ $code -eq 0 || $code -eq 1 ]] || status error "Evidence run stopped before a verdict"' EXIT
 flows_status=success
 "$here/run-local.sh" || flows_status=failure
 
 node --env-file="$env_file" "$root/scripts/e2e/upload-run.mjs" "$sha" "$here/out"
 
-pr_number="$(gh pr view --repo "$repository" --json number --jq .number 2>/dev/null || true)"
+# `gh pr view --repo` needs the branch named; without it gh finds no PR.
+branch="$(git -C "$root" branch --show-current)"
+pr_number="$(gh pr view "$branch" --repo "$repository" --json number --jq .number 2>/dev/null || true)"
 export E2E_SHA="$sha" E2E_FLOWS_STATUS="$flows_status" E2E_REPOSITORY="$repository"
 if [[ -n "$pr_number" ]]; then
   export E2E_EVENT=pull_request E2E_PR_NUMBER="$pr_number"
-  E2E_PR_TITLE="$(gh pr view --repo "$repository" --json title --jq .title)"
+  E2E_PR_TITLE="$(gh pr view "$pr_number" --repo "$repository" --json title --jq .title)"
   E2E_GITHUB_TOKEN="$(gh auth token)"
   export E2E_PR_TITLE E2E_GITHUB_TOKEN
 elif git -C "$root" merge-base --is-ancestor "$sha" "origin/$lane"; then
