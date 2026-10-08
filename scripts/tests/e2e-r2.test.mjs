@@ -56,3 +56,14 @@ test("reads keys and the continuation token from a ListObjectsV2 page", async ()
   assert.equal(page.nextToken, "tok/1==");
   assert.equal(parseListObjects("<ListBucketResult/>").nextToken, undefined);
 });
+
+test("evidence goes to its own bucket, never the lane bucket", async () => {
+  const { evidenceBucketEnv } = await import("../e2e/r2.mjs");
+  const env = { R2_BUCKET: "kc-development", R2_ENDPOINT: "https://account.example" };
+  assert.throws(() => evidenceBucketEnv(env), /E2E_R2_BUCKET/);
+  assert.deepEqual(evidenceBucketEnv({ ...env, E2E_R2_BUCKET: " kc-e2e-evidence " }), {
+    ...env,
+    E2E_R2_BUCKET: " kc-e2e-evidence ",
+    R2_BUCKET: "kc-e2e-evidence",
+  });
+});

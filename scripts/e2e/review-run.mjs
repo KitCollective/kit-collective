@@ -21,7 +21,7 @@ import { runPrefix, runRecordKey, screenshotFromKey } from "./artifacts.mjs";
 import { selectBefore } from "./before.mjs";
 import { compareRuns, stepKey } from "./compare.mjs";
 import { fetchIssue, issueIdentifier, updateComment } from "./linear.mjs";
-import { createR2Client } from "./r2.mjs";
+import { createR2Client, evidenceBucketEnv } from "./r2.mjs";
 import {
   evidenceLines,
   renderComment,
@@ -47,7 +47,7 @@ const git = (...args) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "
 const sha = required("E2E_SHA");
 const isPullRequest = required("E2E_EVENT") === "pull_request";
 const flowsStatus = required("E2E_FLOWS_STATUS");
-const r2 = createR2Client(env);
+const r2 = createR2Client(evidenceBucketEnv(env));
 
 /** Screenshots of one run, keyed by flow step. */
 async function loadScreenshots(runSha) {

@@ -7,7 +7,7 @@
  */
 import { readFileSync } from "node:fs";
 import { artifactKey, findArtifacts } from "./artifacts.mjs";
-import { createR2Client } from "./r2.mjs";
+import { createR2Client, evidenceBucketEnv } from "./r2.mjs";
 
 const CONTENT_TYPES = { screenshot: "image/png", video: "video/mp4" };
 
@@ -17,7 +17,7 @@ if (!/^[0-9a-f]{40}$/.test(sha ?? "") || roots.length === 0) {
   process.exit(2);
 }
 
-const r2 = createR2Client(process.env);
+const r2 = createR2Client(evidenceBucketEnv(process.env));
 const artifacts = findArtifacts(roots);
 for (const artifact of artifacts) {
   const key = artifactKey(sha, artifact);

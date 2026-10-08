@@ -87,7 +87,21 @@ function amzDateNow() {
 }
 
 /**
- * Lane R2 bucket over the S3 API. Uses the same env names as the API
+ * The evidence bucket's settings: the account's R2 endpoint and keys as the API
+ * names them, with `E2E_R2_BUCKET` naming the evidence bucket. It is a bucket of
+ * its own so it can be public without exposing any Collector's photos.
+ * @param {NodeJS.ProcessEnv} env
+ */
+export function evidenceBucketEnv(env) {
+  const bucket = env.E2E_R2_BUCKET?.trim();
+  if (!bucket) {
+    throw new Error("E2E_R2_BUCKET is required (the evidence bucket, never a lane bucket)");
+  }
+  return { ...env, R2_BUCKET: bucket };
+}
+
+/**
+ * An R2 bucket over the S3 API. Uses the same env names as the API
  * (`R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`).
  * @param {NodeJS.ProcessEnv} env
  */
