@@ -52,8 +52,7 @@ name: search-bid
 # The amount field starts underneath the floating tab bar; scroll it clear first,
 # or the tap lands on the Søg tab and pops the stack.
 - scroll
-- waitForAnimationToEnd:
-    timeout: 5000
+- runFlow: ../subflows/settle.yaml
 - takeScreenshot: kc__search-bid__04-send-bid
 - tapOn:
     id: bid-amount

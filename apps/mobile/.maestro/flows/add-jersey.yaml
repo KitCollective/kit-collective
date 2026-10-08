@@ -74,6 +74,7 @@ name: add-jersey
     visible:
       id: collection-add
     timeout: 15000
+- runFlow: ../subflows/settle.yaml
 - waitForAnimationToEnd:
     timeout: 8000
 - takeScreenshot: kc__add-jersey__06-samling

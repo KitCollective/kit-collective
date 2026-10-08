@@ -10,6 +10,10 @@ if [[ -z "$E2E_SIMULATOR_UDID" ]]; then
   E2E_SIMULATOR_UDID="$(xcrun simctl create "$E2E_SIMULATOR" "$E2E_SIMULATOR_MODEL" 2>/dev/null)"
   xcrun simctl bootstatus "$E2E_SIMULATOR_UDID" -b >/dev/null
   xcrun simctl addmedia "$E2E_SIMULATOR_UDID" "$(dirname "${BASH_SOURCE[0]}")/fixtures/shirt-front.jpg"
+  # Keep iOS from offering to save the test password; the dialog lands on top of
+  # whatever screen is showing a few seconds after sign-in.
+  xcrun simctl spawn "$E2E_SIMULATOR_UDID" defaults write com.apple.WebUI AutoFillPasswords -bool NO
+  xcrun simctl spawn "$E2E_SIMULATOR_UDID" defaults write -g AutoFillPasswords -bool NO
 else
   xcrun simctl bootstatus "$E2E_SIMULATOR_UDID" -b >/dev/null
 fi

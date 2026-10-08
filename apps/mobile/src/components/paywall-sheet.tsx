@@ -46,7 +46,7 @@ export function PaywallSheet({
           </Text>
         ) : null}
         {iapAvailable ? (
-          <View style={styles.priceRow}>
+          <View style={styles.priceRow} testID="paywall-prices">
             <View style={styles.priceColumn}>
               <Text style={[typography.caption, { color: theme.contentSecondary }]}>Månedlig</Text>
               <Text style={[typography.mono, { color: theme.contentPrimary }]}>
