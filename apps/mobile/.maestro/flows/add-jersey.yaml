@@ -74,8 +74,9 @@ name: add-jersey
     visible:
       id: collection-add
     timeout: 15000
+# Scroll to the end of the grid: straight after the Sheet closes, the system tab
+# bar has not always noticed the content beneath it, and draws itself two ways.
+- scroll
 - runFlow: ../subflows/settle.yaml
-- waitForAnimationToEnd:
-    timeout: 8000
 - takeScreenshot: kc__add-jersey__06-samling
 - stopRecording
