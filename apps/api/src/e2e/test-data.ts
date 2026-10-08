@@ -115,7 +115,8 @@ export async function applyTestData(input: {
   const { db, objectStore, credentials } = input;
   const catalog = await resolveFixtureCatalog(db);
   await assertIdentityFree(db, credentials);
-  // Fixture sides are typed from TEST_DATA_CATALOG, and every one of those resolved above.
+  // SAFETY: fixture sides are typed from TEST_DATA_CATALOG, and resolveFixtureCatalog
+  // resolved every one of those or threw.
   const sideOf = (side: FixtureSide) => catalog.get(sideKey(side)) as ResolvedSide;
 
   const accounts = [

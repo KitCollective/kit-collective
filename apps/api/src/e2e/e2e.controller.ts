@@ -60,7 +60,7 @@ export class E2eController {
     try {
       config = readTestDataConfig(process.env);
     } catch (error) {
-      throw new ForbiddenException((error as Error).message);
+      throw new ForbiddenException(error instanceof Error ? error.message : String(error));
     }
     await applyTestData({
       db: this.db,
