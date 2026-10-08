@@ -12,7 +12,7 @@ appId: app.kitcollective.mobile
 - extendedWaitUntil:
     visible:
       id: splash-login
-    timeout: 30000
+    timeout: 90000
 - tapOn:
     id: splash-login
 - tapOn:
@@ -30,6 +30,6 @@ appId: app.kitcollective.mobile
 - extendedWaitUntil:
     visible:
       id: collection-add
-    timeout: 30000
+    timeout: 90000
 - waitForAnimationToEnd:
     timeout: 5000

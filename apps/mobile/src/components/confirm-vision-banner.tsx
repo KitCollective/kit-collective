@@ -101,6 +101,7 @@ export function ConfirmVisionBanner({ state, onQuotaPress }: ConfirmVisionBanner
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={message}
+        testID={`confirm-vision-${state}`}
         onPress={onQuotaPress}
         style={bannerStyle}
       >
@@ -115,6 +116,7 @@ export function ConfirmVisionBanner({ state, onQuotaPress }: ConfirmVisionBanner
       accessibilityRole={isAnalyzing ? "progressbar" : "text"}
       accessibilityLabel={message}
       accessibilityState={isAnalyzing ? { busy: true } : undefined}
+      testID={`confirm-vision-${state}`}
       style={bannerStyle}
     >
       {body}

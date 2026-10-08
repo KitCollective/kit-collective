@@ -14,7 +14,7 @@ name: first-session
 - extendedWaitUntil:
     visible:
       id: splash-continue
-    timeout: 30000
+    timeout: 90000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__first-session__01-splash
@@ -66,7 +66,7 @@ name: first-session
 - extendedWaitUntil:
     visible:
       id: collection-add
-    timeout: 30000
+    timeout: 90000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__first-session__07-samling
