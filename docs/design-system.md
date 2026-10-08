@@ -225,9 +225,9 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Motion
 
-Status: `locked`
+Status: `locked` (Gap 2026-10-09: brand moments in the first session)
 
-**Purpose**: Quiet confirmation that something happened. Never celebration, never decoration.
+**Purpose**: Quiet confirmation that something happened. Never celebration, never decoration. The one exception is the three **brand moments** below.
 
 **Scale** (Base-adjacent):
 | Token | Duration | Use |
@@ -246,6 +246,27 @@ Status: `locked`
 **Example** *(not a rule)*: Capture full-screen modal covers the tabs in `motion.base`; Vision chips fade in with `motion.fast` when the suggestion arrives.
 
 **Exceptions**: Platform keyboard and system share sheets use OS motion.
+
+**Brand moments** (Gap 2026-10-09, decided by Nicklas): three places in the **first session** may move more than the scale allows, because that is where a new collector decides whether the product is alive. Everywhere else the rules above hold unchanged.
+
+| Moment | Where | Motion | Timing |
+| --- | --- | --- | --- |
+| Jersey wall | Welcome (splash) | Three columns of jersey tiles drift vertically, neighbours in opposite directions, the wall tilted about 6°. Copy and actions rise in once. | Drift loops at 22–32s per column, linear. Rise 520ms, 90ms stagger. |
+| Jersey to stage | Try-it demo: tray → stage | The chosen tile travels from the tray to the stage and grows; the other tiles sink and fade. One light haptic on landing. | About 420ms, spring with a small overshoot. |
+| Vision at work | Try-it demo and the first-session Vision wait | A scan line passes over the photo, a ring pulses once on the crest when the club resolves, and club / season / type resolve one row at a time. | Scan 900ms per pass. Row reveal 260ms. |
+
+The first jersey landing in **Samling** stays inside the scale: `motion.slow`, as already listed.
+
+**Brand-moment constraints**:
+- At most one brand moment on screen at a time, and never on a screen where the collector is typing.
+- Motion never blocks input: every action is tappable while it plays.
+- Still opacity and transform only. The travelling tile is a scaled transform, not an animated layout.
+- `prefers-reduced-motion: reduce` → the wall is a still, the tile cross-fades into the stage, the scan line is omitted, and rows appear without travel.
+- No new colors, no confetti, no sound. The jerseys are the only color.
+- The stage is 4:5, the same crop as a jersey tile, so the photo is never letterboxed or cropped on the way in.
+- A time shown to the collector (the demo's seconds counter) must be a measured value for real Vision, not a chosen one.
+
+**Brand-moment gaps** (flag, do not invent): no tokens exist for the durations above (`motion` in `tokens.ts` has only fast / base / slow). Whether the scan line also applies to the everyday **Tilføj trøje** Vision wait outside the first session is undecided. Source of the wall photos (showcase endpoint or KitCollective's own photos) is undecided. Reference: Paper page `02 First session & Auth`, Proposal B.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
