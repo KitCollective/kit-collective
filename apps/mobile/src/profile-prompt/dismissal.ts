@@ -4,11 +4,15 @@ export type PromptStore = {
   set: (key: string, value: string) => Promise<void>;
 };
 
+const WAITING = "waiting";
 const ARMED = "armed";
 const DISMISSED = "dismissed";
 
-/** none: never offered. armed: the first jersey was saved and the prompt is owed. dismissed: done. */
-export type ProfilePromptState = "none" | "armed" | "dismissed";
+/**
+ * none: not seen yet. waiting: first seen with an empty Samling, so the first jersey is still to
+ * come. armed: the first jersey was saved and the prompt is owed. dismissed: done.
+ */
+export type ProfilePromptState = "none" | "waiting" | "armed" | "dismissed";
 
 export function profilePromptKey(userId: string): string {
   return `kit.profilePromptDismissed.${userId}`;
@@ -26,16 +30,23 @@ export async function readProfilePromptState(
     if (value === DISMISSED) {
       return "dismissed";
     }
-    return value === ARMED ? "armed" : "none";
+    if (value === ARMED) {
+      return "armed";
+    }
+    return value === WAITING ? "waiting" : "none";
   } catch {
     return "dismissed";
   }
 }
 
-/** Marks the first saved jersey: the prompt is shown from now until it is dismissed. */
-export async function armProfilePrompt(store: PromptStore, userId: string): Promise<boolean> {
+/** Persists `waiting` or `armed`. Returns false when storage fails, so nothing is shown. */
+export async function storeProfilePromptState(
+  store: PromptStore,
+  userId: string,
+  state: "waiting" | "armed",
+): Promise<boolean> {
   try {
-    await store.set(profilePromptKey(userId), ARMED);
+    await store.set(profilePromptKey(userId), state === "armed" ? ARMED : WAITING);
     return true;
   } catch {
     return false;
@@ -51,19 +62,25 @@ export async function dismissProfilePrompt(store: PromptStore, userId: string): 
 }
 
 /**
- * The first save arms the prompt: a collector arriving from the first session with a saved
- * jersey, or one whose only jersey is the first. Collectors who already had a collection are
- * never armed, so they are not told their first jersey was just saved.
+ * The next stored state, or null for no change. Arming happens at the real first save, never by
+ * counting: a collector who already has a jersey the first time Samling is read is left alone,
+ * so nobody is told their first jersey was just saved when it was not.
  */
-export function shouldArmProfilePrompt(input: {
+export function nextProfilePromptState(input: {
   state: ProfilePromptState | null;
   jerseyCount: number;
   arrivedWithSavedJersey: boolean;
-}): boolean {
-  if (input.state !== "none") {
-    return false;
+}): "waiting" | "armed" | null {
+  if (input.state === "waiting") {
+    return input.jerseyCount >= 1 ? "armed" : null;
   }
-  return input.arrivedWithSavedJersey ? input.jerseyCount >= 1 : input.jerseyCount === 1;
+  if (input.state !== "none") {
+    return null;
+  }
+  if (input.jerseyCount === 0) {
+    return "waiting";
+  }
+  return input.arrivedWithSavedJersey ? "armed" : null;
 }
 
 export function shouldShowProfilePrompt(input: {

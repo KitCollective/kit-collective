@@ -31,12 +31,12 @@ import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overvi
 import { PlacePagerScreen } from "@/navigation/place-pager-screen";
 import { usePlaceOverview } from "@/navigation/use-place-overview";
 import {
-  armProfilePrompt,
   dismissProfilePrompt,
+  nextProfilePromptState,
   type ProfilePromptState,
   readProfilePromptState,
-  shouldArmProfilePrompt,
   shouldShowProfilePrompt,
+  storeProfilePromptState,
 } from "@/profile-prompt/dismissal";
 import { ProfilePrompt } from "@/profile-prompt/profile-prompt";
 import { securePromptStore } from "@/profile-prompt/secure-prompt-store";
@@ -212,21 +212,22 @@ function CollectionHome() {
     };
   }, [userId]);
 
-  // The first saved jersey arms the prompt; once the collection has loaded the count is real.
+  // Samling first seen empty waits for the first jersey; that save (or an arrival with the
+  // jersey just saved) arms the prompt. A collection that already had jerseys is never armed.
   useEffect(() => {
-    if (
-      !userId ||
-      loading ||
-      !shouldArmProfilePrompt({
-        state: profilePromptState,
-        jerseyCount: totalJerseyCount,
-        arrivedWithSavedJersey: showResultCollectionCaption,
-      })
-    ) {
+    if (!userId || loading) {
       return;
     }
-    setProfilePromptState("armed");
-    void armProfilePrompt(securePromptStore, userId);
+    const next = nextProfilePromptState({
+      state: profilePromptState,
+      jerseyCount: totalJerseyCount,
+      arrivedWithSavedJersey: showResultCollectionCaption,
+    });
+    if (!next) {
+      return;
+    }
+    setProfilePromptState(next);
+    void storeProfilePromptState(securePromptStore, userId, next);
   }, [userId, loading, profilePromptState, totalJerseyCount, showResultCollectionCaption]);
 
   const dismissPrompt = () => {
