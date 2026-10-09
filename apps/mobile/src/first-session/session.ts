@@ -211,7 +211,7 @@ function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSes
 /** Where the host sends the collector once the first session ends. */
 export function collectionHref(state: FirstSessionState): string {
   if (state.resultCollection) {
-    return "/(tabs)/collection?firstSessionResult=1";
+    return `/(tabs)/collection?firstSessionResult=1&firstSessionSaved=${state.jerseysSavedInSession}`;
   }
   if (state.skippedJerseyDetails && state.sawDemo) {
     return "/(tabs)/collection?firstSessionArrival=1";

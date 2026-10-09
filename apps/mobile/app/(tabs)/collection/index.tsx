@@ -51,14 +51,18 @@ export default function CollectionScreen() {
 
 function CollectionHome() {
   const router = useRouter();
-  const { firstSessionResult, firstSessionArrival } = useLocalSearchParams<{
+  const { firstSessionResult, firstSessionArrival, firstSessionSaved } = useLocalSearchParams<{
     firstSessionResult?: string;
+    firstSessionSaved?: string;
     firstSessionArrival?: string;
   }>();
   const showResultCollectionCaption = firstSessionResult === "1";
+  const savedInFirstSession = Number.parseInt(firstSessionSaved ?? "0", 10) || 0;
   const isFirstArrival = firstSessionArrival === "1";
   const { accessToken, requestPremiumAccess, user } = useAuth();
   const userId = user?.id ?? null;
+  // True only after a live fetch of the collection succeeded: a failed fetch is not an empty one.
+  const [collectionLoaded, setCollectionLoaded] = useState(false);
   const [profilePromptState, setProfilePromptState] = useState<ProfilePromptState | null>(null);
   const captureChooser = useCaptureChooser();
   const { width } = useWindowDimensions();
@@ -174,7 +178,10 @@ function CollectionHome() {
         await refreshAll();
         if (active) {
           hasInitialLoadRef.current = true;
+          setCollectionLoaded(true);
         }
+      } catch {
+        // The empty state keeps its existing behaviour; the prompt just does not move.
       } finally {
         if (active) {
           setLoading(false);
@@ -221,14 +228,22 @@ function CollectionHome() {
     const next = nextProfilePromptState({
       state: profilePromptState,
       jerseyCount: totalJerseyCount,
-      arrivedWithSavedJersey: showResultCollectionCaption,
+      collectionLoaded,
+      savedInFirstSession,
     });
     if (!next) {
       return;
     }
     setProfilePromptState(next);
     void storeProfilePromptState(securePromptStore, userId, next);
-  }, [userId, loading, profilePromptState, totalJerseyCount, showResultCollectionCaption]);
+  }, [
+    userId,
+    loading,
+    profilePromptState,
+    totalJerseyCount,
+    collectionLoaded,
+    savedInFirstSession,
+  ]);
 
   const dismissPrompt = () => {
     setProfilePromptState("dismissed");

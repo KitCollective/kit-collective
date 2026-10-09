@@ -243,7 +243,9 @@ describe("First session arrival in Samling", () => {
       { type: "saveJersey" },
     );
 
-    expect(collectionHref(saved)).toBe("/(tabs)/collection?firstSessionResult=1");
+    expect(collectionHref(saved)).toBe(
+      "/(tabs)/collection?firstSessionResult=1&firstSessionSaved=1",
+    );
   });
 
   it("a returning collector who logs in from welcome without an example gets plain Samling", () => {

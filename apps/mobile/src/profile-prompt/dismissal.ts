@@ -63,14 +63,21 @@ export async function dismissProfilePrompt(store: PromptStore, userId: string): 
 
 /**
  * The next stored state, or null for no change. Arming happens at the real first save, never by
- * counting: a collector who already has a jersey the first time Samling is read is left alone,
- * so nobody is told their first jersey was just saved when it was not.
+ * guessing from a count alone:
+ * - nothing moves until the collection was actually loaded (a failed fetch is not "empty");
+ * - a collection first seen empty waits for its first jersey;
+ * - an arrival from the first session arms only when the collection is exactly the jerseys saved
+ *   in that session, so a collector who already had jerseys is never told theirs was the first.
  */
 export function nextProfilePromptState(input: {
   state: ProfilePromptState | null;
+  collectionLoaded: boolean;
   jerseyCount: number;
-  arrivedWithSavedJersey: boolean;
+  savedInFirstSession: number;
 }): "waiting" | "armed" | null {
+  if (!input.collectionLoaded) {
+    return null;
+  }
   if (input.state === "waiting") {
     return input.jerseyCount >= 1 ? "armed" : null;
   }
@@ -80,7 +87,8 @@ export function nextProfilePromptState(input: {
   if (input.jerseyCount === 0) {
     return "waiting";
   }
-  return input.arrivedWithSavedJersey ? "armed" : null;
+  const savedAll = input.savedInFirstSession > 0 && input.jerseyCount === input.savedInFirstSession;
+  return savedAll ? "armed" : null;
 }
 
 export function shouldShowProfilePrompt(input: {

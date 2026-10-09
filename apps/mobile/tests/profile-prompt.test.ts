@@ -41,34 +41,55 @@ describe("profile prompt", () => {
     expect(shouldShowProfilePrompt({ jerseyCount: 1, state: null })).toBe(false);
   });
 
-  it("waits on an empty Samling and arms when the first jersey appears", () => {
-    const next = (state: "none" | "waiting", jerseyCount: number, arrived = false) =>
-      nextProfilePromptState({ state, jerseyCount, arrivedWithSavedJersey: arrived });
+  const next = (input: {
+    state: "none" | "waiting" | "armed" | "dismissed" | null;
+    jerseyCount: number;
+    collectionLoaded?: boolean;
+    savedInFirstSession?: number;
+  }) =>
+    nextProfilePromptState({
+      collectionLoaded: true,
+      savedInFirstSession: 0,
+      ...input,
+    });
 
-    expect(next("none", 0)).toBe("waiting");
-    expect(next("waiting", 0)).toBeNull();
-    expect(next("waiting", 1)).toBe("armed");
+  it("waits on an empty Samling and arms when the first jersey appears", () => {
+    expect(next({ state: "none", jerseyCount: 0 })).toBe("waiting");
+    expect(next({ state: "waiting", jerseyCount: 0 })).toBeNull();
+    expect(next({ state: "waiting", jerseyCount: 1 })).toBe("armed");
   });
 
-  it("arms an arrival from the first session with the jersey just saved", () => {
-    expect(
-      nextProfilePromptState({ state: "none", jerseyCount: 3, arrivedWithSavedJersey: true }),
-    ).toBe("armed");
+  it("a failed or unfinished fetch never moves the prompt", () => {
+    for (const state of ["none", "waiting"] as const) {
+      expect(next({ state, jerseyCount: 0, collectionLoaded: false })).toBeNull();
+      expect(next({ state, jerseyCount: 4, collectionLoaded: false })).toBeNull();
+    }
+  });
+
+  it("an existing collector whose first fetch fails is not armed by the later success", () => {
+    const afterFailure = next({ state: "none", jerseyCount: 0, collectionLoaded: false });
+    expect(afterFailure).toBeNull();
+    expect(next({ state: "none", jerseyCount: 5 })).toBeNull();
+  });
+
+  it("arms an arrival whose whole collection is the jerseys just saved", () => {
+    expect(next({ state: "none", jerseyCount: 1, savedInFirstSession: 1 })).toBe("armed");
+    expect(next({ state: "none", jerseyCount: 3, savedInFirstSession: 3 })).toBe("armed");
+  });
+
+  it("does not arm an existing collector who saved one jersey from the own-photo road", () => {
+    expect(next({ state: "none", jerseyCount: 4, savedInFirstSession: 1 })).toBeNull();
   });
 
   it("never arms an existing collector, with one jersey or many", () => {
     for (const jerseyCount of [1, 2, 12]) {
-      expect(
-        nextProfilePromptState({ state: "none", jerseyCount, arrivedWithSavedJersey: false }),
-      ).toBeNull();
+      expect(next({ state: "none", jerseyCount })).toBeNull();
     }
   });
 
   it("never changes state once armed, dismissed or still unread", () => {
     for (const state of ["armed", "dismissed", null] as const) {
-      expect(
-        nextProfilePromptState({ state, jerseyCount: 1, arrivedWithSavedJersey: true }),
-      ).toBeNull();
+      expect(next({ state, jerseyCount: 1, savedInFirstSession: 1 })).toBeNull();
     }
   });
 
@@ -77,9 +98,7 @@ describe("profile prompt", () => {
     const state = await readProfilePromptState(store, "user-a");
 
     expect(state).toBe("none");
-    expect(
-      nextProfilePromptState({ state, jerseyCount: 1, arrivedWithSavedJersey: false }),
-    ).toBeNull();
+    expect(next({ state, jerseyCount: 1 })).toBeNull();
     expect(shouldShowProfilePrompt({ jerseyCount: 1, state })).toBe(false);
   });
 
@@ -116,6 +135,7 @@ describe("Samling profile prompt and first arrival chrome", () => {
     expect(collection).toContain("shouldShowProfilePrompt");
     expect(collection).toContain("dismissProfilePrompt");
     expect(collection).toContain("nextProfilePromptState");
+    expect(collection).toContain("collectionLoaded");
   });
 
   it("first arrival shows one Tilføj din første trøje slot and the example-not-saved note", () => {
