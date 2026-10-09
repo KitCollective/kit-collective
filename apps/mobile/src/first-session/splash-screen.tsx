@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   invertedLogin: {
-    backgroundColor: color.surface,
+    backgroundColor: "#FF3B30",
   },
   tertiaryInverse: {
     backgroundColor: "transparent",
