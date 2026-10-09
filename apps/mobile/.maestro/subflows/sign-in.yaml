@@ -11,10 +11,10 @@ appId: app.kitcollective.mobile
     clearKeychain: true
 - extendedWaitUntil:
     visible:
-      id: splash-login
+      id: welcome-have-account
     timeout: 90000
 - tapOn:
-    id: splash-login
+    id: welcome-have-account
 - tapOn:
     id: door-email
 - inputText: ${EMAIL}

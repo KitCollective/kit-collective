@@ -1,4 +1,4 @@
-# First session as a Collector can reach it today: splash, onboard, door, Samling.
+# First session as a Collector can reach it today: welcome, demo, door, Samling.
 appId: app.kitcollective.mobile
 name: first-session
 ---
@@ -13,44 +13,35 @@ name: first-session
 - startRecording: kc__first-session
 - extendedWaitUntil:
     visible:
-      id: splash-continue
+      id: welcome-have-account
     timeout: 90000
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__first-session__01-splash
+- takeScreenshot: kc__first-session__01-welcome
 - tapOn:
-    id: splash-continue
+    id: welcome-example-example-1
 - extendedWaitUntil:
     visible:
-      id: onboard-primary
+      id: demo-start
+    timeout: 20000
+# The actions are tappable from the first frame, so wait for the travel and the rows to settle.
+- waitForAnimationToEnd:
     timeout: 10000
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: kc__first-session__02-onboard-1
+- takeScreenshot: kc__first-session__02-demo-result
 - tapOn:
-    id: onboard-primary
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: kc__first-session__03-onboard-2
-- tapOn:
-    id: onboard-primary
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: kc__first-session__04-onboard-3
-- tapOn:
-    id: onboard-primary
+    id: demo-start
 - extendedWaitUntil:
     visible:
       id: door-submit
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__first-session__05-door-register
+- takeScreenshot: kc__first-session__03-door-register
 - tapOn:
     id: door-mode-login
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__first-session__06-door-login
+- takeScreenshot: kc__first-session__04-door-login
 - tapOn:
     id: door-email
 - inputText: ${MAESTRO_COLLECTOR_EMAIL}
@@ -69,5 +60,5 @@ name: first-session
     timeout: 90000
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__first-session__07-collection
+- takeScreenshot: kc__first-session__05-collection
 - stopRecording

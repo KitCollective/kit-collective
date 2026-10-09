@@ -14,17 +14,7 @@ import {
   FORGOT_PASSWORD_TITLE,
   PASSWORD_HELPER,
   PASSWORD_REPEAT_LABEL,
-  SPLASH_CAPTION,
-  SPLASH_LOGIN_LABEL,
-  SPLASH_REGISTER_LABEL,
-  VERIFY_EMAIL_CONTINUE,
-  VERIFY_EMAIL_TITLE,
 } from "../src/first-session/door-copy";
-import {
-  ONBOARD_NEXT_LABEL,
-  ONBOARD_SLIDES,
-  onboardPrimaryLabel,
-} from "../src/first-session/onboard-copy";
 
 describe("first-session door copy", () => {
   it("uses Login as the general term in login mode", () => {
@@ -57,29 +47,5 @@ describe("first-session door copy", () => {
     expect(FORGOT_PASSWORD_BACK).toBe("Tilbage");
     expect(FORGOT_PASSWORD_INFO).toContain("Vi sender et link");
     expect(FORGOT_PASSWORD_DONE).toContain("Tjek din e-mail");
-  });
-
-  it("locks splash and verify collector copy", () => {
-    expect(SPLASH_CAPTION).toBe("Tryk for at fortsætte");
-    expect(SPLASH_LOGIN_LABEL).toBe("Login");
-    expect(SPLASH_REGISTER_LABEL).toBe("Opret konto");
-    expect(VERIFY_EMAIL_TITLE).toBe("Tjek din e-mail");
-    expect(VERIFY_EMAIL_CONTINUE).toBe("Fortsæt");
-  });
-});
-
-describe("first-session onboard copy", () => {
-  it("locks the three product slides", () => {
-    expect(ONBOARD_SLIDES).toHaveLength(3);
-    expect(ONBOARD_SLIDES[0]?.title).toBe("Registrer din samling");
-    expect(ONBOARD_SLIDES[1]?.title).toBe("Se den som billeder");
-    expect(ONBOARD_SLIDES[2]?.title).toBe("Få besked om drømmetrøjen");
-    expect(ONBOARD_NEXT_LABEL).toBe("Fortsæt");
-  });
-
-  it("uses Opret konto only on the last slide before the door", () => {
-    expect(onboardPrimaryLabel(false, "door")).toBe("Fortsæt");
-    expect(onboardPrimaryLabel(true, "door")).toBe("Opret konto");
-    expect(onboardPrimaryLabel(true, "app")).toBe("Fortsæt");
   });
 });

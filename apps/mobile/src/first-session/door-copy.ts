@@ -20,9 +20,6 @@ export function doorPasswordSubmitLabel(mode: DoorMode): string {
   return mode === "login" ? "Login" : "Opret konto";
 }
 
-export const SPLASH_CAPTION = "Tryk for at fortsætte";
-export const SPLASH_LOGIN_LABEL = "Login";
-export const SPLASH_REGISTER_LABEL = "Opret konto";
 export const DOOR_SPLITTER_LABEL = "eller";
 export const PASSWORD_REPEAT_LABEL = "Gentag adgangskode";
 export const PASSWORD_HELPER = "mindst 8 tegn";
@@ -35,7 +32,3 @@ export const FORGOT_PASSWORD_INFO =
 export const FORGOT_PASSWORD_SUBMIT = "Send link";
 export const FORGOT_PASSWORD_DONE = "Tjek din e-mail, hvis kontoen findes.";
 export const FORGOT_PASSWORD_BACK = "Tilbage";
-
-export const VERIFY_EMAIL_TITLE = "Tjek din e-mail";
-export const VERIFY_EMAIL_BODY = "Vi har sendt et link. Du kan fortsætte nu.";
-export const VERIFY_EMAIL_CONTINUE = "Fortsæt";
