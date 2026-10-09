@@ -46,7 +46,7 @@ Completion: Linear status is `Done` and the PR SHA is on `origin/<lanes.integrat
 
 ### 1. Load
 
-`get_issue` **and** `list_comments`. Workpad is the single `agent.workpadHeading` comment. Attached PR → also GitHub review comments.
+`get_issue` **and** `list_comments` — from the workspace in `factory.config.json`, nowhere else. In Claude Code, or whenever a Linear MCP answers “not found” for the issue, use `node scripts/linear.mjs issue <KIT-n>` (one call returns labels, `blockedBy` and comments) and its `comment` / `state` / `label` / `description` / `link` commands for every later Linear write. It finds the key itself and checks the workspace; do not read `.env`, and do not stop to ask for a key. Workpad is the single `agent.workpadHeading` comment. Attached PR → also GitHub review comments.
 
 ### 2. Claim
 
