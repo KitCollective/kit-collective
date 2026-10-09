@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -10,64 +10,81 @@ function readFirstSession(file: string) {
 }
 
 describe("first-session visual host chrome", () => {
-  it("paints splash with locked fill.primary, not theme.canvas or a raw dark hex", () => {
-    const splash = `${readFirstSession("splash-screen.tsx")}\n${readFirstSession("splash-frame.tsx")}`;
-    const copy = readFirstSession("door-copy.ts");
+  it("paints welcome and demo on fill.primary with inverse tokens and the white lockup", () => {
+    const welcome = readFirstSession("welcome-screen.tsx");
+    const demo = readFirstSession("demo-screen.tsx");
+    const wall = readFirstSession("jersey-wall.tsx");
 
-    expect(splash).toContain("color.fillPrimary");
-    expect(splash).not.toContain("kitcollective-lockup-white.png");
-    expect(splash).toContain("SPLASH_CAPTION");
-    expect(copy).toContain("Tryk for at fortsætte");
-    expect(splash).toContain("withAlpha(color.contentInverse");
-    expect(splash).not.toContain("theme.canvas");
-    expect(splash.includes(`#${"0A0A0A"}`)).toBe(false);
-    expect(splash).not.toContain("BrandLockupWhite");
-    expect(splash).not.toContain("prototype-first-run");
-    expect(splash).not.toContain("FloatingTabBar");
+    expect(welcome).toContain("color.fillPrimary");
+    expect(welcome).toContain("kitcollective-lockup-white.svg");
+    expect(welcome).toContain("WELCOME_HEADLINE");
+    expect(welcome).toContain("typography.display");
+    expect(demo).toContain("color.fillPrimary");
+    expect(wall).toContain("color.scrim");
+    for (const source of [welcome, demo, wall]) {
+      expect(source).not.toContain("theme.canvas");
+      expect(source).not.toContain("prototype-first-run");
+      expect(source).not.toContain("FloatingTabBar");
+      expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    }
   });
 
-  it("keeps the prize-jersey backdrop under a dark scrim with reduced-motion stills", () => {
-    const splash = readFirstSession("splash-screen.tsx");
-    const frame = readFirstSession("splash-frame.tsx");
-    const backdrop = readFirstSession("splash-backdrop.tsx");
+  it("welcome offers three example tiles, a secondary own-photo action and a tertiary account action", () => {
+    const welcome = readFirstSession("welcome-screen.tsx");
+
+    expect(welcome).toContain("EXAMPLE_JERSEYS.map");
+    expect(welcome).toContain("onStartDemo(exampleId, origins)");
+    expect(welcome).toContain('variant="secondary"');
+    expect(welcome).toContain('variant="tertiary"');
+    expect(welcome).toContain("WELCOME_OWN_PHOTO_LABEL");
+    expect(welcome).toContain("WELCOME_HAVE_ACCOUNT_LABEL");
+    expect(welcome).not.toContain("Næste");
+  });
+
+  it("the wall, travel and Vision-at-work motion follow Brand moments and honour Reduce Motion", () => {
+    const wall = readFirstSession("jersey-wall.tsx");
+    const demo = readFirstSession("demo-screen.tsx");
+    const welcome = readFirstSession("welcome-screen.tsx");
+    const moments = readFirstSession("brand-moments.ts");
+
+    expect(wall).toContain("reduceMotion");
+    expect(wall).toContain("withRepeat");
+    expect(wall).toContain("Easing.linear");
+    expect(wall).toContain("BRAND_MOMENTS.wall.tiltDeg");
+    expect(wall).toContain('index % 2 === 0 ? "up" : "down"');
+    expect(welcome).toContain("useReduceMotion");
+    expect(welcome).toContain("riseStaggerMs");
+    expect(demo).toContain("useReduceMotion");
+    expect(demo).toContain("withSpring");
+    expect(demo).toContain("timeline.showsScanLine");
+    expect(demo).toContain("scale:");
+    expect(moments).toContain("tiltDeg: 6");
+    expect(moments).toContain("riseMs: 520");
+    expect(moments).toContain("riseStaggerMs: 90");
+    expect(moments).toContain("travelMs: 420");
+    expect(moments).toContain("scanPassMs: 900");
+    expect(moments).toContain("rowRevealMs: 260");
+  });
+
+  it("the stage is 4:5 and the demo never touches the network", () => {
+    const demo = readFirstSession("demo-screen.tsx");
+    const data = readFirstSession("demo.ts");
+    const welcome = readFirstSession("welcome-screen.tsx");
+
+    expect(demo).toContain("5 / 4");
+    for (const source of [demo, data, welcome]) {
+      expect(source).not.toMatch(/@\/api\//);
+      expect(source).not.toMatch(/\bfetch\(|startUnsignedVisionSuggest|apiClient|axios/);
+    }
+  });
+
+  it("keeps boot loading a plain plate and never brings back the prize-jersey splash", () => {
     const loading = readFirstSession("splash-loading.tsx");
 
-    expect(frame).toContain("SplashBackdrop");
-    expect(frame).toContain('justifyContent: "flex-end"');
-    expect(splash).not.toContain("kitcollective-lockup-white.png");
-    expect(splash).toContain("ActivityIndicator");
-    expect(splash).toContain("useReduceMotion");
-    expect(splash).toContain("withTiming");
-    expect(loading).toContain("SplashFrame");
     expect(loading).toContain("ActivityIndicator");
-    expect(loading).toContain("alive={false}");
-    expect(existsSync(join(__dirname, "../assets/brand/splash-prize-jersey.png"))).toBe(true);
-    expect(backdrop).toContain("splash-prize-jersey.png");
-    expect(backdrop).toContain("useReduceMotion");
-    expect(backdrop).toContain("withRepeat");
-    expect(backdrop).toContain("cancelAnimation");
-    expect(backdrop).toContain("scale:");
-    expect(backdrop).toContain("withAlpha(color.contentInverse");
-    expect(backdrop).toContain("color.scrim");
-    expect(backdrop).not.toContain("identityWashStart");
-    expect(backdrop).not.toContain("identityWashEnd");
-    expect(backdrop).not.toContain("hairlineWidth");
-    expect(backdrop).toContain("pointerEvents");
-    expect(backdrop).not.toContain("theme.canvas");
-    expect(backdrop.includes(`#${"0A0A0A"}`)).toBe(false);
-    expect(backdrop).not.toContain("#ff");
-    expect(backdrop).not.toContain("#00");
-  });
-
-  it("keeps splash dock inverted surface login and tertiary inverse register", () => {
-    const splash = readFirstSession("splash-screen.tsx");
-
-    expect(splash).toContain("color.surface");
-    expect(splash).toContain("color.contentPrimary");
-    expect(splash).toContain("color.contentInverse");
-    expect(splash).not.toContain("outline");
-    expect(splash).toContain("Gesture.Pan");
-    expect(splash).toContain("scheduleOnRN(onOpenRegister)");
+    expect(loading).toContain("color.fillPrimary");
+    expect(loading).not.toContain("SplashBackdrop");
+    expect(loading).not.toContain("splash-prize-jersey");
   });
 
   it("extends Sheet with door variant rather than a new primitive", () => {
@@ -137,38 +154,6 @@ describe("first-session visual host chrome", () => {
     expect(door).not.toContain("FloatingTabBar");
   });
 
-  it("keeps verify beat quiet and non-blocking", () => {
-    const verify = readFirstSession("verify-email-beat.tsx");
-
-    expect(verify).toContain("VERIFY_EMAIL_TITLE");
-    expect(verify).toContain("onDismissVerify");
-    expect(verify).toContain("onDismiss");
-    expect(verify).toContain('variant="primary"');
-    expect(verify).toContain("VERIFY_EMAIL_CONTINUE");
-    expect(verify).not.toContain("FloatingTabBar");
-    expect(verify).not.toContain("Bekræft");
-  });
-
-  it("locks discovery showcase chrome without title, search, or tab bar", () => {
-    const discovery = readFirstSession("discovery-showcase.tsx");
-    const marquee = readFirstSession("discovery-marquee.tsx");
-    const copy = readFirstSession("discovery-copy.ts");
-    const chrome = `${discovery}\n${marquee}\n${copy}`;
-
-    expect(copy).toContain("Tilføj din første trøje");
-    expect(copy).toContain("Jeg har allerede en konto");
-    expect(discovery).toContain("DiscoveryMarquee");
-    expect(discovery).toContain("ButtonDock");
-    expect(discovery).toContain("fetchShowcaseJerseys");
-    expect(marquee).toContain("displayOnly");
-    expect(discovery).toContain("useReduceMotion");
-    expect(marquee).toContain("columnTiles(jerseys, !reduceMotion)");
-    expect(chrome).not.toContain("ScreenHeader");
-    expect(chrome).not.toContain("SearchField");
-    expect(chrome).not.toContain("FloatingTabBar");
-    expect(chrome).not.toContain("Søg");
-  });
-
   it("locks chooser chrome as gallery-first capture without premium or tab bar", () => {
     const chooser = readFirstSession("chooser-screen.tsx");
 
@@ -197,72 +182,5 @@ describe("first-session visual host chrome", () => {
     expect(analysing).toContain("startUnsignedVisionSuggest");
     expect(chrome).not.toContain("identity.wash");
     expect(chrome).not.toContain("FloatingTabBar");
-  });
-
-  it("locks onboard chrome as three product slides with Fortsæt then Opret konto", () => {
-    const screen = readFirstSession("onboard-screen.tsx");
-    const copy = readFirstSession("onboard-copy.ts");
-    const chrome = `${screen}\n${copy}`;
-
-    expect(copy).toContain("Registrer din samling");
-    expect(copy).toContain("Se den som billeder");
-    expect(copy).toContain("Få besked om drømmetrøjen");
-    expect(copy).toContain("En trøje bliver en post — ikke et skema.");
-    expect(copy).toContain("Foto først, klub og sæson under.");
-    expect(copy).toContain("uden at scrolle.");
-    expect(copy).toContain("ONBOARD_NEXT_LABEL");
-    expect(copy).toContain("SPLASH_REGISTER_LABEL");
-    expect(screen).toContain("ButtonDock");
-    expect(screen).toContain("snapToInterval");
-    expect(screen).toContain("theme.fillSecondary");
-    expect(screen).toContain("theme.surface");
-    expect(screen).toContain("radius.md");
-    expect(screen).toContain("theme.borderSubtle");
-    expect(screen).toContain("assets/onboard/register.png");
-    expect(screen).toContain("assets/onboard/collection.png");
-    expect(screen).toContain("assets/onboard/wishlist.png");
-    expect(screen).toContain("typography.title");
-    expect(screen).toContain("typography.body");
-    expect(screen).toContain('resizeMode="contain"');
-    expect(screen).toContain("space.insetLg * 16");
-    expect(screen).not.toContain("pagingEnabled");
-    expect(screen).not.toContain('alignSelf: "stretch"');
-    expect(chrome).not.toContain("Vision");
-    expect(chrome).not.toContain("45 sekunder");
-    expect(chrome).not.toContain("29 kr");
-    expect(chrome).not.toContain("Spring over");
-    expect(chrome).not.toContain("FloatingTabBar");
-  });
-
-  it("locks profile onboarding chrome without skip, handle field, or preferences", () => {
-    const profile = readFirstSession("profile-onboarding.tsx");
-    const location = readFirstSession("profile-location.tsx");
-    const copy = readFirstSession("profile-copy.ts");
-    const chrome = `${profile}\n${location}\n${copy}`;
-
-    expect(copy).toContain("Din profil");
-    expect(copy).toContain("Vælg billede");
-    expect(copy).toContain("Min lokation");
-    expect(copy).toContain("Om mig");
-    expect(copy).toContain("Fortsæt");
-    expect(profile).toContain("PROFILE_TITLE");
-    expect(profile).toContain("typography.title");
-    expect(profile).toContain('size="lg"');
-    expect(profile).toContain("uploadAvatar");
-    expect(profile).toContain("typography.mono");
-    expect(profile).toContain("ButtonDock");
-    expect(location).toContain("SearchField");
-    expect(location).toContain('variant="city"');
-    expect(location).toContain("popularCitiesForCountryLabel");
-    expect(chrome).not.toContain("FloatingTabBar");
-    expect(chrome).not.toContain("Spring over");
-    expect(chrome).not.toContain("Brugernavn");
-    expect(chrome).not.toContain("Navn");
-    expect(chrome).not.toContain("Ønske");
-    expect(chrome).not.toContain("genvej");
-    expect(chrome).not.toContain("cookie");
-    expect(chrome).not.toContain("notifikation");
-    expect(chrome).not.toContain("prototype-first-run");
-    expect(profile).not.toContain("KC");
   });
 });

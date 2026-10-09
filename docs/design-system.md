@@ -376,7 +376,7 @@ Status: `locked` (Gap 2026-08-24: kit files + placements). Construction is brand
 **Files** (kit names; black = `#0A0A0A` on light, white = `#FFFFFF` on dark):
 | File | Role | Use |
 | --- | --- | --- |
-| `kitcollective-lockup-black.svg` | Lockup (KC plate + wordmark). Primary. | Login, onboarding, splash on a **light** canvas. Min 132px wide. |
+| `kitcollective-lockup-black.svg` | Lockup (KC plate + wordmark). Primary. | Login on a **light** canvas. Min 132px wide. The first-session welcome uses the white lockup, small, on the dark jersey wall. |
 | `kitcollective-lockup-white.svg` | Lockup on dark | Same jobs on a **dark** canvas (`mobile` / `web` only). Never on `admin`. |
 | `kitcollective-wordmark-black.svg` | Wordmark (name only) | App header, navigation, narrow chrome on **light**. `admin` header. Min 96px wide. OG wash strip when a wordmark is needed — same file at chrome size; there is no separate compact file. |
 | `kitcollective-wordmark-white.svg` | Wordmark on dark | Same jobs on **dark**. Never on `admin`. |
@@ -397,7 +397,7 @@ Status: `locked` (Gap 2026-08-24: kit files + placements). Construction is brand
 - `admin` operator profile: circular letters from the operator **email**, not the KC monogram.
 - Club / season / user identity rows: catalog **Mark** / letter monogram from stamdata. Never the product logo. Never emoji. Never `KitPhoto` as a crest. Honour rows use the same Mark `md` slot (trophy or competition badge when stored).
 - Collector Samling header: **Samling + count + capture (Tilføj trøje)** — no wordmark, no KC monogram, no lockup. Tab bar has no logo. Jersey tiles have no logo.
-- Splash / onboarding / mobile login (when wired): lockup; black on light canvas, white on dark.
+- Welcome (first session) / mobile login (when wired): lockup; black on light canvas, white on dark. There are no onboarding slides (Gap 2026-10-09: first session 1.0).
 - Share / Open Graph: jersey dominates; wordmark or filled monogram in the wash strip only.
 - Store / home-screen icons: appicon files. Kit README also names `store-square`; that file is **not** in the SVG kit — flag; do not invent it.
 - Primary CTA fill stays black, never a logo color. Brand-book in-book mocks with a wordmark **collection** header are **not** a Samling placement rule.
