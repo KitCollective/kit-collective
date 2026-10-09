@@ -148,6 +148,7 @@ export function CatalogDrillScreen({
                     seasonLabel={jersey.seasonLabel}
                     typeLabel={KIT_TYPE_LABELS_DA[jersey.type]}
                     onPress={() => router.push(`/(tabs)/search/${jersey.id}`)}
+                    testID={`jersey-tile-${jersey.id}`}
                   />
                 </View>
               ))}

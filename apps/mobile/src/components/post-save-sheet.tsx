@@ -49,7 +49,12 @@ export function PostSaveSheet({
         </Text>
         <Button label="Samme klub" onPress={() => openChooser(savedClub)} disabled={!savedClub} />
         <Button label="Ny trøje" variant="secondary" onPress={() => openChooser()} />
-        <Button label="Til samling" variant="tertiary" onPress={onDismiss} />
+        <Button
+          label="Til samling"
+          variant="tertiary"
+          onPress={onDismiss}
+          testID="post-save-to-collection"
+        />
       </View>
     </Sheet>
   );

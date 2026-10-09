@@ -133,6 +133,7 @@ export function SplashScreen({ onOpenLogin, onOpenRegister, onContinue }: Splash
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={SPLASH_CAPTION}
+            testID="splash-continue"
             disabled={!interactive}
             onPress={interactive ? onContinue : undefined}
             style={styles.captionHit}
@@ -153,6 +154,7 @@ export function SplashScreen({ onOpenLogin, onOpenRegister, onContinue }: Splash
           <Animated.View style={[styles.dockStack, dockStyle]}>
             <SplashDockButton
               label={SPLASH_LOGIN_LABEL}
+              testID="splash-login"
               labelColor={color.contentPrimary}
               fill={styles.invertedLogin}
               interactive={interactive}
@@ -174,6 +176,7 @@ export function SplashScreen({ onOpenLogin, onOpenRegister, onContinue }: Splash
 
 type SplashDockButtonProps = {
   label: string;
+  testID?: string;
   labelColor: string;
   fill: StyleProp<ViewStyle>;
   interactive: boolean;
@@ -182,6 +185,7 @@ type SplashDockButtonProps = {
 
 function SplashDockButton({
   label,
+  testID,
   labelColor,
   fill,
   interactive,
@@ -193,6 +197,7 @@ function SplashDockButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      testID={testID}
       disabled={!interactive}
       onPress={interactive ? onPress : undefined}
       style={({ pressed }) => [

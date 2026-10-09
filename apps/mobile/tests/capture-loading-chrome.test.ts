@@ -49,8 +49,9 @@ describe("Capture loading transition", () => {
     // No InteractionManager gate anymore (it cleared before the native present finished).
     expect(route).not.toContain("InteractionManager.runAfterInteractions");
     expect(route).not.toContain('from "react-native"');
-    // Reduced motion enters with animation: "none" (no transitionEnd to await) → rAF paint.
-    expect(route).toContain("reduceMotion");
+    // Reduced motion enters with animation: "none" (no transitionEnd to await) → rAF paint,
+    // decided inside the scheduler (upload-capture-presentation.test.ts drives it).
+    expect(route).toContain("readReduceMotion");
     expect(presentation).toContain("requestAnimationFrame");
     // Success: same-stack replace into Confirm (no modal hop).
     expect(route).toContain('pathname: "/(capture)/confirm"');

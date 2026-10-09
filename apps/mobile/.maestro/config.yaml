@@ -1,0 +1,4 @@
+# Device flows (KIT-267). One file per flow under flows/; each resets the test
+# data first, so flows are independent and can run in any order or alone.
+flows:
+  - flows/*

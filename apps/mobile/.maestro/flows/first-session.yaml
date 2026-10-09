@@ -1,0 +1,73 @@
+# First session as a Collector can reach it today: splash, onboard, door, Samling.
+appId: app.kitcollective.mobile
+name: first-session
+---
+- runScript:
+    file: ../scripts/reset-test-data.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- startRecording: kc__first-session
+- extendedWaitUntil:
+    visible:
+      id: splash-continue
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__first-session__01-splash
+- tapOn:
+    id: splash-continue
+- extendedWaitUntil:
+    visible:
+      id: onboard-primary
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__first-session__02-onboard-1
+- tapOn:
+    id: onboard-primary
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__first-session__03-onboard-2
+- tapOn:
+    id: onboard-primary
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__first-session__04-onboard-3
+- tapOn:
+    id: onboard-primary
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__first-session__05-door-register
+- tapOn:
+    id: door-mode-login
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__first-session__06-door-login
+- tapOn:
+    id: door-email
+- inputText: ${MAESTRO_COLLECTOR_EMAIL}
+- tapOn:
+    id: door-password
+- inputText: ${MAESTRO_COLLECTOR_PASSWORD}
+- tapOn:
+    id: door-submit
+# iOS offers to save the password in a system dialog, in the simulator's language.
+- tapOn:
+    text: "Ikke nu|Not Now"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__first-session__07-collection
+- stopRecording

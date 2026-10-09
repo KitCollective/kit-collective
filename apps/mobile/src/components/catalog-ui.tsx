@@ -97,6 +97,7 @@ type ListRowProps = {
   meta?: string;
   selected?: boolean;
   onPress: () => void;
+  testID?: string;
 };
 
 type SelectFieldProps = {
@@ -142,13 +143,14 @@ export function SelectField({ value, placeholder, onPress, disabled }: SelectFie
   );
 }
 
-export function ListRow({ title, meta, selected, onPress }: ListRowProps) {
+export function ListRow({ title, meta, selected, onPress, testID }: ListRowProps) {
   const theme = useTheme();
   const typography = useTypography();
 
   return (
     <Pressable
       accessibilityRole="button"
+      testID={testID}
       onPress={onPress}
       style={({ pressed }) => [
         styles.listRow,

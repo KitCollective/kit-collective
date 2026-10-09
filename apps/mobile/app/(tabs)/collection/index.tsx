@@ -269,6 +269,7 @@ function CollectionHome() {
                 seasonLabel={item.seasonLabel}
                 typeLabel={KIT_TYPE_LABELS_DA[item.type]}
                 onPress={() => openJerseyDetail(item.id)}
+                testID={`jersey-tile-${item.id}`}
               />
             </View>
           );

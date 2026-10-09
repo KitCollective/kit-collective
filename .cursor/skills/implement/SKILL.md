@@ -25,7 +25,7 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 3. On resume, treat `### Review feedback` and other issue/PR comments as the change request. Do not start a new branch. **Fix the class, not the instance** — if feedback names `ci.yml` missing `JWT_SECRET`, grep every workflow that boots the API; if it names one design-system miss, re-read the lock against the whole UI diff.
 4. One workpad comment. Start: branch from `origin/<lanes.integration>`. One issue, one PR **into that lane**. Title `<teamKey>-n: …`.
 5. Out of scope → `/signal-up` (cap `agent.signalUpCapPerRun`). Ratchet files required by `### Review feedback` are in-scope (`docs/agents/write-scope.md`).
-6. Upload VM screenshots/recordings to this Linear issue, then comment and link under `### Evidence`.
+6. Evidence. A slice whose surface has device-flow evidence: run the Device flows after the PR is open, as `docs/agents/device-flows.md` says; the run writes the PR comment, the `Device flows` status and the workpad's `### Evidence`. Any other slice: upload screenshots/recordings to this Linear issue, then comment and link under `### Evidence`.
 7. After the PR is attached **and the pre-review gate passes**: clear addressed review feedback, move to `In Review`. Do not merge. Do not move to `Done`.
 8. If `### Review feedback` required a ratchet, land it in this PR (`docs/agents/error-ratcheting.md`). Tighten only.
 

@@ -95,6 +95,7 @@ export function OnboardScreen({ exit, onComplete }: OnboardScreenProps) {
       <ButtonDock>
         <Button
           label={onboardPrimaryLabel(isLastSlide, exit)}
+          testID="onboard-primary"
           width="fill"
           onPress={handlePrimary}
         />

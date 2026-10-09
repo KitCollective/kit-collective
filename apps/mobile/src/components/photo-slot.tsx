@@ -103,6 +103,7 @@ export function PhotoSlot({
       }
     >
       <Pressable
+        testID={isAdd ? undefined : `photo-slot-${role}-${isEmpty ? "empty" : "filled"}`}
         accessibilityRole="button"
         accessibilityLabel={
           isAdd

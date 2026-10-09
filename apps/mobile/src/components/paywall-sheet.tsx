@@ -36,7 +36,7 @@ export function PaywallSheet({
 
   return (
     <Sheet visible={visible} title="KitCollective+" onDismiss={onDismiss}>
-      <View style={styles.body}>
+      <View style={styles.body} testID="paywall-sheet">
         <Text style={[typography.body, { color: theme.contentSecondary }]}>
           Plus er ubegrænset Vision Matcher og ønskeliste.
         </Text>
@@ -46,7 +46,7 @@ export function PaywallSheet({
           </Text>
         ) : null}
         {iapAvailable ? (
-          <View style={styles.priceRow}>
+          <View style={styles.priceRow} testID="paywall-prices">
             <View style={styles.priceColumn}>
               <Text style={[typography.caption, { color: theme.contentSecondary }]}>Månedlig</Text>
               <Text style={[typography.mono, { color: theme.contentPrimary }]}>

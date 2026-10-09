@@ -121,7 +121,7 @@ export class VisionService {
       if (photos.length === 0) {
         throw new Error("Identity vision job missing photo bytes");
       }
-      result = await this.adapter.infer(photos);
+      result = await this.adapter.infer(photos, { userId: payload.userId });
       const resolved = resolveIdentityJob(result);
       status = resolved.status;
       result = resolved.storedResult;
@@ -162,9 +162,11 @@ export class VisionService {
       if (!this.adapter.inferGrouping || photos.length < 2) {
         status = "noop";
       } else {
-        const result = await this.adapter.inferGrouping(photos, {
-          priorGroups: payload.groupingPriorGroups,
-        });
+        const result = await this.adapter.inferGrouping(
+          photos,
+          { priorGroups: payload.groupingPriorGroups },
+          { userId: payload.userId },
+        );
         const resolved = resolveGroupingStatus(result);
         status = resolved.status;
         if (resolved.result) {
