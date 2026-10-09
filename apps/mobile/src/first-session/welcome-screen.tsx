@@ -93,6 +93,7 @@ export function WelcomeScreen({ onStartDemo, onOwnPhoto, onHaveAccount }: Welcom
     const rects = await Promise.all(
       EXAMPLE_JERSEYS.map((jersey) => measure(tileRefs.current[jersey.id] ?? null)),
     );
+    // SAFETY: the keys come from EXAMPLE_JERSEYS, whose ids are exactly DemoExampleId.
     const origins = Object.fromEntries(
       EXAMPLE_JERSEYS.map((jersey, index) => [
         jersey.id,

@@ -292,6 +292,7 @@ function GhostTiles({ origins, activeId, travel, reduceMotion }: GhostTilesProps
     return null;
   }
 
+  // SAFETY: origins is keyed by DemoExampleId only (ExampleOrigins), so its keys are DemoExampleId.
   return (
     <>
       {(Object.keys(origins) as DemoExampleId[])

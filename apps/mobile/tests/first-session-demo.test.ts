@@ -114,6 +114,7 @@ describe("bundled placeholder photos", () => {
 
   it("wall-photos requires only files that exist and commits no Drive test photo", () => {
     const source = readFileSync(join(mobileRoot, "src/first-session/wall-photos.ts"), "utf8");
+    // SAFETY: the regex has one capture group, so every match has index 1.
     const required = [...source.matchAll(/require\("\.\.\/\.\.\/(assets\/[^"]+)"\)/g)].map(
       (match) => match[1] as string,
     );
