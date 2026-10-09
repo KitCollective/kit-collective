@@ -3,6 +3,7 @@
 // (Claude Code Desktop, issue worktrees). Reads LINEAR_API_KEY from the
 // environment, or from the main checkout's gitignored .env, and never prints it.
 //
+//   node scripts/linear.mjs workspace
 //   node scripts/linear.mjs issue KIT-272
 //   node scripts/linear.mjs comment KIT-272 --body-file <path>
 //   node scripts/linear.mjs comment-update <commentId> --body-file <path>
@@ -59,6 +60,25 @@ function bodyFromArgs(args) {
   const index = args.indexOf("--body-file");
   if (index === -1 || !args[index + 1]) fail("--body-file <path> is required");
   return readFileSync(args[index + 1], "utf8");
+}
+
+// Refuse to read or write when the key belongs to another Linear workspace.
+async function assertWorkspace() {
+  const expected = findWorkspaceMatch();
+  if (!expected) return;
+  const { organization } = await gql("{ organization { urlKey name } }");
+  if (!organization.urlKey.toLowerCase().includes(expected.toLowerCase())) {
+    fail(
+      `key is for workspace "${organization.urlKey}", but factory.config.json expects "${expected}"`,
+    );
+  }
+}
+
+function findWorkspaceMatch() {
+  const configPath = join(mainCheckoutRoot(), "factory.config.json");
+  if (!existsSync(configPath)) return null;
+  const match = /"workspaceMatch"\s*:\s*"([^"]+)"/.exec(readFileSync(configPath, "utf8"));
+  return match ? match[1] : null;
 }
 
 const ISSUE_QUERY = `query($id: String!) {
@@ -171,6 +191,14 @@ async function setLabel(identifier, action, labelName) {
 
 const [command, ...args] = process.argv.slice(2);
 
+if (command === "workspace") {
+  await assertWorkspace();
+  const { organization } = await gql("{ organization { urlKey name } }");
+  process.stdout.write(`${organization.urlKey} (${organization.name})\n`);
+  process.exit(0);
+}
+await assertWorkspace();
+
 switch (command) {
   case "issue":
     await showIssue(args[0] ?? fail("issue <KIT-n>"));
@@ -234,5 +262,5 @@ switch (command) {
     break;
   }
   default:
-    fail("commands: issue, comment, comment-update, state, label, description, link");
+    fail("commands: workspace, issue, comment, comment-update, state, label, description, link");
 }
