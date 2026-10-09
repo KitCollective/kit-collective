@@ -26,6 +26,15 @@ import {
 import { motionGate } from "@/first-session/motion-gate";
 import { OnDarkButton } from "@/first-session/on-dark-button";
 import type { DemoExampleId } from "@/first-session/session";
+import {
+  LOCK_EASE,
+  MUTED_ALPHA,
+  StageOverlays,
+  type StageRect,
+  stageRectFor,
+  VisionRow,
+  visionStageStyles,
+} from "@/first-session/vision-stage";
 import { examplePhoto } from "@/first-session/wall-photos";
 import {
   DEMO_ANOTHER_LABEL,
@@ -38,13 +47,7 @@ import { useTypography } from "@/theme/brand-fonts";
 import { color, motion, radius, space, withAlpha } from "@/theme/tokens";
 import { useReduceMotionSetting } from "@/theme/use-reduce-motion";
 
-const STAGE_WIDTH_RATIO = 0.56;
-const STAGE_RATIO = 5 / 4;
-const MUTED_ALPHA = 0.64;
-const SKELETON_ALPHA = 0.16;
 const RING_SCALE = 1.08;
-const SCAN_LINE_HEIGHT = 2;
-const LOCK_EASE = Easing.bezier(0.4, 0, 0.2, 1);
 
 type DemoScreenProps = {
   example: ExampleJersey;
@@ -54,8 +57,6 @@ type DemoScreenProps = {
   onStart: () => void;
   onTryAnother: () => void;
 };
-
-type StageRect = { x: number; y: number; width: number; height: number };
 
 function travelFrom(origin: TileRect | undefined, stage: StageRect) {
   if (!origin) {
@@ -95,13 +96,7 @@ function DemoBody({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const timeline = demoTimeline(reduceMotion);
-  const stageWidth = Math.round(width * STAGE_WIDTH_RATIO);
-  const stage: StageRect = {
-    x: (width - stageWidth) / 2,
-    y: insets.top + space.insetLg,
-    width: stageWidth,
-    height: stageWidth * STAGE_RATIO,
-  };
+  const stage = stageRectFor(width, insets.top + space.insetLg);
   const mutedColor = withAlpha(color.contentInverse, MUTED_ALPHA);
 
   const [resolved, setResolved] = useState<DemoRowKey[]>([]);
@@ -212,7 +207,7 @@ function DemoBody({
       />
       <Animated.View
         style={[
-          styles.stage,
+          visionStageStyles.stage,
           { left: stage.x, top: stage.y, width: stage.width, height: stage.height },
           stageStyle,
         ]}
@@ -221,32 +216,21 @@ function DemoBody({
           source={examplePhoto(example.id)}
           resizeMode="cover"
           accessibilityLabel={`${example.clubLabel} ${example.seasonLabel}`}
-          style={styles.stageImage}
+          style={visionStageStyles.stageImage}
         />
-        {timeline.showsScanLine ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.scanLine,
-              { backgroundColor: withAlpha(color.contentInverse, 0.8) },
-              scanStyle,
-            ]}
-          />
-        ) : null}
-        {timeline.showsScanLine ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.ring, { borderColor: color.contentInverse }, ringStyle]}
-          />
-        ) : null}
+        <StageOverlays
+          showsScanLine={timeline.showsScanLine}
+          scanStyle={scanStyle}
+          ringStyle={ringStyle}
+        />
       </Animated.View>
 
       <View
-        style={[styles.rows, { top: stage.y + stage.height + space.insetLg }]}
+        style={[visionStageStyles.rows, { top: stage.y + stage.height + space.insetLg }]}
         accessibilityLiveRegion="polite"
       >
         {DEMO_ROW_KEYS.map((row) => (
-          <DemoRow
+          <VisionRow
             key={row}
             label={DEMO_ROW_LABELS[row]}
             value={demoRowValue(example, row)}
@@ -327,7 +311,11 @@ function GhostTiles({ origins, activeId, travel, reduceMotion }: GhostTilesProps
                 style,
               ]}
             >
-              <Image source={examplePhoto(id)} resizeMode="cover" style={styles.stageImage} />
+              <Image
+                source={examplePhoto(id)}
+                resizeMode="cover"
+                style={visionStageStyles.stageImage}
+              />
             </Animated.View>
           );
         })}
@@ -335,105 +323,14 @@ function GhostTiles({ origins, activeId, travel, reduceMotion }: GhostTilesProps
   );
 }
 
-type DemoRowProps = {
-  label: string;
-  value: string;
-  revealed: boolean;
-  revealMs: number;
-  mutedColor: string;
-};
-
-function DemoRow({ label, value, revealed, revealMs, mutedColor }: DemoRowProps) {
-  const typography = useTypography();
-  const opacity = useSharedValue(0);
-
-  useEffect(() => {
-    opacity.set(withTiming(revealed ? 1 : 0, { duration: revealMs, easing: LOCK_EASE }));
-  }, [opacity, revealMs, revealed]);
-
-  const valueStyle = useAnimatedStyle(() => ({ opacity: opacity.get() }));
-  const skeletonStyle = useAnimatedStyle(() => ({ opacity: 1 - opacity.get() }));
-
-  return (
-    <View style={styles.row}>
-      <Text
-        accessibilityElementsHidden={!revealed}
-        importantForAccessibility={revealed ? "auto" : "no-hide-descendants"}
-        style={[typography.mono, { color: mutedColor }]}
-      >
-        {label}
-      </Text>
-      <View
-        style={styles.rowValue}
-        accessibilityElementsHidden={!revealed}
-        importantForAccessibility={revealed ? "auto" : "no-hide-descendants"}
-      >
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.skeleton,
-            { backgroundColor: withAlpha(color.contentInverse, SKELETON_ALPHA) },
-            skeletonStyle,
-          ]}
-        />
-        <Animated.Text style={[typography.title, { color: color.contentInverse }, valueStyle]}>
-          {value}
-        </Animated.Text>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-  },
-  stage: {
-    position: "absolute",
-    borderRadius: radius.md,
-    overflow: "visible",
-  },
-  stageImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: radius.md,
   },
   ghost: {
     position: "absolute",
     borderRadius: radius.md,
     overflow: "hidden",
-  },
-  scanLine: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    height: SCAN_LINE_HEIGHT,
-  },
-  ring: {
-    ...StyleSheet.absoluteFill,
-    borderWidth: 2,
-    borderRadius: radius.md,
-  },
-  rows: {
-    position: "absolute",
-    left: space.insetLg,
-    right: space.insetLg,
-    gap: space.gapMd,
-  },
-  row: {
-    gap: space.gapSm / 2,
-  },
-  rowValue: {
-    minHeight: 29,
-    justifyContent: "center",
-  },
-  skeleton: {
-    position: "absolute",
-    left: 0,
-    width: "40%",
-    height: 16,
-    borderRadius: radius.sm,
   },
   resultMeta: {
     flexDirection: "row",
