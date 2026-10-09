@@ -6,13 +6,13 @@ Five Maestro flows drive the iOS Simulator build through the Collector journeys,
 
 | Flow | Signs in as | Steps (one screenshot each) |
 | --- | --- | --- |
-| `first-session` | signed out, then the Test Collector | `01-splash`, `02-onboard-1`, `03-onboard-2`, `04-onboard-3`, `05-door-register`, `06-door-login`, `07-collection` |
+| `first-session` | signed out, then the Test Collector | `01-welcome`, `02-demo-result`, `03-door-register`, `04-door-login`, `05-collection` |
 | `add-jersey` | Test Collector | `01-source-sheet`, `02-confirm` (Bekræft with the fixed Vision suggestion), `03-details`, `04-ready-to-save`, `05-saved`, `06-collection`. The system photo picker between the first two is tapped through, not screenshotted |
 | `collection` | Test Collector | `01-collection`, `02-shortcut-filter`, `03-own-detail` |
 | `search-bid` | Test Collector | `01-typeahead`, `02-catalog-drill`, `03-foreign-detail` (the second test Collector's UserJersey), `04-send-bid`, `05-amount-entered`, `06-bid-sent` |
 | `wishlist-paywall` | second test Collector | `01-wishlist`, `02-paywall` |
 
-That is 24 steps. Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a re-run starts from the same rows. A screenshot is `kc__<flow>__<step>.png`; a recording is `kc__<flow>.mp4`.
+That is 22 steps. Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a re-run starts from the same rows. A screenshot is `kc__<flow>__<step>.png`; a recording is `kc__<flow>.mp4`.
 
 Not covered: Android, physical devices, the camera branch of Tilføj trøje, showcase and first photos (unreachable from a cold start today).
 

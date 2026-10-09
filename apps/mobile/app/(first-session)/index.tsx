@@ -5,17 +5,16 @@ import { useAuth } from "@/auth/AuthProvider";
 import { resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
 import { FirstSessionAnalysingScreen } from "@/first-session/analysing-screen";
 import { FirstSessionChooserScreen } from "@/first-session/chooser-screen";
-import { DiscoveryShowcaseScreen } from "@/first-session/discovery-showcase";
-import { DoorSheet, VerifyEmailBeat } from "@/first-session/door";
+import { exampleById } from "@/first-session/demo";
+import { DemoScreen } from "@/first-session/demo-screen";
+import { DoorSheet } from "@/first-session/door";
 import { JerseyDetailsScreen } from "@/first-session/jersey-details-screen";
-import { OnboardScreen } from "@/first-session/onboard-screen";
-import { ProfileOnboardingScreen } from "@/first-session/profile-onboarding";
 import {
   createFirstSession,
   firstSessionBackdrop,
   reduceFirstSession,
 } from "@/first-session/session";
-import { SplashView } from "@/first-session/splash";
+import { type ExampleOrigins, WelcomeScreen } from "@/first-session/welcome-screen";
 import { LoadingScreen } from "../_layout";
 
 export default function FirstSessionHost() {
@@ -28,6 +27,7 @@ export default function FirstSessionHost() {
   const [showThrottleBanner, setShowThrottleBanner] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialBusy, setSocialBusy] = useState<IdentityLinkedProvider | null>(null);
+  const [demoOrigins, setDemoOrigins] = useState<ExampleOrigins | null>(null);
 
   const dispatch = useCallback((event: Parameters<typeof reduceFirstSession>[1]) => {
     setSession((current) => reduceFirstSession(current, event));
@@ -37,7 +37,7 @@ export default function FirstSessionHost() {
     return <LoadingScreen />;
   }
 
-  if (user && session.place === "splash") {
+  if (user && session.place === "welcome") {
     return <Redirect href="/(tabs)/collection" />;
   }
 
@@ -68,16 +68,6 @@ export default function FirstSessionHost() {
     );
   }
 
-  if (session.place === "profile") {
-    return (
-      <ProfileOnboardingScreen
-        onContinue={() => {
-          dispatch({ type: "continueProfile" });
-        }}
-      />
-    );
-  }
-
   function resetDoorFields() {
     setEmail("");
     setPassword("");
@@ -94,10 +84,6 @@ export default function FirstSessionHost() {
   function closeDoor() {
     resetDoorFields();
     dispatch({ type: "closeDoor" });
-  }
-
-  function handleContinueFromSplash() {
-    dispatch({ type: "continueFromSplash" });
   }
 
   async function handleSubmitEmail() {
@@ -173,35 +159,30 @@ export default function FirstSessionHost() {
     }
   }
 
-  function handleDismissVerifyEmail() {
-    dispatch({ type: "dismissVerifyEmail" });
-  }
-
   const doorMode = session.doorMode ?? "login";
   const backdrop = firstSessionBackdrop(session);
 
   return (
     <>
-      {backdrop === "discovery" ? (
-        <DiscoveryShowcaseScreen
-          onAddFirst={() => {
+      {backdrop === "welcome" ? (
+        <WelcomeScreen
+          onStartDemo={(exampleId, origins) => {
+            setDemoOrigins(origins);
+            dispatch({ type: "startDemo", exampleId });
+          }}
+          onOwnPhoto={() => {
             dispatch({ type: "startAdd" });
           }}
           onHaveAccount={() => openDoor("login")}
         />
       ) : null}
-      {backdrop === "splash" ? (
-        <SplashView
-          onContinue={handleContinueFromSplash}
-          onLogin={() => openDoor("login")}
-          onRegister={() => openDoor("register")}
-        />
-      ) : null}
-      {backdrop === "onboard" ? (
-        <OnboardScreen
-          exit={session.identitySession ? "app" : "door"}
-          onComplete={() => {
-            dispatch({ type: "completeOnboard" });
+      {backdrop === "demo" && session.demoExampleId ? (
+        <DemoScreen
+          example={exampleById(session.demoExampleId)}
+          origins={demoOrigins}
+          onStart={() => openDoor("register")}
+          onTryAnother={() => {
+            dispatch({ type: "demoTryAnother" });
           }}
         />
       ) : null}
@@ -233,7 +214,7 @@ export default function FirstSessionHost() {
         onSwapMode={() => {
           const next = doorMode === "login" ? "register" : "login";
           resetDoorFields();
-          if (session.doorOverAnalysing) {
+          if (session.doorOver === "analysing") {
             dispatch({ type: "openDoorFromAnalysing", mode: next });
             return;
           }
@@ -248,10 +229,6 @@ export default function FirstSessionHost() {
         onSocial={(provider) => {
           void handleSocial(provider);
         }}
-      />
-      <VerifyEmailBeat
-        visible={session.place === "verify-email"}
-        onDismiss={handleDismissVerifyEmail}
       />
     </>
   );

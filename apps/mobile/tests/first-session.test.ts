@@ -16,10 +16,10 @@ import {
 } from "../src/first-session/session";
 
 describe("First session launch", () => {
-  it("unsigned launch place is splash", () => {
+  it("unsigned launch place is welcome", () => {
     const session = createFirstSession({ signedIn: false });
 
-    expect(session.place).toBe("splash");
+    expect(session.place).toBe("welcome");
     expect(session.showsTabBar).toBe(false);
   });
 
@@ -31,295 +31,211 @@ describe("First session launch", () => {
   });
 });
 
-describe("First session door from splash", () => {
-  it("openDoor login from splash skips Discovery", () => {
-    const session = reduceFirstSession(createFirstSession({ signedIn: false }), {
-      type: "openDoor",
-      mode: "login",
-    });
+describe("First session welcome and demo", () => {
+  const welcome = () => createFirstSession({ signedIn: false });
 
-    expect(session.place).toBe("door");
-    expect(session.doorMode).toBe("login");
-    expect(session.skippedDiscovery).toBe(true);
-    expect(session.place).not.toBe("discovery");
+  it("tapping an example starts the demo directly, with no pick screen in between", () => {
+    const demo = reduceFirstSession(welcome(), { type: "startDemo", exampleId: "example-2" });
+
+    expect(demo.place).toBe("demo");
+    expect(demo.demoExampleId).toBe("example-2");
+    expect(demo.showsTabBar).toBe(false);
+    expect(demo.hasDraft).toBe(false);
+    expect(demo.captureSessionId).toBe(null);
   });
 
-  it("openDoor register from splash skips Discovery", () => {
-    const session = reduceFirstSession(createFirstSession({ signedIn: false }), {
-      type: "openDoor",
-      mode: "register",
-    });
+  it("Prøv en anden trøje returns to welcome and forgets the example", () => {
+    const demo = reduceFirstSession(welcome(), { type: "startDemo", exampleId: "example-1" });
+    const back = reduceFirstSession(demo, { type: "demoTryAnother" });
 
-    expect(session.place).toBe("door");
-    expect(session.doorMode).toBe("register");
-    expect(session.skippedDiscovery).toBe(true);
-    expect(session.place).not.toBe("discovery");
+    expect(back.place).toBe("welcome");
+    expect(back.demoExampleId).toBe(null);
+    expect(firstSessionBackdrop(back)).toBe("welcome");
+  });
+
+  it("Kom i gang from the demo opens the door over the demo, and closing returns to the same demo", () => {
+    const demo = reduceFirstSession(welcome(), { type: "startDemo", exampleId: "example-3" });
+    const door = reduceFirstSession(demo, { type: "openDoor", mode: "register" });
+
+    expect(door.place).toBe("door");
+    expect(door.doorOver).toBe("demo");
+    expect(firstSessionBackdrop(door)).toBe("demo");
+
+    const back = reduceFirstSession(door, { type: "closeDoor" });
+    expect(back.place).toBe("demo");
+    expect(back.demoExampleId).toBe("example-3");
+  });
+
+  it("Jeg har allerede en konto opens the door over welcome and closes back to welcome", () => {
+    const door = reduceFirstSession(welcome(), { type: "openDoor", mode: "login" });
+
+    expect(door.place).toBe("door");
+    expect(door.doorMode).toBe("login");
+    expect(door.doorOver).toBe("welcome");
+    expect(firstSessionBackdrop(door)).toBe("welcome");
+    expect(reduceFirstSession(door, { type: "closeDoor" }).place).toBe("welcome");
+  });
+
+  it("swapping door mode keeps the screen behind the door", () => {
+    const demo = reduceFirstSession(welcome(), { type: "startDemo", exampleId: "example-1" });
+    const door = reduceFirstSession(demo, { type: "openDoor", mode: "register" });
+    const swapped = reduceFirstSession(door, { type: "openDoor", mode: "login" });
+
+    expect(swapped.doorMode).toBe("login");
+    expect(firstSessionBackdrop(swapped)).toBe("demo");
+  });
+
+  it("Brug mit eget foto opens the existing chooser, and cancelling returns to welcome", () => {
+    const chooser = reduceFirstSession(welcome(), { type: "startAdd" });
+
+    expect(chooser.place).toBe("chooser");
+    expect(chooser.showsTabBar).toBe(false);
+    expect(reduceFirstSession(chooser, { type: "cancelChooser" }).place).toBe("welcome");
   });
 });
 
-describe("First session identity without draft", () => {
-  it("login without draft lands on collection, skips profile and jersey details, and shows the tab bar", () => {
-    const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
+describe("First session identity", () => {
+  const door = (mode: "login" | "register", hasDraft = false) =>
+    reduceFirstSession(createFirstSession({ signedIn: false, hasDraft }), {
       type: "openDoor",
-      mode: "login",
+      mode,
     });
-    const session = reduceFirstSession(door, {
-      type: "submitIdentity",
-      method: "password",
-      kind: "login",
-    });
+
+  it.each([
+    ["password", "login"],
+    ["password", "register"],
+    ["social", "login"],
+    ["social", "register"],
+  ] as const)("%s %s without a draft lands on Samling and shows the tab bar", (method, kind) => {
+    const session = reduceFirstSession(door(kind), { type: "submitIdentity", method, kind });
 
     expect(session.place).toBe("collection");
-    expect(session.skippedProfile).toBe(true);
     expect(session.skippedJerseyDetails).toBe(true);
-    expect(session.onboardCompleted).toBe(true);
     expect(session.showsTabBar).toBe(true);
-    expect(session.place).not.toBe("profile");
-    expect(session.place).not.toBe("jersey-details");
   });
 
-  it("password register without draft shows verify-email, then profile; empty Fortsæt lands on collection", () => {
-    const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
-      type: "openDoor",
-      mode: "register",
+  it("after the demo, identity lands on Samling and the example leaves no draft", () => {
+    const demo = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "startDemo",
+      exampleId: "example-1",
     });
-    const afterRegister = reduceFirstSession(door, {
+    const session = reduceFirstSession(
+      reduceFirstSession(demo, { type: "openDoor", mode: "register" }),
+      {
+        type: "submitIdentity",
+        method: "social",
+        kind: "register",
+      },
+    );
+
+    expect(session.place).toBe("collection");
+    expect(session.hasDraft).toBe(false);
+    expect(session.demoExampleId).toBe(null);
+  });
+
+  it("social identity marks the e-mail verified, password identity does not", () => {
+    const social = reduceFirstSession(door("register"), {
+      type: "submitIdentity",
+      method: "social",
+      kind: "register",
+    });
+    const password = reduceFirstSession(door("register"), {
       type: "submitIdentity",
       method: "password",
       kind: "register",
     });
 
-    expect(afterRegister.place).toBe("verify-email");
-    expect(afterRegister.identitySession).toEqual({ emailVerified: false });
-    expect(afterRegister.showsTabBar).toBe(false);
-    expect(afterRegister.skippedProfile).toBe(false);
-
-    const profile = reduceFirstSession(afterRegister, { type: "dismissVerifyEmail" });
-
-    expect(profile.place).toBe("profile");
-    expect(profile.identitySession).toEqual({ emailVerified: false });
-    expect(profile.skippedProfile).toBe(false);
-    expect(profile.skippedJerseyDetails).toBe(true);
-    expect(profile.showsTabBar).toBe(false);
-    expect(profile.place).not.toBe("collection");
-    expect(profile.place).not.toBe("jersey-details");
-
-    const session = reduceFirstSession(profile, { type: "continueProfile" });
-
-    expect(session.place).toBe("onboard");
-    expect(session.showsTabBar).toBe(false);
-    expect(session.onboardCompleted).toBe(false);
-    expect(session.skippedJerseyDetails).toBe(true);
-
-    const landed = reduceFirstSession(session, { type: "completeOnboard" });
-
-    expect(landed.place).toBe("collection");
-    expect(landed.showsTabBar).toBe(true);
-    expect(landed.onboardCompleted).toBe(true);
-    expect(landed.skippedJerseyDetails).toBe(true);
+    expect(social.identitySession).toEqual({ emailVerified: true });
+    expect(password.identitySession).toBe(null);
   });
 
-  it("social register skips the verify beat and opens profile", () => {
-    const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
-      type: "openDoor",
-      mode: "register",
-    });
-    const session = reduceFirstSession(door, {
-      type: "submitIdentity",
-      method: "social",
-      kind: "register",
-    });
+  it.each(["register", "login"] as const)(
+    "%s identity with a draft opens jersey details",
+    (kind) => {
+      const session = reduceFirstSession(door(kind, true), {
+        type: "submitIdentity",
+        method: "social",
+        kind,
+      });
 
-    expect(session.place).toBe("profile");
-    expect(session.place).not.toBe("verify-email");
-    expect(session.skippedProfile).toBe(false);
-    expect(session.showsTabBar).toBe(false);
+      expect(session.place).toBe("jersey-details");
+      expect(session.showsTabBar).toBe(false);
+    },
+  );
+});
 
-    const collection = reduceFirstSession(session, { type: "continueProfile" });
+describe("First session path has no onboard, profile or verify-email place", () => {
+  it("every reachable place is on the new path", () => {
+    const onPath = new Set([
+      "welcome",
+      "demo",
+      "chooser",
+      "analysing",
+      "door",
+      "jersey-details",
+      "collection",
+      "tab-shell",
+    ]);
+    let state = createFirstSession({ signedIn: false });
+    const seen = new Set<string>([state.place]);
+    const events: Parameters<typeof reduceFirstSession>[1][] = [
+      { type: "startDemo", exampleId: "example-1" },
+      { type: "openDoor", mode: "register" },
+      { type: "closeDoor" },
+      { type: "demoTryAnother" },
+      { type: "startAdd" },
+      { type: "photosPicked", sessionId: "capture-session-1" },
+      { type: "visionComplete" },
+      { type: "submitIdentity", method: "password", kind: "register" },
+      { type: "saveJersey" },
+    ];
+    for (const event of events) {
+      state = reduceFirstSession(state, event);
+      seen.add(state.place);
+    }
 
-    expect(collection.place).toBe("onboard");
-    expect(collection.showsTabBar).toBe(false);
-    expect(collection.onboardCompleted).toBe(false);
-
-    const landed = reduceFirstSession(collection, { type: "completeOnboard" });
-
-    expect(landed.place).toBe("collection");
-    expect(landed.showsTabBar).toBe(true);
-    expect(landed.skippedProfile).toBe(false);
-    expect(landed.skippedJerseyDetails).toBe(true);
-    expect(landed.onboardCompleted).toBe(true);
+    for (const place of seen) {
+      expect(onPath.has(place)).toBe(true);
+    }
   });
 
-  it("social login without draft lands on collection and never opens profile", () => {
-    const door = reduceFirstSession(createFirstSession({ signedIn: false, hasDraft: false }), {
-      type: "openDoor",
-      mode: "login",
-    });
-    const session = reduceFirstSession(door, {
-      type: "submitIdentity",
-      method: "social",
-      kind: "login",
-    });
+  it("the reducer source carries no onboard, profile or verify-email vocabulary", () => {
+    const source = readFileSync(join(__dirname, "../src/first-session/session.ts"), "utf8");
 
-    expect(session.place).toBe("collection");
-    expect(session.skippedProfile).toBe(true);
-    expect(session.showsTabBar).toBe(true);
-    expect(session.place).not.toBe("profile");
+    expect(source).not.toMatch(/onboard|profile|verify-email|continueFromSplash|discovery/i);
   });
 });
 
 describe("First session tab bar", () => {
-  it("hides the tab bar on splash, discovery, door, verify-email, and profile, and shows it on collection", () => {
-    const splash = createFirstSession({ signedIn: false });
-    expect(splash.place).toBe("splash");
-    expect(splash.showsTabBar).toBe(false);
-
-    const discovery = reduceFirstSession(splash, { type: "continueFromSplash" });
-    expect(discovery.place).toBe("onboard");
-    expect(discovery.showsTabBar).toBe(false);
-
-    const chooser = reduceFirstSession(discovery, { type: "startAdd" });
-    expect(chooser.place).toBe("chooser");
-    expect(chooser.showsTabBar).toBe(false);
-
+  it("hides the tab bar on welcome, demo, chooser, analysing and door, and shows it on collection", () => {
+    const welcome = createFirstSession({ signedIn: false });
+    const demo = reduceFirstSession(welcome, { type: "startDemo", exampleId: "example-1" });
+    const door = reduceFirstSession(demo, { type: "openDoor", mode: "register" });
+    const chooser = reduceFirstSession(welcome, { type: "startAdd" });
     const analysing = reduceFirstSession(chooser, {
       type: "photosPicked",
       sessionId: "capture-session-1",
     });
-    expect(analysing.place).toBe("analysing");
-    expect(analysing.showsTabBar).toBe(false);
 
-    const door = reduceFirstSession(splash, { type: "openDoor", mode: "register" });
-    expect(door.place).toBe("door");
-    expect(door.showsTabBar).toBe(false);
+    for (const state of [welcome, demo, door, chooser, analysing]) {
+      expect(state.showsTabBar).toBe(false);
+    }
 
-    const verify = reduceFirstSession(door, {
+    const collection = reduceFirstSession(door, {
       type: "submitIdentity",
-      method: "password",
+      method: "social",
       kind: "register",
     });
-    expect(verify.place).toBe("verify-email");
-    expect(verify.showsTabBar).toBe(false);
-
-    const profile = reduceFirstSession(verify, { type: "dismissVerifyEmail" });
-    expect(profile.place).toBe("profile");
-    expect(profile.showsTabBar).toBe(false);
-
-    const onboard = reduceFirstSession(profile, { type: "continueProfile" });
-    expect(onboard.place).toBe("onboard");
-    expect(onboard.showsTabBar).toBe(false);
-
-    const collection = reduceFirstSession(onboard, { type: "completeOnboard" });
     expect(collection.place).toBe("collection");
     expect(collection.showsTabBar).toBe(true);
   });
 });
 
-describe("First session continue from splash", () => {
-  it("continueFromSplash opens onboard and keeps skippedDiscovery false", () => {
-    const session = reduceFirstSession(createFirstSession({ signedIn: false }), {
-      type: "continueFromSplash",
-    });
-
-    expect(session.place).toBe("onboard");
-    expect(session.skippedDiscovery).toBe(false);
-    expect(session.onboardCompleted).toBe(false);
-    expect(session.showsTabBar).toBe(false);
-  });
-
-  it("completeOnboard before identity opens register over onboard", () => {
-    const onboard = reduceFirstSession(createFirstSession({ signedIn: false }), {
-      type: "continueFromSplash",
-    });
-    const door = reduceFirstSession(onboard, { type: "completeOnboard" });
-
-    expect(door.place).toBe("door");
-    expect(door.doorMode).toBe("register");
-    expect(door.doorOverOnboard).toBe(true);
-    expect(door.onboardCompleted).toBe(true);
-
-    const back = reduceFirstSession(door, { type: "closeDoor" });
-    expect(back.place).toBe("onboard");
-    expect(back.doorOverOnboard).toBe(false);
-  });
-
-  it("register after splash-first onboard skips onboard after profile", () => {
-    const door = reduceFirstSession(
-      reduceFirstSession(createFirstSession({ signedIn: false }), {
-        type: "continueFromSplash",
-      }),
-      { type: "completeOnboard" },
-    );
-    const afterRegister = reduceFirstSession(door, {
-      type: "submitIdentity",
-      method: "social",
-      kind: "register",
-    });
-    const afterProfile = reduceFirstSession(afterRegister, { type: "continueProfile" });
-
-    expect(afterProfile.place).toBe("collection");
-    expect(afterProfile.onboardCompleted).toBe(true);
-    expect(afterProfile.showsTabBar).toBe(true);
-  });
-
-  it("openDoor register from splash still shows onboard after profile", () => {
-    const door = reduceFirstSession(createFirstSession({ signedIn: false }), {
-      type: "openDoor",
-      mode: "register",
-    });
-    expect(door.onboardCompleted).toBe(false);
-    expect(door.skippedDiscovery).toBe(true);
-  });
-
-  it("swapping to login inside the onboard door keeps onboard behind it", () => {
-    const door = reduceFirstSession(
-      reduceFirstSession(createFirstSession({ signedIn: false }), {
-        type: "continueFromSplash",
-      }),
-      { type: "completeOnboard" },
-    );
-    const swapped = reduceFirstSession(door, { type: "openDoor", mode: "login" });
-
-    expect(swapped.doorOverOnboard).toBe(true);
-    expect(firstSessionBackdrop(swapped)).toBe("onboard");
-    expect(reduceFirstSession(swapped, { type: "closeDoor" }).place).toBe("onboard");
-  });
-
-  it("backdrop is one surface even when splash and onboard both preceded the door", () => {
-    const splashDoor = reduceFirstSession(createFirstSession({ signedIn: false }), {
-      type: "openDoor",
-      mode: "register",
-    });
-    const backOnSplash = reduceFirstSession(splashDoor, { type: "closeDoor" });
-    const onboard = reduceFirstSession(backOnSplash, { type: "continueFromSplash" });
-    const onboardDoor = reduceFirstSession(onboard, { type: "completeOnboard" });
-
-    expect(onboardDoor.skippedDiscovery).toBe(true);
-    expect(firstSessionBackdrop(onboardDoor)).toBe("onboard");
-    expect(firstSessionBackdrop(onboard)).toBe("onboard");
-    expect(firstSessionBackdrop(backOnSplash)).toBe("splash");
-  });
-});
-
-describe("First session showcase seam", () => {
-  it("empty showcase response still leaves add-first available in the host", () => {
-    const source = readFileSync(
-      join(__dirname, "../src/first-session/discovery-showcase.tsx"),
-      "utf8",
-    );
-
-    expect(source).toContain("DISCOVERY_ADD_FIRST_LABEL");
-    expect(source).toContain("<Button label={DISCOVERY_ADD_FIRST_LABEL}");
-    expect(source).not.toContain("disabled={jerseys.length === 0}");
-  });
-});
-
 describe("First session add to door flow", () => {
   it("startAdd opens chooser without premium gating", () => {
-    const discovery = reduceFirstSession(createFirstSession({ signedIn: false }), {
-      type: "continueFromSplash",
+    const chooser = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "startAdd",
     });
-    const chooser = reduceFirstSession(discovery, { type: "startAdd" });
 
     expect(chooser.place).toBe("chooser");
     expect(chooser.showsTabBar).toBe(false);
@@ -327,12 +243,9 @@ describe("First session add to door flow", () => {
   });
 
   it("photosPicked creates draft state and moves to analysing", () => {
-    const chooser = reduceFirstSession(
-      reduceFirstSession(createFirstSession({ signedIn: false }), {
-        type: "continueFromSplash",
-      }),
-      { type: "startAdd" },
-    );
+    const chooser = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "startAdd",
+    });
     const session = reduceFirstSession(chooser, {
       type: "photosPicked",
       sessionId: "capture-session-1",
@@ -353,7 +266,7 @@ describe("First session add to door flow", () => {
 
     expect(door.place).toBe("door");
     expect(door.doorMode).toBe("register");
-    expect(door.doorOverAnalysing).toBe(true);
+    expect(door.doorOver).toBe("analysing");
     expect(door.hasDraft).toBe(true);
     expect(door.captureSessionId).toBe("capture-session-1");
   });
@@ -367,12 +280,12 @@ describe("First session add to door flow", () => {
     const failed = reduceFirstSession(analysing, { type: "visionFailed" });
     expect(failed.place).toBe("door");
     expect(failed.doorMode).toBe("register");
-    expect(failed.doorOverAnalysing).toBe(true);
+    expect(failed.doorOver).toBe("analysing");
 
     const filled = reduceFirstSession(analysing, { type: "fillSelf" });
     expect(filled.place).toBe("door");
     expect(filled.doorMode).toBe("register");
-    expect(filled.doorOverAnalysing).toBe(true);
+    expect(filled.doorOver).toBe("analysing");
   });
 
   it("closeDoor from analysing-backed door returns to analysing", () => {
@@ -387,7 +300,7 @@ describe("First session add to door flow", () => {
 
     expect(back.place).toBe("analysing");
     expect(back.doorMode).toBe(null);
-    expect(back.doorOverAnalysing).toBe(false);
+    expect(back.doorOver).toBe(null);
     expect(back.captureSessionId).toBe("capture-session-1");
   });
 
@@ -409,9 +322,7 @@ describe("First session add to door flow", () => {
     expect(afterLogin.hasDraft).toBe(true);
     expect(afterLogin.captureSessionId).toBe("capture-session-1");
     expect(afterLogin.showsTabBar).toBe(false);
-    expect(afterLogin.skippedProfile).toBe(false);
     expect(afterLogin.place).not.toBe("collection");
-    expect(afterLogin.place).not.toBe("profile");
 
     const host = readFileSync(join(__dirname, "../app/(first-session)/index.tsx"), "utf8");
     expect(host).not.toContain("requestPremiumAccess");
@@ -446,7 +357,7 @@ describe("First session add to door flow", () => {
 
     expect(afterRegister.hasDraft).toBe(true);
     expect(afterRegister.captureSessionId).toBe(sessionId);
-    expect(afterRegister.place).toBe("profile");
+    expect(afterRegister.place).toBe("jersey-details");
     expect(store.load()?.sessionId).toBe(sessionId);
   });
 
@@ -463,7 +374,7 @@ describe("First session add to door flow", () => {
 
     expect(afterVision.place).toBe("door");
     expect(afterVision.doorMode).toBe("login");
-    expect(afterVision.doorOverAnalysing).toBe(true);
+    expect(afterVision.doorOver).toBe("analysing");
   });
 
   it("≤3 picker photos bind one jersey in the capture draft", () => {
@@ -502,7 +413,7 @@ describe("First session add to door flow", () => {
 });
 
 describe("First session jersey details and first Save", () => {
-  function sessionAtProfileWithDraft() {
+  function sessionAtJerseyDetails() {
     const door = reduceFirstSession(
       reduceFirstSession(createFirstSession({ signedIn: false }), {
         type: "photosPicked",
@@ -515,29 +426,22 @@ describe("First session jersey details and first Save", () => {
       method: "social",
       kind: "register",
     });
-    expect(afterRegister.place).toBe("profile");
+    expect(afterRegister.place).toBe("jersey-details");
     expect(afterRegister.hasDraft).toBe(true);
     return afterRegister;
   }
 
-  it("continueProfile with draft opens onboard, then completeOnboard opens jersey-details", () => {
-    const details = reduceFirstSession(sessionAtProfileWithDraft(), { type: "continueProfile" });
+  it("identity with a draft goes straight to jersey-details, keeping the capture session", () => {
+    const details = sessionAtJerseyDetails();
 
-    expect(details.place).toBe("onboard");
-    expect(details.hasDraft).toBe(true);
+    expect(details.place).toBe("jersey-details");
     expect(details.captureSessionId).toBe("capture-session-1");
     expect(details.showsTabBar).toBe(false);
-    expect(details.onboardCompleted).toBe(false);
-    expect(details.place).not.toBe("collection");
-
-    const jerseyDetails = reduceFirstSession(details, { type: "completeOnboard" });
-    expect(jerseyDetails.place).toBe("jersey-details");
-    expect(jerseyDetails.skippedJerseyDetails).toBe(false);
+    expect(details.skippedJerseyDetails).toBe(false);
   });
 
   it("saveJersey from jersey-details lands on result Collection with tab bar and one save counted", () => {
-    const onboard = reduceFirstSession(sessionAtProfileWithDraft(), { type: "continueProfile" });
-    const details = reduceFirstSession(onboard, { type: "completeOnboard" });
+    const details = sessionAtJerseyDetails();
     const result = reduceFirstSession(details, { type: "saveJersey" });
 
     expect(result.place).toBe("collection");
@@ -590,8 +494,7 @@ describe("First session jersey details and first Save", () => {
   });
 
   it("after result Collection, plus is not first-session chrome", () => {
-    const onboard = reduceFirstSession(sessionAtProfileWithDraft(), { type: "continueProfile" });
-    const details = reduceFirstSession(onboard, { type: "completeOnboard" });
+    const details = sessionAtJerseyDetails();
     const result = reduceFirstSession(details, { type: "saveJersey" });
     expect(result.place).toBe("collection");
     expect(result.resultCollection).toBe(true);
