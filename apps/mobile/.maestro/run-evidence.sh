@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Runs the device flows for the current commit on this Mac and publishes the
 # evidence (KIT-267, ADR-0048): screenshots and recordings to the evidence
-# bucket, and for a PR the before/after comparison, the review, the PR comment, the Linear
-# workpad links and the `Device flows` commit status.
+# bucket and the `Device flows` commit status on every run, and for a PR also
+# the before/after comparison, the review, the PR comment and the Linear
+# workpad links.
 #
 #   apps/mobile/.maestro/local-api.sh     (terminal 1)
 #   apps/mobile/.maestro/build-local.sh   (when apps/mobile, packages or the lockfile changed)

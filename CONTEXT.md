@@ -130,11 +130,11 @@ A Maestro flow under `apps/mobile/.maestro/flows/` that drives the iOS Simulator
 _Avoid_: e2e test as a synonym for an API integration test; worker browser screenshots as evidence for a mobile slice; a flow that needs a manual step
 
 **Test Collector**:
-The Collector the Device flows sign in as, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and meets the paywall. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
+The Collector four of the five Device flows sign in as, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and signs in for the Ønske and paywall flow. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
 _Avoid_: a real Collector's account in a flow; a lane-wide Vision switch; a fourth lane for tests
 
 **Evidence run**:
-The screenshots and recordings of one Device flow run for one commit, in the evidence bucket (its own public bucket, never a lane bucket) under `e2e/<sha>/`, kept 30 days. "Before" for a PR is the latest passed `development` Evidence run at or before the PR's merge base; "after" is the PR head.
+The screenshots and recordings of one run of the five Device flows for one commit, in the evidence bucket (its own public bucket, never a lane bucket) under `e2e/<sha>/`, kept 30 days. "Before" for a PR is the latest passed `development` Evidence run at or before the PR's merge base; "after" is the PR head.
 _Avoid_: committing screenshots to git; comparing against `staging` or an arbitrary older run; evidence in a lane bucket
 
 **Design finding**:

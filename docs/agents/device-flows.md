@@ -4,15 +4,15 @@ Five Maestro flows drive the iOS Simulator build through the Collector journeys,
 
 ## What runs
 
-| Flow | Signs in as | Steps |
+| Flow | Signs in as | Steps (one screenshot each) |
 | --- | --- | --- |
-| `first-session` | signed out, then the Test Collector | splash, onboard (3), door register, door login, Samling |
-| `add-jersey` | Test Collector | source Sheet, gallery, Bekræft with the fixed Vision suggestion, Detaljer, ready to save, Gemt, Samling |
-| `collection` | Test Collector | Samling, a shortcut filter, own UserJersey detail |
-| `search-bid` | Test Collector | Søg typeahead, catalog drill, the second test Collector's UserJersey, Send bud |
-| `wishlist-paywall` | second test Collector | Ønske, the paywall Sheet |
+| `first-session` | signed out, then the Test Collector | `01-splash`, `02-onboard-1`, `03-onboard-2`, `04-onboard-3`, `05-door-register`, `06-door-login`, `07-collection` |
+| `add-jersey` | Test Collector | `01-source-sheet`, `02-confirm` (Bekræft with the fixed Vision suggestion), `03-details`, `04-ready-to-save`, `05-saved`, `06-collection`. The system photo picker between the first two is tapped through, not screenshotted |
+| `collection` | Test Collector | `01-collection`, `02-shortcut-filter`, `03-own-detail` |
+| `search-bid` | Test Collector | `01-typeahead`, `02-catalog-drill`, `03-foreign-detail` (the second test Collector's UserJersey), `04-send-bid`, `05-amount-entered`, `06-bid-sent` |
+| `wishlist-paywall` | second test Collector | `01-wishlist`, `02-paywall` |
 
-Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a re-run starts from the same rows. A screenshot is `kc__<flow>__<step>.png`; a recording is `kc__<flow>.mp4`.
+That is 24 steps. Every flow first calls `POST /v1/e2e/test-data`, so flows are independent and a re-run starts from the same rows. A screenshot is `kc__<flow>__<step>.png`; a recording is `kc__<flow>.mp4`.
 
 Not covered: Android, physical devices, the camera branch of Tilføj trøje, showcase and first photos (unreachable from a cold start today).
 
@@ -76,7 +76,7 @@ The flows own a simulator, "KitCollective Device Flows", created on first use wi
 
 When a mobile slice lands, run it once on `development` (step 3), or the next PR has nothing to compare against. `/land` names this step.
 
-The status belongs to one commit. `development` requires the branch to be up to date, so merging `development` into a PR branch moves the head: run `run-evidence.sh` again on the new head before landing. No rebuild is needed when the merge brought no change under the app, API or package sources.
+The status belongs to one commit. `development` requires the branch to be up to date, so merging `development` into a PR branch moves the head: run `run-evidence.sh` again on the new head before landing. No rebuild is needed when the merge brought no change under the app, API or package sources or the lockfile.
 
 ## Settings
 

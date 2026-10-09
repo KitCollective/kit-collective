@@ -218,7 +218,8 @@ describe("device-flow test data", () => {
     await applyTestData({ db, objectStore, credentials: CREDENTIALS });
     const before = await snapshot(db, [TEST_COLLECTOR_ID, TEST_PEER_ID]);
 
-    // Tilføj trøje, Send bud and a new Ønske, as the flows leave them.
+    // What the flows leave behind (an added UserJersey, a bid thread), plus stray rows no flow
+    // writes today (a favourite, a new Ønske), so the reset is proven against more than it needs.
     const [side] = await db.select().from(teamSeason).limit(1);
     const [added] = await db
       .insert(userJersey)
