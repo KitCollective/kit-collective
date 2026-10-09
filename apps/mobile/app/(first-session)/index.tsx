@@ -10,10 +10,12 @@ import { DemoScreen } from "@/first-session/demo-screen";
 import { DoorSheet } from "@/first-session/door";
 import { JerseyDetailsScreen } from "@/first-session/jersey-details-screen";
 import {
+  collectionHref,
   createFirstSession,
   firstSessionBackdrop,
   reduceFirstSession,
 } from "@/first-session/session";
+import { VisionFailedScreen } from "@/first-session/vision-failed-screen";
 import { type ExampleOrigins, WelcomeScreen } from "@/first-session/welcome-screen";
 import { LoadingScreen } from "../_layout";
 
@@ -42,15 +44,7 @@ export default function FirstSessionHost() {
   }
 
   if (session.place === "collection" || session.place === "tab-shell") {
-    return (
-      <Redirect
-        href={
-          session.resultCollection
-            ? "/(tabs)/collection?firstSessionResult=1"
-            : "/(tabs)/collection"
-        }
-      />
-    );
+    return <Redirect href={collectionHref(session)} />;
   }
 
   if (session.place === "jersey-details" && session.captureSessionId) {
@@ -184,6 +178,13 @@ export default function FirstSessionHost() {
           onTryAnother={() => {
             dispatch({ type: "demoTryAnother" });
           }}
+        />
+      ) : null}
+      {backdrop === "vision-failed" ? (
+        <VisionFailedScreen
+          captureSessionId={session.captureSessionId}
+          onFillSelf={() => dispatch({ type: "fillSelf" })}
+          onTryAnother={() => dispatch({ type: "tryAnotherPhoto" })}
         />
       ) : null}
       {session.place === "chooser" ? (

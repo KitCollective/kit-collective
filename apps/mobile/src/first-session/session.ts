@@ -3,6 +3,7 @@ export type FirstSessionPlace =
   | "demo"
   | "chooser"
   | "analysing"
+  | "vision-failed"
   | "door"
   | "jersey-details"
   | "collection"
@@ -22,7 +23,7 @@ export type FirstSessionIdentitySession = {
 export type DemoExampleId = "example-1" | "example-2" | "example-3";
 
 /** The screen a door sheet sits on top of. */
-export type DoorOver = "welcome" | "demo" | "analysing";
+export type DoorOver = "welcome" | "demo" | "analysing" | "vision-failed";
 
 export type FirstSessionState = {
   place: FirstSessionPlace;
@@ -48,6 +49,7 @@ export type FirstSessionEvent =
   | { type: "recordDumpSave" }
   | { type: "startAdd" }
   | { type: "cancelChooser" }
+  | { type: "tryAnotherPhoto" }
   | { type: "photosPicked"; sessionId: string }
   | { type: "visionComplete" }
   | { type: "visionFailed" }
@@ -92,8 +94,17 @@ export function firstSessionBackdrop(state: FirstSessionState): FirstSessionBack
   if (state.place === "door") {
     return state.doorOver ?? "welcome";
   }
-  if (state.place === "welcome" || state.place === "demo" || state.place === "analysing") {
+  if (
+    state.place === "welcome" ||
+    state.place === "demo" ||
+    state.place === "analysing" ||
+    state.place === "vision-failed"
+  ) {
     return state.place;
+  }
+  // The source sheet is a sheet over the welcome screen.
+  if (state.place === "chooser") {
+    return "welcome";
   }
   return null;
 }
@@ -102,7 +113,7 @@ function doorOverFor(state: FirstSessionState): DoorOver {
   if (state.place === "door") {
     return state.doorOver ?? "welcome";
   }
-  if (state.place === "demo" || state.place === "analysing") {
+  if (state.place === "demo" || state.place === "analysing" || state.place === "vision-failed") {
     return state.place;
   }
   return "welcome";
@@ -150,13 +161,18 @@ function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSes
         hasDraft: true,
         captureSessionId: event.sessionId,
       };
+    case "tryAnotherPhoto":
+      return { ...state, place: "chooser", hasDraft: false, captureSessionId: null };
     case "visionComplete":
+      // A late answer never moves a collector who has already left analysing or opened the door.
+      return state.place === "analysing" ? openDoorFromAnalysing(state) : state;
     case "visionFailed":
-      if (state.place === "door" && state.doorOver === "analysing") {
-        return state;
-      }
-      return openDoorFromAnalysing(state);
+      // Vision could not read the jersey: say so and keep the photo. No door yet.
+      return state.place === "analysing" ? { ...state, place: "vision-failed" } : state;
     case "fillSelf":
+      if (state.place === "vision-failed") {
+        return { ...state, place: "door", doorMode: "register", doorOver: "vision-failed" };
+      }
       return openDoorFromAnalysing(state);
     case "openDoorFromAnalysing":
       return openDoorFromAnalysing(state, event.mode);
@@ -181,6 +197,17 @@ function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSes
       return _exhaustive;
     }
   }
+}
+
+/** Where the host sends the collector once the first session ends. */
+export function collectionHref(state: FirstSessionState): string {
+  if (state.resultCollection) {
+    return "/(tabs)/collection?firstSessionResult=1";
+  }
+  if (state.skippedJerseyDetails) {
+    return "/(tabs)/collection?firstSessionArrival=1";
+  }
+  return "/(tabs)/collection";
 }
 
 export function reduceFirstSession(
