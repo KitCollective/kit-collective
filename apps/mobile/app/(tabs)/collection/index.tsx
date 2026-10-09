@@ -31,8 +31,11 @@ import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overvi
 import { PlacePagerScreen } from "@/navigation/place-pager-screen";
 import { usePlaceOverview } from "@/navigation/use-place-overview";
 import {
+  armProfilePrompt,
   dismissProfilePrompt,
-  isProfilePromptDismissed,
+  type ProfilePromptState,
+  readProfilePromptState,
+  shouldArmProfilePrompt,
   shouldShowProfilePrompt,
 } from "@/profile-prompt/dismissal";
 import { ProfilePrompt } from "@/profile-prompt/profile-prompt";
@@ -56,7 +59,7 @@ function CollectionHome() {
   const isFirstArrival = firstSessionArrival === "1";
   const { accessToken, requestPremiumAccess, user } = useAuth();
   const userId = user?.id ?? null;
-  const [profilePromptDismissed, setProfilePromptDismissed] = useState<boolean | null>(null);
+  const [profilePromptState, setProfilePromptState] = useState<ProfilePromptState | null>(null);
   const captureChooser = useCaptureChooser();
   const { width } = useWindowDimensions();
   const theme = useTheme();
@@ -199,9 +202,9 @@ function CollectionHome() {
       return;
     }
     let active = true;
-    void isProfilePromptDismissed(securePromptStore, userId).then((dismissed) => {
+    void readProfilePromptState(securePromptStore, userId).then((state) => {
       if (active) {
-        setProfilePromptDismissed(dismissed);
+        setProfilePromptState(state);
       }
     });
     return () => {
@@ -209,8 +212,25 @@ function CollectionHome() {
     };
   }, [userId]);
 
+  // The first saved jersey arms the prompt; once the collection has loaded the count is real.
+  useEffect(() => {
+    if (
+      !userId ||
+      loading ||
+      !shouldArmProfilePrompt({
+        state: profilePromptState,
+        jerseyCount: totalJerseyCount,
+        arrivedWithSavedJersey: showResultCollectionCaption,
+      })
+    ) {
+      return;
+    }
+    setProfilePromptState("armed");
+    void armProfilePrompt(securePromptStore, userId);
+  }, [userId, loading, profilePromptState, totalJerseyCount, showResultCollectionCaption]);
+
   const dismissPrompt = () => {
-    setProfilePromptDismissed(true);
+    setProfilePromptState("dismissed");
     if (userId) {
       void dismissProfilePrompt(securePromptStore, userId);
     }
@@ -306,7 +326,7 @@ function CollectionHome() {
       ) : null}
       {shouldShowProfilePrompt({
         jerseyCount: totalJerseyCount,
-        dismissed: profilePromptDismissed,
+        state: profilePromptState,
       }) ? (
         <ProfilePrompt
           onOpen={() => router.push("/(tabs)/profile/edit")}

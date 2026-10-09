@@ -246,6 +246,35 @@ describe("First session arrival in Samling", () => {
     expect(collectionHref(saved)).toBe("/(tabs)/collection?firstSessionResult=1");
   });
 
+  it("a returning collector who logs in from welcome without an example gets plain Samling", () => {
+    const login = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "openDoor",
+        mode: "login",
+      }),
+      { type: "submitIdentity", method: "password", kind: "login" },
+    );
+
+    expect(login.place).toBe("collection");
+    expect(collectionHref(login)).toBe("/(tabs)/collection");
+  });
+
+  it("an example seen and left with Prøv en anden trøje still counts for the note", () => {
+    const afterTryAnother = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "startDemo",
+        exampleId: "example-1",
+      }),
+      { type: "demoTryAnother" },
+    );
+    const signedIn = reduceFirstSession(
+      reduceFirstSession(afterTryAnother, { type: "openDoor", mode: "login" }),
+      { type: "submitIdentity", method: "password", kind: "login" },
+    );
+
+    expect(collectionHref(signedIn)).toBe("/(tabs)/collection?firstSessionArrival=1");
+  });
+
   it("a signed-in launch lands on plain Samling", () => {
     expect(collectionHref(createFirstSession({ signedIn: true }))).toBe("/(tabs)/collection");
   });

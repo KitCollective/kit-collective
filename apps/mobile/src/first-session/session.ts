@@ -35,6 +35,8 @@ export type FirstSessionState = {
   identitySession: FirstSessionIdentitySession | null;
   showsTabBar: boolean;
   skippedJerseyDetails: boolean;
+  /** True once an example was shown: only then does Samling say the example was not saved. */
+  sawDemo: boolean;
   jerseysSavedInSession: number;
   resultCollection: boolean;
 };
@@ -82,6 +84,7 @@ export function createFirstSession(input: {
     identitySession: null,
     showsTabBar: showsTabBarFor(place),
     skippedJerseyDetails: false,
+    sawDemo: false,
     jerseysSavedInSession: 0,
     resultCollection: false,
   };
@@ -147,7 +150,13 @@ function submitIdentity(
 function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSessionState {
   switch (event.type) {
     case "startDemo":
-      return { ...state, ...DOOR_CLOSED, place: "demo", demoExampleId: event.exampleId };
+      return {
+        ...state,
+        ...DOOR_CLOSED,
+        place: "demo",
+        demoExampleId: event.exampleId,
+        sawDemo: true,
+      };
     case "demoTryAnother":
       return { ...state, ...DOOR_CLOSED, place: "welcome", demoExampleId: null };
     case "startAdd":
@@ -204,7 +213,7 @@ export function collectionHref(state: FirstSessionState): string {
   if (state.resultCollection) {
     return "/(tabs)/collection?firstSessionResult=1";
   }
-  if (state.skippedJerseyDetails) {
+  if (state.skippedJerseyDetails && state.sawDemo) {
     return "/(tabs)/collection?firstSessionArrival=1";
   }
   return "/(tabs)/collection";
