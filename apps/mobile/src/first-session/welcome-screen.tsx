@@ -141,6 +141,7 @@ export function WelcomeScreen({ onStartDemo, onOwnPhoto, onHaveAccount }: Welcom
                   tileRefs.current[jersey.id] = node;
                 }}
                 collapsable={false}
+                testID={`welcome-example-${jersey.id}`}
                 accessibilityRole="button"
                 accessibilityLabel={exampleTileLabel(jersey.clubLabel, jersey.seasonLabel)}
                 onPress={() => {
@@ -162,9 +163,15 @@ export function WelcomeScreen({ onStartDemo, onOwnPhoto, onHaveAccount }: Welcom
           </View>
         </Animated.View>
         <Animated.View style={[styles.actions, actionsRise]}>
-          <OnDarkButton label={WELCOME_OWN_PHOTO_LABEL} variant="secondary" onPress={onOwnPhoto} />
+          <OnDarkButton
+            label={WELCOME_OWN_PHOTO_LABEL}
+            testID="welcome-own-photo"
+            variant="secondary"
+            onPress={onOwnPhoto}
+          />
           <OnDarkButton
             label={WELCOME_HAVE_ACCOUNT_LABEL}
+            testID="welcome-have-account"
             variant="tertiary"
             onPress={onHaveAccount}
           />

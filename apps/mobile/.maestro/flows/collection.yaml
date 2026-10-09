@@ -1,0 +1,30 @@
+# Samling, a shortcut filter, and the test Collector's own UserJersey detail.
+appId: app.kitcollective.mobile
+name: collection
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- startRecording: kc__collection
+- takeScreenshot: kc__collection__01-collection
+- tapOn:
+    id: shortcut-chip-e2e00000-0000-4000-8000-000000000401
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__collection__02-shortcut-filter
+- tapOn:
+    id: shortcut-chip-all
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000101
+- extendedWaitUntil:
+    visible:
+      id: jersey-detail-own
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__collection__03-own-detail
+- stopRecording

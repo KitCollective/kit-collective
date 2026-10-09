@@ -116,6 +116,8 @@ One store for **both** file classes. Two prefixes. Postgres never holds JPEG byt
 
 One R2 bucket per lane (`kc-development`, `kc-staging`, `kc-production`). Same key layout inside each. Staging credentials must not open the production bucket.
 
+**Exception: device-flow evidence (ADR-0048, Nicklas 2026-10-08).** A fourth bucket, `kc-e2e-evidence`, holds only `e2e/{sha}/{flow}/…` screenshots and recordings of the two test Collectors and drawn shirts, with public read through its r2.dev address and a 30-day lifecycle. It is written by `scripts/e2e/` from the approver's Mac, never by Nest, and holds neither file class above. No lane bucket is ever public.
+
 ```text
 CX33                          R2 (per lane)
 ├── Coolify / Docker          ├── user/…     ← collectors’ camera + roll

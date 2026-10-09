@@ -192,7 +192,7 @@ export default function JerseyDetailScreen() {
   const showPagerDots = jersey.photos.length > 1;
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.fillPrimary }]}>
+    <View testID="jersey-detail-own" style={[styles.root, { backgroundColor: theme.fillPrimary }]}>
       <ScrollView
         ref={pagerRef}
         horizontal

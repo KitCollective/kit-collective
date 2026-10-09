@@ -198,6 +198,7 @@ function SearchHome() {
           onChangeText={setQuery}
           placeholder="Søg"
           accessibilityLabel="Søg"
+          testID="search-input"
           onClear={() => setQuery("")}
         />
       </View>
@@ -223,6 +224,7 @@ function SearchHome() {
                   <ListRow
                     key={club.clubId}
                     title={club.clubLabel}
+                    testID="typeahead-club-row"
                     onPress={() => openClubDrill(club)}
                   />
                 ))}

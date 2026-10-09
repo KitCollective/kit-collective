@@ -54,6 +54,7 @@ export function ConfirmDetailsScreen() {
               <Chip
                 key={value}
                 label={JERSEY_SIZE_LABELS_DA[value]}
+                testID={`detail-size-${value}`}
                 selected={draft.sizeSelected && draft.size === value}
                 accessibilityRole="radio"
                 onPress={() => {
@@ -71,6 +72,7 @@ export function ConfirmDetailsScreen() {
               <Chip
                 key={value}
                 label={JERSEY_CONDITION_LABELS_DA[value]}
+                testID={`detail-condition-${value}`}
                 selected={draft.conditionSelected && draft.condition === value}
                 accessibilityRole="radio"
                 onPress={() => {
@@ -93,7 +95,13 @@ export function ConfirmDetailsScreen() {
       </ScrollView>
 
       <ButtonDock variant="fade">
-        <Button label="Gem" variant="primary" width="fill" onPress={handleCommitDrill} />
+        <Button
+          label="Gem"
+          variant="primary"
+          width="fill"
+          onPress={handleCommitDrill}
+          testID="confirm-details-save"
+        />
       </ButtonDock>
     </View>
   );

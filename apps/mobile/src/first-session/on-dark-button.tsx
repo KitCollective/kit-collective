@@ -7,6 +7,7 @@ const SECONDARY_FILL_ALPHA = 0.16;
 
 type OnDarkButtonProps = {
   label: string;
+  testID?: string;
   variant: "primary" | "secondary" | "tertiary";
   onPress: () => void;
 };
@@ -16,7 +17,7 @@ type OnDarkButtonProps = {
  * no on-dark variant yet (design-system gap, flagged), so this mirrors its
  * layout with inverse semantic tokens only.
  */
-export function OnDarkButton({ label, variant, onPress }: OnDarkButtonProps) {
+export function OnDarkButton({ label, testID, variant, onPress }: OnDarkButtonProps) {
   const typography = useTypography();
   const labelColor = variant === "primary" ? color.contentPrimary : color.contentInverse;
 
@@ -24,6 +25,7 @@ export function OnDarkButton({ label, variant, onPress }: OnDarkButtonProps) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      testID={testID}
       onPress={onPress}
       style={({ pressed }) => [
         buttonLayoutStyles("fill"),

@@ -8,7 +8,7 @@ import {
   type TransitionNavigation,
 } from "@/capture/upload-capture-presentation";
 import { runUploadCapture, startUploadCaptureWhenPresented } from "@/capture/uploadCaptureSession";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
+import { readReduceMotion } from "@/theme/use-reduce-motion";
 
 const PICKING_CAPTION = "Åbner dine billeder …";
 const BUILDING_CAPTION = "Forbereder trøjen …";
@@ -22,7 +22,6 @@ type CaptureTransitionNavigation = ReturnType<typeof useNavigation> & Transition
 export default function CaptureLoadingRoute() {
   const router = useRouter();
   const navigation = useNavigation<CaptureTransitionNavigation>();
-  const reduceMotion = useReduceMotion();
   const params = useLocalSearchParams<{
     prefilledClubId?: string;
     prefilledClubLabel?: string;
@@ -40,7 +39,8 @@ export default function CaptureLoadingRoute() {
 
     let active = true;
     const cleanup = startUploadCaptureWhenPresented({
-      scheduleWhenPresented: (run) => scheduleUploadWhenPresented(navigation, reduceMotion, run),
+      scheduleWhenPresented: (run) =>
+        scheduleUploadWhenPresented(navigation, readReduceMotion, run),
       runPick: () =>
         runUploadCapture(expoUploadFilesAdapter, createPersistedCaptureSession, {
           prefilledClub,
@@ -66,7 +66,7 @@ export default function CaptureLoadingRoute() {
       active = false;
       cleanup();
     };
-  }, [navigation, prefilledClub, reduceMotion, router]);
+  }, [navigation, prefilledClub, router]);
 
   return <CaptureLoadingScreen caption={caption} />;
 }

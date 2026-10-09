@@ -50,11 +50,20 @@ export type VisionGroupingInferenceResult = {
   model?: string;
 };
 
+/** Who the Vision job is for. */
+export type VisionCallContext = {
+  userId: string;
+};
+
 export type VisionAdapter = {
-  infer(photos: VisionIdentityPhotoInput[]): Promise<VisionInferenceResult | null>;
+  infer(
+    photos: VisionIdentityPhotoInput[],
+    context?: VisionCallContext,
+  ): Promise<VisionInferenceResult | null>;
   inferGrouping?(
     photos: VisionGroupingPhotoInput[],
     options?: VisionGroupingOptions,
+    context?: VisionCallContext,
   ): Promise<VisionGroupingInferenceResult | null>;
 };
 

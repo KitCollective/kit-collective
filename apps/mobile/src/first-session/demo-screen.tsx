@@ -256,8 +256,18 @@ export function DemoScreen({ example, origins, onStart, onTryAnother }: DemoScre
         pointerEvents={resultReady ? "auto" : "none"}
       >
         <Animated.View style={[styles.dockStack, resultStyle]}>
-          <OnDarkButton label={DEMO_START_LABEL} variant="primary" onPress={onStart} />
-          <OnDarkButton label={DEMO_ANOTHER_LABEL} variant="tertiary" onPress={onTryAnother} />
+          <OnDarkButton
+            label={DEMO_START_LABEL}
+            testID="demo-start"
+            variant="primary"
+            onPress={onStart}
+          />
+          <OnDarkButton
+            label={DEMO_ANOTHER_LABEL}
+            testID="demo-another"
+            variant="tertiary"
+            onPress={onTryAnother}
+          />
         </Animated.View>
       </View>
     </View>

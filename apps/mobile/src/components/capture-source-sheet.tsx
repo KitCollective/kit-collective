@@ -68,6 +68,7 @@ export function CaptureSourceSheet({
             key={option.source}
             accessibilityRole="button"
             accessibilityLabel={`${option.title}. ${option.helper}`}
+            testID={`capture-source-${option.source}`}
             onPress={() => onConfirm(option.source)}
             style={({ pressed }) => [
               styles.row,

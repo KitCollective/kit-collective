@@ -23,6 +23,7 @@ export function CollectionHeader({ count, onAddPress }: CollectionHeaderProps) {
       </View>
       <IconButton
         name="Tilføj trøje"
+        testID="collection-add"
         icon="add"
         onPress={onAddPress}
         iconColor={theme.contentPrimary}

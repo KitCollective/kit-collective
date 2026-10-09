@@ -17,6 +17,7 @@ type ConfirmSectionRowProps = {
   onPress: () => void;
   /** Reports the card's natural height so the pair can equalise both. */
   onMeasureHeight?: (height: number) => void;
+  testID?: string;
 };
 
 export function ConfirmSectionRow({
@@ -27,6 +28,7 @@ export function ConfirmSectionRow({
   minHeight,
   onPress,
   onMeasureHeight,
+  testID,
 }: ConfirmSectionRowProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -42,6 +44,7 @@ export function ConfirmSectionRow({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${filled} af ${required} udfyldt. ${spokenFacts}`}
+      testID={testID}
       onPress={onPress}
       onLayout={handleLayout}
       style={({ pressed }) => [

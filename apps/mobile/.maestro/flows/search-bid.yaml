@@ -1,0 +1,75 @@
+# Søg, a catalog drill, another Collector's UserJersey, and Send bud.
+appId: app.kitcollective.mobile
+name: search-bid
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- startRecording: kc__search-bid
+- tapOn: Søg
+- extendedWaitUntil:
+    visible:
+      id: search-input
+    timeout: 15000
+- tapOn:
+    id: search-input
+# The second test Collector's jersey is on this catalog side.
+- inputText: OB
+- extendedWaitUntil:
+    visible:
+      id: typeahead-clubs
+    timeout: 15000
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__search-bid__01-typeahead
+- tapOn:
+    id: typeahead-club-row
+- extendedWaitUntil:
+    visible:
+      id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__search-bid__02-catalog-drill
+- tapOn:
+    id: jersey-tile-e2e00000-0000-4000-8000-000000000105
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__search-bid__03-foreign-detail
+- tapOn:
+    id: send-bid-open
+- extendedWaitUntil:
+    visible:
+      id: bid-amount
+    timeout: 15000
+# The amount field starts underneath the floating tab bar; scroll it clear first,
+# or the tap lands on the Søg tab and pops the stack.
+- scroll
+- runFlow: ../subflows/settle.yaml
+- takeScreenshot: kc__search-bid__04-send-bid
+- tapOn:
+    id: bid-amount
+- inputText: "250"
+# The number pad has no return key and covers the form; a tap on the photo dismisses it.
+- tapOn:
+    point: 50%,25%
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__search-bid__05-amount-entered
+- tapOn:
+    id: bid-submit
+- extendedWaitUntil:
+    visible:
+      id: send-bid-open
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__search-bid__06-bid-sent
+- stopRecording

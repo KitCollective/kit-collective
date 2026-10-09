@@ -365,6 +365,7 @@ function DoorModeSwitcher({
             key={segment.mode}
             accessibilityRole="button"
             accessibilityLabel={segment.label}
+            testID={`door-mode-${segment.mode}`}
             accessibilityState={{ selected }}
             disabled={disabled || selected}
             onPress={() => onSelect(segment.mode)}

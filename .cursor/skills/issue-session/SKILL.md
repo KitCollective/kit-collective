@@ -88,6 +88,8 @@ Move to `Merging` (approver-present). Follow [land/SKILL.md](../land/SKILL.md) a
 
 ### 8. Reap worktree
 
+A slice with device-flow evidence first gets its Device flows run on the integration lane, as [land/SKILL.md](../land/SKILL.md) says.
+
 After land success, follow [reap-worktree/SKILL.md](../reap-worktree/SKILL.md): verify the branch is on `origin/<lanes.integration>`, remove the issue worktree, delete the merged remote branch when safe.
 
 ## After the batch

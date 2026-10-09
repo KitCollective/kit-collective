@@ -11,6 +11,7 @@ type JerseyTileProps = {
   typeLabel: string;
   onPress?: () => void;
   displayOnly?: boolean;
+  testID?: string;
 };
 
 export function JerseyTile({
@@ -20,6 +21,7 @@ export function JerseyTile({
   typeLabel,
   onPress,
   displayOnly = false,
+  testID,
 }: JerseyTileProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -67,6 +69,7 @@ export function JerseyTile({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      testID={testID}
       onPress={onPress}
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
     >
