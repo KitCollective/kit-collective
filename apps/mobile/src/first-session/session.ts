@@ -4,15 +4,13 @@ export type FirstSessionPlace =
   | "chooser"
   | "analysing"
   | "door"
+  | "code"
   | "jersey-details"
   | "collection"
   | "tab-shell";
 
-export type DoorMode = "login" | "register";
-
-export type IdentitySubmitMethod = "password" | "social";
-
-export type IdentitySubmitKind = "login" | "register";
+/** How the collector got through the Kom i gang sheet: a provider, or an e-mail that gets a code. */
+export type IdentitySubmitMethod = "social" | "email";
 
 export type FirstSessionIdentitySession = {
   emailVerified: boolean;
@@ -26,7 +24,6 @@ export type DoorOver = "welcome" | "demo" | "analysing";
 
 export type FirstSessionState = {
   place: FirstSessionPlace;
-  doorMode: DoorMode | null;
   doorOver: DoorOver | null;
   hasDraft: boolean;
   captureSessionId: string | null;
@@ -39,11 +36,12 @@ export type FirstSessionState = {
 };
 
 export type FirstSessionEvent =
-  | { type: "openDoor"; mode: DoorMode }
+  | { type: "openDoor" }
   | { type: "closeDoor" }
+  | { type: "backFromCode" }
   | { type: "startDemo"; exampleId: DemoExampleId }
   | { type: "demoTryAnother" }
-  | { type: "submitIdentity"; method: IdentitySubmitMethod; kind: IdentitySubmitKind }
+  | { type: "submitIdentity"; method: IdentitySubmitMethod }
   | { type: "saveJersey" }
   | { type: "recordDumpSave" }
   | { type: "startAdd" }
@@ -52,12 +50,11 @@ export type FirstSessionEvent =
   | { type: "visionComplete" }
   | { type: "visionFailed" }
   | { type: "fillSelf" }
-  | { type: "openDoorFromAnalysing"; mode?: DoorMode };
+  | { type: "openDoorFromAnalysing" };
 
-type DoorFields = Pick<FirstSessionState, "doorMode" | "doorOver">;
+type DoorFields = Pick<FirstSessionState, "doorOver">;
 
 const DOOR_CLOSED: DoorFields = {
-  doorMode: null,
   doorOver: null,
 };
 
@@ -99,7 +96,7 @@ export function firstSessionBackdrop(state: FirstSessionState): FirstSessionBack
 }
 
 function doorOverFor(state: FirstSessionState): DoorOver {
-  if (state.place === "door") {
+  if (state.place === "door" || state.place === "code") {
     return state.doorOver ?? "welcome";
   }
   if (state.place === "demo" || state.place === "analysing") {
@@ -108,23 +105,27 @@ function doorOverFor(state: FirstSessionState): DoorOver {
   return "welcome";
 }
 
-function openDoorFromAnalysing(
-  state: FirstSessionState,
-  mode: DoorMode = "register",
-): FirstSessionState {
-  return { ...state, place: "door", doorMode: mode, doorOver: "analysing" };
+function openDoorFromAnalysing(state: FirstSessionState): FirstSessionState {
+  return { ...state, place: "door", doorOver: "analysing" };
 }
 
-/** Identity leads to jersey details when a draft exists, otherwise to Samling. */
+/**
+ * A provider sign-in lands on jersey details when a draft exists, otherwise on Samling.
+ * An e-mail goes to the code step first and keeps the screen the sheet sat on.
+ */
 function submitIdentity(
   state: FirstSessionState,
   event: Extract<FirstSessionEvent, { type: "submitIdentity" }>,
 ): FirstSessionState {
+  if (event.method === "email") {
+    return { ...state, place: "code", doorOver: doorOverFor(state) };
+  }
+
   const signedIn: FirstSessionState = {
     ...state,
     ...DOOR_CLOSED,
     demoExampleId: null,
-    identitySession: event.method === "social" ? { emailVerified: true } : state.identitySession,
+    identitySession: { emailVerified: true },
   };
 
   if (state.hasDraft) {
@@ -159,9 +160,11 @@ function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSes
     case "fillSelf":
       return openDoorFromAnalysing(state);
     case "openDoorFromAnalysing":
-      return openDoorFromAnalysing(state, event.mode);
+      return openDoorFromAnalysing(state);
     case "openDoor":
-      return { ...state, place: "door", doorMode: event.mode, doorOver: doorOverFor(state) };
+      return { ...state, place: "door", doorOver: doorOverFor(state) };
+    case "backFromCode":
+      return { ...state, place: "door" };
     case "closeDoor":
       return { ...state, ...DOOR_CLOSED, place: state.doorOver ?? "welcome" };
     case "submitIdentity":

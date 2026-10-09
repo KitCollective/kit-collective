@@ -69,26 +69,36 @@ describe("First session host chrome", () => {
     const host = readFileSync(hostPath, "utf8");
     const chrome = `${door}\n${doorSheet}\n${doorFaces}\n${copy}\n${host}`;
 
-    // Two-mode title switcher, Login as the general term, no sentence line.
-    expect(copy).toContain("Login");
-    expect(copy).toContain("Opret");
+    // One Kom i gang sheet: e-mail + Fortsæt, divider, equal secondary social buttons.
+    expect(copy).toContain('DOOR_TITLE = "Kom i gang"');
+    expect(copy).toContain('DOOR_SUBMIT_LABEL = "Fortsæt"');
     expect(copy).toContain("eller");
-    expect(copy).toContain("Har du en konto? Login");
-    expect(copy).toContain("Ny her? Opret konto");
-    expect(copy).toContain("Gentag adgangskode");
-    expect(copy).toContain("mindst 8 tegn");
-    expect(copy).toContain("Glemt adgangskode?");
-    expect(copy).toContain("Tjek din e-mail");
-    // Sentence line and its copy are gone.
-    expect(copy).not.toContain("Samlingen venter.");
-    expect(copy).not.toContain("Trøjen er læst. En konto husker den.");
-    expect(copy).not.toContain("doorSentence");
-    expect(copy).not.toContain("Log ind");
-    expect(copy).not.toContain("1/2");
-    expect(copy).not.toContain("Skift");
     expect(doorSheet).toContain('variant="door"');
-    expect(chrome).not.toContain("Apple");
-    expect(chrome).not.toContain("Gem kun på denne telefon");
+    expect(doorSheet).toContain("title={DOOR_TITLE}");
+    for (const testId of ["door-email", "door-submit", "door-email-error"]) {
+      expect(doorFaces).toContain(testId);
+    }
+    expect(doorFaces).toContain("door-${provider}");
+    expect(doorFaces).toContain('variant="secondary"');
+    expect(doorFaces).toContain("leading={");
+    // No password, switcher, forgot page, mode state or Apple (KIT-274 adds Apple).
+    for (const banned of [
+      "Apple",
+      "Adgangskode",
+      "password",
+      "Password",
+      "Glemt",
+      "forgot",
+      "Forgot",
+      "doorMode",
+      "DoorMode",
+      "Opret konto",
+      "Login",
+      "Log ind",
+      "Gem kun på denne telefon",
+    ]) {
+      expect(chrome).not.toContain(banned);
+    }
     expect(chrome).not.toMatch(/Fortsæt med Google/);
     expect(chrome).not.toMatch(/Fortsæt med Facebook/);
   });
@@ -101,8 +111,17 @@ describe("First session host chrome", () => {
     expect(host).toContain('type: "startDemo"');
     expect(host).toContain('type: "startAdd"');
     // Kom i gang and Jeg har allerede en konto both open the existing door.
-    expect(host).toContain('onStart={() => openDoor("register")}');
-    expect(host).toContain('onHaveAccount={() => openDoor("login")}');
+    expect(host).toContain("onStart={() => openDoor()}");
+    expect(host).toContain("onHaveAccount={() => openDoor()}");
+    expect(host).toContain('dispatch({ type: "openDoor" })');
+    expect(host).not.toContain("signUp");
+    // E-mail routes to the code stub; social skips it; a failed login raises a bottom toast.
+    expect(host).toContain('method: "email"');
+    expect(host).toContain('method: "social"');
+    expect(host).toContain("CodeStub");
+    expect(host).toContain('type: "backFromCode"');
+    expect(host).toContain("socialCancelledMessage(provider)");
+    expect(host).toContain('position: "bottom"');
     // One backdrop at a time is decided in the reducer, not by flag algebra in the host.
     expect(host).toContain("firstSessionBackdrop");
     expect(host).not.toMatch(/Onboard|ProfileOnboarding|VerifyEmailBeat|DiscoveryShowcase/);

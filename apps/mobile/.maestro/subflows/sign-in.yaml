@@ -1,4 +1,4 @@
-# Cold start, known test data, signed in. Callers pass EMAIL and PASSWORD.
+# Cold start, known test data, signed in through the legacy password screen. Callers pass EMAIL and PASSWORD.
 appId: app.kitcollective.mobile
 ---
 - runScript:
@@ -9,20 +9,25 @@ appId: app.kitcollective.mobile
 - launchApp:
     clearState: true
     clearKeychain: true
+# The Kom i gang sheet has no password. Test accounts still sign in on the legacy
+# password screen until the e-mail code lands (KIT-275) and the screen is removed (KIT-276).
 - extendedWaitUntil:
     visible:
       id: welcome-have-account
     timeout: 90000
+- openLink: kitcollective:///login
+- extendedWaitUntil:
+    visible:
+      id: login-email
+    timeout: 20000
 - tapOn:
-    id: welcome-have-account
-- tapOn:
-    id: door-email
+    id: login-email
 - inputText: ${EMAIL}
 - tapOn:
-    id: door-password
+    id: login-password
 - inputText: ${PASSWORD}
 - tapOn:
-    id: door-submit
+    id: login-submit
 # iOS offers to save the password in a system dialog, in the simulator's language.
 - tapOn:
     text: "Ikke nu|Not Now"

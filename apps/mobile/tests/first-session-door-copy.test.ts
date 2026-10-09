@@ -1,51 +1,53 @@
 import { describe, expect, it } from "vitest";
 import {
-  DOOR_LOGIN_SEGMENT,
-  DOOR_REGISTER_SEGMENT,
-  DOOR_SPLITTER_LABEL,
-  doorPasswordSubmitLabel,
-  doorSwapLabel,
-  doorTitle,
-  FORGOT_PASSWORD_BACK,
-  FORGOT_PASSWORD_DONE,
-  FORGOT_PASSWORD_INFO,
-  FORGOT_PASSWORD_LABEL,
-  FORGOT_PASSWORD_SUBMIT,
-  FORGOT_PASSWORD_TITLE,
-  PASSWORD_HELPER,
-  PASSWORD_REPEAT_LABEL,
+  CODE_STUB_BACK_LABEL,
+  DOOR_DIVIDER_LABEL,
+  DOOR_EMAIL_INVALID,
+  DOOR_PROVIDER_LABEL,
+  DOOR_SUBMIT_LABEL,
+  DOOR_TERMS_LINE,
+  DOOR_TITLE,
+  isValidEmail,
+  socialCancelledMessage,
 } from "../src/first-session/door-copy";
 
 describe("first-session door copy", () => {
-  it("uses Login as the general term in login mode", () => {
-    expect(doorTitle("login")).toBe("Login");
-    expect(doorSwapLabel("login")).toBe("Ny her? Opret konto");
-    expect(doorPasswordSubmitLabel("login")).toBe("Login");
+  it("locks the single Kom i gang sheet copy", () => {
+    expect(DOOR_TITLE).toBe("Kom i gang");
+    expect(DOOR_SUBMIT_LABEL).toBe("Fortsæt");
+    expect(DOOR_DIVIDER_LABEL).toBe("eller");
+    expect(DOOR_PROVIDER_LABEL).toEqual({ google: "Google", facebook: "Facebook" });
+    expect(DOOR_TERMS_LINE).toContain("vilkårene");
+    expect(DOOR_TERMS_LINE).toContain("privatlivspolitikken");
+    expect(DOOR_EMAIL_INVALID).toBe("Skriv en gyldig e-mail");
+    expect(CODE_STUB_BACK_LABEL).toBe("Tilbage");
   });
 
-  it("locks register labels with Opret", () => {
-    expect(doorTitle("register")).toBe("Opret");
-    expect(doorSwapLabel("register")).toBe("Har du en konto? Login");
-    expect(doorPasswordSubmitLabel("register")).toBe("Opret konto");
+  it("names the provider in the cancelled-login toast", () => {
+    expect(socialCancelledMessage("google")).toBe("Google-login blev afbrudt");
+    expect(socialCancelledMessage("facebook")).toBe("Facebook-login blev afbrudt");
   });
+});
 
-  it("locks the two-mode title switcher segments", () => {
-    expect(DOOR_LOGIN_SEGMENT).toBe("Login");
-    expect(DOOR_REGISTER_SEGMENT).toBe("Opret");
-  });
+describe("isValidEmail", () => {
+  it.each(["a@b.dk", "dig@eksempel.dk", "  dig@eksempel.dk  ", "navn.efternavn+tag@mail.co.uk"])(
+    "accepts %j",
+    (value) => {
+      expect(isValidEmail(value)).toBe(true);
+    },
+  );
 
-  it("locks single-face identity chrome without a sentence line", () => {
-    expect(PASSWORD_REPEAT_LABEL).toBe("Gentag adgangskode");
-    expect(PASSWORD_HELPER).toBe("mindst 8 tegn");
-    expect(FORGOT_PASSWORD_LABEL).toBe("Glemt adgangskode?");
-    expect(DOOR_SPLITTER_LABEL).toBe("eller");
-  });
-
-  it("locks the in-sheet forgot-password page copy", () => {
-    expect(FORGOT_PASSWORD_TITLE).toBe("Nulstil adgangskode");
-    expect(FORGOT_PASSWORD_SUBMIT).toBe("Send link");
-    expect(FORGOT_PASSWORD_BACK).toBe("Tilbage");
-    expect(FORGOT_PASSWORD_INFO).toContain("Vi sender et link");
-    expect(FORGOT_PASSWORD_DONE).toContain("Tjek din e-mail");
+  it.each([
+    "",
+    "   ",
+    "dig",
+    "dig@",
+    "@eksempel.dk",
+    "dig@eksempel",
+    "dig@eksempel.",
+    "a b@c.dk",
+    "a@@b.dk",
+  ])("rejects %j", (value) => {
+    expect(isValidEmail(value)).toBe(false);
   });
 });

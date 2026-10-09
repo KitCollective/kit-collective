@@ -98,7 +98,7 @@ describe("first-session visual host chrome", () => {
     expect(door).toContain('from "@/components/sheet"');
   });
 
-  it("adopts the shared Lunar-style chrome: top-left circular button, switcher below header, back sub-page", () => {
+  it("adopts the shared Lunar-style chrome: top-left circular button, title below header", () => {
     const catalog = readFileSync(sheetPath, "utf8");
     const door = readFirstSession("door-sheet.tsx");
 
@@ -110,10 +110,9 @@ describe("first-session visual host chrome", () => {
     // Content starts below the header row.
     expect(catalog).toContain("sheetTitleRegion");
     expect(catalog).not.toContain("sheetClose");
-    // Door header row holds only the circular button; switcher is the first content row,
-    // and the reset sub-page uses the shared back handler.
-    expect(door).toContain("titleContent={");
-    expect(door).toContain("onBack={onForgot ? backToAuth : undefined}");
+    // Door header row holds only the circular button; the Kom i gang title sits below it.
+    expect(door).toContain("title={DOOR_TITLE}");
+    expect(door).not.toContain("titleContent");
     expect(door).not.toContain("leading={");
     expect(door).not.toContain('icon="arrow-back"');
     // Drag-anywhere dismiss with the scroll handoff wired through the door body.
@@ -121,32 +120,28 @@ describe("first-session visual host chrome", () => {
     expect(door).toContain("Animated.ScrollView");
   });
 
-  it("keeps a single-face door with email + password, icon social, and locked Danish copy", () => {
+  it("keeps a single Kom i gang door: e-mail, Fortsæt, secondary social with icon + text, locked copy", () => {
     const door = `${readFirstSession("door-sheet.tsx")}\n${readFirstSession("door-faces.tsx")}`;
     const copy = readFirstSession("door-copy.ts");
 
-    expect(door).toContain('label="E-mail"');
-    expect(door).toContain('label="Adgangskode"');
-    expect(door).toContain("PASSWORD_REPEAT_LABEL");
-    expect(door).toContain("PASSWORD_HELPER");
-    expect(door).toContain("FORGOT_PASSWORD_LABEL");
-    expect(door).toContain("doorPasswordSubmitLabel");
-    expect(copy).toContain("Gentag adgangskode");
-    expect(copy).toContain("mindst 8 tegn");
-    expect(copy).toContain("Glemt adgangskode?");
+    expect(door).toContain("DOOR_EMAIL_LABEL");
+    expect(door).toContain("DOOR_SUBMIT_LABEL");
+    expect(copy).toContain('DOOR_TITLE = "Kom i gang"');
+    expect(copy).toContain('DOOR_SUBMIT_LABEL = "Fortsæt"');
+    expect(copy).toContain("vilkårene og privatlivspolitikken");
     expect(door).toContain("<BrandMark provider={provider}");
-    expect(door).toContain('provider: "google"');
-    expect(door).toContain('provider: "facebook"');
-    expect(door).toContain('name: "Google"');
-    expect(door).toContain('name: "Facebook"');
-    // No multi-step chrome — one face for the whole identity flow.
+    expect(door).toContain('variant="secondary"');
+    expect(door).toContain("DOOR_PROVIDER_LABEL[provider]");
+    expect(copy).toContain('google: "Google"');
+    expect(copy).toContain('facebook: "Facebook"');
+
     expect(door).not.toContain("emailStep");
     expect(door).not.toContain("doorStepCaption");
     expect(door).not.toContain("EMAIL_NEXT_LABEL");
     expect(door).not.toContain("EMAIL_CHANGE_LABEL");
     expect(door).not.toContain("doorEmailCtaLabel");
-    expect(copy).not.toContain("1/2");
-    expect(copy).not.toContain("Skift");
+    expect(door).not.toContain("Adgangskode");
+    expect(door).not.toContain("FORGOT_PASSWORD");
     expect(door).not.toContain("Apple");
     expect(door).not.toContain("Fortsæt med");
     expect(door).not.toContain("Gem kun på denne telefon");
