@@ -20,8 +20,10 @@ const CHANNEL_TOLERANCE = 3;
 const MAX_DIFFERING_PIXELS = 24;
 
 /**
- * The top strip is the iOS status bar (clock, battery, signal). It is never app
- * content and differs between any two runs, so it is not compared.
+ * The top strip is the iOS status bar (clock, battery, signal), drawn by the
+ * system. `run-local.sh` pins it, and it is still left out so a system change
+ * to it can never mark a step. The cost: app pixels a full-bleed screen draws
+ * under the status bar are not compared either.
  */
 const IGNORE_TOP_RATIO = 0.075;
 

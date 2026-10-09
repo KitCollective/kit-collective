@@ -21,7 +21,8 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 | Path | What |
 | --- | --- |
 | `apps/mobile/.maestro/flows/` | the five flows |
-| `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (wait for a still screen), `reset-test-data.js` (the reset call) |
+| `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (a fixed pause for motion Maestro cannot see) |
+| `apps/mobile/.maestro/scripts/` | `reset-test-data.js`, the reset call the flows run first |
 | `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery |
 | `apps/mobile/.maestro/design-sections.json` | which `docs/design-system.md` sections the review reads per flow |
 | `apps/mobile/.maestro/*.sh` | local API, build, run, publish evidence |
@@ -49,7 +50,7 @@ Everything runs on the approver's Mac. Needs Xcode with an iOS Simulator, CocoaP
 # Terminal 1: local API on a disposable database, fixed Vision, in-memory photos.
 apps/mobile/.maestro/local-api.sh
 
-# When apps/mobile or packages changed since the last build: Release build for
+# When apps/mobile, packages or the lockfile changed since the last build: Release build for
 # this commit, pointed at the local API, installed on the flows' own simulator.
 apps/mobile/.maestro/build-local.sh
 
@@ -74,6 +75,8 @@ The flows own a simulator, "KitCollective Device Flows", created on first use wi
 5. sets the status to success or failure. Only a failed flow makes it red; a run that stops before its verdict sets `error`, never leaves `pending`.
 
 When a mobile slice lands, run it once on `development` (step 3), or the next PR has nothing to compare against. `/land` names this step.
+
+The status belongs to one commit. `development` requires the branch to be up to date, so merging `development` into a PR branch moves the head: run `run-evidence.sh` again on the new head before landing. No rebuild is needed when the merge brought no change under the app, API or package sources.
 
 ## Settings
 
