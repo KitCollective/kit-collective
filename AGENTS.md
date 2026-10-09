@@ -28,7 +28,7 @@ If you find a genuine contradiction, surface it instead of picking a side quietl
 | `.cursor/skills/` | Working skills. Matt’s loop copied in, then this factory’s twist. YAML in `agents/`. | Yes — keep generic. |
 | `.cursor/agents/` | Domain helpers spawned from `/implement` / `/tdd`. Product specialization. | Yes — per project. |
 
-Factory slash commands are the **Cursor** skills.
+Factory slash commands are the **Cursor** skills. Claude Code reads the same files through `.claude/skills` and `.claude/agents`, which are symlinks to the two `.cursor` folders: edit under `.cursor`, never under `.claude`.
 
 ## Agent skills
 
