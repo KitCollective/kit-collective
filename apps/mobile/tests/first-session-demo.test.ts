@@ -11,6 +11,7 @@ import {
   EXAMPLE_JERSEYS,
   exampleById,
 } from "../src/first-session/demo";
+import { motionGate } from "../src/first-session/motion-gate";
 
 const mobileRoot = join(__dirname, "..");
 
@@ -124,5 +125,45 @@ describe("bundled placeholder photos", () => {
       expect(path).toMatch(/placeholder-/);
       expect(existsSync(join(mobileRoot, path))).toBe(true);
     }
+  });
+});
+
+describe("motion waits for the Reduce Motion setting", () => {
+  it("is not ready while the OS has not answered, then carries the answer", () => {
+    expect(motionGate(null)).toEqual({ ready: false });
+    expect(motionGate(true)).toEqual({ ready: true, reduceMotion: true });
+    expect(motionGate(false)).toEqual({ ready: true, reduceMotion: false });
+  });
+
+  it("welcome and demo gate on the loaded setting and never use the eager hook", () => {
+    for (const file of ["welcome-screen.tsx", "demo-screen.tsx"]) {
+      const source = readFileSync(join(mobileRoot, "src/first-session", file), "utf8");
+      expect(source).toContain("useReduceMotionSetting");
+      expect(source).toContain("motionGate(");
+      expect(source).toContain("gate.ready");
+      expect(source).not.toMatch(/\buseReduceMotion\b/);
+    }
+  });
+});
+
+describe("motion never blocks input", () => {
+  it("both demo actions are tappable from the first frame", () => {
+    const screen = readFileSync(join(mobileRoot, "src/first-session/demo-screen.tsx"), "utf8");
+    const dock = screen.slice(
+      screen.indexOf("styles.dock,"),
+      screen.indexOf("type GhostTilesProps"),
+    );
+
+    expect(dock).toContain('testID="demo-start"');
+    expect(dock).toContain('testID="demo-another"');
+    expect(dock).not.toContain("pointerEvents");
+    expect(dock).not.toContain("resultReady");
+  });
+
+  it("measuring an example tile gives up instead of hanging the tap", () => {
+    const welcome = readFileSync(join(mobileRoot, "src/first-session/welcome-screen.tsx"), "utf8");
+
+    expect(welcome).toContain("MEASURE_TIMEOUT_MS = 300");
+    expect(welcome).toContain("setTimeout(() => resolve(null), MEASURE_TIMEOUT_MS)");
   });
 });

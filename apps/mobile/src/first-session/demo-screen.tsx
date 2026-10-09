@@ -23,6 +23,7 @@ import {
   demoTimeline,
   type ExampleJersey,
 } from "@/first-session/demo";
+import { motionGate } from "@/first-session/motion-gate";
 import { OnDarkButton } from "@/first-session/on-dark-button";
 import type { DemoExampleId } from "@/first-session/session";
 import { examplePhoto } from "@/first-session/wall-photos";
@@ -35,7 +36,7 @@ import {
 import type { ExampleOrigins, TileRect } from "@/first-session/welcome-screen";
 import { useTypography } from "@/theme/brand-fonts";
 import { color, motion, radius, space, withAlpha } from "@/theme/tokens";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
+import { useReduceMotionSetting } from "@/theme/use-reduce-motion";
 
 const STAGE_WIDTH_RATIO = 0.56;
 const STAGE_RATIO = 5 / 4;
@@ -73,9 +74,24 @@ function travelFrom(origin: TileRect | undefined, stage: StageRect) {
  * result: no Vision call, no network. Brand moments: Jersey to stage and
  * Vision at work (docs/design-system.md -> Motion).
  */
-export function DemoScreen({ example, origins, onStart, onTryAnother }: DemoScreenProps) {
+// The first-session screens deliberately use the static dark plate colors in both appearances.
+export function DemoScreen(props: DemoScreenProps) {
+  const gate = motionGate(useReduceMotionSetting());
+
+  if (!gate.ready) {
+    return <View style={[styles.screen, { backgroundColor: color.fillPrimary }]} />;
+  }
+  return <DemoBody {...props} reduceMotion={gate.reduceMotion} />;
+}
+
+function DemoBody({
+  example,
+  origins,
+  onStart,
+  onTryAnother,
+  reduceMotion,
+}: DemoScreenProps & { reduceMotion: boolean }) {
   const typography = useTypography();
-  const reduceMotion = useReduceMotion();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const timeline = demoTimeline(reduceMotion);
@@ -239,7 +255,11 @@ export function DemoScreen({ example, origins, onStart, onTryAnother }: DemoScre
             mutedColor={mutedColor}
           />
         ))}
-        <Animated.View style={[styles.resultMeta, resultStyle]}>
+        <Animated.View
+          accessibilityElementsHidden={!resultReady}
+          importantForAccessibility={resultReady ? "auto" : "no-hide-descendants"}
+          style={[styles.resultMeta, resultStyle]}
+        >
           <View style={[styles.mark, { borderColor: mutedColor }]}>
             <Text style={[typography.mono, { color: color.contentInverse }]}>
               {DEMO_EXAMPLE_MARK}
@@ -251,11 +271,9 @@ export function DemoScreen({ example, origins, onStart, onTryAnother }: DemoScre
         </Animated.View>
       </View>
 
-      <View
-        style={[styles.dock, { paddingBottom: Math.max(insets.bottom, space.insetMd) }]}
-        pointerEvents={resultReady ? "auto" : "none"}
-      >
-        <Animated.View style={[styles.dockStack, resultStyle]}>
+      {/* Motion never blocks input: both actions work from the first frame. */}
+      <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, space.insetMd) }]}>
+        <View style={styles.dockStack}>
           <OnDarkButton
             label={DEMO_START_LABEL}
             testID="demo-start"
@@ -268,7 +286,7 @@ export function DemoScreen({ example, origins, onStart, onTryAnother }: DemoScre
             variant="tertiary"
             onPress={onTryAnother}
           />
-        </Animated.View>
+        </View>
       </View>
     </View>
   );
@@ -338,8 +356,18 @@ function DemoRow({ label, value, revealed, revealMs, mutedColor }: DemoRowProps)
 
   return (
     <View style={styles.row}>
-      <Text style={[typography.mono, { color: mutedColor }]}>{label}</Text>
-      <View style={styles.rowValue}>
+      <Text
+        accessibilityElementsHidden={!revealed}
+        importantForAccessibility={revealed ? "auto" : "no-hide-descendants"}
+        style={[typography.mono, { color: mutedColor }]}
+      >
+        {label}
+      </Text>
+      <View
+        style={styles.rowValue}
+        accessibilityElementsHidden={!revealed}
+        importantForAccessibility={revealed ? "auto" : "no-hide-descendants"}
+      >
         <Animated.View
           pointerEvents="none"
           style={[

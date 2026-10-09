@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BRAND_MOMENTS } from "@/first-session/brand-moments";
 import { EXAMPLE_JERSEYS } from "@/first-session/demo";
 import { JerseyWall } from "@/first-session/jersey-wall";
+import { motionGate } from "@/first-session/motion-gate";
 import { OnDarkButton } from "@/first-session/on-dark-button";
 import type { DemoExampleId } from "@/first-session/session";
 import { examplePhoto } from "@/first-session/wall-photos";
@@ -23,7 +24,7 @@ import {
 } from "@/first-session/welcome-copy";
 import { useTypography } from "@/theme/brand-fonts";
 import { color, radius, space, withAlpha } from "@/theme/tokens";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
+import { useReduceMotionSetting } from "@/theme/use-reduce-motion";
 import LockupWhite from "../../assets/brand/kitcollective-lockup-white.svg";
 
 const LOCKUP_WIDTH = 132;
@@ -65,19 +66,40 @@ function useRise(index: number, reduceMotion: boolean) {
   }));
 }
 
+/** A tap must never hang on a view that does not answer, so measuring gives up after this. */
+const MEASURE_TIMEOUT_MS = 300;
+
 function measure(view: View | null): Promise<TileRect | null> {
   return new Promise((resolve) => {
     if (!view) {
       resolve(null);
       return;
     }
-    view.measureInWindow((x, y, width, height) => resolve({ x, y, width, height }));
+    const giveUp = setTimeout(() => resolve(null), MEASURE_TIMEOUT_MS);
+    view.measureInWindow((x, y, width, height) => {
+      clearTimeout(giveUp);
+      resolve({ x, y, width, height });
+    });
   });
 }
 
-export function WelcomeScreen({ onStartDemo, onOwnPhoto, onHaveAccount }: WelcomeScreenProps) {
+// The first-session screens deliberately use the static dark plate colors in both appearances.
+export function WelcomeScreen(props: WelcomeScreenProps) {
+  const gate = motionGate(useReduceMotionSetting());
+
+  if (!gate.ready) {
+    return <View style={[styles.screen, { backgroundColor: color.fillPrimary }]} />;
+  }
+  return <WelcomeBody {...props} reduceMotion={gate.reduceMotion} />;
+}
+
+function WelcomeBody({
+  onStartDemo,
+  onOwnPhoto,
+  onHaveAccount,
+  reduceMotion,
+}: WelcomeScreenProps & { reduceMotion: boolean }) {
   const typography = useTypography();
-  const reduceMotion = useReduceMotion();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const tileRefs = useRef<Partial<Record<DemoExampleId, View | null>>>({});

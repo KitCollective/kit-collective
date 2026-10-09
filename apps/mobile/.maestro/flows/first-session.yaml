@@ -24,8 +24,9 @@ name: first-session
     visible:
       id: demo-start
     timeout: 20000
+# The actions are tappable from the first frame, so wait for the travel and the rows to settle.
 - waitForAnimationToEnd:
-    timeout: 5000
+    timeout: 10000
 - takeScreenshot: kc__first-session__02-demo-result
 - tapOn:
     id: demo-start

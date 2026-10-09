@@ -266,7 +266,7 @@ The first jersey landing in **Samling** stays inside the scale: `motion.slow`, a
 - The stage is 4:5, the same crop as a jersey tile, so the photo is never letterboxed or cropped on the way in.
 - A time shown to the collector (the demo's seconds counter) must be a measured value for real Vision, not a chosen one.
 
-**Brand-moment gaps** (flag, do not invent): no tokens exist for the durations above (`motion` in `tokens.ts` has only fast / base / slow). Whether the scan line also applies to the everyday **Tilføj trøje** Vision wait outside the first session is undecided. Source of the wall photos (showcase endpoint or KitCollective's own photos) is undecided. Reference: Paper page `02 First session & Auth`, Proposal B.
+**Brand-moment gaps** (flag, do not invent): no tokens exist for the durations above (`motion` in `tokens.ts` has only fast / base / slow). "One light haptic on landing" (Jersey to stage) is deferred: `expo-haptics` is not a dependency and stays out until Nicklas approves it. The shared Button has no on-dark variant, so the first-session screens use `OnDarkButton` (inverse semantic tokens, same layout) until a lock decision adds one. Whether the scan line also applies to the everyday **Tilføj trøje** Vision wait outside the first session is undecided. Source of the wall photos (showcase endpoint or KitCollective's own photos) is undecided. Reference: Paper page `02 First session & Auth`, Proposal B.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
