@@ -21,7 +21,7 @@ If the setup file is missing, run `/bootstrap-linear`. Do not guess IDs.
 
 ## When a skill says "fetch the relevant ticket"
 
-Use Linear `get_issue` with `<teamKey>-n` or UUID **and** `list_comments` on the same issue. On the PI worker that is Linear CLI (`gh` for GitHub). Desktop and Cloud Agent sessions may use Linear MCP; Linear MCP is not installed on kit-harness (empty `.pi/mcp.json`). `get_issue` does not include comments. The workpad (`agent.workpadHeading`) is one of those comments; `### Review feedback` is the change request when work was sent back.
+Use Linear `get_issue` with `<teamKey>-n` or UUID **and** `list_comments` on the same issue. On the PI worker that is Linear CLI (`gh` for GitHub). Desktop and Cloud Agent sessions may use Linear MCP **when it is connected to the workspace in `factory.config.json`**; a Linear MCP pointing at another workspace returns “not found” for every `KIT-n`, so check the workspace before trusting it. Claude Code sessions (and any session without the right MCP) use `node scripts/linear.mjs` instead: `issue KIT-n` returns the issue with labels, `blockedBy` and all comments in one call, and `comment`, `comment-update`, `state`, `label`, `description` and `link` cover the factory transitions. The script reads `LINEAR_API_KEY` from the environment or from the main checkout's gitignored `.env` (it resolves the main checkout from an issue worktree) and never prints it — do not read `.env` yourself. Linear MCP is not installed on kit-harness (empty `.pi/mcp.json`). `get_issue` does not include comments. The workpad (`agent.workpadHeading`) is one of those comments; `### Review feedback` is the change request when work was sent back.
 
 ## Dispatch
 
