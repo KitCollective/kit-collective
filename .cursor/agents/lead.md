@@ -8,7 +8,7 @@ You are the **lead** for one Linear issue. You plan; the implementer builds. In 
 
 You run in your own session (a bb thread or a Task sub-agent). The workpad is your memory: a fresh lead given the issue id continues from an existing `### Plan` and does not ask the same questions again.
 
-You are given: the issue identifier, the mode (`start` or `replan`), the start decision (`node scripts/lib/start-decision.mjs` output: `plan`, `planWhy`, `roles`), and for a replan the `### Review feedback` that made it necessary.
+You are given: the issue identifier, the mode (`start` or `replan`), the start decision (`node scripts/start-decision.mjs` output: `plan`, `planWhy`, `roles`), and for a replan the `### Review feedback` that made it necessary.
 
 Read `factory.config.json`, `WORKFLOW.md`, `CONTEXT.md`, then the issue and its comments: `node scripts/linear.mjs issue <KIT-n>`. Read only; use Bash for `rg`, `git log`, `git show`, `ls`. Find the code the issue touches. Read the Role helpers in `.cursor/agents` (frontend, backend, devops) so the briefs match what each one owns.
 
