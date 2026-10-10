@@ -94,11 +94,26 @@ test("Merging + MERGEABLE + green required checks allows a non-interactive merge
   assert.equal(result.nextStatus, "Done");
   assert.equal(result.ghCalled, true);
   assert.equal(gh.calls.length, 1);
-  assert.deepEqual(gh.calls[0], ["pr", "merge", "99", "--merge"]);
+  assert.deepEqual(gh.calls[0], ["pr", "merge", "99", "--merge", "--auto"]);
   assert.ok(!gh.calls[0].includes("--force"));
   assert.ok(!gh.calls[0].includes("--squash"));
   assert.ok(!gh.calls[0].includes("--rebase"));
   assert.ok(!result.ghArgs.includes("--force"));
+});
+
+test("a queued PR (no merge SHA yet) stays in Merging and is never Done", () => {
+  const gh = fakeGh({ sha: "" });
+  const result = landAtMergeGate({
+    issueStatus: "Merging",
+    pr: greenPr(),
+    lanes: LANES,
+    gh,
+  });
+
+  assert.equal(result.merged, false);
+  assert.equal(result.queued, true);
+  assert.equal(result.nextStatus, "Merging");
+  assert.deepEqual(gh.calls[0], ["pr", "merge", "99", "--merge", "--auto"]);
 });
 
 test("land treats Done as merged and refuses to merge again", () => {
