@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * CI ratchet (KIT-75): the required GitHub `test` job must run land-policy and
- * migration-prefix factory-script tests. Fails if those invocations are omitted,
+ * CI ratchet (KIT-75): the required GitHub `test` gate must cover land-policy and
+ * migration-prefix factory-script tests. `test` aggregates the `static`, `apps` and
+ * `api` jobs (they run in parallel); coverage is asserted across all of them. Fails if those invocations are omitted,
  * or if existing mobile check-scripts leave that job.
  * Pi harness tests moved to github.com/KitCollective/kit-pi-harness (2026-09-01).
  */
@@ -11,6 +12,9 @@ import { fileURLToPath } from "node:url";
 
 export const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
 export const PACKAGE_JSON_PATH = "package.json";
+
+/** Jobs the required `test` gate aggregates; each must exist and be in its `needs`. */
+export const GATED_JOBS = ["static", "apps", "api"];
 
 export const FACTORY_NODE_TEST_NEEDLES = [
   "land-policy",
@@ -193,11 +197,25 @@ export function pullsRequestIntoDevelopment(workflowSource) {
  */
 export function missingFactoryCiCoverage({ workflowSource, packageSource }) {
   const missing = [];
-  const testJob = extractNamedJob(workflowSource, "test");
-  if (!testJob) {
+  const gate = extractNamedJob(workflowSource, "test");
+  if (!gate) {
     missing.push("jobs.test");
     return missing;
   }
+  const gateNeeds = gate.match(/^\s+needs:\s*\[([^\]]*)\]/m)?.[1] ?? "";
+  const bodies = [];
+  for (const job of GATED_JOBS) {
+    const body = extractNamedJob(workflowSource, job);
+    if (!body) {
+      missing.push(`jobs.${job}`);
+      continue;
+    }
+    bodies.push(body);
+    if (!gateNeeds.split(",").some((name) => name.trim() === job)) {
+      missing.push(`jobs.test needs ${job}`);
+    }
+  }
+  const testJob = bodies.join("\n");
 
   if (!pullsRequestIntoDevelopment(workflowSource)) {
     missing.push("pull_request into development");

@@ -250,7 +250,7 @@ catches it in the API tests and the container smoke test.
 
 ### Factory CI test-job ratchet (KIT-75)
 
-`scripts/check-factory-ci-tests.mjs` (CI via `pnpm check:factory-ci-tests` in `.github/workflows/ci.yml`) fails when the required GitHub `test` job omits harness node tests or webhook-router / land-policy factory-script tests, or when existing mobile check-scripts leave that job. Needles are asserted on expanded `run:` / script bodies only — a step title that names `land-policy` does not satisfy coverage if the script body dropped it. `scripts/tests/check-factory-ci-tests.test.mjs` mutation-tests the ratchet. Prevents repeating the KIT-75 checker fail (colocating the check-script under `.github/workflows/` and matching factory needles from the step name). Tighten only.
+`scripts/check-factory-ci-tests.mjs` (CI via `pnpm check:factory-ci-tests` in `.github/workflows/ci.yml`) fails when the required GitHub `test` gate (which needs the parallel `static`, `apps` and `api` jobs; dropping one from `needs` also fails) omits harness node tests or webhook-router / land-policy factory-script tests, or when existing mobile check-scripts leave that job. Needles are asserted on expanded `run:` / script bodies only — a step title that names `land-policy` does not satisfy coverage if the script body dropped it. `scripts/tests/check-factory-ci-tests.test.mjs` mutation-tests the ratchet. Prevents repeating the KIT-75 checker fail (colocating the check-script under `.github/workflows/` and matching factory needles from the step name). Tighten only.
 
 ### Checker pass workpad ratchet (KIT-106)
 
