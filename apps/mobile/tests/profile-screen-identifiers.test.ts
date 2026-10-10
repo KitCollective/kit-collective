@@ -13,16 +13,6 @@ const PROFILE_SCREEN_EXPORTS = [
     danish: "CookieIndstillingerScreen",
   },
   {
-    file: "skift-adgangskode.tsx",
-    english: "ChangePasswordScreen",
-    danish: "SkiftAdgangskodeScreen",
-  },
-  {
-    file: "skift-email.tsx",
-    english: "ChangeEmailScreen",
-    danish: "SkiftEmailScreen",
-  },
-  {
     file: "email-notifikationer.tsx",
     english: "EmailNotificationsScreen",
     danish: "EmailNotifikationerScreen",

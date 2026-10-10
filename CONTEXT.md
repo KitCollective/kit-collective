@@ -342,11 +342,11 @@ Six-digit single-use code mailed to an address on the **Kom i gang** sheet. A co
 _Avoid_: magic link; OTP in UI copy; a password field next to it; telling the caller whether the email has an account
 
 **Email verification**:
-Password sign-up must verify. A Social login whose provider already verified the email counts, and so does a correct **E-mail code**. Not Staff access.
+A Social login whose provider already verified the email counts, and so does a correct **E-mail code**. Password sign-up no longer exists for collectors (KIT-276); it survives only for Staff login in `admin`. Not Staff access.
 _Avoid_: a second verify after Google, Facebook or an e-mail code; treating `role=admin` as verified
 
 **Password reset**:
-Signed-out email link that sets a new password on the same User. Not the signed-in change-password that already exists.
+Signed-out email link that sets a new password on the same User. Superseded for collectors (KIT-276): the collector app has no password, no reset and no change-password; sign-in is an **E-mail code** or a social login. It stays an `admin`-only path for Staff login. Stored collector passwords are left untouched and unused.
 _Avoid_: reset as a second account; SMS reset in this increment
 
 **Auth event**:
@@ -382,7 +382,7 @@ Birthday and gender on the collector's own account. Optional, never shown to oth
 _Avoid_: showing them publicly; requiring them; using them to target a collector
 
 **Handle**:
-The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision — same rule for password and Social login. Never the email. Never the provider display name. Availability is `yours`, `available`, or `taken`.
+The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision — same rule for E-mail code and Social login. Never the email. Never the provider display name. Availability is `yours`, `available`, or `taken`.
 _Avoid_: raw email as the thread-row name; a second login identifier; Google name as Handle; asking for a Handle before first session; success-green availability chrome
 
 **Private UserJersey**:

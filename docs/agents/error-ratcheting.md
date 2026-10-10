@@ -359,7 +359,7 @@ OpenRouter workspace guardrail allows only `tencent/hy4-preview` on every worksp
 
 ### Mobile profile settings hub ratchet (KIT-125)
 
-`scripts/check-mobile-profile-settings-hub.mjs` (CI via `node scripts/check-mobile-profile-settings-hub.mjs` in `.github/workflows/ci.yml`; logic covered by `scripts/tests/check-mobile-profile-settings-hub.test.mjs`) fails when `apps/mobile/app/(tabs)/profile/indstillinger.tsx` drops one of the four locked `SettingsSectionLabel` strings from `docs/design-system.md` §5, when `kontoindstillinger.tsx` omits email `Skift` → `skift-email` or phone trailing `Skift`, or when live prefs drill screens use factory jargon. Prevents repeating the KIT-125 checker fail (missing hub section label, no-op email Skift, inline phone field, lock-speak helper, factory-jargon prefs copy). Tighten only.
+`scripts/check-mobile-profile-settings-hub.mjs` (CI via `node scripts/check-mobile-profile-settings-hub.mjs` in `.github/workflows/ci.yml`; logic covered by `scripts/tests/check-mobile-profile-settings-hub.test.mjs`) fails when `apps/mobile/app/(tabs)/profile/indstillinger.tsx` drops one of the four locked `SettingsSectionLabel` strings from `docs/design-system.md` §5, when `kontoindstillinger.tsx` brings back an e-mail change screen or a change-password row (no password after First session 1.0, KIT-276) or omits phone trailing `Skift`, or when live prefs drill screens use factory jargon. Prevents repeating the KIT-125 checker fail (missing hub section label, no-op email Skift, inline phone field, lock-speak helper, factory-jargon prefs copy). Tighten only.
 
 ### Implement write-scope worktree allowlist
 

@@ -30,9 +30,7 @@ fi
 export MAESTRO_API_URL="$E2E_API_URL"
 export MAESTRO_TEST_DATA_TOKEN="$E2E_TEST_DATA_TOKEN"
 export MAESTRO_COLLECTOR_EMAIL="$E2E_COLLECTOR_EMAIL"
-export MAESTRO_COLLECTOR_PASSWORD="$E2E_COLLECTOR_PASSWORD"
 export MAESTRO_PEER_EMAIL="$E2E_PEER_EMAIL"
-export MAESTRO_PEER_PASSWORD="$E2E_PEER_PASSWORD"
 
 # Reduce Motion stills the looping and entering animations, so a screenshot of
 # the same screen is the same picture every run.
