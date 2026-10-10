@@ -62,17 +62,22 @@ Follow [implement/SKILL.md](../implement/SKILL.md) through the pre-review gate. 
 
 ### 4. Fresh review
 
-Spawn one Task (`subagent_type` `generalPurpose` or `bugbot` only if the human asked Bugbot). Prompt: read `.cursor/skills/code-review/SKILL.md` and run it on this issue’s PR / merge-base diff. Return every hard finding; do not stop at three.
+First `pnpm check:review-gate`. Red → fix it and stay in step 3; a review never sees what a script can say.
+
+Then wait for the required checks yourself: `node scripts/wait-for-checks.mjs <pr>` (ADR-0050). It is the one sanctioned wait; the ratchet hook denies the watch flag, sleeps and loops. Run it in the background when other work is left, in the foreground otherwise. Exit `0` go on, `1` red (fail, below), `3` behind or conflicting (rebase, rerun), `2` or `4` retry once, then ask. **Never ask the human whether CI is green, and never stop to wait for a build.**
+
+Spawn one Task (`subagent_type` `generalPurpose` or `bugbot` only if the human asked Bugbot). Prompt: read `.cursor/skills/code-review/SKILL.md` and run it on this issue’s PR / merge-base diff, with the workpad's `### Review matrix` and `lastReviewSha` when there is one. Return every hard finding; do not stop at three. The sub-agent writes the matrix; the parent runs `node scripts/review-matrix.mjs validate` on it before taking a verdict.
 
 Parent aggregates:
 
-- Required GitHub checks still pending → wait; stay `In Review`.
 - Hard Spec or Standards findings, red required checks, or `CONFLICTING` → **fail**.
 - Both axes clean, `MERGEABLE`, required checks green → **pass**.
 
 ### 5. Fix loop (fail)
 
-Move to `Implementing`. Write the **full** set under workpad `### Review feedback` (file/criterion + what done looks like). One checker-style role comment with axis headings. Increment the checker-fail side of `### Loop counters`.
+**Light fail first.** When every finding is tagged `[text]` or `[name]` and the checks are green: stay `In Review`, fix in place, run `node scripts/classify-fix-diff.mjs <lastReviewSha>`. `light` → read that diff against each finding (a Task that sees only the fix diff and the findings, not a three-axis review), rerun `pnpm check:review-gate`, update the matrix rows the fix touched, `lightFixes` +1, one role comment, then step 6. `reviewLoops` unchanged; the third light fix on one issue counts as one `reviewLoops`. `full` → the tag was wrong: continue below as a normal fail.
+
+Otherwise move to `Implementing`. Write the **full** set under workpad `### Review feedback` (file/criterion + what done looks like). One checker-style role comment with axis headings. Increment the checker-fail side of `### Loop counters`.
 
 Then resume implement: **fix the class**, not the cited file. Re-run the pre-review gate. Return to step 4.
 

@@ -36,6 +36,18 @@ When the caller is the factory Checker (In Review / kit-slice), pin the range fr
 | 1 | **Inventory** | `merge-base...HEAD` (no `lastReviewSha`) | Every hard finding. Write `### Review pin` and `### Review color`. |
 | 2+ | **Delta** | open Review feedback classes **plus** `lastReviewSha...HEAD` | Only still-open classes, or a regression created by the fix. |
 
+### Review matrix (ADR-0050)
+
+Every review writes workpad `### Review matrix`: one row per lock-set row (`node scripts/review-matrix.mjs rows` prints the template), status `checked`, `N/A` or `finding`, evidence (file, command output or screenshot name) and the SHA read. No empty row, no verdict before `node scripts/review-matrix.mjs validate <workpad>` exits 0. A `checked` row with no evidence is a miss.
+
+- **Pass 1** fills every row. For `state-machine`, walk every state, transition and guard of each reducer or machine the diff touches, in one pass, not only the one a finding names.
+- **Pass 2+** reads the existing matrix first, runs `node scripts/review-matrix.mjs plan <workpad> <lastReviewSha>`, re-checks only `recheck` rows and copies `inherit` rows unchanged. Do not invent findings on an inherited row; a regression the fix created shows up as a touched row.
+- Rows `names-english` and `docs-sync` are filled from `pnpm check:review-gate` output, not from reading: if the script is green the row is `checked` with that evidence. Do not spend review time on what the script says.
+
+### Light findings (ADR-0050)
+
+Tag a finding `[text]` when the whole fix is a doc, comment or copy line, `[name]` when it is only an identifier or file name; leave it untagged when the fix changes behaviour. Write the tag after the axis prefix: `- Standards [name]: ...`. When every finding of the fail is tagged, the session fixes in place and the verification is `node scripts/classify-fix-diff.mjs <lastReviewSha>`: on `light` the reviewer reads that diff against each finding (no new three-axis fan-out), on `full` the tag was wrong and the normal loop runs. A light fail does not count toward the loop cap.
+
 Required checks pending → **amber** cheap hold: do **not** start the model review loop. Stay In Review.
 
 Hard findings, `CONFLICTING`, or failed required checks → **red** → Implementing on the **same** branch/PR.
@@ -124,7 +136,7 @@ When the caller is the checker agent: write **every** hard finding into `### Rev
 - Slop: (none) | Slop/<finding>
 ```
 
-Every axis must appear on pass and fail. Hard Slop findings use the `Slop/` prefix (not `Slop:`). A clean axis is `- Spec: (none)`, `- Standards: (none)`, or `- Slop: (none)`.
+Every axis must appear on pass and fail. A text-only or name-only finding carries `[text]` or `[name]` after the prefix (see _Light findings_). Hard Slop findings use the `Slop/` prefix (not `Slop:`). A clean axis is `- Spec: (none)`, `- Standards: (none)`, or `- Slop: (none)`.
 
 **First-pass tags (factory checker):** When a Standards or Slop finding matches a registered class in `.pi/first-pass-classes.json`, write `[first-pass:<id>]` on that workpad line (keep the axis prefix). Example: `- Standards: [first-pass:empty-state-body] EmptyState body must not be empty`. Untagged findings keep a full Scout+helpers resume. Do not invent harness product regexes — only tag registered ids.
 

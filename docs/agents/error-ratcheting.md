@@ -31,7 +31,7 @@ Command hooks on `beforeShellExecution` (fail closed). Scripts must print `{"per
 1. `block-dangerous-git.sh` — no force-push, hard reset, `clean -f`, branch `-D`
 2. `block-reward-hacks.sh` — no shell deletion of tests or `.github/workflows`
 3. `protect-ratchet.sh` — no shell removal/emptying of `.cursor/hooks*`
-4. `block-pi-ci-sleep.sh` — no `sleep` ≥ 10s, no `gh pr checks --watch`, no for/while poll of `gh pr checks`
+4. `block-pi-ci-sleep.sh` — no `sleep` ≥ 10s, no `gh pr checks --watch`, no for/while poll of `gh pr checks`; the one allowed wait is `node scripts/wait-for-checks.mjs <pr>` (ADR-0050)
 5. `block-migration-prefix-collision.sh` — no `git add`/`commit` of `packages/db/migrations/NNNN_*.sql` when `origin/development` already has that prefix under another name
 
 Do **not** put factory learning in `sessionStart` context injection or in Cursor Automations **Memories** (`MEMORIES.md`). Cloud Agents may never see sessionStart; Memories is an unreviewed second source of truth. Prefer `beforeShellExecution` denials and always-applied rules / `AGENTS.md`. The planner comments on Linear; it does not keep a memory file of ratchets.
@@ -368,6 +368,14 @@ OpenRouter workspace guardrail allows only `tencent/hy4-preview` on every worksp
 ### Pi CI-sleep hook
 
 `.cursor/hooks/block-pi-ci-sleep.sh` (wired in `.cursor/hooks.json`, tests in `.cursor/hooks/tests/block-pi-ci-sleep.test.mjs`, CI via `node --test` in `.github/workflows/ci.yml`) denies `sleep` of 10 seconds or more, any `sleep` chained with `gh pr checks`, `gh pr checks --watch`, and `for`/`while` loops that call `gh pr checks`. A single `gh pr checks` snapshot stays allowed. Prevents repeating KIT-118 implement sessions that `sleep 30/60/90` and poll checks instead of exiting so the harness can wait. Tighten only.
+
+### Review-loop ratchets (ADR-0050)
+
+`scripts/check-code-english.mjs` and `scripts/check-doc-references.mjs` (run together by `pnpm check:review-gate` in the pre-review gate, and as steps of the CI `test` job; logic covered by `scripts/tests/check-code-english.test.mjs` and `scripts/tests/check-doc-references.test.mjs`) fail when a branch adds a Danish identifier or code file name (stems in `.cursor/hooks/lib/danish-code-identifiers.mjs`, plus any `æ`, `ø`, `å` in a declared name), or when a living doc names a symbol, prop or Device-flow step the branch removed, or a repository path that does not exist on a line the branch added. Prevents repeating KIT-272 reviews 2 to 4 and KIT-267 review 5. Tighten only: extend the stem list, never an exemption.
+
+`scripts/lib/review-matrix.mjs` (`LOCK_ROWS`, `planRecheck`) and `scripts/review-matrix.mjs` keep the workpad `### Review matrix` complete and say which rows a later review re-checks. `scripts/lib/fix-diff.mjs` and `scripts/classify-fix-diff.mjs` decide whether a `[text]` / `[name]` fix is light. Tests in `scripts/tests/review-matrix.test.mjs` and `scripts/tests/fix-diff.test.mjs`. A new lock-set row needs its path globs and a test.
+
+`scripts/wait-for-checks.mjs` (tests in `scripts/tests/pr-checks.test.mjs`) is the sanctioned wait for required checks. `.cursor/hooks/block-pi-ci-sleep.sh` still denies the watch flag, sleeps and loops; its message names the script. `scripts/check-factory-ci-tests.mjs` requires the five test files on the CI `test` job.
 
 ### English code identifiers (Pi implement / helper / checker)
 

@@ -255,6 +255,25 @@ jobs:
       - name: Check vision log save-action
         run: pnpm check:vision-log-save-action
 
+      - name: Check code identifiers are English
+        run: node scripts/check-code-english.mjs
+        env:
+          BASE_REF: origin/development
+
+      - name: Check docs name what the diff left
+        run: node scripts/check-doc-references.mjs
+        env:
+          BASE_REF: origin/development
+
+      - name: Test review-loop scripts (matrix, fix diff, check wait, English, doc references)
+        run: >-
+          node --test
+          scripts/tests/check-code-english.test.mjs
+          scripts/tests/check-doc-references.test.mjs
+          scripts/tests/review-matrix.test.mjs
+          scripts/tests/fix-diff.test.mjs
+          scripts/tests/pr-checks.test.mjs
+
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs
         env:

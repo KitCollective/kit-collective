@@ -12,7 +12,21 @@ export const DANISH_IDENTIFIER_STEMS = [
   "privatliv",
   "moerktilstand",
   "brugernavn",
+  "komigang",
+  "tilfoej",
+  "tilføj",
+  "fortsaet",
+  "fortsæt",
+  "trøje",
+  "troeje",
 ];
+
+/** Danish letters never belong in a declared name (KIT-272 review 4 widened the gate). */
+const DANISH_LETTERS = /[æøåÆØÅ]/;
+
+/** Code files whose names are checked. Expo route files are shipped URLs and stay Danish. */
+const CODE_FILE = /\.(?:tsx?|jsx?|mjs|cjs|mts|cts)$/;
+const ROUTE_SLUG_PREFIX = "apps/mobile/app/";
 
 const DECLARATION =
   /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|const|let|var|class|interface|type|enum)\s+([A-Za-zÀ-ÿ_$][\wÀ-ÿ$]*)/;
@@ -46,11 +60,43 @@ export function findDanishCodeIdentifiers(diffText) {
     }
     const name = match[1];
     const folded = foldIdent(name);
+    if (DANISH_LETTERS.test(name)) {
+      hits.push({ name, stem: "æøå", line: trimmed });
+      continue;
+    }
     for (const stem of DANISH_IDENTIFIER_STEMS) {
       if (folded.includes(foldIdent(stem))) {
         hits.push({ name, stem, line: trimmed });
         break;
       }
+    }
+  }
+  return hits;
+}
+
+/**
+ * File names are identifiers too (code-english rule). Shipped Expo route slugs under
+ * apps/mobile/app/ are product URLs and are skipped.
+ *
+ * @param {string[]} paths
+ * @returns {{ path: string, stem: string }[]}
+ */
+export function findDanishFileNames(paths) {
+  /** @type {{ path: string, stem: string }[]} */
+  const hits = [];
+  for (const path of paths) {
+    if (!CODE_FILE.test(path) || path.startsWith(ROUTE_SLUG_PREFIX)) {
+      continue;
+    }
+    const base = path.split("/").pop() ?? path;
+    if (DANISH_LETTERS.test(base)) {
+      hits.push({ path, stem: "æøå" });
+      continue;
+    }
+    const folded = foldIdent(base);
+    const stem = DANISH_IDENTIFIER_STEMS.find((candidate) => folded.includes(foldIdent(candidate)));
+    if (stem) {
+      hits.push({ path, stem });
     }
   }
   return hits;
