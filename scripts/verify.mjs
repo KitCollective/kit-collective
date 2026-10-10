@@ -18,7 +18,10 @@
  * cached: the key reads the committed tree, the command runs in the working tree. `globalPaths` in the
  * table (lockfile, compiler config) and the node version are part of every suite's key.
  * Results are cached per machine in the gitignored `.factory/verify-cache.json` of the main checkout.
- * Exit: 0 OK, 1 a suite failed or timed out, 2 usage or a bad checks table, 3 INCOMPLETE.
+ * Exit: 0 OK, 1 a suite failed or timed out, 2 usage or a bad checks table, 3 INCOMPLETE,
+ * 4 NOTHING TO DO (`--changed` matched no suite and no global path; nothing ran, not a pass).
+ * A changed global path selects every suite. A run with uncommitted changes says
+ * `VERIFY OK (dirty: not for <sha8>; ...)` and has `dirty: true` in the JSON report.
  */
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -28,6 +31,7 @@ import { mainCheckout } from "./lib/run-log.mjs";
 import {
   dirtyPaths,
   mergeCache,
+  nothingToDo,
   runSuites,
   suiteIsDirty,
   suiteKey,
@@ -63,7 +67,16 @@ if (changedAt !== -1) {
   })
     .split("\n")
     .filter(Boolean);
-  suites = suitesFor(files, suites);
+  suites = suitesFor(files, suites, config.checks.globalPaths ?? []);
+  if (suites.length === 0) {
+    const none = nothingToDo();
+    process.stdout.write(
+      args.includes("--json")
+        ? `${JSON.stringify({ ...none, nothingToDo: true, suites: [] }, null, 2)}\n`
+        : `${none.line}\n`,
+    );
+    process.exit(none.code);
+  }
 }
 
 const capabilities = [
@@ -88,7 +101,7 @@ const globalPaths = config.checks.globalPaths ?? [];
 const keyOf = (suite) =>
   suiteKey({ suite, globalPaths, fullListing, nodeVersion: process.version });
 const dirty = dirtyPaths(
-  execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], {
+  execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all"], {
     cwd: ROOT,
     encoding: "utf8",
   }),
@@ -149,10 +162,11 @@ try {
 const temp = `${cachePath}.${process.pid}.tmp`;
 writeFileSync(temp, JSON.stringify(mergeCache(current, rows), null, 2));
 renameSync(temp, cachePath);
-const result = verdictOf(rows);
+const result = verdictOf(rows, { head });
+const isDirtyRun = rows.some((r) => r.uncached);
 process.stdout.write(
   args.includes("--json")
-    ? `${JSON.stringify({ head, ...result, suites: rows }, null, 2)}\n`
+    ? `${JSON.stringify({ head, dirty: isDirtyRun, ...result, suites: rows }, null, 2)}\n`
     : `${result.line}\n`,
 );
 process.exit(result.code);

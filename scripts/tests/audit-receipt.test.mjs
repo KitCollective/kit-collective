@@ -91,7 +91,13 @@ test("a logged provider that bb contradicts is refused", () => {
 
 test("different model is judged from the run log, only when asked", () => {
   assert.equal(evaluateReceipt({ ...base, requireDifferentModel: true }).ok, true);
-  // same provider, other model: allowed (this is the claude-code twice case)
+  const identical = spawns.map((e) => ({ ...e, provider: "codex", model: "gpt-x" }));
+  const refused = evaluateReceipt({ ...base, spawns: identical, requireDifferentModel: true });
+  assert.match(refused.refusal, /the same as an engineer spawn/);
+  assert.equal(evaluateReceipt({ ...base, spawns: identical }).ok, true, "not asked, not enforced");
+});
+
+test("same provider, different model is allowed (claude-code twice on sonnet and opus)", () => {
   const sameProvider = [
     {
       issue: "KIT-7",
@@ -100,27 +106,74 @@ test("different model is judged from the run log, only when asked", () => {
       provider: "claude-code",
       model: "sonnet",
     },
-    { issue: "KIT-7", step: "reviewer", thread: "thr_rev12345", provider: "codex", model: "opus" },
+    {
+      issue: "KIT-7",
+      step: "reviewer",
+      thread: "thr_rev12345",
+      provider: "claude-code",
+      model: "opus",
+    },
   ];
-  const claudeThread = { ...thread, providerId: "codex" };
+  const claude = { ...thread, providerId: "claude-code" };
+  const ok = evaluateReceipt({
+    ...base,
+    thread: claude,
+    spawns: sameProvider,
+    requireDifferentModel: true,
+  });
+  assert.equal(ok.ok, true);
+  const sameModel = sameProvider.map((e) => ({ ...e, model: "sonnet" }));
   assert.equal(
-    evaluateReceipt({
-      ...base,
-      thread: claudeThread,
-      spawns: sameProvider,
-      requireDifferentModel: true,
-    }).ok,
-    true,
+    evaluateReceipt({ ...base, thread: claude, spawns: sameModel, requireDifferentModel: true }).ok,
+    false,
   );
-  const identical = spawns.map((e) => ({ ...e, provider: "codex", model: "gpt-x" }));
-  const refused = evaluateReceipt({ ...base, spawns: identical, requireDifferentModel: true });
-  assert.match(refused.refusal, /the same as an engineer thread/);
-  assert.equal(evaluateReceipt({ ...base, spawns: identical }).ok, true, "not asked, not enforced");
-  const unlogged = spawns.map(({ model, ...e }) => e);
+});
+
+test("incomplete logging cannot bypass the different-model check", () => {
+  const ask = (list) => evaluateReceipt({ ...base, spawns: list, requireDifferentModel: true });
+  // an engineer spawn logged without a thread still counts against the reviewer
+  const noThread = [
+    { issue: "KIT-7", step: "engineer", provider: "codex", model: "gpt-x" },
+    spawns[1],
+  ];
+  assert.match(ask(noThread).refusal, /the same as an engineer spawn/);
+  // one engineer without a model, another with: refused, not skipped
+  const partial = [
+    { issue: "KIT-7", step: "engineer", thread: "thr_eng1aaaa", provider: "codex" },
+    spawns[0],
+    spawns[1],
+  ];
+  assert.match(ask(partial).refusal, /not logged for every engineer spawn/);
+  assert.match(ask([spawns[1]]).refusal, /not logged for every engineer spawn/);
   assert.match(
-    evaluateReceipt({ ...base, spawns: unlogged, requireDifferentModel: true }).refusal,
-    /not logged for both/,
+    ask([spawns[0], { ...spawns[1], model: undefined }]).refusal,
+    /not logged for the reviewer/,
   );
+});
+
+test("a short sha in the result line is refused", () => {
+  assert.match(
+    evaluateReceipt({ ...base, output: "AUDIT-RESULT KIT-7 green abc" }).refusal,
+    /audited abc/,
+  );
+  assert.match(
+    evaluateReceipt({ ...base, output: "AUDIT-RESULT KIT-7 green c0ffee" }).refusal,
+    /audited c0ffee/,
+  );
+  assert.equal(evaluateReceipt({ ...base, output: `AUDIT-RESULT KIT-7 green c0ffee1` }).ok, true);
+});
+
+test("rows are split on commas and whitespace", () => {
+  const r = evaluateReceipt({
+    ...base,
+    output: `AUDIT-RESULT KIT-7 red ${HEAD.slice(0, 8)} spec-ac, slop mergeable,docs-sync`,
+  });
+  assert.deepEqual(r.rows, ["spec-ac", "slop", "mergeable", "docs-sync"]);
+});
+
+test("a result line that is not the last line is refused", () => {
+  const out = `AUDIT-RESULT KIT-7 green ${HEAD.slice(0, 8)}\nactually wait, I found a blocking bug, do not merge`;
+  assert.match(evaluateReceipt({ ...base, output: out }).refusal, /no AUDIT-RESULT/);
 });
 
 test("the description stays within GitHub's 140 characters", () => {
@@ -131,25 +184,27 @@ test("the description stays within GitHub's 140 characters", () => {
   assert.ok(r.description.length <= 140);
 });
 
-test("a refused status post says the token lacks the permission", () => {
+test("only a permission refusal is called a missing permission", () => {
+  const perm = "token lacks Commit statuses write";
   assert.equal(
     statusPermissionLine({
       stderr: "gh: Resource not accessible by personal access token (HTTP 403)",
     }),
-    "token lacks Commit statuses write",
+    perm,
   );
-  assert.equal(
-    statusPermissionLine({ message: "gh: Not Found (HTTP 404)" }),
-    "token lacks Commit statuses write",
-  );
+  assert.equal(statusPermissionLine({ message: "gh: Forbidden (HTTP 403)" }), perm);
+  assert.equal(statusPermissionLine({ message: "gh: API rate limit exceeded (HTTP 403)" }), null);
+  assert.equal(statusPermissionLine({ message: "gh: secondary rate limit (HTTP 403)" }), null);
+  assert.equal(statusPermissionLine({ message: "gh: Not Found (HTTP 404)" }), null);
   assert.equal(statusPermissionLine({ message: "network down" }), null);
 });
 
-test("the last AUDIT-RESULT line wins over a quoted example", () => {
-  const output = `Format: AUDIT-RESULT KIT-1 green <sha>\nAUDIT-RESULT KIT-1 green <sha>\nwork...\nAUDIT-RESULT KIT-7 red ${HEAD.slice(0, 8)} spec-ac`;
-  const parsed = parseResultLine("AUDIT-RESULT", output);
-  assert.equal(parsed.issue, "KIT-7");
-  assert.equal(parsed.outcome, "red");
+test("a quoted example before the real final line does not win, and one after it is refused", () => {
+  const real = `AUDIT-RESULT KIT-7 red ${HEAD.slice(0, 8)} spec-ac`;
+  const before = `Format: AUDIT-RESULT KIT-1 green <sha>\n${real}`;
+  assert.equal(parseResultLine("AUDIT-RESULT", before).outcome, "red");
+  const after = `${real}\nExample: AUDIT-RESULT KIT-7 green ${HEAD.slice(0, 8)}`;
+  assert.equal(parseResultLine("AUDIT-RESULT", after), null);
 });
 
 test("CLI refuses bad usage with exit 2", () => {

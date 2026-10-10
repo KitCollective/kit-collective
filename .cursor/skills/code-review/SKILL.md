@@ -148,7 +148,7 @@ When the checker parent records a recurring **Standards** or **Slop** lesson via
 
 ## Result line (reviewer thread)
 
-When the review runs as its own bb thread (`bb-orchestrate`), the last line of the final output is `AUDIT-RESULT <KIT-n> <green|amber|red> <head-sha> [failing,matrix,rows]`: the full head SHA you read, and for red the lock-set row ids that are findings. `scripts/audit-receipt.mjs` turns that line into the `kc/audit` commit status (ADR-0056); a missing line, another SHA, or a thread older than the head commit is refused.
+When the review runs as its own bb thread (`bb-orchestrate`), the **final line** of the output is `AUDIT-RESULT <KIT-n> <green|amber|red> <head-sha> [failing,matrix,rows]`: the full head SHA you read, and for red the lock-set row ids that are findings. `scripts/audit-receipt.mjs` turns that line into the `kc/audit` commit status (ADR-0056); a missing line, another SHA, or a thread older than the head commit is refused. Nothing may follow it: no caveat, no quoted example (a result line is only accepted as the last non-empty line, bare or wrapped whole in `**` or backticks). Do not quote the line format anywhere in the output.
 
 ## Why three axes
 

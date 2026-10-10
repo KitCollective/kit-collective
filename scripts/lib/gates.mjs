@@ -182,19 +182,26 @@ export function landGate({ pr, onIntegration, checks }) {
 }
 
 /**
- * Finds a result line like `LEAD-RESULT KIT-1 plan ...` in a step's final text.
+ * The result line of a step: the LAST NON-EMPTY line of its output must be
+ * `<TAG> KIT-n <outcome> ...`. Nothing may follow it: a line quoted earlier, or a caveat written
+ * after a green line, must not decide the verdict. A line wrapped whole in `**...**` or backticks
+ * is accepted; a wrapper around only part of the line is not.
  * @param {string} tag e.g. LEAD-RESULT
  * @param {string} text
  * @returns {{ issue: string, outcome: string, rest: string } | null}
  */
 export function parseResultLine(tag, text) {
-  // The LAST match wins: an output that quotes an example line earlier must not beat its final line.
-  const all = [
-    ...String(text ?? "").matchAll(
-      new RegExp(`^\\s*${tag} ([A-Z][A-Z0-9]*-\\d+) (\\S+)(?: (.*))?$`, "gm"),
-    ),
-  ];
-  const m = all.at(-1);
+  const lines = String(text ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  let last = lines.at(-1) ?? "";
+  for (const wrap of ["**", "`"]) {
+    if (last.length > 2 * wrap.length && last.startsWith(wrap) && last.endsWith(wrap)) {
+      last = last.slice(wrap.length, -wrap.length).trim();
+    }
+  }
+  const m = new RegExp(`^${tag} ([A-Z][A-Z0-9]*-\\d+) (\\S+)(?: (.*))?$`).exec(last);
   return m ? { issue: m[1], outcome: m[2], rest: m[3] ?? "" } : null;
 }
 

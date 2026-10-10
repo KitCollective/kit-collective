@@ -211,3 +211,26 @@ test("CLI appends, reports and refuses bad input", () => {
   assert.match(run("report").stdout, /without Lead \(n=1, SMALL SAMPLE/);
   assert.equal(run("path").stdout.trim(), path);
 });
+
+test("an engineer or reviewer spawn must carry thread, provider and model; a lead may omit them", () => {
+  for (const step of ["engineer", "reviewer"]) {
+    const bare = validateEvent({ event: "spawn", issue: "KIT-1", step });
+    assert.deepEqual(bare, [
+      `spawn ${step} needs thread`,
+      `spawn ${step} needs provider`,
+      `spawn ${step} needs model`,
+    ]);
+    assert.deepEqual(
+      validateEvent({
+        event: "spawn",
+        issue: "KIT-1",
+        step,
+        thread: "thr_abc123",
+        provider: "codex",
+        model: "gpt-x",
+      }),
+      [],
+    );
+  }
+  assert.deepEqual(validateEvent({ event: "spawn", issue: "KIT-1", step: "lead" }), []);
+});

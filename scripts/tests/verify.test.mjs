@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   dirtyPaths,
   mergeCache,
+  nothingToDo,
   reuseKey,
   runSuites,
   suiteIsDirty,
@@ -207,19 +208,61 @@ test("a dirty suite is run, not reused, and its result is not cached", async () 
   assert.ok(again.every((r) => r.status === "pass" || r.status === "skipped"));
 });
 
-test("dirtyPaths parses porcelain, and suiteIsDirty looks at suite and global paths", () => {
-  const porcelain =
-    " M apps/web/a.ts\n?? docs/new.md\nR  old.ts -> apps/api/new.ts\n M pnpm-lock.yaml";
-  assert.deepEqual(dirtyPaths(porcelain), [
-    "apps/web/a.ts",
-    "docs/new.md",
-    "apps/api/new.ts",
-    "pnpm-lock.yaml",
+test("dirtyPaths keeps both sides of a rename and needs no unquoting (-z)", () => {
+  const z = (...entries) => `${entries.join("\0")}\0`;
+  assert.deepEqual(
+    dirtyPaths(
+      z(" M apps/web/a.ts", "?? docs/new.md", "R  docs/a.ts", "apps/web/a.ts", " M pnpm-lock.yaml"),
+    ),
+    ["apps/web/a.ts", "docs/new.md", "docs/a.ts", "apps/web/a.ts", "pnpm-lock.yaml"],
+  );
+  assert.deepEqual(dirtyPaths(z("?? apps/web/blåbær.ts", "?? apps/web/with space.ts")), [
+    "apps/web/blåbær.ts",
+    "apps/web/with space.ts",
   ]);
+  assert.deepEqual(dirtyPaths(z("C  copy.ts", "orig.ts")), ["copy.ts", "orig.ts"]);
+  assert.deepEqual(dirtyPaths(""), []);
+});
+
+test("a rename across suites marks both suites dirty; non-ASCII and spaces match globs", () => {
   const web = { paths: ["apps/web/**"] };
-  assert.equal(suiteIsDirty(["apps/web/a.ts"], web), true);
-  assert.equal(suiteIsDirty(["docs/new.md"], web), false);
-  assert.equal(suiteIsDirty(["pnpm-lock.yaml"], web, ["pnpm-lock.yaml"]), true);
+  const docs = { paths: ["docs/**"] };
+  const dirty = dirtyPaths("R  docs/a.ts\0apps/web/a.ts\0");
+  assert.equal(suiteIsDirty(dirty, web), true, "the old path lives in the web suite");
+  assert.equal(suiteIsDirty(dirty, docs), true);
+  assert.equal(suiteIsDirty(dirtyPaths("?? apps/web/blåbær med mellemrum.ts\0"), web), true);
+});
+
+test("a changed global path selects every suite; --changed with no match is NOTHING TO DO, not OK", () => {
+  const { suites } = table();
+  assert.equal(suitesFor(["package.json"], suites, ["package.json"]).length, suites.length);
+  assert.equal(suitesFor(["pnpm-lock.yaml"], suites, ["pnpm-lock.yaml"]).length, suites.length);
+  assert.deepEqual(suitesFor(["package.json"], suites), [], "without globals nothing matches");
+  const none = nothingToDo();
+  assert.equal(none.code, VERIFY_EXIT.nothing);
+  assert.notEqual(none.code, VERIFY_EXIT.ok);
+  assert.match(none.line, /^VERIFY NOTHING TO DO/);
+  assert.doesNotMatch(none.line, /VERIFY OK/);
+});
+
+test("a dirty run is named as not being for the commit", async () => {
+  const rows = await runSuites({
+    ...table(),
+    capabilities: ["postgres"],
+    cache: {},
+    isDirty: (suite) => suite.id === "web",
+    ...harness(() => "pass").options,
+  });
+  const v = verdictOf(rows, { head: "0123456789abcdef" });
+  assert.equal(v.code, VERIFY_EXIT.ok);
+  assert.match(v.line, /^VERIFY OK \(dirty: not for 01234567; /);
+  assert.doesNotMatch(
+    verdictOf(
+      rows.map((r) => ({ ...r, uncached: false })),
+      { head: "0123456789" },
+    ).line,
+    /dirty/,
+  );
 });
 
 test("a global path or the node version invalidates every suite's key", () => {

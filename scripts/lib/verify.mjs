@@ -8,7 +8,7 @@
 import { createHash } from "node:crypto";
 import { matchesGlob } from "./pr-write-scope.mjs";
 
-export const VERIFY_EXIT = { ok: 0, failed: 1, usage: 2, incomplete: 3 };
+export const VERIFY_EXIT = { ok: 0, failed: 1, usage: 2, incomplete: 3, nothing: 4 };
 
 /**
  * Checks table shape (`globalPaths` are inputs shared by every suite: lockfile, compiler and
@@ -64,9 +64,15 @@ export function validateChecks(checks) {
   return problems;
 }
 
-/** Suites a change set touches; `null` changed means "all". */
-export function suitesFor(changed, suites) {
+/**
+ * Suites a change set touches; `null` changed means "all". A changed global path (lockfile,
+ * compiler config) is an input of every suite, so it selects all of them.
+ */
+export function suitesFor(changed, suites, globalPaths = []) {
   if (changed === null) {
+    return suites;
+  }
+  if (changed.some((file) => globalPaths.some((glob) => matchesGlob(file, glob)))) {
     return suites;
   }
   return suites.filter((suite) =>
@@ -110,12 +116,26 @@ export function suiteKey({ suite, globalPaths = [], fullListing, nodeVersion }) 
   );
 }
 
-/** Paths from `git status --porcelain` (staged, unstaged and untracked; renames give the new path). */
-export function dirtyPaths(porcelain) {
-  return porcelain
-    .split("\n")
-    .filter((line) => line.length > 3)
-    .map((line) => line.slice(3).split(" -> ").at(-1).replace(/^"|"$/g, ""));
+/**
+ * Paths from `git status --porcelain -z --untracked-files=all` (staged, unstaged, untracked).
+ * A rename or copy keeps BOTH sides: the old path is a change to the suite that lost the file.
+ * With -z no path is quoted, so spaces and non-ASCII names need no unescaping.
+ * @param {string} porcelainZ
+ */
+export function dirtyPaths(porcelainZ) {
+  const entries = porcelainZ.split("\0").filter((entry) => entry !== "");
+  const paths = [];
+  for (let i = 0; i < entries.length; i += 1) {
+    const status = entries[i].slice(0, 2);
+    paths.push(entries[i].slice(3));
+    if (/[RC]/.test(status)) {
+      i += 1;
+      if (entries[i] !== undefined) {
+        paths.push(entries[i]);
+      }
+    }
+  }
+  return paths;
 }
 
 /** Whether uncommitted changes touch the suite's own paths or the global paths. */
@@ -185,7 +205,8 @@ export async function runSuites({
 }
 
 /** One verdict from the rows. */
-export function verdictOf(rows) {
+/** @param {object[]} rows @param {{ head?: string }} [o] head is named when the run was dirty */
+export function verdictOf(rows, { head } = {}) {
   const bad = rows.filter((r) => r.status === "fail" || r.status === "timeout");
   if (bad.length > 0) {
     return {
@@ -195,7 +216,8 @@ export function verdictOf(rows) {
   }
   const skipped = rows.filter((r) => r.status === "skipped");
   const dirty = rows.filter((r) => r.uncached).length;
-  const counts = `${rows.filter((r) => r.status === "pass").length} ran, ${rows.filter((r) => r.status === "reused").length} reused${dirty > 0 ? `, ${dirty} on uncommitted changes and not cached` : ""}`;
+  const note = dirty > 0 ? `dirty: not for ${(head ?? "the commit").slice(0, 8)}; ` : "";
+  const counts = `${note}${rows.filter((r) => r.status === "pass").length} ran, ${rows.filter((r) => r.status === "reused").length} reused${dirty > 0 ? `, ${dirty} on uncommitted changes and not cached` : ""}`;
   if (skipped.length > 0) {
     return {
       code: VERIFY_EXIT.incomplete,
@@ -203,4 +225,12 @@ export function verdictOf(rows) {
     };
   }
   return { code: VERIFY_EXIT.ok, line: `VERIFY OK (${counts})` };
+}
+
+/** What `--changed` reports when no suite matches: never the text or code of a real pass. */
+export function nothingToDo() {
+  return {
+    code: VERIFY_EXIT.nothing,
+    line: "VERIFY NOTHING TO DO (no suite matches the diff; nothing was run, this is not a pass)",
+  };
 }

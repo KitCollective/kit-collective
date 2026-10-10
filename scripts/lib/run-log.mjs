@@ -111,6 +111,15 @@ export function validateEvent(event) {
       problems.push(`invalid ${key}`);
     }
   }
+  // The receipt reads provider and model from these spawns, so an engineer or reviewer spawn
+  // without them (or without a thread) would let a check be bypassed. Only the lead may omit them.
+  if (event.event === "spawn" && ["engineer", "reviewer"].includes(event.step)) {
+    for (const key of ["thread", "provider", "model"]) {
+      if (event[key] === undefined) {
+        problems.push(`spawn ${event.step} needs ${key}`);
+      }
+    }
+  }
   if (event.event === "gate" && !GATE_OUTCOMES.includes(event.outcome)) {
     problems.push("gate outcome must be open or closed");
   }

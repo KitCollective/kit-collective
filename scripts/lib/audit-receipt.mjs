@@ -57,7 +57,7 @@ export function evaluateReceipt({
   if (!VERDICTS.includes(parsed.outcome)) {
     return { ok: false, refusal: `verdict ${parsed.outcome} is not green, amber or red` };
   }
-  const [auditedSha, rowList = ""] = parsed.rest.split(/\s+/);
+  const [auditedSha, ...rowTokens] = parsed.rest.split(/\s+/).filter(Boolean);
   if (
     !auditedSha ||
     auditedSha.length < 7 ||
@@ -69,7 +69,8 @@ export function evaluateReceipt({
     };
   }
   const forIssue = (spawns ?? []).filter((e) => e.issue === parsed.issue);
-  const engineers = forIssue.filter((e) => e.step === "engineer" && e.thread);
+  // Every engineer spawn of the issue counts, whether or not a thread id was logged for it.
+  const engineers = forIssue.filter((e) => e.step === "engineer");
   if (thread.id === implementerThread || engineers.some((e) => e.thread === thread.id)) {
     return { ok: false, refusal: `thread ${thread.id} is an implementer thread, not a reviewer` };
   }
@@ -88,20 +89,24 @@ export function evaluateReceipt({
   }
   if (requireDifferentModel) {
     const known = (e) => e.provider && e.model;
-    if (!known(reviewer) || !engineers.some(known)) {
+    if (!known(reviewer)) {
       return {
         ok: false,
-        refusal: "different model requested, but provider and model are not logged for both spawns",
+        refusal:
+          "different model requested, but provider and model are not logged for the reviewer",
       };
     }
-    if (
-      engineers.some(
-        (e) => known(e) && e.provider === reviewer.provider && e.model === reviewer.model,
-      )
-    ) {
+    if (engineers.length === 0 || !engineers.every(known)) {
       return {
         ok: false,
-        refusal: `reviewer runs on ${reviewer.provider}/${reviewer.model}, the same as an engineer thread`,
+        refusal:
+          "different model requested, but provider and model are not logged for every engineer spawn",
+      };
+    }
+    if (engineers.some((e) => e.provider === reviewer.provider && e.model === reviewer.model)) {
+      return {
+        ok: false,
+        refusal: `reviewer runs on ${reviewer.provider}/${reviewer.model}, the same as an engineer spawn`,
       };
     }
   }
@@ -112,7 +117,10 @@ export function evaluateReceipt({
     state: parsed.outcome === "red" ? "failure" : "success",
     verdict: parsed.outcome,
     issue: parsed.issue,
-    rows: rowList ? rowList.split(",").filter(Boolean) : [],
+    rows: rowTokens
+      .join(" ")
+      .split(/[,\s]+/)
+      .filter(Boolean),
     // GitHub limits a status description to 140 characters.
     description:
       `audit ${parsed.outcome} by ${thread.id} (${provider}/${model}) at ${head.slice(0, 7)}`.slice(
@@ -123,14 +131,18 @@ export function evaluateReceipt({
 }
 
 /**
- * A refused status POST from `gh api` (HTTP 403 or 404, "Resource not accessible") means the
- * token cannot write commit statuses; say so instead of printing the raw gh error.
+ * A refused status POST from `gh api` ("Resource not accessible", or HTTP 403 without a rate-limit
+ * message) means the token cannot write commit statuses; say so. A 404 (wrong repo or sha) or a rate
+ * limit returns null, so the caller prints gh's own first line.
  * @param {{ message?: string, stderr?: string }} error
  * @returns {string | null}
  */
 export function statusPermissionLine(error) {
   const text = `${error?.stderr ?? ""}\n${error?.message ?? ""}`;
-  return /HTTP (403|404)|Resource not accessible|Forbidden|Not Found/i.test(text)
+  if (/rate limit|abuse|secondary/i.test(text)) {
+    return null;
+  }
+  return /Resource not accessible|HTTP 403/i.test(text)
     ? "token lacks Commit statuses write"
     : null;
 }

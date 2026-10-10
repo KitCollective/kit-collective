@@ -8,8 +8,8 @@ Nicklas, 2026-10-10, with ADR-0050 and ADR-0053. In Optio a Claude Code `Subagen
 
 - the thread exists and started **after** the head commit (a reviewer that began earlier cannot have read this head);
 - the run log holds a `spawn reviewer` event for this exact thread and issue, the thread is none of the issue's `spawn engineer` threads, and the logged provider matches bb's;
-- its final output holds `AUDIT-RESULT KIT-n green|amber|red <sha> [rows]` as the **last** such line, for exactly this head SHA;
-- with `--require-different-model` (recommended, not mandatory: model is only as honest as the log), the reviewer's logged provider and model are not the same as an engineer's.
+- its final output holds `AUDIT-RESULT KIT-n green|amber|red <sha> [rows]` as the **last non-empty line** of the output (nothing may follow it, so a quoted example or a caveat after a green line is refused; a line wrapped whole in `**` or backticks is accepted), for exactly this head SHA;
+- with `--require-different-model` (recommended, not mandatory: model is only as honest as the log), the reviewer's logged provider and model differ from every engineer spawn of the issue, thread logged or not. Provider and model must be logged for the reviewer and for every engineer spawn, or the check refuses; `run-log.mjs` itself refuses an engineer or reviewer spawn without thread, provider and model.
 
 It also appends the `audit` event to the run log. `audit-receipt.mjs check <pr>` is the land-path read: exit 0 only on `kc/audit` = success on the current head.
 

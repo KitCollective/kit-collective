@@ -261,3 +261,31 @@ test("skills and ADRs call the gate CLIs in their current form", async () => {
     }
   }
 });
+
+test("result line: it must be the last non-empty line", () => {
+  const sha = "c0ffee1";
+  const red = `AUDIT-RESULT KIT-7 red ${sha} spec`;
+  // red followed by a quoted green example: the quote is the last line, which is not a result line
+  assert.equal(
+    parseResultLine("AUDIT-RESULT", `${red}\nExample: AUDIT-RESULT KIT-7 green ${sha}`),
+    null,
+  );
+  // a caveat after a green line is refused: nothing may follow the result line
+  assert.equal(
+    parseResultLine(
+      "AUDIT-RESULT",
+      `AUDIT-RESULT KIT-7 green ${sha}\nactually wait, I found a blocking bug, do not merge`,
+    ),
+    null,
+  );
+  assert.deepEqual(parseResultLine("AUDIT-RESULT", `notes\n\n${red}  \n\n`), {
+    issue: "KIT-7",
+    outcome: "red",
+    rest: `${sha} spec`,
+  });
+  // whole-line markdown wrapping is tolerated, partial wrapping is not
+  assert.equal(parseResultLine("AUDIT-RESULT", `**${red}**`)?.outcome, "red");
+  assert.equal(parseResultLine("AUDIT-RESULT", `\`${red}\``)?.outcome, "red");
+  assert.equal(parseResultLine("AUDIT-RESULT", `see **${red}** above`), null);
+  assert.equal(parseResultLine("AUDIT-RESULT", "AUDIT-RESULT KIT-7 green")?.rest, "");
+});
