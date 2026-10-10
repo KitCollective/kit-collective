@@ -62,6 +62,7 @@ describe("Expo Auth throttle Banner chrome", () => {
 
     expect(doorFaces).toContain("AuthThrottleBanner");
     expect(doorSheet).toContain("showThrottleBanner");
+    expect(doorSheet).not.toContain("requestPasswordReset");
 
     expect(firstSession).toContain("resolveAuthErrorFeedback");
     expect(firstSession).toContain("showThrottleBanner");
