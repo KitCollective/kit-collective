@@ -288,6 +288,7 @@ jobs:
           scripts/tests/linear-args.test.mjs
           scripts/tests/start-decision.test.mjs
           scripts/tests/run-log.test.mjs
+          scripts/tests/gates.test.mjs
 
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs

@@ -26,6 +26,7 @@ export const FACTORY_NODE_TEST_NEEDLES = [
   "pr-checks",
   "start-decision",
   "run-log",
+  "gates",
 ];
 
 export const MOBILE_CHECK_NEEDLES = [

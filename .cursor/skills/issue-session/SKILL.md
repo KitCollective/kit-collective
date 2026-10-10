@@ -44,6 +44,10 @@ Write-scope overlap and fan-out: [references/batch.md](references/batch.md).
 
 Completion: Linear status is `Done` and the PR SHA is on `origin/<lanes.integration>`, **or** the issue is stopped under Guardrails / loop cap with a role comment.
 
+### 0. Session check
+
+`node scripts/session-check.mjs <KIT-n>` (add `--resume` only when the human said to continue). Exit `0` go on; `1` stop on this identifier, the line says why (open PR, remote branch, claimed state, a run in the last 30 minutes, a stop label). It reads Linear, GitHub and the run log, never local worktrees, so it holds across machines.
+
 ### 1. Load
 
 `get_issue` **and** `list_comments` — from the workspace in `factory.config.json`, nowhere else. In Claude Code, or whenever a Linear MCP answers “not found” for the issue, use `node scripts/linear.mjs issue <KIT-n>` (one call returns labels, `blockedBy` and comments) and its `comment` / `state` / `label` / `description` / `link` commands for every later Linear write. It finds the key itself and checks the workspace; do not read `.env`, and do not stop to ask for a key. Workpad is the single `agent.workpadHeading` comment. Attached PR → also GitHub review comments.
@@ -68,7 +72,9 @@ Follow [implement/SKILL.md](../implement/SKILL.md), which **reads** `### Plan` i
 
 ### 4. Fresh review
 
-First `pnpm check:review-gate`. Red → fix it and stay in step 3; a review never sees what a script can say.
+Run the whole gate in one call: `node scripts/gate.mjs review <pr> --issue <KIT-n>`. It folds `pnpm check:review-gate`, the matrix validation, the PR write-scope check and `wait-for-checks` into one verdict line and logs it. Exit `0` open, `1` closed (fix the named step), `3` waiting (checks pending, run again), `4` unknown (retry once, then ask). Before a reviewer is spawned run `node scripts/head-changed.mjs <KIT-n>`: exit `1` means this head was already audited red; change the code first.
+
+The single steps, when you need one alone: `pnpm check:review-gate`. Red → fix it and stay in step 3; a review never sees what a script can say.
 
 Then wait for the required checks yourself: `node scripts/wait-for-checks.mjs <pr>` (ADR-0050). It is the one sanctioned wait; the ratchet hook denies the watch flag, sleeps and loops. Run it in the background when other work is left, in the foreground otherwise. Exit `0` go on, `1` red (fail, below), `3` behind or conflicting (rebase, rerun), `2` or `4` retry once, then ask. **Never ask the human whether CI is green, and never stop to wait for a build.**
 
@@ -99,15 +105,19 @@ Stop the issue (leave `Implementing`, role-comment) when checker-fail returns hi
 
 ### 7. Land
 
-Move to `Merging` (approver-present). Follow [land/SKILL.md](../land/SKILL.md) and [land/references/merge.md](../land/references/merge.md). Success → `Done` + role comment with merge SHA. Merge fail → `Implementing` + merge error under `### Review feedback` + increment `reviewLoops` + resume from step 3.
+Move to `Merging` (approver-present). Follow [land/SKILL.md](../land/SKILL.md) and [land/references/merge.md](../land/references/merge.md). Success → run `node scripts/gate.mjs land <pr> --issue <KIT-n>`: only exit `0` (PR merged, merge commit on `origin/<lanes.integration>`, checks on that commit green) allows `Done` + role comment with merge SHA; `3` waits and reruns, `1` is a merge fail. Merge fail → `Implementing` + merge error under `### Review feedback` + increment `reviewLoops` + resume from step 3.
 
 ### 8. Reap worktree
 
 After land success, follow [reap-worktree/SKILL.md](../reap-worktree/SKILL.md): verify the branch is on `origin/<lanes.integration>`, remove the issue worktree, delete the merged remote branch when safe.
 
+## A step that returns no result line
+
+When a spawned step ends without its result line (`LEAD-RESULT`, `AUDIT-RESULT`, the lander's), `node scripts/gate.mjs result <TAG> <file>` exits `1` (`NO-RESULT`). Log `reason --code no-result-line`, then run the gate for that step yourself (`gate.mjs review` or `land`) and go by its exit code. Never take a silent step for a pass.
+
 ## Run log
 
-Every issue leaves lines in the central run log (`flow.runLog` in `factory.config.json`, default `.factory/run-log.jsonl` in the main checkout, gitignored): `start`, `spawn`, `result` (with provider, model and tokens when `bb thread show --json` exposes them, else null), `audit`, `reason`. Only this orchestrating session writes it. `node scripts/run-log.mjs report` compares issues with and without a lead by review rounds and tokens (ADR-0051, ADR-0052).
+Every issue leaves lines in the central run log (`flow.runLog` in `factory.config.json`, default file `run-log.jsonl` in the gitignored `.factory` folder of the main checkout): `start`, `spawn`, `result` (with provider, model and tokens when `bb thread show --json` exposes them, else null), `audit`, `reason`. Only this orchestrating session writes it. `node scripts/run-log.mjs report` compares issues with and without a lead by review rounds and tokens (ADR-0051, ADR-0052).
 
 ## After the batch
 
