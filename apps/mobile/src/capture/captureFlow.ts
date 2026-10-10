@@ -18,6 +18,7 @@ import {
 import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
 import type { CaptureBranch, CaptureSessionState } from "./captureSessionTypes";
 import { mergeGalleryEscapePhotos } from "./galleryEscape";
+import { notifyParkedSessionChanged } from "./parkedSession";
 
 export type { PrefilledClub };
 export {
@@ -90,4 +91,5 @@ export function withPersistedCaptureSession(
 export function clearPersistedCaptureSession(sessionId: string): void {
   createSqliteCaptureSessionStore(sessionId).clear();
   clearActiveCameraCaptureSessionId();
+  notifyParkedSessionChanged();
 }

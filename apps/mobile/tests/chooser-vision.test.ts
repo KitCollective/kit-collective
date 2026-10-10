@@ -135,15 +135,17 @@ describe("Vision off at the request seam", () => {
     expect(groupingJobFingerprint(session)).not.toBeNull();
   });
 
-  it("runs both Vision hooks on the gated token, so a switched-off session sends nothing", () => {
+  it("runs the Vision hooks on the gated token, so a switched-off session sends nothing", () => {
     const confirm = readFileSync(join(__dirname, "../app/(capture)/confirm.tsx"), "utf8");
+    const overview = readFileSync(join(__dirname, "../app/(capture)/overview.tsx"), "utf8");
     const grouping = readFileSync(
       join(__dirname, "../src/capture/use-confirm-grouping.ts"),
       "utf8",
     );
     expect(confirm).toContain("visionRequestToken(sessionToken, visionEnabled)");
     expect(confirm).toContain("resolveVisionEnabled(visionRemembered");
-    expect(confirm).toMatch(/useConfirmGrouping\(\{\s*accessToken,/);
+    expect(overview).toContain("visionRequestToken(sessionToken, visionEnabled)");
+    expect(overview).toMatch(/useConfirmGrouping\(\{\s*accessToken,/);
     expect(confirm).toMatch(/useConfirmVision\(\{\s*accessToken,/);
     // No token, no job key: nothing waits on a grouping run that will never start.
     expect(grouping).toContain("accessToken && state ? groupingJobFingerprint(state) : null");

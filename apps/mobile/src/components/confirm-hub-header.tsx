@@ -52,6 +52,7 @@ export function ConfirmHubHeader({ onClose, trailing }: ConfirmHubHeaderProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Luk"
+          testID="confirm-close"
           onPress={onClose}
           style={({ pressed }) => [
             styles.chromeButton,

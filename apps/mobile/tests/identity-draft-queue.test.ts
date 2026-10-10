@@ -15,7 +15,6 @@ import {
   raceWithTimeout,
   remainingIdentityBudget,
   shouldAttemptIdentityQueue,
-  shouldHoldIdentityForGrouping,
   shouldSyncIdentityChrome,
 } from "../src/capture/identityDraftQueue";
 
@@ -122,15 +121,12 @@ describe("identitySettledSnapshot", () => {
 
 describe("shouldAttemptIdentityQueue", () => {
   const ready = {
-    deferIdentity: false,
     hasAccessToken: true,
     queueFingerprint: "a",
     previousFingerprint: "a",
-    groupingJustClosed: false,
   };
 
-  it("starts when grouping closes, not when the collector switches tabs", () => {
-    expect(shouldAttemptIdentityQueue({ ...ready, groupingJustClosed: true })).toBe(true);
+  it("does not start when the collector only switches tabs", () => {
     expect(shouldAttemptIdentityQueue(ready)).toBe(false);
   });
 
@@ -142,84 +138,49 @@ describe("shouldAttemptIdentityQueue", () => {
     expect(shouldAttemptIdentityQueue({ ...ready, previousFingerprint: null })).toBe(true);
   });
 
-  it("does not start while grouping still blocks identity", () => {
+  it("does not start without a token or an empty queue", () => {
+    expect(shouldAttemptIdentityQueue({ ...ready, hasAccessToken: false })).toBe(false);
     expect(
-      shouldAttemptIdentityQueue({
-        ...ready,
-        deferIdentity: true,
-        groupingJustClosed: true,
-        queueFingerprint: "",
-        previousFingerprint: null,
-      }),
+      shouldAttemptIdentityQueue({ ...ready, queueFingerprint: "", previousFingerprint: null }),
     ).toBe(false);
   });
 
-  it("starts when jersey 1 lands even if grouping is still revealing later jerseys", () => {
+  it("starts when jersey 1 lands", () => {
     expect(
       shouldAttemptIdentityQueue({
         ...ready,
         previousFingerprint: "",
         queueFingerprint: "jersey-1:front.jpg",
-        groupingJustClosed: false,
       }),
     ).toBe(true);
-  });
-});
-
-describe("shouldHoldIdentityForGrouping", () => {
-  it("releases identity as soon as the first grouped jersey has photos", () => {
-    expect(shouldHoldIdentityForGrouping({ groupingInFlight: true, boundDraftCount: 0 })).toBe(
-      true,
-    );
-    expect(shouldHoldIdentityForGrouping({ groupingInFlight: true, boundDraftCount: 1 })).toBe(
-      false,
-    );
-    expect(shouldHoldIdentityForGrouping({ groupingInFlight: false, boundDraftCount: 0 })).toBe(
-      false,
-    );
   });
 });
 
 describe("isDraftReadyForIdentityJob", () => {
   it("is false when the draft has no photos", () => {
     const session = createCaptureSession([]);
-    expect(isDraftReadyForIdentityJob(getActiveDraft(session), false)).toBe(false);
-    expect(isDraftReadyForIdentityJob(getActiveDraft(session), true)).toBe(false);
+    expect(isDraftReadyForIdentityJob(getActiveDraft(session))).toBe(false);
   });
 
-  it("holds a front-only shirt while grouping is in flight", () => {
+  it("is ready with a single photo, with no wait for front and back", () => {
     let session = createCaptureSession([URI_A, URI_B, URI_C, URI_D]);
     session = bindUnboundPhotoToDraft(session, URI_A, getActiveDraft(session).id, "front");
-    expect(isDraftReadyForIdentityJob(getActiveDraft(session), true)).toBe(false);
-  });
-
-  it("is ready when front and back are bound even if grouping is still in flight", () => {
-    let session = createCaptureSession([URI_A, URI_B, URI_C, URI_D]);
-    const draftId = getActiveDraft(session).id;
-    session = bindUnboundPhotoToDraft(session, URI_A, draftId, "front");
-    session = bindUnboundPhotoToDraft(session, URI_B, draftId, "back");
-    expect(isDraftReadyForIdentityJob(getActiveDraft(session), true)).toBe(true);
-  });
-
-  it("does not starve a single-photo shirt after grouping settles", () => {
-    let session = createCaptureSession([URI_A, URI_B, URI_C, URI_D]);
-    session = bindUnboundPhotoToDraft(session, URI_A, getActiveDraft(session).id, "front");
-    expect(isDraftReadyForIdentityJob(getActiveDraft(session), false)).toBe(true);
+    expect(isDraftReadyForIdentityJob(getActiveDraft(session))).toBe(true);
   });
 });
 
-describe("identity queue waits for a photo set", () => {
-  it("skips jersey 1 until front and back are bound while grouping is in flight", () => {
+describe("identity queue", () => {
+  it("queues jerseys with photos in tab order and skips the started ones", () => {
     let session = createCaptureSession([URI_A, URI_B, URI_C, URI_D]);
     const first = getActiveDraft(session).id;
+    expect(orderedIdentityDrafts(session.drafts)).toEqual([]);
+    expect(nextQueuedIdentityDraft(session.drafts, new Set())).toBeUndefined();
+
     session = bindUnboundPhotoToDraft(session, URI_A, first, "front");
 
-    expect(orderedIdentityDrafts(session.drafts, true)).toEqual([]);
-    expect(nextQueuedIdentityDraft(session.drafts, new Set(), true)).toBeUndefined();
-
-    session = bindUnboundPhotoToDraft(session, URI_B, first, "back");
-
-    expect(orderedIdentityDrafts(session.drafts, true).map((draft) => draft.id)).toEqual([first]);
-    expect(nextQueuedIdentityDraft(session.drafts, new Set(), true)?.id).toBe(first);
+    expect(orderedIdentityDrafts(session.drafts).map((draft) => draft.id)).toEqual([first]);
+    expect(nextQueuedIdentityDraft(session.drafts, new Set())?.id).toBe(first);
+    const started = new Set([identityRunKey(getActiveDraft(session))]);
+    expect(nextQueuedIdentityDraft(session.drafts, started)).toBeUndefined();
   });
 });

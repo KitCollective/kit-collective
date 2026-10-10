@@ -190,9 +190,7 @@ export class VisionService {
           groupingResult: grouping ? serializeGroupingResult(grouping) : null,
           confidences: grouping
             ? serializeConfidences({
-                overall: Math.min(
-                  ...(grouping.groups.map((group) => group.confidence ?? 0) ?? [0]),
-                ),
+                overall: Math.max(...grouping.groups.map((group) => group.confidence ?? 0)),
               })
             : null,
           updatedAt: new Date(),
