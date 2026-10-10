@@ -9,17 +9,13 @@ name: kit-281
       EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
       PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
 - startRecording: kc__kit-281
-# AC 1, 2, 5, 8: two tiles, the Vision switch on by default, the free quota line, and
-# the caption that says Vision sorts.
+# AC 1, 2, 8: two tiles, the Vision switch on by default, and the caption that says
+# Vision sorts. The Test Collector has no free quota line (AC 5, 6 are unit tests).
 - tapOn:
     id: collection-add
 - extendedWaitUntil:
     visible:
       id: capture-vision-switch
-    timeout: 15000
-- extendedWaitUntil:
-    visible:
-      id: capture-vision-quota
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
