@@ -26,24 +26,17 @@ name: kit-280
     point: 90%,12%
 - extendedWaitUntil:
     visible:
-      id: confirm-vision-success
+      id: confirm-identity-resolved
     timeout: 90000
 - extendedWaitUntil:
     visible:
       id: photo-slot-front-filled
     timeout: 30000
-- tapOn:
-    id: confirm-section-details
-- extendedWaitUntil:
-    visible:
-      id: confirm-details-save
-    timeout: 10000
+# Size and condition sit on the Confirm hub since KIT-279.
 - tapOn:
     id: detail-size-m
 - tapOn:
     id: detail-condition-used
-- tapOn:
-    id: confirm-details-save
 - extendedWaitUntil:
     visible:
       id: confirm-save

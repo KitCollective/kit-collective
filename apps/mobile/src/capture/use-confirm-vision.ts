@@ -23,7 +23,6 @@ import {
   confirmSeasonWasEdited,
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
-import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
 import {
   identityQueueFingerprint,
   identityRunKey,
@@ -34,6 +33,15 @@ import {
   shouldAttemptIdentityQueue,
   shouldSyncIdentityChrome,
 } from "@/capture/identityDraftQueue";
+import {
+  type IdentityDraftState,
+  type IdentityDraftStates,
+  identityLandingPatch,
+  identityStateFor,
+  landingFadesIn,
+  patchIdentityState,
+  resetIdentityState,
+} from "@/capture/identityDraftState";
 import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
 import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
 import { motion } from "@/theme/tokens";
@@ -59,7 +67,6 @@ type UseConfirmVisionOptions = {
   jobId: string | null;
   setJobId: (jobId: string | null) => void;
   setSelectedSeasonLabel: (label: string | null) => void;
-  onCatalogMiss?: (miss: boolean) => void;
   onPremiumRequired?: () => Promise<boolean>;
   /** Hold identity until grouping has bound drafts (or failed). */
   deferIdentity?: boolean;
@@ -104,23 +111,32 @@ export function useConfirmVision({
   jobId,
   setJobId,
   setSelectedSeasonLabel,
-  onCatalogMiss,
   onPremiumRequired,
   deferIdentity = false,
   groupingInFlight = false,
 }: UseConfirmVisionOptions) {
   const [polling, setPolling] = useState(false);
-  const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
-  const [applied, setApplied] = useState(false);
-  const [catalogMissHint, setCatalogMissHint] = useState<string | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  // Everything Vision left pending belongs to one jersey. Switching tabs, or another jersey's
+  // read starting or landing, must not touch it.
+  const [identityStates, setIdentityStates] = useState<IdentityDraftStates>({});
+  const patchIdentity = useCallback((draftId: string, patch: Partial<IdentityDraftState>) => {
+    setIdentityStates((current) => patchIdentityState(current, draftId, patch));
+  }, []);
+  const resetIdentity = useCallback((draftId: string) => {
+    setIdentityStates((current) => resetIdentityState(current, draftId));
+  }, []);
+  const { suggestion, applied, catalogMiss, catalogMissHint } = identityStateFor(
+    identityStates,
+    draft?.id ?? null,
+  );
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const appliedJobId = useRef<string | null>(null);
   const snapshotsByDraftRef = useRef(new Map<string, IdentityFieldSnapshot>());
   const startedIdentityKeysRef = useRef(new Set<string>());
   const sessionDraftsRef = useRef(sessionDrafts);
   sessionDraftsRef.current = sessionDrafts;
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
   const wasDeferredRef = useRef(deferIdentity);
   const groupingInFlightRef = useRef(groupingInFlight);
   groupingInFlightRef.current = groupingInFlight;
@@ -129,6 +145,8 @@ export function useConfirmVision({
   const identityKickAgainRef = useRef(false);
   const identityUnmountedRef = useRef(false);
   const [inFlightDraftId, setInFlightDraftId] = useState<string | null>(null);
+  /** Jerseys whose identity read has finished, found or not. Drives "Vision fandt ikke trøjen". */
+  const [settledDraftIds, setSettledDraftIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const fadeInSuggestion = useCallback(() => {
     suggestionOpacity.setValue(reduceMotion ? 1 : 0);
@@ -157,9 +175,6 @@ export function useConfirmVision({
         appliedJobId.current = job.jobId;
       }
 
-      const isActiveDraft = currentDraftId === draftRef.current?.id;
-      onCatalogMiss?.(job.catalogMiss === true && isActiveDraft);
-
       const snapshot: IdentityFieldSnapshot = {
         fieldPreselect: job.fieldPreselect ?? {},
         suggestions: job.suggestions ?? null,
@@ -167,9 +182,10 @@ export function useConfirmVision({
       };
       snapshotsByDraftRef.current.set(currentDraftId, snapshot);
 
-      if (job.catalogMiss && isActiveDraft) {
-        setCatalogMissHint(resolveVisionCatalogMissHint(job));
-      }
+      patchIdentity(currentDraftId, {
+        catalogMiss: job.catalogMiss === true,
+        catalogMissHint: job.catalogMiss ? resolveVisionCatalogMissHint(job) : null,
+      });
 
       if (job.catalogMiss && !job.suggestions) {
         return;
@@ -180,8 +196,8 @@ export function useConfirmVision({
       const shouldPreselect = hasPreselectFields(fieldPreselect);
 
       if (!shouldPreselect && suggestions) {
-        if (currentDraftId === draftRef.current?.id) {
-          setSuggestion(job);
+        patchIdentity(currentDraftId, identityLandingPatch({ kind: "suggest", job }));
+        if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
           fadeInSuggestion();
         }
         return;
@@ -205,7 +221,12 @@ export function useConfirmVision({
           }),
         );
 
-        if (!confirmSeasonWasEdited() && suggestions.seasonLabel && fieldPreselect.season) {
+        if (
+          landingFadesIn(currentDraftId, draftRef.current?.id ?? null) &&
+          !confirmSeasonWasEdited() &&
+          suggestions.seasonLabel &&
+          fieldPreselect.season
+        ) {
           setSelectedSeasonLabel(suggestions.seasonLabel);
         }
 
@@ -226,20 +247,23 @@ export function useConfirmVision({
           badge: confirmBadgeWasEdited(),
         });
         if (suggestOnlyJob) {
-          if (currentDraftId === draftRef.current?.id) {
-            setSuggestion(suggestOnlyJob);
+          patchIdentity(
+            currentDraftId,
+            identityLandingPatch({ kind: "suggest", job: suggestOnlyJob }),
+          );
+          if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
             fadeInSuggestion();
           }
           return;
         }
 
-        if (currentDraftId === draftRef.current?.id) {
-          setApplied(true);
+        patchIdentity(currentDraftId, identityLandingPatch({ kind: "applied" }));
+        if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
           fadeInSuggestion();
         }
       }
     },
-    [accessToken, fadeInSuggestion, mutate, onCatalogMiss, sessionId, setSelectedSeasonLabel],
+    [accessToken, fadeInSuggestion, mutate, sessionId, patchIdentity, setSelectedSeasonLabel],
   );
   const applySuggestionsRef = useRef(applySuggestions);
   applySuggestionsRef.current = applySuggestions;
@@ -309,15 +333,12 @@ export function useConfirmVision({
       snapshotsByDraftRef.current.delete(next.id);
       setInFlightDraftId(next.id);
       const syncChrome = () => shouldSyncIdentityChrome(next.id, draftRef.current?.id ?? null);
+      resetIdentity(next.id);
       if (syncChrome()) {
         setJobId(null);
-        setSuggestion(null);
-        setApplied(false);
         appliedJobId.current = null;
-        setCatalogMissHint(null);
         resetConfirmManualEdits();
         setSelectedSeasonLabel(null);
-        onCatalogMiss?.(false);
         setPolling(true);
       }
       const settleIdle = () => {
@@ -362,6 +383,7 @@ export function useConfirmVision({
       } catch {
         settleIdle();
       } finally {
+        setSettledDraftIds((current) => new Set(current).add(next.id));
         setInFlightDraftId((current) => (current === next.id ? null : current));
         if (syncChrome()) {
           setPolling(false);
@@ -419,9 +441,9 @@ export function useConfirmVision({
   }, [
     accessToken,
     deferIdentity,
-    onCatalogMiss,
     onPremiumRequired,
     queueFingerprint,
+    resetIdentity,
     setJobId,
     setSelectedSeasonLabel,
   ]);
@@ -475,9 +497,10 @@ export function useConfirmVision({
   }, [accessToken, applySuggestions, inFlightDraftId, jobId, polling]);
 
   const applySuggestion = useCallback(async () => {
-    if (!suggestion?.suggestions || !accessToken) {
+    if (!suggestion?.suggestions || !accessToken || !draftRef.current) {
       return;
     }
+    const ownerDraftId = draftRef.current.id;
 
     const suggestions = suggestion.suggestions;
     mutate((current) => {
@@ -534,25 +557,29 @@ export function useConfirmVision({
         // Season list is a Data drill convenience — Brug already wrote the draft.
       }
     }
-    setSuggestion(null);
-    setApplied(true);
-    setCatalogMissHint(null);
-    onCatalogMiss?.(false);
-  }, [accessToken, mutate, onCatalogMiss, setSelectedSeasonLabel, suggestion]);
+    patchIdentity(ownerDraftId, {
+      suggestion: null,
+      applied: true,
+      catalogMiss: false,
+      catalogMissHint: null,
+    });
+  }, [accessToken, mutate, patchIdentity, setSelectedSeasonLabel, suggestion]);
 
   return {
     suggestion,
+    catalogMiss,
     catalogMissHint,
     suggestionOpacity,
-    bannerState: resolveConfirmVisionBannerState({
-      activated: Boolean(accessToken),
-      outOfQuota: false,
-      analyzing: polling,
-      succeeded: applied,
-    }),
+    /** An identity read is running for the active jersey. */
+    analyzing: polling,
+    /** Vision, not the collector, filled the active jersey's facts. */
+    filledByVision: applied,
+    settledDraftIds,
     applySuggestion,
     dismissSuggestion: () => {
-      setSuggestion(null);
+      if (draftRef.current) {
+        patchIdentity(draftRef.current.id, { suggestion: null });
+      }
     },
   };
 }
