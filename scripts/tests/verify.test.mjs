@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
@@ -63,12 +64,17 @@ test("suitesFor picks the suites a diff touches; null means all", () => {
   assert.deepEqual(suitesFor(["README.md"], suites), []);
 });
 
+const entry = (sha, path) => ({ mode: "100644", type: "blob", sha, path, raw: Buffer.from(path) });
+
 test("treeListing keeps only matching paths, so another app's change does not alter the key", () => {
-  const full =
-    "100644 blob aaa\tapps/web/a.ts\n100644 blob bbb\tapps/api/b.ts\n100644 blob ccc\tREADME.md";
+  const full = [
+    entry("aaa", "apps/web/a.ts"),
+    entry("bbb", "apps/api/b.ts"),
+    entry("ccc", "README.md"),
+  ];
   assert.equal(treeListing(full, ["apps/web/**"]), "100644 blob aaa\tapps/web/a.ts");
   assert.equal(treeListing(full, ["*.md"]), "100644 blob ccc\tREADME.md");
-  const changedApi = full.replace("bbb", "zzz");
+  const changedApi = [full[0], entry("zzz", "apps/api/b.ts"), full[2]];
   assert.equal(treeListing(changedApi, ["apps/web/**"]), treeListing(full, ["apps/web/**"]));
   assert.notEqual(treeListing(changedApi, ["apps/api/**"]), treeListing(full, ["apps/api/**"]));
 });
@@ -267,18 +273,39 @@ test("a dirty run is named as not being for the commit", async () => {
 
 test("a global path or the node version invalidates every suite's key", () => {
   const suites = table().suites;
-  const listing =
-    "100644 blob aaa\tapps/web/a.ts\n100644 blob bbb\tpnpm-lock.yaml\n100644 blob ccc\tdocs/d.md";
-  const keys = (full, nodeVersion = "v22") =>
+  const entries = (web = "aaa", lock = "bbb") => [
+    entry(web, "apps/web/a.ts"),
+    entry(lock, "pnpm-lock.yaml"),
+    entry("ccc", "docs/d.md"),
+  ];
+  const keys = (list, nodeVersion = "v22") =>
     suites.map((suite) =>
-      suiteKey({ suite, globalPaths: ["pnpm-lock.yaml"], fullListing: full, nodeVersion }),
+      suiteKey({ suite, globalPaths: ["pnpm-lock.yaml"], entries: list, nodeVersion }),
     );
-  const base = keys(listing);
-  const lockChanged = keys(listing.replace("bbb", "zzz"));
-  assert.ok(base.every((key, i) => key !== lockChanged[i]));
-  assert.ok(base.every((key, i) => key !== keys(listing, "v24")[i]));
-  const unrelated = keys(listing.replace("aaa", "yyy"));
-  assert.equal(unrelated[2], base[2], "a change in apps/web leaves the docs suite key alone");
+  const base = keys(entries());
+  assert.ok(base.every((key, i) => key !== keys(entries("aaa", "zzz"))[i]));
+  assert.ok(base.every((key, i) => key !== keys(entries(), "v24")[i]));
+  assert.equal(
+    keys(entries("yyy"))[2],
+    base[2],
+    "a change in apps/web leaves the docs suite key alone",
+  );
+});
+
+test("--changed with no matching suite prints NOTHING TO DO as JSON with head, dirty and suites", () => {
+  const cli = new URL("../verify.mjs", import.meta.url).pathname;
+  const result = spawnSync("node", [cli, "--changed", "HEAD", "--json"], { encoding: "utf8" });
+  assert.equal(result.status, VERIFY_EXIT.nothing, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.match(report.head, /^[0-9a-f]{40}$/);
+  assert.equal(typeof report.dirty, "boolean");
+  assert.deepEqual(report.suites, []);
+  assert.equal(report.nothingToDo, true);
+  assert.match(report.line, /^VERIFY NOTHING TO DO/);
+  for (const bad of [["--output=/tmp/x"], ["--changed", "-x"], ["--changed", "--upload-pack=x"]]) {
+    const refused = spawnSync("node", [cli, ...bad], { encoding: "utf8" });
+    assert.equal(refused.status, VERIFY_EXIT.usage, bad.join(" "));
+  }
 });
 
 test("mergeCache keeps entries another run wrote and takes only this run's fresh results", () => {

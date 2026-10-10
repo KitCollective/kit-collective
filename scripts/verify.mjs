@@ -27,7 +27,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { changedFiles } from "./lib/git-files.mjs";
+import { assertRef, changedFiles, lsTree } from "./lib/git-files.mjs";
 import { mainCheckout } from "./lib/run-log.mjs";
 import {
   dirtyPaths,
@@ -50,6 +50,13 @@ const fail = (message) => {
   process.exit(VERIFY_EXIT.usage);
 };
 
+const KNOWN = new Set(["--suite", "--changed", "--capability", "--no-reuse", "--json"]);
+for (const arg of args) {
+  if (arg.startsWith("--") && !KNOWN.has(arg)) {
+    fail(`unknown option ${arg.slice(0, 40)}`);
+  }
+}
+
 const config = JSON.parse(readFileSync(join(ROOT, "factory.config.json"), "utf8"));
 const problems = validateChecks(config.checks);
 if (problems.length > 0) fail(problems.join("; "));
@@ -69,13 +76,18 @@ const changedAt = args.indexOf("--changed");
 if (changedAt !== -1) {
   const next = args[changedAt + 1];
   const base = next && !next.startsWith("--") ? next : `origin/${config.lanes.integration}`;
-  const files = changedFiles(`${base}...HEAD`, { cwd: ROOT });
+  let files;
+  try {
+    files = changedFiles(`${assertRef(base)}...HEAD`, { cwd: ROOT });
+  } catch (error) {
+    fail(error.message);
+  }
   suites = suitesFor(files, suites, config.checks.globalPaths ?? []);
   if (suites.length === 0) {
     const none = nothingToDo({ dirty: dirty.length > 0, head });
     process.stdout.write(
       args.includes("--json")
-        ? `${JSON.stringify({ ...none, nothingToDo: true, suites: [] }, null, 2)}\n`
+        ? `${JSON.stringify({ head, dirty: dirty.length > 0, ...none, nothingToDo: true, suites: [] }, null, 2)}\n`
         : `${none.line}\n`,
     );
     process.exit(none.code);
@@ -94,14 +106,9 @@ try {
   cache = {};
 }
 
-const fullListing = execFileSync("git", ["ls-tree", "-r", "HEAD"], {
-  cwd: ROOT,
-  encoding: "utf8",
-  maxBuffer: 64 * 1024 * 1024,
-});
+const entries = lsTree("HEAD", { cwd: ROOT });
 const globalPaths = config.checks.globalPaths ?? [];
-const keyOf = (suite) =>
-  suiteKey({ suite, globalPaths, fullListing, nodeVersion: process.version });
+const keyOf = (suite) => suiteKey({ suite, globalPaths, entries, nodeVersion: process.version });
 const isDirty = (suite) => suiteIsDirty(dirty, suite, globalPaths);
 
 /** Runs the command in its own process group so a timeout kills the whole tree. */

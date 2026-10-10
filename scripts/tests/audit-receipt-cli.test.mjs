@@ -11,7 +11,7 @@ const CLI = fileURLToPath(new URL("../audit-receipt.mjs", import.meta.url));
 const HEAD = "c0ffee1234567890c0ffee1234567890c0ffee12";
 
 /** Fake `gh` and `bb` on PATH; the status POST is recorded in `calls`. */
-function world({ output, postFails = false }) {
+function world({ output, postFails = false, prViewError = "", statusesGetError = "" }) {
   const dir = mkdtempSync(join(tmpdir(), "receipt-"));
   const calls = join(dir, "calls.txt");
   const script = (name, body) => {
@@ -21,9 +21,9 @@ function world({ output, postFails = false }) {
   script(
     "gh",
     `case "$*" in
-  *"pr view"*) echo '{"headRefOid":"${HEAD}"}';;
+  *"pr view"*) ${prViewError ? `echo "${prViewError}" >&2; exit 1` : `echo '{"headRefOid":"${HEAD}"}'`};;
   *"/statuses/"*) echo "POST $*" >> "${calls}"; ${postFails ? 'echo "gh: Resource not accessible by personal access token (HTTP 403)" >&2; exit 1' : "echo '{}'"};;
-  *"/statuses"*) echo '[]';;
+  *"/statuses"*) ${statusesGetError ? `echo "${statusesGetError}" >&2; exit 1` : "echo '[]'"};;
   *"/commits/"*) echo '{"date":"2020-01-01T00:00:00Z"}';;
 esac`,
   );
@@ -94,4 +94,27 @@ test("a refused post reports the permission problem, not the raw command", () =>
   assert.equal(result.status, 4);
   assert.match(result.stdout, /UNKNOWN \(receipt\): token lacks Commit statuses write/);
   assert.doesNotMatch(result.stdout, /Command failed|description=/);
+});
+
+test("read-path failures print gh's own line, never the command line", () => {
+  const notFound = world({
+    output: green,
+    prViewError: "gh: Could not resolve to a PullRequest (HTTP 404)",
+  });
+  const first = notFound.run();
+  assert.equal(first.status, 4);
+  assert.match(
+    first.stdout,
+    /UNKNOWN \(receipt\): gh: Could not resolve to a PullRequest \(HTTP 404\)/,
+  );
+  assert.doesNotMatch(first.stdout, /Command failed|--repo/);
+
+  const limited = world({
+    output: green,
+    statusesGetError: "gh: API rate limit exceeded (HTTP 403)",
+  });
+  const second = limited.run();
+  assert.equal(second.status, 4);
+  assert.match(second.stdout, /UNKNOWN \(receipt\): gh: API rate limit exceeded \(HTTP 403\)/);
+  assert.doesNotMatch(second.stdout, /Command failed|token lacks/);
 });

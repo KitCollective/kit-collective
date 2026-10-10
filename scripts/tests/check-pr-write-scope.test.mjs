@@ -173,3 +173,9 @@ test("resolveWriteScopeViolations does not waive product or harness paths even i
     "harness/land.mjs",
   ]);
 });
+
+test("matchesGlob spans a newline in a file name and still honours directory boundaries", () => {
+  assert.equal(matchesGlob("apps/web/line\nbreak.ts", "apps/web/**"), true);
+  assert.equal(matchesGlob("apps/web/line\nbreak.ts", "apps/web/*.ts"), true);
+  assert.equal(matchesGlob("apps/other/line\nbreak.ts", "apps/web/**"), false);
+});

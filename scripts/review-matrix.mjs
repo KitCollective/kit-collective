@@ -10,7 +10,7 @@
  * The workpad is a file path or `-` for stdin.
  */
 import { readFileSync } from "node:fs";
-import { changedFiles } from "./lib/git-files.mjs";
+import { assertRef, changedFiles } from "./lib/git-files.mjs";
 import { LOCK_ROWS, parseMatrix, planRecheck, validateMatrix } from "./lib/review-matrix.mjs";
 
 const [command, source, lastReviewSha] = process.argv.slice(2);
@@ -36,7 +36,13 @@ if ((command === "validate" || command === "plan") && source) {
     process.stderr.write("plan needs <lastReviewSha>\n");
     process.exit(2);
   }
-  const changed = changedFiles(`${lastReviewSha}...HEAD`);
+  let changed;
+  try {
+    changed = changedFiles(`${assertRef(lastReviewSha)}...HEAD`);
+  } catch (error) {
+    process.stderr.write(`${error.message}\n`);
+    process.exit(2);
+  }
   process.stdout.write(`${JSON.stringify(planRecheck(rows, changed), null, 2)}\n`);
   process.exit(0);
 }

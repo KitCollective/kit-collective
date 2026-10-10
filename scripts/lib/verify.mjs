@@ -81,16 +81,17 @@ export function suitesFor(changed, suites, globalPaths = []) {
 }
 
 /**
- * The part of `git ls-tree -r HEAD` output (mode, type, blob sha, path) that a suite's globs match.
- * Blob shas make the listing change exactly when the content of a matching file changes.
+ * The entries of `git ls-tree -r -z HEAD` (see `lsTree` in git-files.mjs) that a suite's globs
+ * match, as stable lines: mode, type, blob sha and the exact path bytes. The blob shas make the
+ * listing change exactly when the content of a matching file changes; the path is matched as UTF-8
+ * but hashed from its raw bytes, so a non-UTF-8 name still keys correctly.
+ * @param {{ mode: string, type: string, sha: string, path: string, raw: Buffer }[]} entries
+ * @param {string[]} globs
  */
-export function treeListing(fullListing, globs) {
-  return fullListing
-    .split("\n")
-    .filter((line) => {
-      const path = line.split("\t")[1];
-      return path !== undefined && globs.some((glob) => matchesGlob(path, glob));
-    })
+export function treeListing(entries, globs) {
+  return entries
+    .filter((entry) => globs.some((glob) => matchesGlob(entry.path, glob)))
+    .map((entry) => `${entry.mode} ${entry.type} ${entry.sha}\t${entry.raw.toString("latin1")}`)
     .join("\n");
 }
 
@@ -107,11 +108,11 @@ export function reuseKey(command, ...inputs) {
 }
 
 /** The key of one suite for a committed tree listing. */
-export function suiteKey({ suite, globalPaths = [], fullListing, nodeVersion }) {
+export function suiteKey({ suite, globalPaths = [], entries, nodeVersion }) {
   return reuseKey(
     suite.command,
-    treeListing(fullListing, suite.paths),
-    treeListing(fullListing, globalPaths),
+    treeListing(entries, suite.paths),
+    treeListing(entries, globalPaths),
     nodeVersion,
   );
 }

@@ -244,7 +244,11 @@ test("ghMessage is gh's own first stderr line and never the command line", () =>
   };
   assert.equal(ghMessage(error), "gh: Not Found (HTTP 404)");
   assert.doesNotMatch(ghMessage(error), /secret-model-name/);
-  assert.equal(ghMessage({ message: "x" }), "gh failed");
+  assert.equal(ghMessage({ message: "x" }), "x");
+  assert.equal(
+    ghMessage({ message: "Command failed: gh api -f description=zzz" }),
+    "command failed",
+  );
 });
 
 test("model comparison ignores case and surrounding whitespace, and does not resolve aliases", () => {

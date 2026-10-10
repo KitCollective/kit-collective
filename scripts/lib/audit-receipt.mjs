@@ -118,12 +118,7 @@ export function evaluateReceipt({
     verdict: parsed.verdict,
     issue: parsed.issue,
     rows: parsed.rows,
-    // GitHub limits a status description to 140 characters.
-    description:
-      `audit ${parsed.verdict} by ${thread.id} (${provider}/${model}) at ${head.slice(0, 7)}`.slice(
-        0,
-        140,
-      ),
+    description: describe({ verdict: parsed.verdict, thread: thread.id, provider, model, head }),
   };
 }
 
@@ -145,11 +140,32 @@ export function statusPermissionLine(error) {
     : null;
 }
 
-/** gh's own first stderr line, never the command line (which holds the status description). */
+/**
+ * The tool's own first stderr line for a failed `gh` or `bb` call, never the command line (which
+ * holds arguments such as the status description). Without stderr: the message of a non-command
+ * error (e.g. bad JSON), or a neutral line.
+ */
 export function ghMessage(error) {
-  return (
-    String(error?.stderr ?? "")
-      .trim()
-      .split("\n")[0] || "gh failed"
-  );
+  const line = String(error?.stderr ?? "")
+    .trim()
+    .split("\n")[0];
+  if (line) {
+    return line;
+  }
+  const message = String(error?.message ?? "").split("\n")[0];
+  return message && !message.startsWith("Command failed") ? message : "command failed";
+}
+
+/**
+ * `audit <verdict> by <thread> (<provider>/<model>) at <sha7>`, at most 140 characters (GitHub's
+ * limit). A long provider/model is shortened with an ellipsis; the thread id and the sha always
+ * stay whole, because they are the provenance.
+ */
+export function describe({ verdict, thread, provider, model, head }) {
+  const prefix = `audit ${verdict} by ${thread} (`;
+  const suffix = `) at ${head.slice(0, 7)}`;
+  const room = 140 - prefix.length - suffix.length;
+  const who = `${provider}/${model}`;
+  const shown = who.length <= room ? who : `${who.slice(0, Math.max(room - 1, 0))}…`;
+  return `${prefix}${shown}${suffix}`;
 }

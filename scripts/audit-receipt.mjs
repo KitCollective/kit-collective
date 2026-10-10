@@ -149,5 +149,5 @@ try {
     `${rest.includes("--dry-run") ? "WOULD POST" : "POSTED"} (receipt): ${AUDIT_CONTEXT} ${result.state}: ${result.description}`,
   );
 } catch (error) {
-  out(4, `UNKNOWN (receipt): ${String(error.message).split("\n")[0]}`);
+  out(4, `UNKNOWN (receipt): ${ghMessage(error)}`);
 }

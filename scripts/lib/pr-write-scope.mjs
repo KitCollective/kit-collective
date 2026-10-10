@@ -89,7 +89,8 @@ export function matchesGlob(filePath, glob) {
     .replace(/\*\*/g, "\0")
     .replace(/\*/g, "[^/]*")
     .replace(/\0/g, ".*")}$`;
-  return new RegExp(regexSource).test(filePath);
+  // "s" so `**` also spans a newline inside a file name
+  return new RegExp(regexSource, "s").test(filePath);
 }
 
 export function isRatchetException(filePath) {
