@@ -82,7 +82,10 @@ export function KomIGangFace({
           />
         ))}
       </View>
-      <Text style={[typography.caption, styles.terms, { color: theme.contentSecondary }]}>
+      <Text
+        testID="door-terms"
+        style={[typography.caption, styles.terms, { color: theme.contentSecondary }]}
+      >
         {DOOR_TERMS_LINE}
       </Text>
     </View>
@@ -94,7 +97,12 @@ function ErrorText({ message, testID }: { message: string; testID?: string }) {
   const typography = useTypography();
 
   return (
-    <Text testID={testID} style={[typography.caption, { color: theme.danger }]}>
+    <Text
+      testID={testID}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+      style={[typography.caption, { color: theme.danger }]}
+    >
       {message}
     </Text>
   );

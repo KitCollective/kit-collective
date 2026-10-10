@@ -99,15 +99,12 @@ export default function FirstSessionHost() {
       await signInSocial(provider);
       dispatch({ type: "submitIdentity", method: "social" });
     } catch (caught) {
-      const feedback = resolveAuthErrorFeedback(caught, socialCancelledMessage(provider));
-      setShowThrottleBanner(feedback.showThrottleBanner);
-      if (!feedback.showThrottleBanner) {
-        Toast.show({
-          type: "error",
-          position: "bottom",
-          text1: socialCancelledMessage(provider),
-        });
-      }
+      setShowThrottleBanner(resolveAuthErrorFeedback(caught, "").showThrottleBanner);
+      Toast.show({
+        type: "error",
+        position: "bottom",
+        text1: socialCancelledMessage(provider),
+      });
     } finally {
       setSocialBusy(null);
     }

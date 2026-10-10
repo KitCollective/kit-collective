@@ -144,6 +144,12 @@ describe("First session identity", () => {
     expect(back.doorOver).toBe("welcome");
   });
 
+  it("back from the code step only applies on the code step", () => {
+    const welcome = createFirstSession({ signedIn: false });
+
+    expect(reduceFirstSession(welcome, { type: "backFromCode" })).toEqual(welcome);
+  });
+
   it("social sign-in marks the e-mail verified", () => {
     const social = reduceFirstSession(door(), { type: "submitIdentity", method: "social" });
 
@@ -334,7 +340,7 @@ describe("First session add to door flow", () => {
     expect(session.showsTabBar).toBe(false);
   });
 
-  it("visionComplete opens register door over analysing", () => {
+  it("visionComplete opens the Kom i gang sheet over analysing", () => {
     const analysing = reduceFirstSession(createFirstSession({ signedIn: false }), {
       type: "photosPicked",
       sessionId: "capture-session-1",
@@ -373,7 +379,7 @@ describe("First session add to door flow", () => {
     expect(reduceFirstSession(door, { type: "visionFailed" })).toEqual(door);
   });
 
-  it("fillSelf from analysing opens the register door over analysing", () => {
+  it("fillSelf from analysing opens the Kom i gang sheet over analysing", () => {
     const analysing = reduceFirstSession(createFirstSession({ signedIn: false }), {
       type: "photosPicked",
       sessionId: "capture-session-1",
@@ -495,14 +501,14 @@ describe("First session add to door flow", () => {
       }),
       { type: "fillSelf" },
     );
-    const afterRegister = reduceFirstSession(door, {
+    const afterIdentity = reduceFirstSession(door, {
       type: "submitIdentity",
       method: "social",
     });
 
-    expect(afterRegister.hasDraft).toBe(true);
-    expect(afterRegister.captureSessionId).toBe(sessionId);
-    expect(afterRegister.place).toBe("jersey-details");
+    expect(afterIdentity.hasDraft).toBe(true);
+    expect(afterIdentity.captureSessionId).toBe(sessionId);
+    expect(afterIdentity.place).toBe("jersey-details");
     expect(store.load()?.sessionId).toBe(sessionId);
   });
 
@@ -562,13 +568,13 @@ describe("First session jersey details and first Save", () => {
       }),
       { type: "visionComplete" },
     );
-    const afterRegister = reduceFirstSession(door, {
+    const afterIdentity = reduceFirstSession(door, {
       type: "submitIdentity",
       method: "social",
     });
-    expect(afterRegister.place).toBe("jersey-details");
-    expect(afterRegister.hasDraft).toBe(true);
-    return afterRegister;
+    expect(afterIdentity.place).toBe("jersey-details");
+    expect(afterIdentity.hasDraft).toBe(true);
+    return afterIdentity;
   }
 
   it("identity with a draft goes straight to jersey-details, keeping the capture session", () => {

@@ -113,7 +113,6 @@ describe("first-session visual host chrome", () => {
     expect(catalog).not.toContain("sheetClose");
     // Door header row holds only the circular button; the Kom i gang title sits below it.
     expect(door).toContain("title={DOOR_TITLE}");
-    expect(door).not.toContain("titleContent");
     expect(door).not.toContain("leading={");
     expect(door).not.toContain('icon="arrow-back"');
     // Drag-anywhere dismiss with the scroll handoff wired through the door body.

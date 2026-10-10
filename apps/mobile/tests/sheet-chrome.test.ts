@@ -134,15 +134,12 @@ describe("Door identity face", () => {
   });
 });
 
-describe("Door title and Sheet title slot", () => {
-  it("keeps the Sheet title slot generic: a ReactNode rendered below the header row", () => {
+describe("Door title and Sheet title", () => {
+  it("renders the Sheet title as a plain header text below the header row", () => {
     const catalog = readFileSync(sheetPath, "utf8");
 
-    // Optional slot for other users; plain `title` string still rendered when absent.
-    expect(catalog).toContain("titleContent?: ReactNode");
-    expect(catalog).toContain("titleContent ? (");
     expect(catalog).toContain('accessibilityRole="header"');
-    expect(catalog).toContain("<View style={styles.sheetTitleRegion}>{titleContent}</View>");
+    expect(catalog).not.toContain("titleContent");
   });
 
   it("titles the door Kom i gang with the plain title and no mode switcher", () => {
@@ -150,7 +147,6 @@ describe("Door title and Sheet title slot", () => {
 
     expect(door).toContain('variant="door"');
     expect(door).toContain("title={DOOR_TITLE}");
-    expect(door).not.toContain("titleContent");
     expect(door).not.toContain("DoorModeSwitcher");
     expect(door).not.toContain("DOOR_LOGIN_SEGMENT");
     expect(door).not.toContain("DOOR_REGISTER_SEGMENT");

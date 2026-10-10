@@ -189,7 +189,7 @@ function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSes
     case "openDoor":
       return { ...state, place: "door", doorOver: doorOverFor(state) };
     case "backFromCode":
-      return { ...state, place: "door" };
+      return state.place === "code" ? { ...state, place: "door" } : state;
     case "closeDoor":
       return { ...state, ...DOOR_CLOSED, place: state.doorOver ?? "welcome" };
     case "submitIdentity":

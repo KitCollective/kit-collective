@@ -6,6 +6,12 @@
 # Not shown by a screen and so proved by the first-session reducer tests instead:
 # - a successful social sign-in goes to Samling, or to jersey details with a draft, with no
 #   code step (a provider sign-in cannot run on the simulator).
+# - the sheet opening over a Vision RESULT of an own photo: the Device-flow environment has no
+#   Vision answer for an anonymous collector, so the flow opens the sheet over the Vision
+#   failure screen (Udfyld selv). Reducer tests cover visionComplete -> sheet over analysing.
+# - "equal secondary buttons, primary black only on Fortsæt" is judged from the screenshots.
+# Environment assumption: Google sign-in cannot complete on the simulator, so tapping Google
+# is the failed sign-in of AC 8.
 appId: app.kitcollective.mobile
 name: kit-272
 ---
@@ -35,6 +41,22 @@ name: kit-272
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 5000
+- assertVisible: "Kom i gang"
+- assertVisible:
+    id: door-email
+- assertVisible:
+    id: door-google
+- assertVisible:
+    id: door-facebook
+- assertVisible:
+    id: door-terms
+- assertNotVisible:
+    id: door-password
+- assertNotVisible:
+    id: door-mode-login
+- assertNotVisible:
+    id: door-mode-register
+- assertNotVisible: "Adgangskode|Login|Opret"
 - takeScreenshot: kc__kit-272__01-sheet-from-welcome
 # AC 8: a cancelled or failed social sign-in leaves the sheet open and names the provider.
 - tapOn:
@@ -44,6 +66,8 @@ name: kit-272
     timeout: 20000
 - waitForAnimationToEnd:
     timeout: 3000
+- assertVisible:
+    id: door-submit
 - takeScreenshot: kc__kit-272__02-social-failed-toast
 # AC 5: an invalid e-mail shows the inline error and does not request a code.
 - tapOn:
@@ -55,6 +79,8 @@ name: kit-272
     visible:
       id: door-email-error
     timeout: 5000
+- assertNotVisible:
+    id: code-stub
 - takeScreenshot: kc__kit-272__03-invalid-email
 # AC 6: a valid e-mail hands over to the code step (a stub until KIT-275).
 - eraseText: 40
@@ -143,6 +169,8 @@ name: kit-272
       visible:
         id: vision-failed-fill-self
     commands:
+      - assertVisible:
+          id: vision-failed-stage
       - tapOn:
           id: vision-failed-fill-self
 - extendedWaitUntil:
