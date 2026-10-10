@@ -46,7 +46,7 @@ Completion: Linear status is `Done` and the PR SHA is on `origin/<lanes.integrat
 
 ### 0. Session check
 
-`node scripts/session-check.mjs <KIT-n>` (add `--resume` only when the human said to continue). Exit `0` go on; `1` stop on this identifier, the line says why (open PR, remote branch, claimed state, a run in the last 30 minutes, a stop label). It reads Linear, GitHub and the run log, never local worktrees, so it holds across machines.
+`node scripts/session-check.mjs <KIT-n>` (add `--resume` when the human said to continue, and also when the human names an issue that is already `Implementing` and no live run exists: no open PR, no remote branch hit, no `start` in the run log inside the live window. Run it first without `--resume`; if the only reason for refusal is the claimed state, rerun with `--resume`). Exit `0` go on; `1` stop on this identifier, the line says why (open PR, remote branch, claimed state, a run in the last 30 minutes, a stop label). It reads Linear, GitHub and the run log, never local worktrees, so it holds across machines.
 
 ### 1. Load
 
@@ -72,7 +72,7 @@ Follow [implement/SKILL.md](../implement/SKILL.md), which **reads** `### Plan` i
 
 ### 4. Fresh review
 
-Run the whole gate in one call: `node scripts/gate.mjs review <pr> --issue <KIT-n>`. It folds `pnpm check:review-gate`, the matrix validation, the PR write-scope check and `wait-for-checks` into one verdict line and logs it. Exit `0` open, `1` closed (fix the named step), `3` waiting (checks pending, run again), `4` unknown (retry once, then ask). Before a reviewer is spawned run `node scripts/head-changed.mjs <KIT-n>`: exit `1` means this head was already audited red; change the code first.
+Run the whole gate in one call: `node scripts/gate.mjs review <pr> --issue <KIT-n>`. It folds `pnpm check:review-gate`, the matrix validation, the PR write-scope check and `wait-for-checks` into one verdict line and logs it. Exit `0` open, `1` closed (fix the named step), `3` waiting (checks pending, run again), `4` unknown (retry once, then ask). Run it from the PR's worktree: when HEAD is not the PR head it exits `4` (`run this gate from the PR's worktree`). Mechanical steps run first and the wait for checks only when they are clean. Before a reviewer is spawned run `node scripts/head-changed.mjs <KIT-n> --pr <pr>` (the head comes from GitHub, never from the cwd): exit `1` means this head was already audited red; change the code first.
 
 The single steps, when you need one alone: `pnpm check:review-gate`. Red → fix it and stay in step 3; a review never sees what a script can say.
 

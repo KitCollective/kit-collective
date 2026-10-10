@@ -39,3 +39,18 @@ export function logGate(issue, gate, outcome, sha) {
     process.stderr.write(`run-log: ${error.message}\n`);
   }
 }
+
+/** The PR facts a gate needs, from GitHub (never inferred from the checkout's branch). */
+export async function prView(pr) {
+  return JSON.parse(
+    await gh([
+      "pr",
+      "view",
+      pr,
+      "--repo",
+      config().github.ownerRepo,
+      "--json",
+      "headRefOid,title,body,headRefName",
+    ]),
+  );
+}

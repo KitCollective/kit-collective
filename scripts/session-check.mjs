@@ -10,7 +10,7 @@
  * Prints one line. Exit: 0 free (OPEN), 1 refuse (CLOSED), 2 usage, 4 a source could not be read.
  */
 import { config, events, gh, linearIssue, logGate, sh } from "./lib/gate-io.mjs";
-import { sessionCheck } from "./lib/gates.mjs";
+import { matchesIssueKey, sessionCheck } from "./lib/gates.mjs";
 
 const args = process.argv.slice(2);
 const issue = args.find((a) => /^[A-Z][A-Z0-9]*-\d+$/.test(a));
@@ -28,7 +28,8 @@ try {
   const branches = refs
     .split("\n")
     .filter(Boolean)
-    .map((l) => l.split("refs/heads/")[1]);
+    .map((l) => l.split("refs/heads/")[1])
+    .filter((name) => matchesIssueKey(name, issue));
   const prs = JSON.parse(
     await gh([
       "pr",
@@ -44,7 +45,7 @@ try {
     ]),
   );
   const openPrs = prs
-    .filter((p) => p.title.startsWith(`${issue}:`) || p.headRefName.toLowerCase().includes(key))
+    .filter((p) => p.title.startsWith(`${issue}:`) || matchesIssueKey(p.headRefName, issue))
     .map((p) => p.number);
   result = sessionCheck({
     issue,
