@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # BB managed-worktree hook (see `bb guide environments`).
 #
-# Host-global secrets model (kit-harness):
-# - GitHub: host `gh` credential store (~/.config/gh). Never GH_TOKEN in worktree or EnvironmentFile.
-# - Linear: injected into bb host-daemon via systemd EnvironmentFile
-#   (/root/.config/kit-collective/factory.env). BB passes non-BB_* daemon env into agents.
+# Project-level secrets model (bb):
+# - GH_TOKEN and LINEAR_API_KEY are set once at project level in bb (see repo-root bb.env).
+#   bb injects them into the agent process env, so gh and scripts/linear.mjs share one source.
 # - This hook VERIFIES only. It must never write secret .env files into the worktree.
 set -euo pipefail
 
@@ -13,25 +12,24 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! env -u GH_TOKEN -u GITHUB_TOKEN gh auth status -h github.com >/dev/null 2>&1; then
-  echo ".bb-env-setup.sh: ERROR — gh not authenticated. Run scripts/kit-harness-agent-env-wizard.sh on Mac." >&2
+if ! gh auth status -h github.com >/dev/null 2>&1; then
+  echo ".bb-env-setup.sh: ERROR — gh not authenticated. Set GH_TOKEN at project level in bb (see bb.env)." >&2
   exit 1
 fi
-echo ".bb-env-setup.sh: gh auth OK (host credential store)"
+echo ".bb-env-setup.sh: gh auth OK"
 
 # Presence check via python so `bash -x` cannot echo secret values
 if ! python3 -c 'import os,sys; sys.exit(0 if (os.environ.get("LINEAR_API_KEY") or os.environ.get("LINEAR_CLI_API_KEY")) else 1)'; then
-  echo ".bb-env-setup.sh: ERROR — LINEAR_* missing from process env." >&2
-  echo "  Expected systemd EnvironmentFile on bb host-daemon (factory.env)." >&2
-  echo "  Re-run scripts/kit-harness-agent-env-wizard.sh on Mac." >&2
+  echo ".bb-env-setup.sh: ERROR — LINEAR_API_KEY missing from process env." >&2
+  echo "  Set it at project level in bb (see bb.env)." >&2
   exit 1
 fi
-echo ".bb-env-setup.sh: LINEAR_* present in process env (host-global; no worktree .env)"
+echo ".bb-env-setup.sh: LINEAR_API_KEY present in process env (no worktree .env)"
 
 # Hard refuse: never leave / copy secret dotenv into the worktree
 if [[ -f .env ]] && grep -qE '^(LINEAR_|GH_TOKEN|GITHUB_TOKEN)=' .env 2>/dev/null; then
-  echo ".bb-env-setup.sh: ERROR — refusing secret-bearing .env in worktree (host-global model)." >&2
-  echo "  Delete .env and rely on host-daemon EnvironmentFile." >&2
+  echo ".bb-env-setup.sh: ERROR — refusing secret-bearing .env in worktree (project-level bb secrets)." >&2
+  echo "  Delete .env and rely on the bb project-level secrets." >&2
   exit 1
 fi
 
