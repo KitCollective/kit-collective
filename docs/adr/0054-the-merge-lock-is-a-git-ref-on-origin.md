@@ -10,6 +10,8 @@ Options weighed:
 
 `scripts/sync-pr.mjs sync` merges `origin/<integration>` into the PR branch without a person and prints `CURRENT`, `SYNCED`, `CONFLICT` or `CLOSED`; a conflict is aborted and handed back, nothing half-merged is left. It never rebases and never rewrites a pushed branch once a PR is open. `sync-pr.mjs valid <audited-sha>` says whether an audit still holds: only first-parent merge commits of the lane whose tree equals `git merge-tree` of their parents (no hand edit, no new work) keep it. This relaxes the rule that any head change costs a new audit, for clean lane merges only.
 
+Requirements and limits: `git merge-tree --write-tree` needs git 2.38 or newer (the container has 2.39.5). Every git call in `sync-pr.mjs` and `merge-lock.mjs` carries a fixed factory identity, so neither depends on the user's git config; the tests run with no identity and `user.useConfigOnly` to keep it that way. A crashed holder blocks the queue for up to the stale window (30 minutes) unless a human runs `merge-lock.mjs release <pr> --force`; `merge-lock.mjs status` shows holder and age. The holder renews by calling `take` again, which `issue-session` does right after `SYNCED` and before any long wait.
+
 Gives up: the lock is only as honest as its holder (a crashed orchestrator blocks the queue until the stale timeout); the merge queue on the lane remains the final authority.
 
 Status: accepted.

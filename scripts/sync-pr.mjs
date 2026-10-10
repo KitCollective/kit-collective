@@ -4,7 +4,8 @@
  * on the PR's branch, with nothing uncommitted, while holding the merge lock.
  *
  * Usage: node scripts/sync-pr.mjs sync <pr>
- *        node scripts/sync-pr.mjs valid <audited-sha>
+ *        node scripts/sync-pr.mjs valid <audited-sha> --pr <pr>
+ *   Both require the local HEAD to equal the PR head (by SHA) and say so when it does not.
  *   sync   CURRENT (already holds the lane), SYNCED (lane merged in, pushed; checks rerun),
  *          CONFLICT (nothing committed or pushed; files named), CLOSED (could not work, or the PR
  *          is not open or is on another branch). Never rebases, never forces.
@@ -13,9 +14,11 @@
  * Exit: 0 CURRENT, SYNCED or AUDIT-VALID; 1 CONFLICT, CLOSED or AUDIT-STALE; 2 usage.
  */
 import { execFileSync } from "node:child_process";
-import { auditStillValid, syncBranch } from "./lib/sync-pr.mjs";
+import { auditStillValid, syncBound, syncBranch } from "./lib/sync-pr.mjs";
 
 const [action, arg] = process.argv.slice(2);
+const prAt = process.argv.indexOf("--pr");
+const prArg = prAt === -1 ? undefined : process.argv[prAt + 1];
 const cwd = process.cwd();
 const base = JSON.parse(
   execFileSync(
@@ -30,7 +33,7 @@ if (action === "sync" && /^\d+$/.test(arg ?? "")) {
     const view = JSON.parse(
       execFileSync(
         "gh",
-        ["pr", "view", arg, "--json", "state,headRefName,baseRefName,isCrossRepository"],
+        ["pr", "view", arg, "--json", "state,headRefName,headRefOid,baseRefName,isCrossRepository"],
         { cwd, encoding: "utf8" },
       ),
     );
@@ -51,15 +54,28 @@ if (action === "sync" && /^\d+$/.test(arg ?? "")) {
         line: `CLOSED (sync): on ${branch}, the PR branch is ${view.headRefName}`,
       };
     } else {
-      result = syncBranch({ cwd, base });
+      const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+      const bound = syncBound({ head, prHead: view.headRefOid });
+      result = bound.ok ? syncBranch({ cwd, base }) : { code: 1, line: bound.line };
     }
   } catch (error) {
     result = { code: 1, line: `CLOSED (sync): ${String(error.message).split("\n")[0]}` };
   }
-} else if (action === "valid" && /^[0-9a-f]{7,40}$/i.test(arg ?? "")) {
-  result = auditStillValid({ cwd, audited: arg, base });
+} else if (action === "valid" && /^[0-9a-f]{7,40}$/i.test(arg ?? "") && /^\d+$/.test(prArg ?? "")) {
+  try {
+    const view = JSON.parse(
+      execFileSync("gh", ["pr", "view", prArg, "--json", "headRefOid"], { cwd, encoding: "utf8" }),
+    );
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+    const bound = syncBound({ head, prHead: view.headRefOid, verb: "AUDIT-STALE" });
+    result = bound.ok
+      ? auditStillValid({ cwd, audited: arg, base })
+      : { code: 1, line: bound.line };
+  } catch (error) {
+    result = { code: 1, line: `AUDIT-STALE: ${String(error.message).split("\n")[0]}` };
+  }
 } else {
-  process.stderr.write("usage: sync-pr.mjs sync <pr> | valid <audited-sha>\n");
+  process.stderr.write("usage: sync-pr.mjs sync <pr> | valid <audited-sha> --pr <pr>\n");
   process.exit(2);
 }
 process.stdout.write(`${result.line}\n`);

@@ -4,15 +4,29 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { LOCK_REF, release, take, waitFor } from "../lib/merge-lock.mjs";
-import { auditStillValid, syncBranch } from "../lib/sync-pr.mjs";
+import { LOCK_REF, release, status, take, waitFor } from "../lib/merge-lock.mjs";
+import { auditStillValid, syncBound, syncBranch } from "../lib/sync-pr.mjs";
 
-// CI has no git identity; the lib calls git with process.env, so the identity goes there.
+// Hostile environment: no identity anywhere and no auto-detection, as on CI and in the bb container.
+// The lib calls get this process.env; only the test helper below carries an identity, for its own commits.
+const emptyHome = mkdtempSync(join(tmpdir(), "home-"));
+for (const name of [
+  "GIT_AUTHOR_NAME",
+  "GIT_AUTHOR_EMAIL",
+  "GIT_COMMITTER_NAME",
+  "GIT_COMMITTER_EMAIL",
+  "EMAIL",
+]) {
+  delete process.env[name];
+}
 Object.assign(process.env, {
-  GIT_AUTHOR_NAME: "t",
-  GIT_AUTHOR_EMAIL: "t@t",
-  GIT_COMMITTER_NAME: "t",
-  GIT_COMMITTER_EMAIL: "t@t",
+  HOME: emptyHome,
+  XDG_CONFIG_HOME: emptyHome,
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "user.useConfigOnly",
+  GIT_CONFIG_VALUE_0: "true",
 });
 const env = {
   ...process.env,
@@ -167,4 +181,57 @@ test("audit is stale after new work or a hand-edited merge", () => {
     auditStillValid({ cwd: g.work, audited: auditedG, base: "development" }).line,
     /^AUDIT-STALE.*hand edits/,
   );
+});
+
+test("sync: a merge that fails without a conflict reports git's own reason", () => {
+  const f = fixture();
+  const work = f.clone("work");
+  git(work, "checkout", "--orphan", "unrelated");
+  git(work, "rm", "-rf", ".");
+  writeFileSync(join(work, "z.txt"), "z\n");
+  git(work, "add", "-A");
+  git(work, "commit", "-m", "unrelated root");
+  const result = syncBranch({ cwd: work, base: "development" });
+  assert.equal(result.code, 1);
+  assert.match(result.line, /^CLOSED \(sync\): merge failed: .*unrelated histories/);
+  assert.doesNotMatch(result.line, /merge --abort/);
+});
+
+test("syncBound: the checkout must be the PR head by SHA", () => {
+  const a = "a".repeat(40);
+  const b = "b".repeat(40);
+  assert.equal(syncBound({ head: a, prHead: a }).ok, true);
+  const bad = syncBound({ head: a, prHead: b });
+  assert.equal(bad.ok, false);
+  assert.equal(
+    bad.line,
+    "CLOSED (sync): local HEAD is aaaaaaaa, the PR head is bbbbbbbb; pull or run from the PR worktree",
+  );
+  assert.match(
+    syncBound({ head: a, prHead: b, verb: "AUDIT-STALE" }).line,
+    /^AUDIT-STALE: local HEAD/,
+  );
+  assert.equal(syncBound({ head: a, prHead: "" }).ok, false);
+});
+
+test("merge lock status: free, then held with the holder and age", () => {
+  const { clone } = fixture();
+  const a = clone("a");
+  assert.equal(status({ cwd: a }).code, 3);
+  take({ cwd: a, pr: "7", now: 1000 });
+  const held = status({ cwd: a, now: 1000 + 600 });
+  assert.equal(held.code, 0);
+  assert.equal(held.line, "HELD (merge-lock): PR 7 for 10 min");
+});
+
+test("merge lock release --force clears a crashed holder; plain release by another PR does not", () => {
+  const { clone } = fixture();
+  const a = clone("a");
+  const b = clone("b");
+  take({ cwd: a, pr: "7", now: 1000 });
+  assert.equal(release({ cwd: b, pr: "9" }).code, 3);
+  const forced = release({ cwd: b, pr: "9", force: true });
+  assert.equal(forced.code, 0);
+  assert.match(forced.line, /cleared by force, PR 7 held it/);
+  assert.equal(status({ cwd: b }).code, 3);
 });
