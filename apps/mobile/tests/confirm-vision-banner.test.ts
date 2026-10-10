@@ -18,6 +18,7 @@ describe("visionMatcherRemainingToOutOfQuota", () => {
         cap: 10,
         remaining: 0,
         unlimited: false,
+        renewsAt: null,
       }),
     ).toBe(true);
     expect(
@@ -26,6 +27,7 @@ describe("visionMatcherRemainingToOutOfQuota", () => {
         cap: 10,
         remaining: 0,
         unlimited: true,
+        renewsAt: null,
       }),
     ).toBe(false);
   });
@@ -37,6 +39,7 @@ describe("visionMatcherRemainingToOutOfQuota", () => {
         cap: 10,
         remaining: 7,
         unlimited: false,
+        renewsAt: null,
       }),
     ).toBe(false);
   });

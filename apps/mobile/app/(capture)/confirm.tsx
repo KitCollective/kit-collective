@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/auth/AuthProvider";
 import { addJerseyDraft, setActiveDraft, switchSingleToBulkBind } from "@/capture/captureSession";
+import { resolveVisionEnabled } from "@/capture/chooserVision";
 import {
   confirmSaveEnabled,
   hasPendingLowConfidence,
@@ -12,6 +13,7 @@ import {
 import { confirmJerseyIndexPlacement } from "@/capture/confirmPhotoStrip";
 import { visionMatcherRemainingToOutOfQuota } from "@/capture/confirmVisionQuota";
 import { shouldHoldIdentityForGrouping } from "@/capture/identityDraftQueue";
+import { visionRequestToken } from "@/capture/identitySuggestRequest";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { scanLineLedger } from "@/capture/scanLineLedger";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
@@ -31,6 +33,7 @@ import { PhotoLightbox } from "@/components/photo-lightbox";
 import { PostSaveSheet } from "@/components/post-save-sheet";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { stickySize } from "@/prefs/stickySizeStore";
+import { useVisionSwitch } from "@/prefs/vision-switch-device";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
@@ -46,7 +49,11 @@ export default function ConfirmScreen() {
     sessionId: string;
     editJerseyId?: string;
   }>();
-  const { accessToken, requestPremiumAccess, entitlement } = useAuth();
+  const { accessToken: sessionToken, requestPremiumAccess, entitlement } = useAuth();
+  const visionRemembered = useVisionSwitch();
+  const visionEnabled = resolveVisionEnabled(visionRemembered, entitlement?.visionMatcher);
+  // Vision off means no identity and no grouping request: both hooks run without a token.
+  const accessToken = visionRequestToken(sessionToken, visionEnabled);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const {
     state,

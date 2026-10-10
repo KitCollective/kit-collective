@@ -25,6 +25,7 @@ import {
   user,
   visionLog,
 } from "@kit/db";
+import { VISION_MATCHER_WINDOW_DAYS } from "@kit/domain";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import bcrypt from "bcryptjs";
@@ -281,6 +282,88 @@ describe("Vision Matcher jersey cap", () => {
       cap: 10,
       remaining: 0,
       unlimited: false,
+      renewsAt: expect.any(String),
+    });
+  });
+
+  it("reports when the oldest counted run leaves the window for a free collector", async () => {
+    const session = await registerSession(app, "cap-renews@example.com");
+    const day = 24 * 60 * 60 * 1000;
+    const oldest = new Date(Date.now() - 20 * day);
+    const { db, pool } = createDb(DATABASE_URL);
+    await db.insert(visionLog).values([
+      // A draft read twice stays counted until its newest run leaves, so only 5 days count here.
+      {
+        userId: session.user.id,
+        draftId: draftId(1),
+        kind: "identity",
+        status: "ready",
+        createdAt: new Date(Date.now() - 25 * day),
+      },
+      {
+        userId: session.user.id,
+        draftId: draftId(1),
+        kind: "identity",
+        status: "ready",
+        createdAt: new Date(Date.now() - 5 * day),
+      },
+      {
+        userId: session.user.id,
+        draftId: draftId(2),
+        kind: "identity",
+        status: "ready",
+        createdAt: oldest,
+      },
+      {
+        userId: session.user.id,
+        draftId: draftId(3),
+        kind: "identity",
+        status: "ready",
+        createdAt: new Date(Date.now() - 2 * day),
+      },
+      // Outside the window and failed runs never count.
+      {
+        userId: session.user.id,
+        draftId: draftId(4),
+        kind: "identity",
+        status: "ready",
+        createdAt: new Date(Date.now() - 40 * day),
+      },
+      {
+        userId: session.user.id,
+        draftId: draftId(5),
+        kind: "identity",
+        status: "failed",
+        createdAt: new Date(Date.now() - 30 * 60 * 1000),
+      },
+    ]);
+    await pool.end();
+
+    const me = await fetchMe(app, session.accessToken);
+    const usage = me.entitlement.visionMatcher;
+    expect(usage).toMatchObject({ used: 3, remaining: 7, unlimited: false });
+    expect(new Date(usage?.renewsAt ?? 0).getTime()).toBe(
+      oldest.getTime() + VISION_MATCHER_WINDOW_DAYS * day,
+    );
+  });
+
+  it("has no renewal date for a free collector with no runs or for a live collector", async () => {
+    const fresh = await registerSession(app, "cap-renews-none@example.com");
+    expect((await fetchMe(app, fresh.accessToken)).entitlement.visionMatcher?.renewsAt).toBeNull();
+
+    const live = await registerSession(app, "cap-renews-live@example.com");
+    const { db, pool } = createDb(DATABASE_URL);
+    await db.insert(entitlement).values({
+      userId: live.user.id,
+      source: "comp",
+      expires: new Date(Date.now() + 86_400_000),
+      trialUsed: false,
+    });
+    await pool.end();
+    await seedReadyIdentityJobs(live.user.id, 3);
+    expect((await fetchMe(app, live.accessToken)).entitlement.visionMatcher).toMatchObject({
+      unlimited: true,
+      renewsAt: null,
     });
   });
 

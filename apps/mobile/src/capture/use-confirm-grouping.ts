@@ -78,7 +78,8 @@ export function useConfirmGrouping({
   const snapshotRef = useRef<CaptureSessionState | null>(state);
   snapshotRef.current = state;
 
-  const jobKey = state ? groupingJobFingerprint(state) : null;
+  // No token (Vision off, or signed out) means no grouping job, so nothing waits on one.
+  const jobKey = accessToken && state ? groupingJobFingerprint(state) : null;
 
   useEffect(() => {
     void sessionId;

@@ -180,27 +180,28 @@ describe("Native tab bar chrome", () => {
     expect(existsSync(join(__dirname, "../app/(tabs)/add"))).toBe(false);
   });
 
-  it("opens the capture chooser as a Sheet with direct-action rows", () => {
+  it("opens the capture chooser as a Sheet with two direct-action tiles and a Vision row", () => {
     const sheet = readFileSync(sheetPath, "utf8");
 
-    // Caption names the 1–3 / 4+ branch (docs/design-system.md Capture session).
-    expect(sheet).toContain(
-      "Op til tre billeder bliver én trøje. Fire eller flere lander som uredigerede.",
-    );
-    // Rows are direct actions (role button), not a radio group.
+    // The caption comes from the Vision view-model: "… Vision sorterer dem." / "… Du sorterer selv."
+    expect(sheet).toContain("sentence={vision.caption}");
+    // The sheet never asks single versus bulk: the photo count decides.
+    expect(sheet).not.toContain("Op til tre billeder");
+    // Tiles are direct actions (role button), not a radio group.
     expect(sheet).toContain('accessibilityRole="button"');
-    // Each choice carries a title, a helper sentence, a leading icon, and a trailing chevron.
+    expect(sheet).toContain('title: "Tag billeder"');
+    expect(sheet).toContain('title: "Vælg billeder"');
     expect(sheet).toContain('icon: "images-outline"');
     expect(sheet).toContain('icon: "camera-outline"');
-    expect(sheet).toContain("option.helper");
-    expect(sheet).toContain('name="chevron-forward"');
-    // Tapping a row is the commit — no Næste dock, no preselect, no "vælg en mulighed" caption.
+    // Tapping a tile is the commit — no Næste dock, no preselect, no "vælg en mulighed" caption.
     expect(sheet).toContain("onConfirm(option.source)");
     expect(sheet).not.toContain('label="Næste"');
     expect(sheet).not.toContain('accessibilityRole="radio"');
     expect(sheet).not.toContain("Vælg en mulighed for at fortsætte.");
-    // Upload filer is renamed Upload billeder.
-    expect(sheet).toContain('title: "Upload billeder"');
+    // The Vision row: a Switch, the quota line, and the upgrade link once the allowance is spent.
+    expect(sheet).toContain("SwitchControl");
+    expect(sheet).toContain("capture-vision-quota");
+    expect(sheet).toContain('accessibilityRole="link"');
     // Top-left Luk is dropped; a footer Annuller cancels instead.
     expect(sheet).toContain("hideChrome");
     expect(sheet).toContain('label="Annuller"');
