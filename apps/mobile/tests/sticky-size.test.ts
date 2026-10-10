@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addJerseyDraft,
+  applyGroupingSuggestion,
   applyStickySizeToUnselected,
   createCaptureSession,
   createCaptureSessionFromPhotos,
@@ -53,6 +54,19 @@ describe("sticky size on new drafts", () => {
     expect(added.size).toBe("s");
     expect(added.sizeSelected).toBe(true);
     expect(added.conditionSelected).toBe(false);
+  });
+
+  it("pre-selects it on every jersey Vision grouping creates", () => {
+    let session = switchSingleToBulkBind(createCaptureSession([URI], { defaultSize: "l" }));
+    const photoId = session.photoIdByUri?.[URI] ?? "";
+    session = applyGroupingSuggestion(
+      session,
+      { groups: [{ photoIds: [photoId] }, { photoIds: [] }] },
+      { preselect: true, defaultSize: "l" },
+    );
+    expect(session.drafts).toHaveLength(2);
+    expect(session.drafts.map((draft) => draft.size)).toEqual(["l", "l"]);
+    expect(session.drafts.every((draft) => !draft.conditionSelected)).toBe(true);
   });
 
   it("leaves the size empty when nothing was saved yet", () => {

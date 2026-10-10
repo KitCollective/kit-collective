@@ -32,7 +32,7 @@ name: add-jersey
 # state would differ from run to run.
 - extendedWaitUntil:
     visible:
-      id: confirm-vision-success
+      id: confirm-identity-resolved
     timeout: 90000
 # The picked photo binds to the front slot a moment after the suggestion lands.
 - extendedWaitUntil:
@@ -42,21 +42,14 @@ name: add-jersey
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__add-jersey__02-confirm
-- tapOn:
-    id: confirm-section-details
-- extendedWaitUntil:
-    visible:
-      id: confirm-details-save
-    timeout: 10000
+# Size and condition sit on the hub now; the Detaljer drill only holds Badge and Noter.
 - tapOn:
     id: detail-size-m
 - tapOn:
     id: detail-condition-used
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__add-jersey__03-details
-- tapOn:
-    id: confirm-details-save
+- takeScreenshot: kc__add-jersey__03-size-and-condition
 - extendedWaitUntil:
     visible:
       id: confirm-save

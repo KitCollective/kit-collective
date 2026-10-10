@@ -23,7 +23,6 @@ import {
   confirmSeasonWasEdited,
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
-import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
 import {
   identityQueueFingerprint,
   identityRunKey,
@@ -129,6 +128,8 @@ export function useConfirmVision({
   const identityKickAgainRef = useRef(false);
   const identityUnmountedRef = useRef(false);
   const [inFlightDraftId, setInFlightDraftId] = useState<string | null>(null);
+  /** Jerseys whose identity read has finished, found or not. Drives "Vision fandt ikke trøjen". */
+  const [settledDraftIds, setSettledDraftIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const fadeInSuggestion = useCallback(() => {
     suggestionOpacity.setValue(reduceMotion ? 1 : 0);
@@ -362,6 +363,7 @@ export function useConfirmVision({
       } catch {
         settleIdle();
       } finally {
+        setSettledDraftIds((current) => new Set(current).add(next.id));
         setInFlightDraftId((current) => (current === next.id ? null : current));
         if (syncChrome()) {
           setPolling(false);
@@ -544,12 +546,11 @@ export function useConfirmVision({
     suggestion,
     catalogMissHint,
     suggestionOpacity,
-    bannerState: resolveConfirmVisionBannerState({
-      activated: Boolean(accessToken),
-      outOfQuota: false,
-      analyzing: polling,
-      succeeded: applied,
-    }),
+    /** An identity read is running for the active jersey. */
+    analyzing: polling,
+    /** Vision, not the collector, filled the active jersey's facts. */
+    filledByVision: applied,
+    settledDraftIds,
     applySuggestion,
     dismissSuggestion: () => {
       setSuggestion(null);

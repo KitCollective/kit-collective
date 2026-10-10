@@ -1,27 +1,23 @@
-import {
-  JERSEY_CONDITION_LABELS_DA,
-  JERSEY_CONDITIONS,
-  JERSEY_SIZE_LABELS_DA,
-  JERSEY_SIZES,
-} from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { selectDraftCondition, selectDraftSize, setDraftNotes } from "@/capture/captureSession";
+import { setDraftNotes } from "@/capture/captureSession";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmSave } from "@/capture/useConfirmSave";
-import { Chip } from "@/components/chip";
+import { ConfirmBadgeSection } from "@/components/confirm-badge-section";
 import { ConfirmDrillHeader } from "@/components/confirm-drill-header";
 import { TextField } from "@/components/profile-ui";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
-import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
+/**
+ * Detaljer drill: only the optional Badge and Noter. Size and condition moved to the hub
+ * (design lock: Confirm and Save, Revision 2026-10-09, item 1).
+ */
 export function ConfirmDetailsScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const typography = useTypography();
   const insets = useSafeAreaInsets();
   const { sessionId, editJerseyId } = useLocalSearchParams<{
     sessionId: string;
@@ -47,41 +43,7 @@ export function ConfirmDetailsScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: fadeDockScrollPadding }]}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Størrelse</Text>
-          <View style={styles.chipRow}>
-            {JERSEY_SIZES.map((value) => (
-              <Chip
-                key={value}
-                label={JERSEY_SIZE_LABELS_DA[value]}
-                testID={`detail-size-${value}`}
-                selected={draft.sizeSelected && draft.size === value}
-                accessibilityRole="radio"
-                onPress={() => {
-                  mutate((current) => selectDraftSize(current, current.activeDraftId, value));
-                }}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[typography.label, { color: theme.contentPrimary }]}>Stand</Text>
-          <View style={styles.chipRow}>
-            {JERSEY_CONDITIONS.map((value) => (
-              <Chip
-                key={value}
-                label={JERSEY_CONDITION_LABELS_DA[value]}
-                testID={`detail-condition-${value}`}
-                selected={draft.conditionSelected && draft.condition === value}
-                accessibilityRole="radio"
-                onPress={() => {
-                  mutate((current) => selectDraftCondition(current, current.activeDraftId, value));
-                }}
-              />
-            ))}
-          </View>
-        </View>
+        <ConfirmBadgeSection draft={draft} mutate={mutate} />
 
         <TextField
           label="Noter"
@@ -114,13 +76,5 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: space.insetLg,
     gap: space.gapLg,
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: space.gapSm,
-  },
-  section: {
-    gap: space.gapSm,
   },
 });

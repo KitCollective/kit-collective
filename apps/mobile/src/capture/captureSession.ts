@@ -998,10 +998,11 @@ export function uriForPhotoId(state: CaptureSessionState, photoId: string): stri
 function ensureDraftForGroupIndex(
   state: CaptureSessionState,
   groupIndex: number,
+  defaults?: NewDraftDefaults,
 ): CaptureSessionState {
   let next = state;
   while (next.drafts.length <= groupIndex) {
-    next = addJerseyDraft(next);
+    next = addJerseyDraft(next, defaults);
   }
   return next;
 }
@@ -1029,7 +1030,7 @@ function bindPhotoIdsToDraft(
 export function applyGroupingSuggestion(
   state: CaptureSessionState,
   grouping: { groups: Array<{ photoIds: string[] }> },
-  options: { preselect: boolean },
+  options: NewDraftDefaults & { preselect: boolean },
 ): CaptureSessionState {
   if (grouping.groups.length === 0) {
     return state;
@@ -1058,7 +1059,7 @@ export function applyGroupingSuggestion(
   });
 
   grouping.groups.forEach((group, index) => {
-    next = ensureDraftForGroupIndex(next, index);
+    next = ensureDraftForGroupIndex(next, index, options);
     const draftId = next.drafts[index]?.id;
     if (!draftId) {
       return;
@@ -1073,12 +1074,15 @@ export function applyGroupingSuggestion(
   return next;
 }
 
-export function acceptPendingGrouping(state: CaptureSessionState): CaptureSessionState {
+export function acceptPendingGrouping(
+  state: CaptureSessionState,
+  defaults?: NewDraftDefaults,
+): CaptureSessionState {
   if (!state.pendingGrouping) {
     return state;
   }
 
-  return applyGroupingSuggestion(state, state.pendingGrouping, { preselect: true });
+  return applyGroupingSuggestion(state, state.pendingGrouping, { preselect: true, ...defaults });
 }
 
 export function dismissPendingGrouping(state: CaptureSessionState): CaptureSessionState {

@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
-import { createStickySizeStore, type StickySizeStorage } from "./stickySize";
+import type { StickySizeStorage } from "./stickySize";
+import { setStickySizeStorage } from "./stickySizeStore";
 
 /** Same storage split as the session: SecureStore on device, localStorage on Expo Web. */
 const deviceStorage: StickySizeStorage = {
@@ -19,5 +20,4 @@ const deviceStorage: StickySizeStorage = {
   },
 };
 
-/** The one device-wide store. `StickySizeBinding` binds it to the signed-in collector. */
-export const stickySize = createStickySizeStore(deviceStorage);
+setStickySizeStorage(deviceStorage);

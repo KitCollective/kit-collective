@@ -3,6 +3,7 @@ import { PHOTO_ROLE_LABELS_DA } from "@kit/domain";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, FadeOut, Keyframe } from "react-native-reanimated";
 import { ConfirmAnalyzingPulse, SKELETON_BONE_ALPHA } from "@/components/confirm-analyzing-pulse";
+import { ConfirmScanLine } from "@/components/confirm-scan-line";
 import { useTypography } from "@/theme/brand-fonts";
 import { motion, radius, space, withAlpha } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
@@ -41,6 +42,8 @@ type PhotoSlotProps = {
   labelPlacement?: PhotoSlotLabelPlacement;
   enter?: PhotoSlotEnter;
   analyzing?: boolean;
+  /** Mounts the Vision scan line over a filled photo. `true` while the first read runs. */
+  scanning?: boolean;
   onPress: () => void;
 };
 
@@ -68,6 +71,7 @@ export function PhotoSlot({
   labelPlacement,
   enter,
   analyzing = false,
+  scanning,
   onPress,
 }: PhotoSlotProps) {
   const theme = useTheme();
@@ -190,6 +194,9 @@ export function PhotoSlot({
               accessibilityIgnoresInvertColors
             />
             {overlayBadge}
+            {scanning !== undefined ? (
+              <ConfirmScanLine active={scanning} height={slotHeight} />
+            ) : null}
           </View>
         )}
         {placement === "below" ? (

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/auth/AuthProvider";
-import { stickySize } from "./sticky-size-device";
+import "./sticky-size-device";
+import { stickySize } from "./stickySizeStore";
 
 /** Renders nothing. Hydrates the sticky size for whoever is signed in. */
 export function StickySizeBinding() {

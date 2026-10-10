@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   addPhotosToDraft,
@@ -13,6 +15,7 @@ import {
 import { createScanLineLedger } from "../src/capture/scanLineLedger";
 
 const URIS = Array.from({ length: 12 }, (_, i) => `file:///photos/${i}.jpg`);
+const uriAt = (index: number): string => URIS[index] ?? "";
 
 describe("confirmPhotoStrip", () => {
   it("renders filled slots only, in role order, then one add tile", () => {
@@ -64,7 +67,7 @@ describe("confirmJerseyIndexPlacement", () => {
 describe("addPhotosToDraft", () => {
   it("binds picked photos by fill order without flipping a single session to bulk", () => {
     const session = createCaptureSession(URIS.slice(0, 3));
-    const next = addPhotosToDraft(session, getActiveDraft(session).id, [URIS[3] as string]);
+    const next = addPhotosToDraft(session, getActiveDraft(session).id, [uriAt(3)]);
     expect(next.branch).toBe("single");
     const draft = getActiveDraft(next);
     expect(draft.photos).toHaveLength(4);
@@ -91,8 +94,8 @@ describe("addPhotosToDraft", () => {
   });
 
   it("ignores photos the session already has", () => {
-    const session = createCaptureSession([URIS[0] as string]);
-    const next = addPhotosToDraft(session, getActiveDraft(session).id, [URIS[0] as string]);
+    const session = createCaptureSession([uriAt(0)]);
+    const next = addPhotosToDraft(session, getActiveDraft(session).id, [uriAt(0)]);
     expect(getActiveDraft(next).photos).toHaveLength(1);
   });
 });
@@ -119,5 +122,21 @@ describe("scan line ledger", () => {
   it("ignores a missing photo key", () => {
     const ledger = createScanLineLedger();
     expect(ledger.shouldRun(null, { inFlight: true, reduceMotion: false })).toBe(false);
+  });
+});
+
+describe("scan line chrome", () => {
+  const scanLine = readFileSync(join(__dirname, "../src/components/confirm-scan-line.tsx"), "utf8");
+  const confirm = readFileSync(join(__dirname, "../app/(capture)/confirm.tsx"), "utf8");
+
+  it("renders nothing under Reduce Motion and runs one pass length from the brand moment", () => {
+    expect(scanLine).toContain("useReduceMotion");
+    expect(scanLine).toContain("if (reduceMotion) {\n    return null;");
+    expect(scanLine).toContain("BRAND_MOMENTS.visionAtWork.scanPassMs");
+  });
+
+  it("is gated by the once-per-photo ledger on the Confirm screen", () => {
+    expect(confirm).toContain("scanLineLedger.shouldRun");
+    expect(confirm).toContain("scanningFront={scanFront}");
   });
 });
