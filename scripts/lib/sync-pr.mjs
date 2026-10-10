@@ -5,14 +5,30 @@
  * Pattern from Optio's sync.sh and delta.sh.
  */
 import { execFileSync } from "node:child_process";
+import { prBound } from "./gates.mjs";
+
+/** A fixed identity for every git call here: never rely on, or change, the user's git config. */
+const IDENTITY = {
+  GIT_AUTHOR_NAME: "factory-sync",
+  GIT_AUTHOR_EMAIL: "factory-sync@kitcollective.invalid",
+  GIT_COMMITTER_NAME: "factory-sync",
+  GIT_COMMITTER_EMAIL: "factory-sync@kitcollective.invalid",
+};
 
 function git(cwd, args) {
   return execFileSync("git", args, {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, ...IDENTITY },
   }).trim();
 }
+
+/** First line of git's own message, from a failed call. */
+const reason = (error) =>
+  String(error.stderr || error.message || "")
+    .trim()
+    .split("\n")[0];
 const ok = (cwd, args) => {
   try {
     git(cwd, args);
@@ -37,16 +53,16 @@ export function syncBranch({ cwd, base, remote = "origin", push = true }) {
     }
     try {
       git(cwd, ["merge", "--no-edit", "--no-ff", `${remote}/${base}`]);
-    } catch {
-      const files = git(cwd, ["diff", "--name-only", "--diff-filter=U"])
-        .split("\n")
-        .filter(Boolean);
-      git(cwd, ["merge", "--abort"]);
+    } catch (error) {
+      const merging = ok(cwd, ["rev-parse", "-q", "--verify", "MERGE_HEAD"]);
+      const files = merging
+        ? git(cwd, ["diff", "--name-only", "--diff-filter=U"]).split("\n").filter(Boolean)
+        : [];
+      if (merging) {
+        git(cwd, ["merge", "--abort"]);
+      }
       if (files.length === 0) {
-        return {
-          code: 1,
-          line: "CLOSED (sync): the merge failed for a reason other than a conflict",
-        };
+        return { code: 1, line: `CLOSED (sync): merge failed: ${reason(error)}` };
       }
       return {
         code: 1,
@@ -59,7 +75,7 @@ export function syncBranch({ cwd, base, remote = "origin", push = true }) {
       } catch (error) {
         return {
           code: 1,
-          line: `CLOSED (sync): push refused (${String(error.message).split("\n")[0]}); merge kept locally`,
+          line: `CLOSED (sync): push refused (${reason(error)}); merge kept locally`,
         };
       }
     }
@@ -129,4 +145,22 @@ export function auditStillValid({ cwd, audited, base, remote = "origin", head = 
   } catch (error) {
     return { code: 1, line: `AUDIT-STALE: ${String(error.message).split("\n")[0]}` };
   }
+}
+
+/**
+ * The checkout must be the PR's head by SHA, not only by branch name: a stale local branch
+ * would be merged and pushed over newer work. Reuses `prBound` from the gates.
+ * @param {{ head: string, prHead: string, verb?: string }} o
+ * @returns {{ ok: boolean, line?: string }}
+ */
+export function syncBound({ head, prHead, verb = "CLOSED (sync)" }) {
+  const bound = prBound({ head, prHead });
+  if (bound.ok) {
+    return bound;
+  }
+  const short = (sha) => String(sha ?? "").slice(0, 8) || "unknown";
+  return {
+    ok: false,
+    line: `${verb}: local HEAD is ${short(head)}, the PR head is ${short(prHead)}; pull or run from the PR worktree`,
+  };
 }

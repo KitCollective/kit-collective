@@ -93,13 +93,13 @@ export function take({
 }
 
 /** Gives the lock back. Only the PR that holds it can. */
-export function release({ cwd, remote = "origin", pr }) {
+export function release({ cwd, remote = "origin", pr, force = false }) {
   try {
     const current = holder(cwd, remote);
     if (!current) {
       return { code: 0, line: "RELEASED (merge-lock): nothing was held" };
     }
-    if (current.pr !== String(pr)) {
+    if (!force && current.pr !== String(pr)) {
       return { code: 3, line: `HELD (merge-lock): PR ${current.pr} holds it, not PR ${pr}` };
     }
     git(cwd, [
@@ -109,7 +109,30 @@ export function release({ cwd, remote = "origin", pr }) {
       `--force-with-lease=${LOCK_REF}:${current.sha}`,
       `:${LOCK_REF}`,
     ]);
-    return { code: 0, line: `RELEASED (merge-lock): PR ${pr} gave the lock back` };
+    return {
+      code: 0,
+      line:
+        force && current.pr !== String(pr)
+          ? `RELEASED (merge-lock): cleared by force, PR ${current.pr} held it`
+          : `RELEASED (merge-lock): PR ${pr} gave the lock back`,
+    };
+  } catch (error) {
+    return { code: 1, line: `CLOSED (merge-lock): ${String(error.message).split("\n")[0]}` };
+  }
+}
+
+/**
+ * Who holds the lock and for how long. Exit 0 held, 3 free (nothing to wait for), 1 cannot work.
+ * @param {{ cwd: string, remote?: string, now?: number }} o
+ */
+export function status({ cwd, remote = "origin", now = Math.floor(Date.now() / 1000) }) {
+  try {
+    const current = holder(cwd, remote);
+    if (!current) {
+      return { code: 3, line: "FREE (merge-lock): nobody holds it" };
+    }
+    const minutes = Math.round((now - current.at) / 60);
+    return { code: 0, line: `HELD (merge-lock): PR ${current.pr} for ${minutes} min` };
   } catch (error) {
     return { code: 1, line: `CLOSED (merge-lock): ${String(error.message).split("\n")[0]}` };
   }
