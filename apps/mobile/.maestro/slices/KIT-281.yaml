@@ -17,6 +17,10 @@ name: kit-281
     visible:
       id: capture-vision-switch
     timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: capture-vision-quota
+    timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: kc__kit-281__01-sheet-vision-on

@@ -85,8 +85,7 @@ export function CaptureSourceSheet({
             onPress={() => onConfirm(option.source)}
             style={({ pressed }) => [
               styles.tile,
-              { backgroundColor: theme.fillSecondary },
-              pressed && styles.tilePressed,
+              { backgroundColor: pressed ? theme.borderSubtle : theme.fillSecondary },
             ]}
           >
             <Ionicons name={option.icon} size={24} color={theme.contentPrimary} />
@@ -177,9 +176,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: space.insetMd,
     justifyContent: "space-between",
-  },
-  tilePressed: {
-    opacity: 0.8,
   },
   tileText: {
     gap: 2,
