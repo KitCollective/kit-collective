@@ -95,7 +95,8 @@ name: kit-272
 - takeScreenshot: kc__kit-272__05-sheet-from-demo
 # AC 1 (over an own-photo result): the sheet opens over the analysed photo.
 # The system photo picker has no stable ids. The flows' simulator holds exactly one
-# fixture photo, newest first: the first cell, then the confirm button.
+# fixture photo, newest first: the first cell, then the confirm button (the own-photo
+# picker is a multi-select with a header line, so the button sits lower than in add-jersey).
 - launchApp:
     clearState: true
     clearKeychain: true
@@ -119,7 +120,7 @@ name: kit-272
 - tapOn:
     point: 16%,25%
 - tapOn:
-    point: 90%,12%
+    point: 90%,16%
 - extendedWaitUntil:
     visible:
       id: door-submit
