@@ -57,7 +57,7 @@ Typical contract:
 | In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |
 | Ready for merge | started | checker on pass | Empty Linear Agent is the happy path. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop caps allow. Pi delegate is not a gate. Nicklas can still move. |
 | Merging | started | **Auto-merge** or **approver** from `Ready for merge` | Merge permission. Land auto-merges into the integration lane. Works when delegate is empty. |
-| Done | completed | **land only** after `gh pr merge` succeeds | SHA is on `lanes.integration`. `blockedBy` may resolve |
+| Done | completed | **land only** after the queued PR is `MERGED` | SHA is on `lanes.integration`. `blockedBy` may resolve |
 | Canceled | canceled | humans | Dead. No agent action |
 
 ## Project + environment promotion
@@ -118,7 +118,7 @@ A fail whose findings are **all** tagged `[text]` or `[name]` is a **light fail*
 
 ## Land run (status became `Merging`)
 
-**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Ready for merge`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land merges into the integration lane only, then moves the issue to `Done` and writes **one role comment** with the merge SHA. Merge fail → `Implementing`, merge error under `### Review feedback`, `reviewLoops` incremented, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
+**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Ready for merge`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land enqueues the PR (`gh pr merge --merge --auto`; the lane has a merge queue) and merges into the integration lane only once the queue lands it, then moves the issue to `Done` and writes **one role comment** with the merge SHA. Merge fail → `Implementing`, merge error under `### Review feedback`, `reviewLoops` incremented, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
 
 ## Guardrails
 
