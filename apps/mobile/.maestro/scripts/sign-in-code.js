@@ -14,7 +14,7 @@ output.wrong = code === "000000" ? "000001" : "000000";
 
 if (EXPIRE === "true") {
   const expired = http.post(`${API_URL}/v1/e2e/expire-code?email=${email}`, {
-    headers,
+    headers: { ...headers, "Content-Type": "application/json" },
     body: "{}",
   });
   if (expired.status !== 204) {
