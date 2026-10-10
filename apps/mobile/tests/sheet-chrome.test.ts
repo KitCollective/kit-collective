@@ -109,111 +109,61 @@ describe("Sheet chrome", () => {
 });
 
 describe("Door identity face", () => {
-  it("keeps email + password on one face with social filling the row", () => {
+  it("keeps one Kom i gang face: e-mail, Fortsæt, equal secondary social buttons with icon + text", () => {
     const door = readDoorChrome();
     const host = readFileSync(hostPath, "utf8");
 
-    expect(door).toContain('label="E-mail"');
-    expect(door).toContain('label="Adgangskode"');
-    expect(door).toContain("doorPasswordSubmitLabel");
+    expect(door).toContain("DOOR_EMAIL_LABEL");
+    expect(door).toContain("DOOR_SUBMIT_LABEL");
+    expect(door).toContain("DOOR_TERMS_LINE");
     expect(door).toContain("<BrandMark provider={provider}");
-    expect(door).toContain('provider: "google"');
-    expect(door).toContain('provider: "facebook"');
-    // Social buttons fill the row so they read as one centered cluster.
-    expect(door).toContain("flex: 1");
+    expect(door).toContain('"google"');
+    expect(door).toContain('"facebook"');
+    // Social buttons are equal-width secondary Buttons with a leading mark and the name.
+    expect(door).toContain('variant="secondary"');
+    expect(door).toContain('width="fill"');
+    expect(door).toContain("DOOR_PROVIDER_LABEL[provider]");
+    // Invalid e-mail: danger on the border and text only.
+    expect(door).toContain("error ? theme.danger : theme.borderSubtle");
     // No multi-step chrome anywhere.
     expect(door).not.toContain("emailStep");
     expect(door).not.toContain("ChooseStep");
     expect(door).not.toContain("EmailPasswordStep");
-    expect(door).not.toContain("doorEmailCtaLabel");
     expect(host).not.toContain("emailStep");
     expect(host).not.toContain("onNextEmail");
   });
 });
 
-describe("Door title mode switcher", () => {
-  it("lets Sheet take a ReactNode title slot rendered below the header row", () => {
+describe("Door title and Sheet title", () => {
+  it("renders the Sheet title as a plain header text below the header row", () => {
     const catalog = readFileSync(sheetPath, "utf8");
 
-    // New optional slot, plain `title` string still rendered when absent.
-    expect(catalog).toContain("titleContent?: ReactNode");
-    expect(catalog).toContain("titleContent ? (");
     expect(catalog).toContain('accessibilityRole="header"');
-    // The title-slot node lives in the content region below the header, not the header row.
-    expect(catalog).toContain("<View style={styles.sheetTitleRegion}>{titleContent}</View>");
+    expect(catalog).not.toContain("titleContent");
   });
 
-  it("drops the switcher to the first content row below the header (not beside the button)", () => {
+  it("titles the door Kom i gang with the plain title and no mode switcher", () => {
     const door = readFileSync(doorSheetPath, "utf8");
 
-    // The header row is just the circular button; the switcher is titleContent.
-    expect(door).toContain("titleContent={");
-    expect(door).toContain("DoorModeSwitcher mode={mode}");
-    // No bespoke leading/back affordance in the door — the shared sub-page pattern owns it.
+    expect(door).toContain('variant="door"');
+    expect(door).toContain("title={DOOR_TITLE}");
+    expect(door).not.toContain("DoorModeSwitcher");
+    expect(door).not.toContain("DOOR_LOGIN_SEGMENT");
+    expect(door).not.toContain("DOOR_REGISTER_SEGMENT");
+    // No bespoke leading/back affordance in the door, no mode swipe, no forgot page.
     expect(door).not.toContain("leading={");
-    expect(door).not.toContain('icon="arrow-back"');
+    expect(door).not.toContain("activeOffsetX");
+    expect(door).not.toContain("onSwapMode");
+    expect(door).not.toContain("requestPasswordReset");
+    expect(door).not.toContain("ForgotPasswordFace");
   });
 
-  it("renders two switcher segments that tap-switch and expose selected state", () => {
+  it("mounts a Toast host inside the door Modal so the cancelled-login toast is visible", () => {
     const door = readFileSync(doorSheetPath, "utf8");
 
-    expect(door).toContain("DoorModeSwitcher");
-    expect(door).toContain("DOOR_LOGIN_SEGMENT");
-    expect(door).toContain("DOOR_REGISTER_SEGMENT");
-    // Each segment is an accessible button reporting its selected state.
-    expect(door).toContain("accessibilityState={{ selected }}");
-    // The muted inactive segment uses content.muted; active uses content.primary.
-    expect(door).toContain("theme.contentPrimary : theme.contentMuted");
-    // Grayscale-only — no underline / animated indicator bar under the active segment.
-    expect(door).not.toContain("borderBottomWidth");
-    expect(door).not.toContain("indicatorStyle");
-    // Tapping a segment triggers the same mode swap as the swipe / bottom link.
-    expect(door).toContain("onSwapMode");
-  });
-});
-
-describe("Door face motion and mode swipe", () => {
-  it("crossfades faces on the UI thread with an interruptible, velocity-aware swipe", () => {
-    const door = readFileSync(doorSheetPath, "utf8");
-
-    // Transform + opacity only, driven by shared values.
-    expect(door).toContain("useAnimatedStyle");
-    expect(door).toContain("translateX");
-    expect(door).toContain("faceOpacity");
-    // Horizontal swipe declares its axis so it never fights vertical dismiss / scroll.
-    expect(door).toContain("activeOffsetX");
-    expect(door).toContain("failOffsetY");
-    expect(door).toContain("GestureDetector");
-    // Capture current value on start; hand velocity to the settle spring.
-    expect(door).toContain("dragStart.set(faceX.get())");
-    expect(door).toContain("withSpring");
-    expect(door).toContain("velocity: event.velocityX");
-    expect(door).toContain("project(event.velocityX)");
-    expect(door).toContain("scheduleOnRN(onSwapMode)");
-    // Reduced motion drops the translation, keeps opacity.
-    expect(door).toContain("useReduceMotion");
-    expect(door).toContain("translateX: reduceMotion ? 0 : faceX.get()");
-  });
-});
-
-describe("Door forgot-password page-in-a-sheet", () => {
-  it("swaps in place to a reset sub-page with the shared top-left back chevron", () => {
-    const door = readDoorChrome();
-    const host = readFileSync(hostPath, "utf8");
-
-    // In-sheet page state, not a route push.
-    expect(door).toContain('"auth" | "forgot"');
-    expect(door).toContain("ForgotPasswordFace");
-    expect(door).toContain("FORGOT_PASSWORD_TITLE");
-    expect(door).toContain("FORGOT_PASSWORD_SUBMIT");
-    // Same reset API the /(auth)/reset route uses.
-    expect(door).toContain("requestPasswordReset");
-    // The reset page uses the shared sub-page back handler, not a bespoke leading button.
-    expect(door).toContain("onBack={onForgot ? backToAuth : undefined}");
-    // The host no longer pushes the reset route from the door.
-    expect(host).not.toContain('router.push("/(auth)/reset")');
-    expect(host).not.toContain("useRouter");
-    expect(door).not.toContain("router.push");
+    expect(door).toContain("<Toast");
+    expect(door).toContain("config={toastConfig}");
+    expect(door).toContain('position="bottom"');
   });
 });
 
