@@ -6,7 +6,6 @@ name: wishlist-paywall
     file: ../subflows/sign-in.yaml
     env:
       EMAIL: ${MAESTRO_PEER_EMAIL}
-      PASSWORD: ${MAESTRO_PEER_PASSWORD}
 - startRecording: kc__wishlist-paywall
 - tapOn: Ønsker
 - extendedWaitUntil:

@@ -131,8 +131,6 @@ export default function AccountSettingsScreen() {
             title="E-mail"
             value={email}
             meta={emailVerified ? "Bekræftet" : "Ikke bekræftet"}
-            actionLabel="Skift"
-            onAction={() => router.push("/(tabs)/profile/skift-email")}
           />
           <ProfileRowDivider />
           {editingPhone ? (
@@ -183,11 +181,6 @@ export default function AccountSettingsScreen() {
               />
             </View>
           ))}
-          <ProfileRowDivider />
-          <ListValueRow
-            title="Skift adgangskode"
-            onPress={() => router.push("/(tabs)/profile/skift-adgangskode")}
-          />
           <ProfileRowDivider />
           <ListValueRow title="Slet min konto" onPress={() => setDeleteVisible(true)} />
         </ProfileSurfaceGroup>

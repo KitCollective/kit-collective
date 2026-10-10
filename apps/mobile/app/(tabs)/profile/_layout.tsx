@@ -24,8 +24,6 @@ export default function ProfileLayout() {
       <Stack.Screen name="favoritter" />
       <Stack.Screen name="indstillinger" />
       <Stack.Screen name="kontoindstillinger" />
-      <Stack.Screen name="skift-adgangskode" />
-      <Stack.Screen name="skift-email" />
       <Stack.Screen name="push-notifikationer" />
       <Stack.Screen name="email-notifikationer" />
       <Stack.Screen name="sprog" />
