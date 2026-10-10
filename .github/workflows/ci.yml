@@ -2,57 +2,69 @@ name: CI
 
 on:
   push:
-    branches: [development, staging, production, "cursor/**", "nicklas/**"]
+    branches: [development, staging, production]
   pull_request:
     branches: [development, staging, production]
+  merge_group:
+
+# A new push to a PR cancels its stale run. Lane pushes and merge-queue runs finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # CI-only test values — not product defaults. JWT_SECRET is leftover test setup only.
+  DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+  API_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_api_test
+  SEED_APIFY_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+  SEED_FKAPI_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+  KIT_DB_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
+  JWT_SECRET: ci-test-jwt-secret-not-for-production
+  BETTER_AUTH_SECRET: ci-test-better-auth-secret-not-for-production
+  BETTER_AUTH_URL: http://127.0.0.1:3000
 
 jobs:
-  test:
+  # Decides whether the API database suite can be skipped. Only a PR that touches
+  # nothing but the mobile app, the admin app, docs or agent tooling may skip it.
+  # Lane pushes and the merge queue always run everything.
+  changes:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: kit
-          POSTGRES_PASSWORD: kit
-          POSTGRES_DB: kit_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U kit -d kit_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-
-    env:
-      DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
-      API_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_api_test
-      SEED_APIFY_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
-      SEED_FKAPI_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
-      KIT_DB_TEST_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
-      # CI-only test values — not product defaults. JWT_SECRET is leftover test setup only.
-      JWT_SECRET: ci-test-jwt-secret-not-for-production
-      BETTER_AUTH_SECRET: ci-test-better-auth-secret-not-for-production
-      BETTER_AUTH_URL: http://127.0.0.1:3000
-
+    outputs:
+      api: ${{ steps.diff.outputs.api }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Create API test database
+      - name: Detect API-relevant changes
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          PGPASSWORD=kit psql -h localhost -U kit -d kit_test -c "CREATE DATABASE kit_api_test;"
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "api=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          relevant=$(git diff --name-only "$BASE_SHA" HEAD \
+            | grep -Ev '^(apps/mobile/|apps/admin/|docs/|\.cursor/|\.scratch/)|\.md$' || true)
+          if [ -n "$relevant" ]; then
+            echo "api=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "api=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Build, typecheck, lint and every ratchet. No database.
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: static
 
       - name: Build
         run: pnpm build
@@ -316,10 +328,97 @@ jobs:
       - name: Lint GitHub Actions workflows
         run: bash scripts/lint-workflows.sh
 
-      - name: Test
-        run: pnpm test
+
+  # Every package test except the API. A PR only runs the packages Turbo marks affected.
+  apps:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
         env:
-          DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_test
-          JWT_SECRET: ci-test-jwt-secret-not-for-production
-          BETTER_AUTH_SECRET: ci-test-better-auth-secret-not-for-production
-          BETTER_AUTH_URL: http://127.0.0.1:3000
+          POSTGRES_USER: kit
+          POSTGRES_PASSWORD: kit
+          POSTGRES_DB: kit_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kit -d kit_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: apps
+
+      - name: Test (affected packages on a PR, all otherwise)
+        env:
+          EVENT: ${{ github.event_name }}
+          TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            pnpm exec turbo run test --filter='!@kit/api' --affected --concurrency=1
+          else
+            pnpm exec turbo run test --filter='!@kit/api' --concurrency=1
+          fi
+
+  # The API suite is database-bound and runs files serially, so it is split over
+  # three runners, each with its own Postgres.
+  api:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kit
+          POSTGRES_PASSWORD: kit
+          POSTGRES_DB: kit_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kit -d kit_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: api-${{ matrix.shard }}
+
+      - name: Create API test database
+        run: |
+          PGPASSWORD=kit psql -h localhost -U kit -d kit_test -c "CREATE DATABASE kit_api_test;"
+
+      - name: Build API and its dependencies
+        run: pnpm exec turbo run build --filter='@kit/api...'
+
+      - name: Test API (shard ${{ matrix.shard }}/3)
+        run: pnpm --filter @kit/api exec vitest run --shard=${{ matrix.shard }}/3
+
+  # The one required check on the lane rulesets. A skipped `api` shard (no API
+  # change) passes; a failed or cancelled job does not.
+  test:
+    if: always()
+    needs: [changes, static, apps, api]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          case " $RESULTS " in
+            *" failure "*|*" cancelled "*) exit 1 ;;
+          esac

@@ -92,3 +92,16 @@ test("coverage fails when pull_request does not include the integration lane", (
   const missing = missingFactoryCiCoverage(mutated);
   assert.ok(missing.some((item) => item.includes("pull_request into development")));
 });
+
+test("coverage fails when the test gate stops waiting for a job", () => {
+  const files = currentFiles();
+  const mutated = {
+    ...files,
+    workflowSource: files.workflowSource.replace(
+      "needs: [changes, static, apps, api]",
+      "needs: [changes, static, api]",
+    ),
+  };
+  const missing = missingFactoryCiCoverage(mutated);
+  assert.ok(missing.some((item) => item.includes("jobs.test needs apps")));
+});
