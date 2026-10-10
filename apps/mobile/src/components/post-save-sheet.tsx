@@ -87,12 +87,13 @@ export function PostSaveSheet({
             ) : null}
           </View>
         </View>
-        <Button label={model.nextLabel} onPress={() => openChooser()} />
+        <Button label={model.nextLabel} onPress={() => openChooser()} testID="post-save-next" />
         {model.sameSideLabel ? (
           <Button
             label={model.sameSideLabel}
             variant="secondary"
             onPress={() => openChooser(model.sameSide)}
+            testID="post-save-same-side"
           />
         ) : null}
         <Button

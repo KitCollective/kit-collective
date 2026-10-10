@@ -1,0 +1,73 @@
+# KIT-280: the saved sheet after Save (docs/design-system.md → Confirm and Save → Revision 2026-10-09, item 8).
+# design-sections: Sheet, Button, Photo
+appId: app.kitcollective.mobile
+name: kit-280
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- startRecording: kc__kit-280
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+# The system photo picker has no stable ids: first cell, then the confirm button.
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 90%,12%
+- extendedWaitUntil:
+    visible:
+      id: confirm-vision-success
+    timeout: 90000
+- extendedWaitUntil:
+    visible:
+      id: photo-slot-front-filled
+    timeout: 30000
+- tapOn:
+    id: confirm-section-details
+- extendedWaitUntil:
+    visible:
+      id: confirm-details-save
+    timeout: 10000
+- tapOn:
+    id: detail-size-m
+- tapOn:
+    id: detail-condition-used
+- tapOn:
+    id: confirm-details-save
+- extendedWaitUntil:
+    visible:
+      id: confirm-save
+    timeout: 10000
+- tapOn:
+    id: confirm-save
+- extendedWaitUntil:
+    visible:
+      id: post-save-next
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 1 + button order: front photo thumb, Gemt, club · season · type, "Trøje nr. n i din samling",
+# then Tilføj næste trøje / Endnu en <klub> / Se samlingen.
+- takeScreenshot: kc__kit-280__01-saved-sheet
+# AC 3: Endnu en <klub> re-presents the Chooser (saved side prefilled, nothing else).
+- tapOn:
+    id: post-save-same-side
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-280__02-chooser-same-side
+- stopRecording
