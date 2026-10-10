@@ -23,6 +23,12 @@ export const GH_PR_MERGE_STRATEGY_FLAGS = ["--merge", "--squash", "--rebase"];
 export const LAND_GH_MERGE_STRATEGY = "--merge";
 
 /**
+ * The integration lane has a merge queue: `--auto` enqueues the PR and GitHub merges it
+ * once the queue's own checks pass. The queue is configured for merge commits.
+ */
+export const LAND_GH_AUTO_FLAG = "--auto";
+
+/**
  * @param {unknown} args
  * @returns {boolean}
  */
@@ -123,8 +129,8 @@ function evaluateMergeGate({ issueStatus, pr, lanes }) {
     allowMerge: true,
     reason: "Merging + MERGEABLE + green required checks",
     // Strategy after the number: land.mjs reads args[2] as the PR. gh without a TTY
-    // requires an explicit method; this is a merge commit onto the integration lane.
-    ghArgs: ["pr", "merge", String(pr.number), LAND_GH_MERGE_STRATEGY],
+    // requires an explicit method; this is a merge commit onto the integration lane, queued.
+    ghArgs: ["pr", "merge", String(pr.number), LAND_GH_MERGE_STRATEGY, LAND_GH_AUTO_FLAG],
   };
 }
 
@@ -141,6 +147,7 @@ function evaluateMergeGate({ issueStatus, pr, lanes }) {
  *   ghCalled: boolean,
  *   ghArgs: string[] | null,
  *   reason: string,
+ *   queued?: boolean,
  *   sha?: string,
  * }}
  */
@@ -174,6 +181,19 @@ export function landAtMergeGate({ issueStatus, pr, lanes, gh }) {
       ghCalled: true,
       ghArgs: decision.ghArgs,
       reason: result.error ?? "merge failed",
+    };
+  }
+
+  // No SHA means the PR is in the merge queue, not on the lane yet: stay in Merging.
+  // Done only after the PR is MERGED (`gh pr view --json state,mergeCommit`).
+  if (!result.sha) {
+    return {
+      merged: false,
+      queued: true,
+      nextStatus: MERGE_PERMISSION_STATUS,
+      ghCalled: true,
+      ghArgs: decision.ghArgs,
+      reason: "queued in the merge queue; Done only after the PR is merged",
     };
   }
 
