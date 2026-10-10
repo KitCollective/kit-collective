@@ -6,6 +6,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { prBound } from "./gates.mjs";
+import { nulList } from "./git-files.mjs";
 
 /** A fixed identity for every git call here: never rely on, or change, the user's git config. */
 const IDENTITY = {
@@ -56,7 +57,7 @@ export function syncBranch({ cwd, base, remote = "origin", push = true }) {
     } catch (error) {
       const merging = ok(cwd, ["rev-parse", "-q", "--verify", "MERGE_HEAD"]);
       const files = merging
-        ? git(cwd, ["diff", "--name-only", "--diff-filter=U"]).split("\n").filter(Boolean)
+        ? nulList(git(cwd, ["diff", "--name-only", "-z", "--diff-filter=U"]))
         : [];
       if (merging) {
         git(cwd, ["merge", "--abort"]);

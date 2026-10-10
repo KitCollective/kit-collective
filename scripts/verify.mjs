@@ -27,6 +27,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { changedFiles } from "./lib/git-files.mjs";
 import { mainCheckout } from "./lib/run-log.mjs";
 import {
   dirtyPaths,
@@ -53,6 +54,13 @@ const config = JSON.parse(readFileSync(join(ROOT, "factory.config.json"), "utf8"
 const problems = validateChecks(config.checks);
 if (problems.length > 0) fail(problems.join("; "));
 
+const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
+const dirty = dirtyPaths(
+  execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  }),
+);
 let suites = config.checks.suites;
 const wanted = all("--suite");
 for (const id of wanted) if (!suites.some((s) => s.id === id)) fail(`no suite ${id}`);
@@ -61,15 +69,10 @@ const changedAt = args.indexOf("--changed");
 if (changedAt !== -1) {
   const next = args[changedAt + 1];
   const base = next && !next.startsWith("--") ? next : `origin/${config.lanes.integration}`;
-  const files = execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], {
-    cwd: ROOT,
-    encoding: "utf8",
-  })
-    .split("\n")
-    .filter(Boolean);
+  const files = changedFiles(`${base}...HEAD`, { cwd: ROOT });
   suites = suitesFor(files, suites, config.checks.globalPaths ?? []);
   if (suites.length === 0) {
-    const none = nothingToDo();
+    const none = nothingToDo({ dirty: dirty.length > 0, head });
     process.stdout.write(
       args.includes("--json")
         ? `${JSON.stringify({ ...none, nothingToDo: true, suites: [] }, null, 2)}\n`
@@ -83,7 +86,6 @@ const capabilities = [
   ...all("--capability"),
   ...(process.env.VERIFY_CAPABILITIES ?? "").split(",").filter(Boolean),
 ];
-const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
 const cachePath = join(mainCheckout(ROOT), ".factory", "verify-cache.json");
 let cache = {};
 try {
@@ -100,12 +102,6 @@ const fullListing = execFileSync("git", ["ls-tree", "-r", "HEAD"], {
 const globalPaths = config.checks.globalPaths ?? [];
 const keyOf = (suite) =>
   suiteKey({ suite, globalPaths, fullListing, nodeVersion: process.version });
-const dirty = dirtyPaths(
-  execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  }),
-);
 const isDirty = (suite) => suiteIsDirty(dirty, suite, globalPaths);
 
 /** Runs the command in its own process group so a timeout kills the whole tree. */

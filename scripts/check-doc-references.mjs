@@ -17,6 +17,7 @@ import {
   pathExists,
   removedNames,
 } from "./lib/doc-references.mjs";
+import { nulList } from "./lib/git-files.mjs";
 
 const baseRef = process.env.BASE_REF ?? "origin/development";
 
@@ -33,7 +34,7 @@ try {
 }
 
 const diff = git(["diff", "-U0", `${baseRef}...HEAD`]);
-const tracked = git(["ls-files"]).split("\n").filter(Boolean);
+const tracked = nulList(git(["ls-files", "-z"]));
 const livingDocs = tracked.filter(isLivingDoc);
 const codeFiles = tracked.filter((file) =>
   /\.(?:tsx?|jsx?|mjs|cjs|mts|cts|ya?ml|json)$/.test(file),

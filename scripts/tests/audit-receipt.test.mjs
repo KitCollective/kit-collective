@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
-import { evaluateReceipt, statusPermissionLine } from "../lib/audit-receipt.mjs";
+import { evaluateReceipt, ghMessage, statusPermissionLine } from "../lib/audit-receipt.mjs";
 import { parseResultLine } from "../lib/gates.mjs";
 
 const HEAD = "c0ffee1234567890c0ffee1234567890c0ffee12";
@@ -44,16 +44,22 @@ test("refuses a thread that started before the head commit", () => {
 });
 
 test("refuses a missing result line, a bad verdict and another sha", () => {
-  assert.match(evaluateReceipt({ ...base, output: "looks fine to me" }).refusal, /no AUDIT-RESULT/);
+  assert.match(
+    evaluateReceipt({ ...base, output: "looks fine to me" }).refusal,
+    /exact AUDIT-RESULT/,
+  );
   assert.match(
     evaluateReceipt({ ...base, output: `AUDIT-RESULT KIT-7 maybe ${HEAD.slice(0, 8)}` }).refusal,
-    /not green/,
+    /exact AUDIT-RESULT/,
   );
   assert.match(
     evaluateReceipt({ ...base, output: "AUDIT-RESULT KIT-7 green deadbeef" }).refusal,
     /audited deadbeef/,
   );
-  assert.match(evaluateReceipt({ ...base, output: "AUDIT-RESULT KIT-7 green" }).refusal, /no sha/);
+  assert.match(
+    evaluateReceipt({ ...base, output: "AUDIT-RESULT KIT-7 green" }).refusal,
+    /exact AUDIT-RESULT/,
+  );
 });
 
 test("refuses a thread id that is not a bb thread", () => {
@@ -154,37 +160,61 @@ test("incomplete logging cannot bypass the different-model check", () => {
 test("a short sha in the result line is refused", () => {
   assert.match(
     evaluateReceipt({ ...base, output: "AUDIT-RESULT KIT-7 green abc" }).refusal,
-    /audited abc/,
+    /exact AUDIT-RESULT/,
   );
   assert.match(
     evaluateReceipt({ ...base, output: "AUDIT-RESULT KIT-7 green c0ffee" }).refusal,
-    /audited c0ffee/,
+    /exact AUDIT-RESULT/,
   );
-  assert.equal(evaluateReceipt({ ...base, output: `AUDIT-RESULT KIT-7 green c0ffee1` }).ok, true);
-});
-
-test("rows are split on commas and whitespace", () => {
-  const r = evaluateReceipt({
-    ...base,
-    output: `AUDIT-RESULT KIT-7 red ${HEAD.slice(0, 8)} spec-ac, slop mergeable,docs-sync`,
-  });
-  assert.deepEqual(r.rows, ["spec-ac", "slop", "mergeable", "docs-sync"]);
-});
-
-test("a result line that is not the last line is refused", () => {
-  const out = `AUDIT-RESULT KIT-7 green ${HEAD.slice(0, 8)}\nactually wait, I found a blocking bug, do not merge`;
-  assert.match(evaluateReceipt({ ...base, output: out }).refusal, /no AUDIT-RESULT/);
-});
-
-test("the description stays within GitHub's 140 characters", () => {
-  const long = spawns.map((e) =>
-    e.step === "reviewer" ? { ...e, provider: "codex", model: "m".repeat(200) } : e,
+  assert.equal(evaluateReceipt({ ...base, output: "AUDIT-RESULT KIT-7 green c0ffee1" }).ok, true);
+  assert.equal(
+    evaluateReceipt({ ...base, output: `AUDIT-RESULT KIT-7 green ${HEAD.toUpperCase()}` }).ok,
+    true,
   );
-  const r = evaluateReceipt({ ...base, spawns: long });
-  assert.ok(r.description.length <= 140);
 });
 
-test("only a permission refusal is called a missing permission", () => {
+test("rows are exact lock-row ids, comma separated, and only on amber or red", () => {
+  const line = (rest) => evaluateReceipt({ ...base, output: `AUDIT-RESULT KIT-7 ${rest}` });
+  const sha = HEAD.slice(0, 8);
+  assert.deepEqual(line(`red ${sha} spec-ac,mergeable,docs-sync`).rows, [
+    "spec-ac",
+    "mergeable",
+    "docs-sync",
+  ]);
+  assert.equal(line(`amber ${sha} state-machine`).ok, true);
+  for (const bad of [
+    `red ${sha} spec-ac, slop`, // a space after the comma, and `slop` is not a lock row
+    `red ${sha} slop`,
+    `red ${sha} spec-ac,spec-ac`,
+    `green ${sha} spec-ac`,
+  ]) {
+    assert.equal(line(bad).ok, false, bad);
+  }
+});
+
+test("a caveat on the same line or after it is never accepted as a result", () => {
+  const sha = HEAD.slice(0, 8);
+  const refused = (output) => evaluateReceipt({ ...base, output }).ok === false;
+  assert.ok(refused(`AUDIT-RESULT KIT-7 green ${sha} (but do not merge: blocking bug)`));
+  assert.ok(refused(`AUDIT-RESULT KIT-7 green ${sha}\nactually wait, do not merge`));
+  for (const separator of ["\f", "\v", "\u0085", "\u2028", "\u2029", "\r"]) {
+    assert.ok(
+      refused(`AUDIT-RESULT KIT-7 green ${sha}${separator}do not merge`),
+      JSON.stringify(separator),
+    );
+  }
+  assert.equal(
+    evaluateReceipt({ ...base, output: `**AUDIT-RESULT KIT-7 green ${sha}**` }).ok,
+    true,
+  );
+  assert.equal(
+    evaluateReceipt({ ...base, output: `\`AUDIT-RESULT KIT-7 green ${sha}\`` }).ok,
+    true,
+  );
+  assert.ok(refused(`see **AUDIT-RESULT KIT-7 green ${sha}** here`));
+});
+
+test("only a permission refusal is called a missing permission, judged on stderr alone", () => {
   const perm = "token lacks Commit statuses write";
   assert.equal(
     statusPermissionLine({
@@ -192,11 +222,48 @@ test("only a permission refusal is called a missing permission", () => {
     }),
     perm,
   );
-  assert.equal(statusPermissionLine({ message: "gh: Forbidden (HTTP 403)" }), perm);
-  assert.equal(statusPermissionLine({ message: "gh: API rate limit exceeded (HTTP 403)" }), null);
-  assert.equal(statusPermissionLine({ message: "gh: secondary rate limit (HTTP 403)" }), null);
-  assert.equal(statusPermissionLine({ message: "gh: Not Found (HTTP 404)" }), null);
+  assert.equal(statusPermissionLine({ stderr: "gh: Forbidden (HTTP 403)" }), perm);
+  assert.equal(statusPermissionLine({ stderr: "gh: API rate limit exceeded (HTTP 403)" }), null);
+  assert.equal(statusPermissionLine({ stderr: "gh: secondary rate limit (HTTP 403)" }), null);
+  assert.equal(statusPermissionLine({ stderr: "gh: Not Found (HTTP 404)" }), null);
   assert.equal(statusPermissionLine({ message: "network down" }), null);
+  // the command line (error.message) holds the description; a model called "secondary" must not decide
+  assert.equal(
+    statusPermissionLine({
+      message: "Command failed: gh api -f description=audit green by thr_x (codex/secondary-abuse)",
+      stderr: "gh: Resource not accessible by personal access token (HTTP 403)",
+    }),
+    perm,
+  );
+});
+
+test("ghMessage is gh's own first stderr line and never the command line", () => {
+  const error = {
+    message: "Command failed: gh api repos/o/r/statuses/abc -f description=secret-model-name",
+    stderr: "gh: Not Found (HTTP 404)\nmore",
+  };
+  assert.equal(ghMessage(error), "gh: Not Found (HTTP 404)");
+  assert.doesNotMatch(ghMessage(error), /secret-model-name/);
+  assert.equal(ghMessage({ message: "x" }), "gh failed");
+});
+
+test("model comparison ignores case and surrounding whitespace, and does not resolve aliases", () => {
+  const asked = (model) =>
+    evaluateReceipt({
+      ...base,
+      spawns: [spawns[0], { ...spawns[1], provider: "claude-code", model }].map((e) =>
+        e.step === "engineer" ? { ...e, provider: "claude-code", model: "sonnet" } : e,
+      ),
+      thread: { ...thread, providerId: "claude-code" },
+      requireDifferentModel: true,
+    });
+  assert.equal(asked(" Sonnet ").ok, false);
+  assert.equal(asked("SONNET").ok, false);
+  assert.equal(
+    asked("claude-sonnet-5-5").ok,
+    true,
+    "aliases are not resolved: only as good as the log",
+  );
 });
 
 test("a quoted example before the real final line does not win, and one after it is refused", () => {

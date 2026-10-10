@@ -204,20 +204,28 @@ export async function runSuites({
   return rows;
 }
 
-/** One verdict from the rows. */
-/** @param {object[]} rows @param {{ head?: string }} [o] head is named when the run was dirty */
+const shortHead = (head) => (head ? head.slice(0, 8) : "the checked commit");
+
+/**
+ * One verdict from the rows. A run with uncommitted changes says so in every line it prints, pass
+ * or fail, because the result is not for the commit.
+ * @param {object[]} rows
+ * @param {{ head?: string }} [o]
+ */
 export function verdictOf(rows, { head } = {}) {
+  const uncached = rows.filter((r) => r.uncached).length;
+  const note = uncached > 0 ? `dirty: not for ${shortHead(head)}` : "";
   const bad = rows.filter((r) => r.status === "fail" || r.status === "timeout");
   if (bad.length > 0) {
     return {
       code: VERIFY_EXIT.failed,
-      line: `VERIFY FAIL: ${bad.map((r) => `${r.id} (${r.status})`).join(", ")}`,
+      line: `VERIFY FAIL${note ? ` (${note})` : ""}: ${bad.map((r) => `${r.id} (${r.status})`).join(", ")}`,
     };
   }
   const skipped = rows.filter((r) => r.status === "skipped");
-  const dirty = rows.filter((r) => r.uncached).length;
-  const note = dirty > 0 ? `dirty: not for ${(head ?? "the commit").slice(0, 8)}; ` : "";
-  const counts = `${note}${rows.filter((r) => r.status === "pass").length} ran, ${rows.filter((r) => r.status === "reused").length} reused${dirty > 0 ? `, ${dirty} on uncommitted changes and not cached` : ""}`;
+  const ran = rows.filter((r) => r.status === "pass").length;
+  const reused = rows.filter((r) => r.status === "reused").length;
+  const counts = `${note ? `${note}; ` : ""}${ran} ran, ${reused} reused${uncached > 0 ? `, ${uncached} on uncommitted changes and not cached` : ""}`;
   if (skipped.length > 0) {
     return {
       code: VERIFY_EXIT.incomplete,
@@ -228,9 +236,9 @@ export function verdictOf(rows, { head } = {}) {
 }
 
 /** What `--changed` reports when no suite matches: never the text or code of a real pass. */
-export function nothingToDo() {
+export function nothingToDo({ dirty = false, head } = {}) {
   return {
     code: VERIFY_EXIT.nothing,
-    line: "VERIFY NOTHING TO DO (no suite matches the diff; nothing was run, this is not a pass)",
+    line: `VERIFY NOTHING TO DO${dirty ? ` (dirty: not for ${shortHead(head)})` : ""} (no suite matches the diff; nothing was run, this is not a pass)`,
   };
 }

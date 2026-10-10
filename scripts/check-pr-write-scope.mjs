@@ -5,6 +5,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { nulList } from "./lib/git-files.mjs";
 import {
   changedFilesDiffArgs,
   findWriteScopeViolations,
@@ -55,19 +56,13 @@ function getScopeSourceText() {
 
 function getChangedFiles(baseRef) {
   try {
-    return execFileSync("git", changedFilesDiffArgs(baseRef), {
-      encoding: "utf8",
-    })
-      .trim()
-      .split("\n")
-      .filter(Boolean);
+    return nulList(execFileSync("git", changedFilesDiffArgs(baseRef), { encoding: "utf8" }));
   } catch {
-    return execFileSync("git", ["diff", "--name-only", "HEAD~1"], {
-      encoding: "utf8",
-    })
-      .trim()
-      .split("\n")
-      .filter(Boolean);
+    return nulList(
+      execFileSync("git", ["diff", "--name-only", "-z", "--no-renames", "HEAD~1"], {
+        encoding: "utf8",
+      }),
+    );
   }
 }
 

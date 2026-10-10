@@ -11,6 +11,7 @@ import {
   findDanishCodeIdentifiers,
   findDanishFileNames,
 } from "../.cursor/hooks/lib/danish-code-identifiers.mjs";
+import { changedFiles } from "./lib/git-files.mjs";
 
 const baseRef = process.env.BASE_REF ?? "origin/development";
 const CODE_PATHSPEC = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs", "*.mts", "*.cts"];
@@ -29,7 +30,7 @@ try {
 
 const range = `${baseRef}...HEAD`;
 const identifiers = findDanishCodeIdentifiers(git(["diff", "-U0", range, "--", ...CODE_PATHSPEC]));
-const added = git(["diff", "--name-only", "--diff-filter=AR", range]).split("\n").filter(Boolean);
+const added = changedFiles(range, { extra: ["--diff-filter=A"] });
 const fileNames = findDanishFileNames(added);
 
 if (identifiers.length === 0 && fileNames.length === 0) {

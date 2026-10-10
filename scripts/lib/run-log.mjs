@@ -7,6 +7,7 @@
 import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
+import { ROW_IDS } from "./audit-result.mjs";
 import { LOCK_ROWS } from "./review-matrix.mjs";
 
 export const DEFAULT_LOG_PATH = ".factory/run-log.jsonl";
@@ -72,8 +73,7 @@ const FIELDS = {
   verdict: (v) => ["green", "amber", "red"].includes(v),
   round: (v) => Number.isInteger(v) && v >= 0 && v < 100,
   sha: (v) => typeof v === "string" && SHA.test(v),
-  rows: (v) =>
-    Array.isArray(v) && v.length <= 20 && v.every((r) => LOCK_ROWS.some((l) => l.id === r)),
+  rows: (v) => Array.isArray(v) && v.length <= 20 && v.every((r) => ROW_IDS.includes(r)),
   code: (v) => REASON_CODES.includes(v),
 };
 

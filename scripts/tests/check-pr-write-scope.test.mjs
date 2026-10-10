@@ -15,9 +15,11 @@ test("changedFilesDiffArgs uses two-dot range so merge-commits from base are exc
   assert.deepEqual(changedFilesDiffArgs("origin/development"), [
     "diff",
     "--name-only",
+    "-z",
+    "--no-renames",
     "origin/development..HEAD",
   ]);
-  assert.notEqual(changedFilesDiffArgs("origin/development")[2], "origin/development...HEAD");
+  assert.equal(changedFilesDiffArgs("origin/development").at(-1).includes("..."), false);
 });
 
 test("parseWriteScopeGlobs extracts comma-separated globs", () => {

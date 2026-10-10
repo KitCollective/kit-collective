@@ -9,8 +9,8 @@
  *       print JSON { recheck, inherit } for the diff `<lastReviewSha>...HEAD`
  * The workpad is a file path or `-` for stdin.
  */
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { changedFiles } from "./lib/git-files.mjs";
 import { LOCK_ROWS, parseMatrix, planRecheck, validateMatrix } from "./lib/review-matrix.mjs";
 
 const [command, source, lastReviewSha] = process.argv.slice(2);
@@ -36,11 +36,7 @@ if ((command === "validate" || command === "plan") && source) {
     process.stderr.write("plan needs <lastReviewSha>\n");
     process.exit(2);
   }
-  const changed = execFileSync("git", ["diff", "--name-only", `${lastReviewSha}...HEAD`], {
-    encoding: "utf8",
-  })
-    .split("\n")
-    .filter(Boolean);
+  const changed = changedFiles(`${lastReviewSha}...HEAD`);
   process.stdout.write(`${JSON.stringify(planRecheck(rows, changed), null, 2)}\n`);
   process.exit(0);
 }

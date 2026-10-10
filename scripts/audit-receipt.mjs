@@ -12,7 +12,7 @@
  *          come from there: bb shows no model) and refuses a thread that is one of the issue's engineer
  *          threads. Reads `bb thread show <thread> --json` and `bb thread output <thread> --json`, takes the
  *          PR head from GitHub, refuses unless the thread started after the head commit and its
- *          final output holds `AUDIT-RESULT KIT-n green|amber|red <head-sha> [rows,...]`. It then
+ *          final output ends with the exact line `AUDIT-RESULT KIT-n green|amber|red <head-sha> [rows,...]`. It then
  *          sets `kc/audit` (success for green and amber, failure for red) whose description names
  *          the thread id, provider, model and SHA, and appends an `audit` event to the run log.
  *   check  exit 0 only when the PR head carries `kc/audit` = success (the land path).
@@ -22,12 +22,19 @@
  * answered for this exact head, logged as a reviewer and not an engineer, other model than the
  * engineer's per the run log when asked; `--require-different-model` is a recommendation, because bb
  * itself has no model field).
- * One line out. Exit: 0 posted or present, 1 refused or not green, 2 usage, 4 a source failed.
+ * The audit event is validated before anything is posted. One line out. Exit: 0 posted or present,
+ * 1 refused or not green, 2 usage, 4 a source failed, 5 `POSTED but not logged` (the status is set, the
+ * run log write failed).
  */
 import { execFileSync } from "node:child_process";
-import { AUDIT_CONTEXT, evaluateReceipt, statusPermissionLine } from "./lib/audit-receipt.mjs";
+import {
+  AUDIT_CONTEXT,
+  evaluateReceipt,
+  ghMessage,
+  statusPermissionLine,
+} from "./lib/audit-receipt.mjs";
 import { config, events, gh, logGate } from "./lib/gate-io.mjs";
-import { append, logPath } from "./lib/run-log.mjs";
+import { append, logPath, validateEvent } from "./lib/run-log.mjs";
 
 const [action, pr, ...rest] = process.argv.slice(2);
 const opt = (name) => {
@@ -95,6 +102,23 @@ try {
   if (!result.ok) {
     out(1, `REFUSED (receipt): ${result.refusal}`);
   }
+  // Everything is validated BEFORE the status is posted, including the event that will be logged.
+  const round = events().filter((e) => e.event === "audit" && e.issue === result.issue).length + 1;
+  const auditEvent = {
+    event: "audit",
+    issue: result.issue,
+    verdict: result.verdict,
+    round,
+    sha: head,
+    ...(result.rows.length ? { rows: result.rows } : {}),
+  };
+  const invalid = validateEvent(auditEvent);
+  if (invalid.length > 0) {
+    out(
+      1,
+      `REFUSED (receipt): the audit event would be invalid (${invalid.join("; ")}); nothing posted`,
+    );
+  }
   if (!rest.includes("--dry-run")) {
     try {
       await gh([
@@ -108,27 +132,15 @@ try {
         `description=${result.description}`,
       ]);
     } catch (error) {
-      out(
-        4,
-        `UNKNOWN (receipt): ${statusPermissionLine(error) ?? String(error.message).split("\n")[0]}`,
-      );
+      out(4, `UNKNOWN (receipt): ${statusPermissionLine(error) ?? ghMessage(error)}`);
     }
-    const round =
-      events().filter((e) => e.event === "audit" && e.issue === result.issue).length + 1;
     try {
-      append(
-        {
-          event: "audit",
-          issue: result.issue,
-          verdict: result.verdict,
-          round,
-          sha: head,
-          ...(result.rows.length ? { rows: result.rows } : {}),
-        },
-        { path: logPath() },
-      );
+      append(auditEvent, { path: logPath() });
     } catch (error) {
-      process.stderr.write(`run-log: ${error.message}\n`);
+      out(
+        5,
+        `POSTED but not logged (${String(error.message).split("\n")[0]}): ${AUDIT_CONTEXT} ${result.state} on ${head.slice(0, 7)}`,
+      );
     }
     logGate(result.issue, "review", result.verdict === "red" ? "closed" : "open", head);
   }

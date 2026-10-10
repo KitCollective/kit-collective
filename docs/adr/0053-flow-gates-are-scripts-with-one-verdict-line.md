@@ -8,6 +8,8 @@ Nicklas, 2026-10-10, with ADR-0051 and ADR-0052. The issue flow will run as seve
 4. **No result line, run the gate** (`gate.mjs result`): a step that ends without its `TAG KIT-n outcome` line is never read as a pass; the orchestrator runs the gate itself and goes by its exit code (Optio OPT-389).
 5. **One review entry** (`gate.mjs review`): `check-code-english`, `check-doc-references`, matrix validation, write-scope and `wait-for-checks` in one call, one verdict line (the first failing step plus a count), logged as a `gate` event.
 
+**File lists are read exactly.** Every script that decides from "which files changed" uses `scripts/lib/git-files.mjs`: `git diff --name-only -z --no-renames`, split on NUL, so a renamed file counts at both paths and a non-ASCII name or a name with spaces is never quoted or escaped. Converted: suite selection (`verify.mjs`), review rows (`review-matrix.mjs plan`), the write-scope ratchet, the Danish-name check, the doc-reference path list (`ls-files -z`) and the sync conflict list. Left as they were: `check-migration-prefixes` (migration names are ASCII by rule and it reads `ls-tree` names, not a selection), `classify-fix-diff` and the doc-reference diff (they read diff text hunks, not file lists).
+
 Exit codes everywhere: `0` open, `1` closed, `2` usage, `3` waiting, `4` unknown. Each gate logs `gate` events (ADR-0052).
 
 Known limit: the claim race. Two orchestrators started together can both get OPEN from `session-check` and both claim the issue, because Linear has no atomic claim. The run-log check narrows the window; it does not remove it. `gate.mjs review` also refuses to run unless the checkout is the PR's head, since its diff-based steps read the checkout.

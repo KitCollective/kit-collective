@@ -298,3 +298,26 @@ test("validateChecks checks globalPaths", () => {
   assert.match(validateChecks({ globalPaths: "x", suites: table().suites }).join(), /globalPaths/);
   assert.deepEqual(validateChecks({ globalPaths: ["a"], suites: table().suites }), []);
 });
+
+test("a failing dirty run and a NOTHING TO DO line are marked dirty; the head is never truncated text", async () => {
+  const rows = await runSuites({
+    ...table(),
+    capabilities: ["postgres"],
+    cache: {},
+    isDirty: (suite) => suite.id === "web",
+    ...harness((id) => (id === "web" ? "fail" : "pass")).options,
+  });
+  const failed = verdictOf(rows, { head: "0123456789abcdef" });
+  assert.equal(failed.code, VERIFY_EXIT.failed);
+  assert.match(failed.line, /^VERIFY FAIL \(dirty: not for 01234567\): web \(fail\)/);
+  assert.match(
+    verdictOf(rows.map((r) => ({ ...r, status: "pass" }))).line,
+    /dirty: not for the checked commit;/,
+  );
+  assert.doesNotMatch(verdictOf(rows.map((r) => ({ ...r, status: "pass" }))).line, /the chec;/);
+  assert.match(
+    nothingToDo({ dirty: true, head: "0123456789abcdef" }).line,
+    /^VERIFY NOTHING TO DO \(dirty: not for 01234567\)/,
+  );
+  assert.doesNotMatch(nothingToDo().line, /dirty/);
+});

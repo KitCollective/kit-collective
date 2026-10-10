@@ -9,10 +9,9 @@
  * created after the head commit, produced an AUDIT-RESULT line for exactly this head, and (when
  * asked) ran on another provider or model than the implementer, judged from the run log.
  */
-import { parseResultLine } from "./gates.mjs";
+import { parseAuditResult } from "./audit-result.mjs";
 
 export const AUDIT_CONTEXT = "kc/audit";
-const VERDICTS = ["green", "amber", "red"];
 
 /**
  * Provider and model come from the run log, where the orchestrator wrote them at spawn, because
@@ -50,22 +49,17 @@ export function evaluateReceipt({
       refusal: `thread ${thread.id} started before the head commit, so it cannot have read this head`,
     };
   }
-  const parsed = parseResultLine("AUDIT-RESULT", output);
+  const parsed = parseAuditResult(output);
   if (!parsed) {
-    return { ok: false, refusal: `thread ${thread.id} returned no AUDIT-RESULT line` };
-  }
-  if (!VERDICTS.includes(parsed.outcome)) {
-    return { ok: false, refusal: `verdict ${parsed.outcome} is not green, amber or red` };
-  }
-  const [auditedSha, ...rowTokens] = parsed.rest.split(/\s+/).filter(Boolean);
-  if (
-    !auditedSha ||
-    auditedSha.length < 7 ||
-    !head.toLowerCase().startsWith(auditedSha.toLowerCase())
-  ) {
     return {
       ok: false,
-      refusal: `thread audited ${auditedSha || "no sha"}, the head is ${head.slice(0, 7)}`,
+      refusal: `thread ${thread.id} did not end with an exact AUDIT-RESULT line (nothing else on the line or after it)`,
+    };
+  }
+  if (!head.toLowerCase().startsWith(parsed.sha)) {
+    return {
+      ok: false,
+      refusal: `thread audited ${parsed.sha}, the head is ${head.slice(0, 7)}`,
     };
   }
   const forIssue = (spawns ?? []).filter((e) => e.issue === parsed.issue);
@@ -103,7 +97,13 @@ export function evaluateReceipt({
           "different model requested, but provider and model are not logged for every engineer spawn",
       };
     }
-    if (engineers.some((e) => e.provider === reviewer.provider && e.model === reviewer.model)) {
+    const norm = (value) => String(value).trim().toLowerCase();
+    if (
+      engineers.some(
+        (e) =>
+          norm(e.provider) === norm(reviewer.provider) && norm(e.model) === norm(reviewer.model),
+      )
+    ) {
       return {
         ok: false,
         refusal: `reviewer runs on ${reviewer.provider}/${reviewer.model}, the same as an engineer spawn`,
@@ -114,16 +114,13 @@ export function evaluateReceipt({
   const model = reviewer.model ?? "unknown";
   return {
     ok: true,
-    state: parsed.outcome === "red" ? "failure" : "success",
-    verdict: parsed.outcome,
+    state: parsed.verdict === "red" ? "failure" : "success",
+    verdict: parsed.verdict,
     issue: parsed.issue,
-    rows: rowTokens
-      .join(" ")
-      .split(/[,\s]+/)
-      .filter(Boolean),
+    rows: parsed.rows,
     // GitHub limits a status description to 140 characters.
     description:
-      `audit ${parsed.outcome} by ${thread.id} (${provider}/${model}) at ${head.slice(0, 7)}`.slice(
+      `audit ${parsed.verdict} by ${thread.id} (${provider}/${model}) at ${head.slice(0, 7)}`.slice(
         0,
         140,
       ),
@@ -138,11 +135,21 @@ export function evaluateReceipt({
  * @returns {string | null}
  */
 export function statusPermissionLine(error) {
-  const text = `${error?.stderr ?? ""}\n${error?.message ?? ""}`;
+  // stderr only: error.message carries the command line, including the status description.
+  const text = String(error?.stderr ?? "");
   if (/rate limit|abuse|secondary/i.test(text)) {
     return null;
   }
   return /Resource not accessible|HTTP 403/i.test(text)
     ? "token lacks Commit statuses write"
     : null;
+}
+
+/** gh's own first stderr line, never the command line (which holds the status description). */
+export function ghMessage(error) {
+  return (
+    String(error?.stderr ?? "")
+      .trim()
+      .split("\n")[0] || "gh failed"
+  );
 }

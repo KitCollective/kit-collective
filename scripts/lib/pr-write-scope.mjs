@@ -80,7 +80,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
  * (KIT-117 — inflated PR file counts when branches merge origin/development).
  */
 export function changedFilesDiffArgs(baseRef = "origin/development") {
-  return ["diff", "--name-only", `${baseRef}..HEAD`];
+  return ["diff", "--name-only", "-z", "--no-renames", `${baseRef}..HEAD`];
 }
 
 export function matchesGlob(filePath, glob) {
