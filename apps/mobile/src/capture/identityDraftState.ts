@@ -47,3 +47,16 @@ export function resetIdentityState(
   const { [draftId]: _forgotten, ...rest } = states;
   return rest;
 }
+
+/** What a finished Vision read leaves on its jersey for the collector to settle. */
+export type IdentityLanding = { kind: "suggest"; job: VisionJobResponse } | { kind: "applied" };
+
+/** The patch for the jersey that owns the job, whichever tab is open when it lands. */
+export function identityLandingPatch(landing: IdentityLanding): Partial<IdentityDraftState> {
+  return landing.kind === "suggest" ? { suggestion: landing.job } : { applied: true };
+}
+
+/** The shared fade runs only for the visible jersey; a background landing waits for its tab. */
+export function landingFadesIn(draftId: string, activeDraftId: string | null): boolean {
+  return draftId === activeDraftId;
+}

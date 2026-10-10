@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_IDENTITY_DRAFT_STATE,
   type IdentityDraftStates,
+  identityLandingPatch,
   identityStateFor,
+  landingFadesIn,
   patchIdentityState,
   resetIdentityState,
 } from "../src/capture/identityDraftState";
@@ -66,5 +68,40 @@ describe("identity state per jersey", () => {
     patchIdentityState(before, "draft-a", { applied: true });
     resetIdentityState(before, "draft-a");
     expect(before["draft-a"]?.applied).toBe(false);
+  });
+});
+
+describe("a Vision result that lands while another jersey is open", () => {
+  it("stores the low-confidence guess under the jersey that owns the job", () => {
+    // A's read lands while the collector is on B: the patch is for A, the fade is not.
+    const states = patchIdentityState(
+      {},
+      "draft-a",
+      identityLandingPatch({ kind: "suggest", job: guessA }),
+    );
+    expect(landingFadesIn("draft-a", "draft-b")).toBe(false);
+    expect(identityStateFor(states, "draft-a").suggestion).toBe(guessA);
+    expect(identityStateFor(states, "draft-b").suggestion).toBeNull();
+  });
+
+  it("marks a background jersey as filled by Vision without touching the visible one", () => {
+    const states = patchIdentityState({}, "draft-a", identityLandingPatch({ kind: "applied" }));
+    expect(identityStateFor(states, "draft-a").applied).toBe(true);
+    expect(identityStateFor(states, "draft-b").applied).toBe(false);
+  });
+
+  it("fades in only for the visible jersey", () => {
+    expect(landingFadesIn("draft-a", "draft-a")).toBe(true);
+    expect(landingFadesIn("draft-a", null)).toBe(false);
+  });
+
+  it("keeps the guess for A when it is reopened", () => {
+    let states = patchIdentityState(
+      {},
+      "draft-a",
+      identityLandingPatch({ kind: "suggest", job: guessA }),
+    );
+    states = patchIdentityState(states, "draft-b", identityLandingPatch({ kind: "applied" }));
+    expect(identityStateFor(states, "draft-a").suggestion).toBe(guessA);
   });
 });

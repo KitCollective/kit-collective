@@ -36,7 +36,9 @@ import {
 import {
   type IdentityDraftState,
   type IdentityDraftStates,
+  identityLandingPatch,
   identityStateFor,
+  landingFadesIn,
   patchIdentityState,
   resetIdentityState,
 } from "@/capture/identityDraftState";
@@ -194,8 +196,8 @@ export function useConfirmVision({
       const shouldPreselect = hasPreselectFields(fieldPreselect);
 
       if (!shouldPreselect && suggestions) {
-        if (currentDraftId === draftRef.current?.id) {
-          patchIdentity(currentDraftId, { suggestion: job });
+        patchIdentity(currentDraftId, identityLandingPatch({ kind: "suggest", job }));
+        if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
           fadeInSuggestion();
         }
         return;
@@ -219,7 +221,12 @@ export function useConfirmVision({
           }),
         );
 
-        if (!confirmSeasonWasEdited() && suggestions.seasonLabel && fieldPreselect.season) {
+        if (
+          landingFadesIn(currentDraftId, draftRef.current?.id ?? null) &&
+          !confirmSeasonWasEdited() &&
+          suggestions.seasonLabel &&
+          fieldPreselect.season
+        ) {
           setSelectedSeasonLabel(suggestions.seasonLabel);
         }
 
@@ -240,15 +247,18 @@ export function useConfirmVision({
           badge: confirmBadgeWasEdited(),
         });
         if (suggestOnlyJob) {
-          if (currentDraftId === draftRef.current?.id) {
-            patchIdentity(currentDraftId, { suggestion: suggestOnlyJob });
+          patchIdentity(
+            currentDraftId,
+            identityLandingPatch({ kind: "suggest", job: suggestOnlyJob }),
+          );
+          if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
             fadeInSuggestion();
           }
           return;
         }
 
-        if (currentDraftId === draftRef.current?.id) {
-          patchIdentity(currentDraftId, { applied: true });
+        patchIdentity(currentDraftId, identityLandingPatch({ kind: "applied" }));
+        if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
           fadeInSuggestion();
         }
       }
