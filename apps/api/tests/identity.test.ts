@@ -1393,10 +1393,13 @@ describe("Identity /v1", () => {
       expect(me.statusCode).toBe(200);
     });
 
-    it("signs in an account that was created with a password and leaves its password untouched", async () => {
+    it("signs in an account that was created with a verified password and leaves its password untouched", async () => {
       resetRecordedMails();
       const registered = await registerSession(app, "code-password@example.com");
-      expect(registered.user.emailVerified).toBe(false);
+      const token = new URL(
+        mailUrl(recordedMails.find((item) => item.kind === "verify")) ?? "",
+      ).searchParams.get("token");
+      await app.inject({ method: "POST", url: "/v1/identity/verify", payload: { token } });
 
       await requestCodeInject(app, { email: "code-password@example.com" });
       const verify = await verifyCodeInject(app, {
@@ -1413,6 +1416,44 @@ describe("Identity /v1", () => {
         password: "password123",
       });
       expect(login.statusCode).toBe(200);
+    });
+
+    it("drops the password and sessions of an account whose address was never proven", async () => {
+      resetRecordedMails();
+      // Someone registered this address with a password before its owner ever proved it.
+      const squatter = await registerSession(app, "code-squatted@example.com");
+      expect(squatter.user.emailVerified).toBe(false);
+
+      await requestCodeInject(app, { email: "code-squatted@example.com" });
+      const verify = await verifyCodeInject(app, {
+        email: "code-squatted@example.com",
+        code: latestCode("code-squatted@example.com"),
+      });
+      expect(verify.statusCode).toBe(200);
+      expect(identitySessionSchema.parse(JSON.parse(verify.body)).user.id).toBe(squatter.user.id);
+
+      const login = await loginInject(app, {
+        email: "code-squatted@example.com",
+        password: "password123",
+      });
+      expect(login.statusCode).toBe(401);
+      const old = await app.inject({
+        method: "GET",
+        url: "/v1/identity/me",
+        headers: { authorization: `Bearer ${squatter.accessToken}` },
+      });
+      expect(old.statusCode).toBe(401);
+    });
+
+    it("lets one of two parallel code requests win and leaves a single live code", async () => {
+      resetRecordedMails();
+      const email = "code-parallel@example.com";
+      await Promise.all([requestCodeInject(app, { email }), requestCodeInject(app, { email })]);
+      const rows = await helperDb.db
+        .select()
+        .from(verification)
+        .where(eq(verification.identifier, `code:${email}`));
+      expect(rows).toHaveLength(1);
     });
 
     it("accepts a code once", async () => {

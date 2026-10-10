@@ -438,12 +438,14 @@ export class IdentityService {
       .toString()
       .padStart(IDENTITY_CODE_LENGTH, "0");
     const identifier = `${CODE_IDENTIFIER_PREFIX}${normalizedEmail}`;
-    await this.db.delete(verification).where(eq(verification.identifier, identifier));
-    await this.db.insert(verification).values({
-      id: randomBytes(16).toString("hex"),
-      identifier,
-      value: this.hashSignInCode(normalizedEmail, code),
-      expiresAt: new Date(Date.now() + identityCodeExpiryMinutes() * 60 * 1000),
+    await this.db.transaction(async (tx) => {
+      await tx.delete(verification).where(eq(verification.identifier, identifier));
+      await tx.insert(verification).values({
+        id: randomBytes(16).toString("hex"),
+        identifier,
+        value: this.hashSignInCode(normalizedEmail, code),
+        expiresAt: new Date(Date.now() + identityCodeExpiryMinutes() * 60 * 1000),
+      });
     });
     await this.notifyService.sendSignInCode({ to: normalizedEmail, code });
     return identityCodeAcceptedSchema.parse({ accepted: true });
@@ -468,6 +470,7 @@ export class IdentityService {
       .select()
       .from(verification)
       .where(eq(verification.identifier, identifier))
+      .orderBy(desc(verification.createdAt))
       .limit(1);
 
     if (!row || row.expiresAt.getTime() <= Date.now()) {
@@ -477,7 +480,9 @@ export class IdentityService {
       throw new GoneException("Code expired");
     }
 
-    if ((await this.authThrottle.countCodeAttempts(row.id)) >= identityCodeMaxAttempts()) {
+    // Count this guess before judging it, so parallel guesses cannot all read an empty budget.
+    await this.authThrottle.recordCodeAttempt(row.id);
+    if ((await this.authThrottle.countCodeAttempts(row.id)) > identityCodeMaxAttempts()) {
       await this.db.delete(verification).where(eq(verification.id, row.id));
       await this.recordAuthEvent({
         kind: "lockout",
@@ -491,7 +496,6 @@ export class IdentityService {
     const given = Buffer.from(this.hashSignInCode(normalizedEmail, parsed.data.code));
     const expected = Buffer.from(row.value);
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
-      await this.authThrottle.recordCodeAttempt(row.id);
       await this.recordAuthEvent({
         kind: "failure",
         userId: await this.findUserIdByEmail(normalizedEmail),
@@ -504,7 +508,7 @@ export class IdentityService {
     // Single use: only the request that deletes the row signs in.
     const consumed = await this.db
       .delete(verification)
-      .where(eq(verification.id, row.id))
+      .where(eq(verification.identifier, identifier))
       .returning({ id: verification.id });
     if (consumed.length === 0) {
       throw new GoneException("Code expired");
@@ -526,13 +530,32 @@ export class IdentityService {
   }
 
   private async findOrCreateVerifiedCollector(email: string) {
-    const [existing] = await this.db
-      .update(user)
-      .set({ emailVerified: true })
+    const [found] = await this.db
+      .select({ id: user.id, emailVerified: user.emailVerified })
+      .from(user)
       .where(eq(user.email, email))
-      .returning(USER_ME_SELECT);
-    if (existing) {
-      return existing;
+      .limit(1);
+    if (found) {
+      // A password set before the address was proven may belong to someone who does not own the
+      // mailbox (pre-registration), so an unverified account loses it and its sessions here.
+      const [existing] = await this.db
+        .update(user)
+        .set(
+          found.emailVerified
+            ? { emailVerified: true }
+            : {
+                emailVerified: true,
+                passwordHash: await hash(randomBytes(32).toString("hex"), 12),
+              },
+        )
+        .where(eq(user.id, found.id))
+        .returning(USER_ME_SELECT);
+      if (existing) {
+        if (!found.emailVerified) {
+          await this.db.delete(session).where(eq(session.userId, existing.id));
+        }
+        return existing;
+      }
     }
 
     // No password exists for this collector; the column is not null, so it holds a random hash.
