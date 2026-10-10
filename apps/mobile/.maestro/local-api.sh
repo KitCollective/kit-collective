@@ -28,7 +28,8 @@ if lsof -ti tcp:3000 -sTCP:LISTEN >/dev/null 2>&1; then
   exit 2
 fi
 
-pnpm build
+# A fresh worktree has none of the workspace packages built (domain, db, api-contract).
+pnpm --filter "@kit/api..." build
 pnpm e2e:local-database
 source_stamp "${api_sources[@]}" > "$stamp_dir/api"
 exec pnpm start

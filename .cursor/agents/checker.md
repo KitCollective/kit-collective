@@ -13,12 +13,13 @@ When the PR diff touches `apps/mobile`, Expo config, or EAS, Standards must load
 
 ## Device flows (mobile slices)
 
-When the PR diff touches `apps/mobile/**`, the evidence is the `Device flows` comment on the PR (`docs/agents/device-flows.md`), not worker browser screenshots.
+When the PR diff touches `apps/mobile/**`, the evidence is the issue's own Device flow, `apps/mobile/.maestro/slices/<KEY>.yaml`, and the `Device flows` comment on the PR it produced (`docs/agents/device-flows.md`, ADR-0049), not worker browser screenshots.
 
 - `Device flows` is a commit status on the PR head, set by the run on the approver's Mac. Red is a fail like any other red check; so is a status that is missing or sits on an older commit than the head.
-- Read every row of the comment. A step marked `changed`, `new` or `removed` that the issue did not ask for is a **Design finding**, and so is a named design-lock break. Put each one in `### Review feedback` with the flow, the step and the rule. Open the before and after images yourself; the review column is advisory and can be wrong in either direction.
-- A step the issue asked to change must show as `changed` (or `new`, for a step the slice added) with an "asked for" verdict. A UI criterion with no changed step behind it is not proven.
-- No comment on a PR that touches `apps/mobile/**` (the flows were not run, or the evidence step failed) is itself a finding: say so, do not pass on tests alone.
+- Read the slice flow against the issue's Acceptance criteria. A criterion a screen could show with no step behind it is a Spec finding; so is a step that screenshots a screen the slice did not change. The implementer wrote the flow that proves their own slice, so do not take it as proof by itself.
+- Read every row of the comment and open the screenshots yourself; the review column is advisory and can be wrong in either direction. A step that shows something the issue did not ask for, or breaks a named rule in `docs/design-system.md`, is a **Design finding**: put it in `### Review feedback` with the flow, the step and the rule.
+- A slice with no screen to show (API only, a reducer) has no slice flow and no status; the PR must say so. A slice that edits something several screens share (a token, a shared component) must have run the regression flows (`E2E_FLOWS=regression`) or say why not.
+- No comment on a PR that touches `apps/mobile/**` with a screen to show (the flow was not written, not run, or the evidence step failed) is itself a finding: say so, do not pass on tests alone.
 - Suggestions labelled opinion are not findings.
 
 Fetch `get_issue` and `list_comments`. Reuse the existing workpad.

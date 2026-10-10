@@ -126,15 +126,15 @@ One of `development`, `staging`, `production` — git branch, GitHub Environment
 _Avoid_: environment as a synonym without saying which object
 
 **Device flow**:
-A Maestro flow under `apps/mobile/.maestro/flows/` that drives the iOS Simulator build through one Collector journey and takes a named screenshot at every meaningful step, plus one recording. Five exist: first session, Tilføj trøje, Samling, Søg and bud, Ønske and paywall. They run on the approver's Mac against a local API, and a red Device flow blocks a PR through the `Device flows` commit status.
+A Maestro flow that drives the iOS Simulator build and takes a named screenshot at every meaningful step, plus one recording. Each mobile slice has its own, `apps/mobile/.maestro/slices/<KEY>.yaml`, with one step per Acceptance criterion a screen can show. Five **regression flows** (first session, Tilføj trøje, Samling, Søg and bud, Ønske and paywall) sit under `regression/` and run on request. They run on the approver's Mac against a local API, one run at a time in a queue, and a red Device flow blocks a PR through the `Device flows` commit status.
 _Avoid_: e2e test as a synonym for an API integration test; worker browser screenshots as evidence for a mobile slice; a flow that needs a manual step
 
 **Test Collector**:
-The Collector four of the five Device flows sign in as, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and signs in for the Ønske and paywall flow. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
+The Collector four of the five regression flows, and a slice flow by default, sign in as, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and signs in for the Ønske and paywall flow. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
 _Avoid_: a real Collector's account in a flow; a lane-wide Vision switch; a fourth lane for tests
 
 **Evidence run**:
-The screenshots and recordings of one run of the five Device flows for one commit, in the evidence bucket (its own public bucket, never a lane bucket) under `e2e/<sha>/`, kept 30 days. "Before" for a PR is the latest passed `development` Evidence run at or before the PR's merge base; "after" is the PR head.
+The screenshots and recordings of one run of a Device flow (a slice flow, or the regression flows) for one commit, in the evidence bucket (its own public bucket, never a lane bucket) under `e2e/<sha>/`, kept 30 days. "Before" for a PR is the latest passed `development` Evidence run of the same flow at or before the PR's merge base; a slice flow has none, so its steps are `new`. "After" is the PR head.
 _Avoid_: committing screenshots to git; comparing against `staging` or an arbitrary older run; evidence in a lane bucket
 
 **Design finding**:

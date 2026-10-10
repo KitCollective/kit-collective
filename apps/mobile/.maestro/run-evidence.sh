@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Runs the device flows for the current commit on this Mac and publishes the
-# evidence (KIT-267, ADR-0048): screenshots and recordings to the evidence
-# bucket and the `Device flows` commit status on every run, and for a PR also
-# the before/after comparison, the review, the PR comment and the Linear
-# workpad links.
+# Runs the device flow for the current commit on this Mac and publishes the
+# evidence (KIT-267, ADR-0048, ADR-0049): screenshots and recordings to the
+# evidence bucket and the `Device flows` commit status on every run, and for a
+# PR also the review, the PR comment and the Linear workpad links.
 #
+# What runs: the issue's own flow, `slices/<KEY>.yaml`; with `E2E_FLOWS=regression`
+# the five regression flows instead.
+#
+# Agents run `device-run.sh`, which queues, starts the API, installs the app and
+# calls this script. By hand:
 #   apps/mobile/.maestro/local-api.sh     (terminal 1)
-#   apps/mobile/.maestro/build-local.sh   (when apps/mobile, packages or the lockfile changed)
+#   apps/mobile/.maestro/build-local.sh   (cached native binary, fresh JavaScript)
 #   apps/mobile/.maestro/run-evidence.sh  (terminal 2)
 #
 # Settings (R2 account keys, E2E_R2_BUCKET, E2E_EVIDENCE_BASE_URL,
@@ -26,6 +30,8 @@ sha="$(git -C "$root" rev-parse HEAD)"
 source "$here/source-stamp.sh"
 # shellcheck source=simulator.sh
 source "$here/simulator.sh"
+# shellcheck source=slice-flow.sh
+source "$here/slice-flow.sh"
 refuse_uncommitted "${app_sources[@]}" "${api_sources[@]}"
 refuse_uncommitted_flows
 if [[ "$(cat "$stamp_dir/app-$E2E_SIMULATOR_UDID" 2>/dev/null)" != "$(source_stamp "${app_sources[@]}")" ]]; then
@@ -35,6 +41,11 @@ fi
 if [[ "$(cat "$stamp_dir/api" 2>/dev/null)" != "$(source_stamp "${api_sources[@]}")" ]]; then
   echo "The local API was not started from $sha: restart local-api.sh first." >&2
   exit 2
+fi
+
+# The flow to run must exist before any status is set.
+if [[ "${E2E_FLOWS:-slice}" != regression ]]; then
+  slice_flow_path >/dev/null || exit 2
 fi
 
 status() {
