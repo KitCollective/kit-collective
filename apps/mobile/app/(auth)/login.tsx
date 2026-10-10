@@ -96,6 +96,8 @@ export default function LoginScreen() {
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Adgangskode</Text>
           <TextInput
             testID="login-password"
+            returnKeyType="go"
+            onSubmitEditing={() => void handleSubmit()}
             secureTextEntry
             autoCapitalize="none"
             value={password}

@@ -30,8 +30,8 @@ appId: app.kitcollective.mobile
 - tapOn:
     id: login-password
 - inputText: ${PASSWORD}
-- tapOn:
-    id: login-submit
+# The keyboard covers the Log ind button, so submit with Return on the password field.
+- pressKey: Enter
 # iOS offers to save the password in a system dialog, in the simulator's language.
 - tapOn:
     text: "Ikke nu|Not Now"
