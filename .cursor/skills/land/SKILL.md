@@ -9,6 +9,6 @@ Read [../_shared/factory.md](../_shared/factory.md). Details: [references/merge.
 
 The merge gate is `scripts/lib/land-policy.mjs` (`landAtMergeGate`). The archived Pi harness job `land.mjs` called that gate at the seam — see [pi-harness-archived.md](../../docs/agents/pi-harness-archived.md). Do not merge from `Done`; `Done` means the PR is already on `lanes.integration`.
 
-After a merge of a slice with device-flow evidence, run the Device flows once on the integration lane's new head, as `docs/agents/device-flows.md` says: that run is the "before" the next such PR is compared against.
+A merged slice owes no Device flows run on the integration lane (ADR-0049). The five regression flows run on request at a milestone or before a promotion to `staging`: `E2E_FLOWS=regression apps/mobile/.maestro/device-run.sh`.
 
 After merge success and `Done`, follow [reap-worktree/SKILL.md](../reap-worktree/SKILL.md) to verify integration and reap the issue worktree.

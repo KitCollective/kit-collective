@@ -31,6 +31,7 @@ import {
   upsertPrComment,
 } from "./report.mjs";
 import { buildReviewPrompt, designExcerpt, requestVerdict, reviewContract } from "./review.mjs";
+import { onlyFlows, sliceDesignSections } from "./slices.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const FACTORY = JSON.parse(readFileSync(join(REPO_ROOT, "factory.config.json"), "utf8"));
@@ -111,6 +112,25 @@ async function readIssue(identifier, linearKey) {
   }
 }
 
+/**
+ * The sections a flow asks for: the regression flows are listed in
+ * `design-sections.json`; a slice flow names its own in its header comment.
+ */
+function sectionsOfFlow(sections, flow) {
+  if (sections.flows[flow]) {
+    return sections.flows[flow];
+  }
+  try {
+    const slice = readFileSync(
+      join(REPO_ROOT, `apps/mobile/.maestro/slices/${flow.toUpperCase()}.yaml`),
+      "utf8",
+    );
+    return sliceDesignSections(slice);
+  } catch {
+    return [];
+  }
+}
+
 async function reviewDifferences(pairs, before, after, issueRead) {
   const reviews = new Map();
   const different = pairs.filter((pair) => pair.status !== "same");
@@ -145,7 +165,7 @@ async function reviewDifferences(pairs, before, after, issueRead) {
           contract,
           excerpt: designExcerpt(designSystem, [
             ...sections.always,
-            ...(sections.flows[pair.flow] ?? []),
+            ...sectionsOfFlow(sections, pair.flow),
           ]),
           hasBefore: beforePng !== null,
           hasAfter: afterPng !== null,
@@ -188,7 +208,10 @@ if (isPullRequest) {
   }
 
   const beforeSha = await findBefore();
-  const before = beforeSha ? await loadScreenshots(beforeSha) : new Map();
+  // A slice flow has no before; the other flows of the before run are not part of this one.
+  const before = beforeSha
+    ? onlyFlows(await loadScreenshots(beforeSha), new Set(flows), flowOfKey)
+    : new Map();
   const pairs = beforeSha ? compareRuns(before, after) : [];
   const reviews = await reviewDifferences(pairs, before, after, issueRead);
 
