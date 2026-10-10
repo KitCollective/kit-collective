@@ -48,6 +48,7 @@ describe("Coolify Seed MCP host", () => {
   it("default Dockerfile command serves HTTP, while stdio remains the predecessor binary", () => {
     const dockerfile = readRepo("seed/coolify/Dockerfile");
     const remote = readRepo("seed/coolify/Dockerfile.remote");
+    // SAFETY: seed/mcp/package.json is this package's own manifest; the expectations below fail the test if bin or scripts are missing.
     const pkg = JSON.parse(readRepo("seed/mcp/package.json")) as {
       bin: Record<string, string>;
       scripts: Record<string, string>;
