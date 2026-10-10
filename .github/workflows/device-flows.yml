@@ -1,0 +1,154 @@
+name: Device flows
+
+# DRAFT (KIT-267 follow-up). Runs the Maestro Device flows on a hosted iOS
+# Simulator so they do not have to run on the approver's Mac every time.
+#
+# It reuses the local scripts (ADR-0049) with the device lock switched off
+# (the runner is a fresh machine per run): build-local.sh for the cached native
+# binary plus this commit's JavaScript, local-api.sh for the API on a disposable
+# Postgres, run-local.sh for the flows. Screenshots and recordings are uploaded
+# as a run artifact.
+#
+# Deliberately NOT required and NOT the `Device flows` commit status (ADR-0048):
+# the status stays the local run's verdict. This workflow is the nightly
+# regression run and an on-request run, never a gate on every PR. It does not run
+# the Claude review or the Linear workpad step; those use the approver's login.
+#
+# Triggers:
+#   - nightly: the five regression flows against `development`
+#   - label `run-device-flows` on a PR: that issue's slice flow (issue key from the
+#     branch name, e.g. claude/kit-279-59e33d)
+#   - manual: pick regression or slice (and an issue key)
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      flows:
+        description: Which flows to run
+        type: choice
+        options: [regression, slice]
+        default: regression
+      issue:
+        description: Issue key for a slice run, for example KIT-279
+        required: false
+        type: string
+  pull_request:
+    types: [labeled]
+    branches: [development]
+
+concurrency:
+  group: device-flows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    name: iOS Simulator
+    if: github.event_name != 'pull_request' || github.event.label.name == 'run-device-flows'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      # Local-only test values (see apps/mobile/.maestro/local.env.sh); the database
+      # is disposable and lives on this runner only.
+      E2E_LOCK_HELD: "1"
+      E2E_LOCAL_DATABASE_URL: postgresql://kit:kit@localhost:5432/kit_e2e_test
+      E2E_FLOWS: ${{ (github.event_name == 'schedule' || inputs.flows == 'regression') && 'regression' || 'slice' }}
+      E2E_ISSUE: ${{ inputs.issue }}
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # A PR run tests the PR head, not the merge ref: the evidence scripts
+          # key everything by the commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # build-local.sh and run-local.sh read the branch name for the slice key.
+      - name: Check out a named branch
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: git switch -c "$HEAD_REF"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Maestro
+        # TODO pin a version once one is chosen; the installer takes MAESTRO_VERSION.
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Start Postgres
+        run: |
+          brew install postgresql@16
+          brew services start postgresql@16
+          echo "$(brew --prefix postgresql@16)/bin" >> "$GITHUB_PATH"
+          for _ in $(seq 1 30); do
+            "$(brew --prefix postgresql@16)/bin/pg_isready" -q && break
+            sleep 1
+          done
+          "$(brew --prefix postgresql@16)/bin/createuser" -s kit
+          "$(brew --prefix postgresql@16)/bin/psql" -d postgres -c "ALTER USER kit PASSWORD 'kit';"
+          "$(brew --prefix postgresql@16)/bin/createdb" -O kit kit_e2e_test
+
+      # The native binary is keyed by the same hash build-local.sh uses (lockfile,
+      # native config, Xcode version), so a cache hit means JavaScript only.
+      - name: Native binary cache key
+        id: native
+        run: |
+          cd apps/mobile/.maestro
+          # shellcheck disable=SC1091
+          stamp="$(source ./source-stamp.sh && source ./native-cache.sh && native_stamp)"
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
+
+      - name: Restore native binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/kit-e2e/native
+          key: kit-e2e-native-${{ runner.os }}-${{ steps.native.outputs.stamp }}
+
+      - name: Start the local API
+        run: |
+          apps/mobile/.maestro/local-api.sh > "$RUNNER_TEMP/local-api.log" 2>&1 &
+          for _ in $(seq 1 180); do
+            curl -fsS http://localhost:3000/v1/health >/dev/null 2>&1 && exit 0
+            sleep 2
+          done
+          echo "The local API did not become healthy:" >&2
+          tail -40 "$RUNNER_TEMP/local-api.log" >&2
+          exit 1
+
+      - name: Build the Simulator app
+        run: apps/mobile/.maestro/build-local.sh
+
+      - name: Run the flows
+        run: apps/mobile/.maestro/run-local.sh
+
+      - name: Upload screenshots and recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-flows-${{ github.sha }}
+          path: |
+            apps/mobile/.maestro/out
+            ${{ runner.temp }}/local-api.log
+          retention-days: 14
+          if-no-files-found: warn
