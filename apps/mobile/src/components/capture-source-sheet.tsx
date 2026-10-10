@@ -110,8 +110,9 @@ export function CaptureSourceSheet({
           size={22}
           color={theme.contentPrimary}
           accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
         />
-        <View style={[styles.visionBody, vision.switchDisabled && { opacity: DISABLED_OPACITY }]}>
+        <View style={styles.visionBody}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>
             {CHOOSER_VISION_COPY.label}
           </Text>
@@ -121,7 +122,7 @@ export function CaptureSourceSheet({
               accessibilityLabel={vision.helper}
               testID="capture-vision-upgrade"
               onPress={onOpenPaywall}
-              hitSlop={8}
+              style={styles.upgradeLink}
             >
               <Text
                 style={[
@@ -156,6 +157,7 @@ export function CaptureSourceSheet({
             onValueChange={onVisionChange}
             accessibilityLabel={CHOOSER_VISION_COPY.label}
             testID="capture-vision-switch"
+            hitSlop={6}
           />
         </View>
       </View>
@@ -188,6 +190,10 @@ const styles = StyleSheet.create({
     gap: space.gapMd,
     borderTopWidth: 1,
     paddingTop: space.insetMd,
+  },
+  upgradeLink: {
+    minHeight: 44,
+    justifyContent: "center",
   },
   visionBody: {
     flex: 1,

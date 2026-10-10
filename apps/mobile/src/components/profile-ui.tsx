@@ -414,6 +414,7 @@ type SwitchControlProps = {
   onValueChange: (value: boolean) => void;
   accessibilityLabel: string;
   testID?: string;
+  hitSlop?: number;
 };
 
 export function SwitchControl({
@@ -422,6 +423,7 @@ export function SwitchControl({
   onValueChange,
   accessibilityLabel,
   testID,
+  hitSlop,
 }: SwitchControlProps) {
   const theme = useTheme();
 
@@ -430,6 +432,7 @@ export function SwitchControl({
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel}
       testID={testID}
+      hitSlop={hitSlop}
       accessibilityState={{ checked: value, disabled }}
       disabled={disabled}
       onPress={() => onValueChange(!value)}
