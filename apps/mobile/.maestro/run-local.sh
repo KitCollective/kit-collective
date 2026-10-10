@@ -17,6 +17,16 @@ source ./source-stamp.sh
 # shellcheck source=slice-flow.sh
 source ./slice-flow.sh
 
+# Homebrew's openjdk is keg-only, so a shell without it on PATH has no Java and Maestro cannot start.
+if ! java -version >/dev/null 2>&1; then
+  for jdk in /opt/homebrew/opt/openjdk@17 /opt/homebrew/opt/openjdk /usr/local/opt/openjdk@17; do
+    if [[ -x "$jdk/bin/java" ]]; then
+      export JAVA_HOME="$jdk" PATH="$jdk/bin:$PATH"
+      break
+    fi
+  done
+fi
+
 export MAESTRO_API_URL="$E2E_API_URL"
 export MAESTRO_TEST_DATA_TOKEN="$E2E_TEST_DATA_TOKEN"
 export MAESTRO_COLLECTOR_EMAIL="$E2E_COLLECTOR_EMAIL"
