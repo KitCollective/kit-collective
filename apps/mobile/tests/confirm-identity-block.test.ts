@@ -38,7 +38,6 @@ const baseInput = (overrides: Partial<IdentityBlockInput> = {}): IdentityBlockIn
   draft: freshDraft(),
   visionOn: true,
   inFlight: false,
-  settled: false,
   filledByVision: false,
   suggestion: null,
   ...overrides,
@@ -53,7 +52,7 @@ describe("resolveIdentityBlock: resolved", () => {
       number: "9",
     });
     const block = resolveIdentityBlock(
-      baseInput({ draft: getActiveDraft(withPlayer), settled: true, filledByVision: true }),
+      baseInput({ draft: getActiveDraft(withPlayer), filledByVision: true }),
     );
     expect(block.kind).toBe("resolved");
     expect(block.label).toBe("Fundet af Vision");
@@ -66,7 +65,7 @@ describe("resolveIdentityBlock: resolved", () => {
   it("does not claim Vision found a jersey the collector filled in by hand", () => {
     const { session } = filledSession();
     const block = resolveIdentityBlock(
-      baseInput({ draft: getActiveDraft(session), settled: true, filledByVision: false }),
+      baseInput({ draft: getActiveDraft(session), filledByVision: false }),
     );
     expect(block.kind).toBe("resolved");
     expect(block.label).toBeNull();
@@ -182,8 +181,13 @@ describe("resolveIdentityBlock: empty", () => {
     expect(block.pill).toEqual({ label: "Vælg", tone: "primary", action: "open-data" });
   });
 
-  it("says Vision did not find the jersey once it has settled with nothing", () => {
-    const block = resolveIdentityBlock(baseInput({ settled: true }));
+  it("shows the in-flight block, not 'not found', while the first read has not landed", () => {
+    const block = resolveIdentityBlock(baseInput({ inFlight: true }));
+    expect(block.kind).toBe("in-flight");
+  });
+
+  it("says Vision did not find the jersey when Vision is on, no read is running and nothing was found", () => {
+    const block = resolveIdentityBlock(baseInput());
     expect(block.kind).toBe("empty");
     expect(block.label).toBe("Vision fandt ikke trøjen");
   });

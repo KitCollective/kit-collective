@@ -175,7 +175,6 @@ export default function ConfirmScreen() {
     draft,
     visionOn,
     inFlight: identityInFlight,
-    settled,
     filledByVision: vision.filledByVision,
     suggestion: identitySuggestion,
   });

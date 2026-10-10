@@ -190,6 +190,7 @@ export function JerseyTabBar({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tilføj trøje"
+            testID="jersey-index-add"
             onPress={onAddJersey}
             style={({ pressed }) => [
               styles.addButton,

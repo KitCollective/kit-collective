@@ -33,8 +33,6 @@ export type IdentityBlockInput = {
   visionOn: boolean;
   /** An identity read is running for this jersey. */
   inFlight: boolean;
-  /** A read has finished for this jersey (found or not). Callers use it to decide `inFlight`. */
-  settled: boolean;
   /** Vision (not the collector) filled the facts. */
   filledByVision: boolean;
   /** Pending suggest-only result, shown as a question. */
