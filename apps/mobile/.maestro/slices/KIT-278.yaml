@@ -178,7 +178,13 @@ env:
 # AC 3: invalid e-mail, inline under the field, no code sent.
 - assertNotVisible:
     id: code-screen
+# The focused field blinks its caret, so the keyboard goes away before the frame is stored.
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 3000
 - takeScreenshot: kc__kit-278__10-error-invalid-email
+- tapOn:
+    id: door-email
 - eraseText: 40
 - inputText: ${MAESTRO_COLLECTOR_EMAIL}
 - tapOn:
