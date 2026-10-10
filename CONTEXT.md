@@ -390,7 +390,7 @@ A stamdata landing under Søg for Club, NationalTeam, Kit, or Player: identity c
 _Avoid_: League/Season landings in this feature; treating Club search as the only name for a national side; treating the drill as a KitPhoto gallery; serving archive bytes on the drill; conflating Kit drill with UserJersey detail; inventing an "unknown Kit" bucket for null catalogKitId
 
 **UserJersey detail**:
-Full-screen view of one UserJersey: one scrolling column with a 4:5 photo (swipe between photos), then title, player and facts. Own and foreign share that column (decided 2026-10-10; it replaces the immersive photo stage with a bottom sheet). **Own**: Privat and åben for bud switches, every fact edited on its own (patch), delete. **Foreign**: Favorit, owner → Peer Profil under the facts, Send bud CTA when åben for bud (separate stack screen), and the collector's own pending Bud in place of that CTA once sent. Overflow Rapportér / Blokér. Not the Send bud form itself. Not a Søg catalog drill.
+Full-screen view of one UserJersey: one scrolling column with a 4:5 photo (swipe between photos), then title, player and facts. Own and foreign share that column (decided 2026-10-10; it replaces the immersive photo stage with a bottom sheet). **Own**: Privat and åben for bud switches, every fact edited on its own (patch), delete. **Foreign**: Favorit, owner → Peer Profil under the facts, Send bud CTA when åben for bud (separate stack screen), the collector's own pending Bud in place of that CTA once sent, and a way to write to the owner without a Bud. Overflow Rapportér / Blokér. Not the Send bud form itself. Not a Søg catalog drill.
 _Avoid_: Send bud as the only foreign view; price overlay on the photo; editing someone else's copy; a separate Rediger screen; requiring an Indbakke thread before report/block; the immersive stage with a bottom sheet
 
 **Favorit**:
@@ -430,19 +430,19 @@ The OS push permission is asked when the collector saves their first Wishlist ro
 _Avoid_: a launch push wall; asking only after a Match was already missed
 
 **Indbakke**:
-The collector messages place in tab slot 4 (envelope). Beskeder and Aktivitet are two views of one conversation model. Not Ønske, not a general notification tray.
-_Avoid_: heart / wishlist chrome in slot 4; a Match card on Aktivitet; using the Samling header for inbox unread
+The collector messages place in tab slot 4 (envelope). One list: incoming Bud that wait for an answer first, then one row per Conversation (decided 2026-10-10; it replaces the Beskeder and Aktivitet views). Not Ønske, not a general notification tray.
+_Avoid_: heart / wishlist chrome in slot 4; a Match card in Indbakke; Beskeder | Aktivitet tabs; using the Samling header for inbox unread
 
 **Entitlement**:
 Nest-owned Billing fact on a User: paid collector plan yes/no, expires, source (`iap_apple` / `iap_google` / `trial` / `comp`, later `stripe`). Orthogonal to Staff access. Absence is the free Collector. Not a `User.role` and not a plan column on User.
 _Avoid_: stuffing the plan into `User.role`; treating `role=admin` as paid; Tier one/two/three before a second SKU; Expo or Auth session as billing truth; calling the store chrome "Premium" a schema name; Admin DKK as the charge amount
 
 **Conversation**:
-One thread between two collectors about a UserJersey. Shared unread across Beskeder and Aktivitet. Created when a bud is sent or a reply is posted (later slices).
-_Avoid_: two parallel inbox tables; fake threads to avoid empty state
+The one thread between two collectors (decided 2026-10-10; before that, one thread per UserJersey). It holds every message and every Bud between them; each Bud names its own UserJersey. Created when the first Bud or the first message is sent. A message needs no Bud: a collector can write from a foreign UserJersey detail or from Peer Profil. Deleting a UserJersey does not delete the Conversation.
+_Avoid_: one thread per UserJersey; two parallel inbox tables; fake threads to avoid empty state
 
 **Bud**:
-A collector-to-collector bid message in a Conversation — an integer DKK amount, not payment or checkout. Accept/decline records outcome in the thread; no money moves in this product gap.
+A collector-to-collector bid message in a Conversation about one UserJersey — an integer DKK amount, not payment or checkout. Accept/decline records outcome in the thread; no money moves in this product gap.
 _Avoid_: price overlay on Samling tiles; treating bud as a marketplace purchase
 
 **Staff access**:
