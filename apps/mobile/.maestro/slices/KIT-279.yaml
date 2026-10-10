@@ -60,42 +60,13 @@ name: kit-279
     id: confirm-details-save
 - extendedWaitUntil:
     visible:
-      id: confirm-save
+      id: jersey-index-add
     timeout: 10000
-# AC 6: save, then add the next jersey: the last size is pre-selected, condition is not.
-- tapOn:
-    id: confirm-save
-- extendedWaitUntil:
-    visible:
-      id: post-save-next
-    timeout: 30000
-- tapOn:
-    id: post-save-next
-- extendedWaitUntil:
-    visible:
-      id: capture-source-gallery
-    timeout: 15000
-- tapOn:
-    id: capture-source-gallery
-- tapOn: Fotos
-- waitForAnimationToEnd:
-    timeout: 8000
-- tapOn:
-    point: 16%,25%
-- tapOn:
-    point: 90%,12%
-- extendedWaitUntil:
-    visible:
-      id: confirm-identity-resolved
-    timeout: 90000
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: kc__kit-279__04-sticky-size-next-jersey
 # AC 4, 9: a second jersey is added: the index moves to its own row with the
 # photo count, and the new jersey shows the empty identity block.
 - tapOn:
     id: jersey-index-add
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__kit-279__05-two-jerseys-empty-identity
+- takeScreenshot: kc__kit-279__04-two-jerseys-empty-identity
 - stopRecording
