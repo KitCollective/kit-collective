@@ -1,8 +1,10 @@
+import { VISION_CONFIDENCE_PRESELECT, VISION_CONFIDENCE_SUGGEST } from "@kit/api-contract";
 import type { JerseyCondition, JerseySize, KitType, PhotoRole, PhotoSource } from "@kit/domain";
 import { MAX_USER_JERSEY_PHOTOS, UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
+  CaptureSavedDraft,
   CaptureSessionPhoto,
   CaptureSessionState,
   CaptureSessionStore,
@@ -953,7 +955,7 @@ export function shouldStartGroupingJob(state: CaptureSessionState): boolean {
   if (state.branch !== "bulk") {
     return false;
   }
-  if (state.groupingDesignGap || state.pendingGrouping) {
+  if (groupingAlreadyJudged(state)) {
     return false;
   }
   if (state.unboundUris.length >= 2) {
@@ -962,15 +964,51 @@ export function shouldStartGroupingJob(state: CaptureSessionState): boolean {
   return state.unboundUris.length >= 1 && state.drafts.some((draft) => draft.photos.length > 0);
 }
 
+function photoIdOf(state: CaptureSessionState, uri: string): string {
+  return state.photoIdByUri?.[uri] ?? uri;
+}
+
+/** Every photo the session holds right now, bound or not. */
+function sessionPhotoKeys(state: CaptureSessionState): string[] {
+  const uris = new Set([
+    ...state.orderedUris,
+    ...state.unboundUris,
+    ...state.drafts.flatMap((draft) => draft.photos.map((photo) => photo.uri)),
+  ]);
+  return [...uris].map((uri) => photoIdOf(state, uri)).sort();
+}
+
+/**
+ * A finished run judged every photo the session held. Only a photo it has never seen asks Vision
+ * again. Saving, binding, unbinding, discarding, parking and reopening move photos between
+ * jerseys and the pile but add none, so none of them restarts grouping or spends quota.
+ */
+function groupingAlreadyJudged(state: CaptureSessionState): boolean {
+  if (!state.groupingSettledKey) {
+    return false;
+  }
+  const judged = new Set(state.groupingSettledKey.split(","));
+  return state.unboundUris.every((uri) => judged.has(photoIdOf(state, uri)));
+}
+
+function groupingRunKey(state: CaptureSessionState): string {
+  return `${unboundGroupingFingerprint(state)}|${groupingPriorGroups(state)
+    .map((group) => group.photoIds.join("-"))
+    .join(";")}`;
+}
+
 /** Stable key for one grouping request. Unrelated Confirm persists must not change this. */
 export function groupingJobFingerprint(state: CaptureSessionState): string | null {
   if (!shouldStartGroupingJob(state)) {
     return null;
   }
 
-  return `${unboundGroupingFingerprint(state)}|${groupingPriorGroups(state)
-    .map((group) => group.photoIds.join("-"))
-    .join(";")}`;
+  return groupingRunKey(state);
+}
+
+/** A finished (or stopped) run: remember which photos it judged, so a reopen does not ask again. */
+export function markGroupingSettled(state: CaptureSessionState): CaptureSessionState {
+  return withState(state, { ...state, groupingSettledKey: sessionPhotoKeys(state).join(",") });
 }
 
 export function groupingPriorGroups(state: CaptureSessionState): Array<{ photoIds: string[] }> {
@@ -995,16 +1033,28 @@ export function uriForPhotoId(state: CaptureSessionState, photoId: string): stri
   return entry?.[0] ?? null;
 }
 
-function ensureDraftForGroupIndex(
-  state: CaptureSessionState,
-  groupIndex: number,
-  defaults?: NewDraftDefaults,
-): CaptureSessionState {
-  let next = state;
-  while (next.drafts.length <= groupIndex) {
-    next = addJerseyDraft(next, defaults);
+export type GroupingGroupInput = { photoIds: string[]; confidence?: number };
+
+/** What the collector gets from one group: bound for them, a draft to check, or left loose. */
+export type GroupingOutcome = "bind" | "check" | "loose";
+
+/**
+ * The per-group rule (CONTEXT.md, Vision suggestion): at or above the pre-select bar the group
+ * binds automatically; from the suggest bar up to it the group becomes a draft marked Tjek;
+ * below the suggest bar its photos stay without a jersey. A group with no confidence is never
+ * trusted to bind, but its photos are not dropped either.
+ */
+export function classifyGroupingConfidence(confidence: number | undefined): GroupingOutcome {
+  if (confidence === undefined) {
+    return "check";
   }
-  return next;
+  if (confidence >= VISION_CONFIDENCE_PRESELECT) {
+    return "bind";
+  }
+  if (confidence >= VISION_CONFIDENCE_SUGGEST) {
+    return "check";
+  }
+  return "loose";
 }
 
 function bindPhotoIdsToDraft(
@@ -1027,73 +1077,123 @@ function bindPhotoIdsToDraft(
   return next;
 }
 
-export function applyGroupingSuggestion(
-  state: CaptureSessionState,
-  grouping: { groups: Array<{ photoIds: string[] }> },
-  options: NewDraftDefaults & { preselect: boolean },
-): CaptureSessionState {
-  if (grouping.groups.length === 0) {
+function draftOwningAnyPhoto(state: CaptureSessionState, photoIds: string[]): string | null {
+  const wanted = new Set(photoIds);
+  const owner = state.drafts.find((draft) =>
+    draft.photos.some((photo) => {
+      const id = photo.photoId ?? state.photoIdByUri?.[photo.uri];
+      return id !== undefined && wanted.has(id);
+    }),
+  );
+  return owner?.id ?? null;
+}
+
+/** Picker order into the slots the jersey still has empty; photos that already have a role stay. */
+function fillMissingRoles(state: CaptureSessionState, draftId: string): CaptureSessionState {
+  const draft = getDraft(state, draftId);
+  if (draft.photos.every((photo) => photo.role !== null)) {
     return state;
   }
+  const used = new Set(draft.photos.map((photo) => photo.role));
+  const photos = draft.photos.map((photo) => {
+    if (photo.role !== null) {
+      return photo;
+    }
+    const role: PhotoRole = UNIVERSAL_PHOTO_ROLES.find((entry) => !used.has(entry)) ?? "other";
+    used.add(role);
+    return { ...photo, role };
+  });
+  return updateDraft(state, draftId, (current) => ({ ...current, photos }));
+}
 
-  if (!options.preselect) {
-    if (grouping.groups.length > 1) {
-      return withState(state, {
-        ...state,
-        pendingGrouping: grouping,
-        groupingDesignGap: true,
-      });
+/**
+ * Applies every group of one Vision grouping result, each by its own confidence. A group lands on
+ * the draft that already holds one of its photos, else on an empty draft, else on a new one, so a
+ * group left loose never shifts the others onto the wrong jersey.
+ */
+export function applyGroupingSuggestion(
+  state: CaptureSessionState,
+  grouping: { groups: GroupingGroupInput[] },
+  defaults?: NewDraftDefaults,
+): CaptureSessionState {
+  let next = state;
+  const touched: string[] = [];
+
+  for (const group of grouping.groups) {
+    const outcome = classifyGroupingConfidence(group.confidence);
+    if (outcome === "loose") {
+      continue;
     }
 
-    return withState(state, {
-      ...state,
-      pendingGrouping: grouping,
-      groupingDesignGap: false,
-    });
+    let draftId = draftOwningAnyPhoto(next, group.photoIds);
+    const ownedBefore = draftId !== null;
+    if (!draftId) {
+      const bindable = group.photoIds.some((photoId) => {
+        const uri = uriForPhotoId(next, photoId);
+        return uri !== null && next.unboundUris.includes(uri);
+      });
+      if (!bindable) {
+        continue;
+      }
+      const empty = next.drafts.find((draft) => draft.photos.length === 0 && !draft.editJerseyId);
+      draftId = empty?.id ?? null;
+      if (!draftId) {
+        next = addJerseyDraft(next, defaults);
+        draftId = next.activeDraftId;
+      }
+    }
+
+    next = bindPhotoIdsToDraft(next, draftId, group.photoIds);
+    if (outcome === "check" && !ownedBefore) {
+      next = updateDraft(next, draftId, (draft) => ({ ...draft, needsCheck: true }));
+    }
+    touched.push(draftId);
   }
 
-  let next = withState(state, {
-    ...state,
-    pendingGrouping: undefined,
-    groupingDesignGap: false,
-  });
+  for (const draftId of touched) {
+    next = fillMissingRoles(next, draftId);
+  }
 
-  grouping.groups.forEach((group, index) => {
-    next = ensureDraftForGroupIndex(next, index, options);
-    const draftId = next.drafts[index]?.id;
-    if (!draftId) {
-      return;
-    }
-    next = bindPhotoIdsToDraft(next, draftId, group.photoIds);
-  });
-
-  if (next.drafts[0]) {
-    next = setActiveDraft(next, next.drafts[0].id);
+  // Confirm opens on the first jersey that holds photos, not on the one created last.
+  const first = next.drafts.find((draft) => draft.photos.length > 0);
+  if (touched.length > 0 && first && first.id !== next.activeDraftId) {
+    next = setActiveDraft(next, first.id);
   }
 
   return next;
 }
 
-export function acceptPendingGrouping(
-  state: CaptureSessionState,
-  defaults?: NewDraftDefaults,
-): CaptureSessionState {
-  if (!state.pendingGrouping) {
+/** The collector reopened the overview or finished it: the session is no longer parked. */
+export function unparkSession(state: CaptureSessionState): CaptureSessionState {
+  if (state.parkedAt == null) {
     return state;
   }
-
-  return applyGroupingSuggestion(state, state.pendingGrouping, { preselect: true, ...defaults });
+  return withState(state, { ...state, parkedAt: null });
 }
 
-export function dismissPendingGrouping(state: CaptureSessionState): CaptureSessionState {
-  if (!state.pendingGrouping) {
+/** Gør resten færdig senere: keep the session, let Samling show one row that reopens it. */
+export function parkSession(state: CaptureSessionState, now: number): CaptureSessionState {
+  return withState(state, { ...state, overview: true, parkedAt: now });
+}
+
+/** The bulk overview owns this session from here on (Confirm then advances through it). */
+export function markOverviewSession(state: CaptureSessionState): CaptureSessionState {
+  if (state.overview === true) {
     return state;
   }
+  return withState(state, { ...state, overview: true });
+}
 
+export function appendSavedDraft(
+  state: CaptureSessionState,
+  saved: CaptureSavedDraft,
+): CaptureSessionState {
   return withState(state, {
     ...state,
-    pendingGrouping: undefined,
-    groupingDesignGap: false,
+    savedDrafts: [
+      ...(state.savedDrafts ?? []).filter((entry) => entry.draftId !== saved.draftId),
+      saved,
+    ],
   });
 }
 

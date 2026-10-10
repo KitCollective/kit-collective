@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/auth/AuthProvider";
 import { addJerseyDraft, setActiveDraft, switchSingleToBulkBind } from "@/capture/captureSession";
+import { resolveVisionEnabled } from "@/capture/chooserVision";
 import {
   confirmSaveEnabled,
   hasPendingLowConfidence,
@@ -11,11 +12,11 @@ import {
 } from "@/capture/confirmIdentityBlock";
 import { confirmJerseyIndexPlacement } from "@/capture/confirmPhotoStrip";
 import { visionMatcherRemainingToOutOfQuota } from "@/capture/confirmVisionQuota";
-import { shouldHoldIdentityForGrouping } from "@/capture/identityDraftQueue";
+import { visionRequestToken } from "@/capture/identitySuggestRequest";
+import { leaveOverviewSession } from "@/capture/parkedSession";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { scanLineLedger } from "@/capture/scanLineLedger";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
-import { useConfirmGrouping } from "@/capture/use-confirm-grouping";
 import { useConfirmPhotos } from "@/capture/use-confirm-photos";
 import { useConfirmVision } from "@/capture/use-confirm-vision";
 import { useConfirmSave } from "@/capture/useConfirmSave";
@@ -31,6 +32,7 @@ import { PhotoLightbox } from "@/components/photo-lightbox";
 import { PostSaveSheet } from "@/components/post-save-sheet";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { stickySize } from "@/prefs/stickySizeStore";
+import { useVisionSwitch } from "@/prefs/vision-switch-device";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
@@ -46,7 +48,11 @@ export default function ConfirmScreen() {
     sessionId: string;
     editJerseyId?: string;
   }>();
-  const { accessToken, requestPremiumAccess, entitlement } = useAuth();
+  const { accessToken: sessionToken, requestPremiumAccess, entitlement } = useAuth();
+  const visionRemembered = useVisionSwitch();
+  const visionEnabled = resolveVisionEnabled(visionRemembered, entitlement?.visionMatcher);
+  // Vision off means no identity and no grouping request: both hooks run without a token.
+  const accessToken = visionRequestToken(sessionToken, visionEnabled);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
   const {
     state,
@@ -66,13 +72,11 @@ export default function ConfirmScreen() {
     handlePostSaveDismiss,
   } = useConfirmSave({ sessionId, editJerseyId, visionJobId });
 
-  const exitToCollection = useConfirmExit(sessionId, state, isSessionResolved);
-  const grouping = useConfirmGrouping({
-    accessToken,
-    sessionId,
-    state,
-    mutate,
-    reduceMotion,
+  // Luk on an overview session parks it, so Samling keeps one row that reopens the overview.
+  const exitToCollection = useConfirmExit(sessionId, state, isSessionResolved, () => {
+    if (sessionId && state?.overview) {
+      leaveOverviewSession(sessionId);
+    }
   });
   const vision = useConfirmVision({
     accessToken,
@@ -80,16 +84,10 @@ export default function ConfirmScreen() {
     draft,
     sessionDrafts: state?.drafts ?? [],
     mutate,
-    reduceMotion,
     jobId: visionJobId,
     setJobId: setVisionJobId,
     setSelectedSeasonLabel,
     onPremiumRequired: requestPremiumAccess,
-    deferIdentity: shouldHoldIdentityForGrouping({
-      groupingInFlight: grouping.blocksIdentity,
-      boundDraftCount: (state?.drafts ?? []).filter((entry) => entry.photos.length > 0).length,
-    }),
-    groupingInFlight: grouping.blocksIdentity,
   });
   const photos = useConfirmPhotos({
     sessionId,
@@ -162,11 +160,8 @@ export default function ConfirmScreen() {
   const outOfQuota = visionMatcherRemainingToOutOfQuota(entitlement?.visionMatcher);
   const visionOn = Boolean(accessToken) && !outOfQuota && !editJerseyId;
   const settled = vision.settledDraftIds.has(draft.id);
-  // A read is running, queued behind grouping, or about to start for this jersey.
-  const identityInFlight =
-    vision.analyzing ||
-    grouping.blocksIdentity ||
-    (visionOn && draft.photos.length > 0 && !settled);
+  // A read is running or about to start for this jersey.
+  const identityInFlight = vision.analyzing || (visionOn && draft.photos.length > 0 && !settled);
   const identitySuggestion = vision.suggestion?.suggestions ?? null;
   const lowConfidencePending = !identityInFlight && hasPendingLowConfidence(identitySuggestion);
   const identityBlock = resolveIdentityBlock({
@@ -179,10 +174,8 @@ export default function ConfirmScreen() {
   const saveEnabled = confirmSaveEnabled({ draft, lowConfidencePending });
   const jerseyCount = state?.drafts.length ?? 1;
   const indexPlacement = confirmJerseyIndexPlacement(jerseyCount);
-  const unboundUris = (state?.unboundUris ?? []).filter(
-    (uri) => !grouping.hiddenSandboxUris.includes(uri),
-  );
-  const showSandbox = unboundUris.length > 0 || grouping.blocksIdentity;
+  const unboundUris = state?.unboundUris ?? [];
+  const showSandbox = unboundUris.length > 0;
 
   const jerseyIndex = state ? (
     <JerseyTabBar
@@ -190,7 +183,6 @@ export default function ConfirmScreen() {
       activeDraftId={state.activeDraftId}
       onSelectDraft={handleSelectDraft}
       onAddJersey={handleAddJersey}
-      analyzing={grouping.blocksIdentity}
       showPhotoCount={indexPlacement === "row"}
     />
   ) : null;
@@ -217,9 +209,6 @@ export default function ConfirmScreen() {
             photoCount={draft.photos.length}
             onPressRole={photos.handlePhotoSlotPress}
             onAddPhoto={() => void photos.addPhoto()}
-            analyzing={grouping.blocksIdentity}
-            rollingUris={grouping.rollingUris}
-            homecoming={grouping.homecoming}
             scanningFront={scanFront}
           />
 
@@ -237,25 +226,15 @@ export default function ConfirmScreen() {
                 activeTabLabel={activeTabLabel}
                 onPressPhoto={photos.bindUnboundPhoto}
                 onDiscardPhoto={photos.discardUnboundPhoto}
-                analyzing={grouping.blocksIdentity}
-                gatheringUris={grouping.gatheringUris}
               />
             </View>
           ) : null}
         </View>
 
-        {grouping.blocksIdentity ? (
-          <View style={styles.visionSlotReserve} accessibilityElementsHidden />
-        ) : (
-          <ConfirmVisionSlot
-            groupingMessage={grouping.groupingMessage}
-            catalogMiss={vision.catalogMiss}
-            catalogMissHint={vision.catalogMissHint}
-            suggestionOpacity={grouping.suggestionOpacity}
-            onApplySuggestion={() => grouping.applySuggestion()}
-            onDismissSuggestion={grouping.dismissSuggestion}
-          />
-        )}
+        <ConfirmVisionSlot
+          catalogMiss={vision.catalogMiss}
+          catalogMissHint={vision.catalogMissHint}
+        />
 
         <ConfirmIdentityBlock
           model={identityBlock}
@@ -342,9 +321,5 @@ const styles = StyleSheet.create({
   },
   sandbox: {
     gap: space.gapSm,
-  },
-  // Holds the Vision slot's height while grouping hides it, so the column does not hop.
-  visionSlotReserve: {
-    minHeight: 44,
   },
 });

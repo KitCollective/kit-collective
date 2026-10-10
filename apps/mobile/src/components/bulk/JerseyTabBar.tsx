@@ -20,7 +20,6 @@ type JerseyTabBarProps = {
   activeDraftId: string;
   onSelectDraft: (draftId: string) => void;
   onAddJersey: () => void;
-  analyzing?: boolean;
   /** The per-jersey photo count badge: two or more jerseys only. */
   showPhotoCount?: boolean;
 };
@@ -62,7 +61,6 @@ export function JerseyTabBar({
   activeDraftId,
   onSelectDraft,
   onAddJersey,
-  analyzing = false,
   showPhotoCount = true,
 }: JerseyTabBarProps) {
   const theme = useTheme();
@@ -103,11 +101,7 @@ export function JerseyTabBar({
   }));
 
   return (
-    <View
-      accessibilityRole="tablist"
-      accessibilityState={analyzing ? { busy: true } : undefined}
-      style={styles.container}
-    >
+    <View accessibilityRole="tablist" style={styles.container}>
       <Animated.ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -129,7 +123,7 @@ export function JerseyTabBar({
               >
                 <Pressable
                   accessibilityRole="tab"
-                  accessibilityState={{ selected, busy: analyzing }}
+                  accessibilityState={{ selected }}
                   accessibilityLabel={`Trøje ${jerseyNumber}, ${photoCount} fotos`}
                   onPress={() => onSelectDraft(draft.id)}
                   style={({ pressed }) => [

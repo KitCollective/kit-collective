@@ -2,7 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { CaptureSource } from "@/capture/captureSourceFlow";
+import { CHOOSER_VISION_COPY, type ChooserVisionModel } from "@/capture/chooserVision";
 import { Sheet } from "@/components/catalog-ui";
+import { SwitchControl } from "@/components/profile-ui";
 import { Button } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -13,6 +15,10 @@ type CaptureSourceSheetProps = {
   onDismiss: () => void;
   onConfirm: (source: CaptureSource) => void;
   onModalHide?: () => void;
+  vision: ChooserVisionModel;
+  onVisionChange: (next: boolean) => void;
+  /** Out of quota the helper is a link; the host presents KitCollective+ after the Sheet closes. */
+  onOpenPaywall: () => void;
 };
 
 type SourceOption = {
@@ -24,31 +30,38 @@ type SourceOption = {
 
 const SOURCE_OPTIONS: readonly SourceOption[] = [
   {
-    source: "gallery",
-    title: "Upload billeder",
-    helper: "Vælg billeder fra galleri eller filer.",
-    icon: "images-outline",
+    source: "camera",
+    title: "Tag billeder",
+    helper: "Kamera",
+    icon: "camera-outline",
   },
   {
-    source: "camera",
-    title: "Tag billede",
-    helper: "Fotografér trøjen med kameraet nu.",
-    icon: "camera-outline",
+    source: "gallery",
+    title: "Vælg billeder",
+    helper: "Fotos eller filer",
+    icon: "images-outline",
   },
 ];
 
+/** Switch-off dimming. The lock names `opacity.disabled` but gives no value; matches the Profil switch. */
+const DISABLED_OPACITY = 0.4;
+
 /**
  * Capture chooser for the Samling capture button (docs/design-system.md → Patterns →
- * Capture session). Each row is a direct action: tapping it commits the source and
- * dismisses the Sheet, and the trailing chevron marks it as a step forward. There is
- * no separate commit button — the row is the commit. The top-left Luk is omitted; a
- * footer Annuller cancels instead (swipe-down + scrim still dismiss too).
+ * Capture session, Revision 2026-10-09). Two equal tiles, each a direct action: tapping one
+ * commits the source and dismisses the Sheet. The Sheet never asks single versus bulk — the
+ * photo count decides. Under a hairline the Vision row holds the per-device switch and, for
+ * a free collector, the remaining allowance. The top-left Luk is omitted; a footer Annuller
+ * cancels instead (swipe-down + scrim still dismiss too).
  */
 export function CaptureSourceSheet({
   visible,
   onDismiss,
   onConfirm,
   onModalHide,
+  vision,
+  onVisionChange,
+  onOpenPaywall,
 }: CaptureSourceSheetProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -57,13 +70,13 @@ export function CaptureSourceSheet({
     <Sheet
       visible={visible}
       title="Tilføj trøje"
-      sentence="Op til tre billeder bliver én trøje. Fire eller flere lander som uredigerede."
+      sentence={vision.caption}
       onDismiss={onDismiss}
       onModalHide={onModalHide}
       hideChrome
     >
-      <View style={[styles.group, { borderColor: theme.borderSubtle }]}>
-        {SOURCE_OPTIONS.map((option, index) => (
+      <View style={styles.tiles}>
+        {SOURCE_OPTIONS.map((option) => (
           <Pressable
             key={option.source}
             accessibilityRole="button"
@@ -71,13 +84,12 @@ export function CaptureSourceSheet({
             testID={`capture-source-${option.source}`}
             onPress={() => onConfirm(option.source)}
             style={({ pressed }) => [
-              styles.row,
-              index > 0 && { borderTopWidth: 1, borderTopColor: theme.borderSubtle },
-              pressed && { backgroundColor: theme.fillSecondary },
+              styles.tile,
+              { backgroundColor: pressed ? theme.borderSubtle : theme.fillSecondary },
             ]}
           >
-            <Ionicons name={option.icon} size={22} color={theme.contentPrimary} />
-            <View style={styles.rowBody}>
+            <Ionicons name={option.icon} size={24} color={theme.contentPrimary} />
+            <View style={styles.tileText}>
               <Text style={[typography.label, { color: theme.contentPrimary }]}>
                 {option.title}
               </Text>
@@ -85,9 +97,68 @@ export function CaptureSourceSheet({
                 {option.helper}
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={theme.contentMuted} />
           </Pressable>
         ))}
+      </View>
+      <View
+        style={[styles.visionRow, { borderTopColor: theme.borderSubtle }]}
+        testID="capture-vision-row"
+      >
+        <Ionicons
+          name="sparkles-outline"
+          size={22}
+          color={theme.contentPrimary}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+        <View style={styles.visionBody}>
+          <Text style={[typography.label, { color: theme.contentPrimary }]}>
+            {CHOOSER_VISION_COPY.label}
+          </Text>
+          {vision.helperIsLink ? (
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={vision.helper}
+              testID="capture-vision-upgrade"
+              onPress={onOpenPaywall}
+              style={styles.upgradeLink}
+            >
+              <Text
+                style={[
+                  typography.caption,
+                  { color: theme.contentPrimary, textDecorationLine: "underline" },
+                ]}
+              >
+                {vision.helper}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[typography.caption, { color: theme.contentSecondary }]}>
+              {vision.helper}
+            </Text>
+          )}
+          {vision.quotaLine ? (
+            <Text
+              testID="capture-vision-quota"
+              style={[
+                typography.mono,
+                { color: vision.quotaTone === "danger" ? theme.danger : theme.contentSecondary },
+              ]}
+            >
+              {vision.quotaLine}
+            </Text>
+          ) : null}
+        </View>
+        <View style={vision.switchDisabled ? { opacity: DISABLED_OPACITY } : undefined}>
+          <SwitchControl
+            value={vision.switchOn}
+            disabled={vision.switchDisabled}
+            onValueChange={onVisionChange}
+            accessibilityLabel={CHOOSER_VISION_COPY.label}
+            testID="capture-vision-switch"
+            hitSlop={6}
+          />
+        </View>
       </View>
       <Button label="Annuller" variant="tertiary" width="fill" onPress={onDismiss} />
     </Sheet>
@@ -95,20 +166,32 @@ export function CaptureSourceSheet({
 }
 
 const styles = StyleSheet.create({
-  group: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    overflow: "hidden",
+  tiles: {
+    flexDirection: "row",
+    gap: space.gapMd,
   },
-  row: {
+  tile: {
+    flex: 1,
+    minHeight: 112,
+    borderRadius: radius.md,
+    padding: space.insetMd,
+    justifyContent: "space-between",
+  },
+  tileText: {
+    gap: 2,
+  },
+  visionRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: space.gapMd,
-    minHeight: 56,
-    paddingHorizontal: space.insetMd,
-    paddingVertical: space.insetSm,
+    borderTopWidth: 1,
+    paddingTop: space.insetMd,
   },
-  rowBody: {
+  upgradeLink: {
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  visionBody: {
     flex: 1,
     gap: 2,
   },

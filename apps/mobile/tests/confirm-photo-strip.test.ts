@@ -21,7 +21,7 @@ describe("confirmPhotoStrip", () => {
   it("renders filled slots only, in role order, then one add tile", () => {
     const strip = confirmPhotoStrip(
       { front: "a", back: undefined, left: "c", right: undefined, other: "e" },
-      { analyzing: false, photoCount: 3 },
+      { photoCount: 3 },
     );
     expect(strip.roles).toEqual(["front", "left", "other"]);
     expect(strip.showAddTile).toBe(true);
@@ -31,7 +31,7 @@ describe("confirmPhotoStrip", () => {
   it("has no empty role slots for an empty jersey, only the add tile", () => {
     const strip = confirmPhotoStrip(
       { front: undefined, back: undefined, left: undefined, right: undefined, other: undefined },
-      { analyzing: false, photoCount: 0 },
+      { photoCount: 0 },
     );
     expect(strip.roles).toEqual([]);
     expect(strip.showAddTile).toBe(true);
@@ -40,18 +40,10 @@ describe("confirmPhotoStrip", () => {
   it("hides the add tile at ten photos and says why", () => {
     const strip = confirmPhotoStrip(
       { front: "a", back: "b", left: undefined, right: undefined, other: undefined },
-      { analyzing: false, photoCount: 10 },
+      { photoCount: 10 },
     );
     expect(strip.showAddTile).toBe(false);
     expect(strip.capHelper).toBe("Du kan højst have 10 fotos på én trøje.");
-  });
-
-  it("hides the add tile while grouping is in flight", () => {
-    const strip = confirmPhotoStrip(
-      { front: "a", back: undefined, left: undefined, right: undefined, other: undefined },
-      { analyzing: true, photoCount: 1 },
-    );
-    expect(strip.showAddTile).toBe(false);
   });
 });
 

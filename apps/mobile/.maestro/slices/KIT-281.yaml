@@ -1,0 +1,47 @@
+# Device flow for KIT-281: add jersey start sheet with Vision switch and quota.
+# design-sections: Sheet, Switch, Button, Capture session
+appId: app.kitcollective.mobile
+name: kit-281
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- startRecording: kc__kit-281
+# AC 1, 2, 8: two tiles, the Vision switch on by default, and the caption that says
+# Vision sorts. The Test Collector has no free quota line (AC 5, 6 are unit tests).
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-vision-switch
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-281__01-sheet-vision-on
+# AC 8: with Vision off the caption reads "Du sorterer selv."
+- tapOn:
+    id: capture-vision-switch
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-281__02-sheet-vision-off
+# AC 3: one photo with Vision off lands on Confirm with the empty identity block.
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+# The system photo picker has no stable ids: the first cell, then confirm.
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 90%,12%
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-empty
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-281__03-confirm-empty-identity
+- stopRecording

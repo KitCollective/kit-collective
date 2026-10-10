@@ -14,6 +14,7 @@ import { reloadCaptureSession } from "./captureSession";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
+  CaptureSavedDraft,
   CaptureSessionPhoto,
   CaptureSessionState,
   CaptureSessionStore,
@@ -42,6 +43,7 @@ type DraftRow = {
   badge_id: string | null;
   badge_label: string | null;
   sort_order: number;
+  needs_check: number | null;
 };
 
 type PhotoRow = {
@@ -77,38 +79,33 @@ function readPhotoIdByUri(value: string | null | undefined): Record<string, stri
   }
 }
 
-function readPendingGrouping(
-  value: string | null | undefined,
-): CaptureSessionState["pendingGrouping"] {
+function readSavedDraft(entry: unknown): CaptureSavedDraft | null {
+  if (!isRecord(entry) || typeof entry.draftId !== "string") {
+    return null;
+  }
+  return {
+    draftId: entry.draftId,
+    thumbUri: typeof entry.thumbUri === "string" ? entry.thumbUri : null,
+    clubLabel: typeof entry.clubLabel === "string" ? entry.clubLabel : null,
+    seasonLabel: typeof entry.seasonLabel === "string" ? entry.seasonLabel : null,
+    kitType: readKitType(typeof entry.kitType === "string" ? entry.kitType : null),
+  };
+}
+
+function readSavedDrafts(value: string | null | undefined): CaptureSavedDraft[] {
   if (!value) {
-    return undefined;
+    return [];
   }
   try {
     const parsed: unknown = JSON.parse(value);
-    if (!isRecord(parsed) || !Array.isArray(parsed.groups)) {
-      return undefined;
+    if (!Array.isArray(parsed)) {
+      return [];
     }
-
-    const groups = parsed.groups
-      .map((entry) => {
-        if (!isRecord(entry) || !Array.isArray(entry.photoIds)) {
-          return null;
-        }
-        const photoIds = entry.photoIds.filter((id): id is string => typeof id === "string");
-        if (photoIds.length === 0) {
-          return null;
-        }
-        return { photoIds };
-      })
-      .filter((group): group is { photoIds: string[] } => group !== null);
-
-    if (groups.length === 0) {
-      return undefined;
-    }
-
-    return { groups };
+    return parsed
+      .map((entry) => readSavedDraft(entry))
+      .filter((entry): entry is CaptureSavedDraft => entry !== null);
   } catch {
-    return undefined;
+    return [];
   }
 }
 
@@ -182,6 +179,7 @@ function readDraft(row: DraftRow, photos: CaptureSessionPhoto[]): CaptureJerseyD
     badgeId: row.badge_id ?? null,
     badgeLabel: row.badge_label ?? null,
     photos,
+    ...(row.needs_check === 1 ? { needsCheck: true } : {}),
   };
 }
 
@@ -196,15 +194,17 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         ]);
         draftDb.runSync(`DELETE FROM capture_session_draft WHERE session_id = ?`, [sessionId]);
         draftDb.runSync(
-          `INSERT INTO capture_session (id, branch, active_draft_id, ordered_uris_json, photo_id_by_uri_json, pending_grouping_json, grouping_design_gap, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO capture_session (id, branch, active_draft_id, ordered_uris_json, photo_id_by_uri_json, overview, parked_at, grouping_settled_key, saved_drafts_json, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              branch = excluded.branch,
              active_draft_id = excluded.active_draft_id,
              ordered_uris_json = excluded.ordered_uris_json,
              photo_id_by_uri_json = excluded.photo_id_by_uri_json,
-             pending_grouping_json = excluded.pending_grouping_json,
-             grouping_design_gap = excluded.grouping_design_gap,
+             overview = excluded.overview,
+             parked_at = excluded.parked_at,
+             grouping_settled_key = excluded.grouping_settled_key,
+             saved_drafts_json = excluded.saved_drafts_json,
              updated_at = excluded.updated_at`,
           [
             sessionId,
@@ -212,8 +212,12 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
             state.activeDraftId,
             JSON.stringify(state.orderedUris),
             JSON.stringify(state.photoIdByUri ?? {}),
-            state.pendingGrouping ? JSON.stringify(state.pendingGrouping) : null,
-            state.groupingDesignGap ? 1 : 0,
+            state.overview ? 1 : 0,
+            state.parkedAt ?? null,
+            state.groupingSettledKey ?? null,
+            state.savedDrafts && state.savedDrafts.length > 0
+              ? JSON.stringify(state.savedDrafts)
+              : null,
             Date.now(),
           ],
         );
@@ -233,8 +237,8 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
                kit_type, size, condition,
                kit_type_selected, size_selected, condition_selected,
                notes, player_name, player_id, player_number,
-               badge_enabled, badge_id, badge_label, sort_order, updated_at
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+               badge_enabled, badge_id, badge_label, sort_order, updated_at, needs_check
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               draft.id,
               sessionId,
@@ -259,6 +263,7 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
               draft.badgeLabel,
               index,
               Date.now(),
+              draft.needsCheck ? 1 : 0,
             ],
           );
 
@@ -292,10 +297,12 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         active_draft_id: string;
         ordered_uris_json: string;
         photo_id_by_uri_json: string | null;
-        pending_grouping_json: string | null;
-        grouping_design_gap: number;
+        overview: number | null;
+        parked_at: number | null;
+        grouping_settled_key: string | null;
+        saved_drafts_json: string | null;
       }>(
-        `SELECT id, branch, active_draft_id, ordered_uris_json, photo_id_by_uri_json, pending_grouping_json, grouping_design_gap FROM capture_session WHERE id = ?`,
+        `SELECT id, branch, active_draft_id, ordered_uris_json, photo_id_by_uri_json, overview, parked_at, grouping_settled_key, saved_drafts_json FROM capture_session WHERE id = ?`,
         [sessionId],
       );
 
@@ -348,10 +355,14 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
         orderedUris: readOrderedUris(sessionRow.ordered_uris_json),
         unboundUris: unboundRows.map((row) => row.uri),
         photoIdByUri,
-        pendingGrouping: readPendingGrouping(sessionRow.pending_grouping_json),
-        groupingDesignGap: sessionRow.grouping_design_gap === 1,
         drafts,
         activeDraftId: sessionRow.active_draft_id,
+        ...(sessionRow.overview === 1 ? { overview: true } : {}),
+        parkedAt: sessionRow.parked_at ?? null,
+        ...(sessionRow.grouping_settled_key
+          ? { groupingSettledKey: sessionRow.grouping_settled_key }
+          : {}),
+        savedDrafts: readSavedDrafts(sessionRow.saved_drafts_json),
       };
     },
     clear() {
@@ -365,4 +376,20 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
 
 export function reloadSqliteCaptureSession(sessionId: string): CaptureSessionState | null {
   return reloadCaptureSession(createSqliteCaptureSessionStore(sessionId));
+}
+
+/** The session Samling's parked row reopens: the most recently parked one. */
+export function newestParkedSessionId(): string | null {
+  const row = draftDb.getFirstSync<{ id: string }>(
+    `SELECT id FROM capture_session WHERE parked_at IS NOT NULL ORDER BY parked_at DESC LIMIT 1`,
+  );
+  return row?.id ?? null;
+}
+
+/** At most one session is parked: parking this one unparks every other. */
+export function unparkOtherSessions(sessionId: string): void {
+  draftDb.runSync(
+    `UPDATE capture_session SET parked_at = NULL WHERE id != ? AND parked_at IS NOT NULL`,
+    [sessionId],
+  );
 }

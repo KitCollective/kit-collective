@@ -6,12 +6,6 @@ import {
   openConfirmSheet,
   shouldOpenSeasonAfterClubDismiss,
 } from "../src/capture/confirmSheet";
-import {
-  SANDBOX_GATHER_STAGGER_MS,
-  SANDBOX_THUMB_STEP,
-  sandboxGatherDelayMs,
-  sandboxGatherTranslateX,
-} from "../src/capture/sandboxGather";
 
 const confirmPath = join(__dirname, "../app/(capture)/confirm.tsx");
 const dataScreenPath = join(__dirname, "../src/components/confirm-data-screen.tsx");
@@ -69,14 +63,12 @@ describe("Confirm chrome", () => {
     expect(confirm).toContain("JerseyTabBar");
     expect(confirm).toContain("ConfirmPhotoViewer");
     expect(confirm).toContain("UnboundPhotosRow");
-    expect(confirm).toContain("deferIdentity: shouldHoldIdentityForGrouping");
-    expect(confirm).toContain("groupingInFlight: grouping.blocksIdentity");
+    // Grouping lives on the bulk overview now: Confirm carries no grouping wait chrome.
+    expect(confirm).not.toContain("useConfirmGrouping");
+    expect(confirm).not.toContain("grouping.");
+    expect(confirm).not.toContain("visionSlotReserve");
     expect(confirm).not.toContain("GROUPING_ANALYZING_COPY");
     expect(confirm).not.toContain("analyzingMessage");
-    expect(confirm).toContain("analyzing={grouping.blocksIdentity}");
-    expect(confirm).toContain("grouping.blocksIdentity");
-    expect(confirm).toContain("homecoming={grouping.homecoming}");
-    expect(confirm).toContain("visionSlotReserve");
     expect(confirm).not.toContain("ConfirmVisionBanner");
     expect(confirm).not.toContain("resolveConfirmVisionBannerState");
     expect(confirm).not.toContain("loading={vision.fieldMarkInput.analyzing}");
@@ -136,7 +128,7 @@ describe("Confirm chrome", () => {
     expect(jerseyTabs).toContain("motion.slow");
     expect(jerseyTabs).not.toContain("motion.fast");
     expect(jerseyTabs).toContain('key="add-jersey"');
-    expect(jerseyTabs).toContain("analyzing");
+    expect(jerseyTabs).not.toContain("analyzing");
     expect(jerseyTabs).toContain("jerseyTabPillX");
     expect(jerseyTabs).toContain("JERSEY_TAB_STEP");
     expect(jerseyTabs).toContain("withTiming");
@@ -174,19 +166,11 @@ describe("Confirm chrome", () => {
     expect(unboundRow).toContain("useReduceMotion");
     expect(unboundRow).toContain("motion.slow");
     expect(unboundRow).not.toContain("motion.fast");
-    expect(unboundRow).toContain("gatheringUris");
-    expect(unboundRow).toContain("sandboxGatherTranslateX");
-    expect(unboundRow).toContain("@/capture/sandboxGather");
-    expect(unboundRow).toContain("withTiming");
-    expect(unboundRow).toContain("withTiming(0.95");
-    expect(unboundRow).toContain("analyzing");
-    expect(unboundRow).toContain("ConfirmAnalyzingPulse");
-    expect(unboundRow).toContain("Grupperer fotoet");
+    expect(unboundRow).not.toContain("gatheringUris");
+    expect(unboundRow).not.toContain("sandboxGather");
+    expect(unboundRow).not.toContain("Grupperer fotoet");
     expect(unboundRow).not.toContain("thumbSkeleton");
-    expect(unboundRow).toContain("withAlpha(theme.canvas, 0.6)");
     expect(unboundRow).not.toContain("travel=");
-    expect(unboundRow).toContain("SANDBOX_GATHER_LIFT");
-    expect(unboundRow).toContain("sandboxGatherDelayMs");
     expect(unboundRow).not.toContain("theme.info");
 
     const analyzingPulse = readFileSync(
@@ -205,35 +189,22 @@ describe("Confirm chrome", () => {
     expect(analyzingPulse).not.toContain("ANALYZING_SHIMMER_MS");
 
     const grouping = readFileSync(confirmGroupingPath, "utf8");
-    expect(grouping).not.toContain("GROUPING_ANALYZING_COPY");
-    expect(grouping).toContain("GROUPING_TAB_STAGGER_MS = motion.slow");
-    expect(grouping).toContain("GROUPING_GATHER_MS = motion.slow + motion.base");
-    expect(grouping).toContain("GROUPING_FIRST_ROLL_MS = motion.slow");
-    expect(grouping).toContain("setRollingUris(gatherUris.slice(0, 1))");
-    expect(grouping).toContain("GROUPING_SLOT_ROLL_MS = motion.slow");
-    expect(grouping).toContain("gatherUris.slice(0, shown + 1)");
-    expect(grouping).toContain("for (let shown = 1; shown < gatherUris.length");
-    const shownLoop = grouping.indexOf("for (let shown = 1; shown < gatherUris.length");
-    const bindAfterHold = grouping.indexOf("revealSlice([...prior, { photoIds }], groupIndex)");
-    expect(shownLoop).toBeGreaterThan(-1);
-    expect(bindAfterHold).toBeGreaterThan(shownLoop);
-    expect(grouping.slice(shownLoop, bindAfterHold)).not.toContain("revealSlice");
-    expect(grouping).toContain("GROUPING_SLOT_POP_MS = motion.slow");
-    expect(grouping).toContain("GROUPING_SLOT_HOLD_MS = motion.slow + motion.base");
-    expect(grouping).toContain("GROUPING_REVEAL_SETTLE_MS = motion.base");
-    expect(grouping).toContain("GROUPING_RETURN_MS = motion.slow");
-    expect(grouping).toContain("setHomecoming");
-    expect(grouping).toContain("activateGroup");
-    expect(grouping).toContain("const first = current.drafts[0]");
-    expect(grouping).toContain("setGatheringUris");
-    expect(grouping).not.toContain("photoIds.slice(0, photoIndex + 1)");
-    expect(confirm).toContain("gatheringUris={grouping.gatheringUris}");
-    expect(confirm).toContain("hiddenSandboxUris");
-    expect(grouping).toContain("setHiddenSandboxUris");
-    expect(confirm).toContain("rollingUris={grouping.rollingUris}");
-    expect(grouping).toContain("setAnalyzing(true)");
-    expect(grouping).toContain("blocksIdentity");
-    expect(grouping).toContain("applyFillOrderToDraft");
+    // The grouping hook feeds the overview: per-group rule in the reducer, no Confirm reveal.
+    for (const gone of [
+      "GROUPING_TAB_STAGGER_MS",
+      "GROUPING_GATHER_MS",
+      "setGatheringUris",
+      "setRollingUris",
+      "setHomecoming",
+      "setHiddenSandboxUris",
+      "blocksIdentity",
+      "pendingGrouping",
+      "groupingDesignGap",
+    ]) {
+      expect(grouping).not.toContain(gone);
+    }
+    expect(grouping).toContain("applyGroupingSuggestion");
+    expect(grouping).toContain("markGroupingSettled");
     expect(grouping).toContain("if (!accessToken || !sessionId)");
     expect(grouping).toContain("ensureSessionPhotoIds");
     expect(grouping).toContain("buildGroupingSuggestRequest");
@@ -242,21 +213,22 @@ describe("Confirm chrome", () => {
     expect(grouping).toContain('applyGroupingClose("timeout"');
     expect(grouping).not.toContain("confirm.grouping");
     expect(grouping).toContain("shouldBeginGroupingStart");
-    expect(confirmVision).toContain("deferIdentity");
+    expect(confirmVision).not.toContain("deferIdentity");
+    expect(confirmVision).not.toContain("groupingInFlight");
+    expect(confirmVision).not.toContain("suggestionOpacity");
     expect(confirmVision).toContain("shouldAttemptIdentityQueue");
     expect(confirmVision).toContain("nextQueuedIdentityDraft");
     expect(confirmVision).toContain("identityLoopActiveRef");
     expect(confirmVision).toContain("identityKickAgainRef");
     expect(confirmVision).toContain("launchIdentityLoop");
     expect(confirmVision).not.toContain("skipNewDrafts");
-    expect(confirm).toContain("shouldHoldIdentityForGrouping");
     expect(confirmVision).toContain("shouldSyncIdentityChrome");
     expect(confirmVision).toContain("raceWithTimeout");
     expect(confirmVision).toContain("identitySettledSnapshot");
     expect(confirmVision).not.toContain("setActiveDraft(current, next.id)");
     expect(confirmVision).not.toContain("startedIdentityKeysRef.current.delete");
     expect(confirmVision).not.toContain("Promise.all(");
-    expect(confirmVision).toContain("groupingJustClosed");
+    expect(confirmVision).not.toContain("groupingJustClosed");
     expect(confirmVision).not.toContain("fieldMarkInput");
     expect(confirmVision).not.toContain("markDataReviewed");
     expect(confirmVision).not.toContain(
@@ -277,39 +249,29 @@ describe("Confirm chrome", () => {
     const photoSlot = readFileSync(join(__dirname, "../src/components/photo-slot.tsx"), "utf8");
     expect(viewer).toContain("ScrollView");
     expect(viewer).not.toContain("borderWidth");
-    expect(viewer).toContain("analyzing");
-    expect(viewer).toContain("groupingStripUris");
-    expect(viewer).toContain("groupingViewerRoles");
-    expect(viewer).toContain("isGroupingWait");
-    expect(viewer).toContain("ConfirmGroupingWait");
-    expect(viewer).toContain("rollingUris");
-    expect(viewer).toContain('labelPlacement={analyzing ? "none" : "overlay"}');
-    expect(viewer).toContain("homecoming");
-    expect(viewer).toContain("slotUris[role] ?? role");
-    expect(viewer).not.toContain("analyzing ? (slotUris[role] ?? role) : role");
+    expect(viewer).not.toContain("groupingStripUris");
+    expect(viewer).not.toContain("groupingViewerRoles");
+    expect(viewer).not.toContain("isGroupingWait");
+    expect(viewer).not.toContain("ConfirmGroupingWait");
+    expect(viewer).not.toContain("rollingUris");
+    expect(viewer).not.toContain("homecoming");
+    expect(viewer).toContain("photoUris[role] ?? role");
 
-    const groupingWait = readFileSync(
-      join(__dirname, "../src/components/confirm-grouping-wait.tsx"),
-      "utf8",
-    );
-    expect(groupingWait).toContain("Forsøger at gruppere dine trøjer");
-    expect(groupingWait).toContain("Du kan starte grupperingen selv");
-    expect(groupingWait).toContain("CONFIRM_VIEWER_WIDTH");
-    expect(groupingWait).toContain("(CONFIRM_VIEWER_WIDTH * 5) / 4");
-    expect(groupingWait).toContain("GROUPING_WAIT_CYCLE_MS = motion.slow * 5");
-    expect(groupingWait).toContain("translateY");
-    expect(groupingWait).not.toContain("theme.info");
-    expect(photoSlot).toContain("ConfirmAnalyzingPulse");
-    expect(photoSlot).not.toContain("skeletonStack");
-    expect(photoSlot).toContain("SKELETON_BONE_ALPHA");
-    expect(photoSlot).toContain("withAlpha(theme.fillPrimary, SKELETON_BONE_ALPHA)");
-    expect(photoSlot).not.toContain("travel=");
+    // The grouping wait canvas is gone from Confirm (the overview replaced it).
+    expect(existsSync(join(__dirname, "../src/components/confirm-grouping-wait.tsx"))).toBe(false);
+    expect(existsSync(join(__dirname, "../src/capture/groupingReveal.ts"))).toBe(false);
+    // The grouping wait chrome (skeleton pulse, fade and roll entering) left with the overview.
+    for (const gone of [
+      "ConfirmAnalyzingPulse",
+      "SKELETON_BONE_ALPHA",
+      "SLOT_FADE_ENTERING",
+      "SLOT_ROLL_ENTERING",
+      "groupingPreview",
+      "analyzing",
+    ]) {
+      expect(photoSlot).not.toContain(gone);
+    }
     expect(photoSlot).toContain("theme.surface");
-    expect(photoSlot).toContain("SLOT_FADE_ENTERING");
-    expect(photoSlot).toContain("SLOT_ROLL_ENTERING");
-    expect(photoSlot).toContain("FadeOut");
-    expect(photoSlot).not.toContain("scale: 0.95");
-    expect(photoSlot).toContain("motion.slow");
     expect(photoSlot).not.toContain("theme.info");
 
     expect(layout).toContain('name="confirm-data"');
@@ -358,7 +320,7 @@ describe("Confirm chrome", () => {
     ]) {
       expect(confirm).not.toContain(gone);
     }
-    // The Vision slot keeps only the grouping suggestion strip and the catalog-miss note.
+    // The Vision slot keeps only the catalog-miss note.
     expect(confirm).toContain("ConfirmVisionSlot");
 
     // Viewer and sandbox share one tighter-gap wrapper (gapMd < the column's gapLg)
@@ -436,15 +398,6 @@ describe("Confirm chrome", () => {
     expect(pickerModal).toContain('name="Luk"');
     expect(pickerModal).toContain('icon="close"');
     expect(pickerModal).toContain("SearchField");
-  });
-
-  it("gathers sandbox thumbs toward the first photo of the jersey", () => {
-    const uris = ["a", "b", "c"];
-    expect(sandboxGatherTranslateX(uris, ["b", "c"], "b")).toBe(0);
-    expect(sandboxGatherTranslateX(uris, ["b", "c"], "c")).toBe(-SANDBOX_THUMB_STEP);
-    expect(sandboxGatherTranslateX(uris, ["b", "c"], "a")).toBe(0);
-    expect(sandboxGatherDelayMs(0)).toBe(0);
-    expect(sandboxGatherDelayMs(2)).toBe(SANDBOX_GATHER_STAGGER_MS * 2);
   });
 
   it("keeps player print off the main confirm column", () => {

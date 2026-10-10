@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchClubSeasons } from "@/api/catalog";
 import { fetchCollectionJerseys } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
+import { unsavedDraftCount } from "@/capture/captureOverview";
 import { canSave, catalogSideId } from "@/capture/captureSession";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { saveConfirmJersey } from "@/capture/saveConfirmJersey";
@@ -119,6 +120,18 @@ export function useConfirmSave(options: {
       return;
     }
 
+    if (outcome.status === "overview-continue") {
+      // Gem og næste stays on Confirm for the next unsaved jersey (the saved one left the
+      // drafts). After the last, back to the overview, which now shows every row as Gemt.
+      if (outcome.remaining === 0) {
+        router.dismissTo({
+          pathname: "/(capture)/overview",
+          params: { sessionId: options.sessionId },
+        });
+      }
+      return;
+    }
+
     if (
       outcome.status === "bulk-continue" &&
       options.afterBulkContinue === "hub" &&
@@ -145,11 +158,10 @@ export function useConfirmSave(options: {
 
   const dockHelper = saveBlockMessage ?? (draft ? getSaveBlockMessage(draft) : null);
   const saveEnabled = draft ? canSave(draft) : false;
-  const saveLabel = options.editJerseyId
-    ? "Gem"
-    : isBulk && state && state.drafts.length > 1
-      ? "Gem og næste"
-      : "Gem";
+  const moreToSave = state?.overview
+    ? unsavedDraftCount(state) > 1
+    : isBulk && state !== null && state.drafts.length > 1;
+  const saveLabel = options.editJerseyId ? "Gem" : moreToSave ? "Gem og næste" : "Gem";
 
   return {
     state,

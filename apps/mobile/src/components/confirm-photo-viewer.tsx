@@ -2,8 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import type { PhotoRole } from "@kit/domain";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { CONFIRM_ADD_PHOTO_LABEL, confirmPhotoStrip } from "@/capture/confirmPhotoStrip";
-import { groupingStripUris, groupingViewerRoles, isGroupingWait } from "@/capture/groupingReveal";
-import { ConfirmGroupingWait } from "@/components/confirm-grouping-wait";
 import { CONFIRM_VIEWER_WIDTH, PhotoSlot } from "@/components/photo-slot";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
@@ -20,9 +18,6 @@ type ConfirmPhotoViewerProps = {
   onPressRole: (role: PhotoRole) => void;
   /** Opens the picker. The Foto tile; there is no Upload tile and no empty role slot. */
   onAddPhoto: () => void;
-  analyzing?: boolean;
-  rollingUris?: string[];
-  homecoming?: boolean;
   /** True while the first identity read of the front photo runs (once per photo). */
   scanningFront?: boolean;
 };
@@ -36,68 +31,56 @@ export function ConfirmPhotoViewer({
   photoCount,
   onPressRole,
   onAddPhoto,
-  analyzing = false,
-  rollingUris = [],
-  homecoming = false,
   scanningFront,
 }: ConfirmPhotoViewerProps) {
   const theme = useTheme();
   const typography = useTypography();
-  const slotUris = analyzing ? groupingStripUris(rollingUris) : photoUris;
-  const strip = confirmPhotoStrip(slotUris, { analyzing, photoCount });
-  const roles = analyzing ? groupingViewerRoles(slotUris, true) : strip.roles;
-  const waiting = isGroupingWait(slotUris, analyzing);
+  const strip = confirmPhotoStrip(photoUris, { photoCount });
 
   return (
     <View style={[styles.canvas, { minHeight: CANVAS_HEIGHT }]}>
-      {waiting ? <ConfirmGroupingWait /> : null}
-      {waiting ? null : (
-        <ScrollView
-          horizontal
-          nestedScrollEnabled
-          showsHorizontalScrollIndicator={false}
-          accessibilityLabel="Fotos på denne trøje"
-          accessibilityState={analyzing ? { busy: true } : undefined}
-          contentContainerStyle={styles.strip}
-        >
-          {roles.map((role, index) => (
-            <PhotoSlot
-              key={slotUris[role] ?? role}
-              role={role}
-              uri={slotUris[role]}
-              width={CONFIRM_VIEWER_WIDTH}
-              labelPlacement={analyzing ? "none" : "overlay"}
-              enter={analyzing ? (homecoming || index === 0 ? "fade" : "roll") : undefined}
-              analyzing={analyzing}
-              scanning={role === "front" ? scanningFront : undefined}
-              onPress={() => onPressRole(role)}
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        accessibilityLabel="Fotos på denne trøje"
+        contentContainerStyle={styles.strip}
+      >
+        {strip.roles.map((role) => (
+          <PhotoSlot
+            key={photoUris[role] ?? role}
+            role={role}
+            uri={photoUris[role]}
+            width={CONFIRM_VIEWER_WIDTH}
+            labelPlacement="overlay"
+            scanning={role === "front" ? scanningFront : undefined}
+            onPress={() => onPressRole(role)}
+          />
+        ))}
+        {strip.showAddTile ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tilføj foto"
+            testID="confirm-add-photo"
+            onPress={onAddPhoto}
+            style={({ pressed }) => [
+              styles.addTile,
+              { backgroundColor: theme.fillSecondary },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons
+              name="add"
+              size={24}
+              color={theme.contentPrimary}
+              accessibilityElementsHidden
             />
-          ))}
-          {strip.showAddTile ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Tilføj foto"
-              testID="confirm-add-photo"
-              onPress={onAddPhoto}
-              style={({ pressed }) => [
-                styles.addTile,
-                { backgroundColor: theme.fillSecondary },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Ionicons
-                name="add"
-                size={24}
-                color={theme.contentPrimary}
-                accessibilityElementsHidden
-              />
-              <Text style={[typography.caption, { color: theme.contentPrimary }]}>
-                {CONFIRM_ADD_PHOTO_LABEL}
-              </Text>
-            </Pressable>
-          ) : null}
-        </ScrollView>
-      )}
+            <Text style={[typography.caption, { color: theme.contentPrimary }]}>
+              {CONFIRM_ADD_PHOTO_LABEL}
+            </Text>
+          </Pressable>
+        ) : null}
+      </ScrollView>
       {strip.capHelper ? (
         <Text style={[typography.caption, { color: theme.contentMuted }]}>{strip.capHelper}</Text>
       ) : null}

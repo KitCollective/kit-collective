@@ -3,13 +3,9 @@ import { resolveVisionSaveAction } from "@kit/api-contract";
 import type { PhotoRole } from "@kit/domain";
 import { saveUserJersey, updateUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction } from "@/api/vision";
+import { advanceBulkSessionAfterSave } from "@/capture/bulkSaveAdvance";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
-import {
-  addJerseyDraft,
-  applyStickySizeToUnselected,
-  hasCatalogSide,
-  removeDraft,
-} from "@/capture/captureSession";
+import { hasCatalogSide } from "@/capture/captureSession";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -26,6 +22,8 @@ export type ConfirmSaveOutcome =
   | { status: "missing-auth" }
   | { status: "edit-saved"; jerseyId: string }
   | { status: "bulk-continue" }
+  /** Saved from the bulk overview: `remaining` jerseys are still unsaved. */
+  | { status: "overview-continue"; remaining: number }
   | {
       status: "saved";
       club: CatalogPickerItem | null;
@@ -159,16 +157,13 @@ export async function saveConfirmJersey(input: {
     const savedSeasonLabel = response.jersey.seasonLabel ?? input.selectedSeasonLabel;
 
     if (input.branch === "bulk") {
-      const nextState = input.mutate((current) => {
-        let next = removeDraft(current, input.draft.id);
-        if (next.drafts.length === 0 && next.unboundUris.length > 0) {
-          next = addJerseyDraft(next, { defaultSize: stickySize.get() });
-        }
-        const lastSize = stickySize.get();
-        return lastSize ? applyStickySizeToUnselected(next, lastSize) : next;
+      const advance = advanceBulkSessionAfterSave({
+        draft: input.draft,
+        stickySize: stickySize.get(),
+        mutate: input.mutate,
       });
 
-      if (!nextState || nextState.drafts.length === 0) {
+      if (advance.status === "session-done") {
         clearPersistedCaptureSession(input.sessionId);
         return {
           status: "saved",
@@ -177,8 +172,7 @@ export async function saveConfirmJersey(input: {
           jersey: response.jersey,
         };
       }
-
-      return { status: "bulk-continue" };
+      return advance;
     }
 
     clearPersistedCaptureSession(input.sessionId);

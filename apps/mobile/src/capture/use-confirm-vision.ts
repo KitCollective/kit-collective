@@ -1,6 +1,5 @@
 import type { VisionFieldPreselect, VisionJobResponse, VisionSuggestions } from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated } from "react-native";
 import { fetchClubSeasons } from "@/api/catalog";
 import { fetchVisionJob, startVisionSuggest, VisionPremiumRequiredError } from "@/api/vision";
 import {
@@ -44,7 +43,6 @@ import {
 } from "@/capture/identityDraftState";
 import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
 import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
-import { motion } from "@/theme/tokens";
 
 type IdentityFieldSnapshot = {
   fieldPreselect: VisionFieldPreselect;
@@ -63,15 +61,10 @@ type UseConfirmVisionOptions = {
   draft: CaptureJerseyDraft | null;
   sessionDrafts?: CaptureJerseyDraft[];
   mutate: CaptureSessionMutator;
-  reduceMotion: boolean;
   jobId: string | null;
   setJobId: (jobId: string | null) => void;
   setSelectedSeasonLabel: (label: string | null) => void;
   onPremiumRequired?: () => Promise<boolean>;
-  /** Hold identity until grouping has bound drafts (or failed). */
-  deferIdentity?: boolean;
-  /** Per-draft photo-set readiness: wait for front+back while grouping is in flight. */
-  groupingInFlight?: boolean;
 };
 
 function hasPreselectFields(fieldPreselect: VisionFieldPreselect | undefined): boolean {
@@ -107,13 +100,10 @@ export function useConfirmVision({
   draft,
   sessionDrafts = [],
   mutate,
-  reduceMotion,
   jobId,
   setJobId,
   setSelectedSeasonLabel,
   onPremiumRequired,
-  deferIdentity = false,
-  groupingInFlight = false,
 }: UseConfirmVisionOptions) {
   const [polling, setPolling] = useState(false);
   const draftRef = useRef(draft);
@@ -131,15 +121,11 @@ export function useConfirmVision({
     identityStates,
     draft?.id ?? null,
   );
-  const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const appliedJobId = useRef<string | null>(null);
   const snapshotsByDraftRef = useRef(new Map<string, IdentityFieldSnapshot>());
   const startedIdentityKeysRef = useRef(new Set<string>());
   const sessionDraftsRef = useRef(sessionDrafts);
   sessionDraftsRef.current = sessionDrafts;
-  const wasDeferredRef = useRef(deferIdentity);
-  const groupingInFlightRef = useRef(groupingInFlight);
-  groupingInFlightRef.current = groupingInFlight;
   const prevQueueFingerprintRef = useRef<string | null>(null);
   const identityLoopActiveRef = useRef(false);
   const identityKickAgainRef = useRef(false);
@@ -147,18 +133,6 @@ export function useConfirmVision({
   const [inFlightDraftId, setInFlightDraftId] = useState<string | null>(null);
   /** Jerseys whose identity read has finished, found or not. Drives "Vision fandt ikke trøjen". */
   const [settledDraftIds, setSettledDraftIds] = useState<ReadonlySet<string>>(() => new Set());
-
-  const fadeInSuggestion = useCallback(() => {
-    suggestionOpacity.setValue(reduceMotion ? 1 : 0);
-    if (reduceMotion) {
-      return;
-    }
-    Animated.timing(suggestionOpacity, {
-      toValue: 1,
-      duration: motion.fast,
-      useNativeDriver: true,
-    }).start();
-  }, [reduceMotion, suggestionOpacity]);
 
   const applySuggestions = useCallback(
     async (job: VisionJobResponse, targetDraftId?: string) => {
@@ -197,9 +171,6 @@ export function useConfirmVision({
 
       if (!shouldPreselect && suggestions) {
         patchIdentity(currentDraftId, identityLandingPatch({ kind: "suggest", job }));
-        if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
-          fadeInSuggestion();
-        }
         return;
       }
 
@@ -251,25 +222,19 @@ export function useConfirmVision({
             currentDraftId,
             identityLandingPatch({ kind: "suggest", job: suggestOnlyJob }),
           );
-          if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
-            fadeInSuggestion();
-          }
           return;
         }
 
         patchIdentity(currentDraftId, identityLandingPatch({ kind: "applied" }));
-        if (landingFadesIn(currentDraftId, draftRef.current?.id ?? null)) {
-          fadeInSuggestion();
-        }
       }
     },
-    [accessToken, fadeInSuggestion, mutate, sessionId, patchIdentity, setSelectedSeasonLabel],
+    [accessToken, mutate, sessionId, patchIdentity, setSelectedSeasonLabel],
   );
   const applySuggestionsRef = useRef(applySuggestions);
   applySuggestionsRef.current = applySuggestions;
 
   const draftId = draft?.id ?? null;
-  const queueFingerprint = identityQueueFingerprint(sessionDrafts, groupingInFlight);
+  const queueFingerprint = identityQueueFingerprint(sessionDrafts);
 
   useEffect(() => {
     setPolling(inFlightDraftId !== null && inFlightDraftId === draftId);
@@ -283,19 +248,15 @@ export function useConfirmVision({
   }, []);
 
   useEffect(() => {
-    const groupingJustClosed = wasDeferredRef.current && !deferIdentity;
-    wasDeferredRef.current = deferIdentity;
     const previousFingerprint = prevQueueFingerprintRef.current;
     prevQueueFingerprintRef.current = queueFingerprint;
 
     if (
       !accessToken ||
       !shouldAttemptIdentityQueue({
-        deferIdentity,
         hasAccessToken: true,
         queueFingerprint,
         previousFingerprint,
-        groupingJustClosed,
       })
     ) {
       return;
@@ -323,7 +284,6 @@ export function useConfirmVision({
       const next = nextQueuedIdentityDraft(
         sessionDraftsRef.current,
         startedIdentityKeysRef.current,
-        groupingInFlightRef.current,
       );
       if (!next) {
         return false;
@@ -423,11 +383,7 @@ export function useConfirmVision({
             !identityUnmountedRef.current &&
             (identityKickAgainRef.current ||
               Boolean(
-                nextQueuedIdentityDraft(
-                  sessionDraftsRef.current,
-                  startedIdentityKeysRef.current,
-                  groupingInFlightRef.current,
-                ),
+                nextQueuedIdentityDraft(sessionDraftsRef.current, startedIdentityKeysRef.current),
               ))
           ) {
             identityKickAgainRef.current = false;
@@ -440,7 +396,6 @@ export function useConfirmVision({
     launchIdentityLoop(true);
   }, [
     accessToken,
-    deferIdentity,
     onPremiumRequired,
     queueFingerprint,
     resetIdentity,
@@ -569,7 +524,6 @@ export function useConfirmVision({
     suggestion,
     catalogMiss,
     catalogMissHint,
-    suggestionOpacity,
     /** An identity read is running for the active jersey. */
     analyzing: polling,
     /** Vision, not the collector, filled the active jersey's facts. */
