@@ -47,4 +47,6 @@ A human shapes the ticket, then may apply `ready-for-agent`. Dispatch still requ
 - …
 ```
 
+Create it with `node scripts/linear.mjs signal-up "<title>" --origin <teamKey>-n --body-file <path>`: the command sets Triage, the `signal-up` label only, the origin's project and a "related" link to the origin, and refuses to run without `--origin`. `relate` and `project` repair an issue that missed either.
+
 Title: short and actionable. Link the new id under workpad `### Signal-up`.

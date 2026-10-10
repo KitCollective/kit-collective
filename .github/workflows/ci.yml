@@ -273,6 +273,7 @@ jobs:
           scripts/tests/review-matrix.test.mjs
           scripts/tests/fix-diff.test.mjs
           scripts/tests/pr-checks.test.mjs
+          scripts/tests/linear-args.test.mjs
 
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs
