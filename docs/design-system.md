@@ -610,7 +610,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Unsupported**: Side-by-side primaries on phone. Hugging centered pill as the only primary on these docked screens.
 
-**Example** *(not a rule)*: Login dock: fill “Log ind” + tertiary “Opret konto” below. Cookies: fill “Acceptér alle” + `secondary` “Kun nødvendige” + tertiary “Bekræft mine valg”.
+**Example** *(not a rule)*: Cookies: fill “Acceptér alle” + `secondary` “Kun nødvendige” + tertiary “Bekræft mine valg”.
 
 **Code**: `apps/mobile` — `ButtonDock` in `src/components/ui.tsx`; fade/blur scrim in `src/components/fade-scrim.tsx`.
 
@@ -1423,7 +1423,7 @@ Status: `retired` (Revision 2026-10-10). The Detaljer screen is replaced by the 
 
 **Peer Profil** (another collector; Tab bar hidden): Back and More (Rapportér, Blokér). Avatar `lg`, Handle, city · n trøjer, About me in `body` 15. One `primary` Button **Skriv besked** (opens the conversation with that collector). Chips **Alle n** | **Åbne for bud n**, then the two-column Jersey tile grid. **Se som andre** shows this view of oneself without the Button.
 
-**Removed**: Skift adgangskode (no password after First session 1.0); Profiloplysninger (it was Rediger profil); phone; separate Push and E-mail screens; the Indstillinger and Cookie rows on Profil home.
+**Removed**: Skift adgangskode and the password-confirmed e-mail change (no password after First session 1.0; a code-confirmed e-mail change is a follow-up); Profiloplysninger (it was Rediger profil); phone; separate Push and E-mail screens; the Indstillinger and Cookie rows on Profil home.
 
 **Personal data**: birthday and gender are never shown to other collectors, never used to target a collector, and are reported only in aggregate. A collector can clear them, and they are deleted with the account.
 
@@ -1450,7 +1450,7 @@ Status: `retired` (Revision 2026-10-10). The Detaljer screen is replaced by the 
    - Sprog (meta current language + `chevron`) / Mørk tilstand (meta current appearance + `chevron`)
    - Privatlivsindstillinger (`navigate`) + List row `danger` **Log ud** (icon + label, no chevron)
    Tab bar hidden.
-6. **Leaves** — Account (email/phone with trailing `action` “Skift”; birthday as a value + `chevron`; linked accounts; Skift adgangskode; Slet min konto). Push (grouped switches; master “Slå push til” in its **own last group**; off dims the other groups to 40%). Email (Nyheder off by default; high-priority on). Privacy (switches + one `navigate` “Administrer kontodata”). Sprog and Mørk tilstand are the **same** `select` list: selected row trailing `check` in `fill.primary`, unselected rows `chevron` or empty — do not show the word “Valgt” and a chevron together. Appearance options: System / Light / Dark (hub meta “Systemindstilling” when system). Daily-limit and birthday **picker chrome** are not locked — flag; do not invent a calendar or stepper.
+6. **Leaves** — Account (email as a read-only value with its “Bekræftet” meta; phone with trailing `action` “Skift”; birthday as a value + `chevron`; linked accounts; Slet min konto). Push (grouped switches; master “Slå push til” in its **own last group**; off dims the other groups to 40%). Email (Nyheder off by default; high-priority on). Privacy (switches + one `navigate` “Administrer kontodata”). Sprog and Mørk tilstand are the **same** `select` list: selected row trailing `check` in `fill.primary`, unselected rows `chevron` or empty — do not show the word “Valgt” and a chevron together. Appearance options: System / Light / Dark (hub meta “Systemindstilling” when system). Daily-limit and birthday **picker chrome** are not locked — flag; do not invent a calendar or stepper.
 7. **Log ud / Slet min konto** — Sheet `confirm` (`radius.lg`, scrim). Title + consequence + dock `destructive` + `tertiary` Annuller. Not a full-screen place.
 8. **Cookie-indstillinger** — Grouped consent: necessary = `mono` “Altid aktive” (no Switch). Analysis and marketing = Switch. Button dock: `primary` **Acceptér alle**, `secondary` **Kun nødvendige**, `tertiary` **Bekræft mine valg**. No legal essay. Tab bar hidden.
 

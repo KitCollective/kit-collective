@@ -6,7 +6,6 @@ name: collection
     file: ../subflows/sign-in.yaml
     env:
       EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
-      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
 - startRecording: kc__collection
 - takeScreenshot: kc__collection__01-collection
 - tapOn:

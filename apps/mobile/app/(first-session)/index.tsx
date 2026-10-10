@@ -1,5 +1,5 @@
 import type { IdentityLinkedProvider } from "@kit/api-contract";
-import { Redirect } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import Toast from "react-native-toast-message";
 import { requestSignInCode } from "@/api/identity";
@@ -25,6 +25,7 @@ import {
   socialCancelledMessage,
 } from "@/first-session/door-copy";
 import { JerseyDetailsScreen } from "@/first-session/jersey-details-screen";
+import { LEGACY_DOOR_PARAM_VALUE } from "@/first-session/legacy-routes";
 import {
   collectionHref,
   createFirstSession,
@@ -38,7 +39,14 @@ import { LoadingScreen } from "../_layout";
 
 export default function FirstSessionHost() {
   const { user, isLoading, signInSocial, signInWithCode } = useAuth();
-  const [session, setSession] = useState(() => createFirstSession({ signedIn: false }));
+  // An old login, register or reset link lands here with ?door=1: Kom i gang opens at once.
+  const { door } = useLocalSearchParams<{ door?: string }>();
+  const [session, setSession] = useState(() => {
+    const first = createFirstSession({ signedIn: false });
+    return door === LEGACY_DOOR_PARAM_VALUE
+      ? reduceFirstSession(first, { type: "openDoor" })
+      : first;
+  });
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [showThrottleBanner, setShowThrottleBanner] = useState(false);

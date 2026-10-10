@@ -56,8 +56,10 @@ export function checkMobileProfileSettingsHub(overrides = {}) {
     }
   }
 
-  if (!/router\.push\("\/\(tabs\)\/profile\/skift-email"\)/.test(konto)) {
-    violations.push(`${kontoPath}: email Skift must navigate to skift-email`);
+  // No password after First session 1.0: the e-mail row is a read-only fact until a code-confirmed
+  // change exists, and there is no change-password row.
+  if (/skift-email|skift-adgangskode|Skift adgangskode/.test(konto)) {
+    violations.push(`${kontoPath}: no e-mail change screen or change-password row on Konto`);
   }
 
   if (!/title="Telefon"[\s\S]*actionLabel="Skift"/.test(konto)) {

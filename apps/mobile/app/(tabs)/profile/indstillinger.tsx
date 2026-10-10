@@ -27,7 +27,7 @@ function authEventKindLabel(kind: AuthEventKind): string {
     case "failure":
       return "Mislykket login";
     case "reset":
-      return "Adgangskode nulstillet";
+      return "Konto nulstillet";
     case "provider_link":
       return "Konto knyttet";
     case "lockout":
