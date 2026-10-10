@@ -353,7 +353,7 @@ Do not mix a heading role onto Plex Sans. Do not set body copy in Archivo. Do no
 | `mono` | IBM Plex Mono | 12px–14px | 400 | 18px (12) / 20px (14) | 0 | Season, kit type, size, collection count, IDs, relative time on Thread row and bubbles |
 | `numeral` | Saira Extra Condensed | 32px (emblem `md`) / 38px (emblem `lg`) / 40px (collection facts) / 44px (season on own UserJersey detail) | 700 | equal to the size (never tighter — the face is tall and clips) | 0 | Digits, slash and en dash only. Never words |
 
-**Numerals** (Revision 2026-10-10, decided by Nicklas; Paper page *04 Samling*, artboards *Samling / Type study* and *Samling / Type B 01–03*). A fourth family, **Saira Extra Condensed 700**, exists for one job: numbers that are the subject of the screen, set like print on a shirt. It is the one deliberate step away from the Uber Base voice. It is used in exactly three places:
+**Numerals** (Revision 2026-10-10, decided by Nicklas; Paper page *04 Samling*, artboards *Samling / 01* and *Egen trøje / 01*, *03*). A fourth family, **Saira Extra Condensed 700**, exists for one job: numbers that are the subject of the screen, set like print on a shirt. It is the one deliberate step away from the Uber Base voice. It is used in exactly three places:
 
 1. **Collection facts** on Samling (jersey count, club count, oldest season).
 2. **Season** on own UserJersey detail, trailing the club name.
@@ -771,7 +771,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Number emblem
 
-Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper: *Samling / Type B 02* and *03*.
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper: *Egen trøje / 01* and *03*.
 
 **Purpose**: Show a shirt number as an object, so a player reads as "the name on the back" and not as a text field.
 
@@ -1278,7 +1278,7 @@ Status: `locked` for the compositions below. Other compositions: flag.
 
 ### Collection grid
 
-**Revision 2026-10-10** (decided by Nicklas; Paper page *04 Samling*, artboards *Samling / Type B 01*, *Refined 01* and *05*, *Proposal 02*, *08*, *09*). Where this block and the composition below disagree, **this block wins** until `/to-design` rewrites the composition.
+**Revision 2026-10-10** (decided by Nicklas; Paper page *04 Samling*, artboards *Samling / 01*–*05*). Where this block and the composition below disagree, **this block wins** until `/to-design` rewrites the composition.
 
 1. **Header.** Samling in `display` 32, and the capture button as a 44 `fill.primary` disc with a `content.inverse` plus. The small `mono` count beside the title is replaced by the facts block.
 2. **Collection facts.** Under the header, between two hairlines: three equal columns, each a `numeral` 40 value over a `caption` label — **Trøjer**, **Klubber** (clubs and national teams together), **Ældste sæson** (the start year of the oldest season). No dividers between columns; the first column aligns with the title. Hidden while the collection is empty.
@@ -1380,7 +1380,7 @@ Flag missing context; do not invent patterns.
 
 ### Own UserJersey detail
 
-Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *04 Samling*: *Samling / Type B 02* (the screen), *Type B 03* (player), *Refined 03* (type), *06*–*08* (club and season), *Proposal 05*–*06* (menu, delete).
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *04 Samling*: artboards *Egen trøje / 01*–*09*.
 
 **Purpose**: Show one owned jersey and let the owner correct any single fact in one step.
 
@@ -1388,9 +1388,9 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *04 Samli
 1. **Photo**: 4:5, full width, swipe between photos. Round `surface` Back and More buttons over it, and a small count pill (`1/2`) bottom-right. No dots.
 2. **Thumb strip**: 48 × 60 thumbs, the current one outlined in `fill.primary`; a trailing `fill.secondary` tile adds a photo. Tapping a thumb jumps; long content scrolls horizontally.
 3. **Title block**: a `caption` line (**Trøje nr. n · type**), the club or national team in `display` 32, and the season in `numeral` 44 trailing on the same baseline.
-4. **Player row**: `fill.secondary`, `radius.md`: Number emblem `lg`, player name (`label` 16, 600), `caption` **Spiller på ryggen**, trailing chevron. Without a player: the dashed add emblem and **Tilføj spiller**.
-5. **Fact rows**: Type, Størrelse, Stand, Badge, Note as label-left / value-right List rows. An unset optional fact reads **Tilføj** in `content.muted`.
-6. **Bid row** (only with bids): **n bud** (`label` 16, 600), a `caption` with the latest sender and time, and a `fill.primary` pill **Se bud** that opens the thread. No amount.
+4. **Bid box** (only while the jersey has unanswered bids): the first thing under the title block, above the player row, so a bid is never below the fold. A `fill.primary` box (`radius.md`): a 36 `surface` disc with the count, **Nye bud på trøjen** (`label` 16, 600, `content.inverse`), a `caption` with the latest sender and time, and a trailing `content.inverse` chevron. The whole box opens the thread. No amount. It is the only `fill.primary` block on the screen.
+5. **Player row**: `fill.secondary`, `radius.md`: Number emblem `lg`, player name (`label` 16, 600), `caption` **Spiller på ryggen**, trailing chevron. Without a player: the dashed add emblem and **Tilføj spiller**.
+6. **Fact rows**: Type, Størrelse, Stand, Badge, Note as label-left / value-right List rows. An unset optional fact reads **Tilføj** in `content.muted`.
 7. **Settings**: **Åben for bud** and **Privat** as List rows with a Switch and one helper line each. Private turns bids off and disables that Switch, with the helper saying why.
 
 **Editing**: every fact is its own target; there is no Rediger screen. Type, size, condition and badge open a Sheet `form` with Chip `single-select`; season opens a Sheet with the club's seasons and decade chips; a tap saves and closes. Player and club open the full-screen picker. Changing **club** is the only edit that asks first: a Sheet lists what is kept and what is reset (player, and badge when it no longer applies) with `primary` **Skift til *klub*** and `tertiary` **Behold *klub***. Changing season keeps the player only if he was in that squad.
