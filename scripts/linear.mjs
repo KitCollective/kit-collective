@@ -11,12 +11,18 @@
 //   node scripts/linear.mjs label KIT-272 add|remove <label>
 //   node scripts/linear.mjs description KIT-272 --body-file <path>
 //   node scripts/linear.mjs link KIT-272 <url> [title]
-//   node scripts/linear.mjs signal-up "<title>" --body-file <path>
-//       new Triage issue in team KIT with the `signal-up` label only (docs/agents/signal-up.md)
+//   node scripts/linear.mjs signal-up "<title>" --origin KIT-n --body-file <path>
+//       new Triage issue in team KIT with the `signal-up` label only, in the origin's project
+//       and related to the origin (docs/agents/signal-up.md)
+//   node scripts/linear.mjs relate KIT-a KIT-b
+//       a "related" link between two issues
+//   node scripts/linear.mjs project KIT-a KIT-b
+//       move KIT-a into KIT-b's project
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { issueIdentifier, optionValue } from "./lib/linear-args.mjs";
 
 const API = "https://api.linear.app/graphql";
 
@@ -88,7 +94,7 @@ const ISSUE_QUERY = `query($id: String!) {
     id identifier title url description
     state { name }
     team { id }
-    project { name }
+    project { id name }
     projectMilestone { name }
     labels { nodes { id name } }
     relations { nodes { type relatedIssue { identifier state { name } } } }
@@ -102,6 +108,27 @@ async function loadIssue(identifier) {
   const { issue } = await gql(ISSUE_QUERY, { id: identifier });
   if (!issue) fail(`${identifier} not found in this workspace`);
   return issue;
+}
+
+async function relateIssues(first, second) {
+  const a = await loadIssue(first);
+  const b = await loadIssue(second);
+  await gql(
+    "mutation($input: IssueRelationCreateInput!) { issueRelationCreate(input: $input) { success } }",
+    { input: { issueId: a.id, relatedIssueId: b.id, type: "related" } },
+  );
+  return `${a.identifier} related to ${b.identifier}`;
+}
+
+async function moveToProjectOf(identifier, originIdentifier) {
+  const issue = await loadIssue(identifier);
+  const origin = await loadIssue(originIdentifier);
+  if (!origin.project) fail(`${origin.identifier} is in no project`);
+  await gql(
+    "mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }",
+    { id: issue.id, input: { projectId: origin.project.id } },
+  );
+  return `${issue.identifier} in project ${origin.project.name}`;
 }
 
 async function showIssue(identifier) {
@@ -264,7 +291,12 @@ switch (command) {
     break;
   }
   case "signal-up": {
-    const title = args[0] ?? fail('signal-up "<title>" --body-file <path>');
+    const usage = 'signal-up "<title>" --origin KIT-n --body-file <path>';
+    const title = args[0] && !args[0].startsWith("--") ? args[0] : fail(usage);
+    const originId =
+      issueIdentifier(optionValue(args, "--origin")) ??
+      fail(`--origin KIT-n is required: ${usage}`);
+    const origin = await loadIssue(originId);
     const { teams } = await gql('{ teams(filter: { key: { eq: "KIT" } }) { nodes { id } } }');
     const teamId = teams.nodes[0]?.id ?? fail("team KIT not found");
     const { workflowStates } = await gql(
@@ -280,13 +312,40 @@ switch (command) {
       fail("label signal-up not found");
     const { issueCreate } = await gql(
       "mutation($input: IssueCreateInput!) { issueCreate(input: $input) { issue { identifier url } } }",
-      { input: { teamId, stateId, labelIds: [labelId], title, description: bodyFromArgs(args) } },
+      {
+        input: {
+          teamId,
+          stateId,
+          labelIds: [labelId],
+          title,
+          description: bodyFromArgs(args),
+          ...(origin.project ? { projectId: origin.project.id } : {}),
+        },
+      },
     );
-    process.stdout.write(`${issueCreate.issue.identifier} ${issueCreate.issue.url}\n`);
+    const created = issueCreate.issue;
+    await relateIssues(created.identifier, origin.identifier);
+    process.stdout.write(
+      `${created.identifier} ${created.url} (project ${origin.project?.name ?? "none"}, related to ${origin.identifier})\n`,
+    );
+    break;
+  }
+  case "relate": {
+    const [first, second] = [issueIdentifier(args[0]), issueIdentifier(args[1])];
+    process.stdout.write(
+      `${await relateIssues(first ?? fail("relate KIT-a KIT-b"), second ?? fail("relate KIT-a KIT-b"))}\n`,
+    );
+    break;
+  }
+  case "project": {
+    const [first, second] = [issueIdentifier(args[0]), issueIdentifier(args[1])];
+    process.stdout.write(
+      `${await moveToProjectOf(first ?? fail("project KIT-a KIT-b"), second ?? fail("project KIT-a KIT-b"))}\n`,
+    );
     break;
   }
   default:
     fail(
-      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up",
+      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, project",
     );
 }
