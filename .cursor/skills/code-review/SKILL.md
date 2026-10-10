@@ -146,6 +146,10 @@ Spec source is the whole Linear issue body (What to build + AC), not AC alone. A
 
 When the checker parent records a recurring **Standards** or **Slop** lesson via `memory_add`, use one schema: **`class → lesson`** with target `failure`. The **class** names the recurring mistake (e.g. `inline imports in Nest modules`, `narrating comments in harness tests`). The **lesson** states what to do differently — never a hunk, never a KIT identifier. **Never** `memory_add` Spec misses; Spec feedback stays on the workpad only. Sub-agents are read-only and must not call `memory_add`, `memory_replace`, or `memory_remove`. When this PR lands a git ratchet (`.cursor/hooks/`, `.cursor/rules/`, `scripts/check-*`) for a class you previously staged in Hermes, call `memory_remove` for that staging lesson so git wins.
 
+## Result line (reviewer thread)
+
+When the review runs as its own bb thread (`bb-orchestrate`), the last line of the final output is `AUDIT-RESULT <KIT-n> <green|amber|red> <head-sha> [failing,matrix,rows]`: the full head SHA you read, and for red the lock-set row ids that are findings. `scripts/audit-receipt.mjs` turns that line into the `kc/audit` commit status (ADR-0056); a missing line, another SHA, or a thread older than the head commit is refused.
+
 ## Why three axes
 
 A change can pass one axis and fail another:

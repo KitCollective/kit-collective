@@ -28,6 +28,8 @@ export const FACTORY_NODE_TEST_NEEDLES = [
   "run-log",
   "gates",
   "merge-lock-sync",
+  "verify.test",
+  "audit-receipt",
 ];
 
 export const MOBILE_CHECK_NEEDLES = [

@@ -30,6 +30,8 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 7. After the PR is attached **and the pre-review gate passes**: clear addressed review feedback, move to `In Review`. Do not merge. Do not move to `Done`.
 8. If `### Review feedback` required a ratchet, land it in this PR (`docs/agents/error-ratcheting.md`). Tighten only.
 
+When this run is a bb thread (`bb-orchestrate`), end the final output with `ENGINEER-RESULT <KIT-n> ready|blocked|failed <one sentence>`; `ready` only after the pre-review gate below is true.
+
 ## Pre-review gate (do not skip)
 
 Do not move to `In Review` until all of these are true. Record the commands under workpad `### Validation`.

@@ -1,0 +1,13 @@
+# Verify reuses a green suite when its command and its tree are unchanged
+
+Nicklas, 2026-10-10, with ADR-0053. A fix round touches one app, but "run the full test graph" reruns everything, on machines where some suites cannot run at all (the server container has no Postgres). Optio's `verify.sh` reuses a green row per suite; we take that with a table in `factory.config.json`.
+
+**Schema.** `checks.defaults.timeoutSeconds`, and `checks.suites[]` of `{ id, paths, command, timeoutSeconds?, needs? }`: `id` is kebab-case and unique, `paths` are globs (the same matcher as the write-scope check), `command` is a shell command run from the repo root, `needs` names capabilities the machine must have (`postgres`). `scripts/lib/verify.mjs` validates it and a test asserts the repo's own table is valid. Only suites the repo has are listed: typecheck, the factory script tests, the review gate, and the `domain`, `api-contract`, `admin`, `mobile`, `db` and `api` test suites. Device flows and the CI image smokes stay out: they have their own status checks.
+
+**Behaviour.** `node scripts/verify.mjs` runs one suite at a time, kills a suite's process group at its timeout, and reports one line or `--json`. A suite is **reused** when its last result was a pass under the same key: `sha256(command, the `git ls-tree -r HEAD` lines of the files its paths match)`. A change to another app leaves the key alone; a change to a matching file, or to the command, changes it. A fail or timeout is never reused. Results are cached per machine in the gitignored `.factory/verify-cache.json` of the main checkout, because a pass on a machine says nothing about another's capabilities.
+
+**Capabilities.** A suite whose `needs` the machine lacks (`--capability postgres` or `VERIFY_CAPABILITIES`) is `skipped`, and the run ends `INCOMPLETE` (exit 3), never green. That surfaces the open item rather than hiding it: DB-test slices run on the Mac until the server has a database sidecar.
+
+Gives up: the key reads the committed tree at HEAD, so uncommitted edits are not part of it (verify a head, commit first); the table must be kept honest when a package starts depending on another, or a suite is reused over a stale dependency (the suites list their shared packages in `paths`).
+
+Status: accepted. A schema the owner may want to change; it is a plain table.
