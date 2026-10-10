@@ -374,8 +374,12 @@ Own collector place in Expo tab slot 5 — identity card, favorites drill, and s
 _Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar; treating Detaljer stub as the product peer profile; Auth events on the identity card
 
 **Peer Profil**:
-Another collector's public place: Avatar, Handle, About me, location per Vis by, and a 4:5 grid of that collector's non-private UserJerseys. No settings, no Favoritter-of-theirs. Entries include Søg Handle hit, foreign UserJersey detail owner, and Indbakke Detaljer. Overflow can Rapportér / Blokér (same Moderation as Indbakke). A blocked peer is not shown — no grid, no profile, both directions.
+Another collector's public place: Avatar, Handle, About me, location per Vis by, and a 4:5 grid of that collector's non-private UserJerseys. No settings, no Favoritter-of-theirs. Entries include Søg Handle hit, foreign UserJersey detail owner, and the More sheet in a Conversation. One action: write to the collector. Overflow can Rapportér / Blokér (same Moderation as Indbakke). A blocked peer is not shown — no grid, no profile, both directions.
 _Avoid_: mirroring own Profil settings; showing private copies; a second Detaljer stub as the only peer surface; browse that ignores block
+
+**Private profile facts**:
+Birthday and gender on the collector's own account. Optional, never shown to other collectors, used only for aggregate statistics, clearable, and deleted with the account. Not part of Peer Profil.
+_Avoid_: showing them publicly; requiring them; using them to target a collector
 
 **Handle**:
 The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision — same rule for password and Social login. Never the email. Never the provider display name. Availability is `yours`, `available`, or `taken`.

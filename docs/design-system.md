@@ -1402,6 +1402,37 @@ Status: `retired` (Revision 2026-10-10). The Detaljer screen is replaced by the 
 
 ### Own Profil
 
+**Revision 2026-10-10** (decided by Nicklas; Paper page *08 Profil & Indstillinger*, artboards *Profil / 01*–*04*, *06*, *07* and *Samlerprofil / 05*). It wins over the older composition below until `/to-design` rewrites it.
+
+**Canvas**: `canvas` with flat rows and hairlines, like the rest of the app. No `fill.secondary` canvas and no `surface` group cards on Profil or its drills.
+
+**Home** (Tab bar visible): title **Profil** with a `fill.secondary` settings Icon button trailing. Identity: Avatar `lg`, Handle (`label` 18 / 600), and city · **n trøjer** (city per Vis by). Two `secondary` Buttons side by side: **Rediger profil** and **Se som andre** (opens the collector's own Peer Profil view). Then two rows: **Favoritter** with the count in `mono`, and **KitCollective+** with the status as value (**Prøve · n dage tilbage**, **Aktiv**, **Udløbet**, **Ikke aktiv**). Nothing else.
+
+**Rediger profil** (Tab bar hidden): Back + title, no **Gem**. Avatar 88 with **Skift foto** under it. Rows label-left / value-right with chevron: **Brugernavn**, **Om mig** (one line, truncated), **By**. Then **Vis by på profil** with a Switch and the helper **Slået fra vises kun land.** Every row saves on its own: Brugernavn and Om mig open a Sheet `form` above the keyboard with one field and `primary` **Gem**; By opens Min lokation. The Brugernavn Sheet shows **Ledigt** (check) or **Optaget** under the field, and **Gem** is enabled only when the name is available or unchanged.
+
+**Indstillinger** (Tab bar hidden): one flat list, no hub with leaves. `caption` 500 section labels and rows with the current value on the right:
+- **Konto**: E-mail (masked, opens change e-mail); Log ind med (the linked methods).
+- **Om dig**: Fødselsdato; Køn. Both optional (**Tilføj** when unset), with the helper **Valgfrit. Vises ikke for andre. Bruges kun til statistik.** Køn is a Sheet with Chip `single-select`: Kvinde, Mand, Andet, Vil ikke oplyse. Either can be cleared again.
+- **App**: Notifikationer; Sprog; Udseende (System / Lys / Mørk).
+- **Privatliv**: Blokerede samlere (count; a list where a block can be lifted, asking first); Cookies; Mine data.
+- **Log ud**, and **Slet konto** in `danger`; both ask in a Sheet `confirm`. Version in `mono` last.
+
+**Notifikationer**: one screen. **Push**: Bud, Beskeder, Match på ønsker. **E-mail**: Bud og beskeder, Nyheder (off by default). Switch rows only.
+
+**KitCollective+** (from the Profil row): `title` with the state (**Gratis prøve**, **KitCollective+**, **Udløbet**) and one `body` line with the date (**Slutter 13. oktober. Intet trækkes.** / **Fornyes …**). Two fact rows (Ønsker; Fotogenkendelse). Dock: `primary` **Vælg plan** (opens the paywall Sheet) when there is no paid plan, **Administrer abonnement** (opens the store) when there is; `tertiary` **Gendan køb**.
+
+**Peer Profil** (another collector; Tab bar hidden): Back and More (Rapportér, Blokér). Avatar `lg`, Handle, city · n trøjer, About me in `body` 15. One `primary` Button **Skriv besked** (opens the conversation with that collector). Chips **Alle n** | **Åbne for bud n**, then the two-column Jersey tile grid. **Se som andre** shows this view of oneself without the Button.
+
+**Removed**: Skift adgangskode (no password after First session 1.0); Profiloplysninger (it was Rediger profil); phone; separate Push and E-mail screens; the Indstillinger and Cookie rows on Profil home.
+
+**Personal data**: birthday and gender are never shown to other collectors, never used to target a collector, and are reported only in aggregate. A collector can clear them, and they are deleted with the account.
+
+**Unsupported**: Gender or birthday on a public surface or as a required field. A save bar on Rediger profil. A settings hub with a second level of group pages. Follow, followers or ratings on Peer Profil. Marketplace account chrome.
+
+**Gaps** (flag, do not invent): the birthday picker; Favoritter and Min lokation keep the older composition below, on the new canvas; change e-mail with a code; Mine data; dark mode.
+
+**Older composition** (superseded where the Revision speaks):
+
 **Purpose**: Own-collector identity, favorites, and settings live under the Profil tab — list + drill, not a control panel and not a marketplace account hub.
 
 **Composition**:
