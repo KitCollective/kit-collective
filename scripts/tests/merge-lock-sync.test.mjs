@@ -7,6 +7,13 @@ import { test } from "node:test";
 import { LOCK_REF, release, take, waitFor } from "../lib/merge-lock.mjs";
 import { auditStillValid, syncBranch } from "../lib/sync-pr.mjs";
 
+// CI has no git identity; the lib calls git with process.env, so the identity goes there.
+Object.assign(process.env, {
+  GIT_AUTHOR_NAME: "t",
+  GIT_AUTHOR_EMAIL: "t@t",
+  GIT_COMMITTER_NAME: "t",
+  GIT_COMMITTER_EMAIL: "t@t",
+});
 const env = {
   ...process.env,
   GIT_AUTHOR_NAME: "t",
