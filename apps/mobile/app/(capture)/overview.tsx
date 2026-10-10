@@ -1,9 +1,8 @@
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/auth/AuthProvider";
-import { clearPersistedCaptureSession } from "@/capture/captureFlow";
 import {
   firstUnsavedDraftId,
   inboxRow,
@@ -21,7 +20,7 @@ import {
   setActiveDraft,
   switchSingleToBulkBind,
 } from "@/capture/captureSession";
-import { parkOverviewSession, unparkOverviewSession } from "@/capture/parkedSession";
+import { leaveOverviewSession, unparkSessionById } from "@/capture/parkedSession";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmGrouping } from "@/capture/use-confirm-grouping";
 import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession";
@@ -50,6 +49,7 @@ const HEADER_FALLBACK_HEIGHT = 44 + space.insetLg;
  */
 export default function CaptureOverviewScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const theme = useTheme();
   const typography = useTypography();
   const reduceMotion = useReduceMotion();
@@ -70,26 +70,37 @@ export default function CaptureOverviewScreen() {
   // This session is the overview's from here on, and no longer parked while it is open.
   const claimedRef = useRef(false);
   useEffect(() => {
-    if (!state || claimedRef.current) {
+    if (!sessionId || !state || claimedRef.current) {
       return;
     }
     claimedRef.current = true;
     mutate((current) => markOverviewSession(current));
-    unparkOverviewSession(mutate);
-  }, [mutate, state]);
-
-  // Leaving keeps the session as the one parked row, unless nothing is left to do.
-  const leaveSession = useCallback(() => {
-    if (!sessionId || !state) {
-      return;
-    }
-    if (unsavedDraftCount(state) > 0 || state.unboundUris.length > 0) {
-      parkOverviewSession(mutate, sessionId);
-    } else {
-      clearPersistedCaptureSession(sessionId);
-    }
+    unparkSessionById(sessionId);
   }, [mutate, sessionId, state]);
+
+  // Every way out ends in the same exit: Luk, the parked tertiary button, Android back, and
+  // any other removal of this screen. It parks the session, or clears it when nothing is left.
+  const leaveSession = useCallback(() => {
+    if (sessionId) {
+      leaveOverviewSession(sessionId);
+    }
+  }, [sessionId]);
   const exitToCollection = useConfirmExit(sessionId, state, isSessionResolved, leaveSession);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        exitToCollection();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [exitToCollection]),
+  );
+
+  useEffect(
+    () => navigation.addListener("beforeRemove", () => leaveSession()),
+    [leaveSession, navigation],
+  );
 
   if (!sessionId || !state) {
     return <View style={[styles.container, { backgroundColor: theme.canvas }]} />;
@@ -103,8 +114,10 @@ export default function CaptureOverviewScreen() {
   const skeletons = pendingSkeletonRows({ analyzing, unboundCount });
   const inbox = analyzing ? null : inboxRow(state);
   const firstUnsaved = rows.find((row) => row.kind === "draft") ?? null;
+  const visionFailed = grouping.failed && rows.length === 0 && !analyzing;
   const dock = overviewDock({
     analyzing,
+    failed: visionFailed,
     unsavedCount,
     firstTitle: firstUnsaved?.title ?? null,
   });
@@ -124,6 +137,10 @@ export default function CaptureOverviewScreen() {
   };
 
   const handlePrimary = () => {
+    if (visionFailed) {
+      grouping.retry();
+      return;
+    }
     if (!analyzing && unsavedCount === 0) {
       exitToCollection();
       return;
@@ -135,6 +152,10 @@ export default function CaptureOverviewScreen() {
     if (analyzing) {
       grouping.stop();
       openConfirm(firstUnsavedDraftId(state));
+      return;
+    }
+    if (visionFailed) {
+      openConfirm(null);
       return;
     }
     exitToCollection();
@@ -225,7 +246,12 @@ export default function CaptureOverviewScreen() {
 
       <CaptureOverviewHeader
         title={overviewTitle({ analyzing, totalPhotos, jerseyCount: rows.length })}
-        caption={overviewCaption({ analyzing, totalPhotos })}
+        caption={overviewCaption({
+          analyzing,
+          failed: grouping.failed,
+          totalPhotos,
+          jerseyCount: rows.length,
+        })}
         onClose={exitToCollection}
         onMeasure={setHeaderHeight}
       />

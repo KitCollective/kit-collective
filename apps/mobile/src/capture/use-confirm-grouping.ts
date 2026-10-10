@@ -49,6 +49,12 @@ export function useConfirmGrouping({
 }: UseConfirmGroupingOptions) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  /** Vision did not answer (timeout or error). A run the collector stopped is not a failure. */
+  const [failed, setFailed] = useState(false);
+  /** Prøv Vision igen bumps this, which makes every earlier failure stale. */
+  const [attempt, setAttempt] = useState(0);
+  const attemptRef = useRef(0);
+  attemptRef.current = attempt;
   const startedFingerprint = useRef<string | null>(null);
   const failedFingerprints = useRef(new Set<string>());
   const appliedJobId = useRef<string | null>(null);
@@ -64,14 +70,16 @@ export function useConfirmGrouping({
     appliedJobId.current = null;
     setJobId(null);
     setAnalyzing(false);
+    setFailed(false);
   }, [sessionId]);
 
   const applyGroupingClose = useCallback(
     (reason: "timeout" | "error" | "skip" | "complete", fingerprint: string | null) => {
       const close = closeGroupingRun(reason);
       if (close.failed && fingerprint) {
-        failedFingerprints.current.add(fingerprint);
+        failedFingerprints.current.add(`${fingerprint}#${attemptRef.current}`);
       }
+      setFailed(close.failed && reason !== "skip");
       setAnalyzing(close.analyzing);
     },
     [],
@@ -114,7 +122,7 @@ export function useConfirmGrouping({
       !shouldBeginGroupingStart({
         jobKey,
         analyzing,
-        failed: Boolean(jobKey && failedFingerprints.current.has(jobKey)),
+        failed: Boolean(jobKey && failedFingerprints.current.has(`${jobKey}#${attempt}`)),
       })
     ) {
       return;
@@ -129,6 +137,7 @@ export function useConfirmGrouping({
     }
 
     startedFingerprint.current = jobKey;
+    setFailed(false);
     setAnalyzing(true);
 
     const ensured = ensureSessionPhotoIds(snapshot);
@@ -175,7 +184,7 @@ export function useConfirmGrouping({
         }
       }
     })();
-  }, [accessToken, analyzing, applyGroupingClose, jobKey, mutate, sessionId]);
+  }, [accessToken, analyzing, applyGroupingClose, attempt, jobKey, mutate, sessionId]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !analyzing) {
@@ -234,5 +243,12 @@ export function useConfirmGrouping({
     mutate((current) => markGroupingSettled(current));
   }, [applyGroupingClose, mutate]);
 
-  return { analyzing, stop };
+  /** Prøv Vision igen: forget the failed run and ask again. */
+  const retry = useCallback(() => {
+    appliedJobId.current = null;
+    setFailed(false);
+    setAttempt((current) => current + 1);
+  }, []);
+
+  return { analyzing, failed, stop, retry };
 }

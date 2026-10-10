@@ -11,7 +11,7 @@ import {
 } from "@/capture/confirmIdentityBlock";
 import { confirmJerseyIndexPlacement } from "@/capture/confirmPhotoStrip";
 import { visionMatcherRemainingToOutOfQuota } from "@/capture/confirmVisionQuota";
-import { parkOverviewSession } from "@/capture/parkedSession";
+import { leaveOverviewSession } from "@/capture/parkedSession";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
 import { scanLineLedger } from "@/capture/scanLineLedger";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
@@ -68,7 +68,7 @@ export default function ConfirmScreen() {
   // Luk on an overview session parks it, so Samling keeps one row that reopens the overview.
   const exitToCollection = useConfirmExit(sessionId, state, isSessionResolved, () => {
     if (sessionId && state?.overview) {
-      parkOverviewSession(mutate, sessionId);
+      leaveOverviewSession(sessionId);
     }
   });
   const vision = useConfirmVision({
@@ -77,7 +77,6 @@ export default function ConfirmScreen() {
     draft,
     sessionDrafts: state?.drafts ?? [],
     mutate,
-    reduceMotion,
     jobId: visionJobId,
     setJobId: setVisionJobId,
     setSelectedSeasonLabel,

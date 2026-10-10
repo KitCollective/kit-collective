@@ -10,8 +10,8 @@ const CONTROL_SIZE = 44;
 
 type CaptureOverviewHeaderProps = {
   title: string;
-  /** `mono` line under the title: photos · sorted. */
-  caption: string;
+  /** `mono` line under the title: photos · sorted. None while Vision runs. */
+  caption: string | null;
   onClose: () => void;
   /** Reports the block's height so the list can start under it. */
   onMeasure: (height: number) => void;
@@ -64,13 +64,15 @@ export function CaptureOverviewHeader({
           >
             {title}
           </Text>
-          <Text
-            numberOfLines={1}
-            testID="overview-caption"
-            style={[typography.mono, { color: theme.contentSecondary }]}
-          >
-            {caption}
-          </Text>
+          {caption ? (
+            <Text
+              numberOfLines={1}
+              testID="overview-caption"
+              style={[typography.mono, { color: theme.contentSecondary }]}
+            >
+              {caption}
+            </Text>
+          ) : null}
         </View>
       </View>
       <FadeScrim edge="top" />

@@ -1,11 +1,5 @@
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
-import {
-  appendSavedDraft,
-  canSave,
-  hasCatalogSide,
-  removeDraft,
-  setActiveDraft,
-} from "./captureSession";
+import { appendSavedDraft, canSave, removeDraft, setActiveDraft } from "./captureSession";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -49,27 +43,15 @@ export type OverviewRow = {
   thumbUri: string | null;
 };
 
+/** The only trailing words the lock has: Tjek, Str. og stand, Gemt (Capture session, item 3). */
+const STATUS_INCOMPLETE = "Str. og stand";
+
 const STATUS_RANK: Record<OverviewRowStatus, number> = {
   check: 0,
   incomplete: 1,
   ready: 2,
   saved: 3,
 };
-
-function identityMissing(draft: CaptureJerseyDraft): boolean {
-  return !hasCatalogSide(draft) || !draft.seasonId || !draft.kitTypeSelected;
-}
-
-/** What the jersey still needs, in one trailing word. Identity first; it is what Gem blocks on. */
-function missingLabel(draft: CaptureJerseyDraft): string {
-  if (identityMissing(draft)) {
-    return "Klub og sæson";
-  }
-  if (!draft.sizeSelected && !draft.conditionSelected) {
-    return "Str. og stand";
-  }
-  return draft.sizeSelected ? "Stand" : "Str.";
-}
 
 export function draftOverviewStatus(
   draft: CaptureJerseyDraft,
@@ -100,7 +82,7 @@ function draftRow(draft: CaptureJerseyDraft, position: number): OverviewRow {
     kind: "draft",
     draftId: draft.id,
     status,
-    statusLabel: status === "check" ? "Tjek" : status === "incomplete" ? missingLabel(draft) : null,
+    statusLabel: status === "check" ? "Tjek" : status === "incomplete" ? STATUS_INCOMPLETE : null,
     title: draft.clubLabel ?? draft.nationalTeamLabel ?? `Trøje ${position}`,
     meta: joinMeta([draft.seasonLabel, kit]) || photoCountLabel(draft.photos.length),
     thumbUri: draftThumb(draft),
@@ -190,6 +172,11 @@ function plural(count: number, one: string, many: string): string {
   return count === 1 ? `1 ${one}` : `${count} ${many}`;
 }
 
+/**
+ * Title of the overview. While Vision runs: **Sorterer 16 fotos**. When it found jerseys:
+ * **6 trøjer fundet**. When it found none (it did not answer, or nothing grouped): **16 fotos er
+ * gemt** (Revision 2026-10-09, item 6), never "0 trøjer fundet".
+ */
 export function overviewTitle(input: {
   analyzing: boolean;
   totalPhotos: number;
@@ -198,13 +185,24 @@ export function overviewTitle(input: {
   if (input.analyzing) {
     return `Sorterer ${plural(input.totalPhotos, "foto", "fotos")}`;
   }
+  if (input.jerseyCount === 0) {
+    return `${plural(input.totalPhotos, "foto", "fotos")} er gemt`;
+  }
   return `${plural(input.jerseyCount, "trøje", "trøjer")} fundet`;
 }
 
-/** `mono` line under the title: photos and how far the sorting is. */
-export function overviewCaption(input: { analyzing: boolean; totalPhotos: number }): string {
+/** `mono` line under the title. `null` while Vision runs: the lock gives it no line there. */
+export function overviewCaption(input: {
+  analyzing: boolean;
+  failed: boolean;
+  totalPhotos: number;
+  jerseyCount: number;
+}): string | null {
   if (input.analyzing) {
-    return "Vision læser dine fotos";
+    return null;
+  }
+  if (input.jerseyCount === 0) {
+    return input.failed ? "Vision svarede ikke" : plural(input.totalPhotos, "foto", "fotos");
   }
   return `${plural(input.totalPhotos, "foto", "fotos")} · sorteret`;
 }
@@ -259,6 +257,8 @@ export type OverviewDockModel = {
 
 export function overviewDock(input: {
   analyzing: boolean;
+  /** Vision did not answer and nothing was found. */
+  failed: boolean;
   unsavedCount: number;
   firstTitle: string | null;
 }): OverviewDockModel {
@@ -271,7 +271,14 @@ export function overviewDock(input: {
       tertiary: "Sortér selv i stedet",
     };
   }
+  if (input.failed && input.unsavedCount === 0) {
+    return {
+      primary: { label: "Prøv Vision igen", disabled: false },
+      tertiary: "Sortér selv",
+    };
+  }
   if (input.unsavedCount === 0) {
+    // Every jersey is saved. "Se samlingen" is the label the Saved sheet already locks (item 8).
     return { primary: { label: "Se samlingen", disabled: false }, tertiary: null };
   }
   return {
@@ -281,6 +288,15 @@ export function overviewDock(input: {
     },
     tertiary: "Gør resten færdig senere",
   };
+}
+
+/**
+ * What leaving the overview does with the session, whichever way the collector leaves (Luk, the
+ * parked tertiary button, Android back, a swipe): keep it as the parked row while anything is
+ * left to do, drop it once every jersey is saved and no photo is loose.
+ */
+export function overviewLeaveAction(state: CaptureSessionState): "park" | "clear" {
+  return unsavedDraftCount(state) > 0 || state.unboundUris.length > 0 ? "park" : "clear";
 }
 
 export type ParkedRowModel = {

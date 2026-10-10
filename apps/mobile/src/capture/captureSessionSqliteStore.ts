@@ -377,3 +377,19 @@ export function createSqliteCaptureSessionStore(sessionId: string): CaptureSessi
 export function reloadSqliteCaptureSession(sessionId: string): CaptureSessionState | null {
   return reloadCaptureSession(createSqliteCaptureSessionStore(sessionId));
 }
+
+/** The session Samling's parked row reopens: the most recently parked one. */
+export function newestParkedSessionId(): string | null {
+  const row = draftDb.getFirstSync<{ id: string }>(
+    `SELECT id FROM capture_session WHERE parked_at IS NOT NULL ORDER BY parked_at DESC LIMIT 1`,
+  );
+  return row?.id ?? null;
+}
+
+/** At most one session is parked: parking this one unparks every other. */
+export function unparkOtherSessions(sessionId: string): void {
+  draftDb.runSync(
+    `UPDATE capture_session SET parked_at = NULL WHERE id != ? AND parked_at IS NOT NULL`,
+    [sessionId],
+  );
+}

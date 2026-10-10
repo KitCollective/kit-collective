@@ -3,14 +3,9 @@ import { resolveVisionSaveAction } from "@kit/api-contract";
 import type { PhotoRole } from "@kit/domain";
 import { saveUserJersey, updateUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction } from "@/api/vision";
+import { advanceBulkSessionAfterSave } from "@/capture/bulkSaveAdvance";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
-import { completeOverviewDraft, unsavedDraftCount } from "@/capture/captureOverview";
-import {
-  addJerseyDraft,
-  applyStickySizeToUnselected,
-  hasCatalogSide,
-  removeDraft,
-} from "@/capture/captureSession";
+import { hasCatalogSide } from "@/capture/captureSession";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -162,23 +157,13 @@ export async function saveConfirmJersey(input: {
     const savedSeasonLabel = response.jersey.seasonLabel ?? input.selectedSeasonLabel;
 
     if (input.branch === "bulk") {
-      const nextState = input.mutate((current) => {
-        // The bulk overview keeps the saved jersey as a Gemt row; other bulk sessions just drop it.
-        let next = current.overview
-          ? completeOverviewDraft(current, input.draft.id)
-          : removeDraft(current, input.draft.id);
-        if (!current.overview && next.drafts.length === 0 && next.unboundUris.length > 0) {
-          next = addJerseyDraft(next, { defaultSize: stickySize.get() });
-        }
-        const lastSize = stickySize.get();
-        return lastSize ? applyStickySizeToUnselected(next, lastSize) : next;
+      const advance = advanceBulkSessionAfterSave({
+        draft: input.draft,
+        stickySize: stickySize.get(),
+        mutate: input.mutate,
       });
 
-      if (nextState?.overview) {
-        return { status: "overview-continue", remaining: unsavedDraftCount(nextState) };
-      }
-
-      if (!nextState || nextState.drafts.length === 0) {
+      if (advance.status === "session-done") {
         clearPersistedCaptureSession(input.sessionId);
         return {
           status: "saved",
@@ -187,8 +172,7 @@ export async function saveConfirmJersey(input: {
           jersey: response.jersey,
         };
       }
-
-      return { status: "bulk-continue" };
+      return advance;
     }
 
     clearPersistedCaptureSession(input.sessionId);

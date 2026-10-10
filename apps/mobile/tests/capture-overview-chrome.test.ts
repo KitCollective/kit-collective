@@ -32,10 +32,12 @@ describe("bulk overview wiring", () => {
     expect(overview).toContain('pathname: "/(capture)/confirm"');
   });
 
-  it("parks the session on Luk and on Gør resten færdig senere, and clears it when nothing is left", () => {
-    expect(overview).toContain("parkOverviewSession");
-    expect(overview).toContain("clearPersistedCaptureSession");
+  it("sends Luk, the tertiary button, Android back and any removal through one exit", () => {
+    expect(overview).toContain("leaveOverviewSession");
     expect(overview).toContain("useConfirmExit(sessionId, state, isSessionResolved, leaveSession)");
+    expect(overview).toContain('BackHandler.addEventListener("hardwareBackPress"');
+    expect(overview).toContain('addListener("beforeRemove"');
+    expect(read("../app/(capture)/confirm.tsx")).toContain("leaveOverviewSession(sessionId)");
   });
 
   it("returns to the overview after the last Gem og næste", () => {

@@ -6,6 +6,7 @@ import {
   nextUnsavedDraftId,
   overviewCaption,
   overviewDock,
+  overviewLeaveAction,
   overviewProgress,
   overviewRows,
   overviewTitle,
@@ -16,9 +17,12 @@ import {
 } from "../src/capture/captureOverview";
 import {
   appendSavedDraft,
+  appendUnboundPhotos,
   applyGroupingSuggestion,
+  bindUnboundPhotoToDraft,
   createCaptureSession,
   createMemoryCaptureSessionStore,
+  discardUnboundPhoto,
   markGroupingSettled,
   markOverviewSession,
   parkSession,
@@ -28,6 +32,8 @@ import {
   selectDraftSize,
   setDraftCatalogSide,
   setDraftSeason,
+  shouldStartGroupingJob,
+  unbindPhoto,
   unparkSession,
 } from "../src/capture/captureSession";
 import type { CaptureSessionState } from "../src/capture/captureSessionTypes";
@@ -108,12 +114,11 @@ describe("overview rows", () => {
     expect(rows[3]).toMatchObject({ kind: "saved", title: "AGF", statusLabel: "Gemt" });
   });
 
-  it("names the identity as the need while the jersey has no club and season yet", () => {
-    const rows = overviewRows(groupedSession());
-    const incomplete = rows.filter((row) => row.status === "incomplete");
-    expect(incomplete.length).toBeGreaterThan(0);
-    expect(incomplete[0]!.statusLabel).toBe("Klub og sæson");
-    expect(incomplete[0]!.title).toMatch(/^Trøje \d$/);
+  it("uses only the locked trailing words: Tjek, Str. og stand, Gemt, or none", () => {
+    const labels = new Set(overviewRows(groupedSession()).map((row) => row.statusLabel));
+    expect(
+      [...labels].every((label) => ["Tjek", "Str. og stand", "Gemt", null].includes(label)),
+    ).toBe(true);
   });
 
   it("keeps session order inside one status and skips drafts with no photos", () => {
@@ -175,8 +180,16 @@ describe("overview chrome", () => {
   });
 
   it("captions the title with the photo count and the state", () => {
-    expect(overviewCaption({ analyzing: false, totalPhotos: 16 })).toBe("16 fotos · sorteret");
-    expect(overviewCaption({ analyzing: true, totalPhotos: 16 })).toBe("Vision læser dine fotos");
+    const base = { analyzing: false, failed: false, totalPhotos: 16, jerseyCount: 6 };
+    expect(overviewCaption(base)).toBe("16 fotos · sorteret");
+    expect(overviewCaption({ ...base, analyzing: true })).toBeNull();
+  });
+
+  it("never says 0 trøjer fundet or sorteret when Vision found nothing", () => {
+    const none = { analyzing: false, totalPhotos: 16, jerseyCount: 0 };
+    expect(overviewTitle(none)).toBe("16 fotos er gemt");
+    expect(overviewCaption({ ...none, failed: true })).toBe("Vision svarede ikke");
+    expect(overviewCaption({ ...none, failed: false })).toBe("16 fotos");
   });
 
   it("reports progress as the share of photos placed, and skeletons only while running", () => {
@@ -202,23 +215,41 @@ describe("overview chrome", () => {
     expect(inboxRow(bound)).toBeNull();
   });
 
+  it("offers Prøv Vision igen and Sortér selv when Vision did not answer", () => {
+    expect(
+      overviewDock({ analyzing: false, failed: true, unsavedCount: 0, firstTitle: null }),
+    ).toEqual({
+      primary: { label: "Prøv Vision igen", disabled: false },
+      tertiary: "Sortér selv",
+    });
+  });
+
   it("labels the dock for running, done, and finished", () => {
-    expect(overviewDock({ analyzing: true, unsavedCount: 0, firstTitle: null })).toEqual({
+    expect(
+      overviewDock({ analyzing: true, failed: false, unsavedCount: 0, firstTitle: null }),
+    ).toEqual({
       primary: { label: "Start med første trøje", disabled: true },
       tertiary: "Sortér selv i stedet",
     });
-    expect(overviewDock({ analyzing: true, unsavedCount: 1, firstTitle: "FC København" })).toEqual({
+    expect(
+      overviewDock({ analyzing: true, failed: false, unsavedCount: 1, firstTitle: "FC København" }),
+    ).toEqual({
       primary: { label: "Start med FC København", disabled: false },
       tertiary: "Sortér selv i stedet",
     });
-    expect(overviewDock({ analyzing: false, unsavedCount: 3, firstTitle: "x" })).toEqual({
+    expect(
+      overviewDock({ analyzing: false, failed: false, unsavedCount: 3, firstTitle: "x" }),
+    ).toEqual({
       primary: { label: "Gennemgå 3 trøjer", disabled: false },
       tertiary: "Gør resten færdig senere",
     });
-    expect(overviewDock({ analyzing: false, unsavedCount: 1, firstTitle: "x" }).primary.label).toBe(
-      "Gennemgå 1 trøje",
-    );
-    expect(overviewDock({ analyzing: false, unsavedCount: 0, firstTitle: null })).toEqual({
+    expect(
+      overviewDock({ analyzing: false, failed: false, unsavedCount: 1, firstTitle: "x" }).primary
+        .label,
+    ).toBe("Gennemgå 1 trøje");
+    expect(
+      overviewDock({ analyzing: false, failed: false, unsavedCount: 0, firstTitle: null }),
+    ).toEqual({
       primary: { label: "Se samlingen", disabled: false },
       tertiary: null,
     });
@@ -298,5 +329,64 @@ describe("overview session state", () => {
     expect(reloaded.parkedAt).toBe(1_000);
     expect(reloaded.groupingSettledKey).toBe(state.groupingSettledKey);
     expect(reloaded.savedDrafts).toHaveLength(1);
+  });
+});
+
+describe("a settled grouping run is not asked again", () => {
+  function settled(): CaptureSessionState {
+    return markGroupingSettled(markOverviewSession(groupedSession()));
+  }
+
+  it("stays settled when a jersey is saved, the session is parked and reopened", () => {
+    const state = settled();
+    expect(shouldStartGroupingJob(state)).toBe(false);
+
+    const saved = completeOverviewDraft(state, firstUnsavedDraftId(state)!);
+    expect(shouldStartGroupingJob(saved)).toBe(false);
+
+    const parked = parkSession(saved, 1_000);
+    expect(shouldStartGroupingJob(parked)).toBe(false);
+    expect(shouldStartGroupingJob(unparkSession(parked))).toBe(false);
+  });
+
+  it("stays settled when loose photos are bound, unbound or discarded by hand", () => {
+    const state = settled();
+    const draftId = state.drafts[0]!.id;
+    const loose = state.unboundUris[0]!;
+
+    const bound = bindUnboundPhotoToDraft(state, loose, draftId, "other");
+    expect(shouldStartGroupingJob(bound)).toBe(false);
+    expect(shouldStartGroupingJob(unbindPhoto(bound, loose))).toBe(false);
+    expect(shouldStartGroupingJob(discardUnboundPhoto(state, loose))).toBe(false);
+  });
+
+  it("asks again only for a photo the run never saw", () => {
+    const state = settled();
+    expect(shouldStartGroupingJob(appendUnboundPhotos(state, ["file:///photos/new.jpg"]))).toBe(
+      true,
+    );
+  });
+});
+
+describe("leaving the overview", () => {
+  it("parks while a jersey is unsaved or a photo is loose, and clears when nothing is left", () => {
+    expect(overviewLeaveAction(groupedSession())).toBe("park");
+
+    let state = markOverviewSession(createCaptureSession(URIS.slice(0, 4)));
+    state = applyGroupingSuggestion(
+      state,
+      { groups: [{ photoIds: ids(state, 0, 4), confidence: 95 }] },
+      {},
+    );
+    expect(overviewLeaveAction(state)).toBe("park");
+
+    const done = completeOverviewDraft(state, firstUnsavedDraftId(state)!);
+    expect(done.unboundUris).toEqual([]);
+    expect(overviewLeaveAction(done)).toBe("clear");
+  });
+
+  it("parks when only loose photos are left", () => {
+    const state = markOverviewSession(createCaptureSession(URIS.slice(0, 4)));
+    expect(overviewLeaveAction(state)).toBe("park");
   });
 });

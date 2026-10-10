@@ -955,13 +955,40 @@ export function shouldStartGroupingJob(state: CaptureSessionState): boolean {
   if (state.branch !== "bulk") {
     return false;
   }
-  if (state.groupingSettledKey && state.groupingSettledKey === groupingRunKey(state)) {
+  if (groupingAlreadyJudged(state)) {
     return false;
   }
   if (state.unboundUris.length >= 2) {
     return true;
   }
   return state.unboundUris.length >= 1 && state.drafts.some((draft) => draft.photos.length > 0);
+}
+
+function photoIdOf(state: CaptureSessionState, uri: string): string {
+  return state.photoIdByUri?.[uri] ?? uri;
+}
+
+/** Every photo the session holds right now, bound or not. */
+function sessionPhotoKeys(state: CaptureSessionState): string[] {
+  const uris = new Set([
+    ...state.orderedUris,
+    ...state.unboundUris,
+    ...state.drafts.flatMap((draft) => draft.photos.map((photo) => photo.uri)),
+  ]);
+  return [...uris].map((uri) => photoIdOf(state, uri)).sort();
+}
+
+/**
+ * A finished run judged every photo the session held. Only a photo it has never seen asks Vision
+ * again. Saving, binding, unbinding, discarding, parking and reopening move photos between
+ * jerseys and the pile but add none, so none of them restarts grouping or spends quota.
+ */
+function groupingAlreadyJudged(state: CaptureSessionState): boolean {
+  if (!state.groupingSettledKey) {
+    return false;
+  }
+  const judged = new Set(state.groupingSettledKey.split(","));
+  return state.unboundUris.every((uri) => judged.has(photoIdOf(state, uri)));
 }
 
 function groupingRunKey(state: CaptureSessionState): string {
@@ -979,12 +1006,9 @@ export function groupingJobFingerprint(state: CaptureSessionState): string | nul
   return groupingRunKey(state);
 }
 
-/**
- * A finished run has judged every photo still unbound, including the groups it left without a
- * jersey. Remember that, so reopening the overview does not ask Vision about the same pile again.
- */
+/** A finished (or stopped) run: remember which photos it judged, so a reopen does not ask again. */
 export function markGroupingSettled(state: CaptureSessionState): CaptureSessionState {
-  return withState(state, { ...state, groupingSettledKey: groupingRunKey(state) });
+  return withState(state, { ...state, groupingSettledKey: sessionPhotoKeys(state).join(",") });
 }
 
 export function groupingPriorGroups(state: CaptureSessionState): Array<{ photoIds: string[] }> {
@@ -1130,12 +1154,10 @@ export function applyGroupingSuggestion(
     next = fillMissingRoles(next, draftId);
   }
 
-  const active = next.drafts.find((draft) => draft.id === next.activeDraftId);
-  if (!active || (active.photos.length === 0 && touched.length > 0)) {
-    const first = next.drafts.find((draft) => draft.photos.length > 0) ?? next.drafts[0];
-    if (first) {
-      next = setActiveDraft(next, first.id);
-    }
+  // Confirm opens on the first jersey that holds photos, not on the one created last.
+  const first = next.drafts.find((draft) => draft.photos.length > 0);
+  if (touched.length > 0 && first && first.id !== next.activeDraftId) {
+    next = setActiveDraft(next, first.id);
   }
 
   return next;

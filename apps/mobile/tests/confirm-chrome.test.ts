@@ -213,7 +213,9 @@ describe("Confirm chrome", () => {
     expect(grouping).toContain('applyGroupingClose("timeout"');
     expect(grouping).not.toContain("confirm.grouping");
     expect(grouping).toContain("shouldBeginGroupingStart");
-    expect(confirmVision).toContain("deferIdentity");
+    expect(confirmVision).not.toContain("deferIdentity");
+    expect(confirmVision).not.toContain("groupingInFlight");
+    expect(confirmVision).not.toContain("suggestionOpacity");
     expect(confirmVision).toContain("shouldAttemptIdentityQueue");
     expect(confirmVision).toContain("nextQueuedIdentityDraft");
     expect(confirmVision).toContain("identityLoopActiveRef");
@@ -226,7 +228,7 @@ describe("Confirm chrome", () => {
     expect(confirmVision).not.toContain("setActiveDraft(current, next.id)");
     expect(confirmVision).not.toContain("startedIdentityKeysRef.current.delete");
     expect(confirmVision).not.toContain("Promise.all(");
-    expect(confirmVision).toContain("groupingJustClosed");
+    expect(confirmVision).not.toContain("groupingJustClosed");
     expect(confirmVision).not.toContain("fieldMarkInput");
     expect(confirmVision).not.toContain("markDataReviewed");
     expect(confirmVision).not.toContain(
@@ -258,17 +260,18 @@ describe("Confirm chrome", () => {
     // The grouping wait canvas is gone from Confirm (the overview replaced it).
     expect(existsSync(join(__dirname, "../src/components/confirm-grouping-wait.tsx"))).toBe(false);
     expect(existsSync(join(__dirname, "../src/capture/groupingReveal.ts"))).toBe(false);
-    expect(photoSlot).toContain("ConfirmAnalyzingPulse");
-    expect(photoSlot).not.toContain("skeletonStack");
-    expect(photoSlot).toContain("SKELETON_BONE_ALPHA");
-    expect(photoSlot).toContain("withAlpha(theme.fillPrimary, SKELETON_BONE_ALPHA)");
-    expect(photoSlot).not.toContain("travel=");
+    // The grouping wait chrome (skeleton pulse, fade and roll entering) left with the overview.
+    for (const gone of [
+      "ConfirmAnalyzingPulse",
+      "SKELETON_BONE_ALPHA",
+      "SLOT_FADE_ENTERING",
+      "SLOT_ROLL_ENTERING",
+      "groupingPreview",
+      "analyzing",
+    ]) {
+      expect(photoSlot).not.toContain(gone);
+    }
     expect(photoSlot).toContain("theme.surface");
-    expect(photoSlot).toContain("SLOT_FADE_ENTERING");
-    expect(photoSlot).toContain("SLOT_ROLL_ENTERING");
-    expect(photoSlot).toContain("FadeOut");
-    expect(photoSlot).not.toContain("scale: 0.95");
-    expect(photoSlot).toContain("motion.slow");
     expect(photoSlot).not.toContain("theme.info");
 
     expect(layout).toContain('name="confirm-data"');
