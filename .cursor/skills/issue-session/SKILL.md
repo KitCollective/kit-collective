@@ -107,7 +107,7 @@ After land success, follow [reap-worktree/SKILL.md](../reap-worktree/SKILL.md): 
 
 ## Run log
 
-Every issue leaves lines in the central run log (`flow.runLog` in `factory.config.json`, default `.factory/run-log.jsonl` in the main checkout, gitignored): `start`, `spawn`, `result` (with provider, model and tokens when `bb thread show --json` exposes them, else null), `audit`, `reason`. Only this orchestrating session writes it. `node scripts/run-log.mjs report` compares issues with and without a lead by review rounds and tokens (ADR-0051, ADR-0052).
+Every issue leaves lines in the central run log (`flow.runLog` in `factory.config.json`, default file `run-log.jsonl` in the gitignored `.factory` folder of the main checkout): `start`, `spawn`, `result` (with provider, model and tokens when `bb thread show --json` exposes them, else null), `audit`, `reason`. Only this orchestrating session writes it. `node scripts/run-log.mjs report` compares issues with and without a lead by review rounds and tokens (ADR-0051, ADR-0052).
 
 ## After the batch
 
