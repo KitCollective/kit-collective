@@ -80,6 +80,14 @@ Path globs on an implementation issue the implementer may change.
 _Avoid_: treating surface labels as write scope
 <!-- factory:generated-end -->
 
+**Lead**:
+The read-only agent that plans one issue before the implementer builds (`.cursor/agents/lead.md`, ADR-0051). Writes `### Plan` in the workpad. Not the planner.
+_Avoid_: calling the lead "planner" (the planner claims and dispatches), a lead that writes code
+
+**Run log**:
+The central JSON-lines record of the issue flow, written only by the orchestrating session (ADR-0052). Fixed fields and reason codes, no free text.
+_Avoid_: a log per worktree or machine, free-text reasons
+
 ## Language
 
 **Kit**:

@@ -56,9 +56,15 @@ If status is already `Implementing` with `ready-for-agent`: start or resume. Sam
 
 If status is `In Review`, `Ready for merge`, or `Merging`: join at the matching step below (review, approve+land, or land).
 
+### 2a. Lead (start)
+
+Log the run: `node scripts/run-log.mjs start --issue <KIT-n>` (the orchestrator is the only writer of the run log, ADR-0052).
+
+Decide with rules, not a service: `node scripts/start-decision.mjs --red-audits <n> [--replan] < issue.json` (`{ body, labels }`; `startDecision` in `scripts/lib/start-decision.mjs`) prints one JSON line with `plan`, `roles`, `engineerModel`. Spawn the **lead** (`.cursor/agents/lead.md`, strong model) in a fresh Task sub-agent with the issue id, mode `start` and that decision. It writes `### Plan` in the workpad and returns `LEAD-RESULT <KIT-n> plan|plan-approval|stop <sentence>`. `plan-approval` and `stop` end this issue's run with a role comment (a person approves or fixes); `plan` goes on. A resumed issue whose workpad already has `### Plan` skips the lead. Log the spawn and result: `node scripts/run-log.mjs spawn --issue <KIT-n> --step lead --thread <id> --mode start` and `result --issue <KIT-n> --step lead --outcome plan`. A Task sub-agent has no thread id: omit `--thread`, but still log the `spawn`, because the report counts an issue as "with lead" from that line. The lead is spawned at start and at replan, never by the implementer.
+
 ### 3. Implement
 
-Follow [implement/SKILL.md](../implement/SKILL.md) through the pre-review gate. Move to `In Review` only when that gate is true. One implement → In Review role comment. Do not merge. Do not tick description Acceptance criteria.
+Follow [implement/SKILL.md](../implement/SKILL.md), which **reads** `### Plan` instead of planning, through the pre-review gate. Move to `In Review` only when that gate is true. One implement → In Review role comment. Do not merge. Do not tick description Acceptance criteria.
 
 ### 4. Fresh review
 
@@ -79,6 +85,10 @@ Parent aggregates:
 
 Otherwise move to `Implementing`. Write the **full** set under workpad `### Review feedback` (file/criterion + what done looks like). One checker-style role comment with axis headings. Increment the checker-fail side of `### Loop counters`.
 
+**Replan.** When the feedback shows the plan itself was wrong (wrong file split, a missing Role, a path outside the write-scope) or the implementer recorded a plan conflict under `### Notes`, spawn the lead again with mode `replan` and the `### Review feedback`, log `reason --code replan`, and run the implementer on the strong model (`startDecision` with `replan: true`). Otherwise the lead is not spawned again.
+
+Log every verdict: `node scripts/run-log.mjs audit --issue <KIT-n> --verdict green|amber|red --round <n> --sha <head> [--rows <failing matrix rows>]`, and a `reason` per failing cause with a fixed code (`scripts/lib/run-log.mjs` `REASON_CODES`). Report with `node scripts/run-log.mjs report`.
+
 Then resume implement: **fix the class**, not the cited file. Re-run the pre-review gate. Return to step 4.
 
 Stop the issue (leave `Implementing`, role-comment) when checker-fail returns hit five, or CI-fail cycles hit five (`WORKFLOW.md` loop cap). Do not land.
@@ -94,6 +104,10 @@ Move to `Merging` (approver-present). Follow [land/SKILL.md](../land/SKILL.md) a
 ### 8. Reap worktree
 
 After land success, follow [reap-worktree/SKILL.md](../reap-worktree/SKILL.md): verify the branch is on `origin/<lanes.integration>`, remove the issue worktree, delete the merged remote branch when safe.
+
+## Run log
+
+Every issue leaves lines in the central run log (`flow.runLog` in `factory.config.json`, default `.factory/run-log.jsonl` in the main checkout, gitignored): `start`, `spawn`, `result` (with provider, model and tokens when `bb thread show --json` exposes them, else null), `audit`, `reason`. Only this orchestrating session writes it. `node scripts/run-log.mjs report` compares issues with and without a lead by review rounds and tokens (ADR-0051, ADR-0052).
 
 ## After the batch
 
