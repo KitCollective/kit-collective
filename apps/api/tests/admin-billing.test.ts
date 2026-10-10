@@ -162,7 +162,7 @@ describe("Admin billing /v1", () => {
         source: "comp",
         expires,
         trialUsed: false,
-        visionMatcher: { used: 0, cap: 10, remaining: 10, unlimited: true },
+        visionMatcher: { used: 0, cap: 10, remaining: 10, unlimited: true, renewsAt: null },
       }),
     );
 
