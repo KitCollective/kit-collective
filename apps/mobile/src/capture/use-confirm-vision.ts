@@ -24,18 +24,22 @@ import {
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
 import {
-  type IdentityOwned,
   identityQueueFingerprint,
   identityRunKey,
   identitySettledSnapshot,
   nextQueuedIdentityDraft,
   raceWithTimeout,
   remainingIdentityBudget,
-  scopeIdentityFlagToDraft,
-  scopeIdentityToDraft,
   shouldAttemptIdentityQueue,
   shouldSyncIdentityChrome,
 } from "@/capture/identityDraftQueue";
+import {
+  type IdentityDraftState,
+  type IdentityDraftStates,
+  identityStateFor,
+  patchIdentityState,
+  resetIdentityState,
+} from "@/capture/identityDraftState";
 import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
 import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
 import { motion } from "@/theme/tokens";
@@ -61,7 +65,6 @@ type UseConfirmVisionOptions = {
   jobId: string | null;
   setJobId: (jobId: string | null) => void;
   setSelectedSeasonLabel: (label: string | null) => void;
-  onCatalogMiss?: (miss: boolean) => void;
   onPremiumRequired?: () => Promise<boolean>;
   /** Hold identity until grouping has bound drafts (or failed). */
   deferIdentity?: boolean;
@@ -106,7 +109,6 @@ export function useConfirmVision({
   jobId,
   setJobId,
   setSelectedSeasonLabel,
-  onCatalogMiss,
   onPremiumRequired,
   deferIdentity = false,
   groupingInFlight = false,
@@ -114,29 +116,19 @@ export function useConfirmVision({
   const [polling, setPolling] = useState(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  // A pending guess and the "Vision filled it" flag belong to one jersey: the draft that was
-  // active when they were set. Other tabs must not see, be blocked by, or apply them.
-  const [ownedSuggestion, setOwnedSuggestion] = useState<IdentityOwned<VisionJobResponse> | null>(
-    null,
+  // Everything Vision left pending belongs to one jersey. Switching tabs, or another jersey's
+  // read starting or landing, must not touch it.
+  const [identityStates, setIdentityStates] = useState<IdentityDraftStates>({});
+  const patchIdentity = useCallback((draftId: string, patch: Partial<IdentityDraftState>) => {
+    setIdentityStates((current) => patchIdentityState(current, draftId, patch));
+  }, []);
+  const resetIdentity = useCallback((draftId: string) => {
+    setIdentityStates((current) => resetIdentityState(current, draftId));
+  }, []);
+  const { suggestion, applied, catalogMiss, catalogMissHint } = identityStateFor(
+    identityStates,
+    draft?.id ?? null,
   );
-  const [appliedOwner, setAppliedOwner] = useState<string | null>(null);
-  const setSuggestion = useCallback((job: VisionJobResponse | null, ownerDraftId?: string) => {
-    const owner = ownerDraftId ?? draftRef.current?.id;
-    setOwnedSuggestion(job && owner ? { ownerDraftId: owner, value: job } : null);
-  }, []);
-  const setApplied = useCallback((value: boolean, ownerDraftId?: string) => {
-    setAppliedOwner(value ? (ownerDraftId ?? draftRef.current?.id ?? null) : null);
-  }, []);
-  const suggestion = scopeIdentityToDraft(ownedSuggestion, draft?.id ?? null);
-  const applied = scopeIdentityFlagToDraft(appliedOwner, draft?.id ?? null);
-  const [ownedCatalogMissHint, setOwnedCatalogMissHint] = useState<IdentityOwned<string> | null>(
-    null,
-  );
-  const setCatalogMissHint = useCallback((hint: string | null, ownerDraftId?: string) => {
-    const owner = ownerDraftId ?? draftRef.current?.id;
-    setOwnedCatalogMissHint(hint && owner ? { ownerDraftId: owner, value: hint } : null);
-  }, []);
-  const catalogMissHint = scopeIdentityToDraft(ownedCatalogMissHint, draft?.id ?? null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const appliedJobId = useRef<string | null>(null);
   const snapshotsByDraftRef = useRef(new Map<string, IdentityFieldSnapshot>());
@@ -181,9 +173,6 @@ export function useConfirmVision({
         appliedJobId.current = job.jobId;
       }
 
-      const isActiveDraft = currentDraftId === draftRef.current?.id;
-      onCatalogMiss?.(job.catalogMiss === true && isActiveDraft);
-
       const snapshot: IdentityFieldSnapshot = {
         fieldPreselect: job.fieldPreselect ?? {},
         suggestions: job.suggestions ?? null,
@@ -191,9 +180,10 @@ export function useConfirmVision({
       };
       snapshotsByDraftRef.current.set(currentDraftId, snapshot);
 
-      if (job.catalogMiss && isActiveDraft) {
-        setCatalogMissHint(resolveVisionCatalogMissHint(job), currentDraftId);
-      }
+      patchIdentity(currentDraftId, {
+        catalogMiss: job.catalogMiss === true,
+        catalogMissHint: job.catalogMiss ? resolveVisionCatalogMissHint(job) : null,
+      });
 
       if (job.catalogMiss && !job.suggestions) {
         return;
@@ -205,7 +195,7 @@ export function useConfirmVision({
 
       if (!shouldPreselect && suggestions) {
         if (currentDraftId === draftRef.current?.id) {
-          setSuggestion(job, currentDraftId);
+          patchIdentity(currentDraftId, { suggestion: job });
           fadeInSuggestion();
         }
         return;
@@ -251,29 +241,19 @@ export function useConfirmVision({
         });
         if (suggestOnlyJob) {
           if (currentDraftId === draftRef.current?.id) {
-            setSuggestion(suggestOnlyJob, currentDraftId);
+            patchIdentity(currentDraftId, { suggestion: suggestOnlyJob });
             fadeInSuggestion();
           }
           return;
         }
 
         if (currentDraftId === draftRef.current?.id) {
-          setApplied(true, currentDraftId);
+          patchIdentity(currentDraftId, { applied: true });
           fadeInSuggestion();
         }
       }
     },
-    [
-      accessToken,
-      fadeInSuggestion,
-      mutate,
-      onCatalogMiss,
-      sessionId,
-      setApplied,
-      setCatalogMissHint,
-      setSelectedSeasonLabel,
-      setSuggestion,
-    ],
+    [accessToken, fadeInSuggestion, mutate, sessionId, patchIdentity, setSelectedSeasonLabel],
   );
   const applySuggestionsRef = useRef(applySuggestions);
   applySuggestionsRef.current = applySuggestions;
@@ -343,15 +323,12 @@ export function useConfirmVision({
       snapshotsByDraftRef.current.delete(next.id);
       setInFlightDraftId(next.id);
       const syncChrome = () => shouldSyncIdentityChrome(next.id, draftRef.current?.id ?? null);
+      resetIdentity(next.id);
       if (syncChrome()) {
         setJobId(null);
-        setSuggestion(null);
-        setApplied(false);
         appliedJobId.current = null;
-        setCatalogMissHint(null);
         resetConfirmManualEdits();
         setSelectedSeasonLabel(null);
-        onCatalogMiss?.(false);
         setPolling(true);
       }
       const settleIdle = () => {
@@ -454,14 +431,11 @@ export function useConfirmVision({
   }, [
     accessToken,
     deferIdentity,
-    onCatalogMiss,
     onPremiumRequired,
     queueFingerprint,
-    setApplied,
-    setCatalogMissHint,
+    resetIdentity,
     setJobId,
     setSelectedSeasonLabel,
-    setSuggestion,
   ]);
 
   useEffect(() => {
@@ -573,23 +547,17 @@ export function useConfirmVision({
         // Season list is a Data drill convenience — Brug already wrote the draft.
       }
     }
-    setSuggestion(null);
-    setApplied(true, ownerDraftId);
-    setCatalogMissHint(null);
-    onCatalogMiss?.(false);
-  }, [
-    accessToken,
-    mutate,
-    onCatalogMiss,
-    setApplied,
-    setCatalogMissHint,
-    setSelectedSeasonLabel,
-    setSuggestion,
-    suggestion,
-  ]);
+    patchIdentity(ownerDraftId, {
+      suggestion: null,
+      applied: true,
+      catalogMiss: false,
+      catalogMissHint: null,
+    });
+  }, [accessToken, mutate, patchIdentity, setSelectedSeasonLabel, suggestion]);
 
   return {
     suggestion,
+    catalogMiss,
     catalogMissHint,
     suggestionOpacity,
     /** An identity read is running for the active jersey. */
@@ -599,7 +567,9 @@ export function useConfirmVision({
     settledDraftIds,
     applySuggestion,
     dismissSuggestion: () => {
-      setSuggestion(null);
+      if (draftRef.current) {
+        patchIdentity(draftRef.current.id, { suggestion: null });
+      }
     },
   };
 }

@@ -136,23 +136,3 @@ export function shouldAttemptIdentityQueue(input: {
   }
   return input.previousFingerprint !== input.queueFingerprint;
 }
-
-/** A value that belongs to the jersey that was active when it was produced. */
-export type IdentityOwned<T> = { ownerDraftId: string; value: T };
-
-/** Pending identity state is visible only on the jersey that owns it. */
-export function scopeIdentityToDraft<T>(
-  owned: IdentityOwned<T> | null,
-  activeDraftId: string | null,
-): T | null {
-  return owned && activeDraftId !== null && owned.ownerDraftId === activeDraftId
-    ? owned.value
-    : null;
-}
-
-export function scopeIdentityFlagToDraft(
-  ownerDraftId: string | null,
-  activeDraftId: string | null,
-): boolean {
-  return ownerDraftId !== null && ownerDraftId === activeDraftId;
-}

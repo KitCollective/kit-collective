@@ -48,7 +48,6 @@ export default function ConfirmScreen() {
   }>();
   const { accessToken, requestPremiumAccess, entitlement } = useAuth();
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
-  const [catalogMiss, setCatalogMiss] = useState(false);
   const {
     state,
     isSessionResolved,
@@ -85,7 +84,6 @@ export default function ConfirmScreen() {
     jobId: visionJobId,
     setJobId: setVisionJobId,
     setSelectedSeasonLabel,
-    onCatalogMiss: setCatalogMiss,
     onPremiumRequired: requestPremiumAccess,
     deferIdentity: shouldHoldIdentityForGrouping({
       groupingInFlight: grouping.blocksIdentity,
@@ -251,7 +249,7 @@ export default function ConfirmScreen() {
         ) : (
           <ConfirmVisionSlot
             groupingMessage={grouping.groupingMessage}
-            catalogMiss={catalogMiss}
+            catalogMiss={vision.catalogMiss}
             catalogMissHint={vision.catalogMissHint}
             suggestionOpacity={grouping.suggestionOpacity}
             onApplySuggestion={() => grouping.applySuggestion()}
