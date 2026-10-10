@@ -10,6 +10,7 @@ import {
 import { replacePersistedCapturePhotos } from "../src/capture/captureSessionPersistence";
 import { shouldGateFirstSessionSave } from "../src/first-session/first-session-entitlement";
 import {
+  collectionHref,
   createFirstSession,
   firstSessionBackdrop,
   reduceFirstSession,
@@ -171,6 +172,7 @@ describe("First session path has no onboard, profile or verify-email place", () 
       "demo",
       "chooser",
       "analysing",
+      "vision-failed",
       "door",
       "code",
       "jersey-details",
@@ -186,6 +188,9 @@ describe("First session path has no onboard, profile or verify-email place", () 
       { type: "demoTryAnother" },
       { type: "startAdd" },
       { type: "photosPicked", sessionId: "capture-session-1" },
+      { type: "visionFailed" },
+      { type: "tryAnotherPhoto" },
+      { type: "photosPicked", sessionId: "capture-session-2" },
       { type: "visionComplete" },
       { type: "submitIdentity", method: "email" },
       { type: "backFromCode" },
@@ -200,12 +205,82 @@ describe("First session path has no onboard, profile or verify-email place", () 
     for (const place of seen) {
       expect(onPath.has(place)).toBe(true);
     }
+    for (const place of onPath) {
+      expect(place).not.toMatch(/onboard|profile|verify/);
+    }
   });
 
   it("the reducer source carries no onboard, profile or verify-email vocabulary", () => {
     const source = readFileSync(join(__dirname, "../src/first-session/session.ts"), "utf8");
 
     expect(source).not.toMatch(/onboard|profile|verify-email|continueFromSplash|discovery/i);
+  });
+});
+
+describe("First session arrival in Samling", () => {
+  const signedInWithoutDraft = () =>
+    reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "startDemo",
+        exampleId: "example-1",
+      }),
+      { type: "submitIdentity", method: "social" },
+    );
+
+  it("the demo road arrives with the first-arrival signal and no result signal", () => {
+    expect(collectionHref(signedInWithoutDraft())).toBe("/(tabs)/collection?firstSessionArrival=1");
+  });
+
+  it("the own-photo road arrives with the saved jersey, not the empty first-arrival slot", () => {
+    const saved = reduceFirstSession(
+      reduceFirstSession(
+        reduceFirstSession(
+          reduceFirstSession(createFirstSession({ signedIn: false }), {
+            type: "photosPicked",
+            sessionId: "capture-session-1",
+          }),
+          { type: "visionComplete" },
+        ),
+        { type: "submitIdentity", method: "social" },
+      ),
+      { type: "saveJersey" },
+    );
+
+    expect(collectionHref(saved)).toBe(
+      "/(tabs)/collection?firstSessionResult=1&firstSessionSaved=1",
+    );
+  });
+
+  it("a returning collector who logs in from welcome without an example gets plain Samling", () => {
+    const login = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "openDoor",
+      }),
+      { type: "submitIdentity", method: "social" },
+    );
+
+    expect(login.place).toBe("collection");
+    expect(collectionHref(login)).toBe("/(tabs)/collection");
+  });
+
+  it("an example seen and left with Prøv en anden trøje still counts for the note", () => {
+    const afterTryAnother = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "startDemo",
+        exampleId: "example-1",
+      }),
+      { type: "demoTryAnother" },
+    );
+    const signedIn = reduceFirstSession(reduceFirstSession(afterTryAnother, { type: "openDoor" }), {
+      type: "submitIdentity",
+      method: "social",
+    });
+
+    expect(collectionHref(signedIn)).toBe("/(tabs)/collection?firstSessionArrival=1");
+  });
+
+  it("a signed-in launch lands on plain Samling", () => {
+    expect(collectionHref(createFirstSession({ signedIn: true }))).toBe("/(tabs)/collection");
   });
 });
 
@@ -272,19 +347,93 @@ describe("First session add to door flow", () => {
     expect(door.captureSessionId).toBe("capture-session-1");
   });
 
-  it("visionFailed and fillSelf fail-open to register door over analysing", () => {
+  it("visionFailed shows the failure screen, keeps the photo and does not open the door", () => {
     const analysing = reduceFirstSession(createFirstSession({ signedIn: false }), {
       type: "photosPicked",
       sessionId: "capture-session-1",
     });
-
     const failed = reduceFirstSession(analysing, { type: "visionFailed" });
-    expect(failed.place).toBe("door");
-    expect(failed.doorOver).toBe("analysing");
 
+    expect(failed.place).toBe("vision-failed");
+    expect(failed.hasDraft).toBe(true);
+    expect(failed.captureSessionId).toBe("capture-session-1");
+    expect(failed.showsTabBar).toBe(false);
+    expect(firstSessionBackdrop(failed)).toBe("vision-failed");
+  });
+
+  it("a Vision failure never yanks a door the collector already opened", () => {
+    const door = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "photosPicked",
+        sessionId: "capture-session-1",
+      }),
+      { type: "fillSelf" },
+    );
+
+    expect(reduceFirstSession(door, { type: "visionFailed" })).toEqual(door);
+  });
+
+  it("fillSelf from analysing opens the register door over analysing", () => {
+    const analysing = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "photosPicked",
+      sessionId: "capture-session-1",
+    });
     const filled = reduceFirstSession(analysing, { type: "fillSelf" });
+
     expect(filled.place).toBe("door");
     expect(filled.doorOver).toBe("analysing");
+  });
+
+  it("Udfyld selv on the failure screen opens the door over it and the photo reaches jersey details", () => {
+    const failed = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "photosPicked",
+        sessionId: "capture-session-1",
+      }),
+      { type: "visionFailed" },
+    );
+    const door = reduceFirstSession(failed, { type: "fillSelf" });
+
+    expect(door.place).toBe("door");
+    expect(door.doorOver).toBe("vision-failed");
+    expect(firstSessionBackdrop(door)).toBe("vision-failed");
+
+    const back = reduceFirstSession(door, { type: "closeDoor" });
+    expect(back.place).toBe("vision-failed");
+    expect(back.captureSessionId).toBe("capture-session-1");
+
+    const afterIdentity = reduceFirstSession(door, {
+      type: "submitIdentity",
+      method: "social",
+    });
+    expect(afterIdentity.place).toBe("jersey-details");
+    expect(afterIdentity.hasDraft).toBe(true);
+    expect(afterIdentity.captureSessionId).toBe("capture-session-1");
+  });
+
+  it("Prøv et andet foto returns to the source sheet over welcome and drops the failed draft", () => {
+    const failed = reduceFirstSession(
+      reduceFirstSession(createFirstSession({ signedIn: false }), {
+        type: "photosPicked",
+        sessionId: "capture-session-1",
+      }),
+      { type: "visionFailed" },
+    );
+    const chooser = reduceFirstSession(failed, { type: "tryAnotherPhoto" });
+
+    expect(chooser.place).toBe("chooser");
+    expect(chooser.hasDraft).toBe(false);
+    expect(chooser.captureSessionId).toBe(null);
+    expect(chooser.showsTabBar).toBe(false);
+    expect(firstSessionBackdrop(chooser)).toBe("welcome");
+  });
+
+  it("the source sheet sits over the welcome screen", () => {
+    const chooser = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "startAdd",
+    });
+
+    expect(firstSessionBackdrop(chooser)).toBe("welcome");
   });
 
   it("closeDoor from analysing-backed door returns to analysing", () => {

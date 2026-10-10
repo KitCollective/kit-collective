@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useCallback, useRef, useState } from "react";
+import { Platform } from "react-native";
 import { CaptureCameraSession } from "@/capture/CaptureCameraSession";
 import {
   createPersistedCaptureSession,
@@ -9,48 +9,74 @@ import {
   replacePersistedCapturePhotos,
 } from "@/capture/captureFlow";
 import type { CaptureSessionPhoto } from "@/capture/captureSessionTypes";
-import { expoGalleryPickerAdapter, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
+import { expoDocumentPickerAdapter, expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
+import { pickDocumentImages } from "@/capture/pickDocumentImages";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
-import { pickUploadFiles } from "@/capture/pickUploadFiles";
-import { ScreenHeader } from "@/components/screen-header";
-import { Button, IconButton } from "@/components/ui";
-import { useTypography } from "@/theme/brand-fonts";
-import { space } from "@/theme/tokens";
-import { useTheme } from "@/theme/use-theme";
+import { type OwnPhotoSource, pickOwnPhotos } from "@/first-session/own-photo-source";
+import { FirstSessionSourceSheet } from "@/first-session/source-sheet";
+import { capFirstSessionPhotos, FIRST_SESSION_PHOTO_CAP } from "@/first-session/vision-result";
 
 type FirstSessionChooserScreenProps = {
   onClose: () => void;
   onPhotosPicked: (sessionId: string) => void;
 };
 
+/**
+ * Brug mit eget foto: the source sheet over the welcome screen (Tag billede,
+ * Fotobibliotek, Filer). Up to three photos become one jersey. Cancelling a
+ * picker or the camera brings the sheet back.
+ */
 export function FirstSessionChooserScreen({
   onClose,
   onPhotosPicked,
 }: FirstSessionChooserScreenProps) {
-  const theme = useTheme();
-  const typography = useTypography();
+  const [sheetVisible, setSheetVisible] = useState(true);
   const [showCamera, setShowCamera] = useState(false);
   const [cameraSessionId, setCameraSessionId] = useState<string | null>(null);
   const [cameraPhotoUris, setCameraPhotoUris] = useState<string[]>([]);
+  // A chosen source waits until the sheet's Modal has left the screen: on iOS the
+  // system picker cannot present on top of a closing Modal.
+  const queued = useRef<OwnPhotoSource | null>(null);
 
-  const handleUpload = useCallback(async () => {
-    const uris = await pickUploadFiles(
-      {
-        allowsMultipleSelection: true,
-      },
-      expoUploadFilesAdapter,
-    );
+  const finishFromUris = useCallback(
+    (uris: string[], photoSource: "gallery" | "camera") => {
+      const { sessionId } = createPersistedCaptureSession(capFirstSessionPhotos(uris), {
+        photoSource,
+      });
+      onPhotosPicked(sessionId);
+    },
+    [onPhotosPicked],
+  );
 
-    if (!uris || uris.length === 0) {
-      return;
-    }
+  const runSource = useCallback(
+    async (source: OwnPhotoSource) => {
+      if (source === "camera") {
+        setShowCamera(true);
+        return;
+      }
 
-    const { sessionId } = createPersistedCaptureSession(uris, {
-      photoSource: "gallery",
-    });
-    onPhotosPicked(sessionId);
-  }, [onPhotosPicked]);
+      const uris = await pickOwnPhotos(source, {
+        library: ({ selectionLimit }) =>
+          pickGalleryPhotos(
+            {
+              allowsMultipleSelection: true,
+              selectionLimit,
+              quality: galleryMultiSelectQuality(),
+            },
+            expoGalleryPickerAdapter,
+          ),
+        files: () => pickDocumentImages({ multiple: true }, expoDocumentPickerAdapter),
+      });
+
+      if (!uris) {
+        setSheetVisible(true);
+        return;
+      }
+      finishFromUris(uris, "gallery");
+    },
+    [finishFromUris],
+  );
 
   const finishCaptureFromPhotos = useCallback(
     (photos: CaptureSessionPhoto[]) => {
@@ -58,7 +84,10 @@ export function FirstSessionChooserScreen({
         return;
       }
 
-      const sessionId = replacePersistedCapturePhotos(cameraSessionId, photos);
+      const sessionId = replacePersistedCapturePhotos(
+        cameraSessionId,
+        capFirstSessionPhotos(photos),
+      );
       onPhotosPicked(sessionId);
     },
     [cameraSessionId, onPhotosPicked],
@@ -91,21 +120,22 @@ export function FirstSessionChooserScreen({
         onComplete={(uris) => {
           if (uris.length === 0) {
             setShowCamera(false);
+            setSheetVisible(true);
             return;
           }
 
-          if (cameraSessionId) {
+          if (cameraSessionId && uris.length <= FIRST_SESSION_PHOTO_CAP) {
             finalizeShootFirstSession(cameraSessionId);
             onPhotosPicked(cameraSessionId);
             return;
           }
 
-          const { sessionId } = createPersistedCaptureSession(uris, {
-            photoSource: "camera",
-          });
-          onPhotosPicked(sessionId);
+          finishFromUris(uris, "camera");
         }}
-        onClose={() => setShowCamera(false)}
+        onClose={() => {
+          setShowCamera(false);
+          setSheetVisible(true);
+        }}
         onGalleryEscape={(existingUris) => void handleGalleryEscape(existingUris)}
         onPhotoCaptured={(uri) => {
           const sessionId = persistCameraShotInSession(
@@ -121,43 +151,29 @@ export function FirstSessionChooserScreen({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <ScreenHeader
-        title="Tilføj trøje"
-        trailing={<IconButton name="Luk" icon="close" onPress={onClose} />}
-      />
-
-      <View style={styles.body}>
-        <Text style={[typography.body, { color: theme.contentMuted }]}>
-          Op til tre billeder bliver én trøje. Fire eller flere lander som uredigerede, som du
-          binder til trøjer.
-        </Text>
-
-        <View style={styles.actions}>
-          <Button label="Upload filer" width="fill" onPress={() => void handleUpload()} />
-          <Button
-            label="Tag billede"
-            variant="secondary"
-            width="fill"
-            onPress={() => setShowCamera(true)}
-          />
-        </View>
-      </View>
-    </View>
+    <FirstSessionSourceSheet
+      visible={sheetVisible}
+      onDismiss={() => {
+        queued.current = null;
+        setSheetVisible(false);
+        onClose();
+      }}
+      onConfirm={(source) => {
+        setSheetVisible(false);
+        if (Platform.OS === "ios") {
+          queued.current = source;
+          return;
+        }
+        void runSource(source);
+      }}
+      onModalHide={() => {
+        const next = queued.current;
+        if (!next) {
+          return;
+        }
+        queued.current = null;
+        void runSource(next);
+      }}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  body: {
-    flex: 1,
-    paddingHorizontal: space.insetLg,
-    gap: space.gapLg,
-    justifyContent: "center",
-  },
-  actions: {
-    gap: space.gapSm,
-  },
-});

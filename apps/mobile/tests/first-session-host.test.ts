@@ -153,7 +153,10 @@ describe("First session host chrome", () => {
     expect(host).toContain('place === "jersey-details"');
     expect(host).toContain("saveJersey");
     expect(host).toContain("recordDumpSave");
-    expect(host).toContain("firstSessionResult=1");
+    expect(host).toContain("collectionHref(session)");
+    expect(readFileSync(join(mobileRoot, "src/first-session/session.ts"), "utf8")).toContain(
+      "firstSessionResult=1",
+    );
     expect(host).not.toContain("requestPremiumAccess");
     expect(host).not.toContain("Gem senere");
   });

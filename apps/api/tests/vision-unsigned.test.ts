@@ -23,6 +23,7 @@ import bcrypt from "bcryptjs";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { FailingVisionAdapter, StubVisionAdapter } from "../dist/vision/test-vision.adapters.js";
+import { unsignedVisionSuggestCap } from "../dist/vision/unsigned-vision-throttle.service.js";
 import { VISION_ADAPTER } from "../dist/vision/vision.adapter.js";
 
 const migrationsFolder = path.join(
@@ -255,6 +256,55 @@ describe("Unsigned Vision /v1", () => {
     expect(blocked.statusCode).toBe(429);
 
     await throttleApp.close();
+  });
+
+  it("takes the unsigned suggest cap from UNSIGNED_VISION_SUGGEST_CAP when it is set", async () => {
+    const previous = process.env.UNSIGNED_VISION_SUGGEST_CAP;
+    process.env.UNSIGNED_VISION_SUGGEST_CAP = "2";
+    try {
+      const moduleRef = await Test.createTestingModule({
+        imports: [AppModule],
+      })
+        .overrideProvider(VISION_ADAPTER)
+        .useValue(new StubVisionAdapter({ clubId: CLUB_ID, confidences: { overall: 80 } }))
+        .compile();
+
+      const configuredApp = moduleRef.createNestApplication<NestFastifyApplication>(
+        new FastifyAdapter(),
+      );
+      configuredApp.setGlobalPrefix("v1");
+      await configuredApp.init();
+      await configuredApp.getHttpAdapter().getInstance().ready();
+
+      const statuses: number[] = [];
+      for (let i = 0; i < 3; i += 1) {
+        const response = await configuredApp.inject({
+          method: "POST",
+          url: "/v1/collection/vision/suggest/unsigned",
+          remoteAddress: "198.51.100.77",
+          payload: unsignedSuggestPayload(),
+        });
+        statuses.push(response.statusCode);
+      }
+      expect(statuses).toEqual([202, 202, 429]);
+
+      await configuredApp.close();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.UNSIGNED_VISION_SUGGEST_CAP;
+      } else {
+        process.env.UNSIGNED_VISION_SUGGEST_CAP = previous;
+      }
+    }
+  });
+
+  it("falls back to the contract cap when UNSIGNED_VISION_SUGGEST_CAP is not a positive integer", () => {
+    expect(unsignedVisionSuggestCap(undefined)).toBe(UNSIGNED_VISION_SUGGEST_CAP);
+    expect(unsignedVisionSuggestCap("")).toBe(UNSIGNED_VISION_SUGGEST_CAP);
+    expect(unsignedVisionSuggestCap("0")).toBe(UNSIGNED_VISION_SUGGEST_CAP);
+    expect(unsignedVisionSuggestCap("-3")).toBe(UNSIGNED_VISION_SUGGEST_CAP);
+    expect(unsignedVisionSuggestCap("abc")).toBe(UNSIGNED_VISION_SUGGEST_CAP);
+    expect(unsignedVisionSuggestCap("7")).toBe(7);
   });
 
   it("keeps signed suggest and catalog search on auth", async () => {

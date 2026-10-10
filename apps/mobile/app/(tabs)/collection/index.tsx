@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -5,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -22,13 +24,24 @@ import { JerseyTile } from "@/components/jersey-tile";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
 import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { Button, EmptyState } from "@/components/ui";
+import { FIRST_ARRIVAL_NOTE, FIRST_ARRIVAL_SLOT_LABEL } from "@/first-session/first-arrival-copy";
 import { RESULT_COLLECTION_BUD_CAPTION } from "@/first-session/jersey-details-copy";
 import { registerPlaceHome, useIsPlaceHomeLive } from "@/navigation/place-homes";
 import { readPlaceOverview, writePlaceOverview } from "@/navigation/place-overview-cache";
 import { PlacePagerScreen } from "@/navigation/place-pager-screen";
 import { usePlaceOverview } from "@/navigation/use-place-overview";
+import {
+  dismissProfilePrompt,
+  nextProfilePromptState,
+  type ProfilePromptState,
+  readProfilePromptState,
+  shouldShowProfilePrompt,
+  storeProfilePromptState,
+} from "@/profile-prompt/dismissal";
+import { ProfilePrompt } from "@/profile-prompt/profile-prompt";
+import { securePromptStore } from "@/profile-prompt/secure-prompt-store";
 import { useTypography } from "@/theme/brand-fonts";
-import { space } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
 import { useStableSafeAreaInsets } from "@/theme/use-stable-safe-area-insets";
 import { useTheme } from "@/theme/use-theme";
 
@@ -38,9 +51,19 @@ export default function CollectionScreen() {
 
 function CollectionHome() {
   const router = useRouter();
-  const { firstSessionResult } = useLocalSearchParams<{ firstSessionResult?: string }>();
+  const { firstSessionResult, firstSessionArrival, firstSessionSaved } = useLocalSearchParams<{
+    firstSessionResult?: string;
+    firstSessionSaved?: string;
+    firstSessionArrival?: string;
+  }>();
   const showResultCollectionCaption = firstSessionResult === "1";
-  const { accessToken, requestPremiumAccess } = useAuth();
+  const savedInFirstSession = Number.parseInt(firstSessionSaved ?? "0", 10) || 0;
+  const isFirstArrival = firstSessionArrival === "1";
+  const { accessToken, requestPremiumAccess, user } = useAuth();
+  const userId = user?.id ?? null;
+  // True only after a live fetch of the collection succeeded: a failed fetch is not an empty one.
+  const [collectionLoaded, setCollectionLoaded] = useState(false);
+  const [profilePromptState, setProfilePromptState] = useState<ProfilePromptState | null>(null);
   const captureChooser = useCaptureChooser();
   const { width } = useWindowDimensions();
   const theme = useTheme();
@@ -155,7 +178,10 @@ function CollectionHome() {
         await refreshAll();
         if (active) {
           hasInitialLoadRef.current = true;
+          setCollectionLoaded(true);
         }
+      } catch {
+        // The empty state keeps its existing behaviour; the prompt just does not move.
       } finally {
         if (active) {
           setLoading(false);
@@ -177,6 +203,54 @@ function CollectionHome() {
 
     void loadCollection();
   }, [accessToken, isLive, loadCollection]);
+
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+    let active = true;
+    void readProfilePromptState(securePromptStore, userId).then((state) => {
+      if (active) {
+        setProfilePromptState(state);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  // Samling first seen empty waits for the first jersey; that save (or an arrival with the
+  // jersey just saved) arms the prompt. A collection that already had jerseys is never armed.
+  useEffect(() => {
+    if (!userId || loading) {
+      return;
+    }
+    const next = nextProfilePromptState({
+      state: profilePromptState,
+      jerseyCount: totalJerseyCount,
+      collectionLoaded,
+      savedInFirstSession,
+    });
+    if (!next) {
+      return;
+    }
+    setProfilePromptState(next);
+    void storeProfilePromptState(securePromptStore, userId, next);
+  }, [
+    userId,
+    loading,
+    profilePromptState,
+    totalJerseyCount,
+    collectionLoaded,
+    savedInFirstSession,
+  ]);
+
+  const dismissPrompt = () => {
+    setProfilePromptState("dismissed");
+    if (userId) {
+      void dismissProfilePrompt(securePromptStore, userId);
+    }
+  };
 
   const openJerseyDetail = (jerseyId: string) => {
     router.push(`/(tabs)/collection/${jerseyId}`);
@@ -211,18 +285,45 @@ function CollectionHome() {
             {RESULT_COLLECTION_BUD_CAPTION}
           </Text>
         ) : null}
-        <EmptyState
-          title="Ingen trøjer endnu"
-          diagram={<CollectionEmptyDiagram />}
-          action={
-            <Button
-              label="Tilføj trøje"
-              variant="primary"
-              width="hug"
+        {isFirstArrival ? (
+          <View style={styles.firstArrival}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={FIRST_ARRIVAL_SLOT_LABEL}
+              testID="collection-first-slot"
               onPress={() => void startCapture()}
-            />
-          }
-        />
+              style={({ pressed }) => [
+                styles.firstSlot,
+                { borderColor: theme.borderSubtle },
+                pressed && { backgroundColor: theme.fillSecondary },
+              ]}
+            >
+              <Ionicons name="add" size={28} color={theme.contentPrimary} />
+              <Text style={[typography.label, { color: theme.contentPrimary }]}>
+                {FIRST_ARRIVAL_SLOT_LABEL}
+              </Text>
+            </Pressable>
+            <Text
+              style={[typography.body, { color: theme.contentMuted, textAlign: "center" }]}
+              testID="collection-first-note"
+            >
+              {FIRST_ARRIVAL_NOTE}
+            </Text>
+          </View>
+        ) : (
+          <EmptyState
+            title="Ingen trøjer endnu"
+            diagram={<CollectionEmptyDiagram />}
+            action={
+              <Button
+                label="Tilføj trøje"
+                variant="primary"
+                width="hug"
+                onPress={() => void startCapture()}
+              />
+            }
+          />
+        )}
       </View>
     );
   }
@@ -238,6 +339,15 @@ function CollectionHome() {
         <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
           {RESULT_COLLECTION_BUD_CAPTION}
         </Text>
+      ) : null}
+      {shouldShowProfilePrompt({
+        jerseyCount: totalJerseyCount,
+        state: profilePromptState,
+      }) ? (
+        <ProfilePrompt
+          onOpen={() => router.push("/(tabs)/profile/edit")}
+          onDismiss={dismissPrompt}
+        />
       ) : null}
       <ShortcutChipRow
         shortcuts={shortcuts}
@@ -308,6 +418,24 @@ const styles = StyleSheet.create({
   resultCaption: {
     paddingHorizontal: space.insetMd,
     paddingBottom: space.insetSm,
+  },
+  firstArrival: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.gapMd,
+    paddingHorizontal: space.insetLg,
+  },
+  firstSlot: {
+    width: "50%",
+    aspectRatio: 4 / 5,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.gapSm,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: radius.md,
+    padding: space.insetMd,
   },
   gridContent: {
     paddingHorizontal: space.insetMd,

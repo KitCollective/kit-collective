@@ -390,8 +390,8 @@ A stamdata landing under Søg for Club, NationalTeam, Kit, or Player: identity c
 _Avoid_: League/Season landings in this feature; treating Club search as the only name for a national side; treating the drill as a KitPhoto gallery; serving archive bytes on the drill; conflating Kit drill with UserJersey detail; inventing an "unknown Kit" bucket for null catalogKitId
 
 **UserJersey detail**:
-Full-screen view of one UserJersey. Immersive photo stage (pager) with meta and actions in a bottom sheet — not hero+strip as the primary layout. **Own**: Privat and åben for bud switches, edit via Confirm UI (patch), delete. **Foreign**: owner → Peer Profil, Favorit, Send bud CTA when åben for bud (separate stack screen). Overflow Rapportér / Blokér. Not the Send bud form itself. Not a Søg catalog drill.
-_Avoid_: Send bud as the only foreign view; price overlay on the photo; editing someone else's copy; a second edit form language beside Confirm; requiring an Indbakke thread before report/block; locking hero+strip after prototype B won
+Full-screen view of one UserJersey: one scrolling column with a 4:5 photo (swipe between photos), then title, player and facts. Own and foreign share that column (decided 2026-10-10; it replaces the immersive photo stage with a bottom sheet). **Own**: Privat and åben for bud switches, every fact edited on its own (patch), delete. **Foreign**: Favorit, owner → Peer Profil under the facts, Send bud CTA when åben for bud (separate stack screen), and the collector's own pending Bud in place of that CTA once sent. Overflow Rapportér / Blokér. Not the Send bud form itself. Not a Søg catalog drill.
+_Avoid_: Send bud as the only foreign view; price overlay on the photo; editing someone else's copy; a separate Rediger screen; requiring an Indbakke thread before report/block; the immersive stage with a bottom sheet
 
 **Favorit**:
 A saved foreign UserJersey — another collector's shirt on the Profil favorites grid. Not own Samling tiles. Not a Wishlist row.

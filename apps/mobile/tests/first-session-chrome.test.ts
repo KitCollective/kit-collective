@@ -71,7 +71,8 @@ describe("first-session visual host chrome", () => {
     const data = readFirstSession("demo.ts");
     const welcome = readFirstSession("welcome-screen.tsx");
 
-    expect(demo).toContain("5 / 4");
+    expect(readFirstSession("vision-stage.tsx")).toContain("5 / 4");
+    expect(demo).toContain("stageRectFor");
     for (const source of [demo, data, welcome]) {
       expect(source).not.toMatch(/@\/api\//);
       expect(source).not.toMatch(/\bfetch\(|startUnsignedVisionSuggest|apiClient|axios/);
@@ -149,21 +150,25 @@ describe("first-session visual host chrome", () => {
     expect(door).not.toContain("FloatingTabBar");
   });
 
-  it("locks chooser chrome as gallery-first capture without premium or tab bar", () => {
+  it("locks chooser chrome as the source sheet over welcome, without premium or tab bar", () => {
     const chooser = readFirstSession("chooser-screen.tsx");
+    const sheet = readFirstSession("source-sheet.tsx");
+    const copy = readFirstSession("source-copy.ts");
 
-    expect(chooser).toContain("Tilføj trøje");
-    expect(chooser).toContain("Op til tre billeder bliver én trøje");
-    expect(chooser).toContain("Upload filer");
-    expect(chooser).toContain("Tag billede");
-    expect(chooser).toContain("pickUploadFiles");
+    expect(copy).toContain("Tilføj trøje");
+    expect(copy).toContain("Op til tre billeder bliver én trøje");
+    expect(copy).toContain("Tag billede");
+    expect(copy).toContain("Fotobibliotek");
+    expect(copy).toContain("Filer");
+    expect(sheet).toContain("Sheet");
+    expect(chooser).toContain("FirstSessionSourceSheet");
     expect(chooser).toContain("CaptureCameraSession");
     expect(chooser).toContain("createPersistedCaptureSession");
     expect(chooser).not.toContain("requestPremiumAccess");
     expect(chooser).not.toContain("FloatingTabBar");
   });
 
-  it("locks analysing chrome with Læser trøjen copy, PhotoSlot, hairline progress, and no wash", () => {
+  it("locks analysing chrome as the 4:5 stage with real Vision, no hairline bar and no wash", () => {
     const analysing = readFirstSession("analysing-screen.tsx");
     const copy = readFirstSession("analysing-copy.ts");
     const chrome = `${analysing}\n${copy}`;
@@ -171,10 +176,11 @@ describe("first-session visual host chrome", () => {
     expect(copy).toContain("Læser trøjen");
     expect(copy).toContain("Vi finder klub, sæson og type.");
     expect(copy).toContain("Udfyld selv i stedet");
-    expect(analysing).toContain("PhotoSlot");
-    expect(analysing).toContain("StyleSheet.hairlineWidth");
+    expect(analysing).toContain("color.fillPrimary");
     expect(analysing).toContain("buildIdentitySuggestRequest");
     expect(analysing).toContain("startUnsignedVisionSuggest");
+    expect(chrome).not.toContain("PhotoSlot");
+    expect(chrome).not.toContain("StyleSheet.hairlineWidth");
     expect(chrome).not.toContain("identity.wash");
     expect(chrome).not.toContain("FloatingTabBar");
   });
