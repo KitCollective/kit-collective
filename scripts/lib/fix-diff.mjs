@@ -5,7 +5,35 @@
  */
 
 const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*|#|<!--|-->)/;
+const QUOTE = /['"`]/;
+/** Words that change behaviour when swapped: a "rename" to or from one is not a rename. */
+const RESERVED = new Set(
+  (
+    "true false null undefined this super new delete typeof instanceof void in of if else for while do " +
+    "switch case default break continue return throw try catch finally await async yield function class " +
+    "const let var static public private protected readonly import export from as extends implements type interface"
+  ).split(" "),
+);
 const TOKEN = /[A-Za-z_$][\w$]*|\d+|[^\sA-Za-z_$\d]/g;
+
+/**
+ * For each token of a line, whether it sits inside a quoted string.
+ * @param {string[]} tokens
+ */
+function stringFlags(tokens) {
+  let open = null;
+  return tokens.map((token) => {
+    if (open === null && QUOTE.test(token) && token.length === 1) {
+      open = token;
+      return true;
+    }
+    if (open !== null && token === open) {
+      open = null;
+      return true;
+    }
+    return open !== null;
+  });
+}
 
 /**
  * @param {string} diffText unified diff, `-U0` preferred
@@ -32,9 +60,12 @@ function perFile(diffText) {
 
 /**
  * @param {string} diffText
+ * @param {{ isStillUsed?: (name: string) => boolean }} [options] `isStillUsed` answers whether a
+ *   renamed-away name still appears in the tree after the fix; a rename that left the old name
+ *   behind swapped one thing for another and is not light.
  * @returns {{ kind: "light" | "full", reason: string }}
  */
-export function classifyFixDiff(diffText) {
+export function classifyFixDiff(diffText, options = {}) {
   const files = perFile(diffText);
   if (files.size === 0) {
     return { kind: "full", reason: "empty diff" };
@@ -63,18 +94,30 @@ export function classifyFixDiff(diffText) {
       if (before.length !== after.length) {
         return { kind: "full", reason: `${file}: a code line changed shape` };
       }
+      const insideString = stringFlags(before);
       for (let t = 0; t < before.length; t += 1) {
         if (before[t] === after[t]) {
           continue;
         }
+        if (insideString[t]) {
+          return { kind: "full", reason: `${file}: text inside a string changed` };
+        }
         if (!/^[A-Za-z_$][\w$]*$/.test(before[t]) || !/^[A-Za-z_$][\w$]*$/.test(after[t])) {
           return { kind: "full", reason: `${file}: a non-name token changed` };
+        }
+        if (RESERVED.has(before[t]) || RESERVED.has(after[t])) {
+          return { kind: "full", reason: `${file}: a keyword or literal changed` };
         }
         if (renames.has(before[t]) && renames.get(before[t]) !== after[t]) {
           return { kind: "full", reason: `${before[t]} renamed two ways` };
         }
         renames.set(before[t], after[t]);
       }
+    }
+  }
+  for (const from of renames.keys()) {
+    if (options.isStillUsed?.(from)) {
+      return { kind: "full", reason: `${from} is still used after the rename` };
     }
   }
   const renamed = [...renames].map(([from, to]) => `${from} -> ${to}`).join(", ");

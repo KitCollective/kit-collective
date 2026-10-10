@@ -60,3 +60,22 @@ export function verdict(checks, view, options = {}) {
   }
   return { done: true, code: EXIT.green, line: `GREEN (${counts}); PR is MERGEABLE` };
 }
+
+const VALUE_OPTIONS = new Set(["--timeout", "--interval", "--also"]);
+
+/**
+ * The PR argument: the first plain argument that is not the value of an option, so
+ * `--timeout 1800 287` waits on PR 287, not on PR 1800.
+ * @param {string[]} args
+ * @returns {string | undefined}
+ */
+export function prArgument(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    if (VALUE_OPTIONS.has(args[i])) {
+      i += 1;
+    } else if (/^\d+$/.test(args[i]) || args[i].includes("/pull/")) {
+      return args[i];
+    }
+  }
+  return undefined;
+}

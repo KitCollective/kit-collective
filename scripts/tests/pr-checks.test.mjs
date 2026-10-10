@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { EXIT, verdict } from "../lib/pr-checks.mjs";
+import { EXIT, prArgument, verdict } from "../lib/pr-checks.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(HERE, "..", "wait-for-checks.mjs");
@@ -103,4 +103,12 @@ test("the CI-sleep hook lets the sanctioned command through", () => {
     encoding: "utf8",
   });
   assert.equal(JSON.parse(out).permission, "allow");
+});
+
+test("the PR argument is not the value of an option", () => {
+  assert.equal(prArgument(["287", "--timeout", "1800"]), "287");
+  assert.equal(prArgument(["--timeout", "1800", "287"]), "287");
+  assert.equal(prArgument(["--also", "Device flows", "--interval", "30", "287"]), "287");
+  assert.equal(prArgument(["https://github.com/o/r/pull/12"]), "https://github.com/o/r/pull/12");
+  assert.equal(prArgument(["--timeout", "1800"]), undefined);
 });
