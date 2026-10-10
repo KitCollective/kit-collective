@@ -1,4 +1,5 @@
-# Cold start, known test data, signed in through the legacy password screen. Callers pass EMAIL and PASSWORD.
+# Cold start, known test data, signed in through the Kom i gang sheet with the e-mail code.
+# Callers pass EMAIL (the collector's address). There is no password on this path.
 appId: app.kitcollective.mobile
 ---
 - runScript:
@@ -9,33 +10,34 @@ appId: app.kitcollective.mobile
 - launchApp:
     clearState: true
     clearKeychain: true
-# The Kom i gang sheet has no password. Test accounts still sign in on the legacy
-# password screen until the e-mail code lands (KIT-275) and the screen is removed (KIT-276).
 - extendedWaitUntil:
     visible:
       id: welcome-have-account
     timeout: 90000
-- openLink: kitcollective:///login
-# iOS asks whether to open the link in the app, in the simulator's language.
 - tapOn:
-    text: "Åbn|Open"
-    optional: true
+    id: welcome-have-account
 - extendedWaitUntil:
     visible:
-      id: login-email
-    timeout: 20000
+      id: door-submit
+    timeout: 10000
 - tapOn:
-    id: login-email
+    id: door-email
 - inputText: ${EMAIL}
 - tapOn:
-    id: login-password
-- inputText: ${PASSWORD}
-# The keyboard covers the Log ind button, so submit with Return on the password field.
-- pressKey: Enter
-# iOS offers to save the password in a system dialog, in the simulator's language.
-- tapOn:
-    text: "Ikke nu|Not Now"
-    optional: true
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 10000
+# The local API's recording mailer holds the code; the sixth digit submits by itself.
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${EMAIL}
+      EXPIRE: "false"
+- inputText: ${output.code}
 - extendedWaitUntil:
     visible:
       id: collection-add

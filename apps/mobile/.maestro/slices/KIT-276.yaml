@@ -1,0 +1,79 @@
+# KIT-276: remove password, login and reset from the collector app.
+#
+# design-sections: Sheet, List row
+#
+# Signed-out part: it resets the data and launches with clearState, as sign-in.yaml does.
+# Not shown by a screen and so proved by unit tests instead:
+# - no login, register, reset, reset-complete or verify screen and no password or repeat-password
+#   field in the code (AC 1, AC 2, AC 7): tests/collector-password-removed.test.ts.
+# - staff login in admin still works (AC 4): admin and API suites, untouched by this slice.
+# - no migration touches stored passwords (AC 5): none is added.
+# - CONTEXT.md and the identity ADRs carry the supersession note (AC 6): docs diff.
+appId: app.kitcollective.mobile
+name: kit-276
+---
+- runScript:
+    file: ../scripts/reset-test-data.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- startRecording: kc__kit-276
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 3: an old login link opens the Kom i gang sheet, not a failed route.
+- openLink: kitcollective:///login
+# iOS asks whether to open the link in the app, in the simulator's language.
+- tapOn:
+    text: "Åbn|Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Kom i gang"
+- assertNotVisible: "Adgangskode|Password|Glemt"
+- takeScreenshot: kc__kit-276__01-old-login-link-opens-kom-i-gang
+# AC 3: the old password reset and verify links lead to the same sheet.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- openLink: kitcollective:///reset-complete?token=old
+- tapOn:
+    text: "Åbn|Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Kom i gang"
+- assertNotVisible: "Adgangskode|Password|Ny adgangskode"
+- takeScreenshot: kc__kit-276__02-old-reset-link-opens-kom-i-gang
+# AC 2: Konto has no password row and no e-mail change action. Signed in with the e-mail code.
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+- tapOn: Profil
+- tapOn: Indstillinger
+- tapOn: Kontoindstillinger
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "E-mail"
+- assertNotVisible: "Skift adgangskode|Adgangskode"
+- takeScreenshot: kc__kit-276__03-konto-without-password
+- stopRecording

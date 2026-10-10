@@ -12,7 +12,7 @@ export type AuthErrorFeedback = {
 
 export function resolveAuthErrorFeedback(
   error: unknown,
-  invalidCredentialsMessage: string,
+  fallbackMessage: string,
 ): AuthErrorFeedback {
   if (isIdentityAuthThrottleError(error)) {
     return { fieldError: null, showThrottleBanner: true };
@@ -20,7 +20,7 @@ export function resolveAuthErrorFeedback(
   if (error instanceof IdentityAuthError) {
     return { fieldError: error.message, showThrottleBanner: false };
   }
-  return { fieldError: invalidCredentialsMessage, showThrottleBanner: false };
+  return { fieldError: fallbackMessage, showThrottleBanner: false };
 }
 
 export function AuthThrottleBanner() {

@@ -25,7 +25,6 @@ name: kit-000
     file: ../subflows/sign-in.yaml
     env:
       EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
-      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
 - startRecording: kc__kit-000
 # AC 1: <what the criterion says>
 - tapOn:
