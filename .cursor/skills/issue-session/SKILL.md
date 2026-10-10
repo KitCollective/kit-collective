@@ -105,6 +105,8 @@ Stop the issue (leave `Implementing`, role-comment) when checker-fail returns hi
 
 ### 7. Land
 
+Take the merge queue lock first: `node scripts/merge-lock.mjs wait <pr>` (background; exit `0` taken). It is a ref on origin, so it holds across machines (ADR-0054). Then `node scripts/sync-pr.mjs sync <pr>` from the PR's worktree: `CURRENT` or `SYNCED` go on (after `SYNCED` wait for the required checks again), `CONFLICT` goes back to the implementer, `CLOSED` stops. Right after `SYNCED` renew the lock (`node scripts/merge-lock.mjs take <pr>`) and renew it again before and during any long wait while holding it, since a lock older than 30 minutes is taken over; `merge-lock.mjs status` shows holder and age, and only a human uses `release <pr> --force` to clear a crashed holder. `sync-pr.mjs` needs HEAD to equal the PR head by SHA (run it from the PR's worktree). A review pass stays valid after `SYNCED`: `node scripts/sync-pr.mjs valid <audited-sha> --pr <pr>` says `AUDIT-VALID` when only clean merges of `<lanes.integration>` were added. Release the lock when land has ended either way: `node scripts/merge-lock.mjs release <pr>`. Never rebase after the PR is open, and never rewrite a pushed branch.
+
 Move to `Merging` (approver-present). Follow [land/SKILL.md](../land/SKILL.md) and [land/references/merge.md](../land/references/merge.md). Success → run `node scripts/gate.mjs land <pr> --issue <KIT-n>`: only exit `0` (PR merged, merge commit on `origin/<lanes.integration>`, checks on that commit green) allows `Done` + role comment with merge SHA; `3` waits and reruns, `1` is a merge fail. Merge fail → `Implementing` + merge error under `### Review feedback` + increment `reviewLoops` + resume from step 3.
 
 ### 8. Reap worktree

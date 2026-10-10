@@ -27,6 +27,7 @@ export const FACTORY_NODE_TEST_NEEDLES = [
   "start-decision",
   "run-log",
   "gates",
+  "merge-lock-sync",
 ];
 
 export const MOBILE_CHECK_NEEDLES = [
