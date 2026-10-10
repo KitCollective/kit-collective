@@ -31,10 +31,22 @@ describe("entitlementSchema", () => {
         source: null,
         expires: null,
         trialUsed: false,
-        visionMatcher: { used: 3, cap: 10, remaining: 7, unlimited: false },
+        visionMatcher: {
+          used: 3,
+          cap: 10,
+          remaining: 7,
+          unlimited: false,
+          renewsAt: "2026-09-20T09:00:00.000Z",
+        },
       }),
     ).toMatchObject({
-      visionMatcher: { used: 3, cap: 10, remaining: 7, unlimited: false },
+      visionMatcher: {
+        used: 3,
+        cap: 10,
+        remaining: 7,
+        unlimited: false,
+        renewsAt: "2026-09-20T09:00:00.000Z",
+      },
     });
   });
 
@@ -45,9 +57,9 @@ describe("entitlementSchema", () => {
         source: "comp",
         expires: "2026-09-02T12:00:00.000Z",
         trialUsed: false,
-        visionMatcher: { used: 11, cap: 10, remaining: 10, unlimited: true },
+        visionMatcher: { used: 11, cap: 10, remaining: 10, unlimited: true, renewsAt: null },
       }).visionMatcher,
-    ).toEqual({ used: 11, cap: 10, remaining: 10, unlimited: true });
+    ).toEqual({ used: 11, cap: 10, remaining: 10, unlimited: true, renewsAt: null });
   });
 
   it("accepts live trial entitlement", () => {

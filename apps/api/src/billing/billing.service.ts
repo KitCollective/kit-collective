@@ -57,12 +57,17 @@ function isEntitlementLive(source: string | null, expires: Date | null): boolean
   return expires.getTime() > Date.now();
 }
 
-function toVisionMatcherUsage(used: number, live: boolean): VisionMatcherUsage {
+function toVisionMatcherUsage(
+  counted: { used: number; renewsAt: Date | null },
+  live: boolean,
+): VisionMatcherUsage {
+  const { used, renewsAt } = counted;
   return visionMatcherUsageSchema.parse({
     used,
     cap: VISION_MATCHER_JERSEY_CAP,
     remaining: live ? VISION_MATCHER_JERSEY_CAP : Math.max(0, VISION_MATCHER_JERSEY_CAP - used),
     unlimited: live,
+    renewsAt: live || !renewsAt ? null : renewsAt.toISOString(),
   });
 }
 
@@ -72,7 +77,7 @@ function toEntitlementView(
     expires: Date | null;
     trialUsed: boolean;
   },
-  used: number,
+  counted: { used: number; renewsAt: Date | null },
 ): Entitlement {
   const live = isEntitlementLive(row.source, row.expires);
   return entitlementSchema.parse({
@@ -80,7 +85,7 @@ function toEntitlementView(
     source: row.source,
     expires: row.expires ? row.expires.toISOString() : null,
     trialUsed: row.trialUsed,
-    visionMatcher: toVisionMatcherUsage(used, live),
+    visionMatcher: toVisionMatcherUsage(counted, live),
   });
 }
 
@@ -149,7 +154,7 @@ export class BillingService {
   }
 
   async getEntitlementForUser(userId: string): Promise<Entitlement> {
-    const used = await this.countVisionMatcherUsed(userId);
+    const counted = await this.listCountedIdentityDraftKeys(userId);
     const [row] = await this.db
       .select()
       .from(entitlement)
@@ -162,7 +167,7 @@ export class BillingService {
         source: row?.source ?? "comp",
         expires: null,
         trialUsed: row?.trialUsed ?? false,
-        visionMatcher: toVisionMatcherUsage(used, true),
+        visionMatcher: toVisionMatcherUsage(counted, true),
       });
     }
 
@@ -172,11 +177,11 @@ export class BillingService {
         source: null,
         expires: null,
         trialUsed: false,
-        visionMatcher: toVisionMatcherUsage(used, false),
+        visionMatcher: toVisionMatcherUsage(counted, false),
       });
     }
 
-    return toEntitlementView(row, used);
+    return toEntitlementView(row, counted);
   }
 
   async canEnqueueIdentityVision(userId: string, draftId?: string): Promise<boolean> {
@@ -201,17 +206,14 @@ export class BillingService {
     throwPremiumRequired();
   }
 
-  private async countVisionMatcherUsed(userId: string): Promise<number> {
-    return (await this.listCountedIdentityDraftKeys(userId)).used;
-  }
-
   private async listCountedIdentityDraftKeys(userId: string): Promise<{
     used: number;
     draftIds: Set<string>;
+    renewsAt: Date | null;
   }> {
     const windowStart = new Date(Date.now() - VISION_MATCHER_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     const rows = await this.db
-      .select({ draftId: visionLog.draftId })
+      .select({ draftId: visionLog.draftId, createdAt: visionLog.createdAt })
       .from(visionLog)
       .where(
         and(
@@ -222,17 +224,37 @@ export class BillingService {
         ),
       );
 
-    const draftIds = new Set<string>();
+    // A draft stays counted until its newest ready run leaves the window, so the run that frees
+    // a slot first is the one whose newest counted entry is oldest.
+    const newestByDraft = new Map<string, Date>();
     let nullDraftCount = 0;
+    let oldestFreeing: Date | null = null;
     for (const row of rows) {
       if (row.draftId) {
-        draftIds.add(row.draftId);
+        const known = newestByDraft.get(row.draftId);
+        if (!known || row.createdAt > known) {
+          newestByDraft.set(row.draftId, row.createdAt);
+        }
       } else {
         nullDraftCount += 1;
+        if (!oldestFreeing || row.createdAt < oldestFreeing) {
+          oldestFreeing = row.createdAt;
+        }
+      }
+    }
+    for (const newest of newestByDraft.values()) {
+      if (!oldestFreeing || newest < oldestFreeing) {
+        oldestFreeing = newest;
       }
     }
 
-    return { used: draftIds.size + nullDraftCount, draftIds };
+    return {
+      used: newestByDraft.size + nullDraftCount,
+      draftIds: new Set(newestByDraft.keys()),
+      renewsAt: oldestFreeing
+        ? new Date(oldestFreeing.getTime() + VISION_MATCHER_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+        : null,
+    };
   }
 
   private async toView(
@@ -243,7 +265,7 @@ export class BillingService {
       trialUsed: boolean;
     },
   ): Promise<Entitlement> {
-    return toEntitlementView(row, await this.countVisionMatcherUsed(userId));
+    return toEntitlementView(row, await this.listCountedIdentityDraftKeys(userId));
   }
 
   async grantComp(userId: string, body: GrantCompRequest): Promise<Entitlement> {

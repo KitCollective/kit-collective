@@ -11,6 +11,8 @@ export const visionMatcherUsageSchema = z
     cap: z.literal(VISION_MATCHER_JERSEY_CAP),
     remaining: z.number().int().nonnegative(),
     unlimited: z.boolean(),
+    /** When the oldest counted run leaves the rolling window and a run frees up. Null when none is counted or the collector is unlimited. */
+    renewsAt: z.string().datetime().nullable(),
   })
   .strict();
 

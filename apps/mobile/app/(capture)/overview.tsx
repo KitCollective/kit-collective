@@ -20,6 +20,8 @@ import {
   setActiveDraft,
   switchSingleToBulkBind,
 } from "@/capture/captureSession";
+import { resolveVisionEnabled } from "@/capture/chooserVision";
+import { visionRequestToken } from "@/capture/identitySuggestRequest";
 import { leaveOverviewSession, unparkSessionById } from "@/capture/parkedSession";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmGrouping } from "@/capture/use-confirm-grouping";
@@ -29,6 +31,7 @@ import { CaptureOverviewRow, CaptureOverviewSkeletonRow } from "@/components/cap
 import { SessionSummaryRow } from "@/components/session-summary-row";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { stickySize } from "@/prefs/stickySizeStore";
+import { useVisionSwitch } from "@/prefs/vision-switch-device";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
@@ -55,7 +58,11 @@ export default function CaptureOverviewScreen() {
   const reduceMotion = useReduceMotion();
   const insets = useSafeAreaInsets();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
-  const { accessToken } = useAuth();
+  const { accessToken: sessionToken, entitlement } = useAuth();
+  const visionRemembered = useVisionSwitch();
+  const visionEnabled = resolveVisionEnabled(visionRemembered, entitlement?.visionMatcher);
+  // Vision off means no grouping request leaves the device.
+  const accessToken = visionRequestToken(sessionToken, visionEnabled);
   const { state, isSessionResolved, mutate, refresh } = usePersistedCaptureSession(sessionId);
   const grouping = useConfirmGrouping({ accessToken, sessionId, state, mutate, reduceMotion });
   const [headerHeight, setHeaderHeight] = useState(insets.top + HEADER_FALLBACK_HEIGHT);
