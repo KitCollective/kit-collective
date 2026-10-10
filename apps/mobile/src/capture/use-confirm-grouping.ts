@@ -21,6 +21,7 @@ import {
   shouldBeginGroupingStart,
 } from "@/capture/groupingSuggestRequest";
 import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
+import { stickySize } from "@/prefs/stickySizeStore";
 import { motion } from "@/theme/tokens";
 
 const GROUPING_TIMEOUT_MS = 15_000;
@@ -138,7 +139,11 @@ export function useConfirmGrouping({
 
       const revealSlice = (slice: Array<{ photoIds: string[] }>, activateIndex: number) => {
         mutate((current) => {
-          let next = applyGroupingSuggestion(current, { groups: slice }, { preselect: true });
+          let next = applyGroupingSuggestion(
+            current,
+            { groups: slice },
+            { preselect: true, defaultSize: stickySize.get() },
+          );
           const target = next.drafts[activateIndex];
           if (!target) {
             return next;
@@ -355,7 +360,7 @@ export function useConfirmGrouping({
   }, [accessToken, applyGroupingClose, applyJob, analyzing, jobId]);
 
   const applySuggestion = useCallback(() => {
-    mutate((current) => acceptPendingGrouping(current));
+    mutate((current) => acceptPendingGrouping(current, { defaultSize: stickySize.get() }));
     setSuggestion(null);
   }, [mutate]);
 

@@ -33,7 +33,8 @@ type UnboundPhotosRowProps = {
   activeTabLabel: string;
   onPressPhoto: (uri: string) => void;
   onDiscardPhoto: (uri: string) => void;
-  onUpload: () => void;
+  /** When omitted there is no Upload tile (Confirm; the Foto tile on the photo strip adds). */
+  onUpload?: () => void;
   analyzing?: boolean;
   gatheringUris?: string[];
 };
@@ -235,24 +236,26 @@ export function UnboundPhotosRow({
         );
       })}
 
-      <Animated.View layout={layout}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Upload fotos"
-          accessibilityHint="Åbner vælger til fotos eller filer"
-          onPress={onUpload}
-          style={({ pressed }) => [
-            styles.uploadTile,
-            {
-              backgroundColor: theme.fillSecondary,
-              borderColor: theme.borderSubtle,
-            },
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={[typography.caption, { color: theme.contentSecondary }]}>Upload</Text>
-        </Pressable>
-      </Animated.View>
+      {onUpload ? (
+        <Animated.View layout={layout}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Upload fotos"
+            accessibilityHint="Åbner vælger til fotos eller filer"
+            onPress={onUpload}
+            style={({ pressed }) => [
+              styles.uploadTile,
+              {
+                backgroundColor: theme.fillSecondary,
+                borderColor: theme.borderSubtle,
+              },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[typography.caption, { color: theme.contentSecondary }]}>Upload</Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
     </Animated.ScrollView>
   );
 }

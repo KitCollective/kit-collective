@@ -19,6 +19,7 @@ const clubPickerPath = join(__dirname, "../src/components/club-picker-overlay.ts
 const playerPickerPath = join(__dirname, "../src/components/player-picker-overlay.tsx");
 const seasonPickerPath = join(__dirname, "../src/components/season-picker-overlay.tsx");
 const dataScreenPath = join(__dirname, "../src/components/confirm-data-screen.tsx");
+const badgeSectionPath = join(__dirname, "../src/components/confirm-badge-section.tsx");
 const facetPickerPath = join(__dirname, "../src/components/facet-picker-overlay.tsx");
 
 describe("live catalog picker isolation", () => {
@@ -147,7 +148,8 @@ describe("live catalog picker isolation", () => {
     expect(seasonPicker).not.toContain("dummyCatalog");
 
     expect(dataScreen).toContain("fetchClubSeasons");
-    expect(dataScreen).toContain("fetchSeasonPatches");
+    // Sleeve patches load in the Badge section, which now lives on the Detaljer drill.
+    expect(readFileSync(badgeSectionPath, "utf8")).toContain("fetchSeasonPatches");
     expect(dataScreen).not.toContain("dummyCatalog");
     expect(dataScreen).toContain("accessToken={accessToken}");
 

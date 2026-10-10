@@ -2,22 +2,19 @@ import type { CatalogPickerItem } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA, KIT_TYPES } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fetchClubSeasons, fetchSeasonPatches } from "@/api/catalog";
+import { fetchClubSeasons } from "@/api/catalog";
 import { useAuth } from "@/auth/AuthProvider";
 import {
   catalogSideId,
   selectDraftKitType,
-  setDraftBadge,
-  setDraftBadgeEnabled,
   setDraftCatalogSide,
   setDraftPlayer,
   setDraftSeason,
 } from "@/capture/captureSession";
 import {
   clearConfirmSeasonEdited,
-  markConfirmBadgeEdited,
   markConfirmClubEdited,
   markConfirmKitTypeEdited,
   markConfirmPlayerEdited,
@@ -30,7 +27,6 @@ import { Chip } from "@/components/chip";
 import { ClubPickerOverlay } from "@/components/club-picker-overlay";
 import { ConfirmDrillHeader } from "@/components/confirm-drill-header";
 import { PlayerPickerOverlay } from "@/components/player-picker-overlay";
-import { SwitchControl } from "@/components/profile-ui";
 import { SeasonPickerOverlay } from "@/components/season-picker-overlay";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { useTypography } from "@/theme/brand-fonts";
@@ -60,9 +56,6 @@ export function ConfirmDataScreen() {
   const [liveSeasons, setLiveSeasons] = useState<CatalogPickerItem[]>([]);
   const [seasonsLoading, setSeasonsLoading] = useState(false);
   const [seasonsError, setSeasonsError] = useState<string | null>(null);
-  const [livePatches, setLivePatches] = useState<CatalogPickerItem[]>([]);
-  const [patchesLoading, setPatchesLoading] = useState(false);
-  const [patchesError, setPatchesError] = useState<string | null>(null);
   const sideId = catalogSideId({
     clubId: draft?.clubId ?? null,
     nationalTeamId: draft?.nationalTeamId ?? null,
@@ -104,43 +97,6 @@ export function ConfirmDataScreen() {
       cancelled = true;
     };
   }, [accessToken, sideId]);
-
-  useEffect(() => {
-    if (!accessToken || !draft?.badgeEnabled || !draft.seasonId) {
-      setLivePatches([]);
-      setPatchesLoading(false);
-      setPatchesError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setLivePatches([]);
-    setPatchesLoading(true);
-    setPatchesError(null);
-    void fetchSeasonPatches(accessToken, draft.seasonId)
-      .then((response) => {
-        if (cancelled) {
-          return;
-        }
-        setLivePatches(response.items);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        setLivePatches([]);
-        setPatchesError("Kunne ikke hente badges.");
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setPatchesLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, draft?.badgeEnabled, draft?.seasonId]);
 
   if (!sessionId || !draft) {
     return null;
@@ -204,74 +160,6 @@ export function ConfirmDataScreen() {
               />
             ))}
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <Pressable
-            accessibilityRole="switch"
-            accessibilityLabel="Badge"
-            accessibilityState={{ checked: draft.badgeEnabled }}
-            onPress={() => {
-              markConfirmBadgeEdited();
-              mutate((current) =>
-                setDraftBadgeEnabled(current, current.activeDraftId, !draft.badgeEnabled),
-              );
-            }}
-            style={styles.badgeRow}
-          >
-            <View style={styles.badgeCopy}>
-              <Text style={[typography.label, { color: theme.contentPrimary }]}>Badge</Text>
-              <Text style={[typography.caption, { color: theme.contentMuted }]}>
-                Ærmemærke for liga eller turnering.
-              </Text>
-            </View>
-            <View
-              pointerEvents="none"
-              accessible={false}
-              importantForAccessibility="no-hide-descendants"
-            >
-              <SwitchControl
-                value={draft.badgeEnabled}
-                onValueChange={() => undefined}
-                accessibilityLabel="Badge"
-              />
-            </View>
-          </Pressable>
-          {draft.badgeEnabled ? (
-            !draft.seasonId ? (
-              <Text style={[typography.caption, { color: theme.contentMuted }]}>
-                Vælg en sæson for at se badges.
-              </Text>
-            ) : patchesError ? (
-              <Text style={[typography.caption, { color: theme.contentMuted }]}>
-                {patchesError}
-              </Text>
-            ) : livePatches.length > 0 ? (
-              <View style={styles.chipRow}>
-                {livePatches.map((item) => (
-                  <Chip
-                    key={item.id}
-                    label={item.label}
-                    selected={draft.badgeId === item.id}
-                    accessibilityRole="radio"
-                    onPress={() => {
-                      markConfirmBadgeEdited();
-                      mutate((current) =>
-                        setDraftBadge(current, current.activeDraftId, {
-                          id: item.id,
-                          label: item.label,
-                        }),
-                      );
-                    }}
-                  />
-                ))}
-              </View>
-            ) : patchesLoading ? null : (
-              <Text style={[typography.caption, { color: theme.contentMuted }]}>
-                Ingen badges for denne sæson.
-              </Text>
-            )
-          ) : null}
         </View>
       </ScrollView>
 
@@ -346,15 +234,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: space.gapSm,
-  },
-  badgeRow: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.gapMd,
-  },
-  badgeCopy: {
-    flex: 1,
-    gap: 2,
   },
 });

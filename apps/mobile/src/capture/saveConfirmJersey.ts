@@ -4,7 +4,12 @@ import type { PhotoRole } from "@kit/domain";
 import { saveUserJersey, updateUserJersey } from "@/api/collection";
 import { fetchVisionJob, logVisionAction } from "@/api/vision";
 import { clearPersistedCaptureSession } from "@/capture/captureFlow";
-import { addJerseyDraft, hasCatalogSide, removeDraft } from "@/capture/captureSession";
+import {
+  addJerseyDraft,
+  applyStickySizeToUnselected,
+  hasCatalogSide,
+  removeDraft,
+} from "@/capture/captureSession";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
@@ -13,6 +18,7 @@ import type {
 import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { scheduleOriginalPhotoUploads } from "@/capture/uploadPhotoOriginal";
+import { stickySize } from "@/prefs/stickySizeStore";
 import { markJerseySaved } from "@/session/addSession";
 
 export type ConfirmSaveOutcome =
@@ -139,6 +145,10 @@ export async function saveConfirmJersey(input: {
     }
 
     markJerseySaved();
+    // Size is a sticky default (lock: Confirm and Save, Revision 2026-10-09). Condition is not.
+    if (input.draft.size) {
+      stickySize.remember(input.draft.size);
+    }
 
     const savedClub = input.draft.clubLabel
       ? { id: input.draft.clubId!, label: input.draft.clubLabel }
@@ -152,9 +162,10 @@ export async function saveConfirmJersey(input: {
       const nextState = input.mutate((current) => {
         let next = removeDraft(current, input.draft.id);
         if (next.drafts.length === 0 && next.unboundUris.length > 0) {
-          next = addJerseyDraft(next);
+          next = addJerseyDraft(next, { defaultSize: stickySize.get() });
         }
-        return next;
+        const lastSize = stickySize.get();
+        return lastSize ? applyStickySizeToUnselected(next, lastSize) : next;
       });
 
       if (!nextState || nextState.drafts.length === 0) {

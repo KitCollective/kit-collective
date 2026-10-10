@@ -18,6 +18,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { CaptureChooserProvider } from "@/capture/capture-chooser";
 import { toastConfig } from "@/components/toast-config";
 import { LoadingScreen } from "@/first-session/splash-loading";
+import { StickySizeBinding } from "@/prefs/sticky-size-binding";
 import { AppearanceProvider } from "@/theme/appearance";
 import { BrandFontsProvider } from "@/theme/brand-fonts";
 
@@ -55,6 +56,7 @@ export default function RootLayout() {
       <BrandFontsProvider enabled={brandFontsEnabled}>
         <AppearanceProvider>
           <AuthProvider>
+            <StickySizeBinding />
             <CaptureChooserProvider>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />

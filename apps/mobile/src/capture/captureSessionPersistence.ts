@@ -1,4 +1,5 @@
 import type { PhotoSource } from "@kit/domain";
+import { stickySize } from "@/prefs/stickySizeStore";
 import {
   appendUnassignedCameraShotToSession,
   applyFillOrderToActiveDraft,
@@ -48,6 +49,7 @@ function persistCaptureSessionFromPhotos(
   let state = createCaptureSessionFromPhotos(photos, {
     store,
     sessionId,
+    defaultSize: stickySize.get(),
   });
 
   if (options?.prefilledClub) {

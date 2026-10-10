@@ -1,5 +1,6 @@
 import type { PhotoSource } from "@kit/domain";
 import * as Crypto from "expo-crypto";
+import { stickySize } from "@/prefs/stickySizeStore";
 import { createCaptureSession, setDraftClub } from "./captureSession";
 import {
   clearActiveCameraCaptureSessionId,
@@ -63,6 +64,7 @@ export function createPersistedCaptureSession(
     store,
     sessionId,
     photoSource: options?.photoSource ?? "gallery",
+    defaultSize: stickySize.get(),
   });
 
   if (options?.prefilledClub) {

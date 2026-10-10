@@ -1,90 +1,46 @@
 import { Ionicons } from "@expo/vector-icons";
-import type { LayoutChangeEvent } from "react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import type { ConfirmSectionFact } from "@/capture/confirmSectionProgress";
-import { ConfirmProgressDonut } from "@/components/confirm-progress-donut";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 type ConfirmSectionRowProps = {
   title: string;
-  facts: ConfirmSectionFact[];
-  filled: number;
-  required: number;
-  /** Shared height so Data and Detaljer read as a matched, equal pair. */
-  minHeight?: number;
+  /** Muted trailing qualifier, e.g. "valgfrit". */
+  meta?: string;
   onPress: () => void;
-  /** Reports the card's natural height so the pair can equalise both. */
-  onMeasureHeight?: (height: number) => void;
   testID?: string;
 };
 
-export function ConfirmSectionRow({
-  title,
-  facts,
-  filled,
-  required,
-  minHeight,
-  onPress,
-  onMeasureHeight,
-  testID,
-}: ConfirmSectionRowProps) {
+/**
+ * The one quiet row on the hub that reaches the Detaljer drill (design lock: Confirm and Save,
+ * Revision 2026-10-09, item 1). No donut, no fact capsules: it holds nothing Gem requires.
+ */
+export function ConfirmSectionRow({ title, meta, onPress, testID }: ConfirmSectionRowProps) {
   const theme = useTheme();
   const typography = useTypography();
-  const spokenFacts = facts
-    .map((fact) => (fact.value ? fact.value : `${fact.placeholder} mangler`))
-    .join(". ");
-
-  const handleLayout = (event: LayoutChangeEvent) => {
-    onMeasureHeight?.(event.nativeEvent.layout.height);
-  };
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${title}, ${filled} af ${required} udfyldt. ${spokenFacts}`}
+      accessibilityLabel={meta ? `${title}, ${meta}` : title}
       testID={testID}
       onPress={onPress}
-      onLayout={handleLayout}
       style={({ pressed }) => [
-        styles.card,
+        styles.row,
         {
           backgroundColor: pressed ? theme.fillSecondary : theme.surface,
           borderColor: theme.borderSubtle,
-          minHeight,
         },
       ]}
     >
-      <ConfirmProgressDonut filled={filled} required={required} />
-      <View style={styles.body}>
+      <View style={styles.copy}>
         <Text numberOfLines={1} style={[typography.label, { color: theme.contentPrimary }]}>
           {title}
+          {meta ? (
+            <Text style={[typography.label, { color: theme.contentMuted }]}>{` · ${meta}`}</Text>
+          ) : null}
         </Text>
-        <View style={styles.facts}>
-          {facts.map((fact) => (
-            <View
-              key={fact.key}
-              pointerEvents="none"
-              style={[
-                styles.fact,
-                fact.value
-                  ? { backgroundColor: theme.fillSecondary }
-                  : { borderColor: theme.borderSubtle, borderWidth: 1, borderStyle: "dashed" },
-              ]}
-            >
-              <Text
-                numberOfLines={1}
-                style={[
-                  typography.captionSm,
-                  { color: fact.value ? theme.contentPrimary : theme.contentMuted },
-                ]}
-              >
-                {fact.value ?? fact.placeholder}
-              </Text>
-            </View>
-          ))}
-        </View>
       </View>
       <Ionicons name="chevron-forward" size={20} color={theme.contentMuted} />
     </Pressable>
@@ -92,28 +48,17 @@ export function ConfirmSectionRow({
 }
 
 const styles = StyleSheet.create({
-  card: {
+  row: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: space.gapMd,
     paddingHorizontal: space.insetMd,
-    paddingVertical: space.insetMd,
     borderWidth: 1,
     borderRadius: radius.md,
   },
-  body: {
+  copy: {
     flex: 1,
     minWidth: 0,
-    gap: space.gapSm,
-  },
-  facts: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: space.gapSm,
-  },
-  fact: {
-    borderRadius: radius.pill,
-    paddingHorizontal: space.insetSm,
-    maxWidth: "100%",
   },
 });

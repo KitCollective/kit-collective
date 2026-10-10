@@ -21,12 +21,19 @@ type JerseyTabBarProps = {
   onSelectDraft: (draftId: string) => void;
   onAddJersey: () => void;
   analyzing?: boolean;
+  /** The per-jersey photo count badge: two or more jerseys only. */
+  showPhotoCount?: boolean;
 };
 
 const TAB_SIZE = 44;
 const BADGE_OUTSET = space.insetSm;
 const LOCK_EASE = Easing.bezier(0.4, 0, 0.2, 1);
 export const JERSEY_TAB_STEP = TAB_SIZE + space.gapSm;
+
+/** Width of the index with `count` jerseys plus the add circle, for the one-jersey header slot. */
+export function jerseyTabBarWidth(count: number): number {
+  return (count + 1) * TAB_SIZE + count * space.gapSm + BADGE_OUTSET;
+}
 
 export function jerseyTabPillX(index: number): number {
   return Math.max(0, index) * JERSEY_TAB_STEP;
@@ -56,6 +63,7 @@ export function JerseyTabBar({
   onSelectDraft,
   onAddJersey,
   analyzing = false,
+  showPhotoCount = true,
 }: JerseyTabBarProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -134,7 +142,7 @@ export function JerseyTabBar({
                     {jerseyNumber}
                   </Text>
                 </Pressable>
-                {photoCount > 0 ? (
+                {showPhotoCount && photoCount > 0 ? (
                   <View
                     style={[
                       styles.countBadge,
@@ -182,6 +190,7 @@ export function JerseyTabBar({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tilføj trøje"
+            testID="jersey-index-add"
             onPress={onAddJersey}
             style={({ pressed }) => [
               styles.addButton,
