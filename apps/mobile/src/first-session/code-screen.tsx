@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -77,6 +77,13 @@ export function CodeScreen({
   const showError = wrong || expired;
   const focusIndex = Math.min(code.length, CODE_CELL_COUNT - 1);
   const resendEnabled = resendSeconds <= 0;
+
+  // A new code makes the boxes editable again; the keyboard must come back with them.
+  useEffect(() => {
+    if (!expired) {
+      inputRef.current?.focus();
+    }
+  }, [expired]);
 
   return (
     <View
