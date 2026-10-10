@@ -361,6 +361,8 @@ Do not mix a heading role onto Plex Sans. Do not set body copy in Archivo. Do no
 
 Everywhere else numbers keep their existing role: `mono` for season · type on tiles and inline facts, counts beside headings, IDs and times. Do not set words, labels, prices, bid amounts, or body numbers in `numeral`. Do not use it on `admin` or `web`. One `numeral` block per screen region; an emblem list counts as one. If the webfont fails, fall back to Archivo 700 at the same size.
 
+**Bid amount entry** (Revision 2026-10-10): the amount on Send bid is `mono` 56px / 500, line height 60px, tracking -0.03em, with **kr** in `mono` 20px `content.secondary`. That is the only `mono` above 20px.
+
 **One bold thing per block** (same revision). A data block has one emphasised line — the title, or the hero numeral. Facts under it are label-left / value-right List rows: label `body` in `content.secondary`, value `label` 16 (500) in `content.primary`, hairline between rows. Do not set several values in Archivo side by side; that is what made dense screens read as clumsy.
 
 There is no extra 14px admin-only family. Admin uses the same roles; chrome in English.
@@ -644,7 +646,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Properties**: `value`, `placeholder` (not a label substitute), `onSubmit` / live filter. Collection search may filter as you type. Club search queries catalog IDs, never free-text club as truth. City search stores a tag (popular city or free tag), not a Places ID. Admin search matches CatalogLabel aliases in every locale; displayed labels stay `en` on this surface.
 
-**Variants**: `collection` (Søg place — filter owned jerseys). `catalog` (club pick on confirm). `city` (Min lokation city search — query is a tag, not Places chrome). `admin` (app header). Same chrome; different data. Do not add a header-search variant on collection home.
+**Variants**: `collection` (Søg place — filter owned jerseys). `catalog` (club pick on confirm). `city` (Min lokation city search — query is a tag, not Places chrome). `admin` (app header). Same chrome; different data. Do not add a header-search variant on collection home. Revision 2026-10-10: `discover` on the Søg tab is `fill.secondary` with no border, 48 high, and in focus Back replaces the search icon (see Søg home and typeahead).
 
 **States**: Rest, focus, disabled, empty. Error is rare; if the query cannot run, use Banner, not a red search field.
 
@@ -1399,17 +1401,76 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *04 Samli
 
 **Unsupported**: A `destructive` Button on the detail itself. The two settings in separate cards. A six-cell spec grid in Archivo. A bid amount on this screen. A share action before the public web layer exists. Tab bar on this screen.
 
-**Gaps** (flag, do not invent): foreign UserJersey detail is a different pattern and not covered; what happens to open bids on delete is not defined in `CONTEXT.md`; free name and number on the back; dark mode.
+**Gaps** (flag, do not invent): what happens to open bids on delete is not defined in `CONTEXT.md`; free name and number on the back; dark mode.
+
+Flag missing context; do not invent patterns.
+
+### Søg home and typeahead
+
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg & Send bud*: artboards *Søg / 01 Hjem* and *Søg / 02 Mens du skriver*.
+
+**Purpose**: Get from the Søg tab to another collector's jersey in as few taps as possible.
+
+**Home** (Tab bar visible, Søg active):
+1. Title **Søg** in `display` 32.
+2. **Search field**, the first thing on the screen: `fill.secondary`, `radius.pill`, 48 high, no border, placeholder **Klub, spiller eller samler**. This is the Søg variant of Search field and wins over the bordered chrome there.
+3. Shelf **Åbne for bud**: `section` heading with a trailing **Se alle**, then Jersey tiles 148 wide that scroll sideways (4:5 photo, club, owner's size, season · type). No bid badge and no amount.
+4. Shelf **Klubber og landshold**: Chips in one row that scrolls sideways, most collected first. A chip opens the Søg catalog drill.
+5. Shelf **Samlere**: List rows with a 44px Avatar, Handle, and a `caption` line (**n trøjer · n åbne for bud**), trailing chevron.
+
+**Typeahead** (from the first character):
+1. The field takes the top of the screen: Back replaces the search icon and the title goes away; a clear control sits on the right.
+2. **One flat list** of hits, 64 high with a hairline between rows. The kind is the `caption` under the name (**Klub · n trøjer**, **Landshold**, **Spiller**, **Kit**, **Samler**), never a section heading. The leading 44px slot shows what the hit is: initials on `fill.secondary` (`radius.sm`) for a club or national team, a Number emblem for a player, a jersey thumb for a kit, a round Avatar for a collector.
+3. Under the list: **Trøjer** as a `section` heading with the count in `mono`, then the same two-column Jersey tile grid as Samling.
+
+**Unsupported**: A heading per hit kind. Trøjer | Katalog | Samlere tabs. A bid amount or bid badge on a tile here. A bordered search field on this place.
+
+**Gaps** (flag, do not invent): no hits; recent searches; what **Se alle** opens; loading and offline; dark mode.
+
+Flag missing context; do not invent patterns.
+
+### Foreign UserJersey detail
+
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg & Send bud*: artboards *Fremmed trøje / 03*, *05* and *06*.
+
+**Purpose**: Show another collector's jersey with the facts that decide a bid, and one way to bid.
+
+**Composition** (one scrolling column, the same as Own UserJersey detail; Tab bar hidden):
+1. **Photo**: 4:5, full width, swipe between photos. Round `surface` Back, Favorit and More buttons over it, and the count pill bottom-right. No thumb strip.
+2. **Title block**: a `caption` line with the type, plus **· Åben for bud** when it is; the club or national team in `display` 32; the season in `numeral` 44 trailing on the same baseline.
+3. **Player row** (only with a player): `fill.secondary`, `radius.md`, Number emblem `lg`, player name, `caption` **Spiller på ryggen**. No chevron; it is not editable.
+4. **Fact rows**: Størrelse, Stand, Badge as label-left / value-right List rows. Unset facts are left out. Nothing here is a target.
+5. **Owner**: last, under the facts. A `caption` **Ejer**, then one row with a 44px Avatar, Handle, a `caption` line (city per Vis by · **n trøjer**) and a trailing chevron. Opens Peer Profil.
+6. **Button dock** (sticks to the bottom, hairline above):
+   - Åben for bud, no bid from this collector: Button `primary` **Send bud**.
+   - This collector has a pending bid: the button is replaced by one `fill.secondary` row (`radius.md`, 54 high): **Dit bud** and the amount in `mono`, the status **Afventer svar** in `mono` `content.secondary`, trailing chevron. The row opens the thread. This is the only place a collector's own amount shows outside the thread. One pending bid per collector per jersey: there is no way to bid again while it waits (decided 2026-10-10).
+   - Not åben for bud: no dock and no other action; Favorit is the only thing to do (decided 2026-10-10).
+
+**After sending**: back on this screen, a Toast once (**Dit bud er sendt til *handle***), and the dock shows the own bid row.
+
+**More** opens a Sheet with **Rapportér** and **Blokér**.
+
+**Unsupported**: The immersive photo stage with a bottom sheet. The owner between the title and the facts. A message or other action on a jersey that is not åben for bud. **Byd igen** beside a pending bid. Other collectors' amounts. An amount on the photo. Editing. Tab bar on this screen.
+
+**Gaps** (flag, do not invent): the dock after a bid is accepted or declined; dark mode.
 
 Flag missing context; do not invent patterns.
 
 ### Send bid
 
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg & Send bud*: artboard *Send bud / 04 Beløb*.
+
 **Purpose**: Start a bud on **another** collector’s UserJersey. Lands as a message in their Indbakke.
 
-**Composition**: Lives under **Søg** (compass is the active Tab bar place). Back + title **Send bud**. 4:5 photo (`radius.md`) + club (`heading-sm`) + season · type (`mono`) + owner initial + handle. Text field “Dit bud” with `kr` suffix, focus `border.strong`. Helper: last bid on that jersey when known (`mono`). Button `primary` **Send bud**. Caption: the owner gets a message; this is not a purchase. Tab bar visible.
+**Composition** (stack screen under **Søg**; Tab bar hidden; the number pad is open from the start):
+1. Back + title **Send bud**.
+2. **Jersey summary**: a 56 × 70 thumb (`radius.sm`), club and season (`label` 16, 600), type · size · condition in `mono`, and player · owner Handle in `caption`. No large photo.
+3. **Amount**, centred and the one bold thing: `caption` **Dit bud**, the amount in `mono` 56 / 500 with **kr** in `mono` 20 `content.secondary`, and a 2px `fill.primary` underline as the focus mark. Whole kroner only.
+4. **Dock above the number pad**: a `caption` line (**handle får dit bud i Indbakke. Det er ikke et køb.**), then Button `primary` that carries the amount (**Send bud på 250 kr**). Without an amount the button reads **Send bud** and is disabled.
 
-**Unsupported**: Entry from **own** Samling tiles. Price overlay on the photo. Cart. “Køb nu”. Wash focus. Starting Send bud from Indbakke as a compose-to-nobody control. Entry from a foreign Profil: flag (not locked).
+**Unsupported**: Entry from **own** Samling tiles. A large photo on this screen. Price overlay on the photo. Preset amount chips. A helper showing the last bid or any other collector's amount (decided 2026-10-10). Cart. “Køb nu”. Wash focus. The `numeral` face for the amount. Tab bar on this screen. Starting Send bud from Indbakke as a compose-to-nobody control. Entry from a foreign Profil: flag (not locked).
+
+**Gaps** (flag, do not invent): a failed send; an upper limit; dark mode.
 
 Flag missing context; do not invent patterns.
 
