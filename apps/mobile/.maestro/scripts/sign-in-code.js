@@ -13,7 +13,10 @@ output.code = code;
 output.wrong = code === "000000" ? "000001" : "000000";
 
 if (EXPIRE === "true") {
-  const expired = http.post(`${API_URL}/v1/e2e/expire-code?email=${email}`, { headers });
+  const expired = http.post(`${API_URL}/v1/e2e/expire-code?email=${email}`, {
+    headers,
+    body: "{}",
+  });
   if (expired.status !== 204) {
     throw new Error(`Expiring the code failed with HTTP ${expired.status}`);
   }
