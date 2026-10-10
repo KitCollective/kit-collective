@@ -1,4 +1,5 @@
-# Device flows (KIT-267). One file per flow under flows/; each resets the test
-# data first, so flows are independent and can run in any order or alone.
+# The five regression flows (KIT-267, ADR-0049). They run only on request
+# (`E2E_FLOWS=regression`): at a milestone, or before a promotion to staging.
+# An issue's evidence is its own flow under slices/.
 flows:
-  - flows/*
+  - regression/*

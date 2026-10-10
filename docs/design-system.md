@@ -361,7 +361,7 @@ Do not mix a heading role onto Plex Sans. Do not set body copy in Archivo. Do no
 
 Everywhere else numbers keep their existing role: `mono` for season · type on tiles and inline facts, counts beside headings, IDs and times. Do not set words, labels, prices, bid amounts, or body numbers in `numeral`. Do not use it on `admin` or `web`. One `numeral` block per screen region; an emblem list counts as one. If the webfont fails, fall back to Archivo 700 at the same size.
 
-**Bid amount entry** (Revision 2026-10-10): the amount on Send bid is `mono` 56px / 500, line height 60px, tracking -0.03em, with **kr** in `mono` 20px `content.secondary`. That is the only `mono` above 20px.
+**Bid amount entry** (Revision 2026-10-10): the amount on Send bid is `mono` 56px / 500, line height 60px, tracking -0.03em, with **kr** in `mono` 20px `content.secondary`. The amount on a Bid card is `mono` 28px / 500. Those are the only `mono` sizes above 20px.
 
 **One bold thing per block** (same revision). A data block has one emphasised line — the title, or the hero numeral. Facts under it are label-left / value-right List rows: label `body` in `content.secondary`, value `label` 16 (500) in `content.primary`, hairline between rows. Do not set several values in Archivo side by side; that is what made dense screens read as clumsy.
 
@@ -1058,6 +1058,8 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Thread row
 
+**Revision 2026-10-10** (wins over the text below): two variants. `person` (under **Samtaler**): 48px round initial or Avatar, Handle, snippet. `bid` (under **Venter på dit svar**): the jersey as a 48 × 60 thumb, Handle, a `caption` jersey line, and the bid amount as the snippet. Time stays `mono` 12 trailing the Handle. Unread is an 8px `fill.primary` dot plus snippet weight 500, not a row fill. So a jersey photo in the leading slot and a price as the snippet are allowed on `bid` only.
+
 **Purpose**: One conversation in Beskeder. Navigate to Samtale.
 
 **Anatomy**: Leading 44×44 circular initial on `fill.secondary` (first letter of handle, Archivo 600). Handle (`heading-sm`). Snippet (`body`, one line, truncate). Relative time (`mono`, `content.muted`). No trailing chevron required.
@@ -1081,6 +1083,8 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Activity card
+
+**Revision 2026-10-10**: `retired`. Indbakke has no Aktivitet; incoming bids are Thread rows `bid`. Do not build or extend this component.
 
 **Purpose**: One bid or thread event in Aktivitet. Tap opens the same conversation as the matching Thread row.
 
@@ -1130,6 +1134,8 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Bid card
 
+**Revision 2026-10-10** (wins over the text below): the card carries its own jersey. Top: a jersey row (40 × 50 thumb, club and season in `label` 15 / 600, type · size in `mono`, chevron) with a hairline under it; it opens the jersey. Then a `label-sm` line in `content.secondary` (***handle* byder på din trøje** / **Du bød**), the amount in `mono` 28 / 500 with **kr** in `mono` 15 `content.secondary`, and either the two buttons (incoming pending: `primary` **Accepter**, `secondary` **Afvis**) or the status: **Accepteret** with a filled check, **Afvist** in `content.secondary`, **Afventer svar** for the sender. The sender of a declined bid also gets Button `secondary` **Send nyt bud**. Width 290, start-aligned for incoming, end-aligned for outgoing.
+
 **Purpose**: A bud as a timeline object in the thread — communication, not checkout.
 
 **Anatomy**: Body sentence (`body`). Amount (`mono` 20px) + status (`mono`, `content.muted`). Incoming **pending** only: Button `primary` **Accepter** + Button `secondary` **Afvis**, side by side, each ≥ 44 tall. Card on `surface` + `border.subtle` + `radius.md`. Align start (left), not centered.
@@ -1153,6 +1159,8 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 Flag missing context; do not invent values, tokens, variants, or rules.
 
 ### Message composer
+
+**Revision 2026-10-10**: a **jersey reference** may sit above the row, in the reply-to slot: a 32 × 40 thumb, `caption` **Om trøjen**, the jersey in `label` 15 / 500, and a dismiss Icon button. It appears only when the conversation was opened from a jersey without a bid, is sent with the first message, and is gone after that.
 
 **Purpose**: Reply with text and/or a photo at the bottom of Samtale.
 
@@ -1319,39 +1327,78 @@ Flag missing context; do not invent patterns.
 
 ### Inbox
 
-**Purpose**: Collector-to-collector messages. A bud creates a thread; it is not checkout.
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *06 Indbakke*: artboards *Indbakke / 01* and *02*. This revision wins over every older mention of **Beskeder** | **Aktivitet**, Activity card and the Detaljer screen elsewhere in this file until `/to-design` rewrites them.
 
-**Composition**:
-1. Header title **Indbakke** (`display` 28 — the recurring overview title). No Samling bell here.
-2. Top tabs **Beskeder** | **Aktivitet** (shared unread model — one conversation behind both).
-3. Beskeder: Thread rows. Aktivitet: Activity cards. Either empty: Empty state `inbox` (no fake rows).
-4. Tab bar visible; Indbakke tab selected; badge = unread conversation count.
-5. Tap row or card → Samtale (Tab bar hides). Overflow on Samtale → Detaljer (Tab bar stays hidden).
+**Purpose**: Show what waits for the collector first, then the people they talk to. A conversation is between two collectors, not about one jersey.
+
+**Composition** (one list, no Top tabs; Tab bar visible, Indbakke selected, badge = unread conversations):
+1. Title **Indbakke**.
+2. Section **Venter på dit svar** (only when there is one): `section` heading with the count in `mono`. One Thread row `bid` per incoming pending bid: the jersey as a 48 × 60 thumb (`radius.sm`), the bidder's Handle, the jersey line in `caption` (club season · type), and **Bud på *n* kr** as the snippet. Opens that collector's conversation at the bid.
+3. Section **Samtaler**: `section` heading. One Thread row `person` per collector, newest first: 48px round initial or Avatar, Handle, and the latest message as the snippet. A bid as the latest event reads **Dit bud på *n* kr · Afventer svar**, **Bud accepteret · *n* kr** and so on.
+4. Unread is a `fill.primary` 8px dot trailing the row plus weight 500 on the snippet. No row fill.
+5. Empty: `title` **Ingen samtaler endnu**, one `body` line that a conversation starts with a bid or a message, Button `primary` **Find trøjer** (to Søg) and Button `secondary` **Åbn for bud** (to Samling).
 6. Wide ≥1024: list column + conversation (Layout). Same components.
 
-**Unsupported**: Marketplace listing UI. Two unread models. Heart/Ønske as this place. Help. Prototype switcher chrome.
+**Unsupported**: Top tabs on Indbakke. Activity card. A row per jersey under **Samtaler**. Row fill as the unread signal. A compose-to-nobody control. Marketplace listing UI. Help.
+
+**Venter på dit svar holds actions, not messages** (decided 2026-10-10): incoming pending bids, and later the Deal card steps where it is the collector's turn. Unread messages stay under **Samtaler**.
+
+**Gaps** (flag, do not invent): long lists and paging; dark mode.
 
 Flag missing context; do not invent patterns.
 
 ### Conversation
 
-**Purpose**: Read and reply in one thread, including bud accept/decline.
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *06 Indbakke*: artboards *Samtale / 03*–*07*.
 
-**Composition**: Back (to Indbakke) + handle (`heading-sm`) + optional one-line jersey context (`mono`: club · season · type) + overflow Icon button “Detaljer”. Column: centered dates, Bid cards, Chat bubbles (`incoming` left = them, `outgoing` right = me). Message composer pinned. No Tab bar. Dark mode uses the same roles (4d) — not a third palette.
+**Purpose**: Read and reply in the one thread two collectors share, including every bid between them.
 
-**Unsupported**: Left = me. Tab bar. Payment. Wash bubbles. Inventing a profile beyond the Detaljer stub.
+**Composition** (Tab bar hidden):
+1. **Header**, hairline below: Back, a 32px round initial or Avatar, the Handle (`label` 16, 600), and More. There is no jersey line in the header; the thread is not about one jersey.
+2. **Column**: centred dates, Bid cards, Chat bubbles (`incoming` left = them, `outgoing` right = me), and system lines.
+3. **Bid card** carries its own jersey: see the component's Revision. An incoming pending bid shows **Accepter** / **Afvis**; an answered bid shows the status instead. On the bidder's side a declined bid shows Button `secondary` **Send nyt bud**, which opens Send bid for that jersey.
+4. **System line**: centred `caption` in `content.secondary`, max 300 wide, never a bubble. Used after accept: **Du accepterede buddet på *n* kr. Aftal betaling og levering med *handle* her i tråden.** (and the mirrored text for the bidder).
+5. **Thread start** (no messages yet): a centred 64px initial or Avatar, Handle, and city · **n trøjer**.
+6. **Message composer** pinned. Opened from a jersey without a bid, it shows a **jersey reference** above the field (see the component's Revision).
+
+**More** opens a Sheet, not a screen: a profile row (44px initial or Avatar, Handle, city · n trøjer · **Se profil**, chevron) to Peer Profil; List rows **Rapportér** and **Blokér *handle***; **Slet samtale** in `danger`; and a `caption` that blocking hides the thread for both and delete removes it only for you. **Blokér** and **Slet samtale** each ask in a Sheet `confirm` first.
+
+**Starting a conversation without a bid** (decided 2026-10-10): from a foreign jersey (the message Icon button beside **Send bud**, or **Skriv til *handle*** when the jersey is not åben for bud) and from Peer Profil (**Skriv besked**). It opens the one conversation with that collector, creating it on the first message sent.
+
+**Accepting a bid** (decided 2026-10-10): the jersey stops being åben for bud, and every other pending bid on it is declined with a system line in its own thread (**Trøjen er gået til en anden samler.**). The owner can turn åben for bud on again if the deal falls through. In Indbakke 1.0 the system line after accept is all that follows; the Deal card comes with its own spec.
+
+**Unsupported**: A pinned jersey row under the header. A separate Detaljer screen. Left = me. Tab bar. Payment. Wash bubbles. Blokér or Slet samtale without asking.
+
+**Gaps** (flag, do not invent): a Bid card whose jersey was deleted or made private; the system line after a decline; sending and failed states; dark mode.
+
+Flag missing context; do not invent patterns.
+
+### Deal card (Handel)
+
+Status: `locked` as a design (Revision 2026-10-10, decided by Nicklas), **not part of Indbakke 1.0**. It gets its own spec (Handel 1.0), and nothing here is built until that spec has settled consent, retention and deletion of the personal data it stores. Paper page *06 Indbakke*: artboards *Handel / 08*–*12*.
+
+**Purpose**: Walk two collectors from an accepted bid to a delivered jersey. Money and parcels move outside KitCollective; the card only keeps the steps and shows whose turn it is.
+
+**Anatomy**: one card per accepted bid, in the thread, 358 wide on `surface` with `border.subtle` and `radius.md`.
+1. **Header**: the jersey row from Bid card (thumb, club and season, **Handel · *n* kr** in `mono`) with ***n* af 5** in `mono` trailing, hairline below.
+2. **Five steps** in a column. Done: a 20px `fill.primary` disc with a check, the label in `body` 15, and a `mono` detail trailing (method or time). Current: a 20px ring with the number, the label at 600, one `label-sm` line that starts **Din tur.** for the one who must act, the step's content, and one Button `primary`. To do: a `fill.secondary` disc with the number and the label in `content.secondary`.
+
+**The steps**:
+1. **Adresse og betalingsmåde** (buyer). Button opens a Sheet `form`: name, address, postcode and city, and Chip `single-select` **MobilePay** | **Bankoverførsel**, with a `caption` that the address is kept for this deal and shown to the seller only when the payment is confirmed. One `primary` **Fortsæt**.
+2. **Betal** (buyer). The seller's MobilePay number or account number in `mono` on `fill.secondary` with **Kopiér**; a `caption` that the payment happens outside KitCollective; `primary` **Jeg har betalt**; `tertiary` **Vedhæft kvittering (valgfrit)**. The seller saves the number once and is asked in the card only when it is missing.
+3. **Betaling bekræftet** (seller). The receipt as a row when one is attached; `primary` **Bekræft betaling modtaget**; `tertiary` **Jeg har ikke fået pengene**. Confirming is what releases the address, not the receipt.
+4. **Sendt** (seller). The buyer's address on `fill.secondary` with **Kopiér**; an optional tracking number field; `primary` **Markér som sendt**.
+5. **Modtaget** (buyer). The tracking number when there is one; `primary` **Jeg har modtaget trøjen**.
+
+**Unsupported**: Taking or holding money. A price, fee or buyer protection. Showing the address before step 3 is confirmed. A receipt as proof by itself. More than one `primary` on the card. The card for a bid that was not accepted.
+
+**Gaps** (flag, do not invent): consent, retention and deletion of address, phone and account numbers and receipts; what **Jeg har ikke fået pengene** and a parcel that never arrives lead to; cancelling a deal; bank transfer details; reminders and time limits; the finished card; dark mode.
 
 Flag missing context; do not invent patterns.
 
 ### Conversation details
 
-**Purpose**: Profile stub and safety actions for one thread.
-
-**Composition**: Canvas `fill.secondary`. Groups on `surface`, `radius.md`. First group: List row `navigate` (44 circular initial + handle + `mono` “{n} trøjer · {city}” + chevron) — stub only. Second group: List row `danger` Rapportér, Blokér. Third group: List row `danger` Slet samtale (alone). Helper caption: blocking hides the thread for both; delete removes it only for you. No Help. No Tab bar.
-
-**Unsupported**: Help. A fourth group of settings. Inventing jersey count/city if the host has no data — flag.
-
-Flag missing context; do not invent patterns.
+Status: `retired` (Revision 2026-10-10). The Detaljer screen is replaced by the **More** Sheet under Conversation. Do not build it.
 
 ### Own Profil
 
@@ -1442,15 +1489,15 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg 
 4. **Fact rows**: Størrelse, Stand, Badge as label-left / value-right List rows. Unset facts are left out. Nothing here is a target.
 5. **Owner**: last, under the facts. A `caption` **Ejer**, then one row with a 44px Avatar, Handle, a `caption` line (city per Vis by · **n trøjer**) and a trailing chevron. Opens Peer Profil.
 6. **Button dock** (sticks to the bottom, hairline above):
-   - Åben for bud, no bid from this collector: Button `primary` **Send bud**.
+   - Åben for bud, no bid from this collector: a 54px `secondary` message Icon button (name **Skriv til *handle***) and Button `primary` **Send bud** filling the rest.
    - This collector has a pending bid: the button is replaced by one `fill.secondary` row (`radius.md`, 54 high): **Dit bud** and the amount in `mono`, the status **Afventer svar** in `mono` `content.secondary`, trailing chevron. The row opens the thread. This is the only place a collector's own amount shows outside the thread. One pending bid per collector per jersey: there is no way to bid again while it waits (decided 2026-10-10).
-   - Not åben for bud: no dock and no other action; Favorit is the only thing to do (decided 2026-10-10).
+   - Not åben for bud: Button `secondary` **Skriv til *handle*** alone (decided 2026-10-10 with Indbakke; it replaces the earlier "no action").
 
 **After sending**: back on this screen, a Toast once (**Dit bud er sendt til *handle***), and the dock shows the own bid row.
 
 **More** opens a Sheet with **Rapportér** and **Blokér**.
 
-**Unsupported**: The immersive photo stage with a bottom sheet. The owner between the title and the facts. A message or other action on a jersey that is not åben for bud. **Byd igen** beside a pending bid. Other collectors' amounts. An amount on the photo. Editing. Tab bar on this screen.
+**Unsupported**: The immersive photo stage with a bottom sheet. The owner between the title and the facts. **Send bud** on a jersey that is not åben for bud. **Byd igen** beside a pending bid. Other collectors' amounts. An amount on the photo. Editing. Tab bar on this screen.
 
 **Gaps** (flag, do not invent): the dock after a bid is accepted or declined; dark mode.
 
