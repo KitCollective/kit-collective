@@ -50,7 +50,7 @@ describe("identitySuggestRequest seam", () => {
     expect(analysing).toContain("buildIdentitySuggestRequest");
     expect(analysing).toContain("startUnsignedVisionSuggest");
     expect(analysing).toContain("fetchUnsignedVisionJob");
-    expect(analysing).toContain("VisionJobResponse");
+    expect(analysing).toContain("classifyVisionJob");
     expect(analysing).not.toContain("firstVisionPhoto");
     expect(analysing).not.toContain("grouping");
   });
