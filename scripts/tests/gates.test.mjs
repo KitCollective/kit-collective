@@ -4,11 +4,16 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  declaresScope,
   foldReview,
   GATE_EXIT,
   headChanged,
   landGate,
+  matchesIssueKey,
   parseResultLine,
+  prBound,
+  resolveHead,
+  scopeEnv,
   sessionCheck,
 } from "../lib/gates.mjs";
 
@@ -168,4 +173,70 @@ test("review fold: one verdict line, mechanical red outranks pending checks", ()
   assert.equal(foldReview([{ name: "checks", code: 2, line: "PENDING" }]).code, GATE_EXIT.waiting);
   assert.equal(foldReview([{ name: "checks", code: 4, line: "?" }]).code, GATE_EXIT.unknown);
   assert.equal(foldReview([{ name: "checks", code: 3, line: "behind" }]).code, GATE_EXIT.closed);
+});
+
+test("prBound: only the PR's own head is valid, a different checkout is unknown", () => {
+  assert.equal(prBound({ head: HEAD, prHead: HEAD.toUpperCase() }).ok, true);
+  const other = prBound({ head: OTHER, prHead: HEAD });
+  assert.equal(other.ok, false);
+  assert.equal(
+    other.line,
+    "UNKNOWN: run this gate from the PR's worktree at aaaaaaaa (HEAD is bbbbbbbb)",
+  );
+  assert.equal(prBound({ head: "", prHead: HEAD }).ok, false);
+});
+
+test("resolveHead: explicit, then the PR head, never the checkout when a PR is named", () => {
+  assert.equal(resolveHead({ explicit: "x", prHead: "y", checkoutHead: "z" }), "x");
+  assert.equal(resolveHead({ prHead: "y", checkoutHead: "z" }), "y");
+  assert.equal(resolveHead({ checkoutHead: "z" }), "z");
+  assert.equal(resolveHead({}), "");
+});
+
+test("scopeEnv carries the PR text and never leaves PR_BODY empty", () => {
+  assert.deepEqual(
+    scopeEnv({ title: "KIT-1: t", body: "write-scope: apps/web/**", headRefName: "claude/kit-1" }),
+    {
+      PR_TITLE: "KIT-1: t",
+      PR_BODY: "write-scope: apps/web/**",
+      PR_HEAD_REF: "claude/kit-1",
+    },
+  );
+  assert.equal(scopeEnv({ title: "t", body: "" }).PR_BODY, " ");
+});
+
+test("declaresScope sees a write-scope line in the PR text only", () => {
+  assert.equal(
+    declaresScope({ title: "t", body: "write-scope: apps/web/**", headRefName: "b" }),
+    true,
+  );
+  assert.equal(declaresScope({ title: "t", body: "nothing here", headRefName: "b" }), false);
+});
+
+test("the scope step receives the PR_* env (gate.mjs wires scopeEnv into it)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(GATE, "utf8");
+  assert.match(
+    source,
+    /check-pr-write-scope\.mjs", \[\], \{ \.\.\.base, \.\.\.scopeEnv\(view\) \}/,
+  );
+  assert.match(source, /prBound\(\{ head: await git/);
+});
+
+test("matchesIssueKey: a boundary after the number", () => {
+  assert.equal(matchesIssueKey("claude/kit-27-d7ad5f", "KIT-27"), true);
+  assert.equal(matchesIssueKey("claude/kit-276-d7ad5f", "KIT-27"), false);
+  assert.equal(matchesIssueKey("KIT-27: title", "KIT-27"), true);
+  assert.equal(matchesIssueKey("claude/kit-276-d7ad5f", "KIT-276"), true);
+  assert.equal(matchesIssueKey("claude/xkit-27", "KIT-27"), false);
+  assert.equal(matchesIssueKey("kit-27", "KIT-27"), true);
+});
+
+test("review fold after an early stop names only the steps that ran", () => {
+  const folded = foldReview([
+    { name: "review-gate", code: 0, line: "ok" },
+    { name: "doc-references", code: 1, line: "names a removed path" },
+  ]);
+  assert.equal(folded.code, GATE_EXIT.closed);
+  assert.equal(folded.line, "CLOSED (review): doc-references: names a removed path");
 });

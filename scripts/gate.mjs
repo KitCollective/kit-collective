@@ -4,8 +4,11 @@
  * `gate` event to the run log.
  *
  *   node scripts/gate.mjs review <pr> --issue KIT-n [--workpad <file>] [--timeout s]
- *       folds pnpm check:review-gate, the review matrix, the PR write-scope and
- *       wait-for-checks (required checks green and MERGEABLE) into one verdict.
+ *       must run from the PR's worktree (HEAD == the PR head, else exit 4). Folds pnpm check:review-gate, the review matrix, the PR write-scope and
+ *       wait-for-checks (required checks green and MERGEABLE) into one verdict. Mechanical steps
+ *       run first and stop at the first failure; checks are awaited only when they are clean.
+ *       The scope step gets the PR text through PR_TITLE/PR_BODY/PR_HEAD_REF. A PR with no
+ *       write-scope line adds `note: scope: no write-scope declared` (`--require-scope` closes).
  *   node scripts/gate.mjs land <pr> --issue KIT-n
  *       Done is allowed only when the PR is merged, its merge commit is on origin/<integration>
  *       and the checks on that merge commit are green. A step that returned no result line
@@ -22,8 +25,16 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { config, gh, git, linearIssue, logGate, sh, workpadOf } from "./lib/gate-io.mjs";
-import { foldReview, GATE_EXIT, landGate, parseResultLine } from "./lib/gates.mjs";
+import { config, gh, git, linearIssue, logGate, prView, sh, workpadOf } from "./lib/gate-io.mjs";
+import {
+  declaresScope,
+  foldReview,
+  GATE_EXIT,
+  landGate,
+  parseResultLine,
+  prBound,
+  scopeEnv,
+} from "./lib/gates.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [sub, first, ...rest] = process.argv.slice(2);
@@ -81,30 +92,46 @@ try {
       workpadFile = join(mkdtempSync(join(tmpdir(), "gate-")), "workpad.md");
       writeFileSync(workpadFile, workpadOf(await linearIssue(issue)));
     }
-    const steps = [
-      await step("review-gate", "scripts/check-code-english.mjs", [], {
-        BASE_REF: "origin/development",
-      }),
-      await step("doc-references", "scripts/check-doc-references.mjs", [], {
-        BASE_REF: "origin/development",
-      }),
-      await step("matrix", "scripts/review-matrix.mjs", ["validate", workpadFile]),
-      await step("scope", "scripts/check-pr-write-scope.mjs", [], {
-        BASE_REF: "origin/development",
-      }),
-      await step("checks", "scripts/wait-for-checks.mjs", [
-        pr,
-        "--timeout",
-        opt("--timeout") ?? "1800",
-      ]),
+    const view = await prView(pr);
+    const bound = prBound({ head: await git(["rev-parse", "HEAD"]), prHead: view.headRefOid });
+    if (!bound.ok) {
+      done({ code: GATE_EXIT.unknown, line: bound.line });
+    }
+    const base = { BASE_REF: "origin/development" };
+    const declared = declaresScope(view);
+    // Mechanical steps first; the long wait for checks only when they are clean.
+    const steps = [];
+    const mechanical = [
+      () => step("review-gate", "scripts/check-code-english.mjs", [], base),
+      () => step("doc-references", "scripts/check-doc-references.mjs", [], base),
+      () => step("matrix", "scripts/review-matrix.mjs", ["validate", workpadFile]),
+      () => step("scope", "scripts/check-pr-write-scope.mjs", [], { ...base, ...scopeEnv(view) }),
     ];
+    for (const run of mechanical) {
+      steps.push(await run());
+      if (steps.at(-1).code !== 0) break;
+    }
+    if (steps.every((s) => s.code === 0) && !declared && rest.includes("--require-scope")) {
+      steps.push({
+        name: "scope",
+        code: 1,
+        line: "no write-scope declared on the PR (--require-scope)",
+      });
+    }
+    if (steps.every((s) => s.code === 0)) {
+      steps.push(
+        await step("checks", "scripts/wait-for-checks.mjs", [
+          pr,
+          "--timeout",
+          opt("--timeout") ?? "1800",
+        ]),
+      );
+    }
     const result = foldReview(steps);
-    logGate(
-      issue,
-      "review",
-      result.code === GATE_EXIT.open ? "open" : "closed",
-      await git(["rev-parse", "HEAD"]),
-    );
+    if (result.code === GATE_EXIT.open && !declared) {
+      result.line += "; note: scope: no write-scope declared";
+    }
+    logGate(issue, "review", result.code === GATE_EXIT.open ? "open" : "closed", view.headRefOid);
     done(result);
   }
 
