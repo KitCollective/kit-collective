@@ -1,6 +1,6 @@
 import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { Redirect, useLocalSearchParams } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Toast from "react-native-toast-message";
 import { requestSignInCode } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
@@ -62,6 +62,13 @@ export default function FirstSessionHost() {
   const dispatch = useCallback((event: Parameters<typeof reduceFirstSession>[1]) => {
     setSession((current) => reduceFirstSession(current, event));
   }, []);
+
+  // The host is already mounted when an old login link arrives while the welcome screen is open.
+  useEffect(() => {
+    if (door === LEGACY_DOOR_PARAM_VALUE) {
+      dispatch({ type: "openDoor" });
+    }
+  }, [door, dispatch]);
 
   if (isLoading) {
     return <LoadingScreen />;
