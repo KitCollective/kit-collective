@@ -20,12 +20,16 @@ services:
     image: kit-collective-seed:latest
     restart: "no"
     mem_limit: 512m
+    healthcheck:
+      disable: true
     environment:
       SEED_LANE: ${SEED_LANE:-development}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       SEED_PROXY_URL: ${SEED_PROXY_URL:?SEED_PROXY_URL is required}
       SEED_REQUIRE_PROXY: ${SEED_REQUIRE_PROXY:-true}
       APIFY_TOKEN: ${APIFY_TOKEN:-}
+    # Coolify leaves ${SEED_*} empty in `command` unless the wire script bakes argv.
+    # Local compose interpolates these from the shell env at `docker compose up`.
     command:
       - node
       - seed/apify/dist/cli.js

@@ -1,6 +1,7 @@
 import type { CatalogPickerItem } from "@kit/api-contract";
 import { useMemo, useState } from "react";
-import { type CatalogPickerRow, dummySeasonsForClub } from "@/catalog/dummyCatalog";
+import type { CatalogPickerRow } from "@/catalog/catalogPickerRow";
+import { resolveSeasonPickerRows } from "@/catalog/liveCatalogPicker";
 import { CatalogPickerModal } from "@/components/catalog-picker-modal";
 
 type SeasonPickerOverlayProps = {
@@ -9,6 +10,7 @@ type SeasonPickerOverlayProps = {
   clubId?: string | null;
   selectedId: string | null;
   loading?: boolean;
+  errorMessage?: string | null;
   onSelect: (item: CatalogPickerRow) => void;
   onDismiss: () => void;
 };
@@ -16,26 +18,21 @@ type SeasonPickerOverlayProps = {
 export function SeasonPickerOverlay({
   visible,
   seasons,
-  clubId,
   selectedId,
   loading = false,
+  errorMessage = null,
   onSelect,
   onDismiss,
 }: SeasonPickerOverlayProps) {
   const [query, setQuery] = useState("");
   const items = useMemo(() => {
-    const source: CatalogPickerRow[] =
-      seasons && seasons.length > 0
-        ? seasons.map((season) => ({ id: season.id, label: season.label }))
-        : clubId
-          ? dummySeasonsForClub(clubId)
-          : [];
+    const source = resolveSeasonPickerRows({ liveSeasons: seasons });
     const trimmed = query.trim().toLowerCase();
     if (!trimmed) {
       return source;
     }
     return source.filter((row) => row.label.toLowerCase().includes(trimmed));
-  }, [clubId, query, seasons]);
+  }, [query, seasons]);
 
   return (
     <CatalogPickerModal
@@ -47,6 +44,7 @@ export function SeasonPickerOverlay({
       items={items}
       selectedId={selectedId}
       loading={loading}
+      errorMessage={errorMessage}
       emptyMessage="Ingen sæsoner for denne klub."
       onSelect={(item) => {
         onSelect(item);

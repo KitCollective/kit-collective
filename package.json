@@ -8,9 +8,11 @@
     "test": "turbo run test --concurrency=1",
     "test:factory-scripts": "node --test scripts/tests/land-policy.test.mjs",
     "check:factory-ci-tests": "node scripts/check-factory-ci-tests.mjs",
+    "seed:bulk": "node --env-file=.env seed/apify/scripts/seed-bulk.mjs",
     "lint": "biome lint .",
     "lint:anti-slop": "oxlint",
     "format": "biome check --write .",
+    "prepare": "git config core.hooksPath .githooks || true",
     "format:check": "biome ci .",
     "typecheck": "turbo run typecheck",
     "check:imports": "node scripts/check-import-boundaries.mjs",
@@ -31,6 +33,9 @@
     "check:mobile-capture-dead-exports": "node scripts/check-mobile-capture-dead-exports.mjs",
     "check:workflow-api-boot-env": "node scripts/check-workflow-api-boot-env.mjs",
     "check:vision-log-save-action": "node scripts/check-vision-log-save-action.mjs",
+    "check:code-english": "node scripts/check-code-english.mjs",
+    "check:doc-references": "node scripts/check-doc-references.mjs",
+    "check:review-gate": "node scripts/check-code-english.mjs && node scripts/check-doc-references.mjs",
     "check:workflows": "bash scripts/lint-workflows.sh"
   },
   "devDependencies": {

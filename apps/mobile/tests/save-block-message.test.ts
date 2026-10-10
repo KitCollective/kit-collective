@@ -7,6 +7,8 @@ function emptyDraft(overrides: Partial<CaptureJerseyDraft> = {}): CaptureJerseyD
     id: "draft-1",
     clubId: null,
     clubLabel: null,
+    nationalTeamId: null,
+    nationalTeamLabel: null,
     seasonId: null,
     kitType: null,
     size: null,
@@ -36,12 +38,20 @@ describe("getSaveBlockMessage", () => {
           photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
         }),
       ),
-    ).toBe("Vælg en klub.");
+    ).toBe("Vælg en klub eller et landshold.");
     expect(
       getSaveBlockMessage(
         emptyDraft({
           photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
           clubId: "club",
+        }),
+      ),
+    ).toBe("Vælg en sæson.");
+    expect(
+      getSaveBlockMessage(
+        emptyDraft({
+          photos: [{ uri: "file:///a.jpg", role: "front", source: "gallery" }],
+          nationalTeamId: "nt",
         }),
       ),
     ).toBe("Vælg en sæson.");

@@ -1,9 +1,43 @@
+export {
+  type BulkCheckpoint,
+  type BulkCliRequest,
+  type BulkCliResult,
+  type BulkDeps,
+  type BulkFailure,
+  type BulkPlan,
+  type BulkPlanEntry,
+  type BulkRecord,
+  type BulkSummary,
+  type BulkTask,
+  type BulkTaskKind,
+  type BulkTaskOutcome,
+  type BulkTaskStatus,
+  bulkTaskId,
+  createDefaultBulkDeps,
+  expandSeasonRange,
+  loadBulkPlan,
+  parseBulkPlan,
+  runBulk,
+  runBulkFromCli,
+  summarizeBulkRecords,
+  synthesizeBulkPlanId,
+} from "./bulk.js";
+export {
+  bulkCheckpointPath,
+  createInMemoryBulkCheckpoint,
+  createJsonlBulkCheckpoint,
+  DEFAULT_SEED_BULK_STATE_DIR,
+  parseBulkRecords,
+  resolveBulkStateDir,
+} from "./bulk-checkpoint.js";
 export type {
+  CatalogMarksFetcher,
   ClubSeasonPair,
   FetchAdapter,
   FetchClubSeasonParams,
   FetchLeagueParams,
   FetchLeagueSeasonParams,
+  JerseyNumbersFetcher,
   ListClubSeasonPairsParams,
 } from "./fetch/adapter.js";
 export {
@@ -14,10 +48,18 @@ export {
 } from "./fetch/apify-adapter.js";
 export { createFixtureFetchAdapter } from "./fetch/fixture-adapter.js";
 export {
+  type JerseyNumberParse,
+  type JerseyNumberParseRow,
+  type JerseyNumberParseWarning,
+  parseJerseyNumbersHtml,
+} from "./fetch/jersey-numbers-parser.js";
+export {
   createKaderFetchAdapter,
+  playerJerseyNumbersUrl,
   TransfermarktHttpError,
 } from "./fetch/kader-fetch-adapter.js";
 export { createRecordingFetchAdapter } from "./fetch/recording-adapter.js";
+export { widenSeasonLabel } from "./fetch/season-label.js";
 export {
   createTransfermarktRequestDelay,
   createTransfermarktRetryFetch,
@@ -32,6 +74,24 @@ export {
   TransfermarktCircuitOpenError,
 } from "./fetch/transfermarkt-rate-limit.js";
 export {
+  createInMemoryJerseyCheckpoint,
+  createJsonlJerseyCheckpoint,
+  DEFAULT_JERSEY_CONCURRENCY,
+  JERSEY_BACKFILL_PLAN_ID,
+  type JerseyCheckpoint,
+  type JerseyCheckpointRecord,
+  type JerseyNumbersCliResult,
+  type JerseyNumbersFailure,
+  type JerseyNumbersSummary,
+  jerseyCheckpointPath,
+  listLanePlayerExternalIds,
+  type RunJerseyNumbersCliOptions,
+  type RunJerseyNumbersOptions,
+  resolveJerseyConcurrency,
+  runJerseyNumbers,
+  runJerseyNumbersFromCli,
+} from "./jersey-numbers.js";
+export {
   type FkJoinRunner,
   type FkJoinRunResult,
   type JoinWorkflowSummary,
@@ -39,13 +99,19 @@ export {
   runNationalTeamJoinWorkflow,
 } from "./join-workflow.js";
 export { parseLane, resolveDatabaseUrl } from "./lane.js";
-export { mapFacts } from "./map/index.js";
-export { normalize, stripForbiddenFields } from "./normalize/index.js";
+export { type JerseyNumberMapResult, mapFacts, mapPlayerJerseyNumbers } from "./map/index.js";
+export {
+  normalize,
+  normalizePlayerJerseyNumbers,
+  stripForbiddenFields,
+} from "./normalize/index.js";
 export type {
   HierarchyGrain,
   LeagueGrain,
   LeagueSeasonGrain,
+  ParsedBulkCli,
   ParsedGrainCli,
+  ParsedJerseyNumbersCli,
   ParsedJoinCli,
   ParsedSeedCli,
   ParsedWalkCli,
@@ -62,6 +128,8 @@ export {
 export { type ResolvedFetchAdapter, resolveFetchAdapter } from "./resolve-fetch-adapter.js";
 export {
   type ClubSeasonFailure,
+  type ExecuteHierarchyGrainOptions,
+  executeHierarchyGrain,
   parseCliArgs,
   type RunHierarchyGrainOptions,
   type RunHierarchyGrainResult,
@@ -88,10 +156,14 @@ export {
 export { filterSeasons } from "./season-range.js";
 export { isClubSeasonAlreadySeeded } from "./seeded.js";
 export type {
+  JerseyNumberSide,
   Lane,
   MapResult,
   NormalizedFacts,
+  NormalizedJerseyNumber,
+  NormalizedPlayerJerseyNumbers,
   RunSeedCliInput,
   TransfermarktRawPayload,
+  TransfermarktRawPlayerJerseyNumbers,
 } from "./types.js";
 export { TM_SYSTEM } from "./types.js";

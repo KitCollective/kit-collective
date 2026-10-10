@@ -1,0 +1,10 @@
+# A fixed pause for motion Maestro cannot see between two frames: the scroll
+# indicator fading out, or a Sheet's scrim finishing its fade. The element never
+# exists; the optional wait just runs its timeout.
+appId: app.kitcollective.mobile
+---
+- extendedWaitUntil:
+    visible:
+      id: settle-pause-never-present
+    timeout: 2500
+    optional: true

@@ -1,0 +1,25 @@
+{
+  "always": ["Color", "Typography", "Spacing", "Layout"],
+  "flows": {
+    "first-session": ["Button", "Button dock", "Sheet", "Text field", "Logo"],
+    "add-jersey": [
+      "Sheet",
+      "Photo slot",
+      "Banner",
+      "Chip",
+      "Button dock",
+      "Confirm and Save",
+      "Capture session"
+    ],
+    "collection": [
+      "Collection grid",
+      "Collection shortcuts (genveje)",
+      "Jersey tile",
+      "Chip",
+      "Switch",
+      "Tab bar"
+    ],
+    "search-bid": ["Search field", "List row", "Jersey tile", "Send bid", "Text field", "Tab bar"],
+    "wishlist-paywall": ["Empty state", "Sheet", "Button", "List row", "Tab bar"]
+  }
+}

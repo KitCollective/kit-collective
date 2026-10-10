@@ -9,6 +9,7 @@ type ChipProps = {
   onPress: () => void;
   /** Single-select groups use radio; multi-select uses button (design-system Chip). */
   accessibilityRole?: "button" | "radio";
+  testID?: string;
 };
 
 export function Chip({
@@ -16,6 +17,7 @@ export function Chip({
   selected = false,
   onPress,
   accessibilityRole = "button",
+  testID,
 }: ChipProps) {
   const theme = useTheme();
   const typography = useTypography();
@@ -24,6 +26,7 @@ export function Chip({
     <Pressable
       accessibilityRole={accessibilityRole}
       accessibilityState={{ selected }}
+      testID={testID}
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,

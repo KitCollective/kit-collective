@@ -1,5 +1,6 @@
 import type { PhotoSource } from "@kit/domain";
 import * as Crypto from "expo-crypto";
+import { stickySize } from "@/prefs/stickySizeStore";
 import { createCaptureSession, setDraftClub } from "./captureSession";
 import {
   clearActiveCameraCaptureSessionId,
@@ -17,6 +18,7 @@ import {
 import { createSqliteCaptureSessionStore } from "./captureSessionSqliteStore";
 import type { CaptureBranch, CaptureSessionState } from "./captureSessionTypes";
 import { mergeGalleryEscapePhotos } from "./galleryEscape";
+import { notifyParkedSessionChanged } from "./parkedSession";
 
 export type { PrefilledClub };
 export {
@@ -63,6 +65,7 @@ export function createPersistedCaptureSession(
     store,
     sessionId,
     photoSource: options?.photoSource ?? "gallery",
+    defaultSize: stickySize.get(),
   });
 
   if (options?.prefilledClub) {
@@ -88,4 +91,5 @@ export function withPersistedCaptureSession(
 export function clearPersistedCaptureSession(sessionId: string): void {
   createSqliteCaptureSessionStore(sessionId).clear();
   clearActiveCameraCaptureSessionId();
+  notifyParkedSessionChanged();
 }

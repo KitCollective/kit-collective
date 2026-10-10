@@ -1,0 +1,946 @@
+{
+  "version": 1,
+  "notes": "GT is QA-visual-label (not Nicklas-authored). Labeled from photos first via visual inspection of 384px thumbs before any model grouping JSON. Orphan Nike care-tag 817A15D1 left unassigned (not confidently matched to a physical shirt).",
+  "dumps": [
+    {
+      "id": "A-three-shirts-mixed",
+      "expectGrouping": true,
+      "photos": [
+        {
+          "file": "4FB86A65-D3A7-44B7-873F-EFA6EA08CD2F.jpg",
+          "jerseyId": "j10-barca-salmon-third",
+          "angle": "front"
+        },
+        {
+          "file": "0BEE2D82-ECF5-48DD-A00E-9C9BA41CB61A.jpg",
+          "jerseyId": "j2-italy-blue-home",
+          "angle": "back"
+        },
+        {
+          "file": "B3EAFB76-FCD3-4EBC-B5AA-21F50D45DC42.jpg",
+          "jerseyId": "j5-arsenal-red-home-125",
+          "angle": "front"
+        },
+        {
+          "file": "07790B00-08EE-4EB0-ACC9-22E4F761EF66.jpg",
+          "jerseyId": "j1-juventus-pink-away",
+          "angle": "back"
+        },
+        {
+          "file": "155CCAF9-0C8D-4833-8279-C813A0155479.jpg",
+          "jerseyId": "j2-italy-blue-home",
+          "angle": "front"
+        },
+        {
+          "file": "IMG_5791.WEBP",
+          "jerseyId": "j14-argentina-home-2006",
+          "angle": "detail"
+        },
+        {
+          "file": "IMG_9174.PNG",
+          "jerseyId": "j17-mancity-sky-home",
+          "angle": "back"
+        },
+        {
+          "file": "IMG_9173.PNG",
+          "jerseyId": "j17-mancity-sky-home",
+          "angle": "front"
+        },
+        {
+          "file": "1C06E22F-FBA4-4EE3-B8B5-A5E4C41C61C1.jpg",
+          "jerseyId": "j1-juventus-pink-away",
+          "angle": "front"
+        },
+        {
+          "file": "31E20A68-6B08-4E49-BA6B-1DD446EA9912.jpg",
+          "jerseyId": "j5-arsenal-red-home-125",
+          "angle": "back"
+        },
+        {
+          "file": "IMG_5790.WEBP",
+          "jerseyId": "j14-argentina-home-2006",
+          "angle": "front"
+        },
+        {
+          "file": "E6FAFB2A-4D35-4F6C-AC51-4C616FF2A093.jpg",
+          "jerseyId": "j8-psg-white-jordan",
+          "angle": "back"
+        },
+        {
+          "file": "9FBBBC3D-A937-4998-8886-FC3494BD3B90.jpg",
+          "jerseyId": "j10-barca-salmon-third",
+          "angle": "back"
+        },
+        {
+          "file": "IMG_5789.WEBP",
+          "jerseyId": "j14-argentina-home-2006",
+          "angle": "back"
+        },
+        {
+          "file": "3F0DDC28-5C7D-4009-A802-0FDCB5027F25.jpg",
+          "jerseyId": "j8-psg-white-jordan",
+          "angle": "front"
+        }
+      ]
+    },
+    {
+      "id": "B-same-shirt-angles",
+      "expectGrouping": true,
+      "photos": [
+        {
+          "file": "IMG_5790.WEBP",
+          "jerseyId": "j14-argentina-home-2006",
+          "angle": "front"
+        },
+        {
+          "file": "IMG_5789.WEBP",
+          "jerseyId": "j14-argentina-home-2006",
+          "angle": "back"
+        },
+        {
+          "file": "IMG_5791.WEBP",
+          "jerseyId": "j14-argentina-home-2006",
+          "angle": "detail"
+        },
+        {
+          "file": "IMG_5792.WEBP",
+          "jerseyId": "j14-argentina-home-2006",
+          "angle": "detail"
+        },
+        {
+          "file": "C055F04A-639C-4E2E-AB5A-04813B948EC2.jpg",
+          "jerseyId": "j14-argentina-home-2006",
+          "angle": "label"
+        }
+      ]
+    },
+    {
+      "id": "C-similar-white-homes",
+      "expectGrouping": true,
+      "photos": [
+        {
+          "file": "3F0DDC28-5C7D-4009-A802-0FDCB5027F25.jpg",
+          "jerseyId": "j8-psg-white-jordan",
+          "angle": "front"
+        },
+        {
+          "file": "E6FAFB2A-4D35-4F6C-AC51-4C616FF2A093.jpg",
+          "jerseyId": "j8-psg-white-jordan",
+          "angle": "back"
+        },
+        {
+          "file": "3122A3CF-F133-4910-BCC9-04FA14FCFD55.jpg",
+          "jerseyId": "j3-denmark-white-away",
+          "angle": "front"
+        },
+        {
+          "file": "14CBA4A1-2711-496F-A927-CF93DBF2FDCD.jpg",
+          "jerseyId": "j3-denmark-white-away",
+          "angle": "back"
+        }
+      ],
+      "_howto": "PSG white Jordan vs Denmark white Adidas \u2014 must NOT merge."
+    }
+  ],
+  "jerseys": [
+    {
+      "id": "j1-juventus-pink-away",
+      "clubHint": "Juventus",
+      "clubHintAlts": [
+        "Juve",
+        "Juventus FC"
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2015/16",
+      "seasonHintAccept": [
+        "2015/16",
+        "2014/15",
+        "2016/17"
+      ],
+      "kitType": "away",
+      "playerHint": "Dybala",
+      "playerNumberHint": "21",
+      "patchHint": "UCL",
+      "catalogLikely": true,
+      "colors": [
+        "pink",
+        "black",
+        "white"
+      ],
+      "notes": "GT is QA-visual-label (not Nicklas-authored). Adidas Jeep pink away."
+    },
+    {
+      "id": "j2-italy-blue-home",
+      "clubHint": "Italy",
+      "clubHintAlts": [
+        "Italia",
+        "FIGC",
+        "Italy National Team"
+      ],
+      "nationalTeam": true,
+      "seasonHint": "2006",
+      "seasonHintAccept": [
+        "2005/06",
+        "2006",
+        "2006/07"
+      ],
+      "kitType": "home",
+      "playerHint": "Pirlo",
+      "playerNumberHint": "21",
+      "patchHint": "2006 World Cup",
+      "catalogLikely": true,
+      "colors": [
+        "blue",
+        "navy",
+        "gold"
+      ],
+      "notes": "GT is QA-visual-label. Puma Italy home WC2006."
+    },
+    {
+      "id": "j3-denmark-white-away",
+      "clubHint": "Denmark",
+      "clubHintAlts": [
+        "Danmark",
+        "DBU"
+      ],
+      "nationalTeam": true,
+      "seasonHint": null,
+      "seasonHintAccept": [],
+      "kitType": "away",
+      "playerHint": "Bendtner",
+      "playerNumberHint": "11",
+      "patchHint": null,
+      "catalogLikely": true,
+      "colors": [
+        "white",
+        "red"
+      ],
+      "notes": "GT is QA-visual-label. White Adidas Denmark with Bendtner 11."
+    },
+    {
+      "id": "j4-arsenal-red-home-o2",
+      "clubHint": "Arsenal",
+      "clubHintAlts": [
+        "Arsenal FC",
+        "Arsenal F.C."
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2004/05",
+      "seasonHintAccept": [
+        "2003/04",
+        "2004/05",
+        "2005/06"
+      ],
+      "kitType": "home",
+      "playerHint": "Henry",
+      "playerNumberHint": "14",
+      "patchHint": "Premier League Champions",
+      "catalogLikely": true,
+      "colors": [
+        "red",
+        "white"
+      ],
+      "notes": "GT is QA-visual-label. Nike O2 home, Henry 14."
+    },
+    {
+      "id": "j5-arsenal-red-home-125",
+      "clubHint": "Arsenal",
+      "clubHintAlts": [
+        "Arsenal FC"
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2011/12",
+      "seasonHintAccept": [
+        "2011/12",
+        "2010/11"
+      ],
+      "kitType": "home",
+      "playerHint": "Henry",
+      "playerNumberHint": "12",
+      "patchHint": "Premier League",
+      "catalogLikely": true,
+      "colors": [
+        "red",
+        "white"
+      ],
+      "notes": "GT is QA-visual-label. 125 Years crest, Fly Emirates, Henry 12."
+    },
+    {
+      "id": "j6-portugal-black-away",
+      "clubHint": "Portugal",
+      "clubHintAlts": [
+        "Portugal National Team",
+        "Sele\u00e7\u00e3o"
+      ],
+      "nationalTeam": true,
+      "seasonHint": "2006",
+      "seasonHintAccept": [
+        "2004",
+        "2005/06",
+        "2006"
+      ],
+      "kitType": "away",
+      "playerHint": "C. Ronaldo",
+      "playerNumberHint": "17",
+      "patchHint": "World Cup / Euro",
+      "catalogLikely": true,
+      "colors": [
+        "black",
+        "gold"
+      ],
+      "notes": "GT is QA-visual-label. Nike black Portugal, Ronaldo 17."
+    },
+    {
+      "id": "j7-brazil-blue-away-2014",
+      "clubHint": "Brazil",
+      "clubHintAlts": [
+        "Brasil",
+        "CBF"
+      ],
+      "nationalTeam": true,
+      "seasonHint": "2014",
+      "seasonHintAccept": [
+        "2013/14",
+        "2014",
+        "2014/15"
+      ],
+      "kitType": "away",
+      "playerHint": "Neymar Jr",
+      "playerNumberHint": "10",
+      "patchHint": "2014 World Cup",
+      "catalogLikely": true,
+      "colors": [
+        "blue",
+        "white"
+      ],
+      "notes": "GT is QA-visual-label. Nike blue horizontal-stripe away WC2014."
+    },
+    {
+      "id": "j8-psg-white-jordan",
+      "clubHint": "Paris Saint-Germain",
+      "clubHintAlts": [
+        "PSG",
+        "Paris SG"
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2018/19",
+      "seasonHintAccept": [
+        "2018/19",
+        "2017/18",
+        "2019/20"
+      ],
+      "kitType": "away",
+      "playerHint": "Neymar Jr",
+      "playerNumberHint": "10",
+      "patchHint": "UCL",
+      "catalogLikely": true,
+      "colors": [
+        "white",
+        "black",
+        "grey"
+      ],
+      "notes": "GT is QA-visual-label. Jordan white Fly Emirates."
+    },
+    {
+      "id": "j9-brazil-yellow-home-2014",
+      "clubHint": "Brazil",
+      "clubHintAlts": [
+        "Brasil",
+        "CBF"
+      ],
+      "nationalTeam": true,
+      "seasonHint": "2014",
+      "seasonHintAccept": [
+        "2014"
+      ],
+      "kitType": "home",
+      "playerHint": "Neymar Jr",
+      "playerNumberHint": "10",
+      "patchHint": "2014 World Cup",
+      "catalogLikely": true,
+      "colors": [
+        "yellow",
+        "green"
+      ],
+      "notes": "GT is QA-visual-label. Nike yellow home WC2014."
+    },
+    {
+      "id": "j10-barca-salmon-third",
+      "clubHint": "FC Barcelona",
+      "clubHintAlts": [
+        "Barcelona",
+        "Bar\u00e7a",
+        "FCB"
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2018/19",
+      "seasonHintAccept": [
+        "2018/19"
+      ],
+      "kitType": "third",
+      "playerHint": "Messi",
+      "playerNumberHint": "10",
+      "patchHint": "UCL",
+      "catalogLikely": true,
+      "colors": [
+        "salmon",
+        "pink",
+        "navy"
+      ],
+      "notes": "GT is QA-visual-label. Nike salmon third Rakuten Messi 10."
+    },
+    {
+      "id": "j11-barca-blue-away-2007",
+      "clubHint": "FC Barcelona",
+      "clubHintAlts": [
+        "Barcelona",
+        "Bar\u00e7a"
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2007/08",
+      "seasonHintAccept": [
+        "2007/08"
+      ],
+      "kitType": "away",
+      "playerHint": "Messi",
+      "playerNumberHint": "19",
+      "patchHint": "LFP",
+      "catalogLikely": true,
+      "colors": [
+        "blue",
+        "teal",
+        "lime"
+      ],
+      "notes": "GT is QA-visual-label. Camp Nou 50th away, Messi 19."
+    },
+    {
+      "id": "j12-spain-red-home",
+      "clubHint": "Spain",
+      "clubHintAlts": [
+        "Espa\u00f1a",
+        "RFEF"
+      ],
+      "nationalTeam": true,
+      "seasonHint": "2008",
+      "seasonHintAccept": [
+        "2007/08",
+        "2008",
+        "2008/09"
+      ],
+      "kitType": "home",
+      "playerHint": "F. Torres",
+      "playerNumberHint": "9",
+      "patchHint": "Euro 2008",
+      "catalogLikely": true,
+      "colors": [
+        "red",
+        "yellow"
+      ],
+      "notes": "GT is QA-visual-label. Adidas Spain home Torres 9."
+    },
+    {
+      "id": "j13-mancity-navy-third",
+      "clubHint": "Manchester City",
+      "clubHintAlts": [
+        "Man City",
+        "MCFC"
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2014/15",
+      "seasonHintAccept": [
+        "2014/15",
+        "2015/16"
+      ],
+      "kitType": "third",
+      "playerHint": "Kun Ag\u00fcero",
+      "playerNumberHint": "10",
+      "patchHint": "UCL",
+      "catalogLikely": true,
+      "colors": [
+        "navy",
+        "cyan"
+      ],
+      "notes": "GT is QA-visual-label. Nike navy Etihad third Aguero 10."
+    },
+    {
+      "id": "j14-argentina-home-2006",
+      "clubHint": "Argentina",
+      "clubHintAlts": [
+        "AFA",
+        "Argentina National Team"
+      ],
+      "nationalTeam": true,
+      "seasonHint": "2006",
+      "seasonHintAccept": [
+        "2005/06",
+        "2006"
+      ],
+      "kitType": "home",
+      "playerHint": "Messi",
+      "playerNumberHint": "19",
+      "patchHint": "2006 World Cup",
+      "catalogLikely": true,
+      "colors": [
+        "light blue",
+        "white",
+        "black",
+        "gold"
+      ],
+      "notes": "GT is QA-visual-label. Adidas Argentina home Messi 19 WC2006."
+    },
+    {
+      "id": "j15-sweden-yellow-home",
+      "clubHint": "Sweden",
+      "clubHintAlts": [
+        "Sverige"
+      ],
+      "nationalTeam": true,
+      "seasonHint": "2006",
+      "seasonHintAccept": [
+        "2004",
+        "2005/06",
+        "2006"
+      ],
+      "kitType": "home",
+      "playerHint": "Ibrahimovi\u0107",
+      "playerNumberHint": "10",
+      "patchHint": "World Cup / Euro",
+      "catalogLikely": true,
+      "colors": [
+        "yellow",
+        "blue"
+      ],
+      "notes": "GT is QA-visual-label. Umbro Sweden yellow Ibrahimovic 10."
+    },
+    {
+      "id": "j16-brazil-blue-away-2006",
+      "clubHint": "Brazil",
+      "clubHintAlts": [
+        "Brasil",
+        "CBF"
+      ],
+      "nationalTeam": true,
+      "seasonHint": "2006",
+      "seasonHintAccept": [
+        "2005/06",
+        "2006"
+      ],
+      "kitType": "away",
+      "playerHint": "Ronaldinho",
+      "playerNumberHint": "10",
+      "patchHint": "2006 World Cup",
+      "catalogLikely": true,
+      "colors": [
+        "blue",
+        "white"
+      ],
+      "notes": "GT is QA-visual-label. Solid blue Nike away Ronaldinho 10 (distinct from 2014 striped away)."
+    },
+    {
+      "id": "j17-mancity-sky-home",
+      "clubHint": "Manchester City",
+      "clubHintAlts": [
+        "Man City",
+        "MCFC"
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2022/23",
+      "seasonHintAccept": [
+        "2022/23",
+        "2021/22",
+        "2023/24"
+      ],
+      "kitType": "home",
+      "playerHint": "Haaland",
+      "playerNumberHint": "9",
+      "patchHint": "UCL",
+      "catalogLikely": true,
+      "colors": [
+        "sky blue",
+        "maroon",
+        "white",
+        "navy"
+      ],
+      "notes": "GT is QA-visual-label. Puma sky blue home Haaland 9."
+    },
+    {
+      "id": "j18-barca-home-2007",
+      "clubHint": "FC Barcelona",
+      "clubHintAlts": [
+        "Barcelona",
+        "Bar\u00e7a"
+      ],
+      "nationalTeam": false,
+      "seasonHint": "2007/08",
+      "seasonHintAccept": [
+        "2007/08"
+      ],
+      "kitType": "home",
+      "playerHint": "Messi",
+      "playerNumberHint": "19",
+      "patchHint": "LFP",
+      "catalogLikely": true,
+      "colors": [
+        "blue",
+        "red",
+        "yellow"
+      ],
+      "notes": "GT is QA-visual-label. Camp Nou 50th home Blaugrana Messi 19."
+    }
+  ],
+  "inventory": {
+    "folder": "kc_test_kits",
+    "folderId": "1mby9f3pJwsQyix1JhiweEgDzehrrbkfp",
+    "fileCount": 131,
+    "rasterCount": 42,
+    "files": [
+      "07790B00-08EE-4EB0-ACC9-22E4F761EF66.jpg",
+      "0BEE2D82-ECF5-48DD-A00E-9C9BA41CB61A.jpg",
+      "14CBA4A1-2711-496F-A927-CF93DBF2FDCD.jpg",
+      "155CCAF9-0C8D-4833-8279-C813A0155479.jpg",
+      "15A4DD6E-C2B7-4A28-ACA3-75B62B3621CD.jpg",
+      "1C06E22F-FBA4-4EE3-B8B5-A5E4C41C61C1.jpg",
+      "1D2F47AF-4745-4820-9C77-9D990DD9DE6B.jpg",
+      "3122A3CF-F133-4910-BCC9-04FA14FCFD55.jpg",
+      "31E20A68-6B08-4E49-BA6B-1DD446EA9912.jpg",
+      "37A93B39-55BB-41AF-A690-C303BE694A2C.jpg",
+      "3F0DDC28-5C7D-4009-A802-0FDCB5027F25.jpg",
+      "42A0DA1C-D251-482D-892C-96433DCE5FC2.jpg",
+      "49AB21FE-8673-4677-9E24-64647B5066CB.jpg",
+      "4DFC6A06-3EA5-4ADB-B672-FAC6F451D538.jpg",
+      "4FB86A65-D3A7-44B7-873F-EFA6EA08CD2F.jpg",
+      "6EFB4407-B5F6-4B42-A7C9-6426241EB22D.jpg",
+      "817A15D1-CF70-4FBD-8621-E893B45A0D93.jpg",
+      "91ACE921-4BF3-4DCC-8EC3-08B7A63579D5.jpg",
+      "93E9BD5E-71B2-4B39-93A3-2BCA601466DB.jpg",
+      "9FBBBC3D-A937-4998-8886-FC3494BD3B90.jpg",
+      "AA8C0EB9-BAB9-4D04-8254-57862742A1A5.jpg",
+      "B3EAFB76-FCD3-4EBC-B5AA-21F50D45DC42.jpg",
+      "B7A6DEDD-559C-43E1-AFE7-7963D405C9D8.jpg",
+      "C055F04A-639C-4E2E-AB5A-04813B948EC2.jpg",
+      "C35C9826-D837-4E61-844D-4661D642E4BD.jpg",
+      "D6D68753-4247-45AD-8BA3-01490E4E6898.jpg",
+      "E42EE74D-4557-415E-B72D-DB0F68D86217.jpg",
+      "E6FAFB2A-4D35-4F6C-AC51-4C616FF2A093.jpg",
+      "IMG_5789.WEBP",
+      "IMG_5790.WEBP",
+      "IMG_5791.WEBP",
+      "IMG_5792.WEBP",
+      "IMG_9158.PNG",
+      "IMG_9159.PNG",
+      "IMG_9169.PNG",
+      "IMG_9170.PNG",
+      "IMG_9173.PNG",
+      "IMG_9174.PNG",
+      "IMG_9816.WEBP",
+      "IMG_9817.WEBP",
+      "IMG_9818.WEBP",
+      "IMG_9819.WEBP",
+      "IMG_1527.HEIC",
+      "IMG_1528.HEIC",
+      "IMG_1529.HEIC",
+      "IMG_2448.HEIC",
+      "IMG_2449.HEIC",
+      "IMG_2450.HEIC",
+      "IMG_2451.HEIC",
+      "IMG_4642.HEIC",
+      "IMG_4643.HEIC",
+      "IMG_4644.HEIC",
+      "IMG_5229.HEIC",
+      "IMG_5230.HEIC",
+      "IMG_7324.HEIC",
+      "IMG_7325.HEIC",
+      "IMG_7326.HEIC",
+      "IMG_7328.HEIC",
+      "IMG_7329.HEIC",
+      "IMG_7330.HEIC",
+      "IMG_7333.HEIC",
+      "IMG_7334.HEIC",
+      "IMG_7335.HEIC",
+      "IMG_7336.HEIC",
+      "IMG_7337.HEIC",
+      "IMG_7338.HEIC",
+      "IMG_7339.HEIC",
+      "IMG_7340.HEIC",
+      "IMG_7341.HEIC",
+      "IMG_7342.HEIC",
+      "IMG_7343.HEIC",
+      "IMG_7344.HEIC",
+      "IMG_7345.HEIC",
+      "IMG_7346.HEIC",
+      "IMG_7347.HEIC",
+      "IMG_7348.HEIC",
+      "IMG_7349.HEIC",
+      "IMG_7350.HEIC",
+      "IMG_7351.HEIC",
+      "IMG_7352.HEIC",
+      "IMG_7353.HEIC",
+      "IMG_7354.HEIC",
+      "IMG_7355.HEIC",
+      "IMG_7356.HEIC",
+      "IMG_7357.HEIC",
+      "IMG_7358.HEIC",
+      "IMG_7359.HEIC",
+      "IMG_7360.HEIC",
+      "IMG_7361.HEIC",
+      "IMG_7362.HEIC",
+      "IMG_7363.HEIC",
+      "IMG_7365.HEIC",
+      "IMG_7366.HEIC",
+      "IMG_7367.HEIC",
+      "IMG_7368.HEIC",
+      "IMG_7369.HEIC",
+      "IMG_7370.HEIC",
+      "IMG_7371.HEIC",
+      "IMG_7372.HEIC",
+      "IMG_7373.HEIC",
+      "IMG_7375.HEIC",
+      "IMG_7376.HEIC",
+      "IMG_7378.HEIC",
+      "IMG_7379.HEIC",
+      "IMG_7380.HEIC",
+      "IMG_7381.HEIC",
+      "IMG_7382.HEIC",
+      "IMG_7383.HEIC",
+      "IMG_7384.HEIC",
+      "IMG_7385.HEIC",
+      "IMG_7388.HEIC",
+      "IMG_7389.HEIC",
+      "IMG_7390.HEIC",
+      "IMG_7391.HEIC",
+      "IMG_7392.HEIC",
+      "IMG_7393.HEIC",
+      "IMG_7394.HEIC",
+      "IMG_7395.HEIC",
+      "IMG_7396.HEIC",
+      "IMG_7397.HEIC",
+      "IMG_7398.HEIC",
+      "IMG_7400.HEIC",
+      "IMG_7401.HEIC",
+      "IMG_7402.HEIC",
+      "IMG_7405.HEIC",
+      "IMG_7406.HEIC",
+      "IMG_8095.HEIC",
+      "IMG_8394.HEIC",
+      "IMG_8395.HEIC",
+      "IMG_9090.HEIC",
+      "IMG_9944.HEIC"
+    ],
+    "photos": [
+      {
+        "file": "1C06E22F-FBA4-4EE3-B8B5-A5E4C41C61C1.jpg",
+        "jerseyId": "j1-juventus-pink-away",
+        "angle": "front"
+      },
+      {
+        "file": "07790B00-08EE-4EB0-ACC9-22E4F761EF66.jpg",
+        "jerseyId": "j1-juventus-pink-away",
+        "angle": "back"
+      },
+      {
+        "file": "155CCAF9-0C8D-4833-8279-C813A0155479.jpg",
+        "jerseyId": "j2-italy-blue-home",
+        "angle": "front"
+      },
+      {
+        "file": "0BEE2D82-ECF5-48DD-A00E-9C9BA41CB61A.jpg",
+        "jerseyId": "j2-italy-blue-home",
+        "angle": "back"
+      },
+      {
+        "file": "3122A3CF-F133-4910-BCC9-04FA14FCFD55.jpg",
+        "jerseyId": "j3-denmark-white-away",
+        "angle": "front"
+      },
+      {
+        "file": "14CBA4A1-2711-496F-A927-CF93DBF2FDCD.jpg",
+        "jerseyId": "j3-denmark-white-away",
+        "angle": "back"
+      },
+      {
+        "file": "D6D68753-4247-45AD-8BA3-01490E4E6898.jpg",
+        "jerseyId": "j4-arsenal-red-home-o2",
+        "angle": "front"
+      },
+      {
+        "file": "15A4DD6E-C2B7-4A28-ACA3-75B62B3621CD.jpg",
+        "jerseyId": "j4-arsenal-red-home-o2",
+        "angle": "back"
+      },
+      {
+        "file": "B3EAFB76-FCD3-4EBC-B5AA-21F50D45DC42.jpg",
+        "jerseyId": "j5-arsenal-red-home-125",
+        "angle": "front"
+      },
+      {
+        "file": "31E20A68-6B08-4E49-BA6B-1DD446EA9912.jpg",
+        "jerseyId": "j5-arsenal-red-home-125",
+        "angle": "back"
+      },
+      {
+        "file": "4DFC6A06-3EA5-4ADB-B672-FAC6F451D538.jpg",
+        "jerseyId": "j6-portugal-black-away",
+        "angle": "front"
+      },
+      {
+        "file": "1D2F47AF-4745-4820-9C77-9D990DD9DE6B.jpg",
+        "jerseyId": "j6-portugal-black-away",
+        "angle": "back"
+      },
+      {
+        "file": "42A0DA1C-D251-482D-892C-96433DCE5FC2.jpg",
+        "jerseyId": "j7-brazil-blue-away-2014",
+        "angle": "front"
+      },
+      {
+        "file": "37A93B39-55BB-41AF-A690-C303BE694A2C.jpg",
+        "jerseyId": "j7-brazil-blue-away-2014",
+        "angle": "back"
+      },
+      {
+        "file": "3F0DDC28-5C7D-4009-A802-0FDCB5027F25.jpg",
+        "jerseyId": "j8-psg-white-jordan",
+        "angle": "front"
+      },
+      {
+        "file": "E6FAFB2A-4D35-4F6C-AC51-4C616FF2A093.jpg",
+        "jerseyId": "j8-psg-white-jordan",
+        "angle": "back"
+      },
+      {
+        "file": "E42EE74D-4557-415E-B72D-DB0F68D86217.jpg",
+        "jerseyId": "j9-brazil-yellow-home-2014",
+        "angle": "front"
+      },
+      {
+        "file": "49AB21FE-8673-4677-9E24-64647B5066CB.jpg",
+        "jerseyId": "j9-brazil-yellow-home-2014",
+        "angle": "back"
+      },
+      {
+        "file": "4FB86A65-D3A7-44B7-873F-EFA6EA08CD2F.jpg",
+        "jerseyId": "j10-barca-salmon-third",
+        "angle": "front"
+      },
+      {
+        "file": "9FBBBC3D-A937-4998-8886-FC3494BD3B90.jpg",
+        "jerseyId": "j10-barca-salmon-third",
+        "angle": "back"
+      },
+      {
+        "file": "C35C9826-D837-4E61-844D-4661D642E4BD.jpg",
+        "jerseyId": "j11-barca-blue-away-2007",
+        "angle": "front"
+      },
+      {
+        "file": "6EFB4407-B5F6-4B42-A7C9-6426241EB22D.jpg",
+        "jerseyId": "j11-barca-blue-away-2007",
+        "angle": "back"
+      },
+      {
+        "file": "91ACE921-4BF3-4DCC-8EC3-08B7A63579D5.jpg",
+        "jerseyId": "j12-spain-red-home",
+        "angle": "front"
+      },
+      {
+        "file": "AA8C0EB9-BAB9-4D04-8254-57862742A1A5.jpg",
+        "jerseyId": "j12-spain-red-home",
+        "angle": "back"
+      },
+      {
+        "file": "B7A6DEDD-559C-43E1-AFE7-7963D405C9D8.jpg",
+        "jerseyId": "j13-mancity-navy-third",
+        "angle": "front"
+      },
+      {
+        "file": "93E9BD5E-71B2-4B39-93A3-2BCA601466DB.jpg",
+        "jerseyId": "j13-mancity-navy-third",
+        "angle": "back"
+      },
+      {
+        "file": "IMG_5790.WEBP",
+        "jerseyId": "j14-argentina-home-2006",
+        "angle": "front"
+      },
+      {
+        "file": "IMG_5789.WEBP",
+        "jerseyId": "j14-argentina-home-2006",
+        "angle": "back"
+      },
+      {
+        "file": "IMG_5791.WEBP",
+        "jerseyId": "j14-argentina-home-2006",
+        "angle": "detail"
+      },
+      {
+        "file": "IMG_5792.WEBP",
+        "jerseyId": "j14-argentina-home-2006",
+        "angle": "detail"
+      },
+      {
+        "file": "C055F04A-639C-4E2E-AB5A-04813B948EC2.jpg",
+        "jerseyId": "j14-argentina-home-2006",
+        "angle": "label"
+      },
+      {
+        "file": "IMG_9158.PNG",
+        "jerseyId": "j15-sweden-yellow-home",
+        "angle": "front"
+      },
+      {
+        "file": "IMG_9159.PNG",
+        "jerseyId": "j15-sweden-yellow-home",
+        "angle": "back"
+      },
+      {
+        "file": "IMG_9169.PNG",
+        "jerseyId": "j16-brazil-blue-away-2006",
+        "angle": "front"
+      },
+      {
+        "file": "IMG_9170.PNG",
+        "jerseyId": "j16-brazil-blue-away-2006",
+        "angle": "back"
+      },
+      {
+        "file": "IMG_9173.PNG",
+        "jerseyId": "j17-mancity-sky-home",
+        "angle": "front"
+      },
+      {
+        "file": "IMG_9174.PNG",
+        "jerseyId": "j17-mancity-sky-home",
+        "angle": "back"
+      },
+      {
+        "file": "IMG_9817.WEBP",
+        "jerseyId": "j18-barca-home-2007",
+        "angle": "front"
+      },
+      {
+        "file": "IMG_9816.WEBP",
+        "jerseyId": "j18-barca-home-2007",
+        "angle": "back"
+      },
+      {
+        "file": "IMG_9818.WEBP",
+        "jerseyId": "j18-barca-home-2007",
+        "angle": "detail"
+      },
+      {
+        "file": "IMG_9819.WEBP",
+        "jerseyId": "j18-barca-home-2007",
+        "angle": "detail"
+      }
+    ],
+    "unassignedPhotos": [
+      {
+        "file": "817A15D1-CF70-4FBD-8621-E893B45A0D93.jpg",
+        "jerseyId": "",
+        "angle": "label",
+        "notes": "Nike style 237741-655 care tag; fabric pink/pale-blue \u2014 not confidently bound."
+      }
+    ]
+  },
+  "pathMapNote": "Converted thumbs at /workspace/vision-qa-corpus/thumbs384 and full1024; raw at /workspace/vision-qa-corpus/raw and mirrored under kit-collective/.scratch/vision-qa/corpus/raw on the cloud box. Mac path .scratch/vision-qa/\u2026 was not writable from this executor (no machineId Shell routing)."
+}

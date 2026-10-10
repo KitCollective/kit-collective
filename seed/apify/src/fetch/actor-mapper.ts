@@ -7,16 +7,17 @@ import {
 } from "@kit/seed-shared";
 import type {
   TransfermarktRawClub,
+  TransfermarktRawHonour,
   TransfermarktRawNationalTeam,
   TransfermarktRawPayload,
   TransfermarktRawPlayer,
 } from "../types.js";
 import type {
+  ActorNationality,
   ActorPlayerProfile,
   ActorSeasonClubRow,
   ActorSquadRow,
   ClubFactsParse,
-  HonourParseRow,
 } from "./actor-types.js";
 import {
   calendarYearBounds,
@@ -34,7 +35,7 @@ export interface MapClubSeasonParams {
   profileByPlayerId: Map<string, ActorPlayerProfile>;
   portraits?: Map<string, Uint8Array>;
   facts?: ClubFactsParse;
-  honours?: HonourParseRow[];
+  honours?: TransfermarktRawHonour[];
   identity?: CompetitionIdentity;
 }
 
@@ -109,11 +110,14 @@ export function mapLeagueSeasonToPayload(params: {
 type ResolvedPlayer = {
   id: string;
   name: string;
+  fullName?: string;
   jerseyNumber?: number;
   position?: string;
   dateOfBirth?: string;
+  placeOfBirth?: string;
   nationalityIso?: string;
   nationalityName?: string;
+  nationalities?: ActorNationality[];
   heightCm?: number;
   preferredFoot?: ActorSquadRow["preferredFoot"];
   portraitBytes?: Uint8Array;
@@ -121,62 +125,62 @@ type ResolvedPlayer = {
   callUpClubName?: string;
 };
 
+/**
+ * Merge a squad row with its profile page, if one was fetched.
+ *
+ * The squad row is season-accurate and wins for every fact it carries; the profile only
+ * fills holes and contributes the fields the squad table has no column for (place of
+ * birth, full name).
+ */
 function resolvePlayer(
   row: ActorSquadRow,
   profileByPlayerId: Map<string, ActorPlayerProfile>,
   portraits: Map<string, Uint8Array>,
 ): ResolvedPlayer | null {
-  const needsProfile = !row.playerId || row.shirtNumber === undefined || row.shirtNumber === null;
-
   if (!row.playerId) {
     return null;
   }
 
-  const profile = needsProfile ? profileByPlayerId.get(row.playerId) : undefined;
-  const jerseyNumber = needsProfile
-    ? profile?.shirtNumber === null || profile?.shirtNumber === undefined
-      ? undefined
-      : profile.shirtNumber
-    : (row.shirtNumber ?? undefined);
+  const profile = profileByPlayerId.get(row.playerId);
+  const jerseyNumber = row.shirtNumber ?? profile?.shirtNumber ?? undefined;
 
-  if (needsProfile && !profile) {
-    return {
-      id: row.playerId,
-      name: row.playerName,
-      jerseyNumber: undefined,
-      position: row.position,
-      dateOfBirth: row.dateOfBirth,
-      nationalityIso: row.nationalityIso,
-      nationalityName: row.nationalityName,
-      heightCm: row.heightCm,
-      preferredFoot: row.preferredFoot,
-      portraitBytes: portraits.get(row.playerId),
-    };
-  }
-
-  return {
-    id: profile?.playerId ?? row.playerId,
+  const resolved: ResolvedPlayer = {
+    id: row.playerId,
     name: profile?.playerName ?? row.playerName,
-    jerseyNumber,
-    position: row.position,
-    dateOfBirth: row.dateOfBirth,
-    nationalityIso: row.nationalityIso,
-    nationalityName: row.nationalityName,
-    heightCm: row.heightCm,
-    preferredFoot: row.preferredFoot,
+    jerseyNumber: jerseyNumber ?? undefined,
+    position: row.position ?? profile?.position,
+    dateOfBirth: row.dateOfBirth ?? profile?.dateOfBirth,
+    nationalityIso: row.nationalityIso ?? profile?.nationalityIso,
+    nationalityName: row.nationalityName ?? profile?.nationalityName,
+    nationalities: row.nationalities ?? profile?.nationalities,
+    heightCm: row.heightCm ?? profile?.heightCm,
+    preferredFoot: row.preferredFoot ?? profile?.preferredFoot,
     portraitBytes: portraits.get(row.playerId),
     callUpClubExternalId: row.callUpClubExternalId,
     callUpClubName: row.callUpClubName,
   };
+
+  if (profile?.fullName) {
+    resolved.fullName = profile.fullName;
+  }
+  if (profile?.placeOfBirth) {
+    resolved.placeOfBirth = profile.placeOfBirth;
+  }
+
+  return resolved;
 }
 
 export function applyClubFacts(
   club: TransfermarktRawClub,
   facts?: ClubFactsParse,
-  honours?: HonourParseRow[],
+  honours?: TransfermarktRawHonour[],
 ): TransfermarktRawClub {
   return {
     ...club,
+    // The Club grain has no short name of its own and falls back to the official name.
+    // Flagging that keeps `Football Club København` from clobbering the `FC Copenhagen`
+    // display label a Club-season run already stored.
+    nameIsOfficialFallback: Boolean(facts?.officialName && facts.officialName === club.name),
     officialName: facts?.officialName,
     foundedOn: facts?.foundedOn,
     stadiumName: facts?.stadiumName,
@@ -193,7 +197,7 @@ export function mapClubToPayload(params: {
   clubExternalId: string;
   clubName: string;
   facts?: ClubFactsParse;
-  honours?: HonourParseRow[];
+  honours?: TransfermarktRawHonour[];
   identity?: CompetitionIdentity;
 }): TransfermarktRawPayload {
   const identity = resolveCompetitionOrThrow(params.competitionSlug, params.identity);
@@ -222,7 +226,8 @@ export function mapClubSeasonToPayload(params: MapClubSeasonParams): Transfermar
 
   const players = params.squadRows
     .map((row) => resolvePlayer(row, params.profileByPlayerId, params.portraits ?? new Map()))
-    .filter((player): player is ResolvedPlayer => player !== null);
+    .filter((player): player is ResolvedPlayer => player !== null)
+    .map(squadRowToPlayer);
 
   return {
     competition: competitionPayload(identity),
@@ -318,7 +323,7 @@ export function nationalTeamCompetitionPayload(
 function applyNationalTeamFacts(
   team: TransfermarktRawNationalTeam,
   facts?: ClubFactsParse,
-  honours?: HonourParseRow[],
+  honours?: TransfermarktRawHonour[],
 ): TransfermarktRawNationalTeam {
   return {
     ...team,
@@ -335,10 +340,13 @@ function squadRowToPlayer(row: ResolvedPlayer): TransfermarktRawPlayer {
     name: row.name,
     jerseyNumber: row.jerseyNumber,
   };
+  if (row.fullName) player.fullName = row.fullName;
   if (row.position) player.position = row.position;
   if (row.dateOfBirth) player.dateOfBirth = row.dateOfBirth;
+  if (row.placeOfBirth) player.placeOfBirth = row.placeOfBirth;
   if (row.nationalityIso) player.nationalityIso = row.nationalityIso;
   if (row.nationalityName) player.nationalityName = row.nationalityName;
+  if (row.nationalities?.length) player.nationalities = row.nationalities.map((it) => ({ ...it }));
   if (row.heightCm !== undefined) player.heightCm = row.heightCm;
   if (row.preferredFoot) player.preferredFoot = row.preferredFoot;
   if (row.portraitBytes) player.portraitBytes = row.portraitBytes;
@@ -351,7 +359,7 @@ export function mapNationalTeamToPayload(params: {
   nationalTeamRef: string;
   teamName: string;
   facts?: ClubFactsParse;
-  honours?: HonourParseRow[];
+  honours?: TransfermarktRawHonour[];
   identity?: NationalTeamIdentity;
 }): TransfermarktRawPayload {
   const identity = resolveNationalTeamOrThrow(params.nationalTeamRef, params.identity);

@@ -2,7 +2,7 @@ import type { PhotoRole } from "@kit/domain";
 import { PHOTO_ROLES } from "@kit/domain";
 import { useEffect, useState } from "react";
 import {
-  appendUnboundPhotos,
+  addPhotosToDraft,
   bindUnboundPhotoToDraft,
   changeDraftPhotoRole,
   discardUnboundPhoto,
@@ -197,10 +197,14 @@ export function useConfirmPhotos({
     setLightboxRole(toRole);
   };
 
-  const uploadToSandbox = async () => {
+  /** The Foto tile: picked photos join this jersey by fill order, up to the 10 cap. */
+  const addPhoto = async () => {
+    if (!draft) {
+      return;
+    }
     const uris = await pickUploadFiles({ allowsMultipleSelection: true }, expoUploadFilesAdapter);
     if (uris?.length) {
-      mutate((current) => appendUnboundPhotos(current, uris));
+      mutate((current) => addPhotosToDraft(current, current.activeDraftId, uris));
     }
   };
 
@@ -219,6 +223,6 @@ export function useConfirmPhotos({
     discardUnboundPhoto: (uri: string) => {
       mutate((current) => discardUnboundPhoto(current, uri));
     },
-    uploadToSandbox,
+    addPhoto,
   };
 }

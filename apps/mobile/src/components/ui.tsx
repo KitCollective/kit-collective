@@ -62,6 +62,8 @@ type ButtonProps = PressableProps & {
   variant?: ButtonVariant;
   width?: ButtonWidth;
   loading?: boolean;
+  /** Optional leading glyph (e.g. a provider mark) rendered before the label. */
+  leading?: ReactNode;
 };
 
 export function Button({
@@ -69,6 +71,7 @@ export function Button({
   variant = "primary",
   width = "hug",
   loading = false,
+  leading,
   disabled,
   ...props
 }: ButtonProps) {
@@ -92,6 +95,11 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator color={getLoadingColor(theme, variant)} />
+      ) : leading ? (
+        <View style={styles.buttonContent}>
+          {leading}
+          <Text style={[typography.label, labelStyle]}>{label}</Text>
+        </View>
       ) : (
         <Text style={[typography.label, labelStyle]}>{label}</Text>
       )}
@@ -187,6 +195,12 @@ export function EmptyState({ title, body, diagram, action }: EmptyStateProps) {
 }
 
 const styles = StyleSheet.create({
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: space.gapSm,
+  },
   iconButton: {
     minHeight: 44,
     minWidth: 44,

@@ -273,6 +273,7 @@ export default function ForeignJerseyDetailScreen() {
         {peerJersey.biddingEnabled ? (
           <Button
             label="Send bud"
+            testID="send-bid-open"
             width="fill"
             onPress={() => router.push(`/(tabs)/search/send-bid/${jerseyId}`)}
           />

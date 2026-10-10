@@ -15,6 +15,7 @@ export interface KaderHtmlStore {
   loadCompetitionSeason(competition: string, season: number): Promise<string>;
   loadKader(clubId: string, season: number): Promise<string>;
   loadProfile(playerId: string): Promise<string>;
+  loadJerseyNumbers(playerId: string): Promise<string>;
   loadClubFacts(clubId: string): Promise<string | undefined>;
   loadClubHonours(clubId: string): Promise<string | undefined>;
   loadPortrait(playerId: string): Promise<Uint8Array | undefined>;
@@ -24,6 +25,7 @@ export function createKaderHtmlStore(fixturesDir: string): KaderHtmlStore {
   const competitionsDir = path.join(fixturesDir, "competitions");
   const kaderDir = path.join(fixturesDir, "kader");
   const profilesDir = path.join(fixturesDir, "profiles");
+  const jerseyNumbersDir = path.join(fixturesDir, "jersey-numbers");
   const factsDir = path.join(fixturesDir, "facts");
   const honoursDir = path.join(fixturesDir, "honours");
   const portraitsDir = path.join(fixturesDir, "portraits");
@@ -64,6 +66,10 @@ export function createKaderHtmlStore(fixturesDir: string): KaderHtmlStore {
     async loadProfile(playerId: string): Promise<string> {
       const filePath = path.join(profilesDir, `player-${playerId}.html`);
       return readFile(filePath, "utf8");
+    },
+
+    async loadJerseyNumbers(playerId: string): Promise<string> {
+      return readFile(path.join(jerseyNumbersDir, `player-${playerId}.html`), "utf8");
     },
 
     async loadClubFacts(clubId: string): Promise<string | undefined> {

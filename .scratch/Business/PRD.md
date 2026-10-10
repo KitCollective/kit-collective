@@ -1,12 +1,21 @@
 # KitCollective – Nordisk platform for fodboldtrøjesamlere
 
-**Version 2.1** · 14. august 2026 · Erstatter 2.0
+**Version 2.2** · 8. oktober 2026 · Erstatter 2.1
 
 Research der underbygger 2.1: `.scratch/Research/jersey-registration-speed.md`,
 `catalog-seed-sources.md`, `jersey-vision-providers.md`.
 
 Stak og spec-regler: `.scratch/Architecture/tech-stack.md`.
 Datamodel (stamdata-trøje vs bruger-trøje): `.scratch/Architecture/data-model.md`.
+
+---
+
+## Mission og vision
+
+**Mission:** Give seriøse samlere et ordentligt sted at registrere, overskue og
+genfinde deres samling.
+
+**Vision:** KitCollective er standardkataloget for fodboldtrøjer i Norden.
 
 ---
 
@@ -35,6 +44,23 @@ foto; Save venter aldrig på modellen. Push er den kanal, der gør ønskelisten
 til en grund til at vende tilbage. Appen suppleres af et **offentligt Astro-
 weblag uden login**, hvor samlinger og katalogsider kan ses og deles. Uden det
 mister vi organisk søgning og muligheden for at dele i en Facebook-gruppe.
+
+### Væsentligste ændringer fra version 2.1
+
+Version 2.2 retter PRD'en ind efter `CONTEXT.md`, som er højeste autoritet for,
+hvad en ting er.
+
+| Område | Version 2.1 | Version 2.2 | Begrundelse |
+| --- | --- | --- | --- |
+| Betalingsgrænse | Søgning i andres samlinger og kontakt kræver premium | Kun ønskeliste, match-job og match-push kræver premium. Søg og bud er gratis | `CONTEXT.md`, Wishlist og Søg |
+| Ønskelistens kriterier | Klub, sæson eller interval, størrelse, spillertryk, stand, makspris | Klub eller landshold, sæson og type, med valgfri størrelse | `CONTEXT.md`, Wishlist. Spillertryk er ikke med i første version |
+| Prøveperiode | Fast tre dage | Antal dage sættes i Offer i admin. Starter første gang samleren åbner Ønske | `CONTEXT.md`, Offer og Nest-trial |
+| Udløb af premium | "Netværksfunktionerne begrænses" | Ønskelisten kan ses og slettes, men ikke ændres, og match stopper. Samling, Søg og bud er uændrede | `CONTEXT.md`, Lapse |
+| Vision-udbyder | Gemini med OpenAI som fallback | Gemini 2.5 Flash-Lite via OpenRouter låst til Google, med direkte Gemini-nøgle som fallback | `CONTEXT.md`, Vision suggestion, og ADR-0044 |
+| Status pr. trøje | Tre værdier: ikke tilgængelig, åben for bytte, åben for henvendelser | To valg: privat, og åben for bud. De kan ikke være slået til samtidig | `CONTEXT.md`, Private UserJersey og UserJersey detail |
+| Kontakt mellem samlere | "Henvendelse" som fri kontakt | Bud: en besked med et helt beløb i kroner i en samtale om én trøje, samlet i Indbakke. Ingen penge flyttes | `CONTEXT.md`, Bud, Conversation og Indbakke |
+| Handel i faser | "Åben for tilbud" i fase 2, budsystem i fase 3 | Bud er en del af MVP. Fase 2 er formidling og fremhævede opslag. Fase 3 er tidsbegrænsede auktioner med sælgergebyr | Bud findes allerede som term i `CONTEXT.md`; auktioner gør ikke |
+| Mission og vision | Ikke med | Tilføjet øverst | Notion-siden Direction har PRD'en som kilde |
 
 ### Væsentligste ændringer fra version 2.0
 
@@ -146,7 +172,7 @@ første i MVP og bruger den tredje som distribution.
   bruger.
 - Definere en drømmetrøje præcist og få besked, når den dukker op — uden at
   skulle scrolle Facebook dagligt.
-- Finde ud af, hvem der ejer en bestemt trøje, og kunne tage kontakt.
+- Finde ud af, hvem der ejer en bestemt trøje, og kunne sende et bud.
 - Bidrage til kataloget, når noget mangler, og se sit bidrag blive fælles data.
 
 ### Non-Goals
@@ -157,8 +183,8 @@ første i MVP og bruger den tredje som distribution.
   samlertrøjer. Prisestimater er den mest klagede funktion i hele kategorien, og
   trøjer er sværere at prissætte end kort, fordi stand, variant og nameset
   varierer voldsomt.
-- Vi bygger ikke en fuld markedsplads. Kontakt mellem samlere er organisk,
-  platformen er ikke part i handlen.
+- Vi bygger ikke en fuld markedsplads. Et bud er en besked med et beløb, ikke
+  en betaling, og platformen er ikke part i handlen.
 - Vi lancerer ikke på engelsk eller uden for Norden i version 1.
 - Vi lader ikke Vision **være sandhed** eller blokere Save. Modellen må kun
   foreslå katalog-ID’er. On-device OCR af mærke/størrelse er v2, ikke MVP.
@@ -174,26 +200,28 @@ første i MVP og bruger den tredje som distribution.
 
 ## Free og premium
 
-Låst beslutning. Gratis er det personlige katalog inden for vores database.
-Premium er netværket.
+Låst beslutning. Gratis er det personlige katalog, søgning og bud mellem
+samlere. Premium er ønskelisten med match.
 
 | Funktion | Lag |
 | --- | --- |
 | Personligt katalog med faste felter | Gratis |
 | Offentlig visning af samling eller enkelt trøje | Gratis, og et valg — ikke betalt |
-| Status: ikke tilgængelig / åben for bytte / åben for henvendelser | Gratis at sætte, kontakt kræver premium |
+| Pr. trøje: privat, eller åben for bud | Gratis at sætte |
 | Billeder, filtrering, sortering, eksport | Gratis |
+| Søgning i alle offentlige samlinger | Gratis |
+| Send bud på en trøje, der er åben for bud, og svar i Indbakke | Gratis |
 | Ønskeliste med præcise kriterier og match-besked | Premium |
-| Søgning i alle offentlige samlinger | Premium |
 | Følg samlere og få besked ved nye uploads | Premium |
-| Send henvendelse om en trøje | Premium |
 | Foreslå manglende katalogdata | Premium |
 | Giveaways | Premium |
-| Auktioner: deltage og oprette | Premium, fase 3 |
+| Tidsbegrænsede auktioner: deltage og oprette | Premium, fase 3 |
 
-**Offentlig visning er bevidst gratis.** Hvis kun premium-brugere kunne gøre
-deres samling synlig, ville premium-søgningen være tom. Gratis-brugere leverer
-det indhold, premium betaler for at søge i.
+**Offentlig visning, søgning og bud er bevidst gratis.** Betalingen låser kun
+ønskelisten: at oprette og ændre poster, match-jobbet og match-beskeden.
+Gratis-brugere leverer de trøjer, en ønskeliste matcher imod, og en tom Søg
+ville gøre både kataloget og ønskelisten værdiløs. Indbakken er heller ikke bag
+betaling.
 
 **Custom data er kun for premium.** Konsekvensen er, at kataloget skal være
 seedet før lancering: Superligaen, de nordiske ligaer, landshold og de største
@@ -201,8 +229,10 @@ europæiske klubber. Ved et hul møder gratis-brugeren en opgraderings-CTA, ikke
 et dødt felt: "Klubben findes ikke endnu — opgrader for at foreslå den."
 
 **Pris:** 29 DKK pr. måned inklusive moms, med lokal prisvisning i SEK og NOK.
-Anbefalet årsabonnement på 290 DKK. Tre dages gratis prøveperiode, som kræver
-verificeret e-mail.
+Anbefalet årsabonnement på 290 DKK. Gratis prøveperiode, hvor antallet af dage
+sættes i admin (tre dage som udgangspunkt). Den starter første gang samleren
+åbner Ønske eller vil tilføje en ønskelistepost, og den er ikke et
+introduktionstilbud i App Store eller Google Play.
 
 ### Hvad app-platformen koster i abonnementsøkonomi
 
@@ -243,31 +273,32 @@ vokser.
   visuelt troværdig.
 - Som samler vil jeg bestemme, om min samling er privat eller offentlig, så jeg
   kan dele uden at blive kontaktet om alt.
-- Som samler vil jeg markere en trøje som åben for bytte eller henvendelse, så
-  andre ved, hvad der er i spil.
+- Som samler vil jeg markere en trøje som åben for bud, så andre ved, hvad der
+  er i spil, og gøre en trøje privat, så ingen andre ser den.
 - Som samler vil jeg eksportere min samling, så jeg ikke føler mig låst inde.
+- Som samler vil jeg søge i alle offentlige samlinger, så jeg kan finde
+  ejeren af en trøje, jeg har ledt efter i årevis.
+- Som samler vil jeg sende et bud til ejeren af en trøje, der er åben for det.
 
 ### Premium-samler
 
 - Som premium-samler vil jeg oprette en ønskeliste med præcise kriterier —
-  klub, sæson, størrelse, spillertryk, stand — så jeg kan definere min
-  drømmetrøje.
+  klub eller landshold, sæson, type og eventuelt størrelse — så jeg kan
+  definere min drømmetrøje.
 - Som premium-samler vil jeg have besked, når en trøje, der matcher min
   ønskeliste, bliver registreret af en anden samler eller dukker op hos en
   partnerbutik.
-- Som premium-samler vil jeg søge i alle offentlige samlinger, så jeg kan finde
-  ejeren af en trøje, jeg har ledt efter i årevis.
 - Som premium-samler vil jeg følge andre samlere og få besked ved nye uploads.
 - Som premium-samler vil jeg foreslå en manglende klub, liga, spiller eller
   sæson, så kataloget bliver bedre for alle.
-- Som premium-samler vil jeg prøve premium i tre dage, før jeg betaler.
+- Som samler vil jeg prøve premium gratis, før jeg betaler.
 
 ### Platformadministrator
 
 - Som administrator vil jeg modtage notifikation, når en premium-bruger
   foreslår katalogdata, så jeg kan verificere og promovere det til fælles
   metadata.
-- Som administrator vil jeg moderere profiler, billeder og henvendelser, så
+- Som administrator vil jeg moderere profiler, billeder og samtaler, så
   communityet forbliver trygt.
 - Som administrator vil jeg se, hvor lang tid der går fra en bruger opretter
   trøje nummer et til nummer to, fordi det er produktets vigtigste tal.
@@ -300,8 +331,9 @@ vokser.
   købsdato, noter.
 - Ægthedsfelt med tre niveauer: ukendt (default), vurderet, verificeret.
 - Ingen obligatorisk pris. Købspris er valgfri og altid privat.
-- Status pr. trøje: ikke tilgængelig (default), åben for bytte, åben for
-  henvendelser.
+- To valg pr. trøje: privat, og åben for bud. Efter Save er en trøje synlig og
+  ikke åben for bud. En privat trøje ses ikke i Søg, på andres visning af
+  profilen eller som match, og den kan ikke være åben for bud.
 - Billeder: anbefal front, ryg og mærke. Mindst ét foto for at gemme.
   **Onboarding / første session: galleri (multi-select) er primær.** Kamera er
   primær ved gentagelse i samme session. Expo Web er galleri-først.
@@ -322,11 +354,13 @@ vokser.
 
 - Offentlige samlerprofiler med trøjeoversigt og samleinteresser.
 - Søgning på land, liga, klub, sæson og trøjeattributter. Søgning i andres
-  samlinger kræver premium.
+  samlinger er gratis.
 - Visning af hvilke samlere der ejer en given trøje, når deres
   synlighedsindstillinger tillader det.
-- Kontaktfunktion mellem samlere med tydelige rammer: dialogen foregår mellem
-  brugerne, og KitCollective er ikke part i en eventuel handel.
+- Bud mellem samlere: en besked med et helt beløb i kroner i en samtale om én
+  trøje. Samtalerne samles i Indbakke. Accept eller afvisning noteres i
+  tråden. Ingen penge flyttes, og KitCollective er ikke part i en eventuel
+  handel.
 - Badges og achievements for samlingsmilepæle, antal klubber, antal lande og
   community-bidrag.
 
@@ -352,13 +386,15 @@ vores eneste vej til organisk søgning.
 
 Dette er MVP'ens vigtigste funktion og den primære grund til at betale.
 
-- Premium-brugere opretter ønskelisteposter med strukturerede kriterier: klub,
-  sæson (eller interval), størrelse, spillertryk, stand, maks. pris (valgfri).
-- Systemet matcher automatisk mod nyregistrerede trøjer, der er markeret åben
-  for bytte eller henvendelser.
+- Premium-brugere opretter ønskelisteposter med strukturerede kriterier, der
+  alle skal være opfyldt: klub eller landshold, sæson og type (mindst én af
+  dem), og eventuelt størrelse. Spillertryk, stand og makspris er ikke med i
+  første version.
+- Systemet matcher automatisk mod andre samleres trøjer, der er åbne for bud
+  og ikke private. Egne trøjer matcher aldrig.
 - **Push-notifikation ved match**, med deep link direkte til trøjen. E-mail er
   en sekundær kanal for brugere, der har afvist push.
-- Brugeren kan gå direkte fra notifikation til henvendelse.
+- Brugeren kan gå direkte fra notifikation til at sende et bud.
 - **Datamodelkrav:** en ønskelistepost skal kunne matches maskinelt mod en
   ekstern varekilde, ikke kun mod interne trøjer. Feltnavne og
   kategori-identifikatorer skal designes med det for øje, selvom
@@ -382,15 +418,18 @@ Dette er MVP'ens vigtigste funktion og den primære grund til at betale.
 - Abonnement til 29 DKK pr. måned via in-app purchase, med lokal prisvisning i
   SEK og NOK gennem butikkernes prisniveauer.
 - Årsabonnement til 290 DKK.
-- Tre dages gratis prøveperiode, som kræver verificeret e-mail.
+- Gratis prøveperiode. Antal dage og om den er tændt styres i admin, ikke i
+  butikkernes metadata. Den starter første gang samleren åbner Ønske eller vil
+  tilføje en post uden et aktivt abonnement.
 - **Gendan køb** skal være tilgængelig og synlig. Det er et krav fra Apple og en
   hyppig afvisningsgrund.
 - Abonnementsvilkår, pris og fornyelse skal fremgå på købsskærmen, ikke kun i
   vilkårene. Også en hyppig afvisningsgrund.
 - Kvitteringer valideres server-side. Abonnementsstatus er noget, vores backend
   afgør, ikke klienten.
-- Ved udløb af premium bevares samlingen fuldt ud. Kun netværksfunktionerne
-  begrænses. Ønskelisten bevares, men der sendes ikke match-beskeder.
+- Ved udløb af premium bevares samlingen fuldt ud, og Søg og bud fortsætter
+  som før. Ønskelisteposterne bevares og kan ses og slettes, men ikke oprettes
+  eller redigeres, og der sendes ikke match-beskeder.
 - Butikkerne håndterer kortdata. Ingen kortoplysninger i vores database.
 
 ### Giveaways — Should have
@@ -408,9 +447,10 @@ Dette er MVP'ens vigtigste funktion og den primære grund til at betale.
 
 ### Handel mellem samlere — Fase 3, ikke MVP
 
-- Fase 2 introducerer "åben for tilbud" og fremhævede opslag, som validerer
-  efterspørgslen uden et budsystem.
-- Fase 3 introducerer egentlige auktioner med sælgergebyr, forudsat at
+- Bud mellem samlere er en del af MVP (se Discovery og community) og viser,
+  om der er efterspørgsel, uden at platformen håndterer penge.
+- Fase 2 kan tilføje fremhævede opslag.
+- Fase 3 introducerer tidsbegrænsede auktioner med sælgergebyr, forudsat at
   regulatoriske og supportmæssige forhold er afklaret, og at oprettelse kræver
   udvidet verifikation.
 
@@ -437,8 +477,9 @@ Push-tilladelse spørges der **ikke** om ved opstart. Den spørges der om i det
 tilladelsen afvist på det forkerte tidspunkt, mister vi produktets vigtigste
 retentionsmekanisme, og den kan kun genvindes via systemindstillingerne.
 
-Premium introduceres først, når brugeren har oprettet mindst én trøje og
-forsøger noget, der kræver netværket. Det er der, værdien er konkret.
+Premium introduceres første gang brugeren åbner Ønske eller vil tilføje en
+ønskelistepost. Det er der, værdien er konkret, og der starter prøveperioden
+eller vises købsskærmen. Det kræver ikke, at brugeren har oprettet en trøje.
 
 ### Kerneflow
 
@@ -461,9 +502,9 @@ igen, ikke oversigten.
 præcise kriterier og får forklaret, at der kommer besked ved match. Dette er
 det primære opgraderingsmoment.
 
-**Trin 5 — Modtag match og tag kontakt.** Ved match sendes en push, der deep
+**Trin 5 — Modtag match og send bud.** Ved match sendes en push, der deep
 linker direkte til trøjen — ikke til forsiden. Derfra kan brugeren åbne
-profilen og sende en henvendelse i samme flow.
+ejerens profil og sende et bud i samme flow.
 
 **Trin 6 — Del samlingen.** Brugeren kan dele et link til sin samling eller en
 enkelt trøje. Linket åbner en offentlig webside, som kan ses uden app og uden
@@ -472,7 +513,7 @@ konto. Det er sådan, nye brugere kommer ind.
 ### Edge cases
 
 - Brugere kan skjule enkelte trøjer eller hele samlingen.
-- Kontaktfunktioner har rapportering og blokering.
+- Indbakke og andre samleres profiler har rapportering og blokering.
 - Udgåede klubnavne, særlige varianter og omdøbte ligaer håndteres som
   katalogposter med gyldighedsperiode, ikke som frit tekstfelt.
 - Ved udløbet premium bevares ønskelisten, men der sendes ikke match-beskeder.
@@ -513,12 +554,12 @@ land, liga og klub fra lister, der allerede er der. Første trøje tager under e
 minut. Da han opretter nummer to, er felterne forudfyldt fra den første, og han
 når gennem elleve trøjer, før han lægger telefonen fra sig.
 
-Ugen efter opretter han en ønskeliste: Brøndby udebane, 1998/99, størrelse L,
-gerne med spillertryk. Han opgraderer til premium for at kunne gøre det, og
+Ugen efter opretter han en ønskeliste: Brøndby udebane, 1998/99, størrelse L.
+Han opgraderer til premium for at kunne gøre det, og
 appen spørger om lov til at sende ham en besked, når trøjen dukker op. Det siger
 han selvfølgelig ja til. Halvanden måned senere lyser telefonen op midt i en
 frokostpause: en samler i Malmø har registreret præcis den trøje og markeret den
-som åben for bytte. Mikkel trykker på beskeden og er inde på trøjen med det
+som åben for bud. Mikkel trykker på beskeden og er inde på trøjen med det
 samme. De skriver sammen, og handlen sker mellem dem.
 
 Et halvt år senere får Mikkel en anden slags besked: trøjen fra hans ønskeliste
@@ -598,7 +639,7 @@ eneste indtægt.
 - Prefill: `samme_klub` vs `ny_troje` vs vision-forslag.
 - Katalogforslag indsendt, godkendt eller afvist, med svartid.
 - Søgning udført og filtre anvendt.
-- Ønskelistepost oprettet, match udløst, notifikation åbnet, henvendelse sendt.
+- Ønskelistepost oprettet, match udløst, notifikation åbnet, bud sendt.
 - Profil åbnet, fulgt, kontaktet, blokeret eller rapporteret.
 - Prøveperiode startet, konverteret eller udløbet.
 - Abonnement fornyet eller opsagt, med opsigelsesårsag.
@@ -635,20 +676,20 @@ Låst stak. Ét git-repo (`apps/*` + `packages/api-contract`).
 - Kontosystem, e-mailverificering, abonnementsstyring og rollebaseret
   administration.
 - Push-notifikationer med granulær styring pr. type: ønskeliste-match, fulgt
-  samler, henvendelse, systembesked. En bruger, der slår alt fra, skal kunne slå
+  samler, bud, systembesked. En bruger, der slår alt fra, skal kunne slå
   ønskeliste-match til igen alene.
 - Kameraintegration (`CameraView`, multi-shot) og system-galleri
   (multi-select, ingen bred medie-permission), med beskæring og komprimering
   på enheden.
-- Vision-worker i Nest: Gemini 2.5 Flash-Lite, OpenAI `gpt-4.1-nano` som
-  fallback. 8–12 s timeout, fail open. Log rå JSON + telemetry. Ingen embeddings.
+- Vision-worker i Nest: Gemini 2.5 Flash-Lite via OpenRouter låst til Google,
+  med direkte Gemini-nøgle som fallback. 8–12 s timeout, fail open. Log rå JSON + telemetry. Ingen embeddings.
 - Offline-tolerance: en påbegyndt registrering må ikke gå tabt ved dårlig
   forbindelse. Kladder gemmes lokalt og synkroniseres.
 - Datamodel for trøjer, klubber, ligaer, lande, sæsoner, spillere, profiler,
-  følgere, ønskelisteposter, badges og henvendelser.
+  følgere, ønskelisteposter, badges, samtaler og bud.
 - Søgeindeks med filtrering på tværs af katalog- og brugerdata.
 - Billedupload, moderering og sikker opbevaring.
-- Notifikationssystem til match, følgning og henvendelser.
+- Notifikationssystem til match, følgning og bud.
 - Administrationsflade til katalogforslag med kø, godkendelse og afvisning.
 
 ### Datamodel — kritiske beslutninger
@@ -685,7 +726,7 @@ Låst stak. Ét git-repo (`apps/*` + `packages/api-contract`).
 - Partnerfeeds eller deeplinks, når aftaler indgås (fase 2).
 - Identitetsleverandør med nordisk dækning — først relevant i fase 3.
 - Crash- og fejlrapportering fra begge platforme.
-- Vision-udbyder (Gemini paid API; OpenAI som fallback). Nøgler kun på Nest.
+- Vision-udbyder (OpenRouter låst til Google; direkte Gemini som fallback). Nøgler kun på Nest.
 
 ### Data og privatliv
 
@@ -709,7 +750,7 @@ Låst stak. Ét git-repo (`apps/*` + `packages/api-contract`).
 | --- | --- | --- |
 | **Registreringsfriktion** | Kategoriens dokumenterede dødsårsag. Brugere opretter én trøje og forsvinder | Mål tid til trøje nr. 2 fra dag ét. Forudfyld felter. Sæt 45 sekunder som hårdt krav |
 | **Katalogflaskehals** | Kun vi kan godkende data. Svartid på dage koster den første registrering | Servicemål på 48 timer. Seed kataloget grundigt før lancering |
-| **Tomt indeks ved premium-launch** | Premium-søgning uden indhold brænder de mest entusiastiske brugere af | Tænd ikke premium før seed-fasen har leveret indhold at søge i |
+| **Tomt indeks ved premium-launch** | En ønskeliste uden trøjer at matche imod brænder de mest entusiastiske brugere af | Tænd ikke premium, før seed-fasen og de første samlere har leveret trøjer at matche imod |
 | **Ønskelisten matcher aldrig** | Den primære betalingsgrund leverer ikke, og abonnenter opsiger | Mål match-rate. Ved lav rate åbnes for match mod partnerlager tidligere end planlagt |
 | **Ingen partnere ved måned 6** | Fase 2 findes ikke, og abonnement er eneste indtægt | Start partnerdialogen i uge 1, ikke efter lancering |
 | **Betalingsviljen findes ikke** | Hele modellen falder | Det er præcis, hvad fase 1 skal afgøre. Seks måneder er en billig test |
@@ -766,7 +807,8 @@ koster en uge hver, når man møder dem første gang.
 
 Expo-app (iOS/Android) med konto og e-mailverifikation, seedet katalog,
 galleri-først onboarding + kamera ved gentagelse, asynkron Vision-prefill,
-samlingsstyring, søgning, ønskeliste med match og push, custom data-kø,
+samlingsstyring, søgning, bud og indbakke, ønskeliste med match og push,
+custom data-kø,
 abonnement via in-app purchase med prøveperiode, rapportering og blokering.
 
 Astro-weblag med offentlige samlingssider, trøjesider og katalogsider, OG og
@@ -780,7 +822,7 @@ til Small Business Program, og et brugbart udgangspunkt for klub- og ligadata.
 ### Fase 2 — Formidling (måned 6–12)
 
 Affiliate-match mellem ønskelisteposter og partnerlager, partnerlinks i
-søgeresultater, "åben for tilbud" og fremhævede opslag, månedlig giveaway,
+søgeresultater, fremhævede opslag, månedlig giveaway,
 udbygget statistik og badges.
 
 Afhængigheder: mindst tre underskrevne partnere og dokumenteret match-rate på
@@ -788,7 +830,7 @@ Afhængigheder: mindst tre underskrevne partnere og dokumenteret match-rate på
 
 ### Fase 3 — Handel (fra måned 12)
 
-Auktioner med budsystem og sælgergebyr, udvidet verifikation som krav for at
+Tidsbegrænsede auktioner med sælgergebyr, udvidet verifikation som krav for at
 oprette auktion, køberbeskyttelse, verificeret samler-badge.
 
 Afhængigheder: juridisk afklaring, modereringskapacitet og tilstrækkelig

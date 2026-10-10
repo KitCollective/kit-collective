@@ -3,6 +3,7 @@ import type { KitType } from "@kit/domain";
 export type VisionFieldConfidences = {
   overall: number;
   club?: number;
+  nationalTeam?: number;
   season?: number;
   kitType?: number;
   player?: number;
@@ -11,14 +12,17 @@ export type VisionFieldConfidences = {
 
 export type VisionInferenceResult = {
   clubId?: string;
+  nationalTeamId?: string;
   seasonId?: string;
   catalogKitId?: string;
   type?: KitType;
   playerId?: string;
   playerNumber?: string;
   patchId?: string;
-  /** Raw model club hint — used to detect catalog miss when clubId is absent. */
+  /** Raw model club hint — used to detect catalog miss when clubId and catalogKitId are absent. */
   clubHint?: string;
+  /** Observable manufacturer+sponsor kit hits used at map time. */
+  kitHitCount?: number;
   visionRaw?: string;
   confidences?: VisionFieldConfidences;
   latencyMs?: number;
@@ -36,15 +40,31 @@ export type VisionGroupingPhotoInput = {
   bytes: Uint8Array;
 };
 
+export type VisionGroupingOptions = {
+  priorGroups?: Array<{ photoIds: string[] }>;
+};
+
 export type VisionGroupingInferenceResult = {
   groups: Array<{ photoIds: string[]; confidence: number }>;
   latencyMs?: number;
   model?: string;
 };
 
+/** Who the Vision job is for. */
+export type VisionCallContext = {
+  userId: string;
+};
+
 export type VisionAdapter = {
-  infer(photos: VisionIdentityPhotoInput[]): Promise<VisionInferenceResult | null>;
-  inferGrouping?(photos: VisionGroupingPhotoInput[]): Promise<VisionGroupingInferenceResult | null>;
+  infer(
+    photos: VisionIdentityPhotoInput[],
+    context?: VisionCallContext,
+  ): Promise<VisionInferenceResult | null>;
+  inferGrouping?(
+    photos: VisionGroupingPhotoInput[],
+    options?: VisionGroupingOptions,
+    context?: VisionCallContext,
+  ): Promise<VisionGroupingInferenceResult | null>;
 };
 
 export const VISION_ADAPTER = Symbol("VISION_ADAPTER");

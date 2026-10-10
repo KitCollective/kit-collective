@@ -1,0 +1,482 @@
+{
+  "date": "2026-09-16",
+  "purpose": "retest KIT-248/249/250 after Done merges + migration 0036/0037 + rebuild",
+  "tickets": {
+    "KIT-248": {
+      "goal": "season/type/player present on club hits",
+      "samples": [
+        {
+          "jerseyId": "j1-juventus-pink-away",
+          "verdict": "noop",
+          "has_club": false,
+          "has_season": false,
+          "has_type": false,
+          "has_player": false,
+          "score": {
+            "club_or_nt": false,
+            "season": false,
+            "type": false,
+            "player": false,
+            "has_hint": false,
+            "has_enrichment": false
+          },
+          "suggestions": {},
+          "catalogMiss": null,
+          "clubHint": null
+        },
+        {
+          "jerseyId": "j5-arsenal-red-home-125",
+          "verdict": "noop",
+          "has_club": false,
+          "has_season": false,
+          "has_type": false,
+          "has_player": false,
+          "score": {
+            "club_or_nt": false,
+            "season": false,
+            "type": false,
+            "player": false,
+            "has_hint": false,
+            "has_enrichment": false
+          },
+          "suggestions": {},
+          "catalogMiss": null,
+          "clubHint": null
+        },
+        {
+          "jerseyId": "j8-psg-white-jordan",
+          "verdict": "noop",
+          "has_club": false,
+          "has_season": false,
+          "has_type": false,
+          "has_player": false,
+          "score": {
+            "club_or_nt": false,
+            "season": false,
+            "type": false,
+            "player": false,
+            "has_hint": false,
+            "has_enrichment": false
+          },
+          "suggestions": {},
+          "catalogMiss": null,
+          "clubHint": null
+        },
+        {
+          "jerseyId": "j17-mancity-sky-home",
+          "verdict": "noop",
+          "has_club": false,
+          "has_season": false,
+          "has_type": false,
+          "has_player": false,
+          "score": {
+            "club_or_nt": false,
+            "season": false,
+            "type": false,
+            "player": false,
+            "has_hint": false,
+            "has_enrichment": false
+          },
+          "suggestions": {},
+          "catalogMiss": null,
+          "clubHint": null
+        }
+      ],
+      "any_enriched": false,
+      "all_club_hit": false,
+      "pass": false
+    },
+    "KIT-249": {
+      "goal": "NT path maps or returns non-empty hint",
+      "samples": [
+        {
+          "jerseyId": "j14-argentina-home-2006",
+          "verdict": "noop",
+          "mapped_nt": false,
+          "nationalTeamLabel": null,
+          "clubLabel": null,
+          "catalogMiss": null,
+          "clubHint": null,
+          "nationalTeamHint": null,
+          "nonempty": false,
+          "suggestions": {}
+        },
+        {
+          "jerseyId": "j2-italy-blue-home",
+          "verdict": "fail",
+          "mapped_nt": false,
+          "nationalTeamLabel": null,
+          "clubLabel": null,
+          "catalogMiss": null,
+          "clubHint": null,
+          "nationalTeamHint": null,
+          "nonempty": false,
+          "suggestions": {}
+        }
+      ],
+      "pass": false
+    },
+    "KIT-250": {
+      "goal": "catalogMiss returns editable hint",
+      "samples": [
+        {
+          "jerseyId": "j10-barca-salmon-third",
+          "verdict": "fail",
+          "catalogMiss": null,
+          "clubHint": null,
+          "nationalTeamHint": null,
+          "suggestions": {}
+        }
+      ],
+      "pass": false
+    }
+  },
+  "identity": [
+    {
+      "jerseyId": "j1-juventus-pink-away",
+      "jobId": "0c948be3-eb78-4e93-a200-7fd4ff350d00",
+      "status": "noop",
+      "preselect": null,
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "score": {
+        "club_or_nt": false,
+        "season": false,
+        "type": false,
+        "player": false,
+        "has_hint": false,
+        "has_enrichment": false
+      },
+      "verdict": "noop",
+      "truth": {
+        "clubHint": "Juventus",
+        "seasonHint": "2015/16",
+        "kitType": "away",
+        "playerHint": "Dybala",
+        "playerNumberHint": "21",
+        "nationalTeam": false,
+        "catalogLikely": true
+      },
+      "n_photos": 2,
+      "elapsed_ms": 3240
+    },
+    {
+      "jerseyId": "j5-arsenal-red-home-125",
+      "jobId": "b9997b09-8b82-4133-9d39-576d23d54389",
+      "status": "noop",
+      "preselect": null,
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "score": {
+        "club_or_nt": false,
+        "season": false,
+        "type": false,
+        "player": false,
+        "has_hint": false,
+        "has_enrichment": false
+      },
+      "verdict": "noop",
+      "truth": {
+        "clubHint": "Arsenal",
+        "seasonHint": "2011/12",
+        "kitType": "home",
+        "playerHint": "Henry",
+        "playerNumberHint": "12",
+        "nationalTeam": false,
+        "catalogLikely": true
+      },
+      "n_photos": 2,
+      "elapsed_ms": 2416
+    },
+    {
+      "jerseyId": "j8-psg-white-jordan",
+      "jobId": "2c45f60d-26cd-4bc6-b09c-38c5c59ab562",
+      "status": "noop",
+      "preselect": null,
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "score": {
+        "club_or_nt": false,
+        "season": false,
+        "type": false,
+        "player": false,
+        "has_hint": false,
+        "has_enrichment": false
+      },
+      "verdict": "noop",
+      "truth": {
+        "clubHint": "Paris Saint-Germain",
+        "seasonHint": "2018/19",
+        "kitType": "away",
+        "playerHint": "Neymar Jr",
+        "playerNumberHint": "10",
+        "nationalTeam": false,
+        "catalogLikely": true
+      },
+      "n_photos": 2,
+      "elapsed_ms": 2487
+    },
+    {
+      "jerseyId": "j17-mancity-sky-home",
+      "jobId": "5af95e9a-188c-46a7-a321-139a0d55a530",
+      "status": "noop",
+      "preselect": null,
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "score": {
+        "club_or_nt": false,
+        "season": false,
+        "type": false,
+        "player": false,
+        "has_hint": false,
+        "has_enrichment": false
+      },
+      "verdict": "noop",
+      "truth": {
+        "clubHint": "Manchester City",
+        "seasonHint": "2022/23",
+        "kitType": "home",
+        "playerHint": "Haaland",
+        "playerNumberHint": "9",
+        "nationalTeam": false,
+        "catalogLikely": true
+      },
+      "n_photos": 2,
+      "elapsed_ms": 2457
+    },
+    {
+      "jerseyId": "j14-argentina-home-2006",
+      "jobId": "d0b34ff3-f0a6-4bd9-a844-a0c2c08d0b8e",
+      "status": "noop",
+      "preselect": null,
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "score": {
+        "club_or_nt": false,
+        "season": false,
+        "type": false,
+        "player": false,
+        "has_hint": false,
+        "has_enrichment": false
+      },
+      "verdict": "noop",
+      "truth": {
+        "clubHint": "Argentina",
+        "seasonHint": "2006",
+        "kitType": "home",
+        "playerHint": "Messi",
+        "playerNumberHint": "19",
+        "nationalTeam": true,
+        "catalogLikely": true
+      },
+      "n_photos": 4,
+      "elapsed_ms": 2452
+    },
+    {
+      "jerseyId": "j2-italy-blue-home",
+      "jobId": "97da5447-c67e-46d0-8c96-cd37d8621622",
+      "status": null,
+      "preselect": null,
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "score": {
+        "club_or_nt": false,
+        "season": false,
+        "type": false,
+        "player": false,
+        "has_hint": false,
+        "has_enrichment": false
+      },
+      "verdict": "fail",
+      "truth": {
+        "clubHint": "Italy",
+        "seasonHint": "2006",
+        "kitType": "home",
+        "playerHint": "Pirlo",
+        "playerNumberHint": "21",
+        "nationalTeam": true,
+        "catalogLikely": true
+      },
+      "n_photos": 2,
+      "elapsed_ms": 3067
+    },
+    {
+      "jerseyId": "j10-barca-salmon-third",
+      "jobId": "70813086-f6a6-41b2-a757-abe54c1779b2",
+      "status": null,
+      "preselect": null,
+      "fieldPreselect": null,
+      "catalogMiss": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {},
+      "score": {
+        "club_or_nt": false,
+        "season": false,
+        "type": false,
+        "player": false,
+        "has_hint": false,
+        "has_enrichment": false
+      },
+      "verdict": "fail",
+      "truth": {
+        "clubHint": "FC Barcelona",
+        "seasonHint": "2018/19",
+        "kitType": "third",
+        "playerHint": "Messi",
+        "playerNumberHint": "10",
+        "nationalTeam": false,
+        "catalogLikely": true
+      },
+      "n_photos": 2,
+      "elapsed_ms": 3950
+    }
+  ],
+  "grouping": [
+    {
+      "dump": "A-three-shirts-mixed",
+      "jobId": "a8855fce-f2eb-436a-a24d-e655d4dff304",
+      "status": "ready",
+      "preselect": true,
+      "groups": [
+        {
+          "confidence": 90,
+          "jerseyIds": [
+            "j10-barca-salmon-third",
+            "j10-barca-salmon-third"
+          ]
+        },
+        {
+          "confidence": 90,
+          "jerseyIds": [
+            "j2-italy-blue-home",
+            "j2-italy-blue-home"
+          ]
+        },
+        {
+          "confidence": 90,
+          "jerseyIds": [
+            "j5-arsenal-red-home-125",
+            "j5-arsenal-red-home-125"
+          ]
+        },
+        {
+          "confidence": 85,
+          "jerseyIds": [
+            "j1-juventus-pink-away"
+          ]
+        },
+        {
+          "confidence": 90,
+          "jerseyIds": [
+            "j14-argentina-home-2006",
+            "j14-argentina-home-2006",
+            "j14-argentina-home-2006"
+          ]
+        },
+        {
+          "confidence": 90,
+          "jerseyIds": [
+            "j17-mancity-sky-home",
+            "j17-mancity-sky-home"
+          ]
+        },
+        {
+          "confidence": 85,
+          "jerseyIds": [
+            "j1-juventus-pink-away"
+          ]
+        },
+        {
+          "confidence": 90,
+          "jerseyIds": [
+            "j8-psg-white-jordan",
+            "j8-psg-white-jordan"
+          ]
+        }
+      ],
+      "pure": true,
+      "model": null,
+      "latency_ms": null,
+      "n_photos": 15
+    },
+    {
+      "dump": "B-same-shirt-angles",
+      "jobId": "3406a22e-b0dc-46a9-98cd-9fd95f824afa",
+      "status": "ready",
+      "preselect": true,
+      "groups": [
+        {
+          "confidence": 98,
+          "jerseyIds": [
+            "j14-argentina-home-2006",
+            "j14-argentina-home-2006",
+            "j14-argentina-home-2006",
+            "j14-argentina-home-2006",
+            "j14-argentina-home-2006"
+          ]
+        }
+      ],
+      "pure": true,
+      "model": null,
+      "latency_ms": null,
+      "n_photos": 5
+    },
+    {
+      "dump": "C-similar-white-homes",
+      "jobId": "3f958127-a96b-4775-885b-29b4377b11d4",
+      "status": "ready",
+      "preselect": true,
+      "groups": [
+        {
+          "confidence": 95,
+          "jerseyIds": [
+            "j8-psg-white-jordan",
+            "j8-psg-white-jordan"
+          ]
+        },
+        {
+          "confidence": 95,
+          "jerseyIds": [
+            "j3-denmark-white-away",
+            "j3-denmark-white-away"
+          ]
+        }
+      ],
+      "pure": true,
+      "model": null,
+      "latency_ms": null,
+      "n_photos": 4
+    }
+  ],
+  "entitlement": {
+    "live": true,
+    "source": "comp",
+    "expires": "2026-10-14T22:42:51.942Z",
+    "trialUsed": false,
+    "visionMatcher": {
+      "used": 11,
+      "cap": 10,
+      "remaining": 10,
+      "unlimited": true
+    }
+  }
+}

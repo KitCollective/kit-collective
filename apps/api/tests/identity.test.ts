@@ -9,6 +9,7 @@ import {
   collectionSaveResponseSchema,
   cookieConsentSchema,
   handleAvailabilityResponseSchema,
+  identityCodeAcceptedSchema,
   identityExportSchema,
   identityMeSchema,
   identityPasswordResetAcceptedSchema,
@@ -28,6 +29,7 @@ import {
   season,
   teamSeason,
   user,
+  verification,
 } from "@kit/db";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
@@ -36,6 +38,52 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AppModule } from "../dist/app.module.js";
 import { recordedMails, resetRecordedMails } from "../dist/notify/recording-mailer.adapter.js";
+
+type RecordedMail = (typeof recordedMails)[number];
+
+function mailUrl(mail: RecordedMail | undefined): string | undefined {
+  return mail && "url" in mail ? mail.url : undefined;
+}
+
+/** The six digits of the newest sign-in code mailed to this address. */
+function latestCode(email: string): string {
+  const mail = [...recordedMails]
+    .reverse()
+    .find((item) => item.kind === "code" && item.to === email);
+  if (!mail || !("code" in mail)) {
+    throw new Error(`No sign-in code was mailed to ${email}`);
+  }
+  return mail.code;
+}
+
+function requestCodeInject(
+  app: NestFastifyApplication,
+  input: { email: string; remoteAddress?: string },
+) {
+  return app.inject({
+    method: "POST",
+    url: "/v1/identity/code",
+    remoteAddress: input.remoteAddress,
+    payload: { email: input.email },
+  });
+}
+
+function verifyCodeInject(
+  app: NestFastifyApplication,
+  input: { email: string; code: string; remoteAddress?: string },
+) {
+  return app.inject({
+    method: "POST",
+    url: "/v1/identity/code/verify",
+    remoteAddress: input.remoteAddress,
+    payload: { email: input.email, code: input.code },
+  });
+}
+
+function wrongCodeFor(code: string): string {
+  return code === "000000" ? "000001" : "000000";
+}
+
 import { clearAuthThrottleHits } from "./helpers/auth-throttle.js";
 
 const migrationsFolder = path.join(
@@ -317,8 +365,8 @@ describe("Identity /v1", () => {
     const mail = recordedMails.find(
       (item) => item.to === "verify-me@example.com" && item.kind === "verify",
     );
-    expect(mail?.url).toMatch(/token=/);
-    const token = new URL(mail?.url ?? "").searchParams.get("token");
+    expect(mailUrl(mail)).toMatch(/token=/);
+    const token = new URL(mailUrl(mail) ?? "").searchParams.get("token");
     expect(token).toBeTruthy();
 
     const verify = await app.inject({
@@ -381,7 +429,7 @@ describe("Identity /v1", () => {
     const mail = recordedMails.find(
       (item) => item.to === "reset-complete@example.com" && item.kind === "reset",
     );
-    const token = new URL(mail?.url ?? "").searchParams.get("token");
+    const token = new URL(mailUrl(mail) ?? "").searchParams.get("token");
 
     const complete = await app.inject({
       method: "POST",
@@ -1301,6 +1349,222 @@ describe("Identity /v1", () => {
     });
 
     expect(response.statusCode).toBe(400);
+  });
+
+  describe("E-mail sign-in code", () => {
+    it("answers a code request the same for a new and an existing e-mail", async () => {
+      resetRecordedMails();
+      await registerSession(app, "code-known@example.com");
+      const known = await requestCodeInject(app, { email: "code-known@example.com" });
+      const unknown = await requestCodeInject(app, { email: "code-unknown@example.com" });
+
+      expect(known.statusCode).toBe(200);
+      expect(unknown.statusCode).toBe(200);
+      expect(identityCodeAcceptedSchema.parse(JSON.parse(known.body))).toEqual({ accepted: true });
+      expect(JSON.parse(known.body)).toEqual(JSON.parse(unknown.body));
+      expect(latestCode("code-known@example.com")).toMatch(/^\d{6}$/);
+      expect(latestCode("code-unknown@example.com")).toMatch(/^\d{6}$/);
+    });
+
+    it("rejects a request that is not an e-mail", async () => {
+      const response = await requestCodeInject(app, { email: "not-an-email" });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("creates the collector, verifies the e-mail and opens a session on a correct code", async () => {
+      resetRecordedMails();
+      await requestCodeInject(app, { email: "Code-New@Example.com" });
+      const verify = await verifyCodeInject(app, {
+        email: "code-new@example.com",
+        code: latestCode("code-new@example.com"),
+      });
+
+      expect(verify.statusCode).toBe(200);
+      const session = identitySessionSchema.parse(JSON.parse(verify.body));
+      expect(session.user.email).toBe("code-new@example.com");
+      expect(session.user.handle).toBe("code_new");
+      expect(session.user.emailVerified).toBe(true);
+
+      const me = await app.inject({
+        method: "GET",
+        url: "/v1/identity/me",
+        headers: { authorization: `Bearer ${session.accessToken}` },
+      });
+      expect(me.statusCode).toBe(200);
+    });
+
+    it("signs in an account that was created with a verified password and leaves its password untouched", async () => {
+      resetRecordedMails();
+      const registered = await registerSession(app, "code-password@example.com");
+      const token = new URL(
+        mailUrl(recordedMails.find((item) => item.kind === "verify")) ?? "",
+      ).searchParams.get("token");
+      await app.inject({ method: "POST", url: "/v1/identity/verify", payload: { token } });
+
+      await requestCodeInject(app, { email: "code-password@example.com" });
+      const verify = await verifyCodeInject(app, {
+        email: "code-password@example.com",
+        code: latestCode("code-password@example.com"),
+      });
+      expect(verify.statusCode).toBe(200);
+      const session = identitySessionSchema.parse(JSON.parse(verify.body));
+      expect(session.user.id).toBe(registered.user.id);
+      expect(session.user.emailVerified).toBe(true);
+
+      const login = await loginInject(app, {
+        email: "code-password@example.com",
+        password: "password123",
+      });
+      expect(login.statusCode).toBe(200);
+    });
+
+    it("drops the password and sessions of an account whose address was never proven", async () => {
+      resetRecordedMails();
+      // Someone registered this address with a password before its owner ever proved it.
+      const squatter = await registerSession(app, "code-squatted@example.com");
+      expect(squatter.user.emailVerified).toBe(false);
+
+      await requestCodeInject(app, { email: "code-squatted@example.com" });
+      const verify = await verifyCodeInject(app, {
+        email: "code-squatted@example.com",
+        code: latestCode("code-squatted@example.com"),
+      });
+      expect(verify.statusCode).toBe(200);
+      expect(identitySessionSchema.parse(JSON.parse(verify.body)).user.id).toBe(squatter.user.id);
+
+      const login = await loginInject(app, {
+        email: "code-squatted@example.com",
+        password: "password123",
+      });
+      expect(login.statusCode).toBe(401);
+      const old = await app.inject({
+        method: "GET",
+        url: "/v1/identity/me",
+        headers: { authorization: `Bearer ${squatter.accessToken}` },
+      });
+      expect(old.statusCode).toBe(401);
+    });
+
+    it("lets one of two parallel code requests win and leaves a single live code", async () => {
+      resetRecordedMails();
+      const email = "code-parallel@example.com";
+      await Promise.all([requestCodeInject(app, { email }), requestCodeInject(app, { email })]);
+      const rows = await helperDb.db
+        .select()
+        .from(verification)
+        .where(eq(verification.identifier, `code:${email}`));
+      expect(rows).toHaveLength(1);
+    });
+
+    it("accepts a code once", async () => {
+      resetRecordedMails();
+      await requestCodeInject(app, { email: "code-once@example.com" });
+      const code = latestCode("code-once@example.com");
+
+      const first = await verifyCodeInject(app, { email: "code-once@example.com", code });
+      const second = await verifyCodeInject(app, { email: "code-once@example.com", code });
+
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(410);
+    });
+
+    it("answers 401 for a wrong code and still accepts the right one", async () => {
+      resetRecordedMails();
+      await requestCodeInject(app, { email: "code-wrong@example.com" });
+      const code = latestCode("code-wrong@example.com");
+
+      const wrong = await verifyCodeInject(app, {
+        email: "code-wrong@example.com",
+        code: wrongCodeFor(code),
+      });
+      expect(wrong.statusCode).toBe(401);
+
+      const right = await verifyCodeInject(app, { email: "code-wrong@example.com", code });
+      expect(right.statusCode).toBe(200);
+    });
+
+    it("refuses even the correct code after the attempt limit", async () => {
+      resetRecordedMails();
+      await requestCodeInject(app, { email: "code-limit@example.com" });
+      const code = latestCode("code-limit@example.com");
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const wrong = await verifyCodeInject(app, {
+          email: "code-limit@example.com",
+          code: wrongCodeFor(code),
+        });
+        expect(wrong.statusCode).toBe(401);
+      }
+
+      const refused = await verifyCodeInject(app, { email: "code-limit@example.com", code });
+      expect(refused.statusCode).toBe(429);
+      const afterwards = await verifyCodeInject(app, { email: "code-limit@example.com", code });
+      expect(afterwards.statusCode).toBe(410);
+    });
+
+    it("invalidates the previous code when a new one is sent", async () => {
+      resetRecordedMails();
+      await requestCodeInject(app, { email: "code-resend@example.com" });
+      const first = latestCode("code-resend@example.com");
+      let second = first;
+      // Six random digits can repeat; ask again until the new code differs from the old one.
+      for (let tries = 0; tries < 4 && second === first; tries += 1) {
+        await requestCodeInject(app, { email: "code-resend@example.com" });
+        second = latestCode("code-resend@example.com");
+      }
+      expect(second).not.toBe(first);
+
+      const stale = await verifyCodeInject(app, { email: "code-resend@example.com", code: first });
+      expect(stale.statusCode).toBe(401);
+      const fresh = await verifyCodeInject(app, { email: "code-resend@example.com", code: second });
+      expect(fresh.statusCode).toBe(200);
+    });
+
+    it("answers 410 for an expired code and for an e-mail that never asked for one", async () => {
+      resetRecordedMails();
+      await requestCodeInject(app, { email: "code-expired@example.com" });
+      const code = latestCode("code-expired@example.com");
+      await helperDb.db
+        .update(verification)
+        .set({ expiresAt: new Date(Date.now() - 1000) })
+        .where(eq(verification.identifier, "code:code-expired@example.com"));
+
+      const expired = await verifyCodeInject(app, { email: "code-expired@example.com", code });
+      expect(expired.statusCode).toBe(410);
+
+      const never = await verifyCodeInject(app, { email: "code-never@example.com", code });
+      expect(never.statusCode).toBe(410);
+    });
+
+    it("rejects a code that is not six digits", async () => {
+      const response = await verifyCodeInject(app, {
+        email: "code-shape@example.com",
+        code: "12ab",
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("stores the code hashed, never in the clear", async () => {
+      resetRecordedMails();
+      await requestCodeInject(app, { email: "code-hash@example.com" });
+      const code = latestCode("code-hash@example.com");
+      const [row] = await helperDb.db
+        .select()
+        .from(verification)
+        .where(eq(verification.identifier, "code:code-hash@example.com"));
+      expect(row?.value).toBeTruthy();
+      expect(row?.value).not.toContain(code);
+    });
+
+    it("429s the sixth code request for the same e-mail", async () => {
+      const email = "code-throttle@example.com";
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const response = await requestCodeInject(app, { email, remoteAddress: "203.30.1.8" });
+        expect(response.statusCode).toBe(200);
+      }
+      const sixth = await requestCodeInject(app, { email, remoteAddress: "203.30.1.8" });
+      expect(sixth.statusCode).toBe(429);
+    });
   });
 
   describe("Auth throttle on login", () => {

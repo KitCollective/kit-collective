@@ -5,7 +5,9 @@
 
 # Agent workflow
 
-Linear is the control plane. The PI worker (Compose + `gh` + Linear CLI) is the runtime. Cursor Cloud Agents are not factory dispatch. Linear MCP is not installed on kit-harness (empty `.pi/mcp.json`).
+Linear is the control plane. The runtime is Desktop `/issue-session`, started by the approver for named issues. Cursor Cloud Agents are not factory dispatch.
+
+**No dispatch worker runs.** The PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`). Where this file says "the worker", "Pi", planner claim, Idle timeout or Auto-merge, it describes that archived worker: the status and comment contract still holds, but a person or an `/issue-session` performs the step, and nothing claims a `ready-for-agent` issue by itself.
 This file is the contract. The worker and skills must follow it, not a one-off prompt.
 
 Load `factory.config.json` (product, team, states, lanes, approver, helper dir).
@@ -55,7 +57,7 @@ Typical contract:
 | In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |
 | Ready for merge | started | checker on pass | Empty Linear Agent is the happy path. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop caps allow. Pi delegate is not a gate. Nicklas can still move. |
 | Merging | started | **Auto-merge** or **approver** from `Ready for merge` | Merge permission. Land auto-merges into the integration lane. Works when delegate is empty. |
-| Done | completed | **land only** after `gh pr merge` succeeds | SHA is on `lanes.integration`. `blockedBy` may resolve |
+| Done | completed | **land only** after the queued PR is `MERGED` | SHA is on `lanes.integration`. `blockedBy` may resolve |
 | Canceled | canceled | humans | Dead. No agent action |
 
 ## Project + environment promotion
@@ -82,8 +84,8 @@ Lanes come from `lanes` in factory config.
 6. Follow `/implement`: `/tdd` at the spec’s seams; spawn **every matching helper** in `paths.helpers` (never their own Linear issues). Workpad `### Domain helpers used` must list them — `(none)` on a slice that matches helper descriptions is a miss. Mobile/EAS slices also load `.cursor/skills/expo/` (`expo-overview` first, then the matching leaf).
 7. Out of scope → `/signal-up`. Cap `agent.signalUpCapPerRun`. Never expand the PR except ratchet paths required by `### Review feedback` (`docs/agents/write-scope.md`).
 8. Open or update a PR **into the integration lane**. Attach the PR URL on the issue.
-9. Upload screenshots/recordings from the worker to the Linear issue. Comment. Link under workpad `### Evidence`.
-10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph plus typecheck of packages whose src or tests you edited; wait for **all** required GitHub checks (pending or red → do not flip, including image/deploy smokes); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff; spawn the UI/layout helper when the issue cites the design lock; every What to build clause has Validation or Evidence. On resume, fix the **class**, not only the cited file.
+9. Evidence. A slice whose surface has device-flow evidence follows `docs/agents/device-flows.md`: write the slice's own Device flow (`apps/mobile/.maestro/slices/<KEY>.yaml`, one step per Acceptance criterion a screen can show), and after the PR is open run `apps/mobile/.maestro/device-run.sh`, which queues behind other sessions, then sets the `Device flows` commit status, writes one PR comment (the steps with their screenshots, verdict and a recording) and puts the same links under workpad `### Evidence`. Do not attach worker browser screenshots for such a slice. A red flow or a **Design finding** goes into `### Review feedback`. Nothing is owed on the integration lane after landing; the five regression flows run on request (`E2E_FLOWS=regression`). Any other slice: upload screenshots/recordings to the Linear issue, comment, and link under workpad `### Evidence`.
+10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph plus typecheck of packages whose src or tests you edited; `pnpm check:review-gate` clean; wait for **all** required GitHub checks with `node scripts/wait-for-checks.mjs <pr>` (pending or red → do not flip, including image/deploy smokes; never ask the human whether CI is green); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff; spawn the UI/layout helper when the issue cites the design lock; every What to build clause has Validation or Evidence. On resume, fix the **class**, not only the cited file.
 11. Clear addressed `### Review feedback`. Move to `In Review` only after the gate. Write **one role comment** (PR URL + what was built). Do not merge. Do not move to `Done`. Do not tick description Acceptance criteria — checker pass owns that.
 
 ## Role comments
@@ -103,16 +105,20 @@ Each factory role writes **one new top-level issue comment** at its status trans
 
 Wakes when status becomes `In Review`. Judge only. No feature coding.
 
-Every pass is a **complete** review of the current diff, not a delta against last `### Review feedback`. Findings that existed in the first PR and are only reported on fail #3+ are a checker miss — dump the whole lock set in fail #1. Spec source is the whole issue body (What to build + AC). A red CI job is not a Spec-clean license.
+The first pass is a **complete** review of the diff: every row of the lock set, written to workpad `### Review matrix` (one row each: `checked`, `N/A` or `finding`, with evidence and the SHA). Findings that existed in the first PR and are only reported on fail #3+ are a checker miss — dump the whole lock set in fail #1. Later passes inherit the matrix and re-check only the rows `node scripts/review-matrix.mjs plan` lists (rows still a finding, state rows, rows the new diff touches); ADR-0050. Spec source is the whole issue body (What to build + AC). A red CI job is not a Spec-clean license.
 
-1. `/code-review` (Standards + Spec) against the attached PR. Sub-agents list **every** hard finding; do not stop at the first three. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis.
+Mechanical findings (Danish identifiers, docs naming what the diff removed) are caught by `pnpm check:review-gate` before `In Review` and in CI; a review does not spend a round on what a script can say.
+
+A fail whose findings are **all** tagged `[text]` or `[name]` is a **light fail**: the issue stays `In Review`, the session fixes in place, and `node scripts/classify-fix-diff.mjs <lastReviewSha>` decides the check. `light` → the reviewer reads the fix diff against each finding and the gate scripts, no new fresh review, `lightFixes` +1 and `reviewLoops` unchanged (three light fixes count as one `reviewLoops`). `full` → the normal loop.
+
+1. `/code-review` (Standards + Spec) against the attached PR. Sub-agents list **every** hard finding; do not stop at the first three. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis. For a mobile slice the Standards axis reads the `Device flows` commit status and PR comment: a red or missing status is a fail; the slice flow is read against the Acceptance criteria (a criterion a screen could show with no step behind it is a Spec finding); a **Design finding** (a named design-lock break, or a change the issue did not ask for) is included in `### Review feedback`, and a step that shows what the issue asked for is the Evidence for that criterion.
 2. GitHub CI/CD on that PR: read **all** required check runs (not only `test` — image/deploy smokes count). `gh pr view --json mergeable` must be `MERGEABLE`. Pending required checks → wait; stay in `In Review`. Do **not** fail early on Standards while checks are still running. Red or failed required checks, or `CONFLICTING` → fail, and still include every Spec/Standards hard miss in the same feedback.
 3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Ready for merge`. Write **one role comment** with a verdict per Acceptance criterion. Tick those criteria `[x]` in the issue **description**. Optional workpad `### Description AC rewrites` (`- old → new | reason`) rewrites **one** criterion line in that section and comments why on that verdict only — never silently tick unmet or stale text, and never attach the rewrite reason to other criteria.
 4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). Write **one role comment** that includes those findings (axis headings). Do **not** tick description Acceptance criteria. If the miss is a new required env, “done” includes every workflow that boots that process. That status change wakes implement. Do not start implement yourself.
 
 ## Land run (status became `Merging`)
 
-**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Ready for merge`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land merges into the integration lane only, then moves the issue to `Done` and writes **one role comment** with the merge SHA. Merge fail → `Implementing`, merge error under `### Review feedback`, `reviewLoops` incremented, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
+**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Ready for merge`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land enqueues the PR (`gh pr merge --merge --auto`; the lane has a merge queue) and merges into the integration lane only once the queue lands it, then moves the issue to `Done` and writes **one role comment** with the merge SHA. Merge fail → `Implementing`, merge error under `### Review feedback`, `reviewLoops` incremented, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
 
 ## Guardrails
 
@@ -156,10 +162,15 @@ Every pass is a **complete** review of the current diff, not a delta against las
 
 - ciFailCycles: 0
 - reviewLoops: 0
+- lightFixes: 0
+
+### Review matrix
+
+- (none until the first review | table from `node scripts/review-matrix.mjs rows`: row, status `checked` / `N/A` / `finding`, evidence, SHA)
 
 ### Review feedback
 
-- (none | why the last pass was not enough — checker, land, or approver)
+- (none | why the last pass was not enough — checker, land, or approver; `[text]` / `[name]` tags mark light findings)
 
 ### Evidence
 

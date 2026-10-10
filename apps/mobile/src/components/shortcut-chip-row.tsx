@@ -32,6 +32,7 @@ export function ShortcutChipRow({
       >
         <Chip
           label="Alle"
+          testID="shortcut-chip-all"
           selected={selectedShortcutId === null}
           onPress={onSelectAlle}
           accessibilityRole="radio"
@@ -40,6 +41,7 @@ export function ShortcutChipRow({
           <Chip
             key={shortcut.id}
             label={shortcut.name}
+            testID={`shortcut-chip-${shortcut.id}`}
             selected={selectedShortcutId === shortcut.id}
             onPress={() => onSelectShortcut(shortcut.id)}
             accessibilityRole="radio"

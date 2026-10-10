@@ -94,13 +94,14 @@ FKApi exposes richer types with **category** (`match`, `prematch`, `preseason`, 
 | Home | match | `home` | **stamdata now** |
 | Away | match | `away` | **stamdata now** |
 | Third | match | `third` | **stamdata now** |
-| Special | match | `special` | **stamdata now** (FCK 2010-11 lists one) |
-| GK Home, GK Away, GK 1, GK 2, GK 3 | match | `gk` | **stamdata now** |
-| Champions League Home (+ V2), European Away, CL GK variants | match | same base type (`home` / `away` / `gk`) | **later leverage** — competition-specific duplicate; keep first match kit per base type for proof unless Join workflow names CL variants |
-| Training, Anthem, Track, Rain, Bench, Warm-up, Pre-season | training / jacket / … | — | **drop** for Football Data Seed proof |
+| Fourth | match | `fourth` | **stamdata now** |
+| Special, anniversary / occasion-only cup kits | match | `special` + remainder | **stamdata now** (FCK 2010-11 Special; Inter CL final stem) |
+| GK Home, GK Away, GK Third, GK Fourth, GK 1, GK 2, GK 3 | match | `gk` + remainder (`home`, `fourth`, `1`, …) | **stamdata now** (several `gk` rows per side+season) |
+| Champions League Home (+ V2), European Away, CL GK variants, Super Cup / cup homes | match | base type + open `kit.variant` | **stamdata now** — own row, own photos; never merge onto league Home |
+| Training, Anthem, Track, Rain, Bench, Warm-up, Pre-season, Pre-match | training / jacket / … | — | **drop** for Football Data Seed proof |
 | Design (Plain, Stripes, Graphic, Hoops, Chest band, …) | — | — | **later leverage** — optional CatalogLabel; not a column on proof |
 
-**Proof accept:** one row per `(side, season, base type)` for `home`, `away`, `third`, `gk`, `special` where FKA lists a match-category kit. Drop training/anthem/track rows for Superliga 2010/11 and Denmark 2010 proof.
+**Proof accept:** one row per `(side, season, type, variant)` where FKA lists a match-category kit (`variant` null on the league default). Several `gk` rows when FKA lists GK Home/Away/Third/Fourth. Drop training/anthem/track/pre-match rows. Champions League / European / Super Cup homes stay as `home` + remainder, not later-leverage drops.
 
 **Proof-season type lists (indexed FKA):**
 
@@ -163,8 +164,11 @@ FKApi exposes richer types with **category** (`match`, `prematch`, `preseason`, 
 | Club join (TM club id) | ✓ | | | existing mapper |
 | NT join (FKA team id) | ✓ (once confirmed) | | | **new grain path** |
 | English kit label | | ✓ | | CatalogLabel |
-| Design pattern | | ✓ | | |
-| Competition tags on kit | | ✓ | | CL duplicate kits |
+| Design | ✓ | | | `kit.design` from FKA fact table |
+| Competition | ✓ | | | `kit.competition` from FKA League |
+| Release date | ✓ | | | `kit.released_on` |
+| Description | ✓ | | | `kit.description` from FKA paragraph |
+| Extra archive images | ✓ | | | extra-images-container → additional `kit_photo` |
 | Rating | | | ✓ | noise |
 | Brand / club logos, FKA URL | | | ✓ | ADR-0002 branding |
 | Training / anthem / track kits | | | ✓ | proof scope |

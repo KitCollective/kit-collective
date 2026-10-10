@@ -25,3 +25,7 @@ Do **not** start B in parallel if B `blockedBy` A. Queue B until A is `Done`.
 Parent: one message with multiple Task calls for the current wave. After the wave, start the next wave (unblocked, non-overlapping). Aggregate the after-batch list.
 
 If worktrees or Cloud Agents are unavailable, say so and run sequential instead of overlapping branches on one tree.
+
+## Device work is shared
+
+Parallel children share one Mac, one simulator and one local database. Each runs `apps/mobile/.maestro/device-run.sh`, which queues on a lock (`docs/agents/device-flows.md`), so children may implement in parallel and their device runs are served one at a time. A child waiting in the queue is not stuck; do not start the API, a build or the flows by any other command, and do not kill a run to let another in.

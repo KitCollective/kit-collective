@@ -25,6 +25,8 @@ import {
   createDb,
   kit,
   league,
+  nationalTeam,
+  nationalTeamSeason,
   patch,
   player,
   playerClubSeason,
@@ -148,6 +150,61 @@ async function insertClubSeasonFixture() {
 
   return {
     clubId: insertedClub!.id,
+    seasonId: insertedSeason!.id,
+  };
+}
+
+async function insertNationalTeamSeasonFixture() {
+  const { db, pool } = createDb(DATABASE_URL);
+
+  const [insertedCountry] = await db
+    .insert(country)
+    .values({ iso3166: "IS" })
+    .returning({ id: country.id });
+
+  const [insertedNationalTeam] = await db
+    .insert(nationalTeam)
+    .values({ countryId: insertedCountry!.id, gender: "men" })
+    .returning({ id: nationalTeam.id });
+
+  const [insertedSeason] = await db
+    .insert(season)
+    .values({
+      label: "2024",
+      startsOn: "2024-01-01",
+      endsOn: "2024-12-31",
+      calendarKind: "calendar",
+    })
+    .returning({ id: season.id });
+
+  await db.insert(nationalTeamSeason).values({
+    nationalTeamId: insertedNationalTeam!.id,
+    seasonId: insertedSeason!.id,
+  });
+
+  await db.insert(catalogLabel).values([
+    {
+      entityType: "country",
+      entityId: insertedCountry!.id,
+      locale: "da",
+      kind: "label",
+      text: "Island",
+      source: "seed",
+    },
+    {
+      entityType: "national_team",
+      entityId: insertedNationalTeam!.id,
+      locale: "da",
+      kind: "label",
+      text: "Danmark",
+      source: "seed",
+    },
+  ]);
+
+  await pool.end();
+
+  return {
+    nationalTeamId: insertedNationalTeam!.id,
     seasonId: insertedSeason!.id,
   };
 }
@@ -367,6 +424,74 @@ describe("Collection /v1", () => {
     expect(body.jersey.photos[0]?.objectKey.startsWith(`user/${session.user.id}/`)).toBe(true);
     expect(body.jersey.photos[0]?.ocrStatus).toBe("none");
     expect(body.jersey.photos[0]?.objectKey.includes("kit/")).toBe(false);
+  });
+
+  it("saves a national-team UserJersey with nationalTeamId", async () => {
+    const session = await registerSession(app, "save-nt@example.com");
+    const fixture = await insertNationalTeamSeasonFixture();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        nationalTeamId: fixture.nationalTeamId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = collectionSaveResponseSchema.parse(JSON.parse(response.body));
+    expect(body.jersey.clubId).toBeNull();
+    expect(body.jersey.nationalTeamId).toBe(fixture.nationalTeamId);
+    expect(body.jersey.nationalTeamLabel).toBe("Danmark");
+    expect(body.jersey.clubLabel).toBeNull();
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/jerseys",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+    });
+    expect(listResponse.statusCode).toBe(200);
+    const listed = collectionJerseysSchema.parse(JSON.parse(listResponse.body));
+    const saved = listed.jerseys.find((jersey) => jersey.id === body.jersey.id);
+    expect(saved?.nationalTeamId).toBe(fixture.nationalTeamId);
+    expect(saved?.clubId).toBeNull();
+  });
+
+  it("rejects a national-team UUID in clubId", async () => {
+    const session = await registerSession(app, "save-nt-as-club@example.com");
+    const fixture = await insertNationalTeamSeasonFixture();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/collection/jerseys/save",
+      headers: {
+        authorization: `Bearer ${session.accessToken}`,
+        "accept-language": "da",
+      },
+      payload: {
+        clubId: fixture.nationalTeamId,
+        seasonId: fixture.seasonId,
+        type: "home",
+        size: "m",
+        condition: "used",
+        photos: [{ role: "front", source: "gallery", contentBase64: JPEG_BASE64 }],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toMatch(/clubId is not a catalog club/);
   });
 
   it("rejects duplicate universal photo roles on save", async () => {
@@ -1330,9 +1455,14 @@ describe("Collection /v1", () => {
       method: "GET",
       url: "/v1/collection/discover/kits/11111111-1111-4111-8111-111111111111",
     });
+    const nationalTeamResponse = await app.inject({
+      method: "GET",
+      url: "/v1/collection/discover/national-teams/11111111-1111-4111-8111-111111111111",
+    });
     expect(clubResponse.statusCode).toBe(401);
     expect(playerResponse.statusCode).toBe(401);
     expect(kitResponse.statusCode).toBe(401);
+    expect(nationalTeamResponse.statusCode).toBe(401);
   });
 
   it("composes Club and Player catalog drills with locale labels and omitted rows", async () => {

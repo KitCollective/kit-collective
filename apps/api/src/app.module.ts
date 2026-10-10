@@ -4,6 +4,7 @@ import { BillingModule } from "./billing/billing.module.js";
 import { CatalogModule } from "./catalog/catalog.module.js";
 import { CollectionModule } from "./collection/collection.module.js";
 import { DbModule } from "./db/db.module.js";
+import { E2eModule } from "./e2e/e2e.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { IdentityModule } from "./identity/identity.module.js";
 import { ModerationModule } from "./moderation/moderation.module.js";
@@ -24,6 +25,7 @@ import { WishlistModule } from "./wishlist/wishlist.module.js";
     WishlistModule,
     ModerationModule,
     AdminModule,
+    E2eModule,
   ],
 })
 export class AppModule {}

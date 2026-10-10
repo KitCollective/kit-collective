@@ -13,11 +13,13 @@ export function useConfirmExit(
   sessionId: string | undefined,
   state: CaptureSessionState | null,
   isSessionResolved: boolean,
+  /** Runs once, on the collector's own Luk, before the modal leaves (parks an overview session). */
+  onClose?: () => void,
 ): () => void {
   const router = useRouter();
   const exitedRef = useRef(false);
 
-  const exitToCollection = useCallback(() => {
+  const dismiss = useCallback(() => {
     if (exitedRef.current) {
       return;
     }
@@ -25,11 +27,18 @@ export function useConfirmExit(
     router.dismissTo(COLLECTION_ROUTE);
   }, [router]);
 
+  const exitToCollection = useCallback(() => {
+    if (!exitedRef.current) {
+      onClose?.();
+    }
+    dismiss();
+  }, [dismiss, onClose]);
+
   useEffect(() => {
     if (shouldConfirmRedirectAway(sessionId, state, isSessionResolved)) {
-      exitToCollection();
+      dismiss();
     }
-  }, [exitToCollection, isSessionResolved, sessionId, state]);
+  }, [dismiss, isSessionResolved, sessionId, state]);
 
   return exitToCollection;
 }

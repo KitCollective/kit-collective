@@ -1,0 +1,191 @@
+# KIT-275: sign in and register with an e-mail and a six-digit code.
+#
+# design-sections: Sheet, Button, Text field, Banner, Toast
+#
+# Signed-out slice: it resets the data and launches with clearState, as sign-in.yaml does.
+# The API fixture (apps/api/src/e2e) hands the flow the code the recording mailer holds, and
+# can let it expire, so no real mail is sent.
+# Not shown by a screen and so proved by the API tests (apps/api/tests/identity.test.ts) instead:
+# - the code is single use, expires, is refused after the attempt limit and a resend invalidates
+#   the old one;
+# - requesting a code answers the same for a new and an existing e-mail;
+# - "or jersey details with a draft" (AC 7): a draft needs an own photo picked in the system photo
+#   picker before the door, which this flow does not replay (KIT-272.yaml drives it); the reducer
+#   tests "a correct code with a draft from an own photo opens jersey details" and
+#   "the sheet opened over an own-photo result keeps the draft" prove it.
+# - no password is sent on this path (the code client and the screens carry none).
+# - one-time-code autofill (textContentType oneTimeCode / autoComplete sms-otp): a simulator has
+#   no SMS or mail to offer a code from; the chrome test asserts the props.
+appId: app.kitcollective.mobile
+name: kit-275
+env:
+  NEW_EMAIL: new-collector@test.kitcollective
+---
+- runScript:
+    file: ../scripts/reset-test-data.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- startRecording: kc__kit-275
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- tapOn:
+    id: welcome-have-account
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 10000
+- tapOn:
+    id: door-email
+- inputText: ${NEW_EMAIL}
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 1 (a valid e-mail opens the code screen), AC 2 (the title is the instruction with the
+# e-mail, Forkert e-mail? under it), AC 3 (six boxes, no submit button), AC 4 (Send igen is a
+# disabled pill during the countdown).
+- assertVisible: ".*${NEW_EMAIL}.*"
+- assertVisible:
+    id: code-wrong-email
+- assertVisible:
+    id: code-box-0
+- assertVisible:
+    id: code-box-5
+- assertVisible:
+    id: code-resend
+- assertNotVisible:
+    id: door-submit
+- assertNotVisible: "Adgangskode|Password"
+- takeScreenshot: kc__kit-275__01-code-screen
+# AC 3: the boxes fill as digits arrive and do not submit before the sixth.
+- inputText: "123"
+- assertVisible:
+    id: code-box-2
+- assertNotVisible:
+    id: code-error
+- takeScreenshot: kc__kit-275__02-digits-advance
+# AC 2: Forkert e-mail? returns to the sheet with the address kept.
+- tapOn:
+    id: code-wrong-email
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: ".*${NEW_EMAIL}.*"
+- takeScreenshot: kc__kit-275__03-forkert-email-sheet-keeps-address
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+# AC 10: a wrong code shows the error state, clears the boxes and enables resend at once.
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${NEW_EMAIL}
+      EXPIRE: "false"
+- inputText: ${output.wrong}
+- extendedWaitUntil:
+    visible:
+      id: code-error
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible: "Send igen"
+- takeScreenshot: kc__kit-275__04-wrong-code
+# AC 11: an expired code disables the boxes and shows Send ny kode.
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${NEW_EMAIL}
+      EXPIRE: "true"
+- inputText: ${output.code}
+- extendedWaitUntil:
+    visible: "Send ny kode"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: kc__kit-275__05-expired-code
+# AC 4: Send ny kode / Send igen sends a new code and the old one stops working.
+- tapOn:
+    id: code-resend
+- extendedWaitUntil:
+    visible: "Send igen.*"
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 3000
+# AC 5, AC 7: a correct code for a new e-mail creates the collector and lands in Samling.
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${NEW_EMAIL}
+      EXPIRE: "false"
+- inputText: ${output.code}
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-275__06-new-collector-in-samling
+# AC 6, AC 7: a correct code for an existing e-mail (the Test Collector, created with a
+# password) opens a session through the same sheet.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- tapOn:
+    id: welcome-have-account
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 10000
+- tapOn:
+    id: door-email
+- inputText: ${MAESTRO_COLLECTOR_EMAIL}
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 10000
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      EXPIRE: "false"
+- inputText: ${output.code}
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-275__07-returning-collector-in-samling
+- stopRecording

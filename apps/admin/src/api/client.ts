@@ -11,6 +11,16 @@ export function joinApiPath(base: string, path: string): string {
   return `${normalizedBase}${normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`}`;
 }
 
+function hasJsonBody(body: BodyInit | null | undefined): boolean {
+  if (body === undefined || body === null) {
+    return false;
+  }
+  if (typeof body === "string") {
+    return body.length > 0;
+  }
+  return true;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit & { token?: string } = {},
@@ -19,7 +29,7 @@ export async function apiFetch<T>(
   const response = await fetch(joinApiPath(getApiBase(), path), {
     ...rest,
     headers: {
-      "content-type": "application/json",
+      ...(hasJsonBody(rest.body) ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...headers,
     },

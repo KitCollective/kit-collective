@@ -1,4 +1,4 @@
-import { KIT_TYPES, PHOTO_ROLES } from "@kit/domain";
+import { KIT_TYPES, PHOTO_ROLES, VISION_MATCHER_JERSEY_CAP } from "@kit/domain";
 import { z } from "zod";
 import {
   VISION_JOB_KINDS,
@@ -21,6 +21,8 @@ export const VISION_CONFIDENCE_SUGGEST = 50;
 /** Coarse per-IP cap for unsigned first-session Vision suggest (in-memory throttle). */
 export const UNSIGNED_VISION_SUGGEST_CAP = 20;
 
+export { VISION_MATCHER_JERSEY_CAP };
+
 export const visionSuggestPhotoSchema = z
   .object({
     role: z.enum(PHOTO_ROLES),
@@ -38,6 +40,7 @@ export const visionSuggestRequestSchema = z
 export const visionFieldPreselectSchema = z
   .object({
     club: z.boolean().optional(),
+    nationalTeam: z.boolean().optional(),
     season: z.boolean().optional(),
     type: z.boolean().optional(),
     player: z.boolean().optional(),
@@ -54,10 +57,12 @@ export const visionSuggestResponseSchema = z
 export const visionSuggestionsSchema = z
   .object({
     clubId: z.string().uuid().optional(),
+    nationalTeamId: z.string().uuid().optional(),
     seasonId: z.string().uuid().optional(),
     catalogKitId: z.string().uuid().optional(),
     type: z.enum(KIT_TYPES).optional(),
     clubLabel: z.string().min(1).optional(),
+    nationalTeamLabel: z.string().min(1).optional(),
     seasonLabel: z.string().min(1).optional(),
     playerId: z.string().uuid().optional(),
     playerLabel: z.string().min(1).optional(),
@@ -76,8 +81,14 @@ export const visionJobResponseSchema = z
     preselect: z.boolean().optional(),
     /** Per-field preselect: ≥70% + catalog hit for that field. */
     fieldPreselect: visionFieldPreselectSchema.optional(),
-    /** True when the model hinted a club but the catalog mapper found no club row. */
+    /** True when the model hinted a club (`clubHint` or `clubHintAlts`) but the catalog mapper found neither a Club nor a Kit. */
     catalogMiss: z.boolean().optional(),
+    /** False when a national-team hint missed catalog coverage; omit when the side likely exists. */
+    catalogLikely: z.boolean().optional(),
+    /** Raw model club hint when `catalogMiss` — editable search seed, not a catalog id. */
+    clubHint: z.string().min(1).optional(),
+    /** Raw model national-team hint when `catalogMiss` — editable search seed, not a catalog id. */
+    nationalTeamHint: z.string().min(1).optional(),
     suggestions: visionSuggestionsSchema.optional(),
     grouping: visionGroupingSuggestionsSchema.optional(),
   })
@@ -90,6 +101,7 @@ export const visionLogRequestSchema = z
     jobId: z.string().uuid(),
     action: z.enum(VISION_USER_ACTIONS),
     clubId: z.string().uuid().optional(),
+    nationalTeamId: z.string().uuid().optional(),
     seasonId: z.string().uuid().optional(),
     catalogKitId: z.string().uuid().nullable().optional(),
     type: z.enum(KIT_TYPES).optional(),

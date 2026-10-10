@@ -4,6 +4,7 @@ import type { FetchAdapter } from "./fetch/adapter.js";
 import { parseLane, resolveDatabaseUrl } from "./lane.js";
 import type { PortraitStore } from "./map/index.js";
 import { resolvePortraitStoreFromEnv } from "./portrait-store.js";
+import { describeSeedError, seedProgress } from "./progress.js";
 import { runHierarchyGrain } from "./run.js";
 import { isClubSeasonAlreadySeeded, isNationalTeamSeasonAlreadySeeded } from "./seeded.js";
 import type { Lane, MapResult } from "./types.js";
@@ -62,6 +63,7 @@ function emptyMapResult(): MapResult {
     externalIds: 0,
     honours: 0,
     playerPhotos: 0,
+    catalogMarks: 0,
     nationalTeams: 0,
     nationalTeamSeasons: 0,
     playerNationalTeamSeasons: 0,
@@ -80,6 +82,7 @@ function addMapResults(target: MapResult, source: MapResult): void {
   target.externalIds += source.externalIds;
   target.honours += source.honours;
   target.playerPhotos += source.playerPhotos;
+  target.catalogMarks += source.catalogMarks;
   target.nationalTeams += source.nationalTeams;
   target.nationalTeamSeasons += source.nationalTeamSeasons;
   target.playerNationalTeamSeasons += source.playerNationalTeamSeasons;
@@ -106,16 +109,25 @@ async function runClubSeasonGrains(
   let skipped = 0;
   const portraitStore = options.portraitStore ?? resolvePortraitStoreFromEnv();
 
+  let index = 0;
   for (const clubExternalId of clubIds) {
-    const clubResult = await runHierarchyGrain({
-      kind: "club",
-      competition: options.competition,
-      clubExternalId,
-      lane: options.lane,
-      fetchAdapter: options.fetchAdapter,
-      databaseUrl: options.databaseUrl,
-    });
-    addMapResults(aggregate, clubResult.summary);
+    index += 1;
+    const prefix = `club ${index}/${clubIds.length} ${clubExternalId}`;
+    seedProgress(`${prefix} identity`);
+    try {
+      const clubResult = await runHierarchyGrain({
+        kind: "club",
+        competition: options.competition,
+        clubExternalId,
+        lane: options.lane,
+        fetchAdapter: options.fetchAdapter,
+        databaseUrl: options.databaseUrl,
+      });
+      addMapResults(aggregate, clubResult.summary);
+    } catch (error: unknown) {
+      seedProgress(`${prefix} identity failed ${describeSeedError(error)}`);
+      throw error;
+    }
 
     const alreadySeeded = await isClubSeasonAlreadySeeded(
       db,
@@ -124,22 +136,29 @@ async function runClubSeasonGrains(
       seasonLabel,
     );
     if (alreadySeeded) {
+      seedProgress(`${prefix} kader skip already-seeded`);
       skipped += 1;
       continue;
     }
 
-    const seasonResult = await runHierarchyGrain({
-      kind: "club_season",
-      competition: options.competition,
-      clubExternalId,
-      season: seasonLabel,
-      lane: options.lane,
-      fetchAdapter: options.fetchAdapter,
-      databaseUrl: options.databaseUrl,
-      portraitStore,
-    });
-    addMapResults(aggregate, seasonResult.summary);
-    fetched += 1;
+    seedProgress(`${prefix} kader ${seasonLabel}`);
+    try {
+      const seasonResult = await runHierarchyGrain({
+        kind: "club_season",
+        competition: options.competition,
+        clubExternalId,
+        season: seasonLabel,
+        lane: options.lane,
+        fetchAdapter: options.fetchAdapter,
+        databaseUrl: options.databaseUrl,
+        portraitStore,
+      });
+      addMapResults(aggregate, seasonResult.summary);
+      fetched += 1;
+    } catch (error: unknown) {
+      seedProgress(`${prefix} kader failed ${describeSeedError(error)}`);
+      throw error;
+    }
   }
 
   return { fetched, skipped };
@@ -153,6 +172,8 @@ export async function runClubJoinWorkflow(
   const seasonLabel = resolveSeasonRef(options.competition, options.season);
   const aggregate = emptyMapResult();
 
+  seedProgress(`join club ${options.competition} ${seasonLabel} lane=${lane}`);
+  seedProgress("grain league");
   const leagueResult = await runHierarchyGrain({
     kind: "league",
     competition: options.competition,
@@ -162,6 +183,7 @@ export async function runClubJoinWorkflow(
   });
   addMapResults(aggregate, leagueResult.summary);
 
+  seedProgress(`grain league-season ${seasonLabel}`);
   const leagueSeasonResult = await runHierarchyGrain({
     kind: "league_season",
     competition: options.competition,
@@ -177,6 +199,7 @@ export async function runClubJoinWorkflow(
     options.competition,
     seasonLabel,
   );
+  seedProgress(`clubs ${clubIds.length} for ${options.competition} ${seasonLabel}`);
   if (clubIds.length === 0) {
     throw new Error(`No clubs found for ${options.competition} ${seasonLabel}`);
   }
@@ -195,7 +218,15 @@ export async function runClubJoinWorkflow(
     fromSeason: seasonLabel,
     toSeason: seasonLabel,
   };
-  const fk = await options.fkRunner({ scope: fkScope, databaseUrl });
+  seedProgress(`fk after facts ${options.competition} ${seasonLabel}`);
+  let fk: FkJoinRunResult;
+  try {
+    fk = await options.fkRunner({ scope: fkScope, databaseUrl });
+    seedProgress(`fk done kits=${fk.kitsUpserted} photos=${fk.photosWritten}`);
+  } catch (error: unknown) {
+    seedProgress(`fk failed ${describeSeedError(error)}`);
+    throw error;
+  }
 
   return {
     path: "club",
@@ -215,6 +246,8 @@ export async function runNationalTeamJoinWorkflow(
   const seasonLabel = options.season.trim();
   const aggregate = emptyMapResult();
 
+  seedProgress(`join national-team ${options.nationalTeamRef} ${seasonLabel} lane=${lane}`);
+  seedProgress("grain national-team");
   const entityResult = await runHierarchyGrain({
     kind: "national_team",
     nationalTeamRef: options.nationalTeamRef,
@@ -233,6 +266,7 @@ export async function runNationalTeamJoinWorkflow(
       seasonLabel,
     );
     if (!alreadySeeded) {
+      seedProgress(`grain national-team-season ${seasonLabel}`);
       const seasonResult = await runHierarchyGrain({
         kind: "national_team_season",
         nationalTeamRef: options.nationalTeamRef,
@@ -244,6 +278,7 @@ export async function runNationalTeamJoinWorkflow(
       });
       addMapResults(aggregate, seasonResult.summary);
     } else {
+      seedProgress("national-team-season skip already-seeded");
       nationalTeamSeasonSkipped = true;
     }
   } finally {
@@ -255,7 +290,15 @@ export async function runNationalTeamJoinWorkflow(
     nationalTeamRef: options.nationalTeamRef,
     season: seasonLabel,
   };
-  const fk = await options.fkRunner({ scope: fkScope, databaseUrl });
+  seedProgress(`fk after facts national-team ${options.nationalTeamRef} ${seasonLabel}`);
+  let fk: FkJoinRunResult;
+  try {
+    fk = await options.fkRunner({ scope: fkScope, databaseUrl });
+    seedProgress(`fk done kits=${fk.kitsUpserted} photos=${fk.photosWritten}`);
+  } catch (error: unknown) {
+    seedProgress(`fk failed ${describeSeedError(error)}`);
+    throw error;
+  }
 
   return {
     path: "national_team",

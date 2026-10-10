@@ -168,6 +168,7 @@ export default function SendBidScreen() {
           >
             <TextInput
               accessibilityLabel="Dit bud i kroner"
+              testID="bid-amount"
               keyboardType="number-pad"
               value={amount}
               onChangeText={setAmount}
@@ -193,6 +194,7 @@ export default function SendBidScreen() {
         ) : null}
         <Button
           label="Send bud"
+          testID="bid-submit"
           width="fill"
           loading={submitting}
           disabled={!canSubmit}

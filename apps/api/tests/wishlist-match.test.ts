@@ -511,6 +511,7 @@ describe("Wishlist Match /v1", () => {
     const base: WishlistMatchJersey = {
       ownerUserId: "owner-1",
       clubId: "00000000-0000-0000-0000-000000000001",
+      nationalTeamId: null,
       seasonId: "00000000-0000-0000-0000-000000000002",
       type: "home",
       size: "m",

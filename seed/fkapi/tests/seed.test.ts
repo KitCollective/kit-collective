@@ -249,6 +249,65 @@ describe("FK seed mapper", () => {
     expect(objectStore.objects.size).toBe(2);
   });
 
+  it("writes extra archive photos and FKA page facts onto the kit", async () => {
+    const scope = allocateTestFixtureScope();
+    await seedApifyPrerequisites(pool, scope);
+    const objectStore = createMemoryObjectStore();
+    const extra = Uint8Array.from([255, 216, 255, 230]);
+    const fetchAdapter: FkFetchAdapter = {
+      async fetchKits() {
+        return [
+          {
+            id: "fk-extra-home",
+            clubTransfermarktId: scope.clubTransfermarktId,
+            seasonTransfermarktId: scope.seasonLabel,
+            seasonLabel: scope.seasonLabel,
+            type: "home",
+            design: "Stripes",
+            colorNames: "Red / Black / White",
+            competition: "Serie A",
+            releasedOn: "2025-05-20",
+            description: "The Puma Milan 25-26 home shirt.",
+            imageBytes: Uint8Array.from([255, 216, 255, 219]),
+            additionalImageBytes: [extra],
+          },
+        ];
+      },
+    };
+
+    const result = await runFkSeed({
+      databaseUrl: TEST_DATABASE_URL,
+      fetchAdapter,
+      objectStore,
+      scope: {
+        kind: "club",
+        competition: "superliga",
+        clubExternalId: scope.clubTransfermarktId,
+        season: scope.seasonLabel,
+      },
+    });
+
+    expect(result.kitsUpserted).toBe(1);
+    expect(result.photosWritten).toBe(2);
+    const facts = await pool.query<{
+      design: string | null;
+      color_names: string | null;
+      competition: string | null;
+      released_on: string | null;
+      description: string | null;
+    }>(
+      `SELECT design, color_names, competition, released_on::text, description FROM kit WHERE design = 'Stripes'`,
+    );
+    expect(facts.rows[0]).toMatchObject({
+      design: "Stripes",
+      color_names: "Red / Black / White",
+      competition: "Serie A",
+      released_on: "2025-05-20",
+      description: "The Puma Milan 25-26 home shirt.",
+    });
+    expect(objectStore.objects.size).toBe(2);
+  });
+
   it("refuses accept when object store reports missing bytes after putObject", async () => {
     const scope = allocateTestFixtureScope();
     await seedApifyPrerequisites(pool, scope);
@@ -314,6 +373,116 @@ describe("FK seed mapper", () => {
     expect(kitRow.rows).toHaveLength(0);
   });
 
+  it("merges duplicate singleton home kits onto one FKA id", async () => {
+    const scope = allocateTestFixtureScope();
+    const { clubId, seasonId } = await seedApifyPrerequisites(pool, scope);
+
+    const slugKit = await pool.query<{ id: string }>(
+      `INSERT INTO kit (club_id, season_id, type) VALUES ($1, $2, 'home') RETURNING id`,
+      [clubId, seasonId],
+    );
+    const numberedKit = await pool.query<{ id: string }>(
+      `INSERT INTO kit (club_id, season_id, type) VALUES ($1, $2, 'home') RETURNING id`,
+      [clubId, seasonId],
+    );
+    const slugKitId = slugKit.rows[0]?.id;
+    const numberedKitId = numberedKit.rows[0]?.id;
+    expect(slugKitId).toBeDefined();
+    expect(numberedKitId).toBeDefined();
+    await pool.query(
+      `INSERT INTO external_id (entity_type, entity_id, system, value)
+       VALUES ('kit', $1, $2, 'ac-milan-2025-26-home-kit'),
+              ('kit', $3, $2, '354421')`,
+      [slugKitId, EXTERNAL_SYSTEM_FKAPI, numberedKitId],
+    );
+
+    const fetchAdapter: FkFetchAdapter = {
+      async fetchKits() {
+        return [
+          {
+            id: "354421",
+            clubTransfermarktId: scope.clubTransfermarktId,
+            seasonTransfermarktId: scope.seasonLabel,
+            seasonLabel: scope.seasonLabel,
+            type: "home",
+            imageBytes: Uint8Array.from([255, 216, 255, 219]),
+          },
+        ];
+      },
+    };
+
+    await runFkSeed({
+      databaseUrl: TEST_DATABASE_URL,
+      fetchAdapter,
+      objectStore: createMemoryObjectStore(),
+      scope: {
+        kind: "club",
+        competition: "superliga",
+        clubExternalId: scope.clubTransfermarktId,
+        season: scope.seasonLabel,
+      },
+    });
+
+    const kits = await pool.query<{ id: string; type: string }>(
+      `SELECT id, type FROM kit WHERE club_id = $1 AND season_id = $2`,
+      [clubId, seasonId],
+    );
+    expect(kits.rows).toHaveLength(1);
+    expect(kits.rows[0]?.id).toBe(numberedKitId);
+    expect(kits.rows[0]?.type).toBe("home");
+  });
+
+  it("keeps two home kits when their variants differ", async () => {
+    const scope = allocateTestFixtureScope();
+    const { clubId, seasonId } = await seedApifyPrerequisites(pool, scope);
+
+    const fetchAdapter: FkFetchAdapter = {
+      async fetchKits() {
+        return [
+          {
+            id: "354421",
+            clubTransfermarktId: scope.clubTransfermarktId,
+            seasonTransfermarktId: scope.seasonLabel,
+            seasonLabel: scope.seasonLabel,
+            type: "home",
+            imageBytes: Uint8Array.from([255, 216, 255, 219]),
+          },
+          {
+            id: "354500",
+            clubTransfermarktId: scope.clubTransfermarktId,
+            seasonTransfermarktId: scope.seasonLabel,
+            seasonLabel: scope.seasonLabel,
+            type: "home",
+            variant: "supercoppa-italiana",
+            imageBytes: Uint8Array.from([255, 216, 255, 219]),
+          },
+        ];
+      },
+    };
+
+    await runFkSeed({
+      databaseUrl: TEST_DATABASE_URL,
+      fetchAdapter,
+      objectStore: createMemoryObjectStore(),
+      scope: {
+        kind: "club",
+        competition: "superliga",
+        clubExternalId: scope.clubTransfermarktId,
+        season: scope.seasonLabel,
+      },
+    });
+
+    const kits = await pool.query<{ type: string; variant: string | null }>(
+      `SELECT type, variant FROM kit WHERE club_id = $1 AND season_id = $2
+       ORDER BY COALESCE(variant, '')`,
+      [clubId, seasonId],
+    );
+    expect(kits.rows).toEqual([
+      { type: "home", variant: null },
+      { type: "home", variant: "supercoppa-italiana" },
+    ]);
+  });
+
   it("is idempotent on second run", async () => {
     const scope = allocateTestFixtureScope();
     await seedApifyPrerequisites(pool, scope);
@@ -376,7 +545,8 @@ describe("FK seed mapper", () => {
 
     expect(result.kitsUpserted).toBe(2);
     const kits = await pool.query<{ club_id: string; season_id: string }>(
-      `SELECT club_id, season_id FROM kit`,
+      `SELECT club_id, season_id FROM kit WHERE club_id = $1`,
+      [clubId],
     );
     expect(kits.rows).toHaveLength(2);
     for (const row of kits.rows) {

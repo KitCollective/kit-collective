@@ -60,8 +60,10 @@ export function resolveGroupingOverallConfidence(
     return 0;
   }
 
-  const confidences = result.groups.map((group) => group.confidence);
-  return Math.min(...confidences);
+  // Per-group judging: the job is as sure as its surest group. Each group is
+  // classified against the thresholds on the client; one weak group no longer
+  // drops the whole result.
+  return Math.max(...result.groups.map((group) => group.confidence));
 }
 
 export function shouldPreselectGrouping(confidence: number): boolean {

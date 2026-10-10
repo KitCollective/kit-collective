@@ -33,6 +33,18 @@ export class IdentityController {
     return this.identityService.login(body, requestAttribution(request));
   }
 
+  @Post("identity/code")
+  @HttpCode(200)
+  requestCode(@Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.identityService.requestCode(body, requestAttribution(request));
+  }
+
+  @Post("identity/code/verify")
+  @HttpCode(200)
+  verifyCode(@Body() body: unknown, @Req() request: FastifyRequest) {
+    return this.identityService.verifyCode(body, requestAttribution(request));
+  }
+
   @Post("identity/social")
   @HttpCode(200)
   socialLogin(@Body() body: unknown, @Req() request: FastifyRequest) {

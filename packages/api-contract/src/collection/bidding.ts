@@ -21,7 +21,8 @@ export type CollectionPrivatePatch = z.infer<typeof collectionPrivatePatchSchema
 export const collectionDiscoverJerseySchema = z
   .object({
     id: z.string().uuid(),
-    clubId: z.string().uuid(),
+    clubId: z.string().uuid().nullable().optional(),
+    nationalTeamId: z.string().uuid().nullable().optional(),
     seasonId: z.string().uuid(),
     type: z.enum(KIT_TYPES),
     clubLabel: z.string().min(1),
@@ -29,7 +30,18 @@ export const collectionDiscoverJerseySchema = z
     ownerHandle: z.string().min(1),
     photos: z.array(collectionJerseyPhotoSchema).min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((jersey, ctx) => {
+    const hasClub = typeof jersey.clubId === "string";
+    const hasNationalTeam = typeof jersey.nationalTeamId === "string";
+    if (hasClub === hasNationalTeam) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Exactly one of clubId or nationalTeamId is required",
+        path: hasClub ? ["nationalTeamId"] : ["clubId"],
+      });
+    }
+  });
 
 export type CollectionDiscoverJersey = z.infer<typeof collectionDiscoverJerseySchema>;
 
@@ -50,6 +62,17 @@ export const collectionDiscoverHomeClubSchema = z
 
 export type CollectionDiscoverHomeClub = z.infer<typeof collectionDiscoverHomeClubSchema>;
 
+export const collectionDiscoverHomeNationalTeamSchema = z
+  .object({
+    nationalTeamId: z.string().uuid(),
+    nationalTeamLabel: z.string().min(1),
+  })
+  .strict();
+
+export type CollectionDiscoverHomeNationalTeam = z.infer<
+  typeof collectionDiscoverHomeNationalTeamSchema
+>;
+
 export const collectionDiscoverHomeCollectorSchema = z
   .object({
     handle: z.string().min(1),
@@ -63,6 +86,7 @@ export type CollectionDiscoverHomeCollector = z.infer<typeof collectionDiscoverH
 export const collectionDiscoverHomeSchema = z
   .object({
     clubs: z.array(collectionDiscoverHomeClubSchema).optional(),
+    nationalTeams: z.array(collectionDiscoverHomeNationalTeamSchema).optional(),
     openForBid: z.array(collectionDiscoverJerseySchema).optional(),
     collectors: z.array(collectionDiscoverHomeCollectorSchema).optional(),
     moreJerseys: z.array(collectionDiscoverJerseySchema).optional(),
@@ -73,7 +97,7 @@ export type CollectionDiscoverHome = z.infer<typeof collectionDiscoverHomeSchema
 
 export const collectionDiscoverCatalogDrillSchema = z
   .object({
-    kind: z.enum(["club", "player", "kit"]),
+    kind: z.enum(["club", "national_team", "player", "kit"]),
     id: z.string().uuid(),
     title: z.string().min(1),
     count: z.number().int().min(0),
@@ -106,6 +130,7 @@ export type CollectionDiscoverTypeaheadPlayer = z.infer<
 export const collectionDiscoverTypeaheadSchema = z
   .object({
     clubs: z.array(collectionDiscoverHomeClubSchema).optional(),
+    nationalTeams: z.array(collectionDiscoverHomeNationalTeamSchema).optional(),
     kits: z.array(collectionDiscoverTypeaheadKitSchema).optional(),
     players: z.array(collectionDiscoverTypeaheadPlayerSchema).optional(),
     collectors: z.array(collectionDiscoverHomeCollectorSchema).optional(),
@@ -118,7 +143,8 @@ export type CollectionDiscoverTypeahead = z.infer<typeof collectionDiscoverTypea
 export const collectionPeerJerseySchema = z
   .object({
     id: z.string().uuid(),
-    clubId: z.string().uuid(),
+    clubId: z.string().uuid().nullable().optional(),
+    nationalTeamId: z.string().uuid().nullable().optional(),
     seasonId: z.string().uuid(),
     type: z.enum(KIT_TYPES),
     clubLabel: z.string().min(1),
@@ -130,7 +156,18 @@ export const collectionPeerJerseySchema = z
     latestBidAmountDkk: z.number().int().min(1).nullable(),
     photos: z.array(collectionJerseyPhotoSchema).min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((jersey, ctx) => {
+    const hasClub = typeof jersey.clubId === "string";
+    const hasNationalTeam = typeof jersey.nationalTeamId === "string";
+    if (hasClub === hasNationalTeam) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Exactly one of clubId or nationalTeamId is required",
+        path: hasClub ? ["nationalTeamId"] : ["clubId"],
+      });
+    }
+  });
 
 export type CollectionPeerJersey = z.infer<typeof collectionPeerJerseySchema>;
 

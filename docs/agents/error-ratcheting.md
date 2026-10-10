@@ -18,6 +18,8 @@ This is not a memory store. Wrong lessons are reverted with git.
 | `.cursor/hooks/*.sh` | Command hooks (deny/allow) |
 | `.cursor/rules/*.mdc` | Always-applied agent rules |
 | `.pi/generated/implement-context.md` | Generated PI implement overlay from `.cursor` — edit sources, run `node scripts/generate-pi-implement-context.mjs`; never hand-edit |
+| `.claude/settings.json` + `.claude/hooks/cursor-ratchet.mjs` | Runs the same `.cursor/hooks.json` command hooks in Claude Code. One set of scripts: add a hook under `.cursor/hooks/`, never a copy under `.claude/` |
+| `.githooks/pre-commit` | Formats staged files with Biome before a commit (enabled by `pnpm install`) |
 | `biome.json` / `oxlint.config.ts` | Format, lint, and anti-slop gates run in CI |
 | `.pi/first-pass-classes.json` | Optional first-pass scanners (tighten only; empty `{ "classes": [] }` is the default) |
 | `docs/agents/error-ratcheting.md` | This contract |
@@ -29,7 +31,7 @@ Command hooks on `beforeShellExecution` (fail closed). Scripts must print `{"per
 1. `block-dangerous-git.sh` — no force-push, hard reset, `clean -f`, branch `-D`
 2. `block-reward-hacks.sh` — no shell deletion of tests or `.github/workflows`
 3. `protect-ratchet.sh` — no shell removal/emptying of `.cursor/hooks*`
-4. `block-pi-ci-sleep.sh` — no `sleep` ≥ 10s, no `gh pr checks --watch`, no for/while poll of `gh pr checks`
+4. `block-pi-ci-sleep.sh` — no `sleep` ≥ 10s, no `gh pr checks --watch`, no for/while poll of `gh pr checks`; the one allowed wait is `node scripts/wait-for-checks.mjs <pr>` (ADR-0050)
 5. `block-migration-prefix-collision.sh` — no `git add`/`commit` of `packages/db/migrations/NNNN_*.sql` when `origin/development` already has that prefix under another name
 
 Do **not** put factory learning in `sessionStart` context injection or in Cursor Automations **Memories** (`MEMORIES.md`). Cloud Agents may never see sessionStart; Memories is an unreviewed second source of truth. Prefer `beforeShellExecution` denials and always-applied rules / `AGENTS.md`. The planner comments on Linear; it does not keep a memory file of ratchets.
@@ -112,7 +114,7 @@ catches it in the API tests and the container smoke test.
 
 ### Admin stamdata navigation ratchet (KIT-39)
 
-`scripts/check-admin-stamdata-navigation.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`) fails when `apps/admin/src/pages/StamdataPage.tsx` `openRow` does not call `navigate(` for every `ADMIN_STAMDATA_LIST_ENTITY_TYPES` value (scoped to the `openRow` function body, not render-time branches), when `apps/admin/src/App.tsx` omits a drill route for club, season, kit, or club-season rows, or when an admin Data table page (`StamdataPage`, `CollectorsPage`) replaces the whole table (including `<thead>`) on loading/empty instead of only the `<tbody>` body. Prevents repeating the KIT-39 checker fails (plain club/season rows were a silent no-op on click; Stamdata loading/empty dropped the table header). Tighten only.
+`scripts/check-admin-stamdata-navigation.mjs` (CI via direct `node` invocation in `.github/workflows/ci.yml`) fails when `apps/admin/src/pages/MasterDataPage.tsx` `openRow` does not call `navigate(` for every `ADMIN_STAMDATA_LIST_ENTITY_TYPES` value (scoped to the `openRow` function body, not render-time branches), when `apps/admin/src/App.tsx` omits a drill route for club, league, player, season, kit, or club-season rows, or when an admin Data table page (`MasterDataPage`, `CollectorsPage`, `ClubDrillPage`, `LeagueDrillPage`, `PlayerDrillPage`) replaces the whole table (including `<thead>`) on loading/empty instead of only the `<tbody>` body. Prevents repeating the KIT-39 checker fails (plain club/season rows were a silent no-op on click; Master Data loading/empty dropped the table header). Tighten only.
 
 ### Admin design-token ratchet (KIT-39)
 
@@ -248,7 +250,7 @@ catches it in the API tests and the container smoke test.
 
 ### Factory CI test-job ratchet (KIT-75)
 
-`scripts/check-factory-ci-tests.mjs` (CI via `pnpm check:factory-ci-tests` in `.github/workflows/ci.yml`) fails when the required GitHub `test` job omits harness node tests or webhook-router / land-policy factory-script tests, or when existing mobile check-scripts leave that job. Needles are asserted on expanded `run:` / script bodies only — a step title that names `land-policy` does not satisfy coverage if the script body dropped it. `scripts/tests/check-factory-ci-tests.test.mjs` mutation-tests the ratchet. Prevents repeating the KIT-75 checker fail (colocating the check-script under `.github/workflows/` and matching factory needles from the step name). Tighten only.
+`scripts/check-factory-ci-tests.mjs` (CI via `pnpm check:factory-ci-tests` in `.github/workflows/ci.yml`) fails when the required GitHub `test` gate (which needs the parallel `static`, `apps` and `api` jobs; dropping one from `needs` also fails) omits harness node tests or webhook-router / land-policy factory-script tests, or when existing mobile check-scripts leave that job. Needles are asserted on expanded `run:` / script bodies only — a step title that names `land-policy` does not satisfy coverage if the script body dropped it. `scripts/tests/check-factory-ci-tests.test.mjs` mutation-tests the ratchet. Prevents repeating the KIT-75 checker fail (colocating the check-script under `.github/workflows/` and matching factory needles from the step name). Tighten only.
 
 ### Checker pass workpad ratchet (KIT-106)
 
@@ -357,7 +359,7 @@ OpenRouter workspace guardrail allows only `tencent/hy4-preview` on every worksp
 
 ### Mobile profile settings hub ratchet (KIT-125)
 
-`scripts/check-mobile-profile-settings-hub.mjs` (CI via `node scripts/check-mobile-profile-settings-hub.mjs` in `.github/workflows/ci.yml`; logic covered by `scripts/tests/check-mobile-profile-settings-hub.test.mjs`) fails when `apps/mobile/app/(tabs)/profile/indstillinger.tsx` drops one of the four locked `SettingsSectionLabel` strings from `docs/design-system.md` §5, when `kontoindstillinger.tsx` omits email `Skift` → `skift-email` or phone trailing `Skift`, or when live prefs drill screens use factory jargon. Prevents repeating the KIT-125 checker fail (missing hub section label, no-op email Skift, inline phone field, lock-speak helper, factory-jargon prefs copy). Tighten only.
+`scripts/check-mobile-profile-settings-hub.mjs` (CI via `node scripts/check-mobile-profile-settings-hub.mjs` in `.github/workflows/ci.yml`; logic covered by `scripts/tests/check-mobile-profile-settings-hub.test.mjs`) fails when `apps/mobile/app/(tabs)/profile/indstillinger.tsx` drops one of the four locked `SettingsSectionLabel` strings from `docs/design-system.md` §5, when `kontoindstillinger.tsx` brings back an e-mail change screen or a change-password row (no password after First session 1.0, KIT-276) or omits phone trailing `Skift`, or when live prefs drill screens use factory jargon. Prevents repeating the KIT-125 checker fail (missing hub section label, no-op email Skift, inline phone field, lock-speak helper, factory-jargon prefs copy). Tighten only.
 
 ### Implement write-scope worktree allowlist
 
@@ -366,6 +368,14 @@ OpenRouter workspace guardrail allows only `tencent/hy4-preview` on every worksp
 ### Pi CI-sleep hook
 
 `.cursor/hooks/block-pi-ci-sleep.sh` (wired in `.cursor/hooks.json`, tests in `.cursor/hooks/tests/block-pi-ci-sleep.test.mjs`, CI via `node --test` in `.github/workflows/ci.yml`) denies `sleep` of 10 seconds or more, any `sleep` chained with `gh pr checks`, `gh pr checks --watch`, and `for`/`while` loops that call `gh pr checks`. A single `gh pr checks` snapshot stays allowed. Prevents repeating KIT-118 implement sessions that `sleep 30/60/90` and poll checks instead of exiting so the harness can wait. Tighten only.
+
+### Review-loop ratchets (ADR-0050)
+
+`scripts/check-code-english.mjs` and `scripts/check-doc-references.mjs` (run together by `pnpm check:review-gate` in the pre-review gate, and as steps of the CI `test` job; logic covered by `scripts/tests/check-code-english.test.mjs` and `scripts/tests/check-doc-references.test.mjs`) fail when a branch adds a Danish identifier or code file name (stems in `.cursor/hooks/lib/danish-code-identifiers.mjs`, plus any `æ`, `ø`, `å` in a declared name), or when a living doc names a symbol, prop or Device-flow step the branch removed, or a repository path that does not exist on a line the branch added. Prevents repeating KIT-272 reviews 2 to 4 and KIT-267 review 5. Tighten only: extend the stem list, never an exemption.
+
+`scripts/lib/review-matrix.mjs` (`LOCK_ROWS`, `planRecheck`) and `scripts/review-matrix.mjs` keep the workpad `### Review matrix` complete and say which rows a later review re-checks. `scripts/lib/fix-diff.mjs` and `scripts/classify-fix-diff.mjs` decide whether a `[text]` / `[name]` fix is light. Tests in `scripts/tests/review-matrix.test.mjs` and `scripts/tests/fix-diff.test.mjs`. A new lock-set row needs its path globs and a test.
+
+`scripts/wait-for-checks.mjs` (tests in `scripts/tests/pr-checks.test.mjs`) is the sanctioned wait for required checks. `.cursor/hooks/block-pi-ci-sleep.sh` still denies the watch flag, sleeps and loops; its message names the script. `scripts/check-factory-ci-tests.mjs` requires the five test files on the CI `test` job.
 
 ### English code identifiers (Pi implement / helper / checker)
 

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   adminClubDrillSchema,
   adminClubSeasonDrillSchema,
+  adminClubSeasonKitsFetchSchema,
   adminKitDrillSchema,
   adminStamdataListSchema,
   collectionJerseysSchema,
@@ -11,9 +12,11 @@ import {
 } from "@kit/api-contract";
 import {
   catalogLabel,
+  catalogMark,
   club,
   country,
   createDb,
+  externalId,
   kit,
   kitPhoto,
   league,
@@ -29,6 +32,7 @@ import { Test } from "@nestjs/testing";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ADMIN_OBJECT_STORE } from "../dist/admin/admin-catalog.service.js";
+import { FK_LISTING_INGEST } from "../dist/admin/fk-listing-ingest.js";
 import { AppModule } from "../dist/app.module.js";
 import { createMemoryObjectStore } from "../dist/collection/object-store.js";
 
@@ -41,6 +45,23 @@ const DATABASE_URL =
   process.env.API_TEST_DATABASE_URL ?? "postgresql://kit:kit@localhost:5432/kit_api_test";
 
 const objectStore = createMemoryObjectStore();
+
+const listingIngestCalls: Array<{
+  clubTransfermarktId: string;
+  seasonLabel: string;
+  clubLabel?: string;
+}> = [];
+
+const listingIngest = {
+  async ingestClubSeason(input: {
+    clubTransfermarktId: string;
+    seasonLabel: string;
+    clubLabel?: string;
+  }) {
+    listingIngestCalls.push(input);
+    return { kitsUpserted: 2, photosWritten: 1 };
+  },
+};
 
 async function registerUser(app: NestFastifyApplication, email: string) {
   const response = await app.inject({
@@ -73,6 +94,8 @@ describe("Admin /v1", () => {
     })
       .overrideProvider(ADMIN_OBJECT_STORE)
       .useValue(objectStore)
+      .overrideProvider(FK_LISTING_INGEST)
+      .useValue(listingIngest)
       .compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -229,6 +252,17 @@ describe("Admin /v1", () => {
       squadNumber: 10,
     });
 
+    const crestKey = "club/190/crest";
+    const crestBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    await objectStore.putObject(crestKey, crestBytes);
+    await db.insert(catalogMark).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      objectKey: crestKey,
+      rights: "unresolved",
+      visibility: "admin_only",
+    });
+
     await pool.end();
 
     await registerUser(app, "staff@example.com");
@@ -247,7 +281,7 @@ describe("Admin /v1", () => {
 
     const aliasSearch = await app.inject({
       method: "GET",
-      url: "/v1/admin/catalog/stamdata?q=FCK",
+      url: "/v1/admin/catalog/stamdata?entityType=club&q=FCK",
       headers: {
         authorization: `Bearer ${adminSession.accessToken}`,
       },
@@ -255,10 +289,22 @@ describe("Admin /v1", () => {
     expect(aliasSearch.statusCode).toBe(200);
     const aliasBody = adminStamdataListSchema.parse(JSON.parse(aliasSearch.body));
     expect(aliasBody.rows.some((row) => row.label.includes("FC Copenhagen"))).toBe(true);
+    const markedClub = aliasBody.rows.find((row) => row.label.includes("FC Copenhagen"));
+    expect(markedClub?.markPath).toBe(`/admin/catalog/clubs/${insertedClub!.id}/mark`);
+
+    const clubMarkResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/mark`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(clubMarkResponse.statusCode).toBe(200);
+    expect(clubMarkResponse.headers["content-type"]).toContain("image/png");
 
     const countryAliasSearch = await app.inject({
       method: "GET",
-      url: "/v1/admin/catalog/stamdata?q=Danmark",
+      url: "/v1/admin/catalog/stamdata?entityType=club&q=Danmark",
       headers: {
         authorization: `Bearer ${adminSession.accessToken}`,
       },
@@ -269,18 +315,38 @@ describe("Admin /v1", () => {
 
     const leagueAliasSearch = await app.inject({
       method: "GET",
-      url: "/v1/admin/catalog/stamdata?q=SL",
+      url: "/v1/admin/catalog/stamdata?entityType=league&q=SL",
       headers: {
         authorization: `Bearer ${adminSession.accessToken}`,
       },
     });
     expect(leagueAliasSearch.statusCode).toBe(200);
     const leagueAliasBody = adminStamdataListSchema.parse(JSON.parse(leagueAliasSearch.body));
-    expect(
-      leagueAliasBody.rows.some(
-        (row) => row.entityType === "season" || row.entityType === "club_season",
-      ),
-    ).toBe(true);
+    expect(leagueAliasBody.rows.some((row) => row.entityType === "league")).toBe(true);
+
+    const playerSearch = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=player&q=Player",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(playerSearch.statusCode).toBe(200);
+    const playerBody = adminStamdataListSchema.parse(JSON.parse(playerSearch.body));
+    expect(playerBody.rows.some((row) => row.label === "Player One")).toBe(true);
+
+    const pagedClubs = await app.inject({
+      method: "GET",
+      url: "/v1/admin/catalog/stamdata?entityType=club&limit=1&offset=0",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(pagedClubs.statusCode).toBe(200);
+    const pagedBody = adminStamdataListSchema.parse(JSON.parse(pagedClubs.body));
+    expect(pagedBody.total).toBeGreaterThanOrEqual(1);
+    expect(pagedBody.rows).toHaveLength(1);
+    expect(pagedBody.rows[0]?.entityType).toBe("club");
 
     const clubDrillResponse = await app.inject({
       method: "GET",
@@ -293,6 +359,8 @@ describe("Admin /v1", () => {
     const clubDrillBody = adminClubDrillSchema.parse(JSON.parse(clubDrillResponse.body));
     expect(clubDrillBody.label).toBe("FC Copenhagen");
     expect(clubDrillBody.kind).toBe("club");
+    expect(clubDrillBody.markPath).toBe(`/admin/catalog/clubs/${insertedClub!.id}/mark`);
+    expect(clubDrillBody.honours).toEqual([]);
     expect(clubDrillBody.seasons.some((season) => season.label === "2024/25")).toBe(true);
 
     const clubSeasonDrillResponse = await app.inject({
@@ -330,9 +398,26 @@ describe("Admin /v1", () => {
     });
     expect(listResponse.statusCode).toBe(200);
     const listBody = adminStamdataListSchema.parse(JSON.parse(listResponse.body));
-    const kitRow = listBody.rows.find((row) => row.entityType === "kit");
-    expect(kitRow?.label).toContain("FC Copenhagen");
-    expect(kitRow?.photoPath).toBe(`/admin/catalog/kits/${insertedKit!.id}/photo`);
+    expect(listBody.rows.every((row) => row.entityType === "club")).toBe(true);
+    expect(listBody.rows.some((row) => row.label.includes("FC Copenhagen"))).toBe(true);
+
+    const leagueDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/leagues/${insertedLeague!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(leagueDrillResponse.statusCode).toBe(200);
+
+    const playerDrillResponse = await app.inject({
+      method: "GET",
+      url: `/v1/admin/catalog/players/${insertedPlayer!.id}`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(playerDrillResponse.statusCode).toBe(200);
 
     const drillResponse = await app.inject({
       method: "GET",
@@ -344,6 +429,8 @@ describe("Admin /v1", () => {
     expect(drillResponse.statusCode).toBe(200);
     const drillBody = adminKitDrillSchema.parse(JSON.parse(drillResponse.body));
     expect(drillBody.clubLabel).toBe("FC Copenhagen");
+    expect(drillBody.clubId).toBe(insertedClub!.id);
+    expect(drillBody.clubMonogram).toBe("FC");
 
     const photoResponse = await app.inject({
       method: "GET",
@@ -353,6 +440,7 @@ describe("Admin /v1", () => {
       },
     });
     expect(photoResponse.statusCode).toBe(200);
+    expect(photoResponse.headers["cache-control"]).toBe("private, max-age=3600");
     expect(Buffer.from(photoResponse.rawPayload)).toEqual(Buffer.from(photoBytes));
 
     const collectorSession = await registerUser(app, "another-collector@example.com");
@@ -392,5 +480,145 @@ describe("Admin /v1", () => {
     expect(collectionResponse.statusCode).toBe(200);
     const jerseys = collectionJerseysSchema.parse(JSON.parse(collectionResponse.body));
     expect(jerseys).toEqual({ jerseys: [] });
+  });
+
+  it("fetches Football Kit Archive kits for a club season through listing ingest", async () => {
+    listingIngestCalls.length = 0;
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "SE" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2010/11",
+        startsOn: "2010-07-01",
+        endsOn: "2011-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "en",
+      kind: "label",
+      text: "FC Copenhagen",
+      source: "seed",
+    });
+    await db.insert(externalId).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      system: "transfermarkt",
+      value: "190-fetch",
+    });
+    await pool.end();
+
+    const adminSession = await registerUser(app, "kits-fetch-admin@example.com");
+    await promoteToAdmin("kits-fetch-admin@example.com");
+
+    const missing = await app.inject({
+      method: "POST",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/seasons/${insertedSeason!.id}/kits/fetch`,
+    });
+    expect(missing.statusCode).toBe(401);
+
+    const fetched = await app.inject({
+      method: "POST",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/seasons/${insertedSeason!.id}/kits/fetch`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(fetched.statusCode).toBe(200);
+    expect(adminClubSeasonKitsFetchSchema.parse(JSON.parse(fetched.body))).toEqual({
+      kitsUpserted: 2,
+      photosWritten: 1,
+    });
+    expect(listingIngestCalls).toEqual([
+      {
+        clubTransfermarktId: "190-fetch",
+        seasonLabel: "2010/11",
+        clubLabel: "FC Copenhagen",
+      },
+    ]);
+
+    const unknown = await app.inject({
+      method: "POST",
+      url: "/v1/admin/catalog/clubs/550e8400-e29b-41d4-a716-446655440099/seasons/550e8400-e29b-41d4-a716-446655440098/kits/fetch",
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(unknown.statusCode).toBe(404);
+  });
+
+  it("refuses kit fetch when the club has no Transfermarkt id", async () => {
+    const { db, pool } = createDb(DATABASE_URL);
+
+    const [insertedCountry] = await db
+      .insert(country)
+      .values({ iso3166: "NO" })
+      .returning({ id: country.id });
+
+    const [insertedLeague] = await db
+      .insert(league)
+      .values({ countryId: insertedCountry!.id })
+      .returning({ id: league.id });
+
+    const [insertedClub] = await db
+      .insert(club)
+      .values({ countryId: insertedCountry!.id, kind: "club" })
+      .returning({ id: club.id });
+
+    const [insertedSeason] = await db
+      .insert(season)
+      .values({
+        leagueId: insertedLeague!.id,
+        label: "2011/12",
+        startsOn: "2011-07-01",
+        endsOn: "2012-06-30",
+        calendarKind: "split_year",
+      })
+      .returning({ id: season.id });
+
+    await db.insert(catalogLabel).values({
+      entityType: "club",
+      entityId: insertedClub!.id,
+      locale: "en",
+      kind: "label",
+      text: "No TM Club",
+      source: "seed",
+    });
+    await pool.end();
+
+    const adminSession = await registerUser(app, "kits-fetch-no-tm@example.com");
+    await promoteToAdmin("kits-fetch-no-tm@example.com");
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/admin/catalog/clubs/${insertedClub!.id}/seasons/${insertedSeason!.id}/kits/fetch`,
+      headers: {
+        authorization: `Bearer ${adminSession.accessToken}`,
+      },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(JSON.parse(response.body)).toMatchObject({
+      message: "Club has no Transfermarkt id",
+    });
   });
 });

@@ -49,12 +49,14 @@ describe("Capture loading transition", () => {
     // No InteractionManager gate anymore (it cleared before the native present finished).
     expect(route).not.toContain("InteractionManager.runAfterInteractions");
     expect(route).not.toContain('from "react-native"');
-    // Reduced motion enters with animation: "none" (no transitionEnd to await) → rAF paint.
-    expect(route).toContain("reduceMotion");
+    // Reduced motion enters with animation: "none" (no transitionEnd to await) → rAF paint,
+    // decided inside the scheduler (upload-capture-presentation.test.ts drives it).
+    expect(route).toContain("readReduceMotion");
     expect(presentation).toContain("requestAnimationFrame");
-    // Success: same-stack replace into Confirm (no modal hop).
-    expect(route).toContain('pathname: "/(capture)/confirm"');
-    expect(route).toContain("router.replace");
+    // Success: same-stack replace into the landing the photo count and Vision decide (the bulk
+    // overview for four or more photos with Vision on, else Confirm; no modal hop).
+    expect(route).toContain("useCaptureLanding");
+    expect(route).toContain("router.replace(landingForRef.current(result.sessionId))");
     // Cancel: single dismiss out of the (capture) modal back to Samling.
     expect(route).toContain("router.dismiss()");
     // Runs exactly once even though params identity changes per render.

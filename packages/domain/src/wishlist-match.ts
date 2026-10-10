@@ -2,6 +2,7 @@ import type { JerseySize, KitType } from "./index.js";
 
 export type WishlistMatchCriteria = {
   clubId: string | null;
+  nationalTeamId: string | null;
   seasonId: string | null;
   type: KitType | null;
   size: JerseySize | null;
@@ -9,7 +10,8 @@ export type WishlistMatchCriteria = {
 
 export type WishlistMatchJersey = {
   ownerUserId: string;
-  clubId: string;
+  clubId: string | null;
+  nationalTeamId: string | null;
   seasonId: string;
   type: KitType;
   size: JerseySize;
@@ -21,9 +23,12 @@ export type WishlistMatchJersey = {
 /** True when every set wishlist facet matches the jersey (AND). Unset facets are wildcards. */
 export function matchesWishlistFacets(
   criteria: WishlistMatchCriteria,
-  jersey: Pick<WishlistMatchJersey, "clubId" | "seasonId" | "type" | "size">,
+  jersey: Pick<WishlistMatchJersey, "clubId" | "nationalTeamId" | "seasonId" | "type" | "size">,
 ): boolean {
   if (criteria.clubId != null && criteria.clubId !== jersey.clubId) {
+    return false;
+  }
+  if (criteria.nationalTeamId != null && criteria.nationalTeamId !== jersey.nationalTeamId) {
     return false;
   }
   if (criteria.seasonId != null && criteria.seasonId !== jersey.seasonId) {

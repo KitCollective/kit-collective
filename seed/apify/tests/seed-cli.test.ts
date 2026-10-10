@@ -141,6 +141,63 @@ describe("CLI args", () => {
     });
     expect(parsed.lane).toBe("development");
   });
+
+  it("parses bulk competition + season range with a synthesised plan id", () => {
+    const parsed = parseCliArgs(["node", "seed-apify", "bulk", "dk1", "2012/13", "2013/14"]);
+    expect(parsed).toEqual({
+      mode: "bulk",
+      bulk: {
+        command: "run",
+        plan: {
+          id: "dk1-2012-13-2013-14",
+          entries: [{ competition: "dk1", fromSeason: "2012/13", toSeason: "2013/14" }],
+        },
+      },
+      lane: "development",
+    });
+  });
+
+  it("parses bulk with an explicit staging lane", () => {
+    const parsed = parseCliArgs([
+      "node",
+      "seed-apify",
+      "bulk",
+      "dk1",
+      "2012/13",
+      "2013/14",
+      "staging",
+    ]);
+    if (parsed.mode !== "bulk") {
+      throw new Error("expected bulk mode");
+    }
+    expect(parsed.lane).toBe("staging");
+    expect(parsed.bulk.command).toBe("run");
+  });
+
+  it("parses bulk plan and bulk status", () => {
+    expect(parseCliArgs(["node", "seed-apify", "bulk", "plan", "plans/big-five.json"])).toEqual({
+      mode: "bulk",
+      bulk: { command: "run-plan-file", planFile: "plans/big-five.json" },
+      lane: "development",
+    });
+    expect(parseCliArgs(["node", "seed-apify", "bulk", "status", "dk1-2012-13-2013-14"])).toEqual({
+      mode: "bulk",
+      bulk: { command: "status", target: "dk1-2012-13-2013-14" },
+      lane: "development",
+    });
+  });
+
+  it("rejects production and malformed bulk argv", () => {
+    expect(() =>
+      parseCliArgs(["node", "seed-apify", "bulk", "dk1", "2012/13", "2013/14", "production"]),
+    ).toThrow(/production/i);
+    expect(() => parseCliArgs(["node", "seed-apify", "bulk", "dk1", "2012/13"])).toThrow(
+      /bulk <competition> <from-season> <to-season>/,
+    );
+    expect(() => parseCliArgs(["node", "seed-apify", "bulk", "status"])).toThrow(
+      /bulk status <plan-id-or-file>/,
+    );
+  });
 });
 
 describe("runSeed scope walk", () => {

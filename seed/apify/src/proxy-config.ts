@@ -1,5 +1,15 @@
 import { ProxyAgent, fetch as undiciFetch } from "undici";
-import { TransfermarktHttpError } from "./fetch/kader-fetch-adapter.js";
+import {
+  isTransfermarktThinHtml,
+  isTransfermarktWafChallengeResponse,
+  TransfermarktHttpError,
+  TransfermarktProxyQuotaError,
+  TransfermarktThinResponseError,
+  TransfermarktWafChallengeError,
+  transfermarktProxyQuotaReason,
+} from "./fetch/transfermarkt-errors.js";
+import { directTransfermarktRequestHeaders } from "./fetch/transfermarkt-session.js";
+import { safeSeedUrl, seedProgress } from "./progress.js";
 
 export interface SeedProxyConfig {
   /** HTTP(S) proxy URL when configured. */
@@ -47,12 +57,45 @@ export function isDecodoSiteUnblockerProxy(proxyUrl: string): boolean {
   }
 }
 
+export const DEFAULT_SITE_UNBLOCKER_GEO = "Germany";
+
+/** A rendered Site Unblocker pass was measured at 8-107 s, well past undici's own defaults. */
+export const SITE_UNBLOCKER_TIMEOUT_MS = 180_000;
+
+/**
+ * `auto` sends the cheap pass first and escalates to a rendered pass only when the WAF
+ * answers. Measured over 8 kader URLs: cheap cleared 6 in ~1.5 s each, the WAF took the
+ * other 2 (HTTP 405 with a Human Verification body), and the rendered pass cleared both.
+ */
+export type SiteUnblockerRenderMode = "auto" | "html" | "off";
+
+export interface SiteUnblockerOptions {
+  geo: string;
+  render: SiteUnblockerRenderMode;
+  /** Sticky exit id. Optional: the rendered pass already clears the WAF without one. */
+  sessionId?: string;
+}
+
+export function resolveSiteUnblockerOptions(
+  env: NodeJS.ProcessEnv = process.env,
+): SiteUnblockerOptions {
+  const render = env.SEED_PROXY_HEADLESS?.trim().toLowerCase();
+
+  return {
+    geo: env.SEED_PROXY_GEO?.trim() || DEFAULT_SITE_UNBLOCKER_GEO,
+    render: render === "html" || render === "off" ? render : "auto",
+    sessionId: env.SEED_PROXY_SESSION_ID?.trim() || undefined,
+  };
+}
+
 export type SeedProxyAgentOptions =
   | string
   | {
       uri: string;
       requestTls: { rejectUnauthorized: boolean };
       proxyTls: { rejectUnauthorized: boolean };
+      headersTimeout: number;
+      bodyTimeout: number;
     };
 
 export type SeedProxyAgent = {
@@ -105,42 +148,104 @@ function createSeedProxyAgent(
     uri: proxyUrl,
     requestTls: { rejectUnauthorized: false },
     proxyTls: { rejectUnauthorized: false },
+    headersTimeout: SITE_UNBLOCKER_TIMEOUT_MS,
+    bodyTimeout: SITE_UNBLOCKER_TIMEOUT_MS,
   });
 }
 
-function seedProxyRequestHeaders(proxyUrl: string): Record<string, string> {
-  if (isDecodoSiteUnblockerProxy(proxyUrl)) {
-    return {
-      "X-SU-Geo": "Germany",
-      "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
-    };
+function siteUnblockerHeaders(
+  options: SiteUnblockerOptions,
+  render: boolean,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "X-SU-Geo": options.geo,
+    "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
+  };
+  if (render) {
+    headers["X-SU-Headless"] = "html";
+  }
+  if (options.sessionId) {
+    headers["X-SU-Session-Id"] = options.sessionId;
+  }
+  return headers;
+}
+
+/** Header sets to try for one URL, cheapest first. */
+function proxyAttemptHeaders(
+  proxyUrl: string,
+  options: SiteUnblockerOptions,
+): Array<Record<string, string>> {
+  if (!isDecodoSiteUnblockerProxy(proxyUrl)) {
+    // A named bot UA is 502d by Transfermarkt; residential exits need the browser set too.
+    return [directTransfermarktRequestHeaders()];
   }
 
-  return {
-    "User-Agent": "KitCollective-Seed/1.0 (+https://github.com/KitCollective/kit-collective)",
-    "Accept-Language": "en-US,en;q=0.9",
-  };
+  if (options.render === "html") {
+    return [siteUnblockerHeaders(options, true)];
+  }
+  if (options.render === "off") {
+    return [siteUnblockerHeaders(options, false)];
+  }
+  return [siteUnblockerHeaders(options, false), siteUnblockerHeaders(options, true)];
+}
+
+/** Only the WAF gate and a truncated relay are worth paying for a rendered pass. */
+function isWorthRendering(error: unknown): boolean {
+  return (
+    error instanceof TransfermarktWafChallengeError ||
+    error instanceof TransfermarktThinResponseError
+  );
 }
 
 export function createProxyFetchHtml(
   proxyUrl: string,
   fetchImpl: SeedProxyFetch = defaultSeedProxyFetch,
   createProxyAgent: SeedProxyAgentFactory = createUndiciProxyAgent,
+  options: SiteUnblockerOptions = resolveSiteUnblockerOptions(),
 ): ProxyFetchHtml {
   const agent = createSeedProxyAgent(proxyUrl, createProxyAgent);
+  const attempts = proxyAttemptHeaders(proxyUrl, options);
 
-  const fetchHtml = async (url: string) => {
-    const response = await fetchImpl(url, {
-      dispatcher: agent,
-      headers: seedProxyRequestHeaders(proxyUrl),
-    });
+  const requestHtml = async (url: string, headers: Record<string, string>) => {
+    const response = await fetchImpl(url, { dispatcher: agent, headers });
 
     const text = await response.text();
     if (!response.ok) {
+      // Checked before the WAF gate: a spent plan is the proxy talking, not Transfermarkt.
+      const quotaReason = transfermarktProxyQuotaReason(response.status, text);
+      if (quotaReason) {
+        throw new TransfermarktProxyQuotaError(response.status, url, quotaReason);
+      }
+    }
+    if (isTransfermarktWafChallengeResponse(response.status, text)) {
+      throw new TransfermarktWafChallengeError(response.status, url);
+    }
+    if (!response.ok) {
       throw new TransfermarktHttpError(response.status, url);
+    }
+    if (isTransfermarktThinHtml(text)) {
+      throw new TransfermarktThinResponseError(text.length, url);
     }
 
     return text;
+  };
+
+  const fetchHtml = async (url: string) => {
+    let lastError: unknown;
+
+    for (const [index, headers] of attempts.entries()) {
+      try {
+        return await requestHtml(url, headers);
+      } catch (error: unknown) {
+        lastError = error;
+        if (index === attempts.length - 1 || !isWorthRendering(error)) {
+          throw error;
+        }
+        seedProgress(`unblocker render ${safeSeedUrl(url)}`);
+      }
+    }
+
+    throw lastError;
   };
 
   return {

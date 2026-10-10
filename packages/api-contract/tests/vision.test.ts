@@ -1,5 +1,6 @@
 import {
   UNSIGNED_VISION_SUGGEST_CAP,
+  VISION_MATCHER_JERSEY_CAP,
   type VisionJobResponse,
   type VisionLogRequest,
   type VisionSuggestRequest,
@@ -41,6 +42,19 @@ describe("vision contract", () => {
     expect(parsed.suggestions?.clubLabel).toBe("F.C. København");
   });
 
+  it("parses job response with catalogMiss hint labels and catalogLikely false", () => {
+    const job: VisionJobResponse = {
+      jobId: "22222222-2222-2222-2222-222222222222",
+      status: "ready",
+      catalogMiss: true,
+      catalogLikely: false,
+      suggestions: {
+        nationalTeamLabel: "Argentina",
+      },
+    };
+    expect(visionJobResponseSchema.parse(job)).toEqual(job);
+  });
+
   it("parses job response with preselect flag", () => {
     const job: VisionJobResponse = {
       jobId: "22222222-2222-2222-2222-222222222222",
@@ -65,5 +79,9 @@ describe("vision contract", () => {
 
   it("exports unsigned vision suggest cap", () => {
     expect(UNSIGNED_VISION_SUGGEST_CAP).toBe(20);
+  });
+
+  it("exports signed-in Vision Matcher jersey cap", () => {
+    expect(VISION_MATCHER_JERSEY_CAP).toBe(10);
   });
 });

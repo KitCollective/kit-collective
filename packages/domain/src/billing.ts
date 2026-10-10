@@ -13,6 +13,10 @@ export const OFFER_PRODUCT_IDS = {
   year: "com.kitcollective.premium.year",
 } as const;
 
+/** Free signed-in Vision Matcher: distinct ready identity drafts per rolling window. Not an Offer field. */
+export const VISION_MATCHER_JERSEY_CAP = 10;
+export const VISION_MATCHER_WINDOW_DAYS = 30;
+
 export function entitlementSourceForIapPlatform(platform: IapPlatform): "iap_apple" | "iap_google" {
   switch (platform) {
     case "apple":

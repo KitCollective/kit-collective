@@ -81,6 +81,51 @@ describe("applyIdentitySuggestion", () => {
     expect(draft.condition).toBeNull();
   });
 
+  it("writes the season label onto the draft so Data can show it", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    const applied = applyIdentitySuggestion(
+      session,
+      draftId,
+      {
+        seasonId: UUID_B,
+        seasonLabel: "2021/22",
+      },
+      { fieldPreselect: { season: true } },
+    );
+
+    const draft = getActiveDraft(applied);
+    expect(draft.seasonId).toBe(UUID_B);
+    expect(draft.seasonLabel).toBe("2021/22");
+  });
+
+  it("preselects a national team without stuffing it into clubId", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+    const NT = "550e8400-e29b-41d4-a716-446655440005";
+
+    const applied = applyIdentitySuggestion(
+      session,
+      draftId,
+      {
+        nationalTeamId: NT,
+        nationalTeamLabel: "Danmark",
+        seasonId: UUID_B,
+        type: "home",
+      },
+      {
+        fieldPreselect: { nationalTeam: true, season: true, type: true },
+      },
+    );
+
+    const draft = getActiveDraft(applied);
+    expect(draft.clubId).toBeNull();
+    expect(draft.nationalTeamId).toBe(NT);
+    expect(draft.nationalTeamLabel).toBe("Danmark");
+    expect(draft.seasonId).toBe(UUID_B);
+  });
+
   it("preselects player and badge when flagged in fieldPreselect", () => {
     const session = createCaptureSession([URI_FRONT]);
     const draftId = getActiveDraft(session).id;

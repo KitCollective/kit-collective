@@ -8,7 +8,8 @@ import {
   type TransitionNavigation,
 } from "@/capture/upload-capture-presentation";
 import { runUploadCapture, startUploadCaptureWhenPresented } from "@/capture/uploadCaptureSession";
-import { useReduceMotion } from "@/theme/use-reduce-motion";
+import { useCaptureLanding } from "@/capture/use-capture-landing";
+import { readReduceMotion } from "@/theme/use-reduce-motion";
 
 const PICKING_CAPTION = "Åbner dine billeder …";
 const BUILDING_CAPTION = "Forbereder trøjen …";
@@ -22,7 +23,10 @@ type CaptureTransitionNavigation = ReturnType<typeof useNavigation> & Transition
 export default function CaptureLoadingRoute() {
   const router = useRouter();
   const navigation = useNavigation<CaptureTransitionNavigation>();
-  const reduceMotion = useReduceMotion();
+  const landingFor = useCaptureLanding();
+  // The effect below runs once; keep the latest landing rule without re-running it.
+  const landingForRef = useRef(landingFor);
+  landingForRef.current = landingFor;
   const params = useLocalSearchParams<{
     prefilledClubId?: string;
     prefilledClubLabel?: string;
@@ -40,7 +44,8 @@ export default function CaptureLoadingRoute() {
 
     let active = true;
     const cleanup = startUploadCaptureWhenPresented({
-      scheduleWhenPresented: (run) => scheduleUploadWhenPresented(navigation, reduceMotion, run),
+      scheduleWhenPresented: (run) =>
+        scheduleUploadWhenPresented(navigation, readReduceMotion, run),
       runPick: () =>
         runUploadCapture(expoUploadFilesAdapter, createPersistedCaptureSession, {
           prefilledClub,
@@ -55,10 +60,7 @@ export default function CaptureLoadingRoute() {
           router.dismiss();
           return;
         }
-        router.replace({
-          pathname: "/(capture)/confirm",
-          params: { sessionId: result.sessionId },
-        });
+        router.replace(landingForRef.current(result.sessionId));
       },
     });
 
@@ -66,7 +68,7 @@ export default function CaptureLoadingRoute() {
       active = false;
       cleanup();
     };
-  }, [navigation, prefilledClub, reduceMotion, router]);
+  }, [navigation, prefilledClub, router]);
 
   return <CaptureLoadingScreen caption={caption} />;
 }

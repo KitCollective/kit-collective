@@ -20,7 +20,7 @@ const migrationsFolder = path.join(path.dirname(fileURLToPath(import.meta.url)),
 
 const DATABASE_URL = resolveKitDbTestDatabaseUrl();
 
-/** Same UUIDs as apps/mobile/src/catalog/dummyCatalog.ts — independent of the seed module. */
+/** Same UUIDs as `DEV_CATALOG_FIXTURE_IDS` in `@kit/api-contract`. */
 const FCK_ID = "11111111-1111-4111-8111-111111111111";
 const FCK_SEASON_2425 = "aaaaaaa1-aaa1-4aa1-8aa1-111111111111";
 const FALK_ID = "b1111111-b111-4111-8111-111111111111";

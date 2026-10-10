@@ -32,6 +32,12 @@ if ! printf '%s' "$COMMAND" | grep -qE 'git[[:space:]]+push\b'; then
   allow
 fi
 
+# A branch delete (`--delete`, `-d`, or an empty-source refspec `:branch`) uploads no commits,
+# so it cannot create an unmergeable PR. Deleting a merged branch must not need a rebase.
+if printf '%s' "$COMMAND" | grep -qE '(^|[[:space:]])(--delete|-d)([[:space:]]|$)|[[:space:]]:[^[:space:]]'; then
+  allow
+fi
+
 # Never block pushes to the integration lane itself.
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
 if [ "$CURRENT_BRANCH" = "development" ] || [ "$CURRENT_BRANCH" = "staging" ] || [ "$CURRENT_BRANCH" = "production" ]; then

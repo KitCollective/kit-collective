@@ -109,8 +109,8 @@ export function checkMobileWishlistUiEvidence(overrides: WishlistUiEvidenceOverr
     violations.push(`${wishlistSheetPath}: Match hit rows must use hasWishlistHit from logic`);
   }
 
-  if (!sheetSource.includes("FacetPickerOverlay")) {
-    violations.push(`${wishlistSheetPath}: club pick must use FacetPickerOverlay`);
+  if (!sheetSource.includes("ClubPickerOverlay")) {
+    violations.push(`${wishlistSheetPath}: side pick must use ClubPickerOverlay`);
   }
 
   if (logicExists) {

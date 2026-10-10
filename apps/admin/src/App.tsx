@@ -9,12 +9,14 @@ import { CollectorJerseyDrillPage } from "./pages/CollectorJerseyDrillPage.js";
 import { CollectorsPage } from "./pages/CollectorsPage.js";
 import { CollectorUserDrillPage } from "./pages/CollectorUserDrillPage.js";
 import { KitDrillPage } from "./pages/KitDrillPage.js";
+import { LeagueDrillPage } from "./pages/LeagueDrillPage.js";
 import { LoginPage } from "./pages/LoginPage.js";
+import { MasterDataPage } from "./pages/MasterDataPage.js";
 import { OfferDrillPage } from "./pages/OfferDrillPage.js";
+import { PlayerDrillPage } from "./pages/PlayerDrillPage.js";
 import { ResetCompletePage } from "./pages/ResetCompletePage.js";
 import { ResetRequestPage } from "./pages/ResetRequestPage.js";
 import { SeasonDrillPage } from "./pages/SeasonDrillPage.js";
-import { StamdataPage } from "./pages/StamdataPage.js";
 import { VerifyPage } from "./pages/VerifyPage.js";
 import "./styles/admin.css";
 
@@ -30,8 +32,10 @@ export function App() {
           <Route element={<RequireAdmin />}>
             <Route element={<AdminShell />}>
               <Route path="/" element={<Navigate to="/stamdata" replace />} />
-              <Route path="/stamdata" element={<StamdataPage />} />
+              <Route path="/stamdata" element={<MasterDataPage />} />
               <Route path="/stamdata/clubs/:clubId" element={<ClubDrillPage />} />
+              <Route path="/stamdata/leagues/:leagueId" element={<LeagueDrillPage />} />
+              <Route path="/stamdata/players/:playerId" element={<PlayerDrillPage />} />
               <Route path="/stamdata/seasons/:seasonId" element={<SeasonDrillPage />} />
               <Route path="/stamdata/kits/:kitId" element={<KitDrillPage />} />
               <Route

@@ -9,9 +9,12 @@ import {
   useState,
 } from "react";
 import { Platform } from "react-native";
+import { useAuth } from "@/auth/AuthProvider";
 import { CaptureSourceSheet } from "@/components/capture-source-sheet";
+import { useVisionSwitch, visionSwitch } from "@/prefs/vision-switch-device";
 import type { PrefilledClub } from "./captureFlow";
 import { type CaptureSource, startCaptureFromSource } from "./captureSourceFlow";
+import { resolveChooserVision } from "./chooserVision";
 
 type CaptureChooserValue = {
   /** Present the Chooser Sheet over whatever place the collector is on. */
@@ -27,6 +30,8 @@ const CaptureChooserContext = createContext<CaptureChooserValue | null>(null);
  */
 export function CaptureChooserProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const { entitlement, requestPremiumAccess, refreshUser } = useAuth();
+  const visionRemembered = useVisionSwitch();
   const [pending, setPending] = useState<{ prefilledClub: PrefilledClub | null } | null>(null);
   // A chosen source waits here until the Sheet's Modal has fully left the screen, so the
   // system picker (iOS ActionSheet / Photos / camera) never presents on top of a closing
@@ -34,20 +39,33 @@ export function CaptureChooserProvider({ children }: { children: ReactNode }) {
   const queued = useRef<{ source: CaptureSource; prefilledClub: PrefilledClub | null } | null>(
     null,
   );
+  // The paywall is its own Sheet, so it waits for this one to leave the screen the same way.
+  const paywallQueued = useRef(false);
 
-  const open = useCallback((prefilledClub: PrefilledClub | null = null) => {
-    queued.current = null;
-    setPending({ prefilledClub });
-  }, []);
+  const open = useCallback(
+    (prefilledClub: PrefilledClub | null = null) => {
+      queued.current = null;
+      paywallQueued.current = false;
+      setPending({ prefilledClub });
+      // The quota line must count the last run; a failed refresh keeps the line already shown.
+      void refreshUser().catch(() => undefined);
+    },
+    [refreshUser],
+  );
 
   const runQueued = useCallback(() => {
+    if (paywallQueued.current) {
+      paywallQueued.current = false;
+      void requestPremiumAccess();
+      return;
+    }
     const next = queued.current;
     if (!next) {
       return;
     }
     queued.current = null;
     void startCaptureFromSource(next.source, { router, prefilledClub: next.prefilledClub });
-  }, [router]);
+  }, [router, requestPremiumAccess]);
 
   const value = useMemo<CaptureChooserValue>(() => ({ open }), [open]);
 
@@ -59,7 +77,18 @@ export function CaptureChooserProvider({ children }: { children: ReactNode }) {
         onDismiss={() => {
           // Plain cancel (Annuller / swipe / scrim): drop any queued source, start nothing.
           queued.current = null;
+          paywallQueued.current = false;
           setPending(null);
+        }}
+        vision={resolveChooserVision(visionRemembered, entitlement?.visionMatcher)}
+        onVisionChange={(next) => visionSwitch.set(next)}
+        onOpenPaywall={() => {
+          setPending(null);
+          if (Platform.OS === "ios") {
+            paywallQueued.current = true;
+            return;
+          }
+          void requestPremiumAccess();
         }}
         onConfirm={(source) => {
           const prefilledClub = pending?.prefilledClub ?? null;

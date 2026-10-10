@@ -58,6 +58,20 @@ export type PreferredFoot = (typeof PREFERRED_FOOT)[number];
 export const HONOUR_SUBJECT_TYPES = ["club", "national_team", "player"] as const;
 export type HonourSubjectType = (typeof HONOUR_SUBJECT_TYPES)[number];
 
+/**
+ * Stamdata identity marks stored as object-store bytes (club crest, league badge,
+ * honour trophy, national-team mark). Player portraits stay on `player_photo`.
+ */
+export const CATALOG_MARK_ENTITY_TYPES = ["club", "league", "honour", "national_team"] as const;
+export type CatalogMarkEntityType = (typeof CATALOG_MARK_ENTITY_TYPES)[number];
+
+export {
+  compareSquadOrder,
+  SQUAD_POSITION_GROUPS,
+  type SquadPositionGroup,
+  squadPositionGroup,
+} from "./squad-position.js";
+
 export const USER_ROLES = ["user", "admin"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
@@ -123,6 +137,40 @@ export type OcrStatus = (typeof OCR_STATUSES)[number];
 export const AUTHENTICITY_VALUES = ["unknown", "genuine", "replica"] as const;
 export type Authenticity = (typeof AUTHENTICITY_VALUES)[number];
 
+/** Nest Vision eval class at Save — not a collector surface, not a second Gemini call. */
+export const VISION_EVAL_CLASSES = ["accepted", "alias", "coverage", "model", "transport"] as const;
+export type VisionEvalClass = (typeof VISION_EVAL_CLASSES)[number];
+
+/** Staff-gated Vision improve proposal kind — CatalogLabel alias, seed backlog, or prompt ticket. */
+export const VISION_IMPROVE_KINDS = ["alias", "seed", "prompt"] as const;
+export type VisionImproveKind = (typeof VISION_IMPROVE_KINDS)[number];
+
+/** Vision improve lifecycle. New upserts are proposed; seed/prompt Apply is noted only. */
+export const VISION_IMPROVE_STATUSES = ["proposed", "applied", "dismissed", "noted"] as const;
+export type VisionImproveStatus = (typeof VISION_IMPROVE_STATUSES)[number];
+
+/** Catalog-ish entity a Vision improve row points at. Not a UserJersey FK. */
+export const VISION_IMPROVE_ENTITY_TYPES = [
+  "club",
+  "national_team",
+  "season",
+  "kit",
+  "player",
+  "patch",
+] as const;
+export type VisionImproveEntityType = (typeof VISION_IMPROVE_ENTITY_TYPES)[number];
+
+/** Identity field the eval class blamed. Same keys as Vision eval field hits. */
+export const VISION_IMPROVE_FIELDS = [
+  "side",
+  "season",
+  "type",
+  "catalogKitId",
+  "player",
+  "patch",
+] as const;
+export type VisionImproveField = (typeof VISION_IMPROVE_FIELDS)[number];
+
 /** Danish chip labels for kit type (UI only — stored values are KIT_TYPES). */
 export const KIT_TYPE_LABELS_DA: Record<KitType, string> = {
   home: "Hjemme",
@@ -157,6 +205,8 @@ export {
   IAP_PLATFORMS,
   type IapPlatform,
   OFFER_PRODUCT_IDS,
+  VISION_MATCHER_JERSEY_CAP,
+  VISION_MATCHER_WINDOW_DAYS,
 } from "./billing.js";
 export {
   countryCodesForIso3166,

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -15,6 +15,7 @@ const hubHeaderPath = join(__dirname, "../src/components/confirm-hub-header.tsx"
 const confirmExitPath = join(__dirname, "../src/capture/use-confirm-exit.ts");
 const confirmPhotosPath = join(__dirname, "../src/capture/use-confirm-photos.ts");
 const confirmVisionPath = join(__dirname, "../src/capture/use-confirm-vision.ts");
+const confirmGroupingPath = join(__dirname, "../src/capture/use-confirm-grouping.ts");
 const jerseyTabBarPath = join(__dirname, "../src/components/bulk/JerseyTabBar.tsx");
 const captureLayoutPath = join(__dirname, "../app/(capture)/_layout.tsx");
 const pickerModalPath = join(__dirname, "../src/components/catalog-picker-modal.tsx");
@@ -34,7 +35,7 @@ describe("confirmSheet", () => {
 });
 
 describe("Confirm chrome", () => {
-  it("opens Data and Detaljer as stack drills with donut rows, not inline cards", () => {
+  it("opens Data from an identity block and Detaljer from a quiet row, with no donut cards", () => {
     const confirm = readFileSync(confirmPath, "utf8");
     const layout = readFileSync(captureLayoutPath, "utf8");
     const dataScreen = readFileSync(dataScreenPath, "utf8");
@@ -44,8 +45,10 @@ describe("Confirm chrome", () => {
     const confirmPhotos = readFileSync(confirmPhotosPath, "utf8");
     const confirmVision = readFileSync(confirmVisionPath, "utf8");
 
-    expect(confirm).toContain('title="Data"');
-    expect(confirm).toContain('title="Detaljer"');
+    expect(confirm).toContain("ConfirmIdentityBlock");
+    expect(confirm).toContain("ConfirmSizeCondition");
+    expect(confirm).toContain('title="Badge og noter"');
+    expect(confirm).toContain('meta="valgfrit"');
     expect(confirm).toContain("ConfirmSectionRow");
     expect(confirm).toContain("confirm-data");
     expect(confirm).toContain("confirm-details");
@@ -60,8 +63,19 @@ describe("Confirm chrome", () => {
     expect(confirm).toContain("JerseyTabBar");
     expect(confirm).toContain("ConfirmPhotoViewer");
     expect(confirm).toContain("UnboundPhotosRow");
+    // Grouping lives on the bulk overview now: Confirm carries no grouping wait chrome.
+    expect(confirm).not.toContain("useConfirmGrouping");
+    expect(confirm).not.toContain("grouping.");
+    expect(confirm).not.toContain("visionSlotReserve");
+    expect(confirm).not.toContain("GROUPING_ANALYZING_COPY");
+    expect(confirm).not.toContain("analyzingMessage");
+    expect(confirm).not.toContain("ConfirmVisionBanner");
+    expect(confirm).not.toContain("resolveConfirmVisionBannerState");
+    expect(confirm).not.toContain("loading={vision.fieldMarkInput.analyzing}");
     expect(confirm).toContain("onDiscardPhoto");
-    expect(confirm).toContain("onUpload");
+    // The Foto tile on the photo strip adds photos; there is no Upload tile on Confirm.
+    expect(confirm).toContain("onAddPhoto");
+    expect(confirm).not.toContain("onUpload");
     expect(confirmPhotos).toContain("pickUploadFiles");
     expect(confirm).not.toContain("Flere trøjer i denne upload");
 
@@ -81,7 +95,7 @@ describe("Confirm chrome", () => {
     // The hub wires Luk to a single guarded exit: one `dismissTo` pops the whole
     // (capture) modal back to Samling, and an `exitedRef` guard makes the Luk press and
     // the redirect-away effect idempotent so exit can never double-hop.
-    expect(confirm).toContain("ConfirmHubHeader onClose={exitToCollection}");
+    expect(confirm).toContain("onClose={exitToCollection}");
     expect(confirm).toContain("exitToCollection");
     expect(confirmExit).toContain("exitedRef");
     expect(confirmExit).toContain("router.dismissTo(COLLECTION_ROUTE)");
@@ -98,13 +112,36 @@ describe("Confirm chrome", () => {
       jerseyTabs.indexOf('accessibilityLabel="Tilføj trøje"'),
     );
     expect(jerseyTabs.indexOf('accessibilityLabel="Tilføj trøje"')).toBeLessThan(
-      jerseyTabs.indexOf("</ScrollView>"),
+      jerseyTabs.indexOf("</Animated.ScrollView>"),
     );
     expect(jerseyTabs).not.toContain("flex: 1");
     expect(jerseyTabs).toContain("radius.pill");
     expect(jerseyTabs).toContain("theme.fillSecondary");
     expect(jerseyTabs).not.toContain("theme.danger");
     expect(jerseyTabs).not.toContain("theme.warning");
+    expect(jerseyTabs).toContain("Keyframe");
+    expect(jerseyTabs).toContain("LinearTransition");
+    expect(jerseyTabs).toContain("scale: 0.95");
+    expect(jerseyTabs).toContain("scale: 0.97");
+    expect(jerseyTabs).toContain("Easing.bezier(0.4, 0, 0.2, 1)");
+    expect(jerseyTabs).toContain("useReduceMotion");
+    expect(jerseyTabs).toContain("motion.slow");
+    expect(jerseyTabs).not.toContain("motion.fast");
+    expect(jerseyTabs).toContain('key="add-jersey"');
+    expect(jerseyTabs).not.toContain("analyzing");
+    expect(jerseyTabs).toContain("jerseyTabPillX");
+    expect(jerseyTabs).toContain("JERSEY_TAB_STEP");
+    expect(jerseyTabs).toContain("withTiming");
+    expect(jerseyTabs).toContain("translateX");
+    expect(jerseyTabs).toContain("inverseRow");
+    expect(jerseyTabs).toContain("-pillX.get()");
+    expect(jerseyTabs).toContain('overflow: "hidden"');
+    expect(jerseyTabs).not.toContain("grouping-skeleton-");
+    expect(jerseyTabs).not.toContain("ConfirmAnalyzingPulse");
+    expect(jerseyTabs).toContain("paddingTop: BADGE_OUTSET");
+    expect(jerseyTabs).toContain("top: -BADGE_OUTSET");
+    expect(jerseyTabs).not.toContain("theme.info");
+    expect(jerseyTabs).not.toContain("theme.success");
 
     const unboundRow = readFileSync(
       join(__dirname, "../src/components/bulk/UnboundPhotosRow.tsx"),
@@ -124,6 +161,82 @@ describe("Confirm chrome", () => {
     expect(unboundRow).not.toContain("ConfirmPhotoSlotAnchor");
     expect(unboundRow).not.toContain("Tryk og hold");
     expect(unboundRow).not.toContain("confirm-photo-recategorize");
+    expect(unboundRow).toContain("FadeOut");
+    expect(unboundRow).toContain("LinearTransition");
+    expect(unboundRow).toContain("useReduceMotion");
+    expect(unboundRow).toContain("motion.slow");
+    expect(unboundRow).not.toContain("motion.fast");
+    expect(unboundRow).not.toContain("gatheringUris");
+    expect(unboundRow).not.toContain("sandboxGather");
+    expect(unboundRow).not.toContain("Grupperer fotoet");
+    expect(unboundRow).not.toContain("thumbSkeleton");
+    expect(unboundRow).not.toContain("travel=");
+    expect(unboundRow).not.toContain("theme.info");
+
+    const analyzingPulse = readFileSync(
+      join(__dirname, "../src/components/confirm-analyzing-pulse.tsx"),
+      "utf8",
+    );
+    expect(analyzingPulse).toContain('pointerEvents="none"');
+    expect(analyzingPulse).toContain("withRepeat");
+    expect(analyzingPulse).toContain("useReduceMotion");
+    expect(analyzingPulse).toContain("ANALYZING_PULSE_MS = motion.slow * 5");
+    expect(analyzingPulse).toContain("Easing.bezier(0.4, 0, 0.6, 1)");
+    expect(analyzingPulse).toContain("SKELETON_BONE_ALPHA = 0.18");
+    expect(analyzingPulse).toContain("REST_OPACITY = 1");
+    expect(analyzingPulse).toContain("MID_OPACITY = 0.55");
+    expect(analyzingPulse).not.toContain("translateX");
+    expect(analyzingPulse).not.toContain("ANALYZING_SHIMMER_MS");
+
+    const grouping = readFileSync(confirmGroupingPath, "utf8");
+    // The grouping hook feeds the overview: per-group rule in the reducer, no Confirm reveal.
+    for (const gone of [
+      "GROUPING_TAB_STAGGER_MS",
+      "GROUPING_GATHER_MS",
+      "setGatheringUris",
+      "setRollingUris",
+      "setHomecoming",
+      "setHiddenSandboxUris",
+      "blocksIdentity",
+      "pendingGrouping",
+      "groupingDesignGap",
+    ]) {
+      expect(grouping).not.toContain(gone);
+    }
+    expect(grouping).toContain("applyGroupingSuggestion");
+    expect(grouping).toContain("markGroupingSettled");
+    expect(grouping).toContain("if (!accessToken || !sessionId)");
+    expect(grouping).toContain("ensureSessionPhotoIds");
+    expect(grouping).toContain("buildGroupingSuggestRequest");
+    expect(grouping).toContain("Promise.allSettled");
+    expect(grouping).toContain("closeGroupingRun");
+    expect(grouping).toContain('applyGroupingClose("timeout"');
+    expect(grouping).not.toContain("confirm.grouping");
+    expect(grouping).toContain("shouldBeginGroupingStart");
+    expect(confirmVision).not.toContain("deferIdentity");
+    expect(confirmVision).not.toContain("groupingInFlight");
+    expect(confirmVision).not.toContain("suggestionOpacity");
+    expect(confirmVision).toContain("shouldAttemptIdentityQueue");
+    expect(confirmVision).toContain("nextQueuedIdentityDraft");
+    expect(confirmVision).toContain("identityLoopActiveRef");
+    expect(confirmVision).toContain("identityKickAgainRef");
+    expect(confirmVision).toContain("launchIdentityLoop");
+    expect(confirmVision).not.toContain("skipNewDrafts");
+    expect(confirmVision).toContain("shouldSyncIdentityChrome");
+    expect(confirmVision).toContain("raceWithTimeout");
+    expect(confirmVision).toContain("identitySettledSnapshot");
+    expect(confirmVision).not.toContain("setActiveDraft(current, next.id)");
+    expect(confirmVision).not.toContain("startedIdentityKeysRef.current.delete");
+    expect(confirmVision).not.toContain("Promise.all(");
+    expect(confirmVision).not.toContain("groupingJustClosed");
+    expect(confirmVision).not.toContain("fieldMarkInput");
+    expect(confirmVision).not.toContain("markDataReviewed");
+    expect(confirmVision).not.toContain(
+      "setIdentitySnapshot({ fieldPreselect: {}, suggestions: null, catalogMiss: false })",
+    );
+    expect(confirmVision).toContain("VISION_TIMEOUT_MS = 45_000");
+    expect(confirmVision).toContain("await applySuggestions(job, inFlightDraftId)");
+    expect(confirmVision).not.toContain("await applySuggestions(job);");
 
     expect(confirm).not.toContain("ConfirmPhotoRecategorize");
     expect(confirm).not.toContain("applyConfirmPhotoOccupancy");
@@ -133,8 +246,33 @@ describe("Confirm chrome", () => {
       join(__dirname, "../src/components/confirm-photo-viewer.tsx"),
       "utf8",
     );
+    const photoSlot = readFileSync(join(__dirname, "../src/components/photo-slot.tsx"), "utf8");
     expect(viewer).toContain("ScrollView");
     expect(viewer).not.toContain("borderWidth");
+    expect(viewer).not.toContain("groupingStripUris");
+    expect(viewer).not.toContain("groupingViewerRoles");
+    expect(viewer).not.toContain("isGroupingWait");
+    expect(viewer).not.toContain("ConfirmGroupingWait");
+    expect(viewer).not.toContain("rollingUris");
+    expect(viewer).not.toContain("homecoming");
+    expect(viewer).toContain("photoUris[role] ?? role");
+
+    // The grouping wait canvas is gone from Confirm (the overview replaced it).
+    expect(existsSync(join(__dirname, "../src/components/confirm-grouping-wait.tsx"))).toBe(false);
+    expect(existsSync(join(__dirname, "../src/capture/groupingReveal.ts"))).toBe(false);
+    // The grouping wait chrome (skeleton pulse, fade and roll entering) left with the overview.
+    for (const gone of [
+      "ConfirmAnalyzingPulse",
+      "SKELETON_BONE_ALPHA",
+      "SLOT_FADE_ENTERING",
+      "SLOT_ROLL_ENTERING",
+      "groupingPreview",
+      "analyzing",
+    ]) {
+      expect(photoSlot).not.toContain(gone);
+    }
+    expect(photoSlot).toContain("theme.surface");
+    expect(photoSlot).not.toContain("theme.info");
 
     expect(layout).toContain('name="confirm-data"');
     expect(layout).toContain('name="confirm-details"');
@@ -149,41 +287,41 @@ describe("Confirm chrome", () => {
     expect(dataScreen).toContain("KIT_TYPES");
     expect(dataScreen).toContain("Vælg spiller");
     expect(dataScreen).toContain("Vælg sæson");
-    expect(dataScreen).toContain('accessibilityLabel="Badge"');
-    expect(dataScreen).toContain("SwitchControl");
-    expect(dataScreen).toContain("dummyBadgesForSeason");
+    // Badge moved to the Detaljer drill (Revision 2026-10-09): Detaljer holds Badge and Noter only.
+    expect(dataScreen).not.toContain("SwitchControl");
+    expect(dataScreen).not.toContain("fetchSeasonPatches");
+    expect(dataScreen).not.toContain("setDraftBadge");
+    const badgeSection = readFileSync(
+      join(__dirname, "../src/components/confirm-badge-section.tsx"),
+      "utf8",
+    );
+    expect(badgeSection).toContain('accessibilityLabel="Badge"');
+    expect(badgeSection).toContain("SwitchControl");
+    expect(badgeSection).toContain("fetchSeasonPatches");
+    expect(badgeSection).toContain("setDraftBadge");
+    expect(dataScreen).not.toContain("dummyBadgesForSeason");
+    expect(dataScreen).not.toContain("dummyCatalog");
     expect(dataScreen).not.toContain('label="Noter"');
     expect(dataScreen).not.toContain("Batch");
 
     expect(confirm).not.toContain('label="Noter"');
-    expect(confirm).toContain("dataSectionFacts");
-    expect(confirm).toContain("detailsSectionFacts");
-    expect(confirm).toContain("sectionPair");
+    expect(confirm).not.toContain("attachConfirmVisionFieldMarks");
     expect(confirm).toContain("hubSpacer");
-    // The standalone Vision skeleton was folded into the AI Vision Analyzer banner,
-    // which owns the Vision slot under the sandbox.
+    // No Data / Detaljer donut cards, fact capsules or equal-height pair.
+    for (const gone of [
+      "dataSectionFacts",
+      "detailsSectionFacts",
+      "sectionPair",
+      "sectionMinHeight",
+      "onMeasureHeight",
+      "ConfirmProgressDonut",
+      "groupHairline",
+      "sectionGroup",
+    ]) {
+      expect(confirm).not.toContain(gone);
+    }
+    // The Vision slot keeps only the catalog-miss note.
     expect(confirm).toContain("ConfirmVisionSlot");
-    expect(confirmVision).toContain("resolveConfirmVisionBannerState");
-    expect(confirm).not.toContain("groupHairline");
-    // The Data/Detaljer rows are no longer wrapped in outer boxes — the row owns its border.
-    expect(confirm).not.toContain("sectionGroup");
-
-    // Bottom-anchored, full-width stacked pair — not two side-by-side columns.
-    const sectionPairBlock = confirm.slice(
-      confirm.indexOf("sectionPair:"),
-      confirm.indexOf("},", confirm.indexOf("sectionPair:")),
-    );
-    expect(sectionPairBlock).toContain('flexDirection: "column"');
-    expect(sectionPairBlock).not.toContain('flexDirection: "row"');
-    expect(sectionPairBlock).not.toContain('alignItems: "stretch"');
-    expect(confirm).toContain("flexGrow: 1");
-
-    // Equal-height pair: both rows share one measured minHeight (taller Data wins).
-    expect(confirm).toContain("sectionMinHeight");
-    expect(confirm).toContain("Math.max(dataSectionHeight, detailsSectionHeight)");
-    expect(confirm).toContain("onMeasureHeight={setDataSectionHeight}");
-    expect(confirm).toContain("onMeasureHeight={setDetailsSectionHeight}");
-    expect(confirm).toContain("minHeight={sectionMinHeight}");
 
     // Viewer and sandbox share one tighter-gap wrapper (gapMd < the column's gapLg)
     // so the sandbox reads as attached to the viewer, not floating far below it.
@@ -194,19 +332,23 @@ describe("Confirm chrome", () => {
     );
     expect(photoStackBlock).toContain("gap: space.gapMd");
 
-    const photoIdx = confirm.indexOf("ConfirmPhotoViewer");
+    // Top to bottom: photos, sandbox (conditional), identity, size and condition, spacer,
+    // the quiet Badge og noter row just above Gem.
+    const photoIdx = confirm.indexOf("<ConfirmPhotoViewer");
     const sandboxIdx = confirm.indexOf("<UnboundPhotosRow");
-    const visionBannerIdx = confirm.indexOf("<ConfirmVisionSlot");
-    const spacerIdx = confirm.indexOf("hubSpacer");
-    const pairIdx = confirm.indexOf("sectionPair");
-    const dataIdx = confirm.indexOf('title="Data"');
+    const identityIdx = confirm.indexOf("<ConfirmIdentityBlock");
+    const sizeIdx = confirm.indexOf("<ConfirmSizeCondition");
+    const spacerIdx = confirm.indexOf("<View style={styles.hubSpacer}");
+    const rowIdx = confirm.indexOf("<ConfirmSectionRow");
     expect(photoIdx).toBeGreaterThan(-1);
     expect(sandboxIdx).toBeGreaterThan(photoIdx);
-    // Vision banner reads as "we analysed these photos": under the sandbox, above the spacer.
-    expect(visionBannerIdx).toBeGreaterThan(sandboxIdx);
-    expect(spacerIdx).toBeGreaterThan(visionBannerIdx);
-    expect(pairIdx).toBeGreaterThan(spacerIdx);
-    expect(dataIdx).toBeGreaterThan(pairIdx);
+    expect(identityIdx).toBeGreaterThan(sandboxIdx);
+    expect(sizeIdx).toBeGreaterThan(identityIdx);
+    expect(spacerIdx).toBeGreaterThan(sizeIdx);
+    expect(rowIdx).toBeGreaterThan(spacerIdx);
+    // The sandbox strip renders only while the session has photos without a jersey.
+    expect(confirm).toContain("showSandbox");
+    expect(confirm).toContain("uden trøje");
 
     expect(detailsScreen).toContain("ConfirmDrillHeader");
     expect(detailsScreen).toContain("handleCommitDrill");
@@ -214,8 +356,10 @@ describe("Confirm chrome", () => {
     expect(detailsScreen).not.toContain("dockHelper");
     expect(detailsScreen).not.toContain("saveEnabled");
     expect(detailsScreen).not.toContain("handleSave");
-    expect(detailsScreen).toContain("JERSEY_SIZES");
-    expect(detailsScreen).toContain("JERSEY_CONDITIONS");
+    // Size and condition moved to the hub; Detaljer holds only Badge and Noter.
+    expect(detailsScreen).not.toContain("JERSEY_SIZES");
+    expect(detailsScreen).not.toContain("JERSEY_CONDITIONS");
+    expect(detailsScreen).toContain("ConfirmBadgeSection");
     expect(detailsScreen).not.toContain("ProfileSurfaceGroup");
     expect(detailsScreen).not.toContain("groupHairline");
     expect(detailsScreen).toContain('label="Noter"');
@@ -226,31 +370,15 @@ describe("Confirm chrome", () => {
       join(__dirname, "../src/components/confirm-section-row.tsx"),
       "utf8",
     );
-    expect(sectionRow).toContain("facts");
-    expect(sectionRow).toContain('borderStyle: "dashed"');
-    expect(sectionRow).toContain("mangler");
-    expect(sectionRow).toContain("paddingHorizontal: space.insetMd");
-    expect(sectionRow).toContain("paddingVertical: space.insetMd");
-    expect(sectionRow).toContain("flex: 1");
-    expect(sectionRow).not.toContain("sectionGroup");
-    expect(sectionRow).not.toContain("groupHairline");
-    // The row is now the bordered card itself and equalises height as a matched pair.
-    expect(sectionRow).toContain("theme.surface");
+    expect(sectionRow).toContain("chevron-forward");
     expect(sectionRow).toContain("theme.borderSubtle");
     expect(sectionRow).toContain("borderRadius: radius.md");
-    expect(sectionRow).toContain('alignItems: "center"');
-    expect(sectionRow).toContain("minHeight");
-    expect(sectionRow).toContain("onMeasureHeight");
-
-    const donut = readFileSync(
-      join(__dirname, "../src/components/confirm-progress-donut.tsx"),
-      "utf8",
-    );
-    expect(donut).toContain("{filled}/{required}");
-    expect(donut).toContain("typography.monoSm");
-    expect(donut).toContain("theme.warning");
-    expect(donut).toContain("theme.fillPrimary");
-    expect(donut).not.toContain("theme.success");
+    expect(sectionRow).toContain("minHeight: 44");
+    for (const gone of ["facts", "mangler", "onMeasureHeight", "Donut", "theme.success"]) {
+      expect(sectionRow).not.toContain(gone);
+    }
+    expect(existsSync(join(__dirname, "../src/components/confirm-progress-donut.tsx"))).toBe(false);
+    expect(existsSync(join(__dirname, "../src/components/confirm-vision-banner.tsx"))).toBe(false);
   });
 
   it("opens club, season, and player as one full-screen picker at a time, not a Sheet", () => {
@@ -262,6 +390,7 @@ describe("Confirm chrome", () => {
     expect(dataScreen).toContain("PlayerPickerOverlay");
     expect(dataScreen).toContain("CatalogSelectRow");
     expect(dataScreen).toContain("useState<DataPickerKind | null>");
+    expect(dataScreen).toContain("fetchClubSeasons");
     expect(dataScreen).not.toContain("<Sheet");
     expect(dataScreen).not.toContain("pendingSeasonAfterClub");
 

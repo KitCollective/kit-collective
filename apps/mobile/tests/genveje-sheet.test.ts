@@ -50,6 +50,8 @@ const baseJersey = {
   countryLabel: "Danmark",
   leagueLabel: "Superligaen",
   clubLabel: "F.C. København",
+  nationalTeamId: null,
+  nationalTeamLabel: null,
   seasonLabel: "2023/24",
   squadPlayers: [{ id: UUID_D, label: "Jonas Wind" }],
   photos: [

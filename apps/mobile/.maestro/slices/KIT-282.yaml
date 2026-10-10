@@ -1,0 +1,180 @@
+# Device flow for KIT-282: the bulk overview and the parked session (ADR-0049).
+# design-sections: Capture session, Confirm and Save, Button dock, List row
+#
+# FIXTURES THIS FLOW NEEDS (neither exists yet; see the KIT-282 workpad)
+# - A simulator photo library with FOUR OR MORE photos. simulator.sh adds one today, and the
+#   three-photo step at the end picks three cells on top of it.
+# - For the steps marked "when present" (AC 5 ordering by Tjek, AC 7 inbox row): a fixed Vision
+#   grouping with a group between 50 and 69 and a group below 50. Today's fixed Vision returns
+#   pairs at 90, so every photo binds, no row reads Tjek and the inbox row never shows. Those steps
+#   take a screenshot only when their element is on screen; they never fail the flow.
+appId: app.kitcollective.mobile
+name: kit-282
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- startRecording: kc__kit-282
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+# The system photo picker has no stable ids: four cells, then confirm.
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 50%,25%
+- tapOn:
+    point: 83%,25%
+- tapOn:
+    point: 16%,40%
+- tapOn:
+    point: 90%,12%
+# AC 3, 4: four or more photos with Vision on open the overview. While grouping runs the title
+# reads Sorterer n fotos, with a progress bar. The fixed Vision answers at once, so this frame
+# is taken only when the bar is still on screen.
+- extendedWaitUntil:
+    visible:
+      id: overview-title
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: overview-progress
+    commands:
+      - takeScreenshot: kc__kit-282__01-sorting-in-flight
+# AC 3, 5: when grouping is done the title reads n trøjer fundet and the jersey rows show their
+# trailing status (Str. og stand while size and condition are missing).
+- extendedWaitUntil:
+    notVisible:
+      id: overview-progress
+    timeout: 60000
+- extendedWaitUntil:
+    visible:
+      id: overview-row-0
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-282__02-jerseys-found-rows
+# AC 7 (when present): the inbox row shows only while photos without a jersey exist.
+- runFlow:
+    when:
+      visible:
+        id: overview-inbox
+    commands:
+      - takeScreenshot: kc__kit-282__03-inbox-row
+# AC 8: the tertiary button Gør resten færdig senere keeps the session and returns to Samling,
+# which shows ONE parked row.
+- tapOn:
+    id: overview-tertiary
+- extendedWaitUntil:
+    visible:
+      id: collection-parked-row
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-282__04-samling-parked-row
+# AC 8: the parked row (Fortsæt) reopens the overview.
+- tapOn:
+    id: collection-parked-row
+- extendedWaitUntil:
+    visible:
+      id: overview-primary
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-282__05-overview-reopened
+# AC 6: Gennemgå opens Confirm for the first unsaved draft; with more than one unsaved the dock
+# reads Gem og næste.
+- tapOn:
+    id: overview-primary
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-resolved
+    timeout: 90000
+- tapOn:
+    id: detail-size-m
+- tapOn:
+    id: detail-condition-used
+- extendedWaitUntil:
+    visible:
+      id: confirm-save
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-282__06-confirm-gem-og-naeste
+# AC 6: Gem og næste advances to the next unsaved draft (the saved one left the drafts).
+- tapOn:
+    id: confirm-save
+- extendedWaitUntil:
+    visible:
+      id: confirm-identity-resolved
+    timeout: 90000
+- tapOn:
+    id: detail-size-m
+- tapOn:
+    id: detail-condition-used
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-282__07-next-unsaved-draft
+# AC 6: after the last draft Gem returns to the overview, where every row reads Gemt.
+- tapOn:
+    id: confirm-save
+- extendedWaitUntil:
+    visible:
+      id: overview-row-0
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-282__08-overview-all-saved
+# AC 8: finishing the session removes the parked row from Samling.
+- tapOn:
+    id: overview-primary
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 15000
+- assertNotVisible:
+    id: collection-parked-row
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-282__09-samling-parked-row-gone
+# AC 10: three photos or fewer go straight to Confirm, with no overview.
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 50%,25%
+- tapOn:
+    point: 83%,25%
+- tapOn:
+    point: 90%,12%
+- extendedWaitUntil:
+    visible:
+      id: confirm-save
+    timeout: 30000
+- assertNotVisible:
+    id: overview-title
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-282__10-three-photos-confirm
+- stopRecording

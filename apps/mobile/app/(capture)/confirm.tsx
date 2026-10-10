@@ -1,32 +1,39 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/auth/AuthProvider";
 import { addJerseyDraft, setActiveDraft, switchSingleToBulkBind } from "@/capture/captureSession";
+import { resolveVisionEnabled } from "@/capture/chooserVision";
 import {
-  DATA_REQUIRED_COUNT,
-  DETAILS_REQUIRED_COUNT,
-  dataRequiredFilledCount,
-  dataSectionFacts,
-  detailsRequiredFilledCount,
-  detailsSectionFacts,
-} from "@/capture/confirmSectionProgress";
+  confirmSaveEnabled,
+  hasPendingLowConfidence,
+  resolveIdentityBlock,
+} from "@/capture/confirmIdentityBlock";
+import { confirmJerseyIndexPlacement } from "@/capture/confirmPhotoStrip";
+import { visionMatcherRemainingToOutOfQuota } from "@/capture/confirmVisionQuota";
+import { visionRequestToken } from "@/capture/identitySuggestRequest";
+import { leaveOverviewSession } from "@/capture/parkedSession";
 import { warmDevicePrepareForDraftRuntime } from "@/capture/photoPrepareRuntime";
+import { scanLineLedger } from "@/capture/scanLineLedger";
 import { useConfirmExit } from "@/capture/use-confirm-exit";
-import { useConfirmGrouping } from "@/capture/use-confirm-grouping";
 import { useConfirmPhotos } from "@/capture/use-confirm-photos";
 import { useConfirmVision } from "@/capture/use-confirm-vision";
 import { useConfirmSave } from "@/capture/useConfirmSave";
-import { JerseyTabBar } from "@/components/bulk/JerseyTabBar";
+import { JerseyTabBar, jerseyTabBarWidth } from "@/components/bulk/JerseyTabBar";
 import { UnboundPhotosRow } from "@/components/bulk/UnboundPhotosRow";
 import { ConfirmHubHeader, confirmHubHeaderScrollPadding } from "@/components/confirm-hub-header";
+import { ConfirmIdentityBlock } from "@/components/confirm-identity-block";
 import { ConfirmPhotoViewer } from "@/components/confirm-photo-viewer";
 import { ConfirmSectionRow } from "@/components/confirm-section-row";
+import { ConfirmSizeCondition } from "@/components/confirm-size-condition";
 import { ConfirmVisionSlot } from "@/components/confirm-vision-slot";
 import { PhotoLightbox } from "@/components/photo-lightbox";
 import { PostSaveSheet } from "@/components/post-save-sheet";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
+import { stickySize } from "@/prefs/stickySizeStore";
+import { useVisionSwitch } from "@/prefs/vision-switch-device";
+import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
@@ -34,15 +41,19 @@ import { useTheme } from "@/theme/use-theme";
 export default function ConfirmScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const typography = useTypography();
   const reduceMotion = useReduceMotion();
   const insets = useSafeAreaInsets();
   const { sessionId, editJerseyId } = useLocalSearchParams<{
     sessionId: string;
     editJerseyId?: string;
   }>();
-  const { accessToken } = useAuth();
+  const { accessToken: sessionToken, requestPremiumAccess, entitlement } = useAuth();
+  const visionRemembered = useVisionSwitch();
+  const visionEnabled = resolveVisionEnabled(visionRemembered, entitlement?.visionMatcher);
+  // Vision off means no identity and no grouping request: both hooks run without a token.
+  const accessToken = visionRequestToken(sessionToken, visionEnabled);
   const [visionJobId, setVisionJobId] = useState<string | null>(null);
-  const [catalogMiss, setCatalogMiss] = useState(false);
   const {
     state,
     isSessionResolved,
@@ -53,31 +64,30 @@ export default function ConfirmScreen() {
     postSaveOpen,
     savedClub,
     savedSeasonLabel,
+    savedJersey,
+    savedCount,
     setSelectedSeasonLabel,
-    saveEnabled,
     saveLabel,
     handleSave,
     handlePostSaveDismiss,
   } = useConfirmSave({ sessionId, editJerseyId, visionJobId });
 
-  const exitToCollection = useConfirmExit(sessionId, state, isSessionResolved);
-  const grouping = useConfirmGrouping({
-    accessToken,
-    sessionId,
-    state,
-    mutate,
-    reduceMotion,
+  // Luk on an overview session parks it, so Samling keeps one row that reopens the overview.
+  const exitToCollection = useConfirmExit(sessionId, state, isSessionResolved, () => {
+    if (sessionId && state?.overview) {
+      leaveOverviewSession(sessionId);
+    }
   });
   const vision = useConfirmVision({
     accessToken,
     sessionId,
     draft,
+    sessionDrafts: state?.drafts ?? [],
     mutate,
-    reduceMotion,
     jobId: visionJobId,
     setJobId: setVisionJobId,
     setSelectedSeasonLabel,
-    onCatalogMiss: setCatalogMiss,
+    onPremiumRequired: requestPremiumAccess,
   });
   const photos = useConfirmPhotos({
     sessionId,
@@ -94,9 +104,21 @@ export default function ConfirmScreen() {
     }
     warmDevicePrepareForDraftRuntime(draft);
   }, [draft]);
-  const [dataSectionHeight, setDataSectionHeight] = useState(0);
-  const [detailsSectionHeight, setDetailsSectionHeight] = useState(0);
-  const sectionMinHeight = Math.max(dataSectionHeight, detailsSectionHeight) || undefined;
+  const [scanFront, setScanFront] = useState(false);
+  const frontPhoto = draft?.photos.find((photo) => (photo.role ?? "front") === "front");
+  const frontPhotoKey = frontPhoto ? (frontPhoto.photoId ?? frontPhoto.uri) : null;
+  const visionAnalyzing = vision.analyzing;
+
+  // The scan line runs once per photo, on its first identity read; never on a reopen.
+  useEffect(() => {
+    if (!visionAnalyzing) {
+      setScanFront(false);
+      return;
+    }
+    if (scanLineLedger.shouldRun(frontPhotoKey, { inFlight: true, reduceMotion })) {
+      setScanFront(true);
+    }
+  }, [frontPhotoKey, reduceMotion, visionAnalyzing]);
 
   const handleSelectDraft = (draftId: string) => {
     mutate((current) => setActiveDraft(current, draftId));
@@ -104,7 +126,9 @@ export default function ConfirmScreen() {
 
   const handleAddJersey = () => {
     mutate((current) =>
-      addJerseyDraft(current.branch === "single" ? switchSingleToBulkBind(current) : current),
+      addJerseyDraft(current.branch === "single" ? switchSingleToBulkBind(current) : current, {
+        defaultSize: stickySize.get(),
+      }),
     );
   };
 
@@ -117,6 +141,9 @@ export default function ConfirmScreen() {
       params: {
         sessionId,
         ...(editJerseyId ? { editJerseyId } : {}),
+        ...(section === "data" && vision.catalogMissHint
+          ? { visionSideHint: vision.catalogMissHint }
+          : {}),
       },
     });
   };
@@ -130,6 +157,35 @@ export default function ConfirmScreen() {
 
   const activeJerseyIndex = state?.drafts.findIndex((entry) => entry.id === draft.id) ?? 0;
   const activeTabLabel = `Trøje ${activeJerseyIndex + 1}`;
+  const outOfQuota = visionMatcherRemainingToOutOfQuota(entitlement?.visionMatcher);
+  const visionOn = Boolean(accessToken) && !outOfQuota && !editJerseyId;
+  const settled = vision.settledDraftIds.has(draft.id);
+  // A read is running or about to start for this jersey.
+  const identityInFlight = vision.analyzing || (visionOn && draft.photos.length > 0 && !settled);
+  const identitySuggestion = vision.suggestion?.suggestions ?? null;
+  const lowConfidencePending = !identityInFlight && hasPendingLowConfidence(identitySuggestion);
+  const identityBlock = resolveIdentityBlock({
+    draft,
+    visionOn,
+    inFlight: identityInFlight,
+    filledByVision: vision.filledByVision,
+    suggestion: identitySuggestion,
+  });
+  const saveEnabled = confirmSaveEnabled({ draft, lowConfidencePending });
+  const jerseyCount = state?.drafts.length ?? 1;
+  const indexPlacement = confirmJerseyIndexPlacement(jerseyCount);
+  const unboundUris = state?.unboundUris ?? [];
+  const showSandbox = unboundUris.length > 0;
+
+  const jerseyIndex = state ? (
+    <JerseyTabBar
+      drafts={state.drafts}
+      activeDraftId={state.activeDraftId}
+      onSelectDraft={handleSelectDraft}
+      onAddJersey={handleAddJersey}
+      showPhotoCount={indexPlacement === "row"}
+    />
+  ) : null;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
@@ -137,83 +193,84 @@ export default function ConfirmScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: confirmHubHeaderScrollPadding(insets.top),
+            paddingTop: confirmHubHeaderScrollPadding(insets.top, {
+              withIndex: indexPlacement === "header",
+            }),
             paddingBottom: fadeDockScrollPadding,
           },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        {state ? (
-          <JerseyTabBar
-            drafts={state.drafts}
-            activeDraftId={state.activeDraftId}
-            onSelectDraft={handleSelectDraft}
-            onAddJersey={handleAddJersey}
-          />
-        ) : null}
+        {indexPlacement === "row" ? jerseyIndex : null}
 
         <View style={styles.photoStack}>
           <ConfirmPhotoViewer
             photoUris={photos.photoUris}
+            photoCount={draft.photos.length}
             onPressRole={photos.handlePhotoSlotPress}
+            onAddPhoto={() => void photos.addPhoto()}
+            scanningFront={scanFront}
           />
 
-          {state ? (
-            <UnboundPhotosRow
-              uris={state.unboundUris}
-              activeTabLabel={activeTabLabel}
-              onPressPhoto={photos.bindUnboundPhoto}
-              onDiscardPhoto={photos.discardUnboundPhoto}
-              onUpload={() => void photos.uploadToSandbox()}
-            />
+          {showSandbox ? (
+            <View style={styles.sandbox}>
+              {unboundUris.length > 0 ? (
+                <Text style={[typography.caption, { color: theme.contentSecondary }]}>
+                  {unboundUris.length === 1
+                    ? "1 foto uden trøje"
+                    : `${unboundUris.length} fotos uden trøje`}
+                </Text>
+              ) : null}
+              <UnboundPhotosRow
+                uris={unboundUris}
+                activeTabLabel={activeTabLabel}
+                onPressPhoto={photos.bindUnboundPhoto}
+                onDiscardPhoto={photos.discardUnboundPhoto}
+              />
+            </View>
           ) : null}
         </View>
 
         <ConfirmVisionSlot
-          bannerState={grouping.analyzing ? "analyzing" : vision.bannerState}
-          suggestion={vision.suggestion}
-          groupingMessage={grouping.groupingMessage}
-          catalogMiss={catalogMiss}
-          suggestionOpacity={
-            grouping.groupingMessage ? grouping.suggestionOpacity : vision.suggestionOpacity
-          }
-          onApplySuggestion={() =>
-            grouping.groupingMessage ? grouping.applySuggestion() : void vision.applySuggestion()
-          }
-          onDismissSuggestion={
-            grouping.groupingMessage ? grouping.dismissSuggestion : vision.dismissSuggestion
-          }
+          catalogMiss={vision.catalogMiss}
+          catalogMissHint={vision.catalogMissHint}
         />
+
+        <ConfirmIdentityBlock
+          model={identityBlock}
+          onOpenData={() => openSection("data")}
+          onApplySuggestion={() => void vision.applySuggestion()}
+          onChooseMyself={() => {
+            vision.dismissSuggestion();
+            openSection("data");
+          }}
+        />
+
+        <ConfirmSizeCondition draft={draft} mutate={mutate} />
 
         <View style={styles.hubSpacer} />
 
-        <View style={styles.sectionPair}>
-          <ConfirmSectionRow
-            title="Data"
-            facts={dataSectionFacts(draft)}
-            filled={dataRequiredFilledCount(draft)}
-            required={DATA_REQUIRED_COUNT}
-            minHeight={sectionMinHeight}
-            onMeasureHeight={setDataSectionHeight}
-            onPress={() => openSection("data")}
-          />
-          <ConfirmSectionRow
-            title="Detaljer"
-            facts={detailsSectionFacts(draft)}
-            filled={detailsRequiredFilledCount(draft)}
-            required={DETAILS_REQUIRED_COUNT}
-            minHeight={sectionMinHeight}
-            onMeasureHeight={setDetailsSectionHeight}
-            onPress={() => openSection("details")}
-          />
-        </View>
+        <ConfirmSectionRow
+          title="Badge og noter"
+          meta="valgfrit"
+          testID="confirm-section-details"
+          onPress={() => openSection("details")}
+        />
       </ScrollView>
 
-      <ConfirmHubHeader onClose={exitToCollection} />
+      <ConfirmHubHeader
+        onClose={exitToCollection}
+        trailing={
+          indexPlacement === "header" ? (
+            <View style={{ width: jerseyTabBarWidth(1), flexShrink: 0 }}>{jerseyIndex}</View>
+          ) : null
+        }
+      />
 
       <ButtonDock variant="fade">
         <Button
           label={saveLabel}
+          testID="confirm-save"
           variant="primary"
           width="fill"
           loading={saving}
@@ -226,6 +283,8 @@ export default function ConfirmScreen() {
         visible={postSaveOpen}
         savedClub={savedClub}
         savedSeasonLabel={savedSeasonLabel}
+        savedJersey={savedJersey}
+        savedCount={savedCount}
         onDismiss={handlePostSaveDismiss}
       />
 
@@ -260,8 +319,7 @@ const styles = StyleSheet.create({
   photoStack: {
     gap: space.gapMd,
   },
-  sectionPair: {
-    flexDirection: "column",
-    gap: space.gapMd,
+  sandbox: {
+    gap: space.gapSm,
   },
 });

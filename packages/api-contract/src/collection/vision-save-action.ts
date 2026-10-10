@@ -4,7 +4,8 @@ import type { VisionJobStatus, VisionSuggestions, VisionUserAction } from "./vis
 export type VisionSaveActionInput = {
   status: VisionJobStatus;
   suggestions?: VisionSuggestions;
-  selectedClubId: string;
+  selectedClubId?: string;
+  selectedNationalTeamId?: string;
   selectedSeasonId: string;
   selectedKitType: KitType;
 };
@@ -12,6 +13,7 @@ export type VisionSaveActionInput = {
 export type VisionSaveActionResult = {
   action: VisionUserAction;
   clubId?: string;
+  nationalTeamId?: string;
   seasonId?: string;
   type?: KitType;
 };
@@ -21,7 +23,14 @@ export type VisionSaveActionResult = {
  * Every job status must yield an action — never leave userAction null at Save.
  */
 export function resolveVisionSaveAction(input: VisionSaveActionInput): VisionSaveActionResult {
-  const { status, suggestions, selectedClubId, selectedSeasonId, selectedKitType } = input;
+  const {
+    status,
+    suggestions,
+    selectedClubId,
+    selectedNationalTeamId,
+    selectedSeasonId,
+    selectedKitType,
+  } = input;
 
   if (status === "pending" || status === "failed" || status === "noop") {
     return { action: "ignored" };
@@ -32,28 +41,36 @@ export function resolveVisionSaveAction(input: VisionSaveActionInput): VisionSav
       return { action: "ignored" };
     }
 
-    const matchesClub = suggestions.clubId === selectedClubId;
+    const matchesClub =
+      selectedClubId != null &&
+      suggestions.clubId === selectedClubId &&
+      suggestions.nationalTeamId == null;
+    const matchesNationalTeam =
+      selectedNationalTeamId != null && suggestions.nationalTeamId === selectedNationalTeamId;
+    const matchesSide = matchesClub || matchesNationalTeam;
     const matchesSeason = suggestions.seasonId === selectedSeasonId;
     const matchesType = !suggestions.type || suggestions.type === selectedKitType;
-    const fullyMatches = matchesClub && matchesSeason && matchesType;
+    const fullyMatches = matchesSide && matchesSeason && matchesType;
 
     if (fullyMatches) {
       return {
         action: "accepted",
-        clubId: selectedClubId,
+        ...(selectedClubId ? { clubId: selectedClubId } : {}),
+        ...(selectedNationalTeamId ? { nationalTeamId: selectedNationalTeamId } : {}),
         seasonId: selectedSeasonId,
         type: selectedKitType,
       };
     }
 
     if (
-      matchesClub ||
+      matchesSide ||
       matchesSeason ||
       (suggestions.type && suggestions.type === selectedKitType)
     ) {
       return {
         action: "edited",
-        clubId: selectedClubId,
+        ...(selectedClubId ? { clubId: selectedClubId } : {}),
+        ...(selectedNationalTeamId ? { nationalTeamId: selectedNationalTeamId } : {}),
         seasonId: selectedSeasonId,
         type: selectedKitType,
       };

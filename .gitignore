@@ -11,3 +11,5 @@ dist/
 .idea/
 .vscode/
 *.log
+.seed-state/
+seed/apify/.cache/

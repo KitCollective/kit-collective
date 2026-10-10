@@ -1,6 +1,7 @@
 import type { PhotoRole } from "@kit/domain";
 import { PHOTO_ROLE_LABELS_DA } from "@kit/domain";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { ConfirmScanLine } from "@/components/confirm-scan-line";
 import { useTypography } from "@/theme/brand-fonts";
 import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
@@ -16,6 +17,8 @@ type PhotoSlotProps = {
   selected?: boolean;
   width?: number;
   labelPlacement?: PhotoSlotLabelPlacement;
+  /** Mounts the Vision scan line over a filled photo. `true` while the first read runs. */
+  scanning?: boolean;
   onPress: () => void;
 };
 
@@ -41,6 +44,7 @@ export function PhotoSlot({
   selected = false,
   width,
   labelPlacement,
+  scanning,
   onPress,
 }: PhotoSlotProps) {
   const theme = useTheme();
@@ -68,76 +72,82 @@ export function PhotoSlot({
     ) : null;
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={
-        isAdd
-          ? "Tilføj foto, tom"
-          : isEmpty
-            ? `${roleLabel}, tom`
-            : selected
-              ? `${roleLabel}, valgt`
-              : roleLabel
-      }
-      accessibilityHint={isEmpty || isAdd ? "Tilføj foto" : "Erstat foto"}
-      onPress={onPress}
-      style={({ pressed }) => [styles.slot, { width: slotWidth }, pressed && styles.slotPressed]}
-    >
-      {isEmpty ? (
-        <View
-          style={[
-            styles.emptyPreview,
-            {
-              width: slotWidth,
-              height: slotHeight,
-              backgroundColor: theme.surface,
-              opacity: isOverlay ? 0.75 : 1,
-              borderColor: theme.borderSubtle,
-              justifyContent: "center",
-            },
-            selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
-          ]}
-        >
-          {placement === "overlay" ? (
-            overlayBadge
-          ) : (
-            <Text
-              style={[
-                typography.caption,
-                { color: isOverlay ? theme.contentInverse : theme.contentMuted },
-              ]}
-            >
-              {isAdd ? "+" : "Tom"}
-            </Text>
-          )}
-        </View>
-      ) : (
-        <View
-          style={[
-            styles.previewWrap,
-            {
-              width: slotWidth,
-              height: slotHeight,
-              backgroundColor: theme.fillSecondary,
-              borderColor: theme.borderSubtle,
-            },
-            selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
-          ]}
-        >
-          <Image
-            source={{ uri }}
-            style={{ width: slotWidth, height: slotHeight }}
-            accessibilityIgnoresInvertColors
-          />
-          {overlayBadge}
-        </View>
-      )}
-      {placement === "below" ? (
-        <Text style={[typography.labelSm, { color: belowLabelColor, textAlign: "center" }]}>
-          {roleLabel}
-        </Text>
-      ) : null}
-    </Pressable>
+    <View>
+      <Pressable
+        testID={isAdd ? undefined : `photo-slot-${role}-${isEmpty ? "empty" : "filled"}`}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isAdd
+            ? "Tilføj foto, tom"
+            : isEmpty
+              ? `${roleLabel}, tom`
+              : selected
+                ? `${roleLabel}, valgt`
+                : roleLabel
+        }
+        accessibilityHint={isEmpty || isAdd ? "Tilføj foto" : "Erstat foto"}
+        onPress={onPress}
+        style={({ pressed }) => [styles.slot, { width: slotWidth }, pressed && styles.slotPressed]}
+      >
+        {isEmpty ? (
+          <View
+            style={[
+              styles.emptyPreview,
+              {
+                width: slotWidth,
+                height: slotHeight,
+                backgroundColor: theme.surface,
+                opacity: isOverlay ? 0.75 : 1,
+                borderColor: theme.borderSubtle,
+                justifyContent: "center",
+              },
+              selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
+            ]}
+          >
+            {placement === "overlay" ? (
+              overlayBadge
+            ) : (
+              <Text
+                style={[
+                  typography.caption,
+                  { color: isOverlay ? theme.contentInverse : theme.contentMuted },
+                ]}
+              >
+                {isAdd ? "+" : "Tom"}
+              </Text>
+            )}
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.previewWrap,
+              {
+                width: slotWidth,
+                height: slotHeight,
+                backgroundColor: theme.fillSecondary,
+                borderColor: theme.borderSubtle,
+              },
+              selected && isOverlay && { borderColor: theme.contentInverse, borderWidth: 2 },
+            ]}
+          >
+            <Image
+              source={{ uri }}
+              style={{ width: slotWidth, height: slotHeight }}
+              accessibilityIgnoresInvertColors
+            />
+            {overlayBadge}
+            {scanning !== undefined ? (
+              <ConfirmScanLine active={scanning} height={slotHeight} />
+            ) : null}
+          </View>
+        )}
+        {placement === "below" ? (
+          <Text style={[typography.labelSm, { color: belowLabelColor, textAlign: "center" }]}>
+            {roleLabel}
+          </Text>
+        ) : null}
+      </Pressable>
+    </View>
   );
 }
 
@@ -168,5 +178,6 @@ const styles = StyleSheet.create({
     left: space.insetSm,
     borderRadius: radius.pill,
     paddingHorizontal: space.insetSm,
+    zIndex: 1,
   },
 });

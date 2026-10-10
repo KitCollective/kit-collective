@@ -78,7 +78,10 @@ describe("collectionDiscoverCatalogDrillSchema", () => {
         jerseys: [],
       }),
     ).toThrow();
-    expect(() =>
+  });
+
+  it("accepts a NationalTeam landing", () => {
+    expect(
       collectionDiscoverCatalogDrillSchema.parse({
         kind: "national_team",
         id: jersey.clubId,
@@ -86,6 +89,12 @@ describe("collectionDiscoverCatalogDrillSchema", () => {
         count: 0,
         jerseys: [],
       }),
-    ).toThrow();
+    ).toEqual({
+      kind: "national_team",
+      id: jersey.clubId,
+      title: "Danmark",
+      count: 0,
+      jerseys: [],
+    });
   });
 });

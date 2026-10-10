@@ -7,7 +7,7 @@ import {
   wishlistEntryWriteSchema,
 } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { catalogLabel, club, season, wishlistEntry } from "@kit/db";
+import { catalogLabel, club, nationalTeam, season, wishlistEntry } from "@kit/db";
 import {
   buildWishlistAndMeta,
   buildWishlistAutoName,
@@ -33,12 +33,16 @@ type WishlistRow = {
   id: string;
   userId: string;
   clubId: string | null;
+  nationalTeamId: string | null;
   seasonId: string | null;
   type: KitType | null;
   size: JerseySize | null;
 };
 
-type WishlistCriteriaValues = Pick<WishlistRow, "clubId" | "seasonId" | "type" | "size">;
+type WishlistCriteriaValues = Pick<
+  WishlistRow,
+  "clubId" | "nationalTeamId" | "seasonId" | "type" | "size"
+>;
 
 @Injectable()
 export class WishlistService {
@@ -56,6 +60,7 @@ export class WishlistService {
         id: wishlistEntry.id,
         userId: wishlistEntry.userId,
         clubId: wishlistEntry.clubId,
+        nationalTeamId: wishlistEntry.nationalTeamId,
         seasonId: wishlistEntry.seasonId,
         type: wishlistEntry.type,
         size: wishlistEntry.size,
@@ -82,6 +87,7 @@ export class WishlistService {
       .values({
         userId,
         clubId: values.clubId,
+        nationalTeamId: values.nationalTeamId,
         seasonId: values.seasonId,
         type: values.type,
         size: values.size,
@@ -90,6 +96,7 @@ export class WishlistService {
         id: wishlistEntry.id,
         userId: wishlistEntry.userId,
         clubId: wishlistEntry.clubId,
+        nationalTeamId: wishlistEntry.nationalTeamId,
         seasonId: wishlistEntry.seasonId,
         type: wishlistEntry.type,
         size: wishlistEntry.size,
@@ -118,6 +125,7 @@ export class WishlistService {
       .update(wishlistEntry)
       .set({
         clubId: values.clubId,
+        nationalTeamId: values.nationalTeamId,
         seasonId: values.seasonId,
         type: values.type,
         size: values.size,
@@ -128,6 +136,7 @@ export class WishlistService {
         id: wishlistEntry.id,
         userId: wishlistEntry.userId,
         clubId: wishlistEntry.clubId,
+        nationalTeamId: wishlistEntry.nationalTeamId,
         seasonId: wishlistEntry.seasonId,
         type: wishlistEntry.type,
         size: wishlistEntry.size,
@@ -164,6 +173,7 @@ export class WishlistService {
   private writeToValues(body: WishlistEntryWrite): WishlistCriteriaValues {
     return {
       clubId: body.clubId ?? null,
+      nationalTeamId: body.nationalTeamId ?? null,
       seasonId: body.seasonId ?? null,
       type: body.type ?? null,
       size: body.size ?? null,
@@ -176,6 +186,7 @@ export class WishlistService {
         id: wishlistEntry.id,
         userId: wishlistEntry.userId,
         clubId: wishlistEntry.clubId,
+        nationalTeamId: wishlistEntry.nationalTeamId,
         seasonId: wishlistEntry.seasonId,
         type: wishlistEntry.type,
         size: wishlistEntry.size,
@@ -207,6 +218,17 @@ export class WishlistService {
       }
     }
 
+    if (body.nationalTeamId) {
+      const [row] = await this.db
+        .select({ id: nationalTeam.id })
+        .from(nationalTeam)
+        .where(eq(nationalTeam.id, body.nationalTeamId))
+        .limit(1);
+      if (!row) {
+        throw new BadRequestException("nationalTeamId is not catalog truth");
+      }
+    }
+
     if (body.seasonId) {
       const [row] = await this.db
         .select({ id: season.id })
@@ -225,12 +247,16 @@ export class WishlistService {
     entitlementLive: boolean,
   ): Promise<WishlistEntry> {
     const clubLabel = row.clubId ? await this.resolveEntityLabel("club", row.clubId, locale) : null;
+    const nationalTeamLabel = row.nationalTeamId
+      ? await this.resolveEntityLabel("national_team", row.nationalTeamId, locale)
+      : null;
     const seasonLabel = row.seasonId ? await this.resolveSeasonLabel(row.seasonId) : null;
     const typeLabel = resolveWishlistTypeLabel(row.type);
     const sizeLabel = resolveWishlistSizeLabel(row.size);
 
     const labels = {
       clubLabel,
+      nationalTeamLabel,
       seasonLabel,
       typeLabel,
       sizeLabel,
@@ -247,6 +273,7 @@ export class WishlistService {
       row.userId,
       {
         clubId: row.clubId,
+        nationalTeamId: row.nationalTeamId,
         seasonId: row.seasonId,
         type: row.type,
         size: row.size,
@@ -260,6 +287,8 @@ export class WishlistService {
       meta,
       clubId: row.clubId,
       clubLabel,
+      nationalTeamId: row.nationalTeamId,
+      nationalTeamLabel,
       seasonId: row.seasonId,
       seasonLabel,
       type: row.type,
@@ -281,7 +310,7 @@ export class WishlistService {
   }
 
   private async resolveEntityLabel(
-    entityType: "club",
+    entityType: "club" | "national_team",
     entityId: string,
     locale: LabelLocale,
   ): Promise<string | null> {

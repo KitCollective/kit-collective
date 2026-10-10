@@ -4,8 +4,8 @@ export function getSaveBlockMessage(draft: CaptureJerseyDraft): string | null {
   if (!draft.editJerseyId && draft.photos.length === 0) {
     return "Tilføj mindst ét foto.";
   }
-  if (!draft.clubId) {
-    return "Vælg en klub.";
+  if (!draft.clubId && !draft.nationalTeamId) {
+    return "Vælg en klub eller et landshold.";
   }
   if (!draft.seasonId) {
     return "Vælg en sæson.";

@@ -24,23 +24,18 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import type { FastifyRequest } from "fastify";
+import { BillingService } from "../billing/billing.service.js";
 import { CurrentUser } from "../identity/current-user.decorator.js";
 import type { JwtPayload } from "../identity/identity.service.js";
 import { JwtAuthGuard } from "../identity/jwt-auth.guard.js";
 import { AnonymousVisionUserService } from "./anonymous-vision-user.service.js";
+import {
+  decodeBase64Photo,
+  identityPhotosFromSuggestRequest,
+} from "./identity-photos-from-suggest.js";
 import { UnsignedVisionThrottleService } from "./unsigned-vision-throttle.service.js";
 import { VisionService } from "./vision.service.js";
 import { VisionQueueService } from "./vision-queue.service.js";
-
-function decodeBase64Photo(contentBase64: string): Uint8Array {
-  const commaIndex = contentBase64.indexOf(",");
-  const normalized = commaIndex >= 0 ? contentBase64.slice(commaIndex + 1) : contentBase64;
-  const bytes = Buffer.from(normalized, "base64");
-  if (bytes.length === 0) {
-    throw new Error("Photo bytes are empty");
-  }
-  return Uint8Array.from(bytes);
-}
 
 function resolveLocale(headerValue: string | undefined): LabelLocale {
   if (
@@ -61,6 +56,7 @@ export class VisionController {
     private readonly visionQueueService: VisionQueueService,
     private readonly anonymousVisionUserService: AnonymousVisionUserService,
     private readonly unsignedVisionThrottleService: UnsignedVisionThrottleService,
+    private readonly billingService: BillingService,
   ) {}
 
   @Post("collection/vision/suggest")
@@ -71,10 +67,8 @@ export class VisionController {
     @Body() rawBody: unknown,
   ): Promise<VisionSuggestResponse> {
     const body = visionSuggestRequestSchema.parse(rawBody);
-    const identityPhotos = body.photos.map((photo) => ({
-      role: photo.role,
-      bytes: decodeBase64Photo(photo.contentBase64),
-    }));
+    await this.billingService.assertIdentityVisionAllowed(user.sub, body.draftId);
+    const identityPhotos = identityPhotosFromSuggestRequest(body.photos);
     const jobId = await this.visionService.createJob(user.sub, { draftId: body.draftId });
 
     this.visionQueueService.enqueue({
@@ -97,10 +91,7 @@ export class VisionController {
     this.unsignedVisionThrottleService.assertWithinCap(request);
 
     const body = visionSuggestRequestSchema.parse(rawBody);
-    const identityPhotos = body.photos.map((photo) => ({
-      role: photo.role,
-      bytes: decodeBase64Photo(photo.contentBase64),
-    }));
+    const identityPhotos = identityPhotosFromSuggestRequest(body.photos);
     const userId = await this.anonymousVisionUserService.getUserId();
     const jobId = await this.visionService.createJob(userId, { draftId: body.draftId });
 
@@ -138,6 +129,7 @@ export class VisionController {
       kind: "grouping",
       sessionId: body.sessionId,
       groupingPhotos,
+      groupingPriorGroups: body.priorGroups,
     });
 
     return visionSuggestResponseSchema.parse({ jobId });

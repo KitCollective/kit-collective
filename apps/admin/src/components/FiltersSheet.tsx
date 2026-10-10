@@ -1,10 +1,13 @@
-import type { AdminFilterOptions, AdminStamdataQuery } from "@kit/api-contract";
-import { useEffect, useRef, useState } from "react";
+import type { AdminFilterOption, AdminFilterOptions, AdminStamdataQuery } from "@kit/api-contract";
+import { useEffect, useId, useRef, useState } from "react";
+
+export type FilterFacet = "country" | "league";
 
 type FiltersSheetProps = {
   open: boolean;
   options: AdminFilterOptions;
   value: AdminStamdataQuery;
+  facets: FilterFacet[];
   onClose: () => void;
   onApply: (next: AdminStamdataQuery) => void;
 };
@@ -12,7 +15,135 @@ type FiltersSheetProps = {
 const FOCUSABLE_SELECTOR =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
-export function FiltersSheet({ open, options, value, onClose, onApply }: FiltersSheetProps) {
+function FilterCombobox({
+  label,
+  options,
+  selectedIds,
+  searchPlaceholder,
+  emptyLabel,
+  onChange,
+}: {
+  label: string;
+  options: AdminFilterOption[];
+  selectedIds: string[];
+  searchPlaceholder: string;
+  emptyLabel: string;
+  onChange: (ids: string[]) => void;
+}) {
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = new Set(selectedIds);
+  const needle = query.trim().toLowerCase();
+  const visible = needle
+    ? options.filter((option) => option.label.toLowerCase().includes(needle))
+    : options;
+  const selectedLabels = options
+    .filter((option) => selected.has(option.id))
+    .map((option) => option.label);
+  const summary =
+    selectedLabels.length === 0
+      ? emptyLabel
+      : selectedLabels.length <= 2
+        ? selectedLabels.join(", ")
+        : `${selectedLabels[0]} +${selectedLabels.length - 1}`;
+
+  useEffect(() => {
+    if (!open) {
+      setQuery("");
+      return;
+    }
+
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (rootRef.current && target instanceof Node && !rootRef.current.contains(target)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    searchRef.current?.focus();
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  function toggle(id: string) {
+    onChange(selected.has(id) ? selectedIds.filter((value) => value !== id) : [...selectedIds, id]);
+  }
+
+  return (
+    <section className="filter-facet" ref={rootRef}>
+      <h3>{label}</h3>
+      <button
+        type="button"
+        className="filter-combobox-trigger"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className={selectedLabels.length === 0 ? "filter-combobox-placeholder" : undefined}>
+          {summary}
+        </span>
+        <span className="filter-combobox-chevron" aria-hidden="true">
+          <ChevronGlyph />
+        </span>
+      </button>
+      {open ? (
+        <div className="filter-combobox-menu">
+          <label className="filter-search-wrap">
+            <span className="filter-search-icon" aria-hidden="true">
+              <SearchGlyph />
+            </span>
+            <input
+              ref={searchRef}
+              className="filter-search"
+              type="search"
+              value={query}
+              placeholder={searchPlaceholder}
+              onChange={(event) => setQuery(event.target.value)}
+              aria-label={searchPlaceholder}
+            />
+          </label>
+          <ul className="filter-option-list" id={listId}>
+            {visible.length === 0 ? (
+              <li className="filter-option-empty">No matches</li>
+            ) : (
+              visible.map((option) => {
+                const isSelected = selected.has(option.id);
+                return (
+                  <li key={option.id}>
+                    <button
+                      type="button"
+                      className="filter-option"
+                      aria-pressed={isSelected}
+                      onClick={() => toggle(option.id)}
+                    >
+                      <span className="filter-option-mark" aria-hidden="true">
+                        {isSelected ? <CheckGlyph /> : null}
+                      </span>
+                      <span className="filter-option-label">{option.label}</span>
+                    </button>
+                  </li>
+                );
+              })
+            )}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+export function FiltersSheet({
+  open,
+  options,
+  value,
+  facets,
+  onClose,
+  onApply,
+}: FiltersSheetProps) {
   const [draft, setDraft] = useState(value);
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -87,15 +218,8 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
     return null;
   }
 
-  function toggleHasPhoto(next: "true" | "false" | undefined) {
-    setDraft((current) => ({
-      ...current,
-      hasPhoto: current.hasPhoto === next ? undefined : next,
-    }));
-  }
-
   return (
-    <div className="sheet-layer">
+    <div className="sheet-layer sheet-layer--end">
       <button
         type="button"
         className="sheet-backdrop"
@@ -104,129 +228,131 @@ export function FiltersSheet({ open, options, value, onClose, onApply }: Filters
       />
       <div
         ref={panelRef}
-        className="sheet-panel"
+        className="sheet-panel sheet-panel--end"
         role="dialog"
         aria-modal="true"
-        aria-label="Filters"
+        aria-labelledby="filters-sheet-title"
       >
-        <h2>Filters</h2>
-
-        <h3>Country</h3>
-        <div className="chip-group">
-          {options.countries.map((country) => (
-            <button
-              key={country.id}
-              type="button"
-              className="chip"
-              aria-pressed={draft.countryId === country.id}
-              onClick={() =>
-                setDraft((current) => ({
-                  ...current,
-                  countryId: current.countryId === country.id ? undefined : country.id,
-                }))
-              }
-            >
-              {country.label}
-            </button>
-          ))}
-        </div>
-
-        <h3>League</h3>
-        <div className="chip-group">
-          {options.leagues.map((league) => (
-            <button
-              key={league.id}
-              type="button"
-              className="chip"
-              aria-pressed={draft.leagueId === league.id}
-              onClick={() =>
-                setDraft((current) => ({
-                  ...current,
-                  leagueId: current.leagueId === league.id ? undefined : league.id,
-                }))
-              }
-            >
-              {league.label}
-            </button>
-          ))}
-        </div>
-
-        <h3>Season</h3>
-        <div className="chip-group">
-          {options.seasons.map((season) => (
-            <button
-              key={season.id}
-              type="button"
-              className="chip"
-              aria-pressed={draft.seasonId === season.id}
-              onClick={() =>
-                setDraft((current) => ({
-                  ...current,
-                  seasonId: current.seasonId === season.id ? undefined : season.id,
-                }))
-              }
-            >
-              {season.label}
-            </button>
-          ))}
-        </div>
-
-        <h3>Kit type</h3>
-        <div className="chip-group">
-          {options.kitTypes.map((kitType) => (
-            <button
-              key={kitType}
-              type="button"
-              className="chip"
-              aria-pressed={draft.kitType === kitType}
-              onClick={() =>
-                setDraft((current) => ({
-                  ...current,
-                  kitType: current.kitType === kitType ? undefined : kitType,
-                }))
-              }
-            >
-              {kitType}
-            </button>
-          ))}
-        </div>
-
-        <h3>Has photo</h3>
-        <div className="chip-group">
-          <button
-            type="button"
-            className="chip"
-            aria-pressed={draft.hasPhoto === "true"}
-            onClick={() => toggleHasPhoto("true")}
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            className="chip"
-            aria-pressed={draft.hasPhoto === "false"}
-            onClick={() => toggleHasPhoto("false")}
-          >
-            No
+        <div className="sheet-panel-header">
+          <h2 id="filters-sheet-title">Filters</h2>
+          <button type="button" className="icon-btn" aria-label="Close filters" onClick={onClose}>
+            <CloseGlyph />
           </button>
         </div>
 
-        <div className="toolbar">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Cancel
+        <div className="sheet-panel-body">
+          {facets.includes("country") ? (
+            <FilterCombobox
+              label="Country"
+              options={options.countries}
+              selectedIds={draft.countryIds ?? []}
+              searchPlaceholder="Search countries"
+              emptyLabel="Any country"
+              onChange={(countryIds) =>
+                setDraft((current) => ({
+                  ...current,
+                  countryIds: countryIds.length > 0 ? countryIds : undefined,
+                }))
+              }
+            />
+          ) : null}
+
+          {facets.includes("league") ? (
+            <FilterCombobox
+              label="League"
+              options={options.leagues}
+              selectedIds={draft.leagueIds ?? []}
+              searchPlaceholder="Search leagues"
+              emptyLabel="Any league"
+              onChange={(leagueIds) =>
+                setDraft((current) => ({
+                  ...current,
+                  leagueIds: leagueIds.length > 0 ? leagueIds : undefined,
+                }))
+              }
+            />
+          ) : null}
+        </div>
+
+        <div className="sheet-panel-footer">
+          <button type="button" className="btn btn-tertiary" onClick={() => setDraft({})}>
+            Clear
           </button>
-          <button
-            type="button"
-            className="btn btn-primary btn-primary--auto"
-            onClick={() => {
-              onApply(draft);
-              onClose();
-            }}
-          >
-            Apply
-          </button>
+          <div className="sheet-panel-footer-actions">
+            <button type="button" className="btn btn-tertiary" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-primary--auto"
+              onClick={() => {
+                onApply({
+                  countryIds: draft.countryIds,
+                  leagueIds: facets.includes("league") ? draft.leagueIds : undefined,
+                });
+                onClose();
+              }}
+            >
+              Apply
+            </button>
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function SearchGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="4.25" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M10.5 10.5 13.25 13.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CheckGlyph() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path
+        d="M2 6.25 4.75 9 10 3.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CloseGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M4 4 12 12M12 4 4 12"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ChevronGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M4 6.25 8 10.25 12 6.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

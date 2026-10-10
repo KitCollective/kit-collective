@@ -19,9 +19,8 @@ import {
   fetchCookieConsent,
   fetchCurrentUser,
   fetchPrefs,
-  loginCollector,
   loginSocial,
-  registerCollector,
+  verifySignInCode,
 } from "@/api/identity";
 import { requestNativeIdToken } from "@/auth/native-id-token";
 import { clearSession, loadSession, saveSession } from "@/auth/session";
@@ -42,9 +41,9 @@ type AuthContextValue = {
   accessToken: string | null;
   entitlement: Entitlement | null;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
   signInSocial: (provider: IdentityLinkedProvider) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  /** Signs in (or registers) with the six-digit code mailed to the address. */
+  signInWithCode: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   requestPremiumAccess: () => Promise<boolean>;
@@ -140,14 +139,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [appearance],
   );
 
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      const next = await loginCollector({ email, password });
-      await applySession(next);
-    },
-    [applySession],
-  );
-
   const signInSocial = useCallback(
     async (provider: IdentityLinkedProvider) => {
       const idToken = await requestNativeIdToken(provider);
@@ -157,9 +148,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [applySession],
   );
 
-  const signUp = useCallback(
-    async (email: string, password: string) => {
-      const next = await registerCollector({ email, password });
+  const signInWithCode = useCallback(
+    async (email: string, code: string) => {
+      const next = await verifySignInCode(email, code);
       await applySession(next);
     },
     [applySession],
@@ -287,9 +278,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accessToken: session?.accessToken ?? null,
       entitlement: user?.entitlement ?? null,
       isLoading,
-      signIn,
       signInSocial,
-      signUp,
+      signInWithCode,
       signOut,
       refreshUser,
       requestPremiumAccess,
@@ -299,9 +289,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       session,
       isLoading,
-      signIn,
       signInSocial,
-      signUp,
+      signInWithCode,
       signOut,
       refreshUser,
       requestPremiumAccess,

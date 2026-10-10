@@ -12,12 +12,12 @@ Linear. Status + `ready-for-agent` + blockers decide what runs. Implement and fa
 _Avoid_: GitHub Issues as source of truth, Linear Assignee → Agents → Cursor as dispatch
 
 **Runtime**:
-PI worker: Compose + `gh` + Linear CLI. Empty `.pi/mcp.json` — Linear MCP is not on the box.
-_Avoid_: Cursor Cloud Agents as dispatch, Linear MCP as the worker runtime
+Desktop `/issue-session`, started by the approver for named issues. No dispatch worker runs; the PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`).
+_Avoid_: assuming a planner claims `ready-for-agent` issues by itself, Cursor Cloud Agents as dispatch
 
 **Product MCP**:
-Coolify MCP and `kc_seed_mcp` are Desktop or Cloud Agent wiring. Not default PI-worker MCP.
-_Avoid_: installing Coolify or Seed MCP on the PI worker as factory dispatch
+Coolify MCP and `kc_seed_mcp` are Desktop or Cloud Agent wiring.
+_Avoid_: treating Coolify or Seed MCP as factory dispatch
 
 **Kickoff**:
 `/to-spec` for a new Linear project + milestones. No issues yet.
@@ -87,8 +87,8 @@ Catalog truth for a shirt design (club / season / type). Not a user’s copy.
 _Avoid_: shirt as catalog, jersey for the catalog row
 
 **UserJersey**:
-A collector’s owned instance of a Kit, with photos and personal fields.
-_Avoid_: Kit (for a copy), collection item
+A collector’s owned instance of a Kit, with photos and personal fields. Points at a Club **or** a NationalTeam (siblings — exactly one), plus season. Not a Club row with `kind: national`.
+_Avoid_: Kit (for a copy), collection item; stuffing a national side into `clubId`
 
 **UserJerseyPhoto**:
 One photo on a UserJersey. Four universal roles (`front` | `back` | `left` | `right` — Forside /
@@ -102,16 +102,44 @@ Locale + kind name for stamdata. The English seed string is not the Danish UI na
 _Avoid_: hardcoding English as the UI label
 
 **Vision suggestion**:
-Gemini output. May suggest identity fields (club, season, kit type) and bulk photoId groups into UserJersey drafts. Persist catalog UUIDs after confirm. High-confidence grouping pre-binds via existing bind reducers; Vision never silently assigns Photo roles.
-_Avoid_: raw model names as foreign keys; auto-committing Photo roles; OpenRouter for collector photos
+Gemini 2.5 Flash-Lite output (OpenRouter via `OPENROUTER_VISION_API_KEY`, pinned to Google, or direct `GEMINI_API_KEY`). Identity prompt uses Huddle kit-type / badge / omit discipline, per-field confidence, clubHintAlts, and season-from-this-shirt graphic/sponsor (not a remembered older kit). When a front photo is present, seasonHint is dated from the front; the back print fills player only and must not change season. Detail crops stay in the infer so a surname the back slot cropped away can still map the player. Nest is the catalog judge: manufacturer+sponsor Kit-hit first; CatalogLabel label+alias and compact sponsor/manufacturer spellings (same diacritic fold on retrieve as on score); unique type/colours among N hits lock without a second Vision call; missing sponsor still locks a unique manufacturer kit on that Club or NationalTeam. Club UUID is only a Club row; NationalTeam kits set `suggestions.nationalTeamId` (never a NationalTeam UUID in `clubId`) and still lock season/type/catalogKitId. Unique kit hit locks season/type/catalogKitId. Missing Kit rows do not omit a visual seasonHint — map it onto TeamSeason for that side at model confidence (never kit-lock 95 from a year-string match). A squad row for the named player/number may reject an impossible year; two remaining squad seasons omit season rather than keep the wrong hint. A mapped playerId with sufficient confidence constrains club (and season) candidates to that player's `player_club_season` career; a conflicting clubHint is not preselected (remap to the best career club or catalogMiss-style). Many remaining kit hits omit catalogKitId and may take one second look with catalog facts (still Google-pin, max two Vision calls). Grouping maps photoIds into UserJersey drafts (max ten photos per copy), incrementally as unbound photos land, with prior groups kept intact. Identity jobs for bound rings queue sequentially 1→2→3 as soon as the first grouped jersey has photos (Vision worker concurrency 8). A detail crop stays in the infer so the back print can map a player. When that player's career rejects the hinted year and more than one squad season remains, one second look picks the season from those labels using the front. Persist catalog UUIDs after confirm. Grouping is judged per group, not per job (the job's own confidence is its surest group): a group at or above the pre-select bar (70) binds automatically via the existing bind reducers, then fill-order on that draft so empty universal slots receive bound photos in picker order; a group from the suggest bar (50) up to the pre-select bar becomes a draft marked "Tjek" (photos bound, sorted first on the bulk overview); a group below the suggest bar leaves its photos without a jersey. A group lands on the draft that already holds one of its photos, so a group left loose never shifts the others. Vision never lets the VLM invent Photo roles; the collector still owns Erstat / Skift rolle.
+_Avoid_: raw model names as foreign keys; auto-committing Photo roles; sending collector photos to non-Google OpenRouter providers; using the factory `OPENROUTER_API_KEY` for Vision; inventing sleeve patches or treating crest years as pads; Eve or pgvector on the collector Vision path; dumping the catalog into the VLM
+
+**Vision label**:
+Save-time snapshot on an identity Vision Matcher job: suggested versus selected Club xor NationalTeam, season, type, catalogKitId, player, and patch. The supervised example. Later UserJersey edits are not this snapshot. May point at UserJerseyPhoto keys in lane R2; bytes stay there.
+_Avoid_: scoring the live UserJersey row as the label; grouping bind as a label this increment; exporting photos to a vendor training bucket; sending the pair to Google so Gemini retrains
+
+**Vision eval**:
+Nest scores the Vision label at Save — per-field hit, `user_action`, and class (`accepted` | `alias` | `coverage` | `model` | `transport`). Staff Admin lists rows. A factory eval-agent aggregates and drafts Vision improve proposals. Not a collector surface. Not a second Gemini call per Save.
+_Avoid_: live Gemini as the score; mixing grouping quality into identity scores; CI fake adapters as this eval; valuation as the noun
+
+**Vision improve**:
+Staff-gated proposal rows in Postgres, shown in the Admin Data table: CatalogLabel alias, identity prompt, or seed backlog. Staff applies. Not an auto-write of Club, Kit, or season. Vertex fine-tune of Gemini is a later increment.
+_Avoid_: auto-committing stamdata from collector Saves; CLIP / pgvector / Eve on this path; OpenRouter as the learner; Hugging Face as this increment; a new Confirm chrome; a /to-design for this table if the stamdata Data table is reused
 
 **Save**:
-Must not wait on Vision, kit completeness, or manufacturer.
-_Avoid_: blocking save on inference
+Must not wait on Vision, kit completeness, or manufacturer. Required side is Club **or** NationalTeam (xor) plus season, type, size, condition, ≥1 photo.
+_Avoid_: blocking save on inference; requiring `clubId` when the copy is a national shirt
 
 **Lane**:
 One of `development`, `staging`, `production` — git branch, GitHub Environment, and EAS channel. Same names, different objects.
 _Avoid_: environment as a synonym without saying which object
+
+**Device flow**:
+A Maestro flow that drives the iOS Simulator build and takes a named screenshot at every meaningful step, plus one recording. Each mobile slice has its own, `apps/mobile/.maestro/slices/<KEY>.yaml`, with one step per Acceptance criterion a screen can show. Five **regression flows** (first session, Tilføj trøje, Samling, Søg and bud, Ønske and paywall) sit under `regression/` and run on request. They run on the approver's Mac against a local API, one run at a time in a queue, and a red Device flow blocks a PR through the `Device flows` commit status.
+_Avoid_: e2e test as a synonym for an API integration test; worker browser screenshots as evidence for a mobile slice; a flow that needs a manual step
+
+**Test Collector**:
+The Collector four of the five regression flows, and a slice flow by default, sign in as, with a Comp Entitlement and fixed Vision. A second test Collector owns the åben-for-bud UserJersey and signs in for the Ønske and paywall flow. Both have fixed ids and are reset before every flow; the reset writes only rows they own, and removes other Collectors' rows only where those point at a test Collector (a favourite, a conversation, a report or a block).
+_Avoid_: a real Collector's account in a flow; a lane-wide Vision switch; a fourth lane for tests
+
+**Evidence run**:
+The screenshots and recordings of one run of a Device flow (a slice flow, or the regression flows) for one commit, in the evidence bucket (its own public bucket, never a lane bucket) under `e2e/<sha>/`, kept 30 days. "Before" for a PR is the latest passed `development` Evidence run of the same flow at or before the PR's merge base; a slice flow has none, so its steps are `new`. "After" is the PR head.
+_Avoid_: committing screenshots to git; comparing against `staging` or an arbitrary older run; evidence in a lane bucket
+
+**Design finding**:
+What the review reports for a step whose screenshot differs from "before": the change was not asked for by the issue, or it breaks a named rule in `docs/design-system.md`. Advisory: it goes into `### Review feedback`, it does not fail the `Device flows` status, and the reviewer never edits UI.
+_Avoid_: failing a PR on a model's opinion; a suggestion without the "opinion" label; a design-lock break with no rule cited
 
 **Football Data Seed**:
 The Linear project for vendor ingest: Transfermarkt hierarchy, then Football Kit Archive hierarchy, then Join workflow, then Cross MCP. Successor to KitCollective Seed. Still the one seed board beside the KitCollective product project.
@@ -186,8 +214,12 @@ Parent club vs loan (club kader) or call-up club (NationalTeam kader). Call-up c
 _Avoid_: trusting Joined / Signed-from columns that show present-day dates on historical kader pages; inventing loan flags when the HTML has none
 
 **Honours**:
-Titles and trophies from Transfermarkt `/erfolge/…` for **Club** and **NationalTeam** (`/erfolge/verein/{id}`) and **Player** (`/erfolge/spieler/{id}`). Stamdata now on those grains (Rich grain) — season + title text as listed. Same noun across side and player. Postgres: **`honour`** table — see `.scratch/football-data-seed/schema-gap.md`.
-_Avoid_: scraping market-value charts as honours; inventing titles not on the page; treating “Teilnehmer” participation rows as wins without keeping the vendor wording; blocking a Club season squad map only because the club Honours page failed when identity facts already landed
+Titles and trophies from Transfermarkt `/erfolge/…` for **Club** and **NationalTeam** (`/erfolge/verein/{id}`) and **Player** (`/erfolge/spieler/{id}`). Stamdata now on those grains (Rich grain) — season + title text as listed, plus the trophy or competition mark when the titles table rendered an image (bytes in the lane object store, `catalog_mark` on the honour row). Same noun across side and player. Postgres: **`honour`** table — see `.scratch/football-data-seed/schema-gap.md`.
+_Avoid_: scraping market-value charts as honours; inventing titles not on the page; treating “Teilnehmer” participation rows as wins without keeping the vendor wording; blocking a Club season squad map only because the club Honours page failed when identity facts already landed; persisting the Transfermarkt image URL on the honour row
+
+**Catalog mark**:
+Club crest, league badge, honour trophy, and national-team mark bytes from the Transfermarkt image CDN. Stamdata now: stored like Player photo (`rights: unresolved`, `visibility: admin_only`). Postgres: **`catalog_mark`**. Object keys are ours (`club/{tmId}/crest`, `league/{code}/badge`, `honour/erfolge/{id}`) — never `tmLogoUrl`. Admin Master Data and club Honours may render them; Expo, Astro, and OG do not until rights are cleared.
+_Avoid_: treating the crest as ADR-0002 “TM branding” drop of a hot-linked URL; inventing SVG crests; using `KitPhoto` as a club mark; serving unresolved marks on collector surfaces
 
 **NationalTeam season**:
 Catalog row that a **NationalTeam** fielded a squad in a **Season** — sibling of `TeamSeason` (club path). Stamdata now for Denmark WC 2010 proof. Postgres: **`national_team_season`** + **`player_national_team_season`** — not a Club row.
@@ -210,8 +242,8 @@ Shirt sponsor name from Football Kit Archive when the source exposes it. Stamdat
 _Avoid_: inventing a new sponsor column; dropping sponsor because FKApi lacks it; treating a training-kit sponsor as the match-kit sponsor; routing FKA through Decodo to scrape sponsor
 
 **Kit type (FK)**:
-Our `kit.type` enum is `home`, `away`, `third`, `gk`, `special`. FKApi `Type_K` is richer (categories match / prematch / training / travel / jacket). Proof keeps match-category types normalized into our enum; drops training, anthem, track, rain; Champions League / European variant kits are later leverage (keep one base type per side+season unless Join workflow names them).
-_Avoid_: storing Track/Training as `special`; treating CL Home as a second `home` row on the proof accept; inventing types not in `@kit/domain`
+Our `kit.type` enum is closed: `home`, `away`, `third`, `fourth`, `gk`, `special`. `kit.variant` is an open slug from the Football Kit Archive URL remainder (`european`, `supercoppa-italiana`, `v2`, `clasico`) and **null** on the league default of that type. Identity is `(side, season, type, variant)` with null-safe variant. Cup, anniversary, Clásico, Super Cup, and Champions League / European match kits stay **own rows with own photos** — never dumped onto league Home. Admin club Jerseys lists the type-default (and GK slots / occasion-only specials that have no type-default). Occasion kits of the same type nest as a **Variants** section on that default’s kit drill, with a link to the variant kit. `kit.competition` slash-lists become per-token links when the token matches a league CatalogLabel (NFKD, alphanumeric); unmatched tokens stay plain text. Do not invent a Super Coppa league from FKA copy. Training, anthem, track, rain, pre-match, pre-season, travel, bench, warm-up still drop. Stem wins over HTML Type when two kits share Type but differ in URL (`uefa-super-cup` vs `uefa-super-cup-1`). Multiple `gk` rows per side+season are allowed (`gk` + `home` / `away` / `fourth` / `1`). Coolify listing ingest is Wayback-only (prefix CDX ∪ archived `{slug}-{season}-kits/` hrefs). Decodo stays off FKA.
+_Avoid_: storing Track/Training as `special`; merging two homes that differ only by variant; inventing a cup enum; listing Super Cup Home as a peer jersey when league Home exists; inventing types not in `@kit/domain`; changing collector Confirm chips in this slice; treating a missing Wayback snapshot as a parser bug
 
 **Tournament squad**:
 A competition-specific NationalTeam roster (e.g. World Cup 2010 final 23) as distinct from the calendar-year NationalTeam kader on Transfermarkt. Hierarchy proof still uses the NT season grain; the WC-only cut stays open until a clean vendor page is confirmed.
@@ -222,8 +254,8 @@ Football Data Seed issues stay `ready-for-human` only. Not `ready-for-agent`. Pl
 _Avoid_: `ready-for-agent` on this project's slices; PI dispatch on Football Data Seed; treating this label here as a missing-info wait
 
 **Seed run**:
-One sentence that starts the full ingest for a Seed scope into a lane’s Postgres. Composes Hierarchy grains. Lives in the Join workflow milestone (Cross MCP wraps it). Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
-_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad; treating the Seed run as the first Football Data Seed accept
+One sentence that starts the full ingest for a Seed scope into a lane’s Postgres. Composes Hierarchy grains. Lives in the Join workflow milestone. Desktop operator path is `/seed-run` over the `seed-apify` CLI (grains and `join`). Cross MCP wraps the same CLI later. Internally the job walks Fetch steps and writes rows. Nest never fetches Transfermarkt.
+_Avoid_: Nest HTTP seed; “sync all of football”; making the human @ club then season then squad; treating the Seed run as the first Football Data Seed accept; calling Coolify `control` or Seed MCP to ingest when the CLI is available
 
 **Competition query**:
 The operator names a league in natural language (`Premier League`, `La Liga i Spanien`, `tyrkiske Superliga`). The Seed job resolves that to a Transfermarkt competition (id + slug + country): catalog alias first, otherwise a Transfermarkt search. Country words disambiguate. Then the existing walk: Competition season page → clubs → kader → numbers.
@@ -266,16 +298,16 @@ The live Transfermarkt path: HTTP GET of the Competition season page and each cl
 _Avoid_: calling this a Nest scraper; treating Cheerio as anti-bot; fetching a player profile page when the kader row already has id and number
 
 **Seed proxy**:
-Outbound HTTP(S) proxy used **only for Transfermarkt** from Coolify jobs and from `kc_seed_mcp`. Vendors: Decodo residential (per GB) or Decodo Site Unblocker (`unblock.decodo.com` as HTTP proxy). Coolify stores the secret and injects it into the TM job; `kc_seed_mcp` reads the same **names** from its own env. Kader fetch on Coolify does not run until that secret is present (fail closed). Football Kit Archive / FKApi must **not** use Decodo.
-_Avoid_: pointing Decodo at Football Kit Archive; Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
+Outbound HTTP(S) proxy used **only for Transfermarkt**. Policy module: `resolveTransfermarktTransport` (ADR-0042, ADR-0043). Setting `SEED_PROXY_URL` makes Decodo Site Unblocker (`unblock.decodo.com`) the transport everywhere, **Desktop included** — the machine IP could not hold a bulk run and the AWS WAF only yields to the Unblocker's rendered pass. `SEED_TM_TRANSPORT=direct` is the opt-out; Coolify / server (`SEED_REQUIRE_PROXY`) still fail-closes without a URL. Portrait bytes stay on the direct connection to the image CDN. Football Kit Archive / listing HTTP must **not** use Decodo (ADR-0041).
+_Avoid_: pointing Decodo at Football Kit Archive; treating a Desktop `.env` `SEED_PROXY_URL` as mandatory for local TM; Coolify Traefik as the TM unblock; Decodo Web Scraping API (`POST /v2/scrape`); datacenter proxies; public free-proxy lists; a naked GET from CX33 “just to try”
 
 **Opt-in Apify**:
 The existing Store-actor FetchAdapter. The operator must explicitly choose it. It is not an automatic fallback when Kader fetch fails or is slow. Quota is spent only when Nicklas opts in.
 _Avoid_: retrying HTML 202s on Apify by default; treating Apify as the primary Coolify path
 
 **FK after facts**:
-Kit ingest for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity (including Kit colours, Kit sponsor when the source has it, and normalized Kit type) and admin_only KitPhoto bytes onto those seasons (ExternalId join). Club kits join via TM club id → `kit.club_id`. NationalTeam kits join via FKA team id → `kit.national_team_id` — never a Club row. Missing side or season → refuse (no kit rows, no R2 writes). Join workflow composes the two vendors; Cross MCP wraps that later. Does not use Seed proxy / Decodo. Live FKApi (`FKAPI_BASE_URL`) is optional — this factory does not host sunr4y/fkapi. Operator Join without that URL sets `SEED_FK_FETCH=fixture` for Hierarchy proof kits.
-_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row; routing FK through Decodo; joining Denmark kits with Transfermarkt `verein/3436` as a club id; requiring a hosted FKApi before proof Join can run
+Kit ingest for the same Seed scope, only after that scope already has Club or NationalTeam plus Season rows from Transfermarkt. Writes Kit identity (including Kit colours, Kit sponsor when the source has it, normalized Kit type, design, competition, release date, and the FKA description) and admin_only KitPhoto bytes onto those seasons (ExternalId join). Listing ingest takes the primary flat image plus extra-images from the kit page — not only `og:image`. Club kits join via TM club id → `kit.club_id`. NationalTeam kits join via FKA team id → `kit.national_team_id` — never a Club row. Missing side or season → refuse (no kit rows, no R2 writes). Join workflow composes the two vendors; Cross MCP wraps that later. Does not use Seed proxy / Decodo. `FKAPI_BASE_URL` is the Coolify **FK listing HTTP** origin (`seed-fk-listing`, `GET /kits` — ADR-0041). That is not sunr4y/fkapi (`/api/kits`). Staff **Fetch kits** is Nest `POST /v1/admin/catalog/clubs/:clubId/seasons/:seasonId/kits/fetch` → listing `POST /ingest` (Bearer `FK_LISTING_INGEST_TOKEN`). Nest does not import `@kit/seed-*`. Listing HTTP reads Wayback (prefix CDX ∪ archived season index) and fails closed (ADR-0041). Join without `FKAPI_BASE_URL` sets `SEED_FK_FETCH=fixture` (not a silent default).
+_Avoid_: scraping FK with no TM sides; treating fixture FK as live archive ingest; showing archive bytes on Expo, Astro, or OG; merging TM and FK into one MCP tool before Join workflow; stuffing national kits onto a Club row; routing FK through Decodo; joining Denmark kits with Transfermarkt `verein/3436` as a club id; asking Nicklas for a public FKApi URL that does not exist; deploying sunr4y/fkapi as the Join origin; treating an empty 200 `{ kits: [] }` as live archive success; treating a live FKA kit without a snapshot as a Nest/parser miss
 
 **kc_seed_mcp**:
 Cursor server id for Seed MCP. Cross MCP accept is Streamable HTTP (`SEED_MCP_URL` + Bearer `SEED_MCP_TOKEN`). Stdio (`seed_apify` + `seed_fk`) is the predecessor and stays as a local debug binary — not the accept. Not Coolify MCP. Not default PI-worker MCP.
@@ -290,7 +322,7 @@ An unstyled HTML page on Nest (`GET /v1/catalog/peek`) so Nicklas can open a URL
 _Avoid_: building the product admin; `/to-design`; treating `GET /v1/catalog/stats` JSON as the peek; hot-linking KitPhoto bytes
 
 **Admin SPA**:
-The Vite + React operator surface (`apps/admin`). Same Identity as Expo. Chrome in English. CatalogLabel in this surface is requested as `en` (fallback `mul` → `en`). Never indexed. KitPhoto may render here; never on Expo, Astro, or OG.
+The Vite + React operator surface (`apps/admin`). Same Identity as Expo. Chrome in English. CatalogLabel in this surface is requested as `en` (fallback `mul` → `en`). Never indexed. KitPhoto may render here; never on Expo, Astro, or OG. Club drill Jerseys can **Fetch kits** for the selected season; kit drill nests occasion kits as Variants.
 _Avoid_: Catalog peek as the product admin; a second login product; Expo as the operator UI; Danish chrome as the admin default; dash.better-auth.com as staff chrome
 
 **Identity**:
@@ -305,12 +337,16 @@ _Avoid_: a 7-day JWT that cannot be revoked; cookie-only Admin beside a differen
 Google or Facebook on the same User — Expo native idToken and Admin. A verified provider email auto-links to the existing User. Not a second account.
 _Avoid_: Apple in this increment; one User row per provider; treating the provider as Staff access; asking before link when the provider email is verified
 
+**E-mail code**:
+Six-digit single-use code mailed to an address on the **Kom i gang** sheet. A correct code creates the collector when none exists, marks the email verified and opens a session; it also signs in a collector who was created with a password. It expires and is refused after an attempt limit; a resend invalidates the previous code. Requesting one answers the same for a new and an existing email. The collector app has no password; Staff login in `admin` keeps its own.
+_Avoid_: magic link; OTP in UI copy; a password field next to it; telling the caller whether the email has an account
+
 **Email verification**:
-Password sign-up must verify. A Social login whose provider already verified the email counts. Not Staff access.
-_Avoid_: a second verify after Google or Facebook; treating `role=admin` as verified
+A Social login whose provider already verified the email counts, and so does a correct **E-mail code**. Password sign-up no longer exists for collectors (KIT-276); it survives only for Staff login in `admin`. Not Staff access.
+_Avoid_: a second verify after Google, Facebook or an e-mail code; treating `role=admin` as verified
 
 **Password reset**:
-Signed-out email link that sets a new password on the same User. Not the signed-in change-password that already exists.
+Signed-out email link that sets a new password on the same User. Superseded for collectors (KIT-276): the collector app has no password, no reset and no change-password; sign-in is an **E-mail code** or a social login. It stays an `admin`-only path for Staff login. Stored collector passwords are left untouched and unused.
 _Avoid_: reset as a second account; SMS reset in this increment
 
 **Auth event**:
@@ -338,11 +374,15 @@ Own collector place in Expo tab slot 5 — identity card, favorites drill, and s
 _Avoid_: copying Vinted marketplace account chrome; KC monogram as the collector Avatar; treating Detaljer stub as the product peer profile; Auth events on the identity card
 
 **Peer Profil**:
-Another collector's public place: Avatar, Handle, About me, location per Vis by, and a 4:5 grid of that collector's non-private UserJerseys. No settings, no Favoritter-of-theirs. Entries include Søg Handle hit, foreign UserJersey detail owner, and Indbakke Detaljer. Overflow can Rapportér / Blokér (same Moderation as Indbakke). A blocked peer is not shown — no grid, no profile, both directions.
+Another collector's public place: Avatar, Handle, About me, location per Vis by, and a 4:5 grid of that collector's non-private UserJerseys. No settings, no Favoritter-of-theirs. Entries include Søg Handle hit, foreign UserJersey detail owner, and the More sheet in a Conversation. One action: write to the collector. Overflow can Rapportér / Blokér (same Moderation as Indbakke). A blocked peer is not shown — no grid, no profile, both directions.
 _Avoid_: mirroring own Profil settings; showing private copies; a second Detaljer stub as the only peer surface; browse that ignores block
 
+**Private profile facts**:
+Birthday and gender on the collector's own account. Optional, never shown to other collectors, used only for aggregate statistics, clearable, and deleted with the account. Not part of Peer Profil.
+_Avoid_: showing them publicly; requiring them; using them to target a collector
+
 **Handle**:
-The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision — same rule for password and Social login. Never the email. Never the provider display name. Availability is `yours`, `available`, or `taken`.
+The collector's unique public name on Profil and in Indbakke thread rows. Assigned at register from the email local-part with a numeric suffix on collision — same rule for E-mail code and Social login. Never the email. Never the provider display name. Availability is `yours`, `available`, or `taken`.
 _Avoid_: raw email as the thread-row name; a second login identifier; Google name as Handle; asking for a Handle before first session; success-green availability chrome
 
 **Private UserJersey**:
@@ -354,27 +394,27 @@ Compass tab (slot 2). Home is a magazine of shelves (clubs, åbne for bud, colle
 _Avoid_: Discovery as the place name; find-in-own-collection as Søg's primary job; limiting Søg to åben-for-bud rows only; Trøjer|Katalog|Samlere as three equal home tabs; paywalling Søg browse in this feature; showing a blocked peer in results; treating prototype A (grid-only) or B (mode tabs) as the locked home
 
 **Søg catalog drill**:
-A stamdata landing under Søg for Club, Kit, or Player only in this feature: identity chrome plus a grid of non-private UserJersey copies that match that grain. Kit means catalog shirt design (club · season · type), not one UserJersey. Kit drill lists only copies with `catalogKitId`. League, Season, and NationalTeam are not own landings yet — typeahead may filter the jersey home. Not Admin. Not Astro. Not own Samling.
-_Avoid_: League/Season/NationalTeam landings in this feature; treating the drill as a KitPhoto gallery; serving archive bytes on the drill; conflating Kit drill with UserJersey detail; inventing an "unknown Kit" bucket for null catalogKitId
+A stamdata landing under Søg for Club, NationalTeam, Kit, or Player: identity chrome plus a grid of non-private UserJersey copies that match that grain. Kit means catalog shirt design (side · season · type), not one UserJersey. Kit drill lists only copies with `catalogKitId`. NationalTeam is a sibling of Club (identity + jersey grid) — not stuffed into the Club drill. League and Season are not own landings — typeahead may filter the jersey home. Not Admin. Not Astro. Not own Samling.
+_Avoid_: League/Season landings in this feature; treating Club search as the only name for a national side; treating the drill as a KitPhoto gallery; serving archive bytes on the drill; conflating Kit drill with UserJersey detail; inventing an "unknown Kit" bucket for null catalogKitId
 
 **UserJersey detail**:
-Full-screen view of one UserJersey. Immersive photo stage (pager) with meta and actions in a bottom sheet — not hero+strip as the primary layout. **Own**: Privat and åben for bud switches, edit via Confirm UI (patch), delete. **Foreign**: owner → Peer Profil, Favorit, Send bud CTA when åben for bud (separate stack screen). Overflow Rapportér / Blokér. Not the Send bud form itself. Not a Søg catalog drill.
-_Avoid_: Send bud as the only foreign view; price overlay on the photo; editing someone else's copy; a second edit form language beside Confirm; requiring an Indbakke thread before report/block; locking hero+strip after prototype B won
+Full-screen view of one UserJersey: one scrolling column with a 4:5 photo (swipe between photos), then title, player and facts. Own and foreign share that column (decided 2026-10-10; it replaces the immersive photo stage with a bottom sheet). **Own**: Privat and åben for bud switches, every fact edited on its own (patch), delete. **Foreign**: Favorit, owner → Peer Profil under the facts, Send bud CTA when åben for bud (separate stack screen), the collector's own pending Bud in place of that CTA once sent, and a way to write to the owner without a Bud. Overflow Rapportér / Blokér. Not the Send bud form itself. Not a Søg catalog drill.
+_Avoid_: Send bud as the only foreign view; price overlay on the photo; editing someone else's copy; a separate Rediger screen; requiring an Indbakke thread before report/block; the immersive stage with a bottom sheet
 
 **Favorit**:
 A saved foreign UserJersey — another collector's shirt on the Profil favorites grid. Not own Samling tiles. Not a Wishlist row.
 _Avoid_: marketplace listing chrome; owner handle on the favorite tile; treating Favorit as Ønske
 
 **Wishlist**:
-A collector's structured want: catalog facets combined with AND. V1 facets are club, season, type (at least one set) and optional size. Not a saved UserJersey and not a Kit row. This increment's Entitlement gate is Wishlist CRUD plus match-job and match-push — not Søg or Send bud.
+A collector's structured want: catalog facets combined with AND. V1 facets are club **or** NationalTeam (xor), season, type (at least one set) and optional size. Not a saved UserJersey and not a Kit row. This increment's Entitlement gate is Wishlist CRUD plus match-job and match-push — not Søg or Send bud.
 _Avoid_: Favorit as the want list; free-text wish; a Kit as the only shape; paywalling Indbakke in this increment; player or country facets in v1
 
 **Ønske**:
-The Wishlist place in Expo. This increment enters from the Samling header trailing Icon button, replacing the notification bell. The empty notification Sheet on that slot is gone. Not a tab. Not Indbakke. Favorit stays under Profil.
-_Avoid_: a sixth tab; heart in slot 4; treating the header slot as Favoritter; keeping the empty notification Sheet as the header action
+The Wishlist place in Expo: its own tab (Ønsker, slot 4). Without a live Entitlement the tab shows what the feature does and one way to start; with one it lists Wishlist rows with their Matches. A wish can also be started from a Søg Kit drill (**Ønsk denne**). Not Indbakke. Favorit stays under Profil.
+_Avoid_: a sixth tab; entry from the Samling header (the earlier placement); treating the tab as Favoritter; a paywall that opens just because the tab was opened
 
 **Match**:
-A hit when another collector's bidding-enabled, non-private UserJersey satisfies a Wishlist row's AND facets. OS push deep-links to that UserJersey. In-app the Wishlist row shows the hit. Aktivitet stays Bud. Own copies never match. Private copies never match.
+A hit when another collector's bidding-enabled, non-private UserJersey satisfies a Wishlist row's AND facets. OS push deep-links to that UserJersey. In-app the Wishlist row shows the hit, and unseen hits count on the Ønsker tab badge. Aktivitet stays Bud. Own copies never match. Private copies never match.
 _Avoid_: matching a closed copy; matching a private copy; matching a seed Kit with no UserJersey; matching the owner's own Save; a Match card on Aktivitet
 
 **Offer**:
@@ -382,8 +422,8 @@ Admin-owned Billing catalog: which month and year IAP product ids are live, whet
 _Avoid_: a DKK price column as IAP truth; hardcoded SKUs in Nest; calling Offer a User.role
 
 **Nest-trial**:
-An Entitlement Nest writes with source `trial` for N days when Offer says trial is on and the collector has not used trial. Starts the first time they open Ønske or tap Tilføj without a live Entitlement. Otherwise that moment is the paywall (month/year + Restore). Not an App Store or Play introductory offer. Restore remains IAP.
-_Avoid_: treating trial days as App Store Connect metadata; a second User.role for trial; requiring a UserJersey before trial; a separate “Prøv N dage” step as the only start
+An Entitlement Nest writes with source `trial` for N days when Offer says trial is on and the collector has not used trial. It starts only when the collector taps **Start gratis prøve** on the paywall (decided 2026-10-10; before that, on first opening Ønske or tapping Tilføj). It takes no payment and renews nothing: when it ends the collector is in Lapse until they buy. The collector is reminded the day before it ends. Not an App Store or Play introductory offer. Restore remains IAP.
+_Avoid_: starting the trial by opening Ønske; treating trial days as App Store Connect metadata; a second User.role for trial; requiring a UserJersey before trial; asking for a plan before the trial
 
 **Lapse**:
 When Entitlement expires, Wishlist rows remain. Match-job and match-push stop. The collector can view and delete rows. Create and edit require a live Entitlement. Collection, Søg, and Send bud stay as they are.
@@ -398,20 +438,26 @@ The OS push permission is asked when the collector saves their first Wishlist ro
 _Avoid_: a launch push wall; asking only after a Match was already missed
 
 **Indbakke**:
-The collector messages place in tab slot 4 (envelope). Beskeder and Aktivitet are two views of one conversation model. Not Ønske, not a general notification tray.
-_Avoid_: heart / wishlist chrome in slot 4; a Match card on Aktivitet; using the Samling header for inbox unread
+The collector messages place in tab slot 4 (envelope). One list: incoming Bud that wait for an answer first, then one row per Conversation (decided 2026-10-10; it replaces the Beskeder and Aktivitet views). Not Ønske, not a general notification tray.
+_Avoid_: heart / wishlist chrome in slot 4; a Match card in Indbakke; Beskeder | Aktivitet tabs; using the Samling header for inbox unread
 
 **Entitlement**:
 Nest-owned Billing fact on a User: paid collector plan yes/no, expires, source (`iap_apple` / `iap_google` / `trial` / `comp`, later `stripe`). Orthogonal to Staff access. Absence is the free Collector. Not a `User.role` and not a plan column on User.
 _Avoid_: stuffing the plan into `User.role`; treating `role=admin` as paid; Tier one/two/three before a second SKU; Expo or Auth session as billing truth; calling the store chrome "Premium" a schema name; Admin DKK as the charge amount
 
 **Conversation**:
-One thread between two collectors about a UserJersey. Shared unread across Beskeder and Aktivitet. Created when a bud is sent or a reply is posted (later slices).
-_Avoid_: two parallel inbox tables; fake threads to avoid empty state
+The one thread between two collectors (decided 2026-10-10; before that, one thread per UserJersey). It holds every message and every Bud between them; each Bud names its own UserJersey. Created when the first Bud or the first message is sent. A message needs no Bud: a collector can write from a foreign UserJersey detail or from Peer Profil. Deleting a UserJersey does not delete the Conversation.
+_Avoid_: one thread per UserJersey; two parallel inbox tables; fake threads to avoid empty state
 
 **Bud**:
-A collector-to-collector bid message in a Conversation — an integer DKK amount, not payment or checkout. Accept/decline records outcome in the thread; no money moves in this product gap.
+A collector-to-collector bid message in a Conversation about one UserJersey — an integer DKK amount, not payment or checkout. Accept/decline records outcome in the thread; no money moves in this product gap.
 _Avoid_: price overlay on Samling tiles; treating bud as a marketplace purchase
+
+**Accepting a Bud** (decided 2026-10-10) closes the UserJersey for new Bud (åben for bud turns off) and declines every other pending Bud on it. The owner may turn åben for bud on again.
+
+**Handel**:
+The guided steps two collectors follow after an accepted Bud: address and payment method, paid, payment confirmed, shipped, received. Money and parcels move outside KitCollective; the product stores the steps and, for that deal only, the buyer's address. Designed 2026-10-10, not built: it waits for its own spec and for rules on consent, retention and deletion of the personal data.
+_Avoid_: calling it checkout or payment; holding money; showing the address before the seller has confirmed the payment; building it inside the Indbakke effort
 
 **Staff access**:
 Authorization on that same User that opens Admin SPA. Stored as `User.role` `admin`. Not a second login and not a second column. Later scoped staff roles may replace this binary grant. An admin may promote or demote another User; not themselves, and not the last admin.
@@ -420,6 +466,10 @@ _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authe
 **Take-down**:
 Removing one UserJersey and its UserJerseyPhoto bytes. The User remains. Not a Kit delete. Not a hide flag.
 _Avoid_: unpublish; soft-hide without a column; deleting the collector by default
+
+**Signal**:
+One dated piece of raw evidence about collectors or the market (a quote, a review, a metric shift, a Vision eval result). Lives in Notion, owned by Nicklas. Not `signal-up`, which is an agent filing an out-of-scope finding as a Linear Triage issue. A `signal-up` issue may be the source of a Signal, never the reverse.
+_Avoid_: calling a `signal-up` issue a Signal; a Signal as a ticket or a spec; rewriting the quote into an opinion; names or profiles of private persons on a Signal
 
 **Role subagent**:
 Implement-phase craft owner spawned by the implement lead when the slice needs that craft. v1 roles: **Frontend**, **Backend**, **DevOps**. Stack-named helpers (`react-expo`, `backend-nest`, `db-drizzle`, `ui-ux`) are aliases of those roles.

@@ -25,6 +25,21 @@ export class StubGroupingVisionAdapter implements VisionAdapter {
   }
 }
 
+export class ReadyIdentityAndGroupingAdapter implements VisionAdapter {
+  constructor(
+    private readonly identity: VisionInferenceResult,
+    private readonly grouping: VisionGroupingInferenceResult,
+  ) {}
+
+  async infer(_photos: VisionIdentityPhotoInput[]): Promise<VisionInferenceResult | null> {
+    return this.identity;
+  }
+
+  async inferGrouping(): Promise<VisionGroupingInferenceResult | null> {
+    return this.grouping;
+  }
+}
+
 export class SlowVisionAdapter implements VisionAdapter {
   constructor(
     private readonly delayMs: number,

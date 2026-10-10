@@ -3,6 +3,7 @@ import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "./index.js";
 
 export type WishlistCriteriaLabels = {
   clubLabel: string | null;
+  nationalTeamLabel: string | null;
   seasonLabel: string | null;
   typeLabel: string | null;
   sizeLabel: string | null;
@@ -10,16 +11,25 @@ export type WishlistCriteriaLabels = {
 
 export function hasWishlistCriterion(input: {
   clubId?: string | null;
+  nationalTeamId?: string | null;
   seasonId?: string | null;
   type?: KitType | null;
 }): boolean {
-  return input.clubId != null || input.seasonId != null || input.type != null;
+  return (
+    input.clubId != null ||
+    input.nationalTeamId != null ||
+    input.seasonId != null ||
+    input.type != null
+  );
 }
 
 export function buildWishlistAndMeta(labels: WishlistCriteriaLabels): string {
   const parts: string[] = [];
   if (labels.clubLabel) {
     parts.push(labels.clubLabel);
+  }
+  if (labels.nationalTeamLabel) {
+    parts.push(labels.nationalTeamLabel);
   }
   if (labels.seasonLabel) {
     parts.push(labels.seasonLabel);
@@ -36,6 +46,7 @@ export function buildWishlistAndMeta(labels: WishlistCriteriaLabels): string {
 export function buildWishlistAutoName(labels: WishlistCriteriaLabels): string {
   const base = buildWishlistAndMeta({
     clubLabel: labels.clubLabel,
+    nationalTeamLabel: labels.nationalTeamLabel,
     seasonLabel: labels.seasonLabel,
     typeLabel: labels.typeLabel,
     sizeLabel: null,

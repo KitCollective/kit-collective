@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Format staged files with Biome before the commit, so `pnpm format:check` in CI
+# does not fail on formatting or import order. Enabled by `pnpm install` (prepare).
+# A file with both staged and unstaged changes is checked, not rewritten.
+
+set -u
+
+ROOT=$(git rev-parse --show-toplevel) || exit 0
+cd "$ROOT" || exit 0
+BIOME="$ROOT/node_modules/.bin/biome"
+[ -x "$BIOME" ] || exit 0
+
+CLEAN=()
+PARTIAL=()
+while IFS= read -r -d '' FILE; do
+  [ -f "$FILE" ] || continue
+  if git diff --quiet -- "$FILE"; then
+    CLEAN+=("$FILE")
+  else
+    PARTIAL+=("$FILE")
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+FLAGS=(--no-errors-on-unmatched --files-ignore-unknown=true)
+
+if [ "${#CLEAN[@]}" -gt 0 ]; then
+  "$BIOME" check --write "${FLAGS[@]}" "${CLEAN[@]}" >/dev/null 2>&1
+  git add -- "${CLEAN[@]}"
+  if ! "$BIOME" check "${FLAGS[@]}" "${CLEAN[@]}"; then
+    echo "pre-commit: Biome found errors it cannot fix automatically (above)." >&2
+    exit 1
+  fi
+fi
+
+if [ "${#PARTIAL[@]}" -gt 0 ]; then
+  if ! "$BIOME" check "${FLAGS[@]}" "${PARTIAL[@]}"; then
+    echo "pre-commit: the files above are partly staged, so they were not rewritten. Run pnpm format and stage the result." >&2
+    exit 1
+  fi
+fi
+
+exit 0

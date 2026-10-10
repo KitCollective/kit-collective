@@ -1,24 +1,50 @@
+import { VISION_CONFIDENCE_PRESELECT, VISION_CONFIDENCE_SUGGEST } from "@kit/api-contract";
 import type { JerseyCondition, JerseySize, KitType, PhotoRole, PhotoSource } from "@kit/domain";
 import { MAX_USER_JERSEY_PHOTOS, UNIVERSAL_PHOTO_ROLES } from "@kit/domain";
 import type {
   CaptureBranch,
   CaptureJerseyDraft,
+  CaptureSavedDraft,
   CaptureSessionPhoto,
   CaptureSessionState,
   CaptureSessionStore,
 } from "./captureSessionTypes";
 
-function createId(): string {
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Grouping Vision rejects non-UUID photo/session ids — never emit `capture-…`. */
+export function createCaptureSessionId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") {
     return globalThis.crypto.randomUUID();
   }
-  return `capture-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const bytes = new Uint8Array(16);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  const version = bytes[6] ?? 0;
+  const variant = bytes[8] ?? 0;
+  bytes[6] = (version & 0x0f) | 0x40;
+  bytes[8] = (variant & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function isUuid(value: string): boolean {
+  return UUID_V4.test(value);
 }
 
 export type { CaptureBranch, CaptureJerseyDraft, CaptureSessionState, CaptureSessionStore };
 
+/** One shirt is front/back plus one extra. Four or more start unbound so grouping can split jerseys. */
+const SINGLE_BRANCH_MAX_PHOTOS = 3;
+
 export function branchFromPhotoCount(count: number): CaptureBranch {
-  return count > MAX_USER_JERSEY_PHOTOS ? "bulk" : "single";
+  return count > SINGLE_BRANCH_MAX_PHOTOS ? "bulk" : "single";
 }
 
 export function canAddPhotoToDraft(draft: CaptureJerseyDraft): boolean {
@@ -31,7 +57,7 @@ export function canSave(draft: CaptureJerseyDraft): boolean {
   if (!draft.editJerseyId && draft.photos.length === 0) {
     return false;
   }
-  if (!draft.clubId || !draft.seasonId) {
+  if (!hasCatalogSide(draft) || !draft.seasonId) {
     return false;
   }
   if (!draft.kitTypeSelected || !draft.sizeSelected || !draft.conditionSelected) {
@@ -57,18 +83,24 @@ export function getActiveDraft(state: CaptureSessionState): CaptureJerseyDraft {
   return getDraft(state, state.activeDraftId);
 }
 
-function createEmptyDraft(id: string): CaptureJerseyDraft {
+/** Last saved size, pre-selected on a new draft. Condition is never a default. */
+export type NewDraftDefaults = { defaultSize?: JerseySize | null };
+
+function createEmptyDraft(id: string, defaults?: NewDraftDefaults): CaptureJerseyDraft {
+  const defaultSize = defaults?.defaultSize ?? null;
   return {
     id,
     clubId: null,
     clubLabel: null,
+    nationalTeamId: null,
+    nationalTeamLabel: null,
     seasonId: null,
     seasonLabel: null,
     kitType: null,
-    size: null,
+    size: defaultSize,
     condition: null,
     kitTypeSelected: false,
-    sizeSelected: false,
+    sizeSelected: defaultSize !== null,
     conditionSelected: false,
     notes: "",
     playerName: "",
@@ -82,7 +114,7 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
 }
 
 function createPhotoId(): string {
-  return createId();
+  return createCaptureSessionId();
 }
 
 function photoIdForUri(state: CaptureSessionState, uri: string): string {
@@ -97,6 +129,23 @@ function photoIdForUri(state: CaptureSessionState, uri: string): string {
 
 function photoIdsForUris(uris: string[]): Record<string, string> {
   return Object.fromEntries(uris.map((uri) => [uri, createPhotoId()]));
+}
+
+/** Persist missing photoIds so grouping can POST UUID keys, not empty strings. */
+export function ensureSessionPhotoIds(state: CaptureSessionState): CaptureSessionState {
+  const photoIdByUri = { ...(state.photoIdByUri ?? {}) };
+  let changed = false;
+  const uris = new Set([...state.orderedUris, ...state.unboundUris]);
+  for (const uri of uris) {
+    if (!photoIdByUri[uri] || !isUuid(photoIdByUri[uri]!)) {
+      photoIdByUri[uri] = createPhotoId();
+      changed = true;
+    }
+  }
+  if (!changed) {
+    return state;
+  }
+  return withState(state, { ...state, photoIdByUri });
 }
 
 function withPhotoId(
@@ -156,20 +205,24 @@ function updateDraft(
 
 export function createCaptureSession(
   orderedUris: string[],
-  options?: { store?: CaptureSessionStore; sessionId?: string; photoSource?: PhotoSource },
+  options?: NewDraftDefaults & {
+    store?: CaptureSessionStore;
+    sessionId?: string;
+    photoSource?: PhotoSource;
+  },
 ): CaptureSessionState {
   const branch = branchFromPhotoCount(orderedUris.length);
-  const draftId = createId();
-  const sessionId = options?.sessionId ?? createId();
+  const draftId = createCaptureSessionId();
+  const sessionId = options?.sessionId ?? createCaptureSessionId();
   const photoSource = options?.photoSource ?? "gallery";
 
   const draft =
     branch === "single"
       ? {
-          ...createEmptyDraft(draftId),
+          ...createEmptyDraft(draftId, options),
           photos: assignSingleRoles(orderedUris, photoSource),
         }
-      : createEmptyDraft(draftId);
+      : createEmptyDraft(draftId, options);
 
   const state: CaptureSessionState = {
     sessionId,
@@ -188,20 +241,20 @@ export function createCaptureSession(
 
 export function createCaptureSessionFromPhotos(
   photos: CaptureSessionPhoto[],
-  options?: { store?: CaptureSessionStore; sessionId?: string },
+  options?: NewDraftDefaults & { store?: CaptureSessionStore; sessionId?: string },
 ): CaptureSessionState {
   const orderedUris = photos.map((photo) => photo.uri);
   const branch = branchFromPhotoCount(orderedUris.length);
-  const draftId = createId();
-  const sessionId = options?.sessionId ?? createId();
+  const draftId = createCaptureSessionId();
+  const sessionId = options?.sessionId ?? createCaptureSessionId();
 
   const draft =
     branch === "single"
       ? {
-          ...createEmptyDraft(draftId),
+          ...createEmptyDraft(draftId, options),
           photos: [...photos],
         }
-      : createEmptyDraft(draftId);
+      : createEmptyDraft(draftId, options);
 
   const state: CaptureSessionState = {
     sessionId,
@@ -268,9 +321,11 @@ export function appendUnboundPhotos(
     return state;
   }
 
+  const orderedUris = [...state.orderedUris, ...nextUris];
   return withState(state, {
     ...state,
-    orderedUris: [...state.orderedUris, ...nextUris],
+    branch: branchFromPhotoCount(orderedUris.length) === "bulk" ? "bulk" : state.branch,
+    orderedUris,
     unboundUris: [...state.unboundUris, ...nextUris],
     photoIdByUri: {
       ...state.photoIdByUri,
@@ -297,12 +352,74 @@ export function unbindPhoto(state: CaptureSessionState, uri: string): CaptureSes
   }));
 }
 
-export function addJerseyDraft(state: CaptureSessionState): CaptureSessionState {
-  const draftId = createId();
+export function addJerseyDraft(
+  state: CaptureSessionState,
+  defaults?: NewDraftDefaults,
+): CaptureSessionState {
+  const draftId = createCaptureSessionId();
   return withState(state, {
     ...state,
-    drafts: [...state.drafts, createEmptyDraft(draftId)],
+    drafts: [...state.drafts, createEmptyDraft(draftId, defaults)],
     activeDraftId: draftId,
+  });
+}
+
+/**
+ * After a jersey is saved, drafts that never got a size take the saved one. A pre-selection,
+ * not a hidden value: the chip shows selected and can change. Condition is never touched.
+ */
+export function applyStickySizeToUnselected(
+  state: CaptureSessionState,
+  size: JerseySize,
+): CaptureSessionState {
+  if (state.drafts.every((draft) => draft.sizeSelected)) {
+    return state;
+  }
+  return withState(state, {
+    ...state,
+    drafts: state.drafts.map((draft) =>
+      draft.sizeSelected ? draft : { ...draft, size, sizeSelected: true },
+    ),
+  });
+}
+
+/**
+ * The Foto tile on Confirm: picked photos join this jersey by fill order (Forside, Bagside,
+ * Venstre, Højre, then Andet). Never flips a single session to bulk; stops at the 10 cap.
+ */
+export function addPhotosToDraft(
+  state: CaptureSessionState,
+  draftId: string,
+  uris: string[],
+  source: PhotoSource = "gallery",
+): CaptureSessionState {
+  let draft = getDraft(state, draftId);
+  const known = new Set(state.orderedUris);
+  const fresh = uris.filter((uri) => !known.has(uri));
+  const photoIdByUri = { ...state.photoIdByUri };
+  const orderedUris = [...state.orderedUris];
+  const added: CaptureSessionPhoto[] = [];
+
+  for (const uri of fresh) {
+    const role = nextAvailableRole({ ...draft, photos: [...draft.photos, ...added] });
+    if (!role) {
+      break;
+    }
+    const photoId = createPhotoId();
+    photoIdByUri[uri] = photoId;
+    orderedUris.push(uri);
+    added.push(withPhotoId(uri, role, source, photoId));
+  }
+
+  if (added.length === 0) {
+    return state;
+  }
+  draft = { ...draft, photos: [...draft.photos, ...added] };
+  return withState(state, {
+    ...state,
+    orderedUris,
+    photoIdByUri,
+    drafts: state.drafts.map((entry) => (entry.id === draftId ? draft : entry)),
   });
 }
 
@@ -378,28 +495,79 @@ export function bindUnboundPhotoToDraft(
   return bindPhoto(state, uri, draftId, targetRole, source);
 }
 
+export function hasCatalogSide(draft: CaptureJerseyDraft): boolean {
+  return Boolean(draft.clubId) !== Boolean(draft.nationalTeamId);
+}
+
+export { catalogSideId } from "@kit/api-contract";
+
+export function suggestedCatalogSideId(
+  suggestions: { clubId?: string | null; nationalTeamId?: string | null },
+  fieldPreselect: { club?: boolean; nationalTeam?: boolean },
+): string | null {
+  if (fieldPreselect.club && suggestions.clubId) {
+    return suggestions.clubId;
+  }
+  if (fieldPreselect.nationalTeam && suggestions.nationalTeamId) {
+    return suggestions.nationalTeamId;
+  }
+  return null;
+}
+
+function sideDependentFields(draft: CaptureJerseyDraft, changed: boolean) {
+  return {
+    seasonId: changed ? null : draft.seasonId,
+    seasonLabel: changed ? null : draft.seasonLabel,
+    playerId: changed ? null : draft.playerId,
+    playerName: changed ? "" : draft.playerName,
+    playerNumber: changed ? "" : draft.playerNumber,
+    badgeEnabled: changed ? false : draft.badgeEnabled,
+    badgeId: changed ? null : draft.badgeId,
+    badgeLabel: changed ? null : draft.badgeLabel,
+  };
+}
+
 export function setDraftClub(
   state: CaptureSessionState,
   draftId: string,
   clubId: string,
   clubLabel?: string | null,
 ): CaptureSessionState {
-  return updateDraft(state, draftId, (draft) => {
-    const clubChanged = draft.clubId !== clubId;
-    return {
-      ...draft,
-      clubId,
-      clubLabel: clubLabel ?? draft.clubLabel,
-      seasonId: clubChanged ? null : draft.seasonId,
-      seasonLabel: clubChanged ? null : draft.seasonLabel,
-      playerId: clubChanged ? null : draft.playerId,
-      playerName: clubChanged ? "" : draft.playerName,
-      playerNumber: clubChanged ? "" : draft.playerNumber,
-      badgeEnabled: clubChanged ? false : draft.badgeEnabled,
-      badgeId: clubChanged ? null : draft.badgeId,
-      badgeLabel: clubChanged ? null : draft.badgeLabel,
-    };
-  });
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    clubId,
+    clubLabel: clubLabel ?? draft.clubLabel,
+    nationalTeamId: null,
+    nationalTeamLabel: null,
+    ...sideDependentFields(draft, draft.clubId !== clubId),
+  }));
+}
+
+export function setDraftNationalTeam(
+  state: CaptureSessionState,
+  draftId: string,
+  nationalTeamId: string,
+  nationalTeamLabel?: string | null,
+): CaptureSessionState {
+  return updateDraft(state, draftId, (draft) => ({
+    ...draft,
+    clubId: null,
+    clubLabel: null,
+    nationalTeamId,
+    nationalTeamLabel: nationalTeamLabel ?? draft.nationalTeamLabel,
+    ...sideDependentFields(draft, draft.nationalTeamId !== nationalTeamId),
+  }));
+}
+
+export function setDraftCatalogSide(
+  state: CaptureSessionState,
+  draftId: string,
+  item: { id: string; label: string; kind?: "club" | "national_team" },
+): CaptureSessionState {
+  if (item.kind === "national_team") {
+    return setDraftNationalTeam(state, draftId, item.id, item.label);
+  }
+  return setDraftClub(state, draftId, item.id, item.label);
 }
 
 export function setDraftSeason(
@@ -668,21 +836,31 @@ export function appendUnassignedCameraShotToSession(
 }
 
 /** Apply Forside → Bagside → Venstre → Højre → Andet fill order before Confirm. */
-export function applyFillOrderToActiveDraft(state: CaptureSessionState): CaptureSessionState {
-  const draft = getActiveDraft(state);
+export function applyFillOrderToDraft(
+  state: CaptureSessionState,
+  draftId: string,
+): CaptureSessionState {
+  const draft = getDraft(state, draftId);
   if (draft.photos.length === 0 || draft.photos.every((photo) => photo.role !== null)) {
     return state;
   }
 
   const assigned = assignPhotosFillOrderPreservingSource(draft.photos);
-  const next = updateDraft(state, state.activeDraftId, (current) => ({
+  const next = updateDraft(state, draftId, (current) => ({
     ...current,
     photos: assigned,
   }));
+  if (draftId !== next.activeDraftId) {
+    return next;
+  }
   return {
     ...next,
     orderedUris: assigned.map((photo) => photo.uri),
   };
+}
+
+export function applyFillOrderToActiveDraft(state: CaptureSessionState): CaptureSessionState {
+  return applyFillOrderToDraft(state, state.activeDraftId);
 }
 
 function serializableState(state: CaptureSessionState): CaptureSessionState {
@@ -693,8 +871,10 @@ function serializableState(state: CaptureSessionState): CaptureSessionState {
 export function createEditCaptureSession(
   jersey: {
     id: string;
-    clubId: string;
-    clubLabel: string;
+    clubId: string | null;
+    clubLabel: string | null;
+    nationalTeamId?: string | null;
+    nationalTeamLabel?: string | null;
     seasonId: string;
     type: KitType;
     size: JerseySize;
@@ -703,11 +883,13 @@ export function createEditCaptureSession(
   sessionId: string,
   store?: CaptureSessionStore,
 ): CaptureSessionState {
-  const draftId = createId();
+  const draftId = createCaptureSessionId();
   const draft: CaptureJerseyDraft = {
     id: draftId,
     clubId: jersey.clubId,
     clubLabel: jersey.clubLabel,
+    nationalTeamId: jersey.nationalTeamId ?? null,
+    nationalTeamLabel: jersey.nationalTeamLabel ?? null,
     seasonId: jersey.seasonId,
     kitType: jersey.type,
     size: jersey.size,
@@ -773,8 +955,77 @@ export function shouldStartGroupingJob(state: CaptureSessionState): boolean {
   if (state.branch !== "bulk") {
     return false;
   }
+  if (groupingAlreadyJudged(state)) {
+    return false;
+  }
+  if (state.unboundUris.length >= 2) {
+    return true;
+  }
+  return state.unboundUris.length >= 1 && state.drafts.some((draft) => draft.photos.length > 0);
+}
 
-  return state.unboundUris.length === state.orderedUris.length && state.unboundUris.length >= 2;
+function photoIdOf(state: CaptureSessionState, uri: string): string {
+  return state.photoIdByUri?.[uri] ?? uri;
+}
+
+/** Every photo the session holds right now, bound or not. */
+function sessionPhotoKeys(state: CaptureSessionState): string[] {
+  const uris = new Set([
+    ...state.orderedUris,
+    ...state.unboundUris,
+    ...state.drafts.flatMap((draft) => draft.photos.map((photo) => photo.uri)),
+  ]);
+  return [...uris].map((uri) => photoIdOf(state, uri)).sort();
+}
+
+/**
+ * A finished run judged every photo the session held. Only a photo it has never seen asks Vision
+ * again. Saving, binding, unbinding, discarding, parking and reopening move photos between
+ * jerseys and the pile but add none, so none of them restarts grouping or spends quota.
+ */
+function groupingAlreadyJudged(state: CaptureSessionState): boolean {
+  if (!state.groupingSettledKey) {
+    return false;
+  }
+  const judged = new Set(state.groupingSettledKey.split(","));
+  return state.unboundUris.every((uri) => judged.has(photoIdOf(state, uri)));
+}
+
+function groupingRunKey(state: CaptureSessionState): string {
+  return `${unboundGroupingFingerprint(state)}|${groupingPriorGroups(state)
+    .map((group) => group.photoIds.join("-"))
+    .join(";")}`;
+}
+
+/** Stable key for one grouping request. Unrelated Confirm persists must not change this. */
+export function groupingJobFingerprint(state: CaptureSessionState): string | null {
+  if (!shouldStartGroupingJob(state)) {
+    return null;
+  }
+
+  return groupingRunKey(state);
+}
+
+/** A finished (or stopped) run: remember which photos it judged, so a reopen does not ask again. */
+export function markGroupingSettled(state: CaptureSessionState): CaptureSessionState {
+  return withState(state, { ...state, groupingSettledKey: sessionPhotoKeys(state).join(",") });
+}
+
+export function groupingPriorGroups(state: CaptureSessionState): Array<{ photoIds: string[] }> {
+  return state.drafts
+    .map((draft) => ({
+      photoIds: draft.photos
+        .map((photo) => photo.photoId ?? state.photoIdByUri?.[photo.uri])
+        .filter((photoId): photoId is string => Boolean(photoId)),
+    }))
+    .filter((group) => group.photoIds.length > 0);
+}
+
+export function unboundGroupingFingerprint(state: CaptureSessionState): string {
+  return state.unboundUris
+    .map((uri) => state.photoIdByUri?.[uri] ?? uri)
+    .sort()
+    .join(",");
 }
 
 export function uriForPhotoId(state: CaptureSessionState, photoId: string): string | null {
@@ -782,15 +1033,28 @@ export function uriForPhotoId(state: CaptureSessionState, photoId: string): stri
   return entry?.[0] ?? null;
 }
 
-function ensureDraftForGroupIndex(
-  state: CaptureSessionState,
-  groupIndex: number,
-): CaptureSessionState {
-  let next = state;
-  while (next.drafts.length <= groupIndex) {
-    next = addJerseyDraft(next);
+export type GroupingGroupInput = { photoIds: string[]; confidence?: number };
+
+/** What the collector gets from one group: bound for them, a draft to check, or left loose. */
+export type GroupingOutcome = "bind" | "check" | "loose";
+
+/**
+ * The per-group rule (CONTEXT.md, Vision suggestion): at or above the pre-select bar the group
+ * binds automatically; from the suggest bar up to it the group becomes a draft marked Tjek;
+ * below the suggest bar its photos stay without a jersey. A group with no confidence is never
+ * trusted to bind, but its photos are not dropped either.
+ */
+export function classifyGroupingConfidence(confidence: number | undefined): GroupingOutcome {
+  if (confidence === undefined) {
+    return "check";
   }
-  return next;
+  if (confidence >= VISION_CONFIDENCE_PRESELECT) {
+    return "bind";
+  }
+  if (confidence >= VISION_CONFIDENCE_SUGGEST) {
+    return "check";
+  }
+  return "loose";
 }
 
 function bindPhotoIdsToDraft(
@@ -813,70 +1077,123 @@ function bindPhotoIdsToDraft(
   return next;
 }
 
-export function applyGroupingSuggestion(
-  state: CaptureSessionState,
-  grouping: { groups: Array<{ photoIds: string[] }> },
-  options: { preselect: boolean },
-): CaptureSessionState {
-  if (grouping.groups.length === 0) {
+function draftOwningAnyPhoto(state: CaptureSessionState, photoIds: string[]): string | null {
+  const wanted = new Set(photoIds);
+  const owner = state.drafts.find((draft) =>
+    draft.photos.some((photo) => {
+      const id = photo.photoId ?? state.photoIdByUri?.[photo.uri];
+      return id !== undefined && wanted.has(id);
+    }),
+  );
+  return owner?.id ?? null;
+}
+
+/** Picker order into the slots the jersey still has empty; photos that already have a role stay. */
+function fillMissingRoles(state: CaptureSessionState, draftId: string): CaptureSessionState {
+  const draft = getDraft(state, draftId);
+  if (draft.photos.every((photo) => photo.role !== null)) {
     return state;
   }
+  const used = new Set(draft.photos.map((photo) => photo.role));
+  const photos = draft.photos.map((photo) => {
+    if (photo.role !== null) {
+      return photo;
+    }
+    const role: PhotoRole = UNIVERSAL_PHOTO_ROLES.find((entry) => !used.has(entry)) ?? "other";
+    used.add(role);
+    return { ...photo, role };
+  });
+  return updateDraft(state, draftId, (current) => ({ ...current, photos }));
+}
 
-  if (!options.preselect) {
-    if (grouping.groups.length > 1) {
-      return withState(state, {
-        ...state,
-        pendingGrouping: grouping,
-        groupingDesignGap: true,
-      });
+/**
+ * Applies every group of one Vision grouping result, each by its own confidence. A group lands on
+ * the draft that already holds one of its photos, else on an empty draft, else on a new one, so a
+ * group left loose never shifts the others onto the wrong jersey.
+ */
+export function applyGroupingSuggestion(
+  state: CaptureSessionState,
+  grouping: { groups: GroupingGroupInput[] },
+  defaults?: NewDraftDefaults,
+): CaptureSessionState {
+  let next = state;
+  const touched: string[] = [];
+
+  for (const group of grouping.groups) {
+    const outcome = classifyGroupingConfidence(group.confidence);
+    if (outcome === "loose") {
+      continue;
     }
 
-    return withState(state, {
-      ...state,
-      pendingGrouping: grouping,
-      groupingDesignGap: false,
-    });
+    let draftId = draftOwningAnyPhoto(next, group.photoIds);
+    const ownedBefore = draftId !== null;
+    if (!draftId) {
+      const bindable = group.photoIds.some((photoId) => {
+        const uri = uriForPhotoId(next, photoId);
+        return uri !== null && next.unboundUris.includes(uri);
+      });
+      if (!bindable) {
+        continue;
+      }
+      const empty = next.drafts.find((draft) => draft.photos.length === 0 && !draft.editJerseyId);
+      draftId = empty?.id ?? null;
+      if (!draftId) {
+        next = addJerseyDraft(next, defaults);
+        draftId = next.activeDraftId;
+      }
+    }
+
+    next = bindPhotoIdsToDraft(next, draftId, group.photoIds);
+    if (outcome === "check" && !ownedBefore) {
+      next = updateDraft(next, draftId, (draft) => ({ ...draft, needsCheck: true }));
+    }
+    touched.push(draftId);
   }
 
-  let next = withState(state, {
-    ...state,
-    pendingGrouping: undefined,
-    groupingDesignGap: false,
-  });
+  for (const draftId of touched) {
+    next = fillMissingRoles(next, draftId);
+  }
 
-  grouping.groups.forEach((group, index) => {
-    next = ensureDraftForGroupIndex(next, index);
-    const draftId = next.drafts[index]?.id;
-    if (!draftId) {
-      return;
-    }
-    next = bindPhotoIdsToDraft(next, draftId, group.photoIds);
-  });
-
-  if (next.drafts[0]) {
-    next = setActiveDraft(next, next.drafts[0].id);
+  // Confirm opens on the first jersey that holds photos, not on the one created last.
+  const first = next.drafts.find((draft) => draft.photos.length > 0);
+  if (touched.length > 0 && first && first.id !== next.activeDraftId) {
+    next = setActiveDraft(next, first.id);
   }
 
   return next;
 }
 
-export function acceptPendingGrouping(state: CaptureSessionState): CaptureSessionState {
-  if (!state.pendingGrouping) {
+/** The collector reopened the overview or finished it: the session is no longer parked. */
+export function unparkSession(state: CaptureSessionState): CaptureSessionState {
+  if (state.parkedAt == null) {
     return state;
   }
-
-  return applyGroupingSuggestion(state, state.pendingGrouping, { preselect: true });
+  return withState(state, { ...state, parkedAt: null });
 }
 
-export function dismissPendingGrouping(state: CaptureSessionState): CaptureSessionState {
-  if (!state.pendingGrouping) {
+/** Gør resten færdig senere: keep the session, let Samling show one row that reopens it. */
+export function parkSession(state: CaptureSessionState, now: number): CaptureSessionState {
+  return withState(state, { ...state, overview: true, parkedAt: now });
+}
+
+/** The bulk overview owns this session from here on (Confirm then advances through it). */
+export function markOverviewSession(state: CaptureSessionState): CaptureSessionState {
+  if (state.overview === true) {
     return state;
   }
+  return withState(state, { ...state, overview: true });
+}
 
+export function appendSavedDraft(
+  state: CaptureSessionState,
+  saved: CaptureSavedDraft,
+): CaptureSessionState {
   return withState(state, {
     ...state,
-    pendingGrouping: undefined,
-    groupingDesignGap: false,
+    savedDrafts: [
+      ...(state.savedDrafts ?? []).filter((entry) => entry.draftId !== saved.draftId),
+      saved,
+    ],
   });
 }
 
@@ -887,6 +1204,8 @@ export function sessionPhotoIds(state: CaptureSessionState): string[] {
 export type IdentitySuggestionInput = {
   clubId?: string;
   clubLabel?: string;
+  nationalTeamId?: string;
+  nationalTeamLabel?: string;
   seasonId?: string;
   seasonLabel?: string;
   type?: KitType;
@@ -899,6 +1218,7 @@ export type IdentitySuggestionInput = {
 
 export type IdentityFieldPreselect = {
   club?: boolean;
+  nationalTeam?: boolean;
   season?: boolean;
   type?: boolean;
   player?: boolean;
@@ -926,11 +1246,28 @@ export function applyIdentitySuggestion(
   let next = state;
 
   if (!manual.club && options.fieldPreselect.club && suggestions.clubId && suggestions.clubLabel) {
-    next = setDraftClub(next, draftId, suggestions.clubId, suggestions.clubLabel);
+    next = setDraftCatalogSide(next, draftId, {
+      id: suggestions.clubId,
+      label: suggestions.clubLabel,
+      kind: "club",
+    });
+  }
+
+  if (
+    !manual.club &&
+    options.fieldPreselect.nationalTeam &&
+    suggestions.nationalTeamId &&
+    suggestions.nationalTeamLabel
+  ) {
+    next = setDraftCatalogSide(next, draftId, {
+      id: suggestions.nationalTeamId,
+      label: suggestions.nationalTeamLabel,
+      kind: "national_team",
+    });
   }
 
   if (!manual.season && options.fieldPreselect.season && suggestions.seasonId) {
-    next = setDraftSeason(next, draftId, suggestions.seasonId);
+    next = setDraftSeason(next, draftId, suggestions.seasonId, suggestions.seasonLabel);
   }
 
   if (!manual.type && options.fieldPreselect.type && suggestions.type) {

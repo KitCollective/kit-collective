@@ -1,17 +1,19 @@
-import type { VisionFieldPreselect, VisionJobResponse } from "@kit/api-contract";
+import type { VisionFieldPreselect, VisionJobResponse, VisionSuggestions } from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated } from "react-native";
 import { fetchClubSeasons } from "@/api/catalog";
-import { fetchVisionJob, startVisionSuggest } from "@/api/vision";
+import { fetchVisionJob, startVisionSuggest, VisionPremiumRequiredError } from "@/api/vision";
 import {
   applyIdentitySuggestion,
+  catalogSideId,
   selectDraftKitType,
   setDraftBadge,
-  setDraftClub,
+  setDraftCatalogSide,
   setDraftPlayer,
   setDraftSeason,
+  suggestedCatalogSideId,
 } from "@/capture/captureSession";
 import type { CaptureJerseyDraft, CaptureSessionMutator } from "@/capture/captureSessionTypes";
+import { resolveVisionCatalogMissHint } from "@/capture/catalogMissHint";
 import {
   confirmBadgeWasEdited,
   confirmClubWasEdited,
@@ -20,13 +22,36 @@ import {
   confirmSeasonWasEdited,
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
-import { resolveConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
-import { draftPhotoFingerprint } from "@/capture/confirmVisionScope";
+import {
+  identityQueueFingerprint,
+  identityRunKey,
+  identitySettledSnapshot,
+  nextQueuedIdentityDraft,
+  raceWithTimeout,
+  remainingIdentityBudget,
+  shouldAttemptIdentityQueue,
+  shouldSyncIdentityChrome,
+} from "@/capture/identityDraftQueue";
+import {
+  type IdentityDraftState,
+  type IdentityDraftStates,
+  identityLandingPatch,
+  identityStateFor,
+  landingFadesIn,
+  patchIdentityState,
+  resetIdentityState,
+} from "@/capture/identityDraftState";
 import { buildSuggestOnlyVisionJob } from "@/capture/identitySuggestOnly";
 import { buildIdentitySuggestRequest } from "@/capture/identitySuggestRequest";
-import { motion } from "@/theme/tokens";
 
-const VISION_TIMEOUT_MS = 12_000;
+type IdentityFieldSnapshot = {
+  fieldPreselect: VisionFieldPreselect;
+  suggestions: VisionSuggestions | null;
+  catalogMiss: boolean;
+};
+
+/** Must outlast Gemini's 15s abort plus poll jitter — a timeout is not a catalog miss. */
+const VISION_TIMEOUT_MS = 45_000;
 const VISION_POLL_INTERVAL_MS = 2_000;
 const VISION_IDENTITY_DEBOUNCE_MS = 500;
 
@@ -34,12 +59,12 @@ type UseConfirmVisionOptions = {
   accessToken: string | null;
   sessionId: string | undefined;
   draft: CaptureJerseyDraft | null;
+  sessionDrafts?: CaptureJerseyDraft[];
   mutate: CaptureSessionMutator;
-  reduceMotion: boolean;
   jobId: string | null;
   setJobId: (jobId: string | null) => void;
   setSelectedSeasonLabel: (label: string | null) => void;
-  onCatalogMiss?: (miss: boolean) => void;
+  onPremiumRequired?: () => Promise<boolean>;
 };
 
 function hasPreselectFields(fieldPreselect: VisionFieldPreselect | undefined): boolean {
@@ -59,7 +84,9 @@ function hasSuggestFields(job: VisionJobResponse): boolean {
       job.suggestions?.type ||
       job.suggestions?.playerId ||
       job.suggestions?.patchId ||
-      job.catalogMiss,
+      job.catalogMiss ||
+      job.clubHint ||
+      job.nationalTeamHint,
   );
 }
 
@@ -71,50 +98,68 @@ export function useConfirmVision({
   accessToken,
   sessionId,
   draft,
+  sessionDrafts = [],
   mutate,
-  reduceMotion,
   jobId,
   setJobId,
   setSelectedSeasonLabel,
-  onCatalogMiss,
+  onPremiumRequired,
 }: UseConfirmVisionOptions) {
   const [polling, setPolling] = useState(false);
-  const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
-  const [applied, setApplied] = useState(false);
-  const suggestionOpacity = useRef(new Animated.Value(0)).current;
-  const appliedJobId = useRef<string | null>(null);
-  const startAttempted = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const prevScopeRef = useRef<{ draftId: string | null; photoFingerprint: string | null }>({
-    draftId: null,
-    photoFingerprint: null,
-  });
-
-  const fadeInSuggestion = useCallback(() => {
-    suggestionOpacity.setValue(reduceMotion ? 1 : 0);
-    if (reduceMotion) {
-      return;
-    }
-    Animated.timing(suggestionOpacity, {
-      toValue: 1,
-      duration: motion.fast,
-      useNativeDriver: true,
-    }).start();
-  }, [reduceMotion, suggestionOpacity]);
+  // Everything Vision left pending belongs to one jersey. Switching tabs, or another jersey's
+  // read starting or landing, must not touch it.
+  const [identityStates, setIdentityStates] = useState<IdentityDraftStates>({});
+  const patchIdentity = useCallback((draftId: string, patch: Partial<IdentityDraftState>) => {
+    setIdentityStates((current) => patchIdentityState(current, draftId, patch));
+  }, []);
+  const resetIdentity = useCallback((draftId: string) => {
+    setIdentityStates((current) => resetIdentityState(current, draftId));
+  }, []);
+  const { suggestion, applied, catalogMiss, catalogMissHint } = identityStateFor(
+    identityStates,
+    draft?.id ?? null,
+  );
+  const appliedJobId = useRef<string | null>(null);
+  const snapshotsByDraftRef = useRef(new Map<string, IdentityFieldSnapshot>());
+  const startedIdentityKeysRef = useRef(new Set<string>());
+  const sessionDraftsRef = useRef(sessionDrafts);
+  sessionDraftsRef.current = sessionDrafts;
+  const prevQueueFingerprintRef = useRef<string | null>(null);
+  const identityLoopActiveRef = useRef(false);
+  const identityKickAgainRef = useRef(false);
+  const identityUnmountedRef = useRef(false);
+  const [inFlightDraftId, setInFlightDraftId] = useState<string | null>(null);
+  /** Jerseys whose identity read has finished, found or not. Drives "Vision fandt ikke trøjen". */
+  const [settledDraftIds, setSettledDraftIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const applySuggestions = useCallback(
-    async (job: VisionJobResponse) => {
+    async (job: VisionJobResponse, targetDraftId?: string) => {
       if (job.status !== "ready" || !sessionId) {
         return;
       }
 
-      const currentDraft = draftRef.current;
-      if (!currentDraft) {
+      const currentDraftId = targetDraftId ?? draftRef.current?.id;
+      if (!currentDraftId) {
         return;
       }
 
-      onCatalogMiss?.(job.catalogMiss === true);
+      if (job.jobId) {
+        appliedJobId.current = job.jobId;
+      }
+
+      const snapshot: IdentityFieldSnapshot = {
+        fieldPreselect: job.fieldPreselect ?? {},
+        suggestions: job.suggestions ?? null,
+        catalogMiss: job.catalogMiss === true,
+      };
+      snapshotsByDraftRef.current.set(currentDraftId, snapshot);
+
+      patchIdentity(currentDraftId, {
+        catalogMiss: job.catalogMiss === true,
+        catalogMissHint: job.catalogMiss ? resolveVisionCatalogMissHint(job) : null,
+      });
 
       if (job.catalogMiss && !job.suggestions) {
         return;
@@ -125,8 +170,7 @@ export function useConfirmVision({
       const shouldPreselect = hasPreselectFields(fieldPreselect);
 
       if (!shouldPreselect && suggestions) {
-        setSuggestion(job);
-        fadeInSuggestion();
+        patchIdentity(currentDraftId, identityLandingPatch({ kind: "suggest", job }));
         return;
       }
 
@@ -136,7 +180,7 @@ export function useConfirmVision({
 
       if (suggestions) {
         mutate((current) =>
-          applyIdentitySuggestion(current, current.activeDraftId, suggestions, {
+          applyIdentitySuggestion(current, currentDraftId, suggestions, {
             fieldPreselect,
             manualEdits: {
               club: confirmClubWasEdited(),
@@ -148,12 +192,22 @@ export function useConfirmVision({
           }),
         );
 
-        if (!confirmSeasonWasEdited() && suggestions.seasonLabel && fieldPreselect.season) {
+        if (
+          landingFadesIn(currentDraftId, draftRef.current?.id ?? null) &&
+          !confirmSeasonWasEdited() &&
+          suggestions.seasonLabel &&
+          fieldPreselect.season
+        ) {
           setSelectedSeasonLabel(suggestions.seasonLabel);
         }
 
-        if (!confirmSeasonWasEdited() && suggestions.clubId && accessToken && fieldPreselect.club) {
-          await fetchClubSeasons(accessToken, suggestions.clubId);
+        const suggestedSideId = suggestedCatalogSideId(suggestions, fieldPreselect);
+        if (!confirmSeasonWasEdited() && accessToken && suggestedSideId) {
+          try {
+            await fetchClubSeasons(accessToken, suggestedSideId);
+          } catch {
+            // Season list is a Data drill convenience — a miss must not unwind applied fields.
+          }
         }
 
         const suggestOnlyJob = buildSuggestOnlyVisionJob(job, {
@@ -164,79 +218,190 @@ export function useConfirmVision({
           badge: confirmBadgeWasEdited(),
         });
         if (suggestOnlyJob) {
-          setSuggestion(suggestOnlyJob);
-          fadeInSuggestion();
+          patchIdentity(
+            currentDraftId,
+            identityLandingPatch({ kind: "suggest", job: suggestOnlyJob }),
+          );
           return;
         }
 
-        setApplied(true);
-        fadeInSuggestion();
+        patchIdentity(currentDraftId, identityLandingPatch({ kind: "applied" }));
       }
     },
-    [accessToken, fadeInSuggestion, mutate, onCatalogMiss, sessionId, setSelectedSeasonLabel],
+    [accessToken, mutate, sessionId, patchIdentity, setSelectedSeasonLabel],
   );
+  const applySuggestionsRef = useRef(applySuggestions);
+  applySuggestionsRef.current = applySuggestions;
 
   const draftId = draft?.id ?? null;
-  const photoFingerprint = draftPhotoFingerprint(draft);
+  const queueFingerprint = identityQueueFingerprint(sessionDrafts);
 
   useEffect(() => {
-    const prev = prevScopeRef.current;
-    const draftChanged = prev.draftId !== draftId;
-    const photosChanged = prev.photoFingerprint !== photoFingerprint;
-    prevScopeRef.current = { draftId, photoFingerprint };
+    setPolling(inFlightDraftId !== null && inFlightDraftId === draftId);
+  }, [draftId, inFlightDraftId]);
 
-    if (!accessToken || !draftId || !photoFingerprint) {
+  useEffect(() => {
+    identityUnmountedRef.current = false;
+    return () => {
+      identityUnmountedRef.current = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const previousFingerprint = prevQueueFingerprintRef.current;
+    prevQueueFingerprintRef.current = queueFingerprint;
+
+    if (
+      !accessToken ||
+      !shouldAttemptIdentityQueue({
+        hasAccessToken: true,
+        queueFingerprint,
+        previousFingerprint,
+      })
+    ) {
       return;
     }
 
-    if (draftChanged) {
-      setJobId(null);
-      setPolling(false);
-      setSuggestion(null);
-      setApplied(false);
-      startAttempted.current = false;
-      appliedJobId.current = null;
-      resetConfirmManualEdits();
-      setSelectedSeasonLabel(null);
-      onCatalogMiss?.(false);
-    } else if (!photosChanged) {
+    if (identityLoopActiveRef.current) {
+      identityKickAgainRef.current = true;
       return;
-    } else {
-      setJobId(null);
-      setPolling(false);
-      setSuggestion(null);
-      setApplied(false);
-      startAttempted.current = false;
-      appliedJobId.current = null;
-      onCatalogMiss?.(false);
     }
 
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      void (async () => {
-        const currentDraft = draftRef.current;
-        if (!currentDraft || startAttempted.current) {
-          return;
+    const startJob = async (payload: Awaited<ReturnType<typeof buildIdentitySuggestRequest>>) => {
+      return startVisionSuggest(accessToken, payload).catch(async (error) => {
+        if (!(error instanceof VisionPremiumRequiredError)) {
+          throw error;
         }
-        startAttempted.current = true;
-        try {
-          const payload = await buildIdentitySuggestRequest(currentDraft);
-          const nextJobId = await startVisionSuggest(accessToken, payload);
-          if (!cancelled) {
-            setJobId(nextJobId);
-            setPolling(true);
+        const granted = (await onPremiumRequired?.()) === true;
+        if (!granted) {
+          return null;
+        }
+        return startVisionSuggest(accessToken, payload);
+      });
+    };
+
+    const runQueuedDraft = async () => {
+      const next = nextQueuedIdentityDraft(
+        sessionDraftsRef.current,
+        startedIdentityKeysRef.current,
+      );
+      if (!next) {
+        return false;
+      }
+      const key = identityRunKey(next);
+      startedIdentityKeysRef.current.add(key);
+      snapshotsByDraftRef.current.delete(next.id);
+      setInFlightDraftId(next.id);
+      const syncChrome = () => shouldSyncIdentityChrome(next.id, draftRef.current?.id ?? null);
+      resetIdentity(next.id);
+      if (syncChrome()) {
+        setJobId(null);
+        appliedJobId.current = null;
+        resetConfirmManualEdits();
+        setSelectedSeasonLabel(null);
+        setPolling(true);
+      }
+      const settleIdle = () => {
+        const snapshot = identitySettledSnapshot();
+        snapshotsByDraftRef.current.set(next.id, snapshot);
+      };
+      const startedAt = Date.now();
+      const remaining = () => remainingIdentityBudget(startedAt, VISION_TIMEOUT_MS);
+      try {
+        const live = sessionDraftsRef.current.find((entry) => entry.id === next.id) ?? next;
+        const payload = await raceWithTimeout(buildIdentitySuggestRequest(live), remaining());
+        const nextJobId = await raceWithTimeout(startJob(payload), remaining());
+        if (!nextJobId) {
+          settleIdle();
+          return true;
+        }
+        if (syncChrome()) {
+          setJobId(nextJobId);
+          setPolling(true);
+        }
+        let settled = false;
+        while (remaining() > 0) {
+          const job = await raceWithTimeout(fetchVisionJob(accessToken, nextJobId), remaining());
+          if (job.status === "pending") {
+            await raceWithTimeout(
+              new Promise<void>((resolve) => {
+                setTimeout(resolve, VISION_POLL_INTERVAL_MS);
+              }),
+              remaining(),
+            ).catch(() => undefined);
+            continue;
           }
-        } catch {
-          // Vision is optional — Confirm and Save continue independently.
+          if (job.status === "ready") {
+            await applySuggestionsRef.current(job, next.id);
+            settled = true;
+          }
+          break;
+        }
+        if (!settled) {
+          settleIdle();
+        }
+      } catch {
+        settleIdle();
+      } finally {
+        setSettledDraftIds((current) => new Set(current).add(next.id));
+        setInFlightDraftId((current) => (current === next.id ? null : current));
+        if (syncChrome()) {
+          setPolling(false);
+        }
+      }
+      return true;
+    };
+
+    const launchIdentityLoop = (debounce: boolean) => {
+      if (identityUnmountedRef.current) {
+        return;
+      }
+      if (identityLoopActiveRef.current) {
+        identityKickAgainRef.current = true;
+        return;
+      }
+      identityLoopActiveRef.current = true;
+      void (async () => {
+        if (debounce) {
+          await new Promise((resolve) => setTimeout(resolve, VISION_IDENTITY_DEBOUNCE_MS));
+        }
+        try {
+          while (!identityUnmountedRef.current) {
+            const ran = await runQueuedDraft();
+            if (ran) {
+              continue;
+            }
+            if (identityKickAgainRef.current) {
+              identityKickAgainRef.current = false;
+              continue;
+            }
+            break;
+          }
+        } finally {
+          identityLoopActiveRef.current = false;
+          if (
+            !identityUnmountedRef.current &&
+            (identityKickAgainRef.current ||
+              Boolean(
+                nextQueuedIdentityDraft(sessionDraftsRef.current, startedIdentityKeysRef.current),
+              ))
+          ) {
+            identityKickAgainRef.current = false;
+            launchIdentityLoop(false);
+          }
         }
       })();
-    }, VISION_IDENTITY_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
     };
-  }, [accessToken, draftId, onCatalogMiss, photoFingerprint, setJobId, setSelectedSeasonLabel]);
+
+    launchIdentityLoop(true);
+  }, [
+    accessToken,
+    onPremiumRequired,
+    queueFingerprint,
+    resetIdentity,
+    setJobId,
+    setSelectedSeasonLabel,
+  ]);
 
   useEffect(() => {
     if (!accessToken || !jobId || !polling) {
@@ -260,10 +425,16 @@ export function useConfirmVision({
         }
 
         setPolling(false);
-        if (appliedJobId.current !== job.jobId) {
-          appliedJobId.current = job.jobId;
-          await applySuggestions(job);
+        if (job.status !== "ready") {
+          return;
         }
+        if (appliedJobId.current === job.jobId) {
+          return;
+        }
+        if (!inFlightDraftId) {
+          return;
+        }
+        await applySuggestions(job, inFlightDraftId);
       } catch {
         if (!cancelled) {
           setPolling(false);
@@ -278,21 +449,38 @@ export function useConfirmVision({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [accessToken, applySuggestions, jobId, polling]);
+  }, [accessToken, applySuggestions, inFlightDraftId, jobId, polling]);
 
   const applySuggestion = useCallback(async () => {
-    if (!suggestion?.suggestions || !accessToken) {
+    if (!suggestion?.suggestions || !accessToken || !draftRef.current) {
       return;
     }
+    const ownerDraftId = draftRef.current.id;
 
     const suggestions = suggestion.suggestions;
     mutate((current) => {
       let next = current;
       if (suggestions.clubId && suggestions.clubLabel) {
-        next = setDraftClub(next, next.activeDraftId, suggestions.clubId, suggestions.clubLabel);
+        next = setDraftCatalogSide(next, next.activeDraftId, {
+          id: suggestions.clubId,
+          label: suggestions.clubLabel,
+          kind: "club",
+        });
+      }
+      if (suggestions.nationalTeamId && suggestions.nationalTeamLabel) {
+        next = setDraftCatalogSide(next, next.activeDraftId, {
+          id: suggestions.nationalTeamId,
+          label: suggestions.nationalTeamLabel,
+          kind: "national_team",
+        });
       }
       if (suggestions.seasonId) {
-        next = setDraftSeason(next, next.activeDraftId, suggestions.seasonId);
+        next = setDraftSeason(
+          next,
+          next.activeDraftId,
+          suggestions.seasonId,
+          suggestions.seasonLabel,
+        );
       }
       if (suggestions.seasonLabel) {
         setSelectedSeasonLabel(suggestions.seasonLabel);
@@ -316,24 +504,36 @@ export function useConfirmVision({
       return next;
     });
 
-    if (suggestions.clubId) {
-      await fetchClubSeasons(accessToken, suggestions.clubId);
+    const sideId = catalogSideId(suggestions);
+    if (sideId) {
+      try {
+        await fetchClubSeasons(accessToken, sideId);
+      } catch {
+        // Season list is a Data drill convenience — Brug already wrote the draft.
+      }
     }
-    setSuggestion(null);
-    setApplied(true);
-    onCatalogMiss?.(false);
-  }, [accessToken, mutate, onCatalogMiss, setSelectedSeasonLabel, suggestion]);
+    patchIdentity(ownerDraftId, {
+      suggestion: null,
+      applied: true,
+      catalogMiss: false,
+      catalogMissHint: null,
+    });
+  }, [accessToken, mutate, patchIdentity, setSelectedSeasonLabel, suggestion]);
 
   return {
     suggestion,
-    suggestionOpacity,
-    bannerState: resolveConfirmVisionBannerState({
-      activated: Boolean(accessToken),
-      outOfQuota: false,
-      analyzing: polling,
-      succeeded: applied,
-    }),
+    catalogMiss,
+    catalogMissHint,
+    /** An identity read is running for the active jersey. */
+    analyzing: polling,
+    /** Vision, not the collector, filled the active jersey's facts. */
+    filledByVision: applied,
+    settledDraftIds,
     applySuggestion,
-    dismissSuggestion: () => setSuggestion(null),
+    dismissSuggestion: () => {
+      if (draftRef.current) {
+        patchIdentity(draftRef.current.id, { suggestion: null });
+      }
+    },
   };
 }

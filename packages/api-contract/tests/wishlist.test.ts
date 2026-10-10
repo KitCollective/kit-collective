@@ -11,10 +11,16 @@ const UUID = "550e8400-e29b-41d4-a716-446655440000";
 const UUID_B = "550e8400-e29b-41d4-a716-446655440001";
 
 describe("wishlistEntryWriteSchema", () => {
-  it("accepts any single criterion", () => {
-    expect(wishlistEntryWriteSchema.parse({ clubId: UUID })).toEqual({ clubId: UUID });
-    expect(wishlistEntryWriteSchema.parse({ seasonId: UUID })).toEqual({ seasonId: UUID });
-    expect(wishlistEntryWriteSchema.parse({ type: "home" })).toEqual({ type: "home" });
+  it("accepts a nationalTeamId criterion", () => {
+    expect(wishlistEntryWriteSchema.parse({ nationalTeamId: UUID })).toEqual({
+      nationalTeamId: UUID,
+    });
+  });
+
+  it("rejects clubId and nationalTeamId together", () => {
+    expect(() =>
+      wishlistEntryWriteSchema.parse({ clubId: UUID, nationalTeamId: UUID_B }),
+    ).toThrow();
   });
 
   it("accepts multiple criteria for AND wishlist rows", () => {
@@ -36,6 +42,8 @@ describe("wishlistEntrySchema", () => {
       meta: "F.C. København · 2023/24 · Hjemme · M",
       clubId: UUID,
       clubLabel: "F.C. København",
+      nationalTeamId: null,
+      nationalTeamLabel: null,
       seasonId: UUID_B,
       seasonLabel: "2023/24",
       type: "home" as const,
@@ -58,6 +66,8 @@ describe("wishlistEntriesSchema", () => {
           meta: "F.C. København",
           clubId: UUID,
           clubLabel: "F.C. København",
+          nationalTeamId: null,
+          nationalTeamLabel: null,
           seasonId: null,
           seasonLabel: null,
           type: null,

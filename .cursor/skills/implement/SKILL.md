@@ -25,7 +25,7 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 3. On resume, treat `### Review feedback` and other issue/PR comments as the change request. Do not start a new branch. **Fix the class, not the instance** — if feedback names `ci.yml` missing `JWT_SECRET`, grep every workflow that boots the API; if it names one design-system miss, re-read the lock against the whole UI diff.
 4. One workpad comment. Start: branch from `origin/<lanes.integration>`. One issue, one PR **into that lane**. Title `<teamKey>-n: …`.
 5. Out of scope → `/signal-up` (cap `agent.signalUpCapPerRun`). Ratchet files required by `### Review feedback` are in-scope (`docs/agents/write-scope.md`).
-6. Upload VM screenshots/recordings to this Linear issue, then comment and link under `### Evidence`.
+6. Evidence. A slice whose surface has device-flow evidence: write the slice's own Device flow (`apps/mobile/.maestro/slices/<KEY>.yaml`, from `slices/TEMPLATE.yaml.example`) and, after the PR is open, run `apps/mobile/.maestro/device-run.sh` as `docs/agents/device-flows.md` says (never `local-api.sh`, `build-local.sh` or `run-evidence.sh` by hand; the run queues behind other sessions); the run writes the PR comment, the `Device flows` status and the workpad's `### Evidence`. Any other slice: upload screenshots/recordings to this Linear issue, then comment and link under `### Evidence`.
 7. After the PR is attached **and the pre-review gate passes**: clear addressed review feedback, move to `In Review`. Do not merge. Do not move to `Done`.
 8. If `### Review feedback` required a ratchet, land it in this PR (`docs/agents/error-ratcheting.md`). Tighten only.
 
@@ -37,9 +37,10 @@ Do not move to `In Review` until all of these are true. Record the commands unde
 2. **Roles** — spawn every matching Role (`/tdd`): Frontend, Backend, DevOps. A slice that touches Nest HTTP and Expo screens whose workpad says `(none)` is a process miss. If the issue cites `docs/design-system.md` or named lock components (Search, Sheet, Mark, Banner, Tab bar, Empty state), **Frontend** must run — Backend+DevOps alone is not enough.
 3. **Lane** — `git fetch origin <lanes.integration>` and rebase or merge so `gh pr view --json mergeable` is `MERGEABLE`. Behind the lane is not shippable.
 4. **Tests** — full graph, not only the files you touched. Typecheck every package whose src **or tests** you edited (`pnpm --filter <pkg> typecheck`), not only the client.
-5. **CI** — wait until **every** required GitHub check is green or skipped-by-design. Image/deploy smokes count. Pending **or red** → stay on the branch; do not flip status.
+5. **CI** — wait until **every** required GitHub check is green or skipped-by-design, with `node scripts/wait-for-checks.mjs <pr>` (one blocking command, exit 0 green and MERGEABLE, 1 red, 2 timeout, 3 not mergeable; run it in the background if there is other work). Never the watch flag, a sleep or a loop (the ratchet hook denies them), and never ask the human whether CI is green. Image/deploy smokes count. Pending **or red** → stay on the branch; do not flip status.
 6. **Env class** — if you added a required process env (fail-fast at boot), grep `.github/workflows/**` for every job that `docker run`s or otherwise boots that process, and set the var there too.
-7. **AC evidence** — every acceptance criterion (and every What to build clause) has a Validation command or Evidence screenshot. Ticking the workpad box is not evidence. Spec source is the whole issue body, not AC alone.
+7. **Mechanical checks** — `pnpm check:review-gate` is clean: no Danish identifier or file name added (`scripts/check-code-english.mjs`), and no living doc names a symbol, prop, flow step or path the diff removed or renamed (`scripts/check-doc-references.mjs`). After a rename or removal, grep `docs/`, `CONTEXT.md` and flow comments yourself too: the script only knows what is distinctive.
+8. **AC evidence** — every acceptance criterion (and every What to build clause) has a Validation command or Evidence screenshot. Ticking the workpad box is not evidence. Spec source is the whole issue body, not AC alone.
 
 ## Domain helpers
 

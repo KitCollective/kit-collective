@@ -1,6 +1,6 @@
 import type { IapPlatform } from "@kit/api-contract";
 import { Platform } from "react-native";
-import type { ProductPurchase, Purchase, SubscriptionPurchase } from "react-native-iap";
+import type { Purchase } from "react-native-iap";
 import type {
   StoreBillingClient,
   StoreProductPrice,
@@ -24,16 +24,16 @@ function platformForStore(): IapPlatform {
   return Platform.OS === "ios" ? "apple" : "google";
 }
 
-function purchaseToken(purchase: Purchase | ProductPurchase | SubscriptionPurchase): string {
-  if ("transactionReceipt" in purchase && purchase.transactionReceipt) {
-    return purchase.transactionReceipt;
-  }
+/** KitCollective+ is sold as auto-renewing subscriptions (month and year). */
+const PRODUCT_TYPE = "subs";
 
-  if ("purchaseToken" in purchase && purchase.purchaseToken) {
+/** StoreKit 2 signed transaction (JWS) on iOS, Play purchase token on Android. */
+function purchaseToken(purchase: Purchase): string {
+  if (purchase.purchaseToken) {
     return purchase.purchaseToken;
   }
 
-  throw new Error("Store purchase did not include a receipt token");
+  throw new Error("Store purchase did not include a purchase token");
 }
 
 export class NativeStoreBillingClient implements StoreBillingClient {
@@ -86,10 +86,10 @@ export class NativeStoreBillingClient implements StoreBillingClient {
   async fetchProductPrices(productIds: readonly string[]): Promise<StoreProductPrice[]> {
     const iap = loadIapModule();
     await this.ensureConnected();
-    const products = await iap.getProducts({ skus: [...productIds] });
-    return products.map((product) => ({
-      productId: product.productId,
-      localizedPrice: product.localizedPrice,
+    const products = await iap.fetchProducts({ skus: [...productIds], type: PRODUCT_TYPE });
+    return (products ?? []).map((product) => ({
+      productId: product.id,
+      localizedPrice: product.displayPrice,
     }));
   }
 
@@ -99,7 +99,8 @@ export class NativeStoreBillingClient implements StoreBillingClient {
 
     return new Promise<StorePurchaseResult>((resolve, reject) => {
       this.pending = { resolve, reject, productId };
-      void iap.requestPurchase({ sku: productId }).catch((error: unknown) => {
+      const request = { apple: { sku: productId }, google: { skus: [productId] } };
+      void iap.requestPurchase({ request, type: PRODUCT_TYPE }).catch((error: unknown) => {
         this.pending = null;
         reject(error instanceof Error ? error : new Error("Purchase failed"));
       });

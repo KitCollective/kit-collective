@@ -1,96 +1,30 @@
-import type { VisionJobResponse } from "@kit/api-contract";
-import { KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { Animated, StyleSheet, View } from "react-native";
-import type { ConfirmVisionBannerState } from "@/capture/confirmVisionBanner";
+import { formatCatalogMissBannerMessage } from "@/capture/catalogMissHint";
 import { Banner } from "@/components/catalog-ui";
-import { ConfirmVisionBanner } from "@/components/confirm-vision-banner";
 import { Button } from "@/components/ui";
-import { space } from "@/theme/tokens";
 
 type ConfirmVisionSlotProps = {
-  bannerState: ConfirmVisionBannerState;
-  suggestion: VisionJobResponse | null;
-  groupingMessage?: string | null;
   catalogMiss?: boolean;
-  suggestionOpacity: Animated.Value;
-  onApplySuggestion: () => void;
-  onDismissSuggestion: () => void;
+  catalogMissHint?: string | null;
 };
 
-/** Renders the single Vision slot below Confirm's photo sandbox. */
+/**
+ * What is left of the Vision slot after the Identity block took over the identity result
+ * (design lock: Confirm and Save, Revision 2026-10-09): the catalog-miss note. Renders nothing
+ * otherwise; there is no status banner, and grouping lives on the bulk overview, not here.
+ */
 export function ConfirmVisionSlot({
-  bannerState,
-  suggestion,
-  groupingMessage,
   catalogMiss = false,
-  suggestionOpacity,
-  onApplySuggestion,
-  onDismissSuggestion,
+  catalogMissHint = null,
 }: ConfirmVisionSlotProps) {
-  if (groupingMessage) {
+  if (catalogMiss) {
     return (
-      <Animated.View style={{ opacity: suggestionOpacity }}>
-        <Banner
-          tone="info"
-          message={`Forslag: ${groupingMessage}`}
-          action={
-            <View style={styles.actions}>
-              <Button label="Brug" variant="tertiary" onPress={() => void onApplySuggestion()} />
-              <Button label="Luk" variant="tertiary" onPress={onDismissSuggestion} />
-            </View>
-          }
-        />
-      </Animated.View>
+      <Banner
+        tone="info"
+        message={formatCatalogMissBannerMessage(catalogMissHint)}
+        action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
+      />
     );
   }
 
-  if (!suggestion?.suggestions) {
-    if (catalogMiss) {
-      return (
-        <Banner
-          tone="info"
-          message="Klubben findes ikke i kataloget endnu. Dit draft bliver gemt."
-          action={<Button label="Opgrader (kommer snart)" variant="tertiary" disabled />}
-        />
-      );
-    }
-
-    return <ConfirmVisionBanner state={bannerState} />;
-  }
-
-  const message = [
-    suggestion.suggestions.clubLabel,
-    suggestion.suggestions.seasonLabel,
-    suggestion.suggestions.type ? KIT_TYPE_LABELS_DA[suggestion.suggestions.type] : null,
-    suggestion.suggestions.playerLabel
-      ? suggestion.suggestions.playerNumber
-        ? `${suggestion.suggestions.playerLabel} (Nr. ${suggestion.suggestions.playerNumber})`
-        : suggestion.suggestions.playerLabel
-      : null,
-    suggestion.suggestions.patchLabel,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <Animated.View style={{ opacity: suggestionOpacity }}>
-      <Banner
-        tone="info"
-        message={`Forslag: ${message}`}
-        action={
-          <View style={styles.actions}>
-            <Button label="Brug" variant="tertiary" onPress={() => void onApplySuggestion()} />
-            <Button label="Luk" variant="tertiary" onPress={onDismissSuggestion} />
-          </View>
-        }
-      />
-    </Animated.View>
-  );
+  return null;
 }
-
-const styles = StyleSheet.create({
-  actions: {
-    flexDirection: "row",
-    gap: space.gapSm,
-  },
-});

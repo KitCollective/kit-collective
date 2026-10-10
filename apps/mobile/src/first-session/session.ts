@@ -1,67 +1,68 @@
 export type FirstSessionPlace =
-  | "splash"
-  | "onboard"
-  | "discovery"
+  | "welcome"
+  | "demo"
   | "chooser"
   | "analysing"
+  | "vision-failed"
   | "door"
-  | "verify-email"
-  | "profile"
+  | "code"
   | "jersey-details"
   | "collection"
   | "tab-shell";
 
-export type DoorMode = "login" | "register";
-
-export type IdentitySubmitMethod = "password" | "social";
-
-export type IdentitySubmitKind = "login" | "register";
+/**
+ * How the collector moved on from the Kom i gang sheet: `social` is a provider sign-in, `email`
+ * asks for a code, and `code` is the correct six-digit code. `social` and `code` open a session.
+ */
+export type IdentitySubmitMethod = "social" | "email" | "code";
 
 export type FirstSessionIdentitySession = {
   emailVerified: boolean;
 };
 
+/** The three bundled example jerseys offered on the welcome screen. */
+export type DemoExampleId = "example-1" | "example-2" | "example-3";
+
+/** The screen a door sheet sits on top of. */
+export type DoorOver = "welcome" | "demo" | "analysing" | "vision-failed";
+
 export type FirstSessionState = {
   place: FirstSessionPlace;
-  doorMode: DoorMode | null;
-  doorOverAnalysing: boolean;
-  doorOverOnboard: boolean;
+  doorOver: DoorOver | null;
   hasDraft: boolean;
   captureSessionId: string | null;
+  demoExampleId: DemoExampleId | null;
   identitySession: FirstSessionIdentitySession | null;
   showsTabBar: boolean;
-  skippedDiscovery: boolean;
-  onboardCompleted: boolean;
-  skippedProfile: boolean;
   skippedJerseyDetails: boolean;
+  /** True once an example was shown: only then does Samling say the example was not saved. */
+  sawDemo: boolean;
   jerseysSavedInSession: number;
   resultCollection: boolean;
 };
 
 export type FirstSessionEvent =
-  | { type: "openDoor"; mode: DoorMode }
+  | { type: "openDoor" }
   | { type: "closeDoor" }
-  | { type: "continueFromSplash" }
-  | { type: "completeOnboard" }
-  | { type: "submitIdentity"; method: IdentitySubmitMethod; kind: IdentitySubmitKind }
-  | { type: "dismissVerifyEmail" }
-  | { type: "continueProfile" }
+  | { type: "backFromCode" }
+  | { type: "startDemo"; exampleId: DemoExampleId }
+  | { type: "demoTryAnother" }
+  | { type: "submitIdentity"; method: IdentitySubmitMethod }
   | { type: "saveJersey" }
   | { type: "recordDumpSave" }
   | { type: "startAdd" }
   | { type: "cancelChooser" }
+  | { type: "tryAnotherPhoto" }
   | { type: "photosPicked"; sessionId: string }
   | { type: "visionComplete" }
   | { type: "visionFailed" }
   | { type: "fillSelf" }
-  | { type: "openDoorFromAnalysing"; mode?: DoorMode };
+  | { type: "openDoorFromAnalysing" };
 
-type DoorFields = Pick<FirstSessionState, "doorMode" | "doorOverAnalysing" | "doorOverOnboard">;
+type DoorFields = Pick<FirstSessionState, "doorOver">;
 
 const DOOR_CLOSED: DoorFields = {
-  doorMode: null,
-  doorOverAnalysing: false,
-  doorOverOnboard: false,
+  doorOver: null,
 };
 
 function showsTabBarFor(place: FirstSessionPlace): boolean {
@@ -73,121 +74,99 @@ export function createFirstSession(input: {
   hasDraft?: boolean;
   captureSessionId?: string | null;
 }): FirstSessionState {
-  const place: FirstSessionPlace = input.signedIn ? "tab-shell" : "splash";
+  const place: FirstSessionPlace = input.signedIn ? "tab-shell" : "welcome";
   return {
     ...DOOR_CLOSED,
     place,
     hasDraft: input.hasDraft ?? false,
     captureSessionId: input.captureSessionId ?? null,
+    demoExampleId: null,
     identitySession: null,
     showsTabBar: showsTabBarFor(place),
-    skippedDiscovery: false,
-    onboardCompleted: false,
-    skippedProfile: false,
     skippedJerseyDetails: false,
+    sawDemo: false,
     jerseysSavedInSession: 0,
     resultCollection: false,
   };
 }
 
-const BACKDROP_PLACES = ["splash", "onboard", "discovery", "analysing"] as const;
-
-export type FirstSessionBackdrop = (typeof BACKDROP_PLACES)[number];
-
-/**
- * The screen the door sheet sits on top of, and the screen a dismissed door
- * returns to.
- */
-export function placeBehindDoor(state: FirstSessionState): FirstSessionBackdrop {
-  if (state.doorOverAnalysing) {
-    return "analysing";
-  }
-  if (state.doorOverOnboard) {
-    return "onboard";
-  }
-  if (state.skippedDiscovery) {
-    return "splash";
-  }
-  return "discovery";
-}
+export type FirstSessionBackdrop = DoorOver;
 
 /** The single full-screen surface behind any sheet, or null when a sheet owns the screen. */
 export function firstSessionBackdrop(state: FirstSessionState): FirstSessionBackdrop | null {
   if (state.place === "door") {
-    return placeBehindDoor(state);
+    return state.doorOver ?? "welcome";
   }
-  return BACKDROP_PLACES.find((place) => place === state.place) ?? null;
-}
-
-function identitySkips(
-  state: FirstSessionState,
-  kind: IdentitySubmitKind,
-): Pick<FirstSessionState, "skippedProfile" | "skippedJerseyDetails"> {
-  const skippedJerseyDetails = state.hasDraft ? state.skippedJerseyDetails : true;
-  if (kind === "login" && !state.hasDraft) {
-    return { skippedProfile: true, skippedJerseyDetails: true };
+  if (
+    state.place === "welcome" ||
+    state.place === "demo" ||
+    state.place === "analysing" ||
+    state.place === "vision-failed"
+  ) {
+    return state.place;
   }
-  return { skippedProfile: false, skippedJerseyDetails };
-}
-
-function openDoorFromAnalysing(
-  state: FirstSessionState,
-  mode: DoorMode = "register",
-): FirstSessionState {
-  return {
-    ...state,
-    ...DOOR_CLOSED,
-    place: "door",
-    doorMode: mode,
-    doorOverAnalysing: true,
-  };
-}
-
-function landAfterOnboard(state: FirstSessionState): FirstSessionState {
-  if (state.hasDraft) {
-    return { ...state, place: "jersey-details", skippedJerseyDetails: false };
+  // The source sheet is a sheet over the welcome screen.
+  if (state.place === "chooser") {
+    return "welcome";
   }
-  return { ...state, place: "collection" };
+  return null;
 }
 
+function doorOverFor(state: FirstSessionState): DoorOver {
+  if (state.place === "door" || state.place === "code") {
+    return state.doorOver ?? "welcome";
+  }
+  if (state.place === "demo" || state.place === "analysing" || state.place === "vision-failed") {
+    return state.place;
+  }
+  return "welcome";
+}
+
+function openDoorFromAnalysing(state: FirstSessionState): FirstSessionState {
+  return { ...state, place: "door", doorOver: "analysing" };
+}
+
+/**
+ * A provider sign-in or a correct code lands on jersey details when a draft exists, otherwise on
+ * Samling. An e-mail goes to the code step first and keeps the screen the sheet sat on.
+ */
 function submitIdentity(
   state: FirstSessionState,
   event: Extract<FirstSessionEvent, { type: "submitIdentity" }>,
 ): FirstSessionState {
+  if (event.method === "email") {
+    return { ...state, place: "code", doorOver: doorOverFor(state) };
+  }
+
   const signedIn: FirstSessionState = {
     ...state,
     ...DOOR_CLOSED,
-    ...identitySkips(state, event.kind),
-    identitySession: event.method === "social" ? { emailVerified: true } : state.identitySession,
+    demoExampleId: null,
+    identitySession: { emailVerified: true },
   };
 
-  if (event.method === "password" && event.kind === "register") {
-    return { ...signedIn, place: "verify-email", identitySession: { emailVerified: false } };
-  }
-  if (event.kind === "register") {
-    return { ...signedIn, place: "profile" };
-  }
   if (state.hasDraft) {
     return { ...signedIn, place: "jersey-details", skippedJerseyDetails: false };
   }
-  return { ...signedIn, place: "collection" };
+  return { ...signedIn, place: "collection", skippedJerseyDetails: true };
 }
 
 function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSessionState {
   switch (event.type) {
-    case "continueFromSplash":
-      return { ...state, place: "onboard" };
-    case "completeOnboard": {
-      const seen: FirstSessionState = { ...state, ...DOOR_CLOSED, onboardCompleted: true };
-      if (state.identitySession) {
-        return landAfterOnboard(seen);
-      }
-      return { ...seen, place: "door", doorMode: "register", doorOverOnboard: true };
-    }
+    case "startDemo":
+      return {
+        ...state,
+        ...DOOR_CLOSED,
+        place: "demo",
+        demoExampleId: event.exampleId,
+        sawDemo: true,
+      };
+    case "demoTryAnother":
+      return { ...state, ...DOOR_CLOSED, place: "welcome", demoExampleId: null };
     case "startAdd":
       return { ...state, place: "chooser" };
     case "cancelChooser":
-      return { ...state, place: "discovery" };
+      return { ...state, place: "welcome" };
     case "photosPicked":
       return {
         ...state,
@@ -195,38 +174,29 @@ function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSes
         hasDraft: true,
         captureSessionId: event.sessionId,
       };
+    case "tryAnotherPhoto":
+      return { ...state, place: "chooser", hasDraft: false, captureSessionId: null };
     case "visionComplete":
+      // A late answer never moves a collector who has already left analysing or opened the door.
+      return state.place === "analysing" ? openDoorFromAnalysing(state) : state;
     case "visionFailed":
-      if (state.place === "door" && state.doorOverAnalysing) {
-        return state;
-      }
-      return openDoorFromAnalysing(state);
+      // Vision could not read the jersey: say so and keep the photo. No door yet.
+      return state.place === "analysing" ? { ...state, place: "vision-failed" } : state;
     case "fillSelf":
+      if (state.place === "vision-failed") {
+        return { ...state, place: "door", doorOver: "vision-failed" };
+      }
       return openDoorFromAnalysing(state);
     case "openDoorFromAnalysing":
-      return openDoorFromAnalysing(state, event.mode);
+      return openDoorFromAnalysing(state);
     case "openDoor":
-      return {
-        ...state,
-        place: "door",
-        doorMode: event.mode,
-        doorOverAnalysing: false,
-        // Swapping login/register inside the door keeps the screen behind it.
-        doorOverOnboard: state.place === "door" && state.doorOverOnboard,
-        skippedDiscovery: state.place === "splash" ? true : state.skippedDiscovery,
-        onboardCompleted: event.mode === "login" ? true : state.onboardCompleted,
-      };
+      return { ...state, place: "door", doorOver: doorOverFor(state) };
+    case "backFromCode":
+      return state.place === "code" ? { ...state, place: "door" } : state;
     case "closeDoor":
-      return { ...state, ...DOOR_CLOSED, place: placeBehindDoor(state) };
+      return { ...state, ...DOOR_CLOSED, place: state.doorOver ?? "welcome" };
     case "submitIdentity":
       return submitIdentity(state, event);
-    case "dismissVerifyEmail":
-      return { ...state, ...DOOR_CLOSED, place: "profile" };
-    case "continueProfile":
-      if (!state.onboardCompleted) {
-        return { ...state, place: "onboard" };
-      }
-      return landAfterOnboard(state);
     case "recordDumpSave":
       return { ...state, jerseysSavedInSession: state.jerseysSavedInSession + 1 };
     case "saveJersey":
@@ -242,6 +212,17 @@ function nextPlace(state: FirstSessionState, event: FirstSessionEvent): FirstSes
       return _exhaustive;
     }
   }
+}
+
+/** Where the host sends the collector once the first session ends. */
+export function collectionHref(state: FirstSessionState): string {
+  if (state.resultCollection) {
+    return `/(tabs)/collection?firstSessionResult=1&firstSessionSaved=${state.jerseysSavedInSession}`;
+  }
+  if (state.skippedJerseyDetails && state.sawDemo) {
+    return "/(tabs)/collection?firstSessionArrival=1";
+  }
+  return "/(tabs)/collection";
 }
 
 export function reduceFirstSession(

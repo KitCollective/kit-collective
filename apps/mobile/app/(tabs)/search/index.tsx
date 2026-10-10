@@ -2,6 +2,7 @@ import type {
   CollectionDiscoverHome,
   CollectionDiscoverHomeClub,
   CollectionDiscoverHomeCollector,
+  CollectionDiscoverHomeNationalTeam,
   CollectionDiscoverJersey,
   CollectionDiscoverTypeahead,
 } from "@kit/api-contract";
@@ -121,6 +122,12 @@ function SearchHome() {
     router.push(`/(tabs)/search/club/${club.clubId}?label=${encodeURIComponent(club.clubLabel)}`);
   };
 
+  const openNationalTeamDrill = (team: CollectionDiscoverHomeNationalTeam) => {
+    router.push(
+      `/(tabs)/search/national-team/${team.nationalTeamId}?label=${encodeURIComponent(team.nationalTeamLabel)}`,
+    );
+  };
+
   const openPeerProfile = (collector: CollectionDiscoverHomeCollector) => {
     router.push(`/(tabs)/search/peer/${collector.handle}`);
   };
@@ -156,22 +163,26 @@ function SearchHome() {
   );
 
   const clubs = home.clubs ?? [];
+  const nationalTeams = home.nationalTeams ?? [];
   const openForBid = home.openForBid ?? [];
   const collectors = home.collectors ?? [];
   const moreJerseys = home.moreJerseys ?? [];
   const magazineEmpty =
     clubs.length === 0 &&
+    nationalTeams.length === 0 &&
     openForBid.length === 0 &&
     collectors.length === 0 &&
     moreJerseys.length === 0;
   const searching = query.trim().length > 0;
   const typeaheadClubs = typeahead.clubs ?? [];
+  const typeaheadNationalTeams = typeahead.nationalTeams ?? [];
   const typeaheadKits = typeahead.kits ?? [];
   const typeaheadPlayers = typeahead.players ?? [];
   const typeaheadCollectors = typeahead.collectors ?? [];
   const typeaheadJerseys = typeahead.jerseys ?? [];
   const typeaheadEmpty =
     typeaheadClubs.length === 0 &&
+    typeaheadNationalTeams.length === 0 &&
     typeaheadKits.length === 0 &&
     typeaheadPlayers.length === 0 &&
     typeaheadCollectors.length === 0 &&
@@ -187,6 +198,7 @@ function SearchHome() {
           onChangeText={setQuery}
           placeholder="Søg"
           accessibilityLabel="Søg"
+          testID="search-input"
           onClear={() => setQuery("")}
         />
       </View>
@@ -198,7 +210,7 @@ function SearchHome() {
         typeaheadEmpty ? (
           <EmptyState
             title="Ingen resultater"
-            body="Prøv et andet klub-, kit-, spiller- eller samlernavn."
+            body="Prøv et andet klub-, landsholds-, kit-, spiller- eller samlernavn."
           />
         ) : (
           <ScrollView
@@ -212,7 +224,20 @@ function SearchHome() {
                   <ListRow
                     key={club.clubId}
                     title={club.clubLabel}
+                    testID="typeahead-club-row"
                     onPress={() => openClubDrill(club)}
+                  />
+                ))}
+              </View>
+            ) : null}
+            {typeaheadNationalTeams.length > 0 ? (
+              <View testID="typeahead-national-teams" style={styles.shelf}>
+                <Text style={[typography.section, { color: theme.contentPrimary }]}>Landshold</Text>
+                {typeaheadNationalTeams.map((team) => (
+                  <ListRow
+                    key={team.nationalTeamId}
+                    title={team.nationalTeamLabel}
+                    onPress={() => openNationalTeamDrill(team)}
                   />
                 ))}
               </View>
@@ -317,6 +342,28 @@ function SearchHome() {
                     style={styles.clubMark}
                   >
                     <Mark label={club.clubLabel} size="md" />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+          {nationalTeams.length > 0 ? (
+            <View testID="magazine-shelf-national-teams" style={styles.shelf}>
+              <Text style={[typography.section, { color: theme.contentPrimary }]}>Landshold</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+              >
+                {nationalTeams.map((team) => (
+                  <Pressable
+                    key={team.nationalTeamId}
+                    accessibilityRole="button"
+                    accessibilityLabel={team.nationalTeamLabel}
+                    onPress={() => openNationalTeamDrill(team)}
+                    style={styles.clubMark}
+                  >
+                    <Mark label={team.nationalTeamLabel} size="md" />
                   </Pressable>
                 ))}
               </ScrollView>

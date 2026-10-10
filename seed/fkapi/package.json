@@ -28,7 +28,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "pnpm build && vitest run",
-    "seed": "node dist/cli.js"
+    "seed": "node dist/cli.js",
+    "start:listing": "node dist/listing-http.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",

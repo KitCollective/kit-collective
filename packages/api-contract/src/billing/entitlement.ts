@@ -1,8 +1,22 @@
+import { VISION_MATCHER_JERSEY_CAP } from "@kit/domain";
 import { z } from "zod";
 
 export const entitlementSourceSchema = z.enum(["iap_apple", "iap_google", "trial", "comp"]);
 
 export type EntitlementSource = z.infer<typeof entitlementSourceSchema>;
+
+export const visionMatcherUsageSchema = z
+  .object({
+    used: z.number().int().nonnegative(),
+    cap: z.literal(VISION_MATCHER_JERSEY_CAP),
+    remaining: z.number().int().nonnegative(),
+    unlimited: z.boolean(),
+    /** When the oldest counted run leaves the rolling window and a run frees up. Null when none is counted or the collector is unlimited. */
+    renewsAt: z.string().datetime().nullable(),
+  })
+  .strict();
+
+export type VisionMatcherUsage = z.infer<typeof visionMatcherUsageSchema>;
 
 export const entitlementSchema = z
   .object({
@@ -10,6 +24,7 @@ export const entitlementSchema = z
     source: entitlementSourceSchema.nullable(),
     expires: z.string().datetime().nullable(),
     trialUsed: z.boolean(),
+    visionMatcher: visionMatcherUsageSchema.optional(),
   })
   .strict();
 

@@ -1,20 +1,31 @@
 import type { VisionJobResponse } from "@kit/api-contract";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated } from "react-native";
 import { fetchVisionGroupingJob, startVisionGroupingSuggest } from "@/api/vision-grouping";
 import {
-  acceptPendingGrouping,
   applyGroupingSuggestion,
-  dismissPendingGrouping,
-  sessionPhotoIds,
-  shouldStartGroupingJob,
+  ensureSessionPhotoIds,
+  groupingJobFingerprint,
+  groupingPriorGroups,
+  markGroupingSettled,
 } from "@/capture/captureSession";
 import type { CaptureSessionMutator, CaptureSessionState } from "@/capture/captureSessionTypes";
+import {
+  buildGroupingSuggestRequest,
+  closeGroupingRun,
+  shouldBeginGroupingStart,
+} from "@/capture/groupingSuggestRequest";
 import { readPreparedPhotoBase64 } from "@/capture/photoBytes";
+import { stickySize } from "@/prefs/stickySizeStore";
 import { motion } from "@/theme/tokens";
 
-const GROUPING_TIMEOUT_MS = 12_000;
+const GROUPING_TIMEOUT_MS = 15_000;
 const GROUPING_POLL_INTERVAL_MS = 2_000;
+/** Between two landed groups, so the overview fills row by row rather than all at once. */
+export const GROUPING_ROW_STAGGER_MS = motion.fast;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 type UseConfirmGroupingOptions = {
   accessToken: string | null;
@@ -24,6 +35,11 @@ type UseConfirmGroupingOptions = {
   reduceMotion: boolean;
 };
 
+/**
+ * Runs Vision grouping for the bulk overview and applies every group by its own confidence
+ * (`applyGroupingSuggestion`). Confident groups bind, middling ones become Tjek drafts, weak ones
+ * stay without a jersey. One uncertain group never holds back the others.
+ */
 export function useConfirmGrouping({
   accessToken,
   sessionId,
@@ -32,96 +48,147 @@ export function useConfirmGrouping({
   reduceMotion,
 }: UseConfirmGroupingOptions) {
   const [jobId, setJobId] = useState<string | null>(null);
-  const [polling, setPolling] = useState(false);
-  const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
-  const suggestionOpacity = useRef(new Animated.Value(0)).current;
-  const startAttempted = useRef(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  /** Vision did not answer (timeout or error). A run the collector stopped is not a failure. */
+  const [failed, setFailed] = useState(false);
+  /** Prøv Vision igen bumps this, which makes every earlier failure stale. */
+  const [attempt, setAttempt] = useState(0);
+  const attemptRef = useRef(0);
+  attemptRef.current = attempt;
+  const startedFingerprint = useRef<string | null>(null);
+  const failedFingerprints = useRef(new Set<string>());
+  const appliedJobId = useRef<string | null>(null);
+  const snapshotRef = useRef<CaptureSessionState | null>(state);
+  snapshotRef.current = state;
 
-  const fadeInSuggestion = useCallback(() => {
-    suggestionOpacity.setValue(reduceMotion ? 1 : 0);
-    if (reduceMotion) {
-      return;
-    }
-    Animated.timing(suggestionOpacity, {
-      toValue: 1,
-      duration: motion.fast,
-      useNativeDriver: true,
-    }).start();
-  }, [reduceMotion, suggestionOpacity]);
-
-  const applyJob = useCallback(
-    (job: VisionJobResponse) => {
-      if (job.status !== "ready" || !job.grouping) {
-        return;
-      }
-
-      const preselect = job.preselect === true;
-      if (!preselect) {
-        mutate((current) => {
-          const next = applyGroupingSuggestion(current, job.grouping!, { preselect: false });
-          if (next.groupingDesignGap) {
-            return next;
-          }
-          setSuggestion(job);
-          fadeInSuggestion();
-          return next;
-        });
-        return;
-      }
-
-      mutate((current) => applyGroupingSuggestion(current, job.grouping!, { preselect: true }));
-      setSuggestion(null);
-    },
-    [fadeInSuggestion, mutate],
-  );
+  // No token (Vision off, or signed out) means no grouping job, so nothing waits on one.
+  const jobKey = accessToken && state ? groupingJobFingerprint(state) : null;
 
   useEffect(() => {
-    if (!accessToken || !sessionId || !state || startAttempted.current) {
+    void sessionId;
+    startedFingerprint.current = null;
+    failedFingerprints.current.clear();
+    appliedJobId.current = null;
+    setJobId(null);
+    setAnalyzing(false);
+    setFailed(false);
+  }, [sessionId]);
+
+  const applyGroupingClose = useCallback(
+    (reason: "timeout" | "error" | "skip" | "complete", fingerprint: string | null) => {
+      const close = closeGroupingRun(reason);
+      if (close.failed && fingerprint) {
+        failedFingerprints.current.add(`${fingerprint}#${attemptRef.current}`);
+      }
+      setFailed(close.failed && reason !== "skip");
+      setAnalyzing(close.analyzing);
+    },
+    [],
+  );
+
+  const applyJob = useCallback(
+    async (job: VisionJobResponse): Promise<boolean> => {
+      if (job.status !== "ready") {
+        return false;
+      }
+
+      const groups = job.grouping?.groups ?? [];
+      for (const [index, group] of groups.entries()) {
+        if (index > 0 && !reduceMotion) {
+          await wait(GROUPING_ROW_STAGGER_MS);
+        }
+        mutate((current) =>
+          applyGroupingSuggestion(current, { groups: [group] }, { defaultSize: stickySize.get() }),
+        );
+      }
+      mutate((current) => markGroupingSettled(current));
+      return true;
+    },
+    [mutate, reduceMotion],
+  );
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!accessToken || !sessionId) {
+      return;
+    }
+    if (
+      !shouldBeginGroupingStart({
+        jobKey,
+        analyzing,
+        failed: Boolean(jobKey && failedFingerprints.current.has(`${jobKey}#${attempt}`)),
+      })
+    ) {
+      return;
+    }
+    if (!jobKey) {
       return;
     }
 
-    if (!shouldStartGroupingJob(state)) {
+    const snapshot = snapshotRef.current;
+    if (!snapshot) {
       return;
     }
 
-    let cancelled = false;
+    startedFingerprint.current = jobKey;
+    setFailed(false);
+    setAnalyzing(true);
+
+    const ensured = ensureSessionPhotoIds(snapshot);
+    if (ensured !== snapshot) {
+      snapshotRef.current = ensured;
+      mutate(() => ensured);
+    }
 
     void (async () => {
       try {
-        const photos = await Promise.all(
-          state.unboundUris.map(async (uri) => ({
-            photoId: state.photoIdByUri?.[uri] ?? "",
+        const prepared = await Promise.allSettled(
+          ensured.unboundUris.map(async (uri) => ({
+            photoId: ensured.photoIdByUri?.[uri] ?? "",
             contentBase64: await readPreparedPhotoBase64(uri, "other", "groupingThumb"),
           })),
         );
-
-        const filtered = photos.filter((photo) => photo.photoId.length > 0);
-        if (filtered.length < 2) {
-          return;
-        }
-
-        const nextJobId = await startVisionGroupingSuggest(accessToken, {
+        const photos = prepared
+          .filter(
+            (
+              result,
+            ): result is PromiseFulfilledResult<{ photoId: string; contentBase64: string }> =>
+              result.status === "fulfilled",
+          )
+          .map((result) => result.value);
+        const request = buildGroupingSuggestRequest({
           sessionId,
-          photos: filtered,
+          photos,
+          priorGroups: groupingPriorGroups(ensured),
         });
-        if (cancelled) {
+        if (!request) {
+          if (mountedRef.current) {
+            applyGroupingClose("skip", jobKey);
+          }
           return;
         }
-        startAttempted.current = true;
-        setJobId(nextJobId);
-        setPolling(true);
+
+        const nextJobId = await startVisionGroupingSuggest(accessToken, request);
+        if (mountedRef.current) {
+          setJobId(nextJobId);
+        }
       } catch {
-        // Grouping is optional — Confirm and Save continue independently.
+        if (mountedRef.current) {
+          applyGroupingClose("error", jobKey);
+        }
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken, sessionId, state]);
+  }, [accessToken, analyzing, applyGroupingClose, attempt, jobKey, mutate, sessionId]);
 
   useEffect(() => {
-    if (!accessToken || !jobId || !polling) {
+    if (!accessToken || !jobId || !analyzing) {
       return;
     }
 
@@ -131,7 +198,8 @@ export function useConfirmGrouping({
     const poll = async () => {
       if (Date.now() - startedAt >= GROUPING_TIMEOUT_MS) {
         if (!cancelled) {
-          setPolling(false);
+          applyGroupingClose("timeout", startedFingerprint.current);
+          setJobId(null);
         }
         return;
       }
@@ -141,12 +209,20 @@ export function useConfirmGrouping({
         if (cancelled || job.status === "pending") {
           return;
         }
+        if (appliedJobId.current === job.jobId) {
+          return;
+        }
+        appliedJobId.current = job.jobId;
 
-        setPolling(false);
-        applyJob(job);
+        const applied = await applyJob(job);
+        if (!cancelled) {
+          applyGroupingClose(applied ? "complete" : "error", startedFingerprint.current);
+          setJobId(null);
+        }
       } catch {
         if (!cancelled) {
-          setPolling(false);
+          applyGroupingClose("error", startedFingerprint.current);
+          setJobId(null);
         }
       }
     };
@@ -158,33 +234,22 @@ export function useConfirmGrouping({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [accessToken, applyJob, jobId, polling]);
+  }, [accessToken, applyGroupingClose, applyJob, analyzing, jobId]);
 
-  const applySuggestion = useCallback(() => {
-    mutate((current) => acceptPendingGrouping(current));
-    setSuggestion(null);
-  }, [mutate]);
+  /** Sortér selv i stedet: stop waiting for Vision. The photos stay without a jersey. */
+  const stop = useCallback(() => {
+    appliedJobId.current = null;
+    setJobId(null);
+    applyGroupingClose("skip", startedFingerprint.current);
+    mutate((current) => markGroupingSettled(current));
+  }, [applyGroupingClose, mutate]);
 
-  const dismissSuggestion = useCallback(() => {
-    mutate((current) => dismissPendingGrouping(current));
-    setSuggestion(null);
-  }, [mutate]);
+  /** Prøv Vision igen: forget the failed run and ask again. */
+  const retry = useCallback(() => {
+    appliedJobId.current = null;
+    setFailed(false);
+    setAttempt((current) => current + 1);
+  }, []);
 
-  const groupingMessage =
-    state?.groupingDesignGap || (suggestion?.grouping && suggestion.grouping.groups.length > 1)
-      ? null
-      : suggestion?.grouping
-        ? "Trøje foreslået"
-        : null;
-
-  return {
-    analyzing: polling,
-    suggestion,
-    suggestionOpacity,
-    groupingMessage,
-    groupingDesignGap: state?.groupingDesignGap === true,
-    applySuggestion,
-    dismissSuggestion,
-    sessionPhotoIds: state ? sessionPhotoIds(state) : [],
-  };
+  return { analyzing, failed, stop, retry };
 }

@@ -57,7 +57,6 @@ type SheetProps = {
   children: ReactNode;
   variant?: SheetVariant;
   sentence?: string;
-  titleContent?: ReactNode;
   headerAction?: ReactNode;
   onBack?: () => void;
   /**
@@ -79,7 +78,6 @@ export function Sheet({
   children,
   variant = "form",
   sentence,
-  titleContent,
   headerAction,
   onBack,
   onModalHide,
@@ -161,20 +159,12 @@ export function Sheet({
                   ) : null}
                 </View>
               )}
-              {titleContent ? (
-                <View style={styles.sheetTitleRegion}>{titleContent}</View>
-              ) : (
-                <Text
-                  accessibilityRole="header"
-                  style={[
-                    typography.title,
-                    styles.sheetTitleRegion,
-                    { color: theme.contentPrimary },
-                  ]}
-                >
-                  {title}
-                </Text>
-              )}
+              <Text
+                accessibilityRole="header"
+                style={[typography.title, styles.sheetTitleRegion, { color: theme.contentPrimary }]}
+              >
+                {title}
+              </Text>
               {sentence ? (
                 <Text
                   style={[typography.body, styles.sheetSentence, { color: theme.contentSecondary }]}

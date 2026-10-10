@@ -1,0 +1,325 @@
+{
+  "ranAt": "2026-09-16T22:50+01",
+  "endpoint": "POST /v1/collection/vision/suggest",
+  "verdicts": {
+    "KIT-248": "PASS",
+    "KIT-249": "PARTIAL",
+    "KIT-250": "PASS"
+  },
+  "scored": {
+    "KIT-248": {
+      "j1-juventus-pink-away": {
+        "status": "ready",
+        "club": true,
+        "season": true,
+        "type": false,
+        "player": false,
+        "labels": {
+          "clubLabel": "Juventus FC",
+          "seasonLabel": "2015/16"
+        },
+        "enriched": true
+      },
+      "j5-arsenal-red-home-125": {
+        "status": "ready",
+        "club": true,
+        "season": false,
+        "type": false,
+        "player": false,
+        "labels": {
+          "clubLabel": "Arsenal Football Club"
+        },
+        "enriched": false
+      },
+      "j8-psg-white-jordan": {
+        "status": "ready",
+        "club": true,
+        "season": true,
+        "type": false,
+        "player": false,
+        "labels": {
+          "clubLabel": "Paris Saint-Germain",
+          "seasonLabel": "2019/20"
+        },
+        "enriched": true
+      },
+      "j17-mancity-sky-home": {
+        "status": "ready",
+        "club": true,
+        "season": true,
+        "type": false,
+        "player": false,
+        "labels": {
+          "clubLabel": "Manchester City",
+          "seasonLabel": "2022/23"
+        },
+        "enriched": true
+      }
+    },
+    "KIT-249": {
+      "j14-argentina-home-2006": {
+        "status": "ready",
+        "mapped_nt": false,
+        "nt_label": null,
+        "miss": true,
+        "ntHint": "Argentina",
+        "clubHint": null
+      },
+      "j2-italy-blue-home": {
+        "status": "ready",
+        "mapped_nt": false,
+        "nt_label": null,
+        "miss": true,
+        "ntHint": "Italy",
+        "clubHint": null
+      }
+    },
+    "KIT-250": {
+      "j10-barca-salmon-third": {
+        "status": "ready",
+        "miss": true,
+        "clubHint": null,
+        "ntHint": "FC Barcelona",
+        "has_hint": true
+      }
+    }
+  },
+  "results": [
+    {
+      "jerseyId": "j1-juventus-pink-away",
+      "file": "1C06E22F-FBA4-4EE3-B8B5-A5E4C41C61C1.jpg",
+      "angle": "front",
+      "expectClub": "Juventus",
+      "expectSeason": "2015/16",
+      "expectType": "away",
+      "expectPlayer": "Dybala",
+      "expectNT": false,
+      "status": "ready",
+      "preselect": true,
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true
+      },
+      "catalogMiss": null,
+      "catalogLikely": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {
+        "clubId": "764918f7-6603-4c18-8d1b-c7e26d665330",
+        "clubLabel": "Juventus FC",
+        "seasonId": "8d3832c9-6e72-4e34-86b3-cab1ce3bc046",
+        "seasonLabel": "2015/16"
+      },
+      "jobId": "78babd3e-ea7f-4953-be5f-b43b3aaa65c9",
+      "secs": 5.1,
+      "rawKeys": [
+        "fieldPreselect",
+        "jobId",
+        "kind",
+        "preselect",
+        "status",
+        "suggestions"
+      ]
+    },
+    {
+      "jerseyId": "j5-arsenal-red-home-125",
+      "file": "B3EAFB76-FCD3-4EBC-B5AA-21F50D45DC42.jpg",
+      "angle": "front",
+      "expectClub": "Arsenal",
+      "expectSeason": "2011/12",
+      "expectType": "home",
+      "expectPlayer": "Henry",
+      "expectNT": false,
+      "status": "ready",
+      "preselect": true,
+      "fieldPreselect": {
+        "club": true,
+        "type": true
+      },
+      "catalogMiss": null,
+      "catalogLikely": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {
+        "clubId": "a4e0de3e-f499-4e8c-8615-0f90137782bc",
+        "clubLabel": "Arsenal Football Club"
+      },
+      "jobId": "f8d747e9-7c6d-4f66-9762-35cc760e8bcd",
+      "secs": 3.2,
+      "rawKeys": [
+        "fieldPreselect",
+        "jobId",
+        "kind",
+        "preselect",
+        "status",
+        "suggestions"
+      ]
+    },
+    {
+      "jerseyId": "j8-psg-white-jordan",
+      "file": "3F0DDC28-5C7D-4009-A802-0FDCB5027F25.jpg",
+      "angle": "front",
+      "expectClub": "Paris Saint-Germain",
+      "expectSeason": "2018/19",
+      "expectType": "away",
+      "expectPlayer": "Neymar Jr",
+      "expectNT": false,
+      "status": "ready",
+      "preselect": true,
+      "fieldPreselect": {
+        "club": true,
+        "season": true
+      },
+      "catalogMiss": null,
+      "catalogLikely": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {
+        "clubId": "e4b6aab6-3869-44d4-aefc-3aa69fc805d6",
+        "clubLabel": "Paris Saint-Germain",
+        "seasonId": "7947b9a3-b408-4d48-b9f6-fc00b4467934",
+        "seasonLabel": "2019/20"
+      },
+      "jobId": "db6717eb-28c9-4e74-b1bc-7c15fff20bd7",
+      "secs": 3.3,
+      "rawKeys": [
+        "fieldPreselect",
+        "jobId",
+        "kind",
+        "preselect",
+        "status",
+        "suggestions"
+      ]
+    },
+    {
+      "jerseyId": "j17-mancity-sky-home",
+      "file": "IMG_9173.jpg",
+      "angle": "front",
+      "expectClub": "Manchester City",
+      "expectSeason": "2022/23",
+      "expectType": "home",
+      "expectPlayer": "Haaland",
+      "expectNT": false,
+      "status": "ready",
+      "preselect": true,
+      "fieldPreselect": {
+        "club": true,
+        "season": true,
+        "type": true
+      },
+      "catalogMiss": null,
+      "catalogLikely": null,
+      "clubHint": null,
+      "nationalTeamHint": null,
+      "suggestions": {
+        "clubId": "5882d356-6045-419d-bdfe-6e3af7a1a37a",
+        "clubLabel": "Manchester City",
+        "seasonId": "9ff764b4-a0f5-45c2-a976-d3365892e0d1",
+        "seasonLabel": "2022/23"
+      },
+      "jobId": "d82a38c8-87bb-4849-aedd-06988ab3a492",
+      "secs": 5.7,
+      "rawKeys": [
+        "fieldPreselect",
+        "jobId",
+        "kind",
+        "preselect",
+        "status",
+        "suggestions"
+      ]
+    },
+    {
+      "jerseyId": "j14-argentina-home-2006",
+      "file": "IMG_5790.jpg",
+      "angle": "front",
+      "expectClub": "Argentina",
+      "expectSeason": "2006",
+      "expectType": "home",
+      "expectPlayer": "Messi",
+      "expectNT": true,
+      "status": "ready",
+      "preselect": false,
+      "fieldPreselect": null,
+      "catalogMiss": true,
+      "catalogLikely": false,
+      "clubHint": null,
+      "nationalTeamHint": "Argentina",
+      "suggestions": {},
+      "jobId": "dad409d3-07e1-495b-a13e-2bf93983ebe5",
+      "secs": 3.2,
+      "rawKeys": [
+        "catalogLikely",
+        "catalogMiss",
+        "jobId",
+        "kind",
+        "nationalTeamHint",
+        "preselect",
+        "status"
+      ]
+    },
+    {
+      "jerseyId": "j2-italy-blue-home",
+      "file": "155CCAF9-0C8D-4833-8279-C813A0155479.jpg",
+      "angle": "front",
+      "expectClub": "Italy",
+      "expectSeason": "2006",
+      "expectType": "home",
+      "expectPlayer": "Pirlo",
+      "expectNT": true,
+      "status": "ready",
+      "preselect": false,
+      "fieldPreselect": null,
+      "catalogMiss": true,
+      "catalogLikely": false,
+      "clubHint": null,
+      "nationalTeamHint": "Italy",
+      "suggestions": {},
+      "jobId": "9126efb0-68e3-4883-a55b-106302e6d730",
+      "secs": 3.2,
+      "rawKeys": [
+        "catalogLikely",
+        "catalogMiss",
+        "jobId",
+        "kind",
+        "nationalTeamHint",
+        "preselect",
+        "status"
+      ]
+    },
+    {
+      "jerseyId": "j10-barca-salmon-third",
+      "file": "4FB86A65-D3A7-44B7-873F-EFA6EA08CD2F.jpg",
+      "angle": "front",
+      "expectClub": "FC Barcelona",
+      "expectSeason": "2018/19",
+      "expectType": "third",
+      "expectPlayer": "Messi",
+      "expectNT": false,
+      "status": "ready",
+      "preselect": false,
+      "fieldPreselect": null,
+      "catalogMiss": true,
+      "catalogLikely": null,
+      "clubHint": null,
+      "nationalTeamHint": "FC Barcelona",
+      "suggestions": {},
+      "jobId": "dea5ce5a-526e-422d-a7a0-0cd74d97dc82",
+      "secs": 3.8,
+      "rawKeys": [
+        "catalogMiss",
+        "jobId",
+        "kind",
+        "nationalTeamHint",
+        "preselect",
+        "status"
+      ]
+    }
+  ],
+  "groupingSmokeA": {
+    "jobId": "28c5e962-0ad7-4bb1-9f64-b94f35414eeb",
+    "status": "ready",
+    "groups": null,
+    "groupCount": 0
+  }
+}

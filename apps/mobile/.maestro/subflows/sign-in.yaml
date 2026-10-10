@@ -1,0 +1,46 @@
+# Cold start, known test data, signed in through the Kom i gang sheet with the e-mail code.
+# Callers pass EMAIL (the collector's address). There is no password on this path.
+appId: app.kitcollective.mobile
+---
+- runScript:
+    file: ../scripts/reset-test-data.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- tapOn:
+    id: welcome-have-account
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 10000
+- tapOn:
+    id: door-email
+- inputText: ${EMAIL}
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-screen
+    timeout: 10000
+# The local API's recording mailer holds the code; the sixth digit submits by itself.
+- runScript:
+    file: ../scripts/sign-in-code.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+      EMAIL: ${EMAIL}
+      EXPIRE: "false"
+- inputText: ${output.code}
+- extendedWaitUntil:
+    visible:
+      id: collection-add
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000

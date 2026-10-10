@@ -3,8 +3,8 @@
 **Vendor:** Transfermarkt (Kader fetch / Opt-in Apify / fixtures)  
 **Field catalog (accept):** [`.scratch/football-data-seed/field-catalog.md`](../../.scratch/football-data-seed/field-catalog.md)  
 **Postgres landing:** [`.scratch/football-data-seed/schema-gap.md`](../../.scratch/football-data-seed/schema-gap.md)  
-**Forbidden (ADR-0002):** market value, agent PII, TM branding (`tmLogoUrl`, crests, profile URLs as product assets).  
-**Seed proxy (Decodo):** required for live Transfermarkt from Coolify / `kc_seed_mcp` — **TM only**. Never point Decodo at Football Kit Archive.  
+**Forbidden (ADR-0002):** market value, agent PII, TM branding URLs (`tmLogoUrl`, profile URLs as product assets). Club/league/honour **bytes** may land on `catalog_mark` (admin_only), never as hot-linked TM URLs.  
+**Seed proxy (Decodo):** required for live Transfermarkt from Coolify (`SEED_REQUIRE_PROXY`) — **TM only**. Desktop grain uses the local IP by default (ADR-0042). Never point Decodo at Football Kit Archive.  
 **Breadth for first proof:** Superliga 2010/11 (`DK1`, `saison_id=2010`); Denmark men World Cup 2010 path (`verein/3436`, `saison_id=2010`).
 
 This file is the seed-module interface for Transfermarkt grains. Not Nest OpenAPI. Not `/v1` seed.
@@ -77,7 +77,7 @@ This file is the seed-module interface for Transfermarkt grains. Not Nest OpenAP
 
 Already seeded: skip fetch when that club+season already has a squad with jersey numbers (and Rich grain body fields once those land).
 
-Portrait bytes on a kader row persist as **Player photo** (`player/{externalId}/portrait`, `rights: unresolved`). Grain CLI and walk use `SEED_OBJECT_DIR` as the lane object-store stand-in (same keys as R2). Inject `portraitStore` in tests.
+Portrait bytes on a kader row persist as **Player photo** (`player/{externalId}/portrait`, `rights: unresolved`). Grain CLI and walk use `createR2ObjectStore` when `R2_*` is set (same SigV4 client as FK kit photos). `SEED_OBJECT_DIR` is the local/CI stand-in when R2 is unset. Inject `portraitStore` in tests.
 
 ---
 

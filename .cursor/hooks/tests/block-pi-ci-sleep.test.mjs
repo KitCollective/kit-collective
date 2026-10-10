@@ -44,6 +44,14 @@ test("denies sleep chained with gh pr checks", () => {
   assert.match(result.message, /do not sleep or poll/i);
 });
 
+test("allows the sanctioned blocking wait and points to it when denying", () => {
+  const allowed = runHook("node scripts/wait-for-checks.mjs 285 --timeout 1800");
+  assert.equal(allowed.permission, "allow");
+  const denied = runHook("gh pr checks 285 --watch");
+  assert.equal(denied.permission, "deny");
+  assert.match(denied.message, /scripts\/wait-for-checks\.mjs/);
+});
+
 test("denies gh pr checks --watch", () => {
   const result = runHook("gh pr checks 131 --watch");
   assert.equal(result.permission, "deny");

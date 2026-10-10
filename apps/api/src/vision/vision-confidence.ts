@@ -1,11 +1,14 @@
 import {
   VISION_CONFIDENCE_PRESELECT,
   VISION_CONFIDENCE_SUGGEST,
+  type VisionEvalEntityHints,
   type VisionFieldPreselect,
   type VisionJobStatus,
   type VisionSuggestions,
 } from "@kit/api-contract";
+import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
+import { collectClubHints, isLikelyNationalTeamHint } from "./vision-kit-lock.js";
 
 export function serializeConfidences(confidences: VisionFieldConfidences): string {
   return JSON.stringify(confidences);
@@ -29,6 +32,7 @@ export function parseConfidences(raw: string | null | undefined): VisionFieldCon
     return {
       overall: parsed.overall,
       club: typeof parsed.club === "number" ? parsed.club : undefined,
+      nationalTeam: typeof parsed.nationalTeam === "number" ? parsed.nationalTeam : undefined,
       season: typeof parsed.season === "number" ? parsed.season : undefined,
       kitType: typeof parsed.kitType === "number" ? parsed.kitType : undefined,
       player: typeof parsed.player === "number" ? parsed.player : undefined,
@@ -50,6 +54,33 @@ export function computeOverallConfidence(modelConfidence: number | undefined): n
   }
 
   return Math.round(modelConfidence * 100);
+}
+
+/**
+ * Blend model field confidence with catalog match scores.
+ * Missing model score keeps the match score (legacy overall-only payloads).
+ * Strong catalog matches (≥ suggest) sustain the field when the model under-reports.
+ * Weak catalog matches still cap via min() so fuzzy ILIKE cannot inflate guesses.
+ */
+export function combineModelAndMatchConfidence(
+  model01: number | undefined,
+  matchScore: number | undefined,
+): number | undefined {
+  if (model01 === undefined) {
+    return matchScore;
+  }
+
+  const modelPct = computeOverallConfidence(model01);
+  if (matchScore === undefined) {
+    return modelPct;
+  }
+
+  // Strong catalog evidence sustains suggest/preselect when the model under-reports the field.
+  if (matchScore >= VISION_CONFIDENCE_SUGGEST) {
+    return Math.max(modelPct, matchScore);
+  }
+
+  return Math.min(modelPct, matchScore);
 }
 
 export function shouldPreselect(confidences: VisionFieldConfidences | null): boolean {
@@ -81,15 +112,54 @@ export function resolveFieldGate(
   return "omit";
 }
 
+function resolveGateConfidence(
+  fieldScore: number | undefined,
+  overall: number | undefined,
+  allowOverallFallback: boolean,
+): number | undefined {
+  if (
+    allowOverallFallback &&
+    fieldScore !== undefined &&
+    fieldScore < VISION_CONFIDENCE_SUGGEST &&
+    overall !== undefined &&
+    overall >= VISION_CONFIDENCE_SUGGEST
+  ) {
+    return overall;
+  }
+
+  return fieldScore ?? overall;
+}
+
 export type ResolvedIdentityJob = {
   status: VisionJobStatus;
   suggestions?: VisionSuggestions;
   fieldPreselect?: VisionFieldPreselect;
   catalogMiss: boolean;
+  /** False when a national-team hint missed catalog coverage; omit when side likely exists. */
+  catalogLikely?: boolean;
+  /** Raw model side hint(s) when catalogMiss — non-id seeds for Confirm search. */
+  clubHint?: string;
+  nationalTeamHint?: string;
   /** Overall preselect for legacy clients — true when any field preselects. */
   preselect: boolean;
   storedResult: VisionInferenceResult | null;
 };
+
+export function resolveCatalogMissHints(result: VisionInferenceResult): {
+  clubHint?: string;
+  nationalTeamHint?: string;
+} {
+  const hint = result.clubHint?.trim() || parseClubHintFromVisionRaw(result.visionRaw);
+  if (!hint) {
+    return {};
+  }
+
+  if (isLikelyNationalTeamHint([hint])) {
+    return { nationalTeamHint: hint };
+  }
+
+  return { clubHint: hint };
+}
 
 export function parseClubHintFromVisionRaw(raw: string | null | undefined): string | undefined {
   if (!raw) {
@@ -98,14 +168,155 @@ export function parseClubHintFromVisionRaw(raw: string | null | undefined): stri
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (isRecord(parsed) && typeof parsed.clubHint === "string") {
-      return parsed.clubHint;
+    if (!isRecord(parsed)) {
+      return undefined;
+    }
+    const clubHint = nonemptyString(parsed.clubHint);
+    if (clubHint) {
+      return clubHint;
+    }
+    if (Array.isArray(parsed.clubHintAlts)) {
+      for (const alt of parsed.clubHintAlts) {
+        const hint = nonemptyString(alt);
+        if (hint) {
+          return hint;
+        }
+      }
     }
   } catch {
     return undefined;
   }
 
   return undefined;
+}
+
+export function parseVisionEvalHints(raw: string | null | undefined): VisionEvalEntityHints {
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      return {};
+    }
+
+    const side: string[] = [];
+    const clubHint = nonemptyString(parsed.clubHint);
+    if (clubHint) {
+      side.push(clubHint);
+    }
+    if (Array.isArray(parsed.clubHintAlts)) {
+      for (const alt of parsed.clubHintAlts) {
+        const hint = nonemptyString(alt);
+        if (hint) {
+          side.push(hint);
+        }
+      }
+    }
+
+    const hints: VisionEvalEntityHints = {};
+    if (side.length > 0) {
+      hints.side = side;
+    }
+    const playerHint = nonemptyString(parsed.playerHint);
+    if (playerHint) {
+      hints.player = [playerHint];
+    }
+    const patchHint = nonemptyString(parsed.patchHint);
+    if (patchHint) {
+      hints.patch = [patchHint];
+    }
+    return hints;
+  } catch {
+    return {};
+  }
+}
+
+export type VisionEvalPhotoMeta = {
+  photoCount: number;
+  photoBytes: number[];
+  photoFingerprint: string;
+};
+
+export function encodeVisionEvalRaw(
+  hints: IdentityVisionHints,
+  kitHitCount?: number,
+  photos?: VisionEvalPhotoMeta,
+): string {
+  return JSON.stringify({
+    ...hints,
+    ...(kitHitCount === undefined ? {} : { kitHitCount }),
+    ...(photos ?? {}),
+  });
+}
+
+export function parseZeroKitHits(raw: string | null | undefined): boolean {
+  if (!raw) {
+    return false;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
+      return false;
+    }
+    if (typeof parsed.kitHitCount === "number") {
+      return parsed.kitHitCount === 0;
+    }
+    if (Array.isArray(parsed.kitHits)) {
+      return parsed.kitHits.length === 0;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+function nonemptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function sideHintsFromResult(result: VisionInferenceResult): string[] {
+  const fromRaw = parseClubHintFromVisionRaw(result.visionRaw);
+  return collectClubHints({
+    clubHint: result.clubHint ?? fromRaw,
+    clubHintAlts: parseClubHintAltsFromVisionRaw(result.visionRaw),
+  });
+}
+
+function hadSideCatalogHint(result: VisionInferenceResult): boolean {
+  return sideHintsFromResult(result).length > 0;
+}
+
+export function parseClubHintAltsFromVisionRaw(raw: string | null | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || !Array.isArray(parsed.clubHintAlts)) {
+      return [];
+    }
+    return parsed.clubHintAlts
+      .map((alt) => (typeof alt === "string" && alt.trim() ? alt.trim() : undefined))
+      .filter((alt): alt is string => Boolean(alt));
+  } catch {
+    return [];
+  }
+}
+
+export function catalogMissSideLabels(result: VisionInferenceResult): VisionSuggestions {
+  const hints = sideHintsFromResult(result);
+  const primary = hints[0];
+  if (!primary) {
+    return {};
+  }
+  if (isLikelyNationalTeamHint(hints)) {
+    return { nationalTeamLabel: primary };
+  }
+  return { clubLabel: primary };
 }
 
 export function resolveIdentityJob(result: VisionInferenceResult | null): ResolvedIdentityJob {
@@ -123,16 +334,25 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     confidences?.club ?? confidences?.overall,
     Boolean(result.clubId),
   );
+  const nationalTeamGate = resolveFieldGate(
+    confidences?.nationalTeam ?? confidences?.overall,
+    Boolean(result.nationalTeamId),
+  );
   const seasonGate = resolveFieldGate(
     confidences?.season ?? confidences?.overall,
     Boolean(result.seasonId),
   );
+  /** kitType is a free enum when catalogKitId is absent — fall back to overall when field score is weak. */
   const typeGate = resolveFieldGate(
-    confidences?.kitType ?? confidences?.overall,
-    Boolean(result.catalogKitId),
+    resolveGateConfidence(
+      confidences?.kitType,
+      confidences?.overall,
+      Boolean(result.type && !result.catalogKitId),
+    ),
+    Boolean(result.type),
   );
   const playerGate = resolveFieldGate(
-    confidences?.player ?? confidences?.overall,
+    resolveGateConfidence(confidences?.player, confidences?.overall, Boolean(result.playerId)),
     Boolean(result.playerId),
   );
   const badgeGate = resolveFieldGate(
@@ -140,7 +360,12 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     Boolean(result.patchId),
   );
 
-  const catalogMiss = Boolean(result.clubHint && !result.clubId);
+  const catalogMiss = Boolean(
+    hadSideCatalogHint(result) && !result.clubId && !result.nationalTeamId && !result.catalogKitId,
+  );
+  const catalogLikely =
+    catalogMiss && isLikelyNationalTeamHint(sideHintsFromResult(result)) ? false : undefined;
+  const catalogMissHints = catalogMiss ? resolveCatalogMissHints(result) : {};
 
   const suggestions: VisionSuggestions = {};
   const fieldPreselect: VisionFieldPreselect = {};
@@ -152,6 +377,13 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     }
   }
 
+  if (nationalTeamGate !== "omit" && result.nationalTeamId) {
+    suggestions.nationalTeamId = result.nationalTeamId;
+    if (nationalTeamGate === "preselect") {
+      fieldPreselect.nationalTeam = true;
+    }
+  }
+
   if (seasonGate !== "omit" && result.seasonId) {
     suggestions.seasonId = result.seasonId;
     if (seasonGate === "preselect") {
@@ -159,7 +391,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
     }
   }
 
-  if (typeGate !== "omit" && result.type && result.catalogKitId) {
+  if (typeGate !== "omit" && result.type) {
     suggestions.type = result.type;
     if (typeGate === "preselect") {
       fieldPreselect.type = true;
@@ -189,6 +421,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
 
   const hasSuggestion = Boolean(
     suggestions.clubId ||
+      suggestions.nationalTeamId ||
       suggestions.seasonId ||
       suggestions.type ||
       suggestions.catalogKitId ||
@@ -196,7 +429,12 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
       suggestions.patchId,
   );
 
-  if (!hasSuggestion && !catalogMiss) {
+  const missLabels = catalogMiss && !hasSuggestion ? catalogMissSideLabels(result) : {};
+  const hasMissLabel = Boolean(missLabels.clubLabel || missLabels.nationalTeamLabel);
+  const mergedSuggestions = hasSuggestion ? suggestions : hasMissLabel ? missLabels : undefined;
+  const hasAnySuggestion = hasSuggestion || hasMissLabel;
+
+  if (!hasAnySuggestion && !catalogMiss) {
     return {
       status: "noop",
       catalogMiss,
@@ -213,6 +451,7 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
 
   const preselect = Boolean(
     fieldPreselect.club ||
+      fieldPreselect.nationalTeam ||
       fieldPreselect.season ||
       fieldPreselect.type ||
       fieldPreselect.player ||
@@ -220,10 +459,13 @@ export function resolveIdentityJob(result: VisionInferenceResult | null): Resolv
   );
 
   return {
-    status: hasSuggestion || catalogMiss ? "ready" : "noop",
-    suggestions: hasSuggestion ? suggestions : undefined,
+    status: hasAnySuggestion || catalogMiss ? "ready" : "noop",
+    suggestions: mergedSuggestions,
     fieldPreselect: hasSuggestion ? fieldPreselect : undefined,
     catalogMiss,
+    catalogLikely,
+    clubHint: catalogMissHints.clubHint,
+    nationalTeamHint: catalogMissHints.nationalTeamHint,
     preselect,
     storedResult: result,
   };

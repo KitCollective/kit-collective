@@ -7,17 +7,34 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
 
+function liveEnv(): void {
+  delete process.env.SEED_APIFY_FIXTURE;
+  delete process.env.SEED_KADER_HTML;
+  delete process.env.SEED_APIFY_RECORDINGS;
+  delete process.env.APIFY_TOKEN;
+  delete process.env.SEED_FETCH;
+  delete process.env.SEED_PROXY_URL;
+  delete process.env.SEED_REQUIRE_PROXY;
+  delete process.env.SEED_TM_TRANSPORT;
+}
+
 describe("resolveFetchAdapter", () => {
-  it("defaults to kader fetch when no env is set", async () => {
-    delete process.env.SEED_APIFY_FIXTURE;
-    delete process.env.SEED_KADER_HTML;
-    delete process.env.SEED_APIFY_RECORDINGS;
-    delete process.env.APIFY_TOKEN;
-    delete process.env.SEED_FETCH;
+  it("refuses kader fetch when no env names a transport", async () => {
+    liveEnv();
+
+    await expect(resolveFetchAdapter()).rejects.toThrow(
+      /Refusing to fetch from this machine's IP by default/,
+    );
+  });
+
+  it("selects kader fetch once the transport is named", async () => {
+    liveEnv();
+    process.env.SEED_TM_TRANSPORT = "direct";
 
     const resolved = await resolveFetchAdapter();
-    expect(resolved).toBeDefined();
     expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
+    expect(resolved.transport).toBe("direct");
+    await resolved.close?.();
   });
 
   it("uses nested fixture adapter when SEED_APIFY_FIXTURE is set", async () => {
@@ -33,11 +50,14 @@ describe("resolveFetchAdapter", () => {
   });
 
   it("uses kader fetch by default even when SEED_APIFY_RECORDINGS is set", async () => {
+    liveEnv();
     process.env.SEED_APIFY_RECORDINGS = "/tmp/actor-recordings";
-    delete process.env.SEED_FETCH;
+    process.env.SEED_TM_TRANSPORT = "direct";
 
     const resolved = await resolveFetchAdapter();
     expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
+    expect(resolved.transport).toBe("direct");
+    await resolved.close?.();
   });
 
   it("uses Apify recordings only when SEED_FETCH=apify", async () => {
@@ -57,10 +77,13 @@ describe("resolveFetchAdapter", () => {
   });
 
   it("does not select Apify when only APIFY_TOKEN is set", async () => {
+    liveEnv();
     process.env.APIFY_TOKEN = "test-token";
-    delete process.env.SEED_FETCH;
+    process.env.SEED_TM_TRANSPORT = "direct";
 
     const resolved = await resolveFetchAdapter();
     expect(resolved.adapter.fetchClubSeason).toBeTypeOf("function");
+    expect(resolved.transport).toBe("direct");
+    await resolved.close?.();
   });
 });

@@ -185,7 +185,36 @@ describe("kader fetch adapter from recorded HTML", () => {
     expect(competitionFetches).toBe(1);
   });
 
-  it("searches Transfermarkt for Premier League, then walks clubs on GB1", async () => {
+  it("resolves a catalogued league without touching the search page", async () => {
+    const competitionHtml = readFileSync(
+      path.join(fixturesDir, "competitions/DK1-2015.html"),
+      "utf8",
+    );
+    const fetched: string[] = [];
+
+    const adapter = createKaderFetchAdapter({
+      ...FAST_LIVE_FETCH,
+      fetchHtml: async (url) => {
+        fetched.push(url);
+        if (url.includes("/wettbewerb/GB1/")) {
+          expect(url).toContain("/premier-league/startseite/wettbewerb/GB1");
+          return competitionHtml;
+        }
+        throw new Error(`unexpected live fetch: ${url}`);
+      },
+    });
+
+    const pairs = await adapter.listClubSeasonPairs({
+      competition: "Premier League",
+      fromSeason: "2019/20",
+      toSeason: "2019/20",
+    });
+
+    expect(pairs).toHaveLength(2);
+    expect(fetched.some((url) => url.includes("schnellsuche"))).toBe(false);
+  });
+
+  it("searches Transfermarkt for an uncatalogued phrasing, then walks clubs on GB1", async () => {
     const searchHtml = readFileSync(path.join(fixturesDir, "search/competitions.html"), "utf8");
     const competitionHtml = readFileSync(
       path.join(fixturesDir, "competitions/DK1-2015.html"),
@@ -213,12 +242,12 @@ describe("kader fetch adapter from recorded HTML", () => {
     });
 
     const pairs = await adapter.listClubSeasonPairs({
-      competition: "Premier League",
+      competition: "Premier League in England",
       fromSeason: "2019/20",
       toSeason: "2019/20",
     });
     const raw = await adapter.fetchClubSeason({
-      competition: "Premier League",
+      competition: "Premier League in England",
       clubExternalId: "190",
       season: "2019/20",
     });

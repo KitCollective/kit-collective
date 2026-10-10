@@ -1,16 +1,12 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const mobileRoot = join(__dirname, "..");
-const splashPath = join(mobileRoot, "src/first-session/splash.tsx");
-const splashScreenPath = join(mobileRoot, "src/first-session/splash-screen.tsx");
 const doorPath = join(mobileRoot, "src/first-session/door.tsx");
 const doorSheetPath = join(mobileRoot, "src/first-session/door-sheet.tsx");
 const doorFacesPath = join(mobileRoot, "src/first-session/door-faces.tsx");
 const doorCopyPath = join(mobileRoot, "src/first-session/door-copy.ts");
-const verifyPath = join(mobileRoot, "src/first-session/verify-email-beat.tsx");
-const profilePath = join(mobileRoot, "src/first-session/profile-onboarding.tsx");
 const hostPath = join(mobileRoot, "app/(first-session)/index.tsx");
 const indexPath = join(mobileRoot, "app/index.tsx");
 
@@ -52,18 +48,17 @@ describe("First session host chrome", () => {
     }
   });
 
-  it("splash copy is Tryk for at fortsætte / Login / Opret konto", () => {
-    const splash = readFileSync(splashPath, "utf8");
-    const splashScreen = readFileSync(splashScreenPath, "utf8");
-    const copy = readFileSync(doorCopyPath, "utf8");
+  it("welcome copy carries the two secondary actions and no splash caption", () => {
+    const copy = readFileSync(join(mobileRoot, "src/first-session/welcome-copy.ts"), "utf8");
+    const doorCopy = readFileSync(doorCopyPath, "utf8");
 
-    expect(splash).toContain("SplashScreen");
-    expect(splashScreen).toContain("SPLASH_CAPTION");
-    expect(copy).toContain("Tryk for at fortsætte");
-    expect(copy).toContain('SPLASH_LOGIN_LABEL = "Login"');
-    expect(copy).toContain("Opret konto");
-    // "Login" replaces "Log ind" as the general term in door + splash entry copy.
-    expect(copy).not.toContain("Log ind");
+    expect(copy).toContain('WELCOME_OWN_PHOTO_LABEL = "Brug mit eget foto"');
+    expect(copy).toContain('WELCOME_HAVE_ACCOUNT_LABEL = "Jeg har allerede en konto"');
+    expect(copy).toContain('DEMO_START_LABEL = "Kom i gang"');
+    expect(copy).toContain('DEMO_ANOTHER_LABEL = "Prøv en anden trøje"');
+    expect(doorCopy).not.toContain("Tryk for at fortsætte");
+    // "Login" replaces "Log ind" as the general term in door copy.
+    expect(doorCopy).not.toContain("Log ind");
   });
 
   it("door copy is locked, Apple is hidden, and banned first-session chrome is absent", () => {
@@ -71,61 +66,109 @@ describe("First session host chrome", () => {
     const doorSheet = readFileSync(doorSheetPath, "utf8");
     const doorFaces = readFileSync(doorFacesPath, "utf8");
     const copy = readFileSync(doorCopyPath, "utf8");
-    const verify = readFileSync(verifyPath, "utf8");
-    const profile = readFileSync(profilePath, "utf8");
     const host = readFileSync(hostPath, "utf8");
-    const chrome = `${door}\n${doorSheet}\n${doorFaces}\n${copy}\n${verify}\n${profile}\n${host}`;
+    const chrome = `${door}\n${doorSheet}\n${doorFaces}\n${copy}\n${host}`;
 
-    // Two-mode title switcher, Login as the general term, no sentence line.
-    expect(copy).toContain("Login");
-    expect(copy).toContain("Opret");
+    // One Kom i gang sheet: e-mail + Fortsæt, divider, equal secondary social buttons.
+    expect(copy).toContain('DOOR_TITLE = "Kom i gang"');
+    expect(copy).toContain('DOOR_SUBMIT_LABEL = "Fortsæt"');
     expect(copy).toContain("eller");
-    expect(copy).toContain("Har du en konto? Login");
-    expect(copy).toContain("Ny her? Opret konto");
-    expect(copy).toContain("Gentag adgangskode");
-    expect(copy).toContain("mindst 8 tegn");
-    expect(copy).toContain("Glemt adgangskode?");
-    expect(copy).toContain("Tjek din e-mail");
-    // Sentence line and its copy are gone.
-    expect(copy).not.toContain("Samlingen venter.");
-    expect(copy).not.toContain("Trøjen er læst. En konto husker den.");
-    expect(copy).not.toContain("doorSentence");
-    expect(copy).not.toContain("Log ind");
-    expect(copy).not.toContain("1/2");
-    expect(copy).not.toContain("Skift");
     expect(doorSheet).toContain('variant="door"');
-    expect(chrome).not.toContain("Apple");
-    expect(chrome).not.toContain("Gem kun på denne telefon");
+    expect(doorSheet).toContain("title={DOOR_TITLE}");
+    for (const testId of ["door-email", "door-submit", "door-email-error"]) {
+      expect(doorFaces).toContain(testId);
+    }
+    expect(doorFaces).toContain("door-${provider}");
+    expect(doorFaces).toContain('variant="secondary"');
+    expect(doorFaces).toContain("leading={");
+    // No password, switcher, forgot page, mode state or Apple (KIT-274 adds Apple).
+    for (const banned of [
+      "Apple",
+      "Adgangskode",
+      "password",
+      "Password",
+      "Glemt",
+      "forgot",
+      "Forgot",
+      "doorMode",
+      "DoorMode",
+      "Opret konto",
+      "Login",
+      "Log ind",
+      "Gem kun på denne telefon",
+    ]) {
+      expect(chrome).not.toContain(banned);
+    }
     expect(chrome).not.toMatch(/Fortsæt med Google/);
     expect(chrome).not.toMatch(/Fortsæt med Facebook/);
   });
 
-  it("host opens profile onboarding after register and never copies prototype chrome", () => {
+  it("Return on the e-mail field does nothing while a social sign-in is pending", () => {
     const host = readFileSync(hostPath, "utf8");
-    const profile = readFileSync(profilePath, "utf8");
+    const submit = host.slice(host.indexOf("function handleSubmitEmail"));
 
-    expect(host).toContain("ProfileOnboardingScreen");
-    expect(host).toContain('place === "profile"');
-    expect(host).toContain("continueProfile");
-    expect(host).toContain("OnboardScreen");
-    expect(host).toContain("completeOnboard");
-    expect(host).toContain("continueFromSplash");
-    // One backdrop at a time is decided in the reducer, not by flag algebra in the host.
-    expect(host).toContain("firstSessionBackdrop");
-    expect(host).not.toContain("showOnboardBackdrop");
-    expect(profile).toContain("uploadAvatar");
-    expect(profile).toContain("updateProfile");
-    expect(profile).not.toContain("prototype-first-run");
+    expect(submit.indexOf("socialBusy !== null")).toBeGreaterThan(-1);
+    expect(submit.indexOf("socialBusy !== null")).toBeLessThan(
+      submit.indexOf("isValidEmail(email)"),
+    );
   });
 
-  it("host opens jersey details after profile/login with draft and routes result Collection", () => {
+  it("host renders welcome, demo and own-photo entry, with no onboarding or profile step", () => {
+    const host = readFileSync(hostPath, "utf8");
+
+    expect(host).toContain("WelcomeScreen");
+    expect(host).toContain("DemoScreen");
+    expect(host).toContain('type: "startDemo"');
+    expect(host).toContain('type: "startAdd"');
+    // Kom i gang and Jeg har allerede en konto both open the existing door.
+    expect(host).toContain("onStart={() => openDoor()}");
+    expect(host).toContain("onHaveAccount={() => openDoor()}");
+    expect(host).toContain('dispatch({ type: "openDoor" })');
+    expect(host).not.toContain("signUp");
+    // E-mail routes to the code screen; social skips it; a failed login raises a bottom toast.
+    expect(host).toContain('method: "email"');
+    expect(host).toContain('method: "social"');
+    expect(host).toContain('method: "code"');
+    expect(host).toContain("CodeScreen");
+    expect(host).not.toContain("CodeStub");
+    expect(host).toContain('type: "backFromCode"');
+    expect(host).toContain("socialCancelledMessage(provider)");
+    expect(host).toContain('position: "bottom"');
+    // One backdrop at a time is decided in the reducer, not by flag algebra in the host.
+    expect(host).toContain("firstSessionBackdrop");
+    expect(host).not.toMatch(/Onboard|ProfileOnboarding|VerifyEmailBeat|DiscoveryShowcase/);
+    expect(host).not.toMatch(
+      /continueProfile|completeOnboard|continueFromSplash|dismissVerifyEmail/,
+    );
+  });
+
+  it("the removed onboarding, profile step and splash files are gone", () => {
+    for (const file of [
+      "onboard-screen.tsx",
+      "onboard-copy.ts",
+      "profile-onboarding.tsx",
+      "verify-email-beat.tsx",
+      "discovery-showcase.tsx",
+      "splash-screen.tsx",
+      "splash-backdrop.tsx",
+    ]) {
+      expect(existsSync(join(mobileRoot, "src/first-session", file))).toBe(false);
+    }
+    expect(existsSync(join(mobileRoot, "assets/onboard"))).toBe(false);
+    expect(existsSync(join(mobileRoot, "assets/brand/splash-prize-jersey.png"))).toBe(false);
+  });
+
+  it("host opens jersey details after identity with a draft and routes result Collection", () => {
     const host = readFileSync(hostPath, "utf8");
 
     expect(host).toContain("JerseyDetailsScreen");
     expect(host).toContain('place === "jersey-details"');
     expect(host).toContain("saveJersey");
     expect(host).toContain("recordDumpSave");
-    expect(host).toContain("firstSessionResult=1");
+    expect(host).toContain("collectionHref(session)");
+    expect(readFileSync(join(mobileRoot, "src/first-session/session.ts"), "utf8")).toContain(
+      "firstSessionResult=1",
+    );
     expect(host).not.toContain("requestPremiumAccess");
     expect(host).not.toContain("Gem senere");
   });

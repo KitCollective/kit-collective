@@ -26,6 +26,8 @@ export interface TransfermarktRawPayload {
       name: string;
       iso3166: string;
     };
+    /** League badge bytes from the TM image CDN. Never a hot-linked URL. */
+    badgeBytes?: Uint8Array;
   };
   seasons: TransfermarktRawSeason[];
   /** Club Hierarchy grain — identity + facts + honours, no seasons required. */
@@ -47,6 +49,8 @@ export interface TransfermarktRawSeason {
 export interface TransfermarktRawHonour {
   seasonLabel: string | null;
   title: string;
+  markObjectKey?: string;
+  markBytes?: Uint8Array;
 }
 
 export interface TransfermarktRawClub {
@@ -55,6 +59,8 @@ export interface TransfermarktRawClub {
   country?: { iso3166: string; name?: string };
   kind?: ClubKind;
   officialName?: string;
+  /** True when `name` is only the official name standing in for a missing short name. */
+  nameIsOfficialFallback?: boolean;
   foundedOn?: string;
   stadiumName?: string;
   stadiumCapacity?: number;
@@ -62,6 +68,8 @@ export interface TransfermarktRawClub {
   secondaryColorHex?: string;
   websiteUrl?: string;
   honours?: TransfermarktRawHonour[];
+  /** Club crest bytes from the TM image CDN. Never `tmLogoUrl`. */
+  crestBytes?: Uint8Array;
   marketValue?: number;
   agent?: { name?: string; phone?: string; email?: string };
   tmLogoUrl?: string;
@@ -85,14 +93,25 @@ export interface TransfermarktRawNationalTeam {
   players: TransfermarktRawPlayer[];
 }
 
+/** One citizenship as the source page lists it. */
+export interface TransfermarktRawNationality {
+  name: string;
+  iso?: string;
+}
+
 export interface TransfermarktRawPlayer {
   id: string;
   name: string;
+  /** Legal/full name from the profile page. Stored as an alias label, never the label. */
+  fullName?: string;
   jerseyNumber?: number;
   position?: string;
   dateOfBirth?: string;
+  placeOfBirth?: string;
   nationalityIso?: string;
   nationalityName?: string;
+  /** Every citizenship, in source order. The first is the primary one. */
+  nationalities?: TransfermarktRawNationality[];
   heightCm?: number;
   preferredFoot?: PreferredFoot;
   portraitBytes?: Uint8Array;
@@ -100,6 +119,37 @@ export interface TransfermarktRawPlayer {
   callUpClubName?: string;
   marketValue?: number;
   agent?: { name?: string; phone?: string; email?: string };
+}
+
+/** Which catalog side a career jersey row was worn for. */
+export type JerseyNumberSide = "club" | "national_team";
+
+/** One `/rueckennummern/spieler/{id}` row as Transfermarkt listed it. */
+export interface TransfermarktRawJerseyNumber {
+  seasonLabel: string;
+  /** Transfermarkt `verein` id: a club, a reserve/youth side, or a national side. */
+  sideExternalId: string;
+  sideName?: string;
+  side: JerseyNumberSide;
+  jerseyNumber: number | null;
+}
+
+export interface TransfermarktRawPlayerJerseyNumbers {
+  playerExternalId: string;
+  rows: TransfermarktRawJerseyNumber[];
+}
+
+export interface NormalizedJerseyNumber {
+  seasonLabel: string;
+  sideExternalId: string;
+  sideName?: string;
+  side: JerseyNumberSide;
+  squadNumber: number | null;
+}
+
+export interface NormalizedPlayerJerseyNumbers {
+  playerExternalId: string;
+  rows: NormalizedJerseyNumber[];
 }
 
 /** Normalized facts after forbidden fields are stripped. */
@@ -110,6 +160,7 @@ export interface NormalizedFacts {
     countryIso: string;
     countryExternalId: string;
     countryName: string;
+    badgeBytes?: Uint8Array;
   };
   seasons: NormalizedSeason[];
   clubs?: NormalizedClub[];
@@ -129,6 +180,8 @@ export interface NormalizedSeason {
 export interface NormalizedHonour {
   seasonLabel: string | null;
   title: string;
+  markObjectKey?: string;
+  markBytes?: Uint8Array;
 }
 
 export interface NormalizedClub {
@@ -139,6 +192,7 @@ export interface NormalizedClub {
   countryName?: string;
   kind: ClubKind;
   officialName?: string;
+  nameIsOfficialFallback?: boolean;
   foundedOn?: string;
   stadiumName?: string;
   stadiumCapacity?: number;
@@ -146,6 +200,7 @@ export interface NormalizedClub {
   secondaryColorHex?: string;
   websiteUrl?: string;
   honours?: NormalizedHonour[];
+  crestBytes?: Uint8Array;
   players: NormalizedPlayer[];
 }
 
@@ -163,15 +218,26 @@ export interface NormalizedNationalTeam {
   players: NormalizedPlayer[];
 }
 
+export interface NormalizedNationality {
+  name: string;
+  iso?: string;
+}
+
 export interface NormalizedPlayer {
   externalId: string;
   name: string;
   nameLocale: LabelLocale;
+  fullName?: string;
+  fullNameLocale?: LabelLocale;
   squadNumber?: number;
   position?: string;
   dateOfBirth?: string;
+  placeOfBirth?: string;
+  /** Primary citizenship — the one `player.primary_country_id` points at. */
   nationalityIso?: string;
   nationalityName?: string;
+  /** Every citizenship, in source order. The first is the primary one. */
+  nationalities?: NormalizedNationality[];
   heightCm?: number;
   preferredFoot?: PreferredFoot;
   portraitBytes?: Uint8Array;
@@ -191,6 +257,7 @@ export interface MapResult {
   externalIds: number;
   honours: number;
   playerPhotos: number;
+  catalogMarks: number;
   nationalTeams: number;
   nationalTeamSeasons: number;
   playerNationalTeamSeasons: number;

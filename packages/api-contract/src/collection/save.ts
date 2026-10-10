@@ -8,6 +8,7 @@ import {
   validateJerseyPhotos,
 } from "@kit/domain";
 import { z } from "zod";
+import { catalogSideXorIssue } from "../catalog/side.js";
 
 export const collectionSavePhotoSchema = z
   .object({
@@ -32,7 +33,8 @@ export const collectionSaveRequestSchema = z
     draftId: z.string().uuid().optional(),
     /** Client-started Vision job — Save must not enqueue a duplicate. */
     visionJobId: z.string().uuid().optional(),
-    clubId: z.string().uuid(),
+    clubId: z.string().uuid().optional(),
+    nationalTeamId: z.string().uuid().optional(),
     seasonId: z.string().uuid(),
     catalogKitId: z.string().uuid().nullable().optional(),
     type: z.enum(KIT_TYPES),
@@ -44,6 +46,7 @@ export const collectionSaveRequestSchema = z
   })
   .strict()
   .superRefine((body, ctx) => {
+    catalogSideXorIssue(ctx, body.clubId, body.nationalTeamId, true);
     const error = validateJerseyPhotos(body.photos);
     if (error === "duplicate_universal_role") {
       ctx.addIssue({
@@ -99,7 +102,8 @@ export const collectionJerseySquadPlayerSchema = z
 export const collectionJerseySchema = z
   .object({
     id: z.string().uuid(),
-    clubId: z.string().uuid(),
+    clubId: z.string().uuid().nullable(),
+    nationalTeamId: z.string().uuid().nullable(),
     seasonId: z.string().uuid(),
     countryId: z.string().uuid(),
     leagueId: z.string().uuid().nullable(),
@@ -109,7 +113,8 @@ export const collectionJerseySchema = z
     condition: z.enum(JERSEY_CONDITIONS),
     countryLabel: z.string().min(1),
     leagueLabel: z.string().min(1).nullable(),
-    clubLabel: z.string().min(1),
+    clubLabel: z.string().min(1).nullable(),
+    nationalTeamLabel: z.string().min(1).nullable(),
     seasonLabel: z.string().min(1),
     squadPlayers: z.array(collectionJerseySquadPlayerSchema),
     playerId: z.string().uuid().nullable().optional(),
@@ -120,7 +125,24 @@ export const collectionJerseySchema = z
     biddingEnabled: z.boolean(),
     private: z.boolean(),
   })
-  .strict();
+  .strict()
+  .superRefine((jersey, ctx) => {
+    catalogSideXorIssue(ctx, jersey.clubId, jersey.nationalTeamId, true);
+    if (jersey.clubId && !jersey.clubLabel) {
+      ctx.addIssue({
+        code: "custom",
+        message: "clubLabel is required when clubId is set",
+        path: ["clubLabel"],
+      });
+    }
+    if (jersey.nationalTeamId && !jersey.nationalTeamLabel) {
+      ctx.addIssue({
+        code: "custom",
+        message: "nationalTeamLabel is required when nationalTeamId is set",
+        path: ["nationalTeamLabel"],
+      });
+    }
+  });
 
 export const collectionSaveResponseSchema = z
   .object({

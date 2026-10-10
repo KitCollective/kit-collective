@@ -9,24 +9,19 @@ import {
   type HandleAvailabilityResponse,
   handleAvailabilityResponseSchema,
   type IdentityAccountUpdate,
-  type IdentityCredentials,
-  type IdentityEmailChange,
   type IdentityExport,
   type IdentityLinkedProvider,
   type IdentityMe,
-  type IdentityPasswordChange,
   type IdentityPrefs,
   type IdentityPrefsUpdate,
   type IdentityProfileUpdate,
   type IdentitySession,
-  identityCredentialsSchema,
+  identityCodeAcceptedSchema,
   identityExportSchema,
   identityLinkedProviderSchema,
   identityMeSchema,
-  identityPasswordResetAcceptedSchema,
   identityPrefsSchema,
   identitySessionSchema,
-  identityVerifyResponseSchema,
 } from "@kit/api-contract";
 import { identityAuthErrorFromResponse } from "@/auth/identity-auth-error";
 import { getApiBaseUrl } from "./config";
@@ -43,35 +38,32 @@ async function requestJson(path: string, init: RequestInit = {}): Promise<Respon
   });
 }
 
-export async function registerCollector(
-  credentials: IdentityCredentials,
-): Promise<IdentitySession> {
-  const payload = identityCredentialsSchema.parse(credentials);
-  const response = await requestJson("/v1/identity/register", {
+/** Asks for a six-digit code by e-mail. The answer is the same for a new and an existing e-mail. */
+export async function requestSignInCode(email: string): Promise<void> {
+  const response = await requestJson("/v1/identity/code", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ email }),
   });
 
   if (!response.ok) {
     throw identityAuthErrorFromResponse(response, {
-      fallbackMessage: "Kunne ikke oprette konto",
+      fallbackMessage: "Kunne ikke sende koden",
     });
   }
 
-  return identitySessionSchema.parse(await response.json());
+  identityCodeAcceptedSchema.parse(await response.json());
 }
 
-export async function loginCollector(credentials: IdentityCredentials): Promise<IdentitySession> {
-  const payload = identityCredentialsSchema.parse(credentials);
-  const response = await requestJson("/v1/identity/login", {
+/** A correct code registers or signs in. 401 wrong code, 410 expired, 429 too many attempts. */
+export async function verifySignInCode(email: string, code: string): Promise<IdentitySession> {
+  const response = await requestJson("/v1/identity/code/verify", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ email, code }),
   });
 
   if (!response.ok) {
     throw identityAuthErrorFromResponse(response, {
-      invalidCredentialsMessage: "Forkert e-mail eller adgangskode",
-      fallbackMessage: "Forkert e-mail eller adgangskode",
+      fallbackMessage: "Kunne ikke bekræfte koden",
     });
   }
 
@@ -207,54 +199,6 @@ export async function updateAccount(
   return identityMeSchema.parse(await response.json());
 }
 
-export async function changePassword(
-  accessToken: string,
-  payload: IdentityPasswordChange,
-): Promise<void> {
-  const response = await requestJson("/v1/identity/password", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (response.status === 401) {
-    throw new Error("Nuværende adgangskode er forkert");
-  }
-
-  if (!response.ok) {
-    throw new Error("Kunne ikke skifte adgangskode");
-  }
-}
-
-export async function changeEmail(
-  accessToken: string,
-  payload: IdentityEmailChange,
-): Promise<IdentityMe> {
-  const response = await requestJson("/v1/identity/email", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (response.status === 401) {
-    throw new Error("Adgangskoden er forkert");
-  }
-
-  if (response.status === 409) {
-    throw new Error("E-mailen er allerede i brug");
-  }
-
-  if (!response.ok) {
-    throw new Error("Kunne ikke skifte e-mail");
-  }
-
-  return identityMeSchema.parse(await response.json());
-}
-
 export async function deleteAccount(accessToken: string): Promise<void> {
   const response = await requestJson("/v1/identity/me", {
     method: "DELETE",
@@ -372,47 +316,6 @@ export async function fetchAccountExport(accessToken: string): Promise<IdentityE
   }
 
   return identityExportSchema.parse(await response.json());
-}
-
-export async function verifyEmail(token: string): Promise<void> {
-  const response = await requestJson("/v1/identity/verify", {
-    method: "POST",
-    body: JSON.stringify({ token }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Linket er ugyldigt eller udløbet");
-  }
-
-  identityVerifyResponseSchema.parse(await response.json());
-}
-
-export async function requestPasswordReset(email: string): Promise<void> {
-  const response = await requestJson("/v1/identity/password-reset", {
-    method: "POST",
-    body: JSON.stringify({ email }),
-  });
-
-  if (!response.ok) {
-    throw identityAuthErrorFromResponse(response, {
-      fallbackMessage: "Kunne ikke sende nulstilling",
-    });
-  }
-
-  identityPasswordResetAcceptedSchema.parse(await response.json());
-}
-
-export async function completePasswordReset(token: string, password: string): Promise<void> {
-  const response = await requestJson("/v1/identity/password-reset/complete", {
-    method: "POST",
-    body: JSON.stringify({ token, password }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Linket er ugyldigt eller udløbet");
-  }
-
-  identityPasswordResetAcceptedSchema.parse(await response.json());
 }
 
 export { acceptAllCookieConsent, essentialOnlyCookieConsent };

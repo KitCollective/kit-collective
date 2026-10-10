@@ -9,6 +9,7 @@ import {
   branchFromPhotoCount,
   canAddPhotoToDraft,
   canSave,
+  catalogSideId,
   changeDraftPhotoRole,
   createCaptureSession,
   createMemoryCaptureSessionStore,
@@ -26,10 +27,12 @@ import {
   setActiveDraft,
   setDraftBadge,
   setDraftBadgeEnabled,
+  setDraftCatalogSide,
   setDraftClub,
   setDraftNotes,
   setDraftPhotoLabel,
   setDraftSeason,
+  suggestedCatalogSideId,
   switchSingleToBulkBind,
   unbindPhoto,
   upsertDraftPhoto,
@@ -77,15 +80,16 @@ function fillDraftForSave(
 }
 
 describe("branchFromPhotoCount", () => {
-  it("branches to single for 1–10 photos", () => {
-    for (let count = 1; count <= 10; count += 1) {
+  it("branches to single for 1–3 photos", () => {
+    for (let count = 1; count <= 3; count += 1) {
       expect(branchFromPhotoCount(count)).toBe("single");
     }
   });
 
-  it("branches to bulk at 11+ photos", () => {
+  it("branches to bulk at 4+ photos so a multi-jersey dump can group", () => {
+    expect(branchFromPhotoCount(4)).toBe("bulk");
+    expect(branchFromPhotoCount(7)).toBe("bulk");
     expect(branchFromPhotoCount(11)).toBe("bulk");
-    expect(branchFromPhotoCount(12)).toBe("bulk");
   });
 });
 
@@ -116,16 +120,16 @@ describe("single branch role assignment", () => {
     expect(photoUriForRole(draft, "left")).toBeNull();
   });
 
-  it("assigns four universal roles then Andet for gallery picks up to ten", () => {
-    const uris = Array.from({ length: 7 }, (_, index) => `file:///photos/pick-${index}.jpg`);
+  it("keeps fill-order roles on a single dump of three photos", () => {
+    const uris = [URI_FRONT, URI_BACK, URI_LABEL];
     const session = createCaptureSession(uris);
     const draft = getActiveDraft(session);
 
     expect(session.branch).toBe("single");
-    expect(draft.photos).toHaveLength(7);
-    expect(photoUriForRole(draft, "front")).toBe(uris[0]);
-    expect(photoUriForRole(draft, "right")).toBe(uris[3]);
-    expect(draft.photos.filter((photo) => photo.role === "other")).toHaveLength(3);
+    expect(draft.photos).toHaveLength(3);
+    expect(photoUriForRole(draft, "front")).toBe(URI_FRONT);
+    expect(photoUriForRole(draft, "back")).toBe(URI_BACK);
+    expect(photoUriForRole(draft, "left")).toBe(URI_LABEL);
   });
 
   it("uses domain Photo roles front | back | left | right | other", () => {
@@ -255,6 +259,17 @@ describe("bind, unbind, and addJersey", () => {
 
     expect(appended.unboundUris).toEqual([extra]);
     expect(appended.orderedUris).toEqual([URI_FRONT, extra]);
+    expect(appended.branch).toBe("single");
+  });
+
+  it("appendUnboundPhotos flips to bulk once the dump has four photos", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const extras = [URI_BACK, URI_LABEL, URI_EXTRA_A];
+
+    const appended = appendUnboundPhotos(session, extras);
+
+    expect(appended.branch).toBe("bulk");
+    expect(appended.unboundUris).toEqual(extras);
   });
 });
 
@@ -320,6 +335,48 @@ describe("setDraftClub", () => {
 
     next = setDraftClub(next, draftId, "660e8400-e29b-41d4-a716-446655440002");
     expect(getDraft(next, draftId).seasonId).toBeNull();
+  });
+});
+
+describe("setDraftCatalogSide", () => {
+  it("stores a national team and clears the club XOR", () => {
+    const session = createCaptureSession([URI_FRONT]);
+    const draftId = getActiveDraft(session).id;
+
+    let next = setDraftClub(session, draftId, UUID, "F.C. København");
+    next = setDraftSeason(next, draftId, UUID_B);
+    next = setDraftCatalogSide(next, draftId, {
+      id: "660e8400-e29b-41d4-a716-446655440002",
+      label: "Danmark",
+      kind: "national_team",
+    });
+
+    const draft = getDraft(next, draftId);
+    expect(draft.clubId).toBeNull();
+    expect(draft.nationalTeamId).toBe("660e8400-e29b-41d4-a716-446655440002");
+    expect(draft.nationalTeamLabel).toBe("Danmark");
+    expect(draft.seasonId).toBeNull();
+    expect(catalogSideId(draft)).toBe("660e8400-e29b-41d4-a716-446655440002");
+  });
+});
+
+describe("suggestedCatalogSideId", () => {
+  it("returns club when that field is preselected", () => {
+    expect(
+      suggestedCatalogSideId(
+        { clubId: UUID, nationalTeamId: UUID_B },
+        { club: true, nationalTeam: true },
+      ),
+    ).toBe(UUID);
+  });
+
+  it("returns national team when club is not preselected", () => {
+    expect(
+      suggestedCatalogSideId(
+        { clubId: UUID, nationalTeamId: UUID_B },
+        { club: false, nationalTeam: true },
+      ),
+    ).toBe(UUID_B);
   });
 });
 
@@ -423,6 +480,9 @@ describe("many Andet photos and jersey cap", () => {
     const uris = Array.from({ length: 10 }, (_, index) => `file:///photos/cap-${index}.jpg`);
     let session = createCaptureSession(uris);
     const draftId = getActiveDraft(session).id;
+    for (const uri of uris) {
+      session = bindPhoto(session, uri, draftId);
+    }
     const before = getDraft(session, draftId).photos.length;
 
     session = upsertDraftPhoto(session, draftId, "other", URI_EXTRA_A, "gallery");

@@ -4,4 +4,4 @@ Residential HTTP through `gate.decodo.com` still gets Transfermarkt HTTP 403 aft
 
 Decodo **Web Scraping API** (`POST https://scraper-api.decodo.com/v2/scrape`) is still not the fetch. Nest still never hits Transfermarkt. Opt-in Apify is unchanged.
 
-Status: accepted. Supersedes ADR-0015 only on “Decodo browser/Scraping API is not the fetch” for **Site Unblocker as HTTP proxy**. Residential proxy remains valid.
+Status: accepted. Supersedes ADR-0015 only on “Decodo browser/Scraping API is not the fetch” for **Site Unblocker as HTTP proxy**. Residential proxy remains valid. Partially superseded by ADR-0042: Desktop/local Kader uses the machine IP by default even when `SEED_PROXY_URL` is set; Coolify still fail-closes without the Unblocker URL.

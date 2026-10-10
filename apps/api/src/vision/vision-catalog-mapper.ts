@@ -1,23 +1,49 @@
+import { isDevCatalogFixtureId, VISION_CONFIDENCE_SUGGEST } from "@kit/api-contract";
 import type { Db } from "@kit/db";
-import { catalogLabel, club, kit, patch, playerClubSeason, season, teamSeason } from "@kit/db";
-import type { KitType } from "@kit/domain";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import {
+  catalogLabel,
+  club,
+  kit,
+  manufacturer,
+  nationalTeam,
+  nationalTeamSeason,
+  patch,
+  player,
+  playerClubSeason,
+  playerNationalTeamSeason,
+  season,
+  teamSeason,
+} from "@kit/db";
+import { Logger } from "@nestjs/common";
+import { and, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import type { IdentityVisionHints } from "./identity-vision-prompt.js";
 import type { VisionFieldConfidences, VisionInferenceResult } from "./vision.adapter.js";
-import { computeOverallConfidence } from "./vision-confidence.js";
+import {
+  combineModelAndMatchConfidence,
+  computeOverallConfidence,
+  encodeVisionEvalRaw,
+} from "./vision-confidence.js";
+import {
+  CATALOG_KIT_LOCK_CONFIDENCE,
+  type CatalogSideKind,
+  type CatalogSideMatch,
+  catalogClubIdForSave,
+  catalogHintSearchNeedles,
+  catalogNationalTeamIdForSave,
+  collectClubHints,
+  compactCatalogHint,
+  type ObservableKitHit,
+  pickBestCatalogSide,
+  pickLockedKit,
+  reconcileHintClubWithCareer,
+  reconcileHintSeasonWithSquad,
+  scoreLabelMatch,
+} from "./vision-kit-lock.js";
 
-export type VisionCatalogHints = {
-  clubHint?: string;
-  seasonHint?: string;
-  kitType?: KitType;
-  playerNumberHint?: string;
-  playerHint?: string;
-  patchHint?: string;
-  confidence?: number;
-};
+export type VisionCatalogHints = IdentityVisionHints;
 
-type ClubMatch = {
-  clubId: string;
-  score: number;
+export type VisionMapOptions = {
+  amongKitIds?: string[];
 };
 
 type PatchMatch = {
@@ -31,75 +57,93 @@ type PlayerMatch = {
   score: number;
 };
 
-type SeasonMatch = {
-  seasonId: string;
-  score: number;
+type SquadRow = {
+  playerId: string;
+  squadNumber: number | null;
 };
 
-function normalizeHint(value: string): string {
-  return value.trim().toLowerCase();
-}
+const KIT_HIT_LIMIT = 40;
+const SIDE_LABEL_LIMIT = 40;
+const PLAYER_LABEL_LIMIT = 20;
+const PATCH_LABEL_LIMIT = 10;
+const SQUAD_NUMBER_MATCH_SCORE = 90;
 
-function scoreLabelMatch(label: string, hint: string): number {
-  const normalizedLabel = normalizeHint(label);
-  const normalizedHint = normalizeHint(hint);
-
-  if (normalizedLabel === normalizedHint) {
-    return 95;
-  }
-  if (normalizedLabel.startsWith(normalizedHint) || normalizedHint.startsWith(normalizedLabel)) {
-    return 85;
-  }
-  if (normalizedLabel.includes(normalizedHint) || normalizedHint.includes(normalizedLabel)) {
-    return 70;
-  }
-
-  return 0;
-}
-
+/**
+ * Intentional omit cases (QA scoring):
+ * - Blank shirt back → VLM omits playerHint/playerNumberHint → no player suggestion.
+ * - seasonHint with no teamSeason/nationalTeamSeason row for the scoped side → no seasonId.
+ * - Named player/number not on the hinted season, two+ squad seasons remain → omit seasonId.
+ * - TeamSeason string match is not kit-lock confidence.
+ * - Model per-field confidence below suggest threshold → resolveIdentityJob omits that field,
+ *   except hint-only kit type and catalog-mapped playerId may fall back to overall / match score.
+ * - Missing manufacturerHint → no observable kit hits → no catalogKitId lock.
+ * - Ambiguous manufacturer+sponsor hits → omit catalogKitId until refinement or type/colour lock.
+ * - Empty badges[] → decodeIdentityVisionHints drops patchHint.
+ */
 export class VisionCatalogMapper {
+  private readonly logger = new Logger(VisionCatalogMapper.name);
+
   constructor(private readonly db: Db) {}
 
-  async mapHints(hints: VisionCatalogHints): Promise<VisionInferenceResult | null> {
-    const clubMatch = hints.clubHint ? await this.resolveClub(hints.clubHint) : null;
-    const seasonMatch =
-      clubMatch && hints.seasonHint
-        ? await this.resolveSeason(clubMatch.clubId, hints.seasonHint)
-        : null;
+  async mapHints(
+    hints: VisionCatalogHints,
+    options: VisionMapOptions = {},
+  ): Promise<VisionInferenceResult | null> {
+    const sideMatch = await this.resolveSide(hints);
+    let hits = await this.listObservableKitHits(hints, sideMatch);
+    let locked = pickLockedKit(hits, {
+      amongKitIds: options.amongKitIds,
+      sideId: sideMatch?.id,
+      seasonHint: hints.seasonHint,
+      kitType: hints.kitType,
+      colorHint: hints.colorHint,
+    });
 
-    let catalogKitId: string | undefined;
-    if (clubMatch && seasonMatch && hints.kitType) {
-      catalogKitId = await this.resolveCatalogKit(
-        clubMatch.clubId,
-        seasonMatch.seasonId,
-        hints.kitType,
+    let clubId = catalogClubIdForSave(locked, sideMatch);
+    const nationalTeamId = catalogNationalTeamIdForSave(locked, sideMatch);
+    const playerScope = playerScopeFor(locked, clubId, nationalTeamId, sideMatch);
+    const hintSeason =
+      locked?.seasonId === undefined
+        ? await this.resolveSeasonFromHint(playerScope, hints.seasonHint)
+        : null;
+    let seasonId = locked?.seasonId ?? hintSeason?.seasonId;
+    const playerMatch =
+      playerScope || hints.playerHint?.trim()
+        ? await this.resolvePlayer(playerScope, seasonId, hints.playerNumberHint, hints.playerHint)
+        : null;
+    if (!locked && playerMatch && playerScope) {
+      const squadSeasonIds = await this.listPlayerSeasonIds(
+        playerScope,
+        playerMatch.playerId,
+        parseSquadNumber(hints.playerNumberHint) ?? parseSquadNumber(playerMatch.playerNumber),
       );
+      seasonId = reconcileHintSeasonWithSquad(seasonId, squadSeasonIds);
     }
 
-    const playerMatch =
-      clubMatch && seasonMatch
-        ? await this.resolvePlayer(
-            clubMatch.clubId,
-            seasonMatch.seasonId,
-            hints.playerNumberHint,
-            hints.playerHint,
-          )
-        : null;
+    const careerClub = await this.applyPlayerCareerClubConstraint({
+      hints,
+      options,
+      playerMatch,
+      nationalTeamId,
+      clubId,
+      seasonId,
+      locked,
+    });
+    clubId = careerClub.clubId;
+    seasonId = careerClub.seasonId;
+    locked = careerClub.locked;
+    hits = careerClub.hits ?? hits;
+    const type = locked?.type ?? hints.kitType;
 
-    const patchMatch = seasonMatch
-      ? await this.resolvePatch(seasonMatch.seasonId, hints.patchHint)
-      : null;
+    const patchMatch = seasonId ? await this.resolvePatch(seasonId, hints.patchHint) : null;
 
-    const clubId = clubMatch?.clubId;
-    const seasonId = seasonMatch?.seasonId;
-    const type = hints.kitType;
-
-    if (!clubId && !seasonId && !type && !playerMatch && !patchMatch) {
-      if (hints.clubHint) {
+    if (!clubId && !nationalTeamId && !locked && !playerMatch && !patchMatch) {
+      if (hints.clubHint || hints.clubHintAlts?.length) {
         return {
-          clubHint: hints.clubHint,
-          visionRaw: JSON.stringify(hints),
-          confidences: this.buildConfidences(hints.confidence, {}),
+          clubHint: collectClubHints(hints)[0],
+          kitHitCount: hits.length,
+          visionRaw: encodeVisionEvalRaw(hints, hits.length),
+          confidences: this.buildConfidences(hints, {}),
         };
       }
       return null;
@@ -107,25 +151,124 @@ export class VisionCatalogMapper {
 
     return {
       clubId,
+      nationalTeamId,
       seasonId,
-      catalogKitId,
+      catalogKitId: locked?.kitId,
       type,
       playerId: playerMatch?.playerId,
       playerNumber: playerMatch?.playerNumber,
       patchId: patchMatch?.patchId,
       clubHint: hints.clubHint,
-      confidences: this.buildConfidences(hints.confidence, {
-        club: clubMatch?.score,
-        season: seasonMatch?.score,
-        kitType: type ? 70 : undefined,
+      kitHitCount: hits.length,
+      visionRaw: encodeVisionEvalRaw(hints, hits.length),
+      confidences: this.buildConfidences(hints, {
+        club: clubId ? clubScoreForMappedClub(sideMatch, locked, clubId) : undefined,
+        nationalTeam: nationalTeamId ? clubMatchScore(sideMatch, locked) : undefined,
+        kitType: locked ? CATALOG_KIT_LOCK_CONFIDENCE : undefined,
         player: playerMatch?.score,
         badge: patchMatch?.score,
+        kitLocked: Boolean(locked),
       }),
     };
   }
 
-  private async resolveClub(hint: string): Promise<ClubMatch | null> {
-    const pattern = `%${hint.trim()}%`;
+  private async applyPlayerCareerClubConstraint(input: {
+    hints: VisionCatalogHints;
+    options: VisionMapOptions;
+    playerMatch: PlayerMatch | null;
+    nationalTeamId: string | undefined;
+    clubId: string | undefined;
+    seasonId: string | undefined;
+    locked: ObservableKitHit | null;
+  }): Promise<{
+    clubId: string | undefined;
+    seasonId: string | undefined;
+    locked: ObservableKitHit | null;
+    hits?: ObservableKitHit[];
+  }> {
+    const { hints, options, playerMatch, nationalTeamId } = input;
+    let { clubId, seasonId, locked } = input;
+    if (!playerMatch || playerMatch.score < VISION_CONFIDENCE_SUGGEST || nationalTeamId) {
+      return { clubId, seasonId, locked };
+    }
+
+    const careerRows = await this.listPlayerClubCareer(playerMatch.playerId);
+    const careerClubIds = [...new Set(careerRows.map((row) => row.clubId))];
+    const hintedClubId = clubId;
+    const reconciled = reconcileHintClubWithCareer(hintedClubId, careerClubIds);
+    if (!reconciled.conflict) {
+      return { clubId, seasonId, locked };
+    }
+
+    this.logger.warn(
+      `Vision player-club career conflict: player=${playerMatch.playerId} hintedClub=${hintedClubId ?? "none"}`,
+    );
+
+    if (locked && hintedClubId && locked.clubId === hintedClubId) {
+      locked = null;
+    }
+    if (
+      seasonId &&
+      !careerRows.some((row) => row.seasonId === seasonId && row.clubId !== hintedClubId)
+    ) {
+      seasonId = undefined;
+    }
+
+    clubId = reconciled.clubId;
+    if (!clubId) {
+      clubId = await this.pickCareerClubFromHints(careerClubIds, hints);
+    }
+
+    if (clubId) {
+      const seasonsAtClub = careerRows
+        .filter((row) => row.clubId === clubId)
+        .map((row) => row.seasonId);
+      seasonId = reconcileHintSeasonWithSquad(
+        seasonId && seasonsAtClub.includes(seasonId) ? seasonId : undefined,
+        seasonsAtClub,
+      );
+    }
+
+    const careerHits = await this.listCareerObservableKitHits(hints, careerClubIds, clubId);
+    const remappedLock = pickLockedKit(careerHits, {
+      amongKitIds: options.amongKitIds,
+      sideId: clubId,
+      seasonHint: hints.seasonHint,
+      kitType: hints.kitType,
+      colorHint: hints.colorHint,
+    });
+    if (remappedLock) {
+      locked = remappedLock;
+      clubId = remappedLock.clubId ?? clubId;
+      seasonId = remappedLock.seasonId;
+    }
+
+    return { clubId, seasonId, locked, hits: careerHits };
+  }
+
+  private async listPlayerClubCareer(
+    playerId: string,
+  ): Promise<Array<{ clubId: string; seasonId: string }>> {
+    return this.db
+      .select({
+        clubId: playerClubSeason.clubId,
+        seasonId: playerClubSeason.seasonId,
+      })
+      .from(playerClubSeason)
+      .where(eq(playerClubSeason.playerId, playerId));
+  }
+
+  private async pickCareerClubFromHints(
+    careerClubIds: string[],
+    hints: VisionCatalogHints,
+  ): Promise<string | undefined> {
+    if (careerClubIds.length === 0) {
+      return undefined;
+    }
+    const hintTexts = collectClubHints(hints);
+    if (hintTexts.length === 0) {
+      return undefined;
+    }
 
     const labelRows = await this.db
       .selectDistinct({
@@ -133,147 +276,489 @@ export class VisionCatalogMapper {
         text: catalogLabel.text,
       })
       .from(catalogLabel)
-      .where(and(eq(catalogLabel.entityType, "club"), sql`${catalogLabel.text} ilike ${pattern}`))
-      .limit(20);
+      .where(
+        and(eq(catalogLabel.entityType, "club"), inArray(catalogLabel.entityId, careerClubIds)),
+      );
 
-    if (labelRows.length === 0) {
-      return null;
-    }
-
-    const clubIds = labelRows.map((row) => row.entityId);
-    const existingClubs = await this.db
-      .select({ id: club.id })
-      .from(club)
-      .where(inArray(club.id, clubIds));
-
-    const validClubIds = new Set(existingClubs.map((row) => row.id));
-    const scored = labelRows
-      .filter((row: { entityId: string }) => validClubIds.has(row.entityId))
-      .map((row: { entityId: string; text: string | null }) => ({
-        clubId: row.entityId,
-        score: scoreLabelMatch(row.text ?? "", hint),
-      }))
-      .filter((row: { score: number }) => row.score > 0)
-      .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
-
-    return scored[0] ?? null;
-  }
-
-  private async resolveSeason(clubId: string, hint: string): Promise<SeasonMatch | null> {
-    const pattern = `%${hint.trim()}%`;
-
-    const seasonRows = await this.db
-      .select({ seasonId: season.id, label: season.label })
-      .from(teamSeason)
-      .innerJoin(season, eq(teamSeason.seasonId, season.id))
-      .where(and(eq(teamSeason.clubId, clubId), sql`${season.label} ilike ${pattern}`))
-      .limit(10);
-
-    const scored = seasonRows
-      .map((row: { seasonId: string; label: string | null }) => ({
-        seasonId: row.seasonId,
-        score: scoreLabelMatch(row.label ?? "", hint),
-      }))
-      .filter((row: { score: number }) => row.score > 0)
-      .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
-
-    return scored[0] ?? null;
-  }
-
-  private async resolveCatalogKit(
-    clubId: string,
-    seasonId: string,
-    kitType: KitType,
-  ): Promise<string | undefined> {
-    const [row] = await this.db
-      .select({ id: kit.id })
-      .from(kit)
-      .where(and(eq(kit.clubId, clubId), eq(kit.seasonId, seasonId), eq(kit.type, kitType)))
-      .limit(1);
-
-    return row?.id;
-  }
-
-  private async resolvePlayer(
-    clubId: string,
-    seasonId: string,
-    numberHint?: string,
-    nameHint?: string,
-  ): Promise<PlayerMatch | null> {
-    if (numberHint?.trim()) {
-      const parsedNumber = Number.parseInt(numberHint.trim(), 10);
-      if (!Number.isNaN(parsedNumber)) {
-        const [row] = await this.db
-          .select({
-            playerId: playerClubSeason.playerId,
-            squadNumber: playerClubSeason.squadNumber,
-          })
-          .from(playerClubSeason)
-          .where(
-            and(
-              eq(playerClubSeason.clubId, clubId),
-              eq(playerClubSeason.seasonId, seasonId),
-              eq(playerClubSeason.squadNumber, parsedNumber),
-            ),
-          )
-          .limit(1);
-
-        if (row) {
-          return {
-            playerId: row.playerId,
-            playerNumber: String(row.squadNumber ?? parsedNumber),
-            score: 90,
-          };
-        }
+    const bestByClub = new Map<string, number>();
+    for (const row of labelRows) {
+      let score = 0;
+      for (const hint of hintTexts) {
+        score = Math.max(score, scoreLabelMatch(row.text ?? "", hint));
+      }
+      if (score <= 0) {
+        continue;
+      }
+      const current = bestByClub.get(row.entityId) ?? 0;
+      if (score > current) {
+        bestByClub.set(row.entityId, score);
       }
     }
 
-    if (!nameHint?.trim()) {
+    const ranked = [...bestByClub.entries()].sort((left, right) => right[1] - left[1]);
+    const best = ranked[0];
+    if (!best) {
+      return undefined;
+    }
+    const tied = ranked.filter((entry) => entry[1] === best[1]);
+    return tied.length === 1 ? best[0] : undefined;
+  }
+
+  private async listCareerObservableKitHits(
+    hints: VisionCatalogHints,
+    careerClubIds: readonly string[],
+    remappedClubId: string | undefined,
+  ): Promise<ObservableKitHit[]> {
+    const sponsorHint = hints.sponsorHint?.trim();
+    const side: CatalogSideMatch | null = remappedClubId
+      ? { id: remappedClubId, kind: "club", score: 0 }
+      : null;
+    const listed = await this.listObservableKitHits(hints, sponsorHint ? null : side);
+    return listed.filter((hit) => hit.clubId != null && careerClubIds.includes(hit.clubId));
+  }
+
+  async listObservableKitHits(
+    hints: VisionCatalogHints,
+    sideMatch?: CatalogSideMatch | null,
+  ): Promise<ObservableKitHit[]> {
+    const manufacturerHint = hints.manufacturerHint?.trim();
+    const sponsorHint = hints.sponsorHint?.trim();
+    if (!manufacturerHint) {
+      return [];
+    }
+    const side = sideMatch === undefined ? await this.resolveSide(hints) : sideMatch;
+    if (!sponsorHint && !side) {
+      return [];
+    }
+
+    const manufacturerClause = hintMatchSql(catalogLabel.text, [manufacturerHint]);
+    if (!manufacturerClause) {
+      return [];
+    }
+
+    const rows = await this.db
+      .select({
+        kitId: kit.id,
+        clubId: kit.clubId,
+        nationalTeamId: kit.nationalTeamId,
+        seasonId: kit.seasonId,
+        type: kit.type,
+        sponsorName: kit.sponsorName,
+        manufacturerText: catalogLabel.text,
+        seasonLabel: season.label,
+        colorNames: kit.colorNames,
+      })
+      .from(kit)
+      .innerJoin(manufacturer, eq(kit.manufacturerId, manufacturer.id))
+      .innerJoin(catalogLabel, eq(catalogLabel.entityId, manufacturer.id))
+      .innerJoin(season, eq(kit.seasonId, season.id))
+      .where(
+        and(
+          eq(catalogLabel.entityType, "manufacturer"),
+          manufacturerClause,
+          sponsorHint ? hintMatchSql(kit.sponsorName, [sponsorHint]) : kitSideEquals(side),
+        ),
+      )
+      .limit(KIT_HIT_LIMIT);
+
+    return rows.flatMap((row) => {
+      if (scoreLabelMatch(row.manufacturerText ?? "", manufacturerHint) <= 0) {
+        return [];
+      }
+      if (sponsorHint && scoreLabelMatch(row.sponsorName ?? "", sponsorHint) <= 0) {
+        return [];
+      }
+      return [
+        {
+          kitId: row.kitId,
+          clubId: row.clubId,
+          nationalTeamId: row.nationalTeamId,
+          seasonId: row.seasonId,
+          seasonLabel: row.seasonLabel,
+          type: row.type,
+          manufacturer: row.manufacturerText,
+          sponsor: row.sponsorName ?? sponsorHint ?? "",
+          colorNames: row.colorNames,
+        },
+      ];
+    });
+  }
+
+  private async resolveSide(hints: VisionCatalogHints): Promise<CatalogSideMatch | null> {
+    const hintTexts = collectClubHints(hints);
+    const sideClause =
+      hintTexts.length > 0 ? hintMatchSql(catalogLabel.text, hintTexts) : undefined;
+    if (!sideClause) {
       return null;
     }
 
-    const pattern = `%${nameHint.trim()}%`;
+    const labelRows = await this.db
+      .selectDistinct({
+        entityType: catalogLabel.entityType,
+        entityId: catalogLabel.entityId,
+        text: catalogLabel.text,
+        kind: catalogLabel.kind,
+      })
+      .from(catalogLabel)
+      .where(and(inArray(catalogLabel.entityType, ["club", "national_team"]), sideClause))
+      .limit(SIDE_LABEL_LIMIT);
+
+    if (labelRows.length === 0) {
+      return null;
+    }
+
+    const clubIds = idsForEntityType(labelRows, "club").filter((id) => !isDevCatalogFixtureId(id));
+    const nationalTeamIds = idsForEntityType(labelRows, "national_team").filter(
+      (id) => !isDevCatalogFixtureId(id),
+    );
+    const [existingClubs, existingNationalTeams] = await Promise.all([
+      this.existingIds(club, clubIds),
+      this.existingIds(nationalTeam, nationalTeamIds),
+    ]);
+
+    return pickBestCatalogSide(
+      labelRows,
+      hintTexts,
+      new Set(existingClubs),
+      new Set(existingNationalTeams),
+    );
+  }
+
+  private async existingIds(
+    table: typeof club | typeof nationalTeam,
+    ids: string[],
+  ): Promise<string[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const rows = await this.db.select({ id: table.id }).from(table).where(inArray(table.id, ids));
+    return rows.map((row) => row.id);
+  }
+
+  private async resolveSeasonFromHint(
+    playerScope: { kind: CatalogSideKind; id: string } | undefined,
+    seasonHint?: string,
+  ): Promise<{ seasonId: string; score: number } | null> {
+    if (!playerScope || !seasonHint?.trim()) {
+      return null;
+    }
+
+    if (playerScope.kind === "club") {
+      const rows = await this.db
+        .select({ seasonId: teamSeason.seasonId, label: season.label })
+        .from(teamSeason)
+        .innerJoin(season, eq(teamSeason.seasonId, season.id))
+        .where(eq(teamSeason.clubId, playerScope.id));
+
+      return (
+        bestScored(
+          rows.map((row) => ({
+            seasonId: row.seasonId,
+            score: scoreLabelMatch(row.label, seasonHint),
+          })),
+        ) ?? null
+      );
+    }
+
+    const rows = await this.db
+      .select({ seasonId: nationalTeamSeason.seasonId, label: season.label })
+      .from(nationalTeamSeason)
+      .innerJoin(season, eq(nationalTeamSeason.seasonId, season.id))
+      .where(eq(nationalTeamSeason.nationalTeamId, playerScope.id));
+
+    return (
+      bestScored(
+        rows.map((row) => ({
+          seasonId: row.seasonId,
+          score: scoreLabelMatch(row.label, seasonHint),
+        })),
+      ) ?? null
+    );
+  }
+
+  private async resolvePlayer(
+    playerScope: { kind: CatalogSideKind; id: string } | undefined,
+    seasonId: string | undefined,
+    numberHint?: string,
+    nameHint?: string,
+  ): Promise<PlayerMatch | null> {
+    const parsedNumber = parseSquadNumber(numberHint);
+    const trimmedName = nameHint?.trim() ?? "";
+    const namedPlayers = trimmedName ? await this.findNamedPlayers(trimmedName) : [];
+    const namedById = new Map(namedPlayers.map((row) => [row.playerId, row]));
+    const sideKind = playerScope?.kind;
+    const sideId = playerScope?.id;
+
+    if (parsedNumber !== undefined && sideKind && sideId && seasonId) {
+      const row = await this.findSquadByNumber(sideKind, sideId, seasonId, parsedNumber);
+      if (row && (!trimmedName || namedById.has(row.playerId))) {
+        return {
+          playerId: row.playerId,
+          playerNumber: String(row.squadNumber ?? parsedNumber),
+          score: SQUAD_NUMBER_MATCH_SCORE,
+        };
+      }
+    }
+
+    if (!trimmedName) {
+      return null;
+    }
+
+    if (namedPlayers.length === 0) {
+      this.warnPlayerMiss(trimmedName, numberHint, sideKind, seasonId);
+      return null;
+    }
+
+    const candidateIds = namedPlayers.map((row) => row.playerId);
+    if (sideKind && sideId && seasonId) {
+      const scopedRows = await this.listSquadByPlayerIds(sideKind, sideId, seasonId, candidateIds);
+      const seasonMatch = bestScored(
+        scopedRows.map((row) => ({
+          playerId: row.playerId,
+          playerNumber: row.squadNumber ? String(row.squadNumber) : undefined,
+          score: namedById.get(row.playerId)?.score ?? 0,
+        })),
+      );
+      if (seasonMatch) {
+        return seasonMatch;
+      }
+    }
+
+    if (sideKind && sideId) {
+      const sideRows = await this.listSquadOnSide(sideKind, sideId, candidateIds);
+      const sidePlayerIds = [...new Set(sideRows.map((row) => row.playerId))];
+      const uniqueSidePlayerId = sidePlayerIds.length === 1 ? sidePlayerIds[0] : undefined;
+      if (uniqueSidePlayerId) {
+        return {
+          playerId: uniqueSidePlayerId,
+          playerNumber: playerNumberFromHintOrSquad(
+            parsedNumber,
+            sideRows.filter((row) => row.playerId === uniqueSidePlayerId),
+          ),
+          score: namedById.get(uniqueSidePlayerId)?.score ?? 0,
+        };
+      }
+      if (sidePlayerIds.length > 1) {
+        this.warnPlayerMiss(trimmedName, numberHint, sideKind, seasonId);
+        return null;
+      }
+    }
+
+    const uniqueGlobal = namedPlayers.length === 1 ? namedPlayers[0] : undefined;
+    if (uniqueGlobal) {
+      return {
+        playerId: uniqueGlobal.playerId,
+        playerNumber: parsedNumber !== undefined ? String(parsedNumber) : undefined,
+        score: uniqueGlobal.score,
+      };
+    }
+
+    this.warnPlayerMiss(trimmedName, numberHint, sideKind, seasonId);
+    return null;
+  }
+
+  private async findNamedPlayers(
+    nameHint: string,
+  ): Promise<Array<{ playerId: string; score: number }>> {
+    const nameClause = playerHintMatchSql(catalogLabel.text, [nameHint]);
+    if (!nameClause) {
+      return [];
+    }
+
     const labelRows = await this.db
       .selectDistinct({
         entityId: catalogLabel.entityId,
         text: catalogLabel.text,
       })
       .from(catalogLabel)
-      .where(and(eq(catalogLabel.entityType, "player"), sql`${catalogLabel.text} ilike ${pattern}`))
-      .limit(20);
+      .innerJoin(player, eq(player.id, catalogLabel.entityId))
+      .where(and(eq(catalogLabel.entityType, "player"), nameClause))
+      .limit(PLAYER_LABEL_LIMIT);
 
-    if (labelRows.length === 0) {
-      return null;
+    const bestByPlayer = new Map<string, number>();
+    for (const row of labelRows) {
+      const score = scoreLabelMatch(row.text ?? "", nameHint);
+      if (score <= 0) {
+        continue;
+      }
+      const current = bestByPlayer.get(row.entityId) ?? 0;
+      if (score > current) {
+        bestByPlayer.set(row.entityId, score);
+      }
     }
 
-    const playerIds = labelRows.map((row) => row.entityId);
-    const scopedRows = await this.db
+    return [...bestByPlayer.entries()].map(([playerId, score]) => ({ playerId, score }));
+  }
+
+  private warnPlayerMiss(
+    nameHint: string,
+    numberHint: string | undefined,
+    sideKind: CatalogSideKind | undefined,
+    seasonId: string | undefined,
+  ): void {
+    this.logger.warn(
+      `Vision player catalog miss: hint=${nameHint} number=${numberHint?.trim() || "none"} side=${sideKind ?? "none"} season=${seasonId ?? "none"}`,
+    );
+  }
+
+  private async findSquadByNumber(
+    sideKind: CatalogSideKind,
+    sideId: string,
+    seasonId: string,
+    squadNumber: number,
+  ): Promise<SquadRow | undefined> {
+    if (sideKind === "club") {
+      const [row] = await this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          squadNumber: playerClubSeason.squadNumber,
+        })
+        .from(playerClubSeason)
+        .where(
+          and(
+            eq(playerClubSeason.clubId, sideId),
+            eq(playerClubSeason.seasonId, seasonId),
+            eq(playerClubSeason.squadNumber, squadNumber),
+          ),
+        )
+        .limit(1);
+      return row;
+    }
+
+    const [row] = await this.db
       .select({
-        playerId: playerClubSeason.playerId,
-        squadNumber: playerClubSeason.squadNumber,
+        playerId: playerNationalTeamSeason.playerId,
+        squadNumber: playerNationalTeamSeason.squadNumber,
       })
-      .from(playerClubSeason)
+      .from(playerNationalTeamSeason)
       .where(
         and(
-          eq(playerClubSeason.clubId, clubId),
-          eq(playerClubSeason.seasonId, seasonId),
-          inArray(playerClubSeason.playerId, playerIds),
+          eq(playerNationalTeamSeason.nationalTeamId, sideId),
+          eq(playerNationalTeamSeason.seasonId, seasonId),
+          eq(playerNationalTeamSeason.squadNumber, squadNumber),
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
+  private async listSquadByPlayerIds(
+    sideKind: CatalogSideKind,
+    sideId: string,
+    seasonId: string,
+    playerIds: string[],
+  ): Promise<SquadRow[]> {
+    if (playerIds.length === 0) {
+      return [];
+    }
+    if (sideKind === "club") {
+      return this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          squadNumber: playerClubSeason.squadNumber,
+        })
+        .from(playerClubSeason)
+        .where(
+          and(
+            eq(playerClubSeason.clubId, sideId),
+            eq(playerClubSeason.seasonId, seasonId),
+            inArray(playerClubSeason.playerId, playerIds),
+          ),
+        );
+    }
+
+    return this.db
+      .select({
+        playerId: playerNationalTeamSeason.playerId,
+        squadNumber: playerNationalTeamSeason.squadNumber,
+      })
+      .from(playerNationalTeamSeason)
+      .where(
+        and(
+          eq(playerNationalTeamSeason.nationalTeamId, sideId),
+          eq(playerNationalTeamSeason.seasonId, seasonId),
+          inArray(playerNationalTeamSeason.playerId, playerIds),
         ),
       );
+  }
 
-    const scored = scopedRows
-      .map((row) => {
-        const label = labelRows.find((entry) => entry.entityId === row.playerId)?.text ?? "";
-        return {
-          playerId: row.playerId,
-          playerNumber: row.squadNumber ? String(row.squadNumber) : undefined,
-          score: scoreLabelMatch(label, nameHint),
-        };
+  private async listPlayerSeasonIds(
+    playerScope: { kind: CatalogSideKind; id: string },
+    playerId: string,
+    squadNumber?: number,
+  ): Promise<string[]> {
+    const withNumber = await this.listPlayerSeasonRows(playerScope, playerId, squadNumber);
+    if (withNumber.length > 0 || squadNumber === undefined) {
+      return [...new Set(withNumber.map((row) => row.seasonId))];
+    }
+    const unnumbered = await this.listPlayerSeasonRows(playerScope, playerId);
+    return [...new Set(unnumbered.map((row) => row.seasonId))];
+  }
+
+  private async listPlayerSeasonRows(
+    playerScope: { kind: CatalogSideKind; id: string },
+    playerId: string,
+    squadNumber?: number,
+  ): Promise<Array<{ seasonId: string }>> {
+    if (playerScope.kind === "club") {
+      const filters = [
+        eq(playerClubSeason.clubId, playerScope.id),
+        eq(playerClubSeason.playerId, playerId),
+      ];
+      if (squadNumber !== undefined) {
+        filters.push(eq(playerClubSeason.squadNumber, squadNumber));
+      }
+      return this.db
+        .select({ seasonId: playerClubSeason.seasonId })
+        .from(playerClubSeason)
+        .where(and(...filters));
+    }
+
+    const filters = [
+      eq(playerNationalTeamSeason.nationalTeamId, playerScope.id),
+      eq(playerNationalTeamSeason.playerId, playerId),
+    ];
+    if (squadNumber !== undefined) {
+      filters.push(eq(playerNationalTeamSeason.squadNumber, squadNumber));
+    }
+    return this.db
+      .select({ seasonId: playerNationalTeamSeason.seasonId })
+      .from(playerNationalTeamSeason)
+      .where(and(...filters));
+  }
+
+  private async listSquadOnSide(
+    sideKind: CatalogSideKind,
+    sideId: string,
+    playerIds: string[],
+  ): Promise<SquadRow[]> {
+    if (playerIds.length === 0) {
+      return [];
+    }
+    if (sideKind === "club") {
+      return this.db
+        .select({
+          playerId: playerClubSeason.playerId,
+          squadNumber: playerClubSeason.squadNumber,
+        })
+        .from(playerClubSeason)
+        .where(
+          and(eq(playerClubSeason.clubId, sideId), inArray(playerClubSeason.playerId, playerIds)),
+        );
+    }
+
+    return this.db
+      .select({
+        playerId: playerNationalTeamSeason.playerId,
+        squadNumber: playerNationalTeamSeason.squadNumber,
       })
-      .filter((row) => row.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    return scored[0] ?? null;
+      .from(playerNationalTeamSeason)
+      .where(
+        and(
+          eq(playerNationalTeamSeason.nationalTeamId, sideId),
+          inArray(playerNationalTeamSeason.playerId, playerIds),
+        ),
+      );
   }
 
   private async resolvePatch(seasonId: string, hint?: string): Promise<PatchMatch | null> {
@@ -281,7 +766,11 @@ export class VisionCatalogMapper {
       return null;
     }
 
-    const pattern = `%${hint.trim()}%`;
+    const patchClause = hintMatchSql(catalogLabel.text, [hint]);
+    if (!patchClause) {
+      return null;
+    }
+
     const labelRows = await this.db
       .selectDistinct({
         entityId: catalogLabel.entityId,
@@ -289,56 +778,221 @@ export class VisionCatalogMapper {
       })
       .from(catalogLabel)
       .innerJoin(patch, eq(patch.id, catalogLabel.entityId))
-      .where(
-        and(
-          eq(catalogLabel.entityType, "patch"),
-          eq(patch.seasonId, seasonId),
-          sql`${catalogLabel.text} ilike ${pattern}`,
-        ),
-      )
-      .limit(10);
+      .where(and(eq(catalogLabel.entityType, "patch"), eq(patch.seasonId, seasonId), patchClause))
+      .limit(PATCH_LABEL_LIMIT);
 
-    const scored = labelRows
-      .map((row) => ({
-        patchId: row.entityId,
-        score: scoreLabelMatch(row.text ?? "", hint),
-      }))
-      .filter((row) => row.score > 0)
-      .sort((a, b) => b.score - a.score);
-
-    return scored[0] ?? null;
+    return (
+      bestScored(
+        labelRows.map((row) => ({
+          patchId: row.entityId,
+          score: scoreLabelMatch(row.text ?? "", hint),
+        })),
+      ) ?? null
+    );
   }
 
   private buildConfidences(
-    modelConfidence: number | undefined,
-    fields: {
+    hints: IdentityVisionHints,
+    match: {
       club?: number;
+      nationalTeam?: number;
       season?: number;
       kitType?: number;
       player?: number;
       badge?: number;
+      kitLocked?: boolean;
     },
   ): VisionFieldConfidences {
-    const fieldScores = [
-      fields.club,
-      fields.season,
-      fields.kitType,
-      fields.player,
-      fields.badge,
-    ].filter((score): score is number => typeof score === "number");
+    const fields = hints.fieldConfidence;
+    const club = combineModelAndMatchConfidence(fields?.club, match.club);
+    const nationalTeam = combineModelAndMatchConfidence(
+      fields?.nationalTeam ?? fields?.club,
+      match.nationalTeam,
+    );
+    const season = match.kitLocked
+      ? CATALOG_KIT_LOCK_CONFIDENCE
+      : combineModelAndMatchConfidence(fields?.season, match.season);
+    const kitType = match.kitLocked
+      ? CATALOG_KIT_LOCK_CONFIDENCE
+      : combineModelAndMatchConfidence(fields?.kitType, match.kitType);
+    const player = combineModelAndMatchConfidence(fields?.player, match.player);
+    const badge = combineModelAndMatchConfidence(fields?.badge, match.badge);
+    const fieldScores = [club, nationalTeam, season, kitType, player, badge].filter(
+      (score): score is number => typeof score === "number",
+    );
     const overallFromFields =
       fieldScores.length > 0
         ? Math.round(fieldScores.reduce((sum, score) => sum + score, 0) / fieldScores.length)
         : 0;
-    const modelOverall = computeOverallConfidence(modelConfidence);
+    const modelOverall = computeOverallConfidence(hints.confidence);
 
     return {
       overall: modelOverall > 0 ? modelOverall : overallFromFields,
-      club: fields.club,
-      season: fields.season,
-      kitType: fields.kitType,
-      player: fields.player,
-      badge: fields.badge,
+      club,
+      nationalTeam,
+      season,
+      kitType,
+      player,
+      badge,
     };
   }
+
+  /** Season labels on this player's rows at the club, oldest first. */
+  async listPlayerClubSeasonLabels(playerId: string, clubId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ label: season.label, startsOn: season.startsOn })
+      .from(playerClubSeason)
+      .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+      .where(and(eq(playerClubSeason.playerId, playerId), eq(playerClubSeason.clubId, clubId)))
+      .orderBy(season.startsOn);
+    return [...new Set(rows.map((row) => row.label))];
+  }
+
+  async seasonIdForPlayerClubLabel(
+    playerId: string,
+    clubId: string,
+    label: string,
+  ): Promise<string | undefined> {
+    const wanted = label.trim().toLowerCase();
+    const rows = await this.db
+      .select({ seasonId: playerClubSeason.seasonId, label: season.label })
+      .from(playerClubSeason)
+      .innerJoin(season, eq(playerClubSeason.seasonId, season.id))
+      .where(and(eq(playerClubSeason.playerId, playerId), eq(playerClubSeason.clubId, clubId)));
+    return rows.find((row) => row.label.trim().toLowerCase() === wanted)?.seasonId;
+  }
+}
+
+function kitSideEquals(side: CatalogSideMatch | null): SQL | undefined {
+  if (!side) {
+    return undefined;
+  }
+  return side.kind === "club" ? eq(kit.clubId, side.id) : eq(kit.nationalTeamId, side.id);
+}
+
+function playerScopeFor(
+  locked: ObservableKitHit | null,
+  clubId: string | undefined,
+  nationalTeamId: string | undefined,
+  sideMatch: CatalogSideMatch | null,
+): { kind: CatalogSideKind; id: string } | undefined {
+  if (locked?.nationalTeamId) {
+    return { kind: "national_team", id: locked.nationalTeamId };
+  }
+  if (locked?.clubId) {
+    return { kind: "club", id: locked.clubId };
+  }
+  if (clubId) {
+    return { kind: "club", id: clubId };
+  }
+  if (nationalTeamId) {
+    return { kind: "national_team", id: nationalTeamId };
+  }
+  if (sideMatch) {
+    return { kind: sideMatch.kind, id: sideMatch.id };
+  }
+  return undefined;
+}
+
+function clubMatchScore(
+  sideMatch: CatalogSideMatch | null,
+  locked: ObservableKitHit | null,
+): number | undefined {
+  if (sideMatch) {
+    return sideMatch.score;
+  }
+  if (locked?.clubId || locked?.nationalTeamId) {
+    return CATALOG_KIT_LOCK_CONFIDENCE;
+  }
+  return undefined;
+}
+
+function clubScoreForMappedClub(
+  sideMatch: CatalogSideMatch | null,
+  locked: ObservableKitHit | null,
+  clubId: string,
+): number | undefined {
+  if (sideMatch?.kind === "club" && sideMatch.id === clubId) {
+    return clubMatchScore(sideMatch, locked);
+  }
+  return clubMatchScore(null, locked);
+}
+
+function idsForEntityType(
+  rows: Array<{ entityType: string; entityId: string }>,
+  entityType: string,
+): string[] {
+  return rows.filter((row) => row.entityType === entityType).map((row) => row.entityId);
+}
+
+function parseSquadNumber(numberHint?: string): number | undefined {
+  if (!numberHint?.trim()) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(numberHint.trim(), 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function playerNumberFromHintOrSquad(
+  parsedNumber: number | undefined,
+  rows: SquadRow[],
+): string | undefined {
+  if (parsedNumber !== undefined) {
+    return String(parsedNumber);
+  }
+  const numbers = [
+    ...new Set(
+      rows.map((row) => row.squadNumber).filter((value): value is number => value != null),
+    ),
+  ];
+  return numbers.length === 1 ? String(numbers[0]) : undefined;
+}
+
+function bestScored<T extends { score: number }>(items: T[]): T | undefined {
+  return items.filter((row) => row.score > 0).sort((left, right) => right.score - left.score)[0];
+}
+
+function hintMatchSql(column: SQLWrapper, hints: string[]): SQL | undefined {
+  const needles = [...new Set(hints.flatMap((hint) => catalogHintSearchNeedles(hint)))];
+  if (needles.length === 0) {
+    return undefined;
+  }
+  const clauses: SQL[] = needles.map((needle) => sql`${column} ilike ${`%${needle}%`}`);
+  const compacts = [
+    ...new Set(hints.map((hint) => compactCatalogHint(hint)).filter((value) => value.length >= 3)),
+  ];
+  for (const compact of compacts) {
+    clauses.push(sql`${compactCatalogColumnSql(column)} = ${compact}`);
+    clauses.push(sql`${compactCatalogColumnSql(column)} like ${`%${compact}%`}`);
+  }
+  return or(...clauses);
+}
+
+/** Prefix on compact surnames so a one-letter OCR miss still retrieves the CatalogLabel row. */
+function playerHintMatchSql(column: SQLWrapper, hints: string[]): SQL | undefined {
+  const exact = hintMatchSql(column, hints);
+  const prefixes = [
+    ...new Set(
+      hints
+        .map((hint) => compactCatalogHint(hint))
+        .filter((compact) => compact.length >= 8)
+        .map((compact) => compact.slice(0, 6)),
+    ),
+  ];
+  if (prefixes.length === 0) {
+    return exact;
+  }
+  const prefixClauses = prefixes.map(
+    (prefix) => sql`${compactCatalogColumnSql(column)} like ${`${prefix}%`}`,
+  );
+  return exact ? or(exact, ...prefixClauses) : or(...prefixClauses);
+}
+
+/** Same compact as `compactCatalogHint`: NFD + ø→o / æ→ae, then strip non-alphanumerics. */
+function compactCatalogColumnSql(column: SQLWrapper): SQL {
+  const combiningMarks = "[\u0300-\u036f]";
+  const folded = sql`replace(replace(replace(replace(replace(replace(replace(
+    regexp_replace(normalize(lower(coalesce(${column}, '')), NFD), ${combiningMarks}, '', 'g'),
+    'æ', 'ae'), 'ø', 'o'), 'å', 'a'), 'ä', 'a'), 'ö', 'o'), 'ü', 'u'), 'ß', 'ss')`;
+  return sql`regexp_replace(${folded}, '[^a-z0-9]', '', 'g')`;
 }

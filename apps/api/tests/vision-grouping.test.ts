@@ -26,6 +26,8 @@ const PHOTO_A = "11111111-1111-1111-1111-111111111111";
 const PHOTO_B = "22222222-2222-2222-2222-222222222222";
 const PHOTO_C = "33333333-3333-3333-3333-333333333333";
 
+const PHOTO_D = "44444444-4444-4444-4444-444444444444";
+
 const JPEG_BASE64 =
   "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFwABAQEBAAAAAAAAAAAAAAAAAAUGB//EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCwAA//2Q==";
 
@@ -45,6 +47,7 @@ async function registerSession(app: NestFastifyApplication, email: string) {
 describe("vision grouping API", () => {
   let app: NestFastifyApplication;
   let token: string;
+  let groups: Array<{ photoIds: string[]; confidence: number }>;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = DATABASE_URL;
@@ -53,6 +56,10 @@ describe("vision grouping API", () => {
     process.env.BETTER_AUTH_URL = "http://127.0.0.1:3000";
     delete process.env.R2_ENDPOINT;
 
+    groups = [
+      { photoIds: [PHOTO_A, PHOTO_B], confidence: 85 },
+      { photoIds: [PHOTO_C], confidence: 80 },
+    ];
     await resetDatabase(DATABASE_URL, migrationsFolder);
 
     const moduleRef = await Test.createTestingModule({
@@ -61,10 +68,9 @@ describe("vision grouping API", () => {
       .overrideProvider(VISION_ADAPTER)
       .useValue(
         new StubGroupingVisionAdapter({
-          groups: [
-            { photoIds: [PHOTO_A, PHOTO_B], confidence: 85 },
-            { photoIds: [PHOTO_C], confidence: 80 },
-          ],
+          get groups() {
+            return groups;
+          },
         }),
       )
       .compile();
@@ -112,5 +118,35 @@ describe("vision grouping API", () => {
     expect(job.grouping?.groups).toHaveLength(2);
     expect(job.grouping?.groups[0]?.photoIds).toEqual([PHOTO_A, PHOTO_B]);
     expect(job.preselect).toBe(true);
+  });
+
+  it("keeps every group with its confidence when one group is weak", async () => {
+    groups = [
+      { photoIds: [PHOTO_A, PHOTO_B], confidence: 90 },
+      { photoIds: [PHOTO_C], confidence: 60 },
+      { photoIds: [PHOTO_D], confidence: 30 },
+    ];
+    const suggest = await app.inject({
+      method: "POST",
+      url: "/v1/collection/vision/grouping/suggest",
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        photos: [PHOTO_A, PHOTO_B, PHOTO_C, PHOTO_D].map((photoId) => ({
+          photoId,
+          contentBase64: JPEG_BASE64,
+        })),
+      },
+    });
+    const { jobId } = visionSuggestResponseSchema.parse(suggest.json());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const jobResponse = await app.inject({
+      method: "GET",
+      url: `/v1/collection/vision/jobs/${jobId}`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const job = visionJobResponseSchema.parse(jobResponse.json());
+    expect(job.status).toBe("ready");
+    expect(job.grouping?.groups.map((group) => group.confidence)).toEqual([90, 60, 30]);
   });
 });

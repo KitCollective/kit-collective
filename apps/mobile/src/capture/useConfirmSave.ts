@@ -1,9 +1,11 @@
-import type { CatalogPickerItem } from "@kit/api-contract";
+import type { CatalogPickerItem, CollectionJersey } from "@kit/api-contract";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { fetchClubSeasons } from "@/api/catalog";
+import { fetchCollectionJerseys } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
-import { canSave } from "@/capture/captureSession";
+import { unsavedDraftCount } from "@/capture/captureOverview";
+import { canSave, catalogSideId } from "@/capture/captureSession";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
 import { saveConfirmJersey } from "@/capture/saveConfirmJersey";
 import { showSaveFailureToast } from "@/capture/saveFailureToast";
@@ -25,10 +27,15 @@ export function useConfirmSave(options: {
   const [postSaveOpen, setPostSaveOpen] = useState(false);
   const [savedClub, setSavedClub] = useState<CatalogPickerItem | null>(null);
   const [savedSeasonLabel, setSavedSeasonLabel] = useState<string | null>(null);
+  const [savedJersey, setSavedJersey] = useState<CollectionJersey | null>(null);
+  const [savedCount, setSavedCount] = useState<number | null>(null);
   const [selectedSeasonLabel, setSelectedSeasonLabel] = useState<string | null>(null);
 
   const draft =
     state?.drafts.find((entry) => entry.id === state.activeDraftId) ?? state?.drafts[0] ?? null;
+  const clubId = draft?.clubId;
+  const nationalTeamId = draft?.nationalTeamId;
+  const seasonId = draft?.seasonId;
   const isBulk = state?.branch === "bulk";
 
   useFocusEffect(
@@ -38,17 +45,18 @@ export function useConfirmSave(options: {
   );
 
   useEffect(() => {
-    if (!accessToken || !draft?.clubId) {
+    const sideId = catalogSideId({ clubId, nationalTeamId });
+    if (!accessToken || !sideId) {
       return;
     }
 
     let cancelled = false;
-    void fetchClubSeasons(accessToken, draft.clubId).then((response) => {
+    void fetchClubSeasons(accessToken, sideId).then((response) => {
       if (cancelled) {
         return;
       }
-      if (draft.seasonId) {
-        const match = response.seasons.find((season) => season.id === draft.seasonId);
+      if (seasonId) {
+        const match = response.seasons.find((season) => season.id === seasonId);
         if (match) {
           setSelectedSeasonLabel(match.label);
         }
@@ -58,7 +66,7 @@ export function useConfirmSave(options: {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, draft?.clubId, draft?.seasonId]);
+  }, [accessToken, clubId, nationalTeamId, seasonId]);
 
   const handleSave = async () => {
     if (!draft || !options.sessionId || !state) {
@@ -99,7 +107,28 @@ export function useConfirmSave(options: {
     if (outcome.status === "saved") {
       setSavedClub(outcome.club);
       setSavedSeasonLabel(outcome.seasonLabel);
+      setSavedJersey(outcome.jersey);
+      setSavedCount(null);
       setPostSaveOpen(true);
+      // Running count is a fire-and-forget read: the sheet opens first and the
+      // count line simply stays out if the fetch fails. Save never waits on it.
+      if (accessToken) {
+        void fetchCollectionJerseys(accessToken)
+          .then((response) => setSavedCount(response.jerseys.length))
+          .catch(() => undefined);
+      }
+      return;
+    }
+
+    if (outcome.status === "overview-continue") {
+      // Gem og næste stays on Confirm for the next unsaved jersey (the saved one left the
+      // drafts). After the last, back to the overview, which now shows every row as Gemt.
+      if (outcome.remaining === 0) {
+        router.dismissTo({
+          pathname: "/(capture)/overview",
+          params: { sessionId: options.sessionId },
+        });
+      }
       return;
     }
 
@@ -129,11 +158,10 @@ export function useConfirmSave(options: {
 
   const dockHelper = saveBlockMessage ?? (draft ? getSaveBlockMessage(draft) : null);
   const saveEnabled = draft ? canSave(draft) : false;
-  const saveLabel = options.editJerseyId
-    ? "Gem"
-    : isBulk && state && state.drafts.length > 1
-      ? "Gem og næste"
-      : "Gem";
+  const moreToSave = state?.overview
+    ? unsavedDraftCount(state) > 1
+    : isBulk && state !== null && state.drafts.length > 1;
+  const saveLabel = options.editJerseyId ? "Gem" : moreToSave ? "Gem og næste" : "Gem";
 
   return {
     state,
@@ -145,6 +173,8 @@ export function useConfirmSave(options: {
     postSaveOpen,
     savedClub,
     savedSeasonLabel,
+    savedJersey,
+    savedCount,
     selectedSeasonLabel,
     setSelectedSeasonLabel,
     dockHelper,

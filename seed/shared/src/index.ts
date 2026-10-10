@@ -18,6 +18,11 @@ export {
   catalogCompetitionIdentity,
   resolveCompetition,
 } from "./competitions.js";
+export {
+  DEFAULT_IMAGE_CONTENT_TYPE,
+  detectImageContentType,
+  imageContentTypeOrDefault,
+} from "./image-content-type.js";
 export type {
   JoinClubScope,
   JoinNationalTeamScope,
@@ -54,3 +59,8 @@ export {
   type SeedScope,
 } from "./seed-scope.js";
 export { normalizeTransfermarktClubId } from "./transfermarkt-club-id.js";
+export {
+  resolveTransfermarktTransport,
+  type TransfermarktTransport,
+  type TransfermarktTransportEnv,
+} from "./transfermarkt-transport.js";

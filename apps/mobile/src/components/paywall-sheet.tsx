@@ -35,10 +35,10 @@ export function PaywallSheet({
   const purchaseDisabled = busy || !iapAvailable;
 
   return (
-    <Sheet visible={visible} title="Premium" onDismiss={onDismiss}>
-      <View style={styles.body}>
+    <Sheet visible={visible} title="KitCollective+" onDismiss={onDismiss}>
+      <View style={styles.body} testID="paywall-sheet">
         <Text style={[typography.body, { color: theme.contentSecondary }]}>
-          Få adgang til ønskeliste og premium-funktioner.
+          Plus er ubegrænset Vision Matcher og ønskeliste.
         </Text>
         {!iapAvailable && webUnavailableMessage ? (
           <Text style={[typography.body, { color: theme.contentSecondary }]}>
@@ -46,7 +46,7 @@ export function PaywallSheet({
           </Text>
         ) : null}
         {iapAvailable ? (
-          <View style={styles.priceRow}>
+          <View style={styles.priceRow} testID="paywall-prices">
             <View style={styles.priceColumn}>
               <Text style={[typography.caption, { color: theme.contentSecondary }]}>Månedlig</Text>
               <Text style={[typography.mono, { color: theme.contentPrimary }]}>
