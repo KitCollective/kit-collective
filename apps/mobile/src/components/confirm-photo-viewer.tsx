@@ -44,13 +44,8 @@ export function ConfirmPhotoViewer({
   const theme = useTheme();
   const typography = useTypography();
   const slotUris = analyzing ? groupingStripUris(rollingUris) : photoUris;
-  const roles = analyzing
-    ? groupingViewerRoles(slotUris, true)
-    : confirmPhotoStrip(slotUris, {
-        analyzing,
-        photoCount,
-      }).roles;
   const strip = confirmPhotoStrip(slotUris, { analyzing, photoCount });
+  const roles = analyzing ? groupingViewerRoles(slotUris, true) : strip.roles;
   const waiting = isGroupingWait(slotUris, analyzing);
 
   return (

@@ -3,7 +3,6 @@ import { PHOTO_ROLES } from "@kit/domain";
 import { useEffect, useState } from "react";
 import {
   addPhotosToDraft,
-  appendUnboundPhotos,
   bindUnboundPhotoToDraft,
   changeDraftPhotoRole,
   discardUnboundPhoto,
@@ -209,13 +208,6 @@ export function useConfirmPhotos({
     }
   };
 
-  const uploadToSandbox = async () => {
-    const uris = await pickUploadFiles({ allowsMultipleSelection: true }, expoUploadFilesAdapter);
-    if (uris?.length) {
-      mutate((current) => appendUnboundPhotos(current, uris));
-    }
-  };
-
   return {
     photoUris: stripPhotoUris,
     lightboxRole,
@@ -231,7 +223,6 @@ export function useConfirmPhotos({
     discardUnboundPhoto: (uri: string) => {
       mutate((current) => discardUnboundPhoto(current, uri));
     },
-    uploadToSandbox,
     addPhoto,
   };
 }
