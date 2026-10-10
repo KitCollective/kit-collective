@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  CODE_STUB_BACK_LABEL,
   DOOR_DIVIDER_LABEL,
   DOOR_EMAIL_INVALID,
   DOOR_PROVIDER_LABEL,
@@ -20,7 +19,6 @@ describe("first-session door copy", () => {
     expect(DOOR_TERMS_LINE).toContain("vilkårene");
     expect(DOOR_TERMS_LINE).toContain("privatlivspolitikken");
     expect(DOOR_EMAIL_INVALID).toBe("Skriv en gyldig e-mail");
-    expect(CODE_STUB_BACK_LABEL).toBe("Tilbage");
   });
 
   it("names the provider in the cancelled-login toast", () => {

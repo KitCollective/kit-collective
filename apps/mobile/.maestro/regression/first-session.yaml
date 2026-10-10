@@ -54,7 +54,7 @@ name: first-session
     id: door-submit
 - extendedWaitUntil:
     visible:
-      id: code-stub
+      id: code-screen
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 5000

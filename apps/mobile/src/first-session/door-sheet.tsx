@@ -18,6 +18,7 @@ type DoorSheetProps = {
   emailError: string | null;
   showThrottleBanner: boolean;
   socialBusy: DoorSocialProvider | null;
+  emailBusy: boolean;
   onClose: () => void;
   onEmailChange: (value: string) => void;
   onSubmit: () => void;
@@ -30,6 +31,7 @@ export function DoorSheet({
   emailError,
   showThrottleBanner,
   socialBusy,
+  emailBusy,
   onClose,
   onEmailChange,
   onSubmit,
@@ -45,6 +47,7 @@ export function DoorSheet({
           emailError={emailError}
           showThrottleBanner={showThrottleBanner}
           socialBusy={socialBusy}
+          emailBusy={emailBusy}
           onEmailChange={onEmailChange}
           onSubmit={onSubmit}
           onSocial={onSocial}

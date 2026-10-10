@@ -22,6 +22,7 @@ import {
   loginCollector,
   loginSocial,
   registerCollector,
+  verifySignInCode,
 } from "@/api/identity";
 import { requestNativeIdToken } from "@/auth/native-id-token";
 import { clearSession, loadSession, saveSession } from "@/auth/session";
@@ -44,6 +45,8 @@ type AuthContextValue = {
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signInSocial: (provider: IdentityLinkedProvider) => Promise<void>;
+  /** Signs in (or registers) with the six-digit code mailed to the address. */
+  signInWithCode: (email: string, code: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -152,6 +155,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (provider: IdentityLinkedProvider) => {
       const idToken = await requestNativeIdToken(provider);
       const next = await loginSocial(provider, idToken);
+      await applySession(next);
+    },
+    [applySession],
+  );
+
+  const signInWithCode = useCallback(
+    async (email: string, code: string) => {
+      const next = await verifySignInCode(email, code);
       await applySession(next);
     },
     [applySession],
@@ -289,6 +300,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       signIn,
       signInSocial,
+      signInWithCode,
       signUp,
       signOut,
       refreshUser,
@@ -301,6 +313,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       signIn,
       signInSocial,
+      signInWithCode,
       signUp,
       signOut,
       refreshUser,
