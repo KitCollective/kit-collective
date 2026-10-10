@@ -81,7 +81,11 @@ export function getActiveDraft(state: CaptureSessionState): CaptureJerseyDraft {
   return getDraft(state, state.activeDraftId);
 }
 
-function createEmptyDraft(id: string): CaptureJerseyDraft {
+/** Last saved size, pre-selected on a new draft. Condition is never a default. */
+export type NewDraftDefaults = { defaultSize?: JerseySize | null };
+
+function createEmptyDraft(id: string, defaults?: NewDraftDefaults): CaptureJerseyDraft {
+  const defaultSize = defaults?.defaultSize ?? null;
   return {
     id,
     clubId: null,
@@ -91,10 +95,10 @@ function createEmptyDraft(id: string): CaptureJerseyDraft {
     seasonId: null,
     seasonLabel: null,
     kitType: null,
-    size: null,
+    size: defaultSize,
     condition: null,
     kitTypeSelected: false,
-    sizeSelected: false,
+    sizeSelected: defaultSize !== null,
     conditionSelected: false,
     notes: "",
     playerName: "",
@@ -199,7 +203,11 @@ function updateDraft(
 
 export function createCaptureSession(
   orderedUris: string[],
-  options?: { store?: CaptureSessionStore; sessionId?: string; photoSource?: PhotoSource },
+  options?: NewDraftDefaults & {
+    store?: CaptureSessionStore;
+    sessionId?: string;
+    photoSource?: PhotoSource;
+  },
 ): CaptureSessionState {
   const branch = branchFromPhotoCount(orderedUris.length);
   const draftId = createCaptureSessionId();
@@ -209,10 +217,10 @@ export function createCaptureSession(
   const draft =
     branch === "single"
       ? {
-          ...createEmptyDraft(draftId),
+          ...createEmptyDraft(draftId, options),
           photos: assignSingleRoles(orderedUris, photoSource),
         }
-      : createEmptyDraft(draftId);
+      : createEmptyDraft(draftId, options);
 
   const state: CaptureSessionState = {
     sessionId,
@@ -231,7 +239,7 @@ export function createCaptureSession(
 
 export function createCaptureSessionFromPhotos(
   photos: CaptureSessionPhoto[],
-  options?: { store?: CaptureSessionStore; sessionId?: string },
+  options?: NewDraftDefaults & { store?: CaptureSessionStore; sessionId?: string },
 ): CaptureSessionState {
   const orderedUris = photos.map((photo) => photo.uri);
   const branch = branchFromPhotoCount(orderedUris.length);
@@ -241,10 +249,10 @@ export function createCaptureSessionFromPhotos(
   const draft =
     branch === "single"
       ? {
-          ...createEmptyDraft(draftId),
+          ...createEmptyDraft(draftId, options),
           photos: [...photos],
         }
-      : createEmptyDraft(draftId);
+      : createEmptyDraft(draftId, options);
 
   const state: CaptureSessionState = {
     sessionId,
@@ -342,12 +350,74 @@ export function unbindPhoto(state: CaptureSessionState, uri: string): CaptureSes
   }));
 }
 
-export function addJerseyDraft(state: CaptureSessionState): CaptureSessionState {
+export function addJerseyDraft(
+  state: CaptureSessionState,
+  defaults?: NewDraftDefaults,
+): CaptureSessionState {
   const draftId = createCaptureSessionId();
   return withState(state, {
     ...state,
-    drafts: [...state.drafts, createEmptyDraft(draftId)],
+    drafts: [...state.drafts, createEmptyDraft(draftId, defaults)],
     activeDraftId: draftId,
+  });
+}
+
+/**
+ * After a jersey is saved, drafts that never got a size take the saved one. A pre-selection,
+ * not a hidden value: the chip shows selected and can change. Condition is never touched.
+ */
+export function applyStickySizeToUnselected(
+  state: CaptureSessionState,
+  size: JerseySize,
+): CaptureSessionState {
+  if (state.drafts.every((draft) => draft.sizeSelected)) {
+    return state;
+  }
+  return withState(state, {
+    ...state,
+    drafts: state.drafts.map((draft) =>
+      draft.sizeSelected ? draft : { ...draft, size, sizeSelected: true },
+    ),
+  });
+}
+
+/**
+ * The Foto tile on Confirm: picked photos join this jersey by fill order (Forside, Bagside,
+ * Venstre, Højre, then Andet). Never flips a single session to bulk; stops at the 10 cap.
+ */
+export function addPhotosToDraft(
+  state: CaptureSessionState,
+  draftId: string,
+  uris: string[],
+  source: PhotoSource = "gallery",
+): CaptureSessionState {
+  let draft = getDraft(state, draftId);
+  const known = new Set(state.orderedUris);
+  const fresh = uris.filter((uri) => !known.has(uri));
+  const photoIdByUri = { ...state.photoIdByUri };
+  const orderedUris = [...state.orderedUris];
+  const added: CaptureSessionPhoto[] = [];
+
+  for (const uri of fresh) {
+    const role = nextAvailableRole({ ...draft, photos: [...draft.photos, ...added] });
+    if (!role) {
+      break;
+    }
+    const photoId = createPhotoId();
+    photoIdByUri[uri] = photoId;
+    orderedUris.push(uri);
+    added.push(withPhotoId(uri, role, source, photoId));
+  }
+
+  if (added.length === 0) {
+    return state;
+  }
+  draft = { ...draft, photos: [...draft.photos, ...added] };
+  return withState(state, {
+    ...state,
+    orderedUris,
+    photoIdByUri,
+    drafts: state.drafts.map((entry) => (entry.id === draftId ? draft : entry)),
   });
 }
 
