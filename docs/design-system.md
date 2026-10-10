@@ -1443,16 +1443,16 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg 
 5. **Owner**: last, under the facts. A `caption` **Ejer**, then one row with a 44px Avatar, Handle, a `caption` line (city per Vis by · **n trøjer**) and a trailing chevron. Opens Peer Profil.
 6. **Button dock** (sticks to the bottom, hairline above):
    - Åben for bud, no bid from this collector: Button `primary` **Send bud**.
-   - This collector has a pending bid: the button is replaced by one `fill.secondary` row (`radius.md`, 54 high): **Dit bud** and the amount in `mono`, the status **Afventer svar** in `mono` `content.secondary`, trailing chevron. The row opens the thread. This is the only place a collector's own amount shows outside the thread.
-   - Not åben for bud: no dock.
+   - This collector has a pending bid: the button is replaced by one `fill.secondary` row (`radius.md`, 54 high): **Dit bud** and the amount in `mono`, the status **Afventer svar** in `mono` `content.secondary`, trailing chevron. The row opens the thread. This is the only place a collector's own amount shows outside the thread. One pending bid per collector per jersey: there is no way to bid again while it waits (decided 2026-10-10).
+   - Not åben for bud: no dock and no other action; Favorit is the only thing to do (decided 2026-10-10).
 
 **After sending**: back on this screen, a Toast once (**Dit bud er sendt til *handle***), and the dock shows the own bid row.
 
 **More** opens a Sheet with **Rapportér** and **Blokér**.
 
-**Unsupported**: The immersive photo stage with a bottom sheet. The owner between the title and the facts. Other collectors' amounts. An amount on the photo. Editing. Tab bar on this screen.
+**Unsupported**: The immersive photo stage with a bottom sheet. The owner between the title and the facts. A message or other action on a jersey that is not åben for bud. **Byd igen** beside a pending bid. Other collectors' amounts. An amount on the photo. Editing. Tab bar on this screen.
 
-**Gaps** (flag, do not invent): an action when the jersey is not åben for bud; whether a collector may bid again while a bid is pending; the dock after a bid is accepted or declined; dark mode.
+**Gaps** (flag, do not invent): the dock after a bid is accepted or declined; dark mode.
 
 Flag missing context; do not invent patterns.
 
@@ -1466,12 +1466,11 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg 
 1. Back + title **Send bud**.
 2. **Jersey summary**: a 56 × 70 thumb (`radius.sm`), club and season (`label` 16, 600), type · size · condition in `mono`, and player · owner Handle in `caption`. No large photo.
 3. **Amount**, centred and the one bold thing: `caption` **Dit bud**, the amount in `mono` 56 / 500 with **kr** in `mono` 20 `content.secondary`, and a 2px `fill.primary` underline as the focus mark. Whole kroner only.
-4. Helper in `mono`: the last bid on that jersey when known.
-5. **Dock above the number pad**: a `caption` line (**handle får dit bud i Indbakke. Det er ikke et køb.**), then Button `primary` that carries the amount (**Send bud på 250 kr**). Without an amount the button reads **Send bud** and is disabled.
+4. **Dock above the number pad**: a `caption` line (**handle får dit bud i Indbakke. Det er ikke et køb.**), then Button `primary` that carries the amount (**Send bud på 250 kr**). Without an amount the button reads **Send bud** and is disabled.
 
-**Unsupported**: Entry from **own** Samling tiles. A large photo on this screen. Price overlay on the photo. Preset amount chips. Cart. “Køb nu”. Wash focus. The `numeral` face for the amount. Tab bar on this screen. Starting Send bud from Indbakke as a compose-to-nobody control. Entry from a foreign Profil: flag (not locked).
+**Unsupported**: Entry from **own** Samling tiles. A large photo on this screen. Price overlay on the photo. Preset amount chips. A helper showing the last bid or any other collector's amount (decided 2026-10-10). Cart. “Køb nu”. Wash focus. The `numeral` face for the amount. Tab bar on this screen. Starting Send bud from Indbakke as a compose-to-nobody control. Entry from a foreign Profil: flag (not locked).
 
-**Gaps** (flag, do not invent): whether the last-bid helper should show other collectors' amounts at all; a failed send; an upper limit; dark mode.
+**Gaps** (flag, do not invent): a failed send; an upper limit; dark mode.
 
 Flag missing context; do not invent patterns.
 
