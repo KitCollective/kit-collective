@@ -1,4 +1,4 @@
-# First session as a Collector can reach it today: welcome, demo, Kom i gang, code step (stub until KIT-275).
+# First session as a new Collector: welcome, demo result, Kom i gang, invalid e-mail, code.
 appId: app.kitcollective.mobile
 name: first-session
 ---
@@ -36,7 +36,7 @@ name: first-session
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 5000
-- takeScreenshot: kc__first-session__03-door
+- takeScreenshot: kc__first-session__03-kom-i-gang
 # An address that is not an e-mail shows the inline error and sends nothing.
 - tapOn:
     id: door-email
@@ -47,7 +47,7 @@ name: first-session
     visible:
       id: door-email-error
     timeout: 5000
-- takeScreenshot: kc__first-session__04-door-invalid-email
+- takeScreenshot: kc__first-session__04-invalid-email
 - eraseText: 40
 - inputText: ${MAESTRO_COLLECTOR_EMAIL}
 - tapOn:
