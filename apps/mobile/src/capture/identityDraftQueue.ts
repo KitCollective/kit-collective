@@ -106,17 +106,6 @@ export function shouldSyncIdentityChrome(
   return inFlightDraftId !== null && inFlightDraftId === activeDraftId;
 }
 
-/**
- * Hold identity only until the first grouped jersey has photos.
- * Grouping reveal of jersey 2 and 3 must not block jersey 1's match.
- */
-export function shouldHoldIdentityForGrouping(input: {
-  groupingInFlight: boolean;
-  boundDraftCount: number;
-}): boolean {
-  return input.groupingInFlight && input.boundDraftCount === 0;
-}
-
 /** Kick the queue when a jersey gains photos — including mid-grouping — not on tab switches. */
 export function shouldAttemptIdentityQueue(input: {
   deferIdentity: boolean;

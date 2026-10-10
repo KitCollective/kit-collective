@@ -26,6 +26,7 @@ export default function CaptureFlowLayout() {
           name="loading"
           options={{ headerShown: false, animation: reduceMotion ? "none" : "fade" }}
         />
+        <Stack.Screen name="overview" options={{ headerShown: false }} />
         <Stack.Screen name="confirm" options={{ headerShown: false }} />
         <Stack.Screen name="confirm-data" options={{ headerShown: false }} />
         <Stack.Screen name="confirm-details" options={{ headerShown: false }} />

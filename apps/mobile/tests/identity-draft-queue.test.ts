@@ -15,7 +15,6 @@ import {
   raceWithTimeout,
   remainingIdentityBudget,
   shouldAttemptIdentityQueue,
-  shouldHoldIdentityForGrouping,
   shouldSyncIdentityChrome,
 } from "../src/capture/identityDraftQueue";
 
@@ -163,20 +162,6 @@ describe("shouldAttemptIdentityQueue", () => {
         groupingJustClosed: false,
       }),
     ).toBe(true);
-  });
-});
-
-describe("shouldHoldIdentityForGrouping", () => {
-  it("releases identity as soon as the first grouped jersey has photos", () => {
-    expect(shouldHoldIdentityForGrouping({ groupingInFlight: true, boundDraftCount: 0 })).toBe(
-      true,
-    );
-    expect(shouldHoldIdentityForGrouping({ groupingInFlight: true, boundDraftCount: 1 })).toBe(
-      false,
-    );
-    expect(shouldHoldIdentityForGrouping({ groupingInFlight: false, boundDraftCount: 0 })).toBe(
-      false,
-    );
   });
 });
 

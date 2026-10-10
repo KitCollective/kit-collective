@@ -84,11 +84,11 @@ describe("Identity block chrome", () => {
 describe("ConfirmVisionSlot", () => {
   const slotSource = readFileSync(slotPath, "utf8");
 
-  it("is no longer a status banner: only the grouping strip and the catalog-miss note", () => {
+  it("is no longer a status banner: only the catalog-miss note, no grouping strip", () => {
     expect(slotSource).not.toContain("ConfirmVisionBanner");
     expect(slotSource).not.toContain("onQuotaPress");
     expect(slotSource).not.toContain("bannerState");
-    expect(slotSource).toContain("groupingMessage");
+    expect(slotSource).not.toContain("groupingMessage");
     expect(slotSource).toContain("catalogMiss");
   });
 });

@@ -16,12 +16,14 @@ import {
 import { expoGalleryPickerAdapter } from "@/capture/expoPickerAdapters";
 import { galleryMultiSelectQuality } from "@/capture/photoBytes";
 import { pickGalleryPhotos } from "@/capture/pickGalleryPhotos";
+import { useCaptureLanding } from "@/capture/use-capture-landing";
 import { isRepeatCaptureSession } from "@/session/addSession";
 import { useTheme } from "@/theme/use-theme";
 
 export default function CaptureScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const landingFor = useCaptureLanding();
   const params = useLocalSearchParams<{
     prefilledClubId?: string;
     prefilledClubLabel?: string;
@@ -37,12 +39,9 @@ export default function CaptureScreen() {
   const navigateToConfirm = useCallback(
     (sessionId: string) => {
       clearActiveCameraCaptureSessionId();
-      router.replace({
-        pathname: "/(capture)/confirm",
-        params: { sessionId },
-      });
+      router.replace(landingFor(sessionId));
     },
-    [router],
+    [landingFor, router],
   );
 
   const finishCaptureFromPhotos = useCallback(
