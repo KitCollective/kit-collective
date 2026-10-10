@@ -11,6 +11,8 @@
 //   node scripts/linear.mjs label KIT-272 add|remove <label>
 //   node scripts/linear.mjs description KIT-272 --body-file <path>
 //   node scripts/linear.mjs link KIT-272 <url> [title]
+//   node scripts/linear.mjs signal-up "<title>" --body-file <path>
+//       new Triage issue in team KIT with the `signal-up` label only (docs/agents/signal-up.md)
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -261,6 +263,30 @@ switch (command) {
     process.stdout.write(`${issue.identifier}: linked ${url}\n`);
     break;
   }
+  case "signal-up": {
+    const title = args[0] ?? fail('signal-up "<title>" --body-file <path>');
+    const { teams } = await gql('{ teams(filter: { key: { eq: "KIT" } }) { nodes { id } } }');
+    const teamId = teams.nodes[0]?.id ?? fail("team KIT not found");
+    const { workflowStates } = await gql(
+      'query($teamId: ID!) { workflowStates(filter: { team: { id: { eq: $teamId } }, name: { eq: "Triage" } }) { nodes { id } } }',
+      { teamId },
+    );
+    const stateId = workflowStates.nodes[0]?.id ?? fail('state "Triage" not found');
+    const { issueLabels } = await gql(
+      '{ issueLabels(filter: { name: { eq: "signal-up" } }) { nodes { id team { id } } } }',
+    );
+    const labelId =
+      (issueLabels.nodes.find((label) => label.team?.id === teamId) ?? issueLabels.nodes[0])?.id ??
+      fail("label signal-up not found");
+    const { issueCreate } = await gql(
+      "mutation($input: IssueCreateInput!) { issueCreate(input: $input) { issue { identifier url } } }",
+      { input: { teamId, stateId, labelIds: [labelId], title, description: bodyFromArgs(args) } },
+    );
+    process.stdout.write(`${issueCreate.issue.identifier} ${issueCreate.issue.url}\n`);
+    break;
+  }
   default:
-    fail("commands: workspace, issue, comment, comment-update, state, label, description, link");
+    fail(
+      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up",
+    );
 }

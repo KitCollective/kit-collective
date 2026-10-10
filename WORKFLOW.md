@@ -85,7 +85,7 @@ Lanes come from `lanes` in factory config.
 7. Out of scope → `/signal-up`. Cap `agent.signalUpCapPerRun`. Never expand the PR except ratchet paths required by `### Review feedback` (`docs/agents/write-scope.md`).
 8. Open or update a PR **into the integration lane**. Attach the PR URL on the issue.
 9. Evidence. A slice whose surface has device-flow evidence follows `docs/agents/device-flows.md`: write the slice's own Device flow (`apps/mobile/.maestro/slices/<KEY>.yaml`, one step per Acceptance criterion a screen can show), and after the PR is open run `apps/mobile/.maestro/device-run.sh`, which queues behind other sessions, then sets the `Device flows` commit status, writes one PR comment (the steps with their screenshots, verdict and a recording) and puts the same links under workpad `### Evidence`. Do not attach worker browser screenshots for such a slice. A red flow or a **Design finding** goes into `### Review feedback`. Nothing is owed on the integration lane after landing; the five regression flows run on request (`E2E_FLOWS=regression`). Any other slice: upload screenshots/recordings to the Linear issue, comment, and link under workpad `### Evidence`.
-10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph plus typecheck of packages whose src or tests you edited; wait for **all** required GitHub checks (pending or red → do not flip, including image/deploy smokes); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff; spawn the UI/layout helper when the issue cites the design lock; every What to build clause has Validation or Evidence. On resume, fix the **class**, not only the cited file.
+10. **Pre-review gate** (see `/implement`): rebase onto latest `origin/<lanes.integration>` until mergeable; full test graph plus typecheck of packages whose src or tests you edited; `pnpm check:review-gate` clean; wait for **all** required GitHub checks with `node scripts/wait-for-checks.mjs <pr>` (pending or red → do not flip, including image/deploy smokes; never ask the human whether CI is green); if a new required env was added, wire it on every workflow that boots that process; re-read design-system / architecture lock against the diff; spawn the UI/layout helper when the issue cites the design lock; every What to build clause has Validation or Evidence. On resume, fix the **class**, not only the cited file.
 11. Clear addressed `### Review feedback`. Move to `In Review` only after the gate. Write **one role comment** (PR URL + what was built). Do not merge. Do not move to `Done`. Do not tick description Acceptance criteria — checker pass owns that.
 
 ## Role comments
@@ -105,7 +105,11 @@ Each factory role writes **one new top-level issue comment** at its status trans
 
 Wakes when status becomes `In Review`. Judge only. No feature coding.
 
-Every pass is a **complete** review of the current diff, not a delta against last `### Review feedback`. Findings that existed in the first PR and are only reported on fail #3+ are a checker miss — dump the whole lock set in fail #1. Spec source is the whole issue body (What to build + AC). A red CI job is not a Spec-clean license.
+The first pass is a **complete** review of the diff: every row of the lock set, written to workpad `### Review matrix` (one row each: `checked`, `N/A` or `finding`, with evidence and the SHA). Findings that existed in the first PR and are only reported on fail #3+ are a checker miss — dump the whole lock set in fail #1. Later passes inherit the matrix and re-check only the rows `node scripts/review-matrix.mjs plan` lists (rows still a finding, state rows, rows the new diff touches); ADR-0050. Spec source is the whole issue body (What to build + AC). A red CI job is not a Spec-clean license.
+
+Mechanical findings (Danish identifiers, docs naming what the diff removed) are caught by `pnpm check:review-gate` before `In Review` and in CI; a review does not spend a round on what a script can say.
+
+A fail whose findings are **all** tagged `[text]` or `[name]` is a **light fail**: the issue stays `In Review`, the session fixes in place, and `node scripts/classify-fix-diff.mjs <lastReviewSha>` decides the check. `light` → the reviewer reads the fix diff against each finding and the gate scripts, no new fresh review, `lightFixes` +1 and `reviewLoops` unchanged (three light fixes count as one `reviewLoops`). `full` → the normal loop.
 
 1. `/code-review` (Standards + Spec) against the attached PR. Sub-agents list **every** hard finding; do not stop at the first three. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis. For a mobile slice the Standards axis reads the `Device flows` commit status and PR comment: a red or missing status is a fail; the slice flow is read against the Acceptance criteria (a criterion a screen could show with no step behind it is a Spec finding); a **Design finding** (a named design-lock break, or a change the issue did not ask for) is included in `### Review feedback`, and a step that shows what the issue asked for is the Evidence for that criterion.
 2. GitHub CI/CD on that PR: read **all** required check runs (not only `test` — image/deploy smokes count). `gh pr view --json mergeable` must be `MERGEABLE`. Pending required checks → wait; stay in `In Review`. Do **not** fail early on Standards while checks are still running. Red or failed required checks, or `CONFLICTING` → fail, and still include every Spec/Standards hard miss in the same feedback.
@@ -158,10 +162,15 @@ Every pass is a **complete** review of the current diff, not a delta against las
 
 - ciFailCycles: 0
 - reviewLoops: 0
+- lightFixes: 0
+
+### Review matrix
+
+- (none until the first review | table from `node scripts/review-matrix.mjs rows`: row, status `checked` / `N/A` / `finding`, evidence, SHA)
 
 ### Review feedback
 
-- (none | why the last pass was not enough — checker, land, or approver)
+- (none | why the last pass was not enough — checker, land, or approver; `[text]` / `[name]` tags mark light findings)
 
 ### Evidence
 

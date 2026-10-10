@@ -37,9 +37,10 @@ Do not move to `In Review` until all of these are true. Record the commands unde
 2. **Roles** — spawn every matching Role (`/tdd`): Frontend, Backend, DevOps. A slice that touches Nest HTTP and Expo screens whose workpad says `(none)` is a process miss. If the issue cites `docs/design-system.md` or named lock components (Search, Sheet, Mark, Banner, Tab bar, Empty state), **Frontend** must run — Backend+DevOps alone is not enough.
 3. **Lane** — `git fetch origin <lanes.integration>` and rebase or merge so `gh pr view --json mergeable` is `MERGEABLE`. Behind the lane is not shippable.
 4. **Tests** — full graph, not only the files you touched. Typecheck every package whose src **or tests** you edited (`pnpm --filter <pkg> typecheck`), not only the client.
-5. **CI** — wait until **every** required GitHub check is green or skipped-by-design. Image/deploy smokes count. Pending **or red** → stay on the branch; do not flip status.
+5. **CI** — wait until **every** required GitHub check is green or skipped-by-design, with `node scripts/wait-for-checks.mjs <pr>` (one blocking command, exit 0 green and MERGEABLE, 1 red, 2 timeout, 3 not mergeable; run it in the background if there is other work). Never the watch flag, a sleep or a loop (the ratchet hook denies them), and never ask the human whether CI is green. Image/deploy smokes count. Pending **or red** → stay on the branch; do not flip status.
 6. **Env class** — if you added a required process env (fail-fast at boot), grep `.github/workflows/**` for every job that `docker run`s or otherwise boots that process, and set the var there too.
-7. **AC evidence** — every acceptance criterion (and every What to build clause) has a Validation command or Evidence screenshot. Ticking the workpad box is not evidence. Spec source is the whole issue body, not AC alone.
+7. **Mechanical checks** — `pnpm check:review-gate` is clean: no Danish identifier or file name added (`scripts/check-code-english.mjs`), and no living doc names a symbol, prop, flow step or path the diff removed or renamed (`scripts/check-doc-references.mjs`). After a rename or removal, grep `docs/`, `CONTEXT.md` and flow comments yourself too: the script only knows what is distinctive.
+8. **AC evidence** — every acceptance criterion (and every What to build clause) has a Validation command or Evidence screenshot. Ticking the workpad box is not evidence. Spec source is the whole issue body, not AC alone.
 
 ## Domain helpers
 

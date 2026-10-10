@@ -58,6 +58,20 @@ export const RATCHET_SCRIPT_PATHS = new Set([
   "scripts/tests/check-mobile-paywall-iap.test.mjs",
   "scripts/tests/check-pr-write-scope.test.mjs",
   "scripts/tests/check-factory-ci-tests.test.mjs",
+  "scripts/check-code-english.mjs",
+  "scripts/check-doc-references.mjs",
+  "scripts/lib/doc-references.mjs",
+  "scripts/tests/check-code-english.test.mjs",
+  "scripts/tests/check-doc-references.test.mjs",
+  "scripts/review-matrix.mjs",
+  "scripts/lib/review-matrix.mjs",
+  "scripts/tests/review-matrix.test.mjs",
+  "scripts/classify-fix-diff.mjs",
+  "scripts/lib/fix-diff.mjs",
+  "scripts/tests/fix-diff.test.mjs",
+  "scripts/wait-for-checks.mjs",
+  "scripts/lib/pr-checks.mjs",
+  "scripts/tests/pr-checks.test.mjs",
 ]);
 
 /**
