@@ -27,3 +27,11 @@ test("checkMobileProfileSettingsHub fails when a prefs drill uses factory jargon
   const violations = checkMobileProfileSettingsHub({ [`prefs:${pushPath}`]: mutated });
   assert.ok(violations.some((v) => v.includes("factory jargon")));
 });
+
+test("checkMobileProfileSettingsHub fails when Konto brings back a password or e-mail change row", () => {
+  const kontoSource = readFileSync("apps/mobile/app/(tabs)/profile/kontoindstillinger.tsx", "utf8");
+  const violations = checkMobileProfileSettingsHub({
+    kontoSource: `${kontoSource}\n<ListValueRow title="Skift adgangskode" />`,
+  });
+  assert.ok(violations.some((v) => v.includes("change-password")));
+});

@@ -4,8 +4,6 @@ import { describe, expect, it } from "vitest";
 
 const uiPath = join(__dirname, "../src/components/ui.tsx");
 const confirmPath = join(__dirname, "../app/(capture)/confirm.tsx");
-const loginPath = join(__dirname, "../app/(auth)/login.tsx");
-const registerPath = join(__dirname, "../app/(auth)/register.tsx");
 const cookiePath = join(__dirname, "../app/(tabs)/profile/cookie-indstillinger.tsx");
 
 describe("Button dock chrome", () => {
@@ -36,15 +34,11 @@ describe("Button dock chrome", () => {
     expect(confirm).toContain("disabled={!saveEnabled}");
   });
 
-  it("keeps login, register, and cookie-indstillinger on the border dock", () => {
-    const login = readFileSync(loginPath, "utf8");
-    const register = readFileSync(registerPath, "utf8");
+  it("keeps cookie-indstillinger on the border dock", () => {
     const cookies = readFileSync(cookiePath, "utf8");
 
-    for (const source of [login, register, cookies]) {
-      expect(source).toContain("ButtonDock");
-      expect(source).not.toContain('variant="fade"');
-    }
+    expect(cookies).toContain("ButtonDock");
+    expect(cookies).not.toContain('variant="fade"');
   });
 
   it("renders fade with reduce-motion-aware blur and a continuous canvas gradient", () => {

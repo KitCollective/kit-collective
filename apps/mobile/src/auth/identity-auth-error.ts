@@ -18,15 +18,11 @@ export const AUTH_THROTTLE_BANNER_MESSAGE = "For mange forsøg. Vent et øjeblik
 export function identityAuthErrorFromResponse(
   response: Response,
   options: {
-    invalidCredentialsMessage?: string;
     fallbackMessage: string;
   },
 ): IdentityAuthError {
   if (response.status === 429) {
     return new IdentityAuthError(429, AUTH_THROTTLE_BANNER_MESSAGE);
-  }
-  if (response.status === 401 && options.invalidCredentialsMessage) {
-    return new IdentityAuthError(401, options.invalidCredentialsMessage);
   }
   return new IdentityAuthError(response.status, options.fallbackMessage);
 }
