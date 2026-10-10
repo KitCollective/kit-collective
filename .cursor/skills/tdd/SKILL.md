@@ -38,7 +38,7 @@ This skill picks the helpers. `/implement` still owns Linear status and the PR.
 
 Before the first red test, list every agent file in `paths.helpers` (default `.cursor/agents/*.md`). Read each YAML `name` and `description`. Do not use a hardcoded roster.
 
-For the current seam / slice, spawn **every Role** whose `description` matches (Frontend, Backend, DevOps). Skip files whose description is not this job (planner, checker, release) and skip deprecated aliases (`Do not spawn from /tdd`). A slice that matches a Role description and whose workpad still says `(none)` is a process miss — spawn before the PR. An issue that cites `docs/design-system.md` or named lock components matches **Frontend** even when Backend already matched.
+For the current seam / slice, spawn **every Role** whose `description` matches (Frontend, Backend, DevOps). Skip files whose description is not this job (planner, lead, checker, release) and skip deprecated aliases (`Do not spawn from /tdd`). A slice that matches a Role description and whose workpad still says `(none)` is a process miss — spawn before the PR. An issue that cites `docs/design-system.md` or named lock components matches **Frontend** even when Backend already matched.
 
 Write the chosen Role names in the workpad under `### Domain helpers used`.
 

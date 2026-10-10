@@ -23,6 +23,7 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 1. Status must be `Implementing`. If it is `dispatch.state`, stop — planner claims, you do not. Resume when a branch/PR already exists (checker or land sent work back). Same branch.
 2. Every run: Linear `get_issue` **and** `list_comments` on this issue. `get_issue` does not return comments. Find the workpad (`agent.workpadHeading`). If a GitHub PR is attached, also read PR review comments.
 3. On resume, treat `### Review feedback` and other issue/PR comments as the change request. Do not start a new branch. **Fix the class, not the instance** — if feedback names `ci.yml` missing `JWT_SECRET`, grep every workflow that boots the API; if it names one design-system miss, re-read the lock against the whole UI diff.
+3a. **Read `### Plan`.** When the workpad has a `### Plan` (written by the lead, `.cursor/agents/lead.md`), follow it: its steps, its file split and its briefs, one brief per Role you spawn. A plan whose result was `plan-approval` needs the approval before you start. When reality contradicts the plan (a file it assumes is not there, a path outside the write-scope), stop and record it under `### Notes`; the orchestrator spawns the lead again for a replan. When there is no `### Plan` (a small issue the start decision sent straight to you, or a run without `/issue-session`), plan inline as before: steps, seams, Roles.
 4. One workpad comment. Start: branch from `origin/<lanes.integration>`. One issue, one PR **into that lane**. Title `<teamKey>-n: …`.
 5. Out of scope → `/signal-up` (cap `agent.signalUpCapPerRun`). Ratchet files required by `### Review feedback` are in-scope (`docs/agents/write-scope.md`).
 6. Evidence. A slice whose surface has device-flow evidence: write the slice's own Device flow (`apps/mobile/.maestro/slices/<KEY>.yaml`, from `slices/TEMPLATE.yaml.example`) and, after the PR is open, run `apps/mobile/.maestro/device-run.sh` as `docs/agents/device-flows.md` says (never `local-api.sh`, `build-local.sh` or `run-evidence.sh` by hand; the run queues behind other sessions); the run writes the PR comment, the `Device flows` status and the workpad's `### Evidence`. Any other slice: upload screenshots/recordings to this Linear issue, then comment and link under `### Evidence`.
@@ -44,7 +45,7 @@ Do not move to `In Review` until all of these are true. Record the commands unde
 
 ## Domain helpers
 
-`/tdd` lists `paths.helpers` and spawns **Role** matches from each file’s YAML `description`. v1 roles: Frontend, Backend, DevOps. Skip planner, checker, release, and files whose description says they are a deprecated alias. Do not hardcode stack names (Expo, Nest, design-system) as agent ids.
+`/tdd` lists `paths.helpers` and spawns **Role** matches from each file’s YAML `description`. v1 roles: Frontend, Backend, DevOps. Skip planner, lead, checker, release, and files whose description says they are a deprecated alias. Do not hardcode stack names (Expo, Nest, design-system) as agent ids.
 
 When a Role matches, it loads **Area skills** on demand: Expo, Nest, design-system — not as spawned agents. Record Role names and any Area skills under workpad `### Domain helpers used`. Product docs win if they conflict with a vendor Expo default.
 

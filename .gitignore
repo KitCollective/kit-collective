@@ -12,4 +12,6 @@ dist/
 .vscode/
 *.log
 .seed-state/
+# Central run log of the issue flow (ADR-0052), written by the orchestrator thread only
+.factory/
 seed/apify/.cache/

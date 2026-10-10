@@ -83,6 +83,9 @@
     "setupFile": "linear.setup.json",
     "specs": ".scratch"
   },
+  "flow": {
+    "runLog": ".factory/run-log.jsonl"
+  },
   "agent": {
     "signalUpCapPerRun": 3,
     "workpadHeading": "## Agent Workpad"

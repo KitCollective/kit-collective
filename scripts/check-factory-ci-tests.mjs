@@ -24,6 +24,8 @@ export const FACTORY_NODE_TEST_NEEDLES = [
   "review-matrix",
   "fix-diff",
   "pr-checks",
+  "start-decision",
+  "run-log",
 ];
 
 export const MOBILE_CHECK_NEEDLES = [
