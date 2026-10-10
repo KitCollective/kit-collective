@@ -21,3 +21,5 @@ Five things were decided while building it, because the first decisions did not 
 The first-session flow covers what a Collector can reach today (splash, onboard, door, Samling). Showcase and first photos are in the code but unreachable from a cold start, so no flow covers them.
 
 Status: accepted.
+
+Superseded in part by ADR-0049 (2026-10-10): a slice is proven by its own flow under `slices/`, the five flows are the regression set, the run queues and the native binary is cached. The rest of this record stands.

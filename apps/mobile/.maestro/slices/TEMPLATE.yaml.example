@@ -1,0 +1,40 @@
+# Device flow for one issue (ADR-0049). Copy to slices/KIT-<n>.yaml in the same PR as the slice.
+#
+# Cover only what THIS issue changes: one step per Acceptance criterion that is
+# visible on a screen, and nothing else. Do not re-walk the whole app.
+#
+# design-sections: Sheet, Button dock
+#   ^ the docs/design-system.md sections the review reads for this flow, besides
+#     Color, Typography, Spacing and Layout, which are always read. Names as in
+#     docs/design-system.md headings. Leave the list empty if none apply.
+#
+# Rules
+# - `name:` is the issue key in lower case, `kit-<n>`. Screenshots are named
+#   kc__kit-<n>__<step>, <step> being NN-what-it-shows (lower case, digits, hyphens).
+# - Tap by `testID`, never by copy. A new control a step must tap gets its testID
+#   in this PR. Adding a testID is not a UI change.
+# - Reach the screen through ../subflows/sign-in.yaml (signed in as the Test
+#   Collector, data reset) or, for a signed-out slice, reset the data and launch
+#   with clearState as sign-in.yaml does. Do not replay other issues' screens.
+# - Each Acceptance criterion that a screen can show gets one takeScreenshot at
+#   the moment it shows. Name the criterion in a comment above the step.
+appId: app.kitcollective.mobile
+name: kit-000
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- startRecording: kc__kit-000
+# AC 1: <what the criterion says>
+- tapOn:
+    id: <testID of the control>
+- extendedWaitUntil:
+    visible:
+      id: <testID of the screen the control opens>
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-000__01-<what-it-shows>
+- stopRecording
