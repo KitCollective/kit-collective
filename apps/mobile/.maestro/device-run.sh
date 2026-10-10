@@ -32,7 +32,7 @@ trap stop_api EXIT
 echo "Waiting for the local API (log: $api_log)"
 ready=no
 for _ in $(seq 1 180); do
-  if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then
+  if curl -fsS http://localhost:3000/v1/health >/dev/null 2>&1; then
     ready=yes
     break
   fi
