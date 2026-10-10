@@ -1,0 +1,130 @@
+# KIT-272: one Kom i gang sheet for new and returning collectors (ADR-0049).
+#
+# design-sections: Button, Button dock, Sheet, Text field, Toast
+#
+# Signed-out slice: it resets the data and launches with clearState, as sign-in.yaml does.
+# Not shown by a screen and so proved by the first-session reducer tests instead:
+# - a successful social sign-in goes to Samling, or to jersey details with a draft, with no
+#   code step (a provider sign-in cannot run on the simulator).
+appId: app.kitcollective.mobile
+name: kit-272
+---
+- runScript:
+    file: ../scripts/reset-test-data.js
+    env:
+      API_URL: ${MAESTRO_API_URL}
+      TEST_DATA_TOKEN: ${MAESTRO_TEST_DATA_TOKEN}
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- startRecording: kc__kit-272
+- extendedWaitUntil:
+    visible:
+      id: welcome-have-account
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+# AC 1 (from Jeg har allerede en konto), AC 2 (e-mail field, one primary Fortsæt, no password),
+# AC 3 (Google and Facebook as equal secondary buttons with icon and text), AC 4 (terms and
+# privacy line), AC 9 (no Login/Opret switcher).
+- tapOn:
+    id: welcome-have-account
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-272__01-sheet-from-welcome
+# AC 8: a cancelled or failed social sign-in leaves the sheet open and names the provider.
+- tapOn:
+    id: door-google
+- extendedWaitUntil:
+    visible: "Google-login blev afbrudt"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: kc__kit-272__02-social-failed-toast
+# AC 5: an invalid e-mail shows the inline error and does not request a code.
+- tapOn:
+    id: door-email
+- inputText: not-an-email
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: door-email-error
+    timeout: 5000
+- takeScreenshot: kc__kit-272__03-invalid-email
+# AC 6: a valid e-mail hands over to the code step (a stub until KIT-275).
+- eraseText: 40
+- inputText: ${MAESTRO_COLLECTOR_EMAIL}
+- tapOn:
+    id: door-submit
+- extendedWaitUntil:
+    visible:
+      id: code-stub
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-272__04-code-step
+# AC 1 (from the demo result): the same sheet opens over the demo.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-example-example-1
+    timeout: 90000
+- tapOn:
+    id: welcome-example-example-1
+- extendedWaitUntil:
+    visible:
+      id: demo-start
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 10000
+- tapOn:
+    id: demo-start
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-272__05-sheet-from-demo
+# AC 1 (over an own-photo result): the sheet opens over the analysed photo.
+# The system photo picker has no stable ids. The flows' simulator holds exactly one
+# fixture photo, newest first: the first cell, then the confirm button.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-own-photo
+    timeout: 90000
+- tapOn:
+    id: welcome-own-photo
+- extendedWaitUntil:
+    visible:
+      id: source-sheet-library
+    timeout: 10000
+- tapOn:
+    id: source-sheet-library
+- tapOn:
+    text: Fotos
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 90%,12%
+- extendedWaitUntil:
+    visible:
+      id: door-submit
+    timeout: 90000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-272__06-sheet-over-own-photo
+- stopRecording
