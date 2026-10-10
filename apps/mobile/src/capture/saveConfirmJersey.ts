@@ -1,4 +1,4 @@
-import type { CatalogPickerItem, VisionJobResponse } from "@kit/api-contract";
+import type { CatalogPickerItem, CollectionJersey, VisionJobResponse } from "@kit/api-contract";
 import { resolveVisionSaveAction } from "@kit/api-contract";
 import type { PhotoRole } from "@kit/domain";
 import { saveUserJersey, updateUserJersey } from "@/api/collection";
@@ -24,6 +24,7 @@ export type ConfirmSaveOutcome =
       status: "saved";
       club: CatalogPickerItem | null;
       seasonLabel: string | null;
+      jersey: CollectionJersey;
     }
   | { status: "error" };
 
@@ -145,6 +146,8 @@ export async function saveConfirmJersey(input: {
         ? { id: input.draft.nationalTeamId, label: input.draft.nationalTeamLabel }
         : null;
 
+    const savedSeasonLabel = response.jersey.seasonLabel ?? input.selectedSeasonLabel;
+
     if (input.branch === "bulk") {
       const nextState = input.mutate((current) => {
         let next = removeDraft(current, input.draft.id);
@@ -156,14 +159,24 @@ export async function saveConfirmJersey(input: {
 
       if (!nextState || nextState.drafts.length === 0) {
         clearPersistedCaptureSession(input.sessionId);
-        return { status: "saved", club: savedClub, seasonLabel: input.selectedSeasonLabel };
+        return {
+          status: "saved",
+          club: savedClub,
+          seasonLabel: savedSeasonLabel,
+          jersey: response.jersey,
+        };
       }
 
       return { status: "bulk-continue" };
     }
 
     clearPersistedCaptureSession(input.sessionId);
-    return { status: "saved", club: savedClub, seasonLabel: input.selectedSeasonLabel };
+    return {
+      status: "saved",
+      club: savedClub,
+      seasonLabel: savedSeasonLabel,
+      jersey: response.jersey,
+    };
   } catch {
     return { status: "error" };
   }

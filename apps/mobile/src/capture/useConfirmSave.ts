@@ -1,7 +1,8 @@
-import type { CatalogPickerItem } from "@kit/api-contract";
+import type { CatalogPickerItem, CollectionJersey } from "@kit/api-contract";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { fetchClubSeasons } from "@/api/catalog";
+import { fetchCollectionJerseys } from "@/api/collection";
 import { useAuth } from "@/auth/AuthProvider";
 import { canSave, catalogSideId } from "@/capture/captureSession";
 import { getSaveBlockMessage } from "@/capture/saveBlockMessage";
@@ -25,6 +26,8 @@ export function useConfirmSave(options: {
   const [postSaveOpen, setPostSaveOpen] = useState(false);
   const [savedClub, setSavedClub] = useState<CatalogPickerItem | null>(null);
   const [savedSeasonLabel, setSavedSeasonLabel] = useState<string | null>(null);
+  const [savedJersey, setSavedJersey] = useState<CollectionJersey | null>(null);
+  const [savedCount, setSavedCount] = useState<number | null>(null);
   const [selectedSeasonLabel, setSelectedSeasonLabel] = useState<string | null>(null);
 
   const draft =
@@ -103,7 +106,16 @@ export function useConfirmSave(options: {
     if (outcome.status === "saved") {
       setSavedClub(outcome.club);
       setSavedSeasonLabel(outcome.seasonLabel);
+      setSavedJersey(outcome.jersey);
+      setSavedCount(null);
       setPostSaveOpen(true);
+      // Running count is a fire-and-forget read: the sheet opens first and the
+      // count line simply stays out if the fetch fails. Save never waits on it.
+      if (accessToken) {
+        void fetchCollectionJerseys(accessToken)
+          .then((response) => setSavedCount(response.jerseys.length))
+          .catch(() => undefined);
+      }
       return;
     }
 
@@ -149,6 +161,8 @@ export function useConfirmSave(options: {
     postSaveOpen,
     savedClub,
     savedSeasonLabel,
+    savedJersey,
+    savedCount,
     selectedSeasonLabel,
     setSelectedSeasonLabel,
     dockHelper,
