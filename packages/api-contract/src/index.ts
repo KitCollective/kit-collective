@@ -439,6 +439,15 @@ export {
   authEventsSchema,
 } from "./identity/auth-events.js";
 export {
+  IDENTITY_CODE_LENGTH,
+  type IdentityCodeAccepted,
+  type IdentityCodeRequest,
+  type IdentityCodeVerify,
+  identityCodeAcceptedSchema,
+  identityCodeRequestSchema,
+  identityCodeVerifySchema,
+} from "./identity/code.js";
+export {
   acceptAllCookieConsent,
   type CookieConsent,
   type CookieConsentUpdate,

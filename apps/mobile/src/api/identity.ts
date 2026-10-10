@@ -19,6 +19,7 @@ import {
   type IdentityPrefsUpdate,
   type IdentityProfileUpdate,
   type IdentitySession,
+  identityCodeAcceptedSchema,
   identityCredentialsSchema,
   identityExportSchema,
   identityLinkedProviderSchema,
@@ -72,6 +73,38 @@ export async function loginCollector(credentials: IdentityCredentials): Promise<
     throw identityAuthErrorFromResponse(response, {
       invalidCredentialsMessage: "Forkert e-mail eller adgangskode",
       fallbackMessage: "Forkert e-mail eller adgangskode",
+    });
+  }
+
+  return identitySessionSchema.parse(await response.json());
+}
+
+/** Asks for a six-digit code by e-mail. The answer is the same for a new and an existing e-mail. */
+export async function requestSignInCode(email: string): Promise<void> {
+  const response = await requestJson("/v1/identity/code", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    throw identityAuthErrorFromResponse(response, {
+      fallbackMessage: "Kunne ikke sende koden",
+    });
+  }
+
+  identityCodeAcceptedSchema.parse(await response.json());
+}
+
+/** A correct code registers or signs in. 401 wrong code, 410 expired, 429 too many attempts. */
+export async function verifySignInCode(email: string, code: string): Promise<IdentitySession> {
+  const response = await requestJson("/v1/identity/code/verify", {
+    method: "POST",
+    body: JSON.stringify({ email, code }),
+  });
+
+  if (!response.ok) {
+    throw identityAuthErrorFromResponse(response, {
+      fallbackMessage: "Kunne ikke bekræfte koden",
     });
   }
 

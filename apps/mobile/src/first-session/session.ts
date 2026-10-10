@@ -10,8 +10,11 @@ export type FirstSessionPlace =
   | "collection"
   | "tab-shell";
 
-/** How the collector got through the Kom i gang sheet: a provider, or an e-mail that gets a code. */
-export type IdentitySubmitMethod = "social" | "email";
+/**
+ * How the collector moved on from the Kom i gang sheet: `social` is a provider sign-in, `email`
+ * asks for a code, and `code` is the correct six-digit code. `social` and `code` open a session.
+ */
+export type IdentitySubmitMethod = "social" | "email" | "code";
 
 export type FirstSessionIdentitySession = {
   emailVerified: boolean;
@@ -124,8 +127,8 @@ function openDoorFromAnalysing(state: FirstSessionState): FirstSessionState {
 }
 
 /**
- * A provider sign-in lands on jersey details when a draft exists, otherwise on Samling.
- * An e-mail goes to the code step first and keeps the screen the sheet sat on.
+ * A provider sign-in or a correct code lands on jersey details when a draft exists, otherwise on
+ * Samling. An e-mail goes to the code step first and keeps the screen the sheet sat on.
  */
 function submitIdentity(
   state: FirstSessionState,

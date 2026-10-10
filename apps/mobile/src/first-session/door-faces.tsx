@@ -23,6 +23,7 @@ export function DoorFace({
   emailError,
   showThrottleBanner,
   socialBusy,
+  emailBusy,
   onEmailChange,
   onSubmit,
   onSocial,
@@ -31,6 +32,7 @@ export function DoorFace({
   emailError: string | null;
   showThrottleBanner: boolean;
   socialBusy: DoorSocialProvider | null;
+  emailBusy: boolean;
   onEmailChange: (value: string) => void;
   onSubmit: () => void;
   onSocial: (provider: DoorSocialProvider) => void;
@@ -59,6 +61,7 @@ export function DoorFace({
         testID="door-submit"
         variant="primary"
         width="fill"
+        loading={emailBusy}
         disabled={busy}
         onPress={onSubmit}
       />

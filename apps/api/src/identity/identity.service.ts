@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import {
   type AuthEvents,
   type AuthSecurityDetections,
@@ -11,9 +11,11 @@ import {
   type HandleAvailabilityResponse,
   handleAvailabilityResponseSchema,
   handleSchema,
+  IDENTITY_CODE_LENGTH,
   IDENTITY_LINKED_PROVIDERS,
   type IdentityAccountUpdate,
   type IdentityAvatarUpload,
+  type IdentityCodeAccepted,
   type IdentityEmailChange,
   type IdentityExport,
   type IdentityLinkedAccount,
@@ -30,6 +32,9 @@ import {
   type IdentityVerifyResponse,
   identityAccountUpdateSchema,
   identityAvatarUploadSchema,
+  identityCodeAcceptedSchema,
+  identityCodeRequestSchema,
+  identityCodeVerifySchema,
   identityCredentialsSchema,
   identityEmailChangeSchema,
   identityExportSchema,
@@ -72,6 +77,7 @@ import {
   BadRequestException,
   ConflictException,
   forwardRef,
+  GoneException,
   Inject,
   Injectable,
   NotFoundException,
@@ -82,7 +88,8 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { BillingService } from "../billing/billing.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
-import { requireBetterAuthUrl } from "../config/better-auth-env.js";
+import { requireBetterAuthSecret, requireBetterAuthUrl } from "../config/better-auth-env.js";
+import { identityCodeExpiryMinutes, identityCodeMaxAttempts } from "../config/identity-code-env.js";
 import { DB, type DbToken } from "../db/db.module.js";
 import { ModerationService } from "../moderation/moderation.service.js";
 import { NotifyService } from "../notify/notify.service.js";
@@ -107,6 +114,7 @@ const { hash, compare } = bcrypt;
 /** Cost-12 hash of `unknown-email-dummy` so unknown-email login does the same work as a miss. */
 const UNKNOWN_EMAIL_DUMMY_HASH = "$2a$12$JVlUVacTaWZV1JKt5IGZdu3XbtkBe8srPl74IyGfJhM0LWsQiamwG";
 const INVALID_EMAIL_OR_PASSWORD = "Invalid email or password";
+const CODE_IDENTIFIER_PREFIX = "code:";
 
 const USER_ME_SELECT = {
   id: user.id,
@@ -403,6 +411,154 @@ export class IdentityService {
       provider: body.provider,
     });
     return await this.buildSession(created, accessToken);
+  }
+
+  /**
+   * Sends a six-digit sign-in code. The answer is the same for a new and an existing e-mail,
+   * and a new code replaces (invalidates) the previous one for that e-mail.
+   */
+  async requestCode(
+    rawBody: unknown,
+    attribution: RequestAttribution,
+  ): Promise<IdentityCodeAccepted> {
+    const parsed = identityCodeRequestSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid email");
+    }
+    const normalizedEmail = parsed.data.email.toLowerCase();
+    const familyAllowed = await this.authThrottle.consumePublicWriteFamily(
+      attribution.ipAddress,
+      normalizedEmail,
+    );
+    if (!familyAllowed) {
+      await this.rejectAuthThrottle(normalizedEmail, attribution);
+    }
+
+    const code = randomInt(0, 10 ** IDENTITY_CODE_LENGTH)
+      .toString()
+      .padStart(IDENTITY_CODE_LENGTH, "0");
+    const identifier = `${CODE_IDENTIFIER_PREFIX}${normalizedEmail}`;
+    await this.db.delete(verification).where(eq(verification.identifier, identifier));
+    await this.db.insert(verification).values({
+      id: randomBytes(16).toString("hex"),
+      identifier,
+      value: this.hashSignInCode(normalizedEmail, code),
+      expiresAt: new Date(Date.now() + identityCodeExpiryMinutes() * 60 * 1000),
+    });
+    await this.notifyService.sendSignInCode({ to: normalizedEmail, code });
+    return identityCodeAcceptedSchema.parse({ accepted: true });
+  }
+
+  /**
+   * A correct code registers a new collector or signs in the existing one (also one created with
+   * a password) and marks the e-mail verified. 401 wrong code, 410 expired or none, 429 too many.
+   */
+  async verifyCode(rawBody: unknown, attribution: RequestAttribution): Promise<IdentitySession> {
+    const parsed = identityCodeVerifySchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid code");
+    }
+    const normalizedEmail = parsed.data.email.toLowerCase();
+    if (!(await this.authThrottle.consumeLoginFamily(attribution.ipAddress))) {
+      await this.rejectAuthThrottle(normalizedEmail, attribution);
+    }
+
+    const identifier = `${CODE_IDENTIFIER_PREFIX}${normalizedEmail}`;
+    const [row] = await this.db
+      .select()
+      .from(verification)
+      .where(eq(verification.identifier, identifier))
+      .limit(1);
+
+    if (!row || row.expiresAt.getTime() <= Date.now()) {
+      if (row) {
+        await this.db.delete(verification).where(eq(verification.id, row.id));
+      }
+      throw new GoneException("Code expired");
+    }
+
+    if ((await this.authThrottle.countCodeAttempts(row.id)) >= identityCodeMaxAttempts()) {
+      await this.db.delete(verification).where(eq(verification.id, row.id));
+      await this.recordAuthEvent({
+        kind: "lockout",
+        userId: await this.findUserIdByEmail(normalizedEmail),
+        ipAddress: attribution.ipAddress,
+        userAgent: attribution.userAgent,
+      });
+      throw tooManyLoginAttempts();
+    }
+
+    const given = Buffer.from(this.hashSignInCode(normalizedEmail, parsed.data.code));
+    const expected = Buffer.from(row.value);
+    if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
+      await this.authThrottle.recordCodeAttempt(row.id);
+      await this.recordAuthEvent({
+        kind: "failure",
+        userId: await this.findUserIdByEmail(normalizedEmail),
+        ipAddress: attribution.ipAddress,
+        userAgent: attribution.userAgent,
+      });
+      throw new UnauthorizedException("Invalid code");
+    }
+
+    // Single use: only the request that deletes the row signs in.
+    const consumed = await this.db
+      .delete(verification)
+      .where(eq(verification.id, row.id))
+      .returning({ id: verification.id });
+    if (consumed.length === 0) {
+      throw new GoneException("Code expired");
+    }
+
+    const collector = await this.findOrCreateVerifiedCollector(normalizedEmail);
+    const accessToken = await this.createSessionToken(collector.id);
+    await this.recordAuthEvent({
+      kind: "login",
+      userId: collector.id,
+      ipAddress: attribution.ipAddress,
+      userAgent: attribution.userAgent,
+    });
+    return await this.buildSession(collector, accessToken);
+  }
+
+  private hashSignInCode(email: string, code: string): string {
+    return createHmac("sha256", requireBetterAuthSecret()).update(`${email}:${code}`).digest("hex");
+  }
+
+  private async findOrCreateVerifiedCollector(email: string) {
+    const [existing] = await this.db
+      .update(user)
+      .set({ emailVerified: true })
+      .where(eq(user.email, email))
+      .returning(USER_ME_SELECT);
+    if (existing) {
+      return existing;
+    }
+
+    // No password exists for this collector; the column is not null, so it holds a random hash.
+    const passwordHash = await hash(randomBytes(32).toString("hex"), 12);
+    const assignedHandle = await this.assignUniqueHandle(email);
+    const [created] = await this.db
+      .insert(user)
+      .values({
+        email,
+        passwordHash,
+        name: assignedHandle,
+        handle: assignedHandle,
+        emailVerified: true,
+      })
+      .onConflictDoNothing({ target: user.email })
+      .returning(USER_ME_SELECT);
+    if (created) {
+      return created;
+    }
+
+    // Another request created the same e-mail between our update and insert.
+    const [raced] = await this.db.select(USER_ME_SELECT).from(user).where(eq(user.email, email));
+    if (!raced) {
+      throw new UnauthorizedException();
+    }
+    return raced;
   }
 
   async verifyEmail(rawBody: unknown): Promise<IdentityVerifyResponse> {

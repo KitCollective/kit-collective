@@ -337,9 +337,13 @@ _Avoid_: a 7-day JWT that cannot be revoked; cookie-only Admin beside a differen
 Google or Facebook on the same User — Expo native idToken and Admin. A verified provider email auto-links to the existing User. Not a second account.
 _Avoid_: Apple in this increment; one User row per provider; treating the provider as Staff access; asking before link when the provider email is verified
 
+**E-mail code**:
+Six-digit single-use code mailed to an address on the **Kom i gang** sheet. A correct code creates the collector when none exists, marks the email verified and opens a session; it also signs in a collector who was created with a password. It expires and is refused after an attempt limit; a resend invalidates the previous code. Requesting one answers the same for a new and an existing email. The collector app has no password; Staff login in `admin` keeps its own.
+_Avoid_: magic link; OTP in UI copy; a password field next to it; telling the caller whether the email has an account
+
 **Email verification**:
-Password sign-up must verify. A Social login whose provider already verified the email counts. Not Staff access.
-_Avoid_: a second verify after Google or Facebook; treating `role=admin` as verified
+Password sign-up must verify. A Social login whose provider already verified the email counts, and so does a correct **E-mail code**. Not Staff access.
+_Avoid_: a second verify after Google, Facebook or an e-mail code; treating `role=admin` as verified
 
 **Password reset**:
 Signed-out email link that sets a new password on the same User. Not the signed-in change-password that already exists.
