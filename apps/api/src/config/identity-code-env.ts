@@ -1,7 +1,7 @@
 /**
  * How long an e-mail sign-in code lives and how many wrong guesses it survives.
  * Values are read from the environment so they change without a deploy of code;
- * the defaults are proposals until Nicklas confirms them on KIT-275.
+ * Nicklas confirmed the defaults (10 minutes, 5 attempts) on KIT-275.
  */
 const DEFAULT_CODE_EXPIRY_MINUTES = 10;
 const DEFAULT_CODE_MAX_ATTEMPTS = 5;

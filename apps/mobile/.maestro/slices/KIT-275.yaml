@@ -9,6 +9,10 @@
 # - the code is single use, expires, is refused after the attempt limit and a resend invalidates
 #   the old one;
 # - requesting a code answers the same for a new and an existing e-mail;
+# - "or jersey details with a draft" (AC 7): a draft needs an own photo picked in the system photo
+#   picker before the door, which this flow does not replay (KIT-272.yaml drives it); the reducer
+#   tests "a correct code with a draft from an own photo opens jersey details" and
+#   "the sheet opened over an own-photo result keeps the draft" prove it.
 # - no password is sent on this path (the code client and the screens carry none).
 # - one-time-code autofill (textContentType oneTimeCode / autoComplete sms-otp): a simulator has
 #   no SMS or mail to offer a code from; the chrome test asserts the props.
