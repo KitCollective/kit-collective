@@ -75,3 +75,22 @@ test("a test that lost lines is full even if the rest is a rename", () => {
 test("an empty diff is full", () => {
   assert.equal(classifyFixDiff("").kind, "full");
 });
+
+test("a swapped literal, keyword or string is not a rename", () => {
+  const cases = [
+    ["  if (ok === true) return;", "  if (ok === false) return;"],
+    ["  return value ?? null;", "  return value ?? undefined;"],
+    ["  const x = 1;", "  var x = 1;"],
+    ['  const label = "Cancel";', '  const label = "Delete";'],
+  ];
+  for (const [before, after] of cases) {
+    const verdict = classifyFixDiff(diff("+++ b/src/x.ts", `-${before}`, `+${after}`));
+    assert.equal(verdict.kind, "full", `${before.trim()} -> ${after.trim()}`);
+  }
+});
+
+test("a rename that leaves the old name in use is full", () => {
+  const change = diff("+++ b/src/x.ts", "-  arm(a);", "+  arm(b);");
+  assert.equal(classifyFixDiff(change, { isStillUsed: () => true }).kind, "full");
+  assert.equal(classifyFixDiff(change, { isStillUsed: () => false }).kind, "light");
+});

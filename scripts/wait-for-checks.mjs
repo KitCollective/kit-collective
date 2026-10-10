@@ -13,11 +13,11 @@
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { EXIT, verdict } from "./lib/pr-checks.mjs";
+import { EXIT, prArgument, verdict } from "./lib/pr-checks.mjs";
 
 const run = promisify(execFile);
 const args = process.argv.slice(2);
-const pr = args.find((arg) => /^\d+$/.test(arg) || arg.includes("/pull/"));
+const pr = prArgument(args);
 
 /** @param {string} flag @param {string} fallback */
 function option(flag, fallback) {

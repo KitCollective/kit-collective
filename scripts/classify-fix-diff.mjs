@@ -17,6 +17,17 @@ const diff = execFileSync("git", ["diff", "-U0", `${from}..${head}`], {
   encoding: "utf8",
   maxBuffer: 256 * 1024 * 1024,
 });
-const verdict = classifyFixDiff(diff);
+/** A rename is complete only when the old name is gone from every non-doc file at head. */
+const isStillUsed = (name) => {
+  try {
+    execFileSync("git", ["grep", "-q", "-w", "-e", name, head, "--", ".", ":!*.md"], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+const verdict = classifyFixDiff(diff, { isStillUsed });
 process.stdout.write(`${verdict.kind} ${verdict.reason}\n`);
 process.exit(verdict.kind === "light" ? 0 : 1);
