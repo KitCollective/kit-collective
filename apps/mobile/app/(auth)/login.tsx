@@ -72,6 +72,7 @@ export default function LoginScreen() {
         <View style={styles.field}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>E-mail</Text>
           <TextInput
+            testID="login-email"
             autoCapitalize="none"
             autoComplete="email"
             keyboardType="email-address"
@@ -94,6 +95,9 @@ export default function LoginScreen() {
         <View style={styles.field}>
           <Text style={[typography.label, { color: theme.contentPrimary }]}>Adgangskode</Text>
           <TextInput
+            testID="login-password"
+            returnKeyType="go"
+            onSubmitEditing={() => void handleSubmit()}
             secureTextEntry
             autoCapitalize="none"
             value={password}
@@ -121,6 +125,7 @@ export default function LoginScreen() {
       <ButtonDock>
         <Button
           label="Log ind"
+          testID="login-submit"
           variant="primary"
           width="fill"
           onPress={() => void handleSubmit()}

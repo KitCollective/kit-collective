@@ -1,13 +1,20 @@
 import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { Redirect } from "expo-router";
 import { useCallback, useState } from "react";
+import Toast from "react-native-toast-message";
 import { useAuth } from "@/auth/AuthProvider";
 import { resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
 import { FirstSessionAnalysingScreen } from "@/first-session/analysing-screen";
 import { FirstSessionChooserScreen } from "@/first-session/chooser-screen";
+import { CodeStub } from "@/first-session/code-stub";
 import { exampleById } from "@/first-session/demo";
 import { DemoScreen } from "@/first-session/demo-screen";
 import { DoorSheet } from "@/first-session/door";
+import {
+  DOOR_EMAIL_INVALID,
+  isValidEmail,
+  socialCancelledMessage,
+} from "@/first-session/door-copy";
 import { JerseyDetailsScreen } from "@/first-session/jersey-details-screen";
 import {
   collectionHref,
@@ -20,14 +27,11 @@ import { type ExampleOrigins, WelcomeScreen } from "@/first-session/welcome-scre
 import { LoadingScreen } from "../_layout";
 
 export default function FirstSessionHost() {
-  const { user, isLoading, signIn, signUp, signInSocial } = useAuth();
+  const { user, isLoading, signInSocial } = useAuth();
   const [session, setSession] = useState(() => createFirstSession({ signedIn: false }));
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordRepeat, setPasswordRepeat] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [showThrottleBanner, setShowThrottleBanner] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [socialBusy, setSocialBusy] = useState<IdentityLinkedProvider | null>(null);
   const [demoOrigins, setDemoOrigins] = useState<ExampleOrigins | null>(null);
 
@@ -64,15 +68,13 @@ export default function FirstSessionHost() {
 
   function resetDoorFields() {
     setEmail("");
-    setPassword("");
-    setPasswordRepeat("");
-    setError(null);
+    setEmailError(null);
     setShowThrottleBanner(false);
   }
 
-  function openDoor(mode: "login" | "register") {
+  function openDoor() {
     resetDoorFields();
-    dispatch({ type: "openDoor", mode });
+    dispatch({ type: "openDoor" });
   }
 
   function closeDoor() {
@@ -80,80 +82,38 @@ export default function FirstSessionHost() {
     dispatch({ type: "closeDoor" });
   }
 
-  async function handleSubmitEmail() {
-    const mode = session.doorMode ?? "login";
-    setError(null);
-    setShowThrottleBanner(false);
-
-    if (email.trim().length === 0) {
-      setError("Skriv din e-mail");
+  function handleSubmitEmail() {
+    // Return on the e-mail field is not blocked by the disabled button.
+    if (socialBusy !== null) {
       return;
     }
-
-    if (mode === "register") {
-      if (password.length < 8) {
-        setError("Adgangskoden skal være mindst 8 tegn");
-        return;
-      }
-      if (password !== passwordRepeat) {
-        setError("Adgangskoderne matcher ikke");
-        return;
-      }
+    if (!isValidEmail(email)) {
+      setEmailError(DOOR_EMAIL_INVALID);
+      return;
     }
-
-    setLoading(true);
-    try {
-      if (mode === "register") {
-        await signUp(email.trim(), password);
-        dispatch({
-          type: "submitIdentity",
-          method: "password",
-          kind: "register",
-        });
-      } else {
-        await signIn(email.trim(), password);
-        dispatch({
-          type: "submitIdentity",
-          method: "password",
-          kind: "login",
-        });
-      }
-    } catch (caught) {
-      const feedback = resolveAuthErrorFeedback(
-        caught,
-        mode === "register"
-          ? "Kunne ikke oprette konto. Tjek e-mail og adgangskode."
-          : "Forkert e-mail eller adgangskode",
-      );
-      setError(feedback.fieldError);
-      setShowThrottleBanner(feedback.showThrottleBanner);
-    } finally {
-      setLoading(false);
-    }
+    setEmailError(null);
+    dispatch({ type: "submitIdentity", method: "email" });
   }
 
   async function handleSocial(provider: IdentityLinkedProvider) {
-    const kind = session.doorMode ?? "login";
-    setError(null);
+    setEmailError(null);
     setShowThrottleBanner(false);
     setSocialBusy(provider);
     try {
       await signInSocial(provider);
-      dispatch({
-        type: "submitIdentity",
-        method: "social",
-        kind,
-      });
+      dispatch({ type: "submitIdentity", method: "social" });
     } catch (caught) {
-      const feedback = resolveAuthErrorFeedback(caught, "Kunne ikke logge ind");
-      setError(feedback.fieldError);
-      setShowThrottleBanner(feedback.showThrottleBanner);
+      setShowThrottleBanner(resolveAuthErrorFeedback(caught, "").showThrottleBanner);
+      Toast.show({
+        type: "error",
+        position: "bottom",
+        text1: socialCancelledMessage(provider),
+      });
     } finally {
       setSocialBusy(null);
     }
   }
 
-  const doorMode = session.doorMode ?? "login";
   const backdrop = firstSessionBackdrop(session);
 
   return (
@@ -167,14 +127,14 @@ export default function FirstSessionHost() {
           onOwnPhoto={() => {
             dispatch({ type: "startAdd" });
           }}
-          onHaveAccount={() => openDoor("login")}
+          onHaveAccount={() => openDoor()}
         />
       ) : null}
       {backdrop === "demo" && session.demoExampleId ? (
         <DemoScreen
           example={exampleById(session.demoExampleId)}
           origins={demoOrigins}
-          onStart={() => openDoor("register")}
+          onStart={() => openDoor()}
           onTryAnother={() => {
             dispatch({ type: "demoTryAnother" });
           }}
@@ -201,32 +161,21 @@ export default function FirstSessionHost() {
           onFillSelf={() => dispatch({ type: "fillSelf" })}
         />
       ) : null}
+      {session.place === "code" ? (
+        <CodeStub onBack={() => dispatch({ type: "backFromCode" })} />
+      ) : null}
       <DoorSheet
         visible={session.place === "door"}
-        mode={doorMode}
         email={email}
-        password={password}
-        passwordRepeat={passwordRepeat}
-        error={error}
+        emailError={emailError}
         showThrottleBanner={showThrottleBanner}
-        loading={loading}
         socialBusy={socialBusy}
         onClose={closeDoor}
-        onSwapMode={() => {
-          const next = doorMode === "login" ? "register" : "login";
-          resetDoorFields();
-          if (session.doorOver === "analysing") {
-            dispatch({ type: "openDoorFromAnalysing", mode: next });
-            return;
-          }
-          dispatch({ type: "openDoor", mode: next });
+        onEmailChange={(value) => {
+          setEmail(value);
+          setEmailError(null);
         }}
-        onEmailChange={setEmail}
-        onPasswordChange={setPassword}
-        onPasswordRepeatChange={setPasswordRepeat}
-        onSubmit={() => {
-          void handleSubmitEmail();
-        }}
+        onSubmit={handleSubmitEmail}
         onSocial={(provider) => {
           void handleSocial(provider);
         }}
