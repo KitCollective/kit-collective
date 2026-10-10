@@ -445,6 +445,12 @@ _Avoid_: one thread per UserJersey; two parallel inbox tables; fake threads to a
 A collector-to-collector bid message in a Conversation about one UserJersey — an integer DKK amount, not payment or checkout. Accept/decline records outcome in the thread; no money moves in this product gap.
 _Avoid_: price overlay on Samling tiles; treating bud as a marketplace purchase
 
+**Accepting a Bud** (decided 2026-10-10) closes the UserJersey for new Bud (åben for bud turns off) and declines every other pending Bud on it. The owner may turn åben for bud on again.
+
+**Handel**:
+The guided steps two collectors follow after an accepted Bud: address and payment method, paid, payment confirmed, shipped, received. Money and parcels move outside KitCollective; the product stores the steps and, for that deal only, the buyer's address. Designed 2026-10-10, not built: it waits for its own spec and for rules on consent, retention and deletion of the personal data.
+_Avoid_: calling it checkout or payment; holding money; showing the address before the seller has confirmed the payment; building it inside the Indbakke effort
+
 **Staff access**:
 Authorization on that same User that opens Admin SPA. Stored as `User.role` `admin`. Not a second login and not a second column. Later scoped staff roles may replace this binary grant. An admin may promote or demote another User; not themselves, and not the last admin.
 _Avoid_: a second IdP; a parallel `staff_access` column; calling the grant authentication; locking admins out of Expo; self-demote; demoting the last admin

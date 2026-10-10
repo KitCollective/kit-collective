@@ -1341,7 +1341,9 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *06 Indba
 
 **Unsupported**: Top tabs on Indbakke. Activity card. A row per jersey under **Samtaler**. Row fill as the unread signal. A compose-to-nobody control. Marketplace listing UI. Help.
 
-**Gaps** (flag, do not invent): whether unread messages also belong under **Venter på dit svar**; long lists and paging; dark mode.
+**Venter på dit svar holds actions, not messages** (decided 2026-10-10): incoming pending bids, and later the Deal card steps where it is the collector's turn. Unread messages stay under **Samtaler**.
+
+**Gaps** (flag, do not invent): long lists and paging; dark mode.
 
 Flag missing context; do not invent patterns.
 
@@ -1363,9 +1365,34 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *06 Indba
 
 **Starting a conversation without a bid** (decided 2026-10-10): from a foreign jersey (the message Icon button beside **Send bud**, or **Skriv til *handle*** when the jersey is not åben for bud) and from Peer Profil (**Skriv besked**). It opens the one conversation with that collector, creating it on the first message sent.
 
+**Accepting a bid** (decided 2026-10-10): the jersey stops being åben for bud, and every other pending bid on it is declined with a system line in its own thread (**Trøjen er gået til en anden samler.**). The owner can turn åben for bud on again if the deal falls through. In Indbakke 1.0 the system line after accept is all that follows; the Deal card comes with its own spec.
+
 **Unsupported**: A pinned jersey row under the header. A separate Detaljer screen. Left = me. Tab bar. Payment. Wash bubbles. Blokér or Slet samtale without asking.
 
-**Gaps** (flag, do not invent): what accepting does to the jersey's åben for bud and to other pending bids on it; a Bid card whose jersey was deleted or made private; the system line after a decline; sending and failed states; dark mode.
+**Gaps** (flag, do not invent): a Bid card whose jersey was deleted or made private; the system line after a decline; sending and failed states; dark mode.
+
+Flag missing context; do not invent patterns.
+
+### Deal card (Handel)
+
+Status: `locked` as a design (Revision 2026-10-10, decided by Nicklas), **not part of Indbakke 1.0**. It gets its own spec (Handel 1.0), and nothing here is built until that spec has settled consent, retention and deletion of the personal data it stores. Paper page *06 Indbakke*: artboards *Handel / 08*–*12*.
+
+**Purpose**: Walk two collectors from an accepted bid to a delivered jersey. Money and parcels move outside KitCollective; the card only keeps the steps and shows whose turn it is.
+
+**Anatomy**: one card per accepted bid, in the thread, 358 wide on `surface` with `border.subtle` and `radius.md`.
+1. **Header**: the jersey row from Bid card (thumb, club and season, **Handel · *n* kr** in `mono`) with ***n* af 5** in `mono` trailing, hairline below.
+2. **Five steps** in a column. Done: a 20px `fill.primary` disc with a check, the label in `body` 15, and a `mono` detail trailing (method or time). Current: a 20px ring with the number, the label at 600, one `label-sm` line that starts **Din tur.** for the one who must act, the step's content, and one Button `primary`. To do: a `fill.secondary` disc with the number and the label in `content.secondary`.
+
+**The steps**:
+1. **Adresse og betalingsmåde** (buyer). Button opens a Sheet `form`: name, address, postcode and city, and Chip `single-select` **MobilePay** | **Bankoverførsel**, with a `caption` that the address is kept for this deal and shown to the seller only when the payment is confirmed. One `primary` **Fortsæt**.
+2. **Betal** (buyer). The seller's MobilePay number or account number in `mono` on `fill.secondary` with **Kopiér**; a `caption` that the payment happens outside KitCollective; `primary` **Jeg har betalt**; `tertiary` **Vedhæft kvittering (valgfrit)**. The seller saves the number once and is asked in the card only when it is missing.
+3. **Betaling bekræftet** (seller). The receipt as a row when one is attached; `primary` **Bekræft betaling modtaget**; `tertiary` **Jeg har ikke fået pengene**. Confirming is what releases the address, not the receipt.
+4. **Sendt** (seller). The buyer's address on `fill.secondary` with **Kopiér**; an optional tracking number field; `primary` **Markér som sendt**.
+5. **Modtaget** (buyer). The tracking number when there is one; `primary` **Jeg har modtaget trøjen**.
+
+**Unsupported**: Taking or holding money. A price, fee or buyer protection. Showing the address before step 3 is confirmed. A receipt as proof by itself. More than one `primary` on the card. The card for a bid that was not accepted.
+
+**Gaps** (flag, do not invent): consent, retention and deletion of address, phone and account numbers and receipts; what **Jeg har ikke fået pengene** and a parcel that never arrives lead to; cancelling a deal; bank transfer details; reminders and time limits; the finished card; dark mode.
 
 Flag missing context; do not invent patterns.
 
