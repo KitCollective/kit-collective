@@ -58,6 +58,8 @@ export default function ConfirmScreen() {
     postSaveOpen,
     savedClub,
     savedSeasonLabel,
+    savedJersey,
+    savedCount,
     setSelectedSeasonLabel,
     saveEnabled,
     saveLabel,
@@ -264,6 +266,8 @@ export default function ConfirmScreen() {
         visible={postSaveOpen}
         savedClub={savedClub}
         savedSeasonLabel={savedSeasonLabel}
+        savedJersey={savedJersey}
+        savedCount={savedCount}
         onDismiss={handlePostSaveDismiss}
       />
 
