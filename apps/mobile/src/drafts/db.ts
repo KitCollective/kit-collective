@@ -93,3 +93,8 @@ ensureColumn("capture_unbound_photo", "photo_id", "TEXT");
 ensureColumn("capture_session", "photo_id_by_uri_json", "TEXT");
 ensureColumn("capture_session", "pending_grouping_json", "TEXT");
 ensureColumn("capture_session", "grouping_design_gap", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("capture_session", "overview", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("capture_session", "parked_at", "INTEGER");
+ensureColumn("capture_session", "grouping_settled_key", "TEXT");
+ensureColumn("capture_session", "saved_drafts_json", "TEXT");
+ensureColumn("capture_session_draft", "needs_check", "INTEGER NOT NULL DEFAULT 0");

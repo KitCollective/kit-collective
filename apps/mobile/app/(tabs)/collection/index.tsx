@@ -21,6 +21,7 @@ import { CollectionHeader } from "@/components/collection-header";
 import { ShortcutsSheet } from "@/components/genveje-sheet";
 import { shouldFallbackToAlleOnFetchError } from "@/components/genveje-sheet-logic";
 import { JerseyTile } from "@/components/jersey-tile";
+import { ParkedSessionRow } from "@/components/parked-session-row";
 import { ShortcutChipRow } from "@/components/shortcut-chip-row";
 import { tabBarContentInset } from "@/components/tab-bar-metrics";
 import { Button, EmptyState } from "@/components/ui";
@@ -280,6 +281,7 @@ function CollectionHome() {
         ]}
       >
         <CollectionHeader count={0} onAddPress={() => void startCapture()} />
+        <ParkedSessionRow />
         {showResultCollectionCaption ? (
           <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
             {RESULT_COLLECTION_BUD_CAPTION}
@@ -349,6 +351,7 @@ function CollectionHome() {
           onDismiss={dismissPrompt}
         />
       ) : null}
+      <ParkedSessionRow />
       <ShortcutChipRow
         shortcuts={shortcuts}
         selectedShortcutId={selectedShortcutId}

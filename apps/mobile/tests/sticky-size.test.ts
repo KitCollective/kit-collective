@@ -57,12 +57,18 @@ describe("sticky size on new drafts", () => {
   });
 
   it("pre-selects it on every jersey Vision grouping creates", () => {
-    let session = switchSingleToBulkBind(createCaptureSession([URI], { defaultSize: "l" }));
-    const photoId = session.photoIdByUri?.[URI] ?? "";
+    const uris = Array.from({ length: 5 }, (_, index) => `file:///photos/sticky-${index}.jpg`);
+    let session = createCaptureSession(uris, { defaultSize: "l" });
+    const idOf = (uri: string) => session.photoIdByUri?.[uri] ?? "";
     session = applyGroupingSuggestion(
       session,
-      { groups: [{ photoIds: [photoId] }, { photoIds: [] }] },
-      { preselect: true, defaultSize: "l" },
+      {
+        groups: [
+          { photoIds: [idOf(uris[0] ?? ""), idOf(uris[1] ?? "")], confidence: 90 },
+          { photoIds: [idOf(uris[2] ?? "")], confidence: 60 },
+        ],
+      },
+      { defaultSize: "l" },
     );
     expect(session.drafts).toHaveLength(2);
     expect(session.drafts.map((draft) => draft.size)).toEqual(["l", "l"]);

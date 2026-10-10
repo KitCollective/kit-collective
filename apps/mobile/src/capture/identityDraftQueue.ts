@@ -5,41 +5,20 @@ export function identityRunKey(draft: CaptureJerseyDraft): string {
   return `${draft.id}:${draftPhotoFingerprint(draft) ?? ""}`;
 }
 
-function draftHasFrontAndBack(draft: CaptureJerseyDraft): boolean {
-  const roles = new Set(draft.photos.map((photo) => photo.role ?? "front"));
-  return roles.has("front") && roles.has("back");
+/** A draft is ready for identity as soon as it holds a photo. */
+export function isDraftReadyForIdentityJob(draft: CaptureJerseyDraft): boolean {
+  return draft.photos.length > 0;
 }
 
-/**
- * A bound draft is ready for identity when it has front+back, or when grouping
- * is not in flight (so a single-photo shirt still identifies after grouping settles).
- */
-export function isDraftReadyForIdentityJob(
-  draft: CaptureJerseyDraft,
-  groupingInFlight: boolean,
-): boolean {
-  if (draft.photos.length === 0) {
-    return false;
-  }
-  if (groupingInFlight) {
-    return draftHasFrontAndBack(draft);
-  }
-  return true;
-}
-
-/** Confirm tabs are `drafts` order — jersey 1, then 2, then 3. Skip empty / not-ready drafts. */
+/** Confirm tabs are `drafts` order — jersey 1, then 2, then 3. Skip drafts with no photos. */
 export function orderedIdentityDrafts(
   drafts: ReadonlyArray<CaptureJerseyDraft>,
-  groupingInFlight = false,
 ): CaptureJerseyDraft[] {
-  return drafts.filter((draft) => isDraftReadyForIdentityJob(draft, groupingInFlight));
+  return drafts.filter((draft) => isDraftReadyForIdentityJob(draft));
 }
 
-export function identityQueueFingerprint(
-  drafts: ReadonlyArray<CaptureJerseyDraft>,
-  groupingInFlight = false,
-): string {
-  return orderedIdentityDrafts(drafts, groupingInFlight)
+export function identityQueueFingerprint(drafts: ReadonlyArray<CaptureJerseyDraft>): string {
+  return orderedIdentityDrafts(drafts)
     .map((draft) => identityRunKey(draft))
     .join("|");
 }
@@ -51,11 +30,8 @@ export function identityQueueFingerprint(
 export function nextQueuedIdentityDraft(
   drafts: ReadonlyArray<CaptureJerseyDraft>,
   startedKeys: ReadonlySet<string>,
-  groupingInFlight = false,
 ): CaptureJerseyDraft | undefined {
-  return orderedIdentityDrafts(drafts, groupingInFlight).find(
-    (draft) => !startedKeys.has(identityRunKey(draft)),
-  );
+  return orderedIdentityDrafts(drafts).find((draft) => !startedKeys.has(identityRunKey(draft)));
 }
 
 export const IDENTITY_TIMEOUT_ERROR = "IDENTITY_TIMEOUT";
@@ -106,30 +82,14 @@ export function shouldSyncIdentityChrome(
   return inFlightDraftId !== null && inFlightDraftId === activeDraftId;
 }
 
-/**
- * Hold identity only until the first grouped jersey has photos.
- * Grouping reveal of jersey 2 and 3 must not block jersey 1's match.
- */
-export function shouldHoldIdentityForGrouping(input: {
-  groupingInFlight: boolean;
-  boundDraftCount: number;
-}): boolean {
-  return input.groupingInFlight && input.boundDraftCount === 0;
-}
-
-/** Kick the queue when a jersey gains photos — including mid-grouping — not on tab switches. */
+/** Kick the queue when a jersey gains photos, not on tab switches. */
 export function shouldAttemptIdentityQueue(input: {
-  deferIdentity: boolean;
   hasAccessToken: boolean;
   queueFingerprint: string;
   previousFingerprint: string | null;
-  groupingJustClosed: boolean;
 }): boolean {
-  if (input.deferIdentity || !input.hasAccessToken || input.queueFingerprint.length === 0) {
+  if (!input.hasAccessToken || input.queueFingerprint.length === 0) {
     return false;
-  }
-  if (input.groupingJustClosed) {
-    return true;
   }
   if (input.previousFingerprint === null) {
     return true;

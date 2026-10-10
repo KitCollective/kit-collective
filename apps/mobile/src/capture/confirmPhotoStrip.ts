@@ -13,13 +13,13 @@ export type ConfirmPhotoStrip = {
 
 export function confirmPhotoStrip(
   photoUris: Record<PhotoRole, string | undefined>,
-  options: { analyzing: boolean; photoCount: number },
+  options: { photoCount: number },
 ): ConfirmPhotoStrip {
   const atCap = options.photoCount >= 10;
   return {
     roles: PHOTO_ROLES.filter((role) => Boolean(photoUris[role])),
-    showAddTile: !options.analyzing && !atCap,
-    capHelper: atCap && !options.analyzing ? JERSEY_PHOTO_CAP_HELPER_DA : null,
+    showAddTile: !atCap,
+    capHelper: atCap ? JERSEY_PHOTO_CAP_HELPER_DA : null,
   };
 }
 

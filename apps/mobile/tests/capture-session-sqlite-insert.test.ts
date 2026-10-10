@@ -38,4 +38,19 @@ describe("capture session sqlite inserts", () => {
       expect(insert.values, insert.table).toBe(insert.columns);
     }
   });
+
+  it("persists the Tjek flag and the overview session fields, and no longer the pending suggestion", () => {
+    const dbSource = readFileSync(join(__dirname, "../src/drafts/db.ts"), "utf8");
+    for (const column of [
+      "needs_check",
+      "parked_at",
+      "grouping_settled_key",
+      "saved_drafts_json",
+    ]) {
+      expect(storeSource, column).toContain(column);
+      expect(dbSource, column).toContain(column);
+    }
+    expect(storeSource).not.toContain("pending_grouping_json");
+    expect(storeSource).not.toContain("grouping_design_gap");
+  });
 });

@@ -8,6 +8,7 @@ import {
   type TransitionNavigation,
 } from "@/capture/upload-capture-presentation";
 import { runUploadCapture, startUploadCaptureWhenPresented } from "@/capture/uploadCaptureSession";
+import { useCaptureLanding } from "@/capture/use-capture-landing";
 import { readReduceMotion } from "@/theme/use-reduce-motion";
 
 const PICKING_CAPTION = "Åbner dine billeder …";
@@ -22,6 +23,10 @@ type CaptureTransitionNavigation = ReturnType<typeof useNavigation> & Transition
 export default function CaptureLoadingRoute() {
   const router = useRouter();
   const navigation = useNavigation<CaptureTransitionNavigation>();
+  const landingFor = useCaptureLanding();
+  // The effect below runs once; keep the latest landing rule without re-running it.
+  const landingForRef = useRef(landingFor);
+  landingForRef.current = landingFor;
   const params = useLocalSearchParams<{
     prefilledClubId?: string;
     prefilledClubLabel?: string;
@@ -55,10 +60,7 @@ export default function CaptureLoadingRoute() {
           router.dismiss();
           return;
         }
-        router.replace({
-          pathname: "/(capture)/confirm",
-          params: { sessionId: result.sessionId },
-        });
+        router.replace(landingForRef.current(result.sessionId));
       },
     });
 
