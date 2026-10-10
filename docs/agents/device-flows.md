@@ -17,7 +17,7 @@ Regression flows (`E2E_FLOWS=regression`): run them at a milestone, before a pro
 
 | Flow | Signs in as | Steps (one screenshot each) |
 | --- | --- | --- |
-| `first-session` | signed out, then the Test Collector | `01-welcome`, `02-demo-result`, `03-door-register`, `04-door-login`, `05-collection` |
+| `first-session` | signed out | `01-welcome`, `02-demo-result`, `03-door`, `04-door-invalid-email`, `05-code` |
 | `add-jersey` | Test Collector | `01-source-sheet`, `02-confirm`, `03-details`, `04-ready-to-save`, `05-saved`, `06-collection` (the system photo picker between the first two is tapped through, not screenshotted) |
 | `collection` | Test Collector | `01-collection`, `02-shortcut-filter`, `03-own-detail` |
 | `search-bid` | Test Collector | `01-typeahead`, `02-catalog-drill`, `03-foreign-detail`, `04-send-bid`, `05-amount-entered`, `06-bid-sent` |
