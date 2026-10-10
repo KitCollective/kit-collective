@@ -16,6 +16,10 @@ appId: app.kitcollective.mobile
       id: welcome-have-account
     timeout: 90000
 - openLink: kitcollective:///login
+# iOS asks whether to open the link in the app, in the simulator's language.
+- tapOn:
+    text: "Åbn|Open"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: login-email
