@@ -18,7 +18,7 @@ import { useTheme } from "@/theme/use-theme";
 const SOCIAL_PROVIDERS: DoorSocialProvider[] = ["google", "facebook"];
 
 /** The single Kom i gang face: e-mail + Fortsæt, divider, equal social buttons, terms line. */
-export function KomIGangFace({
+export function DoorFace({
   email,
   emailError,
   showThrottleBanner,

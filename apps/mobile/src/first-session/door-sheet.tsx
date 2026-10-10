@@ -7,7 +7,7 @@ import Toast from "react-native-toast-message";
 import { Sheet, useSheetScroll } from "@/components/sheet";
 import { toastConfig } from "@/components/toast-config";
 import { DOOR_TITLE, type DoorSocialProvider } from "@/first-session/door-copy";
-import { KomIGangFace } from "@/first-session/door-faces";
+import { DoorFace } from "@/first-session/door-faces";
 import { space } from "@/theme/tokens";
 
 export type { DoorSocialProvider } from "@/first-session/door-copy";
@@ -40,7 +40,7 @@ export function DoorSheet({
   return (
     <Sheet visible={visible} variant="door" title={DOOR_TITLE} onDismiss={onClose}>
       <DoorSheetBody>
-        <KomIGangFace
+        <DoorFace
           email={email}
           emailError={emailError}
           showThrottleBanner={showThrottleBanner}
@@ -52,7 +52,7 @@ export function DoorSheet({
       </DoorSheetBody>
       {/*
         The Sheet is a native Modal the root <Toast> cannot cover. A host here lets the
-        library's ref-priority stack route the cancelled-login toast to this surface.
+        library's ref-priority stack route the failed-sign-in toast to this surface.
         docs/design-system.md → Toast.
       */}
       {visible ? (
