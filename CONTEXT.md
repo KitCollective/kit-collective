@@ -402,11 +402,11 @@ A collector's structured want: catalog facets combined with AND. V1 facets are c
 _Avoid_: Favorit as the want list; free-text wish; a Kit as the only shape; paywalling Indbakke in this increment; player or country facets in v1
 
 **Ønske**:
-The Wishlist place in Expo. This increment enters from the Samling header trailing Icon button, replacing the notification bell. The empty notification Sheet on that slot is gone. Not a tab. Not Indbakke. Favorit stays under Profil.
-_Avoid_: a sixth tab; heart in slot 4; treating the header slot as Favoritter; keeping the empty notification Sheet as the header action
+The Wishlist place in Expo: its own tab (Ønsker, slot 4). Without a live Entitlement the tab shows what the feature does and one way to start; with one it lists Wishlist rows with their Matches. A wish can also be started from a Søg Kit drill (**Ønsk denne**). Not Indbakke. Favorit stays under Profil.
+_Avoid_: a sixth tab; entry from the Samling header (the earlier placement); treating the tab as Favoritter; a paywall that opens just because the tab was opened
 
 **Match**:
-A hit when another collector's bidding-enabled, non-private UserJersey satisfies a Wishlist row's AND facets. OS push deep-links to that UserJersey. In-app the Wishlist row shows the hit. Aktivitet stays Bud. Own copies never match. Private copies never match.
+A hit when another collector's bidding-enabled, non-private UserJersey satisfies a Wishlist row's AND facets. OS push deep-links to that UserJersey. In-app the Wishlist row shows the hit, and unseen hits count on the Ønsker tab badge. Aktivitet stays Bud. Own copies never match. Private copies never match.
 _Avoid_: matching a closed copy; matching a private copy; matching a seed Kit with no UserJersey; matching the owner's own Save; a Match card on Aktivitet
 
 **Offer**:
@@ -414,8 +414,8 @@ Admin-owned Billing catalog: which month and year IAP product ids are live, whet
 _Avoid_: a DKK price column as IAP truth; hardcoded SKUs in Nest; calling Offer a User.role
 
 **Nest-trial**:
-An Entitlement Nest writes with source `trial` for N days when Offer says trial is on and the collector has not used trial. Starts the first time they open Ønske or tap Tilføj without a live Entitlement. Otherwise that moment is the paywall (month/year + Restore). Not an App Store or Play introductory offer. Restore remains IAP.
-_Avoid_: treating trial days as App Store Connect metadata; a second User.role for trial; requiring a UserJersey before trial; a separate “Prøv N dage” step as the only start
+An Entitlement Nest writes with source `trial` for N days when Offer says trial is on and the collector has not used trial. It starts only when the collector taps **Start gratis prøve** on the paywall (decided 2026-10-10; before that, on first opening Ønske or tapping Tilføj). It takes no payment and renews nothing: when it ends the collector is in Lapse until they buy. The collector is reminded the day before it ends. Not an App Store or Play introductory offer. Restore remains IAP.
+_Avoid_: starting the trial by opening Ønske; treating trial days as App Store Connect metadata; a second User.role for trial; requiring a UserJersey before trial; asking for a plan before the trial
 
 **Lapse**:
 When Entitlement expires, Wishlist rows remain. Match-job and match-push stop. The collector can view and delete rows. Create and edit require a live Entitlement. Collection, Søg, and Send bud stay as they are.

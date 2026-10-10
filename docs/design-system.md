@@ -564,7 +564,7 @@ Status: `locked` for the inventory below (v1 + admin gap + inbox gap + Profil ga
 
 **Inventory (Toast gap 2026-09-06)**: Toast (Component **Toast**). Bottom-anchored feedback that floats above the dock / native tab bar; `danger` for save failures. Now the standard **`react-native-toast-message`** library (adopted 2026-09-06 for Expo Go runtime reliability) with a custom `error` renderer that keeps the app's danger/content/`fill.secondary` tokens — see Toast § **Deviation** for the accepted gaps versus the original bespoke lock.
 
-**Deferred primitives**: Checkbox, paywall card, wishlist row. Thread row / Detaljer still use a 44px circular **initial** on `fill.secondary` — that is not Avatar and not a new Mark `kind`. Admin Profile action stays a 32px operator monogram — not Avatar. Do not invent a Filter primitive (use Button + Chip in Sheet). Do not invent an admin checkbox column.
+**Deferred primitives**: Checkbox. (Paywall and Wish row are locked under Patterns → KitCollective+ paywall and Ønsker, Revision 2026-10-10.) Thread row / Detaljer still use a 44px circular **initial** on `fill.secondary` — that is not Avatar and not a new Mark `kind`. Admin Profile action stays a 32px operator monogram — not Avatar. Do not invent a Filter primitive (use Button + Chip in Sheet). Do not invent an admin checkbox column.
 
 A primitive not listed: **flag**. Do not invent components or variants.
 
@@ -1518,6 +1518,57 @@ Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *05 Søg 
 **Unsupported**: Entry from **own** Samling tiles. A large photo on this screen. Price overlay on the photo. Preset amount chips. A helper showing the last bid or any other collector's amount (decided 2026-10-10). Cart. “Køb nu”. Wash focus. The `numeral` face for the amount. Tab bar on this screen. Starting Send bud from Indbakke as a compose-to-nobody control. Entry from a foreign Profil: flag (not locked).
 
 **Gaps** (flag, do not invent): a failed send; an upper limit; dark mode.
+
+Flag missing context; do not invent patterns.
+
+### Ønsker
+
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *07 Ønsker & KitCollective+*: artboards *Ønsker / 01*, *04*, *05*, *06* and *Søg / 07*. This revision wins over the older rule that Ønsker reuses List-row manage rows and gets no row of its own.
+
+**Purpose**: Let a collector say what they look for and show them when it turns up.
+
+**Without Plus** (Tab bar visible, Ønsker selected): the tab sells itself; no Sheet opens until the collector asks.
+1. Title **Ønsker**.
+2. `title` **Få besked, når trøjen dukker op** and one `body` line: **Vi siger til, når en samler åbner den for bud.**
+3. One example Wish row on `fill.secondary` (`radius.md`) with two match thumbs and **2 nye**, marked **Eksempel** in `caption`.
+4. Above the Tab bar: Button `primary` **Prøv gratis i *n* dage** (trial not used) or **Fortsæt med Plus** (trial used), and a `caption` with the monthly price from the store. The button opens the paywall Sheet.
+
+**With Plus**:
+1. Title **Ønsker** with a `fill.primary` add Icon button trailing (as Samling's capture button).
+2. **Wish row**, hairline between rows: the club or national team with season in `label` 16 / 600; type · size in `mono` (**Alle sæsoner**, **Alle størrelser** when a facet is open); trailing a `fill.primary` pill **n nye** for unseen matches, or the match count in `mono` when all are seen; and More. Under it the matches as 84 × 105 thumbs (`radius.sm`) with the owner's Handle in `caption-sm`, scrolling sideways; a thumb opens that jersey. A wish without a match shows **Ingen endnu** in `caption` and no thumbs.
+3. More opens a Sheet with **Rediger** and **Slet** (`danger`); delete asks first.
+4. The Ønsker tab badge counts unseen matches. Opening the tab marks them seen.
+5. No wishes yet: `title` **Ingen ønsker endnu** and Button `primary` **Nyt ønske**.
+
+**Nyt ønske / Rediger ønske** (stack screen, Tab bar hidden): Back + title. **Klub eller landshold** and **Sæson** as label-left / value-right rows that open the full-screen picker; **Type** and **Størrelse** as Chip `single-select` with **Alle** first. A `fill.secondary` row shows up to two thumbs and ***n* trøjer matcher lige nu** as soon as one facet is set (**Ingen matcher lige nu** without thumbs when none do). Button dock: `primary` **Gem ønske**, disabled until one of club, national team, season or type is set. The OS push prompt follows the first saved wish, as before.
+
+**Lapsed** (Entitlement expired): a `fill.secondary` card first in the list, **Plus er udløbet**, **Du får ikke besked om nye trøjer.**, Button `primary` **Fortsæt** (opens the paywall Sheet). Wish rows stay, without matches and More; each has a `tertiary` **Slet**. No add button.
+
+**Ønsk denne** (under Søg): on a Kit drill where no copy is åben for bud, and on a search whose jerseys are all closed, a `fill.secondary` card: **Ingen åbne for bud**, ***n* samlere har den.**, Button `primary` **Ønsk denne**. It opens Nyt ønske with the facets filled in; without Plus it opens the paywall Sheet first.
+
+**Unsupported**: A paywall Sheet on opening the tab. Starting the trial by opening the tab or tapping add. Edit and delete Icon buttons on the row. A match shown only as a row fill. **Ønsk denne** on a foreign UserJersey detail. A price or bid amount on a match thumb. Favorit as a wish.
+
+**Gaps** (flag, do not invent): many matches on one wish; a match whose jersey closed again; loading and offline; dark mode.
+
+Flag missing context; do not invent patterns.
+
+### KitCollective+ paywall
+
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *07 Ønsker & KitCollective+*: artboards *KitCollective+ / 02* and *03*. Replaces "paywall card" under Deferred primitives.
+
+**Purpose**: Start the trial, or sell a plan, in one Sheet with one button.
+
+**Anatomy** (Sheet over the place it was opened from): `title` **KitCollective+** with a close Icon button; two benefit lines with a check, in `body` 15: **Besked ved match**, **Ubegrænset fotogenkendelse**; then one of two bodies; Button `primary`; a row of `tertiary` links **Gendan køb**, **Vilkår**, **Privatliv**.
+
+**Trial** (trial not used): a `fill.secondary` timeline of three lines, `mono` label and `label-sm` text: **I dag** — ***n* dage gratis**; the day before the end — **Påmindelse**; the last day — **Prøven slutter**. A `label-sm` line in `content.secondary`: **Derefter *price*/md. Intet trækkes automatisk.** Button **Start gratis prøve**. No plan is chosen here, because the trial takes no payment. The trial starts on this button and nowhere else.
+
+**Buy** (trial used or over): two plan rows as a radio group. **Årlig** is preselected: 2px `fill.primary` border, the yearly price in `mono`, a `fill.primary` pill with the saving, and the price per month trailing. **Månedlig**: hairline border, price per month trailing. Button **Fortsæt med årlig** / **Fortsæt med månedlig**.
+
+**Numbers**: the trial length comes from Offer in Admin (3 days at launch); prices and the saving come from the store. Nothing is hardcoded, and a price that has not loaded shows a skeleton, never **…**.
+
+**Unsupported**: Two purchase buttons. A plan choice before the trial. "Vision Matcher" or other internal names in the copy. A longer benefit list. Wash or colour on the Sheet. Showing the Sheet without the collector asking.
+
+**Gaps** (flag, do not invent): purchase in progress, failed and restored states; the store being unavailable; what the day-before reminder is (push, Indbakke or both); dark mode.
 
 Flag missing context; do not invent patterns.
 
