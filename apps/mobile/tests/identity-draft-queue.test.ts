@@ -14,6 +14,8 @@ import {
   orderedIdentityDrafts,
   raceWithTimeout,
   remainingIdentityBudget,
+  scopeIdentityFlagToDraft,
+  scopeIdentityToDraft,
   shouldAttemptIdentityQueue,
   shouldHoldIdentityForGrouping,
   shouldSyncIdentityChrome,
@@ -221,5 +223,36 @@ describe("identity queue waits for a photo set", () => {
 
     expect(orderedIdentityDrafts(session.drafts, true).map((draft) => draft.id)).toEqual([first]);
     expect(nextQueuedIdentityDraft(session.drafts, new Set(), true)?.id).toBe(first);
+  });
+});
+
+describe("pending identity state belongs to one jersey", () => {
+  const guessForA = { ownerDraftId: "draft-a", value: { jobId: "job-a" } };
+
+  it("shows a pending guess only on the jersey that owns it", () => {
+    expect(scopeIdentityToDraft(guessForA, "draft-a")).toEqual({ jobId: "job-a" });
+    expect(scopeIdentityToDraft(guessForA, "draft-b")).toBeNull();
+    expect(scopeIdentityToDraft(guessForA, null)).toBeNull();
+    expect(scopeIdentityToDraft(null, "draft-a")).toBeNull();
+  });
+
+  it("marks 'filled by Vision' only on the jersey Vision filled", () => {
+    expect(scopeIdentityFlagToDraft("draft-a", "draft-a")).toBe(true);
+    expect(scopeIdentityFlagToDraft("draft-a", "draft-b")).toBe(false);
+    expect(scopeIdentityFlagToDraft(null, "draft-a")).toBe(false);
+  });
+
+  it("does not block Gem on jersey B because of jersey A's pending guess", () => {
+    const session = addJerseyDraft(createCaptureSession([URI_A]), { defaultSize: "m" });
+    const [a, b] = session.drafts;
+    if (!a || !b) {
+      throw new Error("expected two drafts");
+    }
+    const pendingForA = { ownerDraftId: a.id, value: { jobId: "job-a" } };
+    const guessOnB = scopeIdentityToDraft(pendingForA, b.id);
+    expect(guessOnB).toBeNull();
+    // confirm.tsx derives lowConfidencePending from the scoped guess, so B has none.
+    expect(guessOnB !== null).toBe(false);
+    expect(scopeIdentityToDraft(pendingForA, a.id)).not.toBeNull();
   });
 });

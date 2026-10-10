@@ -24,12 +24,15 @@ import {
   resetConfirmManualEdits,
 } from "@/capture/confirmManualEdits";
 import {
+  type IdentityOwned,
   identityQueueFingerprint,
   identityRunKey,
   identitySettledSnapshot,
   nextQueuedIdentityDraft,
   raceWithTimeout,
   remainingIdentityBudget,
+  scopeIdentityFlagToDraft,
+  scopeIdentityToDraft,
   shouldAttemptIdentityQueue,
   shouldSyncIdentityChrome,
 } from "@/capture/identityDraftQueue";
@@ -109,17 +112,37 @@ export function useConfirmVision({
   groupingInFlight = false,
 }: UseConfirmVisionOptions) {
   const [polling, setPolling] = useState(false);
-  const [suggestion, setSuggestion] = useState<VisionJobResponse | null>(null);
-  const [applied, setApplied] = useState(false);
-  const [catalogMissHint, setCatalogMissHint] = useState<string | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  // A pending guess and the "Vision filled it" flag belong to one jersey: the draft that was
+  // active when they were set. Other tabs must not see, be blocked by, or apply them.
+  const [ownedSuggestion, setOwnedSuggestion] = useState<IdentityOwned<VisionJobResponse> | null>(
+    null,
+  );
+  const [appliedOwner, setAppliedOwner] = useState<string | null>(null);
+  const setSuggestion = useCallback((job: VisionJobResponse | null, ownerDraftId?: string) => {
+    const owner = ownerDraftId ?? draftRef.current?.id;
+    setOwnedSuggestion(job && owner ? { ownerDraftId: owner, value: job } : null);
+  }, []);
+  const setApplied = useCallback((value: boolean, ownerDraftId?: string) => {
+    setAppliedOwner(value ? (ownerDraftId ?? draftRef.current?.id ?? null) : null);
+  }, []);
+  const suggestion = scopeIdentityToDraft(ownedSuggestion, draft?.id ?? null);
+  const applied = scopeIdentityFlagToDraft(appliedOwner, draft?.id ?? null);
+  const [ownedCatalogMissHint, setOwnedCatalogMissHint] = useState<IdentityOwned<string> | null>(
+    null,
+  );
+  const setCatalogMissHint = useCallback((hint: string | null, ownerDraftId?: string) => {
+    const owner = ownerDraftId ?? draftRef.current?.id;
+    setOwnedCatalogMissHint(hint && owner ? { ownerDraftId: owner, value: hint } : null);
+  }, []);
+  const catalogMissHint = scopeIdentityToDraft(ownedCatalogMissHint, draft?.id ?? null);
   const suggestionOpacity = useRef(new Animated.Value(0)).current;
   const appliedJobId = useRef<string | null>(null);
   const snapshotsByDraftRef = useRef(new Map<string, IdentityFieldSnapshot>());
   const startedIdentityKeysRef = useRef(new Set<string>());
   const sessionDraftsRef = useRef(sessionDrafts);
   sessionDraftsRef.current = sessionDrafts;
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
   const wasDeferredRef = useRef(deferIdentity);
   const groupingInFlightRef = useRef(groupingInFlight);
   groupingInFlightRef.current = groupingInFlight;
@@ -169,7 +192,7 @@ export function useConfirmVision({
       snapshotsByDraftRef.current.set(currentDraftId, snapshot);
 
       if (job.catalogMiss && isActiveDraft) {
-        setCatalogMissHint(resolveVisionCatalogMissHint(job));
+        setCatalogMissHint(resolveVisionCatalogMissHint(job), currentDraftId);
       }
 
       if (job.catalogMiss && !job.suggestions) {
@@ -182,7 +205,7 @@ export function useConfirmVision({
 
       if (!shouldPreselect && suggestions) {
         if (currentDraftId === draftRef.current?.id) {
-          setSuggestion(job);
+          setSuggestion(job, currentDraftId);
           fadeInSuggestion();
         }
         return;
@@ -228,19 +251,29 @@ export function useConfirmVision({
         });
         if (suggestOnlyJob) {
           if (currentDraftId === draftRef.current?.id) {
-            setSuggestion(suggestOnlyJob);
+            setSuggestion(suggestOnlyJob, currentDraftId);
             fadeInSuggestion();
           }
           return;
         }
 
         if (currentDraftId === draftRef.current?.id) {
-          setApplied(true);
+          setApplied(true, currentDraftId);
           fadeInSuggestion();
         }
       }
     },
-    [accessToken, fadeInSuggestion, mutate, onCatalogMiss, sessionId, setSelectedSeasonLabel],
+    [
+      accessToken,
+      fadeInSuggestion,
+      mutate,
+      onCatalogMiss,
+      sessionId,
+      setApplied,
+      setCatalogMissHint,
+      setSelectedSeasonLabel,
+      setSuggestion,
+    ],
   );
   const applySuggestionsRef = useRef(applySuggestions);
   applySuggestionsRef.current = applySuggestions;
@@ -424,8 +457,11 @@ export function useConfirmVision({
     onCatalogMiss,
     onPremiumRequired,
     queueFingerprint,
+    setApplied,
+    setCatalogMissHint,
     setJobId,
     setSelectedSeasonLabel,
+    setSuggestion,
   ]);
 
   useEffect(() => {
@@ -477,9 +513,10 @@ export function useConfirmVision({
   }, [accessToken, applySuggestions, inFlightDraftId, jobId, polling]);
 
   const applySuggestion = useCallback(async () => {
-    if (!suggestion?.suggestions || !accessToken) {
+    if (!suggestion?.suggestions || !accessToken || !draftRef.current) {
       return;
     }
+    const ownerDraftId = draftRef.current.id;
 
     const suggestions = suggestion.suggestions;
     mutate((current) => {
@@ -537,10 +574,19 @@ export function useConfirmVision({
       }
     }
     setSuggestion(null);
-    setApplied(true);
+    setApplied(true, ownerDraftId);
     setCatalogMissHint(null);
     onCatalogMiss?.(false);
-  }, [accessToken, mutate, onCatalogMiss, setSelectedSeasonLabel, suggestion]);
+  }, [
+    accessToken,
+    mutate,
+    onCatalogMiss,
+    setApplied,
+    setCatalogMissHint,
+    setSelectedSeasonLabel,
+    setSuggestion,
+    suggestion,
+  ]);
 
   return {
     suggestion,
