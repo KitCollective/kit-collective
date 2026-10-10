@@ -1,31 +1,64 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { matchRoles, parseRisk, parseWriteScope, startDecision } from "../lib/start-decision.mjs";
+import { matchRoles, parseWriteScope, startDecision } from "../lib/start-decision.mjs";
 
-const small = "write-scope: apps/web/**\n\n## Testing\nunit";
+const ticket = (scope, { seams = true } = {}) =>
+  [
+    "## Parent",
+    "KIT-1",
+    "## What to build",
+    "A small thing.",
+    "## Acceptance criteria",
+    "- [ ] it works",
+    ...(seams ? ["## Seams", "unit test at the service"] : []),
+    "## Blocked by",
+    "None",
+    ...(scope ? [`write-scope: ${scope}`] : []),
+  ].join("\n");
+const small = ticket("apps/web/**");
 
-test("a small single-area issue with Testing needs no plan", () => {
+test("a small single-area issue with Seams needs no plan", () => {
   const d = startDecision({ body: small });
   assert.equal(d.plan, false);
   assert.equal(d.engineerModel, "sonnet");
   assert.deepEqual(d.roles, ["frontend"]);
 });
 
-test("no Testing section means plan", () => {
-  assert.equal(startDecision({ body: "write-scope: apps/web/**" }).plan, true);
+test("a real-template issue: Seams gives no plan, no Seams gives a plan", () => {
+  assert.equal(startDecision({ body: ticket("apps/web/**") }).plan, false);
+  const without = startDecision({ body: ticket("apps/web/**", { seams: false }) });
+  assert.equal(without.plan, true);
+  assert.match(without.planWhy, /no Seams section/);
+  assert.equal(startDecision({ body: "## Testing\nx\nwrite-scope: apps/web/**" }).plan, false);
 });
 
 test("write-scope over two apps means plan with both roles", () => {
-  const d = startDecision({ body: `write-scope: apps/web/**, apps/api/**\n## Testing\nx` });
+  const d = startDecision({ body: ticket("apps/web/**, apps/api/**") });
   assert.equal(d.plan, true);
   assert.deepEqual(d.roles.sort(), ["backend", "frontend"]);
 });
 
-test("Risk line and high-risk paths force plan and the strong model", () => {
-  assert.equal(startDecision({ body: `Risk: medium\n${small}` }).plan, true);
-  const high = startDecision({ body: "write-scope: packages/db/**\n## Testing\nx" });
-  assert.equal(high.plan, true);
-  assert.equal(high.engineerModel, "opus");
+test("high-risk paths force a plan and the strong model; ordinary paths do not", () => {
+  const risk = (scope) => startDecision({ body: ticket(scope) });
+  for (const scope of [
+    "packages/db/**",
+    ".github/workflows/**",
+    "apps/api/src/identity/**",
+    "apps/api/src/billing/iap.ts",
+    "apps/api/**", // a parent of a high-risk path
+  ]) {
+    assert.equal(risk(scope).engineerModel, "opus", scope);
+    assert.equal(risk(scope).modelWhy, "high-risk path", scope);
+  }
+  for (const scope of [
+    "apps/api/src/catalog/**",
+    "apps/api/src/search/**",
+    "apps/admin/**",
+    "apps/mobile/app/**",
+  ]) {
+    assert.equal(risk(scope).engineerModel, "sonnet", scope);
+    assert.equal(risk(scope).plan, false, scope);
+  }
 });
 
 test("an approval-plan label always plans", () => {
@@ -40,7 +73,6 @@ test("strong model after two red audits or on replan, not after one", () => {
 
 test("parsers tolerate missing lines", () => {
   assert.deepEqual(parseWriteScope(""), []);
-  assert.equal(parseRisk("nothing"), "");
   assert.deepEqual(matchRoles([]), []);
   assert.deepEqual(parseWriteScope("write-scope: `a/**`, b/**"), ["a/**", "b/**"]);
 });

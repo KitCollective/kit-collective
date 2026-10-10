@@ -52,6 +52,9 @@ export function summariseIssues(events) {
   return [...issues.values()];
 }
 
+/** Groups below this many issues are printed as a small sample, not as a finding. */
+export const SMALL_SAMPLE = 10;
+
 const mean = (xs) =>
   xs.length === 0 ? null : Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 100) / 100;
 const share = (part, whole) => (whole === 0 ? null : Math.round((part / whole) * 100) / 100);
@@ -98,8 +101,10 @@ export function renderReport(report) {
     ["with Lead", report.withLead],
     ["without Lead", report.withoutLead],
   ]) {
+    const sample =
+      c.issues < SMALL_SAMPLE ? `, SMALL SAMPLE (under ${SMALL_SAMPLE}): not a result` : "";
     lines.push(
-      `${name}: ${c.issues} issues, ${c.landed} landed, rounds/issue ${fmt(c.meanRounds)}, first audit red ${fmt(c.firstAuditRedShare)}, tokens/issue ${fmt(c.meanTokensPerIssue)}, rework token share ${fmt(c.reworkTokenShare)}, no tokens recorded ${c.issuesWithoutTokens}`,
+      `${name} (n=${c.issues}${sample}): ${c.issues} issues, ${c.landed} landed, rounds/issue ${fmt(c.meanRounds)}, first audit red ${fmt(c.firstAuditRedShare)}, tokens/issue ${fmt(c.meanTokensPerIssue)}, rework token share ${fmt(c.reworkTokenShare)}, no tokens recorded ${c.issuesWithoutTokens}`,
     );
   }
   lines.push(`tokens by step: ${JSON.stringify(report.tokensByStep)}`);

@@ -155,7 +155,10 @@ test("report splits issues by Lead and measures rework", () => {
   assert.equal(report.withoutLead.firstAuditRedShare, 1);
   assert.equal(report.withoutLead.reworkTokenShare, 0.43); // 300 of 700 after the first red
   assert.equal(report.tokensByStep.engineer, 1200);
-  assert.match(renderReport(report), /with Lead: 1 issues/);
+  assert.match(
+    renderReport(report),
+    /with Lead \(n=1, SMALL SAMPLE \(under 10\): not a result\): 1 issues/,
+  );
 });
 
 test("a log with no tokens reports n/a, never zero", () => {
@@ -205,6 +208,6 @@ test("CLI appends, reports and refuses bad input", () => {
   );
   assert.equal(run("reason", "--issue", "KIT-9", "--code", "free text here").status, 2);
   assert.equal(readFileSync(path, "utf8").trim().split("\n").length, 3);
-  assert.match(run("report").stdout, /without Lead: 1 issues/);
+  assert.match(run("report").stdout, /without Lead \(n=1, SMALL SAMPLE/);
   assert.equal(run("path").stdout.trim(), path);
 });
