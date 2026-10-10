@@ -84,7 +84,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import bcrypt from "bcryptjs";
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { BillingService } from "../billing/billing.service.js";
 import { createMemoryObjectStore, type ObjectStoreAdapter } from "../collection/object-store.js";
 import { createR2ObjectStore } from "../collection/r2-object-store.js";
@@ -439,6 +439,9 @@ export class IdentityService {
       .padStart(IDENTITY_CODE_LENGTH, "0");
     const identifier = `${CODE_IDENTIFIER_PREFIX}${normalizedEmail}`;
     await this.db.transaction(async (tx) => {
+      // Two parallel requests for one address would both delete nothing and both insert. The lock
+      // makes the second wait, then replace the first, so one live code is left.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${identifier}))`);
       await tx.delete(verification).where(eq(verification.identifier, identifier));
       await tx.insert(verification).values({
         id: randomBytes(16).toString("hex"),
