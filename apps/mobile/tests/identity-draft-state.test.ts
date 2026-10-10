@@ -8,8 +8,8 @@ import {
   resetIdentityState,
 } from "../src/capture/identityDraftState";
 
-const guessA = { jobId: "job-a", status: "ready" } as unknown as VisionJobResponse;
-const guessB = { jobId: "job-b", status: "ready" } as unknown as VisionJobResponse;
+const guessA: VisionJobResponse = { jobId: "job-a", status: "ready" };
+const guessB: VisionJobResponse = { jobId: "job-b", status: "ready" };
 
 describe("identity state per jersey", () => {
   it("gives a jersey Vision has not touched the empty state", () => {
