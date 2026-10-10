@@ -355,6 +355,11 @@ jobs:
         with:
           turbo-cache-key: apps
 
+      # `turbo test` only builds a package's dependencies, not the package itself; a
+      # package that imports its own entry (api-contract) would race its own build.
+      - name: Build
+        run: pnpm build
+
       - name: Test (affected packages on a PR, all otherwise)
         env:
           EVENT: ${{ github.event_name }}
