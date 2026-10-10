@@ -1417,7 +1417,7 @@ Status: `retired` (Revision 2026-10-10). The Detaljer screen is replaced by the 
 - **Privatliv**: Blokerede samlere (count; a list where a block can be lifted, asking first); Cookies; Mine data.
 - **Log ud**, and **Slet konto** in `danger`; both ask in a Sheet `confirm`. Version in `mono` last.
 
-**Notifikationer**: one screen. **Push**: Bud, Beskeder, Match på ønsker. **E-mail**: Bud og beskeder, Nyheder (off by default). Switch rows only.
+**Notifikationer**: one screen. **Push**: Bud, Beskeder, Match på ønsker. **E-mail**: Bud og beskeder, Match på ønsker, Nyheder (off by default). Switch rows only.
 
 **KitCollective+** (from the Profil row): `title` with the state (**Gratis prøve**, **KitCollective+**, **Udløbet**) and one `body` line with the date (**Slutter 13. oktober. Intet trækkes.** / **Fornyes …**). Two fact rows (Ønsker; Fotogenkendelse). Dock: `primary` **Vælg plan** (opens the paywall Sheet) when there is no paid plan, **Administrer abonnement** (opens the store) when there is; `tertiary` **Gendan køb**.
 
@@ -1660,6 +1660,8 @@ The board follows the mail type; it is not random.
 - A code leads the subject so it can be read without opening the mail.
 - A bid amount is shown in the mail, never in the subject or the preheader.
 - The footer says why. Account mails (01–04, 12): **Den kan ikke slås fra.** Bid and message mails (05–08): they follow **Bud og beskeder** under Notifikationer.
+- Wish and Plus mails (09–11) follow a third e-mail switch, **Match på ønsker**, under Notifikationer (on by default).
+- 08 is sent only if the message is still unread after 15 minutes, and at most once per conversation until it is opened.
 - Copy is short: a headline, one line, the facts. No greeting, no sign-off.
 
 **Dark**: the field is `#1F1F1F` on a `#000000` canvas, pitch lines `#444444`, the `content.primary` team and the arrows turn white, the identity magnets keep their colours, text uses the dark aliases, and the button is white with black text. The lockup has a white variant. Both schemes are designed; a client that forces its own inversion must still be readable.
@@ -1670,7 +1672,7 @@ The board follows the mail type; it is not random.
 
 **Unsupported**: A coloured or gradient field. A jersey or mascot illustration in the Top. Two buttons. A straight edge under the Top. Marketing blocks, social icons or app-store badges. A bid amount in a subject line. Text set inside an image. A fourth board without a decision.
 
-**Gaps** (flag, do not invent): the support address; the legal sender line (company name, address, CVR); the list of take-down reasons; final artwork for the three boards and the lockup as images in both schemes (the Paper drawings are vector sketches, and the brand SVGs use live text that mail clients cannot render); which Notifikationer switch governs 09–11 (a third e-mail switch **Match på ønsker** is proposed, not decided); when 08 is sent (proposed: only if unread after 15 minutes, once per conversation until it is opened; not decided); deep links for every button; English and other languages; a welcome mail and Handel mails are not designed.
+**Gaps** (flag, do not invent): the support address; the legal sender line (company name, address, CVR); the list of take-down reasons; final artwork for the three boards and the lockup as images in both schemes (the Paper drawings are vector sketches, and the brand SVGs use live text that mail clients cannot render); deep links for every button; English and other languages; a welcome mail and Handel mails are not designed.
 
 ### Confirm and Save
 
