@@ -5,7 +5,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { nulList } from "./lib/git-files.mjs";
+import { assertRef, nulList } from "./lib/git-files.mjs";
 import {
   changedFilesDiffArgs,
   findWriteScopeViolations,
@@ -78,6 +78,12 @@ function main() {
   }
 
   const baseRef = process.env.BASE_REF ?? "origin/development";
+  try {
+    assertRef(baseRef);
+  } catch (error) {
+    process.stderr.write(`check-pr-write-scope: ${error.message}\n`);
+    process.exit(2);
+  }
   const changedFiles = getChangedFiles(baseRef);
   const violations = findWriteScopeViolations(changedFiles, globs);
 

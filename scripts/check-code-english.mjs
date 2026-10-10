@@ -11,7 +11,7 @@ import {
   findDanishCodeIdentifiers,
   findDanishFileNames,
 } from "../.cursor/hooks/lib/danish-code-identifiers.mjs";
-import { changedFiles } from "./lib/git-files.mjs";
+import { assertRef, changedFiles } from "./lib/git-files.mjs";
 
 const baseRef = process.env.BASE_REF ?? "origin/development";
 const CODE_PATHSPEC = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.mjs", "*.cjs", "*.mts", "*.cts"];
@@ -22,14 +22,23 @@ function git(args) {
 }
 
 try {
-  git(["rev-parse", "--verify", `${baseRef}^{commit}`]);
+  assertRef(baseRef);
+} catch (error) {
+  process.stderr.write(`check-code-english: ${error.message}\n`);
+  process.exit(2);
+}
+
+try {
+  git(["rev-parse", "--verify", "--end-of-options", `${baseRef}^{commit}`]);
 } catch {
   process.stdout.write(`check-code-english: ${baseRef} not found; nothing to compare.\n`);
   process.exit(0);
 }
 
 const range = `${baseRef}...HEAD`;
-const identifiers = findDanishCodeIdentifiers(git(["diff", "-U0", range, "--", ...CODE_PATHSPEC]));
+const identifiers = findDanishCodeIdentifiers(
+  git(["diff", "-U0", "--end-of-options", range, "--", ...CODE_PATHSPEC]),
+);
 const added = changedFiles(range, { extra: ["--diff-filter=A"] });
 const fileNames = findDanishFileNames(added);
 

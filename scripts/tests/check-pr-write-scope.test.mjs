@@ -17,8 +17,10 @@ test("changedFilesDiffArgs uses two-dot range so merge-commits from base are exc
     "--name-only",
     "-z",
     "--no-renames",
+    "--end-of-options",
     "origin/development..HEAD",
   ]);
+  assert.throws(() => changedFilesDiffArgs("--output=x"), /refused ref/);
   assert.equal(changedFilesDiffArgs("origin/development").at(-1).includes("..."), false);
 });
 

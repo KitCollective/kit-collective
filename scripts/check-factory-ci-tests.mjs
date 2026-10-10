@@ -32,6 +32,7 @@ export const FACTORY_NODE_TEST_NEEDLES = [
   "audit-receipt",
   "audit-result",
   "git-files",
+  "ref-injection",
 ];
 
 export const MOBILE_CHECK_NEEDLES = [

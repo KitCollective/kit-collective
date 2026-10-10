@@ -162,10 +162,13 @@ export function ghMessage(error) {
  * stay whole, because they are the provenance.
  */
 export function describe({ verdict, thread, provider, model, head }) {
-  const prefix = `audit ${verdict} by ${thread} (`;
-  const suffix = `) at ${head.slice(0, 7)}`;
-  const room = 140 - prefix.length - suffix.length;
+  const sha = head.slice(0, 7);
+  const fixed = `audit ${verdict} by  () at ${sha}`.length; // everything except the id and provider/model
   const who = `${provider}/${model}`;
-  const shown = who.length <= room ? who : `${who.slice(0, Math.max(room - 1, 0))}…`;
-  return `${prefix}${shown}${suffix}`;
+  const clip = (text, room) =>
+    text.length <= room ? text : `${text.slice(0, Math.max(room - 1, 0))}…`;
+  // provider/model shrinks first, the thread id only when it alone does not fit
+  const shown = clip(who, 140 - fixed - thread.length);
+  const id = clip(thread, 140 - fixed - shown.length);
+  return `audit ${verdict} by ${id} (${shown}) at ${sha}`;
 }

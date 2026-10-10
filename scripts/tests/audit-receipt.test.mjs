@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
-import { evaluateReceipt, ghMessage, statusPermissionLine } from "../lib/audit-receipt.mjs";
+import {
+  describe,
+  evaluateReceipt,
+  ghMessage,
+  statusPermissionLine,
+} from "../lib/audit-receipt.mjs";
 import { parseResultLine } from "../lib/gates.mjs";
 
 const HEAD = "c0ffee1234567890c0ffee1234567890c0ffee12";
@@ -282,4 +287,21 @@ test("CLI refuses bad usage with exit 2", () => {
   const cli = new URL("../audit-receipt.mjs", import.meta.url).pathname;
   assert.equal(spawnSync("node", [cli, "post", "12"], { encoding: "utf8" }).status, 2);
   assert.equal(spawnSync("node", [cli], { encoding: "utf8" }).status, 2);
+});
+
+test("describe never exceeds 140 characters and keeps the sha whole", () => {
+  const head = "c0ffee1234567890";
+  const make = (thread, model) =>
+    describe({ verdict: "green", thread, provider: "codex", model, head });
+  const short = make("thr_abc12345", "gpt-x");
+  assert.equal(short, "audit green by thr_abc12345 (codex/gpt-x) at c0ffee1");
+  const longModel = make("thr_abc12345", "m".repeat(300));
+  assert.equal(longModel.length, 140);
+  assert.match(longModel, /^audit green by thr_abc12345 \(codex\/m+…\) at c0ffee1$/);
+  for (const model of ["gpt-x", "m".repeat(300)]) {
+    const absurd = make(`thr_${"x".repeat(150)}`, model);
+    assert.ok(absurd.length <= 140, `${absurd.length}`);
+    assert.ok(absurd.endsWith(" at c0ffee1"));
+    assert.ok(absurd.startsWith("audit green by thr_x"));
+  }
 });

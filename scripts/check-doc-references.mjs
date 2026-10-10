@@ -17,7 +17,7 @@ import {
   pathExists,
   removedNames,
 } from "./lib/doc-references.mjs";
-import { nulList } from "./lib/git-files.mjs";
+import { assertRef, nulList } from "./lib/git-files.mjs";
 
 const baseRef = process.env.BASE_REF ?? "origin/development";
 
@@ -27,13 +27,20 @@ function git(args) {
 }
 
 try {
-  git(["rev-parse", "--verify", `${baseRef}^{commit}`]);
+  assertRef(baseRef);
+} catch (error) {
+  process.stderr.write(`check-doc-references: ${error.message}\n`);
+  process.exit(2);
+}
+
+try {
+  git(["rev-parse", "--verify", "--end-of-options", `${baseRef}^{commit}`]);
 } catch {
   process.stdout.write(`check-doc-references: ${baseRef} not found; nothing to compare.\n`);
   process.exit(0);
 }
 
-const diff = git(["diff", "-U0", `${baseRef}...HEAD`]);
+const diff = git(["diff", "-U0", "--end-of-options", `${baseRef}...HEAD`]);
 const tracked = nulList(git(["ls-files", "-z"]));
 const livingDocs = tracked.filter(isLivingDoc);
 const codeFiles = tracked.filter((file) =>
