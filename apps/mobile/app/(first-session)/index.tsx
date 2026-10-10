@@ -83,6 +83,10 @@ export default function FirstSessionHost() {
   }
 
   function handleSubmitEmail() {
+    // Return on the e-mail field is not blocked by the disabled button.
+    if (socialBusy !== null) {
+      return;
+    }
     if (!isValidEmail(email)) {
       setEmailError(DOOR_EMAIL_INVALID);
       return;

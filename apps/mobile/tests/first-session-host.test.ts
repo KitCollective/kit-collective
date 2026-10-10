@@ -103,6 +103,16 @@ describe("First session host chrome", () => {
     expect(chrome).not.toMatch(/Fortsæt med Facebook/);
   });
 
+  it("Return on the e-mail field does nothing while a social sign-in is pending", () => {
+    const host = readFileSync(hostPath, "utf8");
+    const submit = host.slice(host.indexOf("function handleSubmitEmail"));
+
+    expect(submit.indexOf("socialBusy !== null")).toBeGreaterThan(-1);
+    expect(submit.indexOf("socialBusy !== null")).toBeLessThan(
+      submit.indexOf("isValidEmail(email)"),
+    );
+  });
+
   it("host renders welcome, demo and own-photo entry, with no onboarding or profile step", () => {
     const host = readFileSync(hostPath, "utf8");
 

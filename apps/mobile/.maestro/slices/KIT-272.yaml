@@ -118,6 +118,9 @@ name: kit-272
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 5000
+- assertVisible: "Kom i gang"
+- assertVisible:
+    id: door-email
 - takeScreenshot: kc__kit-272__05-sheet-from-demo
 # AC 1 (over an own-photo result): the sheet opens over the analysed photo.
 # The system photo picker has no stable ids. The flows' simulator holds exactly one
@@ -179,5 +182,8 @@ name: kit-272
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
+- assertVisible: "Kom i gang"
+- assertVisible:
+    id: door-email
 - takeScreenshot: kc__kit-272__06-sheet-over-own-photo
 - stopRecording

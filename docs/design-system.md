@@ -574,7 +574,7 @@ A primitive not listed: **flag**. Do not invent components or variants.
 
 **Anatomy**: Label (required). Leading icon (optional). No subtitle inside the button.
 
-**Properties**: `variant`: `primary` | `secondary` | `tertiary` | `destructive`. `width`: `hug` (default) | `fill`. `size`: `md` (default) | `sm`. `disabled`, `loading`.
+**Properties**: `variant`: `primary` | `secondary` | `tertiary` | `destructive`. `width`: `hug` (default) | `fill`. `size`: `md` (default) | `sm`. `disabled`, `loading`. `leading`: a node rendered before the label (the Kom i gang provider buttons use it for the Google / Facebook mark).
 
 **Variants**: `primary` = the one action that moves the task forward (`fill.primary`, `content.inverse`, `radius.sm`). `secondary` = alternative on the same surface (`fill.secondary` or outline `border.subtle` on `surface`). `tertiary` = low-emphasis, often inline (no fill). `destructive` = data-loss (`danger` fill, `content.inverse`). One `primary` per visible region. Dock primaries use `width.fill` with min hit target ≥ 48×48 on `mobile`. Inline and banner actions stay `width.hug`.
 
@@ -1218,7 +1218,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Properties**: Shown via `Toast.show({ type: 'error', text1, props: { onRetry } })`. `type` selects the config renderer (`error` = danger chrome). `text1` is the message. `props.onRetry` powers the Prøv igen action. `position: 'bottom'`.
 
-**Placement**: Two `<Toast config={toastConfig} />` hosts, both bottom-anchored: one at the app root (`app/_layout.tsx`, after the navigators — **not** inside a React Native Modal) for tabs / first-session, and one inside the `(capture)` group (`app/(capture)/_layout.tsx`) because that group is a `fullScreenModal` native surface the root host cannot cover. The library's ref-priority stack routes each `Toast.show` to the topmost mounted host. `bottomOffset` derives from `useSafeAreaInsets` (+ dock clearance) so the toast clears the native tab bar / fade **Gem** dock.
+**Placement**: Three `<Toast config={toastConfig} />` hosts, all bottom-anchored: one at the app root (`app/_layout.tsx`, after the navigators — **not** inside a React Native Modal) for tabs / first-session, one inside the `(capture)` group (`app/(capture)/_layout.tsx`) because that group is a `fullScreenModal` native surface the root host cannot cover, and one inside the collector door sheet (`src/first-session/door-sheet.tsx`) because that Sheet is a native Modal the root host cannot cover. The door sheet's failed-sign-in toast has no **Prøv igen** (`onRetry` is optional). The library's ref-priority stack routes each `Toast.show` to the topmost mounted host. `bottomOffset` derives from `useSafeAreaInsets` (+ dock clearance) so the toast clears the native tab bar / fade **Gem** dock.
 
 **Motion**: The library's default spring in / fade out, accepted as part of the standard-library deviation below.
 
@@ -1230,7 +1230,7 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 
 **Deviation (accepted 2026-09-06)**: We chose the standard library's behavior over pixel-matching the original bespoke lock, in exchange for runtime reliability in Expo Go. Accepted gaps versus the first lock: **single visible toast** (the library shows one at a time — no 3-deep newest-at-bottom stack), **no swipe-to-dismiss stack semantics** (library default swipe only), and the **motion** is the library's default rather than the tuned slide-up. The danger chrome (tokens, border, icon, Prøv igen) is preserved.
 
-**Code**: `apps/mobile/src/components/toast-config.tsx` (custom `error` renderer), `apps/mobile/src/capture/saveFailureToast.ts` (`showSaveFailureToast`), hosts in `app/_layout.tsx` + `app/(capture)/_layout.tsx`. Library: `react-native-toast-message`.
+**Code**: `apps/mobile/src/components/toast-config.tsx` (custom `error` renderer), `apps/mobile/src/capture/saveFailureToast.ts` (`showSaveFailureToast`), hosts in `app/_layout.tsx`, `app/(capture)/_layout.tsx` + `src/first-session/door-sheet.tsx`. Library: `react-native-toast-message`.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
 
