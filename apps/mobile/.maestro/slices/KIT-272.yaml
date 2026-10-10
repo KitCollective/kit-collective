@@ -117,6 +117,16 @@ name: kit-272
     optional: true
 - waitForAnimationToEnd:
     timeout: 8000
+# iOS sometimes shows a "Private access to photos" banner that pushes the grid down.
+# Close it first, so the first cell is where it is without the banner.
+- runFlow:
+    when:
+      visible: "Privat adgang til fotos|Private Access to Photos"
+    commands:
+      - tapOn:
+          point: 91%,23%
+      - waitForAnimationToEnd:
+          timeout: 3000
 - tapOn:
     point: 16%,25%
 - tapOn:
