@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  dirtyPaths,
+  mergeCache,
   reuseKey,
   runSuites,
+  suiteIsDirty,
+  suiteKey,
   suitesFor,
   treeListing,
   VERIFY_EXIT,
@@ -158,4 +162,96 @@ test("--no-reuse reruns everything", async () => {
   const h = harness(() => "pass");
   await runSuites({ ...table(), capabilities: ["postgres"], cache, noReuse: true, ...h.options });
   assert.equal(h.calls.length, 3);
+});
+
+test("a dirty suite is run, not reused, and its result is not cached", async () => {
+  const cache = {};
+  await runSuites({
+    ...table(),
+    capabilities: ["postgres"],
+    cache,
+    ...harness(() => "pass").options,
+  });
+  const dirtyWeb = harness(() => "pass");
+  const rows = await runSuites({
+    ...table(),
+    capabilities: ["postgres"],
+    cache,
+    isDirty: (suite) => suite.id === "web",
+    ...dirtyWeb.options,
+    keyOf: () => "k-web",
+  });
+  assert.equal(dirtyWeb.calls[0][0], "web", "the dirty suite ran although its key had a green row");
+  assert.equal(rows[0].uncached, true);
+  assert.match(verdictOf(rows).line, /1 on uncommitted changes and not cached/);
+
+  // a failing dirty run must not poison, and a passing dirty run must not seed, the committed key
+  const fresh = {};
+  await runSuites({
+    ...table(),
+    capabilities: ["postgres"],
+    cache: fresh,
+    isDirty: () => true,
+    ...harness(() => "pass").options,
+  });
+  assert.deepEqual(fresh, {});
+  assert.deepEqual(mergeCache({}, [{ id: "web", key: "k", status: "pass", uncached: true }]), {});
+  const clean = harness(() => "pass");
+  const again = await runSuites({
+    ...table(),
+    capabilities: ["postgres"],
+    cache: fresh,
+    ...clean.options,
+  });
+  assert.equal(clean.calls.length, 3, "nothing was cached, so a clean run executes everything");
+  assert.ok(again.every((r) => r.status === "pass" || r.status === "skipped"));
+});
+
+test("dirtyPaths parses porcelain, and suiteIsDirty looks at suite and global paths", () => {
+  const porcelain =
+    " M apps/web/a.ts\n?? docs/new.md\nR  old.ts -> apps/api/new.ts\n M pnpm-lock.yaml";
+  assert.deepEqual(dirtyPaths(porcelain), [
+    "apps/web/a.ts",
+    "docs/new.md",
+    "apps/api/new.ts",
+    "pnpm-lock.yaml",
+  ]);
+  const web = { paths: ["apps/web/**"] };
+  assert.equal(suiteIsDirty(["apps/web/a.ts"], web), true);
+  assert.equal(suiteIsDirty(["docs/new.md"], web), false);
+  assert.equal(suiteIsDirty(["pnpm-lock.yaml"], web, ["pnpm-lock.yaml"]), true);
+});
+
+test("a global path or the node version invalidates every suite's key", () => {
+  const suites = table().suites;
+  const listing =
+    "100644 blob aaa\tapps/web/a.ts\n100644 blob bbb\tpnpm-lock.yaml\n100644 blob ccc\tdocs/d.md";
+  const keys = (full, nodeVersion = "v22") =>
+    suites.map((suite) =>
+      suiteKey({ suite, globalPaths: ["pnpm-lock.yaml"], fullListing: full, nodeVersion }),
+    );
+  const base = keys(listing);
+  const lockChanged = keys(listing.replace("bbb", "zzz"));
+  assert.ok(base.every((key, i) => key !== lockChanged[i]));
+  assert.ok(base.every((key, i) => key !== keys(listing, "v24")[i]));
+  const unrelated = keys(listing.replace("aaa", "yyy"));
+  assert.equal(unrelated[2], base[2], "a change in apps/web leaves the docs suite key alone");
+});
+
+test("mergeCache keeps entries another run wrote and takes only this run's fresh results", () => {
+  const current = { api: { key: "k-api", status: "pass" }, web: { key: "old", status: "pass" } };
+  const merged = mergeCache(current, [
+    { id: "web", key: "new", status: "pass" },
+    { id: "docs", status: "skipped" },
+    { id: "api", status: "reused", key: "k-api" },
+  ]);
+  assert.deepEqual(merged, {
+    api: { key: "k-api", status: "pass" },
+    web: { key: "new", status: "pass" },
+  });
+});
+
+test("validateChecks checks globalPaths", () => {
+  assert.match(validateChecks({ globalPaths: "x", suites: table().suites }).join(), /globalPaths/);
+  assert.deepEqual(validateChecks({ globalPaths: ["a"], suites: table().suites }), []);
 });

@@ -240,3 +240,24 @@ test("review fold after an early stop names only the steps that ran", () => {
   assert.equal(folded.code, GATE_EXIT.closed);
   assert.equal(folded.line, "CLOSED (review): doc-references: names a removed path");
 });
+
+test("skills and ADRs call the gate CLIs in their current form", async () => {
+  const { readdirSync, readFileSync: read } = await import("node:fs");
+  const files = [
+    ...["bb-orchestrate", "issue-session", "code-review", "implement"].map(
+      (name) => `.cursor/skills/${name}/SKILL.md`,
+    ),
+    ...readdirSync("docs/adr")
+      .filter((f) => /^005[3-6]/.test(f))
+      .map((f) => `docs/adr/${f}`),
+  ];
+  for (const file of files) {
+    const text = read(file, "utf8");
+    for (const [, call] of text.matchAll(/`(node scripts\/head-changed\.mjs [^`]*)`/g)) {
+      assert.match(call, /--(pr|head) /, `${file}: ${call}`);
+    }
+    for (const [, call] of text.matchAll(/`(node scripts\/sync-pr\.mjs valid [^`]*)`/g)) {
+      assert.match(call, /--pr /, `${file}: ${call}`);
+    }
+  }
+});

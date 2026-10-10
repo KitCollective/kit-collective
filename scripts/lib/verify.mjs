@@ -11,7 +11,8 @@ import { matchesGlob } from "./pr-write-scope.mjs";
 export const VERIFY_EXIT = { ok: 0, failed: 1, usage: 2, incomplete: 3 };
 
 /**
- * Checks table shape:
+ * Checks table shape (`globalPaths` are inputs shared by every suite: lockfile, compiler and
+ * runner config; their tree listing is part of every suite's key):
  * { "defaults": { "timeoutSeconds": 900 },
  *   "suites": [{ "id": "admin", "paths": ["apps/admin/**"], "command": "pnpm ...",
  *                "timeoutSeconds": 600, "needs": ["postgres"] }] }
@@ -21,6 +22,12 @@ export function validateChecks(checks) {
   const problems = [];
   if (!checks || !Array.isArray(checks.suites) || checks.suites.length === 0) {
     return ["checks.suites must be a non-empty array"];
+  }
+  if (
+    checks.globalPaths !== undefined &&
+    !(Array.isArray(checks.globalPaths) && checks.globalPaths.every((g) => typeof g === "string"))
+  ) {
+    problems.push("checks.globalPaths must be an array of globs");
   }
   const seen = new Set();
   for (const suite of checks.suites) {
@@ -81,16 +88,59 @@ export function treeListing(fullListing, globs) {
     .join("\n");
 }
 
-/** Key a green row is reused under: command plus the tree listing of the suite's paths. */
-export function reuseKey(command, treeListing) {
-  return createHash("sha256").update(command).update("\0").update(treeListing).digest("hex");
+/**
+ * Key a green row is reused under: the command plus every input listing (the suite's paths, the
+ * global paths, the node version). A change in any of them is a different key.
+ */
+export function reuseKey(command, ...inputs) {
+  const hash = createHash("sha256").update(command);
+  for (const input of inputs) {
+    hash.update("\0").update(input);
+  }
+  return hash.digest("hex");
+}
+
+/** The key of one suite for a committed tree listing. */
+export function suiteKey({ suite, globalPaths = [], fullListing, nodeVersion }) {
+  return reuseKey(
+    suite.command,
+    treeListing(fullListing, suite.paths),
+    treeListing(fullListing, globalPaths),
+    nodeVersion,
+  );
+}
+
+/** Paths from `git status --porcelain` (staged, unstaged and untracked; renames give the new path). */
+export function dirtyPaths(porcelain) {
+  return porcelain
+    .split("\n")
+    .filter((line) => line.length > 3)
+    .map((line) => line.slice(3).split(" -> ").at(-1).replace(/^"|"$/g, ""));
+}
+
+/** Whether uncommitted changes touch the suite's own paths or the global paths. */
+export function suiteIsDirty(dirty, suite, globalPaths = []) {
+  return dirty.some((file) =>
+    [...suite.paths, ...globalPaths].some((glob) => matchesGlob(file, glob)),
+  );
+}
+
+/** Merges this run's fresh results into the current cache file contents (last writer per suite wins). */
+export function mergeCache(current, rows) {
+  const merged = { ...current };
+  for (const row of rows) {
+    if (row.key && !row.uncached && ["pass", "fail", "timeout"].includes(row.status)) {
+      merged[row.id] = { key: row.key, status: row.status };
+    }
+  }
+  return merged;
 }
 
 /**
  * @param {{
  *   suites: object[], defaults?: { timeoutSeconds?: number }, capabilities: string[],
  *   cache: Record<string, { key: string, status: string }>, noReuse?: boolean,
- *   keyOf: (suite: object) => string,
+ *   isDirty?: (suite: object) => boolean, keyOf: (suite: object) => string,
  *   exec: (suite: object, timeoutSeconds: number) => Promise<{ status: "pass" | "fail" | "timeout", durationMs: number, tail?: string }>,
  * }} o
  * One suite at a time, in table order.
@@ -101,6 +151,7 @@ export async function runSuites({
   capabilities,
   cache,
   noReuse = false,
+  isDirty = () => false,
   keyOf,
   exec,
 }) {
@@ -112,13 +163,23 @@ export async function runSuites({
       continue;
     }
     const key = keyOf(suite);
-    if (!noReuse && cache[suite.id]?.key === key && cache[suite.id]?.status === "pass") {
+    // The command runs in the working tree but the key reads the committed tree: with uncommitted
+    // changes under the suite a result must not be reused, and must not be cached for the commit.
+    const uncached = isDirty(suite);
+    if (
+      !noReuse &&
+      !uncached &&
+      cache[suite.id]?.key === key &&
+      cache[suite.id]?.status === "pass"
+    ) {
       rows.push({ id: suite.id, status: "reused", key });
       continue;
     }
     const result = await exec(suite, suite.timeoutSeconds ?? defaults.timeoutSeconds ?? 900);
-    rows.push({ id: suite.id, key, ...result });
-    cache[suite.id] = { key, status: result.status };
+    rows.push({ id: suite.id, key, ...result, ...(uncached ? { uncached: true } : {}) });
+    if (!uncached) {
+      cache[suite.id] = { key, status: result.status };
+    }
   }
   return rows;
 }
@@ -133,7 +194,8 @@ export function verdictOf(rows) {
     };
   }
   const skipped = rows.filter((r) => r.status === "skipped");
-  const counts = `${rows.filter((r) => r.status === "pass").length} ran, ${rows.filter((r) => r.status === "reused").length} reused`;
+  const dirty = rows.filter((r) => r.uncached).length;
+  const counts = `${rows.filter((r) => r.status === "pass").length} ran, ${rows.filter((r) => r.status === "reused").length} reused${dirty > 0 ? `, ${dirty} on uncommitted changes and not cached` : ""}`;
   if (skipped.length > 0) {
     return {
       code: VERIFY_EXIT.incomplete,

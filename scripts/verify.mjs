@@ -14,19 +14,24 @@
  *                 never reported green. The Hetzner container has no Postgres, so `postgres`
  *                 suites skip there.
  *   --json        print the report as JSON instead of one line
+ * A suite with uncommitted changes under its paths (or the global paths) always runs and is not
+ * cached: the key reads the committed tree, the command runs in the working tree. `globalPaths` in the
+ * table (lockfile, compiler config) and the node version are part of every suite's key.
  * Results are cached per machine in the gitignored `.factory/verify-cache.json` of the main checkout.
  * Exit: 0 OK, 1 a suite failed or timed out, 2 usage or a bad checks table, 3 INCOMPLETE.
  */
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mainCheckout } from "./lib/run-log.mjs";
 import {
-  reuseKey,
+  dirtyPaths,
+  mergeCache,
   runSuites,
+  suiteIsDirty,
+  suiteKey,
   suitesFor,
-  treeListing,
   VERIFY_EXIT,
   validateChecks,
   verdictOf,
@@ -79,7 +84,16 @@ const fullListing = execFileSync("git", ["ls-tree", "-r", "HEAD"], {
   encoding: "utf8",
   maxBuffer: 64 * 1024 * 1024,
 });
-const keyOf = (suite) => reuseKey(suite.command, treeListing(fullListing, suite.paths));
+const globalPaths = config.checks.globalPaths ?? [];
+const keyOf = (suite) =>
+  suiteKey({ suite, globalPaths, fullListing, nodeVersion: process.version });
+const dirty = dirtyPaths(
+  execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  }),
+);
+const isDirty = (suite) => suiteIsDirty(dirty, suite, globalPaths);
 
 /** Runs the command in its own process group so a timeout kills the whole tree. */
 function exec(suite, timeoutSeconds) {
@@ -120,11 +134,21 @@ const rows = await runSuites({
   capabilities,
   cache,
   noReuse: args.includes("--no-reuse"),
+  isDirty,
   keyOf,
   exec,
 });
 mkdirSync(dirname(cachePath), { recursive: true });
-writeFileSync(cachePath, JSON.stringify(cache, null, 2));
+// Merge with the file as it is now (another run may have written) and replace it atomically.
+let current = {};
+try {
+  current = JSON.parse(readFileSync(cachePath, "utf8"));
+} catch {
+  current = {};
+}
+const temp = `${cachePath}.${process.pid}.tmp`;
+writeFileSync(temp, JSON.stringify(mergeCache(current, rows), null, 2));
+renameSync(temp, cachePath);
 const result = verdictOf(rows);
 process.stdout.write(
   args.includes("--json")

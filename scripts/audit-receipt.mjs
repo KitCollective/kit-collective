@@ -5,8 +5,12 @@
  *
  * Usage: node scripts/audit-receipt.mjs post <pr> --thread thr_x [--implementer-thread thr_y]
  *          [--require-different-model] [--dry-run]
+ * Needs a token with "Commit statuses: Read and write" (fine-grained) or `repo:status`; without it
+ * the post ends `UNKNOWN (receipt): token lacks Commit statuses write`.
  *        node scripts/audit-receipt.mjs check <pr>
- *   post   reads `bb thread show <thread> --json` and `bb thread output <thread> --json`, takes the
+ *   post   needs a `spawn reviewer` event for this thread and issue in the run log (provider and model
+ *          come from there: bb shows no model) and refuses a thread that is one of the issue's engineer
+ *          threads. Reads `bb thread show <thread> --json` and `bb thread output <thread> --json`, takes the
  *          PR head from GitHub, refuses unless the thread started after the head commit and its
  *          final output holds `AUDIT-RESULT KIT-n green|amber|red <head-sha> [rows,...]`. It then
  *          sets `kc/audit` (success for green and amber, failure for red) whose description names
@@ -15,11 +19,13 @@
  * Limits: bb has no SubagentStop hook, so this is provenance, not unforgeability. Anyone whose
  * token may write commit statuses can post the context by hand; the status says which thread claims
  * the audit, and the script refuses what it can verify (thread exists, is newer than the head,
- * answered for this exact head, other model than the implementer when asked).
+ * answered for this exact head, logged as a reviewer and not an engineer, other model than the
+ * engineer's per the run log when asked; `--require-different-model` is a recommendation, because bb
+ * itself has no model field).
  * One line out. Exit: 0 posted or present, 1 refused or not green, 2 usage, 4 a source failed.
  */
 import { execFileSync } from "node:child_process";
-import { AUDIT_CONTEXT, evaluateReceipt } from "./lib/audit-receipt.mjs";
+import { AUDIT_CONTEXT, evaluateReceipt, statusPermissionLine } from "./lib/audit-receipt.mjs";
 import { config, events, gh, logGate } from "./lib/gate-io.mjs";
 import { append, logPath } from "./lib/run-log.mjs";
 
@@ -73,35 +79,40 @@ try {
   const committed = JSON.parse(
     await gh(["api", `repos/${repo}/commits/${head}`, "--jq", "{date: .commit.committer.date}"]),
   ).date;
-  const implementerId = opt("--implementer-thread");
-  const implementer = implementerId ? bb("thread", "show", implementerId).thread : null;
   const result = evaluateReceipt({
     thread: {
       id: shown.thread.id,
       providerId: shown.thread.providerId,
-      model: shown.thread.model,
       createdAt: shown.thread.createdAt,
     },
     output,
     head,
     headCommittedAt: Date.parse(committed),
-    implementer,
+    spawns: events().filter((e) => e.event === "spawn"),
+    implementerThread: opt("--implementer-thread"),
     requireDifferentModel: rest.includes("--require-different-model"),
   });
   if (!result.ok) {
     out(1, `REFUSED (receipt): ${result.refusal}`);
   }
   if (!rest.includes("--dry-run")) {
-    await gh([
-      "api",
-      `repos/${repo}/statuses/${head}`,
-      "-f",
-      `state=${result.state}`,
-      "-f",
-      `context=${AUDIT_CONTEXT}`,
-      "-f",
-      `description=${result.description}`,
-    ]);
+    try {
+      await gh([
+        "api",
+        `repos/${repo}/statuses/${head}`,
+        "-f",
+        `state=${result.state}`,
+        "-f",
+        `context=${AUDIT_CONTEXT}`,
+        "-f",
+        `description=${result.description}`,
+      ]);
+    } catch (error) {
+      out(
+        4,
+        `UNKNOWN (receipt): ${statusPermissionLine(error) ?? String(error.message).split("\n")[0]}`,
+      );
+    }
     const round =
       events().filter((e) => e.event === "audit" && e.issue === result.issue).length + 1;
     try {

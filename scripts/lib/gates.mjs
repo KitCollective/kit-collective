@@ -188,9 +188,13 @@ export function landGate({ pr, onIntegration, checks }) {
  * @returns {{ issue: string, outcome: string, rest: string } | null}
  */
 export function parseResultLine(tag, text) {
-  const m = new RegExp(`^\\s*${tag} ([A-Z][A-Z0-9]*-\\d+) (\\S+)(?: (.*))?$`, "m").exec(
-    String(text ?? ""),
-  );
+  // The LAST match wins: an output that quotes an example line earlier must not beat its final line.
+  const all = [
+    ...String(text ?? "").matchAll(
+      new RegExp(`^\\s*${tag} ([A-Z][A-Z0-9]*-\\d+) (\\S+)(?: (.*))?$`, "gm"),
+    ),
+  ];
+  const m = all.at(-1);
   return m ? { issue: m[1], outcome: m[2], rest: m[3] ?? "" } : null;
 }
 

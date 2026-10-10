@@ -8,6 +8,8 @@ Nicklas, 2026-10-10, with ADR-0053. A fix round touches one app, but "run the fu
 
 **Capabilities.** A suite whose `needs` the machine lacks (`--capability postgres` or `VERIFY_CAPABILITIES`) is `skipped`, and the run ends `INCOMPLETE` (exit 3), never green. That surfaces the open item rather than hiding it: DB-test slices run on the Mac until the server has a database sidecar.
 
-Gives up: the key reads the committed tree at HEAD, so uncommitted edits are not part of it (verify a head, commit first); the table must be kept honest when a package starts depending on another, or a suite is reused over a stale dependency (the suites list their shared packages in `paths`).
+**Uncommitted changes.** The key reads the committed tree but the command runs in the working tree. A suite with uncommitted changes under its `paths` (or the global paths) is therefore always run, never reused, and its result is not written to the cache, so a dirty green can never be reused for the committed tree; the verdict line says how many suites ran uncached. **Shared inputs.** `checks.globalPaths` (lockfile, root `package.json`, workspace, turbo and compiler config, biome, node version files) and the node version itself are part of every suite's key. The cache file is merged with its current contents and replaced atomically, so parallel runs cannot drop each other's entries.
+
+Gives up: the table must be kept honest when a package starts depending on another, or a suite is reused over a stale dependency (the suites list their shared packages in `paths`).
 
 Status: accepted. A schema the owner may want to change; it is a plain table.

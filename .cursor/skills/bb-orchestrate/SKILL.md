@@ -39,7 +39,7 @@ bb thread spawn --project proj_rp846ybret --machine <host> \
 - `--parent-self` makes the child notify this thread when it finishes. Wait with `bb thread wait <id>` (default: idle) in the background; do not poll.
 - Engineer on a later pass resumes on the same branch: pass `--environment <id>` of the first engineer thread instead of `--new-environment`.
 - Read the result with `bb thread output <id> --json`. The step's last line is its result line (`LEAD-RESULT`, `AUDIT-RESULT`, the engineer's `ENGINEER-RESULT KIT-n ready|blocked|failed <sentence>`). No line: `node scripts/gate.mjs result <TAG> <file>` exits `1`; log `reason --code no-result-line` and run the gate yourself (ADR-0053).
-- Models: the start decision gives an alias (`opus`, `sonnet`). The lead always gets the strong one. The reviewer must differ from the engineer's provider or model where bb offers a second one; record both in the log and pass `--implementer-thread` to the receipt.
+- Models: the start decision gives an alias (`opus`, `sonnet`). The lead always gets the strong one. A reviewer on a different model than the engineer is recommended, not required: bb's thread record has no model field, so the model is the one you pass to `--model` at spawn and write to the run log; the receipt reads provider and model from there. Always log `spawn` for the engineer and the reviewer with `--provider` and `--model`, because the receipt refuses a reviewer thread that has no `spawn reviewer` event and a thread that is one of the issue's engineer threads.
 - Prompts name the issue key and the role file (`.cursor/agents/lead.md`, `.cursor/skills/implement/SKILL.md`, `.cursor/skills/code-review/SKILL.md`); they never contain secrets.
 
 ## The flow
@@ -48,9 +48,9 @@ bb thread spawn --project proj_rp846ybret --machine <host> \
 2. `node scripts/start-decision.mjs` over the issue → plan or not, Roles, engineer model.
 3. **Lead** thread (if plan): `run-log.mjs spawn --step lead --thread <id> --provider <p> --model <m> --machine <host>`; on idle read the result, `run-log.mjs result --outcome plan|plan-approval|stop --usage-thread <id>`.
 4. **Engineer** thread on the routed machine: reads `### Plan`, builds with `/tdd` and Roles, opens the PR, passes the pre-review gate. Log spawn and result.
-5. `node scripts/gate.mjs review <pr> --issue <KIT-n>` and `node scripts/head-changed.mjs <KIT-n>`.
-6. **Reviewer** thread (hidden, fresh context, other model): runs `/code-review`, writes the matrix into the workpad, ends with `AUDIT-RESULT KIT-n green|amber|red <head-sha> [failing,rows]`. Then **the orchestrator runs** `node scripts/audit-receipt.mjs post <pr> --thread <reviewer> --implementer-thread <engineer> --require-different-model`. The script, not prose, posts `kc/audit` and logs the audit. Red: fix loop (a new engineer pass, replan rules in `issue-session`).
-7. Pass → `Ready for merge` → `Merging` (this session, approver-present) → `merge-lock.mjs wait`, `sync-pr.mjs sync`, `/land`, `gate.mjs land`, `merge-lock.mjs release`, reap.
+5. `node scripts/gate.mjs review <pr> --issue <KIT-n>` and `node scripts/head-changed.mjs <KIT-n> --pr <pr>`.
+6. **Reviewer** thread (hidden, fresh context, preferably another model): runs `/code-review`, writes the matrix into the workpad, ends with `AUDIT-RESULT KIT-n green|amber|red <head-sha> [failing,rows]`. Then **the orchestrator runs** `node scripts/audit-receipt.mjs post <pr> --thread <reviewer> [--require-different-model]`; add the flag when you want the run log's reviewer model to differ from the engineer's. Posting the status needs a token with "Commit statuses: Read and write"; with only Read the script ends `UNKNOWN (receipt): token lacks Commit statuses write` and the human raises the permission (ask for it, never change tokens yourself). The script, not prose, posts `kc/audit` and logs the audit. Red: fix loop (a new engineer pass, replan rules in `issue-session`).
+7. Pass → `Ready for merge` → `Merging` (this session, approver-present) → `merge-lock.mjs wait`, `sync-pr.mjs sync` (then `merge-lock.mjs take` again to renew), `/land`, `gate.mjs land`, `merge-lock.mjs release`, reap.
 8. `node scripts/verify.mjs --changed --capability <what this machine has>` where a verify per head is wanted: `INCOMPLETE` is not green.
 
 ## Open items (do not fix from here)

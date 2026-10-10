@@ -84,6 +84,16 @@
     "specs": ".scratch"
   },
   "checks": {
+    "globalPaths": [
+      "pnpm-lock.yaml",
+      "package.json",
+      "pnpm-workspace.yaml",
+      "turbo.json",
+      "tsconfig.base.json",
+      "biome.json",
+      ".nvmrc",
+      ".node-version"
+    ],
     "defaults": {
       "timeoutSeconds": 900
     },
