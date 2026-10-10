@@ -67,7 +67,7 @@ const FIELDS = {
   machine: (v) => typeof v === "string" && WORD.test(v),
   tokensIn: TOKENS,
   tokensOut: TOKENS,
-  outcome: (v) => OUTCOMES.includes(v),
+  outcome: (v) => OUTCOMES.includes(v) || GATE_OUTCOMES.includes(v),
   gate: (v) => GATES.includes(v),
   verdict: (v) => ["green", "amber", "red"].includes(v),
   round: (v) => Number.isInteger(v) && v >= 0 && v < 100,

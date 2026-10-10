@@ -76,7 +76,7 @@ export function statusTransitionResolvesBlockedBy({ to, states }) {
  * @param {Array<{ name?: string, conclusion?: string }> | undefined} checks
  * @returns {boolean}
  */
-function requiredChecksGreen(checks) {
+export function requiredChecksGreen(checks) {
   if (!Array.isArray(checks)) {
     return false;
   }
