@@ -81,6 +81,118 @@
     "setupFile": "linear.setup.json",
     "specs": ".scratch"
   },
+  "checks": {
+    "globalPaths": [
+      "pnpm-lock.yaml",
+      "package.json",
+      "pnpm-workspace.yaml",
+      "turbo.json",
+      "tsconfig.base.json",
+      "biome.json",
+      ".nvmrc",
+      ".node-version"
+    ],
+    "defaults": {
+      "timeoutSeconds": 900
+    },
+    "suites": [
+      {
+        "id": "typecheck",
+        "paths": [
+          "apps/**",
+          "packages/**",
+          "tsconfig.base.json",
+          "pnpm-lock.yaml"
+        ],
+        "command": "pnpm typecheck",
+        "timeoutSeconds": 900
+      },
+      {
+        "id": "factory-scripts",
+        "paths": [
+          "scripts/**",
+          ".cursor/**",
+          "factory.config.json"
+        ],
+        "command": "node --test scripts/tests/*.test.mjs",
+        "timeoutSeconds": 600
+      },
+      {
+        "id": "review-gate",
+        "paths": [
+          "apps/**",
+          "packages/**",
+          "scripts/**",
+          "docs/**",
+          "*.md",
+          ".cursor/**"
+        ],
+        "command": "pnpm check:review-gate",
+        "timeoutSeconds": 300
+      },
+      {
+        "id": "domain",
+        "paths": [
+          "packages/domain/**"
+        ],
+        "command": "pnpm --filter ./packages/domain test",
+        "timeoutSeconds": 600
+      },
+      {
+        "id": "api-contract",
+        "paths": [
+          "packages/api-contract/**",
+          "packages/domain/**"
+        ],
+        "command": "pnpm --filter ./packages/api-contract test",
+        "timeoutSeconds": 600
+      },
+      {
+        "id": "admin",
+        "paths": [
+          "apps/admin/**",
+          "packages/api-contract/**",
+          "packages/domain/**"
+        ],
+        "command": "pnpm --filter ./apps/admin test",
+        "timeoutSeconds": 600
+      },
+      {
+        "id": "mobile",
+        "paths": [
+          "apps/mobile/**",
+          "packages/api-contract/**",
+          "packages/domain/**"
+        ],
+        "command": "pnpm --filter ./apps/mobile test",
+        "timeoutSeconds": 900
+      },
+      {
+        "id": "db",
+        "paths": [
+          "packages/db/**",
+          "packages/domain/**"
+        ],
+        "command": "pnpm --filter ./packages/db test",
+        "timeoutSeconds": 900,
+        "needs": [
+          "postgres"
+        ]
+      },
+      {
+        "id": "api",
+        "paths": [
+          "apps/api/**",
+          "packages/**"
+        ],
+        "command": "pnpm --filter ./apps/api test",
+        "timeoutSeconds": 1800,
+        "needs": [
+          "postgres"
+        ]
+      }
+    ]
+  },
   "flow": {
     "runLog": ".factory/run-log.jsonl"
   },

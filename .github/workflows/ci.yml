@@ -290,6 +290,12 @@ jobs:
           scripts/tests/run-log.test.mjs
           scripts/tests/gates.test.mjs
           scripts/tests/merge-lock-sync.test.mjs
+          scripts/tests/verify.test.mjs
+          scripts/tests/audit-receipt.test.mjs
+          scripts/tests/audit-receipt-cli.test.mjs
+          scripts/tests/audit-result.test.mjs
+          scripts/tests/git-files.test.mjs
+          scripts/tests/ref-injection.test.mjs
 
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs

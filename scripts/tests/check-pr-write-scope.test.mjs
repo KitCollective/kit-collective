@@ -15,9 +15,13 @@ test("changedFilesDiffArgs uses two-dot range so merge-commits from base are exc
   assert.deepEqual(changedFilesDiffArgs("origin/development"), [
     "diff",
     "--name-only",
+    "-z",
+    "--no-renames",
+    "--end-of-options",
     "origin/development..HEAD",
   ]);
-  assert.notEqual(changedFilesDiffArgs("origin/development")[2], "origin/development...HEAD");
+  assert.throws(() => changedFilesDiffArgs("--output=x"), /refused ref/);
+  assert.equal(changedFilesDiffArgs("origin/development").at(-1).includes("..."), false);
 });
 
 test("parseWriteScopeGlobs extracts comma-separated globs", () => {
@@ -170,4 +174,10 @@ test("resolveWriteScopeViolations does not waive product or harness paths even i
     "package.json",
     "harness/land.mjs",
   ]);
+});
+
+test("matchesGlob spans a newline in a file name and still honours directory boundaries", () => {
+  assert.equal(matchesGlob("apps/web/line\nbreak.ts", "apps/web/**"), true);
+  assert.equal(matchesGlob("apps/web/line\nbreak.ts", "apps/web/*.ts"), true);
+  assert.equal(matchesGlob("apps/other/line\nbreak.ts", "apps/web/**"), false);
 });

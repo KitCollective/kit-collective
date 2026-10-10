@@ -117,6 +117,10 @@ After land success, follow [reap-worktree/SKILL.md](../reap-worktree/SKILL.md): 
 
 When a spawned step ends without its result line (`LEAD-RESULT`, `AUDIT-RESULT`, the lander's), `node scripts/gate.mjs result <TAG> <file>` exits `1` (`NO-RESULT`). Log `reason --code no-result-line`, then run the gate for that step yourself (`gate.mjs review` or `land`) and go by its exit code. Never take a silent step for a pass.
 
+## Running inside bb
+
+When `BB_THREAD_ID` is set, each step is a child thread: follow [bb-orchestrate/SKILL.md](../bb-orchestrate/SKILL.md) for machine routing, spawning, and the audit receipt (`node scripts/audit-receipt.mjs post <pr> --thread <reviewer>`, ADR-0056), which replaces the in-session Task sub-agent as the proof that a fresh review ran. `node scripts/verify.mjs --changed` (ADR-0055) runs the suites a change touches and reuses green ones; `INCOMPLETE` is not green.
+
 ## Run log
 
 Every issue leaves lines in the central run log (`flow.runLog` in `factory.config.json`, default file `run-log.jsonl` in the gitignored `.factory` folder of the main checkout): `start`, `spawn`, `result` (with provider, model and tokens when `bb thread show --json` exposes them, else null), `audit`, `reason`. Only this orchestrating session writes it. `node scripts/run-log.mjs report` compares issues with and without a lead by review rounds and tokens (ADR-0051, ADR-0052).

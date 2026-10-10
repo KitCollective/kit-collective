@@ -1,3 +1,5 @@
+import { changedFilesArgs } from "./git-files.mjs";
+
 /**
  * Pure helpers for the PR write-scope ratchet (KIT-39).
  * Imported by scripts/check-pr-write-scope.mjs and its unit tests.
@@ -80,7 +82,7 @@ export const RATCHET_SCRIPT_PATHS = new Set([
  * (KIT-117 — inflated PR file counts when branches merge origin/development).
  */
 export function changedFilesDiffArgs(baseRef = "origin/development") {
-  return ["diff", "--name-only", `${baseRef}..HEAD`];
+  return changedFilesArgs(`${baseRef}..HEAD`);
 }
 
 export function matchesGlob(filePath, glob) {
@@ -89,7 +91,8 @@ export function matchesGlob(filePath, glob) {
     .replace(/\*\*/g, "\0")
     .replace(/\*/g, "[^/]*")
     .replace(/\0/g, ".*")}$`;
-  return new RegExp(regexSource).test(filePath);
+  // "s" so `**` also spans a newline inside a file name
+  return new RegExp(regexSource, "s").test(filePath);
 }
 
 export function isRatchetException(filePath) {

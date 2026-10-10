@@ -240,3 +240,37 @@ test("review fold after an early stop names only the steps that ran", () => {
   assert.equal(folded.code, GATE_EXIT.closed);
   assert.equal(folded.line, "CLOSED (review): doc-references: names a removed path");
 });
+
+test("skills and ADRs call the gate CLIs in their current form", async () => {
+  const { readdirSync, readFileSync: read } = await import("node:fs");
+  const files = [
+    ...["bb-orchestrate", "issue-session", "code-review", "implement"].map(
+      (name) => `.cursor/skills/${name}/SKILL.md`,
+    ),
+    ...readdirSync("docs/adr")
+      .filter((f) => /^005[3-6]/.test(f))
+      .map((f) => `docs/adr/${f}`),
+  ];
+  for (const file of files) {
+    const text = read(file, "utf8");
+    for (const [, call] of text.matchAll(/`(node scripts\/head-changed\.mjs [^`]*)`/g)) {
+      assert.match(call, /--(pr|head) /, `${file}: ${call}`);
+    }
+    for (const [, call] of text.matchAll(/`(node scripts\/sync-pr\.mjs valid [^`]*)`/g)) {
+      assert.match(call, /--pr /, `${file}: ${call}`);
+    }
+  }
+});
+
+test("generic result line: the last non-empty line, free trailing sentence, whole-line wrapper", () => {
+  const line = "LEAD-RESULT KIT-7 plan the plan is in the workpad";
+  assert.deepEqual(parseResultLine("LEAD-RESULT", `notes\n\n${line}  \n\n`), {
+    issue: "KIT-7",
+    outcome: "plan",
+    rest: "the plan is in the workpad",
+  });
+  assert.equal(parseResultLine("LEAD-RESULT", `${line}\nExample: LEAD-RESULT KIT-7 stop x`), null);
+  assert.equal(parseResultLine("LEAD-RESULT", `**${line}**`)?.outcome, "plan");
+  assert.equal(parseResultLine("LEAD-RESULT", `see **${line}** above`), null);
+  assert.equal(parseResultLine("LEAD-RESULT", `${line}\fdo not trust this`), null);
+});

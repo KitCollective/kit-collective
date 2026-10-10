@@ -5,6 +5,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { assertRef, nulList } from "./lib/git-files.mjs";
 import {
   changedFilesDiffArgs,
   findWriteScopeViolations,
@@ -55,19 +56,13 @@ function getScopeSourceText() {
 
 function getChangedFiles(baseRef) {
   try {
-    return execFileSync("git", changedFilesDiffArgs(baseRef), {
-      encoding: "utf8",
-    })
-      .trim()
-      .split("\n")
-      .filter(Boolean);
+    return nulList(execFileSync("git", changedFilesDiffArgs(baseRef), { encoding: "utf8" }));
   } catch {
-    return execFileSync("git", ["diff", "--name-only", "HEAD~1"], {
-      encoding: "utf8",
-    })
-      .trim()
-      .split("\n")
-      .filter(Boolean);
+    return nulList(
+      execFileSync("git", ["diff", "--name-only", "-z", "--no-renames", "HEAD~1"], {
+        encoding: "utf8",
+      }),
+    );
   }
 }
 
@@ -83,6 +78,12 @@ function main() {
   }
 
   const baseRef = process.env.BASE_REF ?? "origin/development";
+  try {
+    assertRef(baseRef);
+  } catch (error) {
+    process.stderr.write(`check-pr-write-scope: ${error.message}\n`);
+    process.exit(2);
+  }
   const changedFiles = getChangedFiles(baseRef);
   const violations = findWriteScopeViolations(changedFiles, globs);
 

@@ -7,13 +7,21 @@
  */
 import { execFileSync } from "node:child_process";
 import { classifyFixDiff } from "./lib/fix-diff.mjs";
+import { assertRef } from "./lib/git-files.mjs";
 
 const [from, head = "HEAD"] = process.argv.slice(2);
 if (!from) {
   process.stderr.write("usage: classify-fix-diff.mjs <lastReviewSha> [head]\n");
   process.exit(2);
 }
-const diff = execFileSync("git", ["diff", "-U0", `${from}..${head}`], {
+try {
+  assertRef(from);
+  assertRef(head);
+} catch (error) {
+  process.stderr.write(`classify-fix-diff: ${error.message}\n`);
+  process.exit(2);
+}
+const diff = execFileSync("git", ["diff", "-U0", "--end-of-options", `${from}..${head}`], {
   encoding: "utf8",
   maxBuffer: 256 * 1024 * 1024,
 });

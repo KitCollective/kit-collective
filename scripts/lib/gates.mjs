@@ -3,6 +3,7 @@
  * and returns `{ code, line }`: the CLIs gather the data (gh, git, Linear, the run log) and print the line.
  * Patterns from Optio's gates (head-changed.sh, session-check.sh, gate.sh land); see .cursor/skills/NOTICE.md.
  */
+import { lastLine } from "./audit-result.mjs";
 import { requiredChecksGreen } from "./land-policy.mjs";
 import { parseWriteScopeGlobs } from "./pr-write-scope.mjs";
 
@@ -182,15 +183,17 @@ export function landGate({ pr, onIntegration, checks }) {
 }
 
 /**
- * Finds a result line like `LEAD-RESULT KIT-1 plan ...` in a step's final text.
+ * The generic result line of a step (LEAD-RESULT, ENGINEER-RESULT: free trailing sentence): the LAST
+ * NON-EMPTY line of its output must be `<TAG> KIT-n <outcome> ...`. AUDIT-RESULT has its own exact
+ * grammar in audit-result.mjs. Nothing may follow it: a line quoted earlier, or a caveat written
+ * after a green line, must not decide the verdict. A line wrapped whole in `**...**` or backticks
+ * is accepted; a wrapper around only part of the line is not.
  * @param {string} tag e.g. LEAD-RESULT
  * @param {string} text
  * @returns {{ issue: string, outcome: string, rest: string } | null}
  */
 export function parseResultLine(tag, text) {
-  const m = new RegExp(`^\\s*${tag} ([A-Z][A-Z0-9]*-\\d+) (\\S+)(?: (.*))?$`, "m").exec(
-    String(text ?? ""),
-  );
+  const m = new RegExp(`^${tag} ([A-Z][A-Z0-9]*-\\d+) (\\S+)(?: (.*))?$`).exec(lastLine(text));
   return m ? { issue: m[1], outcome: m[2], rest: m[3] ?? "" } : null;
 }
 

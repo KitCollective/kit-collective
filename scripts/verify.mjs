@@ -1,0 +1,175 @@
+#!/usr/bin/env node
+/**
+ * Verify the current head, one suite at a time, from the `checks` table in factory.config.json
+ * (ADR-0055). A suite that passed before on the same command and the same content of its paths
+ * is reused, not rerun.
+ *
+ * Usage: node scripts/verify.mjs [--suite id]... [--changed [base]] [--capability name]...
+ *          [--no-reuse] [--json]
+ *   --suite       run only these suites (repeatable); default all
+ *   --changed     only suites whose paths the diff `<base>...HEAD` touches (base defaults to
+ *                 origin/<lanes.integration>)
+ *   --capability  what this machine can do (repeatable, or VERIFY_CAPABILITIES=a,b). A suite
+ *                 whose `needs` are not all present is skipped, and the run is INCOMPLETE:
+ *                 never reported green. The Hetzner container has no Postgres, so `postgres`
+ *                 suites skip there.
+ *   --json        print the report as JSON instead of one line
+ * A suite with uncommitted changes under its paths (or the global paths) always runs and is not
+ * cached: the key reads the committed tree, the command runs in the working tree. `globalPaths` in the
+ * table (lockfile, compiler config) and the node version are part of every suite's key.
+ * Results are cached per machine in the gitignored `.factory/verify-cache.json` of the main checkout.
+ * Exit: 0 OK, 1 a suite failed or timed out, 2 usage or a bad checks table, 3 INCOMPLETE,
+ * 4 NOTHING TO DO (`--changed` matched no suite and no global path; nothing ran, not a pass).
+ * A changed global path selects every suite. A run with uncommitted changes says
+ * `VERIFY OK (dirty: not for <sha8>; ...)` and has `dirty: true` in the JSON report.
+ */
+import { execFileSync, spawn } from "node:child_process";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { assertRef, changedFiles, lsTree } from "./lib/git-files.mjs";
+import { mainCheckout } from "./lib/run-log.mjs";
+import {
+  dirtyPaths,
+  mergeCache,
+  nothingToDo,
+  runSuites,
+  suiteIsDirty,
+  suiteKey,
+  suitesFor,
+  VERIFY_EXIT,
+  validateChecks,
+  verdictOf,
+} from "./lib/verify.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const args = process.argv.slice(2);
+const all = (flag) => args.flatMap((a, i) => (a === flag ? [args[i + 1]] : []));
+const fail = (message) => {
+  process.stderr.write(`verify: ${message}\n`);
+  process.exit(VERIFY_EXIT.usage);
+};
+
+const KNOWN = new Set(["--suite", "--changed", "--capability", "--no-reuse", "--json"]);
+for (const arg of args) {
+  if (arg.startsWith("--") && !KNOWN.has(arg)) {
+    fail(`unknown option ${arg.slice(0, 40)}`);
+  }
+}
+
+const config = JSON.parse(readFileSync(join(ROOT, "factory.config.json"), "utf8"));
+const problems = validateChecks(config.checks);
+if (problems.length > 0) fail(problems.join("; "));
+
+const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim();
+const dirty = dirtyPaths(
+  execFileSync("git", ["status", "--porcelain", "-z", "--untracked-files=all"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  }),
+);
+let suites = config.checks.suites;
+const wanted = all("--suite");
+for (const id of wanted) if (!suites.some((s) => s.id === id)) fail(`no suite ${id}`);
+if (wanted.length > 0) suites = suites.filter((s) => wanted.includes(s.id));
+const changedAt = args.indexOf("--changed");
+if (changedAt !== -1) {
+  const next = args[changedAt + 1];
+  const base = next && !next.startsWith("--") ? next : `origin/${config.lanes.integration}`;
+  let files;
+  try {
+    files = changedFiles(`${assertRef(base)}...HEAD`, { cwd: ROOT });
+  } catch (error) {
+    fail(error.message);
+  }
+  suites = suitesFor(files, suites, config.checks.globalPaths ?? []);
+  if (suites.length === 0) {
+    const none = nothingToDo({ dirty: dirty.length > 0, head });
+    process.stdout.write(
+      args.includes("--json")
+        ? `${JSON.stringify({ head, dirty: dirty.length > 0, ...none, nothingToDo: true, suites: [] }, null, 2)}\n`
+        : `${none.line}\n`,
+    );
+    process.exit(none.code);
+  }
+}
+
+const capabilities = [
+  ...all("--capability"),
+  ...(process.env.VERIFY_CAPABILITIES ?? "").split(",").filter(Boolean),
+];
+const cachePath = join(mainCheckout(ROOT), ".factory", "verify-cache.json");
+let cache = {};
+try {
+  cache = JSON.parse(readFileSync(cachePath, "utf8"));
+} catch {
+  cache = {};
+}
+
+const entries = lsTree("HEAD", { cwd: ROOT });
+const globalPaths = config.checks.globalPaths ?? [];
+const keyOf = (suite) => suiteKey({ suite, globalPaths, entries, nodeVersion: process.version });
+const isDirty = (suite) => suiteIsDirty(dirty, suite, globalPaths);
+
+/** Runs the command in its own process group so a timeout kills the whole tree. */
+function exec(suite, timeoutSeconds) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const child = spawn("bash", ["-c", suite.command], {
+      cwd: ROOT,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let tail = "";
+    const keep = (d) => (tail = (tail + d).slice(-2000));
+    child.stdout.on("data", keep);
+    child.stderr.on("data", keep);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        // already gone
+      }
+    }, timeoutSeconds * 1000);
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({
+        status: timedOut ? "timeout" : code === 0 ? "pass" : "fail",
+        durationMs: Date.now() - started,
+        tail: code === 0 ? undefined : tail,
+      });
+    });
+  });
+}
+
+const rows = await runSuites({
+  suites,
+  defaults: config.checks.defaults,
+  capabilities,
+  cache,
+  noReuse: args.includes("--no-reuse"),
+  isDirty,
+  keyOf,
+  exec,
+});
+mkdirSync(dirname(cachePath), { recursive: true });
+// Merge with the file as it is now (another run may have written) and replace it atomically.
+let current = {};
+try {
+  current = JSON.parse(readFileSync(cachePath, "utf8"));
+} catch {
+  current = {};
+}
+const temp = `${cachePath}.${process.pid}.tmp`;
+writeFileSync(temp, JSON.stringify(mergeCache(current, rows), null, 2));
+renameSync(temp, cachePath);
+const result = verdictOf(rows, { head });
+const isDirtyRun = rows.some((r) => r.uncached);
+process.stdout.write(
+  args.includes("--json")
+    ? `${JSON.stringify({ head, dirty: isDirtyRun, ...result, suites: rows }, null, 2)}\n`
+    : `${result.line}\n`,
+);
+process.exit(result.code);
