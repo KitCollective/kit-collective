@@ -336,6 +336,7 @@ Status: `locked` (Gap 2026-08-23: brand families). Do not take chips or labeled 
 | Headings and logo | **Archivo** | 400 (wordmark “Kit” only), 600 (UI headings), 700 (KC mark) |
 | Body, labels, buttons | **IBM Plex Sans** | 400, 500 |
 | Season, size, IDs, counts | **IBM Plex Mono** | 400, 500 |
+| Hero numerals only (see **Numerals** below) | **Saira Extra Condensed** | 700 |
 
 Do not mix a heading role onto Plex Sans. Do not set body copy in Archivo. Do not use Mono for paragraphs.
 
@@ -350,6 +351,17 @@ Do not mix a heading role onto Plex Sans. Do not set body copy in Archivo. Do no
 | `label` | IBM Plex Sans | 13px–16px | 500 | 18px (13) / 20px (16) | 0–0.01em | Buttons (16), chips (14), field labels (13) |
 | `caption` | IBM Plex Sans | 12px–13px | 400 | 18px | 0 | Non-data meta (not admin table headers) |
 | `mono` | IBM Plex Mono | 12px–14px | 400 | 18px (12) / 20px (14) | 0 | Season, kit type, size, collection count, IDs, relative time on Thread row and bubbles |
+| `numeral` | Saira Extra Condensed | 32px (emblem `md`) / 38px (emblem `lg`) / 40px (collection facts) / 44px (season on own UserJersey detail) | 700 | equal to the size (never tighter — the face is tall and clips) | 0 | Digits, slash and en dash only. Never words |
+
+**Numerals** (Revision 2026-10-10, decided by Nicklas; Paper page *04 Samling*, artboards *Samling / 01* and *Egen trøje / 01*, *03*). A fourth family, **Saira Extra Condensed 700**, exists for one job: numbers that are the subject of the screen, set like print on a shirt. It is the one deliberate step away from the Uber Base voice. It is used in exactly three places:
+
+1. **Collection facts** on Samling (jersey count, club count, oldest season).
+2. **Season** on own UserJersey detail, trailing the club name.
+3. **Number emblem** (see Components → Number emblem).
+
+Everywhere else numbers keep their existing role: `mono` for season · type on tiles and inline facts, counts beside headings, IDs and times. Do not set words, labels, prices, bid amounts, or body numbers in `numeral`. Do not use it on `admin` or `web`. One `numeral` block per screen region; an emblem list counts as one. If the webfont fails, fall back to Archivo 700 at the same size.
+
+**One bold thing per block** (same revision). A data block has one emphasised line — the title, or the hero numeral. Facts under it are label-left / value-right List rows: label `body` in `content.secondary`, value `label` 16 (500) in `content.primary`, hairline between rows. Do not set several values in Archivo side by side; that is what made dense screens read as clumsy.
 
 There is no extra 14px admin-only family. Admin uses the same roles; chrome in English.
 
@@ -361,7 +373,7 @@ There is no extra 14px admin-only family. Admin uses the same roles; chrome in E
 
 **Example** *(not a rule)*: Collection home: Archivo `display` 28 “Samling” + Plex Mono “8”. Tile: Archivo `heading-sm` “F.C. København”; Mono “2023/24 · Hjemme”. Empty state title: `section`. Form helper: `body` or `caption`.
 
-**Exceptions**: Legal / App Store fine print may use `caption`. System share sheets use OS type. If a webfont fails to load, fall back to system-ui with the same sizes — do not invent a fourth family.
+**Exceptions**: Legal / App Store fine print may use `caption`. System share sheets use OS type. If a webfont fails to load, fall back to system-ui with the same sizes — do not invent a fifth family (the fourth, Saira Extra Condensed, is the `numeral` role above and nothing else).
 
 **Source**: Brand book v1.0 §06. In-book app mocks that still show kit-type chips or a wordmark collection header are **not** type or layout rules.
 
@@ -756,6 +768,28 @@ Flag missing context; do not invent values, tokens, variants, or rules.
 **Code**: Unmapped. Flag.
 
 Flag missing context; do not invent values, tokens, variants, or rules.
+
+### Number emblem
+
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper: *Egen trøje / 01* and *03*.
+
+**Purpose**: Show a shirt number as an object, so a player reads as "the name on the back" and not as a text field.
+
+**Anatomy**: A rounded square tile with the number centred in `numeral`. No name, no crest, no club colour, no outline of a shirt.
+
+**Variants**:
+| Variant | Size | Radius | Numeral | Use |
+| --- | --- | --- | --- | --- |
+| `md` | 44 × 44 | 10 | 32px | Rows in the player picker |
+| `lg` | 52 × 52 | 10 | 38px | The player row on own UserJersey detail |
+
+**States**: Selected / current = `fill.primary` with `content.inverse`. Rest = `fill.secondary` with `content.primary`. Add (free name and number, when supported) = dashed `border.subtle` with a plus icon, no fill.
+
+**Composition**: Always leads a List row: emblem, then the player name (`label` 16; 600 when selected), optional `caption` under it, trailing Mark or chevron. One- and two-digit numbers share the tile; three digits are not supported.
+
+**Unsupported**: The emblem on Jersey tiles or over photos. Club colours or gradients in the tile. A shirt silhouette. An emblem for anything that is not a shirt number (counts, sizes, seasons). Emblems on `admin`.
+
+Flag missing context; do not invent patterns.
 
 ### Mark
 
@@ -1244,6 +1278,18 @@ Status: `locked` for the compositions below. Other compositions: flag.
 
 ### Collection grid
 
+**Revision 2026-10-10** (decided by Nicklas; Paper page *04 Samling*, artboards *Samling / 01*–*05*). Where this block and the composition below disagree, **this block wins** until `/to-design` rewrites the composition.
+
+1. **Header.** Samling in `display` 32, and the capture button as a 44 `fill.primary` disc with a `content.inverse` plus. The small `mono` count beside the title is replaced by the facts block.
+2. **Collection facts.** Under the header, between two hairlines: three equal columns, each a `numeral` 40 value over a `caption` label — **Trøjer**, **Klubber** (clubs and national teams together), **Ældste sæson** (the start year of the oldest season). No dividers between columns; the first column aligns with the title. Hidden while the collection is empty.
+3. **Chip row.** Leads with one icon-only `fill.secondary` chip that opens **Vis og sortér**. Then **Alle**, the shortcuts and **Tilpas** as before. Unselected chips are `fill.secondary` without a border. While a view other than Alle is active, the icon chip becomes a `fill.primary` chip with the view name, its count and a clear cross.
+4. **Vis og sortér** is a Sheet `form`: **Vis** as Chip `single-select` with counts (Alle, Åbne for bud, Med bud, Private) and **Sortér** as List rows with a Mark (Senest tilføjet, Klub A–Å, Sæson nyeste først, Sæson ældste først). A tap commits and closes. The choice is remembered.
+5. **Grouping.** Sorted by club, tiles sit under a `section` heading with the club name and a `mono` count, and the tile caption drops the club: `mono` 14 season with the size trailing, then `caption` type · player. In every other sort there are no headings and the tile caption is club (`heading-sm`) with the size trailing, then `mono` season · type. The club name appears in exactly one of the two places.
+6. **Tile badge.** One badge only, top-left on the photo: `fill.primary` pill **n bud** while the jersey has unanswered bids. Private jerseys show a small lock disc in the same place. No "åben for bud" badge, no amount, no emblem.
+
+**Gaps** (flag, do not invent): the empty result of a view; whether the facts block shows with fewer than three jerseys; dark mode.
+
+
 **Purpose**: Scan owned jerseys.
 
 **Composition**: Header (Samling + count + capture button; no Search field) + Chip `shortcut` row + Tilpas (hidden when empty) + two-column Jersey tiles (`space.gap.md`, `space.inset.md`) + native Tab bar. Empty collection uses Empty state `collection` instead of the grid **and** instead of the chip row.
@@ -1329,6 +1375,31 @@ Flag missing context; do not invent patterns.
 8. **Cookie-indstillinger** — Grouped consent: necessary = `mono` “Altid aktive” (no Switch). Analysis and marketing = Switch. Button dock: `primary` **Acceptér alle**, `secondary` **Kun nødvendige**, `tertiary` **Bekræft mine valg**. No legal essay. Tab bar hidden.
 
 **Unsupported**: Marketplace account chrome (listings, payments, postage, Help, About, legal as primary rows). Gender. Control-panel accordions (prototype C). Hero + Sheet (prototype B). Tab bar on drills. KC monogram as Avatar. `#0B0B0B` as a new dark canvas. Success-green uniqueness. Prototype switcher. Copying `prototype-profile/` as the host API. Other-collector Profil (still the Detaljer stub).
+
+Flag missing context; do not invent patterns.
+
+### Own UserJersey detail
+
+Status: `locked` (Revision 2026-10-10, decided by Nicklas). Paper page *04 Samling*: artboards *Egen trøje / 01*–*09*.
+
+**Purpose**: Show one owned jersey and let the owner correct any single fact in one step.
+
+**Composition** (one scrolling column, Tab bar hidden):
+1. **Photo**: 4:5, full width, swipe between photos. Round `surface` Back and More buttons over it, and a small count pill (`1/2`) bottom-right. No dots.
+2. **Thumb strip**: 48 × 60 thumbs, the current one outlined in `fill.primary`; a trailing `fill.secondary` tile adds a photo. Tapping a thumb jumps; long content scrolls horizontally.
+3. **Title block**: a `caption` line (**Trøje nr. n · type**), the club or national team in `display` 32, and the season in `numeral` 44 trailing on the same baseline.
+4. **Bid row** (only while the jersey has unanswered bids): the first thing under the title block, above the player row, so a bid is never below the fold. A slim `fill.secondary` row (`radius.md`, 48 high) that reads like an Indbakke thread, not like an alert: the latest two bidders as overlapping 26px initial discs, **n bud venter på svar** (`label` 15, 500), the time of the latest in `mono`, and a trailing chevron. The whole row opens the thread. No amount, no `fill.primary`, no count disc. It is quieter than the player row under it on purpose.
+5. **Player row**: `fill.secondary`, `radius.md`: Number emblem `lg`, player name (`label` 16, 600), `caption` **Spiller på ryggen**, trailing chevron. Without a player: the dashed add emblem and **Tilføj spiller**.
+6. **Fact rows**: Type, Størrelse, Stand, Badge as label-left / value-right List rows. No Note row in 1.0 (decided 2026-10-10). An unset optional fact reads **Tilføj** in `content.muted`.
+7. **Settings**: **Åben for bud** and **Privat** as List rows with a Switch and one helper line each. Private turns bids off and disables that Switch, with the helper saying why.
+
+**Editing**: every fact is its own target; there is no Rediger screen. Type, size, condition and badge open a Sheet `form` with Chip `single-select`; season opens a Sheet with the club's seasons and decade chips; a tap saves and closes. Player and club open the full-screen picker. Changing **club** is the only edit that asks first: a Sheet lists what is kept and what is reset (player, and badge when it no longer applies) with `primary` **Skift til *klub*** and `tertiary` **Behold *klub***. Changing season keeps the player only if he was in that squad.
+
+**More** opens a Sheet of List rows: Tilføj eller skift fotos, and **Slet trøjen** in `danger`. Delete asks in a Sheet `confirm` that shows the jersey and says what happens to its photos and bids; the `destructive` Button lives only there.
+
+**Unsupported**: A `destructive` Button on the detail itself. The two settings in separate cards. A six-cell spec grid in Archivo. A bid amount on this screen. A share action before the public web layer exists. Tab bar on this screen.
+
+**Gaps** (flag, do not invent): foreign UserJersey detail is a different pattern and not covered; what happens to open bids on delete is not defined in `CONTEXT.md`; free name and number on the back; dark mode.
 
 Flag missing context; do not invent patterns.
 
