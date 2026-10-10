@@ -16,9 +16,6 @@ export const DOOR_PROVIDER_LABEL: Record<DoorSocialProvider, string> = {
   facebook: "Facebook",
 };
 
-export const CODE_STUB_TITLE = "Tjek din e-mail";
-export const CODE_STUB_BACK_LABEL = "Tilbage";
-
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 /** Syntactic check only: something@domain.tld. The server decides whether the address exists. */

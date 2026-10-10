@@ -14,6 +14,9 @@ const EMAIL_FAILURE_BUCKET = "email_failure";
 const EMAIL_REQUEST_BUCKET = "email_request";
 const EMAIL_REQUEST_LIMIT = 5;
 const EMAIL_REQUEST_WINDOW_MS = 15 * 60 * 1000;
+const CODE_ATTEMPT_BUCKET = "code_attempt";
+// Longer than any code lives; the bucket key is the single-use code's own id.
+const CODE_ATTEMPT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const IP_FAMILY_BUCKET = "ip_family";
 const GLOBAL_FAMILY_BUCKET = "global_family";
 const GLOBAL_BUCKET_KEY = "global";
@@ -85,6 +88,18 @@ export class AuthThrottleService {
     await this.db.insert(authThrottleHit).values({
       bucket: EMAIL_FAILURE_BUCKET,
       bucketKey: email,
+    });
+  }
+
+  /** Wrong guesses already made against one e-mail code. */
+  async countCodeAttempts(codeId: string): Promise<number> {
+    return this.countHits(CODE_ATTEMPT_BUCKET, codeId, CODE_ATTEMPT_WINDOW_MS);
+  }
+
+  async recordCodeAttempt(codeId: string): Promise<void> {
+    await this.db.insert(authThrottleHit).values({
+      bucket: CODE_ATTEMPT_BUCKET,
+      bucketKey: codeId,
     });
   }
 

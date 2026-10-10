@@ -1,12 +1,21 @@
 import type { IdentityLinkedProvider } from "@kit/api-contract";
 import { Redirect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Toast from "react-native-toast-message";
+import { requestSignInCode } from "@/api/identity";
 import { useAuth } from "@/auth/AuthProvider";
 import { resolveAuthErrorFeedback } from "@/auth/auth-error-feedback";
 import { FirstSessionAnalysingScreen } from "@/first-session/analysing-screen";
 import { FirstSessionChooserScreen } from "@/first-session/chooser-screen";
-import { CodeStub } from "@/first-session/code-stub";
+import {
+  CODE_REQUEST_FAILED,
+  CODE_VERIFY_FAILED,
+  codeFailureFromError,
+  isCompleteCode,
+  RESEND_COUNTDOWN_SECONDS,
+  sanitizeCode,
+} from "@/first-session/code-entry";
+import { CodeScreen, type CodeScreenStatus } from "@/first-session/code-screen";
 import { exampleById } from "@/first-session/demo";
 import { DemoScreen } from "@/first-session/demo-screen";
 import { DoorSheet } from "@/first-session/door";
@@ -22,18 +31,25 @@ import {
   firstSessionBackdrop,
   reduceFirstSession,
 } from "@/first-session/session";
+import { useResendCountdown } from "@/first-session/use-resend-countdown";
 import { VisionFailedScreen } from "@/first-session/vision-failed-screen";
 import { type ExampleOrigins, WelcomeScreen } from "@/first-session/welcome-screen";
 import { LoadingScreen } from "../_layout";
 
 export default function FirstSessionHost() {
-  const { user, isLoading, signInSocial } = useAuth();
+  const { user, isLoading, signInSocial, signInWithCode } = useAuth();
   const [session, setSession] = useState(() => createFirstSession({ signedIn: false }));
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [showThrottleBanner, setShowThrottleBanner] = useState(false);
   const [socialBusy, setSocialBusy] = useState<IdentityLinkedProvider | null>(null);
   const [demoOrigins, setDemoOrigins] = useState<ExampleOrigins | null>(null);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeStatus, setCodeStatus] = useState<CodeScreenStatus>("idle");
+  const resendCountdown = useResendCountdown();
+  // A sixth digit and a second tap must not send the same code twice.
+  const codeInFlight = useRef(false);
 
   const dispatch = useCallback((event: Parameters<typeof reduceFirstSession>[1]) => {
     setSession((current) => reduceFirstSession(current, event));
@@ -70,6 +86,9 @@ export default function FirstSessionHost() {
     setEmail("");
     setEmailError(null);
     setShowThrottleBanner(false);
+    setCode("");
+    setCodeStatus("idle");
+    resendCountdown.clear();
   }
 
   function openDoor() {
@@ -82,9 +101,15 @@ export default function FirstSessionHost() {
     dispatch({ type: "closeDoor" });
   }
 
-  function handleSubmitEmail() {
+  function resetCodeEntry() {
+    setCode("");
+    setCodeStatus("idle");
+    setShowThrottleBanner(false);
+  }
+
+  async function handleSubmitEmail() {
     // Return on the e-mail field is not blocked by the disabled button.
-    if (socialBusy !== null) {
+    if (socialBusy !== null || emailBusy) {
       return;
     }
     if (!isValidEmail(email)) {
@@ -92,7 +117,87 @@ export default function FirstSessionHost() {
       return;
     }
     setEmailError(null);
-    dispatch({ type: "submitIdentity", method: "email" });
+    setShowThrottleBanner(false);
+    setEmailBusy(true);
+    try {
+      await requestSignInCode(email.trim());
+      resetCodeEntry();
+      resendCountdown.start(RESEND_COUNTDOWN_SECONDS);
+      dispatch({ type: "submitIdentity", method: "email" });
+    } catch (caught) {
+      const feedback = resolveAuthErrorFeedback(caught, CODE_REQUEST_FAILED);
+      setShowThrottleBanner(feedback.showThrottleBanner);
+      setEmailError(feedback.fieldError);
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  async function submitCode(value: string) {
+    if (codeInFlight.current) {
+      return;
+    }
+    codeInFlight.current = true;
+    setCodeStatus("verifying");
+    try {
+      await signInWithCode(email.trim(), value);
+      dispatch({ type: "submitIdentity", method: "code" });
+    } catch (caught) {
+      setCode("");
+      const failure = codeFailureFromError(caught);
+      if (failure === "wrong") {
+        // Resend is available at once after a wrong code.
+        resendCountdown.clear();
+        setCodeStatus("wrong");
+      } else if (failure === "expired" || failure === "throttled") {
+        resendCountdown.clear();
+        setShowThrottleBanner(failure === "throttled");
+        setCodeStatus("expired");
+      } else {
+        setCodeStatus("idle");
+        Toast.show({ type: "error", position: "bottom", text1: CODE_VERIFY_FAILED });
+      }
+    } finally {
+      codeInFlight.current = false;
+    }
+  }
+
+  function handleChangeCode(raw: string) {
+    if (codeStatus === "verifying" || codeStatus === "expired") {
+      return;
+    }
+    const next = sanitizeCode(raw);
+    setCode(next);
+    if (next.length > 0 && codeStatus === "wrong") {
+      setCodeStatus("idle");
+    }
+    if (isCompleteCode(next)) {
+      void submitCode(next);
+    }
+  }
+
+  async function handleResend() {
+    if (codeStatus === "verifying") {
+      return;
+    }
+    try {
+      await requestSignInCode(email.trim());
+      resetCodeEntry();
+      resendCountdown.start(RESEND_COUNTDOWN_SECONDS);
+    } catch (caught) {
+      const feedback = resolveAuthErrorFeedback(caught, CODE_REQUEST_FAILED);
+      if (feedback.showThrottleBanner) {
+        setShowThrottleBanner(true);
+      } else {
+        Toast.show({ type: "error", position: "bottom", text1: CODE_REQUEST_FAILED });
+      }
+    }
+  }
+
+  function handleWrongEmail() {
+    resetCodeEntry();
+    resendCountdown.clear();
+    dispatch({ type: "backFromCode" });
   }
 
   async function handleSocial(provider: IdentityLinkedProvider) {
@@ -162,7 +267,19 @@ export default function FirstSessionHost() {
         />
       ) : null}
       {session.place === "code" ? (
-        <CodeStub onBack={() => dispatch({ type: "backFromCode" })} />
+        <CodeScreen
+          email={email.trim()}
+          code={code}
+          status={codeStatus}
+          resendSeconds={resendCountdown.seconds}
+          showThrottleBanner={showThrottleBanner}
+          onChangeCode={handleChangeCode}
+          onResend={() => {
+            void handleResend();
+          }}
+          onWrongEmail={handleWrongEmail}
+          onBack={handleWrongEmail}
+        />
       ) : null}
       <DoorSheet
         visible={session.place === "door"}
@@ -170,12 +287,15 @@ export default function FirstSessionHost() {
         emailError={emailError}
         showThrottleBanner={showThrottleBanner}
         socialBusy={socialBusy}
+        emailBusy={emailBusy}
         onClose={closeDoor}
         onEmailChange={(value) => {
           setEmail(value);
           setEmailError(null);
         }}
-        onSubmit={handleSubmitEmail}
+        onSubmit={() => {
+          void handleSubmitEmail();
+        }}
         onSocial={(provider) => {
           void handleSocial(provider);
         }}

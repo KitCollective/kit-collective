@@ -115,3 +115,96 @@ describe("POST /v1/e2e/test-data", () => {
     expect(await collectorJerseys()).toHaveLength(4);
   });
 });
+
+describe("GET /v1/e2e/last-code", () => {
+  let app: NestFastifyApplication;
+  let closePool: () => Promise<void>;
+
+  const lastCode = (token?: string, email = "flow@example.com") =>
+    app.inject({
+      method: "GET",
+      url: `/v1/e2e/last-code?email=${encodeURIComponent(email)}`,
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DATABASE_URL;
+    process.env.BETTER_AUTH_SECRET = "test-better-auth-secret-not-for-production";
+    process.env.BETTER_AUTH_URL = "http://127.0.0.1:3000";
+    delete process.env.R2_ENDPOINT;
+    await resetDatabase(DATABASE_URL, migrationsFolder);
+    const created = createDb(DATABASE_URL);
+    closePool = () => created.pool.end();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app.setGlobalPrefix("v1");
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await closePool();
+    delete process.env.E2E_TEST_DATA_TOKEN;
+  });
+
+  beforeEach(() => {
+    process.env.E2E_TEST_DATA_TOKEN = TOKEN;
+  });
+
+  it("does not exist without a test-data token", async () => {
+    delete process.env.E2E_TEST_DATA_TOKEN;
+    expect((await lastCode(TOKEN)).statusCode).toBe(404);
+  });
+
+  it("rejects a missing or wrong token", async () => {
+    expect((await lastCode()).statusCode).toBe(401);
+    expect((await lastCode(`${TOKEN}x`)).statusCode).toBe(401);
+  });
+
+  it("does not exist on a production process", async () => {
+    const original = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      expect((await lastCode(TOKEN)).statusCode).toBe(404);
+    } finally {
+      process.env.NODE_ENV = original;
+    }
+  });
+
+  it("lets a mailed code expire on request, behind the same token", async () => {
+    const expire = (token?: string) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/e2e/expire-code?email=flow-expire%40example.com",
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+    await app.inject({
+      method: "POST",
+      url: "/v1/identity/code",
+      payload: { email: "flow-expire@example.com" },
+    });
+    const code = JSON.parse((await lastCode(TOKEN, "flow-expire@example.com")).body).code;
+
+    expect((await expire()).statusCode).toBe(401);
+    expect((await expire(TOKEN)).statusCode).toBe(204);
+    const verify = await app.inject({
+      method: "POST",
+      url: "/v1/identity/code/verify",
+      payload: { email: "flow-expire@example.com", code },
+    });
+    expect(verify.statusCode).toBe(410);
+  });
+
+  it("returns the code mailed to the address, and 404 for one that got none", async () => {
+    expect((await lastCode(TOKEN)).statusCode).toBe(404);
+    await app.inject({
+      method: "POST",
+      url: "/v1/identity/code",
+      payload: { email: "flow@example.com" },
+    });
+    const response = await lastCode(TOKEN);
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).code).toMatch(/^\d{6}$/);
+  });
+});

@@ -125,10 +125,12 @@ describe("First session host chrome", () => {
     expect(host).toContain("onHaveAccount={() => openDoor()}");
     expect(host).toContain('dispatch({ type: "openDoor" })');
     expect(host).not.toContain("signUp");
-    // E-mail routes to the code stub; social skips it; a failed login raises a bottom toast.
+    // E-mail routes to the code screen; social skips it; a failed login raises a bottom toast.
     expect(host).toContain('method: "email"');
     expect(host).toContain('method: "social"');
-    expect(host).toContain("CodeStub");
+    expect(host).toContain('method: "code"');
+    expect(host).toContain("CodeScreen");
+    expect(host).not.toContain("CodeStub");
     expect(host).toContain('type: "backFromCode"');
     expect(host).toContain("socialCancelledMessage(provider)");
     expect(host).toContain('position: "bottom"');

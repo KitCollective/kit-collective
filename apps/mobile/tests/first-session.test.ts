@@ -150,6 +150,53 @@ describe("First session identity", () => {
     expect(reduceFirstSession(welcome, { type: "backFromCode" })).toEqual(welcome);
   });
 
+  it("a correct code without a draft lands on Samling, verified, with the tab bar", () => {
+    const code = reduceFirstSession(door(), { type: "submitIdentity", method: "email" });
+    const session = reduceFirstSession(code, { type: "submitIdentity", method: "code" });
+
+    expect(session.place).toBe("collection");
+    expect(session.skippedJerseyDetails).toBe(true);
+    expect(session.identitySession).toEqual({ emailVerified: true });
+    expect(session.showsTabBar).toBe(true);
+  });
+
+  it("a correct code with a draft from an own photo opens jersey details", () => {
+    const analysing = reduceFirstSession(createFirstSession({ signedIn: false }), {
+      type: "photosPicked",
+      sessionId: "capture-session-1",
+    });
+    const code = reduceFirstSession(reduceFirstSession(analysing, { type: "openDoor" }), {
+      type: "submitIdentity",
+      method: "email",
+    });
+    const session = reduceFirstSession(code, { type: "submitIdentity", method: "code" });
+
+    expect(session.place).toBe("jersey-details");
+    expect(session.captureSessionId).toBe("capture-session-1");
+    expect(session.showsTabBar).toBe(false);
+  });
+
+  it("a returning collector reaches Samling through the same sheet and code step", () => {
+    const welcome = createFirstSession({ signedIn: false });
+    const opened = reduceFirstSession(welcome, { type: "openDoor" });
+    const code = reduceFirstSession(opened, { type: "submitIdentity", method: "email" });
+
+    expect(code.place).toBe("code");
+    expect(reduceFirstSession(code, { type: "submitIdentity", method: "code" }).place).toBe(
+      "collection",
+    );
+  });
+
+  it("Forkert e-mail? and the back button return to the sheet, and the code step can be reached again", () => {
+    const code = reduceFirstSession(door(), { type: "submitIdentity", method: "email" });
+    const back = reduceFirstSession(code, { type: "backFromCode" });
+    const again = reduceFirstSession(back, { type: "submitIdentity", method: "email" });
+
+    expect(back.place).toBe("door");
+    expect(again.place).toBe("code");
+    expect(again.identitySession).toBe(null);
+  });
+
   it("social sign-in marks the e-mail verified", () => {
     const social = reduceFirstSession(door(), { type: "submitIdentity", method: "social" });
 
