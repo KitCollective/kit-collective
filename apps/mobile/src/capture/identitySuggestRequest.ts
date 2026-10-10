@@ -5,6 +5,18 @@ import type { PhotoPreparePurpose } from "./photoPrepare";
 
 export const IDENTITY_PHOTOS_EMPTY = "IDENTITY_PHOTOS_EMPTY";
 
+/**
+ * The one gate in front of every Vision request, identity and grouping alike: the token the
+ * hooks send with. With the Chooser's Vision switch off (or the free allowance spent) there is
+ * none, so no request leaves the device and nothing waits on one.
+ */
+export function visionRequestToken(
+  accessToken: string | null,
+  visionEnabled: boolean,
+): string | null {
+  return visionEnabled ? accessToken : null;
+}
+
 export type IdentityPhotoReader = (
   uri: string,
   role: PhotoRole,
