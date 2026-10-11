@@ -17,6 +17,7 @@
     "@expo-google-fonts/archivo": "^0.4.2",
     "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
     "@expo-google-fonts/ibm-plex-sans": "^0.4.1",
+    "@expo-google-fonts/saira-extra-condensed": "^0.4.2",
     "@expo/metro-runtime": "~57.0.15",
     "@expo/vector-icons": "^15.1.1",
     "@kit/api-contract": "workspace:*",
