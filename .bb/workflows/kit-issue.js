@@ -64,6 +64,8 @@ const machine = typeof args.machine === "string" && /^[A-Za-z0-9_.-]{1,59}$/.tes
 const machineFlag = machine ? ` --machine ${machine}` : "";
 
 // Models are claude-code tuples checked against `bb provider models claude-code`.
+// `bb workflows validate` wants `provider` and `model` as string literals in every agent() call,
+// so the calls repeat them; PROVIDER and MODELS feed the run log and must stay equal to the literals.
 const PROVIDER = "claude-code";
 const MODELS = {
   opus: "claude-opus-5-5",
@@ -71,11 +73,19 @@ const MODELS = {
   fable: "claude-fable-5-1",
   haiku: "claude-haiku-5-5",
 };
-const tuple = (alias, reasoningLevel) => ({
-  provider: PROVIDER,
-  model: MODELS[alias],
-  reasoningLevel,
-});
+/** Spawns a high-reasoning worker on the aliased model: one literal agent() call per alias. */
+function spawn(alias, prompt, label, phaseTitle, schema) {
+  if (alias === "opus") {
+    return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-opus-5-5", reasoningLevel: "high" });
+  }
+  if (alias === "fable") {
+    return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-fable-5-1", reasoningLevel: "high" });
+  }
+  if (alias === "sonnet") {
+    return agent(prompt, { label, phase: phaseTitle, schema, provider: "claude-code", model: "claude-sonnet-5-5", reasoningLevel: "high" });
+  }
+  throw new Error(`kit-issue has no model for alias ${alias}`);
+}
 // The Reviewer never runs on the Engineer's model (audit-receipt --require-different-model).
 const reviewerAlias = (engineerAlias) => (engineerAlias === "opus" ? "fable" : "opus");
 
@@ -116,7 +126,9 @@ async function sh(label, phaseTitle, commands, keepGoing = false) {
     label,
     phase: phaseTitle,
     schema: RUNNER_SCHEMA,
-    ...tuple("haiku", "low"),
+    provider: "claude-code",
+    model: "claude-haiku-5-5",
+    reasoningLevel: "low",
   });
   return out.results;
 }
@@ -193,7 +205,9 @@ if (decision.plan && args.skipLead !== true) {
       {
         label: `lead:${issue}`,
         phase: "Lead",
-        ...tuple("opus", "high"),
+        provider: "claude-code",
+        model: "claude-opus-5-5",
+        reasoningLevel: "high",
         schema: {
           type: "object",
           required: ["outcome", "sentence", "threadId"],
@@ -256,12 +270,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
   ]
     .filter(Boolean)
     .join("\n");
-  return agent(prompt, {
-    label: `engineer:${issue}:r${round}`,
-    phase: "Engineer",
-    ...tuple(engineerModelAlias, "high"),
-    schema: ENGINEER_SCHEMA,
-  });
+  return spawn(engineerModelAlias, prompt, `engineer:${issue}:r${round}`, "Engineer", ENGINEER_SCHEMA);
 }
 
 let feedback = "";
@@ -342,27 +351,25 @@ for (let round = 1; round <= maxRounds; round += 1) {
   const rAlias = reviewerAlias(modelAlias);
   let review = null;
   try {
-    review = await agent(
+    review = await spawn(
+      rAlias,
       [
         `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
         `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
       ].join("\n"),
+      `reviewer:${issue}:r${round}`,
+      "Reviewer",
       {
-        label: `reviewer:${issue}:r${round}`,
-        phase: "Reviewer",
-        ...tuple(rAlias, "high"),
-        schema: {
-          type: "object",
-          required: ["verdict", "sha", "sentence", "threadId"],
-          additionalProperties: false,
-          properties: {
-            verdict: { enum: ["green", "amber", "red"] },
-            sha: { type: "string" },
-            rows: { type: "array", items: { type: "string" } },
-            sentence: { type: "string" },
-            threadId: { type: "string" },
-          },
+        type: "object",
+        required: ["verdict", "sha", "sentence", "threadId"],
+        additionalProperties: false,
+        properties: {
+          verdict: { enum: ["green", "amber", "red"] },
+          sha: { type: "string" },
+          rows: { type: "array", items: { type: "string" } },
+          sentence: { type: "string" },
+          threadId: { type: "string" },
         },
       },
     );
