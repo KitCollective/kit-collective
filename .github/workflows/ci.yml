@@ -251,6 +251,7 @@ jobs:
           scripts/tests/e2e-review.test.mjs
           scripts/tests/e2e-slices.test.mjs
           scripts/tests/device-lock.test.mjs
+          scripts/tests/source-stamp.test.mjs
 
       - name: Check factory tests are wired on the test job
         run: pnpm check:factory-ci-tests

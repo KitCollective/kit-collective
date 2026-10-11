@@ -13,7 +13,7 @@ source_stamp() {
 
 # refuse_uncommitted <path>...: a stamp of HEAD says nothing about a dirty tree.
 refuse_uncommitted() {
-  if [[ -n "$(git -C "$stamp_root" status --porcelain -- "$@" | grep -v '/\.maestro/' || true)" ]]; then
+  if [[ -n "$(git -C "$stamp_root" status --porcelain --no-renames -- "$@" | grep -v '/\.maestro/' || true)" ]]; then
     echo "Uncommitted changes under $*: commit first, the build is stamped with the commit's sources." >&2
     exit 2
   fi

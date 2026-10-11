@@ -4,6 +4,7 @@
  * whose prefix already exists on origin/development under a different name.
  */
 import { execFileSync } from "node:child_process";
+import { assertRef, changedFiles, lsTree } from "./lib/git-files.mjs";
 import {
   findMigrationPrefixCollisions,
   formatMigrationCollisionFeedback,
@@ -11,12 +12,10 @@ import {
   nextMigrationPrefix,
 } from "./lib/migration-prefix.mjs";
 
-function gitLines(args) {
+/** A file list read through the shared reader; a git failure reads as an empty list (fail closed below). */
+function listOrEmpty(read) {
   try {
-    return execFileSync("git", args, { encoding: "utf8" })
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
+    return read();
   } catch {
     return [];
   }
@@ -38,16 +37,15 @@ function ensureBaseRef(baseRef) {
 
 function main() {
   const baseRef = process.env.BASE_REF ?? "origin/development";
+  try {
+    assertRef(baseRef);
+  } catch (error) {
+    console.error(`check-migration-prefixes: ${error.message}`);
+    process.exit(2);
+  }
   ensureBaseRef(baseRef);
-  const added = gitLines([
-    "diff",
-    "--name-only",
-    "--diff-filter=A",
-    `${baseRef}..HEAD`,
-    "--",
-    "packages/db/migrations",
-  ]);
-  const base = gitLines(["ls-tree", "-r", "--name-only", baseRef, "--", "packages/db/migrations"]);
+  const added = listOrEmpty(() => changedFiles(`${baseRef}..HEAD`, { extra: ["--diff-filter=A"] }));
+  const base = listOrEmpty(() => lsTree(baseRef).map((entry) => entry.path));
   if (missingBaseMigrations(added, base)) {
     console.error(
       `check-migration-prefixes: cannot read ${baseRef} migrations while this branch adds SQL. Fetch origin/development.`,

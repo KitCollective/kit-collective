@@ -19,6 +19,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertRef } from "../lib/git-files.mjs";
 import { runPrefix, runRecordKey, screenshotFromKey } from "./artifacts.mjs";
 import { selectBefore } from "./before.mjs";
 import { compareRuns, flowOfKey, stepKey } from "./compare.mjs";
@@ -48,6 +49,12 @@ const required = (name) => {
 const git = (...args) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" }).trim();
 
 const sha = required("E2E_SHA");
+try {
+  assertRef(sha);
+} catch (error) {
+  process.stderr.write(`review-run: ${error.message}\n`);
+  process.exit(2);
+}
 const isPullRequest = required("E2E_RUN_ORIGIN") === "pr";
 const flowsStatus = required("E2E_FLOWS_STATUS");
 const r2 = createR2Client(evidenceBucketEnv(env));
@@ -67,8 +74,14 @@ async function loadScreenshots(runSha) {
 async function findBefore() {
   const lane = FACTORY.lanes.integration;
   git("fetch", "--quiet", "origin", lane);
-  const mergeBase = git("merge-base", `origin/${lane}`, sha);
-  const ancestors = git("rev-list", "--first-parent", `--max-count=${ANCESTOR_LOOKBACK}`, mergeBase)
+  const mergeBase = git("merge-base", "--end-of-options", `origin/${lane}`, sha);
+  const ancestors = git(
+    "rev-list",
+    "--first-parent",
+    `--max-count=${ANCESTOR_LOOKBACK}`,
+    "--end-of-options",
+    mergeBase,
+  )
     .split("\n")
     .filter(Boolean);
   const runs = [];
