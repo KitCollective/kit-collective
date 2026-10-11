@@ -37,14 +37,32 @@ test("the status model: dispatch is To-do, and every state alias points at a lis
   for (const cfg of [config, example]) {
     assert.equal(cfg.dispatch.state, "To-do");
     const listed = new Set(cfg.states.map((state) => state.name));
-    for (const name of ["To-do", "In Progress", "Approval", "Merging", "Post-Merge", "Done"]) {
+    for (const name of [
+      "To-do",
+      "Blocked",
+      "In Progress",
+      "Approval",
+      "Merging",
+      "Post-Merge",
+      "Done",
+    ]) {
       assert.ok(listed.has(name), `states must list ${name}`);
     }
-    for (const stale of ["Implementing", "Ready for merge"]) {
+    for (const stale of ["Implementing", "Ready for merge", "Parked"]) {
       assert.ok(!listed.has(stale), `states must not list ${stale}`);
     }
     for (const target of Object.values(cfg.stateAliases)) {
       assert.ok(listed.has(target), `stateAliases target "${target}" is not a listed state`);
     }
+  }
+});
+
+test("Approval and Blocked semantics: Merging alone is merge permission; Blocked is a started status", () => {
+  assert.equal(landPolicy.MERGE_PERMISSION_STATUS, "Merging");
+  for (const cfg of [config, example]) {
+    const byName = Object.fromEntries(cfg.states.map((state) => [state.name, state]));
+    assert.equal(byName.Blocked.type, "started");
+    assert.equal(byName["To-do"].type, "unstarted");
+    assert.equal(cfg.states.filter((state) => state.type === "unstarted").length, 1);
   }
 });

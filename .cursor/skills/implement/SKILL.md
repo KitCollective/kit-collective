@@ -30,7 +30,7 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 7. After the PR is attached **and the pre-review gate passes**: clear addressed review feedback, move to `In Review`. Do not merge. Do not move to `Done`.
 8. If `### Review feedback` required a ratchet, land it in this PR (`docs/agents/error-ratcheting.md`). Tighten only.
 
-When this run is a bb thread (`bb-orchestrate`), end the final output with `ENGINEER-RESULT <KIT-n> ready|blocked|failed <one sentence>`; `ready` only after the pre-review gate below is true.
+When this run is a bb thread (`bb-orchestrate`), end the final output with `ENGINEER-RESULT <KIT-n> ready|blocked|failed <one sentence>`; `ready` only after the pre-review gate below is true. A `blocked` sentence starts `needs-human: <what you ask>` when a person must answer or decide (the orchestrator moves the issue to `Approval` and fills `### Waiting`; you write what is asked and the stage you stopped at under workpad `### Waiting`), or `blocked-by KIT-m: <why>` when another issue must be done first (the orchestrator relates it with `linear.mjs block` and moves it to `Blocked`). Never move the issue to `Approval` or `Blocked` yourself. On resume, `### Waiting` says what was asked, where you stopped and `Resumed: <date>`; the human's answer is in a Linear comment.
 
 ## Pre-review gate (do not skip)
 

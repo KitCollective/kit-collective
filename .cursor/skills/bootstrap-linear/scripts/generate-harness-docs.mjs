@@ -225,7 +225,7 @@ Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), differ
 _Avoid_: mixing with \`signal-up\` on the same issue, filing into \`${dispatch}\`
 
 **Land**:
-Merge to \`${integration}\` after Auto-merge or ${approver} moves the issue to Merging. The merged PR is Post-Merge; Done only after `gate.mjs land` is open. Land writes one role comment with the merge SHA (or merge error on return to In Progress).
+Merge to \`${integration}\` after Auto-merge or ${approver} moves the issue to Merging. The merged PR is Post-Merge; Done only after \`gate.mjs land\` is open. Land writes one role comment with the merge SHA (or merge error on return to In Progress).
 _Avoid_: landing to ${staging} or ${production} from an issue run
 
 **Auto-merge**:

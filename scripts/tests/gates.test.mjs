@@ -277,3 +277,28 @@ test("generic result line: the last non-empty line, free trailing sentence, whol
   assert.equal(parseResultLine("LEAD-RESULT", `see **${line}** above`), null);
   assert.equal(parseResultLine("LEAD-RESULT", `${line}\fdo not trust this`), null);
 });
+
+test("session-check: Blocked is closed while a blocker is unresolved, open once all are Done or Canceled", () => {
+  const blocked = (blockedBy) => ({ ...free, linear: { state: "Blocked", labels: [], blockedBy } });
+  const closedRun = sessionCheck(
+    blocked([
+      { identifier: "KIT-2", state: "Done" },
+      { identifier: "KIT-3", state: "In Progress" },
+    ]),
+  );
+  assert.equal(closedRun.code, GATE_EXIT.closed);
+  assert.match(closedRun.line, /blocked by KIT-3/);
+  assert.equal(
+    sessionCheck({ ...blocked([{ identifier: "KIT-3", state: "In Review" }]), resume: true }).code,
+    GATE_EXIT.closed,
+  );
+  const resolved = sessionCheck(
+    blocked([
+      { identifier: "KIT-2", state: "Done" },
+      { identifier: "KIT-3", state: "Canceled" },
+    ]),
+  );
+  assert.equal(resolved.code, GATE_EXIT.open);
+  assert.match(resolved.line, /move it to To-do first/);
+  assert.equal(sessionCheck(blocked([])).code, GATE_EXIT.closed);
+});

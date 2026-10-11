@@ -27,6 +27,8 @@ implement:  In Progress (no PR) → branch + code + PR + pre-review gate → In 
 checker:    In Review → complete review → Approval
             or In Progress + full ### Review feedback (no drip-feed)
 implement:  In Progress (PR exists) → same branch, fix the class → In Review
+blocked:     queue build moves Blocked → To-do when all blockers are Done or Canceled
+needs-human: result `needs-human:` → Approval + needs-info / ready-for-human + ### Waiting (human answers, moves to To-do)
 auto-merge: Approval → Merging when MERGEABLE, checks green, loop cap clear
 approver:   Approval → Merging (still allowed)
 land:       merge to lanes.integration → Post-Merge → Done (only after gate.mjs land is open)
@@ -96,7 +98,7 @@ Every run:
 3. Claim all currently eligible issues in dispatch.priorityOrder (Urgent 1, High 2, Medium 3, Low 4, None 0). Same rank: oldest first. Unset/None is last. Skip write-scope overlap with an In Progress issue (leave it in dispatch.state with ready-for-agent, comment why). Do not preempt In Progress. That is the only status move you make.
 4. If the same ### Review feedback class has failed twice on an In Progress issue, comment that the next implement pass must land a ratchet (docs/agents/error-ratcheting.md). Do not write the ratchet.
 
-Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage; planner does not. Never move to In Review, Approval, Merging, Done, Parked, or Canceled.
+Never claim Triage or Duplicate. Intake (hourly, planner mutex) may shape Triage; planner does not. Never move to In Review, Approval, Merging, Done, Blocked, or Canceled.
 ```
 
 ---

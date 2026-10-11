@@ -10,6 +10,7 @@
 //   node scripts/linear.mjs state KIT-272 "In Progress"
 //   node scripts/linear.mjs label KIT-272 add|remove <label>
 //   node scripts/linear.mjs description KIT-272 --body-file <path>
+//   node scripts/linear.mjs block KIT-272 --by KIT-270   (KIT-270 blocks KIT-272: the blockedBy relation)
 //   node scripts/linear.mjs link KIT-272 <url> [title]
 //   node scripts/linear.mjs signal-up "<title>" --origin KIT-n --body-file <path>
 //       new Triage issue in team KIT with the `signal-up` label only, in the origin's project
@@ -22,7 +23,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { issueIdentifier, optionValue } from "./lib/linear-args.mjs";
+import { blockArgs, issueIdentifier, optionValue } from "./lib/linear-args.mjs";
 
 const API = "https://api.linear.app/graphql";
 
@@ -118,6 +119,16 @@ async function relateIssues(first, second) {
     { input: { issueId: a.id, relatedIssueId: b.id, type: "related" } },
   );
   return `${a.identifier} related to ${b.identifier}`;
+}
+
+async function blockIssue(blockedIdentifier, blockerIdentifier) {
+  const blocked = await loadIssue(blockedIdentifier);
+  const blocker = await loadIssue(blockerIdentifier);
+  await gql(
+    "mutation($input: IssueRelationCreateInput!) { issueRelationCreate(input: $input) { success } }",
+    { input: { issueId: blocker.id, relatedIssueId: blocked.id, type: "blocks" } },
+  );
+  return `${blocked.identifier} blocked by ${blocker.identifier}`;
 }
 
 async function moveToProjectOf(identifier, originIdentifier) {
@@ -337,6 +348,11 @@ switch (command) {
     );
     break;
   }
+  case "block": {
+    const parsed = blockArgs(args) ?? fail("block <KIT-n> --by <KIT-m>");
+    process.stdout.write(`${await blockIssue(parsed.issue, parsed.by)}\n`);
+    break;
+  }
   case "project": {
     const [first, second] = [issueIdentifier(args[0]), issueIdentifier(args[1])];
     process.stdout.write(
@@ -346,6 +362,6 @@ switch (command) {
   }
   default:
     fail(
-      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, project",
+      "commands: workspace, issue, comment, comment-update, state, label, description, link, signal-up, relate, block, project",
     );
 }

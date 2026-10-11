@@ -24,7 +24,7 @@ Then, among remaining eligible issues, claim **all of them** in `dispatch.priori
 
 Each claim moves that issue to `In Progress` and writes **one role comment** that the issue was claimed. That wakes the implement automation. Stop when the eligible list is exhausted.
 
-Never claim from Linear **Triage** or **Duplicate**. Never move to `In Review`, `Approval`, `Merging`, `Done`, `Parked`, or `Canceled`.
+Never claim from Linear **Triage** or **Duplicate**. Never move to `In Review`, `Approval`, `Merging`, `Done`, `Blocked`, or `Canceled`.
 
 ## Recurring mistakes
 

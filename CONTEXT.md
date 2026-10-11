@@ -36,23 +36,31 @@ _Avoid_: horizontal tickets (schema-only, API-only)
 _Avoid_: assigning Cursor as Agent or Assignee, treating priority as eligibility, dispatching from `Backlog`
 
 **Status chain**:
-The Linear statuses an issue moves through, named in `factory.config.json` `states` and resolved by name. `Triage` (inbox, Linear built-in) → `Backlog` (unshaped, not ready) → `To-do` (dispatch status) → `In Progress` (claimed, coding) → `In Review` (pre-review gate passed) → `Approval` (review green, waiting for the approver; skipped when Auto-merge applies) → `Merging` (approved; PR enqueued) → `Post-Merge` (PR merged, integration lane being verified) → `Done`. `Parked`, `Canceled` and `Duplicate` sit outside the chain. A merge fail returns the issue to `In Progress`. ADR-0057.
-_Avoid_: the old names `Implementing` and `Ready for merge`; inventing extra statuses
+The Linear statuses an issue moves through, named in `factory.config.json` `states` and resolved by name. `Triage` (inbox, Linear built-in) → `Backlog` (unshaped or deferred by the owner, not ready) → `To-do` (dispatch status) → `In Progress` (claimed, coding) → `In Review` (pre-review gate passed) → `Approval` (waiting for a human) → `Merging` (merge approved; PR enqueued) → `Post-Merge` (PR merged, integration lane being verified) → `Done`. `Blocked` (started work waiting for another issue) and `Approval` can be entered from any working stage. `Canceled` and `Duplicate` sit outside the chain. There is no `Parked`: a deferred issue is `Backlog`. A merge fail returns the issue to `In Progress`. Board order left to right: Triage, Backlog, To-do, Blocked, In Progress, In Review, Approval, Merging, Post-Merge, Done, Canceled, Duplicate. ADR-0057.
+_Avoid_: the old names `Implementing`, `Ready for merge` and `Parked`; inventing extra statuses
 
 **To-do**:
-The dispatch status (`dispatch.state`): shaped, approved and ready to be picked up. `/to-tickets` publishes here because its quiz step is the human's approval.
-_Avoid_: using it for unshaped work (that is `Backlog`), or for parked work (`Parked`)
+The dispatch status (`dispatch.state`): shaped, approved and ready to be picked up. `/to-tickets` publishes here because its quiz step is the human's approval. A To-do issue with an unresolved `blockedBy` is simply not dispatchable. The only unstarted status.
+_Avoid_: using it for unshaped or deferred work (that is `Backlog`)
 
 **In Progress**:
 The issue is claimed and being coded, including after a review or merge failure. Renamed from Implementing.
 _Avoid_: Implementing
 
 **Approval**:
-Review is green and the issue waits for the approver (or for Auto-merge). Renamed from Ready for merge. Not merge permission by itself: only `Merging` is.
-_Avoid_: Ready for merge; treating `Approval` as merge permission
+Waiting for a human, at any stage (renamed from Ready for merge, and now cross-stage). Three shapes: `needs-info` (the agent asks a question), `ready-for-human` (the agent needs a yes/no decision or permission, including a lead `plan-approval`), or neither (review is green and the approver may merge). What is asked and the stage it came from go under workpad `### Waiting`. The human answers in a Linear comment and moves the issue to `To-do` (any answer goes back to To-do, never to a specific stage), or to `Merging` to approve the merge. `Approval` is never merge permission by itself; only the move to `Merging` is.
+_Avoid_: Ready for merge; reading an issue in `Approval` as merge permission; answering by moving the card to a specific stage
+
+**Blocked**:
+Work that has started needs another issue done first. Requires at least one unresolved `blockedBy`; if a person is needed it is `Approval`, not `Blocked`. An agent that finds the dependency files it with `signal-up` (it lands in Triage, the owner accepts it) and then `node scripts/linear.mjs block <KIT-n> --by <KIT-m>`. At queue-build time the orchestrator moves a Blocked issue whose blockers are all Done or Canceled to `To-do`. Resumes only when its blockers are Done.
+_Avoid_: Blocked for a question or a decision (that is `Approval`); Blocked without a `blockedBy`
+
+**Waiting** *(workpad section `### Waiting`)*:
+What an `Approval` issue is waiting for: what is asked, the stage it came from, `Asked: <date>`. When the orchestrator claims the issue again it removes `needs-info` / `ready-for-human`, writes `Resumed: <date>` under it, and resumes from the workpad with `--resume`.
+_Avoid_: asking the question only in a comment; leaving the label on after the answer
 
 **Merging**:
-The approver moved the issue here: this is merge permission (the PRs are opened with the approver's own GitHub account, so GitHub's approving review cannot be used). The PR is enqueued and stays `Merging` until GitHub says `MERGED`.
+The approver moved the issue here from `Approval`: this is merge permission (the PRs are opened with the approver's own GitHub account, so GitHub's approving review cannot be used). The PR is enqueued and stays `Merging` until GitHub says `MERGED`.
 _Avoid_: using a GitHub review approval as merge permission
 
 **Post-Merge**:
@@ -588,8 +596,8 @@ A spawned Pi child with no close and no stdout for 45 minutes (env `PI_JOB_IDLE_
 _Avoid_: wall-clock as the only hang signal; leaving the mutex held after kill; waiting out Idle timeout after `agent_end`
 
 **Timeout park**:
-The worker moving that hung coding job to Parked after Idle timeout, with `### Review feedback` on the existing workpad. Planner still never claims Parked. Resume is a human status change.
-_Avoid_: treating Parked as human-only on this path; planner unparking; Canceled for a hang
+The worker moving that hung coding job to `Approval` with `ready-for-human` after Idle timeout (Parked was removed, ADR-0057), with `### Review feedback` and `### Waiting` on the existing workpad. Resume is a human status change to `To-do`.
+_Avoid_: planner unparking; Canceled for a hang
 
 **Issue worktree**:
 The git worktree for one issue at `/var/lib/kit-pi/worktrees/KIT-n`. The coding-job cwd. Not a second Pi host.
@@ -601,7 +609,7 @@ _Avoid_: deleting the mirror; leaving KIT-n after land; treating a human Park as
 
 **Capacity gate**:
 Before a coding-job spawn, free RAM and worktree-volume disk must clear env floors (default 2 GB RAM, 5 GB disk). If not, the job stays queued and the worker comments the issue; status does not change; not Timeout park.
-_Avoid_: starting Pi when the box is full; Parked for a capacity wait; Prometheus as the gate; a new comment on every retry
+_Avoid_: starting Pi when the box is full; Approval for a capacity wait; Prometheus as the gate; a new comment on every retry
 
 **Worker health**:
 GET /health on the PI worker. HTTP 200 if the process is up. JSON includes planner state, the current coding job (role + identifier) or null, capacity (ram, disk, ready), and `tokens` (last implement / factory-checker input/output per role and model, or null). Missing counts are `unknown`. Never API keys.

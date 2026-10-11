@@ -35,7 +35,8 @@ Team `linear.teamKey` keeps Linear’s **Triage** and **Duplicate** states. They
 
 - **Triage** — inbox for Sentry, `signal-up`, and `proposal`. Planner must not claim, label-as-ready, or delegate them.
 - **Duplicate** — mark that the work already exists on another issue. No agent action.
-- A human **Accepts** from Triage into `Parked`, `Backlog`, or `To-do` (`To-do` only once shaped, with `ready-for-agent`), or marks duplicate / declines / snoozes.
+- `Approval` is cross-stage: a human is needed (a question, a decision, a plan, or the merge). The human answers in a comment and moves the issue to `To-do` (any answer goes back to `To-do`), or to `Merging` to approve the merge. `Blocked` is for started work that needs another issue first and requires an unresolved `blockedBy` (`node scripts/linear.mjs block <KIT-n> --by <KIT-m>`). The owner defers work by moving it to `Backlog`.
+- A human **Accepts** from Triage into `Backlog` or `To-do` (`To-do` only once shaped, with `ready-for-agent`), or marks duplicate / declines / snoozes.
 - After accept: add `needs-triage` until a human has shaped the ticket. Then `ready-for-agent`. Dispatch requires `dispatch.state` + `ready-for-agent` + unblocked. Never set Linear Agent to Cursor.
 
 ## PRs

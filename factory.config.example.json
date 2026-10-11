@@ -27,7 +27,7 @@
   "states": [
     { "name": "Backlog", "type": "backlog", "color": "#bec2c8" },
     { "name": "To-do", "type": "unstarted", "color": "#e2e2e2" },
-    { "name": "Parked", "type": "unstarted", "color": "#95a2b3" },
+    { "name": "Blocked", "type": "started", "color": "#eb5757" },
     { "name": "In Progress", "type": "started", "color": "#f2c94c" },
     { "name": "In Review", "type": "started", "color": "#5e6ad2" },
     { "name": "Approval", "type": "started", "color": "#26b5ce" },

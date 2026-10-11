@@ -13,7 +13,7 @@ import {
 const STATES = [
   { name: "Backlog", type: "backlog" },
   { name: "To-do", type: "unstarted" },
-  { name: "Parked", type: "unstarted" },
+  { name: "Blocked", type: "started" },
   { name: "In Progress", type: "started" },
   { name: "In Review", type: "started" },
   { name: "Approval", type: "started" },
@@ -136,7 +136,7 @@ test("land treats Done as merged and refuses to merge again", () => {
 const refuseStatuses = [
   "Backlog",
   "To-do",
-  "Parked",
+  "Blocked",
   "In Progress",
   "In Review",
   "Approval",
@@ -228,6 +228,7 @@ test("dependents stay blocked until the blocker is Done or Canceled", () => {
   assert.equal(blockerResolvesDependents("Merging", STATES), false);
   assert.equal(blockerResolvesDependents("Approval", STATES), false);
   assert.equal(blockerResolvesDependents("Post-Merge", STATES), false);
+  assert.equal(blockerResolvesDependents("Blocked", STATES), false);
   assert.equal(blockerResolvesDependents("In Progress", STATES), false);
   assert.equal(blockerResolvesDependents("Done", STATES), true);
   assert.equal(blockerResolvesDependents("Canceled", STATES), true);

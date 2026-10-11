@@ -28,6 +28,8 @@ From the human message, collect:
 2. **Batch mode** — `parallel` only when the human said parallel / samtidigt. Otherwise **sequential**.
 3. **Order** — if the human listed identifiers in order, keep that order. Otherwise `dispatch.priorityOrder`, oldest first at the same rank.
 
+At queue-build time, a `Blocked` issue whose blockers are **all** `Done` or `Canceled` is moved to `To-do` first (`node scripts/linear.mjs state <KIT-n> "To-do"`); `session-check` says `move it to To-do first`. A `Blocked` issue with an unresolved blocker is skipped.
+
 ## Guardrails (every issue)
 
 Stop on that identifier (do not mutate it) when any of these hold. Continue the rest of the **batch**.
@@ -36,7 +38,8 @@ Stop on that identifier (do not mutate it) when any of these hold. Continue the 
 - Status is Linear Triage, Duplicate, Canceled, or Done
 - Unresolved `blockedBy` (unless the blocker is also in this **batch** and will finish first — sequential only)
 - Linear Agent is Cursor (Cloud Agent path — skip and role-comment)
-- Status is `Parked` unless the human named that identifier explicitly
+- Status is `Blocked` and a blocker is not `Done`: it resumes only when its blockers are Done (`session-check` says which)
+- Status is `Approval`: it waits for a human, not for the flow (a `needs-info` / `ready-for-human` label is the stop)
 
 Write-scope overlap and fan-out: [references/batch.md](references/batch.md).
 
@@ -58,7 +61,11 @@ If status is `dispatch.state`, labelled `ready-for-agent`, unblocked, and Agent 
 
 If status is already `In Progress` with `ready-for-agent`: start or resume. Same branch, same PR.
 
-If status is `In Review`, `Approval`, or `Merging`: join at the matching step below (review, approve+land, or land).
+If the issue was in `Approval` waiting for a human and the human answered by moving it to `To-do`, its workpad has `### Waiting`: on claiming it, remove `needs-info` / `ready-for-human` yourself (`node scripts/linear.mjs label <KIT-n> remove <label>`), write `Resumed: <date>` under `### Waiting`, and only then proceed, resuming from the workpad with `--resume` at the stage `### Waiting` names. Any answer goes back to `To-do`, never to a specific stage.
+
+If status is `In Review`, `Approval` (with neither `needs-info` nor `ready-for-human`), or `Merging`: join at the matching step below (review, approve+land, or land). `Approval` is cross-stage (ADR-0057): it also holds an issue that waits for a human mid-flow. `needs-info` = a question, `ready-for-human` = a yes/no decision or permission; neither = review green, the approver may merge. Only the move to `Merging` is merge permission.
+
+**Result lines that stop a step.** An Engineer or Lead result `blocked` (or `plan-approval`) is read by its sentence: `needs-human: <what is asked>` → move the issue to `Approval`, add `needs-info` (a question) or `ready-for-human` (a decision or permission), and fill workpad `### Waiting` (what is asked, the stage it came from, `Asked: <date>`); `plan-approval` → `Approval` + `ready-for-human`; `blocked-by KIT-m: <why>` → relate it with `node scripts/linear.mjs block <KIT-n> --by <KIT-m>` and move it to `Blocked`. A dependency the agent discovers is filed first with `/signal-up` (it lands in Triage, the owner accepts it), then `block`. `Blocked` needs an unresolved `blockedBy`; if a person is needed it is `Approval`.
 
 ### 2a. Lead (start)
 

@@ -51,7 +51,7 @@ try {
     issue,
     resume: args.includes("--resume"),
     liveMinutes: minutes === -1 ? 30 : Number(args[minutes + 1]),
-    linear: { state: linear.state, labels: linear.labels },
+    linear: { state: linear.state, labels: linear.labels, blockedBy: linear.blockedBy },
     branches,
     openPrs,
     events: events(),

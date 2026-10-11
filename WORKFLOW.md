@@ -31,15 +31,15 @@ There is **no** concurrency cap. Unresolved `blockedBy` is what keeps a later sl
 
 If any eligibility check fails: **do not modify the issue**. Stop.
 
-Never claim from Linear **Triage** or **Duplicate**. The Intake job (hourly, planner mutex, no Pi) may shape, consolidate, or promote Triage → To-do (well-formed) or Backlog (unshaped). Planner still never claims Triage and never claims `signal-up`. A human may still accept onto `Backlog`/`Parked`.
+Never claim from Linear **Triage** or **Duplicate**. The Intake job (hourly, planner mutex, no Pi) may shape, consolidate, or promote Triage → To-do (well-formed) or Backlog (unshaped). Planner still never claims Triage and never claims `signal-up`. A human may still accept onto `Backlog` or `To-do`.
 
-The worker writes **Parked** after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. Planner still never claims Parked. A human Park is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not Park.
+The worker moves the issue to **Approval** with `ready-for-human` (Parked was removed, ADR-0057) after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. A human hold is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not hold the issue.
 
 An issue may **start** implement when status is `In Progress`, it is labelled `ready-for-agent`, and it has no branch/PR yet. One In Progress stay is one try: it ends when Gate is clean, required GitHub checks are green, the PR is open, and the harness moves **In Review**. Cheap in-slot format/CI re-spawns (Skip Scout) are not tries — they do not increment `reviewLoops` / `ciFailCycles`, do not post a retry-cap hold, and do not make resume skip.
 
 An issue may **resume** implement when status is `In Progress`, it is labelled `ready-for-agent`, **and** it already has a branch/PR (checker or land sent it back). That return increments `reviewLoops`. Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session. Stale "implement retry cap" comments do not skip enqueue.
 
-The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. Parked is never resumed. Implement and factory-checker also require `ready-for-agent` and skip `ready-for-human`, `needs-info`, `wontfix`, and `signal-up`. Empty Linear Agent is the In Progress happy path (Cursor is skipped; leftover Pi still enqueues). Write-scope overlap among In Progress issues still enqueues only the first in `dispatch.priorityOrder`.
+The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. An `Approval` issue is never resumed until a human moves it to `To-do`. Implement and factory-checker also require `ready-for-agent` and skip `ready-for-human`, `needs-info`, `wontfix`, and `signal-up`. Empty Linear Agent is the In Progress happy path (Cursor is skipped; leftover Pi still enqueues). Write-scope overlap among In Progress issues still enqueues only the first in `dispatch.priorityOrder`.
 
 ## Status map
 
@@ -49,14 +49,14 @@ Typical contract:
 
 | State | Linear type | Who moves here | Meaning |
 | --- | --- | --- | --- |
-| Backlog | backlog | humans | Unshaped work. Not ready, never dispatched |
+| Backlog | backlog | humans | Unshaped or deferred work. Not ready, never dispatched |
 | To-do | unstarted | `/to-tickets` (its quiz step is the approval), humans, Intake promote | Dispatch status: eligible when `ready-for-agent` + unblocked |
-| Parked | unstarted | humans; worker on Idle timeout | Visible, never auto-dispatched |
+| Blocked | started | the flow (orchestrator) | Started work waiting for another issue. Requires an unresolved `blockedBy`; if a person is needed it is `Approval`. The orchestrator moves it to `To-do` when all blockers are Done or Canceled |
 | Triage | triage | Sentry, `/signal-up`, `/proposal` | Inbox. Intake may shape. Planner never claims |
 | Duplicate | duplicate | humans, Intake consolidate | Duplicate of another issue. Never auto-dispatch |
 | In Progress | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |
 | In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |
-| Approval | started | checker on pass (skipped when Auto-merge applies) | Waiting for the approver. Empty Linear Agent is the happy path. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop caps allow. Pi delegate is not a gate. Nicklas can still move. |
+| Approval | started | checker on pass (skipped when Auto-merge applies), or the flow at any stage when a human is needed | Waiting for a human, at any stage. `needs-info` = a question, `ready-for-human` = a decision or permission (also a lead `plan-approval`), neither = review green and the approver may merge. Details under workpad `### Waiting`. The human answers in a comment and moves it to `To-do`, or to `Merging` to approve the merge. Never merge permission by itself. Empty Linear Agent is the happy path. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop caps allow. Pi delegate is not a gate. Nicklas can still move. |
 | Merging | started | **Auto-merge** or **approver** from `Approval` | Merge permission. Land auto-merges into the integration lane. Works when delegate is empty. |
 | Post-Merge | started | Linear's GitHub automation when the PR merges, or the orchestrator when it sees `MERGED` | PR merged. Verifying that the integration lane is green, then reap. A land gate that is not open leaves the issue here. `blockedBy` does not resolve |
 | Done | completed | **only** after `node scripts/gate.mjs land <pr> --issue KIT-n` exits 0 | SHA is on `lanes.integration` and its checks are green. `blockedBy` may resolve |
@@ -138,6 +138,10 @@ A fail whose findings are **all** tagged `[text]` or `[name]` is a **light fail*
 ```text
 <lane>:<branch>@<short-sha>
 ```
+
+### Waiting
+
+- (none | what is asked, stage it came from, `Asked: <date>`; `Resumed: <date>` once answered)
 
 ### Plan
 

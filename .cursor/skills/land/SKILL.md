@@ -1,6 +1,6 @@
 ---
 name: land
-description: Merges the GitHub PR for a Linear issue after the approver moved it to Merging. Integration lane only. Use when an issue status becomes Merging. Merged moves it to Post-Merge; Done only after the land gate is open.
+description: Merges the GitHub PR for a Linear issue after the approver moved it to Merging. Integration lane only. `Approval` is never merge permission: only the move to Merging is. Use when an issue status becomes Merging. Merged moves it to Post-Merge; Done only after the land gate is open.
 ---
 
 # Land

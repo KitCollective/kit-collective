@@ -88,7 +88,7 @@ export function headChanged({ head, issue, events, workpad = "" }) {
  * GitHub branches and PRs, and the central run log, never local worktrees.
  * @param {{
  *   issue: string, resume?: boolean, now?: number, liveMinutes?: number,
- *   linear: { state: string, labels: string[] },
+ *   linear: { state: string, labels: string[], blockedBy?: Array<{ identifier: string, state: string }> },
  *   branches: string[], openPrs: number[], events: Record<string, any>[],
  * }} input
  */
@@ -109,6 +109,19 @@ export function sessionCheck({
   }
   if (["Done", "Canceled", "Duplicate"].includes(linear.state)) {
     return closed(`${issue} is ${linear.state}`);
+  }
+  if (linear.state === "Blocked") {
+    const unresolved = (linear.blockedBy ?? []).filter(
+      (b) => !["Done", "Canceled"].includes(b.state),
+    );
+    if (unresolved.length > 0 || (linear.blockedBy ?? []).length === 0) {
+      return closed(
+        unresolved.length > 0
+          ? `${issue} is blocked by ${unresolved.map((b) => b.identifier).join(", ")}`
+          : `${issue} is Blocked with no blockedBy relation; a person is needed (Approval) or it is not blocked`,
+      );
+    }
+    return open(`${issue} is Blocked but all blockers are resolved; move it to To-do first`);
   }
   if (resume) {
     return open(`${issue} resumed on purpose (state ${linear.state})`);
