@@ -3,12 +3,18 @@
  * One entry for the flow gates (ADR-0053). Each subcommand prints one verdict line and logs a
  * `gate` event to the run log.
  *
- *   node scripts/gate.mjs review <pr> --issue KIT-n [--workpad <file>] [--timeout s]
- *       must run from the PR's worktree (HEAD == the PR head, else exit 4). Folds pnpm check:review-gate, the review matrix, the PR write-scope and
- *       wait-for-checks (required checks green and MERGEABLE) into one verdict. Mechanical steps
- *       run first and stop at the first failure; checks are awaited only when they are clean.
- *       The scope step gets the PR text through PR_TITLE/PR_BODY/PR_HEAD_REF. A PR with no
- *       write-scope line adds `note: scope: no write-scope declared` (`--require-scope` closes).
+ *   node scripts/gate.mjs pre-review <pr> --issue KIT-n [--timeout s] [--require-scope]
+ *       the gate before a reviewer exists: pnpm check:review-gate, doc references, the PR
+ *       write-scope and wait-for-checks. It never reads the review matrix (the reviewer has not
+ *       written it yet; ADR-0058).
+ *   node scripts/gate.mjs review <pr> --issue KIT-n [--workpad <file>] [--timeout s] [--require-scope]
+ *       the full gate, run only after the reviewer has written the matrix: everything above plus
+ *       the matrix validation. Both must run from the PR's worktree (HEAD == the PR head, else exit 4).
+ *       Mechanical steps run first and stop at the first failure; checks are awaited only when
+ *       they are clean. The scope comes from the PR text (PR_TITLE/PR_BODY/PR_HEAD_REF), else from
+ *       the Linear issue's `write-scope:` line; an issue scope the PR body lacks closes the gate
+ *       with `scope-missing-in-pr`. No scope anywhere adds `note: scope: no write-scope declared`
+ *       (`--require-scope` closes).
  *   node scripts/gate.mjs land <pr> --issue KIT-n
  *       Done is allowed only when the PR is merged, its merge commit is on origin/<integration>
  *       and the checks on that merge commit are green. A step that returned no result line
@@ -27,13 +33,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config, gh, git, linearIssue, logGate, prView, sh, workpadOf } from "./lib/gate-io.mjs";
 import {
-  declaresScope,
   foldReview,
   GATE_EXIT,
   landGate,
   parseResultLine,
   prBound,
-  scopeEnv,
+  scopeSource,
 } from "./lib/gates.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -79,18 +84,20 @@ if (sub === "result") {
 const pr = first;
 const issue = opt("--issue");
 if (
-  !["review", "land"].includes(sub) ||
+  !["review", "pre-review", "land"].includes(sub) ||
   !/^\d+$/.test(pr ?? "") ||
   !/^[A-Z][A-Z0-9]*-\d+$/.test(issue ?? "")
 )
   usage();
 
 try {
-  if (sub === "review") {
+  if (sub === "review" || sub === "pre-review") {
+    const full = sub === "review";
+    const linear = await linearIssue(issue);
     let workpadFile = opt("--workpad");
-    if (!workpadFile) {
+    if (full && !workpadFile) {
       workpadFile = join(mkdtempSync(join(tmpdir(), "gate-")), "workpad.md");
-      writeFileSync(workpadFile, workpadOf(await linearIssue(issue)));
+      writeFileSync(workpadFile, workpadOf(linear));
     }
     const view = await prView(pr);
     const bound = prBound({ head: await git(["rev-parse", "HEAD"]), prHead: view.headRefOid });
@@ -98,20 +105,31 @@ try {
       done({ code: GATE_EXIT.unknown, line: bound.line });
     }
     const base = { BASE_REF: "origin/development" };
-    const declared = declaresScope(view);
+    const scope = scopeSource(view, linear.description);
     // Mechanical steps first; the long wait for checks only when they are clean.
     const steps = [];
     const mechanical = [
       () => step("review-gate", "scripts/check-code-english.mjs", [], base),
       () => step("doc-references", "scripts/check-doc-references.mjs", [], base),
-      () => step("matrix", "scripts/review-matrix.mjs", ["validate", workpadFile]),
-      () => step("scope", "scripts/check-pr-write-scope.mjs", [], { ...base, ...scopeEnv(view) }),
+      ...(full
+        ? [() => step("matrix", "scripts/review-matrix.mjs", ["validate", workpadFile])]
+        : []),
+      () => step("scope", "scripts/check-pr-write-scope.mjs", [], { ...base, ...scope.env }),
+      async () => ({
+        name: "scope-in-pr",
+        code: scope.problem ? 1 : 0,
+        line: scope.problem ?? "ok",
+      }),
     ];
     for (const run of mechanical) {
       steps.push(await run());
       if (steps.at(-1).code !== 0) break;
     }
-    if (steps.every((s) => s.code === 0) && !declared && rest.includes("--require-scope")) {
+    if (
+      steps.every((s) => s.code === 0) &&
+      scope.source === "none" &&
+      rest.includes("--require-scope")
+    ) {
       steps.push({
         name: "scope",
         code: 1,
@@ -128,10 +146,10 @@ try {
       );
     }
     const result = foldReview(steps);
-    if (result.code === GATE_EXIT.open && !declared) {
+    if (result.code === GATE_EXIT.open && scope.source === "none") {
       result.line += "; note: scope: no write-scope declared";
     }
-    logGate(issue, "review", result.code === GATE_EXIT.open ? "open" : "closed", view.headRefOid);
+    logGate(issue, sub, result.code === GATE_EXIT.open ? "open" : "closed", view.headRefOid);
     done(result);
   }
 

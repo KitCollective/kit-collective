@@ -181,3 +181,21 @@ test("matchesGlob spans a newline in a file name and still honours directory bou
   assert.equal(matchesGlob("apps/web/line\nbreak.ts", "apps/web/*.ts"), true);
   assert.equal(matchesGlob("apps/other/line\nbreak.ts", "apps/web/**"), false);
 });
+
+test("parseWriteScopeGlobs removes the markdown escapes Linear adds to a saved description", () => {
+  assert.deepEqual(
+    parseWriteScopeGlobs(
+      "write-scope: scripts/tests/\\*\\*, scripts/lib/pr\\_write.mjs, docs/adr/\\*\\*",
+    ),
+    ["scripts/tests/**", "scripts/lib/pr_write.mjs", "docs/adr/**"],
+  );
+  // A plain line is unchanged, and a backslash before an ordinary letter stays.
+  assert.deepEqual(parseWriteScopeGlobs("write-scope: a/**, b\\n"), ["a/**", "b\\n"]);
+  assert.equal(parseWriteScopeGlobs("no scope"), null);
+});
+
+test("an escaped scope line still matches the files it names", () => {
+  const globs = parseWriteScopeGlobs("write-scope: scripts/tests/\\*\\*");
+  assert.deepEqual(findWriteScopeViolations(["scripts/tests/a.test.mjs"], globs), []);
+  assert.deepEqual(findWriteScopeViolations(["apps/x.ts"], globs), ["apps/x.ts"]);
+});

@@ -92,3 +92,15 @@ test("CLI prints one JSON line and exits 2 on bad input", async () => {
   assert.equal(JSON.parse(ok.stdout).engineerModel, "opus");
   assert.equal(spawnSync("node", [cli], { input: "{", encoding: "utf8" }).status, 2);
 });
+
+test("start-decision CLI: --issue needs a key, and stdin still works", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const cli = fileURLToPath(new URL("../start-decision.mjs", import.meta.url));
+  const bad = spawnSync("node", [cli, "--issue", "not-a-key"], { encoding: "utf8" });
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /--issue needs a key/);
+  const ok = spawnSync("node", [cli], { input: '{"body":"x","labels":[]}', encoding: "utf8" });
+  assert.equal(ok.status, 0);
+  assert.equal(JSON.parse(ok.stdout).plan, true);
+});

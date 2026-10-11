@@ -113,12 +113,20 @@ export function shouldEnforceWriteScope(globs) {
   return Array.isArray(globs) && globs.length > 0;
 }
 
+/**
+ * Linear (and other markdown editors) escape glob characters on save: `scripts/tests/**` comes
+ * back as `scripts/tests/\*\*`. A backslash before a markdown punctuation character is removed.
+ */
+export function unescapeMarkdown(text) {
+  return text.replace(/\\([\\`*_{}[\]()<>#+\-.!~|])/g, "$1");
+}
+
 export function parseWriteScopeGlobs(text) {
   const match = text.match(/^write-scope:\s*(.+)$/m);
   if (!match) {
     return null;
   }
-  return match[1]
+  return unescapeMarkdown(match[1])
     .split(",")
     .map((glob) => glob.trim())
     .filter(Boolean);
