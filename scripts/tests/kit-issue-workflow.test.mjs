@@ -94,6 +94,13 @@ async function run({ args = { issue: "KIT-9" }, shell, engineer, reviewer, lead 
   return { result, commands, spawns, phases };
 }
 
+/** The last Linear state the workflow wrote, i.e. what Linear shows when the run returns. */
+const lastState = (commands) =>
+  commands
+    .filter((c) => /linear\.mjs state /.test(c))
+    .map((c) => /"([^"]+)"$/.exec(c)[1])
+    .at(-1);
+
 const agentSpawns = (spawns) =>
   spawns.filter((s) => !s.options.schema?.required?.includes("results"));
 
@@ -255,9 +262,12 @@ test("a red review loops once to a fix pass, logs the red audit, and stops at th
     threadId: REVIEWER_THREAD,
   };
   const { result, commands, spawns } = await run({ reviewer: () => red });
-  assert.equal(result.status, "In Progress");
+  // Out of rounds a person acts: Approval + ready-for-human, and the status says what Linear shows.
+  assert.equal(result.status, "Approval");
   assert.equal(result.stoppedAt, "review gate");
   assert.equal(result.rounds, 2);
+  assert.ok(commands.some((c) => c.includes("label KIT-9 swap ready-for-agent ready-for-human")));
+  assert.equal(lastState(commands), "Approval");
   assert.equal(commands.filter((c) => c.includes("--verdict red")).length, 2);
   assert.ok(commands.some((c) => c.includes('state KIT-9 "In Progress"')));
   assert.ok(
@@ -378,4 +388,107 @@ test("runner commands are built from validated tokens only", async () => {
     }),
   });
   for (const command of commands) assert.doesNotMatch(command, /\$\(|`|;|\|/);
+});
+
+test("hostile text from the Reviewer never reaches a command", async () => {
+  const hostile = ["a;touch /tmp/x", "$(id)", "x`id`", "spec-ac", "UPPER", "a b", "x|y"];
+  const { commands } = await run({
+    reviewer: () => ({
+      verdict: "red",
+      sha: SHA,
+      rows: hostile,
+      sentence: "$(id); rm -rf /",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  const audit = commands.find((c) => c.includes("--verdict red"));
+  assert.match(audit, /--rows spec-ac$/);
+  for (const command of commands) {
+    assert.doesNotMatch(command, /touch|\$\(|`|;|\||rm -rf|UPPER/);
+  }
+  const badSha = await run({
+    reviewer: () => ({
+      verdict: "red",
+      sha: "abc; id",
+      rows: [],
+      sentence: "x",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.ok(!badSha.commands.some((c) => c.includes("--verdict red")));
+  const badVerdict = await run({
+    reviewer: () => ({ verdict: "green; id", sha: SHA, sentence: "x", threadId: REVIEWER_THREAD }),
+  });
+  assert.ok(badVerdict.commands.every((c) => !c.includes("green; id")));
+  assert.equal(badVerdict.result.status, "In Review");
+  const badEngineer = await run({
+    engineer: () => ({
+      outcome: "ready; id",
+      sentence: "x",
+      threadId: ENGINEER_THREAD,
+      prNumber: 77,
+    }),
+  });
+  assert.ok(badEngineer.commands.every((c) => !c.includes("ready; id")));
+  const badLead = await run({
+    shell: (c) =>
+      c.includes("start-decision")
+        ? {
+            code: 0,
+            line: JSON.stringify({ plan: true, planWhy: "x", roles: [], engineerModel: "sonnet" }),
+          }
+        : undefined,
+    lead: { outcome: "plan; id", sentence: "x", threadId: "thr_lead0001" },
+  });
+  assert.ok(badLead.commands.every((c) => !c.includes("plan; id")));
+});
+
+test("a refused receipt dry run holds In Review, not Approval", async () => {
+  const refused = await run({
+    shell: (c) =>
+      c.includes("audit-receipt.mjs")
+        ? { code: 1, line: "REFUSED (receipt): the reviewer ran on the same model as an engineer" }
+        : undefined,
+  });
+  assert.equal(refused.result.status, "In Review");
+  assert.equal(refused.result.stoppedAt, "receipt");
+  assert.match(refused.result.note, /REFUSED \(receipt\)/);
+  assert.ok(refused.commands.some((c) => c.includes("--code evidence-gap")));
+  assert.equal(lastState(refused.commands), "In Review");
+  assert.ok(!refused.commands.some((c) => c.includes('state KIT-9 "Approval"')));
+  const passed = await run({
+    shell: (c) =>
+      c.includes("audit-receipt.mjs")
+        ? { code: 0, line: "WOULD POST (receipt): kc/audit success" }
+        : undefined,
+  });
+  assert.equal(passed.result.status, "Approval");
+  assert.equal(lastState(passed.commands), "Approval");
+});
+
+test("the returned status matches the last Linear state in every stop path", async () => {
+  const scenarios = [
+    await run({ engineer: () => new Error("x") }),
+    await run({
+      engineer: () => ({ outcome: "failed", sentence: "x", threadId: ENGINEER_THREAD }),
+    }),
+    await run({ engineer: () => ({ outcome: "ready", sentence: "x", threadId: ENGINEER_THREAD }) }),
+    await run({
+      reviewer: () => ({ verdict: "amber", sha: SHA, sentence: "x", threadId: REVIEWER_THREAD }),
+    }),
+    await run({ reviewer: () => new Error("x") }),
+    await run({
+      shell: (c) => (c.includes("gate.mjs pre-review") ? { code: 4, line: "UNKNOWN" } : undefined),
+    }),
+    await run({
+      shell: (c) =>
+        c.includes("gate.mjs review ")
+          ? { code: 1, line: "CLOSED (review): matrix: empty row" }
+          : undefined,
+    }),
+    await run({ args: { issue: "KIT-9", resume: true }, engineer: () => new Error("x") }),
+  ];
+  for (const { result, commands } of scenarios) {
+    assert.equal(lastState(commands), result.status, `${result.stoppedAt}: ${result.note}`);
+  }
 });

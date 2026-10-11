@@ -51,6 +51,9 @@ export const meta = {
 
 const ISSUE = /^[A-Z][A-Z0-9]*-\d+$/;
 const THREAD = /^thr_[a-z0-9]{4,32}$/;
+const ROW = /^[a-z0-9][a-z0-9-]{0,40}$/;
+/** A value from agent text may enter a command only through one of these. */
+const pick = (value, allowed) => (allowed.includes(value) ? value : null);
 const issue = String(args.issue ?? "");
 if (!ISSUE.test(issue)) {
   return { issue, status: "refused", stoppedAt: "args", note: "issue must look like KIT-123" };
@@ -206,6 +209,9 @@ if (decision.plan && args.skipLead !== true) {
   } catch (error) {
     lead = null;
   }
+  if (lead && pick(lead.outcome, ["plan", "plan-approval", "stop"]) === null) {
+    lead = null;
+  }
   const thread = lead && THREAD.test(lead.threadId) ? ` --thread ${lead.threadId}` : "";
   await sh("log:lead", "Lead", [
     logCmd("spawn", `--issue ${issue} --step lead${thread} --mode start --provider ${PROVIDER} --model ${MODELS.opus}${machineFlag}`),
@@ -270,7 +276,7 @@ for (let round = 1; round <= maxRounds; round += 1) {
   // Two red audits earn the strong model, as the start decision says.
   const modelAlias = round >= 3 ? "opus" : engineerAlias;
   phase("Engineer");
-  if (round > 1) {
+  if (round > 1 || resume) {
     await move("Engineer", "In Progress");
   }
   let engineer = null;
@@ -283,6 +289,9 @@ for (let round = 1; round <= maxRounds; round += 1) {
     if (engineer === null) {
       await sh("log:no-result", "Engineer", [logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
     }
+  }
+  if (engineer && pick(engineer.outcome, ["ready", "blocked", "failed"]) === null) {
+    engineer = null;
   }
   const eThread = engineer && THREAD.test(engineer.threadId) ? engineer.threadId : "";
   if (!engineer || !eThread) {
@@ -360,6 +369,9 @@ for (let round = 1; round <= maxRounds; round += 1) {
   } catch (error) {
     review = null;
   }
+  if (review && pick(review.verdict, ["green", "amber", "red"]) === null) {
+    review = null;
+  }
   const rThread = review && THREAD.test(review.threadId) ? review.threadId : "";
   if (!review || !rThread) {
     await sh("log:no-result", "Reviewer", [logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
@@ -382,7 +394,7 @@ for (let round = 1; round <= maxRounds; round += 1) {
   const gate = full[0] ?? { code: 4, line: "no output from gate.mjs review" };
   if (review.verdict === "red" || gate.code !== 0) {
     const sha = /^[0-9a-f]{7,40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
-    const rows = (review.rows ?? []).join(",");
+    const rows = (Array.isArray(review.rows) ? review.rows : []).filter((row) => typeof row === "string" && ROW.test(row)).slice(0, 20).join(",");
     await sh("log:red", "Review gate", [
       ...(review.verdict === "red" && sha ? [logCmd("audit", `--issue ${issue} --verdict red --round ${round} --sha ${sha}${rows ? ` --rows ${rows}` : ""}`)] : []),
       ...(gate.code !== 0 ? [logCmd("reason", `--issue ${issue} --code ${/scope-missing-in-pr/.test(gate.line) ? "scope-missing-in-pr" : "gate-closed"}`)] : []),
@@ -391,12 +403,20 @@ for (let round = 1; round <= maxRounds; round += 1) {
       feedback = `${review.verdict === "red" ? `The Reviewer returned red: ${review.sentence}. The findings are under \`### Review feedback\` in the workpad.` : ""}${gate.code !== 0 ? `\nThe review gate says: ${gate.line}` : ""}`.trim();
       continue;
     }
-    return stopped("review gate", "In Progress", { prNumber, rounds, verdict: review.verdict, note: gate.code !== 0 ? gate.line : review.sentence });
+    // Out of rounds: a person has to act, and Linear still says In Review, so say Approval.
+    const why = gate.code !== 0 ? gate.line : review.sentence;
+    const state = await stopForHuman("Review gate", `needs-human: round cap reached after a ${review.verdict} review: ${why}`);
+    return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: why });
   }
   const dry = await sh("receipt:dry-run", "Review gate", [
     `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread} --implementer-thread ${engineerThread} --require-different-model --dry-run`,
   ]);
   receipt = dry[0]?.line ?? "no output from audit-receipt";
+  if (dry.length === 0 || dry[0].code !== 0) {
+    // A refused receipt (same model, no spawn logged, no AUDIT-RESULT line) is not a green review.
+    await sh("log:receipt", "Review gate", [logCmd("reason", `--issue ${issue} --code evidence-gap`)], true);
+    return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt, note: `the audit receipt dry run did not pass: ${receipt}` });
+  }
 
   // -- Hand-over: Approval, never Merging.
   phase("Hand-over");

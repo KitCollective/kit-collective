@@ -16,7 +16,7 @@ Facts this relies on (verify with `bb project list`, `bb machine list` when in d
 | Container `bb-harness` (Hetzner, isolated) | `host_new78xp362`: node 22, git, pnpm 9.15.4, gh, python3, jq; repo at `/home/node/work/kit-collective` |
 | Secrets | `GH_TOKEN`, `LINEAR_API_KEY` in the main checkout's gitignored `.env` (`bb secret request` needs a bb thread) |
 
-## Machine routing
+## Machine routing (hand-driven runs; the kit-issue workflow cannot route, ADR-0058)
 
 | Slice | Machine |
 | --- | --- |
@@ -63,4 +63,4 @@ bb thread spawn --project proj_rp846ybret --machine <host> \
 
 ## The kit-issue workflow
 
-`bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'` (ADR-0058) runs steps 1 to 6 above without a hand-driving orchestrator and stops at `Approval`. It never sets `Merging`, never merges and runs the receipt only as `--dry-run`; steps 7 and 8 stay yours. It cannot route a machine (workers reuse the starting thread's environment), so start it from a thread on the machine the slice needs. Runner workers run the scripts; the Lead, Engineer and Reviewer are separate hidden workers.
+`bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'` (ADR-0058) runs steps 1 to 6 above without a hand-driving orchestrator and stops at `Approval`. It never sets `Merging`, never merges and runs the receipt only as `--dry-run`; steps 7 and 8 stay yours. It cannot route a machine or a worktree per step: every worker, the Reviewer included, runs in the environment of the thread that started it, so the machine routing table above applies to hand-driven runs only, and a slice that needs the Mac is not split by it. Its gate results come through a runner model and are not merge-grade until ADR-0058's Decision 2 is settled. Runner workers run the scripts; the Lead, Engineer and Reviewer are separate hidden workers.
