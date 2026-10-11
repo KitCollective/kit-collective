@@ -20,6 +20,26 @@ Nicklas, 2026-10-11. Status: accepted. Supersedes the status names (not the beha
 
 Dispatch = `To-do` + label `ready-for-agent` + unblocked (+ Agent field empty). `/to-tickets` publishes to `dispatch.state` because its quiz step is the human's approval; `Backlog` is for unshaped work. A merge fail goes back to `In Progress`. `sessionCheck` treats In Progress, In Review, Approval, Merging and Post-Merge as claimed, and Done, Canceled and Duplicate as terminal.
 
+## Board columns (canonical)
+
+Left to right: Triage, Backlog, To-do, Parked, In Progress, In Review, Approval, Merging, Post-Merge, Done, then Canceled and Duplicate.
+
+| Column | Meaning |
+| --- | --- |
+| Triage | inbox; the owner accepts or rejects |
+| Backlog | not ready; the owner shapes |
+| To-do | dispatch: `ready-for-agent` + unblocked; the orchestrator claims |
+| Parked | set aside |
+| In Progress | lead plans, engineer builds; leaves when the pre-review gate is green |
+| In Review | fresh reviewer; green -> Approval, red -> back to In Progress |
+| Approval | waits for the approver, or the auto label |
+| Merging | the approver moved it here = merge approval; PR enqueued |
+| Post-Merge | PR merged; land gate verifying; GitHub automation sets it on merge |
+| Done | only after `gate.mjs land` is OPEN |
+| Canceled / Duplicate | unchanged |
+
+The owner makes only two moves: Triage -> Backlog/To-do and Approval -> Merging. Every other move is made by the flow.
+
 ## Why Merging stays
 
 PRs are opened with the owner's own GitHub account, and GitHub does not let you approve your own PR, so the approving review cannot be the merge signal. The approver moving the issue to `Merging` is merge permission (`MERGE_PERMISSION_STATUS` in `scripts/lib/land-policy.mjs`, unchanged).
@@ -36,6 +56,7 @@ Order matters. Scripts resolve statuses by name, so if the PR merges before step
 2. Create `To-do` (type unstarted, colour `#e2e2e2`) and `Post-Merge` (type started, colour `#0e7a5a`).
 3. Team settings, GitHub automation: set "PR merged" to move the issue to `Post-Merge`, not `Done`.
 4. Review issues in `Backlog` with `ready-for-agent` and move the ones that should dispatch to `To-do`.
-5. `linear.setup.json` is tracked and holds state ids: regenerate it with the bootstrap-linear skill afterwards (never hand-edit ids). It still lists the old names until then; nothing that gates a merge reads it except the `Merging` id.
+5. Column order. Linear sorts columns by type group, then by position, and a new status lands last in its group. In Settings -> Teams -> Engineering -> Workflow: drag `To-do` above `Parked` inside the unstarted group, and keep the started group in the order In Progress, In Review, Approval, Merging, Post-Merge (drag `Post-Merge` below `Merging`).
+6. `linear.setup.json` is tracked and holds state ids: regenerate it with the bootstrap-linear skill afterwards (never hand-edit ids). It still lists the old names until then; nothing that gates a merge reads it except the `Merging` id.
 
 `scripts/bootstrap-linear.mjs` cannot rename, so it must not be run before step 1 and 2 are done by hand.
