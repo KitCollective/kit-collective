@@ -79,13 +79,17 @@ Follow [implement/SKILL.md](../implement/SKILL.md), which **reads** `### Plan` i
 
 ### 4. Fresh review
 
-Run the whole gate in one call: `node scripts/gate.mjs review <pr> --issue <KIT-n>`. It folds `pnpm check:review-gate`, the matrix validation, the PR write-scope check and `wait-for-checks` into one verdict line and logs it. Exit `0` open, `1` closed (fix the named step), `3` waiting (checks pending, run again), `4` unknown (retry once, then ask). Run it from the PR's worktree: when HEAD is not the PR head it exits `4` (`run this gate from the PR's worktree`). Mechanical steps run first and the wait for checks only when they are clean. Before a reviewer is spawned run `node scripts/head-changed.mjs <KIT-n> --pr <pr>` (the head comes from GitHub, never from the cwd): exit `1` means this head was already audited red; change the code first.
+Two gates, in this order (ADR-0058). A review matrix exists only after a reviewer has written it, so the matrix is never part of the gate that runs first.
+
+**Pre-review gate** (before any reviewer exists): `node scripts/gate.mjs pre-review <pr> --issue <KIT-n>`. It folds `pnpm check:review-gate`, the PR write-scope check and `wait-for-checks` into one verdict line and logs it; it never reads the matrix. Exit `0` open, `1` closed (fix the named step), `3` waiting (checks pending, run again), `4` unknown (retry once, then ask). Run it from the PR's worktree: when HEAD is not the PR head it exits `4` (`run this gate from the PR's worktree`). Mechanical steps run first and the wait for checks only when they are clean. The scope comes from the PR body, else from the Linear issue's `write-scope:` line; an issue scope the PR body lacks closes the gate with `scope-missing-in-pr` (the Engineer copies the line into the PR body; log `reason --code scope-missing-in-pr`). Before a reviewer is spawned run `node scripts/head-changed.mjs <KIT-n> --pr <pr>` (the head comes from GitHub, never from the cwd): exit `1` means this head was already audited red; change the code first.
+
+**Full review gate** (after the reviewer has written `### Review matrix` in the workpad): `node scripts/gate.mjs review <pr> --issue <KIT-n>`. The pre-review steps again, plus the matrix validation, as one verdict line. The parent takes a verdict only when this gate is open.
 
 The single steps, when you need one alone: `pnpm check:review-gate`. Red → fix it and stay in step 3; a review never sees what a script can say.
 
-Then wait for the required checks yourself: `node scripts/wait-for-checks.mjs <pr>` (ADR-0050). It is the one sanctioned wait; the ratchet hook denies the watch flag, sleeps and loops. Run it in the background when other work is left, in the foreground otherwise. Exit `0` go on, `1` red (fail, below), `3` behind or conflicting (rebase, rerun), `2` or `4` retry once, then ask. **Never ask the human whether CI is green, and never stop to wait for a build.**
+Then wait for the required checks yourself when only checks are left: `node scripts/wait-for-checks.mjs <pr> --timeout <s>` (ADR-0050). It is the one sanctioned wait; the ratchet hook denies the watch flag, sleeps and loops. Exit `0` go on, `1` red (fail, below), `2` still pending at the timeout, `3` behind or conflicting (rebase, rerun), `4` retry once, then ask. **Never ask the human whether CI is green, and never stop to wait for a build.**
 
-Spawn one Task (`subagent_type` `generalPurpose` or `bugbot` only if the human asked Bugbot). Prompt: read `.cursor/skills/code-review/SKILL.md` and run it on this issue’s PR / merge-base diff, with the workpad's `### Review matrix` and `lastReviewSha` when there is one. Return every hard finding; do not stop at three. The sub-agent writes the matrix; the parent runs `node scripts/review-matrix.mjs validate` on it before taking a verdict.
+Spawn one Task (`subagent_type` `generalPurpose` or `bugbot` only if the human asked Bugbot). Prompt: read `.cursor/skills/code-review/SKILL.md` and run it on this issue’s PR / merge-base diff, with the workpad's `### Review matrix` and `lastReviewSha` when there is one. Return every hard finding; do not stop at three. The sub-agent writes the matrix; the parent then runs the full review gate (`gate.mjs review`), which validates it, before taking a verdict.
 
 Parent aggregates:
 
@@ -122,7 +126,7 @@ After land success, follow [reap-worktree/SKILL.md](../reap-worktree/SKILL.md): 
 
 ## A step that returns no result line
 
-When a spawned step ends without its result line (`LEAD-RESULT`, `AUDIT-RESULT`, the lander's), `node scripts/gate.mjs result <TAG> <file>` exits `1` (`NO-RESULT`). Log `reason --code no-result-line`, then run the gate for that step yourself (`gate.mjs review` or `land`) and go by its exit code. Never take a silent step for a pass.
+When a spawned step ends without its result line (`LEAD-RESULT`, `ENGINEER-RESULT`, `AUDIT-RESULT`, the lander's), `node scripts/gate.mjs result <TAG> <file>` exits `1` (`NO-RESULT`). Log `reason --code no-result-line`, then run the gate for that step yourself (`gate.mjs pre-review`, `review` or `land`) and go by its exit code. Never take a silent step for a pass.
 
 ## Running inside bb
 

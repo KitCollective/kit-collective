@@ -297,6 +297,7 @@ jobs:
           scripts/tests/audit-result.test.mjs
           scripts/tests/git-files.test.mjs
           scripts/tests/ref-injection.test.mjs
+          scripts/tests/kit-issue-workflow.test.mjs
 
       - name: Check PR write scope
         run: node scripts/check-pr-write-scope.mjs

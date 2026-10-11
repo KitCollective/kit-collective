@@ -29,7 +29,7 @@ export const OUTCOMES = [
   "landed",
   "none",
 ];
-export const GATES = ["review", "land", "session", "head", "scope", "checks"];
+export const GATES = ["review", "pre-review", "land", "session", "head", "scope", "checks"];
 export const GATE_OUTCOMES = ["open", "closed"];
 
 /** Fixed reason codes. A row that failed an audit is `row-<lock row id>`. */
@@ -47,6 +47,7 @@ export const REASON_CODES = [
   "replan",
   "conflict",
   "scope-miss",
+  "scope-missing-in-pr",
   "session-limit",
   "unspecified",
 ];

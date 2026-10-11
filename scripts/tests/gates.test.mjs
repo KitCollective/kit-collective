@@ -14,6 +14,7 @@ import {
   prBound,
   resolveHead,
   scopeEnv,
+  scopeSource,
   sessionCheck,
 } from "../lib/gates.mjs";
 
@@ -220,10 +221,7 @@ test("declaresScope sees a write-scope line in the PR text only", () => {
 test("the scope step receives the PR_* env (gate.mjs wires scopeEnv into it)", async () => {
   const { readFileSync } = await import("node:fs");
   const source = readFileSync(GATE, "utf8");
-  assert.match(
-    source,
-    /check-pr-write-scope\.mjs", \[\], \{ \.\.\.base, \.\.\.scopeEnv\(view\) \}/,
-  );
+  assert.match(source, /check-pr-write-scope\.mjs", \[\], \{ \.\.\.base, \.\.\.scope\.env \}/);
   assert.match(source, /prBound\(\{ head: await git/);
 });
 
@@ -346,4 +344,56 @@ test("session-check: an unresolved blocker closes any unfinished state but Block
     sessionCheck({ ...free, linear: { state: "To-do", labels: ["needs-info"], blockedBy } }).code,
     GATE_EXIT.closed,
   );
+});
+
+test("scopeSource: the PR text wins, the issue stands in, and an issue scope missing from the PR is a named problem", () => {
+  const view = { title: "KIT-1: t", body: "write-scope: apps/web/**", headRefName: "claude/kit-1" };
+  const fromPr = scopeSource(view, "write-scope: other/**");
+  assert.equal(fromPr.source, "pr");
+  assert.deepEqual(fromPr.globs, ["apps/web/**"]);
+  assert.equal(fromPr.problem, null);
+
+  const bare = { title: "KIT-1: t", body: "no scope here", headRefName: "claude/kit-1" };
+  const fromIssue = scopeSource(
+    bare,
+    "## What\nwrite-scope: scripts/tests/\\*\\*, docs/adr/\\*\\*\n",
+  );
+  assert.equal(fromIssue.source, "issue");
+  assert.deepEqual(fromIssue.globs, ["scripts/tests/**", "docs/adr/**"]);
+  assert.equal(fromIssue.env.WRITE_SCOPE, "scripts/tests/**, docs/adr/**");
+  assert.match(fromIssue.problem, /^scope-missing-in-pr:/);
+
+  const none = scopeSource(bare, "no scope either");
+  assert.equal(none.source, "none");
+  assert.equal(none.problem, null);
+  assert.equal(scopeSource(bare, null).source, "none");
+});
+
+test("gate.mjs: pre-review never reads the matrix, review does, and both use the scope source", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(GATE, "utf8");
+  assert.match(source, /\["review", "pre-review", "land"\]/);
+  assert.match(source, /full\s*\?\s*\[\(\) => step\("matrix"/);
+  assert.match(source, /scopeSource\(view, linear\.description\)/);
+  assert.match(source, /name: "scope-in-pr"/);
+});
+
+test("skills order the gates: pre-review before the reviewer, the full review gate after it", async () => {
+  const { readFileSync: read } = await import("node:fs");
+  for (const file of [
+    ".cursor/skills/issue-session/SKILL.md",
+    ".cursor/skills/bb-orchestrate/SKILL.md",
+  ]) {
+    const text = read(file, "utf8");
+    assert.match(text, /gate\.mjs pre-review <pr> --issue <KIT-n>/, file);
+    assert.match(text, /gate\.mjs review <pr> --issue <KIT-n>/, file);
+    assert.ok(
+      text.indexOf("gate.mjs pre-review") < text.indexOf("gate.mjs review <pr>"),
+      `${file}: pre-review comes first`,
+    );
+  }
+  const implement = read(".cursor/skills/implement/SKILL.md", "utf8");
+  assert.match(implement, /wait-for-checks\.mjs <pr> --timeout/);
+  assert.match(implement, /Wait in the foreground/);
+  assert.match(implement, /write-scope:` line verbatim into the PR body/);
 });

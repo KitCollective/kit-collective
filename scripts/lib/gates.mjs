@@ -284,3 +284,31 @@ export function declaresScope(view) {
   );
   return Array.isArray(globs) && globs.length > 0;
 }
+
+/**
+ * Where the write-scope comes from. The PR text wins; when it has none, the Linear issue's own
+ * `write-scope:` line stands in, so the scope step still runs. An issue that declares a scope
+ * while the PR text does not is a `scope-missing-in-pr` failure: CI's scope ratchet reads only
+ * the PR text and would skip silently.
+ * @param {{ title?: string, body?: string, headRefName?: string }} view
+ * @param {string | null | undefined} issueDescription the Linear issue description
+ * @returns {{ source: "pr" | "issue" | "none", globs: string[],
+ *   env: Record<string, string>, problem: string | null }}
+ */
+export function scopeSource(view, issueDescription) {
+  const prText = [view.title, view.body, view.headRefName].filter(Boolean).join("\n");
+  const inPr = parseWriteScopeGlobs(prText) ?? [];
+  if (inPr.length > 0) {
+    return { source: "pr", globs: inPr, env: scopeEnv(view), problem: null };
+  }
+  const inIssue = parseWriteScopeGlobs(String(issueDescription ?? "")) ?? [];
+  if (inIssue.length > 0) {
+    return {
+      source: "issue",
+      globs: inIssue,
+      env: { WRITE_SCOPE: inIssue.join(", ") },
+      problem: `scope-missing-in-pr: the issue declares write-scope ${inIssue.join(", ")} but the PR body has no write-scope: line; add it so CI's scope ratchet runs`,
+    };
+  }
+  return { source: "none", globs: [], env: scopeEnv(view), problem: null };
+}
