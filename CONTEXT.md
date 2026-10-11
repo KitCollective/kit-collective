@@ -56,7 +56,7 @@ Work that has started needs another issue done first. Requires at least one unre
 _Avoid_: Blocked for a question or a decision (that is `Approval`); Blocked without a `blockedBy`
 
 **Waiting** *(workpad section `### Waiting`)*:
-What an `Approval` issue is waiting for: what is asked, the stage it came from, `Asked: <date>`. When the orchestrator claims the issue again it removes `needs-info` / `ready-for-human`, writes `Resumed: <date>` under it, and resumes from the workpad with `--resume`.
+What an `Approval` issue is waiting for: what is asked, the stage it came from, `Asked: <date>`. When the orchestrator claims the issue again it swaps `needs-info` / `ready-for-human` back to `ready-for-agent` (one atomic `label swap`, the Triage group is single-select), writes `Resumed: <date>` under it, and resumes from the workpad with `--resume`.
 _Avoid_: asking the question only in a comment; leaving the label on after the answer
 
 **Merging**:

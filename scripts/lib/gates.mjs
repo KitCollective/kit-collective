@@ -102,13 +102,23 @@ export function sessionCheck({
   openPrs,
   events,
 }) {
-  const blockedLabels = ["signal-up", "ready-for-human", "needs-info", "wontfix"];
-  const label = linear.labels.find((l) => blockedLabels.includes(l));
+  const hardStops = ["signal-up", "wontfix"];
+  const label = linear.labels.find((l) => hardStops.includes(l));
   if (label) {
     return closed(`${issue} carries label ${label}`);
   }
   if (["Done", "Canceled", "Duplicate"].includes(linear.state)) {
     return closed(`${issue} is ${linear.state}`);
+  }
+  // A blocker that is not Done or Canceled keeps any not-yet-finished issue out, in every state
+  // except Blocked (which has its own rule below), also on resume.
+  const unresolvedBlockers = (linear.blockedBy ?? []).filter(
+    (b) => !["Done", "Canceled"].includes(b.state),
+  );
+  if (linear.state !== "Blocked" && unresolvedBlockers.length > 0) {
+    return closed(
+      `${issue} is blocked by ${unresolvedBlockers.map((b) => b.identifier).join(", ")}`,
+    );
   }
   if (linear.state === "Blocked") {
     const unresolved = (linear.blockedBy ?? []).filter(
@@ -122,6 +132,17 @@ export function sessionCheck({
       );
     }
     return open(`${issue} is Blocked but all blockers are resolved; move it to To-do first`);
+  }
+  const helpLabel = linear.labels.find((l) => ["needs-info", "ready-for-human"].includes(l));
+  if (helpLabel) {
+    // In To-do the label means the human answered (the card was moved there): the claim swaps it
+    // back to ready-for-agent. Anywhere else (Approval, Backlog, Triage, a working stage) a person
+    // is still needed.
+    return linear.state === "To-do"
+      ? open(
+          `${issue} answered (${helpLabel} on To-do): swap ${helpLabel} ready-for-agent, resume from ### Waiting`,
+        )
+      : closed(`${issue} carries label ${helpLabel} (state ${linear.state})`);
   }
   if (resume) {
     return open(`${issue} resumed on purpose (state ${linear.state})`);

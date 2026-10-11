@@ -9,6 +9,7 @@
 //   node scripts/linear.mjs comment-update <commentId> --body-file <path>
 //   node scripts/linear.mjs state KIT-272 "In Progress"
 //   node scripts/linear.mjs label KIT-272 add|remove <label>
+//   node scripts/linear.mjs label KIT-272 swap <from> <to>   (one atomic labelIds update; the Triage group allows one label)
 //   node scripts/linear.mjs description KIT-272 --body-file <path>
 //   node scripts/linear.mjs block KIT-272 --by KIT-270   (KIT-270 blocks KIT-272: the blockedBy relation)
 //   node scripts/linear.mjs link KIT-272 <url> [title]
@@ -23,7 +24,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { blockArgs, issueIdentifier, optionValue } from "./lib/linear-args.mjs";
+import { blockArgs, issueIdentifier, optionValue, swapLabelIds } from "./lib/linear-args.mjs";
 
 const API = "https://api.linear.app/graphql";
 
@@ -203,8 +204,9 @@ async function setState(identifier, stateName) {
   process.stdout.write(`${issue.identifier}: ${issue.state.name} -> ${state.name}\n`);
 }
 
-async function setLabel(identifier, action, labelName) {
-  if (action !== "add" && action !== "remove") fail("label needs add or remove");
+async function setLabel(identifier, action, labelName, toName) {
+  if (action !== "add" && action !== "remove" && action !== "swap")
+    fail("label needs add, remove or swap");
   const issue = await loadIssue(identifier);
   const { team } = await gql(
     "query($id: String!) { team(id: $id) { labels(first: 250) { nodes { id name } } } }",
@@ -216,6 +218,22 @@ async function setLabel(identifier, action, labelName) {
     (node) => node.name.toLowerCase() === labelName.toLowerCase(),
   );
   if (!label) fail(`no label "${labelName}" on the team`);
+  if (action === "swap") {
+    const to = team.labels.nodes.find((node) => node.name.toLowerCase() === toName?.toLowerCase());
+    if (!to) fail(`label swap <from> <to>: no label "${toName}" on the team`);
+    const swapped = swapLabelIds(
+      issue.labels.nodes.map((node) => node.id),
+      label.id,
+      to.id,
+    );
+    if (!swapped) fail(`${issue.identifier} does not carry ${label.name}`);
+    await gql(
+      "mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }",
+      { id: issue.id, input: { labelIds: swapped } },
+    );
+    process.stdout.write(`${issue.identifier}: swap ${label.name} -> ${to.name}\n`);
+    return;
+  }
   const current = new Set(issue.labels.nodes.map((node) => node.id));
   if (action === "add") current.add(label.id);
   else current.delete(label.id);
@@ -274,7 +292,8 @@ switch (command) {
     await setLabel(
       args[0] ?? fail("label <KIT-n> add|remove <label>"),
       args[1],
-      args[2] ?? fail("label name"),
+      args[2] ?? fail("label <KIT-n> add|remove <label> | swap <from> <to>"),
+      args[3],
     );
     break;
   case "description": {

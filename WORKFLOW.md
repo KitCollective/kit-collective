@@ -33,7 +33,7 @@ If any eligibility check fails: **do not modify the issue**. Stop.
 
 Never claim from Linear **Triage** or **Duplicate**. The Intake job (hourly, planner mutex, no Pi) may shape, consolidate, or promote Triage → To-do (well-formed) or Backlog (unshaped). Planner still never claims Triage and never claims `signal-up`. A human may still accept onto `Backlog` or `To-do`.
 
-The worker moves the issue to **Approval** with `ready-for-human` (Parked was removed, ADR-0057) after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. A human hold is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not hold the issue.
+The worker moves the issue to **Approval** with `ready-for-human` (Parked was removed, ADR-0057; this is a documentation leftover of the archived worker, not a question to a human) after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. A human hold is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not hold the issue.
 
 An issue may **start** implement when status is `In Progress`, it is labelled `ready-for-agent`, and it has no branch/PR yet. One In Progress stay is one try: it ends when Gate is clean, required GitHub checks are green, the PR is open, and the harness moves **In Review**. Cheap in-slot format/CI re-spawns (Skip Scout) are not tries — they do not increment `reviewLoops` / `ciFailCycles`, do not post a retry-cap hold, and do not make resume skip.
 
@@ -78,7 +78,7 @@ Lanes come from `lanes` in factory config.
 
 ## Issue run (implement)
 
-1. Status must already be `In Progress` and labelled `ready-for-agent`. If it is `dispatch.state`, stop — planner has not claimed. If `ready-for-agent` is missing or `ready-for-human` / `needs-info` / `wontfix` / `signal-up` is present, stop — do not spawn Pi.
+1. Status must already be `In Progress` and labelled `ready-for-agent`. If it is `dispatch.state`, stop — planner has not claimed. If `ready-for-agent` is missing (a `needs-info` / `ready-for-human` issue in `To-do` is an answered one: swap the label back to `ready-for-agent` first, `node scripts/linear.mjs label <KIT-n> swap needs-info ready-for-agent`) or `wontfix` / `signal-up` is present, stop — do not spawn Pi.
 2. Fetch context: Linear `get_issue` **and** `list_comments`. `get_issue` does not include comments. The workpad is one comment (`agent.workpadHeading`). If a PR is linked, also read GitHub PR review comments.
 3. On resume, the latest `### Review feedback` plus other issue/PR comments **are** the change request. Fix the **class**, not only the cited file. Same branch/PR.
 4. Open or reuse the single workpad comment.
