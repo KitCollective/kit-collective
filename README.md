@@ -25,7 +25,7 @@ node scripts/generate-harness-docs.mjs
 
 6. Wire Cursor Automations from `docs/agents/automations.md`. Re-paste planner, implement, and checker Instruction after contract changes.
 
-Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked). `/signal-up` files into Linear **Triage**.
+Then: `/grill-with-docs` → `/to-spec` → `/to-tickets` → planner claims (`To-do` + `ready-for-agent` + unblocked). `/signal-up` files into Linear **Triage**.
 
 Working skills: `.cursor/skills/` (Expo/EAS vendor pack: `.cursor/skills/expo/`). Domain helpers: `.cursor/agents/`.
 
@@ -35,4 +35,4 @@ An issue runs only when it is in `dispatch.state`, labelled **`ready-for-agent`*
 
 ## Lanes
 
-`lanes.integration` → `lanes.staging` → `lanes.production`. Issue land merges to the integration lane only, after the approver moves the issue to `Done`.
+`lanes.integration` → `lanes.staging` → `lanes.production`. Issue land merges to the integration lane only, after the approver moves the issue to `Merging`.

@@ -18,7 +18,7 @@
     "production": "production"
   },
   "dispatch": {
-    "state": "Backlog",
+    "state": "To-do",
     "requireDelegate": false,
     "requireReadyForAgent": true,
     "requireUnblocked": true,
@@ -26,17 +26,18 @@
   },
   "states": [
     { "name": "Backlog", "type": "backlog", "color": "#bec2c8" },
-    { "name": "Parked", "type": "unstarted", "color": "#95a2b3" },
-    { "name": "Implementing", "type": "started", "color": "#f2c94c" },
+    { "name": "To-do", "type": "unstarted", "color": "#e2e2e2" },
+    { "name": "Blocked", "type": "started", "color": "#eb5757" },
+    { "name": "In Progress", "type": "started", "color": "#f2c94c" },
     { "name": "In Review", "type": "started", "color": "#5e6ad2" },
-    { "name": "Ready for merge", "type": "started", "color": "#26b5ce" },
+    { "name": "Approval", "type": "started", "color": "#26b5ce" },
     { "name": "Merging", "type": "started", "color": "#219653" },
+    { "name": "Post-Merge", "type": "started", "color": "#0e7a5a" },
     { "name": "Done", "type": "completed", "color": "#4cb782" },
     { "name": "Canceled", "type": "canceled", "color": "#95a2b3" }
   ],
   "stateAliases": {
-    "Todo": "Parked",
-    "In Progress": "Implementing",
+    "Todo": "To-do",
     "Cancelled": "Canceled"
   },
   "labels": {

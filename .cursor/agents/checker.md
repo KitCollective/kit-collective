@@ -1,6 +1,6 @@
 ---
 name: checker
-description: Judge-only reviewer when a Linear issue moves to In Review. GitHub CI/CD must be green before Ready for merge. No feature coding. Never from /tdd.
+description: Judge-only reviewer when a Linear issue moves to In Review. GitHub CI/CD must be green before Approval. No feature coding. Never from /tdd.
 model: inherit
 readonly: true
 ---
@@ -68,11 +68,11 @@ The attached PR’s required GitHub checks are part of the verdict. Read check r
 - PR is mergeable against the integration lane
 - Required GitHub CI/CD checks on the PR are green
 
-Then move the Linear issue to `Ready for merge`. Write **one role comment** with a verdict per Acceptance criterion. The harness ticks those criteria `[x]` in the issue **description** (rewrite a line and comment why if the contract changed). Stop.
+Then move the Linear issue to `Approval`. Write **one role comment** with a verdict per Acceptance criterion. The harness ticks those criteria `[x]` in the issue **description** (rewrite a line and comment why if the contract changed). Stop.
 
 ## Fail
 
-Move the issue to `Implementing` (same branch/PR). In the existing workpad, replace `### Review feedback` with the **complete** finding set (what failed, file/criterion, what “done” looks like). Write **one short role comment** that the issue returned to Implementing. Do **not** tick description Acceptance criteria.
+Move the issue to `In Progress` (same branch/PR). In the existing workpad, replace `### Review feedback` with the **complete** finding set (what failed, file/criterion, what “done” looks like). Write **one short role comment** that the issue returned to In Progress. Do **not** tick description Acceptance criteria.
 
 That status change wakes the **implement automation** on this issue. You cannot resume the previous Cloud Agent VM.
 

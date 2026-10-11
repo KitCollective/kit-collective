@@ -31,10 +31,10 @@ The route most work travels. You have an idea and want it built.
 3. **`/to-design`** — when implementing agents will build UI and taste is still implicit. HITL. Writes `docs/design-system.md`. A look you must see is still `/prototype`, then back. Skip this step when the work is not visual.
 4. **`/to-spec`** — kickoff = one Linear project + milestones (no issues). Feature = document on the existing project; new milestone only if this feature is its own staging increment.
 5. **`/to-tickets`** — vertical slices onto **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. Never set Linear Agent to Cursor.
-6. **Planner** claims `Backlog` + `ready-for-agent` + unblocked → `Implementing`. Human stays assignee. Do not set Agent to Cursor.
+6. **Planner** claims `To-do` + `ready-for-agent` + unblocked → `In Progress`. Human stays assignee. Do not set Agent to Cursor.
 7. **`/implement`** — one issue, one branch from `lanes.integration`, one PR into that lane. Drives **`/tdd`** at spec seams (`/codebase-design` vocabulary). Hard repro with no loop yet → **`/diagnosing-bugs`** first. Out of scope → **`/signal-up`** (cap applies). Closes with **`/code-review`** before `In Review`. UI slices follow `docs/design-system.md` when it exists.
-8. **Checker** — `/code-review` again (judge only) **and** GitHub CI/CD on the PR. Pass + required checks green → `Ready for merge`. Fail → `Implementing` + workpad `### Review feedback`.
-9. **Approver** reads the GitHub PR, moves Linear to `Done`. That **is** merge approval.
+8. **Checker** — `/code-review` again (judge only) **and** GitHub CI/CD on the PR. Pass + required checks green → `Approval`. Fail → `In Progress` + workpad `### Review feedback`.
+9. **Approver** reads the GitHub PR, moves Linear to `Merging`. That **is** merge approval.
 10. **`/land`** into `lanes.integration`. A complete **milestone** then staging / production (not this skill).
 11. **`/reap-worktree`** — verify integration, drop the issue worktree, delete merged remote branch (Desktop).
 
@@ -67,7 +67,7 @@ Not feature work — upkeep.
 ## Factory-only
 
 - **`/signal-up`** — out-of-scope bug/debt: new Linear issue in **Triage**, label `signal-up` only. Never delegate. Cap per run.
-- **`/land`** — merge the GitHub PR after `Done`. Integration lane only.
+- **`/land`** — merge the GitHub PR after `Merging`. Integration lane only.
 - **`/reap-worktree`** — after land: verify branch on integration, remove issue worktree, delete merged remote branch (Desktop hygiene).
 - **`/sync-development`** — safely fast-forward the main repo's `lanes.integration` with `origin` (stash WIP, `--ff-only`, stop on diverge).
 - **`/bootstrap-linear`** — board missing or unshaped (`linear.setup.json` absent).

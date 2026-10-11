@@ -8,7 +8,7 @@ Run the [SKILL.md](../SKILL.md) **pipeline** to completion (or skip/cap) on the 
 
 Honor `blockedBy`: if B is blocked by A and both are in the batch, finish A (ideally `Done`) before starting B. If A is not in the batch and still blocks B, skip B.
 
-Honor write-scope: two issues with overlapping `write-scope:` globs never share an Implementing stay. Sequential already serializes them. An issue with no `write-scope:` line does not skip others for path overlap.
+Honor write-scope: two issues with overlapping `write-scope:` globs never share an In Progress stay. Sequential already serializes them. An issue with no `write-scope:` line does not skip others for path overlap.
 
 One git checkout: sequential uses this workspace. Land A before branching B from latest `origin/<lanes.integration>`.
 

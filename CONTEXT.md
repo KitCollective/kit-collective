@@ -32,8 +32,40 @@ One issue that cuts schema → API → UI → tests and is demoable alone.
 _Avoid_: horizontal tickets (schema-only, API-only)
 
 **Dispatch**:
-`Backlog` + label `ready-for-agent` + unblocked. Human remains assignee. Linear Agent stays empty (Cursor in that menu starts a Cloud Agent). Planner claim order = Linear priority (`dispatch.priorityOrder`).
-_Avoid_: assigning Cursor as Agent or Assignee, treating priority as eligibility
+`To-do` + label `ready-for-agent` + unblocked (+ Agent field empty). `Backlog` is not dispatchable. Human remains assignee. Linear Agent stays empty (Cursor in that menu starts a Cloud Agent). Planner claim order = Linear priority (`dispatch.priorityOrder`).
+_Avoid_: assigning Cursor as Agent or Assignee, treating priority as eligibility, dispatching from `Backlog`
+
+**Status chain**:
+The Linear statuses an issue moves through, named in `factory.config.json` `states` and resolved by name. `Triage` (inbox, Linear built-in) → `Backlog` (unshaped or deferred by the owner, not ready) → `To-do` (dispatch status) → `In Progress` (claimed, coding) → `In Review` (pre-review gate passed) → `Approval` (waiting for a human) → `Merging` (merge approved; PR enqueued) → `Post-Merge` (PR merged, integration lane being verified) → `Done`. `Blocked` (started work waiting for another issue) and `Approval` can be entered from any working stage. `Canceled` and `Duplicate` sit outside the chain. There is no `Parked`: a deferred issue is `Backlog`. A merge fail returns the issue to `In Progress`. Board order left to right: Triage, Backlog, To-do, Blocked, In Progress, In Review, Approval, Merging, Post-Merge, Done, Canceled, Duplicate. ADR-0057.
+_Avoid_: the old names `Implementing`, `Ready for merge` and `Parked`; inventing extra statuses
+
+**To-do**:
+The dispatch status (`dispatch.state`): shaped, approved and ready to be picked up. `/to-tickets` publishes here because its quiz step is the human's approval. A To-do issue with an unresolved `blockedBy` is simply not dispatchable. The only unstarted status.
+_Avoid_: using it for unshaped or deferred work (that is `Backlog`)
+
+**In Progress**:
+The issue is claimed and being coded, including after a review or merge failure. Renamed from Implementing.
+_Avoid_: Implementing
+
+**Approval**:
+Waiting for a human, at any stage (renamed from Ready for merge, and now cross-stage). Three shapes: `needs-info` (the agent asks a question), `ready-for-human` (the agent needs a yes/no decision or permission, including a lead `plan-approval`), or neither (review is green and the approver may merge). What is asked and the stage it came from go under workpad `### Waiting`. The human answers in a Linear comment and moves the issue to `To-do` (any answer goes back to To-do, never to a specific stage), or to `Merging` to approve the merge. `Approval` is never merge permission by itself; only the move to `Merging` is.
+_Avoid_: Ready for merge; reading an issue in `Approval` as merge permission; answering by moving the card to a specific stage
+
+**Blocked**:
+Work that has started needs another issue done first. Requires at least one unresolved `blockedBy`; if a person is needed it is `Approval`, not `Blocked`. An agent that finds the dependency files it with `signal-up` (it lands in Triage, the owner accepts it) and then `node scripts/linear.mjs block <KIT-n> --by <KIT-m>`. At queue-build time the orchestrator moves a Blocked issue whose blockers are all Done or Canceled to `To-do`. Resumes only when its blockers are Done.
+_Avoid_: Blocked for a question or a decision (that is `Approval`); Blocked without a `blockedBy`
+
+**Waiting** *(workpad section `### Waiting`)*:
+What an `Approval` issue is waiting for: what is asked, the stage it came from, `Asked: <date>`. When the orchestrator claims the issue again it swaps `needs-info` / `ready-for-human` back to `ready-for-agent` (one atomic `label swap`, the Triage group is single-select), writes `Resumed: <date>` under it, and resumes from the workpad with `--resume`.
+_Avoid_: asking the question only in a comment; leaving the label on after the answer
+
+**Merging**:
+The approver moved the issue here from `Approval`: this is merge permission (the PRs are opened with the approver's own GitHub account, so GitHub's approving review cannot be used). The PR is enqueued and stays `Merging` until GitHub says `MERGED`.
+_Avoid_: using a GitHub review approval as merge permission
+
+**Post-Merge**:
+The PR is merged. Set by Linear's GitHub automation on merge, or by the orchestrator when it sees `MERGED`. The integration lane is verified green here, then the worktree is reaped. `Done` is set only after `node scripts/gate.mjs land <pr> --issue KIT-n` exits 0; a gate that is not open leaves the issue in `Post-Merge`. `blockedBy` does not resolve here.
+_Avoid_: pointing Linear's GitHub automation at `Done`; calling a merged but unverified issue Done
 
 **Workpad**:
 The single workpad comment on an issue. `### Review feedback` is why a pass was sent back. Edited in place — never a second `## Agent Workpad`.
@@ -56,11 +88,11 @@ Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), differ
 _Avoid_: mixing with `signal-up` on the same issue, filing into `Backlog`
 
 **Land**:
-Merge to `development` after Auto-merge or Nicklas moves the issue to Merging. Land sets Done only after the merge and writes one role comment with the merge SHA (or merge error on return to Implementing).
+Merge to `development` after Auto-merge or Nicklas moves the issue to Merging. The merged PR is Post-Merge; Done only after `gate.mjs land` is open. Land writes one role comment with the merge SHA (or merge error on return to In Progress).
 _Avoid_: landing to staging or production from an issue run
 
 **Auto-merge**:
-Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and loop counters under workpad `### Loop counters` are under the cap. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment; Nicklas can still move Merging.
+Worker moving Approval → Merging when the PR is MERGEABLE, required checks are green, and loop counters under workpad `### Loop counters` are under the cap. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment; Nicklas can still move Merging.
 _Avoid_: force-push; treating Auto-merge as land; requiring Pi delegate for flip
 
 **Promotion**:
@@ -525,7 +557,7 @@ _Avoid_: a 30-minute wait on a dirty PR then a new try; dumping the full design 
 
 **First-pass pack**:
 Ticket-derived slice brief (paths + Do not + prior fails + top Hermes lessons) and Scout `### Composition` paths. Full implement loop is Scout → Composition → Draft (once, free OpenRouter scaffold) → helpers one at a time; no Pi Gate. Checker tags registered classes `[first-pass:<id>]`. Same Standards/Slop class 2× → workpad requires land in `.pi/first-pass-classes.json`. Worker scan uses registry only. Incomplete checker `### Review feedback` (missing Spec/Standards/Slop axes) while the PR is green re-runs factory-checker in-slot (cap 2), then parks for human — never a full implement tree. Factory-checker gets a harness-injected review snapshot (capped issue description + three-dot diff); readonly `git` bash fills gaps only — no full `CONTEXT.md` dump, no `gh pr checks` poll in Pi. Spec-only checker fails use slim resume (Skip Scout/Draft/helpers). Pi spawns use `--no-context-files` (no AGENTS.md dump). Token runs log model/input/output/costUsd to harness JSON + workpad ring + `/health.tokenRuns` + durable SQLite (`KIT_TOKEN_DB_PATH`) keyed by identifier/issueId/sessionId (Cursor Composer/Grok list rates, OpenRouter free at $0, or reported usage cost).
-_Avoid_: inventing product scanners in `first-pass.mjs`; treating every checker fail as a full Scout+Draft+helpers tree; bouncing incomplete workpads to Implementing; parallel helper fan-out; spawning Gate; checker rediscovering the whole diff via bash; reading full CONTEXT on every spawn; treating list-rate costUsd as invoice truth
+_Avoid_: inventing product scanners in `first-pass.mjs`; treating every checker fail as a full Scout+Draft+helpers tree; bouncing incomplete workpads to In Progress; parallel helper fan-out; spawning Gate; checker rediscovering the whole diff via bash; reading full CONTEXT on every spawn; treating list-rate costUsd as invoice truth
 
 **Hy3**:
 OpenRouter model `tencent/hy3` for Scout (primary), no-think. Economy Builder (standard/critical), Frontend/Backend/DevOps/Slop, and factory-checker/land also pin Hy3. Gate (legacy pin) uses `xiaomi/mimo-v2.5-pro` as primary and Hy3 as first fallback. Scout falls back to MiMo-V2.5-Pro then DeepSeek Flash / Composer. Draft uses free OpenRouter coding models first, then DeepSeek Flash → GLM 5.3 Flash → Hy3, then Composer — not Hy3 as Draft primary. Economy Optimizer pins DeepSeek Flash; economy Frontend pins GLM 5.3 Flash (native multimodal) for optional Read of at most two cited design PNGs — not a whole-app visual audit, not product Vision (jersey CV). Missing `OPENROUTER_API_KEY` fails those subagents closed (the implement job fails). Prefer OpenRouter Exacto when the client can set it; otherwise the default route to that model id is enough. Last fallback is `cursor/composer-2.5` — not Kimi, not Hy4. Role subagents and Slop pin `cursor/composer-2.5` on disk; an omitted `model:` makes Pi use Kimi; economy rewrites pins for the stay.
@@ -540,11 +572,11 @@ Linear-only skip/claim. Own mutex. Wakes on webhook or poll. Does not spawn Pi. 
 _Avoid_: enqueueing planner on the coding mutex; calling planner a Pi session
 
 **Intake job**:
-Hourly Linear-only scan of open KIT Triage on the planner mutex (`PI_INTAKE_POLL_MS`, default 1 hour). Promotes well-formed slices, consolidates related leftovers, comments unshaped Sentry. Never claims Implementing. Never spawns Pi. Never sets Linear Agent to Cursor.
+Hourly Linear-only scan of open KIT Triage on the planner mutex (`PI_INTAKE_POLL_MS`, default 1 hour). Promotes well-formed slices, consolidates related leftovers, comments unshaped Sentry. Never claims In Progress. Never spawns Pi. Never sets Linear Agent to Cursor.
 _Avoid_: filing leftovers into Backlog with `ready-for-agent`; treating Intake as planner claim; running Intake on the coding slot
 
 **Auto-merge**:
-Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and Loop cap is clear. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself.
+Worker moving Approval → Merging when the PR is MERGEABLE, required checks are green, and Loop cap is clear. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment. Runs on the coding slot with no Pi. Land still merges to development. Nicklas can still move Merging himself.
 _Avoid_: force-push; merging to staging or production; treating Auto-merge as land; requiring Pi delegate for flip
 
 **Role comment**:
@@ -556,7 +588,7 @@ Checker pass ticks `[x]` on Acceptance criteria in the issue description and wri
 _Avoid_: implement ticking description AC; checker pass without updating description when criteria are met
 
 **Loop cap**:
-A try is one Implementing stay that reaches In Review (local Gate clean, required GitHub checks green, PR open). Cheap in-slot format/CI re-spawns are not tries. `reviewLoops` increments when checker or land sends the issue **back** to Implementing. `ciFailCycles` is not incremented on in-slot CI retry. Either counter at five blocks Auto-merge. Counters live under workpad `### Loop counters`. Missing counters fail closed.
+A try is one In Progress stay that reaches In Review (local Gate clean, required GitHub checks green, PR open). Cheap in-slot format/CI re-spawns are not tries. `reviewLoops` increments when checker or land sends the issue **back** to In Progress. `ciFailCycles` is not incremented on in-slot CI retry. Either counter at five blocks Auto-merge. Counters live under workpad `### Loop counters`. Missing counters fail closed.
 _Avoid_: counting cheap format/CI Pi re-spawns as tries; a retry-cap hold that skips resume; treating maxBuffer as format-red
 
 **Idle timeout**:
@@ -564,8 +596,8 @@ A spawned Pi child with no close and no stdout for 45 minutes (env `PI_JOB_IDLE_
 _Avoid_: wall-clock as the only hang signal; leaving the mutex held after kill; waiting out Idle timeout after `agent_end`
 
 **Timeout park**:
-The worker moving that hung coding job to Parked after Idle timeout, with `### Review feedback` on the existing workpad. Planner still never claims Parked. Resume is a human status change.
-_Avoid_: treating Parked as human-only on this path; planner unparking; Canceled for a hang
+The worker moving that hung coding job to `Approval` with `ready-for-human` after Idle timeout (Parked was removed, ADR-0057), with `### Review feedback` and `### Waiting` on the existing workpad. Resume is a human status change to `To-do`.
+_Avoid_: planner unparking; Canceled for a hang
 
 **Issue worktree**:
 The git worktree for one issue at `/var/lib/kit-pi/worktrees/KIT-n`. The coding-job cwd. Not a second Pi host.
@@ -577,7 +609,7 @@ _Avoid_: deleting the mirror; leaving KIT-n after land; treating a human Park as
 
 **Capacity gate**:
 Before a coding-job spawn, free RAM and worktree-volume disk must clear env floors (default 2 GB RAM, 5 GB disk). If not, the job stays queued and the worker comments the issue; status does not change; not Timeout park.
-_Avoid_: starting Pi when the box is full; Parked for a capacity wait; Prometheus as the gate; a new comment on every retry
+_Avoid_: starting Pi when the box is full; Approval for a capacity wait; Prometheus as the gate; a new comment on every retry
 
 **Worker health**:
 GET /health on the PI worker. HTTP 200 if the process is up. JSON includes planner state, the current coding job (role + identifier) or null, capacity (ram, disk, ready), and `tokens` (last implement / factory-checker input/output per role and model, or null). Missing counts are `unknown`. Never API keys.

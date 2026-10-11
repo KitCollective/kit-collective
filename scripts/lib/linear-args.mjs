@@ -28,3 +28,33 @@ export function issueIdentifier(value) {
   const upper = value?.trim().toUpperCase() ?? "";
   return IDENTIFIER.test(upper) ? upper : null;
 }
+
+/**
+ * Arguments of `block <KIT-n> --by <KIT-m>`: the blocked issue and its blocker, or null when
+ * either is missing or malformed, or when an issue would block itself.
+ * @param {string[]} args
+ * @returns {{ issue: string, by: string } | null}
+ */
+export function blockArgs(args) {
+  const issue = issueIdentifier(args[0]);
+  const by = issueIdentifier(optionValue(args, "--by"));
+  return issue && by && issue !== by ? { issue, by } : null;
+}
+
+/**
+ * The label ids after swapping one label for another in a single set, for the Triage label
+ * group, which allows one child label per issue. Returns null when `from` is not on the issue.
+ * @param {Iterable<string>} current ids on the issue
+ * @param {string} fromId
+ * @param {string} toId
+ * @returns {string[] | null}
+ */
+export function swapLabelIds(current, fromId, toId) {
+  const ids = new Set(current);
+  if (!ids.has(fromId)) {
+    return null;
+  }
+  ids.delete(fromId);
+  ids.add(toId);
+  return [...ids];
+}

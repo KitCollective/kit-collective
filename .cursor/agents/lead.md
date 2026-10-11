@@ -61,5 +61,5 @@ Your whole answer is one line; the plan is in the workpad:
 `LEAD-RESULT <KIT-n> <plan|plan-approval|stop> <one sentence>`
 
 - `plan`: `### Plan` is written (or was already there) and needs no person.
-- `plan-approval`: written, and the issue carries an approval label with "plan" in it and you were not told it is approved.
+- `plan-approval`: written, and a person must approve the plan (the issue carries an approval label with "plan" in it and you were not told it is approved). The orchestrator moves the issue to `Approval` + `ready-for-human`; put what is asked, `Stage: plan` and `Asked: <date>` under workpad `### Waiting`. A question you need answered is the same: `stop` with a sentence starting `needs-human:` and the question under `### Waiting`.
 - `stop`: you cannot plan (issue unreadable, workpad not writable). The sentence says why.

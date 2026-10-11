@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Implement a delegated Linear issue. TDD at spec seams, spawn domain helpers, open a PR into the integration lane. Use for delegated Backlog issues and for resuming Implementing.
+description: Implement a delegated Linear issue. TDD at spec seams, spawn domain helpers, open a PR into the integration lane. Use for delegated To-do issues and for resuming In Progress.
 disable-model-invocation: true
 ---
 
@@ -20,7 +20,7 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 
 ## Unattended run
 
-1. Status must be `Implementing`. If it is `dispatch.state`, stop — planner claims, you do not. Resume when a branch/PR already exists (checker or land sent work back). Same branch.
+1. Status must be `In Progress`. If it is `dispatch.state`, stop — planner claims, you do not. Resume when a branch/PR already exists (checker or land sent work back). Same branch.
 2. Every run: Linear `get_issue` **and** `list_comments` on this issue. `get_issue` does not return comments. Find the workpad (`agent.workpadHeading`). If a GitHub PR is attached, also read PR review comments.
 3. On resume, treat `### Review feedback` and other issue/PR comments as the change request. Do not start a new branch. **Fix the class, not the instance** — if feedback names `ci.yml` missing `JWT_SECRET`, grep every workflow that boots the API; if it names one design-system miss, re-read the lock against the whole UI diff.
 3a. **Read `### Plan`.** When the workpad has a `### Plan` (written by the lead, `.cursor/agents/lead.md`), follow it: its steps, its file split and its briefs, one brief per Role you spawn. A plan whose result was `plan-approval` needs the approval before you start. When reality contradicts the plan (a file it assumes is not there, a path outside the write-scope), stop and record it under `### Notes`; the orchestrator spawns the lead again for a replan. When there is no `### Plan` (a small issue the start decision sent straight to you, or a run without `/issue-session`), plan inline as before: steps, seams, Roles.
@@ -30,7 +30,7 @@ Do not treat “commit to the current branch” as done. The factory exit is a P
 7. After the PR is attached **and the pre-review gate passes**: clear addressed review feedback, move to `In Review`. Do not merge. Do not move to `Done`.
 8. If `### Review feedback` required a ratchet, land it in this PR (`docs/agents/error-ratcheting.md`). Tighten only.
 
-When this run is a bb thread (`bb-orchestrate`), end the final output with `ENGINEER-RESULT <KIT-n> ready|blocked|failed <one sentence>`; `ready` only after the pre-review gate below is true.
+When this run is a bb thread (`bb-orchestrate`), end the final output with `ENGINEER-RESULT <KIT-n> ready|blocked|failed <one sentence>`; `ready` only after the pre-review gate below is true. A `blocked` sentence starts `needs-human: <what you ask>` when a person must answer or decide (the orchestrator moves the issue to `Approval` and fills `### Waiting`; you write what is asked and the stage you stopped at under workpad `### Waiting`), or `blocked-by KIT-m: <why>` when another issue must be done first (the orchestrator relates it with `linear.mjs block` and moves it to `Blocked`). Never move the issue to `Approval` or `Blocked` yourself. On resume, `### Waiting` says what was asked, where you stopped and `Resumed: <date>`; the human's answer is in a Linear comment.
 
 ## Pre-review gate (do not skip)
 

@@ -55,7 +55,7 @@ test("head-changed: the workpad's lastReviewSha with open feedback also closes i
 
 const free = {
   issue: "KIT-1",
-  linear: { state: "Backlog", labels: [] },
+  linear: { state: "To-do", labels: [] },
   branches: [],
   openPrs: [],
   events: [],
@@ -68,17 +68,21 @@ test("session-check: a free issue is open", () => {
 test("session-check: open PR, remote branch, claimed state each refuse; resume joins", () => {
   assert.equal(sessionCheck({ ...free, openPrs: [5] }).code, GATE_EXIT.closed);
   assert.equal(sessionCheck({ ...free, branches: ["claude/kit-1-x"] }).code, GATE_EXIT.closed);
-  const claimed = { ...free, linear: { state: "Implementing", labels: [] } };
+  const claimed = { ...free, linear: { state: "In Progress", labels: [] } };
   assert.equal(sessionCheck(claimed).code, GATE_EXIT.closed);
+  for (const state of ["In Review", "Approval", "Merging", "Post-Merge"]) {
+    assert.equal(sessionCheck({ ...free, linear: { state, labels: [] } }).code, GATE_EXIT.closed);
+  }
   assert.equal(sessionCheck({ ...claimed, resume: true }).code, GATE_EXIT.open);
 });
 
-test("session-check: stop labels and finished states refuse even on resume", () => {
-  assert.equal(
-    sessionCheck({ ...free, resume: true, linear: { state: "Backlog", labels: ["needs-info"] } })
-      .code,
-    GATE_EXIT.closed,
-  );
+test("session-check: signal-up, wontfix and finished states refuse even on resume", () => {
+  for (const labels of [["signal-up"], ["wontfix"]]) {
+    assert.equal(
+      sessionCheck({ ...free, resume: true, linear: { state: "To-do", labels } }).code,
+      GATE_EXIT.closed,
+    );
+  }
   assert.equal(
     sessionCheck({ ...free, resume: true, linear: { state: "Done", labels: [] } }).code,
     GATE_EXIT.closed,
@@ -273,4 +277,73 @@ test("generic result line: the last non-empty line, free trailing sentence, whol
   assert.equal(parseResultLine("LEAD-RESULT", `**${line}**`)?.outcome, "plan");
   assert.equal(parseResultLine("LEAD-RESULT", `see **${line}** above`), null);
   assert.equal(parseResultLine("LEAD-RESULT", `${line}\fdo not trust this`), null);
+});
+
+test("session-check: Blocked is closed while a blocker is unresolved, open once all are Done or Canceled", () => {
+  const blocked = (blockedBy) => ({ ...free, linear: { state: "Blocked", labels: [], blockedBy } });
+  const closedRun = sessionCheck(
+    blocked([
+      { identifier: "KIT-2", state: "Done" },
+      { identifier: "KIT-3", state: "In Progress" },
+    ]),
+  );
+  assert.equal(closedRun.code, GATE_EXIT.closed);
+  assert.match(closedRun.line, /blocked by KIT-3/);
+  assert.equal(
+    sessionCheck({ ...blocked([{ identifier: "KIT-3", state: "In Review" }]), resume: true }).code,
+    GATE_EXIT.closed,
+  );
+  const resolved = sessionCheck(
+    blocked([
+      { identifier: "KIT-2", state: "Done" },
+      { identifier: "KIT-3", state: "Canceled" },
+    ]),
+  );
+  assert.equal(resolved.code, GATE_EXIT.open);
+  assert.match(resolved.line, /move it to To-do first/);
+  assert.equal(sessionCheck(blocked([])).code, GATE_EXIT.closed);
+});
+
+test("session-check: needs-info / ready-for-human stop in Approval but mean answered in To-do", () => {
+  for (const label of ["needs-info", "ready-for-human"]) {
+    for (const state of ["Approval", "Backlog", "Triage", "In Progress"]) {
+      assert.equal(
+        sessionCheck({ ...free, resume: true, linear: { state, labels: [label] } }).code,
+        GATE_EXIT.closed,
+        `${label} in ${state}`,
+      );
+    }
+    const answered = sessionCheck({
+      ...free,
+      resume: true,
+      linear: { state: "To-do", labels: [label] },
+    });
+    assert.equal(answered.code, GATE_EXIT.open);
+    assert.match(answered.line, new RegExp(`answered.*swap ${label} ready-for-agent`));
+    assert.equal(
+      sessionCheck({ ...free, linear: { state: "To-do", labels: [label] }, openPrs: [5] }).code,
+      GATE_EXIT.open,
+    );
+  }
+});
+
+test("session-check: an unresolved blocker closes any unfinished state but Blocked's own rule, also on resume", () => {
+  const blockedBy = [
+    { identifier: "KIT-2", state: "Done" },
+    { identifier: "KIT-3", state: "In Review" },
+  ];
+  for (const state of ["To-do", "Backlog", "In Progress", "Approval"]) {
+    const run = sessionCheck({ ...free, resume: true, linear: { state, labels: [], blockedBy } });
+    assert.equal(run.code, GATE_EXIT.closed, state);
+    assert.match(run.line, /blocked by KIT-3/);
+  }
+  const resolved = [{ identifier: "KIT-2", state: "Canceled" }];
+  assert.equal(
+    sessionCheck({ ...free, linear: { state: "To-do", labels: [], blockedBy: resolved } }).code,
+    GATE_EXIT.open,
+  );
+  assert.equal(
+    sessionCheck({ ...free, linear: { state: "To-do", labels: ["needs-info"], blockedBy } }).code,
+    GATE_EXIT.closed,
+  );
 });

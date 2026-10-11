@@ -11,6 +11,6 @@ If you discover a bug, debt, or improvement **outside** those criteria:
 
 1. Do not fix it in this PR.
 2. Follow the `signal-up` skill: new `Triage` issue, label `signal-up` only, related to the origin, at most 3 per run.
-3. Never delegate a signal-up issue. Never move it to `Implementing`.
+3. Never delegate a signal-up issue. Never move it to `In Progress`.
 
 You **may** fix in this run: failures that block this issue’s acceptance, or red CI / review feedback on this PR.

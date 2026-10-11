@@ -6,11 +6,11 @@ Operator path from idea to landed work. Matt’s engineering loop, Linear as the
 
 ```text
 /grill-with-docs → /to-design (when UI needs shared rules) → /to-spec → /to-tickets
-  → planner claims (Backlog + ready-for-agent + unblocked → Implementing)
+  → planner claims (To-do + ready-for-agent + unblocked → In Progress)
   → /implement (/tdd + domain helpers) → PR + Linear evidence → In Review
   → checker (/code-review)
-  → approver reads the PR, Linear → Merging
-  → /land into lanes.integration (success → Done)
+  → approver reads the PR, Linear → Merging (Approval is also where a human answers a question or approves a plan: answer in a comment, move to To-do)
+  → /land into lanes.integration (merge → Post-Merge; Done only after gate.mjs land is open)
   → milestone complete → staging → production
 ```
 
@@ -32,10 +32,10 @@ Keep `/to-tickets` (Matt’s name). It slices vertical issues onto a **milestone
 | `/to-design` | AI-ready visual lock in `docs/design-system.md`. HITL. Skip when the work is not visual. |
 | `/to-spec` | Spec file + Linear project/milestones (kickoff: summary, description, lead, `craft:*`) or document ± milestone (feature). Seams confirmed. |
 | `/to-tickets` | Vertical Linear issues on **one milestone each**, `dispatch.state`, `ready-for-agent`, `blockedBy`. **Not** Linear Agent = Cursor. |
-| Planner | Cron. Claims every eligible `dispatch.state` issue → `Implementing` by `ready-for-agent` + `blockedBy` + Linear priority. No concurrency cap. No code. |
-| `/implement` | Wakes on `Implementing`. Branch + PR + Linear evidence → `In Review`. Mobile/EAS slices load `.cursor/skills/expo/`. |
-| Checker | Wakes on `In Review`. Judge-only `/code-review` + GitHub CI/CD. Mobile/EAS diffs include Expo vendor skills on Standards. Pass + checks green → `Ready for merge`. Fail → `Implementing` + `### Review feedback` (same branch). |
-| Approver | Reads the GitHub PR. Linear `Merging` **is** merge approval. Land moves to `Done` only after the PR is on `development`. |
+| Planner | Cron. Claims every eligible `dispatch.state` issue → `In Progress` by `ready-for-agent` + `blockedBy` + Linear priority. No concurrency cap. No code. |
+| `/implement` | Wakes on `In Progress`. Branch + PR + Linear evidence → `In Review`. Mobile/EAS slices load `.cursor/skills/expo/`. |
+| Checker | Wakes on `In Review`. Judge-only `/code-review` + GitHub CI/CD. Mobile/EAS diffs include Expo vendor skills on Standards. Pass + checks green → `Approval`. Fail → `In Progress` + `### Review feedback` (same branch). |
+| Approver | Reads the GitHub PR. Linear `Merging` **is** merge approval. Land moves to `Post-Merge` on merge and to `Done` only after `gate.mjs land` is open. |
 | `/land` | Merge to integration only. |
 | Staging | When **that milestone’s** issues are all Done or Canceled. |
 

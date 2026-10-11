@@ -19,27 +19,27 @@ You are working on Linear issue `{{ issue.identifier }}`.
 
 The **planner** claims. Implement never claims from `dispatch.state`.
 
-Planner may move an issue to `Implementing` **only** when all of these are true:
+Planner may move an issue to `In Progress` **only** when all of these are true:
 
-1. Status equals `dispatch.state` in factory config (default `Backlog`)
+1. Status equals `dispatch.state` in factory config (default `To-do`)
 2. It is labelled `ready-for-agent` (when `dispatch.requireReadyForAgent` is true)
 3. It has **no** unresolved `blockedBy` relations
 4. It is not labelled `signal-up`
 5. Linear **Agent** is empty (Assignee stays the human). If Agent is Cursor, skip and comment — that path starts a Cloud Agent and is not factory dispatch.
 
-There is **no** concurrency cap. Unresolved `blockedBy` is what keeps a later slice out of `Implementing`. Among issues that pass, claim **all** currently eligible issues in `dispatch.priorityOrder` (default Linear: Urgent `1`, High `2`, Medium `3`, Low `4`, None `0`). Same rank: oldest first. Unset / None is last. Do not preempt `Implementing`. When a candidate declares `write-scope:` globs that overlap an issue already `Implementing`, skip it, leave it in `dispatch.state` with `ready-for-agent`, comment the overlapping identifier and globs, and continue with the next eligible issue. Issues without a `write-scope:` line are not skipped for path overlap. Priority is **claim order**, not eligibility — an Urgent issue without `ready-for-agent` still does not run.
+There is **no** concurrency cap. Unresolved `blockedBy` is what keeps a later slice out of `In Progress`. Among issues that pass, claim **all** currently eligible issues in `dispatch.priorityOrder` (default Linear: Urgent `1`, High `2`, Medium `3`, Low `4`, None `0`). Same rank: oldest first. Unset / None is last. Do not preempt `In Progress`. When a candidate declares `write-scope:` globs that overlap an issue already `In Progress`, skip it, leave it in `dispatch.state` with `ready-for-agent`, comment the overlapping identifier and globs, and continue with the next eligible issue. Issues without a `write-scope:` line are not skipped for path overlap. Priority is **claim order**, not eligibility — an Urgent issue without `ready-for-agent` still does not run.
 
 If any eligibility check fails: **do not modify the issue**. Stop.
 
-Never claim from Linear **Triage** or **Duplicate**. The Intake job (hourly, planner mutex, no Pi) may shape, consolidate, or promote Triage → Backlog. Planner still never claims Triage and never claims `signal-up`. A human may still accept onto `Backlog`/`Parked`.
+Never claim from Linear **Triage** or **Duplicate**. The Intake job (hourly, planner mutex, no Pi) may shape, consolidate, or promote Triage → To-do (well-formed) or Backlog (unshaped). Planner still never claims Triage and never claims `signal-up`. A human may still accept onto `Backlog` or `To-do`.
 
-The worker writes **Parked** after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. Planner still never claims Parked. A human Park is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not Park.
+The worker moves the issue to **Approval** with `ready-for-human` (Parked was removed, ADR-0057; this is a documentation leftover of the archived worker, not a question to a human) after **Idle timeout** (Timeout park, ADR-0022): a spawned Pi child with no close and no stdout for `PI_JOB_IDLE_MS` (default 45 minutes) is killed, the coding slot is freed, `### Review feedback` is updated, and the Issue worktree is reaped. A human hold is not Idle timeout and keeps the Issue worktree. After Pi emits `agent_end`, the worker waits `PI_AGENT_END_GRACE_MS` (default 8 seconds) then kills the child if it has not closed — implement-exit still runs; that path is not Idle timeout and does not hold the issue.
 
-An issue may **start** implement when status is `Implementing`, it is labelled `ready-for-agent`, and it has no branch/PR yet. One Implementing stay is one try: it ends when Gate is clean, required GitHub checks are green, the PR is open, and the harness moves **In Review**. Cheap in-slot format/CI re-spawns (Skip Scout) are not tries — they do not increment `reviewLoops` / `ciFailCycles`, do not post a retry-cap hold, and do not make resume skip.
+An issue may **start** implement when status is `In Progress`, it is labelled `ready-for-agent`, and it has no branch/PR yet. One In Progress stay is one try: it ends when Gate is clean, required GitHub checks are green, the PR is open, and the harness moves **In Review**. Cheap in-slot format/CI re-spawns (Skip Scout) are not tries — they do not increment `reviewLoops` / `ciFailCycles`, do not post a retry-cap hold, and do not make resume skip.
 
-An issue may **resume** implement when status is `Implementing`, it is labelled `ready-for-agent`, **and** it already has a branch/PR (checker or land sent it back). That return increments `reviewLoops`. Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session. Stale "implement retry cap" comments do not skip enqueue.
+An issue may **resume** implement when status is `In Progress`, it is labelled `ready-for-agent`, **and** it already has a branch/PR (checker or land sent it back). That return increments `reviewLoops`. Same issue, same branch, same PR. A new Pi job — there is no resume of the previous session. Stale "implement retry cap" comments do not skip enqueue.
 
-The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. Parked is never resumed. Implement and factory-checker also require `ready-for-agent` and skip `ready-for-human`, `needs-info`, `wontfix`, and `signal-up`. Empty Linear Agent is the Implementing happy path (Cursor is skipped; leftover Pi still enqueues). Write-scope overlap among Implementing issues still enqueues only the first in `dispatch.priorityOrder`.
+The worker also enqueues implement, factory-checker, auto-merge, and land on boot and on the resume poller when those statuses are already set (Compose rebuild or a missed webhook). Checkout reuses `/var/lib/kit-pi/worktrees/KIT-n`. An `Approval` issue is never resumed until a human moves it to `To-do`. Implement and factory-checker also require `ready-for-agent` and skip `ready-for-human`, `needs-info`, `wontfix`, and `signal-up`. Empty Linear Agent is the In Progress happy path (Cursor is skipped; leftover Pi still enqueues). Write-scope overlap among In Progress issues still enqueues only the first in `dispatch.priorityOrder`.
 
 ## Status map
 
@@ -49,15 +49,17 @@ Typical contract:
 
 | State | Linear type | Who moves here | Meaning |
 | --- | --- | --- | --- |
-| Backlog | backlog | humans, `/to-tickets`, Intake promote | Dispatch-eligible when `ready-for-agent` + unblocked |
-| Parked | unstarted | humans; worker on Idle timeout | Visible, never auto-dispatched |
+| Backlog | backlog | humans | Unshaped or deferred work. Not ready, never dispatched |
+| To-do | unstarted | `/to-tickets` (its quiz step is the approval), humans, Intake promote | Dispatch status: eligible when `ready-for-agent` + unblocked |
+| Blocked | started | the flow (orchestrator) | Started work waiting for another issue. Requires an unresolved `blockedBy`; if a person is needed it is `Approval`. The orchestrator moves it to `To-do` when all blockers are Done or Canceled |
 | Triage | triage | Sentry, `/signal-up`, `/proposal` | Inbox. Intake may shape. Planner never claims |
 | Duplicate | duplicate | humans, Intake consolidate | Duplicate of another issue. Never auto-dispatch |
-| Implementing | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |
+| In Progress | started | **planner** on claim; checker/land on fail | Coding in progress, including after review or merge failure |
 | In Review | started | implementer when PR + proof exist on Linear | Checker owns the next step |
-| Ready for merge | started | checker on pass | Empty Linear Agent is the happy path. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop caps allow. Pi delegate is not a gate. Nicklas can still move. |
-| Merging | started | **Auto-merge** or **approver** from `Ready for merge` | Merge permission. Land auto-merges into the integration lane. Works when delegate is empty. |
-| Done | completed | **land only** after the queued PR is `MERGED` | SHA is on `lanes.integration`. `blockedBy` may resolve |
+| Approval | started | checker on pass (skipped when Auto-merge applies), or the flow at any stage when a human is needed | Waiting for a human, at any stage. `needs-info` = a question, `ready-for-human` = a decision or permission (also a lead `plan-approval`), neither = review green and the approver may merge. Details under workpad `### Waiting`. The human answers in a comment and moves it to `To-do`, or to `Merging` to approve the merge. Never merge permission by itself. Empty Linear Agent is the happy path. Auto-merge may flip to Merging when MERGEABLE, checks green, and loop caps allow. Pi delegate is not a gate. Nicklas can still move. |
+| Merging | started | **Auto-merge** or **approver** from `Approval` | Merge permission. Land auto-merges into the integration lane. Works when delegate is empty. |
+| Post-Merge | started | Linear's GitHub automation when the PR merges, or the orchestrator when it sees `MERGED` | PR merged. Verifying that the integration lane is green, then reap. A land gate that is not open leaves the issue here. `blockedBy` does not resolve |
+| Done | completed | **only** after `node scripts/gate.mjs land <pr> --issue KIT-n` exits 0 | SHA is on `lanes.integration` and its checks are green. `blockedBy` may resolve |
 | Canceled | canceled | humans | Dead. No agent action |
 
 ## Project + environment promotion
@@ -76,7 +78,7 @@ Lanes come from `lanes` in factory config.
 
 ## Issue run (implement)
 
-1. Status must already be `Implementing` and labelled `ready-for-agent`. If it is `dispatch.state`, stop — planner has not claimed. If `ready-for-agent` is missing or `ready-for-human` / `needs-info` / `wontfix` / `signal-up` is present, stop — do not spawn Pi.
+1. Status must already be `In Progress` and labelled `ready-for-agent`. If it is `dispatch.state`, stop — planner has not claimed. If `ready-for-agent` is missing (a `needs-info` / `ready-for-human` issue in `To-do` is an answered one: swap the label back to `ready-for-agent` first, `node scripts/linear.mjs label <KIT-n> swap needs-info ready-for-agent`) or `wontfix` / `signal-up` is present, stop — do not spawn Pi.
 2. Fetch context: Linear `get_issue` **and** `list_comments`. `get_issue` does not include comments. The workpad is one comment (`agent.workpadHeading`). If a PR is linked, also read GitHub PR review comments.
 3. On resume, the latest `### Review feedback` plus other issue/PR comments **are** the change request. Fix the **class**, not only the cited file. Same branch/PR.
 4. Open or reuse the single workpad comment.
@@ -96,10 +98,10 @@ Each factory role writes **one new top-level issue comment** at its status trans
 | --- | --- |
 | Planner claim | Issue claimed (eligible, unblocked, write-scope clear) |
 | Implement → In Review | PR URL + what was built |
-| Checker fail | Returned to Implementing; role comment includes findings under Spec / Standards / … (workpad holds the same set) |
+| Checker fail | Returned to In Progress; role comment includes findings under Spec / Standards / … (workpad holds the same set) |
 | Checker pass | Verdict per Acceptance criterion; ticks description AC |
 | Auto-merge flip / refuse | Moved to Merging, or refused with reason |
-| Land success / fail | Merge SHA on Done, or merge error on return to Implementing |
+| Land success / fail | Merge SHA on Done, or merge error on return to In Progress |
 
 ## Checker run
 
@@ -113,12 +115,12 @@ A fail whose findings are **all** tagged `[text]` or `[name]` is a **light fail*
 
 1. `/code-review` (Standards + Spec) against the attached PR. Sub-agents list **every** hard finding; do not stop at the first three. Mobile/EAS diffs include `.cursor/skills/expo/` on the Standards axis. For a mobile slice the Standards axis reads the `Device flows` commit status and PR comment: a red or missing status is a fail; the slice flow is read against the Acceptance criteria (a criterion a screen could show with no step behind it is a Spec finding); a **Design finding** (a named design-lock break, or a change the issue did not ask for) is included in `### Review feedback`, and a step that shows what the issue asked for is the Evidence for that criterion.
 2. GitHub CI/CD on that PR: read **all** required check runs (not only `test` — image/deploy smokes count). `gh pr view --json mergeable` must be `MERGEABLE`. Pending required checks → wait; stay in `In Review`. Do **not** fail early on Standards while checks are still running. Red or failed required checks, or `CONFLICTING` → fail, and still include every Spec/Standards hard miss in the same feedback.
-3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Ready for merge`. Write **one role comment** with a verdict per Acceptance criterion. Tick those criteria `[x]` in the issue **description**. Optional workpad `### Description AC rewrites` (`- old → new | reason`) rewrites **one** criterion line in that section and comments why on that verdict only — never silently tick unmet or stale text, and never attach the rewrite reason to other criteria.
-4. Fail → `Implementing` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). Write **one role comment** that includes those findings (axis headings). Do **not** tick description Acceptance criteria. If the miss is a new required env, “done” includes every workflow that boots that process. That status change wakes implement. Do not start implement yourself.
+3. Pass only when both axes are clean, the PR is mergeable, **and** required GitHub checks are green → `Approval`. Write **one role comment** with a verdict per Acceptance criterion. Tick those criteria `[x]` in the issue **description**. Optional workpad `### Description AC rewrites` (`- old → new | reason`) rewrites **one** criterion line in that section and comments why on that verdict only — never silently tick unmet or stale text, and never attach the rewrite reason to other criteria.
+4. Fail → `In Progress` (same branch/PR) + workpad `### Review feedback` with the **full** set (file/criterion + what done looks like). Write **one role comment** that includes those findings (axis headings). Do **not** tick description Acceptance criteria. If the miss is a new required env, “done” includes every workflow that boots that process. That status change wakes implement. Do not start implement yourself.
 
 ## Land run (status became `Merging`)
 
-**Auto-merge** may move `Ready for merge` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Ready for merge`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land enqueues the PR (`gh pr merge --merge --auto`; the lane has a merge queue) and merges into the integration lane only once the queue lands it, then moves the issue to `Done` and writes **one role comment** with the merge SHA. Merge fail → `Implementing`, merge error under `### Review feedback`, `reviewLoops` incremented, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
+**Auto-merge** may move `Approval` → `Merging` when the PR is MERGEABLE, required checks are green, and loop cap is clear (either five CI-fail cycles or five checker-fail returns blocks). Pi delegate is **not** a gate. On refuse (loop cap, CONFLICTING, or missing `### Loop counters`), stay `Approval`, write one workpad note and **one role comment**. Empty Linear Agent is the happy path. Done and Canceled clear leftover Pi delegate if present. Nicklas can still move `Merging` himself. Land enqueues the PR (`gh pr merge --merge --auto`; the lane has a merge queue) and merges into the integration lane only once the queue lands it, then the issue is `Post-Merge`; it moves to `Done` only after `node scripts/gate.mjs land <pr> --issue KIT-n` exits 0, with **one role comment** carrying the merge SHA. A land gate that is not open leaves it in `Post-Merge`. Merge fail → `In Progress`, merge error under `### Review feedback`, `reviewLoops` incremented, and **one role comment** with the error. Never force-push. Never land into staging or production from this run. Never move to `Done` unless the merge succeeded.
 
 ## Guardrails
 
@@ -136,6 +138,10 @@ A fail whose findings are **all** tagged `[text]` or `[name]` is a **light fail*
 ```text
 <lane>:<branch>@<short-sha>
 ```
+
+### Waiting
+
+- (none | what is asked, stage it came from, `Asked: <date>`; `Resumed: <date>` once answered)
 
 ### Plan
 

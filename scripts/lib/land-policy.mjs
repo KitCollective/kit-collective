@@ -7,8 +7,10 @@
  */
 
 export const MERGE_PERMISSION_STATUS = "Merging";
+/** PR merged, integration lane not yet verified green. Only `gate.mjs land` moves it on to Done. */
+export const POST_MERGE_STATUS = "Post-Merge";
 export const MERGED_STATUS = "Done";
-export const MERGE_FAILURE_STATUS = "Implementing";
+export const MERGE_FAILURE_STATUS = "In Progress";
 
 /** Short backoff while GitHub computes mergeability during concurrent land (KIT-119). */
 export const LAND_UNKNOWN_MERGEABLE_RETRIES = 3;
@@ -102,8 +104,8 @@ function evaluateMergeGate({ issueStatus, pr, lanes }) {
     return {
       allowMerge: false,
       reason:
-        issueStatus === MERGED_STATUS
-          ? "Done means the PR is already on the integration lane"
+        issueStatus === MERGED_STATUS || issueStatus === POST_MERGE_STATUS
+          ? `${issueStatus} means the PR is already merged`
           : `merge is allowed only from ${MERGE_PERMISSION_STATUS}`,
       ghArgs: null,
     };
@@ -185,7 +187,7 @@ export function landAtMergeGate({ issueStatus, pr, lanes, gh }) {
   }
 
   // No SHA means the PR is in the merge queue, not on the lane yet: stay in Merging.
-  // Done only after the PR is MERGED (`gh pr view --json state,mergeCommit`).
+  // Post-Merge only after the PR is MERGED (`gh pr view --json state,mergeCommit`); Done only after `gate.mjs land`.
   if (!result.sha) {
     return {
       merged: false,
@@ -193,13 +195,13 @@ export function landAtMergeGate({ issueStatus, pr, lanes, gh }) {
       nextStatus: MERGE_PERMISSION_STATUS,
       ghCalled: true,
       ghArgs: decision.ghArgs,
-      reason: "queued in the merge queue; Done only after the PR is merged",
+      reason: "queued in the merge queue; Post-Merge only after the PR is merged",
     };
   }
 
   return {
     merged: true,
-    nextStatus: MERGED_STATUS,
+    nextStatus: POST_MERGE_STATUS,
     ghCalled: true,
     ghArgs: decision.ghArgs,
     reason: decision.reason,

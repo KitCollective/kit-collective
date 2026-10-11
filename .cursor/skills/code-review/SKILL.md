@@ -15,7 +15,7 @@ Three-axis review of the diff between `HEAD` and a fixed point:
 
 All three axes run as **parallel sub-agents** in the **same pass** so they do not pollute each other's context, then this skill aggregates their findings. Slop is not a gate before Spec or Standards.
 
-This skill does not merge. The checker agent uses the result to choose `Ready for merge` vs `Implementing`.
+This skill does not merge. The checker agent uses the result to choose `Approval` vs `In Progress`.
 
 ## Process
 
@@ -50,9 +50,9 @@ Tag a finding `[text]` when the whole fix is a doc, comment or copy line, `[name
 
 Required checks pending → **amber** cheap hold: do **not** start the model review loop. Stay In Review.
 
-Hard findings, `CONFLICTING`, or failed required checks → **red** → Implementing on the **same** branch/PR.
+Hard findings, `CONFLICTING`, or failed required checks → **red** → In Progress on the **same** branch/PR.
 
-Axes clean **and** MERGEABLE **and** required checks green → **green** → Ready for merge.
+Axes clean **and** MERGEABLE **and** required checks green → **green** → Approval.
 
 Grapile is not a gate. Do not invent findings on unchanged hunks during delta.
 
@@ -140,7 +140,7 @@ Every axis must appear on pass and fail. A text-only or name-only finding carrie
 
 **First-pass tags (factory checker):** When a Standards or Slop finding matches a registered class in `.pi/first-pass-classes.json`, write `[first-pass:<id>]` on that workpad line (keep the axis prefix). Example: `- Standards: [first-pass:empty-state-body] EmptyState body must not be empty`. Untagged findings keep a full Scout+helpers resume. Do not invent harness product regexes — only tag registered ids.
 
-Spec source is the whole Linear issue body (What to build + AC), not AC alone. A red required check is not a Spec-clean license — finish all three axes before the verdict. Hard Spec miss, hard Standards violation, hard Slop finding, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `Implementing`. Pending required checks → wait; stay in `In Review` (do not fail early on one axis while checks are still running). Otherwise → `Ready for merge` only when required GitHub checks are green **and** the PR is mergeable.
+Spec source is the whole Linear issue body (What to build + AC), not AC alone. A red required check is not a Spec-clean license — finish all three axes before the verdict. Hard Spec miss, hard Standards violation, hard Slop finding, `CONFLICTING` merge state, or failed required GitHub CI/CD checks (all required jobs, including image/deploy smokes) → Linear `In Progress`. Pending required checks → wait; stay in `In Review` (do not fail early on one axis while checks are still running). Otherwise → `Approval` only when required GitHub checks are green **and** the PR is mergeable.
 
 ### Worker memory (checker parent only)
 

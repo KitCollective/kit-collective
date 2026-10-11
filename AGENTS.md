@@ -38,7 +38,7 @@ Work lives in Linear workspace **KitCollective**, team **Engineering** (`KIT`). 
 
 ### Triage labels
 
-Who-acts labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `signal-up`, `proposal`. See `docs/agents/triage-labels.md`. Dispatch = `Backlog` + `ready-for-agent` + unblocked.
+Who-acts labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`, `signal-up`, `proposal`. See `docs/agents/triage-labels.md`. Dispatch = `To-do` + `ready-for-agent` + unblocked (`Backlog` is not dispatchable).
 
 ### Signal-up
 
@@ -102,9 +102,9 @@ Throwaway design question: `/prototype`. Visual lock: `/to-design`. Cited primar
 
 ### Planning stack
 
-`/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`Backlog` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → Auto-merge or Nicklas to Merging → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
+`/grill-with-docs` → `/to-design` (when UI needs shared rules) → `/to-spec` → `/to-tickets` → planner claims (`To-do` + `ready-for-agent` + unblocked) → `/implement` (`/tdd`) → checker → Auto-merge or Nicklas to Merging → `/land` into `development`. Milestone complete → staging. See `docs/agents/planning-stack.md`.
 
-**Runtime**: Desktop `/issue-session`, started by Nicklas for named issues. No dispatch worker runs: the PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`), so nothing claims `Backlog` + `ready-for-agent` by itself. Worker-only steps in `WORKFLOW.md` and `docs/agents/automations.md` describe the archived worker. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring.
+**Runtime**: Desktop `/issue-session`, started by Nicklas for named issues. No dispatch worker runs: the PI worker was archived on 2026-09-01 (`docs/agents/pi-harness-archived.md`), so nothing claims `To-do` + `ready-for-agent` by itself. Worker-only steps in `WORKFLOW.md` and `docs/agents/automations.md` describe the archived worker. Coolify MCP and `kc_seed_mcp` are Desktop / Cloud Agent wiring.
 
 Linear Agent stays empty (Cursor skip). One role comment per factory transition. Checker pass ticks description AC.
 
@@ -113,9 +113,9 @@ Linear Agent stays empty (Cursor skip). One role comment per factory transition.
 1. `/grill-with-docs`
 2. `/to-design` — HITL visual lock into `docs/design-system.md` when agents will implement UI
 3. `/to-spec` — kickoff = Linear project + milestones; feature = document on an existing project
-4. `/to-tickets` — vertical slices in `Backlog` with `ready-for-agent`
-5. planner claims (unblocked) → implement → PR + Linear evidence → checker → `Ready for merge`
+4. `/to-tickets` — vertical slices in `To-do` with `ready-for-agent` (the quiz step is the approval; unshaped work stays in `Backlog`)
+5. planner claims (unblocked) → implement → PR + Linear evidence → checker → `Approval`
 6. Auto-merge or `Nicklas` moves Linear to `Merging`
-7. `/land` into `development` (merge success → `Done`). A complete **milestone** then `staging` / `production` promotions
+7. `/land` into `development` (merge → `Post-Merge`; `Done` only after `gate.mjs land` is open). A complete **milestone** then `staging` / `production` promotions
 
 Product truth lives under `.scratch`. If a spec fights a stack lock, change the lock first.

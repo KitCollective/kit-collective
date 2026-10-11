@@ -1,7 +1,8 @@
+// Stale (Pi/Cursor era): only its status strings follow the status model of ADR-0057. A native bb workflow will replace it.
 export const meta = {
   name: "kit-slice",
   description:
-    "Factory Workflow: Implementing then Checker inventory/delta with cheap hold. ACP Cursor on kit-harness. No Pi.",
+    "Factory Workflow: In Progress then Checker inventory/delta with cheap hold. ACP Cursor on kit-harness. No Pi.",
   inputSchema: {
     type: "object",
     required: ["issueId"],
@@ -29,7 +30,7 @@ export const meta = {
     additionalProperties: false,
     properties: {
       issueId: { type: "string" },
-      status: { enum: ["In Review", "Implementing", "Ready for merge"] },
+      status: { enum: ["In Review", "In Progress", "Approval"] },
       provider: { const: "acp-cursor" },
       machine: { type: "string" },
       prUrl: { type: "string" },
@@ -92,8 +93,8 @@ async function runChecker(prUrl) {
       "Later passes are Delta of open classes plus lastReviewSha...HEAD.",
       "This wake is " + mode + " over " + range + ". Open classes: " + open + ".",
       "If required checks are pending, record cheap hold and do not send a model review.",
-      "Red returns Implementing on the same branch/PR.",
-      "Green moves Ready for merge only when MERGEABLE and required checks are green.",
+      "Red returns In Progress on the same branch/PR.",
+      "Green moves Approval only when MERGEABLE and required checks are green.",
       "This path must not use a Pi worker.",
     ].join("\n"),
     {
@@ -107,7 +108,7 @@ async function runChecker(prUrl) {
         required: ["status", "reviewColor"],
         additionalProperties: false,
         properties: {
-          status: { enum: ["In Review", "Implementing", "Ready for merge"] },
+          status: { enum: ["In Review", "In Progress", "Approval"] },
           reviewColor: { enum: ["red", "amber", "green"] },
           cheapHold: { type: "boolean" },
         },
@@ -131,7 +132,7 @@ if (args.phase === "checker") {
   if (!prUrl) {
     return {
       issueId: issueId,
-      status: "Implementing",
+      status: "In Progress",
       provider: "acp-cursor",
       machine: machine,
       prUrl: "",
@@ -143,7 +144,7 @@ if (args.phase === "checker") {
 phase("Implement");
 const implemented = await agent(
   [
-    "Run the Implementing phase of kit-slice for " + issueId + ".",
+    "Run the In Progress phase of kit-slice for " + issueId + ".",
     "Machine: " + machine + ". Provider: acp-cursor.",
     "Follow the /implement command contract: one workpad, one branch, one PR.",
     "Use Method skill TDD first at the spec seams.",
@@ -176,7 +177,7 @@ const implemented = await agent(
 if (!implemented.workpad || !implemented.prUrl) {
   return {
     issueId: issueId,
-    status: "Implementing",
+    status: "In Progress",
     provider: "acp-cursor",
     machine: machine,
     prUrl: implemented.prUrl || "",
@@ -205,7 +206,7 @@ const closed = await agent(
       required: ["status"],
       additionalProperties: false,
       properties: {
-        status: { enum: ["In Review", "Implementing"] },
+        status: { enum: ["In Review", "In Progress"] },
         reason: { type: "string" },
       },
     },

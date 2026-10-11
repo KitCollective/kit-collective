@@ -2,7 +2,9 @@
 
 Canonical Matt Pocock roles, plus factory extras. Names must match `factory.config.json` / `linear.setup.json`. Linear **label groups** are layout only — agents still match the leaf name.
 
-Dispatch = `dispatch.state` + `ready-for-agent` + unblocked. Linear **Agent** stays empty. Linear priority is claim order among eligible issues, not eligibility.
+Dispatch = `dispatch.state` (To-do) + `ready-for-agent` + unblocked.
+
+In `Approval`, `needs-info` means the agent asks a question and `ready-for-human` means it needs a yes/no decision or permission (also a lead plan-approval); with neither, review is green and the approver may merge. Details go under workpad `### Waiting`. The three labels `ready-for-agent`, `needs-info` and `ready-for-human` sit in the single-select Triage group, so an issue carries one of them: stopping is one atomic `node scripts/linear.mjs label <KIT-n> swap ready-for-agent needs-info` (or `ready-for-human`) with the move to `Approval`, and the claim swaps it back (`swap needs-info ready-for-agent`). The human answers in a comment and moves the issue to `To-do`. A `To-do` issue that still carries `needs-info` / `ready-for-human` has no `ready-for-agent`, so it is not auto-dispatchable; it resumes only when a human-started session names it (`session-check` says `answered`). `signal-up` and `wontfix` stay hard stops in every state. Linear **Agent** stays empty. Linear priority is claim order among eligible issues, not eligibility.
 
 Linear **Triage** (Sentry inbox) and **Duplicate** are Linear product states. They are not this label group and not factory dispatch statuses. See `docs/agents/issue-tracker.md`.
 
