@@ -113,6 +113,25 @@ test("meta is a literal, and every phase() title is a meta phase", () => {
     assert.ok(declared.includes(title), `phase ${title} is not in meta`);
 });
 
+test("the literal provider and model in every agent() call match PROVIDER and MODELS", () => {
+  // bb's validator wants string literals in the agent() options, so the source holds each id
+  // twice: once in the call and once in the constants the run log is written from.
+  const provider = /const PROVIDER = "([^"]+)";/.exec(SOURCE)[1];
+  const block = /const MODELS = (\{[\s\S]*?\n\});/.exec(SOURCE)[1];
+  const models = [...block.matchAll(/: "([^"]+)"/g)].map((m) => m[1]);
+  // `agent()` with nothing in the parentheses is prose in a comment, not a call.
+  const calls = [...SOURCE.matchAll(/\bagent\((?!\))/g)].length;
+  const literalProviders = [...SOURCE.matchAll(/\bprovider: "([^"]*)"/g)].map((m) => m[1]);
+  const literalModels = [...SOURCE.matchAll(/\bmodel: "([^"]*)"/g)].map((m) => m[1]);
+  assert.ok(calls > 0 && models.length > 0);
+  // One literal of each per call, so a call that selects by variable or by spread fails here too.
+  assert.equal(literalProviders.length, calls);
+  assert.equal(literalModels.length, calls);
+  for (const literal of literalProviders) assert.equal(literal, provider);
+  for (const literal of literalModels)
+    assert.ok(models.includes(literal), `model ${literal} is not a value of MODELS`);
+});
+
 test("green path: ends at Approval, in the documented order, with a dry-run receipt", async () => {
   const { result, commands, phases } = await run();
   assert.equal(result.status, "Approval");
