@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -124,4 +124,35 @@ test("CLI fails an added doc line naming a path that does not exist", () => {
 test("CLI passes an added doc line naming an existing path", () => {
   const dir = repo({ "scripts/real.js": "x\n" }, { "docs/d.md": "Run `scripts/real.js` first.\n" });
   assert.equal(run(dir), 0);
+});
+
+/** Runs the CLI with BASE_REF set to `baseRef`, or removed from the child env when undefined. */
+function runWithBase(dir, baseRef) {
+  const env = { ...process.env };
+  delete env.BASE_REF;
+  if (baseRef !== undefined) {
+    env.BASE_REF = baseRef;
+  }
+  return spawnSync("node", [SCRIPT], { cwd: dir, env, encoding: "utf8" });
+}
+
+const staleDoc = () =>
+  repo(
+    {
+      "src/a.ts": "export function KomIGangFace() {}\n",
+      "docs/d.md": "The `KomIGangFace` shows.\n",
+    },
+    { "src/a.ts": "export function DoorFace() {}\n" },
+  );
+
+test("CLI fails an explicit BASE_REF that cannot be resolved, naming the ref", () => {
+  const result = runWithBase(staleDoc(), "origin/nope");
+  assert.equal(result.status, 2, result.stdout + result.stderr);
+  assert.match(result.stderr, /origin\/nope/);
+});
+
+test("CLI keeps the skip when BASE_REF is not set and the default ref is absent, with a note", () => {
+  const result = runWithBase(staleDoc(), undefined);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /BASE_REF is not set and origin\/development/);
 });

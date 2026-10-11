@@ -35,6 +35,14 @@ test("check-code-english and check-doc-references refuse it with exit 2, not 'no
   refused("check-doc-references.mjs", { env: { BASE_REF: "TARGET" } });
 });
 
+test("check-migration-prefixes refuses an option-shaped BASE_REF", () => {
+  refused("check-migration-prefixes.mjs", { env: { BASE_REF: "TARGET" } });
+});
+
+test("the e2e review runner refuses an option-shaped E2E_SHA before anything else", () => {
+  refused("e2e/review-run.mjs", { env: { E2E_SHA: "TARGET" } });
+});
+
 test("classify-fix-diff refuses an option-shaped from or head", () => {
   refused("classify-fix-diff.mjs", { args: ["TARGET"] });
   refused("classify-fix-diff.mjs", { args: ["HEAD", "TARGET"] });

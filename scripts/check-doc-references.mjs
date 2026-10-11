@@ -7,7 +7,8 @@
  * 2. A repo path in backticks on a line this branch added to a doc must exist.
  *
  * Living docs exclude ADRs, .scratch specs and archived notes: they record history.
- * BASE_REF defaults to origin/development. Diff is merge-base to HEAD.
+ * BASE_REF defaults to origin/development. Diff is merge-base to HEAD. A BASE_REF that is set but
+ * cannot be resolved is exit 2; only the unset default may be absent (skip, exit 0).
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -36,7 +37,13 @@ try {
 try {
   git(["rev-parse", "--verify", "--end-of-options", `${baseRef}^{commit}`]);
 } catch {
-  process.stdout.write(`check-doc-references: ${baseRef} not found; nothing to compare.\n`);
+  if (process.env.BASE_REF !== undefined) {
+    process.stderr.write(`check-doc-references: BASE_REF ${baseRef} cannot be resolved.\n`);
+    process.exit(2);
+  }
+  process.stdout.write(
+    `check-doc-references: BASE_REF is not set and ${baseRef} is not here; nothing to compare.\n`,
+  );
   process.exit(0);
 }
 

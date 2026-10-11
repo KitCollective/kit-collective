@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -76,4 +76,28 @@ function run(dir) {
 test("CLI fails a branch that adds a Danish identifier and passes an English one", () => {
   assert.equal(run(repoWith("src/a.tsx", "export function KomIGangFace() {}\n")), 1);
   assert.equal(run(repoWith("src/a.tsx", "export function DoorFace() {}\n")), 0);
+});
+
+/** Runs the CLI with BASE_REF set to `baseRef`, or removed from the child env when undefined. */
+function runWithBase(dir, baseRef) {
+  const env = { ...process.env };
+  delete env.BASE_REF;
+  if (baseRef !== undefined) {
+    env.BASE_REF = baseRef;
+  }
+  return spawnSync("node", [SCRIPT], { cwd: dir, env, encoding: "utf8" });
+}
+
+test("CLI fails an explicit BASE_REF that cannot be resolved, naming the ref", () => {
+  const dir = repoWith("src/a.tsx", "export function KomIGangFace() {}\n");
+  const result = runWithBase(dir, "origin/nope");
+  assert.equal(result.status, 2, result.stdout + result.stderr);
+  assert.match(result.stderr, /origin\/nope/);
+});
+
+test("CLI keeps the skip when BASE_REF is not set and the default ref is absent, with a note", () => {
+  const dir = repoWith("src/a.tsx", "export function KomIGangFace() {}\n");
+  const result = runWithBase(dir, undefined);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /BASE_REF is not set and origin\/development/);
 });
