@@ -37,7 +37,7 @@ const product = config.product?.name ?? "Product";
 const teamKey = config.linear?.teamKey ?? "TEAM";
 const teamName = config.linear?.teamName ?? "Engineering";
 const approver = config.approver ?? "the approver";
-const dispatch = config.dispatch?.state ?? "Backlog";
+const dispatch = config.dispatch?.state ?? "To-do";
 const integration = config.lanes?.integration ?? "development";
 const staging = config.lanes?.staging ?? "staging";
 const production = config.lanes?.production ?? "production";
@@ -162,9 +162,9 @@ Linear Agent stays empty (Cursor skip). One role comment per factory transition.
 2. \`/to-design\` — HITL visual lock into \`docs/design-system.md\` when agents will implement UI
 3. \`/to-spec\` — kickoff = Linear project + milestones; feature = document on an existing project
 4. \`/to-tickets\` — vertical slices in \`${dispatch}\` with \`ready-for-agent\`
-5. planner claims (unblocked) → implement → PR + Linear evidence → checker → \`Ready for merge\`
+5. planner claims (unblocked) → implement → PR + Linear evidence → checker → \`Approval\`
 6. Auto-merge or \`${approver}\` moves Linear to \`Merging\`
-7. \`/land\` into \`${integration}\` (merge success → \`Done\`). A complete **milestone** then \`${staging}\` / \`${production}\` promotions
+7. \`/land\` into \`${integration}\` (merge → \`Post-Merge\`; \`Done\` only after \`gate.mjs land\` is open). A complete **milestone** then \`${staging}\` / \`${production}\` promotions
 
 Product truth lives under \`${specs}\`. If a spec fights a stack lock, change the lock first.
 `;
@@ -225,11 +225,11 @@ Out-of-scope feature or optimisation. Same ingress as signal-up (Triage), differ
 _Avoid_: mixing with \`signal-up\` on the same issue, filing into \`${dispatch}\`
 
 **Land**:
-Merge to \`${integration}\` after Auto-merge or ${approver} moves the issue to Merging. Land sets Done only after the merge and writes one role comment with the merge SHA (or merge error on return to Implementing).
+Merge to \`${integration}\` after Auto-merge or ${approver} moves the issue to Merging. The merged PR is Post-Merge; Done only after `gate.mjs land` is open. Land writes one role comment with the merge SHA (or merge error on return to In Progress).
 _Avoid_: landing to ${staging} or ${production} from an issue run
 
 **Auto-merge**:
-Worker moving Ready for merge → Merging when the PR is MERGEABLE, required checks are green, and loop counters under workpad \`### Loop counters\` are under the cap. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment; Nicklas can still move Merging.
+Worker moving Approval → Merging when the PR is MERGEABLE, required checks are green, and loop counters under workpad \`### Loop counters\` are under the cap. Pi delegate is not a gate. On refuse, writes one workpad note and one role comment; Nicklas can still move Merging.
 _Avoid_: force-push; treating Auto-merge as land; requiring Pi delegate for flip
 
 **Promotion**:

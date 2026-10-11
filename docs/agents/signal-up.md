@@ -29,7 +29,7 @@ New Linear issue only. Do not edit issues you did not create. Do not delegate.
 - `ready-for-agent`
 - `needs-triage` on the same issue while the Triage group is exclusive (Linear rejects two labels from one exclusive group). A human may split that group in the workspace UI; until then do not pair the labels.
 - `proposal` on the same issue
-- Moving it to `Implementing`
+- Moving it to `In Progress`
 
 A human shapes the ticket, then may apply `ready-for-agent`. Dispatch still requires `dispatch.state` + `ready-for-agent` + unblocked. Never delegate.
 

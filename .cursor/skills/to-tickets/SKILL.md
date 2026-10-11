@@ -62,7 +62,7 @@ Publish to team `linear.teamKey`. Not GitHub Issues. Local `.scratch/.../issues/
 
 Every issue:
 
-- Status = `dispatch.state` (Backlog)
+- Status = `dispatch.state` (To-do). Publishing is the human's approval to dispatch: the quiz step is the sign-off. Unshaped work stays in `Backlog`, which is not dispatchable.
 - Parent **project + milestone** from the spec. Every issue belongs to exactly one milestone. A milestone is a handful of slices that promote to staging **together**. Do not dump the whole product into one milestone.
 - Native `blockedBy`
 - Label `ready-for-agent`

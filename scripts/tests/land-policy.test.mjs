@@ -12,11 +12,13 @@ import {
 
 const STATES = [
   { name: "Backlog", type: "backlog" },
+  { name: "To-do", type: "unstarted" },
   { name: "Parked", type: "unstarted" },
-  { name: "Implementing", type: "started" },
+  { name: "In Progress", type: "started" },
   { name: "In Review", type: "started" },
-  { name: "Ready for merge", type: "started" },
+  { name: "Approval", type: "started" },
   { name: "Merging", type: "started" },
+  { name: "Post-Merge", type: "started" },
   { name: "Done", type: "completed" },
   { name: "Canceled", type: "canceled" },
 ];
@@ -91,7 +93,7 @@ test("Merging + MERGEABLE + green required checks allows a non-interactive merge
   });
 
   assert.equal(result.merged, true);
-  assert.equal(result.nextStatus, "Done");
+  assert.equal(result.nextStatus, "Post-Merge");
   assert.equal(result.ghCalled, true);
   assert.equal(gh.calls.length, 1);
   assert.deepEqual(gh.calls[0], ["pr", "merge", "99", "--merge", "--auto"]);
@@ -133,10 +135,12 @@ test("land treats Done as merged and refuses to merge again", () => {
 
 const refuseStatuses = [
   "Backlog",
+  "To-do",
   "Parked",
-  "Implementing",
+  "In Progress",
   "In Review",
-  "Ready for merge",
+  "Approval",
+  "Post-Merge",
   "Canceled",
 ];
 
@@ -204,7 +208,7 @@ test("land refuses merge onto staging or production", () => {
   }
 });
 
-test("merge failure moves to Implementing and never Done", () => {
+test("merge failure moves to In Progress and never Done", () => {
   const gh = fakeGh({ ok: false, error: "protected branch hook declined" });
   const result = landAtMergeGate({
     issueStatus: "Merging",
@@ -215,23 +219,24 @@ test("merge failure moves to Implementing and never Done", () => {
 
   assert.equal(result.merged, false);
   assert.equal(result.ghCalled, true);
-  assert.equal(result.nextStatus, "Implementing");
+  assert.equal(result.nextStatus, "In Progress");
   assert.notEqual(result.nextStatus, "Done");
   assert.ok(!result.ghArgs.includes("--force"));
 });
 
 test("dependents stay blocked until the blocker is Done or Canceled", () => {
   assert.equal(blockerResolvesDependents("Merging", STATES), false);
-  assert.equal(blockerResolvesDependents("Ready for merge", STATES), false);
-  assert.equal(blockerResolvesDependents("Implementing", STATES), false);
+  assert.equal(blockerResolvesDependents("Approval", STATES), false);
+  assert.equal(blockerResolvesDependents("Post-Merge", STATES), false);
+  assert.equal(blockerResolvesDependents("In Progress", STATES), false);
   assert.equal(blockerResolvesDependents("Done", STATES), true);
   assert.equal(blockerResolvesDependents("Canceled", STATES), true);
 });
 
-test("Ready for merge → Merging does not resolve blockedBy", () => {
+test("Approval → Merging does not resolve blockedBy", () => {
   assert.equal(
     statusTransitionResolvesBlockedBy({
-      from: "Ready for merge",
+      from: "Approval",
       to: "Merging",
       states: STATES,
     }),

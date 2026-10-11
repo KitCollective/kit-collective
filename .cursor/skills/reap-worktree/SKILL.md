@@ -14,7 +14,7 @@ This skill is Desktop / Cloud Agent hygiene. The PI worker reaps `/var/lib/kit-p
 ## Factory twist
 
 - Run only after land success (`Done` + merge SHA on `origin/<lanes.integration>`) or when the human explicitly names a merged issue.
-- Never reap while the issue is still `Implementing`, `In Review`, `Ready for merge`, or `Merging`.
+- Never reap while the issue is still `In Progress`, `In Review`, `Approval`, `Merging`, or `Post-Merge`.
 - Never push to `lanes.staging` or `lanes.production` from this skill.
 - `/issue-session` and `/land` follow this skill by reading it — they do not slash-invoke it.
 
@@ -59,7 +59,7 @@ Fix only what the evidence supports — never widen scope.
 | PR merged but local `origin/<integration>` stale | `git fetch origin <lanes.integration>` and re-check step 2 |
 | PR not merged; issue still open | Stop — resume `/land` or `/issue-session`; do not reap |
 | Unpushed commits on issue branch; PR open | Push branch, finish review/land; do not reap |
-| Land claimed Done but SHA not on integration | Stop — comment on issue; move back to `Implementing` if you own the pipeline |
+| Land claimed Done but SHA not on integration | Stop — comment on issue; move back to `In Progress` if you own the pipeline |
 | Dirty worktree with wanted edits | Stash or commit on the issue branch, push if needed, then re-verify |
 
 Re-run step 2 after a fix. Stop after two failed verify cycles and role-comment the blocker.

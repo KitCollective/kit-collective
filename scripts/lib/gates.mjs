@@ -121,7 +121,7 @@ export function sessionCheck({
   if (branches.length > 0) {
     return closed(`${issue} already has remote branch ${branches[0]}; use --resume to continue it`);
   }
-  if (["Implementing", "In Review", "Ready for merge", "Merging"].includes(linear.state)) {
+  if (["In Progress", "In Review", "Approval", "Merging", "Post-Merge"].includes(linear.state)) {
     return closed(`${issue} is already ${linear.state} (claimed); use --resume to join it`);
   }
   const mine = events.filter((e) => e.issue === issue);

@@ -1,6 +1,6 @@
 ---
 name: issue-session
-description: Desktop pipeline for one Linear issue or a batch — Implementing, isolated code-review with a fix loop, then land. Sequential or parallel.
+description: Desktop pipeline for one Linear issue or a batch — In Progress, isolated code-review with a fix loop, then land. Sequential or parallel.
 disable-model-invocation: true
 ---
 
@@ -42,11 +42,11 @@ Write-scope overlap and fan-out: [references/batch.md](references/batch.md).
 
 ## Pipeline (one issue)
 
-Completion: Linear status is `Done` and the PR SHA is on `origin/<lanes.integration>`, **or** the issue is stopped under Guardrails / loop cap with a role comment.
+Completion: Linear status is `Done` (set only after `gate.mjs land` is open) and the PR SHA is on `origin/<lanes.integration>`, **or** the issue is stopped under Guardrails / loop cap with a role comment.
 
 ### 0. Session check
 
-`node scripts/session-check.mjs <KIT-n>` (add `--resume` when the human said to continue, and also when the human names an issue that is already `Implementing` and no live run exists: no open PR, no remote branch hit, no `start` in the run log inside the live window. Run it first without `--resume`; if the only reason for refusal is the claimed state, rerun with `--resume`). Exit `0` go on; `1` stop on this identifier, the line says why (open PR, remote branch, claimed state, a run in the last 30 minutes, a stop label). It reads Linear, GitHub and the run log, never local worktrees, so it holds across machines.
+`node scripts/session-check.mjs <KIT-n>` (add `--resume` when the human said to continue, and also when the human names an issue that is already `In Progress` and no live run exists: no open PR, no remote branch hit, no `start` in the run log inside the live window. Run it first without `--resume`; if the only reason for refusal is the claimed state, rerun with `--resume`). Exit `0` go on; `1` stop on this identifier, the line says why (open PR, remote branch, claimed state, a run in the last 30 minutes, a stop label). It reads Linear, GitHub and the run log, never local worktrees, so it holds across machines.
 
 ### 1. Load
 
@@ -54,11 +54,11 @@ Completion: Linear status is `Done` and the PR SHA is on `origin/<lanes.integrat
 
 ### 2. Claim
 
-If status is `dispatch.state`, labelled `ready-for-agent`, unblocked, and Agent empty: move to `Implementing`, one planner-style role comment. Assignee stays the human.
+If status is `dispatch.state`, labelled `ready-for-agent`, unblocked, and Agent empty: move to `In Progress`, one planner-style role comment. Assignee stays the human.
 
-If status is already `Implementing` with `ready-for-agent`: start or resume. Same branch, same PR.
+If status is already `In Progress` with `ready-for-agent`: start or resume. Same branch, same PR.
 
-If status is `In Review`, `Ready for merge`, or `Merging`: join at the matching step below (review, approve+land, or land).
+If status is `In Review`, `Approval`, or `Merging`: join at the matching step below (review, approve+land, or land).
 
 ### 2a. Lead (start)
 
@@ -89,7 +89,7 @@ Parent aggregates:
 
 **Light fail first.** When every finding is tagged `[text]` or `[name]` and the checks are green: stay `In Review`, fix in place, run `node scripts/classify-fix-diff.mjs <lastReviewSha>`. `light` → read that diff against each finding (a Task that sees only the fix diff and the findings, not a three-axis review), rerun `pnpm check:review-gate`, update the matrix rows the fix touched, `lightFixes` +1, one role comment, then step 6. `reviewLoops` unchanged; the third light fix on one issue counts as one `reviewLoops`. `full` → the tag was wrong: continue below as a normal fail.
 
-Otherwise move to `Implementing`. Write the **full** set under workpad `### Review feedback` (file/criterion + what done looks like). One checker-style role comment with axis headings. Increment the checker-fail side of `### Loop counters`.
+Otherwise move to `In Progress`. Write the **full** set under workpad `### Review feedback` (file/criterion + what done looks like). One checker-style role comment with axis headings. Increment the checker-fail side of `### Loop counters`.
 
 **Replan.** When the feedback shows the plan itself was wrong (wrong file split, a missing Role, a path outside the write-scope) or the implementer recorded a plan conflict under `### Notes`, spawn the lead again with mode `replan` and the `### Review feedback`, log `reason --code replan`, and run the implementer on the strong model (`startDecision` with `replan: true`). Otherwise the lead is not spawned again.
 
@@ -97,17 +97,17 @@ Log every verdict: `node scripts/run-log.mjs audit --issue <KIT-n> --verdict gre
 
 Then resume implement: **fix the class**, not the cited file. Re-run the pre-review gate. Return to step 4.
 
-Stop the issue (leave `Implementing`, role-comment) when checker-fail returns hit five, or CI-fail cycles hit five (`WORKFLOW.md` loop cap). Do not land.
+Stop the issue (leave `In Progress`, role-comment) when checker-fail returns hit five, or CI-fail cycles hit five (`WORKFLOW.md` loop cap). Do not land.
 
 ### 6. Pass
 
-`Ready for merge`. Tick description Acceptance criteria `[x]`. One checker-style verdict comment per criterion. Clear addressed `### Review feedback`.
+`Approval`. Tick description Acceptance criteria `[x]`. One checker-style verdict comment per criterion. Clear addressed `### Review feedback`.
 
 ### 7. Land
 
 Take the merge queue lock first: `node scripts/merge-lock.mjs wait <pr>` (background; exit `0` taken). It is a ref on origin, so it holds across machines (ADR-0054). Then `node scripts/sync-pr.mjs sync <pr>` from the PR's worktree: `CURRENT` or `SYNCED` go on (after `SYNCED` wait for the required checks again), `CONFLICT` goes back to the implementer, `CLOSED` stops. Right after `SYNCED` renew the lock (`node scripts/merge-lock.mjs take <pr>`) and renew it again before and during any long wait while holding it, since a lock older than 30 minutes is taken over; `merge-lock.mjs status` shows holder and age, and only a human uses `release <pr> --force` to clear a crashed holder. `sync-pr.mjs` needs HEAD to equal the PR head by SHA (run it from the PR's worktree). A review pass stays valid after `SYNCED`: `node scripts/sync-pr.mjs valid <audited-sha> --pr <pr>` says `AUDIT-VALID` when only clean merges of `<lanes.integration>` were added. Release the lock when land has ended either way: `node scripts/merge-lock.mjs release <pr>`. Never rebase after the PR is open, and never rewrite a pushed branch.
 
-Move to `Merging` (approver-present). Follow [land/SKILL.md](../land/SKILL.md) and [land/references/merge.md](../land/references/merge.md). Success → run `node scripts/gate.mjs land <pr> --issue <KIT-n>`: only exit `0` (PR merged, merge commit on `origin/<lanes.integration>`, checks on that commit green) allows `Done` + role comment with merge SHA; `3` waits and reruns, `1` is a merge fail. Merge fail → `Implementing` + merge error under `### Review feedback` + increment `reviewLoops` + resume from step 3.
+Move to `Merging` (approver-present). Follow [land/SKILL.md](../land/SKILL.md) and [land/references/merge.md](../land/references/merge.md). Success → run `node scripts/gate.mjs land <pr> --issue <KIT-n>`: only exit `0` (PR merged, merge commit on `origin/<lanes.integration>`, checks on that commit green) allows `Done` + role comment with merge SHA; `3` waits and reruns and the issue stays `Post-Merge` until then (move it to `Post-Merge` yourself when you see `MERGED`, if Linear's GitHub automation has not); `1` is a merge fail. Merge fail → `In Progress` + merge error under `### Review feedback` + increment `reviewLoops` + resume from step 3.
 
 ### 8. Reap worktree
 

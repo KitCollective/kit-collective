@@ -55,7 +55,7 @@ test("head-changed: the workpad's lastReviewSha with open feedback also closes i
 
 const free = {
   issue: "KIT-1",
-  linear: { state: "Backlog", labels: [] },
+  linear: { state: "To-do", labels: [] },
   branches: [],
   openPrs: [],
   events: [],
@@ -68,14 +68,17 @@ test("session-check: a free issue is open", () => {
 test("session-check: open PR, remote branch, claimed state each refuse; resume joins", () => {
   assert.equal(sessionCheck({ ...free, openPrs: [5] }).code, GATE_EXIT.closed);
   assert.equal(sessionCheck({ ...free, branches: ["claude/kit-1-x"] }).code, GATE_EXIT.closed);
-  const claimed = { ...free, linear: { state: "Implementing", labels: [] } };
+  const claimed = { ...free, linear: { state: "In Progress", labels: [] } };
   assert.equal(sessionCheck(claimed).code, GATE_EXIT.closed);
+  for (const state of ["In Review", "Approval", "Merging", "Post-Merge"]) {
+    assert.equal(sessionCheck({ ...free, linear: { state, labels: [] } }).code, GATE_EXIT.closed);
+  }
   assert.equal(sessionCheck({ ...claimed, resume: true }).code, GATE_EXIT.open);
 });
 
 test("session-check: stop labels and finished states refuse even on resume", () => {
   assert.equal(
-    sessionCheck({ ...free, resume: true, linear: { state: "Backlog", labels: ["needs-info"] } })
+    sessionCheck({ ...free, resume: true, linear: { state: "To-do", labels: ["needs-info"] } })
       .code,
     GATE_EXIT.closed,
   );

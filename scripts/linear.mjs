@@ -7,7 +7,7 @@
 //   node scripts/linear.mjs issue KIT-272
 //   node scripts/linear.mjs comment KIT-272 --body-file <path>
 //   node scripts/linear.mjs comment-update <commentId> --body-file <path>
-//   node scripts/linear.mjs state KIT-272 "Implementing"
+//   node scripts/linear.mjs state KIT-272 "In Progress"
 //   node scripts/linear.mjs label KIT-272 add|remove <label>
 //   node scripts/linear.mjs description KIT-272 --body-file <path>
 //   node scripts/linear.mjs link KIT-272 <url> [title]
