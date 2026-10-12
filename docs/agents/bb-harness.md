@@ -23,7 +23,7 @@ The harness needs a gh whose `pr checks` subcommand supports `--json`. This is a
 | Limit | Observed | Read it with |
 | --- | --- | --- |
 | Not root | uid 1000, user `node` | `id` |
-| Capabilities dropped | `CapPrm`, `CapEff` and `CapBnd` all zero, `NoNewPrivs: 1` | `grep -E "^Cap|NoNewPrivs" /proc/self/status` |
+| Capabilities dropped | `CapPrm`, `CapEff` and `CapBnd` all zero, `NoNewPrivs: 1` | `grep -E "^Cap\|NoNewPrivs" /proc/self/status` |
 | Memory cap | 2147483648 bytes (2 GiB) | `cat /sys/fs/cgroup/memory.max` |
 | Process cap | 512 | `cat /sys/fs/cgroup/pids.max` |
 | No Postgres | no `psql` or `postgres` binary | `which psql postgres` |
@@ -69,7 +69,7 @@ The args are the `meta.inputSchema` of `.bb/workflows/kit-issue.js`:
 | `issue` | Required. The issue key, `KIT-n`. |
 | `resume` | `true` to continue an issue that already has a branch and a PR. |
 | `skipLead` | `true` to skip the Lead, for a small issue. |
-| `maxRounds` | Fix rounds after a red review, 1 to 3, default 2. |
+| `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. |
 | `machine` | Only written to the run log; it routes nothing. |
 
 The run goes from the session check to `Approval` and stops there (ADR-0058). `Approval` is not merge permission: a person moves the issue to `Merging` and starts the land step.
