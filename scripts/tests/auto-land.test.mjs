@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmodSync,
   cpSync,
@@ -14,6 +14,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  breaker,
+  breakerAfter,
   dailyCap,
   diffLines,
   independentReviewer,
@@ -543,32 +545,87 @@ test("a closed gate is refused as review-gate-closed", () => {
   assert.equal(w.lockOnOrigin(), "");
 });
 
-test("the daily cap: the sixth start in 24 hours is refused; older ones do not count; the config overrides the constant", () => {
+const startEvent = (w, i, now) =>
+  append(
+    { event: "auto-land", issue: `KIT-${100 + i}`, outcome: "start", sha: "e".repeat(40) },
+    { path: w.log, ...(now ? { now } : {}) },
+  );
+
+test("the runaway ceiling: the 101st start in 24 hours is refused; older ones do not count; the config overrides the constant", () => {
   const w = world();
-  for (let i = 0; i < 5; i += 1) {
-    append(
-      { event: "auto-land", issue: `KIT-${100 + i}`, outcome: "start", sha: "e".repeat(40) },
-      { path: w.log },
-    );
-  }
-  refusedWith(w.start(), "daily-cap");
+  for (let i = 0; i < 100; i += 1) startEvent(w, i);
+  const result = w.start();
+  refusedWith(result, "daily-cap");
+  assert.match(result.stdout, /ceiling is 100/);
   noEffects(w);
 
+  const few = world();
+  for (let i = 0; i < 99; i += 1) startEvent(few, i);
+  assert.equal(few.start(["--dry-run"]).status, 0, "99 is under the ceiling of 100");
+
   const old = world();
-  for (let i = 0; i < 5; i += 1) {
-    append(
-      { event: "auto-land", issue: `KIT-${100 + i}`, outcome: "start", sha: "e".repeat(40) },
-      { path: old.log, now: new Date(Date.now() - 25 * 3600 * 1000) },
-    );
-  }
+  for (let i = 0; i < 100; i += 1) startEvent(old, i, new Date(Date.now() - 25 * 3600 * 1000));
   assert.equal(old.start(["--dry-run"]).status, 0, "25 hours ago is outside the window");
 
   const one = world({ maxPerDayConfig: 1 });
-  append(
-    { event: "auto-land", issue: "KIT-100", outcome: "start", sha: "e".repeat(40) },
-    { path: one.log },
-  );
+  startEvent(one, 0);
   refusedWith(one.start(), "daily-cap");
+});
+
+const alarm = (w, code = "queue-ejected") =>
+  append({ event: "auto-land", issue: "KIT-50", outcome: "alarm", code }, { path: w.log });
+
+test("the breaker opens after 3 consecutive failed finishes and refuses start with breaker-open", () => {
+  const w = world();
+  alarm(w);
+  alarm(w, "integration-red");
+  assert.equal(w.start(["--dry-run"]).status, 0, "two failures do not open it");
+  alarm(w);
+  const result = w.start();
+  refusedWith(result, "breaker-open");
+  assert.match(result.stdout, /auto-land\.mjs reset/);
+  noEffects(w);
+});
+
+test("a success resets the breaker count", () => {
+  const w = world();
+  alarm(w);
+  alarm(w);
+  append(
+    { event: "auto-land", issue: "KIT-51", outcome: "landed", sha: "e".repeat(40) },
+    { path: w.log },
+  );
+  alarm(w);
+  alarm(w);
+  assert.equal(w.start(["--dry-run"]).status, 0, "landed in between: only two in a row");
+});
+
+test("reset clears the breaker, writes a breaker-reset event and nothing else", () => {
+  const w = world();
+  for (let i = 0; i < 3; i += 1) alarm(w);
+  refusedWith(w.start(["--dry-run"]), "breaker-open");
+  const before = w.events().length;
+  const reset = w.run(["reset"]);
+  assert.equal(reset.status, 0, reset.stdout + reset.stderr);
+  assert.match(reset.stdout, /BREAKER RESET/);
+  const added = w.events().slice(before);
+  assert.equal(added.length, 1);
+  assert.equal(added[0].outcome, "breaker-reset");
+  noEffects(w);
+  assert.equal(w.start(["--dry-run"]).status, 0, "the breaker is closed again");
+  // Failures after the reset count from zero.
+  alarm(w);
+  alarm(w);
+  assert.equal(w.start(["--dry-run"]).status, 0);
+});
+
+test("the alarm comment names the reset command", () => {
+  const w = world();
+  w.setGh((s) => {
+    s.mergeFails = true;
+  });
+  w.start();
+  assert.match(w.read("linear-writes.log"), /auto-land\.mjs reset/);
 });
 
 test("a lock held by another PR is waiting, not a merge", () => {
@@ -583,11 +640,48 @@ test("a lock held by another PR is waiting, not a merge", () => {
       env: { ...process.env, ...IDENT },
     },
   );
-  const result = w.start();
+  const result = w.start([], { AUTO_LAND_LOCK_WAIT_SECONDS: "0" });
   assert.equal(result.status, 3, result.stdout);
   assert.match(result.stdout, /lock-held/);
   assert.equal(w.read("linear-writes.log"), "");
   assert.doesNotMatch(w.read("gh-calls.log"), /pr merge/);
+});
+
+test("a second start waits for the lock and then goes through once the first PR lets go", async () => {
+  const w = world();
+  const other = tmp("other2");
+  git(other, "clone", w.origin, ".");
+  const lockCli = fileURLToPath(new URL("../merge-lock.mjs", import.meta.url));
+  const env = { ...process.env, ...IDENT };
+  execFileSync("node", [lockCli, "take", "99"], { cwd: other, env });
+  const child = spawn("node", [CLI, "start", "12", "--issue", "KIT-9"], {
+    cwd: w.work,
+    env: {
+      ...env,
+      PATH: `${w.bin}:${process.env.PATH}`,
+      WORLD: w.dir,
+      KC_RUN_LOG: w.log,
+      KC_LINEAR_CLI: join(w.dir, "linear.js"),
+      KC_GATE_CLI: join(w.dir, "gate.js"),
+      AUTO_LAND_LOCK_WAIT_SECONDS: "120",
+      AUTO_LAND_LOCK_POLL_SECONDS: "1",
+    },
+  });
+  let stdout = "";
+  child.stdout.on("data", (d) => {
+    stdout += d;
+  });
+  const closed = new Promise((resolve) => child.on("close", resolve));
+  // Wait until the second start has done its checks and is queueing on the lock, then let the first go.
+  for (let i = 0; i < 600 && !w.read("gate-calls.log"); i += 1) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  await new Promise((r) => setTimeout(r, 1500));
+  execFileSync("node", [lockCli, "release", "99"], { cwd: other, env });
+  const code = await closed;
+  assert.equal(code, 0, stdout);
+  assert.match(stdout, /^ENQUEUED/);
+  assert.match(w.lockOnOrigin(), /refs\/factory\/merge-lock/);
 });
 
 test("refuses when the branch is behind the lane, before anything is posted", () => {
@@ -786,9 +880,9 @@ test("killSwitch, maxPerDay, diffLines, queueState, independentReviewer and dail
     killSwitch({ labels: ["HOLD"], killFile: false, enabled: true, forceEnabled: true }).code,
     "kill-switch",
   );
-  assert.equal(maxPerDay({}), 5);
+  assert.equal(maxPerDay({}), 100);
   assert.equal(maxPerDay({ flow: { autoLand: { maxPerDay: 2 } } }), 2);
-  assert.equal(maxPerDay({ flow: { autoLand: { maxPerDay: 0 } } }), 5);
+  assert.equal(maxPerDay({ flow: { autoLand: { maxPerDay: 0 } } }), 100);
   assert.equal(diffLines("3\t4\ta\n-\t-\timg.png\n"), 7 + 400);
   assert.equal(
     queueState({ state: "OPEN", autoMergeRequest: null, isInMergeQueue: true }),
@@ -815,7 +909,16 @@ test("killSwitch, maxPerDay, diffLines, queueState, independentReviewer and dail
   ];
   assert.equal(independentReviewer(events, "KIT-1").reviewer.thread, "thr_bbbb1");
   assert.equal(independentReviewer(events, "KIT-2").code, "no-independent-reviewer");
-  assert.equal(dailyCap([], 5), null);
+  assert.equal(dailyCap([], 100), null);
+  assert.equal(breakerAfter({}), 3);
+  assert.equal(breakerAfter({ flow: { autoLand: { breakerAfter: 2 } } }), 2);
+  const fails = [
+    { event: "auto-land", outcome: "alarm" },
+    { event: "auto-land", outcome: "alarm" },
+  ];
+  assert.equal(breaker(fails, 3), null);
+  assert.equal(breaker(fails, 2).code, "breaker-open");
+  assert.equal(maxPerDay({}), 100);
   assert.equal(
     riskClass({ description: "write-scope: a/**", labels: [], files: ["a/x"], lines: 1 }),
     null,

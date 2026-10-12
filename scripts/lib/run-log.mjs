@@ -32,7 +32,7 @@ export const OUTCOMES = [
 export const GATES = ["review", "pre-review", "land", "session", "head", "scope", "checks"];
 export const GATE_OUTCOMES = ["open", "closed"];
 /** What `scripts/auto-land.mjs` logs (ADR-0059): `start` is an enqueue and is what the daily cap counts. */
-export const AUTO_LAND_OUTCOMES = ["start", "landed", "refused", "alarm"];
+export const AUTO_LAND_OUTCOMES = ["start", "landed", "refused", "alarm", "breaker-reset"];
 
 /** Fixed reason codes. A row that failed an audit is `row-<lock row id>`. */
 export const REASON_CODES = [
@@ -67,6 +67,7 @@ export const REASON_CODES = [
   "receipt-refused",
   "review-gate-closed",
   "daily-cap",
+  "breaker-open",
   "sync-changed-head",
   "lock-held",
   "enqueue-failed",
@@ -124,7 +125,8 @@ export function validateEvent(event) {
     return [`event must be one of ${EVENTS.join(", ")}`];
   }
   for (const key of REQUIRED[event.event]) {
-    if (event[key] === undefined) {
+    // A breaker reset belongs to no issue.
+    if (event[key] === undefined && !(event.outcome === "breaker-reset" && key === "issue")) {
       problems.push(`${event.event} needs ${key}`);
     }
   }

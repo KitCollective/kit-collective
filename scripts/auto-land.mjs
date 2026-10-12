@@ -11,7 +11,7 @@
  *       more than 400 lines, a path outside the issue's write-scope: a person), (e) an independent
  *       reviewer is in the run log and the kc/audit receipt for the head is posted (the existing
  *       audit-receipt.mjs does it, with its own checks), (f) the review gate, run here, (g) the
- *       daily cap. Only then: merge lock, sync (the head must not change), the run log's `start`
+ *       runaway ceiling. Only then: merge lock, sync (the head must not change), the run log's `start`
  *       event, Merging plus one role comment, `gh pr merge --merge --auto`.
  *       --dry-run runs every check and changes nothing: no receipt, no lock, no Linear write, no
  *       enqueue, no run-log line. (It posts nothing, so a kc/audit that is a required check can make
@@ -23,6 +23,9 @@
  *       red integration check or anything else is the alarm: lock released, Approval plus
  *       ready-for-human, a comment, a reason code.
  *
+ *   node scripts/auto-land.mjs reset
+ *       Clears the circuit breaker (`breaker-open`: the last 3 finishes failed) by writing a
+ *       `breaker-reset` event to the run log. No other side effect. A person runs it, after the fix.
  *   node scripts/auto-land.mjs enabled
  *       Prints `AUTO-LAND ON` (exit 0) or `AUTO-LAND OFF: <why>` (exit 1) from the config and the kill
  *       file. The workflow asks it; `start` re-checks everything itself.
@@ -41,6 +44,8 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
   approvalComment,
+  breaker,
+  breakerAfter,
   dailyCap,
   diffLines,
   greenAuditFor,
@@ -65,6 +70,12 @@ import { append, logPath, mainCheckout } from "./lib/run-log.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const run = promisify(execFile);
 const [sub, first, ...rest] = process.argv.slice(2);
+if (sub === "reset") {
+  // Clears the circuit breaker; no other side effect.
+  append({ event: "auto-land", outcome: "breaker-reset" }, { path: logPath() });
+  process.stdout.write("BREAKER RESET (auto-land): the next start may run\n");
+  process.exit(0);
+}
 if (sub === "enabled") {
   const main = mainCheckout(process.cwd());
   const on = (() => {
@@ -224,8 +235,8 @@ async function alarm(code, detail, sha) {
       detail,
       sha,
       lock.code === 0
-        ? " The merge lock is released."
-        : " The merge lock is still held: clear it with merge-lock.mjs release <pr> --force.",
+        ? " The merge lock is released. Repeated failures open the auto-land circuit breaker; after the cause is fixed a person clears it with: node scripts/auto-land.mjs reset"
+        : " The merge lock is still held: clear it with merge-lock.mjs release <pr> --force. Repeated failures open the auto-land circuit breaker; clear it with: node scripts/auto-land.mjs reset",
     )),
   );
   try {
@@ -252,6 +263,8 @@ async function start() {
     forceEnabled: rest.includes("--force-enabled"),
   });
   if (gone) await refused(gone);
+  const tripped = breaker(events(), breakerAfter(cfg));
+  if (tripped) await refused(tripped);
 
   const view = await viewPr();
   const head = await git(["rev-parse", "HEAD"]);
@@ -355,7 +368,7 @@ async function start() {
     );
   }
 
-  // (g) the daily cap.
+  // (g) the runaway ceiling (the breaker above is the real brake).
   const cap = maxPerDay(cfg);
   const capped = dailyCap(events(), cap);
   if (capped) await refused(capped, head);
@@ -401,7 +414,15 @@ async function start() {
   }
 
   // (h) the lock, then the sync (the head must not move: the audit is for this head), then the writes.
-  const lock = await script("merge-lock.mjs", "take", pr);
+  // Wait for the lock inside the budget (one PR at a time), so a second start queues up instead of failing.
+  const lockWait = process.env.AUTO_LAND_LOCK_WAIT_SECONDS
+    ? Number(process.env.AUTO_LAND_LOCK_WAIT_SECONDS)
+    : Math.max(0, START_BUDGET_SECONDS - Math.round((Date.now() - startedAt) / 1000) - 20);
+  const lock = await sh("node", [join(ROOT, "scripts", "merge-lock.mjs"), "wait", pr], {
+    MERGE_LOCK_WAIT: String(lockWait),
+    MERGE_LOCK_POLL:
+      process.env.AUTO_LAND_LOCK_POLL_SECONDS || String(Math.min(15, Math.max(1, lockWait))),
+  });
   if (lock.code === 3) {
     out(3, `WAITING (auto-land): lock-held: ${lock.line}`);
   }

@@ -8,8 +8,10 @@
 import { matchesGlob, parseWriteScopeGlobs } from "./pr-write-scope.mjs";
 import { HIGH_RISK_GLOBS, startDecision } from "./start-decision.mjs";
 
-/** The daily cap lives here; `flow.autoLand.maxPerDay` of factory.config.json overrides it. */
-export const DEFAULT_MAX_PER_DAY = 5;
+/** A runaway guard, not a throttle: starts per 24 h. `flow.autoLand.maxPerDay` of factory.config.json overrides it. */
+export const DEFAULT_MAX_PER_DAY = 100;
+/** The circuit breaker opens after this many consecutive failures. `flow.autoLand.breakerAfter` overrides it. */
+export const DEFAULT_BREAKER_AFTER = 3;
 /** A diff of more lines than this (added plus deleted, binary files counted as this many) is for a person. */
 export const MAX_DIFF_LINES = 400;
 /** Total budget of one `start` call, under the 600 s foreground cap of a claude-code thread. */
@@ -60,6 +62,36 @@ const short = (sha) => String(sha ?? "").slice(0, 7);
 export function maxPerDay(config) {
   const value = config?.flow?.autoLand?.maxPerDay;
   return Number.isInteger(value) && value > 0 ? value : DEFAULT_MAX_PER_DAY;
+}
+
+/** Consecutive failures that open the breaker: the config value when it is a positive integer, else the constant. */
+export function breakerAfter(config) {
+  const value = config?.flow?.autoLand?.breakerAfter;
+  return Number.isInteger(value) && value > 0 ? value : DEFAULT_BREAKER_AFTER;
+}
+
+/**
+ * The circuit breaker, read from the run log. Outcomes of `auto-land` in order: `landed` is a success and
+ * resets the count, `alarm` (an ejected PR, red integration CI, a failed enqueue: a person was asked) is a
+ * failure, `breaker-reset` clears it. Open when the last `after` outcomes are failures.
+ * @param {Array<Record<string, any>>} events
+ * @param {number} after
+ */
+export function breaker(events, after) {
+  let failures = 0;
+  for (const e of events.filter((x) => x.event === "auto-land").reverse()) {
+    if (e.outcome === "alarm") {
+      failures += 1;
+    } else if (e.outcome === "landed" || e.outcome === "breaker-reset") {
+      break;
+    }
+  }
+  return failures >= after
+    ? refuse(
+        "breaker-open",
+        `the last ${failures} auto-land finishes failed; fix the cause, then a person runs: node scripts/auto-land.mjs reset`,
+      )
+    : null;
 }
 
 /**
@@ -297,7 +329,10 @@ export function startsInLastDay(events, now = Date.now()) {
 export function dailyCap(events, cap, now = Date.now()) {
   const used = startsInLastDay(events, now);
   return used >= cap
-    ? refuse("daily-cap", `${used} auto-land starts in the last 24 h, the cap is ${cap}`)
+    ? refuse(
+        "daily-cap",
+        `${used} auto-land starts in the last 24 h, the runaway ceiling is ${cap}`,
+      )
     : null;
 }
 

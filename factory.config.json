@@ -202,7 +202,8 @@
     "runLog": ".factory/run-log.jsonl",
     "autoLand": {
       "enabled": false,
-      "maxPerDay": 5
+      "maxPerDay": 100,
+      "breakerAfter": 3
     }
   },
   "agent": {
