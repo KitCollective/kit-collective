@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { CollectionJersey, CollectionShortcut } from "@kit/api-contract";
 import { KIT_TYPE_LABELS_DA } from "@kit/domain";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,6 +16,21 @@ import { CollectionFetchError, fetchCollectionJerseys, resolvePhotoUrl } from "@
 import { fetchCollectionShortcuts } from "@/api/shortcuts";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCaptureChooser } from "@/capture/capture-chooser";
+import { CollectionFactsBlock } from "@/collection/collection-facts";
+import {
+  buildCollectionView,
+  type CollectionListRow,
+  type CollectionSort,
+  type CollectionView,
+  toListRows,
+} from "@/collection/collection-view-model";
+import {
+  COLLECTION_VIEW_PREFS_DEFAULT,
+  type CollectionViewPrefs,
+  readCollectionViewPrefs,
+  storeCollectionViewPrefs,
+} from "@/collection/collection-view-prefs";
+import { ViewSortSheet } from "@/collection/view-sort-sheet";
 import { CollectionEmptyDiagram } from "@/components/collection-empty-diagram";
 import { CollectionHeader } from "@/components/collection-header";
 import { ShortcutsSheet } from "@/components/genveje-sheet";
@@ -84,6 +99,8 @@ function CollectionHome() {
   );
   const [selectedShortcutId, setSelectedShortcutId] = useState<string | null>(null);
   const [genvejeOpen, setGenvejeOpen] = useState(false);
+  const [viewSortOpen, setViewSortOpen] = useState(false);
+  const [prefs, setPrefs] = useState<CollectionViewPrefs>(COLLECTION_VIEW_PREFS_DEFAULT);
   const hasInitialLoadRef = useRef(cachedCollection != null);
 
   useEffect(() => {
@@ -246,6 +263,37 @@ function CollectionHome() {
     savedInFirstSession,
   ]);
 
+  // View and sort are remembered per account and restored when Samling opens.
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+    let active = true;
+    void readCollectionViewPrefs(securePromptStore, userId).then((stored) => {
+      if (active) {
+        setPrefs(stored);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  const changePrefs = (next: CollectionViewPrefs) => {
+    setPrefs(next);
+    if (userId) {
+      void storeCollectionViewPrefs(securePromptStore, userId, next);
+    }
+  };
+  const selectView = (view: CollectionView) => changePrefs({ ...prefs, view });
+  const selectSort = (sort: CollectionSort) => changePrefs({ ...prefs, sort });
+
+  const collectionView = useMemo(
+    () => buildCollectionView({ allJerseys, jerseys, view: prefs.view, sort: prefs.sort }),
+    [allJerseys, jerseys, prefs.view, prefs.sort],
+  );
+  const listRows = useMemo(() => toListRows(collectionView.groups), [collectionView.groups]);
+
   const dismissPrompt = () => {
     setProfilePromptState("dismissed");
     if (userId) {
@@ -280,7 +328,7 @@ function CollectionHome() {
           { backgroundColor: theme.canvas, paddingBottom: tabBarPadding },
         ]}
       >
-        <CollectionHeader count={0} onAddPress={() => void startCapture()} />
+        <CollectionHeader onAddPress={() => void startCapture()} />
         <ParkedSessionRow />
         {showResultCollectionCaption ? (
           <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
@@ -334,9 +382,56 @@ function CollectionHome() {
   const horizontalPadding = space.insetMd * 2;
   const tileWidth = (width - horizontalPadding - columnGap) / 2;
 
+  const renderListRow = (row: CollectionListRow) => {
+    if (row.kind === "heading") {
+      return (
+        <View style={styles.groupHeading} accessible accessibilityRole="header">
+          <Text style={[typography.section, { color: theme.contentPrimary }]}>{row.label}</Text>
+          <Text style={[typography.mono, { color: theme.contentSecondary }]}>{row.count}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.row}>
+        {row.tiles.map((tile) => {
+          const item = tile.jersey;
+          const primaryPhoto = item.photos[0];
+          const photoSource = primaryPhoto
+            ? {
+                uri: resolvePhotoUrl(primaryPhoto.photoUrl, "grid"),
+                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+              }
+            : undefined;
+
+          return (
+            <View key={tile.id} style={{ width: tileWidth }}>
+              <JerseyTile
+                photoSource={photoSource}
+                clubLabel={item.clubLabel ?? item.nationalTeamLabel ?? ""}
+                seasonLabel={item.seasonLabel}
+                typeLabel={KIT_TYPE_LABELS_DA[item.type]}
+                caption={{
+                  lead: tile.primaryLead,
+                  leadRole: prefs.sort === "club" ? "season" : "club",
+                  trailing: tile.primaryTrailing,
+                  secondary: tile.secondaryLine,
+                }}
+                badge={tile.badge}
+                onPress={() => openJerseyDetail(item.id)}
+                testID={`jersey-tile-${item.id}`}
+              />
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
       <CollectionHeader count={totalJerseyCount} onAddPress={() => void startCapture()} />
+      <CollectionFactsBlock facts={collectionView.facts} />
       {showResultCollectionCaption ? (
         <Text style={[typography.body, styles.resultCaption, { color: theme.contentMuted }]}>
           {RESULT_COLLECTION_BUD_CAPTION}
@@ -358,35 +453,25 @@ function CollectionHome() {
         onSelectAlle={() => setSelectedShortcutId(null)}
         onSelectShortcut={(shortcutId) => setSelectedShortcutId(shortcutId)}
         onTilpasPress={() => setGenvejeOpen(true)}
+        view={prefs.view}
+        viewCount={collectionView.viewCounts[prefs.view]}
+        onViewControlPress={() => setViewSortOpen(true)}
+        onClearView={() => selectView("all")}
       />
       <FlatList
-        data={jerseys}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
+        data={listRows}
+        keyExtractor={(row) => row.key}
         contentContainerStyle={[styles.gridContent, { paddingBottom: tabBarPadding }]}
-        renderItem={({ item }) => {
-          const primaryPhoto = item.photos[0];
-          const photoSource = primaryPhoto
-            ? {
-                uri: resolvePhotoUrl(primaryPhoto.photoUrl, "grid"),
-                headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-              }
-            : undefined;
-
-          return (
-            <View style={{ width: tileWidth }}>
-              <JerseyTile
-                photoSource={photoSource}
-                clubLabel={item.clubLabel ?? item.nationalTeamLabel ?? ""}
-                seasonLabel={item.seasonLabel}
-                typeLabel={KIT_TYPE_LABELS_DA[item.type]}
-                onPress={() => openJerseyDetail(item.id)}
-                testID={`jersey-tile-${item.id}`}
-              />
-            </View>
-          );
-        }}
+        renderItem={({ item: row }) => renderListRow(row)}
+      />
+      <ViewSortSheet
+        visible={viewSortOpen}
+        view={prefs.view}
+        sort={prefs.sort}
+        viewCounts={collectionView.viewCounts}
+        onSelectView={selectView}
+        onSelectSort={selectSort}
+        onDismiss={() => setViewSortOpen(false)}
       />
       <ShortcutsSheet
         visible={genvejeOpen}
@@ -445,6 +530,13 @@ const styles = StyleSheet.create({
     gap: space.gapMd,
   },
   row: {
+    flexDirection: "row",
     gap: space.gapMd,
+  },
+  groupHeading: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: space.gapSm,
+    paddingTop: space.insetSm,
   },
 });

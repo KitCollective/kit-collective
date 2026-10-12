@@ -124,6 +124,7 @@ export const collectionJerseySchema = z
     photos: z.array(collectionJerseyPhotoSchema).min(1).max(MAX_USER_JERSEY_PHOTOS),
     biddingEnabled: z.boolean(),
     private: z.boolean(),
+    unansweredBidCount: z.number().int().nonnegative().optional(),
   })
   .strict()
   .superRefine((jersey, ctx) => {
