@@ -175,10 +175,10 @@ async function sh(label, phaseTitle, commands, keepGoing = false, retry = false)
 
 // A claude-code thread's foreground command is capped at 10 minutes (600 s). A gate that waits for
 // CI cannot be held that long in one call, which is why the runner on KIT-285 backgrounded it. So
-// every wait runs in slices of GATE_SLICE_SECONDS (well under the cap, with room for the mechanical
-// steps and the runner's own overhead) and the workflow repeats a slice while the verdict is
-// "waiting" (gate exit 3), up to GATE_SLICES slices: 5 x 540 s is about 45 minutes of wall clock.
-const GATE_SLICE_SECONDS = 540;
+// every wait runs in slices of GATE_SLICE_SECONDS (well under the cap: gate.mjs treats it as the TOTAL budget of one
+// call, mechanical steps included, and the runner adds its own overhead) and the workflow repeats a slice while the verdict is
+// "waiting" (gate exit 3), up to GATE_SLICES slices: 5 x 480 s is about 40 minutes of wall clock.
+const GATE_SLICE_SECONDS = 480;
 const GATE_SLICES = 5;
 
 /** Runs one gate command in slices; `exhausted` is set when every slice still said waiting. */

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -12,12 +14,15 @@ import {
   matchesIssueKey,
   parseResultLine,
   prBound,
+  remainingWaitSeconds,
   resolveHead,
   scopeEnv,
   scopeSource,
   sessionCheck,
+  shouldLogGate,
   workpadHasPlan,
 } from "../lib/gates.mjs";
+import { append, readEvents } from "../lib/run-log.mjs";
 
 const HEAD = "a".repeat(40);
 const OTHER = "b".repeat(40);
@@ -413,4 +418,56 @@ test("workpadHasPlan: a Plan heading counts, a mention does not", () => {
   assert.equal(workpadHasPlan("## Workpad\nsee the ### Plan later\n"), false);
   assert.equal(workpadHasPlan("### Planning notes\n"), false);
   assert.equal(workpadHasPlan(""), false);
+});
+
+test("remainingWaitSeconds: the mechanical steps are subtracted from the total budget", () => {
+  assert.equal(remainingWaitSeconds("480", 0), 480);
+  assert.equal(remainingWaitSeconds("480", 100_000), 380);
+  // A slow mechanical step (451 s of 480) leaves too little to wait: the gate answers waiting at once.
+  assert.equal(remainingWaitSeconds("480", 451_000), null);
+  assert.equal(remainingWaitSeconds("480", 600_000), null);
+  assert.equal(remainingWaitSeconds("nonsense", 0), null);
+  // Whatever the mechanical time, mechanical + wait never exceeds the total.
+  for (const elapsed of [0, 90_000, 300_000, 449_000]) {
+    const left = remainingWaitSeconds(480, elapsed);
+    if (left !== null) assert.ok(elapsed / 1000 + left <= 480);
+  }
+});
+
+test("gate.mjs passes the remaining budget to wait-for-checks and logs no waiting verdict", async () => {
+  const src = readFileSync(GATE, "utf8");
+  assert.match(
+    src,
+    /remainingWaitSeconds\(opt\("--timeout"\) \?\? "1800", Date\.now\(\) - startedAt\)/,
+  );
+  assert.match(src, /\[pr, "--timeout", String\(budget\)\]/);
+  assert.equal((src.match(/if \(shouldLogGate\(result\)\)/g) ?? []).length, 2);
+});
+
+test("a waiting slice writes no gate event; only the final open or closed one does", () => {
+  const dir = mkdtempSync(join(tmpdir(), "gate-log-"));
+  const path = join(dir, "run-log.jsonl");
+  const slices = [
+    { code: GATE_EXIT.waiting, line: "WAITING" },
+    { code: GATE_EXIT.waiting, line: "WAITING" },
+    { code: GATE_EXIT.waiting, line: "WAITING" },
+    { code: GATE_EXIT.open, line: "OPEN" },
+  ];
+  for (const result of slices) {
+    if (shouldLogGate(result)) {
+      append(
+        {
+          event: "gate",
+          issue: "KIT-1",
+          gate: "pre-review",
+          outcome: result.code === 0 ? "open" : "closed",
+        },
+        { path },
+      );
+    }
+  }
+  const events = readEvents(path);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].outcome, "open");
+  assert.equal(shouldLogGate({ code: GATE_EXIT.closed }), true);
 });

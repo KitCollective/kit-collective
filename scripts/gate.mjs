@@ -38,7 +38,9 @@ import {
   landGate,
   parseResultLine,
   prBound,
+  remainingWaitSeconds,
   scopeSource,
+  shouldLogGate,
 } from "./lib/gates.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -90,6 +92,7 @@ if (
 )
   usage();
 
+const startedAt = Date.now();
 try {
   if (sub === "review" || sub === "pre-review") {
     const full = sub === "review";
@@ -137,19 +140,27 @@ try {
       });
     }
     if (steps.every((s) => s.code === 0)) {
+      // --timeout is the TOTAL budget of this call (the caller's foreground command is capped),
+      // so the mechanical steps above are subtracted from what the wait may use.
+      const budget = remainingWaitSeconds(opt("--timeout") ?? "1800", Date.now() - startedAt);
       steps.push(
-        await step("checks", "scripts/wait-for-checks.mjs", [
-          pr,
-          "--timeout",
-          opt("--timeout") ?? "1800",
-        ]),
+        budget === null
+          ? {
+              name: "checks",
+              code: 2,
+              line: "PENDING: the --timeout budget is used up by the mechanical steps; run the gate again",
+            }
+          : await step("checks", "scripts/wait-for-checks.mjs", [pr, "--timeout", String(budget)]),
       );
     }
     const result = foldReview(steps);
     if (result.code === GATE_EXIT.open && scope.source === "none") {
       result.line += "; note: scope: no write-scope declared";
     }
-    logGate(issue, sub, result.code === GATE_EXIT.open ? "open" : "closed", view.headRefOid);
+    // A waiting verdict is not an outcome: the slice that follows decides, so only open or closed is logged.
+    if (shouldLogGate(result)) {
+      logGate(issue, sub, result.code === GATE_EXIT.open ? "open" : "closed", view.headRefOid);
+    }
     done(result);
   }
 
@@ -187,7 +198,9 @@ try {
     onIntegration,
     checks: runs,
   });
-  logGate(issue, "land", result.code === GATE_EXIT.open ? "open" : "closed", view.headRefOid);
+  if (shouldLogGate(result)) {
+    logGate(issue, "land", result.code === GATE_EXIT.open ? "open" : "closed", view.headRefOid);
+  }
   done(result);
 } catch (error) {
   done({ code: GATE_EXIT.unknown, line: `UNKNOWN: ${String(error.message).split("\n")[0]}` });

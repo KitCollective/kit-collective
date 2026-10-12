@@ -693,7 +693,7 @@ test("a gate that keeps waiting is bounded: five slices, then a clear stop in th
   assert.equal(pre.commands.filter(isPre).length, 5);
   assert.equal(pre.result.status, "In Progress");
   assert.equal(pre.result.stoppedAt, "pre-review gate");
-  assert.match(pre.result.note, /still waiting after 5 slices of 540s/);
+  assert.match(pre.result.note, /still waiting after 5 slices of 480s/);
   assert.ok(pre.commands.some((c) => c.includes("--code ci-pending")));
   assert.equal(lastState(pre.commands), "In Progress");
 
@@ -729,7 +729,7 @@ test("the review gate keeps going when early slices wait and a later one is open
 test("the Engineer prompt asks for foreground slices and treats exit 5 as blocked", async () => {
   const { spawns } = await run();
   const engineer = agentSpawns(spawns).find((s) => s.options.label.startsWith("engineer:")).prompt;
-  assert.match(engineer, /wait-for-checks\.mjs <pr> --timeout 540/);
+  assert.match(engineer, /wait-for-checks\.mjs <pr> --timeout 480/);
   assert.match(engineer, /up to 5 times/);
   assert.match(engineer, /Exit 5 means gh is unusable/);
 });

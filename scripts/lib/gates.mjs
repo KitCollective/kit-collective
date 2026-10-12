@@ -321,3 +321,23 @@ export function scopeSource(view, issueDescription) {
 export function workpadHasPlan(workpad) {
   return /^### Plan[ \t]*$/m.test(workpad ?? "");
 }
+
+/** Below this many seconds of budget a wait cannot finish a poll, so the gate answers waiting at once. */
+export const MIN_WAIT_SECONDS = 30;
+
+/**
+ * What is left of a gate call's total `--timeout` for waiting on checks, after the mechanical
+ * steps took `elapsedMs`; null when too little remains (the gate then reports waiting).
+ * @param {string | number} totalSeconds
+ * @param {number} elapsedMs
+ * @returns {number | null}
+ */
+export function remainingWaitSeconds(totalSeconds, elapsedMs) {
+  const left = Math.floor(Number(totalSeconds) - elapsedMs / 1000);
+  return Number.isFinite(left) && left >= MIN_WAIT_SECONDS ? left : null;
+}
+
+/** A waiting gate result (exit 3) is never written to the run log: only open or closed is an outcome. */
+export function shouldLogGate(result) {
+  return result.code !== GATE_EXIT.waiting;
+}
