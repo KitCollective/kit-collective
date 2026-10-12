@@ -115,7 +115,7 @@ async function runRaw(label, phaseTitle, commands, keepGoing) {
   const prompt = [
     "You are a command runner. Run the numbered commands below in the repository root, in order, each exactly as written.",
     "For each one report its exit code and the last non-empty line of its combined output, verbatim, in `results`.",
-    "Run every command in the foreground and wait for it to finish, however long it takes (a command can legitimately run 25 minutes). Never background a command: no `&`, no `nohup`, no `disown`, no `timeout` or `sleep` wrapper, no output redirected to a file to read later. Do not end your turn with prose: your turn ends only with the `results` array, one entry per command you ran.",
+    "Run every command in the foreground and wait for it to finish, until it finishes (a command can run up to about 9 minutes; the foreground limit is 10). Never background a command: no `&`, no `nohup`, no `disown`, no `timeout` or `sleep` wrapper, no output redirected to a file to read later. Do not end your turn with prose: your turn ends only with the `results` array, one entry per command you ran.",
     keepGoing
       ? "Run every command even when one fails."
       : "Stop after the first command that exits non-zero: report it and do not run the rest (fewer results than commands is correct then).",
@@ -171,6 +171,26 @@ async function sh(label, phaseTitle, commands, keepGoing = false, retry = false)
     // The log is best effort here; the stop note below still names the failure.
   }
   return [...got, { code: 4, runner: true, line: `runner-no-result: the command runner returned nothing for: ${meant}` }];
+}
+
+// A claude-code thread's foreground command is capped at 10 minutes (600 s). A gate that waits for
+// CI cannot be held that long in one call, which is why the runner on KIT-285 backgrounded it. So
+// every wait runs in slices of GATE_SLICE_SECONDS (well under the cap, with room for the mechanical
+// steps and the runner's own overhead) and the workflow repeats a slice while the verdict is
+// "waiting" (gate exit 3), up to GATE_SLICES slices: 5 x 540 s is about 45 minutes of wall clock.
+const GATE_SLICE_SECONDS = 540;
+const GATE_SLICES = 5;
+
+/** Runs one gate command in slices; `exhausted` is set when every slice still said waiting. */
+async function gateSlices(label, phaseTitle, command) {
+  let out = { code: 4, line: `no output from ${label}` };
+  for (let slice = 1; slice <= GATE_SLICES; slice += 1) {
+    out = (await sh(label, phaseTitle, [command], false, true))[0] ?? out;
+    if (out.code !== 3) {
+      return out;
+    }
+  }
+  return { ...out, exhausted: true, line: `${out.line} (still waiting after ${GATE_SLICES} slices of ${GATE_SLICE_SECONDS}s)` };
 }
 
 const logCmd = (event, flags) => `node scripts/run-log.mjs ${event} ${flags}`;
@@ -250,7 +270,20 @@ if (resume) {
 const roles = Array.isArray(decision.roles) ? decision.roles.join(", ") : "";
 
 // ---- Lead ---------------------------------------------------------------------------------------
-if (decision.plan && args.skipLead !== true) {
+// A resume keeps the plan the Engineer built against: the Lead is skipped when the workpad already
+// holds `### Plan`. The check is a fixed command (no agent text); an unreadable workpad stops the run
+// rather than risk overwriting the plan.
+let leadNeeded = decision.plan && args.skipLead !== true;
+if (leadNeeded && resume) {
+  const planCheck = (await sh("plan-check", "Lead", [`node scripts/workpad-has-plan.mjs ${issue}`], false, true))[0];
+  if (planCheck.code === 0) {
+    leadNeeded = false;
+    await sh("log:lead-skipped", "Lead", [logCmd("reason", `--issue ${issue} --code lead-skipped`)], true);
+  } else if (planCheck.code !== 1) {
+    return stopped("lead", "stopped", { note: `could not read the workpad to see whether a plan exists: ${planCheck.line}` });
+  }
+}
+if (leadNeeded) {
   phase("Lead");
   let lead = null;
   try {
@@ -324,7 +357,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
   const prompt = [
     `You are the Engineer for ${issue}. Read .cursor/skills/implement/SKILL.md and follow it, with /tdd and the Roles it names. ${resumeNote}`,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
-    "Wait for CI only in the foreground: `node scripts/wait-for-checks.mjs <pr> --timeout 1500`. Never start it in the background and end your turn; on a timeout or exit 3 say so in the result.",
+    `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
     feedback ? `Change request from the last round (fix the class, not the instance):\n${feedback}` : "",
     "Return outcome ready (only when the pre-review gate in implement/SKILL.md is true), blocked (sentence starts `needs-human:` or `blocked-by KIT-m:`) or failed, one sentence, the PR number, and your own thread id ($BB_THREAD_ID) in threadId.",
@@ -390,14 +423,14 @@ for (let round = 1; round <= maxRounds; round += 1) {
 
   // -- Pre-review gate: mechanical steps and checks only, no matrix (ADR-0058).
   phase("Pre-review gate");
-  let pre = null;
-  for (let tries = 0; tries < 3; tries += 1) {
-    const out = await sh("gate:pre-review", "Pre-review gate", [`node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout 1500`], false, true);
-    pre = out[0] ?? { code: 4, line: "no output from gate.mjs pre-review" };
-    if (pre.code !== 3) break;
-  }
+  const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
   if (pre.runner) {
     // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
+    return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
+  }
+  if (pre.exhausted) {
+    // Checks never finished inside the bound: not a red gate, so no fix round, and the issue is still In Progress.
+    await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
     return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
   }
   if (pre.code !== 0) {
@@ -466,8 +499,11 @@ for (let round = 1; round <= maxRounds; round += 1) {
 
   // -- Full review gate (matrix included) and the receipt as a dry run.
   phase("Review gate");
-  const full = await sh("gate:review", "Review gate", [`node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout 1500`], false, true);
-  const gate = full[0] ?? { code: 4, line: "no output from gate.mjs review" };
+  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
+  if (gate.exhausted) {
+    await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
+    return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
+  }
   if (gate.runner) {
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
   }

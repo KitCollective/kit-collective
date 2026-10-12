@@ -16,6 +16,7 @@ import {
   scopeEnv,
   scopeSource,
   sessionCheck,
+  workpadHasPlan,
 } from "../lib/gates.mjs";
 
 const HEAD = "a".repeat(40);
@@ -405,4 +406,11 @@ test("foldReview: gh unusable (exit 5 from checks) is UNKNOWN, not closed", () =
   ]);
   assert.equal(result.code, GATE_EXIT.unknown);
   assert.match(result.line, /^UNKNOWN \(review\): checks: UNKNOWN: gh too old/);
+});
+
+test("workpadHasPlan: a Plan heading counts, a mention does not", () => {
+  assert.equal(workpadHasPlan("## Workpad\n\n### Plan\n- step\n"), true);
+  assert.equal(workpadHasPlan("## Workpad\nsee the ### Plan later\n"), false);
+  assert.equal(workpadHasPlan("### Planning notes\n"), false);
+  assert.equal(workpadHasPlan(""), false);
 });

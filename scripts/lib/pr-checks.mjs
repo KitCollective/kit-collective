@@ -14,6 +14,17 @@ const TRANSIENT =
 const PERMANENT =
   /unknown (shorthand )?flag|unknown command|unknown json field|accepts \d+ arg|requires? (at least|exactly)|invalid (argument|json)|auth login|not logged in|authentication|bad credentials|HTTP 40[134]|could not resolve to a pullrequest|no pull requests? found|not found/i;
 
+/** A PR that gh cannot find yet: it can be a PR created seconds ago that is not indexed. */
+const NOT_FOUND = /HTTP 404|could not resolve to a pullrequest|no pull requests? found|not found/i;
+
+/** How many consecutive not-found answers are retried before they count as permanent. */
+export const NOT_FOUND_ATTEMPTS = 3;
+
+/** @param {{ message?: string, stderr?: string }} error */
+export function isNotFoundGhError(error) {
+  return NOT_FOUND.test(`${error?.stderr ?? ""}\n${error?.message ?? ""}`);
+}
+
 /**
  * A gh failure that waiting cannot fix: a usage error (unknown flag or command), an auth
  * failure, a PR that does not exist, or output that is not JSON. Anything else (network, rate

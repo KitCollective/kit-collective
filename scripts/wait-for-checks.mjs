@@ -11,7 +11,8 @@
  * at the timeout, 3 green but not mergeable (behind, conflicting), 4 unknown (retried until the
  * timeout), 5 gh itself is unusable: too old for `--json` on `pr checks`, a usage or auth error,
  * a PR that does not exist, output that is not JSON. Exit 5 is immediate and the verdict line
- * names the cause (`UNKNOWN: gh ...`); only genuine transient states (pending checks, network
+ * names the cause (`UNKNOWN: gh ...`); a not-found answer is retried 3 times first (a PR created
+ * seconds ago); only genuine transient states (pending checks, network
  * blips, rate limits) are retried. A startup probe of `gh pr checks --help` catches a gh without
  * `--json` before any waiting.
  * Run it in the background when a session wants to keep working: the harness re-invokes on exit.
@@ -22,7 +23,9 @@ import {
   EXIT,
   GH_REQUIREMENT,
   ghErrorLine,
+  isNotFoundGhError,
   isPermanentGhError,
+  NOT_FOUND_ATTEMPTS,
   prArgument,
   verdict,
 } from "./lib/pr-checks.mjs";
@@ -93,13 +96,17 @@ async function snapshot() {
 await probeGh();
 const started = Date.now();
 let last = "";
+let notFound = 0;
 for (;;) {
   let result;
   try {
     const { checks, view } = await snapshot();
+    notFound = 0;
     result = verdict(checks, view, { failFast });
   } catch (error) {
-    if (isPermanentGhError(error)) {
+    // A PR created seconds ago can answer not-found for a moment: only repeated answers are permanent.
+    notFound = isNotFoundGhError(error) ? notFound + 1 : 0;
+    if (isPermanentGhError(error) && (notFound === 0 || notFound >= NOT_FOUND_ATTEMPTS)) {
       process.stdout.write(`UNKNOWN: gh failed, retrying cannot help: ${ghErrorLine(error)}\n`);
       process.exit(EXIT.ghBroken);
     }

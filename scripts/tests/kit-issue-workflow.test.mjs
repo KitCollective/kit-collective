@@ -29,7 +29,14 @@ const SHA = "a".repeat(40);
  * @param {(round: number) => any} [opts.reviewer]
  * @param {any} [opts.lead]
  */
-async function run({ args = { issue: "KIT-9" }, shell, engineer, reviewer, lead } = {}) {
+async function run({
+  args = { issue: "KIT-9" },
+  shell,
+  engineer,
+  reviewer,
+  lead,
+  startDecision,
+} = {}) {
   const commands = [];
   const spawns = [];
   const phases = [];
@@ -41,6 +48,7 @@ async function run({ args = { issue: "KIT-9" }, shell, engineer, reviewer, lead 
     roles: [],
     engineerModel: "sonnet",
     modelWhy: "default",
+    ...startDecision,
   };
   const fakeAgent = async (prompt, options = {}) => {
     spawns.push({ prompt, options });
@@ -333,12 +341,11 @@ test("a closed pre-review gate (scope missing in the PR) is logged with its own 
 test("the pre-review gate waits again on exit 3 and the matrix is not read before the reviewer", async () => {
   let n = 0;
   const { result, commands } = await run({
-    shell: (c) =>
-      c.includes("gate.mjs pre-review")
-        ? ++n < 3
-          ? { code: 3, line: "WAITING: checks pending" }
-          : { code: 0, line: "OPEN" }
-        : undefined,
+    shell: (c) => {
+      if (!c.includes("gate.mjs pre-review")) return undefined;
+      n += 1;
+      return n < 3 ? { code: 3, line: "WAITING: checks pending" } : { code: 0, line: "OPEN" };
+    },
   });
   assert.equal(result.status, "Approval");
   assert.equal(commands.filter((c) => c.includes("gate.mjs pre-review")).length, 3);
@@ -654,4 +661,122 @@ test("resume with no open PR tells the Engineer to open exactly one", async () =
 test("a fresh run does no PR lookup", async () => {
   const { commands } = await run();
   assert.ok(!commands.some(lookup));
+});
+
+test("no command the workflow builds waits longer than the 10 minute foreground cap allows", async () => {
+  const scenarios = [
+    await run(),
+    await run({
+      args: { issue: "KIT-9", resume: true },
+      shell: (c) => (c.includes("gh pr list") ? { code: 0, line: "77" } : undefined),
+    }),
+    await run({
+      shell: (c) => (c.includes("gate.mjs") ? { code: 3, line: "WAITING" } : undefined),
+    }),
+  ];
+  let seen = 0;
+  for (const { commands, spawns } of scenarios) {
+    for (const text of [...commands, ...spawns.map((s) => s.prompt)]) {
+      for (const m of text.matchAll(/--timeout (\d+)/g)) {
+        seen += 1;
+        assert.ok(Number(m[1]) <= 560, `${m[0]} in: ${text.slice(0, 80)}`);
+      }
+    }
+  }
+  assert.ok(seen > 3, "the check must have seen gate and Engineer timeouts");
+});
+
+test("a gate that keeps waiting is bounded: five slices, then a clear stop in the right state", async () => {
+  const pre = await run({
+    shell: (c) => (isPre(c) ? { code: 3, line: "WAITING: checks pending" } : undefined),
+  });
+  assert.equal(pre.commands.filter(isPre).length, 5);
+  assert.equal(pre.result.status, "In Progress");
+  assert.equal(pre.result.stoppedAt, "pre-review gate");
+  assert.match(pre.result.note, /still waiting after 5 slices of 540s/);
+  assert.ok(pre.commands.some((c) => c.includes("--code ci-pending")));
+  assert.equal(lastState(pre.commands), "In Progress");
+
+  const review = await run({
+    shell: (c) =>
+      c.includes("gate.mjs review")
+        ? { code: 3, line: "WAITING (review): checks pending" }
+        : undefined,
+  });
+  assert.equal(review.commands.filter((c) => c.includes("gate.mjs review")).length, 5);
+  assert.equal(review.result.status, "In Review");
+  assert.equal(review.result.stoppedAt, "review gate");
+  assert.match(review.result.note, /still waiting after 5 slices/);
+  assert.equal(lastState(review.commands), "In Review");
+  assert.equal(
+    agentSpawns(review.spawns).filter((s) => s.options.label.startsWith("engineer:")).length,
+    1,
+  );
+});
+
+test("the review gate keeps going when early slices wait and a later one is open", async () => {
+  let n = 0;
+  const { result } = await run({
+    shell: (c) => {
+      if (!c.includes("gate.mjs review")) return undefined;
+      n += 1;
+      return n < 3 ? { code: 3, line: "WAITING" } : { code: 0, line: "OPEN (review)" };
+    },
+  });
+  assert.equal(result.status, "Approval");
+});
+
+test("the Engineer prompt asks for foreground slices and treats exit 5 as blocked", async () => {
+  const { spawns } = await run();
+  const engineer = agentSpawns(spawns).find((s) => s.options.label.startsWith("engineer:")).prompt;
+  assert.match(engineer, /wait-for-checks\.mjs <pr> --timeout 540/);
+  assert.match(engineer, /up to 5 times/);
+  assert.match(engineer, /Exit 5 means gh is unusable/);
+});
+
+const planCheck = (c) => c.includes("workpad-has-plan.mjs");
+const planned = (extra) => run({ args: { issue: "KIT-9", resume: true }, ...extra });
+
+test("resume skips the Lead when the workpad already has a plan, and logs it", async () => {
+  const { result, commands, spawns } = await planned({
+    startDecision: { plan: true },
+    shell: (c) =>
+      planCheck(c)
+        ? { code: 0, line: "PLAN-PRESENT KIT-9" }
+        : c.includes("gh pr list")
+          ? { code: 0, line: "77" }
+          : undefined,
+  });
+  assert.ok(commands.some(planCheck));
+  assert.ok(commands.some((c) => c.includes("--code lead-skipped")));
+  assert.ok(!agentSpawns(spawns).some((s) => s.options.label.startsWith("lead:")));
+  assert.equal(result.status, "Approval");
+});
+
+test("resume without a plan still runs the Lead; an unreadable workpad stops the run", async () => {
+  const lookup = (c) => (c.includes("gh pr list") ? { code: 0, line: "77" } : undefined);
+  const none = await planned({
+    startDecision: { plan: true },
+    shell: (c) => (planCheck(c) ? { code: 1, line: "PLAN-ABSENT KIT-9" } : lookup(c)),
+  });
+  assert.ok(agentSpawns(none.spawns).some((s) => s.options.label.startsWith("lead:")));
+  assert.ok(!none.commands.some((c) => c.includes("--code lead-skipped")));
+  const broken = await planned({
+    startDecision: { plan: true },
+    shell: (c) => (planCheck(c) ? { code: 4, line: "UNKNOWN: boom" } : lookup(c)),
+  });
+  assert.equal(broken.result.status, "stopped");
+  assert.ok(!agentSpawns(broken.spawns).some((s) => s.options.label.startsWith("lead:")));
+});
+
+test("a fresh run never asks for the workpad plan, and skipLead still skips the Lead", async () => {
+  const fresh = await run({ startDecision: { plan: true } });
+  assert.ok(!fresh.commands.some(planCheck));
+  assert.ok(agentSpawns(fresh.spawns).some((s) => s.options.label.startsWith("lead:")));
+  const skip = await planned({
+    args: { issue: "KIT-9", resume: true, skipLead: true },
+    startDecision: { plan: true },
+    shell: (c) => (c.includes("gh pr list") ? { code: 0, line: "77" } : undefined),
+  });
+  assert.ok(!skip.commands.some(planCheck));
 });

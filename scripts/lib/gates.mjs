@@ -312,3 +312,12 @@ export function scopeSource(view, issueDescription) {
   }
   return { source: "none", globs: [], env: scopeEnv(view), problem: null };
 }
+
+/**
+ * Whether the workpad already holds a `### Plan` section (a heading line, not a mention). A
+ * resume skips the Lead then, so the plan the Engineer built against is not overwritten.
+ * @param {string} workpad
+ */
+export function workpadHasPlan(workpad) {
+  return /^### Plan[ \t]*$/m.test(workpad ?? "");
+}

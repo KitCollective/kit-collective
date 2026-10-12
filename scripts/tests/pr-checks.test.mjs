@@ -198,3 +198,31 @@ test("isPermanentGhError separates usage and auth errors from transient ones", (
   for (const stderr of transient) assert.equal(isPermanentGhError({ stderr }), false, stderr);
   assert.equal(isPermanentGhError(new SyntaxError("Unexpected token")), true);
 });
+
+test("a not-found answer right after the PR was created is retried, then green", () => {
+  const counter = join(mkdtempSync(join(tmpdir(), "gh-count-")), "n");
+  const dir = fakeGhScript(
+    `n=$(cat "${counter}" 2>/dev/null || echo 0)
+if [ "$2" = "view" ]; then echo '{"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN"}'; exit 0; fi
+if [ "$n" -lt 2 ]; then echo $((n+1)) > "${counter}"; echo "GraphQL: Could not resolve to a PullRequest with the number of 12." >&2; exit 1; fi
+echo '[{"name":"test","bucket":"pass","state":"SUCCESS"}]'`,
+  );
+  const result = spawnSync("node", [SCRIPT, "12", "--interval", "1", "--timeout", "30"], {
+    env: { ...process.env, PATH: `${dir}:${process.env.PATH}` },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stdout);
+  assert.match(result.stdout, /GREEN/);
+});
+
+test("a PR that stays not-found is permanent after three attempts", () => {
+  const dir = fakeGhScript(
+    'echo "Could not resolve to a PullRequest with the number of 12." >&2; exit 1',
+  );
+  const result = spawnSync("node", [SCRIPT, "12", "--interval", "1", "--timeout", "60"], {
+    env: { ...process.env, PATH: `${dir}:${process.env.PATH}` },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, EXIT.ghBroken);
+  assert.match(result.stdout, /Could not resolve to a PullRequest/);
+});
