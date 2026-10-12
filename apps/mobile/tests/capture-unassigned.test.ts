@@ -20,6 +20,9 @@ import {
 } from "../src/capture/unassignedPhotos";
 
 const URIS = Array.from({ length: 14 }, (_, index) => `file:///photos/u-${index}.jpg`);
+const A = "file:///photos/u-0.jpg";
+const B = "file:///photos/u-1.jpg";
+const C = "file:///photos/u-2.jpg";
 
 /** A bulk session whose first draft holds `count` photos, named FC Barcelona 2023/24 Hjemme. */
 function sessionWithDraft(count: number): { state: CaptureSessionState; draftId: string } {
@@ -34,7 +37,7 @@ function sessionWithDraft(count: number): { state: CaptureSessionState; draftId:
 
 describe("selection in pick order", () => {
   it("numbers the badges 1, 2, 3 in the order the photos were picked", () => {
-    const [a, b, c] = URIS as [string, string, string];
+    const [a, b, c] = [A, B, C];
     let selection: string[] = [];
     selection = toggleSelection(selection, b);
     selection = toggleSelection(selection, a);
@@ -47,7 +50,7 @@ describe("selection in pick order", () => {
   });
 
   it("renumbers the rest when a photo is deselected", () => {
-    const [a, b, c] = URIS as [string, string, string];
+    const [a, b, c] = [A, B, C];
     let selection = [a, b, c];
     selection = toggleSelection(selection, a);
 
