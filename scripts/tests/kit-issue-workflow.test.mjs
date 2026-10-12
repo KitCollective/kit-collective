@@ -24,7 +24,7 @@ const SHA = "a".repeat(40);
 /**
  * @param {object} opts
  * @param {Record<string, any>} [opts.args]
- * @param {(command: string) => { code: number, line: string } | undefined} [opts.shell]
+ * @param {(command: string) => { code: number, line: string } | null | undefined} [opts.shell]
  * @param {(round: number) => any} [opts.engineer] returns the engineer result (or null / throws)
  * @param {(round: number) => any} [opts.reviewer]
  * @param {any} [opts.lead]
@@ -53,6 +53,8 @@ async function run({ args = { issue: "KIT-9" }, shell, engineer, reviewer, lead 
       for (const command of lines) {
         commands.push(command);
         const custom = shell?.(command);
+        // `null` plays a runner that ended its turn without a results array entry (KIT-285).
+        if (custom === null) return { results };
         const result =
           custom ??
           (command.includes("start-decision.mjs")
@@ -505,9 +507,151 @@ test("the returned status matches the last Linear state in every stop path", asy
           ? { code: 1, line: "CLOSED (review): matrix: empty row" }
           : undefined,
     }),
-    await run({ args: { issue: "KIT-9", resume: true }, engineer: () => new Error("x") }),
+    await run({
+      args: { issue: "KIT-9", resume: true },
+      shell: (c) => (c.includes("gh pr list") ? { code: 0, line: "77" } : undefined),
+      engineer: () => new Error("x"),
+    }),
   ];
   for (const { result, commands } of scenarios) {
     assert.equal(lastState(commands), result.status, `${result.stoppedAt}: ${result.note}`);
   }
+});
+
+const isPre = (c) => c.includes("gate.mjs pre-review");
+
+test("the runner prompt forbids backgrounding and prose endings and says to wait in the foreground", async () => {
+  const { spawns } = await run();
+  const runner = spawns.find((s) => s.options.schema?.required?.includes("results")).prompt;
+  assert.match(runner, /foreground/);
+  assert.match(runner, /Never background/);
+  for (const word of ["`&`", "`nohup`", "`timeout`"]) assert.ok(runner.includes(word), word);
+  assert.match(runner, /Do not end your turn with prose/);
+});
+
+test("an empty runner result for the gate is retried once, then succeeds", async () => {
+  let calls = 0;
+  const { result, commands } = await run({
+    shell: (c) => {
+      if (!isPre(c)) return undefined;
+      calls += 1;
+      return calls === 1 ? null : undefined;
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter(isPre).length, 2);
+  assert.ok(!commands.some((c) => c.includes("--code runner-no-result")));
+});
+
+test("a runner that returns nothing twice stops with runner-no-result, never as a gate verdict", async () => {
+  const { result, commands } = await run({ shell: (c) => (isPre(c) ? null : undefined) });
+  assert.equal(result.status, "In Progress");
+  assert.equal(result.stoppedAt, "pre-review gate");
+  assert.match(
+    result.note,
+    /runner-no-result: the command runner returned nothing for: node scripts\/gate\.mjs pre-review 77/,
+  );
+  assert.equal(commands.filter(isPre).length, 2);
+  assert.ok(commands.some((c) => c.includes("reason") && c.includes("--code runner-no-result")));
+  assert.ok(!commands.some((c) => c.includes("--code gate-closed")));
+  assert.ok(!commands.some((c) => c.includes("reviewer")), "no Reviewer is spawned");
+});
+
+test("a runner that returns nothing for the review gate holds In Review, with no fix round", async () => {
+  const { result, commands, spawns } = await run({
+    shell: (c) => (c.includes("gate.mjs review") ? null : undefined),
+  });
+  assert.equal(result.status, "In Review");
+  assert.equal(result.stoppedAt, "review gate");
+  assert.match(result.note, /runner-no-result/);
+  assert.equal(
+    agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:")).length,
+    1,
+  );
+  assert.ok(commands.some((c) => c.includes("--code runner-no-result")));
+});
+
+test("a short results array without a failing last entry counts as a runner failure", async () => {
+  const { result } = await run({
+    shell: (c) => (c.includes("start-decision") ? null : undefined),
+  });
+  assert.equal(result.status, "stopped");
+  assert.match(result.note, /runner-no-result/);
+});
+
+test("a runner failure is logged with a code the run log accepts", async () => {
+  const { REASON_CODES } = await import("../lib/run-log.mjs");
+  assert.ok(REASON_CODES.includes("runner-no-result"));
+});
+
+const lookup = (c) => c.includes("gh pr list");
+
+test("resume looks the PR up read-only and hands its number to the Engineer", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (lookup(c) ? { code: 0, line: "55" } : undefined),
+    engineer: () => ({
+      outcome: "ready",
+      sentence: "done",
+      threadId: ENGINEER_THREAD,
+      prNumber: 55,
+    }),
+  });
+  const lookupAt = commands.findIndex(lookup);
+  assert.ok(lookupAt >= 0);
+  assert.match(commands[lookupAt], /--state open --search "KIT-9 in:title"/);
+  assert.doesNotMatch(commands[lookupAt], /create|merge|close|edit/);
+  const engineer = agentSpawns(spawns).find((s) => s.options.label.startsWith("engineer:"));
+  assert.match(engineer.prompt, /PR #55 exist/);
+  assert.match(engineer.prompt, /never open a second PR/);
+  assert.equal(result.prNumber, 55);
+  assert.equal(result.status, "Approval");
+  assert.ok(commands.some((c) => c.includes('state KIT-9 "In Progress"')));
+});
+
+test("resume stops when the Engineer reports another PR than the existing one", async () => {
+  const { result, commands } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (lookup(c) ? { code: 0, line: "55" } : undefined),
+    engineer: () => ({
+      outcome: "ready",
+      sentence: "done",
+      threadId: ENGINEER_THREAD,
+      prNumber: 77,
+    }),
+  });
+  assert.equal(result.status, "In Progress");
+  assert.equal(result.stoppedAt, "engineer");
+  assert.match(result.note, /second PR/);
+  assert.ok(!commands.some(isPre), "no gate reads the second PR");
+});
+
+test("resume with two open PRs, or an unreadable answer, stops before the Engineer", async () => {
+  for (const line of ["55,56", "OPEN: fine; $(rm -rf /)"]) {
+    const { result, spawns } = await run({
+      args: { issue: "KIT-9", resume: true },
+      shell: (c) => (lookup(c) ? { code: 0, line } : undefined),
+    });
+    assert.equal(result.status, "stopped");
+    assert.equal(result.stoppedAt, "resume");
+    assert.equal(
+      agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:")).length,
+      0,
+    );
+  }
+});
+
+test("resume with no open PR tells the Engineer to open exactly one", async () => {
+  const { spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (lookup(c) ? { code: 0, line: "" } : undefined),
+  });
+  const engineer = agentSpawns(spawns).find((s) => s.options.label.startsWith("engineer:"));
+  assert.match(engineer.prompt, /no open PR was found/);
+  assert.match(engineer.prompt, /exactly one PR/);
+});
+
+test("a fresh run does no PR lookup", async () => {
+  const { commands } = await run();
+  assert.ok(!commands.some(lookup));
 });

@@ -3,7 +3,39 @@
  * PR's mergeability into one verdict.
  */
 
-export const EXIT = { green: 0, red: 1, pending: 2, notMergeable: 3, unknown: 4 };
+export const EXIT = { green: 0, red: 1, pending: 2, notMergeable: 3, unknown: 4, ghBroken: 5 };
+
+/** The gh known to work (2.102.0, the bb-harness container) and the one known not to (2.23.0). */
+export const GH_REQUIREMENT =
+  'a gh whose "pr checks" has --json (works: 2.102.0; no --json: 2.23.0)';
+
+const TRANSIENT =
+  /rate limit|abuse detection|HTTP 5\d\d|timed? ?out|ECONN|ENOTFOUND|EAI_AGAIN|network|temporar/i;
+const PERMANENT =
+  /unknown (shorthand )?flag|unknown command|unknown json field|accepts \d+ arg|requires? (at least|exactly)|invalid (argument|json)|auth login|not logged in|authentication|bad credentials|HTTP 40[134]|could not resolve to a pullrequest|no pull requests? found|not found/i;
+
+/**
+ * A gh failure that waiting cannot fix: a usage error (unknown flag or command), an auth
+ * failure, a PR that does not exist, or output that is not JSON. Anything else (network, rate
+ * limit, 5xx) is transient and retried until the timeout.
+ * @param {{ message?: string, stderr?: string, name?: string, code?: unknown }} error
+ */
+export function isPermanentGhError(error) {
+  if (error?.name === "SyntaxError" || error?.code === "ENOENT") {
+    return true;
+  }
+  const text = `${error?.stderr ?? ""}\n${error?.message ?? ""}`;
+  return !TRANSIENT.test(text) && PERMANENT.test(text);
+}
+
+/** The first meaningful line of a gh failure, for the verdict line. */
+export function ghErrorLine(error) {
+  const lines = `${error?.stderr ?? ""}\n${error?.message ?? ""}`
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("Command failed"));
+  return lines[0] ?? "no output";
+}
 
 /**
  * @param {{ name: string, bucket: string }[]} checks

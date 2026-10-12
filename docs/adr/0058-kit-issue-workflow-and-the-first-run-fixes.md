@@ -46,4 +46,26 @@ Verified by tests: the gate ordering and the scope source, the unescape, the `st
 4. **Fix-loop depth.** 2 rounds by default, 3 maximum, against the five of `WORKFLOW.md`. Raise it only when real runs show 2 is too tight.
 5. **Delete `kit-slice.js`** (human, hook-protected).
 
-Status: accepted; revisit after the first real `kit-issue` run.
+## What the first real run taught (KIT-285, PR #310, run wfr_25e1a2eb; 2026-10-12)
+
+The run stopped at the pre-review gate with "no output from gate.mjs pre-review" while the real cause was elsewhere. Three links failed in a row:
+
+1. **gh was too old.** The bb-harness container had gh 2.23.0, whose `gh pr checks` has no `--json`. **The first version with `--json` was not established**: a web search did not return it, and `2.40` (an earlier guess) is not a verified number. The requirement is therefore written as a capability, not a version: `gh pr checks --help` must list `--json`. Known good: **2.102.0** (the container now). Known bad: 2.23.0. `wait-for-checks.mjs` probes this at startup.
+2. **`wait-for-checks` retried a permanent error.** Every `gh` failure was folded into exit 4 and retried until `--timeout 1500`. Now a usage, auth, not-found or invalid-JSON failure, or a gh without `--json`, is exit **5** at once, with a verdict line naming the cause (`UNKNOWN: gh too old, needs ...`, `UNKNOWN: gh failed, retrying cannot help: <first stderr line>`). Pending checks, network errors, 5xx and rate limits still retry. `gate.mjs` reports `5` as UNKNOWN (4) with that line.
+3. **The runner backgrounded the command.** The Haiku runner put the 1500 s gate in the background and ended its turn with prose, so `results` was empty, and the script read that as a gate result. Now `sh()` is the one place that detects a missing result (an empty array, or fewer results than commands without a failing last one). It retries once for idempotent commands (session-check, both gates, head-changed, the receipt dry run), logs the new reason code **`runner-no-result`**, and returns a synthetic `{ code: 4, runner: true }` whose line names the command that was meant. A runner failure never opens a fix round, is never logged as `gate-closed`, and the stop note starts `runner-no-result:`. The runner prompt forbids `&`, `nohup`, `timeout` and `sleep` wrappers and a prose ending, and says to wait in the foreground.
+
+**Gate results through a runner model are still not merge-grade.** Detecting an empty result does not make a relayed exit code trustworthy: a runner can still report a wrong code or a wrong last line. A human re-runs `gate.mjs review` and the receipt before any merge, as the `Merging` step already does. Decision 2 (a deterministic plugin command) stays open and is more attractive after this run.
+
+### Resume (`"resume": true`), as read from the workflow and its tests
+
+Before this change, resume did this: `session-check --resume` skipped the PR, branch, state and run-log checks; the claim to `In Progress` was skipped in the start step and made at the top of every Engineer round instead; the Engineer prompt said "the branch and the PR exist" but **named no PR**, so the Engineer had to find it, and nothing stopped it from opening a second one; a second PR would have gone through the gates as the new `prNumber`. A closed pre-review gate or a head already audited red is not remembered by the workflow: both gates run again from the PR's current head, and `head-changed` still refuses a head the run log shows as audited red.
+
+Now: a read-only runner step (`gh pr list --state open --search "<KIT-n> in:title"`, filtered to titles that start `<KIT-n>:`) returns the open PR numbers. Exactly one number (digits only) is validated and handed to the Engineer; none means the prompt says to open exactly one PR; two or more, or an unreadable answer, stops with `stoppedAt: resume` before any Engineer is spawned. If the Engineer then reports a different PR number than the known one (resume or a later fix round), the run stops before any gate reads it.
+
+**Gaps that remain:** (a) the lookup finds open PRs only: a merged or closed PR from an earlier run is invisible, and a resume then opens a new one; (b) the title match assumes the `<KIT-n>:` title convention; (c) a branch without a PR is reused only by the Engineer's own judgment; (d) the Engineer's claim that it opened no second PR is checked only through the PR number it reports, not by listing PRs again after the step.
+
+### Verified, and not, after this change
+
+Verified by tests: the exit-5 paths with a fake `gh` on PATH (too old, usage error mid-run, auth, invalid JSON; transient network and rate limit still retry), `foldReview` on exit 5, runner empty/short detection with one retry, `runner-no-result` logging, no fix round on a runner failure, the runner prompt text, and resume's lookup, number hand-over, second-PR stop and ambiguity stop. **Not verified:** a real bb run, whether a real Haiku runner obeys the foreground rule, and `bb workflows validate` (re-run it in a bb thread after merging; the `agent()` calls keep literal `provider` and `model` values and plain options).
+
+Status: accepted; revisit after the next real `kit-issue` run.

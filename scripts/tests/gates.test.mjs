@@ -397,3 +397,12 @@ test("skills order the gates: pre-review before the reviewer, the full review ga
   assert.match(implement, /Wait in the foreground/);
   assert.match(implement, /write-scope:` line verbatim into the PR body/);
 });
+
+test("foldReview: gh unusable (exit 5 from checks) is UNKNOWN, not closed", () => {
+  const result = foldReview([
+    { name: "scope", code: 0, line: "ok" },
+    { name: "checks", code: 5, line: "UNKNOWN: gh too old, needs a gh whose pr checks has --json" },
+  ]);
+  assert.equal(result.code, GATE_EXIT.unknown);
+  assert.match(result.line, /^UNKNOWN \(review\): checks: UNKNOWN: gh too old/);
+});

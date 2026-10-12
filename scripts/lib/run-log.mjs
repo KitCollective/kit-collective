@@ -43,6 +43,7 @@ export const REASON_CODES = [
   "tool-refused",
   "evidence-gap",
   "no-result-line",
+  "runner-no-result",
   "ci-red",
   "replan",
   "conflict",

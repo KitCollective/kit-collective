@@ -233,7 +233,7 @@ export function parseResultLine(tag, text) {
 
 /**
  * Review gate: folds the steps into one verdict. A step is `{ name, code, line }` with
- * wait-for-checks style codes (0 ok, 1 red, 2 pending, 3 not mergeable, 4 unknown) except the
+ * wait-for-checks style codes (0 ok, 1 red, 2 pending, 3 not mergeable, 4 unknown, 5 gh unusable) except the
  * mechanical steps, which use 0 ok and anything else red.
  * @param {{ name: string, code: number, line: string }[]} steps
  */
@@ -256,7 +256,7 @@ export function foldReview(steps) {
   const code =
     first.name === "checks" && first.code === 2
       ? GATE_EXIT.waiting
-      : first.name === "checks" && first.code === 4
+      : first.name === "checks" && (first.code === 4 || first.code === 5)
         ? GATE_EXIT.unknown
         : GATE_EXIT.closed;
   const word =

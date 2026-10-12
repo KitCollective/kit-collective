@@ -13,7 +13,7 @@ Facts this relies on (verify with `bb project list`, `bb machine list` when in d
 | --- | --- |
 | bb project | `kit-collective` = `proj_rp846ybret` |
 | Mac (owner's machine) | `host_kttknna49n` |
-| Container `bb-harness` (Hetzner, isolated) | `host_new78xp362`: node 22, git, pnpm 9.15.4, gh, python3, jq; repo at `/home/node/work/kit-collective` |
+| Container `bb-harness` (Hetzner, isolated) | `host_new78xp362`: node 22, git, pnpm 9.15.4, gh 2.102.0 (`gh pr checks --json` is required; 2.23.0 lacks it, ADR-0058), python3, jq; repo at `/home/node/work/kit-collective` |
 | Secrets | `GH_TOKEN`, `LINEAR_API_KEY` in the main checkout's gitignored `.env` (`bb secret request` needs a bb thread) |
 
 ## Machine routing (hand-driven runs; the kit-issue workflow cannot route, ADR-0058)

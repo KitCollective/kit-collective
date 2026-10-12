@@ -27,6 +27,8 @@ Refs validated with `assertRef` and `--end-of-options`: every script above that 
 
 Exit codes everywhere: `0` open, `1` closed, `2` usage, `3` waiting, `4` unknown. Each gate logs `gate` events (ADR-0052).
 
+`wait-for-checks.mjs` has its own table, which `gate.mjs` folds into the gate codes: `0` green and MERGEABLE, `1` red, `2` pending at the timeout (the gate says waiting, `3`), `3` green but not mergeable, `4` unknown (retried until the timeout), `5` gh unusable (usage or auth error, a missing PR, output that is not JSON, or a gh without `--json` on `pr checks`; immediate, never retried). The gate reports `4` and `5` alike as UNKNOWN (`4`) and keeps the cause on its verdict line (ADR-0058).
+
 Known limit: the claim race. Two orchestrators started together can both get OPEN from `session-check` and both claim the issue, because Linear has no atomic claim. The run-log check narrows the window; it does not remove it. `gate.mjs review` also refuses to run unless the checkout is the PR's head, since its diff-based steps read the checkout.
 
 Gives up: the gates read GitHub and Linear on every call (rate and latency), and the session check is advisory between two orchestrators started in the same second.
