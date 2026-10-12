@@ -233,7 +233,7 @@ export function parseResultLine(tag, text) {
 
 /**
  * Review gate: folds the steps into one verdict. A step is `{ name, code, line }` with
- * wait-for-checks style codes (0 ok, 1 red, 2 pending, 3 not mergeable, 4 unknown) except the
+ * wait-for-checks style codes (0 ok, 1 red, 2 pending, 3 not mergeable, 4 unknown, 5 gh unusable) except the
  * mechanical steps, which use 0 ok and anything else red.
  * @param {{ name: string, code: number, line: string }[]} steps
  */
@@ -256,7 +256,7 @@ export function foldReview(steps) {
   const code =
     first.name === "checks" && first.code === 2
       ? GATE_EXIT.waiting
-      : first.name === "checks" && first.code === 4
+      : first.name === "checks" && (first.code === 4 || first.code === 5)
         ? GATE_EXIT.unknown
         : GATE_EXIT.closed;
   const word =
@@ -311,4 +311,33 @@ export function scopeSource(view, issueDescription) {
     };
   }
   return { source: "none", globs: [], env: scopeEnv(view), problem: null };
+}
+
+/**
+ * Whether the workpad already holds a `### Plan` section (a heading line, not a mention). A
+ * resume skips the Lead then, so the plan the Engineer built against is not overwritten.
+ * @param {string} workpad
+ */
+export function workpadHasPlan(workpad) {
+  return /^### Plan[ \t]*$/m.test(workpad ?? "");
+}
+
+/** Below this many seconds of budget a wait cannot finish a poll, so the gate answers waiting at once. */
+export const MIN_WAIT_SECONDS = 30;
+
+/**
+ * What is left of a gate call's total `--timeout` for waiting on checks, after the mechanical
+ * steps took `elapsedMs`; null when too little remains (the gate then reports waiting).
+ * @param {string | number} totalSeconds
+ * @param {number} elapsedMs
+ * @returns {number | null}
+ */
+export function remainingWaitSeconds(totalSeconds, elapsedMs) {
+  const left = Math.floor(Number(totalSeconds) - elapsedMs / 1000);
+  return Number.isFinite(left) && left >= MIN_WAIT_SECONDS ? left : null;
+}
+
+/** A waiting gate result (exit 3) is never written to the run log: only open or closed is an outcome. */
+export function shouldLogGate(result) {
+  return result.code !== GATE_EXIT.waiting;
 }

@@ -111,10 +111,11 @@ const RUNNER_SCHEMA = {
 };
 
 /** Runs fixed commands one after another through a runner worker; stops at the first non-zero exit unless `keepGoing`. */
-async function sh(label, phaseTitle, commands, keepGoing = false) {
+async function runRaw(label, phaseTitle, commands, keepGoing) {
   const prompt = [
     "You are a command runner. Run the numbered commands below in the repository root, in order, each exactly as written.",
     "For each one report its exit code and the last non-empty line of its combined output, verbatim, in `results`.",
+    "Run every command in the foreground and wait for it to finish, until it finishes (a command can run up to about 9 minutes; the foreground limit is 10). Never background a command: no `&`, no `nohup`, no `disown`, no `timeout` or `sleep` wrapper, no output redirected to a file to read later. Do not end your turn with prose: your turn ends only with the `results` array, one entry per command you ran.",
     keepGoing
       ? "Run every command even when one fails."
       : "Stop after the first command that exits non-zero: report it and do not run the rest (fewer results than commands is correct then).",
@@ -130,7 +131,66 @@ async function sh(label, phaseTitle, commands, keepGoing = false) {
     model: "claude-haiku-5-5",
     reasoningLevel: "low",
   });
-  return out.results;
+  return out?.results;
+}
+
+/** True when the runner returned less than it must have: nothing, or fewer results than commands without a failing last one. */
+function runnerShort(results, commands, keepGoing) {
+  if (!Array.isArray(results) || results.length === 0) {
+    return true;
+  }
+  if (results.length >= commands.length) {
+    return false;
+  }
+  return keepGoing || results[results.length - 1].code === 0;
+}
+
+/**
+ * The one place a runner failure is detected. A runner that returns nothing (a Haiku worker that
+ * backgrounded the command and ended on prose, KIT-285) is never a gate verdict: it is logged as
+ * `runner-no-result` and reported as a synthetic result `{ code: 4, runner: true }` whose line says
+ * which command was meant. `retry` runs the runner a second time first; only for idempotent commands.
+ */
+async function sh(label, phaseTitle, commands, keepGoing = false, retry = false) {
+  let results = null;
+  for (let attempt = 1; attempt <= (retry ? 2 : 1); attempt += 1) {
+    try {
+      results = await runRaw(label, phaseTitle, commands, keepGoing);
+    } catch (error) {
+      results = null;
+    }
+    if (!runnerShort(results, commands, keepGoing)) {
+      return results;
+    }
+  }
+  const got = Array.isArray(results) ? results : [];
+  const meant = String(commands[got.length] ?? commands[0]).slice(0, 200);
+  try {
+    await runRaw("log:runner-no-result", phaseTitle, [logCmd("reason", `--issue ${issue} --code runner-no-result`)], true);
+  } catch (error) {
+    // The log is best effort here; the stop note below still names the failure.
+  }
+  return [...got, { code: 4, runner: true, line: `runner-no-result: the command runner returned nothing for: ${meant}` }];
+}
+
+// A claude-code thread's foreground command is capped at 10 minutes (600 s). A gate that waits for
+// CI cannot be held that long in one call, which is why the runner on KIT-285 backgrounded it. So
+// every wait runs in slices of GATE_SLICE_SECONDS (well under the cap: gate.mjs treats it as the TOTAL budget of one
+// call, mechanical steps included, and the runner adds its own overhead) and the workflow repeats a slice while the verdict is
+// "waiting" (gate exit 3), up to GATE_SLICES slices: 5 x 480 s is about 40 minutes of wall clock.
+const GATE_SLICE_SECONDS = 480;
+const GATE_SLICES = 5;
+
+/** Runs one gate command in slices; `exhausted` is set when every slice still said waiting. */
+async function gateSlices(label, phaseTitle, command) {
+  let out = { code: 4, line: `no output from ${label}` };
+  for (let slice = 1; slice <= GATE_SLICES; slice += 1) {
+    out = (await sh(label, phaseTitle, [command], false, true))[0] ?? out;
+    if (out.code !== 3) {
+      return out;
+    }
+  }
+  return { ...out, exhausted: true, line: `${out.line} (still waiting after ${GATE_SLICES} slices of ${GATE_SLICE_SECONDS}s)` };
 }
 
 const logCmd = (event, flags) => `node scripts/run-log.mjs ${event} ${flags}`;
@@ -170,7 +230,7 @@ function stopped(stoppedAt, status, extra) {
 phase("Session");
 const session = await sh("session-check", "Session", [
   `node scripts/session-check.mjs ${issue}${resume ? " --resume" : ""}`,
-]);
+], false, true);
 if (session.length === 0 || session[0].code !== 0) {
   return stopped("session-check", "stopped", { note: session[0]?.line ?? "no output from session-check" });
 }
@@ -189,10 +249,41 @@ try {
   return stopped("start-decision", "stopped", { note: `start-decision printed no JSON: ${begun[1].line}` });
 }
 const engineerAlias = decision.engineerModel === "opus" ? "opus" : "sonnet";
+
+// A resume joins the PR that exists; it never opens a second one. The lookup is read-only and its
+// answer is digits or nothing, so it can enter the Engineer prompt.
+let resumePr = null;
+if (resume) {
+  const found = await sh("pr-lookup", "Session", [
+    `gh pr list --state open --search "${issue} in:title" --json number,title --jq '[.[] | select(.title | startswith("${issue}:")) | .number] | join(",")'`,
+  ], false, true);
+  const answer = String(found[0]?.line ?? "").trim();
+  if (found[0].code !== 0) {
+    return stopped("resume", "stopped", { note: found[0].line });
+  }
+  if (/^\d+$/.test(answer)) {
+    resumePr = Number(answer);
+  } else if (answer !== "") {
+    return stopped("resume", "stopped", { note: `resume found more than one open PR (or an unreadable answer): ${answer.slice(0, 80)}. Close the extra one, then resume.` });
+  }
+}
 const roles = Array.isArray(decision.roles) ? decision.roles.join(", ") : "";
 
 // ---- Lead ---------------------------------------------------------------------------------------
-if (decision.plan && args.skipLead !== true) {
+// A resume keeps the plan the Engineer built against: the Lead is skipped when the workpad already
+// holds `### Plan`. The check is a fixed command (no agent text); an unreadable workpad stops the run
+// rather than risk overwriting the plan.
+let leadNeeded = decision.plan && args.skipLead !== true;
+if (leadNeeded && resume) {
+  const planCheck = (await sh("plan-check", "Lead", [`node scripts/workpad-has-plan.mjs ${issue}`], false, true))[0];
+  if (planCheck.code === 0) {
+    leadNeeded = false;
+    await sh("log:lead-skipped", "Lead", [logCmd("reason", `--issue ${issue} --code lead-skipped`)], true);
+  } else if (planCheck.code !== 1) {
+    return stopped("lead", "stopped", { note: `could not read the workpad to see whether a plan exists: ${planCheck.line}` });
+  }
+}
+if (leadNeeded) {
   phase("Lead");
   let lead = null;
   try {
@@ -256,14 +347,17 @@ const ENGINEER_SCHEMA = {
 };
 
 async function engineerPass(round, feedback, engineerModelAlias) {
+  const knownPr = prNumber ?? resumePr;
   const resumeNote =
-    round > 1 || resume
-      ? "This is a resume: the branch and the PR exist. Stay on the same branch, never open a second PR, never rewrite pushed history."
-      : "Branch from origin/development, one PR into development.";
+    knownPr !== null
+      ? `This is a resume: the branch and PR #${knownPr} exist. Work on PR #${knownPr} and its branch, never open a second PR, never rewrite pushed history.`
+      : resume
+        ? "This is a resume, but no open PR was found for this issue. Reuse the issue's existing branch if there is one, and open exactly one PR into development."
+        : "Branch from origin/development, one PR into development.";
   const prompt = [
     `You are the Engineer for ${issue}. Read .cursor/skills/implement/SKILL.md and follow it, with /tdd and the Roles it names. ${resumeNote}`,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
-    "Wait for CI only in the foreground: `node scripts/wait-for-checks.mjs <pr> --timeout 1500`. Never start it in the background and end your turn; on a timeout or exit 3 say so in the result.",
+    `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
     feedback ? `Change request from the last round (fix the class, not the instance):\n${feedback}` : "",
     "Return outcome ready (only when the pre-review gate in implement/SKILL.md is true), blocked (sentence starts `needs-human:` or `blocked-by KIT-m:`) or failed, one sentence, the PR number, and your own thread id ($BB_THREAD_ID) in threadId.",
@@ -274,7 +368,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
 }
 
 let feedback = "";
-let prNumber = null;
+let prNumber = resumePr;
 let rounds = 0;
 let lastVerdict = "";
 let receipt = "";
@@ -318,6 +412,10 @@ for (let round = 1; round <= maxRounds; round += 1) {
     }
     return stopped("engineer", "In Progress", { rounds, note: `Engineer failed: ${engineer.sentence}` });
   }
+  if (prNumber !== null && Number.isInteger(engineer.prNumber) && engineer.prNumber !== prNumber) {
+    // A second PR for the same issue: stop before any gate reads it.
+    return stopped("engineer", "In Progress", { prNumber, rounds, note: `the Engineer reported PR #${engineer.prNumber}, but the issue's PR is #${prNumber}: a second PR was opened` });
+  }
   prNumber = Number.isInteger(engineer.prNumber) ? engineer.prNumber : prNumber;
   if (prNumber === null) {
     return stopped("engineer", "In Progress", { rounds, note: "the Engineer reported ready without a PR number" });
@@ -325,11 +423,15 @@ for (let round = 1; round <= maxRounds; round += 1) {
 
   // -- Pre-review gate: mechanical steps and checks only, no matrix (ADR-0058).
   phase("Pre-review gate");
-  let pre = null;
-  for (let tries = 0; tries < 3; tries += 1) {
-    const out = await sh("gate:pre-review", "Pre-review gate", [`node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout 1500`]);
-    pre = out[0] ?? { code: 4, line: "no output from gate.mjs pre-review" };
-    if (pre.code !== 3) break;
+  const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
+  if (pre.runner) {
+    // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
+    return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
+  }
+  if (pre.exhausted) {
+    // Checks never finished inside the bound: not a red gate, so no fix round, and the issue is still In Progress.
+    await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
+    return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
   }
   if (pre.code !== 0) {
     const reason = /scope-missing-in-pr/.test(pre.line) ? "scope-missing-in-pr" : "gate-closed";
@@ -340,7 +442,7 @@ for (let round = 1; round <= maxRounds; round += 1) {
     }
     return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
   }
-  const head = await sh("head-changed", "Pre-review gate", [`node scripts/head-changed.mjs ${issue} --pr ${prNumber}`]);
+  const head = await sh("head-changed", "Pre-review gate", [`node scripts/head-changed.mjs ${issue} --pr ${prNumber}`], false, true);
   if (head.length === 0 || head[0].code !== 0) {
     return stopped("head-changed", "In Progress", { prNumber, rounds, note: head[0]?.line ?? "no output" });
   }
@@ -397,8 +499,14 @@ for (let round = 1; round <= maxRounds; round += 1) {
 
   // -- Full review gate (matrix included) and the receipt as a dry run.
   phase("Review gate");
-  const full = await sh("gate:review", "Review gate", [`node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout 1500`]);
-  const gate = full[0] ?? { code: 4, line: "no output from gate.mjs review" };
+  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
+  if (gate.exhausted) {
+    await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
+    return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
+  }
+  if (gate.runner) {
+    return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
+  }
   if (review.verdict === "red" || gate.code !== 0) {
     const sha = /^[0-9a-f]{7,40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
     const rows = (Array.isArray(review.rows) ? review.rows : []).filter((row) => typeof row === "string" && ROW.test(row)).slice(0, 20).join(",");
@@ -417,11 +525,13 @@ for (let round = 1; round <= maxRounds; round += 1) {
   }
   const dry = await sh("receipt:dry-run", "Review gate", [
     `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread} --implementer-thread ${engineerThread} --require-different-model --dry-run`,
-  ]);
+  ], false, true);
   receipt = dry[0]?.line ?? "no output from audit-receipt";
   if (dry.length === 0 || dry[0].code !== 0) {
     // A refused receipt (same model, no spawn logged, no AUDIT-RESULT line) is not a green review.
-    await sh("log:receipt", "Review gate", [logCmd("reason", `--issue ${issue} --code evidence-gap`)], true);
+    if (!dry[0]?.runner) {
+      await sh("log:receipt", "Review gate", [logCmd("reason", `--issue ${issue} --code evidence-gap`)], true);
+    }
     return stopped("receipt", "In Review", { prNumber, rounds, verdict: "green", receipt, note: `the audit receipt dry run did not pass: ${receipt}` });
   }
 

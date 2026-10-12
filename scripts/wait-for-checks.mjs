@@ -8,12 +8,27 @@
  *
  * Polls inside the process (the cursor-ratchet hook sees one command, not a loop), prints one
  * line per change, then the final verdict. Exit: 0 green and MERGEABLE, 1 red, 2 still pending
- * at the timeout, 3 green but not mergeable (behind, conflicting), 4 unknown.
+ * at the timeout, 3 green but not mergeable (behind, conflicting), 4 unknown (retried until the
+ * timeout), 5 gh itself is unusable: too old for `--json` on `pr checks`, a usage or auth error,
+ * a PR that does not exist, output that is not JSON. Exit 5 is immediate and the verdict line
+ * names the cause (`UNKNOWN: gh ...`); a not-found answer is retried 3 times first (a PR created
+ * seconds ago); only genuine transient states (pending checks, network
+ * blips, rate limits) are retried. A startup probe of `gh pr checks --help` catches a gh without
+ * `--json` before any waiting.
  * Run it in the background when a session wants to keep working: the harness re-invokes on exit.
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { EXIT, prArgument, verdict } from "./lib/pr-checks.mjs";
+import {
+  EXIT,
+  GH_REQUIREMENT,
+  ghErrorLine,
+  isNotFoundGhError,
+  isPermanentGhError,
+  NOT_FOUND_ATTEMPTS,
+  prArgument,
+  verdict,
+} from "./lib/pr-checks.mjs";
 
 const run = promisify(execFile);
 const args = process.argv.slice(2);
@@ -49,6 +64,21 @@ async function gh(ghArgs) {
   }
 }
 
+/** Exits 5 at once when gh cannot do the one thing this script needs. */
+async function probeGh() {
+  try {
+    const help = (await run("gh", ["pr", "checks", "--help"])).stdout;
+    if (!/--json/.test(help)) {
+      process.stdout.write(`UNKNOWN: gh too old, needs ${GH_REQUIREMENT}\n`);
+      process.exit(EXIT.ghBroken);
+    }
+  } catch (error) {
+    const cause = error.code === "ENOENT" ? "gh is not installed" : ghErrorLine(error);
+    process.stdout.write(`UNKNOWN: gh cannot run its pr checks help: ${cause}\n`);
+    process.exit(EXIT.ghBroken);
+  }
+}
+
 async function snapshot() {
   const [required, view, all] = await Promise.all([
     gh(["pr", "checks", pr, "--required", "--json", "name,bucket,state"]),
@@ -63,14 +93,23 @@ async function snapshot() {
   return { checks, view: JSON.parse(view || "{}") };
 }
 
+await probeGh();
 const started = Date.now();
 let last = "";
+let notFound = 0;
 for (;;) {
   let result;
   try {
     const { checks, view } = await snapshot();
+    notFound = 0;
     result = verdict(checks, view, { failFast });
   } catch (error) {
+    // A PR created seconds ago can answer not-found for a moment: only repeated answers are permanent.
+    notFound = isNotFoundGhError(error) ? notFound + 1 : 0;
+    if (isPermanentGhError(error) && (notFound === 0 || notFound >= NOT_FOUND_ATTEMPTS)) {
+      process.stdout.write(`UNKNOWN: gh failed, retrying cannot help: ${ghErrorLine(error)}\n`);
+      process.exit(EXIT.ghBroken);
+    }
     result = {
       done: false,
       code: EXIT.unknown,
