@@ -1,0 +1,136 @@
+# Device flow for KIT-283: photos without a jersey, sorted by hand.
+# design-sections: Capture session, Sheet, Button dock, List row
+#
+# FIXTURE THIS FLOW NEEDS: a simulator photo library with FOUR OR MORE photos. simulator.sh adds
+# one today (KIT-282's flow names the same gap; the spec gives the bulk fixture to KIT-284). The
+# picker taps below pick four cells; with one photo in the library the flow stops at the landing.
+#
+# Not on screen, on purpose: AC 8 (no suggestion row: the API supplies no attribution), AC 9 (the
+# Confirm strip, KIT-279, asserted in tests/confirm-chrome.test.ts) and AC 10 (reducer tests).
+appId: app.kitcollective.mobile
+name: kit-283
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- startRecording: kc__kit-283
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-vision-switch
+    timeout: 15000
+# Vision off: nothing groups the photos, so four or more land on the screen.
+- tapOn:
+    id: capture-vision-switch
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+# The system photo picker has no stable ids: four cells, then confirm.
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 50%,25%
+- tapOn:
+    point: 83%,25%
+- tapOn:
+    point: 16%,40%
+- tapOn:
+    point: 90%,12%
+# AC 6, 1: Vision off with four photos lands on the screen; every photo is in the 4:5 grid.
+- extendedWaitUntil:
+    visible:
+      id: unassigned-title
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__01-landing-grid
+# AC 2: tapping selects with a numbered badge in pick order; tapping again deselects and renumbers.
+- tapOn:
+    id: unassigned-photo-0
+- tapOn:
+    id: unassigned-photo-1
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__02-two-selected
+- tapOn:
+    id: unassigned-photo-0
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__03-deselected-renumbered
+# AC 3: Ny trøje af n fotos makes a jersey of the selection and removes the photos from the grid.
+- tapOn:
+    id: unassigned-photo-0
+- tapOn:
+    id: unassigned-new-jersey
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__04-new-jersey-grid-smaller
+# AC 1: back to the overview, where the inbox row opens the screen with the photos still without
+# a jersey.
+- tapOn:
+    id: unassigned-back
+- extendedWaitUntil:
+    visible:
+      id: overview-inbox
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__05-overview-inbox
+- tapOn:
+    id: overview-inbox
+- extendedWaitUntil:
+    visible:
+      id: unassigned-title
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__06-inbox-opens-screen
+# AC 4: Læg til en trøje opens the picker of this session's jerseys; a row binds the selection.
+- tapOn:
+    id: unassigned-photo-0
+- tapOn:
+    id: unassigned-add-to-draft
+- extendedWaitUntil:
+    visible:
+      id: unassigned-draft-0
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__07-add-to-jersey-picker
+- tapOn:
+    id: unassigned-draft-0
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__08-added-to-jersey
+# AC 5: Slet removes the selection (the two photos left) after a confirm sheet.
+- tapOn:
+    id: unassigned-photo-0
+- tapOn:
+    id: unassigned-photo-1
+- tapOn:
+    id: unassigned-delete
+- extendedWaitUntil:
+    visible:
+      id: unassigned-delete-confirm
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__09-delete-confirm-sheet
+- tapOn:
+    id: unassigned-delete-confirm
+# AC 7: when the grid is empty the screen returns to the overview and the inbox row is gone.
+- extendedWaitUntil:
+    visible:
+      id: overview-primary
+    timeout: 15000
+- assertNotVisible:
+    id: overview-inbox
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: kc__kit-283__10-overview-inbox-gone
+- stopRecording

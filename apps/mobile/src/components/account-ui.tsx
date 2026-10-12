@@ -14,6 +14,7 @@ type ConfirmSheetProps = {
   onConfirm: () => void;
   onDismiss: () => void;
   loading?: boolean;
+  confirmTestID?: string;
 };
 
 export function ConfirmSheet({
@@ -24,6 +25,7 @@ export function ConfirmSheet({
   onConfirm,
   onDismiss,
   loading = false,
+  confirmTestID,
 }: ConfirmSheetProps) {
   return (
     <Sheet visible={visible} title={title} sentence={consequence} onDismiss={onDismiss}>
@@ -32,6 +34,7 @@ export function ConfirmSheet({
         variant="destructive"
         width="fill"
         loading={loading}
+        testID={confirmTestID}
         onPress={onConfirm}
       />
       <Button label="Annuller" variant="tertiary" width="fill" onPress={onDismiss} />

@@ -13,20 +13,27 @@ type CaptureOverviewHeaderProps = {
   /** `mono` line under the title: photos · sorted. None while Vision runs. */
   caption: string | null;
   onClose: () => void;
+  /** `close` is the overview's Luk (X). `back` is a chevron for a screen that steps back to it. */
+  leading?: "close" | "back";
+  /** Prefix of the title, caption and control test ids. */
+  testIDPrefix?: string;
   /** Reports the block's height so the list can start under it. */
   onMeasure: (height: number) => void;
 };
 
-/** Pinned overview title: Luk, the count as title, photos and state in `mono`, under the top fade. */
+/** Pinned overview title: Luk (or Tilbage), the count as title, photos and state in `mono`, under the top fade. */
 export function CaptureOverviewHeader({
   title,
   caption,
   onClose,
+  leading = "close",
+  testIDPrefix = "overview",
   onMeasure,
 }: CaptureOverviewHeaderProps) {
   const theme = useTheme();
   const typography = useTypography();
   const insets = useSafeAreaInsets();
+  const back = leading === "back";
 
   return (
     <View style={styles.root} pointerEvents="box-none">
@@ -39,8 +46,8 @@ export function CaptureOverviewHeader({
       >
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Luk"
-          testID="overview-close"
+          accessibilityLabel={back ? "Tilbage" : "Luk"}
+          testID={`${testIDPrefix}-${back ? "back" : "close"}`}
           onPress={onClose}
           style={({ pressed }) => [
             styles.close,
@@ -49,7 +56,7 @@ export function CaptureOverviewHeader({
           ]}
         >
           <Ionicons
-            name="close"
+            name={back ? "chevron-back" : "close"}
             size={22}
             color={theme.contentPrimary}
             accessibilityElementsHidden
@@ -59,7 +66,7 @@ export function CaptureOverviewHeader({
           <Text
             numberOfLines={1}
             accessibilityRole="header"
-            testID="overview-title"
+            testID={`${testIDPrefix}-title`}
             style={[typography.title, { color: theme.contentPrimary }]}
           >
             {title}
@@ -67,7 +74,7 @@ export function CaptureOverviewHeader({
           {caption ? (
             <Text
               numberOfLines={1}
-              testID="overview-caption"
+              testID={`${testIDPrefix}-caption`}
               style={[typography.mono, { color: theme.contentSecondary }]}
             >
               {caption}

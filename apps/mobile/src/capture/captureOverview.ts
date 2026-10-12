@@ -13,12 +13,17 @@ import type {
  * Everything here is pure so the ordering, status words and parked-row copy have unit tests.
  */
 
-/** Four or more photos is the `bulk` branch. Vision off lands on Confirm as before. */
+/** Four or more photos is the `bulk` branch. Vision off lands on the photos without a jersey. */
 export function shouldOpenBulkOverview(input: {
   branch: CaptureBranch;
   visionOn: boolean;
 }): boolean {
   return input.visionOn && input.branch === "bulk";
+}
+
+/** Four or more photos with Vision off: nothing groups them, so the collector sorts by hand. */
+export function shouldOpenUnassigned(input: { branch: CaptureBranch; visionOn: boolean }): boolean {
+  return !input.visionOn && input.branch === "bulk";
 }
 
 /** Signed in with quota left. Same reading as Confirm's own Vision gate. */

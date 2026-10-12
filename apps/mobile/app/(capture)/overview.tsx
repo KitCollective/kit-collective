@@ -229,7 +229,9 @@ export default function CaptureOverviewScreen() {
             thumbUris={inbox.thumbUris}
             title={inbox.label}
             pillLabel={inbox.pill}
-            onPress={() => openConfirm(firstUnsavedDraftId(state))}
+            onPress={() =>
+              router.push({ pathname: "/(capture)/unassigned", params: { sessionId } })
+            }
           />
         ) : null}
 

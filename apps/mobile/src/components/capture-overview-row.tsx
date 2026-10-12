@@ -16,16 +16,24 @@ type CaptureOverviewRowProps = {
   row: OverviewRow;
   testID: string;
   onPress: () => void;
+  /** Dimmed and not pressable (a jersey at the 10-photo cap in the add-to-jersey Sheet). */
+  disabled?: boolean;
 };
 
 /**
  * One jersey of the bulk overview: 4:5 thumb, club (`heading-sm`), season · type (`mono`) and a
  * fixed-width trailing status (docs/design-system.md, Capture session, Revision 2026-10-09, item 3).
  */
-export function CaptureOverviewRow({ row, testID, onPress }: CaptureOverviewRowProps) {
+export function CaptureOverviewRow({
+  row,
+  testID,
+  onPress,
+  disabled = false,
+}: CaptureOverviewRowProps) {
   const theme = useTheme();
   const typography = useTypography();
   const saved = row.kind === "saved";
+  const inert = saved || disabled;
 
   return (
     <Pressable
@@ -35,11 +43,15 @@ export function CaptureOverviewRow({ row, testID, onPress }: CaptureOverviewRowP
           ? `${row.title}, ${row.meta}. ${row.statusLabel}`
           : `${row.title}, ${row.meta}`
       }
-      accessibilityState={{ disabled: saved }}
-      disabled={saved}
+      accessibilityState={{ disabled: inert }}
+      disabled={inert}
       testID={testID}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        disabled && styles.dimmed,
+        pressed && !inert && styles.pressed,
+      ]}
     >
       {row.thumbUri ? (
         <Image
@@ -126,6 +138,10 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.9,
+  },
+  /** The lock names `opacity.disabled` but gives no value; 0.4 as on the capture Chooser's Switch. */
+  dimmed: {
+    opacity: 0.4,
   },
   thumb: {
     width: THUMB_WIDTH,

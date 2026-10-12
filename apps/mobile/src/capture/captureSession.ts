@@ -291,7 +291,8 @@ export function bindPhoto(
       role === undefined
         ? [...draft.photos, withPhotoId(uri, null, source, photoId)]
         : [
-            ...draft.photos.filter((photo) => photo.role !== role),
+            // Andet holds many photos: binding one must not replace the ones already there.
+            ...draft.photos.filter((photo) => role === "other" || photo.role !== role),
             withPhotoId(uri, role, source, photoId),
           ];
     return { ...draft, photos };
@@ -493,6 +494,57 @@ export function bindUnboundPhotoToDraft(
   }
 
   return bindPhoto(state, uri, draftId, targetRole, source);
+}
+
+/**
+ * Binds the selection into one jersey in the given order, so pick order is fill order. Photos stop
+ * binding once the jersey holds the cap; the rest stay without a jersey and nothing is dropped.
+ */
+export function bindUnboundPhotosToDraft(
+  state: CaptureSessionState,
+  uris: string[],
+  draftId: string,
+): CaptureSessionState {
+  let next = state;
+  for (const uri of uris) {
+    if (!next.unboundUris.includes(uri)) {
+      continue;
+    }
+    next = bindUnboundPhotoToDraft(next, uri, draftId);
+  }
+  return next;
+}
+
+/** A jersey from the selection. Takes the empty draft a bulk session starts with before adding one. */
+export function createDraftFromUnbound(
+  state: CaptureSessionState,
+  uris: string[],
+  defaults?: NewDraftDefaults,
+): CaptureSessionState {
+  if (!uris.some((uri) => state.unboundUris.includes(uri))) {
+    return state;
+  }
+
+  let next = state;
+  let draftId = next.drafts.find((draft) => draft.photos.length === 0 && !draft.editJerseyId)?.id;
+  if (!draftId) {
+    next = addJerseyDraft(next, defaults);
+    draftId = next.activeDraftId;
+  }
+  return setActiveDraft(bindUnboundPhotosToDraft(next, uris, draftId), draftId);
+}
+
+export function discardUnboundPhotos(
+  state: CaptureSessionState,
+  uris: string[],
+): CaptureSessionState {
+  let next = state;
+  for (const uri of uris) {
+    if (next.unboundUris.includes(uri)) {
+      next = discardUnboundPhoto(next, uri);
+    }
+  }
+  return next;
 }
 
 export function hasCatalogSide(draft: CaptureJerseyDraft): boolean {
