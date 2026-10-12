@@ -86,7 +86,7 @@ New or edited factory skill under `.cursor/skills/`. Not a domain helper. See `.
 
 ### Auto-land
 
-`scripts/auto-land.mjs start|finish`: the one script besides a person that may set `Merging` (ADR-0059). It re-checks the PR, issue, risk class, independent reviewer, audit receipt, review gate and daily cap itself before it enqueues; `Approval` stays the exception exit. Shipped off (`flow.autoLand.enabled`, the `autoLand` workflow input, the `hold` label, the file `.factory/auto-land.off`). See `docs/agents/bb-harness.md`.
+`scripts/auto-land.mjs start|finish`: the one script besides a person that may set `Merging` (ADR-0059). It re-checks the PR, issue, risk class, independent reviewer, audit receipt, review gate and daily cap itself before it enqueues; `Approval` stays the exception exit. Shipped off (`flow.autoLand.enabled`, the `autoLand` workflow input, the `hold` label, the file `auto-land.off` in the gitignored `.factory` folder of the main checkout). See `docs/agents/bb-harness.md`.
 
 ### Reap worktree
 
