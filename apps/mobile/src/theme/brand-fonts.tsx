@@ -10,10 +10,21 @@ export {
   resolveTypeRoles,
 } from "@/theme/brand-fonts-resolve";
 
-const BrandFontsContext = createContext(true);
+type BrandFontsState = {
+  brandEnabled: boolean;
+  /** Saira Extra Condensed loads in its own useFonts call and can fail on its own. */
+  numeralEnabled: boolean;
+};
+
+const BrandFontsContext = createContext<BrandFontsState>({
+  brandEnabled: true,
+  numeralEnabled: true,
+});
 
 type BrandFontsProviderProps = {
   enabled: boolean;
+  /** Defaults to `enabled`. */
+  numeralEnabled?: boolean;
   children: ReactNode;
 };
 
@@ -28,19 +39,27 @@ function getNativeSystemFallback(): string {
   );
 }
 
-export function BrandFontsProvider({ enabled, children }: BrandFontsProviderProps) {
-  return <BrandFontsContext.Provider value={enabled}>{children}</BrandFontsContext.Provider>;
+export function BrandFontsProvider({
+  enabled,
+  numeralEnabled = enabled,
+  children,
+}: BrandFontsProviderProps) {
+  const value = useMemo(
+    () => ({ brandEnabled: enabled, numeralEnabled }),
+    [enabled, numeralEnabled],
+  );
+  return <BrandFontsContext.Provider value={value}>{children}</BrandFontsContext.Provider>;
 }
 
 export function useBrandFontsEnabled(): boolean {
-  return useContext(BrandFontsContext);
+  return useContext(BrandFontsContext).brandEnabled;
 }
 
 export function useTypography(): ResolvedTypeRoles {
-  const brandEnabled = useBrandFontsEnabled();
+  const { brandEnabled, numeralEnabled } = useContext(BrandFontsContext);
   const systemFallback = getNativeSystemFallback();
   return useMemo(
-    () => resolveTypeRolesBase(brandEnabled, systemFallback),
-    [brandEnabled, systemFallback],
+    () => resolveTypeRolesBase(brandEnabled, systemFallback, numeralEnabled),
+    [brandEnabled, numeralEnabled, systemFallback],
   );
 }

@@ -6,6 +6,7 @@ import {
 } from "@expo-google-fonts/archivo";
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
 import { IBMPlexSans_400Regular, IBMPlexSans_500Medium } from "@expo-google-fonts/ibm-plex-sans";
+import { SairaExtraCondensed_700Bold } from "@expo-google-fonts/saira-extra-condensed";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -38,8 +39,17 @@ export default function RootLayout() {
     IBMPlexMono_500Medium,
   });
 
-  const fontsReady = fontsLoaded || fontError != null;
+  // Numerals (docs/design-system.md Typography): Saira loads on its own so a failure
+  // here falls back to Archivo 700 without taking the brand faces down with it.
+  const [numeralLoaded, numeralError] = useFonts({
+    SairaExtraCondensed_700Bold,
+  });
+
+  const brandFontsReady = fontsLoaded || fontError != null;
+  const numeralFontReady = numeralLoaded || numeralError != null;
+  const fontsReady = brandFontsReady && numeralFontReady;
   const brandFontsEnabled = fontsLoaded && fontError == null;
+  const numeralEnabled = numeralLoaded && numeralError == null;
 
   useEffect(() => {
     if (fontsReady) {
@@ -53,7 +63,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <BrandFontsProvider enabled={brandFontsEnabled}>
+      <BrandFontsProvider enabled={brandFontsEnabled} numeralEnabled={numeralEnabled}>
         <AppearanceProvider>
           <AuthProvider>
             <StickySizeBinding />

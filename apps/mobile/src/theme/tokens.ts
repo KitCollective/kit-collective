@@ -32,6 +32,7 @@ export const fontFamily = {
   label: "IBMPlexSans_500Medium",
   mono: "IBMPlexMono_400Regular",
   monoMedium: "IBMPlexMono_500Medium",
+  numeral: "SairaExtraCondensed_700Bold",
 } as const;
 
 const lightColor = {
@@ -189,6 +190,31 @@ export const type = {
     fontFamily: fontFamily.mono,
     fontSize: 13,
     lineHeight: 18,
+    letterSpacing: 0,
+  },
+  /** Numerals (docs/design-system.md Typography): digits, slash, en dash only. lineHeight == size. */
+  numeral32: {
+    fontFamily: fontFamily.numeral,
+    fontSize: 32,
+    lineHeight: 32,
+    letterSpacing: 0,
+  },
+  numeral38: {
+    fontFamily: fontFamily.numeral,
+    fontSize: 38,
+    lineHeight: 38,
+    letterSpacing: 0,
+  },
+  numeral40: {
+    fontFamily: fontFamily.numeral,
+    fontSize: 40,
+    lineHeight: 40,
+    letterSpacing: 0,
+  },
+  numeral44: {
+    fontFamily: fontFamily.numeral,
+    fontSize: 44,
+    lineHeight: 44,
     letterSpacing: 0,
   },
 } as const;

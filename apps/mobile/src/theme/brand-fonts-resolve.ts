@@ -1,4 +1,4 @@
-import { type } from "@/theme/tokens";
+import { fontFamily, type } from "@/theme/tokens";
 
 export type TypeRoleStyle = {
   fontFamily: string;
@@ -35,10 +35,31 @@ function resolveTypeRole(
   };
 }
 
+/**
+ * Numeral roles (docs/design-system.md Typography → Numerals): Saira Extra Condensed 700,
+ * and when only that webfont fails, Archivo 700 at the same size. Size and line height
+ * never change with the face.
+ */
+function resolveNumeralRole(
+  role: (typeof type)[keyof typeof type],
+  brandEnabled: boolean,
+  numeralEnabled: boolean,
+  systemFallback: string,
+): TypeRoleStyle {
+  if (numeralEnabled) {
+    return { ...role };
+  }
+  return {
+    ...role,
+    fontFamily: resolveFontFamily(fontFamily.displayBold, brandEnabled, systemFallback),
+  };
+}
+
 /** Resolved typography roles with system-ui fallback when brand webfonts fail. */
 export function resolveTypeRoles(
   brandEnabled: boolean,
   systemFallback = "system-ui",
+  numeralEnabled = brandEnabled,
 ): ResolvedTypeRoles {
   return {
     displayLarge: resolveTypeRole(type.displayLarge, brandEnabled, systemFallback),
@@ -53,5 +74,9 @@ export function resolveTypeRoles(
     captionSm: resolveTypeRole(type.captionSm, brandEnabled, systemFallback),
     mono: resolveTypeRole(type.mono, brandEnabled, systemFallback),
     monoSm: resolveTypeRole(type.monoSm, brandEnabled, systemFallback),
+    numeral32: resolveNumeralRole(type.numeral32, brandEnabled, numeralEnabled, systemFallback),
+    numeral38: resolveNumeralRole(type.numeral38, brandEnabled, numeralEnabled, systemFallback),
+    numeral40: resolveNumeralRole(type.numeral40, brandEnabled, numeralEnabled, systemFallback),
+    numeral44: resolveNumeralRole(type.numeral44, brandEnabled, numeralEnabled, systemFallback),
   };
 }
