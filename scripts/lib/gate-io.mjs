@@ -19,9 +19,12 @@ export async function sh(cmd, args, options = {}) {
 export const gh = async (args) => sh("gh", args);
 export const git = async (args) => (await sh("git", args)).trim();
 
+/** The Linear CLI: scripts/linear.mjs, or the script `KC_LINEAR_CLI` names (tests put a fake there). */
+export const linearCli = () => process.env.KC_LINEAR_CLI || join(ROOT, "scripts", "linear.mjs");
+
 /** The Linear issue (state, labels, comments) through scripts/linear.mjs. */
 export async function linearIssue(issue) {
-  return JSON.parse(await sh("node", [join(ROOT, "scripts", "linear.mjs"), "issue", issue]));
+  return JSON.parse(await sh("node", [linearCli(), "issue", issue]));
 }
 
 /** Body of the single workpad comment, or "". */
@@ -31,8 +34,14 @@ export function workpadOf(linear, heading = config().agent.workpadHeading) {
 
 export const events = () => readEvents(logPath());
 
-/** Logging must never stop a gate: a failed write is reported on stderr only. */
+/**
+ * Logging must never stop a gate: a failed write is reported on stderr only. `KC_DRY_RUN=1`
+ * (set by `auto-land.mjs --dry-run` for the gates it runs) writes nothing.
+ */
 export function logGate(issue, gate, outcome, sha) {
+  if (process.env.KC_DRY_RUN === "1") {
+    return;
+  }
   try {
     append({ event: "gate", issue, gate, outcome, ...(sha ? { sha } : {}) }, { path: logPath() });
   } catch (error) {
