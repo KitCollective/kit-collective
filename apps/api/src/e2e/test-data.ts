@@ -35,6 +35,7 @@ import {
   TEST_PEER_HANDLE,
   TEST_PEER_ID,
   TEST_SHORTCUT,
+  TEST_UNANSWERED_BID,
   TEST_WISHLIST_ENTRY,
 } from "./test-data.fixture.js";
 
@@ -238,6 +239,30 @@ export async function applyTestData(input: {
         })),
       );
     }
+
+    const bid = TEST_UNANSWERED_BID;
+    const [lowerCollectorId, upperCollectorId] = [bid.ownerId, bid.bidderId].sort() as [
+      string,
+      string,
+    ];
+    await tx.insert(conversation).values({
+      id: bid.conversationId,
+      userJerseyId: bid.jerseyId,
+      lowerCollectorId,
+      upperCollectorId,
+    });
+    await tx.insert(conversationParticipant).values([
+      { conversationId: bid.conversationId, userId: bid.ownerId },
+      { conversationId: bid.conversationId, userId: bid.bidderId },
+    ]);
+    await tx.insert(conversationMessage).values({
+      id: bid.messageId,
+      conversationId: bid.conversationId,
+      senderId: bid.bidderId,
+      kind: "bid",
+      bidAmountDkk: bid.amountDkk,
+      bidStatus: "pending",
+    });
 
     const wish = sideOf(TEST_WISHLIST_ENTRY.side);
     await tx.insert(wishlistEntry).values({
