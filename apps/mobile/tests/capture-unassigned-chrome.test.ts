@@ -10,8 +10,10 @@ describe("photos without a jersey wiring", () => {
   const overview = read("../app/(capture)/overview.tsx");
   const landing = read("../src/capture/use-capture-landing.ts");
 
-  it("registers the route in the capture stack without a native header", () => {
-    expect(layout).toMatch(/name="unassigned"\s+options=\{\{ headerShown: false \}\}/);
+  it("registers the route in the capture stack without a native header and with a fade under reduced motion", () => {
+    expect(layout).toMatch(
+      /name="unassigned"\s+options=\{\{ headerShown: false, animation: stackScreenMotion\(reduceMotion\) \}\}/,
+    );
   });
 
   it("opens from the overview's inbox row instead of Confirm", () => {
@@ -50,7 +52,7 @@ describe("photos without a jersey wiring", () => {
     expect(screen).not.toContain("Forslag");
   });
 
-  it("leaves through one guarded dismissTo to the overview: chevron, Android back, empty grid", () => {
+  it("leaves through one guarded dismissTo: chevron, Android back and empty grid to the overview, a lost session to Samling", () => {
     expect(screen).toContain("exitedRef");
     expect(screen).toContain("router.dismissTo");
     expect(screen).toContain('pathname: "/(capture)/overview"');

@@ -69,10 +69,11 @@ export default function UnassignedPhotosScreen() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(insets.top + HEADER_FALLBACK_HEIGHT);
 
-  // One way out, to the overview: the chevron, Android back and an empty grid all land here. The
-  // guard keeps a press from racing the empty-grid exit into two navigations. `dismissTo` pops to
-  // the overview when it is underneath and, when this screen was the landing, replaces this
-  // screen with it (expo-router POP_TO), so both cases end on the overview.
+  // Every way out goes through here: the chevron, Android back and an empty grid land on the
+  // overview, a lost session on Samling. The guard keeps a press from racing the empty-grid exit
+  // into two navigations. `dismissTo` pops to the overview when it is underneath and, when this
+  // screen was the landing, replaces this screen with it (expo-router POP_TO), so both cases end
+  // on the overview.
   const exitedRef = useRef(false);
   const leave = useCallback(
     (target: "overview" | "collection") => {

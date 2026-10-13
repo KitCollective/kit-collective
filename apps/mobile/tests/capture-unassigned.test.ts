@@ -45,7 +45,7 @@ describe("selection in pick order", () => {
     expect(selectionBadge(selection, B)).toBe(1);
     expect(selectionBadge(selection, A)).toBe(2);
     expect(selectionBadge(selection, C)).toBe(3);
-    expect(selectionBadge(selection, URIS[5] ?? "")).toBeNull();
+    expect(selectionBadge(selection, "file:///photos/u-5.jpg")).toBeNull();
   });
 
   it("renumbers the rest when a photo is deselected", () => {
@@ -59,9 +59,9 @@ describe("selection in pick order", () => {
   });
 
   it("does not mutate the selection it is given", () => {
-    const selection = [URIS[0] ?? ""];
-    toggleSelection(selection, URIS[1] ?? "");
-    expect(selection).toEqual([URIS[0]]);
+    const selection = [A];
+    toggleSelection(selection, B);
+    expect(selection).toEqual([A]);
   });
 });
 
@@ -106,7 +106,9 @@ describe("dock", () => {
     expect(deleteConfirmCopy(1).title).toBe("Slet 1 foto?");
     expect(deleteConfirmCopy(3).title).toBe("Slet 3 fotos?");
     expect(deleteConfirmCopy(3).confirmLabel).toBe("Slet");
-    expect(deleteConfirmCopy(3).consequence.length).toBeGreaterThan(0);
+    expect(deleteConfirmCopy(3).consequence).toBe(
+      "Fotoene fjernes fra denne session. Det kan ikke fortrydes.",
+    );
   });
 });
 

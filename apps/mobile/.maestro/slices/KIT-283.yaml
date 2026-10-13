@@ -5,8 +5,9 @@
 # one today (KIT-282's flow names the same gap; the spec gives the bulk fixture to KIT-284). The
 # picker taps below pick four cells; with one photo in the library the flow stops at the landing.
 #
-# Not on screen, on purpose: AC 8 (no suggestion row: the API supplies no attribution), AC 9 (the
-# Confirm strip, KIT-279, asserted in tests/confirm-chrome.test.ts) and AC 10 (reducer tests).
+# Not on screen, on purpose: AC 8 (no suggestion row: auto-bind at 50 and above, through
+# priorGroups, stands in for the one-tap offer), AC 9 (the Confirm strip, KIT-279, asserted in
+# tests/confirm-chrome.test.ts) and AC 10 (reducer tests).
 appId: app.kitcollective.mobile
 name: kit-283
 ---

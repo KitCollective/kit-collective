@@ -639,7 +639,7 @@ describe("sorting photos without a jersey", () => {
 
   it("new from selection adds a draft when every draft already holds photos", () => {
     let session = createCaptureSession(BULK_URIS.slice(0, 9));
-    session = bindUnboundPhotoToDraft(session, BULK_URIS[1] ?? "", getActiveDraft(session).id);
+    session = bindUnboundPhotoToDraft(session, BULK_URI_B, getActiveDraft(session).id);
 
     const next = createDraftFromUnbound(session, PICKED.slice(0, 3), { defaultSize: "m" });
 
@@ -653,12 +653,12 @@ describe("sorting photos without a jersey", () => {
   it("add to draft appends into the next free roles", () => {
     let session = createCaptureSession(BULK_URIS.slice(0, 9));
     const draftId = getActiveDraft(session).id;
-    session = bindUnboundPhotoToDraft(session, BULK_URIS[1] ?? "", draftId);
+    session = bindUnboundPhotoToDraft(session, BULK_URI_B, draftId);
 
     const next = bindUnboundPhotosToDraft(session, PICKED, draftId);
     const draft = getDraft(next, draftId);
 
-    expect(photoUriForRole(draft, "front")).toBe(BULK_URIS[1]);
+    expect(photoUriForRole(draft, "front")).toBe(BULK_URI_B);
     expect(photoUriForRole(draft, "back")).toBe(PICKED[0]);
     expect(photoUriForRole(draft, "left")).toBe(PICKED[1]);
     expect(photoUriForRole(draft, "right")).toBe(PICKED[2]);
