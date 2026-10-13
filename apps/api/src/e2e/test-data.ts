@@ -241,10 +241,9 @@ export async function applyTestData(input: {
     }
 
     const bid = TEST_UNANSWERED_BID;
-    const [lowerCollectorId, upperCollectorId] = [bid.ownerId, bid.bidderId].sort() as [
-      string,
-      string,
-    ];
+    // The conversation stores its two Collectors in id order (lower, upper).
+    const [lowerCollectorId, upperCollectorId] =
+      bid.ownerId < bid.bidderId ? [bid.ownerId, bid.bidderId] : [bid.bidderId, bid.ownerId];
     await tx.insert(conversation).values({
       id: bid.conversationId,
       userJerseyId: bid.jerseyId,
