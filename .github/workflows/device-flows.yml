@@ -56,7 +56,9 @@ jobs:
     name: iOS Simulator
     if: github.event_name != 'pull_request' || github.event.label.name == 'run-device-flows'
     runs-on: macos-latest
-    timeout-minutes: 60
+    # A run that has to build the native binary took 41 minutes once and 58 the next time (the
+    # second one was cancelled at 60, in the flow step). A cache hit needs a fraction of this.
+    timeout-minutes: 90
     env:
       # Local-only test values (see apps/mobile/.maestro/local.env.sh); the database
       # is disposable and lives on this runner only.
