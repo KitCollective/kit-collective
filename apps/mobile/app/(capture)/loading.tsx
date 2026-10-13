@@ -2,7 +2,7 @@ import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { CaptureLoadingScreen } from "@/capture/capture-loading-screen";
 import { createPersistedCaptureSession, readPrefilledClub } from "@/capture/captureFlow";
-import { expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
+import { dismissUploadSourcePicker, expoUploadFilesAdapter } from "@/capture/expoPickerAdapters";
 import {
   scheduleUploadWhenPresented,
   type TransitionNavigation,
@@ -46,15 +46,17 @@ export default function CaptureLoadingRoute() {
     const cleanup = startUploadCaptureWhenPresented({
       scheduleWhenPresented: (run) =>
         scheduleUploadWhenPresented(navigation, readReduceMotion, run),
-      runPick: () =>
+      runPick: ({ onSourceChosen }) =>
         runUploadCapture(expoUploadFilesAdapter, createPersistedCaptureSession, {
           prefilledClub,
+          onSourceChosen,
           onBuildStart: () => {
             if (active) {
               setCaption(BUILDING_CAPTION);
             }
           },
         }),
+      dismissSourcePicker: dismissUploadSourcePicker,
       onResult: (result) => {
         if (result.status === "cancelled") {
           router.dismiss();
