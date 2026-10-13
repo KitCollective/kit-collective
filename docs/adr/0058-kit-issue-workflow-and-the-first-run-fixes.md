@@ -76,4 +76,12 @@ Now: a read-only runner step (`gh pr list --state open --search "<KIT-n> in:titl
 
 Verified by tests: the exit-5 paths with a fake `gh` on PATH (too old, usage error mid-run, auth, invalid JSON; transient network and rate limit still retry), `foldReview` on exit 5, runner empty/short detection with one retry, `runner-no-result` logging, no fix round on a runner failure, the runner prompt text, and resume's lookup, number hand-over, second-PR stop and ambiguity stop. **Not verified:** a real bb run, whether a real Haiku runner obeys the foreground rule, and `bb workflows validate` (re-run it in a bb thread after merging; the `agent()` calls keep literal `provider` and `model` values and plain options).
 
+## What the second real run taught (KIT-295, PR #316; 2026-10-13)
+
+**The runner made up exit codes.** Four of seven runs stopped on a command that had passed: `session-check` twice, `head-changed` and the pre-review gate each printed `OPEN` and exited 0, and the Haiku runner reported `-1`, saying itself that its shell tool had not shown an exit code. The script read `-1` as a closed gate or a failed step.
+
+Now the shell prints the code. `runRaw` wraps every command as `( <command> ); echo "KIT-EXIT:$?"`, the runner relays that line verbatim in `exit` (the schema has no `code` any more) and the last line before it in `line`, and the script parses the code from the marker. A result whose `exit` is not exactly `KIT-EXIT:<digits>` is no result: it takes the `runner-no-result` path of fix 3 (one retry for idempotent commands, then a stop that is never a gate verdict). This supersedes "report each exit code" in the workflow section above.
+
+**What this does not change.** The marker is still relayed by a model, so a runner can still copy it wrongly; gate results stay not merge-grade and Decision 2 (a deterministic plugin command) stays open. Verified by tests with the fake runner only (the wrapping of every command, a made-up code counting as a runner failure); the first real run with the marker was the resume of KIT-295 that followed this change (`wfr_c3fc1e09`). Its orchestrating thread reported that all 19 runner steps relayed the marker and none was misread; on three steps the runner also put the marker in `line`, which is only used as a note.
+
 Status: accepted; revisit after the next real `kit-issue` run.

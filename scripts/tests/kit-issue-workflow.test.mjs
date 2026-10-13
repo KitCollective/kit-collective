@@ -56,7 +56,9 @@ async function run({
       const lines = prompt
         .split("\n")
         .filter((l) => /^\d+\. /.test(l))
-        .map((l) => l.replace(/^\d+\. /, ""));
+        .map((l) => l.replace(/^\d+\. /, ""))
+        // Every command arrives wrapped so the shell prints its own exit code; the tests see the bare command.
+        .map((l) => /^\( (.*) \); echo "KIT-EXIT:\$\?"$/.exec(l)?.[1] ?? l);
       const results = [];
       for (const command of lines) {
         commands.push(command);
@@ -68,7 +70,8 @@ async function run({
           (command.includes("start-decision.mjs")
             ? { code: 0, line: JSON.stringify(decision) }
             : { code: 0, line: "OPEN: fine" });
-        results.push(result);
+        // A `shell` answer with its own `exit` plays a runner that did not relay the printed marker.
+        results.push({ exit: result.exit ?? `KIT-EXIT:${result.code}`, line: result.line });
         if (result.code !== 0 && !prompt.includes("Run every command")) break;
       }
       return { results };
@@ -584,6 +587,25 @@ test("a short results array without a failing last entry counts as a runner fail
   });
   assert.equal(result.status, "stopped");
   assert.match(result.note, /runner-no-result/);
+});
+
+test("every runner command is wrapped so the shell prints its own exit code", async () => {
+  const { spawns } = await run();
+  const runner = spawns.find((s) => s.options.schema?.required?.includes("results")).prompt;
+  const numbered = runner.split("\n").filter((l) => /^\d+\. /.test(l));
+  assert.ok(numbered.length > 0);
+  for (const l of numbered) assert.match(l, /^\d+\. \( .* \); echo "KIT-EXIT:\$\?"$/);
+  assert.match(runner, /Never work out or guess the exit code/);
+});
+
+test("an exit code the runner made up is a runner failure, never a closed gate (KIT-295)", async () => {
+  const { result, commands } = await run({
+    shell: (c) => (isPre(c) ? { exit: "-1", code: 0, line: "OPEN (review): checks clean" } : undefined),
+  });
+  assert.equal(result.stoppedAt, "pre-review gate");
+  assert.match(result.note, /runner-no-result/);
+  assert.equal(commands.filter(isPre).length, 2);
+  assert.ok(!commands.some((c) => c.includes("--code gate-closed")));
 });
 
 test("a runner failure is logged with a code the run log accepts", async () => {
