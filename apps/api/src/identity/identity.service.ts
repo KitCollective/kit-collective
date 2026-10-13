@@ -965,20 +965,7 @@ export class IdentityService {
         or(eq(conversation.lowerCollectorId, userId), eq(conversation.upperCollectorId, userId)),
       );
 
-    const jerseyConversations =
-      ownedJerseyIds.length > 0
-        ? await this.db
-            .select({ id: conversation.id })
-            .from(conversation)
-            .where(inArray(conversation.userJerseyId, ownedJerseyIds))
-        : [];
-
-    const conversationIds = [
-      ...new Set([
-        ...participantConversations.map((row) => row.id),
-        ...jerseyConversations.map((row) => row.id),
-      ]),
-    ];
+    const conversationIds = participantConversations.map((row) => row.id);
 
     await this.db.transaction(async (tx) => {
       if (conversationIds.length > 0) {

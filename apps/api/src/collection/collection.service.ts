@@ -3,6 +3,7 @@ import {
   COLLECTION_SHOWCASE_JERSEY_CAP,
   type CollectionActivity,
   type CollectionConversationDetail,
+  type CollectionConversationMessage,
   type CollectionConversationPeer,
   type CollectionConversations,
   type CollectionDiscoverCatalogDrill,
@@ -74,7 +75,7 @@ import {
   userJerseyPhoto,
   visionLog,
 } from "@kit/db";
-import type { LabelLocale } from "@kit/domain";
+import type { JerseySize, KitType, LabelLocale } from "@kit/domain";
 import {
   KIT_TYPE_LABELS_DA,
   maxOriginalPhotoBytesForRole,
@@ -85,6 +86,7 @@ import {
 } from "@kit/domain";
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -116,6 +118,43 @@ export const OBJECT_STORE = Symbol("OBJECT_STORE");
 
 function canonicalCollectorPair(leftId: string, rightId: string): [string, string] {
   return leftId < rightId ? [leftId, rightId] : [rightId, leftId];
+}
+
+type MessageJerseySnapshotRow = {
+  userJerseyId: string | null;
+  jerseyClubId: string | null;
+  jerseyNationalTeamId: string | null;
+  jerseySeasonLabel: string | null;
+  jerseyType: KitType | null;
+  jerseySize: JerseySize | null;
+};
+
+/** The UserJersey of a message, read from its snapshot so it outlives the UserJersey. */
+function messageJerseyFromSnapshot(
+  row: MessageJerseySnapshotRow,
+  clubLabels: Map<string, string>,
+  nationalTeamLabels: Map<string, string>,
+): CollectionConversationMessage["jersey"] {
+  if (!row.jerseySeasonLabel || !row.jerseyType || !row.jerseySize) {
+    return undefined;
+  }
+
+  const side = discoverJerseySideFromLabels(
+    { clubId: row.jerseyClubId, nationalTeamId: row.jerseyNationalTeamId },
+    clubLabels,
+    nationalTeamLabels,
+  );
+  if (!side) {
+    return undefined;
+  }
+
+  return {
+    userJerseyId: row.userJerseyId,
+    clubLabel: side.clubLabel,
+    seasonLabel: row.jerseySeasonLabel,
+    type: row.jerseyType,
+    size: row.jerseySize,
+  };
 }
 
 function typeaheadTextMatches(parts: Array<string | undefined>, query: string): boolean {
@@ -518,16 +557,16 @@ export class CollectionService {
         bidAmountDkk: conversationMessage.bidAmountDkk,
         bidStatus: conversationMessage.bidStatus,
         createdAt: conversationMessage.createdAt,
-        ownerId: userJersey.userId,
-        clubId: userJersey.clubId,
-        nationalTeamId: userJersey.nationalTeamId,
-        type: userJersey.type,
+        lowerCollectorId: conversation.lowerCollectorId,
+        upperCollectorId: conversation.upperCollectorId,
+        clubId: conversationMessage.jerseyClubId,
+        nationalTeamId: conversationMessage.jerseyNationalTeamId,
+        type: conversationMessage.jerseyType,
         seasonLabel: season.label,
       })
       .from(conversationMessage)
       .innerJoin(conversation, eq(conversationMessage.conversationId, conversation.id))
-      .innerJoin(userJersey, eq(conversation.userJerseyId, userJersey.id))
-      .innerJoin(season, eq(userJersey.seasonId, season.id))
+      .innerJoin(season, eq(conversationMessage.jerseySeasonId, season.id))
       .where(
         and(
           inArray(conversationMessage.conversationId, conversationIds),
@@ -538,7 +577,7 @@ export class CollectionService {
 
     const blockedPeerIds = await this.moderationService.getBlockedPeerIds(userId);
     const visibleBidRows = bidRows.filter((row) => {
-      const peerId = row.ownerId === userId ? row.senderId : row.ownerId;
+      const peerId = row.lowerCollectorId === userId ? row.upperCollectorId : row.lowerCollectorId;
       return !blockedPeerIds.has(peerId);
     });
 
@@ -564,8 +603,8 @@ export class CollectionService {
     const senderById = new Map(senderRows.map((row) => [row.id, row.handle]));
 
     const items = visibleBidRows.map((row) => {
-      if (!row.bidAmountDkk || !row.bidStatus) {
-        throw new NotFoundException("Bid message missing amount or status");
+      if (!row.bidAmountDkk || !row.bidStatus || !row.type) {
+        throw new NotFoundException("Bid message missing amount, status or jersey");
       }
 
       const side = discoverJerseySideFromLabels(row, clubLabels, nationalTeamLabels);
@@ -578,7 +617,8 @@ export class CollectionService {
         throw new NotFoundException("Sender handle missing for activity");
       }
 
-      const viewerIsOwner = row.ownerId === userId;
+      // In a pair the owner of a Bud's UserJersey is the participant who did not send it.
+      const viewerIsOwner = row.senderId !== userId;
       const kitLine = `${side.clubLabel} · ${row.seasonLabel} · ${KIT_TYPE_LABELS_DA[row.type]}`;
 
       const latest = latestByConversation.get(row.conversationId);
@@ -614,7 +654,6 @@ export class CollectionService {
     const [conversationRow] = await this.db
       .select({
         id: conversation.id,
-        userJerseyId: conversation.userJerseyId,
         lowerCollectorId: conversation.lowerCollectorId,
         upperCollectorId: conversation.upperCollectorId,
       })
@@ -645,31 +684,6 @@ export class CollectionService {
       throw new NotFoundException("Peer handle missing");
     }
 
-    const [jerseyRow] = await this.db
-      .select({
-        clubId: userJersey.clubId,
-        nationalTeamId: userJersey.nationalTeamId,
-        type: userJersey.type,
-        seasonLabel: season.label,
-      })
-      .from(userJersey)
-      .innerJoin(season, eq(userJersey.seasonId, season.id))
-      .where(eq(userJersey.id, conversationRow.userJerseyId))
-      .limit(1);
-
-    let jerseyContext: CollectionConversationDetail["jerseyContext"];
-    if (jerseyRow) {
-      const { clubLabels, nationalTeamLabels } = await this.loadSideLabels([jerseyRow], locale);
-      const side = discoverJerseySideFromLabels(jerseyRow, clubLabels, nationalTeamLabels);
-      if (side) {
-        jerseyContext = {
-          clubLabel: side.clubLabel,
-          seasonLabel: jerseyRow.seasonLabel,
-          type: jerseyRow.type,
-        };
-      }
-    }
-
     const messageRows = await this.db
       .select({
         id: conversationMessage.id,
@@ -681,10 +695,25 @@ export class CollectionService {
         bidAmountDkk: conversationMessage.bidAmountDkk,
         bidStatus: conversationMessage.bidStatus,
         createdAt: conversationMessage.createdAt,
+        userJerseyId: conversationMessage.userJerseyId,
+        jerseyClubId: conversationMessage.jerseyClubId,
+        jerseyNationalTeamId: conversationMessage.jerseyNationalTeamId,
+        jerseySeasonLabel: season.label,
+        jerseyType: conversationMessage.jerseyType,
+        jerseySize: conversationMessage.jerseySize,
       })
       .from(conversationMessage)
+      .leftJoin(season, eq(conversationMessage.jerseySeasonId, season.id))
       .where(eq(conversationMessage.conversationId, conversationId))
       .orderBy(asc(conversationMessage.createdAt));
+
+    const { clubLabels, nationalTeamLabels } = await this.loadSideLabels(
+      messageRows.map((row) => ({
+        clubId: row.jerseyClubId,
+        nationalTeamId: row.jerseyNationalTeamId,
+      })),
+      locale,
+    );
 
     const replyIds = messageRows
       .map((row) => row.replyToMessageId)
@@ -723,6 +752,7 @@ export class CollectionService {
           row.replyToMessageId && replyText
             ? { id: row.replyToMessageId, text: replyText }
             : undefined,
+        jersey: messageJerseyFromSnapshot(row, clubLabels, nationalTeamLabels),
       };
     });
 
@@ -739,7 +769,6 @@ export class CollectionService {
     return collectionConversationDetailSchema.parse({
       id: conversationId,
       peerHandle: peerRow.handle,
-      jerseyContext,
       messages,
     });
   }
@@ -838,7 +867,8 @@ export class CollectionService {
       throw new NotFoundException("Message photo not found");
     }
 
-    if (!row.imageObjectKey.startsWith(`conversation/${conversationId}/`)) {
+    // A message merged in from a per-jersey thread keeps the key of the Conversation it was sent in.
+    if (!row.imageObjectKey.startsWith("conversation/")) {
       throw new NotFoundException("Message photo not found");
     }
 
@@ -1173,21 +1203,17 @@ export class CollectionService {
     }
 
     await this.db.transaction(async (tx) => {
-      const jerseyConversations = await tx
-        .select({ id: conversation.id })
-        .from(conversation)
-        .where(eq(conversation.userJerseyId, jerseyId));
-      const conversationIds = jerseyConversations.map((row) => row.id);
-
-      if (conversationIds.length > 0) {
-        await tx
-          .delete(conversationMessage)
-          .where(inArray(conversationMessage.conversationId, conversationIds));
-        await tx
-          .delete(conversationParticipant)
-          .where(inArray(conversationParticipant.conversationId, conversationIds));
-        await tx.delete(conversation).where(eq(conversation.userJerseyId, jerseyId));
-      }
+      // The Conversation and its messages stay; a pending Bud on the UserJersey is declined.
+      await tx
+        .update(conversationMessage)
+        .set({ bidStatus: "declined" })
+        .where(
+          and(
+            eq(conversationMessage.userJerseyId, jerseyId),
+            eq(conversationMessage.kind, "bid"),
+            eq(conversationMessage.bidStatus, "pending"),
+          ),
+        );
 
       await tx.delete(visionLog).where(eq(visionLog.userJerseyId, jerseyId));
       await tx.delete(jerseyDraft).where(eq(jerseyDraft.userJerseyId, jerseyId));
@@ -1730,8 +1756,9 @@ export class CollectionService {
     const [latestBid] = await this.db
       .select({ amount: conversationMessage.bidAmountDkk })
       .from(conversationMessage)
-      .innerJoin(conversation, eq(conversationMessage.conversationId, conversation.id))
-      .where(and(eq(conversation.userJerseyId, jerseyId), eq(conversationMessage.kind, "bid")))
+      .where(
+        and(eq(conversationMessage.userJerseyId, jerseyId), eq(conversationMessage.kind, "bid")),
+      )
       .orderBy(desc(conversationMessage.createdAt))
       .limit(1);
 
@@ -1854,6 +1881,11 @@ export class CollectionService {
         id: userJersey.id,
         ownerId: userJersey.userId,
         biddingEnabled: userJersey.biddingEnabled,
+        clubId: userJersey.clubId,
+        nationalTeamId: userJersey.nationalTeamId,
+        seasonId: userJersey.seasonId,
+        type: userJersey.type,
+        size: userJersey.size,
       })
       .from(userJersey)
       .where(eq(userJersey.id, jerseyId))
@@ -1875,43 +1907,59 @@ export class CollectionService {
       throw new ForbiddenException("Cannot start a conversation with this collector");
     }
 
-    const [lowerCollectorId, upperCollectorId] = canonicalCollectorPair(userId, jerseyRow.ownerId);
-
-    let conversationId: string;
-    const [existingConversation] = await this.db
-      .select({ id: conversation.id })
-      .from(conversation)
+    const [pendingBid] = await this.db
+      .select({ id: conversationMessage.id })
+      .from(conversationMessage)
       .where(
         and(
-          eq(conversation.userJerseyId, jerseyId),
-          eq(conversation.lowerCollectorId, lowerCollectorId),
-          eq(conversation.upperCollectorId, upperCollectorId),
+          eq(conversationMessage.senderId, userId),
+          eq(conversationMessage.userJerseyId, jerseyId),
+          eq(conversationMessage.kind, "bid"),
+          eq(conversationMessage.bidStatus, "pending"),
         ),
       )
       .limit(1);
 
-    if (existingConversation) {
-      conversationId = existingConversation.id;
-    } else {
-      const [insertedConversation] = await this.db
-        .insert(conversation)
-        .values({
-          userJerseyId: jerseyId,
-          lowerCollectorId,
-          upperCollectorId,
-        })
-        .returning({ id: conversation.id });
+    if (pendingBid) {
+      throw new ConflictException("A pending bid on this UserJersey already exists");
+    }
 
-      if (!insertedConversation) {
-        throw new BadRequestException("Could not create conversation");
-      }
+    const [lowerCollectorId, upperCollectorId] = canonicalCollectorPair(userId, jerseyRow.ownerId);
 
+    // Two first Buds of a pair can arrive at once: the pair index keeps one Conversation.
+    const [insertedConversation] = await this.db
+      .insert(conversation)
+      .values({ lowerCollectorId, upperCollectorId })
+      .onConflictDoNothing({
+        target: [conversation.lowerCollectorId, conversation.upperCollectorId],
+      })
+      .returning({ id: conversation.id });
+
+    let conversationId: string;
+    if (insertedConversation) {
       conversationId = insertedConversation.id;
 
       await this.db.insert(conversationParticipant).values([
         { conversationId, userId: jerseyRow.ownerId },
         { conversationId, userId },
       ]);
+    } else {
+      const [existingConversation] = await this.db
+        .select({ id: conversation.id })
+        .from(conversation)
+        .where(
+          and(
+            eq(conversation.lowerCollectorId, lowerCollectorId),
+            eq(conversation.upperCollectorId, upperCollectorId),
+          ),
+        )
+        .limit(1);
+
+      if (!existingConversation) {
+        throw new BadRequestException("Could not create conversation");
+      }
+
+      conversationId = existingConversation.id;
     }
 
     const [insertedMessage] = await this.db
@@ -1922,6 +1970,12 @@ export class CollectionService {
         kind: "bid",
         bidAmountDkk: body.amountDkk,
         bidStatus: "pending",
+        userJerseyId: jerseyRow.id,
+        jerseyClubId: jerseyRow.clubId,
+        jerseyNationalTeamId: jerseyRow.nationalTeamId,
+        jerseySeasonId: jerseyRow.seasonId,
+        jerseyType: jerseyRow.type,
+        jerseySize: jerseyRow.size,
       })
       .returning({ id: conversationMessage.id });
 
@@ -1950,30 +2004,15 @@ export class CollectionService {
     await this.assertConversationNotBlocked(userId, conversationId);
     const body = collectionRespondBidRequestSchema.parse(rawBody);
 
-    const [context] = await this.db
-      .select({
-        ownerId: userJersey.userId,
-      })
-      .from(conversation)
-      .innerJoin(userJersey, eq(conversation.userJerseyId, userJersey.id))
-      .where(eq(conversation.id, conversationId))
-      .limit(1);
-
-    if (!context) {
-      throw new NotFoundException("Conversation not found");
-    }
-
-    if (context.ownerId !== userId) {
-      throw new ForbiddenException("Only the UserJersey owner can accept or decline bids");
-    }
-
     const [messageRow] = await this.db
       .select({
         kind: conversationMessage.kind,
         bidStatus: conversationMessage.bidStatus,
         senderId: conversationMessage.senderId,
+        jerseyOwnerId: userJersey.userId,
       })
       .from(conversationMessage)
+      .leftJoin(userJersey, eq(conversationMessage.userJerseyId, userJersey.id))
       .where(
         and(
           eq(conversationMessage.id, messageId),
@@ -1984,6 +2023,15 @@ export class CollectionService {
 
     if (messageRow?.kind !== "bid") {
       throw new NotFoundException("Bid message not found");
+    }
+
+    // A Bud whose UserJersey is gone has no owner left to answer it.
+    if (!messageRow.jerseyOwnerId) {
+      throw new BadRequestException("Bid is not pending");
+    }
+
+    if (messageRow.jerseyOwnerId !== userId) {
+      throw new ForbiddenException("Only the UserJersey owner can accept or decline bids");
     }
 
     if (messageRow.senderId === userId) {

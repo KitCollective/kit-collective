@@ -36,6 +36,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   integer,
   pgEnum,
@@ -661,9 +662,6 @@ export const conversation = pgTable(
   "conversation",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userJerseyId: uuid("user_jersey_id")
-      .notNull()
-      .references(() => userJersey.id),
     lowerCollectorId: uuid("lower_collector_id")
       .notNull()
       .references(() => user.id),
@@ -674,11 +672,7 @@ export const conversation = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("conversation_jersey_pair_unique").on(
-      table.userJerseyId,
-      table.lowerCollectorId,
-      table.upperCollectorId,
-    ),
+    uniqueIndex("conversation_pair_unique").on(table.lowerCollectorId, table.upperCollectorId),
   ],
 );
 
@@ -725,24 +719,58 @@ export const moderationReport = pgTable("moderation_report", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const conversationMessage = pgTable("conversation_message", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  conversationId: uuid("conversation_id")
-    .notNull()
-    .references(() => conversation.id),
-  senderId: uuid("sender_id")
-    .notNull()
-    .references(() => user.id),
-  kind: messageKindEnum("kind").notNull(),
-  body: text("body"),
-  imageObjectKey: text("image_object_key"),
-  replyToMessageId: uuid("reply_to_message_id").references(
-    (): AnyPgColumn => conversationMessage.id,
-  ),
-  bidAmountDkk: integer("bid_amount_dkk"),
-  bidStatus: bidStatusEnum("bid_status"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const conversationMessage = pgTable(
+  "conversation_message",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversation.id),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => user.id),
+    kind: messageKindEnum("kind").notNull(),
+    body: text("body"),
+    imageObjectKey: text("image_object_key"),
+    replyToMessageId: uuid("reply_to_message_id").references(
+      (): AnyPgColumn => conversationMessage.id,
+    ),
+    bidAmountDkk: integer("bid_amount_dkk"),
+    bidStatus: bidStatusEnum("bid_status"),
+    /** The UserJersey the message is about. Null once that UserJersey is deleted. */
+    userJerseyId: uuid("user_jersey_id").references(() => userJersey.id, { onDelete: "set null" }),
+    /** Snapshot of that UserJersey when the message was sent; outlives the UserJersey. */
+    jerseyClubId: uuid("jersey_club_id").references(() => club.id),
+    jerseyNationalTeamId: uuid("jersey_national_team_id"),
+    jerseySeasonId: uuid("jersey_season_id").references(() => season.id),
+    jerseyType: kitTypeEnum("jersey_type"),
+    jerseySize: jerseySizeEnum("jersey_size"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Named by hand: the generated name is one character over the Postgres limit.
+    foreignKey({
+      name: "conversation_message_jersey_national_team_id_fk",
+      columns: [table.jerseyNationalTeamId],
+      foreignColumns: [nationalTeam.id],
+    }),
+    check(
+      "conversation_message_bid_jersey_snapshot",
+      sql`(
+        ${table.kind} <> 'bid'
+        OR (
+          ${table.jerseySeasonId} IS NOT NULL
+          AND ${table.jerseyType} IS NOT NULL
+          AND ${table.jerseySize} IS NOT NULL
+          AND (
+            (${table.jerseyClubId} IS NOT NULL AND ${table.jerseyNationalTeamId} IS NULL)
+            OR (${table.jerseyClubId} IS NULL AND ${table.jerseyNationalTeamId} IS NOT NULL)
+          )
+        )
+      )`,
+    ),
+  ],
+);
 
 export const userJerseyPhoto = pgTable(
   "user_jersey_photo",

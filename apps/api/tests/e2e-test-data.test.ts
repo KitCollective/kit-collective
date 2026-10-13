@@ -248,7 +248,7 @@ describe("device-flow test data", () => {
     const [lower, upper] = [TEST_COLLECTOR_ID, TEST_PEER_ID].sort();
     const [thread] = await db
       .insert(conversation)
-      .values({ userJerseyId: peerJersey!.id, lowerCollectorId: lower!, upperCollectorId: upper! })
+      .values({ lowerCollectorId: lower!, upperCollectorId: upper! })
       .returning({ id: conversation.id });
     await db.insert(conversationParticipant).values([
       { conversationId: thread!.id, userId: TEST_COLLECTOR_ID },
@@ -260,6 +260,12 @@ describe("device-flow test data", () => {
       kind: "bid",
       bidAmountDkk: 250,
       bidStatus: "pending",
+      userJerseyId: peerJersey!.id,
+      jerseyClubId: peerJersey!.clubId,
+      jerseyNationalTeamId: peerJersey!.nationalTeamId,
+      jerseySeasonId: peerJersey!.seasonId,
+      jerseyType: peerJersey!.type,
+      jerseySize: peerJersey!.size,
     });
     await db.insert(wishlistEntry).values({ userId: TEST_COLLECTOR_ID, type: "away" });
     await db

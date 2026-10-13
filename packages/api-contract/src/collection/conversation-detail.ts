@@ -1,4 +1,4 @@
-import { KIT_TYPES } from "@kit/domain";
+import { JERSEY_SIZES, KIT_TYPES } from "@kit/domain";
 import { z } from "zod";
 
 const MESSAGE_KINDS = ["text", "image", "bid"] as const;
@@ -25,6 +25,20 @@ export const collectionConversationReplyToSchema = z
 
 export type CollectionConversationReplyTo = z.infer<typeof collectionConversationReplyToSchema>;
 
+/**
+ * The UserJersey a message is about, as it was when the message was sent.
+ * `userJerseyId` is null once the UserJersey is deleted; the labels stay readable.
+ */
+const collectionConversationMessageJerseySchema = z
+  .object({
+    userJerseyId: z.string().uuid().nullable(),
+    clubLabel: z.string().min(1),
+    seasonLabel: z.string().min(1),
+    type: z.enum(KIT_TYPES),
+    size: z.enum(JERSEY_SIZES),
+  })
+  .strict();
+
 export const collectionConversationMessageSchema = z
   .object({
     id: z.string().uuid(),
@@ -36,6 +50,7 @@ export const collectionConversationMessageSchema = z
     bidStatus: z.enum(BID_STATUSES).optional(),
     createdAt: z.string().datetime(),
     replyTo: collectionConversationReplyToSchema.optional(),
+    jersey: collectionConversationMessageJerseySchema.optional(),
   })
   .strict();
 
