@@ -64,10 +64,6 @@ export function deleteConfirmCopy(selectedCount: number): {
 
 export type DraftPickerRow = {
   draftId: string;
-  title: string;
-  /** Season · type · photo count. */
-  meta: string;
-  thumbUri: string | null;
   /** At 10 photos: dimmed, **Fuld**, and no press. */
   full: boolean;
   /** The shared overview row shape, with the trailing slot set for this Sheet. */
@@ -88,9 +84,6 @@ export function draftPickerRows(state: CaptureSessionState): DraftPickerRow[] {
     const full = !canAddPhotoToDraft(draft);
     rows.push({
       draftId: draft.id,
-      title: row.title,
-      meta,
-      thumbUri: row.thumbUri,
       full,
       row: { ...row, meta, status: "ready", statusLabel: full ? "Fuld" : null },
     });

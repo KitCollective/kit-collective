@@ -678,6 +678,22 @@ describe("sorting photos without a jersey", () => {
     expect(next.orderedUris).toEqual(uris);
   });
 
+  it("add to draft stops at the cap when universal roles are still free", () => {
+    const uris = Array.from({ length: 13 }, (_, index) => `file:///photos/cap-free-${index}.jpg`);
+    let session = createCaptureSession(uris);
+    const draftId = getActiveDraft(session).id;
+    session = bindUnboundPhotosToDraft(session, uris.slice(0, 9), draftId);
+    session = changeDraftPhotoRole(session, draftId, "back", "other");
+    session = changeDraftPhotoRole(session, draftId, "left", "other");
+    expect(photoUriForRole(getDraft(session, draftId), "back")).toBeNull();
+    expect(getDraft(session, draftId).photos).toHaveLength(9);
+
+    const next = bindUnboundPhotosToDraft(session, uris.slice(9, 12), draftId);
+
+    expect(getDraft(next, draftId).photos).toHaveLength(10);
+    expect(next.unboundUris).toEqual(uris.slice(10));
+  });
+
   it("new from selection stops at the cap and keeps the rest without a jersey", () => {
     const session = createCaptureSession(BULK_URIS);
 

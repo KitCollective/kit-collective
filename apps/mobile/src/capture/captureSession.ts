@@ -469,15 +469,15 @@ export function switchSingleToBulkBind(state: CaptureSessionState): CaptureSessi
 }
 
 export function nextAvailableRole(draft: CaptureJerseyDraft): PhotoRole | null {
+  if (!canAddPhotoToDraft(draft)) {
+    return null;
+  }
   for (const role of UNIVERSAL_PHOTO_ROLES) {
     if (!draft.photos.some((photo) => photo.role === role)) {
       return role;
     }
   }
-  if (draft.photos.length < MAX_USER_JERSEY_PHOTOS) {
-    return "other";
-  }
-  return null;
+  return "other";
 }
 
 export function bindUnboundPhotoToDraft(

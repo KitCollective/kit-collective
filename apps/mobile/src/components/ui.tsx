@@ -65,7 +65,7 @@ type ButtonProps = PressableProps & {
   /** Optional leading glyph (e.g. a provider mark) rendered before the label. */
   leading?: ReactNode;
   /**
-   * `danger` sets the label of a `secondary` or `tertiary` Button in `danger`: "a `secondary` in
+   * `danger` sets the label of a `secondary` Button in `danger`: "a `secondary` in
    * `danger`" (Fotos uden trøje, **Slet**). The word still names the action; never colour alone.
    */
   tone?: "neutral" | "danger";
@@ -86,7 +86,7 @@ export function Button({
   const isDisabled = disabled || loading;
   const variantStyle = getVariantStyles(theme)[variant];
   const labelStyle =
-    tone === "danger" && (variant === "secondary" || variant === "tertiary")
+    tone === "danger" && variant === "secondary"
       ? { color: theme.danger }
       : getLabelStyles(theme)[variant];
 

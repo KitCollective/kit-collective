@@ -120,9 +120,9 @@ describe("Læg til en trøje picker", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.draftId).toBe(draftId);
-    expect(rows[0]?.title).toBe("FC Barcelona");
-    expect(rows[0]?.meta).toBe("2023/24 · Hjemme · 3 fotos");
-    expect(rows[0]?.thumbUri).toBe(URIS[0]);
+    expect(rows[0]?.row.title).toBe("FC Barcelona");
+    expect(rows[0]?.row.meta).toBe("2023/24 · Hjemme · 3 fotos");
+    expect(rows[0]?.row.thumbUri).toBe(URIS[0]);
     expect(rows[0]?.full).toBe(false);
   });
 
@@ -130,7 +130,7 @@ describe("Læg til en trøje picker", () => {
     let state = createCaptureSession(URIS);
     state = createDraftFromUnbound(state, URIS.slice(0, 1));
 
-    expect(draftPickerRows(state)[0]?.meta).toBe("1 foto");
+    expect(draftPickerRows(state)[0]?.row.meta).toBe("1 foto");
   });
 
   it("marks a jersey with 10 photos as Fuld and not pressable", () => {

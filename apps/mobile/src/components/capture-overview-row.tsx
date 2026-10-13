@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.9,
   },
-  /** The lock names `opacity.disabled` but gives no value; 0.4 as on the capture Chooser's Switch. */
+  /** The lock names `opacity.disabled` but gives no value (no token either); 0.4 as Switch and List row lock it. */
   dimmed: {
     opacity: 0.4,
   },
