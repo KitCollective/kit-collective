@@ -32,7 +32,7 @@ The harness needs a gh whose `pr checks` subcommand supports `--json`. This is a
 What the missing pieces mean in practice:
 
 - **No Postgres.** The `api` and `db` suites cannot run. `node scripts/verify.mjs --changed --capability <what this machine has>` skips them and ends `INCOMPLETE` (exit 3), which is never green. Route a slice whose tests need a database to the Mac.
-- **No simulator.** Device flows (`docs/agents/device-flows.md`) stay on the Mac.
+- **No simulator.** A slice's Device flow runs on a GitHub macOS runner instead (`node scripts/request-device-flows.mjs`, ADR-0059), so a mobile slice no longer needs the Mac. The local `device-run.sh`, with its before/after comparison, stays on the Mac (`docs/agents/device-flows.md`).
 
 ## Secrets
 
@@ -56,9 +56,11 @@ The main clone is updated with the existing safe sync, not with a second procedu
 Both commands run from a bb project thread on the machine (`bb project list` shows the project, `kit-collective`):
 
 ```bash
-bb workflows validate --file .bb/workflows/kit-issue.js
-bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'
+bb workflows validate --file /home/node/work/kit-collective/.bb/workflows/kit-issue.js
+bb workflows run --file /home/node/work/kit-collective/.bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'
 ```
+
+Always give the main clone's path, also from a thread in an issue worktree: the workflow file is read when the run starts, and an issue branch cut before a harness fix holds the old file (KIT-283, ADR-0058). The run's first step then compares the worktree's `scripts/`, `.bb/workflows/` and `factory.config.json` with `origin/development` and stops at `harness` when they differ; merge the lane into the branch and push, then run again. That stop does not count against the run cap.
 
 `validate` is read-only; run it after every change to the workflow file. `run` returns at once and starts a real run of the issue: do not use it as a test of the command, it would start a second run.
 
@@ -67,10 +69,12 @@ The args are the `meta.inputSchema` of `.bb/workflows/kit-issue.js`:
 | Arg | Meaning |
 | --- | --- |
 | `issue` | Required. The issue key, `KIT-n`. |
-| `resume` | `true` to continue an issue that already has a branch and a PR. |
+| `resume` | `true` to continue an issue that already has a branch and a PR. When the last Engineer result was `ready`, no findings are open on the head and the pre-review gate is open, the run goes straight to the Reviewer (round 0) and spends no Engineer round. |
 | `skipLead` | `true` to skip the Lead, for a small issue. |
 | `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. |
 | `machine` | Only written to the run log; it routes nothing. |
+
+An issue gets at most `flow.maxRunsPerDay` runs (factory.config.json, 3) in 24 hours, resumes included: the session check refuses the next one and names the cap. Raising it is a committed change by a person, never something a run does for itself.
 
 The run goes from the session check to `Approval` and stops there (ADR-0058). `Approval` is not merge permission: a person moves the issue to `Merging` and starts the land step.
 

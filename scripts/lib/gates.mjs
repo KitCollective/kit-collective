@@ -84,12 +84,38 @@ export function headChanged({ head, issue, events, workpad = "" }) {
 }
 
 /**
+ * Resume point: whether a resumed run may go straight to the Reviewer. Only when the last Engineer
+ * result in the run log is `ready` (the Engineer said the PR is built) and the head has no findings
+ * open against it. Anything else means the Engineer has work, so the answer is to build.
+ * The caller still runs the pre-review gate before any Reviewer is spawned.
+ * @param {{ head: string, issue: string, events: Record<string, any>[], workpad?: string }} input
+ */
+export function resumePoint({ head, issue, events, workpad = "" }) {
+  const lastEngineer = events.findLast(
+    (e) => e.issue === issue && e.event === "result" && e.step === "engineer",
+  );
+  if (!lastEngineer) {
+    return closed("no Engineer result in the run log for this issue; build first");
+  }
+  if (lastEngineer.outcome !== "ready") {
+    return closed(`the last Engineer result was ${lastEngineer.outcome}; build first`);
+  }
+  const changed = headChanged({ head, issue, events, workpad });
+  if (changed.code !== GATE_EXIT.open) {
+    return changed;
+  }
+  return open(
+    "the last Engineer result was ready and the head has no open findings; review it as it is",
+  );
+}
+
+/**
  * Session-check: refuse a second run on one issue. Machine-agnostic: reads Linear state,
  * GitHub branches and PRs, and the central run log, never local worktrees.
  * @param {{
  *   issue: string, resume?: boolean, now?: number, liveMinutes?: number,
  *   linear: { state: string, labels: string[], blockedBy?: Array<{ identifier: string, state: string }> },
- *   branches: string[], openPrs: number[], events: Record<string, any>[],
+ *   branches: string[], openPrs: number[], events: Record<string, any>[], maxRunsPerDay?: number,
  * }} input
  */
 export function sessionCheck({
@@ -97,6 +123,7 @@ export function sessionCheck({
   resume = false,
   now = Date.now(),
   liveMinutes = 30,
+  maxRunsPerDay = 3,
   linear,
   branches,
   openPrs,
@@ -109,6 +136,16 @@ export function sessionCheck({
   }
   if (["Done", "Canceled", "Duplicate"].includes(linear.state)) {
     return closed(`${issue} is ${linear.state}`);
+  }
+  // The run cap holds on resume too: a resume is what a retrying orchestrator starts (KIT-295 ran
+  // seven times in one night). Only runs that got past this check count, since `start` is logged after it.
+  const startsToday = events.filter(
+    (e) => e.issue === issue && e.event === "start" && now - Date.parse(e.at) < 24 * 3600_000,
+  ).length;
+  if (startsToday >= maxRunsPerDay) {
+    return closed(
+      `${issue} was started ${startsToday} times in the last 24 h (cap ${maxRunsPerDay}); a person raises flow.maxRunsPerDay in factory.config.json or waits`,
+    );
   }
   // A blocker that is not Done or Canceled keeps any not-yet-finished issue out, in every state
   // except Blocked (which has its own rule below), also on resume.
@@ -335,6 +372,38 @@ export const MIN_WAIT_SECONDS = 30;
 export function remainingWaitSeconds(totalSeconds, elapsedMs) {
   const left = Math.floor(Number(totalSeconds) - elapsedMs / 1000);
   return Number.isFinite(left) && left >= MIN_WAIT_SECONDS ? left : null;
+}
+
+/** The commit status a slice's Device flow run sets on the PR head (ADR-0048, ADR-0059). */
+export const DEVICE_FLOWS_CONTEXT = "Device flows";
+/** The PR label that starts the hosted Device flows run (.github/workflows/device-flows.yml). */
+export const DEVICE_FLOWS_LABEL = "run-device-flows";
+
+/** Path of an issue's slice flow, the file whose presence makes the status part of the gate. */
+export function sliceFlowPath(issue) {
+  return `apps/mobile/.maestro/slices/${issue}.yaml`;
+}
+
+/**
+ * Whether to ask for a hosted Device flows run on a PR head. Statuses are GitHub's commit
+ * statuses for the head, newest first. A run is asked for only when the slice has a flow and the
+ * head has no verdict and no run under way: a green or running head is left alone (a macOS run
+ * is not free), and a red one is the Engineer's to fix with a new commit, which is a new head.
+ * @param {{ hasSliceFlow: boolean, statuses: Array<{ context?: string, state?: string }> }} input
+ * @returns {{ request: boolean, line: string }}
+ */
+export function deviceFlowsRequest({ hasSliceFlow, statuses }) {
+  if (!hasSliceFlow) {
+    return { request: false, line: "NOT NEEDED: this PR has no slice flow for the issue" };
+  }
+  const latest = statuses.find((status) => status.context === DEVICE_FLOWS_CONTEXT);
+  if (!latest) {
+    return { request: true, line: `REQUESTED: no ${DEVICE_FLOWS_CONTEXT} status on the head yet` };
+  }
+  return {
+    request: false,
+    line: `ALREADY ${String(latest.state).toUpperCase()}: the head has a ${DEVICE_FLOWS_CONTEXT} status`,
+  };
 }
 
 /** A waiting gate result (exit 3) is never written to the run log: only open or closed is an outcome. */

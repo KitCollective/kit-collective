@@ -22,4 +22,6 @@ The first-session flow covers what a Collector can reach today (splash, onboard,
 
 Status: accepted.
 
+Superseded in part by ADR-0059 (2026-10-13): the `Device flows` status may also be set by a hosted run on a GitHub macOS runner, which is what an issue session uses; "Where it runs" above describes the approver's local run only.
+
 Superseded in part by ADR-0049 (2026-10-10): a slice is proven by its own flow under `slices/`, the five flows are the regression set, the run queues and the native binary is cached. The rest of this record stands.
