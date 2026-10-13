@@ -198,11 +198,35 @@ async function sh(label, phaseTitle, commands, keepGoing = false, retry = false)
 const GATE_SLICE_SECONDS = 480;
 const GATE_SLICES = 5;
 
-/** Runs one gate command in slices; `exhausted` is set when every slice still said waiting. */
-async function gateSlices(label, phaseTitle, command) {
+/**
+ * Every runner is a whole agent session, so a step that only writes the run log or a Linear state
+ * rides along with the next gated command instead of getting a runner of its own. `before` holds
+ * such commands: nothing reads their result, so they never stop `command`, whose result is the one
+ * returned. If the shared runner comes back incomplete, `command` is asked once more alone (it must
+ * be idempotent): two attempts in all, the same as a retried command of its own. The `before`
+ * commands are not repeated, exactly as when they had their own runner.
+ */
+async function shAfter(before, label, phaseTitle, command) {
+  if (before.length === 0) {
+    return (await sh(label, phaseTitle, [command], false, true))[0];
+  }
+  let all = null;
+  try {
+    all = await runRaw(label, phaseTitle, [...before, command], true);
+  } catch (error) {
+    all = null;
+  }
+  if (Array.isArray(all) && all.length === before.length + 1) {
+    return all[before.length];
+  }
+  return (await sh(label, phaseTitle, [command]))[0];
+}
+
+/** Runs one gate command in slices; `exhausted` is set when every slice still said waiting. `before` rides along with the first slice. */
+async function gateSlices(label, phaseTitle, command, before = []) {
   let out = { code: 4, line: `no output from ${label}` };
   for (let slice = 1; slice <= GATE_SLICES; slice += 1) {
-    out = (await sh(label, phaseTitle, [command], false, true))[0] ?? out;
+    out = (slice === 1 ? await shAfter(before, label, phaseTitle, command) : (await sh(label, phaseTitle, [command], false, true))[0]) ?? out;
     if (out.code !== 3) {
       return out;
     }
@@ -212,11 +236,16 @@ async function gateSlices(label, phaseTitle, command) {
 
 const logCmd = (event, flags) => `node scripts/run-log.mjs ${event} ${flags}`;
 
-async function move(phaseTitle, state) {
+/** The one place a Linear state command is built, so no caller can write a state outside MAY_SET. */
+function stateCmd(state) {
   if (!MAY_SET.includes(state)) {
     throw new Error(`kit-issue may not set ${state}`);
   }
-  return sh(`linear:${state}`, phaseTitle, [`node scripts/linear.mjs state ${issue} "${state}"`]);
+  return `node scripts/linear.mjs state ${issue} "${state}"`;
+}
+
+async function move(phaseTitle, state) {
+  return sh(`linear:${state}`, phaseTitle, [stateCmd(state)]);
 }
 
 /** A human is needed or another issue must finish first (the `blocked` sentence of the Engineer or Lead). */
@@ -290,12 +319,15 @@ const roles = Array.isArray(decision.roles) ? decision.roles.join(", ") : "";
 // A resume keeps the plan the Engineer built against: the Lead is skipped when the workpad already
 // holds `### Plan`. The check is a fixed command (no agent text); an unreadable workpad stops the run
 // rather than risk overwriting the plan.
+/** Run-log lines waiting for the next runner (see shAfter). Flushed before the loop at the latest. */
+const carried = [];
 let leadNeeded = decision.plan && args.skipLead !== true;
 if (leadNeeded && resume) {
   const planCheck = (await sh("plan-check", "Lead", [`node scripts/workpad-has-plan.mjs ${issue}`], false, true))[0];
   if (planCheck.code === 0) {
     leadNeeded = false;
-    await sh("log:lead-skipped", "Lead", [logCmd("reason", `--issue ${issue} --code lead-skipped`)], true);
+    // Rides with the resume point when there is one; written alone before the loop otherwise.
+    carried.push(logCmd("reason", `--issue ${issue} --code lead-skipped`));
   } else if (planCheck.code !== 1) {
     return stopped("lead", "stopped", { note: `could not read the workpad to see whether a plan exists: ${planCheck.line}` });
   }
@@ -399,11 +431,11 @@ let engineerThread = "";
 // counts Engineer rounds. Any other answer builds first, as before.
 let reviewAsIs = false;
 if (resume && resumePr !== null) {
-  const point = await sh("resume-point", "Pre-review gate", [`node scripts/resume-point.mjs ${issue} --pr ${resumePr}`], false, true);
-  if (point[0]?.runner) {
-    return stopped("resume-point", "stopped", { prNumber: resumePr, note: point[0].line });
+  const point = await shAfter(carried.splice(0), "resume-point", "Pre-review gate", `node scripts/resume-point.mjs ${issue} --pr ${resumePr}`);
+  if (!point || point.runner) {
+    return stopped("resume-point", "stopped", { prNumber: resumePr, note: point?.line ?? "no output from resume-point" });
   }
-  if (point[0]?.code === 0) {
+  if (point.code === 0) {
     phase("Pre-review gate");
     const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
     if (pre.runner) {
@@ -415,22 +447,27 @@ if (resume && resumePr !== null) {
     }
     if (pre.code === 0) {
       reviewAsIs = true;
-      await sh("log:engineer-skipped", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code engineer-skipped`)], true);
     } else if (pre.code === 1) {
       feedback = `The pre-review gate is closed: ${pre.line}`;
     }
   }
 }
+if (carried.length > 0) {
+  await sh("log:lead-skipped", "Lead", carried.splice(0), true);
+}
 
+// Set when a closing step of the previous round already moved the issue back to In Progress.
+let backInProgress = false;
 for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
   rounds = round;
   // Two red audits earn the strong model, as the start decision says.
   const modelAlias = round >= 3 ? "opus" : engineerAlias;
   if (round > 0) {
     phase("Engineer");
-    if (round > 1 || resume) {
+    if ((round > 1 || resume) && !backInProgress) {
       await move("Engineer", "In Progress");
     }
+    backInProgress = false;
     let engineer = null;
     for (let attempt = 1; attempt <= 2 && engineer === null; attempt += 1) {
       try {
@@ -450,11 +487,14 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
       return stopped("engineer", "In Progress", { rounds, note: "the Engineer ended without a usable result or thread id twice" });
     }
     engineerThread = eThread;
-    await sh("log:engineer", "Engineer", [
+    // The two log lines ride with the pre-review gate; a stop before the gate writes them alone.
+    const engineerLog = [
       logCmd("spawn", `--issue ${issue} --step engineer --thread ${eThread} --mode ${round > 1 || reviewAsIs ? "fix" : "start"} --provider ${PROVIDER} --model ${MODELS[modelAlias]}${machineFlag}`),
       logCmd("result", `--issue ${issue} --step engineer --outcome ${engineer.outcome} --usage-thread ${eThread}`),
-    ]);
+    ];
+    const logEngineer = () => sh("log:engineer", "Engineer", engineerLog, true);
     if (engineer.outcome !== "ready") {
+      await logEngineer();
       if (engineer.outcome === "blocked") {
         const state = await stopForHuman("Engineer", engineer.sentence);
         return stopped("engineer", state, { rounds, note: engineer.sentence });
@@ -463,16 +503,18 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     }
     if (prNumber !== null && Number.isInteger(engineer.prNumber) && engineer.prNumber !== prNumber) {
       // A second PR for the same issue: stop before any gate reads it.
+      await logEngineer();
       return stopped("engineer", "In Progress", { prNumber, rounds, note: `the Engineer reported PR #${engineer.prNumber}, but the issue's PR is #${prNumber}: a second PR was opened` });
     }
     prNumber = Number.isInteger(engineer.prNumber) ? engineer.prNumber : prNumber;
     if (prNumber === null) {
+      await logEngineer();
       return stopped("engineer", "In Progress", { rounds, note: "the Engineer reported ready without a PR number" });
     }
 
     // -- Pre-review gate: mechanical steps and checks only, no matrix (ADR-0058).
     phase("Pre-review gate");
-    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
+    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, engineerLog);
     if (pre.runner) {
       // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
       return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
@@ -484,8 +526,11 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     }
     if (pre.code !== 0) {
       const reason = /scope-missing-in-pr/.test(pre.line) ? "scope-missing-in-pr" : "gate-closed";
+      const again = pre.code === 1 && round < maxRounds;
+      // The issue never left In Progress here, so the next round needs no move.
+      backInProgress = again;
       await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ${reason}`)], true);
-      if (pre.code === 1 && round < maxRounds) {
+      if (again) {
         feedback = `The pre-review gate is closed: ${pre.line}`;
         continue;
       }
@@ -496,7 +541,11 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
       return stopped("head-changed", "In Progress", { prNumber, rounds, note: head[0]?.line ?? "no output" });
     }
   }
-  await move("Pre-review gate", "In Review");
+  if (round === 0) {
+    await sh("linear:In Review", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code engineer-skipped`), stateCmd("In Review")], true);
+  } else {
+    await move("Pre-review gate", "In Review");
+  }
 
   // -- Reviewer: fresh hidden thread on another model than the Engineer.
   phase("Reviewer");
@@ -537,19 +586,21 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     return stopped("reviewer", "In Review", { prNumber, rounds, note: "the Reviewer ended without a usable result or thread id" });
   }
   lastVerdict = review.verdict;
-  await sh("log:reviewer", "Reviewer", [
+  // The two log lines ride with the review gate; an amber hold has no gate, so it writes them alone.
+  const reviewerLog = [
     logCmd("spawn", `--issue ${issue} --step reviewer --thread ${rThread} --mode review --provider ${PROVIDER} --model ${MODELS[rAlias]}${machineFlag}`),
     logCmd("result", `--issue ${issue} --step reviewer --outcome ${review.verdict} --usage-thread ${rThread}`),
-  ]);
+  ];
 
   if (review.verdict === "amber") {
+    await sh("log:reviewer", "Reviewer", reviewerLog, true);
     // Required checks were pending when the reviewer looked: a cheap hold, stay In Review.
     return stopped("reviewer", "In Review", { prNumber, rounds, verdict: "amber", note: review.sentence });
   }
 
   // -- Full review gate (matrix included) and the receipt as a dry run.
   phase("Review gate");
-  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
+  const gate = await gateSlices("gate:review", "Review gate", `node scripts/gate.mjs review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, reviewerLog);
   if (gate.exhausted) {
     await sh("log:gate", "Review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
     return stopped("review gate", "In Review", { prNumber, rounds, verdict: review.verdict, note: gate.line });
@@ -563,8 +614,11 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     await sh("log:red", "Review gate", [
       ...(review.verdict === "red" && sha ? [logCmd("audit", `--issue ${issue} --verdict red --round ${round} --sha ${sha}${rows ? ` --rows ${rows}` : ""}`)] : []),
       ...(gate.code !== 0 ? [logCmd("reason", `--issue ${issue} --code ${/scope-missing-in-pr/.test(gate.line) ? "scope-missing-in-pr" : "gate-closed"}`)] : []),
+      // A fix round follows: the move back to In Progress rides along instead of opening the next round with its own runner.
+      ...(round < maxRounds ? [stateCmd("In Progress")] : []),
     ], true);
     if (round < maxRounds) {
+      backInProgress = true;
       feedback = `${review.verdict === "red" ? `The Reviewer returned red: ${review.sentence}. The findings are under \`### Review feedback\` in the workpad.` : ""}${gate.code !== 0 ? `\nThe review gate says: ${gate.line}` : ""}`.trim();
       continue;
     }
