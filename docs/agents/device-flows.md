@@ -1,6 +1,6 @@
 # Device flows
 
-A slice that touches `apps/mobile/**` proves itself with **its own Device flow**, `apps/mobile/.maestro/slices/<KEY>.yaml`, written in the same PR and run on the approver's Mac against an iOS Simulator build. The five flows that used to be the gate are the **regression set** under `regression/`, run only on request. Decisions: `docs/adr/0048-device-flows-as-pr-evidence.md`, changed by `docs/adr/0049-slice-flows-queue-and-native-cache.md`. Terms (**Device flow**, **Test Collector**, **Evidence run**, **Design finding**): `CONTEXT.md`.
+A slice that touches `apps/mobile/**` proves itself with **its own Device flow**, `apps/mobile/.maestro/slices/<KEY>.yaml`, written in the same PR and run against an iOS Simulator build: by the hosted run on a GitHub macOS runner (what an issue session asks for, ADR-0059), or on the approver's Mac. The five flows that used to be the gate are the **regression set** under `regression/`, run only on request. Decisions: `docs/adr/0048-device-flows-as-pr-evidence.md`, changed by `docs/adr/0049-slice-flows-queue-and-native-cache.md`. Terms (**Device flow**, **Test Collector**, **Evidence run**, **Design finding**): `CONTEXT.md`.
 
 ## Write the slice flow
 
@@ -56,7 +56,19 @@ When a slice adds a control a flow must tap, add the `testID` in the same PR. Ad
 
 ## Run the flow
 
-Everything runs on the approver's Mac. Needs Xcode with an iOS Simulator, CocoaPods, a Java runtime and the Maestro CLI (`brew install mobile-dev-inc/tap/maestro openjdk@17 cocoapods`), a local Postgres with a database whose name contains `test`, and `gh` signed in.
+### The hosted run (what a session uses)
+
+```bash
+node scripts/request-device-flows.mjs <pr> --issue KIT-<n>
+```
+
+It puts the `run-device-flows` label on the PR, which starts `.github/workflows/device-flows.yml` on a macOS runner: the same `local-api.sh`, `build-local.sh` and `run-local.sh` as below, on a fresh machine. The run sets the `Device flows` commit status on the PR head (pending, then success, failure or error) with a link to itself, and uploads `apps/mobile/.maestro/out` as the artifact `device-flows-<sha>`. The script asks for nothing when the PR has no slice flow for the issue or the head already has the status; a new commit is a new head and needs a new request. The pre-review gate (`scripts/gate.mjs`) waits for the status with the checks whenever the PR head holds the slice flow, and the `kit-issue` workflow makes the request itself in front of that gate.
+
+What the hosted run does not do: the upload to the evidence bucket, the before/after comparison, the Claude review, the PR comment and the workpad links. Those need the bucket keys and the approver's logins, and no Actions secret holds them. A hosted run takes about 45 minutes when the native binary has to be built and far less on a cache hit; macOS minutes are billed at ten times the Linux rate.
+
+### On the approver's Mac
+
+The rest of this section runs on the approver's Mac, for the full evidence or while iterating on a flow. Needs Xcode with an iOS Simulator, CocoaPods, a Java runtime and the Maestro CLI (`brew install mobile-dev-inc/tap/maestro openjdk@17 cocoapods`), a local Postgres with a database whose name contains `test`, and `gh` signed in.
 
 ```bash
 # What an issue session runs: queue, API, app, flow, evidence. One command.
@@ -108,7 +120,7 @@ GitHub access is the `gh` login on the Mac. The review is a headless Claude Code
 
 R2 (Cloudflare dashboard, `kc-e2e-evidence`): public access through the r2.dev address, and one lifecycle rule that deletes objects after 30 days. The bucket holds test Collectors and drawn shirts only.
 
-GitHub: `development` has the `lane-development` ruleset (pull request required, `test` required). `Device flows` is not added to it, because a required status cannot be limited to PRs that touch `apps/mobile/**` and would block every other PR. It blocks through the checker, which fails a mobile PR whose head has no green `Device flows` status (`.cursor/agents/checker.md`).
+GitHub: `development` has the `lane-development` ruleset (pull request required, `test` required). `Device flows` is not added to it, because a required status cannot be limited to PRs that touch `apps/mobile/**` and would block every other PR. It blocks through the pre-review gate, which waits for the status when the PR head holds the issue's slice flow, and through the checker, which fails a mobile PR whose head has no green `Device flows` status (`.cursor/agents/checker.md`).
 
 ## Outside the local API
 

@@ -1093,3 +1093,20 @@ test("a resume that reviews the head as it is writes both skip lines on runners 
   const review = runners(spawns).find((s) => s.options.label === "linear:In Review").prompt;
   assert.match(review, /--code engineer-skipped/);
 });
+
+test("the hosted Device flows run is asked for in the pre-review gate's own runner, before the gate (ADR-0059)", async () => {
+  const { commands, spawns } = await run();
+  const request = commands.findIndex(
+    (c) => c === "node scripts/request-device-flows.mjs 77 --issue KIT-9",
+  );
+  assert.ok(request >= 0);
+  assert.ok(request < commands.findIndex(isPre));
+  const gate = runners(spawns).find((s) => s.options.label === "gate:pre-review").prompt;
+  assert.match(gate, /request-device-flows\.mjs 77 --issue KIT-9/);
+
+  const resumed = await run({ args: { issue: "KIT-9", resume: true }, shell: resumeShell(0) });
+  const asked = resumed.commands.findIndex((c) =>
+    c.includes("request-device-flows.mjs 55 --issue KIT-9"),
+  );
+  assert.ok(asked >= 0 && asked < resumed.commands.findIndex(isPre));
+});

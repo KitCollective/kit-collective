@@ -374,6 +374,38 @@ export function remainingWaitSeconds(totalSeconds, elapsedMs) {
   return Number.isFinite(left) && left >= MIN_WAIT_SECONDS ? left : null;
 }
 
+/** The commit status a slice's Device flow run sets on the PR head (ADR-0048, ADR-0059). */
+export const DEVICE_FLOWS_CONTEXT = "Device flows";
+/** The PR label that starts the hosted Device flows run (.github/workflows/device-flows.yml). */
+export const DEVICE_FLOWS_LABEL = "run-device-flows";
+
+/** Path of an issue's slice flow, the file whose presence makes the status part of the gate. */
+export function sliceFlowPath(issue) {
+  return `apps/mobile/.maestro/slices/${issue}.yaml`;
+}
+
+/**
+ * Whether to ask for a hosted Device flows run on a PR head. Statuses are GitHub's commit
+ * statuses for the head, newest first. A run is asked for only when the slice has a flow and the
+ * head has no verdict and no run under way: a green or running head is left alone (a macOS run
+ * is not free), and a red one is the Engineer's to fix with a new commit, which is a new head.
+ * @param {{ hasSliceFlow: boolean, statuses: Array<{ context?: string, state?: string }> }} input
+ * @returns {{ request: boolean, line: string }}
+ */
+export function deviceFlowsRequest({ hasSliceFlow, statuses }) {
+  if (!hasSliceFlow) {
+    return { request: false, line: "NOT NEEDED: this PR has no slice flow for the issue" };
+  }
+  const latest = statuses.find((status) => status.context === DEVICE_FLOWS_CONTEXT);
+  if (!latest) {
+    return { request: true, line: `REQUESTED: no ${DEVICE_FLOWS_CONTEXT} status on the head yet` };
+  }
+  return {
+    request: false,
+    line: `ALREADY ${String(latest.state).toUpperCase()}: the head has a ${DEVICE_FLOWS_CONTEXT} status`,
+  };
+}
+
 /** A waiting gate result (exit 3) is never written to the run log: only open or closed is an outcome. */
 export function shouldLogGate(result) {
   return result.code !== GATE_EXIT.waiting;

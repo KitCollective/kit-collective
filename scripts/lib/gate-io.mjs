@@ -54,3 +54,32 @@ export async function prView(pr) {
     ]),
   );
 }
+
+/**
+ * Whether the PR head holds the issue's slice flow. Asked of GitHub, never of the checkout, so
+ * the answer is the same on every machine.
+ * @param {string} path repo-relative path @param {string} head full sha
+ */
+export async function existsAtHead(path, head) {
+  try {
+    await gh([
+      "api",
+      `repos/${config().github.ownerRepo}/contents/${path}?ref=${head}`,
+      "--jq",
+      ".sha",
+    ]);
+    return true;
+  } catch (error) {
+    if (/404|Not Found/i.test(`${error.stderr ?? ""}${error.message ?? ""}`)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/** The commit statuses of a head, newest first. */
+export async function commitStatuses(head) {
+  return JSON.parse(
+    await gh(["api", `repos/${config().github.ownerRepo}/commits/${head}/statuses`]),
+  );
+}
