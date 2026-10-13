@@ -911,3 +911,134 @@ test("a fresh run, and a resume without a PR, never ask for the resume point", a
   assert.ok(!noPr.commands.some(isPoint));
   assert.equal(engineers(noPr.spawns).length, 1);
 });
+
+const runners = (spawns) => spawns.filter((s) => s.options.schema?.required?.includes("results"));
+const labels = (spawns) => runners(spawns).map((s) => s.options.label);
+
+test("a green run spends eight runners: the log lines ride with the gates", async () => {
+  const { result, commands, spawns } = await run();
+  assert.equal(result.status, "Approval");
+  assert.deepEqual(labels(spawns), [
+    "session-check",
+    "start",
+    "gate:pre-review",
+    "head-changed",
+    "linear:In Review",
+    "gate:review",
+    "receipt:dry-run",
+    "linear:Approval",
+  ]);
+  const at = (needle) => commands.findIndex((c) => c.includes(needle));
+  assert.ok(at("--step engineer --outcome ready") >= 0);
+  assert.ok(at("--step engineer --outcome ready") < at("gate.mjs pre-review"));
+  assert.ok(at("--step reviewer --outcome green") >= 0);
+  assert.ok(at("--step reviewer --outcome green") < at("gate.mjs review"));
+  assert.ok(
+    at("gate.mjs review") < at("audit-receipt.mjs"),
+    "the receipt reads a run log that has the reviewer",
+  );
+});
+
+test("a shared runner that comes back incomplete asks the gate once more alone and repeats no log line", async () => {
+  let calls = 0;
+  const { result, commands, spawns } = await run({
+    shell: (c) => {
+      if (!isPre(c)) return undefined;
+      calls += 1;
+      return calls === 1 ? null : undefined;
+    },
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(commands.filter((c) => c.includes("spawn --issue KIT-9 --step engineer")).length, 1);
+  assert.equal(labels(spawns).filter((l) => l === "gate:pre-review").length, 2);
+});
+
+test("a stop before a gate still writes the log lines that would have ridden with it", async () => {
+  const blocked = await run({
+    engineer: () => ({
+      outcome: "blocked",
+      sentence: "needs-human: widen the write-scope?",
+      threadId: ENGINEER_THREAD,
+      prNumber: 77,
+    }),
+  });
+  assert.ok(labels(blocked.spawns).includes("log:engineer"));
+  assert.ok(blocked.commands.some((c) => c.includes("--step engineer --outcome blocked")));
+  const amber = await run({
+    reviewer: () => ({
+      verdict: "amber",
+      sha: SHA,
+      sentence: "checks pending",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.equal(amber.result.verdict, "amber");
+  assert.ok(labels(amber.spawns).includes("log:reviewer"));
+  assert.ok(amber.commands.some((c) => c.includes("--step reviewer --outcome amber")));
+});
+
+test("a fix round opens without a runner of its own for In Progress", async () => {
+  const { result, commands, spawns } = await run({
+    reviewer: (round) =>
+      round === 1
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec"],
+            sentence: "AC 2 unmet",
+            threadId: REVIEWER_THREAD,
+          }
+        : undefined,
+  });
+  assert.equal(result.status, "Approval");
+  assert.equal(result.rounds, 2);
+  assert.ok(!labels(spawns).includes("linear:In Progress"));
+  const red = runners(spawns).find((s) => s.options.label === "log:red").prompt;
+  assert.match(red, /run-log\.mjs audit .*--verdict red/);
+  assert.match(red, /linear\.mjs state KIT-9 "In Progress"/);
+  const states = commands
+    .filter((c) => /linear\.mjs state /.test(c))
+    .map((c) => /"([^"]+)"$/.exec(c)[1]);
+  assert.deepEqual(states, ["In Progress", "In Review", "In Progress", "In Review", "Approval"]);
+});
+
+test("the last red review of a run does not move the issue back to In Progress", async () => {
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", maxRounds: 1 },
+    reviewer: () => ({
+      verdict: "red",
+      sha: SHA,
+      rows: ["spec"],
+      sentence: "AC 2 unmet",
+      threadId: REVIEWER_THREAD,
+    }),
+  });
+  assert.equal(result.status, "Approval");
+  const red = runners(spawns).find((s) => s.options.label === "log:red").prompt;
+  assert.doesNotMatch(red, /"In Progress"/);
+});
+
+test("a resume that reviews the head as it is writes both skip lines on runners it needs anyway", async () => {
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    startDecision: { plan: true },
+    shell: resumeShell(0),
+  });
+  assert.equal(result.status, "Approval");
+  assert.deepEqual(labels(spawns), [
+    "session-check",
+    "start",
+    "pr-lookup",
+    "plan-check",
+    "resume-point",
+    "gate:pre-review",
+    "linear:In Review",
+    "gate:review",
+    "receipt:dry-run",
+    "linear:Approval",
+  ]);
+  const point = runners(spawns).find((s) => s.options.label === "resume-point").prompt;
+  assert.match(point, /--code lead-skipped/);
+  const review = runners(spawns).find((s) => s.options.label === "linear:In Review").prompt;
+  assert.match(review, /--code engineer-skipped/);
+});
