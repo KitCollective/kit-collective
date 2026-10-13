@@ -67,10 +67,12 @@ The args are the `meta.inputSchema` of `.bb/workflows/kit-issue.js`:
 | Arg | Meaning |
 | --- | --- |
 | `issue` | Required. The issue key, `KIT-n`. |
-| `resume` | `true` to continue an issue that already has a branch and a PR. |
+| `resume` | `true` to continue an issue that already has a branch and a PR. When the last Engineer result was `ready`, no findings are open on the head and the pre-review gate is open, the run goes straight to the Reviewer (round 0) and spends no Engineer round. |
 | `skipLead` | `true` to skip the Lead, for a small issue. |
 | `maxRounds` | Total Engineer rounds, 1 to 3, default 2: the first build plus one fix round after a red review. |
 | `machine` | Only written to the run log; it routes nothing. |
+
+An issue gets at most `flow.maxRunsPerDay` runs (factory.config.json, 3) in 24 hours, resumes included: the session check refuses the next one and names the cap. Raising it is a committed change by a person, never something a run does for itself.
 
 The run goes from the session check to `Approval` and stops there (ADR-0058). `Approval` is not merge permission: a person moves the issue to `Merging` and starts the land step.
 

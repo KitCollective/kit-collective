@@ -391,77 +391,110 @@ let lastVerdict = "";
 let receipt = "";
 let engineerThread = "";
 
-for (let round = 1; round <= maxRounds; round += 1) {
+// A resume used to spend a full Engineer round on a PR that was already built (KIT-295: five
+// Engineer rounds, four of them changed nothing). So a resume first asks, with fixed commands only,
+// whether the head can be reviewed as it is: the last Engineer result in the run log is `ready`, no
+// findings are open against the head (resume-point.mjs) and the pre-review gate is open. Then the
+// run starts at round 0, which is the review alone and is not an Engineer round: maxRounds still
+// counts Engineer rounds. Any other answer builds first, as before.
+let reviewAsIs = false;
+if (resume && resumePr !== null) {
+  const point = await sh("resume-point", "Pre-review gate", [`node scripts/resume-point.mjs ${issue} --pr ${resumePr}`], false, true);
+  if (point[0]?.runner) {
+    return stopped("resume-point", "stopped", { prNumber: resumePr, note: point[0].line });
+  }
+  if (point[0]?.code === 0) {
+    phase("Pre-review gate");
+    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
+    if (pre.runner) {
+      return stopped("pre-review gate", "stopped", { prNumber: resumePr, note: pre.line });
+    }
+    if (pre.exhausted) {
+      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
+      return stopped("pre-review gate", "stopped", { prNumber: resumePr, note: pre.line });
+    }
+    if (pre.code === 0) {
+      reviewAsIs = true;
+      await sh("log:engineer-skipped", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code engineer-skipped`)], true);
+    } else if (pre.code === 1) {
+      feedback = `The pre-review gate is closed: ${pre.line}`;
+    }
+  }
+}
+
+for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
   rounds = round;
   // Two red audits earn the strong model, as the start decision says.
   const modelAlias = round >= 3 ? "opus" : engineerAlias;
-  phase("Engineer");
-  if (round > 1 || resume) {
-    await move("Engineer", "In Progress");
-  }
-  let engineer = null;
-  for (let attempt = 1; attempt <= 2 && engineer === null; attempt += 1) {
-    try {
-      engineer = await engineerPass(round, attempt === 1 ? feedback : `${feedback}\n(The previous attempt ended without a result. Resume where it stopped.)`, modelAlias);
-    } catch (error) {
+  if (round > 0) {
+    phase("Engineer");
+    if (round > 1 || resume) {
+      await move("Engineer", "In Progress");
+    }
+    let engineer = null;
+    for (let attempt = 1; attempt <= 2 && engineer === null; attempt += 1) {
+      try {
+        engineer = await engineerPass(round, attempt === 1 ? feedback : `${feedback}\n(The previous attempt ended without a result. Resume where it stopped.)`, modelAlias);
+      } catch (error) {
+        engineer = null;
+      }
+      if (engineer === null) {
+        await sh("log:no-result", "Engineer", [logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
+      }
+    }
+    if (engineer && pick(engineer.outcome, ["ready", "blocked", "failed"]) === null) {
       engineer = null;
     }
-    if (engineer === null) {
-      await sh("log:no-result", "Engineer", [logCmd("reason", `--issue ${issue} --code no-result-line`)], true);
+    const eThread = engineer && THREAD.test(engineer.threadId) ? engineer.threadId : "";
+    if (!engineer || !eThread) {
+      return stopped("engineer", "In Progress", { rounds, note: "the Engineer ended without a usable result or thread id twice" });
     }
-  }
-  if (engineer && pick(engineer.outcome, ["ready", "blocked", "failed"]) === null) {
-    engineer = null;
-  }
-  const eThread = engineer && THREAD.test(engineer.threadId) ? engineer.threadId : "";
-  if (!engineer || !eThread) {
-    return stopped("engineer", "In Progress", { rounds, note: "the Engineer ended without a usable result or thread id twice" });
-  }
-  engineerThread = eThread;
-  await sh("log:engineer", "Engineer", [
-    logCmd("spawn", `--issue ${issue} --step engineer --thread ${eThread} --mode ${round > 1 ? "fix" : "start"} --provider ${PROVIDER} --model ${MODELS[modelAlias]}${machineFlag}`),
-    logCmd("result", `--issue ${issue} --step engineer --outcome ${engineer.outcome} --usage-thread ${eThread}`),
-  ]);
-  if (engineer.outcome !== "ready") {
-    if (engineer.outcome === "blocked") {
-      const state = await stopForHuman("Engineer", engineer.sentence);
-      return stopped("engineer", state, { rounds, note: engineer.sentence });
+    engineerThread = eThread;
+    await sh("log:engineer", "Engineer", [
+      logCmd("spawn", `--issue ${issue} --step engineer --thread ${eThread} --mode ${round > 1 || reviewAsIs ? "fix" : "start"} --provider ${PROVIDER} --model ${MODELS[modelAlias]}${machineFlag}`),
+      logCmd("result", `--issue ${issue} --step engineer --outcome ${engineer.outcome} --usage-thread ${eThread}`),
+    ]);
+    if (engineer.outcome !== "ready") {
+      if (engineer.outcome === "blocked") {
+        const state = await stopForHuman("Engineer", engineer.sentence);
+        return stopped("engineer", state, { rounds, note: engineer.sentence });
+      }
+      return stopped("engineer", "In Progress", { rounds, note: `Engineer failed: ${engineer.sentence}` });
     }
-    return stopped("engineer", "In Progress", { rounds, note: `Engineer failed: ${engineer.sentence}` });
-  }
-  if (prNumber !== null && Number.isInteger(engineer.prNumber) && engineer.prNumber !== prNumber) {
-    // A second PR for the same issue: stop before any gate reads it.
-    return stopped("engineer", "In Progress", { prNumber, rounds, note: `the Engineer reported PR #${engineer.prNumber}, but the issue's PR is #${prNumber}: a second PR was opened` });
-  }
-  prNumber = Number.isInteger(engineer.prNumber) ? engineer.prNumber : prNumber;
-  if (prNumber === null) {
-    return stopped("engineer", "In Progress", { rounds, note: "the Engineer reported ready without a PR number" });
-  }
+    if (prNumber !== null && Number.isInteger(engineer.prNumber) && engineer.prNumber !== prNumber) {
+      // A second PR for the same issue: stop before any gate reads it.
+      return stopped("engineer", "In Progress", { prNumber, rounds, note: `the Engineer reported PR #${engineer.prNumber}, but the issue's PR is #${prNumber}: a second PR was opened` });
+    }
+    prNumber = Number.isInteger(engineer.prNumber) ? engineer.prNumber : prNumber;
+    if (prNumber === null) {
+      return stopped("engineer", "In Progress", { rounds, note: "the Engineer reported ready without a PR number" });
+    }
 
-  // -- Pre-review gate: mechanical steps and checks only, no matrix (ADR-0058).
-  phase("Pre-review gate");
-  const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
-  if (pre.runner) {
-    // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
-    return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
-  }
-  if (pre.exhausted) {
-    // Checks never finished inside the bound: not a red gate, so no fix round, and the issue is still In Progress.
-    await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
-    return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
-  }
-  if (pre.code !== 0) {
-    const reason = /scope-missing-in-pr/.test(pre.line) ? "scope-missing-in-pr" : "gate-closed";
-    await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ${reason}`)], true);
-    if (pre.code === 1 && round < maxRounds) {
-      feedback = `The pre-review gate is closed: ${pre.line}`;
-      continue;
+    // -- Pre-review gate: mechanical steps and checks only, no matrix (ADR-0058).
+    phase("Pre-review gate");
+    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
+    if (pre.runner) {
+      // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
+      return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
     }
-    return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
-  }
-  const head = await sh("head-changed", "Pre-review gate", [`node scripts/head-changed.mjs ${issue} --pr ${prNumber}`], false, true);
-  if (head.length === 0 || head[0].code !== 0) {
-    return stopped("head-changed", "In Progress", { prNumber, rounds, note: head[0]?.line ?? "no output" });
+    if (pre.exhausted) {
+      // Checks never finished inside the bound: not a red gate, so no fix round, and the issue is still In Progress.
+      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ci-pending`)], true);
+      return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
+    }
+    if (pre.code !== 0) {
+      const reason = /scope-missing-in-pr/.test(pre.line) ? "scope-missing-in-pr" : "gate-closed";
+      await sh("log:gate", "Pre-review gate", [logCmd("reason", `--issue ${issue} --code ${reason}`)], true);
+      if (pre.code === 1 && round < maxRounds) {
+        feedback = `The pre-review gate is closed: ${pre.line}`;
+        continue;
+      }
+      return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });
+    }
+    const head = await sh("head-changed", "Pre-review gate", [`node scripts/head-changed.mjs ${issue} --pr ${prNumber}`], false, true);
+    if (head.length === 0 || head[0].code !== 0) {
+      return stopped("head-changed", "In Progress", { prNumber, rounds, note: head[0]?.line ?? "no output" });
+    }
   }
   await move("Pre-review gate", "In Review");
 
@@ -541,7 +574,8 @@ for (let round = 1; round <= maxRounds; round += 1) {
     return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: why });
   }
   const dry = await sh("receipt:dry-run", "Review gate", [
-    `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread} --implementer-thread ${engineerThread} --require-different-model --dry-run`,
+    // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
+    `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`,
   ], false, true);
   receipt = dry[0]?.line ?? "no output from audit-receipt";
   if (dry.length === 0 || dry[0].code !== 0) {

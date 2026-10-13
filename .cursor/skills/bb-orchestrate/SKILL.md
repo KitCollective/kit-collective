@@ -45,7 +45,7 @@ bb thread spawn --project proj_rp846ybret --machine <host> \
 
 ## The flow
 
-1. `node scripts/session-check.mjs <KIT-n>`: refuse a second run. Then `run-log.mjs start`.
+1. `node scripts/session-check.mjs <KIT-n>`: refuse a second run, and any run past `flow.maxRunsPerDay` (3 starts per issue in 24 hours, resumes included; never raise it yourself, report the refusal). Then `run-log.mjs start`.
 2. `node scripts/start-decision.mjs` over the issue → plan or not, Roles, engineer model.
 3. **Lead** thread (if plan): `run-log.mjs spawn --step lead --thread <id> --provider <p> --model <m> --machine <host>`; on idle read the result, `run-log.mjs result --outcome plan|plan-approval|stop --usage-thread <id>`.
 4. **Engineer** thread on the routed machine: reads `### Plan`, builds with `/tdd` and Roles, opens the PR, passes the pre-review gate. Log spawn and result.
