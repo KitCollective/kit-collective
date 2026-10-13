@@ -45,6 +45,7 @@ export const REASON_CODES = [
   "no-result-line",
   "runner-no-result",
   "lead-skipped",
+  "engineer-skipped",
   "ci-red",
   "ci-pending",
   "replan",

@@ -76,4 +76,35 @@ Now: a read-only runner step (`gh pr list --state open --search "<KIT-n> in:titl
 
 Verified by tests: the exit-5 paths with a fake `gh` on PATH (too old, usage error mid-run, auth, invalid JSON; transient network and rate limit still retry), `foldReview` on exit 5, runner empty/short detection with one retry, `runner-no-result` logging, no fix round on a runner failure, the runner prompt text, and resume's lookup, number hand-over, second-PR stop and ambiguity stop. **Not verified:** a real bb run, whether a real Haiku runner obeys the foreground rule, and `bb workflows validate` (re-run it in a bb thread after merging; the `agent()` calls keep literal `provider` and `model` values and plain options).
 
+## What the second real run taught (KIT-295, PR #316; 2026-10-13)
+
+**The runner made up exit codes.** Four of seven runs stopped on a command that had passed: `session-check` twice, `head-changed` and the pre-review gate each printed `OPEN` and exited 0, and the Haiku runner reported `-1`, saying itself that its shell tool had not shown an exit code. The script read `-1` as a closed gate or a failed step.
+
+Now the shell prints the code. `runRaw` wraps every command as `( <command> ); echo "KIT-EXIT:$?"`, the runner relays that line verbatim in `exit` (the schema has no `code` any more) and the last line before it in `line`, and the script parses the code from the marker. A result whose `exit` is not exactly `KIT-EXIT:<digits>` is no result: it takes the `runner-no-result` path of fix 3 (one retry for idempotent commands, then a stop that is never a gate verdict). This supersedes "report each exit code" in the workflow section above.
+
+**What this does not change.** The marker is still relayed by a model, so a runner can still copy it wrongly; gate results stay not merge-grade and Decision 2 (a deterministic plugin command) stays open. Verified by tests with the fake runner only (the wrapping of every command, a made-up code counting as a runner failure); the first real run with the marker was the resume of KIT-295 that followed this change (`wfr_c3fc1e09`). Its orchestrating thread reported that all 19 runner steps relayed the marker and none was misread; on three steps the runner also put the marker in `line`, which is only used as a note.
+
+## What the night of 2026-10-12 cost, and the two guards (2026-10-13)
+
+KIT-283, KIT-286 and KIT-295 were started 17 times in about 14 hours and the account hit its spend limit three times. The made-up exit codes above caused the stops; two other things made each stop expensive, and they are changed here.
+
+**A resume built again before it reviewed.** Every resume ran a full Engineer round on the existing PR before the Reviewer, also when the PR was built, CI was green and only the review was missing (KIT-295: five Engineer rounds, four changed nothing). Now a resume with an open PR first runs `node scripts/resume-point.mjs <KIT-n> --pr <n>`. It answers "review it as it is" only when the last Engineer result in the run log is `ready` and no findings are open against the head (the head-changed rule). If the pre-review gate is then open, the run starts at round 0: the Reviewer alone, logged as `reason engineer-skipped`, with no move to `In Progress`. Round 0 is not an Engineer round, so `maxRounds` still counts Engineer rounds and a red round-0 review still gets its fix round. Every other answer (an Engineer that ended `blocked` or `failed`, no Engineer result, open findings, a closed gate, an unreadable source) builds first, as before; a closed gate's line becomes the change request.
+
+**Nothing counted runs.** `maxRounds` bounds one run; nothing bounded how many runs an issue got. `session-check.mjs` now refuses when the run log holds `flow.maxRunsPerDay` (factory.config.json, default 3) `start` events for the issue inside 24 hours, on resume too. Only runs that passed the session check count, because `start` is logged after it. The cap is a committed number and not a flag or a workflow argument: the thread that retries is the thing being capped, so it must not be able to raise it. A person who wants a fourth run changes the number in a PR or waits.
+
+**What this does not change.** Each script step is still one runner worker (Decision 2 stays open), and a resume that does build still starts a new Engineer thread without the previous one's context. The resume point trusts the run log's last Engineer result, which is as reliable as the run that wrote it; the pre-review gate and the Reviewer still judge the head itself. Verified by tests with the fake runner and by unit tests of `resumePoint` and the cap in `sessionCheck`; not yet by a real run.
+
+## Fewer runners per run (2026-10-13)
+
+Every runner is a whole agent session that starts with the repo's full context to run one or two commands. A green run spent ten; it now spends eight, a fix round spends three fewer, and a resume that reviews the head as it is spends ten where it would have spent thirteen. No command was removed: steps whose result nothing reads now share the runner of the next step.
+
+- The Engineer's two run-log lines ride with the pre-review gate, the Reviewer's two with the review gate (`shAfter`, `gateSlices(..., before)`). They are still written before the gate runs, so the gate and the receipt read a run log that has them.
+- A stop before the gate (an Engineer that ended `blocked` or `failed`, a second PR, an amber review) writes those lines with a runner of their own, as before.
+- The move back to `In Progress` before a fix round rides with the round's closing log (`log:red`), and is left out after a closed pre-review gate, where the issue never left `In Progress`.
+- On resume, `lead-skipped` rides with the resume point and `engineer-skipped` with the move to `In Review`.
+
+**What stays apart, on purpose.** A command whose exit code decides what happens next keeps its own runner: `head-changed` is not joined with the move to `In Review`, nor the receipt dry run with the move to `Approval`. Joined, the script would rely on the runner model to stop after a failing first command, and a runner that did not would leave Linear saying `In Review` or `Approval` for a run that stopped. A shared runner that comes back incomplete does not repeat the log lines; the gated command is asked once more alone, two attempts in all, as before.
+
+Verified by tests with the fake runner (the runner labels of a green run and of a resume, the order of log lines and gates, the stops that write their own log, the fix round's states); not yet by a real run.
+
 Status: accepted; revisit after the next real `kit-issue` run.
