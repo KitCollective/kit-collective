@@ -615,11 +615,21 @@ test("a runner failure is logged with a code the run log accepts", async () => {
 });
 
 const lookup = (c) => c.includes("gh pr list");
+const isPoint = (c) => c.includes("resume-point.mjs");
+/** A resume on PR #55 whose resume point says build (`point` code 1) or review as it is (code 0). */
+const resumeShell = (point, more) => (c) =>
+  lookup(c)
+    ? { code: 0, line: "55" }
+    : isPoint(c)
+      ? { code: point, line: point === 0 ? "OPEN: review it as it is" : "CLOSED: build first" }
+      : more?.(c);
+const engineers = (spawns) =>
+  agentSpawns(spawns).filter((s) => s.options.label.startsWith("engineer:"));
 
 test("resume looks the PR up read-only and hands its number to the Engineer", async () => {
   const { result, commands, spawns } = await run({
     args: { issue: "KIT-9", resume: true },
-    shell: (c) => (lookup(c) ? { code: 0, line: "55" } : undefined),
+    shell: resumeShell(1),
     engineer: () => ({
       outcome: "ready",
       sentence: "done",
@@ -642,7 +652,7 @@ test("resume looks the PR up read-only and hands its number to the Engineer", as
 test("resume stops when the Engineer reports another PR than the existing one", async () => {
   const { result, commands } = await run({
     args: { issue: "KIT-9", resume: true },
-    shell: (c) => (lookup(c) ? { code: 0, line: "55" } : undefined),
+    shell: resumeShell(1),
     engineer: () => ({
       outcome: "ready",
       sentence: "done",
@@ -802,4 +812,102 @@ test("a fresh run never asks for the workpad plan, and skipLead still skips the 
     shell: (c) => (c.includes("gh pr list") ? { code: 0, line: "77" } : undefined),
   });
   assert.ok(!skip.commands.some(planCheck));
+});
+
+test("a resume whose head is ready goes straight to the Reviewer: no Engineer, no In Progress (KIT-295)", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0),
+  });
+  assert.equal(engineers(spawns).length, 0);
+  assert.equal(result.status, "Approval");
+  assert.equal(result.prNumber, 55);
+  assert.equal(result.rounds, 0);
+  const reviewer = agentSpawns(spawns).find((s) => s.options.label.startsWith("reviewer:"));
+  assert.equal(reviewer.options.label, "reviewer:KIT-9:r0");
+  assert.ok(!commands.some((c) => c.includes('state KIT-9 "In Progress"')));
+  assert.ok(commands.some((c) => c.includes("--code engineer-skipped")));
+  assert.equal(
+    commands.filter(isPre).length,
+    1,
+    "the pre-review gate runs once, before the Reviewer",
+  );
+  const receipt = commands.find((c) => c.includes("audit-receipt.mjs"));
+  assert.doesNotMatch(receipt, /--implementer-thread/);
+  const { REASON_CODES } = await import("../lib/run-log.mjs");
+  assert.ok(REASON_CODES.includes("engineer-skipped"));
+});
+
+test("a red review of a head reviewed as it is still leaves every Engineer round", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true, maxRounds: 1 },
+    shell: resumeShell(0),
+    engineer: () => ({
+      outcome: "ready",
+      sentence: "fixed",
+      threadId: ENGINEER_THREAD,
+      prNumber: 55,
+    }),
+    reviewer: (round) =>
+      round === 1
+        ? {
+            verdict: "red",
+            sha: SHA,
+            rows: ["spec"],
+            sentence: "AC 2 unmet",
+            threadId: REVIEWER_THREAD,
+          }
+        : undefined,
+  });
+  assert.equal(engineers(spawns).length, 1);
+  assert.match(engineers(spawns)[0].prompt, /The Reviewer returned red/);
+  assert.equal(result.status, "Approval");
+  assert.equal(result.rounds, 1);
+  assert.ok(commands.some((c) => c.includes("--step engineer") && c.includes("--mode fix")));
+  assert.ok(commands.some((c) => c.includes("--round 0")));
+});
+
+test("a resume whose pre-review gate is closed builds, with the gate line as the change request", async () => {
+  let gates = 0;
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: resumeShell(0, (c) => {
+      if (!isPre(c)) return undefined;
+      gates += 1;
+      return gates === 1 ? { code: 1, line: "CLOSED (review): scope" } : undefined;
+    }),
+    engineer: () => ({
+      outcome: "ready",
+      sentence: "done",
+      threadId: ENGINEER_THREAD,
+      prNumber: 55,
+    }),
+  });
+  assert.equal(engineers(spawns).length, 1);
+  assert.match(
+    engineers(spawns)[0].prompt,
+    /The pre-review gate is closed: CLOSED \(review\): scope/,
+  );
+  assert.equal(result.status, "Approval");
+});
+
+test("a resume point the runner could not read stops the run before any worker is spent", async () => {
+  const { result, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (lookup(c) ? { code: 0, line: "55" } : isPoint(c) ? null : undefined),
+  });
+  assert.equal(result.stoppedAt, "resume-point");
+  assert.match(result.note, /runner-no-result/);
+  assert.equal(agentSpawns(spawns).length, 0);
+});
+
+test("a fresh run, and a resume without a PR, never ask for the resume point", async () => {
+  const fresh = await run();
+  assert.ok(!fresh.commands.some(isPoint));
+  const noPr = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (lookup(c) ? { code: 0, line: "" } : undefined),
+  });
+  assert.ok(!noPr.commands.some(isPoint));
+  assert.equal(engineers(noPr.spawns).length, 1);
 });

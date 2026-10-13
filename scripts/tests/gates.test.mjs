@@ -16,6 +16,7 @@ import {
   prBound,
   remainingWaitSeconds,
   resolveHead,
+  resumePoint,
   scopeEnv,
   scopeSource,
   sessionCheck,
@@ -470,4 +471,53 @@ test("a waiting slice writes no gate event; only the final open or closed one do
   assert.equal(events.length, 1);
   assert.equal(events[0].outcome, "open");
   assert.equal(shouldLogGate({ code: GATE_EXIT.closed }), true);
+});
+
+test("session-check: the run cap refuses a fourth start in 24 hours, on resume too; old starts do not count", () => {
+  const now = Date.parse("2026-10-13T12:00:00Z");
+  const start = (hoursAgo) => ({
+    event: "start",
+    issue: "KIT-1",
+    at: new Date(now - hoursAgo * 3600_000).toISOString(),
+  });
+  const done = {
+    event: "result",
+    issue: "KIT-1",
+    step: "engineer",
+    outcome: "ready",
+    at: new Date(now).toISOString(),
+  };
+  const three = [start(10), start(5), start(1), done];
+  const capped = sessionCheck({ ...free, now, events: three });
+  assert.equal(capped.code, GATE_EXIT.closed);
+  assert.match(capped.line, /started 3 times in the last 24 h \(cap 3\)/);
+  assert.equal(sessionCheck({ ...free, now, resume: true, events: three }).code, GATE_EXIT.closed);
+  assert.equal(
+    sessionCheck({ ...free, now, events: [start(30), start(5), start(1), done] }).code,
+    GATE_EXIT.open,
+  );
+  assert.equal(
+    sessionCheck({ ...free, now, maxRunsPerDay: 4, events: three }).code,
+    GATE_EXIT.open,
+  );
+  const other = three.map((e) => ({ ...e, issue: "KIT-2" }));
+  assert.equal(sessionCheck({ ...free, now, events: other }).code, GATE_EXIT.open);
+});
+
+test("resume point: review as it is only after a ready Engineer result with no findings open on the head", () => {
+  const ready = { event: "result", issue: "KIT-1", step: "engineer", outcome: "ready" };
+  const blocked = { ...ready, outcome: "blocked" };
+  const base = { head: HEAD, issue: "KIT-1" };
+  assert.equal(resumePoint({ ...base, events: [ready] }).code, GATE_EXIT.open);
+  assert.equal(resumePoint({ ...base, events: [] }).code, GATE_EXIT.closed);
+  assert.equal(resumePoint({ ...base, events: [ready, blocked] }).code, GATE_EXIT.closed);
+  assert.equal(resumePoint({ ...base, events: [blocked, ready] }).code, GATE_EXIT.open);
+  assert.equal(
+    resumePoint({ ...base, events: [{ ...ready, issue: "KIT-2" }] }).code,
+    GATE_EXIT.closed,
+  );
+  const red = { event: "audit", issue: "KIT-1", verdict: "red", round: 1, sha: HEAD };
+  assert.equal(resumePoint({ ...base, events: [ready, red] }).code, GATE_EXIT.closed);
+  assert.equal(resumePoint({ ...base, head: OTHER, events: [ready, red] }).code, GATE_EXIT.open);
+  assert.equal(resumePoint({ ...base, head: "", events: [ready] }).code, GATE_EXIT.closed);
 });

@@ -197,7 +197,8 @@
     ]
   },
   "flow": {
-    "runLog": ".factory/run-log.jsonl"
+    "runLog": ".factory/run-log.jsonl",
+    "maxRunsPerDay": 3
   },
   "agent": {
     "signalUpCapPerRun": 3,
