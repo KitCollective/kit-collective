@@ -3,6 +3,8 @@ import type { PickGalleryPhotosOptions } from "./pickGalleryPhotos";
 
 export type PickUploadFilesOptions = {
   allowsMultipleSelection?: boolean;
+  /** Called once the collector has chosen Photos or Files, right before that system picker opens. */
+  onSourceChosen?: () => void;
 };
 
 export type UploadSource = "gallery" | "documents";
@@ -98,6 +100,7 @@ export async function pickUploadFiles(
   if (!source) {
     return null;
   }
+  options.onSourceChosen?.();
 
   switch (source) {
     case "gallery":

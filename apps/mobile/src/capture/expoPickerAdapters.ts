@@ -45,3 +45,16 @@ export const expoUploadFilesAdapter: UploadFilesAdapter = {
   pickDocumentImages: (options) => pickDocumentImages(options, expoDocumentPickerAdapter),
   galleryMultiSelectQuality,
 };
+
+/**
+ * Takes down the upload source sheet if it is still up and says whether it may be opened
+ * again. Only iOS has a sheet that can be taken down: an Android alert cannot, so a second
+ * one would stack on the first.
+ */
+export function dismissUploadSourcePicker(): boolean {
+  if (Platform.OS !== "ios") {
+    return false;
+  }
+  ActionSheetIOS.dismissActionSheet();
+  return true;
+}
