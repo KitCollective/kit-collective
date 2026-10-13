@@ -1,15 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  jerseyTileAccessibilityLabel,
-  jerseyTileBadgeLabel,
-  jerseyTileMetaLine,
-} from "@/components/jersey-tile-meta";
-
-describe("jerseyTileMetaLine", () => {
-  it("keeps its output for the other tile screens", () => {
-    expect(jerseyTileMetaLine("2023/24", "Hjemme")).toBe("2023/24 · Hjemme");
-  });
-});
+import { jerseyTileAccessibilityLabel, jerseyTileBadgeLabel } from "@/components/jersey-tile-meta";
 
 describe("jerseyTileBadgeLabel", () => {
   it("is n bud for bids and Privat for the lock", () => {

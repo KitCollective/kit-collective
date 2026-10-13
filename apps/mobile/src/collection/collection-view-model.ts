@@ -1,6 +1,6 @@
 import type { CollectionJersey } from "@kit/api-contract";
 import { JERSEY_SIZE_LABELS_DA, KIT_TYPE_LABELS_DA } from "@kit/domain";
-import { jerseyTileMetaLine } from "@/components/jersey-tile-meta";
+import { type JerseyTileBadge, jerseyTileMetaLine } from "@/components/jersey-tile-meta";
 
 /**
  * Pure Samling view-model (docs/design-system.md → Patterns → Collection grid, Revision
@@ -36,8 +36,6 @@ export type CollectionFacts = {
   oldestSeasonYear: number | null;
 };
 
-export type CollectionTileBadge = { kind: "bids"; count: number } | { kind: "lock" };
-
 export type CollectionTile = {
   id: string;
   jersey: CollectionJersey;
@@ -47,7 +45,7 @@ export type CollectionTile = {
   primaryTrailing: string;
   /** season · type outside club sort; type · player in club sort. */
   secondaryLine: string;
-  badge: CollectionTileBadge | null;
+  badge: JerseyTileBadge | null;
 };
 
 export type CollectionGroup = {
@@ -118,7 +116,7 @@ function buildFacts(allJerseys: CollectionJersey[]): CollectionFacts | null {
   return { jerseyCount: allJerseys.length, clubCount: clubs.size, oldestSeasonYear: oldest };
 }
 
-function badgeFor(jersey: CollectionJersey): CollectionTileBadge | null {
+function badgeFor(jersey: CollectionJersey): JerseyTileBadge | null {
   const count = unansweredBids(jersey);
   if (count > 0) {
     return { kind: "bids", count };
@@ -215,11 +213,13 @@ export function buildCollectionView(input: {
   return { facts: buildFacts(allJerseys), viewCounts, groups };
 }
 
+const TILES_PER_ROW = 2;
+
 /**
  * `numColumns={2}` cannot hold a heading, so the list is one flat array of heading and
  * two-tile rows. Every group starts on a new row.
  */
-export function toListRows(groups: CollectionGroup[], columns = 2): CollectionListRow[] {
+export function toListRows(groups: CollectionGroup[]): CollectionListRow[] {
   const rows: CollectionListRow[] = [];
   for (const group of groups) {
     if (group.label !== null) {
@@ -230,8 +230,8 @@ export function toListRows(groups: CollectionGroup[], columns = 2): CollectionLi
         count: group.count,
       });
     }
-    for (let index = 0; index < group.tiles.length; index += columns) {
-      const tiles = group.tiles.slice(index, index + columns);
+    for (let index = 0; index < group.tiles.length; index += TILES_PER_ROW) {
+      const tiles = group.tiles.slice(index, index + TILES_PER_ROW);
       rows.push({ kind: "row", key: `row-${tiles[0]?.id ?? index}`, tiles });
     }
   }

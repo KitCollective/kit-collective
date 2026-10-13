@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   bidsPill: {
     borderRadius: radius.pill,
     paddingHorizontal: space.insetSm,
-    paddingVertical: 2,
+    paddingVertical: space.insetSm / 2,
   },
   lockDisc: {
     width: LOCK_DISC,

@@ -72,8 +72,9 @@ export function ViewSortSheet({
           Sortér
         </Text>
         <View accessibilityRole="radiogroup">
-          {COLLECTION_SORTS.map((option) => {
+          {COLLECTION_SORTS.map((option, index) => {
             const selected = sort === option;
+            const last = index === COLLECTION_SORTS.length - 1;
             return (
               <Pressable
                 key={option}
@@ -85,7 +86,11 @@ export function ViewSortSheet({
                   onSelectSort(option);
                   onDismiss();
                 }}
-                style={({ pressed }) => [styles.sortRow, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.sortRow,
+                  !last && { borderBottomColor: theme.borderSubtle },
+                  pressed && styles.pressed,
+                ]}
               >
                 <Text style={[typography.label, { color: theme.contentPrimary }]}>
                   {COLLECTION_SORT_LABELS_DA[option]}
@@ -94,7 +99,7 @@ export function ViewSortSheet({
                   <Ionicons
                     name="checkmark"
                     size={22}
-                    color={theme.contentPrimary}
+                    color={theme.fillPrimary}
                     accessibilityElementsHidden
                   />
                 ) : null}
@@ -120,7 +125,9 @@ const styles = StyleSheet.create({
     marginTop: space.insetMd,
   },
   sortRow: {
-    minHeight: 48,
+    minHeight: 56,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "transparent",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",

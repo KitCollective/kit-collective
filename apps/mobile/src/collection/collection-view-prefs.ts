@@ -1,10 +1,10 @@
-import type { PromptStore } from "@/profile-prompt/dismissal";
 import {
   COLLECTION_SORTS,
   COLLECTION_VIEWS,
   type CollectionSort,
   type CollectionView,
-} from "./collection-view-model";
+} from "@/collection/collection-view-model";
+import type { PromptStore } from "@/profile-prompt/dismissal";
 
 export type CollectionViewPrefs = {
   view: CollectionView;
