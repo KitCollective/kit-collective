@@ -6,7 +6,8 @@
  *
  * Usage: node scripts/request-device-flows.mjs <pr> --issue KIT-n
  * Nothing is asked for when the PR has no slice flow for the issue, or when the head already has
- * a `Device flows` status of any state (a red flow is fixed by a commit, which is a new head).
+ * a pending, green or red `Device flows` status (a red flow is fixed by a commit, which is a new
+ * head). An `error` status is a run that stopped before the flow finished: it is asked for again.
  * Prints one line. Exit: 0 requested or nothing to do, 2 usage, 4 a source could not be read.
  */
 import { commitStatuses, config, existsAtHead, gh, prView } from "./lib/gate-io.mjs";
