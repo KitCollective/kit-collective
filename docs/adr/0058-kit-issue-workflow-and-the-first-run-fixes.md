@@ -107,4 +107,15 @@ Every runner is a whole agent session that starts with the repo's full context t
 
 Verified by tests with the fake runner (the runner labels of a green run and of a resume, the order of log lines and gates, the stops that write their own log, the fix round's states); not yet by a real run.
 
+## A resume in an old worktree ran the old harness (KIT-283; 2026-10-13)
+
+The first run after the three changes above was a resume of KIT-283, started in the issue's existing worktree to keep its uncommitted work. That branch had been cut before the fixes, so the run read the old workflow file from it and stopped on a made-up exit code again; the session check it ran had no run cap. A worker runs the copy of `scripts/` and `.bb/workflows/` in the worktree of the thread that started the run, and nothing compared that copy with the integration lane.
+
+Two rules now:
+
+- **Start the run from the main clone's file.** `bb workflows run --file <main clone>/.bb/workflows/kit-issue.js`, not a path relative to an issue worktree. The workflow file is read when the run starts, so no step inside it can replace a stale copy of itself.
+- **The first step compares the harness with the lane.** In the session check's own runner, before the check: `git fetch --quiet origin development`, then `git diff --quiet origin/development -- .bb/workflows scripts factory.config.json`. A difference stops the run at `harness` with the instruction to merge the lane into the branch (or start from a fresh worktree). It is plain git and not a repo script, because a stale worktree may not have the script. It runs before `start` is logged, so the stop costs no run of the cap. A comparison that could not run is a stop too.
+
+**What this does not cover.** An issue that itself changes `scripts/`, `.bb/workflows/` or `factory.config.json` always differs from the lane and cannot run through `kit-issue`; harness work stays hand-driven, as it has been. The comparison is relayed by a runner like every other command.
+
 Status: accepted; revisit after the next real `kit-issue` run.
