@@ -72,7 +72,7 @@ async function run({
             : { code: 0, line: "OPEN: fine" });
         // A `shell` answer with its own `exit` plays a runner that did not relay the printed marker.
         results.push({ exit: result.exit ?? `KIT-EXIT:${result.code}`, line: result.line });
-        if (result.code !== 0 && !prompt.includes("Run every command")) break;
+        if (result.code !== 0 && !prompt.includes("Run every command even when one fails.")) break;
       }
       return { results };
     }
@@ -260,8 +260,59 @@ test("session-check closed stops before anything else runs", async () => {
   });
   assert.equal(result.status, "stopped");
   assert.equal(result.stoppedAt, "session-check");
-  assert.equal(commands.length, 1);
+  // The harness comparison (two git commands) shares the session check's runner.
+  assert.equal(commands.length, 3);
   assert.equal(spawns.length, 1);
+});
+
+const isHarnessDiff = (c) => c.startsWith("git diff --quiet origin/development");
+
+test("a worktree whose harness differs from development stops before the session check counts a start (KIT-283)", async () => {
+  const { result, commands, spawns } = await run({
+    args: { issue: "KIT-9", resume: true },
+    shell: (c) => (isHarnessDiff(c) ? { code: 1, line: "" } : undefined),
+  });
+  assert.equal(result.status, "stopped");
+  assert.equal(result.stoppedAt, "harness");
+  assert.match(
+    result.note,
+    /differs from origin\/development: merge origin\/development into the branch/,
+  );
+  assert.equal(commands[0], "git fetch --quiet origin development");
+  assert.match(
+    commands[1],
+    /^git diff --quiet origin\/development -- \.bb\/workflows scripts factory\.config\.json$/,
+  );
+  assert.ok(!commands.some((c) => c.includes("session-check.mjs")));
+  assert.ok(
+    !commands.some((c) => c.includes("run-log.mjs start")),
+    "no start is logged, so the run cap is not spent",
+  );
+  assert.equal(spawns.length, 1);
+});
+
+test("a harness comparison that could not run is a stop, not a pass", async () => {
+  const fetchFailed = await run({
+    shell: (c) =>
+      c.startsWith("git fetch") ? { code: 128, line: "fatal: unable to access" } : undefined,
+  });
+  assert.equal(fetchFailed.result.stoppedAt, "harness");
+  assert.match(fetchFailed.result.note, /could not compare the harness.*fatal: unable to access/);
+  const diffBroke = await run({
+    shell: (c) => (isHarnessDiff(c) ? { code: 129, line: "usage: git diff" } : undefined),
+  });
+  assert.equal(diffBroke.result.stoppedAt, "harness");
+  assert.match(diffBroke.result.note, /could not compare/);
+  assert.equal(agentSpawns(diffBroke.spawns).length, 0);
+});
+
+test("a current harness adds no runner: the comparison rides with the session check", async () => {
+  const { spawns } = await run();
+  const first = spawns[0];
+  assert.equal(first.options.label, "session-check");
+  const numbered = first.prompt.split("\n").filter((l) => /^\d+\. /.test(l));
+  assert.equal(numbered.length, 3);
+  assert.match(numbered[2], /session-check\.mjs KIT-9/);
 });
 
 test("a bad issue key is refused without spawning anything", async () => {

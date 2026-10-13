@@ -274,11 +274,34 @@ function stopped(stoppedAt, status, extra) {
 
 // ---- Session ------------------------------------------------------------------------------------
 phase("Session");
-const session = await sh("session-check", "Session", [
+// Every command below runs this worktree's copy of scripts/, and an issue worktree that was cut
+// before a harness fix still holds the old copy (KIT-283 on 2026-10-13: a resume in such a worktree
+// ran the session check without the run cap and had no resume-point.mjs). So the first step compares
+// the harness paths with the integration lane, with plain git and no repo script, because a stale
+// worktree may not have the script that would do it. A difference stops the run before `start` is
+// logged, so it costs no run of the cap. The workflow file itself is read when the run starts:
+// start it from the main clone's path, which sync-development keeps current.
+const HARNESS_PATHS = ".bb/workflows scripts factory.config.json";
+// One runner for all three: the two git commands are read-only, and the script reads the results in
+// order, so a runner that did not stop after a failing one cannot turn a stale harness into a start.
+const opening = await sh("session-check", "Session", [
+  "git fetch --quiet origin development",
+  `git diff --quiet origin/development -- ${HARNESS_PATHS}`,
   `node scripts/session-check.mjs ${issue}${resume ? " --resume" : ""}`,
 ], false, true);
-if (session.length === 0 || session[0].code !== 0) {
-  return stopped("session-check", "stopped", { note: session[0]?.line ?? "no output from session-check" });
+const [fetched, same, session] = opening;
+if (!fetched || fetched.code !== 0 || !same || same.code !== 0) {
+  const failed = !fetched || fetched.code !== 0 ? fetched : same;
+  return stopped("harness", "stopped", {
+    note: failed?.runner
+      ? failed.line
+      : failed === same && same.code === 1
+        ? `this worktree's harness (${HARNESS_PATHS}) differs from origin/development: merge origin/development into the branch and push, or start from a fresh worktree, then run again`
+        : `could not compare the harness with origin/development: ${failed?.line ?? "no output"}`,
+  });
+}
+if (!session || session.code !== 0) {
+  return stopped("session-check", "stopped", { note: session?.line ?? "no output from session-check" });
 }
 const begun = await sh("start", "Session", [
   logCmd("start", `--issue ${issue}`),

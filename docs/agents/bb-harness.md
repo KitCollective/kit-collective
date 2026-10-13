@@ -56,9 +56,11 @@ The main clone is updated with the existing safe sync, not with a second procedu
 Both commands run from a bb project thread on the machine (`bb project list` shows the project, `kit-collective`):
 
 ```bash
-bb workflows validate --file .bb/workflows/kit-issue.js
-bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'
+bb workflows validate --file /home/node/work/kit-collective/.bb/workflows/kit-issue.js
+bb workflows run --file /home/node/work/kit-collective/.bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'
 ```
+
+Always give the main clone's path, also from a thread in an issue worktree: the workflow file is read when the run starts, and an issue branch cut before a harness fix holds the old file (KIT-283, ADR-0058). The run's first step then compares the worktree's `scripts/`, `.bb/workflows/` and `factory.config.json` with `origin/development` and stops at `harness` when they differ; merge the lane into the branch and push, then run again. That stop does not count against the run cap.
 
 `validate` is read-only; run it after every change to the workflow file. `run` returns at once and starts a real run of the issue: do not use it as a test of the command, it would start a second run.
 
