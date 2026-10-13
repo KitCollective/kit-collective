@@ -37,27 +37,25 @@ function sessionWithDraft(count: number): { state: CaptureSessionState; draftId:
 
 describe("selection in pick order", () => {
   it("numbers the badges 1, 2, 3 in the order the photos were picked", () => {
-    const [a, b, c] = [A, B, C];
     let selection: string[] = [];
-    selection = toggleSelection(selection, b);
-    selection = toggleSelection(selection, a);
-    selection = toggleSelection(selection, c);
+    selection = toggleSelection(selection, B);
+    selection = toggleSelection(selection, A);
+    selection = toggleSelection(selection, C);
 
-    expect(selectionBadge(selection, b)).toBe(1);
-    expect(selectionBadge(selection, a)).toBe(2);
-    expect(selectionBadge(selection, c)).toBe(3);
+    expect(selectionBadge(selection, B)).toBe(1);
+    expect(selectionBadge(selection, A)).toBe(2);
+    expect(selectionBadge(selection, C)).toBe(3);
     expect(selectionBadge(selection, URIS[5] ?? "")).toBeNull();
   });
 
   it("renumbers the rest when a photo is deselected", () => {
-    const [a, b, c] = [A, B, C];
-    let selection = [a, b, c];
-    selection = toggleSelection(selection, a);
+    let selection = [A, B, C];
+    selection = toggleSelection(selection, A);
 
-    expect(selection).toEqual([b, c]);
-    expect(selectionBadge(selection, b)).toBe(1);
-    expect(selectionBadge(selection, c)).toBe(2);
-    expect(selectionBadge(selection, a)).toBeNull();
+    expect(selection).toEqual([B, C]);
+    expect(selectionBadge(selection, B)).toBe(1);
+    expect(selectionBadge(selection, C)).toBe(2);
+    expect(selectionBadge(selection, A)).toBeNull();
   });
 
   it("does not mutate the selection it is given", () => {

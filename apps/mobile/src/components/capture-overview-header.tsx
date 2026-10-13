@@ -8,6 +8,9 @@ import { useTheme } from "@/theme/use-theme";
 
 const CONTROL_SIZE = 44;
 
+/** Height to assume for the header before `onMeasure` reports the real one (below the safe-area inset). */
+export const HEADER_FALLBACK_HEIGHT = CONTROL_SIZE + space.insetLg;
+
 type CaptureOverviewHeaderProps = {
   title: string;
   /** `mono` line under the title: photos · sorted. None while Vision runs. */

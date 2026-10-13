@@ -29,17 +29,19 @@ import {
 } from "@/capture/unassignedPhotos";
 import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession";
 import { ConfirmSheet } from "@/components/account-ui";
-import { CaptureOverviewHeader } from "@/components/capture-overview-header";
+import {
+  CaptureOverviewHeader,
+  HEADER_FALLBACK_HEIGHT,
+} from "@/components/capture-overview-header";
 import { CaptureOverviewRow } from "@/components/capture-overview-row";
 import { Sheet } from "@/components/catalog-ui";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
 import { stickySize } from "@/prefs/stickySizeStore";
 import { useTypography } from "@/theme/brand-fonts";
-import { radius, space, type } from "@/theme/tokens";
+import { radius, space } from "@/theme/tokens";
 import { useTheme } from "@/theme/use-theme";
 
 const COLUMNS = 2;
-const HEADER_FALLBACK_HEIGHT = 44 + space.insetLg;
 const FILL_BUTTON_HEIGHT = 48;
 /** The fade dock's own scroll clearance covers one button; the other two add their height and gap. */
 const EXTRA_DOCK_BUTTONS = 2 * (FILL_BUTTON_HEIGHT + space.gapMd);
@@ -240,12 +242,7 @@ export default function UnassignedPhotosScreen() {
         />
       </ButtonDock>
 
-      <Sheet
-        visible={pickerOpen}
-        title="Læg til en trøje"
-        onDismiss={() => setPickerOpen(false)}
-        hideChrome
-      >
+      <Sheet visible={pickerOpen} title="Læg til en trøje" onDismiss={() => setPickerOpen(false)}>
         <Text style={[typography.caption, { color: theme.contentSecondary }]}>
           {selectedCaption(selection.length)}
         </Text>
@@ -312,7 +309,7 @@ const styles = StyleSheet.create({
     top: space.insetSm,
     left: space.insetSm,
     minWidth: BADGE_SIZE,
-    height: Math.max(BADGE_SIZE, type.captionSm.lineHeight),
+    height: BADGE_SIZE,
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",

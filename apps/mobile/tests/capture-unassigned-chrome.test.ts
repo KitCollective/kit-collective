@@ -42,8 +42,8 @@ describe("photos without a jersey wiring", () => {
     expect(screen).toContain("JERSEY_PHOTO_CAP_HELPER_DA");
   });
 
-  it("opens the picker as a form Sheet with only Annuller, and Slet in the existing confirm Sheet", () => {
-    expect(screen).toContain("hideChrome");
+  it("opens the picker as a form Sheet with one tertiary Annuller, and Slet in the existing confirm Sheet", () => {
+    expect(screen).not.toContain("hideChrome");
     expect(screen).toContain('label="Annuller"');
     expect(screen).toContain('variant="tertiary"');
     expect(screen).toContain("<ConfirmSheet");

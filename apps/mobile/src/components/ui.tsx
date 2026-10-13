@@ -64,10 +64,7 @@ type ButtonProps = PressableProps & {
   loading?: boolean;
   /** Optional leading glyph (e.g. a provider mark) rendered before the label. */
   leading?: ReactNode;
-  /**
-   * `danger` sets the label of a `secondary` Button in `danger`: "a `secondary` in
-   * `danger`" (Fotos uden trøje, **Slet**). The word still names the action; never colour alone.
-   */
+  /** `danger` sets the label of a `secondary` Button in `danger` (Fotos uden trøje, **Slet**). The word still names the action; never colour alone. */
   tone?: "neutral" | "danger";
 };
 

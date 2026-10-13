@@ -26,7 +26,10 @@ import { leaveOverviewSession, unparkSessionById } from "@/capture/parkedSession
 import { useConfirmExit } from "@/capture/use-confirm-exit";
 import { useConfirmGrouping } from "@/capture/use-confirm-grouping";
 import { usePersistedCaptureSession } from "@/capture/usePersistedCaptureSession";
-import { CaptureOverviewHeader } from "@/components/capture-overview-header";
+import {
+  CaptureOverviewHeader,
+  HEADER_FALLBACK_HEIGHT,
+} from "@/components/capture-overview-header";
 import { CaptureOverviewRow, CaptureOverviewSkeletonRow } from "@/components/capture-overview-row";
 import { SessionSummaryRow } from "@/components/session-summary-row";
 import { BUTTON_DOCK_FADE_SCROLL_PADDING, Button, ButtonDock } from "@/components/ui";
@@ -43,7 +46,6 @@ const PILE_THUMB_HEIGHT = (PILE_THUMB_WIDTH * 5) / 4;
 const PILE_THUMBS_MAX = 8;
 /** The fade dock's own scroll clearance covers one button; the second one adds its height and gap. */
 const SECOND_DOCK_BUTTON = 44 + space.gapSm;
-const HEADER_FALLBACK_HEIGHT = 44 + space.insetLg;
 
 /**
  * The bulk overview (docs/design-system.md, Capture session, Revision 2026-10-09, items 3 and 4):

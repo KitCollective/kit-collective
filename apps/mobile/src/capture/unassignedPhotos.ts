@@ -1,4 +1,4 @@
-import { type OverviewRow, overviewRows } from "./captureOverview";
+import { type OverviewRow, overviewRows, plural } from "./captureOverview";
 import { canAddPhotoToDraft } from "./captureSession";
 import type { CaptureSessionState } from "./captureSessionTypes";
 
@@ -7,10 +7,6 @@ import type { CaptureSessionState } from "./captureSessionTypes";
  * (docs/design-system.md, Capture session, Revision 2026-10-09, item 5). Pure so the pick order,
  * dock words and picker rows have unit tests.
  */
-
-function plural(count: number, one: string, many: string): string {
-  return count === 1 ? `1 ${one}` : `${count} ${many}`;
-}
 
 /** Appends on select, removes on deselect. The list is pick order, so index + 1 is the badge. */
 export function toggleSelection(selection: readonly string[], uri: string): string[] {

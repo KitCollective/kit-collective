@@ -173,7 +173,7 @@ export function completeOverviewDraft(
   return nextId ? setActiveDraft(next, nextId) : next;
 }
 
-function plural(count: number, one: string, many: string): string {
+export function plural(count: number, one: string, many: string): string {
   return count === 1 ? `1 ${one}` : `${count} ${many}`;
 }
 
