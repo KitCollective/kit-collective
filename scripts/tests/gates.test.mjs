@@ -539,7 +539,10 @@ test("device flows request: only a head with a slice flow and no status asks for
   });
   assert.equal(fresh.request, true);
   assert.match(fresh.line, /^REQUESTED/);
-  for (const state of ["pending", "success", "failure", "error"]) {
+  const stopped = deviceFlowsRequest({ hasSliceFlow: true, statuses: [status("error")] });
+  assert.equal(stopped.request, true, "a run that stopped before its verdict is asked for again");
+  assert.match(stopped.line, /^REQUESTED AGAIN/);
+  for (const state of ["pending", "success", "failure"]) {
     const answer = deviceFlowsRequest({ hasSliceFlow: true, statuses: [status(state)] });
     assert.equal(answer.request, false, `a ${state} head is left alone`);
     assert.match(answer.line, new RegExp(`^ALREADY ${state.toUpperCase()}`));

@@ -9,7 +9,7 @@ A hosted run already existed as a draft (`.github/workflows/device-flows.yml`, K
 ## Decision
 
 1. **The hosted run sets the `Device flows` status** on the PR head for a slice run started by the label: pending when it starts, then success, failure or error, each with a link to the run. Its last step always writes a verdict, so a run that stops early does not leave the head pending. The nightly and manual runs set no status.
-2. **An issue session asks for the hosted run and does not run `device-run.sh`.** `node scripts/request-device-flows.mjs <pr> --issue KIT-n` sets the label. It asks for nothing when the PR has no slice flow for the issue, or when the head already has a `Device flows` status of any state: a macOS run is not free, and a red flow is fixed by a commit, which is a new head.
+2. **An issue session asks for the hosted run and does not run `device-run.sh`.** `node scripts/request-device-flows.mjs <pr> --issue KIT-n` sets the label. It asks for nothing when the PR has no slice flow for the issue, or when the head already has a pending, green or red `Device flows` status: a macOS run is not free, and a red flow is fixed by a commit, which is a new head.
 3. **The pre-review gate waits for the status** with the required checks, whenever the PR head holds `apps/mobile/.maestro/slices/<KEY>.yaml` (`wait-for-checks --also "Device flows"`). So a Reviewer is never spawned on a head whose flow has not passed. The `kit-issue` workflow puts the request in front of that gate itself, in the gate's own runner.
 4. **The local run stays**, as the approver's tool. It sets the same status and is still the only run that uploads to the evidence bucket, compares with the "before" run, asks for the Claude review and writes the PR comment and the workpad links.
 5. **The native binary cache is saved right after the build.** `actions/cache` saves only when the whole job succeeds, and every hosted run so far had a red flow, so each run rebuilt the native binary for about 41 minutes. Restore and save are now separate steps.
@@ -27,4 +27,10 @@ A hosted run already existed as a draft (`.github/workflows/device-flows.yml`, K
 - **A flow that needs more than one photo cannot pass anywhere but a hand-made simulator.** `simulator.sh` gives the library one photo; the slice flows of KIT-282 and KIT-283 need four. The spec gives that fixture to KIT-284, which is blocked by KIT-283: KIT-283 cannot get a green flow before the fixture exists.
 - **No hosted slice run has happened.** The label trigger has never fired on a real PR.
 
-Status: accepted; revisit after the first hosted slice runs.
+## The first hosted slice run (PR #316, 2026-10-13)
+
+The label started the run, the run set `pending` on the head at once, and when the job was cancelled its last step set `error`: the three status steps work. The run never reached the flow. The native build took 58 minutes this time (41 in the nightly run that morning) and the job's 60 minute limit cancelled it in the flow step, after the binary had been saved to the cache.
+
+Two changes follow. The job's limit is 90 minutes. And `error` is no longer a state that `request-device-flows.mjs` leaves alone: it means the run stopped before the flow finished, so the next request asks again; `failure` (a red flow) still waits for a new commit.
+
+Status: accepted; revisit after the first hosted slice run that reaches a verdict.

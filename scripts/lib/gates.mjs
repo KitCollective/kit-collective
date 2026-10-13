@@ -389,6 +389,8 @@ export function sliceFlowPath(issue) {
  * statuses for the head, newest first. A run is asked for only when the slice has a flow and the
  * head has no verdict and no run under way: a green or running head is left alone (a macOS run
  * is not free), and a red one is the Engineer's to fix with a new commit, which is a new head.
+ * `error` is not a verdict: the run stopped before the flow finished (a timeout, a runner fault),
+ * so it is asked for again.
  * @param {{ hasSliceFlow: boolean, statuses: Array<{ context?: string, state?: string }> }} input
  * @returns {{ request: boolean, line: string }}
  */
@@ -399,6 +401,12 @@ export function deviceFlowsRequest({ hasSliceFlow, statuses }) {
   const latest = statuses.find((status) => status.context === DEVICE_FLOWS_CONTEXT);
   if (!latest) {
     return { request: true, line: `REQUESTED: no ${DEVICE_FLOWS_CONTEXT} status on the head yet` };
+  }
+  if (latest.state === "error") {
+    return {
+      request: true,
+      line: `REQUESTED AGAIN: the last ${DEVICE_FLOWS_CONTEXT} run stopped before the flow finished`,
+    };
   }
   return {
     request: false,
