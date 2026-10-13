@@ -600,7 +600,8 @@ test("every runner command is wrapped so the shell prints its own exit code", as
 
 test("an exit code the runner made up is a runner failure, never a closed gate (KIT-295)", async () => {
   const { result, commands } = await run({
-    shell: (c) => (isPre(c) ? { exit: "-1", code: 0, line: "OPEN (review): checks clean" } : undefined),
+    shell: (c) =>
+      isPre(c) ? { exit: "-1", code: 0, line: "OPEN (review): checks clean" } : undefined,
   });
   assert.equal(result.stoppedAt, "pre-review gate");
   assert.match(result.note, /runner-no-result/);
