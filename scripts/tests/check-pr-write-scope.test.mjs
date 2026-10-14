@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   changedFilesDiffArgs,
   findWriteScopeViolations,
@@ -241,4 +242,17 @@ test("an escaped scope line still matches the files it names", () => {
   const globs = parseWriteScopeGlobs("write-scope: scripts/tests/\\*\\*");
   assert.deepEqual(findWriteScopeViolations(["scripts/tests/a.test.mjs"], globs), []);
   assert.deepEqual(findWriteScopeViolations(["apps/x.ts"], globs), ["apps/x.ts"]);
+});
+
+test("CI runs again when the PR description changes, since the scope step reads it from the event", () => {
+  const ci = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../../.github/workflows/ci.yml"),
+    "utf8",
+  );
+  const pullRequest = /^ {2}pull_request:\n([\s\S]*?)^ {2}[a-z_]+:/m.exec(ci)?.[1] ?? "";
+  assert.match(pullRequest, /types: \[opened, synchronize, reopened, edited\]/);
+  assert.match(
+    ci,
+    /PR_BODY: \$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.body/,
+  );
 });
