@@ -45,6 +45,7 @@ What the missing pieces mean in practice:
 
   It opens a secure form for the person; the values are typed into that form and never pass through the chat, a prompt or a command line. Existing assignments in the file are preserved.
 - Posting the `kc/audit` status needs "Commit statuses: Read and write"; the `kit-issue` run never posts it (the receipt runs only as a dry run), so the person who merges asks for that permission when they need it.
+- The same `GH_TOKEN` reads the Holdout repo: `docs/agents/scenarios.md` has the format, the CLI and the command that proves a machine's read.
 - Nothing on this page, in a prompt or in a thread message carries a value. If a run needs a new secret, add its name to `bb.env` and request it with the command above.
 
 ## Updating the clone
