@@ -1110,3 +1110,11 @@ test("the hosted Device flows run is asked for in the pre-review gate's own runn
   );
   assert.ok(asked >= 0 && asked < resumed.commands.findIndex(isPre));
 });
+
+test("the runner and the Engineer are told to set the shell tool's timeout, which otherwise backgrounds a wait after 2 minutes (KIT-286)", async () => {
+  const { spawns } = await run();
+  const runner = spawns.find((s) => s.options.schema?.required?.includes("results")).prompt;
+  assert.match(runner, /set the tool's timeout to 600000 ms/);
+  const engineer = agentSpawns(spawns).find((s) => s.options.label.startsWith("engineer:")).prompt;
+  assert.match(engineer, /set the tool's timeout to 600000 ms/);
+});
