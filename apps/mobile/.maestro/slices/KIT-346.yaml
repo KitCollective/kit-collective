@@ -1,0 +1,57 @@
+# Device flow for KIT-346: Confirm's photo slots show the draft's own photo at once (ADR-0049).
+# design-sections: Photo slot, Confirm and Save
+# simulator-photos: fck-white-home-back, fck-white-home-front
+#
+# The slice changes when a slot fills, not how it looks: the draft's own photo URI shows at once
+# and swaps to the prepared strip URI per role. The slots must be filled on Confirm without
+# waiting for the Vision suggestion, so the flow asserts them before confirm-identity-resolved.
+# A slot the prepare swap left empty would show no photo, which the screenshot would catch.
+#
+# Not shown by a screen and so proved by tests/use-confirm-photos-strip.test.ts instead: a prepare
+# that never settles, a failed prepare, and the new-draft-object-with-the-same-URIs case
+# (criteria 1 to 4 at the seam).
+appId: app.kitcollective.mobile
+name: kit-346
+---
+- runFlow:
+    file: ../subflows/sign-in.yaml
+    env:
+      EMAIL: ${MAESTRO_COLLECTOR_EMAIL}
+      PASSWORD: ${MAESTRO_COLLECTOR_PASSWORD}
+- startRecording: kc__kit-346
+- tapOn:
+    id: collection-add
+- extendedWaitUntil:
+    visible:
+      id: capture-source-gallery
+    timeout: 10000
+- tapOn:
+    id: capture-source-gallery
+- tapOn: Fotos
+# The system photo picker has no stable ids: two cells, then confirm. Two photos go straight to
+# Confirm (three or fewer), so the draft holds a front and a back photo.
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    point: 16%,25%
+- tapOn:
+    point: 50%,25%
+- tapOn:
+    point: 90%,12%
+- extendedWaitUntil:
+    visible:
+      id: confirm-save
+    timeout: 30000
+# AC 1, 2: both slots are filled on Confirm. This is asserted before confirm-identity-resolved, so
+# it does not wait for the Vision suggestion; the slot shows the photo whether or not the
+# prepared strip URI has landed.
+- extendedWaitUntil:
+    visible:
+      id: photo-slot-front-filled
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: photo-slot-back-filled
+    timeout: 10000
+- takeScreenshot: kc__kit-346__01-strip-filled
+- stopRecording
