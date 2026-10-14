@@ -33,3 +33,5 @@ Do not use this exception to expand product features. Checker must not treat the
 3. **Checker** — files outside the declared globs are a Spec/Standards finding unless the issue said the scope was unset, or the file is a required ratchet (exception above).
 
 Until an issue declares scope, planner does not skip for path overlap — only `blockedBy` and priority apply.
+
+The CI scope step reads the PR description from the event that started the run, so a corrected `write-scope:` line in the description starts a CI run of its own (`pull_request` type `edited`). No new commit is needed, and the head, with its `Device flows` status, stays the same.
