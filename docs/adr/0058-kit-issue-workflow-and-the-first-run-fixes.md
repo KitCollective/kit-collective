@@ -118,4 +118,8 @@ Two rules now:
 
 **What this does not cover.** An issue that itself changes `scripts/`, `.bb/workflows/` or `factory.config.json` always differs from the lane and cannot run through `kit-issue`; harness work stays hand-driven, as it has been. The comparison is relayed by a runner like every other command.
 
+## Correction: the main clone's path is refused (2026-10-14)
+
+The first rule above, start the run from the main clone's file, cannot be followed. bb refuses a workflow file outside the starting thread's workspace ("Workflow scriptPath must stay inside the origin workspace"), as the KIT-283 resume of 2026-10-14 found. So a run uses the thread's own worktree copy, and the copy must be current when the run starts: a thread in a fresh worktree from `origin/development` has it; a thread in an existing issue worktree merges `origin/development` into the branch and pushes first. The harness comparison stays and catches a copy that is stale anyway, for every branch that already holds it. The 2026-10-13 KIT-283 thread that was scheduled with the main clone's path never ran.
+
 Status: accepted; revisit after the next real `kit-issue` run.

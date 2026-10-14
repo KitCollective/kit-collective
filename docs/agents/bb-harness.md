@@ -56,11 +56,11 @@ The main clone is updated with the existing safe sync, not with a second procedu
 Both commands run from a bb project thread on the machine (`bb project list` shows the project, `kit-collective`):
 
 ```bash
-bb workflows validate --file /home/node/work/kit-collective/.bb/workflows/kit-issue.js
-bb workflows run --file /home/node/work/kit-collective/.bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'
+bb workflows validate --file .bb/workflows/kit-issue.js
+bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'
 ```
 
-Always give the main clone's path, also from a thread in an issue worktree: the workflow file is read when the run starts, and an issue branch cut before a harness fix holds the old file (KIT-283, ADR-0058). The run's first step then compares the worktree's `scripts/`, `.bb/workflows/` and `factory.config.json` with `origin/development` and stops at `harness` when they differ; merge the lane into the branch and push, then run again. That stop does not count against the run cap.
+The path is the thread's own worktree copy: bb refuses a workflow file outside the thread's workspace ("Workflow scriptPath must stay inside the origin workspace"), so a thread cannot point at the main clone's file. The file is read when the run starts, so it must be current: a thread in a fresh worktree from `origin/development` is; a thread in an existing issue worktree merges `origin/development` into the branch and pushes before it starts the run. From that point on a stale copy stops itself: the run's first step compares the worktree's `scripts/`, `.bb/workflows/` and `factory.config.json` with `origin/development` and stops at `harness` when they differ (merge the lane into the branch and push, then run again). That stop does not count against the run cap. A branch older than that step has no such check, which is why the merge comes first.
 
 `validate` is read-only; run it after every change to the workflow file. `run` returns at once and starts a real run of the issue: do not use it as a test of the command, it would start a second run.
 
