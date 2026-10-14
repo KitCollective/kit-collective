@@ -223,15 +223,14 @@ describe("device-flow test data", () => {
     // One Bud from the peer waits unanswered on the Collector's first jersey (KIT-286).
     const bidThreads = await db.select().from(conversation);
     expect(bidThreads).toHaveLength(1);
-    expect(bidThreads[0]).toMatchObject({
-      id: TEST_UNANSWERED_BID.conversationId,
-      userJerseyId: TEST_UNANSWERED_BID.jerseyId,
-    });
+    expect(bidThreads[0]).toMatchObject({ id: TEST_UNANSWERED_BID.conversationId });
     expect(await db.select().from(conversationParticipant)).toHaveLength(2);
+    // The Bud, not the Conversation, carries the UserJersey (one Conversation per pair, KIT-295).
     const bids = await db.select().from(conversationMessage);
     expect(bids).toHaveLength(1);
     expect(bids[0]).toMatchObject({
       senderId: TEST_PEER_ID,
+      userJerseyId: TEST_UNANSWERED_BID.jerseyId,
       kind: "bid",
       bidAmountDkk: TEST_UNANSWERED_BID.amountDkk,
       bidStatus: "pending",
@@ -280,17 +279,10 @@ describe("device-flow test data", () => {
       .select()
       .from(userJersey)
       .where(eq(userJersey.userId, TEST_PEER_ID));
-    const [lower, upper] = [TEST_COLLECTOR_ID, TEST_PEER_ID].sort();
-    const [thread] = await db
-      .insert(conversation)
-      .values({ lowerCollectorId: lower!, upperCollectorId: upper! })
-      .returning({ id: conversation.id });
-    await db.insert(conversationParticipant).values([
-      { conversationId: thread!.id, userId: TEST_COLLECTOR_ID },
-      { conversationId: thread!.id, userId: TEST_PEER_ID },
-    ]);
+    // The pair already has the fixture's Conversation, and a pair has one Conversation (KIT-295),
+    // so the flow's Bud lands in that one.
     await db.insert(conversationMessage).values({
-      conversationId: thread!.id,
+      conversationId: TEST_UNANSWERED_BID.conversationId,
       senderId: TEST_COLLECTOR_ID,
       kind: "bid",
       bidAmountDkk: 250,
@@ -314,7 +306,7 @@ describe("device-flow test data", () => {
     for (const key of SNAPSHOT_KEYS) {
       expect(stable(after[key])).toEqual(stable(before[key]));
     }
-    // The flow's own thread is gone; only the fixture's unanswered Bud is left.
+    // The flow's own Bud is gone; only the fixture's Conversation and unanswered Bud are left.
     expect(await db.select({ id: conversation.id }).from(conversation)).toEqual([
       { id: TEST_UNANSWERED_BID.conversationId },
     ]);
