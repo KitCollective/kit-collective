@@ -121,7 +121,7 @@ async function runRaw(label, phaseTitle, commands, keepGoing) {
   const prompt = [
     "You are a command runner. Run the numbered commands below in the repository root, in order, each exactly as written.",
     "Every command ends by printing a line `KIT-EXIT:<n>`, where n is its exit code. For each command report in `results`: `exit`, that `KIT-EXIT:<n>` line verbatim; and `line`, the last non-empty line of the combined output before it, verbatim (an empty string when there is none). Never work out or guess the exit code yourself: copy the printed line.",
-    "Run every command in the foreground and wait for it to finish, until it finishes (a command can run up to about 9 minutes; the foreground limit is 10). Never background a command: no `&`, no `nohup`, no `disown`, no `timeout` or `sleep` wrapper, no output redirected to a file to read later. Do not end your turn with prose: your turn ends only with the `results` array, one entry per command you ran.",
+    "Run every command in the foreground and wait for it to finish, until it finishes (a command can run up to about 9 minutes; the foreground limit is 10). Your shell tool moves a command to the background after 2 minutes unless you give it a longer timeout, so set the tool's timeout to 600000 ms (10 minutes) on every command you run. Never background a command: no `&`, no `nohup`, no `disown`, no `timeout` or `sleep` wrapper, no output redirected to a file to read later. Do not end your turn with prose: your turn ends only with the `results` array, one entry per command you ran.",
     keepGoing
       ? "Run every command even when one fails."
       : "Stop after the first command whose line is not `KIT-EXIT:0`: report it and do not run the rest (fewer results than commands is correct then).",
@@ -283,8 +283,9 @@ phase("Session");
 // ran the session check without the run cap and had no resume-point.mjs). So the first step compares
 // the harness paths with the integration lane, with plain git and no repo script, because a stale
 // worktree may not have the script that would do it. A difference stops the run before `start` is
-// logged, so it costs no run of the cap. The workflow file itself is read when the run starts:
-// start it from the main clone's path, which sync-development keeps current.
+// logged, so it costs no run of the cap. The workflow file itself is read when the run starts and
+// must be the starting thread's own copy (bb refuses a path outside its workspace): a thread in an
+// existing issue worktree merges the lane in first.
 const HARNESS_PATHS = ".bb/workflows scripts factory.config.json";
 // One runner for all three: the two git commands are read-only, and the script reads the results in
 // order, so a runner that did not stop after a failing one cannot turn a stale harness into a start.
@@ -433,7 +434,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
   const prompt = [
     `You are the Engineer for ${issue}. Read .cursor/skills/implement/SKILL.md and follow it, with /tdd and the Roles it names. ${resumeNote}`,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
-    `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
+    `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes, and your shell tool backgrounds it after 2 unless you set the tool's timeout to 600000 ms, so set it): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
     feedback ? `Change request from the last round (fix the class, not the instance):\n${feedback}` : "",
     "Return outcome ready (only when the pre-review gate in implement/SKILL.md is true), blocked (sentence starts `needs-human:` or `blocked-by KIT-m:`) or failed, one sentence, the PR number, and your own thread id ($BB_THREAD_ID) in threadId.",
