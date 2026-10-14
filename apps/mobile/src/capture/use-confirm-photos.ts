@@ -54,6 +54,7 @@ export function useConfirmPhotos({
   );
   const strip = stripRef.current;
 
+  // SAFETY: PHOTO_ROLES lists every PhotoRole, so the entries cover the whole record.
   const stripSources = Object.fromEntries(
     PHOTO_ROLES.map((role) => [
       role,

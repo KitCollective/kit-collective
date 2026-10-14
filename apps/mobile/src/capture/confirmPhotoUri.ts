@@ -1,7 +1,21 @@
 import type { PhotoRole } from "@kit/domain";
 import { PHOTO_ROLES } from "@kit/domain";
-import { resolvePhotoUrl } from "@/api/collection";
-import { readPreparedPhotoUri } from "@/capture/photoBytes";
+
+// The resolvers load the Expo file and fetch layers on first use, so the strip tracker below
+// imports without them and tests can run it in node.
+async function resolveServerUrl(uri: string, variant: "strip" | "lightbox"): Promise<string> {
+  const { resolvePhotoUrl } = await import("@/api/collection");
+  return resolvePhotoUrl(uri, variant);
+}
+
+async function readPrepared(
+  uri: string,
+  role: PhotoRole,
+  variant: "strip" | "lightbox",
+): Promise<string> {
+  const { readPreparedPhotoUri } = await import("@/capture/photoBytes");
+  return readPreparedPhotoUri(uri, role, variant);
+}
 
 function isServerPhotoUri(uri: string): boolean {
   return uri.startsWith("http") || uri.includes("/v1/collection/photos/");
@@ -10,9 +24,9 @@ function isServerPhotoUri(uri: string): boolean {
 /** Confirm hub strip — local prepared 4:5 or server `variant=strip`. */
 export async function resolveConfirmStripUri(uri: string, role: PhotoRole): Promise<string> {
   if (isServerPhotoUri(uri)) {
-    return resolvePhotoUrl(uri, "strip");
+    return resolveServerUrl(uri, "strip");
   }
-  return readPreparedPhotoUri(uri, role, "strip");
+  return readPrepared(uri, role, "strip");
 }
 
 /** The draft's own photo URI per role, `undefined` where the draft has none. */
@@ -79,7 +93,7 @@ export function createConfirmStripPhotos(
 /** Photo lightbox — local prepared uncropped or server `variant=lightbox`. */
 export async function resolveConfirmLightboxUri(uri: string, role: PhotoRole): Promise<string> {
   if (isServerPhotoUri(uri)) {
-    return resolvePhotoUrl(uri, "lightbox");
+    return resolveServerUrl(uri, "lightbox");
   }
-  return readPreparedPhotoUri(uri, role, "lightbox");
+  return readPrepared(uri, role, "lightbox");
 }

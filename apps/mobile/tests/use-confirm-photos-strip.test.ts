@@ -2,12 +2,9 @@ import { PHOTO_ROLES, type PhotoRole } from "@kit/domain";
 import { describe, expect, it, vi } from "vitest";
 import { type ConfirmStripSources, createConfirmStripPhotos } from "../src/capture/confirmPhotoUri";
 
-// The module also holds the resolvers, which pull in the Expo file and fetch layers.
-vi.mock("@/capture/photoBytes", () => ({ readPreparedPhotoUri: vi.fn() }));
-vi.mock("@/api/collection", () => ({ resolvePhotoUrl: vi.fn() }));
-
 function sources(partial: Partial<ConfirmStripSources>): ConfirmStripSources {
   const empty = Object.fromEntries(PHOTO_ROLES.map((role) => [role, undefined]));
+  // SAFETY: PHOTO_ROLES lists every PhotoRole, so `empty` has every key.
   return { ...(empty as ConfirmStripSources), ...partial };
 }
 
