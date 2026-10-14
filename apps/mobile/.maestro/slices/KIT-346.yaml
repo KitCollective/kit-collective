@@ -29,13 +29,15 @@ name: kit-346
     id: capture-source-gallery
 - tapOn: Fotos
 # The system photo picker has no stable ids: two cells, then confirm. Two photos go straight to
-# Confirm (three or fewer), so the draft holds a front and a back photo.
+# Confirm (three or fewer), so the draft holds a front and a back photo. The second cell is tapped
+# at 38%: the centre of the second column of a four-column grid and inside the second of three, where
+# 50% falls on the border of two cells in the four-column grid (the first hosted run picked one photo).
 - waitForAnimationToEnd:
     timeout: 8000
 - tapOn:
     point: 16%,25%
 - tapOn:
-    point: 50%,25%
+    point: 38%,25%
 - tapOn:
     point: 90%,12%
 - extendedWaitUntil:
