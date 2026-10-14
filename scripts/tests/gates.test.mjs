@@ -569,6 +569,8 @@ test("the hosted Device flows workflow speaks for a PR head only, and always end
   assert.match(verdict, /if: always\(\) && env\.STATUS_SHA != ''/);
   for (const state of ["success", "failure", "error"])
     assert.match(verdict, new RegExp(`state=${state}`));
+  // The artifact is named after the head the status is set on, so the checker's command finds it.
+  assert.match(workflow, /name: device-flows-\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
   // The native binary is saved after the build, not at the end of a job that a red flow fails.
   assert.match(workflow, /actions\/cache\/restore@v4/);
   assert.match(workflow, /actions\/cache\/save@v4/);
