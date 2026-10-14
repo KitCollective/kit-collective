@@ -8,6 +8,12 @@
 #     Color, Typography, Spacing and Layout, which are always read. Names as in
 #     docs/design-system.md headings. Leave the list empty if none apply.
 #
+# simulator-photos: fck-white-home-front, fck-white-home-back
+#   ^ only for a flow that picks photos from the library: the fixture photos the
+#     simulator holds, by name from ../fixtures/photos/catalog.json, in the order they
+#     are added (the picker shows the last one first). Delete the line otherwise; the
+#     library then holds the one drawn shirt.
+#
 # Rules
 # - `name:` is the issue key in lower case, `kit-<n>`. Screenshots are named
 #   kc__kit-<n>__<step>, <step> being NN-what-it-shows (lower case, digits, hyphens).
