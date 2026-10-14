@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
+import { collectionFactsNumeralStyle } from "@/collection/collection-facts-style";
 import type { CollectionFacts } from "@/collection/collection-view-model";
 import { useTypography } from "@/theme/brand-fonts";
 import { space } from "@/theme/tokens";
@@ -50,7 +51,12 @@ export function CollectionFactsBlock({ facts }: CollectionFactsBlockProps) {
           accessibilityLabel={`${column.label}: ${column.value}`}
           style={styles.column}
         >
-          <Text style={[typography.numeral40, { color: theme.contentPrimary }]}>
+          <Text
+            style={[
+              collectionFactsNumeralStyle(typography.numeral40),
+              { color: theme.contentPrimary },
+            ]}
+          >
             {column.value}
           </Text>
           <Text style={[typography.caption, { color: theme.contentSecondary }]}>
