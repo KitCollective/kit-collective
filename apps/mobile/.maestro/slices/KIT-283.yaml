@@ -6,7 +6,7 @@
 #     four cells, and with Vision off nothing groups them, so all four land unassigned.
 #
 # The last step opens the jersey's Confirm and waits for its three photo slots (front, back, left),
-# which show once each prepared crop resolves (up to 30 s each on a hosted runner).
+# which show once each prepared crop resolves (up to 90 s each on a hosted runner).
 #
 # Not on screen, on purpose: AC 8 (no suggestion row: auto-bind at 50 and above, through
 # priorGroups, stands in for the one-tap offer), AC 9 (the Confirm strip, KIT-279, asserted in
@@ -140,18 +140,18 @@ name: kit-283
 - tapOn:
     id: overview-row-0
 # The strip shows a slot once its prepared 4:5 crop resolves, three photos in parallel on a slow
-# runner: wait for each slot at the 30 s the other slice flows give the first one (KIT-279, KIT-280).
+# runner: wait for each slot up to 90 s (the crop took 17 s on one hosted run and over 30 s on the next).
 - extendedWaitUntil:
     visible:
       id: photo-slot-front-filled
-    timeout: 30000
+    timeout: 90000
 - extendedWaitUntil:
     visible:
       id: photo-slot-back-filled
-    timeout: 30000
+    timeout: 90000
 - extendedWaitUntil:
     visible:
       id: photo-slot-left-filled
-    timeout: 30000
+    timeout: 90000
 - takeScreenshot: kc__kit-283__11-roles-in-pick-order
 - stopRecording
