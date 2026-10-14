@@ -14,12 +14,17 @@ export type TransitionNavigation = {
 /**
  * Schedules the upload picker after the loading route has painted and become the
  * top-most native surface. Animated presentation ends with transitionEnd. With
- * Reduce Motion the route enters without a transition and there is no such event,
+ * Reduce Motion the route may enter without a transition and without that event,
  * so once the setting is known to be on, two frames stand in for it. The setting
  * is read here, asynchronously: a value captured at mount is always "off". The
  * backstop covers a missing event and a setting that never answers.
  *
- * The backstop never fires into a transition that is known to be running: iOS
+ * Only transitionEnd reports "presented". The frames and the backstops are guesses and
+ * report "backstop", so a transitionEnd that still comes lets the caller recover: with
+ * Reduce Motion on, the simulator still animated the route in, the frames opened the
+ * sheet 0.9 s after the tap, and iOS took it down when the route appeared (KIT-345).
+ *
+ * Neither guess fires into a transition that is known to be running: iOS
  * takes a sheet presented mid-transition down when the transition ends and calls
  * nothing back, which left the collector on the loading screen (KIT-345). A
  * transition that started gets the long backstop instead. The start event can be
@@ -61,7 +66,11 @@ export function scheduleUploadWhenPresented(
       return;
     }
     outerFrame = requestAnimationFrame(() => {
-      innerFrame = requestAnimationFrame(() => run("presented"));
+      innerFrame = requestAnimationFrame(() => {
+        if (!transitioning) {
+          run("backstop");
+        }
+      });
     });
   });
 
