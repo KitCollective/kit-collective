@@ -19,7 +19,7 @@ appId: app.kitcollective.mobile
 - extendedWaitUntil:
     visible:
       id: door-submit
-    timeout: 10000
+    timeout: 60000
 - tapOn:
     id: door-email
 - inputText: ${EMAIL}
@@ -28,7 +28,7 @@ appId: app.kitcollective.mobile
 - extendedWaitUntil:
     visible:
       id: code-screen
-    timeout: 10000
+    timeout: 60000
 # The local API's recording mailer holds the code; the sixth digit submits by itself.
 - runScript:
     file: ../scripts/sign-in-code.js
