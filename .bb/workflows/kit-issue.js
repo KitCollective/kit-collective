@@ -283,8 +283,9 @@ phase("Session");
 // ran the session check without the run cap and had no resume-point.mjs). So the first step compares
 // the harness paths with the integration lane, with plain git and no repo script, because a stale
 // worktree may not have the script that would do it. A difference stops the run before `start` is
-// logged, so it costs no run of the cap. The workflow file itself is read when the run starts:
-// start it from the main clone's path, which sync-development keeps current.
+// logged, so it costs no run of the cap. The workflow file itself is read when the run starts and
+// must be the starting thread's own copy (bb refuses a path outside its workspace): a thread in an
+// existing issue worktree merges the lane in first.
 const HARNESS_PATHS = ".bb/workflows scripts factory.config.json";
 // One runner for all three: the two git commands are read-only, and the script reads the results in
 // order, so a runner that did not stop after a failing one cannot turn a stale harness into a start.
