@@ -32,7 +32,7 @@ The harness needs a gh whose `pr checks` subcommand supports `--json`. This is a
 What the missing pieces mean in practice:
 
 - **No Postgres.** The `api` and `db` suites cannot run. `node scripts/verify.mjs --changed --capability <what this machine has>` skips them and ends `INCOMPLETE` (exit 3), which is never green. Route a slice whose tests need a database to the Mac.
-- **No simulator.** Device flows (`docs/agents/device-flows.md`) stay on the Mac.
+- **No simulator.** A slice's Device flow runs on a GitHub macOS runner instead (`node scripts/request-device-flows.mjs`, ADR-0059), so a mobile slice no longer needs the Mac. The local `device-run.sh`, with its before/after comparison, stays on the Mac (`docs/agents/device-flows.md`).
 
 ## Secrets
 

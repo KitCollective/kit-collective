@@ -235,6 +235,10 @@ async function gateSlices(label, phaseTitle, command, before = []) {
 }
 
 const logCmd = (event, flags) => `node scripts/run-log.mjs ${event} ${flags}`;
+// Asks for the hosted Device flows run of the PR head (ADR-0059). It decides for itself: nothing is
+// asked for without a slice flow, or when the head already has the status. The pre-review gate
+// waits for the status with the checks, so this always rides in front of that gate.
+const requestDeviceFlows = (pr) => `node scripts/request-device-flows.mjs ${pr} --issue ${issue}`;
 
 /** The one place a Linear state command is built, so no caller can write a state outside MAY_SET. */
 function stateCmd(state) {
@@ -460,7 +464,7 @@ if (resume && resumePr !== null) {
   }
   if (point.code === 0) {
     phase("Pre-review gate");
-    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`);
+    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${resumePr} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [requestDeviceFlows(resumePr)]);
     if (pre.runner) {
       return stopped("pre-review gate", "stopped", { prNumber: resumePr, note: pre.line });
     }
@@ -537,7 +541,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
 
     // -- Pre-review gate: mechanical steps and checks only, no matrix (ADR-0058).
     phase("Pre-review gate");
-    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, engineerLog);
+    const pre = await gateSlices("gate:pre-review", "Pre-review gate", `node scripts/gate.mjs pre-review ${prNumber} --issue ${issue} --timeout ${GATE_SLICE_SECONDS}`, [...engineerLog, requestDeviceFlows(prNumber)]);
     if (pre.runner) {
       // The runner failed, not the gate: sh() logged runner-no-result, and no fix round can help.
       return stopped("pre-review gate", "In Progress", { prNumber, rounds, note: pre.line });

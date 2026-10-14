@@ -22,6 +22,26 @@ export function sliceDesignSections(flowYaml) {
     .filter(Boolean);
 }
 
+const PHOTOS_LINE = /^#[ \t]*simulator-photos:[ \t]*(.*)$/m;
+
+/**
+ * The fixture photos a slice flow asks for, in order, from its header comment
+ * `# simulator-photos: fck-white-home-front, fck-white-home-back`. The names are those of
+ * apps/mobile/.maestro/fixtures/photos/catalog.json; simulator.sh reads the same line.
+ * @param {string} flowYaml
+ * @returns {string[]}
+ */
+export function sliceSimulatorPhotos(flowYaml) {
+  const match = PHOTOS_LINE.exec(flowYaml);
+  if (!match) {
+    return [];
+  }
+  return match[1]
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
 /**
  * The flow name a slice file has in screenshot names: `KIT-279` gives `kit-279`.
  * @param {string} issueKey

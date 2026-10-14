@@ -6,7 +6,10 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  DEVICE_FLOWS_CONTEXT,
+  DEVICE_FLOWS_LABEL,
   declaresScope,
+  deviceFlowsRequest,
   foldReview,
   GATE_EXIT,
   headChanged,
@@ -21,6 +24,7 @@ import {
   scopeSource,
   sessionCheck,
   shouldLogGate,
+  sliceFlowPath,
   workpadHasPlan,
 } from "../lib/gates.mjs";
 import { append, readEvents } from "../lib/run-log.mjs";
@@ -441,7 +445,10 @@ test("gate.mjs passes the remaining budget to wait-for-checks and logs no waitin
     src,
     /remainingWaitSeconds\(opt\("--timeout"\) \?\? "1800", Date\.now\(\) - startedAt\)/,
   );
-  assert.match(src, /\[pr, "--timeout", String\(budget\)\]/);
+  assert.match(src, /\[\s*pr,\s*"--timeout",\s*String\(budget\),\s*\.\.\.also,?\s*\]/);
+  // The extra context is the Device flows status, and only for a head that holds the slice flow.
+  assert.match(src, /existsAtHead\(sliceFlowPath\(issue\), view\.headRefOid\)/);
+  assert.match(src, /\["--also", DEVICE_FLOWS_CONTEXT\]/);
   assert.equal((src.match(/if \(shouldLogGate\(result\)\)/g) ?? []).length, 2);
 });
 
@@ -520,4 +527,55 @@ test("resume point: review as it is only after a ready Engineer result with no f
   assert.equal(resumePoint({ ...base, events: [ready, red] }).code, GATE_EXIT.closed);
   assert.equal(resumePoint({ ...base, head: OTHER, events: [ready, red] }).code, GATE_EXIT.open);
   assert.equal(resumePoint({ ...base, head: "", events: [ready] }).code, GATE_EXIT.closed);
+});
+
+test("device flows request: only a head with a slice flow and no status asks for a run", () => {
+  const status = (state, context = "Device flows") => ({ context, state });
+  assert.equal(deviceFlowsRequest({ hasSliceFlow: false, statuses: [] }).request, false);
+  assert.match(deviceFlowsRequest({ hasSliceFlow: false, statuses: [] }).line, /^NOT NEEDED/);
+  const fresh = deviceFlowsRequest({
+    hasSliceFlow: true,
+    statuses: [status("success", "kc/audit")],
+  });
+  assert.equal(fresh.request, true);
+  assert.match(fresh.line, /^REQUESTED/);
+  const stopped = deviceFlowsRequest({ hasSliceFlow: true, statuses: [status("error")] });
+  assert.equal(stopped.request, true, "a run that stopped before its verdict is asked for again");
+  assert.match(stopped.line, /^REQUESTED AGAIN/);
+  for (const state of ["pending", "success", "failure"]) {
+    const answer = deviceFlowsRequest({ hasSliceFlow: true, statuses: [status(state)] });
+    assert.equal(answer.request, false, `a ${state} head is left alone`);
+    assert.match(answer.line, new RegExp(`^ALREADY ${state.toUpperCase()}`));
+  }
+  // Newest first: the latest status of the context is the one that counts.
+  assert.match(
+    deviceFlowsRequest({ hasSliceFlow: true, statuses: [status("failure"), status("pending")] })
+      .line,
+    /^ALREADY FAILURE/,
+  );
+  assert.equal(sliceFlowPath("KIT-283"), "apps/mobile/.maestro/slices/KIT-283.yaml");
+});
+
+test("the hosted Device flows workflow speaks for a PR head only, and always ends with a verdict", () => {
+  const workflow = readFileSync(
+    join(fileURLToPath(new URL("../..", import.meta.url)), ".github/workflows/device-flows.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /statuses: write/);
+  assert.match(workflow, /STATUS_SHA: \$\{\{ github\.event_name == 'pull_request' && /);
+  assert.match(workflow, new RegExp(`context="${DEVICE_FLOWS_CONTEXT}"`));
+  assert.match(workflow, new RegExp(`label\\.name == '${DEVICE_FLOWS_LABEL}'`));
+  const verdict = workflow.slice(workflow.indexOf("Device flows status, verdict"));
+  assert.match(verdict, /if: always\(\) && env\.STATUS_SHA != ''/);
+  for (const state of ["success", "failure", "error"])
+    assert.match(verdict, new RegExp(`state=${state}`));
+  // The artifact is named after the head the status is set on, so the checker's command finds it.
+  assert.match(
+    workflow,
+    /name: device-flows-\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/,
+  );
+  // The native binary is saved after the build, not at the end of a job that a red flow fails.
+  assert.match(workflow, /actions\/cache\/restore@v4/);
+  assert.match(workflow, /actions\/cache\/save@v4/);
+  assert.ok(workflow.indexOf("actions/cache/save@v4") < workflow.indexOf("id: flows"));
 });

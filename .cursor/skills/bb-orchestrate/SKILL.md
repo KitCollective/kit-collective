@@ -11,7 +11,7 @@ Facts this relies on (verify with `bb project list`, `bb machine list` when in d
 
 | Thing | Value |
 | --- | --- |
-| bb project | `kit-collective` = `proj_rp846ybret` |
+| bb project | `kit-collective` = `proj_ywcvj7w835` |
 | Mac (owner's machine) | `host_kttknna49n` |
 | Container `bb-harness` (Hetzner, isolated) | `host_new78xp362`: node 22, git, pnpm 9.15.4, gh 2.102.0 (`gh pr checks --json` is required; 2.23.0 lacks it, ADR-0058), python3, jq; repo at `/home/node/work/kit-collective` |
 | Secrets | `GH_TOKEN`, `LINEAR_API_KEY` in the main checkout's gitignored `.env` (`bb secret request` needs a bb thread) |
@@ -30,7 +30,7 @@ The orchestrator itself runs on one machine; the run log, `.factory` cache and `
 ## Spawning a step
 
 ```bash
-bb thread spawn --project proj_rp846ybret --machine <host> \
+bb thread spawn --project proj_ywcvj7w835 --machine <host> \
   --new-environment worktree --base-branch origin/development \
   --parent-self --visibility hidden --provider <provider> --model <model> \
   --title "<KIT-n> lead" --prompt "<brief>" --json
