@@ -1,0 +1,1479 @@
+{
+ "about": "Real photos of football shirts for Device flows, from the kc_test_kits Drive folder (taken by Frederik Lohse). 1024 px JPEG, metadata stripped. A slice flow names the ones it needs in its header: # simulator-photos: <name>, <name>, ... (see README.md). Labels are a visual reading, not checked against a catalog.",
+ "angles": {
+  "front": "the shirt's front",
+  "back": "the back, usually name and number",
+  "detail": "a close-up (crest, print, signature)",
+  "label": "the care or product label"
+ },
+ "jerseys": {
+  "argentina-grey-prematch": {
+   "team": "Argentina",
+   "nationalTeam": true,
+   "kit": "training",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "argentina-home-2006": {
+   "team": "Argentina",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2006",
+   "player": "Messi",
+   "colors": [
+    "light blue",
+    "white",
+    "black",
+    "gold"
+   ]
+  },
+  "argentina-home-2022-champions": {
+   "team": "Argentina",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "argentina-home-2022-messi": {
+   "team": "Argentina",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2022",
+   "player": "Messi",
+   "colors": []
+  },
+  "argentina-home-2024": {
+   "team": "Argentina",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": null,
+   "player": "Messi",
+   "colors": []
+  },
+  "argentina-purple-away-2022": {
+   "team": "Argentina",
+   "nationalTeam": true,
+   "kit": "away",
+   "season": "2022",
+   "player": "Messi",
+   "colors": []
+  },
+  "arsenal-grey-training": {
+   "team": "Arsenal",
+   "nationalTeam": false,
+   "kit": "training",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "arsenal-red-home-125": {
+   "team": "Arsenal",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": "2011/12",
+   "player": "Henry",
+   "colors": [
+    "red",
+    "white"
+   ]
+  },
+  "arsenal-red-home-2008-bendtner": {
+   "team": "Arsenal",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": "Bendtner",
+   "colors": []
+  },
+  "arsenal-red-home-o2": {
+   "team": "Arsenal",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": "2004/05",
+   "player": "Henry",
+   "colors": [
+    "red",
+    "white"
+   ]
+  },
+  "b93-pink-special": {
+   "team": "B93",
+   "nationalTeam": false,
+   "kit": "special",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "barca-black-anatomy": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "special",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "barca-black-away-2011": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "barca-blue-away-2007": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": "2007/08",
+   "player": "Messi",
+   "colors": [
+    "blue",
+    "teal",
+    "lime"
+   ]
+  },
+  "barca-grey-away-2003": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "barca-grey-city": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "training",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "barca-home-2005-ronaldinho": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": "Ronaldinho",
+   "colors": []
+  },
+  "barca-home-2007": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": "2007/08",
+   "player": "Messi",
+   "colors": [
+    "blue",
+    "red",
+    "yellow"
+   ]
+  },
+  "barca-home-2014": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "barca-lilac-away": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "barca-pink-third": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "third",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "barca-salmon-third": {
+   "team": "FC Barcelona",
+   "nationalTeam": false,
+   "kit": "third",
+   "season": "2018/19",
+   "player": "Messi",
+   "colors": [
+    "salmon",
+    "pink",
+    "navy"
+   ]
+  },
+  "brazil-blue-away-2006": {
+   "team": "Brazil",
+   "nationalTeam": true,
+   "kit": "away",
+   "season": "2006",
+   "player": "Ronaldinho",
+   "colors": [
+    "blue",
+    "white"
+   ]
+  },
+  "brazil-blue-away-2014": {
+   "team": "Brazil",
+   "nationalTeam": true,
+   "kit": "away",
+   "season": "2014",
+   "player": "Neymar Jr",
+   "colors": [
+    "blue",
+    "white"
+   ]
+  },
+  "brazil-yellow-home-2006": {
+   "team": "Brazil",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2006",
+   "player": "Ronaldinho",
+   "colors": []
+  },
+  "brazil-yellow-home-2014": {
+   "team": "Brazil",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2014",
+   "player": "Neymar Jr",
+   "colors": [
+    "yellow",
+    "green"
+   ]
+  },
+  "denmark-black-special": {
+   "team": "Denmark",
+   "nationalTeam": true,
+   "kit": "special",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "denmark-red-home-hummel": {
+   "team": "Denmark",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": null,
+   "player": "Dolberg",
+   "colors": []
+  },
+  "denmark-red-white-hummel": {
+   "team": "Denmark",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "denmark-white-away": {
+   "team": "Denmark",
+   "nationalTeam": true,
+   "kit": "away",
+   "season": null,
+   "player": "Bendtner",
+   "colors": [
+    "white",
+    "red"
+   ]
+  },
+  "denmark-white-hummel": {
+   "team": "Denmark",
+   "nationalTeam": true,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "denmark-white-tonal": {
+   "team": "Denmark",
+   "nationalTeam": true,
+   "kit": "third",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "england-white-home-2006": {
+   "team": "England",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2006",
+   "player": "Beckham",
+   "colors": []
+  },
+  "fck-blue-away": {
+   "team": "FC København",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": "Daramy",
+   "colors": []
+  },
+  "fck-green-away": {
+   "team": "FC København",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": "Froholdt",
+   "colors": []
+  },
+  "fck-navy-third": {
+   "team": "FC København",
+   "nationalTeam": false,
+   "kit": "third",
+   "season": null,
+   "player": "Wind",
+   "colors": []
+  },
+  "fck-white-home": {
+   "team": "FC København",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": "Wind",
+   "colors": []
+  },
+  "fck-white-home-ucl": {
+   "team": "FC København",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": "Lerager",
+   "colors": []
+  },
+  "fck-white-unibet": {
+   "team": "FC København",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "france-blue-home-2006": {
+   "team": "France",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2006",
+   "player": "Henry",
+   "colors": []
+  },
+  "germany-red-away-2006": {
+   "team": "Germany",
+   "nationalTeam": true,
+   "kit": "away",
+   "season": "2006",
+   "player": "Podolski",
+   "colors": []
+  },
+  "germany-white-home-2006": {
+   "team": "Germany",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2006",
+   "player": "Klose",
+   "colors": []
+  },
+  "inter-miami-white-home": {
+   "team": "Inter Miami",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "inter-white-away": {
+   "team": "Inter",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "inter-white-snake-away": {
+   "team": "Inter",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "italy-blue-home": {
+   "team": "Italy",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2006",
+   "player": "Pirlo",
+   "colors": [
+    "blue",
+    "navy",
+    "gold"
+   ]
+  },
+  "ivory-coast-orange-home-2006": {
+   "team": "Ivory Coast",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2006",
+   "player": "Drogba",
+   "colors": []
+  },
+  "juventus-black-away": {
+   "team": "Juventus",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "juventus-pink-away": {
+   "team": "Juventus",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": "2015/16",
+   "player": "Dybala",
+   "colors": [
+    "pink",
+    "black",
+    "white"
+   ]
+  },
+  "juventus-white-pink-away": {
+   "team": "Juventus",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": "Rabiot",
+   "colors": []
+  },
+  "lazio-sky-home": {
+   "team": "Lazio",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": "Immobile",
+   "colors": []
+  },
+  "mancity-black-third": {
+   "team": "Manchester City",
+   "nationalTeam": false,
+   "kit": "third",
+   "season": null,
+   "player": "Foden",
+   "colors": []
+  },
+  "mancity-brown-camo": {
+   "team": "Manchester City",
+   "nationalTeam": false,
+   "kit": "third",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "mancity-navy-third": {
+   "team": "Manchester City",
+   "nationalTeam": false,
+   "kit": "third",
+   "season": "2014/15",
+   "player": "Kun Agüero",
+   "colors": [
+    "navy",
+    "cyan"
+   ]
+  },
+  "mancity-pastel": {
+   "team": "Manchester City",
+   "nationalTeam": false,
+   "kit": "fourth",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "mancity-sky-home": {
+   "team": "Manchester City",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": "2022/23",
+   "player": "Haaland",
+   "colors": [
+    "sky blue",
+    "maroon",
+    "white",
+    "navy"
+   ]
+  },
+  "mancity-sky-home-2022": {
+   "team": "Manchester City",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": "Haaland",
+   "colors": []
+  },
+  "mancity-white-dragon": {
+   "team": "Manchester City",
+   "nationalTeam": false,
+   "kit": "special",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "milan-cream-fourth": {
+   "team": "AC Milan",
+   "nationalTeam": false,
+   "kit": "fourth",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "milan-grey-diavoli": {
+   "team": "AC Milan",
+   "nationalTeam": false,
+   "kit": "special",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "milan-pink-third": {
+   "team": "AC Milan",
+   "nationalTeam": false,
+   "kit": "third",
+   "season": null,
+   "player": "Giroud",
+   "colors": []
+  },
+  "norway-red-home": {
+   "team": "Norway",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": null,
+   "player": "Haaland",
+   "colors": []
+  },
+  "portugal-black-away": {
+   "team": "Portugal",
+   "nationalTeam": true,
+   "kit": "away",
+   "season": "2006",
+   "player": "C. Ronaldo",
+   "colors": [
+    "black",
+    "gold"
+   ]
+  },
+  "psg-black-pink": {
+   "team": "Paris Saint-Germain",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "psg-white-away-2023": {
+   "team": "Paris Saint-Germain",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "psg-white-jordan": {
+   "team": "Paris Saint-Germain",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": "2018/19",
+   "player": "Neymar Jr",
+   "colors": [
+    "white",
+    "black",
+    "grey"
+   ]
+  },
+  "psg-white-jordan-fourth": {
+   "team": "Paris Saint-Germain",
+   "nationalTeam": false,
+   "kit": "fourth",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "psg-white-pink": {
+   "team": "Paris Saint-Germain",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "psg-white-qatar": {
+   "team": "Paris Saint-Germain",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "rangers-white-away": {
+   "team": "Rangers",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "roma-white-orange": {
+   "team": "AS Roma",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": "Dybala",
+   "colors": []
+  },
+  "spain-red-home": {
+   "team": "Spain",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2008",
+   "player": "F. Torres",
+   "colors": [
+    "red",
+    "yellow"
+   ]
+  },
+  "spain-white-geometric": {
+   "team": "Spain",
+   "nationalTeam": true,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "sweden-yellow-home": {
+   "team": "Sweden",
+   "nationalTeam": true,
+   "kit": "home",
+   "season": "2006",
+   "player": "Ibrahimović",
+   "colors": [
+    "yellow",
+    "blue"
+   ]
+  },
+  "toulouse-purple-nicolaisen": {
+   "team": "Toulouse FC",
+   "nationalTeam": false,
+   "kit": "home",
+   "season": null,
+   "player": "Nicolaisen",
+   "colors": []
+  },
+  "unknown-nike": {
+   "team": "unknown",
+   "nationalTeam": false,
+   "kit": "unknown",
+   "season": null,
+   "player": null,
+   "colors": []
+  },
+  "venezia-white": {
+   "team": "Venezia FC",
+   "nationalTeam": false,
+   "kit": "away",
+   "season": null,
+   "player": null,
+   "colors": []
+  }
+ },
+ "photos": [
+  {
+   "name": "argentina-grey-prematch-front",
+   "jersey": "argentina-grey-prematch",
+   "angle": "front",
+   "source": "IMG_9090.HEIC"
+  },
+  {
+   "name": "argentina-home-2006-back",
+   "jersey": "argentina-home-2006",
+   "angle": "back",
+   "source": "IMG_5789.WEBP"
+  },
+  {
+   "name": "argentina-home-2006-detail",
+   "jersey": "argentina-home-2006",
+   "angle": "detail",
+   "source": "IMG_5791.WEBP"
+  },
+  {
+   "name": "argentina-home-2006-detail-2",
+   "jersey": "argentina-home-2006",
+   "angle": "detail",
+   "source": "IMG_5792.WEBP"
+  },
+  {
+   "name": "argentina-home-2006-front",
+   "jersey": "argentina-home-2006",
+   "angle": "front",
+   "source": "IMG_5790.WEBP"
+  },
+  {
+   "name": "argentina-home-2006-label",
+   "jersey": "argentina-home-2006",
+   "angle": "label",
+   "source": "C055F04A-639C-4E2E-AB5A-04813B948EC2.jpg"
+  },
+  {
+   "name": "argentina-home-2022-champions-front",
+   "jersey": "argentina-home-2022-champions",
+   "angle": "front",
+   "source": "IMG_7348.HEIC"
+  },
+  {
+   "name": "argentina-home-2022-messi-back",
+   "jersey": "argentina-home-2022-messi",
+   "angle": "back",
+   "source": "IMG_7350.HEIC"
+  },
+  {
+   "name": "argentina-home-2022-messi-front",
+   "jersey": "argentina-home-2022-messi",
+   "angle": "front",
+   "source": "IMG_7349.HEIC"
+  },
+  {
+   "name": "argentina-home-2024-back",
+   "jersey": "argentina-home-2024",
+   "angle": "back",
+   "source": "IMG_7406.HEIC"
+  },
+  {
+   "name": "argentina-home-2024-front",
+   "jersey": "argentina-home-2024",
+   "angle": "front",
+   "source": "IMG_7405.HEIC"
+  },
+  {
+   "name": "argentina-purple-away-2022-back",
+   "jersey": "argentina-purple-away-2022",
+   "angle": "back",
+   "source": "IMG_7352.HEIC"
+  },
+  {
+   "name": "argentina-purple-away-2022-front",
+   "jersey": "argentina-purple-away-2022",
+   "angle": "front",
+   "source": "IMG_7351.HEIC"
+  },
+  {
+   "name": "arsenal-grey-training-front",
+   "jersey": "arsenal-grey-training",
+   "angle": "front",
+   "source": "IMG_7340.HEIC"
+  },
+  {
+   "name": "arsenal-red-home-125-back",
+   "jersey": "arsenal-red-home-125",
+   "angle": "back",
+   "source": "31E20A68-6B08-4E49-BA6B-1DD446EA9912.jpg"
+  },
+  {
+   "name": "arsenal-red-home-125-front",
+   "jersey": "arsenal-red-home-125",
+   "angle": "front",
+   "source": "B3EAFB76-FCD3-4EBC-B5AA-21F50D45DC42.jpg"
+  },
+  {
+   "name": "arsenal-red-home-2008-bendtner-back",
+   "jersey": "arsenal-red-home-2008-bendtner",
+   "angle": "back",
+   "source": "IMG_7366.HEIC"
+  },
+  {
+   "name": "arsenal-red-home-2008-bendtner-detail",
+   "jersey": "arsenal-red-home-2008-bendtner",
+   "angle": "detail",
+   "source": "IMG_7367.HEIC"
+  },
+  {
+   "name": "arsenal-red-home-2008-bendtner-front",
+   "jersey": "arsenal-red-home-2008-bendtner",
+   "angle": "front",
+   "source": "IMG_7365.HEIC"
+  },
+  {
+   "name": "arsenal-red-home-o2-back",
+   "jersey": "arsenal-red-home-o2",
+   "angle": "back",
+   "source": "15A4DD6E-C2B7-4A28-ACA3-75B62B3621CD.jpg"
+  },
+  {
+   "name": "arsenal-red-home-o2-front",
+   "jersey": "arsenal-red-home-o2",
+   "angle": "front",
+   "source": "D6D68753-4247-45AD-8BA3-01490E4E6898.jpg"
+  },
+  {
+   "name": "b93-pink-special-back",
+   "jersey": "b93-pink-special",
+   "angle": "back",
+   "source": "IMG_7385.HEIC"
+  },
+  {
+   "name": "b93-pink-special-front",
+   "jersey": "b93-pink-special",
+   "angle": "front",
+   "source": "IMG_7384.HEIC"
+  },
+  {
+   "name": "barca-black-anatomy-front",
+   "jersey": "barca-black-anatomy",
+   "angle": "front",
+   "source": "IMG_7362.HEIC"
+  },
+  {
+   "name": "barca-black-away-2011-front",
+   "jersey": "barca-black-away-2011",
+   "angle": "front",
+   "source": "IMG_8095.HEIC"
+  },
+  {
+   "name": "barca-blue-away-2007-back",
+   "jersey": "barca-blue-away-2007",
+   "angle": "back",
+   "source": "6EFB4407-B5F6-4B42-A7C9-6426241EB22D.jpg"
+  },
+  {
+   "name": "barca-blue-away-2007-front",
+   "jersey": "barca-blue-away-2007",
+   "angle": "front",
+   "source": "C35C9826-D837-4E61-844D-4661D642E4BD.jpg"
+  },
+  {
+   "name": "barca-grey-away-2003-front",
+   "jersey": "barca-grey-away-2003",
+   "angle": "front",
+   "source": "IMG_7361.HEIC"
+  },
+  {
+   "name": "barca-grey-city-front",
+   "jersey": "barca-grey-city",
+   "angle": "front",
+   "source": "IMG_7339.HEIC"
+  },
+  {
+   "name": "barca-home-2005-ronaldinho-back",
+   "jersey": "barca-home-2005-ronaldinho",
+   "angle": "back",
+   "source": "IMG_7390.HEIC"
+  },
+  {
+   "name": "barca-home-2005-ronaldinho-detail",
+   "jersey": "barca-home-2005-ronaldinho",
+   "angle": "detail",
+   "source": "IMG_7391.HEIC"
+  },
+  {
+   "name": "barca-home-2005-ronaldinho-front",
+   "jersey": "barca-home-2005-ronaldinho",
+   "angle": "front",
+   "source": "IMG_7389.HEIC"
+  },
+  {
+   "name": "barca-home-2007-back",
+   "jersey": "barca-home-2007",
+   "angle": "back",
+   "source": "IMG_9816.WEBP"
+  },
+  {
+   "name": "barca-home-2007-detail",
+   "jersey": "barca-home-2007",
+   "angle": "detail",
+   "source": "IMG_9818.WEBP"
+  },
+  {
+   "name": "barca-home-2007-detail-2",
+   "jersey": "barca-home-2007",
+   "angle": "detail",
+   "source": "IMG_9819.WEBP"
+  },
+  {
+   "name": "barca-home-2007-front",
+   "jersey": "barca-home-2007",
+   "angle": "front",
+   "source": "IMG_9817.WEBP"
+  },
+  {
+   "name": "barca-home-2014-front",
+   "jersey": "barca-home-2014",
+   "angle": "front",
+   "source": "IMG_7363.HEIC"
+  },
+  {
+   "name": "barca-lilac-away-front",
+   "jersey": "barca-lilac-away",
+   "angle": "front",
+   "source": "IMG_7343.HEIC"
+  },
+  {
+   "name": "barca-pink-third-front",
+   "jersey": "barca-pink-third",
+   "angle": "front",
+   "source": "IMG_7330.HEIC"
+  },
+  {
+   "name": "barca-salmon-third-back",
+   "jersey": "barca-salmon-third",
+   "angle": "back",
+   "source": "9FBBBC3D-A937-4998-8886-FC3494BD3B90.jpg"
+  },
+  {
+   "name": "barca-salmon-third-front",
+   "jersey": "barca-salmon-third",
+   "angle": "front",
+   "source": "4FB86A65-D3A7-44B7-873F-EFA6EA08CD2F.jpg"
+  },
+  {
+   "name": "brazil-blue-away-2006-back",
+   "jersey": "brazil-blue-away-2006",
+   "angle": "back",
+   "source": "IMG_9170.PNG"
+  },
+  {
+   "name": "brazil-blue-away-2006-front",
+   "jersey": "brazil-blue-away-2006",
+   "angle": "front",
+   "source": "IMG_9169.PNG"
+  },
+  {
+   "name": "brazil-blue-away-2014-back",
+   "jersey": "brazil-blue-away-2014",
+   "angle": "back",
+   "source": "37A93B39-55BB-41AF-A690-C303BE694A2C.jpg"
+  },
+  {
+   "name": "brazil-blue-away-2014-front",
+   "jersey": "brazil-blue-away-2014",
+   "angle": "front",
+   "source": "42A0DA1C-D251-482D-892C-96433DCE5FC2.jpg"
+  },
+  {
+   "name": "brazil-yellow-home-2006-back",
+   "jersey": "brazil-yellow-home-2006",
+   "angle": "back",
+   "source": "IMG_7393.HEIC"
+  },
+  {
+   "name": "brazil-yellow-home-2006-front",
+   "jersey": "brazil-yellow-home-2006",
+   "angle": "front",
+   "source": "IMG_7392.HEIC"
+  },
+  {
+   "name": "brazil-yellow-home-2014-back",
+   "jersey": "brazil-yellow-home-2014",
+   "angle": "back",
+   "source": "49AB21FE-8673-4677-9E24-64647B5066CB.jpg"
+  },
+  {
+   "name": "brazil-yellow-home-2014-front",
+   "jersey": "brazil-yellow-home-2014",
+   "angle": "front",
+   "source": "E42EE74D-4557-415E-B72D-DB0F68D86217.jpg"
+  },
+  {
+   "name": "denmark-black-special-front",
+   "jersey": "denmark-black-special",
+   "angle": "front",
+   "source": "IMG_7398.HEIC"
+  },
+  {
+   "name": "denmark-red-home-hummel-back",
+   "jersey": "denmark-red-home-hummel",
+   "angle": "back",
+   "source": "IMG_7395.HEIC"
+  },
+  {
+   "name": "denmark-red-home-hummel-front",
+   "jersey": "denmark-red-home-hummel",
+   "angle": "front",
+   "source": "IMG_7394.HEIC"
+  },
+  {
+   "name": "denmark-red-white-hummel-front",
+   "jersey": "denmark-red-white-hummel",
+   "angle": "front",
+   "source": "IMG_7401.HEIC"
+  },
+  {
+   "name": "denmark-red-white-hummel-front-2",
+   "jersey": "denmark-red-white-hummel",
+   "angle": "front",
+   "source": "IMG_7402.HEIC"
+  },
+  {
+   "name": "denmark-white-away-back",
+   "jersey": "denmark-white-away",
+   "angle": "back",
+   "source": "14CBA4A1-2711-496F-A927-CF93DBF2FDCD.jpg"
+  },
+  {
+   "name": "denmark-white-away-front",
+   "jersey": "denmark-white-away",
+   "angle": "front",
+   "source": "3122A3CF-F133-4910-BCC9-04FA14FCFD55.jpg"
+  },
+  {
+   "name": "denmark-white-hummel-front",
+   "jersey": "denmark-white-hummel",
+   "angle": "front",
+   "source": "IMG_7326.HEIC"
+  },
+  {
+   "name": "denmark-white-tonal-front",
+   "jersey": "denmark-white-tonal",
+   "angle": "front",
+   "source": "IMG_7328.HEIC"
+  },
+  {
+   "name": "england-white-home-2006-back",
+   "jersey": "england-white-home-2006",
+   "angle": "back",
+   "source": "IMG_7356.HEIC"
+  },
+  {
+   "name": "england-white-home-2006-front",
+   "jersey": "england-white-home-2006",
+   "angle": "front",
+   "source": "IMG_7355.HEIC"
+  },
+  {
+   "name": "fck-blue-away-back",
+   "jersey": "fck-blue-away",
+   "angle": "back",
+   "source": "IMG_7338.HEIC"
+  },
+  {
+   "name": "fck-blue-away-front",
+   "jersey": "fck-blue-away",
+   "angle": "front",
+   "source": "IMG_7337.HEIC"
+  },
+  {
+   "name": "fck-green-away-back",
+   "jersey": "fck-green-away",
+   "angle": "back",
+   "source": "IMG_5230.HEIC"
+  },
+  {
+   "name": "fck-green-away-front",
+   "jersey": "fck-green-away",
+   "angle": "front",
+   "source": "IMG_5229.HEIC"
+  },
+  {
+   "name": "fck-navy-third-back",
+   "jersey": "fck-navy-third",
+   "angle": "back",
+   "source": "IMG_7334.HEIC"
+  },
+  {
+   "name": "fck-navy-third-front",
+   "jersey": "fck-navy-third",
+   "angle": "front",
+   "source": "IMG_7333.HEIC"
+  },
+  {
+   "name": "fck-white-home-back",
+   "jersey": "fck-white-home",
+   "angle": "back",
+   "source": "IMG_7336.HEIC"
+  },
+  {
+   "name": "fck-white-home-front",
+   "jersey": "fck-white-home",
+   "angle": "front",
+   "source": "IMG_7335.HEIC"
+  },
+  {
+   "name": "fck-white-home-ucl-back",
+   "jersey": "fck-white-home-ucl",
+   "angle": "back",
+   "source": "IMG_7383.HEIC"
+  },
+  {
+   "name": "fck-white-home-ucl-front",
+   "jersey": "fck-white-home-ucl",
+   "angle": "front",
+   "source": "IMG_7382.HEIC"
+  },
+  {
+   "name": "fck-white-unibet-front",
+   "jersey": "fck-white-unibet",
+   "angle": "front",
+   "source": "IMG_7347.HEIC"
+  },
+  {
+   "name": "france-blue-home-2006-back",
+   "jersey": "france-blue-home-2006",
+   "angle": "back",
+   "source": "IMG_7354.HEIC"
+  },
+  {
+   "name": "france-blue-home-2006-front",
+   "jersey": "france-blue-home-2006",
+   "angle": "front",
+   "source": "IMG_7353.HEIC"
+  },
+  {
+   "name": "germany-red-away-2006-back",
+   "jersey": "germany-red-away-2006",
+   "angle": "back",
+   "source": "IMG_7360.HEIC"
+  },
+  {
+   "name": "germany-red-away-2006-front",
+   "jersey": "germany-red-away-2006",
+   "angle": "front",
+   "source": "IMG_7359.HEIC"
+  },
+  {
+   "name": "germany-white-home-2006-back",
+   "jersey": "germany-white-home-2006",
+   "angle": "back",
+   "source": "IMG_8395.HEIC"
+  },
+  {
+   "name": "germany-white-home-2006-front",
+   "jersey": "germany-white-home-2006",
+   "angle": "front",
+   "source": "IMG_8394.HEIC"
+  },
+  {
+   "name": "inter-miami-white-home-front",
+   "jersey": "inter-miami-white-home",
+   "angle": "front",
+   "source": "IMG_7345.HEIC"
+  },
+  {
+   "name": "inter-white-away-front",
+   "jersey": "inter-white-away",
+   "angle": "front",
+   "source": "IMG_7373.HEIC"
+  },
+  {
+   "name": "inter-white-snake-away-front",
+   "jersey": "inter-white-snake-away",
+   "angle": "front",
+   "source": "IMG_9944.HEIC"
+  },
+  {
+   "name": "italy-blue-home-back",
+   "jersey": "italy-blue-home",
+   "angle": "back",
+   "source": "0BEE2D82-ECF5-48DD-A00E-9C9BA41CB61A.jpg"
+  },
+  {
+   "name": "italy-blue-home-front",
+   "jersey": "italy-blue-home",
+   "angle": "front",
+   "source": "155CCAF9-0C8D-4833-8279-C813A0155479.jpg"
+  },
+  {
+   "name": "ivory-coast-orange-home-2006-back",
+   "jersey": "ivory-coast-orange-home-2006",
+   "angle": "back",
+   "source": "IMG_7358.HEIC"
+  },
+  {
+   "name": "ivory-coast-orange-home-2006-front",
+   "jersey": "ivory-coast-orange-home-2006",
+   "angle": "front",
+   "source": "IMG_7357.HEIC"
+  },
+  {
+   "name": "juventus-black-away-front",
+   "jersey": "juventus-black-away",
+   "angle": "front",
+   "source": "IMG_7329.HEIC"
+  },
+  {
+   "name": "juventus-pink-away-back",
+   "jersey": "juventus-pink-away",
+   "angle": "back",
+   "source": "07790B00-08EE-4EB0-ACC9-22E4F761EF66.jpg"
+  },
+  {
+   "name": "juventus-pink-away-front",
+   "jersey": "juventus-pink-away",
+   "angle": "front",
+   "source": "1C06E22F-FBA4-4EE3-B8B5-A5E4C41C61C1.jpg"
+  },
+  {
+   "name": "juventus-white-pink-away-back",
+   "jersey": "juventus-white-pink-away",
+   "angle": "back",
+   "source": "IMG_7379.HEIC"
+  },
+  {
+   "name": "juventus-white-pink-away-front",
+   "jersey": "juventus-white-pink-away",
+   "angle": "front",
+   "source": "IMG_7378.HEIC"
+  },
+  {
+   "name": "lazio-sky-home-back",
+   "jersey": "lazio-sky-home",
+   "angle": "back",
+   "source": "IMG_7376.HEIC"
+  },
+  {
+   "name": "lazio-sky-home-front",
+   "jersey": "lazio-sky-home",
+   "angle": "front",
+   "source": "IMG_7375.HEIC"
+  },
+  {
+   "name": "mancity-black-third-back",
+   "jersey": "mancity-black-third",
+   "angle": "back",
+   "source": "IMG_7381.HEIC"
+  },
+  {
+   "name": "mancity-black-third-front",
+   "jersey": "mancity-black-third",
+   "angle": "front",
+   "source": "IMG_7380.HEIC"
+  },
+  {
+   "name": "mancity-brown-camo-front",
+   "jersey": "mancity-brown-camo",
+   "angle": "front",
+   "source": "IMG_2450.HEIC"
+  },
+  {
+   "name": "mancity-navy-third-back",
+   "jersey": "mancity-navy-third",
+   "angle": "back",
+   "source": "93E9BD5E-71B2-4B39-93A3-2BCA601466DB.jpg"
+  },
+  {
+   "name": "mancity-navy-third-front",
+   "jersey": "mancity-navy-third",
+   "angle": "front",
+   "source": "B7A6DEDD-559C-43E1-AFE7-7963D405C9D8.jpg"
+  },
+  {
+   "name": "mancity-pastel-front",
+   "jersey": "mancity-pastel",
+   "angle": "front",
+   "source": "IMG_4642.HEIC"
+  },
+  {
+   "name": "mancity-sky-home-2022-back",
+   "jersey": "mancity-sky-home-2022",
+   "angle": "back",
+   "source": "IMG_7369.HEIC"
+  },
+  {
+   "name": "mancity-sky-home-2022-front",
+   "jersey": "mancity-sky-home-2022",
+   "angle": "front",
+   "source": "IMG_7368.HEIC"
+  },
+  {
+   "name": "mancity-sky-home-back",
+   "jersey": "mancity-sky-home",
+   "angle": "back",
+   "source": "IMG_9174.PNG"
+  },
+  {
+   "name": "mancity-sky-home-front",
+   "jersey": "mancity-sky-home",
+   "angle": "front",
+   "source": "IMG_9173.PNG"
+  },
+  {
+   "name": "mancity-white-dragon-front",
+   "jersey": "mancity-white-dragon",
+   "angle": "front",
+   "source": "IMG_7346.HEIC"
+  },
+  {
+   "name": "milan-cream-fourth-front",
+   "jersey": "milan-cream-fourth",
+   "angle": "front",
+   "source": "IMG_7370.HEIC"
+  },
+  {
+   "name": "milan-grey-diavoli-back",
+   "jersey": "milan-grey-diavoli",
+   "angle": "back",
+   "source": "IMG_4644.HEIC"
+  },
+  {
+   "name": "milan-grey-diavoli-front",
+   "jersey": "milan-grey-diavoli",
+   "angle": "front",
+   "source": "IMG_4643.HEIC"
+  },
+  {
+   "name": "milan-pink-third-back",
+   "jersey": "milan-pink-third",
+   "angle": "back",
+   "source": "IMG_7372.HEIC"
+  },
+  {
+   "name": "milan-pink-third-front",
+   "jersey": "milan-pink-third",
+   "angle": "front",
+   "source": "IMG_7371.HEIC"
+  },
+  {
+   "name": "norway-red-home-back",
+   "jersey": "norway-red-home",
+   "angle": "back",
+   "source": "IMG_7397.HEIC"
+  },
+  {
+   "name": "norway-red-home-front",
+   "jersey": "norway-red-home",
+   "angle": "front",
+   "source": "IMG_7396.HEIC"
+  },
+  {
+   "name": "portugal-black-away-back",
+   "jersey": "portugal-black-away",
+   "angle": "back",
+   "source": "1D2F47AF-4745-4820-9C77-9D990DD9DE6B.jpg"
+  },
+  {
+   "name": "portugal-black-away-front",
+   "jersey": "portugal-black-away",
+   "angle": "front",
+   "source": "4DFC6A06-3EA5-4ADB-B672-FAC6F451D538.jpg"
+  },
+  {
+   "name": "psg-black-pink-front",
+   "jersey": "psg-black-pink",
+   "angle": "front",
+   "source": "IMG_7342.HEIC"
+  },
+  {
+   "name": "psg-white-away-2023-front",
+   "jersey": "psg-white-away-2023",
+   "angle": "front",
+   "source": "IMG_7388.HEIC"
+  },
+  {
+   "name": "psg-white-jordan-back",
+   "jersey": "psg-white-jordan",
+   "angle": "back",
+   "source": "E6FAFB2A-4D35-4F6C-AC51-4C616FF2A093.jpg"
+  },
+  {
+   "name": "psg-white-jordan-fourth-front",
+   "jersey": "psg-white-jordan-fourth",
+   "angle": "front",
+   "source": "IMG_7344.HEIC"
+  },
+  {
+   "name": "psg-white-jordan-front",
+   "jersey": "psg-white-jordan",
+   "angle": "front",
+   "source": "3F0DDC28-5C7D-4009-A802-0FDCB5027F25.jpg"
+  },
+  {
+   "name": "psg-white-pink-front",
+   "jersey": "psg-white-pink",
+   "angle": "front",
+   "source": "IMG_7324.HEIC"
+  },
+  {
+   "name": "psg-white-qatar-front",
+   "jersey": "psg-white-qatar",
+   "angle": "front",
+   "source": "IMG_7341.HEIC"
+  },
+  {
+   "name": "rangers-white-away-front",
+   "jersey": "rangers-white-away",
+   "angle": "front",
+   "source": "IMG_7400.HEIC"
+  },
+  {
+   "name": "roma-white-orange-back",
+   "jersey": "roma-white-orange",
+   "angle": "back",
+   "source": "IMG_2449.HEIC"
+  },
+  {
+   "name": "roma-white-orange-front",
+   "jersey": "roma-white-orange",
+   "angle": "front",
+   "source": "IMG_2448.HEIC"
+  },
+  {
+   "name": "spain-red-home-back",
+   "jersey": "spain-red-home",
+   "angle": "back",
+   "source": "AA8C0EB9-BAB9-4D04-8254-57862742A1A5.jpg"
+  },
+  {
+   "name": "spain-red-home-front",
+   "jersey": "spain-red-home",
+   "angle": "front",
+   "source": "91ACE921-4BF3-4DCC-8EC3-08B7A63579D5.jpg"
+  },
+  {
+   "name": "spain-white-geometric-front",
+   "jersey": "spain-white-geometric",
+   "angle": "front",
+   "source": "IMG_2451.HEIC"
+  },
+  {
+   "name": "sweden-yellow-home-back",
+   "jersey": "sweden-yellow-home",
+   "angle": "back",
+   "source": "IMG_9159.PNG"
+  },
+  {
+   "name": "sweden-yellow-home-front",
+   "jersey": "sweden-yellow-home",
+   "angle": "front",
+   "source": "IMG_9158.PNG"
+  },
+  {
+   "name": "toulouse-purple-nicolaisen-back",
+   "jersey": "toulouse-purple-nicolaisen",
+   "angle": "back",
+   "source": "IMG_1527.HEIC"
+  },
+  {
+   "name": "toulouse-purple-nicolaisen-detail",
+   "jersey": "toulouse-purple-nicolaisen",
+   "angle": "detail",
+   "source": "IMG_1528.HEIC"
+  },
+  {
+   "name": "toulouse-purple-nicolaisen-front",
+   "jersey": "toulouse-purple-nicolaisen",
+   "angle": "front",
+   "source": "IMG_1529.HEIC"
+  },
+  {
+   "name": "unknown-nike-label",
+   "jersey": "unknown-nike",
+   "angle": "label",
+   "source": "817A15D1-CF70-4FBD-8621-E893B45A0D93.jpg"
+  },
+  {
+   "name": "venezia-white-front",
+   "jersey": "venezia-white",
+   "angle": "front",
+   "source": "IMG_7325.HEIC"
+  }
+ ]
+}

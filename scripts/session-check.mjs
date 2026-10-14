@@ -6,7 +6,8 @@
  *
  * Usage: node scripts/session-check.mjs <KIT-n> [--resume] [--live-minutes 30]
  * --resume is the deliberate resume: it skips the PR, branch, state and run-log checks (an issue
- * that is Done, Canceled or carries a stop label still refuses).
+ * that is Done, Canceled or carries a stop label still refuses). The run cap (`flow.maxRunsPerDay`
+ * of factory.config.json, default 3 starts per issue in 24 hours) refuses on resume too.
  * Prints one line. Exit: 0 free (OPEN), 1 refuse (CLOSED), 2 usage, 4 a source could not be read.
  */
 import { config, events, gh, linearIssue, logGate, sh } from "./lib/gate-io.mjs";
@@ -19,6 +20,8 @@ if (!issue) {
   process.exit(2);
 }
 const minutes = args.indexOf("--live-minutes");
+/** The cap is a committed number, never a flag: a run cannot raise its own cap. */
+const runCap = (value) => (Number.isInteger(value) && value > 0 ? value : 3);
 let result;
 try {
   const repo = config().github.ownerRepo;
@@ -51,6 +54,7 @@ try {
     issue,
     resume: args.includes("--resume"),
     liveMinutes: minutes === -1 ? 30 : Number(args[minutes + 1]),
+    maxRunsPerDay: runCap(config().flow?.maxRunsPerDay),
     linear: { state: linear.state, labels: linear.labels, blockedBy: linear.blockedBy },
     branches,
     openPrs,

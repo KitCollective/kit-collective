@@ -11,7 +11,7 @@ Facts this relies on (verify with `bb project list`, `bb machine list` when in d
 
 | Thing | Value |
 | --- | --- |
-| bb project | `kit-collective` = `proj_rp846ybret` |
+| bb project | `kit-collective` = `proj_ywcvj7w835` |
 | Mac (owner's machine) | `host_kttknna49n` |
 | Container `bb-harness` (Hetzner, isolated) | `host_new78xp362`: node 22, git, pnpm 9.15.4, gh 2.102.0 (`gh pr checks --json` is required; 2.23.0 lacks it, ADR-0058), python3, jq; repo at `/home/node/work/kit-collective` |
 | Secrets | `GH_TOKEN`, `LINEAR_API_KEY` in the main checkout's gitignored `.env` (`bb secret request` needs a bb thread) |
@@ -30,7 +30,7 @@ The orchestrator itself runs on one machine; the run log, `.factory` cache and `
 ## Spawning a step
 
 ```bash
-bb thread spawn --project proj_rp846ybret --machine <host> \
+bb thread spawn --project proj_ywcvj7w835 --machine <host> \
   --new-environment worktree --base-branch origin/development \
   --parent-self --visibility hidden --provider <provider> --model <model> \
   --title "<KIT-n> lead" --prompt "<brief>" --json
@@ -45,7 +45,7 @@ bb thread spawn --project proj_rp846ybret --machine <host> \
 
 ## The flow
 
-1. `node scripts/session-check.mjs <KIT-n>`: refuse a second run. Then `run-log.mjs start`.
+1. `node scripts/session-check.mjs <KIT-n>`: refuse a second run, and any run past `flow.maxRunsPerDay` (3 starts per issue in 24 hours, resumes included; never raise it yourself, report the refusal). Then `run-log.mjs start`.
 2. `node scripts/start-decision.mjs` over the issue → plan or not, Roles, engineer model.
 3. **Lead** thread (if plan): `run-log.mjs spawn --step lead --thread <id> --provider <p> --model <m> --machine <host>`; on idle read the result, `run-log.mjs result --outcome plan|plan-approval|stop --usage-thread <id>`.
 4. **Engineer** thread on the routed machine: reads `### Plan`, builds with `/tdd` and Roles, opens the PR, passes the pre-review gate. Log spawn and result.
@@ -63,4 +63,4 @@ bb thread spawn --project proj_rp846ybret --machine <host> \
 
 ## The kit-issue workflow
 
-`bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'` (ADR-0058) runs steps 1 to 6 above without a hand-driving orchestrator and stops at `Approval`. It never sets `Merging`, never merges and runs the receipt only as `--dry-run`; steps 7 and 8 stay yours. It cannot route a machine or a worktree per step: every worker, the Reviewer included, runs in the environment of the thread that started it, so the machine routing table above applies to hand-driven runs only, and a slice that needs the Mac is not split by it. Its gate results come through a runner model and are not merge-grade until ADR-0058's Decision 2 is settled. **A foreground command in a claude-code thread is capped at 10 minutes (600 s)**, so every wait runs in slices: `--timeout 480`, repeated while the verdict is waiting (gate exit 3, wait-for-checks exit 2), at most 5 slices (about 40 minutes). The Engineer does the same in its own turn and only ends `blocked ci-pending` after the bound. wait-for-checks exit `5` means gh is unusable and is never retried. Runner workers run the scripts; the Lead, Engineer and Reviewer are separate hidden workers.
+`bb workflows run --file .bb/workflows/kit-issue.js --args '{"issue":"KIT-n"}'` (ADR-0058; the thread's own worktree copy, since bb refuses a file outside the thread's workspace: in an existing issue worktree merge `origin/development` into the branch and push first, and a run stopped at `harness` means the worktree must take the lane) runs steps 1 to 6 above without a hand-driving orchestrator and stops at `Approval`. It never sets `Merging`, never merges and runs the receipt only as `--dry-run`; steps 7 and 8 stay yours. It cannot route a machine or a worktree per step: every worker, the Reviewer included, runs in the environment of the thread that started it, so the machine routing table above applies to hand-driven runs only, and a slice that needs the Mac is not split by it. Its gate results come through a runner model and are not merge-grade until ADR-0058's Decision 2 is settled. **A foreground command in a claude-code thread is capped at 10 minutes (600 s)**, so every wait runs in slices: `--timeout 480`, repeated while the verdict is waiting (gate exit 3, wait-for-checks exit 2), at most 5 slices (about 40 minutes). The Engineer does the same in its own turn and only ends `blocked ci-pending` after the bound. wait-for-checks exit `5` means gh is unusable and is never retried. Runner workers run the scripts; the Lead, Engineer and Reviewer are separate hidden workers.

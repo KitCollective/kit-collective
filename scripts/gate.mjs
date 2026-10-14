@@ -6,7 +6,9 @@
  *   node scripts/gate.mjs pre-review <pr> --issue KIT-n [--timeout s] [--require-scope]
  *       the gate before a reviewer exists: pnpm check:review-gate, doc references, the PR
  *       write-scope and wait-for-checks. It never reads the review matrix (the reviewer has not
- *       written it yet; ADR-0058).
+ *       written it yet; ADR-0058). When the PR head holds the issue's slice flow
+ *       (apps/mobile/.maestro/slices/<KEY>.yaml), the `Device flows` status is waited for with
+ *       the checks (ADR-0059).
  *   node scripts/gate.mjs review <pr> --issue KIT-n [--workpad <file>] [--timeout s] [--require-scope]
  *       the full gate, run only after the reviewer has written the matrix: everything above plus
  *       the matrix validation. Both must run from the PR's worktree (HEAD == the PR head, else exit 4).
@@ -31,8 +33,19 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { config, gh, git, linearIssue, logGate, prView, sh, workpadOf } from "./lib/gate-io.mjs";
 import {
+  config,
+  existsAtHead,
+  gh,
+  git,
+  linearIssue,
+  logGate,
+  prView,
+  sh,
+  workpadOf,
+} from "./lib/gate-io.mjs";
+import {
+  DEVICE_FLOWS_CONTEXT,
   foldReview,
   GATE_EXIT,
   landGate,
@@ -41,6 +54,7 @@ import {
   remainingWaitSeconds,
   scopeSource,
   shouldLogGate,
+  sliceFlowPath,
 } from "./lib/gates.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -143,6 +157,11 @@ try {
       // --timeout is the TOTAL budget of this call (the caller's foreground command is capped),
       // so the mechanical steps above are subtracted from what the wait may use.
       const budget = remainingWaitSeconds(opt("--timeout") ?? "1800", Date.now() - startedAt);
+      // A slice with its own Device flow is not ready for review before that flow has a verdict
+      // on this head (ADR-0059): a missing status waits, a red one closes.
+      const also = (await existsAtHead(sliceFlowPath(issue), view.headRefOid))
+        ? ["--also", DEVICE_FLOWS_CONTEXT]
+        : [];
       steps.push(
         budget === null
           ? {
@@ -150,7 +169,12 @@ try {
               code: 2,
               line: "PENDING: the --timeout budget is used up by the mechanical steps; run the gate again",
             }
-          : await step("checks", "scripts/wait-for-checks.mjs", [pr, "--timeout", String(budget)]),
+          : await step("checks", "scripts/wait-for-checks.mjs", [
+              pr,
+              "--timeout",
+              String(budget),
+              ...also,
+            ]),
       );
     }
     const result = foldReview(steps);

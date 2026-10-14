@@ -13,11 +13,12 @@ When the PR diff touches `apps/mobile`, Expo config, or EAS, Standards must load
 
 ## Device flows (mobile slices)
 
-When the PR diff touches `apps/mobile/**`, the evidence is the issue's own Device flow, `apps/mobile/.maestro/slices/<KEY>.yaml`, and the `Device flows` comment on the PR it produced (`docs/agents/device-flows.md`, ADR-0049), not worker browser screenshots.
+When the PR diff touches `apps/mobile/**`, the evidence is the issue's own Device flow, `apps/mobile/.maestro/slices/<KEY>.yaml`, and what its run produced (`docs/agents/device-flows.md`, ADR-0049, ADR-0059), not worker browser screenshots.
 
-- `Device flows` is a commit status on the PR head, set by the run on the approver's Mac. Red is a fail like any other red check; so is a status that is missing or sits on an older commit than the head.
+- `Device flows` is a commit status on the PR head, set by the hosted run (a GitHub macOS runner, asked for with `node scripts/request-device-flows.mjs`) or by a run on the approver's Mac. Red is a fail like any other red check; so is a status that is missing or sits on an older commit than the head.
+- The screenshots are where the run put them. A local run wrote the `Device flows` comment on the PR. A hosted run wrote no comment: its status links the run, and `gh run download <run id> --name device-flows-<head sha>` fetches the artifact (`takeScreenshot/` holds one picture per step, `startRecording/` the recording). A hosted run has no "before" picture and no review column, so read each screenshot against the issue and `docs/design-system.md` yourself.
 - Read the slice flow against the issue's Acceptance criteria. A criterion a screen could show with no step behind it is a Spec finding; so is a step that screenshots a screen the slice did not change. The implementer wrote the flow that proves their own slice, so do not take it as proof by itself.
-- Read every row of the comment and open the screenshots yourself; the review column is advisory and can be wrong in either direction. A step that shows something the issue did not ask for, or breaks a named rule in `docs/design-system.md`, is a **Design finding**: put it in `### Review feedback` with the flow, the step and the rule.
+- Read every row of the comment (when there is one) and open the screenshots yourself; the review column is advisory and can be wrong in either direction. A step that shows something the issue did not ask for, or breaks a named rule in `docs/design-system.md`, is a **Design finding**: put it in `### Review feedback` with the flow, the step and the rule.
 - A slice with no screen to show (API only, a reducer) has no slice flow and no status; the PR must say so. A slice that edits something several screens share (a token, a shared component) must have run the regression flows (`E2E_FLOWS=regression`) or say why not.
 - No comment on a PR that touches `apps/mobile/**` with a screen to show (the flow was not written, not run, or the evidence step failed) is itself a finding: say so, do not pass on tests alone.
 - Suggestions labelled opinion are not findings.
