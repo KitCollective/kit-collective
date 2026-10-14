@@ -176,7 +176,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: device-flows-${{ github.sha }}
+          # Named after the commit the flows ran on. On a PR run github.sha is the merge
+          # commit GitHub made, which no reviewer can know; the head is what the status names.
+          name: device-flows-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             apps/mobile/.maestro/out
             ${{ runner.temp }}/local-api.log

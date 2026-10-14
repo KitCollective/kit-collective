@@ -9,7 +9,8 @@ Copy `slices/TEMPLATE.yaml.example` to `slices/KIT-<n>.yaml` (`name: kit-<n>`). 
 - one `takeScreenshot` per Acceptance criterion that a screen can show, named `kc__kit-<n>__NN-what-it-shows`, with a comment above it naming the criterion;
 - reach the screen through `../subflows/sign-in.yaml` (Test Collector, data reset) or, for a signed-out slice, reset and launch with `clearState` as that subflow does; do not replay other issues' screens;
 - tap by `testID`; a control a step must tap gets its `testID` in this PR (not a UI change);
-- the header comment `# design-sections: Sheet, Button dock` names the `docs/design-system.md` sections the review reads besides Color, Typography, Spacing and Layout.
+- the header comment `# design-sections: Sheet, Button dock` names the `docs/design-system.md` sections the review reads besides Color, Typography, Spacing and Layout;
+- a flow that picks photos from the library names them in `# simulator-photos: <name>, <name>, ...`, chosen from `fixtures/photos/catalog.json` by what the flow must show (`fixtures/photos/README.md`). Without the line the library holds the one drawn shirt.
 
 A slice with no screen to show (API only, a reducer) has no slice flow and no `Device flows` status; say so in the PR. The checker reads the flow against the Acceptance criteria: a criterion a screen could show with no step behind it, or a step that screenshots a screen the slice did not change, is a Spec finding.
 
@@ -35,7 +36,7 @@ Not covered: Android, physical devices, the camera branch of Tilføj trøje, sho
 | `apps/mobile/.maestro/regression/` | the five regression flows |
 | `apps/mobile/.maestro/subflows/` | `sign-in.yaml` (reset, cold start, sign in), `settle.yaml` (a fixed pause for motion Maestro cannot see) |
 | `apps/mobile/.maestro/scripts/` | `reset-test-data.js`, the reset call the flows run first |
-| `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery |
+| `apps/mobile/.maestro/fixtures/` | one drawn shirt photo for the simulator gallery; `photos/` holds the real shirt photos a slice flow can ask for |
 | `apps/mobile/.maestro/design-sections.json` | which `docs/design-system.md` sections the review reads per flow |
 | `apps/mobile/.maestro/*.sh` | local API, build, run, publish evidence |
 | `apps/api/src/e2e/` | test data, its guard, the reset route |
@@ -92,7 +93,7 @@ apps/mobile/.maestro/run-evidence.sh                   # the slice flow, plus pu
 
 `local-api.sh` drops and recreates `E2E_LOCAL_DATABASE_URL` (default `postgresql://kit:kit@localhost:5432/kit_e2e_test`) and adds the fixture catalog. It never reads a lane `DATABASE_URL`. The values in `local.env.sh` are local-only test values.
 
-The flows own a simulator, "KitCollective Device Flows", created on first use with exactly one photo in its library.
+The flows own a simulator, "KitCollective Device Flows", created on first use with exactly one photo in its library. A slice flow that needs other photos names them in its header (`# simulator-photos: fck-white-home-front, fck-white-home-back`), from the 131 real shirt photos in `apps/mobile/.maestro/fixtures/photos/` (`catalog.json`, `README.md` there); it then runs on a simulator of its own with exactly those photos, named after the list.
 
 `run-evidence.sh` refuses uncommitted changes under the app, API and package sources, the flows (`apps/mobile/.maestro`) and the evidence scripts (`scripts/e2e`), refuses a branch with no slice flow (unless `E2E_FLOWS=regression`), and refuses when the installed app or the running API was not built from this commit's sources. Evidence is keyed by commit. Then:
 

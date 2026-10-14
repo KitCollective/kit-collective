@@ -77,12 +77,16 @@ export const RATCHET_SCRIPT_PATHS = new Set([
 ]);
 
 /**
- * Git args for listing files changed on a feature branch vs the integration lane.
- * Two-dot `..` (not three-dot `...`) so merge-commits from the base are excluded
- * (KIT-117 — inflated PR file counts when branches merge origin/development).
+ * Git args for listing the files a feature branch changed, as GitHub shows them on the PR.
+ * Three-dot `...` diffs from the merge base, so changes that reached the lane after the
+ * branch left it (or after it last merged the lane) are not counted as the branch's own.
+ * The two-dot range used before compared the two tips: every PR that was behind the lane
+ * failed the scope check on files it never touched (KIT-283 and KIT-295, 2026-10-13/14).
+ * KIT-117 had chosen two dots after a three-dot list of 84 files for a 22-file PR; a list
+ * like that needs a stale `origin/development`, which inflates both ranges, so fetch first.
  */
 export function changedFilesDiffArgs(baseRef = "origin/development") {
-  return changedFilesArgs(`${baseRef}..HEAD`);
+  return changedFilesArgs(`${baseRef}...HEAD`);
 }
 
 export function matchesGlob(filePath, glob) {

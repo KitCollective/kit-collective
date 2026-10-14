@@ -35,6 +35,7 @@ import {
   TEST_PEER_HANDLE,
   TEST_PEER_ID,
   TEST_SHORTCUT,
+  TEST_UNANSWERED_BID,
   TEST_WISHLIST_ENTRY,
 } from "./test-data.fixture.js";
 
@@ -238,6 +239,41 @@ export async function applyTestData(input: {
         })),
       );
     }
+
+    const bid = TEST_UNANSWERED_BID;
+    // The conversation stores its two Collectors in id order (lower, upper).
+    const [lowerCollectorId, upperCollectorId] =
+      bid.ownerId < bid.bidderId ? [bid.ownerId, bid.bidderId] : [bid.bidderId, bid.ownerId];
+    // One Conversation per pair (KIT-295): the Bud, not the Conversation, carries the UserJersey
+    // and its snapshot.
+    const bidJersey = TEST_JERSEYS.find((jersey) => jersey.id === bid.jerseyId);
+    if (!bidJersey) {
+      throw new Error("TEST_UNANSWERED_BID names a jersey that is not in TEST_JERSEYS");
+    }
+    const bidSide = sideOf(bidJersey.side);
+    await tx.insert(conversation).values({
+      id: bid.conversationId,
+      lowerCollectorId,
+      upperCollectorId,
+    });
+    await tx.insert(conversationParticipant).values([
+      { conversationId: bid.conversationId, userId: bid.ownerId },
+      { conversationId: bid.conversationId, userId: bid.bidderId },
+    ]);
+    await tx.insert(conversationMessage).values({
+      id: bid.messageId,
+      conversationId: bid.conversationId,
+      senderId: bid.bidderId,
+      kind: "bid",
+      bidAmountDkk: bid.amountDkk,
+      bidStatus: "pending",
+      userJerseyId: bidJersey.id,
+      jerseyClubId: bidSide.clubId,
+      jerseyNationalTeamId: bidSide.nationalTeamId,
+      jerseySeasonId: bidSide.seasonId,
+      jerseyType: bidJersey.type,
+      jerseySize: bidJersey.size,
+    });
 
     const wish = sideOf(TEST_WISHLIST_ENTRY.side);
     await tx.insert(wishlistEntry).values({

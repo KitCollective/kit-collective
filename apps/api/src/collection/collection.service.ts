@@ -94,7 +94,7 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { and, asc, count, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, notInArray, or, sql } from "drizzle-orm";
 import { BillingService } from "../billing/billing.service.js";
 import { DB } from "../db/db.module.js";
 import { MatchQueueService } from "../match/match-queue.service.js";
@@ -320,6 +320,7 @@ export class CollectionService {
       squadPlayersByScope,
       playerFieldsByJersey,
       patchesByJersey,
+      unansweredBidCounts,
     ] = await Promise.all([
       this.resolveEntityLabels("club", clubIds, locale),
       this.resolveEntityLabels("national_team", nationalTeamIds, locale),
@@ -329,6 +330,7 @@ export class CollectionService {
       this.loadSquadPlayersForScopes(squadScopes, locale),
       this.loadPlayerFieldsForJerseys(rows, locale),
       this.loadPatchesForJerseys(jerseyIds, locale),
+      this.loadUnansweredBidCounts(userId, jerseyIds),
     ]);
 
     const jerseys: CollectionJersey[] = rows.map((row) => {
@@ -390,6 +392,7 @@ export class CollectionService {
         photos,
         biddingEnabled: row.biddingEnabled,
         private: row.private,
+        unansweredBidCount: unansweredBidCounts.get(row.id) ?? 0,
       };
     });
 
@@ -2942,6 +2945,60 @@ export class CollectionService {
     }
 
     return fieldsByJersey;
+  }
+
+  /**
+   * Pending bids from other collectors per owned jersey, by the Indbakke rule: the conversation is
+   * visible to the owner (not hidden) and the bidder is not a blocked peer.
+   */
+  private async loadUnansweredBidCounts(
+    ownerId: string,
+    jerseyIds: string[],
+  ): Promise<Map<string, number>> {
+    const countsByJersey = new Map<string, number>();
+
+    if (jerseyIds.length === 0) {
+      return countsByJersey;
+    }
+
+    const blockedPeerIds = [...(await this.moderationService.getBlockedPeerIds(ownerId))];
+
+    // A Bud carries its UserJersey on the message (one Conversation per pair, KIT-295).
+    const rows = await this.db
+      .select({
+        userJerseyId: conversationMessage.userJerseyId,
+        unansweredBidCount: count(),
+      })
+      .from(conversationMessage)
+      .innerJoin(conversation, eq(conversationMessage.conversationId, conversation.id))
+      .innerJoin(
+        conversationParticipant,
+        and(
+          eq(conversationParticipant.conversationId, conversation.id),
+          eq(conversationParticipant.userId, ownerId),
+        ),
+      )
+      .where(
+        and(
+          inArray(conversationMessage.userJerseyId, jerseyIds),
+          eq(conversationMessage.kind, "bid"),
+          eq(conversationMessage.bidStatus, "pending"),
+          ne(conversationMessage.senderId, ownerId),
+          sql`${conversationParticipant.hiddenAt} IS NULL`,
+          blockedPeerIds.length > 0
+            ? notInArray(conversationMessage.senderId, blockedPeerIds)
+            : undefined,
+        ),
+      )
+      .groupBy(conversationMessage.userJerseyId);
+
+    for (const row of rows) {
+      if (row.userJerseyId) {
+        countsByJersey.set(row.userJerseyId, row.unansweredBidCount);
+      }
+    }
+
+    return countsByJersey;
   }
 
   private async loadPatchesForJerseys(

@@ -121,7 +121,7 @@ async function runRaw(label, phaseTitle, commands, keepGoing) {
   const prompt = [
     "You are a command runner. Run the numbered commands below in the repository root, in order, each exactly as written.",
     "Every command ends by printing a line `KIT-EXIT:<n>`, where n is its exit code. For each command report in `results`: `exit`, that `KIT-EXIT:<n>` line verbatim; and `line`, the last non-empty line of the combined output before it, verbatim (an empty string when there is none). Never work out or guess the exit code yourself: copy the printed line.",
-    "Run every command in the foreground and wait for it to finish, until it finishes (a command can run up to about 9 minutes; the foreground limit is 10). Never background a command: no `&`, no `nohup`, no `disown`, no `timeout` or `sleep` wrapper, no output redirected to a file to read later. Do not end your turn with prose: your turn ends only with the `results` array, one entry per command you ran.",
+    "Run every command in the foreground and wait for it to finish, until it finishes (a command can run up to about 9 minutes; the foreground limit is 10). Your shell tool moves a command to the background after 2 minutes unless you give it a longer timeout, so set the tool's timeout to 600000 ms (10 minutes) on every command you run. Never background a command: no `&`, no `nohup`, no `disown`, no `timeout` or `sleep` wrapper, no output redirected to a file to read later. Do not end your turn with prose: your turn ends only with the `results` array, one entry per command you ran.",
     keepGoing
       ? "Run every command even when one fails."
       : "Stop after the first command whose line is not `KIT-EXIT:0`: report it and do not run the rest (fewer results than commands is correct then).",
@@ -283,8 +283,9 @@ phase("Session");
 // ran the session check without the run cap and had no resume-point.mjs). So the first step compares
 // the harness paths with the integration lane, with plain git and no repo script, because a stale
 // worktree may not have the script that would do it. A difference stops the run before `start` is
-// logged, so it costs no run of the cap. The workflow file itself is read when the run starts:
-// start it from the main clone's path, which sync-development keeps current.
+// logged, so it costs no run of the cap. The workflow file itself is read when the run starts and
+// must be the starting thread's own copy (bb refuses a path outside its workspace): a thread in an
+// existing issue worktree merges the lane in first.
 const HARNESS_PATHS = ".bb/workflows scripts factory.config.json";
 // One runner for all three: the two git commands are read-only, and the script reads the results in
 // order, so a runner that did not stop after a failing one cannot turn a stale harness into a start.
@@ -433,7 +434,7 @@ async function engineerPass(round, feedback, engineerModelAlias) {
   const prompt = [
     `You are the Engineer for ${issue}. Read .cursor/skills/implement/SKILL.md and follow it, with /tdd and the Roles it names. ${resumeNote}`,
     "Read `### Plan` in the workpad when there is one. Copy the issue's write-scope: line into the PR body (plain globs, no backslashes).",
-    `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
+    `Wait for CI only in the foreground, in slices (a foreground command is capped at 10 minutes, and your shell tool backgrounds it after 2 unless you set the tool's timeout to 600000 ms, so set it): \`node scripts/wait-for-checks.mjs <pr> --timeout ${GATE_SLICE_SECONDS}\`. On exit 2 (still pending) run the same command again in the same turn, up to ${GATE_SLICES} times in all; only after that end with \`blocked ci-pending\`. Exit 5 means gh is unusable: report \`blocked\` with the verdict line and do not retry. Never start it in the background and end your turn.`,
     "Never move the issue to Merging, Post-Merge or Done, never merge, never enable auto-merge, never post a kc/audit status. Move nothing in Linear except the workpad and your evidence comments.",
     feedback ? `Change request from the last round (fix the class, not the instance):\n${feedback}` : "",
     "Return outcome ready (only when the pre-review gate in implement/SKILL.md is true), blocked (sentence starts `needs-human:` or `blocked-by KIT-m:`) or failed, one sentence, the PR number, and your own thread id ($BB_THREAD_ID) in threadId.",
@@ -584,7 +585,7 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
       [
         `You are the Reviewer for ${issue}, PR #${prNumber}. You did not write this code. Read .cursor/skills/code-review/SKILL.md and run it on the PR's merge-base diff (this checkout is the PR head; confirm with git rev-parse HEAD).`,
         "Write `### Review matrix` into the issue's workpad (one row per lock-set row, evidence for each). You are a judge: change no code, move no Linear state, post no status, do not merge.",
-        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
+        `Your reply's final line must be exactly: AUDIT-RESULT ${issue} <green|amber|red> <full head sha> [failing,rows] (amber only for required checks still pending). The receipt reads only your last text message, so write that line as your last text, after every other tool call (the workpad write included), with nothing after it. Then return the same verdict, the sha and the failing rows through the result tool, a one-sentence summary, and your own thread id ($BB_THREAD_ID) in threadId.`,
       ].join("\n"),
       `reviewer:${issue}:r${round}`,
       "Reviewer",
@@ -654,10 +655,27 @@ for (let round = reviewAsIs ? 0 : 1; round <= maxRounds; round += 1) {
     const state = await stopForHuman("Review gate", `needs-human: round cap reached after a ${review.verdict} review: ${why}`);
     return stopped("review gate", state, { prNumber, rounds, verdict: review.verdict, note: why });
   }
-  const dry = await sh("receipt:dry-run", "Review gate", [
-    // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
-    `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`,
-  ], false, true);
+  // Round 0 reviewed a head no Engineer of this run built: the receipt then reads the implementer from the run log alone.
+  const receiptCmd = `node scripts/audit-receipt.mjs post ${prNumber} --thread ${rThread}${engineerThread ? ` --implementer-thread ${engineerThread}` : ""} --require-different-model --dry-run`;
+  let dry = await sh("receipt:dry-run", "Review gate", [receiptCmd], false, true);
+  // A Reviewer that returned its verdict through the result tool can end on another sentence, and
+  // the receipt reads only the thread's last text (KIT-283 and KIT-286, 2026-10-14). The Reviewer
+  // is asked once for the line, as bb-orchestrate allows, and the receipt is tried again. The message
+  // is built from checked tokens only; the verdict is green, since only a green review gets here.
+  const reviewSha = /^[0-9a-f]{40}$/i.test(review.sha) ? review.sha.toLowerCase() : "";
+  if (dry[0]?.code !== 0 && !dry[0]?.runner && reviewSha && /did not end with an exact AUDIT-RESULT line/.test(dry[0]?.line ?? "")) {
+    await sh("log:no-result", "Review gate", [
+      logCmd("reason", `--issue ${issue} --code no-result-line`),
+      `bb thread unarchive ${rThread}`,
+    ], true);
+    const asked = await sh("reviewer:result-line", "Review gate", [
+      `bb thread tell ${rThread} "Your review ended without the result line. Do not review again and change nothing. If the head is still ${reviewSha} and your verdict stands, reply with exactly one line and nothing else: AUDIT-RESULT ${issue} green ${reviewSha}"`,
+      `bb thread wait ${rThread} --timeout 300`,
+    ]);
+    if (asked.length === 2 && asked.every((r) => r.code === 0)) {
+      dry = await sh("receipt:dry-run", "Review gate", [receiptCmd], false, true);
+    }
+  }
   receipt = dry[0]?.line ?? "no output from audit-receipt";
   if (dry.length === 0 || dry[0].code !== 0) {
     // A refused receipt (same model, no spawn logged, no AUDIT-RESULT line) is not a green review.

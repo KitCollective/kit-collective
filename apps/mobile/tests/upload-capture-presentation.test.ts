@@ -78,6 +78,25 @@ describe("scheduleUploadWhenPresented", () => {
     expect(run).not.toHaveBeenCalled();
     flushFrames();
     expect(run).toHaveBeenCalledTimes(1);
+    // Two frames only stand in for an event that did not come: they are not a presentation, so
+    // a transitionEnd that follows still counts (the caller recovers on it).
+    expect(run).toHaveBeenLastCalledWith("backstop");
+  });
+
+  it("does not let the Reduce Motion frames open the picker into a transition that started (KIT-345)", async () => {
+    // A hosted run with Reduce Motion on still animated the loading route in: the sheet opened
+    // after two frames, 0.9 s after the tap, and iOS took it down when the route appeared.
+    const { navigation, transitionStart, transitionEnd } = fakeNavigation();
+    const run = vi.fn();
+    scheduleUploadWhenPresented(navigation, async () => true, run);
+    transitionStart();
+    await vi.advanceTimersByTimeAsync(0);
+    flushFrames();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(run).not.toHaveBeenCalled();
+    transitionEnd();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenLastCalledWith("presented");
   });
 
   it("falls back to the backstop when neither signal arrives", async () => {
