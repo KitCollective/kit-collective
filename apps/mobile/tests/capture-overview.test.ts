@@ -13,6 +13,7 @@ import {
   parkedRow,
   pendingSkeletonRows,
   shouldOpenBulkOverview,
+  shouldOpenUnassigned,
   visionOnForCapture,
 } from "../src/capture/captureOverview";
 import {
@@ -76,6 +77,13 @@ describe("bulk overview entry", () => {
     expect(shouldOpenBulkOverview({ branch: "bulk", visionOn: true })).toBe(true);
     expect(shouldOpenBulkOverview({ branch: "single", visionOn: true })).toBe(false);
     expect(shouldOpenBulkOverview({ branch: "bulk", visionOn: false })).toBe(false);
+  });
+
+  it("lands on the photos without a jersey for four or more photos with Vision off", () => {
+    expect(shouldOpenUnassigned({ branch: "bulk", visionOn: false })).toBe(true);
+    expect(shouldOpenUnassigned({ branch: "bulk", visionOn: true })).toBe(false);
+    expect(shouldOpenUnassigned({ branch: "single", visionOn: false })).toBe(false);
+    expect(shouldOpenUnassigned({ branch: "single", visionOn: true })).toBe(false);
   });
 
   it("counts Vision as on when signed in with quota left", () => {

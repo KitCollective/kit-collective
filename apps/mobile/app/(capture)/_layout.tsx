@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { toastConfig } from "@/components/toast-config";
+import { stackScreenMotion } from "@/navigation/stack-motion";
 import { useReduceMotion } from "@/theme/use-reduce-motion";
 import { useTheme } from "@/theme/use-theme";
 
@@ -27,6 +28,10 @@ export default function CaptureFlowLayout() {
           options={{ headerShown: false, animation: reduceMotion ? "none" : "fade" }}
         />
         <Stack.Screen name="overview" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="unassigned"
+          options={{ headerShown: false, animation: stackScreenMotion(reduceMotion) }}
+        />
         <Stack.Screen name="confirm" options={{ headerShown: false }} />
         <Stack.Screen name="confirm-data" options={{ headerShown: false }} />
         <Stack.Screen name="confirm-details" options={{ headerShown: false }} />
